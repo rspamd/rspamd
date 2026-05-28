@@ -1588,14 +1588,29 @@ rspamd_rcl_composites_handler(rspamd_mempool_t *pool,
 							  struct rspamd_rcl_section *section,
 							  GError **err)
 {
+	auto *cfg = static_cast<rspamd_config *>(ud);
 	auto success = TRUE;
 
 	auto it = ucl_object_iterate_new(obj);
 	const auto *cur = obj;
 
 	while ((cur = ucl_object_iterate_safe(it, true))) {
+		const auto *cur_key = ucl_object_key(cur);
+
+		/* `dynamic` is reserved for hot-reloadable composite map sources.
+		 * Its value is whatever rspamd_map_add_from_ucl accepts: a single
+		 * URL string, an array of URLs, or a full map UCL object. */
+		if (cur_key != nullptr && strcmp(cur_key, "dynamic") == 0) {
+			if (!rspamd_composites_add_dynamic_map(cfg->composites_manager, cur, cfg)) {
+				msg_err_config("failed to register dynamic composites map");
+				success = FALSE;
+				break;
+			}
+			continue;
+		}
+
 		success = rspamd_rcl_composite_handler(pool, cur,
-											   ucl_object_key(cur), ud, section, err);
+											   cur_key, ud, section, err);
 		if (!success) {
 			break;
 		}
