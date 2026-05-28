@@ -3929,6 +3929,16 @@ void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
 		}
 	}
 
+	/*
+	 * Worst case the whole query decodes into one buffer; each parameter writes
+	 * into its own non-overlapping slot, so rspamd_url_parse can safely keep
+	 * raw pointers into it (the buffer lives for the pool's lifetime). Lazy
+	 * alloc keeps queries with no embedded URL paying nothing.
+	 */
+	const gsize query_total = (gsize) (end - query);
+	char *scratch = NULL;
+	gsize scratch_off = 0;
+
 	p = query;
 	c = query;
 	while (p <= end) {
@@ -3940,11 +3950,15 @@ void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
 				gsize vlen = p - vstart;
 
 				if (vlen > 0) {
-					char *decoded = rspamd_mempool_alloc(pool, vlen + 1);
-					gsize dlen = rspamd_url_decode(decoded, vstart, vlen);
-					decoded[dlen] = '\0';
-					rspamd_url_find_multiple(pool, decoded, dlen, how, NULL,
+					if (scratch == NULL) {
+						scratch = rspamd_mempool_alloc(pool, query_total + 1);
+					}
+					char *slot = scratch + scratch_off;
+					gsize dlen = rspamd_url_decode(slot, vstart, vlen);
+					slot[dlen] = '\0';
+					rspamd_url_find_multiple(pool, slot, dlen, how, NULL,
 											 func, ud, lua_state);
+					scratch_off += dlen + 1;
 				}
 			}
 			c = p + 1;

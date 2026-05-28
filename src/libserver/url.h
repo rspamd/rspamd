@@ -278,7 +278,7 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
  * How deep to follow URLs nested inside the query of an already query-extracted
  * URL (a properly escaped wrapper carries one target per encoding layer).
  */
-#define RSPAMD_URL_QUERY_MAX_NESTING 3
+#define RSPAMD_URL_QUERY_MAX_NESTING 5
 
 /**
  * Find URLs embedded in the query parameters of `url`. Unlike

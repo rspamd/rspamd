@@ -11,6 +11,7 @@ ${MESSAGE_QSAFE}      ${RSPAMD_TESTDIR}/messages/phishing_query_safe.eml
 ${MESSAGE_QMULTI}     ${RSPAMD_TESTDIR}/messages/phishing_query_multi.eml
 ${MESSAGE_QNESTED}    ${RSPAMD_TESTDIR}/messages/phishing_query_nested.eml
 ${MESSAGE_QNESTFIRE}  ${RSPAMD_TESTDIR}/messages/phishing_query_nested_fire.eml
+${MESSAGE_QOVERCAP}   ${RSPAMD_TESTDIR}/messages/phishing_query_overcap.eml
 ${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,STRICT_PHISHING,STRICTER_PHISHING]}
 
 *** Test Cases ***
@@ -59,5 +60,15 @@ TEST PHISHING FIRES WHEN NESTED QUERY LEAF DIFFERS FROM DISPLAY TEXT
   # chain must be followed to the leaf: an intermediate match does not suppress,
   # so phishing fires on the leaf vs display mismatch.
   Scan File  ${MESSAGE_QNESTFIRE}
+  ...  Settings=${SETTINGS_PHISHING}
+  Expect Symbol  PHISHING
+
+TEST PHISHING FIRES WHEN NESTED CHAIN EXCEEDS NESTING CAP
+  # The href wraps a single-target chain deeper than RSPAMD_URL_QUERY_MAX_NESTING.
+  # The deepest URL we are willing to follow happens to match the displayed
+  # domain, but the real leaf is one more level down and points elsewhere.
+  # Since the walk exits via budget exhaustion rather than reaching a natural
+  # end, the intermediate match must not suppress phishing.
+  Scan File  ${MESSAGE_QOVERCAP}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol  PHISHING

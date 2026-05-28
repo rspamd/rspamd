@@ -171,8 +171,11 @@ html_href_query_targets_display(rspamd_mempool_t *pool,
 
 	struct rspamd_url *leaf = nullptr;
 	struct rspamd_url *cur = href_url;
+	bool fully_consumed = false;
+
 	for (unsigned int depth = 0; depth < RSPAMD_URL_QUERY_MAX_NESTING; depth++) {
 		if (cur->querylen == 0) {
+			fully_consumed = true; /* natural end: no further query */
 			break;
 		}
 
@@ -181,6 +184,7 @@ html_href_query_targets_display(rspamd_mempool_t *pool,
 										  html_query_target_cb, &cbd, L);
 
 		if (cbd.count == 0) {
+			fully_consumed = true; /* natural end: query carries no embedded url */
 			break;
 		}
 		if (cbd.count != 1) {
@@ -191,7 +195,10 @@ html_href_query_targets_display(rspamd_mempool_t *pool,
 		cur = cbd.single;
 	}
 
-	if (leaf == nullptr) {
+	/* Exited via nesting budget exhaustion: the real leaf is deeper than we
+	 * are willing to follow, so we cannot decide on a match against an
+	 * intermediate hop. Safe default: do not suppress. */
+	if (!fully_consumed || leaf == nullptr) {
 		return false;
 	}
 
