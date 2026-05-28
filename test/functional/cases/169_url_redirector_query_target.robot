@@ -23,11 +23,11 @@ RESOLVE ENCODED QUERY TARGET THROUGH PATH-LESS WRAPPER
   # and to send it percent-encoded; otherwise the wrapper sees a dropped or
   # &-truncated u and the target is lost.
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://dest.example/?a=1&b=2
+  Expect Extended URL  http://dest.com/?a=1&b=2
   # The followed wrapper also carried &other=...; a hop already resolved to a
   # real redirect target must not have its query re-extracted, so the extra
   # URL must not surface.
-  Do Not Expect Extended URL  http://other.example/
+  Do Not Expect Extended URL  http://other.com/
 
 *** Keywords ***
 Urlredirector Setup

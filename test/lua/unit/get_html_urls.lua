@@ -426,4 +426,35 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("Nested query-embedded URLs stop at RSPAMD_URL_QUERY_MAX_NESTING", function()
+    -- wrap?u=l1?v=l2?w=l3?x=l4, each level escaped one layer deeper. With the
+    -- nesting cap at 3, l1/l2/l3 are extracted but l4 (a 4th level) is not.
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fl1.com%2F%3Fv%3Dhttp%253A%252F%252Fl2.com%252F%253Fw%253Dhttp%25253A%25252F%25252Fl3.com%25252F%25253Fx%25253Dhttp%2525253A%2525252F%2525252Fl4.com%2525252F">link</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local hosts = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      hosts[u:get_host()] = true
+    end
+
+    assert_true(hosts["l1.com"], "level-1 embedded URL should be extracted")
+    assert_true(hosts["l2.com"], "level-2 embedded URL should be extracted")
+    assert_true(hosts["l3.com"], "level-3 embedded URL should be extracted")
+    assert_nil(hosts["l4.com"], "level-4 URL is past the nesting cap and must not be extracted")
+
+    task:destroy()
+  end)
+
 end)

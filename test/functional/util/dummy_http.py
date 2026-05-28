@@ -143,8 +143,8 @@ class MainHandler(tornado.web.RequestHandler):
             # percent-encoded (redirector raw-request fix); and the extra URL
             # must NOT surface, because the followed wrapper's query is not
             # re-extracted (REDIRECTED-guard fix).
-            target = "http%3A%2F%2Fdest.example%2F%3Fa%3D1%26b%3D2"
-            other = "http%3A%2F%2Fother.example%2F"
+            target = "http%3A%2F%2Fdest.com%2F%3Fa%3D1%26b%3D2"
+            other = "http%3A%2F%2Fother.com%2F"
             self.redirect(f"{self.request.protocol}://{self.request.host}?u={target}&other={other}")
         elif path == "/" and self.get_query_argument("u", default=None):
             # Path-less wrapper: redirect to the URL carried (percent-encoded)
