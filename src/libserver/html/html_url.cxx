@@ -177,9 +177,8 @@ html_href_query_targets_display(rspamd_mempool_t *pool,
 		}
 
 		query_target_scan_cbd cbd{0, nullptr};
-		rspamd_url_find_multiple(pool, rspamd_url_query_unsafe(cur),
-								 cur->querylen, RSPAMD_URL_FIND_ALL, NULL,
-								 html_query_target_cb, &cbd, L);
+		rspamd_url_query_foreach_embedded(pool, cur, RSPAMD_URL_FIND_ALL,
+										  html_query_target_cb, &cbd, L);
 
 		if (cbd.count == 0) {
 			break;

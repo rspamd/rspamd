@@ -3896,17 +3896,14 @@ rspamd_url_query_count_cb(struct rspamd_url *url, gsize start_offset,
 	return ret;
 }
 
-static void rspamd_url_find_in_query_depth(rspamd_mempool_t *pool,
-										   struct rspamd_url *url,
-										   enum rspamd_url_find_type how,
-										   url_insert_function func,
-										   gpointer ud,
-										   void *lua_state,
-										   unsigned int depth)
+void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
+									   struct rspamd_url *url,
+									   enum rspamd_url_find_type how,
+									   url_insert_function func,
+									   gpointer ud,
+									   void *lua_state)
 {
 	const char *raw, *query, *end, *p, *c;
-	struct rspamd_url_query_count_cbd cbd = {pool, how, func, ud, lua_state,
-											 depth, 0};
 
 	if (url->raw == NULL || url->rawlen == 0) {
 		return;
@@ -3947,13 +3944,28 @@ static void rspamd_url_find_in_query_depth(rspamd_mempool_t *pool,
 					gsize dlen = rspamd_url_decode(decoded, vstart, vlen);
 					decoded[dlen] = '\0';
 					rspamd_url_find_multiple(pool, decoded, dlen, how, NULL,
-											 rspamd_url_query_count_cb, &cbd, lua_state);
+											 func, ud, lua_state);
 				}
 			}
 			c = p + 1;
 		}
 		p++;
 	}
+}
+
+static void rspamd_url_find_in_query_depth(rspamd_mempool_t *pool,
+										   struct rspamd_url *url,
+										   enum rspamd_url_find_type how,
+										   url_insert_function func,
+										   gpointer ud,
+										   void *lua_state,
+										   unsigned int depth)
+{
+	struct rspamd_url_query_count_cbd cbd = {pool, how, func, ud, lua_state,
+											 depth, 0};
+
+	rspamd_url_query_foreach_embedded(pool, url, how,
+									  rspamd_url_query_count_cb, &cbd, lua_state);
 
 	/* Record how many URLs are embedded in this URL's query. */
 	if (cbd.count > 0) {

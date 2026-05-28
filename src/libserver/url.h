@@ -303,6 +303,24 @@ void rspamd_url_find_in_query(rspamd_mempool_t *pool,
 							  void *lua_state);
 
 /**
+ * Invoke `func` for every URL embedded in `url`'s query, scanning a single
+ * level only (no nesting). Uses the same raw, per-parameter, decode-each-value
+ * bounding as rspamd_url_find_in_query.
+ * @param pool
+ * @param url url whose query is scanned
+ * @param how
+ * @param func callback invoked for each url found
+ * @param ud
+ * @param lua_state Lua state for consultation (may be NULL)
+ */
+void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
+									   struct rspamd_url *url,
+									   enum rspamd_url_find_type how,
+									   url_insert_function func,
+									   gpointer ud,
+									   void *lua_state);
+
+/**
  * Generic callback to insert URLs into rspamd_task
  * @param url
  * @param start_offset
