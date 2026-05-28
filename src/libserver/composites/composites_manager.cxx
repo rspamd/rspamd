@@ -61,7 +61,7 @@ auto composites_manager::add_composite(std::string_view composite_name, const uc
 		return nullptr;
 	}
 
-	if (composites.contains(composite_name)) {
+	if (current_gen->composites.contains(composite_name)) {
 		if (silent_duplicate) {
 			msg_debug_config("composite %s is redefined", composite_name.data());
 			return nullptr;
@@ -156,7 +156,7 @@ auto composites_manager::add_composite(std::string_view composite_name,
 	GError *err = nullptr;
 	rspamd_expression *expr = nullptr;
 
-	if (composites.contains(composite_name)) {
+	if (current_gen->composites.contains(composite_name)) {
 		/* Duplicate composite - refuse to add */
 		if (silent_duplicate) {
 			msg_debug_config("composite %s is redefined", composite_name.data());
@@ -198,10 +198,16 @@ auto composites_manager::add_composite(std::string_view composite_name,
 	return new_composite(composite_name, expr, composite_expression).get();
 }
 
+/*
+ * Per-map state. Lives in cfg->cfg_pool and survives across reloads of the
+ * same map. `last_names` tracks which composite names this map last
+ * published so that on reload we can stub-out names that the map dropped.
+ */
 struct map_cbdata {
 	composites_manager *cm;
 	struct rspamd_config *cfg;
 	std::string buf;
+	ankerl::unordered_dense::set<std::string> last_names;
 
 	explicit map_cbdata(struct rspamd_config *cfg)
 		: cfg(cfg)
@@ -213,14 +219,12 @@ struct map_cbdata {
 						  struct map_cb_data *data,
 						  gboolean _final)
 	{
-
 		if (data->cur_data == nullptr) {
 			data->cur_data = data->prev_data;
 			reinterpret_cast<map_cbdata *>(data->cur_data)->buf.clear();
 		}
 
 		auto *cbd = reinterpret_cast<map_cbdata *>(data->cur_data);
-
 		cbd->buf.append(chunk, len);
 		return nullptr;
 	}
@@ -234,46 +238,102 @@ struct map_cbdata {
 			if (cbd) {
 				cbd->buf.clear();
 			}
+			return;
 		}
-		else if (cbd != nullptr) {
-			if (target) {
-				*target = data->cur_data;
+
+		if (cbd == nullptr) {
+			msg_err("no data read for composites map");
+			return;
+		}
+
+		if (target) {
+			*target = data->cur_data;
+		}
+
+		auto *cfg = cbd->cfg;
+		auto *cm = cbd->cm;
+
+		/* Parse the buffered bytes as UCL. */
+		auto *parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
+		if (!ucl_parser_add_chunk(parser,
+								  reinterpret_cast<const unsigned char *>(cbd->buf.data()),
+								  cbd->buf.size())) {
+			msg_err_config("cannot parse composites map as UCL: %s",
+						   ucl_parser_get_error(parser));
+			ucl_parser_free(parser);
+			cbd->buf.clear();
+			return;
+		}
+
+		ucl_object_t *top = ucl_parser_get_object(parser);
+		ucl_parser_free(parser);
+
+		if (top == nullptr) {
+			msg_err_config("composites map UCL is empty");
+			cbd->buf.clear();
+			return;
+		}
+
+		if (ucl_object_type(top) != UCL_OBJECT) {
+			msg_err_config("composites map must be a UCL object, got %s",
+						   ucl_object_type_to_string(ucl_object_type(top)));
+			ucl_object_unref(top);
+			cbd->buf.clear();
+			return;
+		}
+
+		/* Build a staging generation cloned from the base. */
+		auto staging = cm->build_staging();
+		ankerl::unordered_dense::set<std::string> seen_in_map;
+		unsigned int added = 0, updated = 0, failed = 0;
+
+		const ucl_object_t *cur;
+		auto *it = ucl_object_iterate_new(top);
+		while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
+			const char *key = ucl_object_key(cur);
+			if (key == nullptr) {
+				continue;
+			}
+			std::string name{key};
+
+			bool replacing = staging->composites.contains(name);
+			auto *comp = cm->add_composite_to_staging(*staging, name, cur);
+			if (comp == nullptr) {
+				failed++;
+				continue;
 			}
 
-			rspamd::string_foreach_line(cbd->buf, [&](std::string_view line) {
-				auto [name_and_score, expr] = rspamd::string_split_on(line, ' ');
-				auto [name, score] = rspamd::string_split_on(name_and_score, ':');
-
-				if (!score.empty()) {
-					/* I wish it was supported properly */
-					//auto conv_res = std::from_chars(value->data(), value->size(), num);
-					char numbuf[128], *endptr = nullptr;
-					size_t n = std::min(score.size(), sizeof(numbuf) - 1);
-					memcpy(numbuf, score.data(), n);
-					numbuf[n] = '\0';
-					auto num = g_ascii_strtod(numbuf, &endptr);
-
-					if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
-						msg_err("invalid score for %*s", (int) name_and_score.size(), name_and_score.data());
-						return;
-					}
-
-					auto ret = cbd->cm->add_composite(name, expr, true, num);
-
-					if (ret == nullptr) {
-						msg_err("cannot add composite %*s", (int) name_and_score.size(), name_and_score.data());
-						return;
-					}
-				}
-				else {
-					msg_err("missing score for %*s", (int) name_and_score.size(), name_and_score.data());
-					return;
-				}
-			});
+			seen_in_map.insert(name);
+			if (replacing) {
+				updated++;
+			}
+			else {
+				added++;
+			}
 		}
-		else {
-			msg_err("no data read for composites map");
+		ucl_object_iterate_free(it);
+		ucl_object_unref(top);
+
+		/* Names this map previously owned but no longer mentions become
+		 * disabled stubs in the staging. */
+		unsigned int stubbed = 0;
+		for (const auto &name: cbd->last_names) {
+			if (seen_in_map.contains(name)) {
+				continue;
+			}
+			if (cm->disable_in_staging(*staging, name)) {
+				stubbed++;
+			}
 		}
+
+		cm->publish_generation(staging);
+		cbd->last_names = std::move(seen_in_map);
+		cbd->buf.clear();
+
+		msg_info_config("dynamic composites map reloaded (gen %L): "
+						"%ud added, %ud updated, %ud stubbed, %ud failed",
+						(int64_t) cm->current()->generation_id,
+						added, updated, stubbed, failed);
 	}
 
 	static void
@@ -362,7 +422,7 @@ symbol_needs_second_pass(struct rspamd_config *cfg, const char *symbol_name)
 struct composite_dep_cbdata {
 	struct rspamd_config *cfg;
 	bool needs_second_pass;
-	composites_manager *cm;
+	composites_generation *gen;
 };
 
 static void
@@ -385,8 +445,9 @@ composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
 		return;
 	}
 
-	/* Check if this is a reference to another composite */
-	if (auto *dep_comp = cbd->cm->find(atom_str); dep_comp != nullptr) {
+	/* Check if this is a reference to another composite within the
+	 * generation being built */
+	if (auto *dep_comp = cbd->gen->find(atom_str); dep_comp != nullptr) {
 		/* Dependency on another composite - will be handled in transitive pass */
 		return;
 	}
@@ -401,21 +462,31 @@ composite_dep_callback(const rspamd_ftok_t *atom, gpointer ud)
 	}
 }
 
-void composites_manager::process_dependencies()
+void composites_manager::process_dependencies(composites_generation &gen)
 {
 	ankerl::unordered_dense::set<rspamd_composite *> second_pass_set;
 	bool changed;
 
-	msg_debug_config("analyzing composite dependencies for two-phase evaluation");
+	msg_debug_config("analyzing composite dependencies for two-phase evaluation (gen %L)",
+					 (int64_t) gen.generation_id);
 
-	/* Initially, all composites start in first pass */
-	for (const auto &comp: all_composites) {
-		first_pass_composites.push_back(comp.get());
+	/* Reset pass buckets in case process_dependencies() is called repeatedly */
+	gen.first_pass_composites.clear();
+	gen.second_pass_composites.clear();
+
+	/* Skip disabled stubs entirely — they will not be evaluated */
+	for (const auto &comp: gen.all_composites) {
+		if (!comp->disabled) {
+			gen.first_pass_composites.push_back(comp.get());
+		}
+		else {
+			comp->second_pass = false;
+		}
 	}
 
 	/* First pass: mark composites that directly depend on postfilters/stats */
-	for (auto *comp: first_pass_composites) {
-		composite_dep_cbdata cbd{cfg, false, this};
+	for (auto *comp: gen.first_pass_composites) {
+		composite_dep_cbdata cbd{cfg, false, &gen};
 
 		rspamd_expression_atom_foreach(comp->expr,
 									   composite_dep_callback,
@@ -431,7 +502,7 @@ void composites_manager::process_dependencies()
 	/* Second pass: handle transitive dependencies */
 	do {
 		changed = false;
-		for (auto *comp: first_pass_composites) {
+		for (auto *comp: gen.first_pass_composites) {
 			if (second_pass_set.contains(comp)) {
 				continue;
 			}
@@ -440,15 +511,15 @@ void composites_manager::process_dependencies()
 
 			/* Helper struct for lambda capture */
 			struct trans_check_data {
-				composites_manager *cm;
+				composites_generation *gen;
 				ankerl::unordered_dense::set<rspamd_composite *> *second_pass_set;
 				bool *has_dep;
-			} trans_data{this, &second_pass_set, &has_second_pass_dep};
+			} trans_data{&gen, &second_pass_set, &has_second_pass_dep};
 
 			rspamd_expression_atom_foreach(comp->expr, [](const rspamd_ftok_t *atom, gpointer ud) {
 											   auto *data = reinterpret_cast<trans_check_data *>(ud);
 											   std::string_view atom_str(atom->begin, atom->len);
-											   if (auto *dep_comp = data->cm->find(atom_str); dep_comp != nullptr) {
+											   if (auto *dep_comp = data->gen->find(atom_str); dep_comp != nullptr) {
 												   /* Cast away const since we know this points to a modifiable composite */
 												   if (data->second_pass_set->contains(const_cast<rspamd_composite *>(dep_comp))) {
 													   *data->has_dep = true;
@@ -465,20 +536,21 @@ void composites_manager::process_dependencies()
 	} while (changed);
 
 	/* Move second-pass composites from first_pass to second_pass vector and mark them */
-	auto it = first_pass_composites.begin();
-	while (it != first_pass_composites.end()) {
+	auto it = gen.first_pass_composites.begin();
+	while (it != gen.first_pass_composites.end()) {
 		if (second_pass_set.contains(*it)) {
 			(*it)->second_pass = true;
-			second_pass_composites.push_back(*it);
-			it = first_pass_composites.erase(it);
+			gen.second_pass_composites.push_back(*it);
+			it = gen.first_pass_composites.erase(it);
 		}
 		else {
+			(*it)->second_pass = false;
 			++it;
 		}
 	}
 
 	msg_debug_config("composite dependency analysis complete: %d first-pass, %d second-pass composites",
-					 (int) first_pass_composites.size(), (int) second_pass_composites.size());
+					 (int) gen.first_pass_composites.size(), (int) gen.second_pass_composites.size());
 }
 
 /*
@@ -549,7 +621,7 @@ extract_atom_symbol_name(const rspamd_expression_atom_t *atom)
  * for a composite. Handles transitive composite references with cycle detection.
  */
 static void
-collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
+collect_leaf_atoms(composites_generation &gen, const rspamd_composite *comp,
 				   ankerl::unordered_dense::set<std::string> &leaf_atoms,
 				   ankerl::unordered_dense::set<int> &visited)
 {
@@ -559,10 +631,10 @@ collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
 	visited.insert(comp->id);
 
 	struct walk_data {
-		composites_manager *cm;
+		composites_generation *gen;
 		ankerl::unordered_dense::set<std::string> *leaves;
 		ankerl::unordered_dense::set<int> *visited;
-	} wd{cm, &leaf_atoms, &visited};
+	} wd{&gen, &leaf_atoms, &visited};
 
 	rspamd_expression_atom_foreach_ex(comp->expr, [](GNode *node, rspamd_expression_atom_t *atom, gpointer ud) {
 			auto *wd = reinterpret_cast<walk_data *>(ud);
@@ -576,10 +648,10 @@ collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
 				return;
 			}
 
-			auto *ref = wd->cm->find(sym);
+			auto *ref = wd->gen->find(sym);
 			if (ref != nullptr) {
 				/* Atom is a composite reference - recurse into it */
-				collect_leaf_atoms(wd->cm, ref, *wd->leaves, *wd->visited);
+				collect_leaf_atoms(*wd->gen, ref, *wd->leaves, *wd->visited);
 			}
 			else {
 				wd->leaves->insert(std::move(sym));
@@ -588,7 +660,7 @@ collect_leaf_atoms(composites_manager *cm, const rspamd_composite *comp,
 
 /* Context for building inverted index */
 struct inverted_index_cbdata {
-	composites_manager *cm;
+	composites_generation *gen;
 	rspamd_composite *comp;
 	bool has_positive;
 	bool has_group_atom; /* Composite uses group matcher (g:, g+:, g-:) */
@@ -633,16 +705,26 @@ inverted_index_atom_callback(GNode *atom_node, rspamd_expression_atom_t *atom, g
 	/* Mark that we have at least one positive atom */
 	cbd->has_positive = true;
 
-	/* Add to inverted index */
-	cbd->cm->symbol_to_composites[symbol_name].push_back(cbd->comp);
+	/* Add to inverted index in the generation being built */
+	cbd->gen->symbol_to_composites[symbol_name].push_back(cbd->comp);
 }
 
-void composites_manager::build_inverted_index()
+void composites_manager::build_inverted_index(composites_generation &gen)
 {
-	msg_debug_config("building inverted index for %d composites", (int) all_composites.size());
+	msg_debug_config("building inverted index for %d composites (gen %L)",
+					 (int) gen.all_composites.size(), (int64_t) gen.generation_id);
 
-	for (auto &comp: all_composites) {
-		inverted_index_cbdata cbd{this, comp.get(), false, false};
+	gen.symbol_to_composites.clear();
+	gen.not_only_composites.clear();
+
+	for (auto &comp: gen.all_composites) {
+		if (comp->disabled) {
+			/* Stub: contributes neither to the index nor to "always check" */
+			comp->has_positive_atoms = false;
+			continue;
+		}
+
+		inverted_index_cbdata cbd{&gen, comp.get(), false, false};
 
 		rspamd_expression_atom_foreach_ex(comp->expr, inverted_index_atom_callback, &cbd);
 
@@ -654,7 +736,7 @@ void composites_manager::build_inverted_index()
 			 * - It has only negated atoms (no positive symbols to match)
 			 * - It uses group matchers (we don't know which symbols will match)
 			 */
-			not_only_composites.push_back(comp.get());
+			gen.not_only_composites.push_back(comp.get());
 			if (cbd.has_group_atom) {
 				msg_debug_config("composite '%s' uses group matcher, will always be checked",
 								 comp->sym.c_str());
@@ -679,8 +761,8 @@ void composites_manager::build_inverted_index()
 	 * entries. Then remove the composite-name keys.
 	 */
 	ankerl::unordered_dense::set<std::string> composite_keys;
-	for (const auto &[sym, _]: symbol_to_composites) {
-		if (find(sym) != nullptr) {
+	for (const auto &[sym, _]: gen.symbol_to_composites) {
+		if (gen.find(sym) != nullptr) {
 			composite_keys.insert(sym);
 		}
 	}
@@ -690,22 +772,22 @@ void composites_manager::build_inverted_index()
 						 (int) composite_keys.size());
 
 		for (const auto &comp_key: composite_keys) {
-			auto it = symbol_to_composites.find(comp_key);
-			if (it == symbol_to_composites.end()) {
+			auto it = gen.symbol_to_composites.find(comp_key);
+			if (it == gen.symbol_to_composites.end()) {
 				continue;
 			}
 
 			auto dependents = it->second; /* Copy before modifying the map */
-			auto *ref_comp = find(comp_key);
+			auto *ref_comp = gen.find(comp_key);
 
 			/* Collect all leaf (non-composite) atoms reachable from this composite */
 			ankerl::unordered_dense::set<std::string> leaf_atoms;
 			ankerl::unordered_dense::set<int> visited;
-			collect_leaf_atoms(this, ref_comp, leaf_atoms, visited);
+			collect_leaf_atoms(gen, ref_comp, leaf_atoms, visited);
 
 			/* Propagate dependents to each leaf atom's index entry */
 			for (const auto &leaf: leaf_atoms) {
-				auto &entry = symbol_to_composites[leaf];
+				auto &entry = gen.symbol_to_composites[leaf];
 				for (auto *dep: dependents) {
 					if (std::find(entry.begin(), entry.end(), dep) == entry.end()) {
 						entry.push_back(dep);
@@ -720,9 +802,9 @@ void composites_manager::build_inverted_index()
 			 */
 			if (leaf_atoms.empty()) {
 				for (auto *dep: dependents) {
-					if (std::find(not_only_composites.begin(),
-								  not_only_composites.end(), dep) == not_only_composites.end()) {
-						not_only_composites.push_back(dep);
+					if (std::find(gen.not_only_composites.begin(),
+								  gen.not_only_composites.end(), dep) == gen.not_only_composites.end()) {
+						gen.not_only_composites.push_back(dep);
 						msg_debug_config("composite '%s' depends on composite '%s' "
 										 "with no leaf atoms, will always be checked",
 										 dep->sym.c_str(), comp_key.c_str());
@@ -731,7 +813,7 @@ void composites_manager::build_inverted_index()
 			}
 
 			/* Remove the composite-name key from the index */
-			symbol_to_composites.erase(comp_key);
+			gen.symbol_to_composites.erase(comp_key);
 
 			msg_debug_config("resolved composite reference '%s': "
 							 "propagated %d dependents to %d leaf atoms",
@@ -741,7 +823,7 @@ void composites_manager::build_inverted_index()
 	}
 
 	msg_debug_config("inverted index built: %d unique symbols, %d not-only composites",
-					 (int) symbol_to_composites.size(), (int) not_only_composites.size());
+					 (int) gen.symbol_to_composites.size(), (int) gen.not_only_composites.size());
 }
 
 /* Callback data for collecting atoms from whitelist composites */
@@ -799,14 +881,18 @@ whitelist_atom_callback(const rspamd_ftok_t *atom, gpointer ud)
 	}
 }
 
-void composites_manager::mark_whitelist_dependencies()
+void composites_manager::mark_whitelist_dependencies(composites_generation &gen)
 {
 	ankerl::unordered_dense::set<std::string> fine_symbols;
 
-	msg_debug_config("analyzing whitelist composites for FINE symbol marking");
+	msg_debug_config("analyzing whitelist composites for FINE symbol marking (gen %L)",
+					 (int64_t) gen.generation_id);
 
 	/* Step 1: Find composites with negative score and collect their atoms */
-	for (const auto &comp: all_composites) {
+	for (const auto &comp: gen.all_composites) {
+		if (comp->disabled) {
+			continue;
+		}
 		auto *sym_def = static_cast<struct rspamd_symbol *>(
 			g_hash_table_lookup(cfg->symbols, comp->sym.c_str()));
 
@@ -824,7 +910,10 @@ void composites_manager::mark_whitelist_dependencies()
 	bool changed;
 	do {
 		changed = false;
-		for (const auto &comp: all_composites) {
+		for (const auto &comp: gen.all_composites) {
+			if (comp->disabled) {
+				continue;
+			}
 			if (fine_symbols.contains(comp->sym)) {
 				size_t before = fine_symbols.size();
 				whitelist_atom_cbdata cbd{&fine_symbols};
@@ -850,13 +939,263 @@ void composites_manager::mark_whitelist_dependencies()
 					marked_count);
 }
 
+auto composites_manager::build_staging() -> std::shared_ptr<composites_generation>
+{
+	auto staging = std::make_shared<composites_generation>();
+	staging->generation_id = allocate_generation_id();
+
+	if (!base_gen) {
+		/* Should not happen — pin_base_generation must be called once
+		 * after static load. Fall back to current_gen so the caller still
+		 * gets a workable staging. */
+		msg_warn_config("composites: build_staging() called before base "
+						"generation was pinned, cloning current_gen instead");
+	}
+
+	const auto &source = base_gen ? *base_gen : *current_gen;
+
+	for (const auto &orig: source.all_composites) {
+		/*
+		 * Deep-copy the composite struct (shared expression pointer is
+		 * fine, it lives in cfg_pool). Re-derive per-generation flags
+		 * via the analysis pipeline.
+		 */
+		auto cloned = std::make_shared<rspamd_composite>(*orig);
+		cloned->id = next_id();
+		cloned->second_pass = false;
+		cloned->has_positive_atoms = false;
+		staging->all_composites.push_back(cloned);
+		staging->composites[cloned->sym] = cloned;
+	}
+
+	msg_debug_config("composites: built staging gen %L with %d cloned composites",
+					 (int64_t) staging->generation_id,
+					 (int) staging->all_composites.size());
+
+	return staging;
+}
+
+auto composites_manager::add_composite_to_staging(composites_generation &staging,
+												  std::string_view name,
+												  const ucl_object_t *obj) -> rspamd_composite *
+{
+	const auto *val = ucl_object_lookup(obj, "enabled");
+	if (val != nullptr && !ucl_object_toboolean(val)) {
+		/* Operator wants the name present but inactive — disabled stub */
+		disable_in_staging(staging, std::string(name));
+		return staging.find(name) ? const_cast<rspamd_composite *>(staging.find(name)) : nullptr;
+	}
+
+	const char *composite_expression = nullptr;
+	val = ucl_object_lookup(obj, "expression");
+
+	if (val == nullptr || !ucl_object_tostring_safe(val, &composite_expression)) {
+		msg_err_config("dynamic composite %*s has no expression",
+					   (int) name.size(), name.data());
+		return nullptr;
+	}
+
+	/* Copy the expression into cfg_pool — parser keeps pointers into it. */
+	auto expr_len = strlen(composite_expression);
+	char *expr_copy = rspamd_mempool_alloc_buffer(cfg->cfg_pool, expr_len + 1);
+	memcpy(expr_copy, composite_expression, expr_len);
+	expr_copy[expr_len] = '\0';
+
+	GError *err = nullptr;
+	rspamd_expression *expr = nullptr;
+
+	if (!rspamd_parse_expression(expr_copy, expr_len, &composite_expr_subr,
+								 nullptr, cfg->cfg_pool, &err, &expr)) {
+		msg_err_config("cannot parse expression for dynamic composite %*s: %e",
+					   (int) name.size(), name.data(), err);
+		if (err) {
+			g_error_free(err);
+		}
+		return nullptr;
+	}
+
+	auto composite = std::make_shared<rspamd_composite>();
+	composite->id = next_id();
+	composite->expr = expr;
+	composite->str_expr = composite_expression;
+	composite->sym = std::string(name);
+	composite->second_pass = false;
+	composite->has_positive_atoms = false;
+	composite->disabled = false;
+	composite->policy = rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL;
+
+	val = ucl_object_lookup(obj, "policy");
+	if (val) {
+		auto p = composite_policy_from_str(ucl_object_tostring(val));
+		if (p == rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN) {
+			msg_err_config("dynamic composite %*s has unknown policy '%s'",
+						   (int) name.size(), name.data(), ucl_object_tostring(val));
+			return nullptr;
+		}
+		composite->policy = p;
+	}
+
+	/* Replace any existing entry under this name (came from base_gen
+	 * clone or from an earlier entry in this same map). */
+	auto sym_key = composite->sym;
+	auto it = staging.composites.find(sym_key);
+	if (it != staging.composites.end()) {
+		/* Find and replace in all_composites */
+		for (auto &slot: staging.all_composites) {
+			if (slot.get() == it->second.get()) {
+				slot = composite;
+				break;
+			}
+		}
+		it->second = composite;
+	}
+	else {
+		staging.all_composites.push_back(composite);
+		staging.composites[sym_key] = composite;
+	}
+
+	/* Reflect the composite in cfg->symbols so scoring and FINE-flag
+	 * propagation work for both static and dynamic composites. Safe to
+	 * mutate the GHashTable here because we're on the libev thread with
+	 * no scan in progress. */
+	auto score = std::isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
+	val = ucl_object_lookup(obj, "score");
+	if (val != nullptr) {
+		ucl_object_todouble_safe(val, &score);
+	}
+
+	const char *group = "composite";
+	val = ucl_object_lookup(obj, "group");
+	if (val != nullptr) {
+		group = ucl_object_tostring(val);
+	}
+
+	const char *description = composite_expression;
+	val = ucl_object_lookup(obj, "description");
+	if (val != nullptr) {
+		description = ucl_object_tostring(val);
+	}
+
+	rspamd_config_add_symbol(cfg, composite->sym.c_str(), score,
+							 description, group,
+							 0, ucl_object_get_priority(obj),
+							 1);
+
+	const auto *groups = ucl_object_lookup(obj, "groups");
+	if (groups && ucl_object_type(groups) == UCL_ARRAY) {
+		const ucl_object_t *cur_gr;
+		auto *gr_it = ucl_object_iterate_new(groups);
+
+		while ((cur_gr = ucl_object_iterate_safe(gr_it, true)) != nullptr) {
+			rspamd_config_add_symbol_group(cfg, composite->sym.c_str(),
+										   ucl_object_tostring(cur_gr));
+		}
+
+		ucl_object_iterate_free(gr_it);
+	}
+
+	return composite.get();
+}
+
+auto composites_manager::disable_in_staging(composites_generation &staging,
+											const std::string &name) -> bool
+{
+	auto it = staging.composites.find(name);
+	if (it == staging.composites.end()) {
+		/* Name never existed — create an inert stub so find() works */
+		auto stub = std::make_shared<rspamd_composite>();
+		stub->id = next_id();
+		stub->expr = nullptr;
+		stub->sym = name;
+		stub->second_pass = false;
+		stub->has_positive_atoms = false;
+		stub->disabled = true;
+		stub->policy = rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE;
+		staging.all_composites.push_back(stub);
+		staging.composites[name] = stub;
+		return true;
+	}
+
+	auto stub = std::make_shared<rspamd_composite>(*it->second);
+	stub->id = next_id();
+	stub->expr = nullptr;
+	stub->second_pass = false;
+	stub->has_positive_atoms = false;
+	stub->disabled = true;
+	for (auto &slot: staging.all_composites) {
+		if (slot.get() == it->second.get()) {
+			slot = stub;
+			break;
+		}
+	}
+	it->second = stub;
+	return true;
+}
+
+auto composites_manager::publish_generation(std::shared_ptr<composites_generation> staging) -> void
+{
+	if (!staging) {
+		return;
+	}
+
+	/* Register newly-introduced composite names with the symcache. cfg->symbols
+	 * was already updated by add_composite_to_staging(). ever_seen_names gates
+	 * the one-time symcache add. */
+	bool symcache_changed = false;
+	for (const auto &[name, comp]: staging->composites) {
+		if (comp->disabled) {
+			continue;
+		}
+		if (ever_seen_names.contains(name)) {
+			continue;
+		}
+		if (cfg->cache) {
+			rspamd_symcache_add_symbol(cfg->cache, name.c_str(), 0,
+									   nullptr, comp.get(),
+									   SYMBOL_TYPE_COMPOSITE, -1);
+			symcache_changed = true;
+		}
+		/* Pin the shared_ptr so the symcache's ud never dangles even if
+		 * the composite is replaced in a later generation. */
+		symcache_pinned[name] = comp;
+		ever_seen_names.insert(name);
+	}
+
+	if (symcache_changed && cfg->cache) {
+		rspamd_symcache_promote_resort(cfg->cache);
+	}
+
+	/* Run the analysis pipeline on the staging gen. */
+	process_dependencies(*staging);
+	build_inverted_index(*staging);
+	mark_whitelist_dependencies(*staging);
+
+	/* Atomic swap (single-threaded libev: assignment is the swap). */
+	current_gen = std::move(staging);
+}
+
+auto composites_manager::seal_static_load() -> void
+{
+	if (base_gen) {
+		return; /* Already sealed */
+	}
+	base_gen = current_gen;
+	for (const auto &[name, comp]: current_gen->composites) {
+		ever_seen_names.insert(name);
+		/* Static composites are pinned via base_gen → all_composites, no
+		 * extra pinning required for the symcache ud. */
+	}
+	msg_debug_config("composites: sealed static load (gen %L, %d composites)",
+					 (int64_t) current_gen->generation_id,
+					 (int) current_gen->all_composites.size());
+}
+
 }// namespace rspamd::composites
 
 void rspamd_composites_process_deps(void *cm_ptr, struct rspamd_config *cfg)
 {
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
 	cm->process_dependencies();
-	rspamd_composites_resolve_atom_types(cm);
 	cm->build_inverted_index();
 }
 
@@ -893,4 +1232,22 @@ void rspamd_composites_mark_whitelist_deps(void *cm_ptr, struct rspamd_config *c
 {
 	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
 	cm->mark_whitelist_dependencies();
+	/* Last step of static load: snapshot base generation and ever-seen
+	 * names so dynamic map publishes can clone from a stable base. */
+	cm->seal_static_load();
+}
+
+bool rspamd_composites_add_dynamic_map(void *cm_ptr, const ucl_object_t *obj,
+									   struct rspamd_config *cfg)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	(void) cm;
+	return rspamd_composites_add_map_handlers(obj, cfg);
+}
+
+uint64_t rspamd_composites_current_generation(void *cm_ptr)
+{
+	auto *cm = COMPOSITE_MANAGER_FROM_PTR(cm_ptr);
+	auto *gen = cm->current();
+	return gen ? gen->generation_id : 0;
 }
