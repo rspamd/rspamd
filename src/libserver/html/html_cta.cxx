@@ -540,6 +540,26 @@ void rspamd_html_process_cta_urls(struct rspamd_mime_text_part *text_part,
          */
 		float weight = rspamd_html_url_button_weight(text_part->html, u);
 
+		/* A query-extracted URL (e.g. a wrapper's real target in ?u=...) owns no
+         * tag, so it has no weight; walk the linked_url chain up to a tagged
+         * ancestor, bounded by the nesting cap, so a leaf several hops deep
+         * still inherits CTA from the original tagged href. */
+		if (weight <= 0.0 && (u->flags & RSPAMD_URL_FLAG_QUERY)) {
+			struct rspamd_url *ancestor = u;
+			for (unsigned int hop = 0; hop < RSPAMD_URL_QUERY_MAX_NESTING; hop++) {
+				if (ancestor->ext == nullptr ||
+					ancestor->ext->linked_url == nullptr ||
+					ancestor->ext->linked_url == ancestor) {
+					break;
+				}
+				ancestor = ancestor->ext->linked_url;
+				weight = rspamd_html_url_button_weight(text_part->html, ancestor);
+				if (weight > 0.0) {
+					break;
+				}
+			}
+		}
+
 		if (weight > 0.0) {
 			if (rspamd_heap_size(rspamd_html_heap_storage, heap_ptr) < max_cta) {
 				rspamd_html_cta_entry entry = {

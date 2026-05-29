@@ -43,6 +43,18 @@ URL Suspect - Multiple At Signs
   ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_MULTIPLE_AT_SIGNS]}
   Expect Symbol  URL_MULTIPLE_AT_SIGNS
 
+URL Suspect - Multiple Query URLs
+  # A single URL whose query embeds more than one URL is anomalous
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_multi_query.eml
+  ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_QUERY_MULTIPLE_URLS]}
+  Expect Symbol With Exact Options  URL_QUERY_MULTIPLE_URLS  2
+
+URL Suspect - Single Query URL
+  # One embedded URL in a query is common (redirectors/trackers) and must not fire
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_single_query.eml
+  ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_QUERY_MULTIPLE_URLS]}
+  Do Not Expect Symbol  URL_QUERY_MULTIPLE_URLS
+
 URL Suspect - Normal URL
   # Test that normal URLs don't trigger symbols
   Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_normal.eml

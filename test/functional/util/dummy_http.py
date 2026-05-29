@@ -113,6 +113,10 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/mailto_redirect":
             # Send an HTTP redirect to a mailto: URL (non-HTTP scheme)
             self.redirect("mailto:user@example.net")
+        elif path == "/redir_to_example":
+            # Redirect to a domain matching the displayed text, so the phishing
+            # module sees a 1:1 redirect target and must not fire (no FP).
+            self.redirect("http://www.example.com/")
         elif path == "/chain_intermediate_1":
             # Intermediate hop to chain_to_tel2
             self.redirect(f"{self.request.protocol}://{self.request.host}/chain_intermediate_2")
@@ -131,13 +135,28 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/slow":
             # Slow redirect
             self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
+        elif path == "/combo_entry":
+            # Redirect to a PATH-LESS wrapper that carries a percent-encoded
+            # target (with its own &-separated params) plus an extra distinct
+            # URL. Resolving the full target needs: keeping the query on a
+            # path-less request (http path-less fix) and sending it
+            # percent-encoded (redirector raw-request fix); and the extra URL
+            # must NOT surface, because the followed wrapper's query is not
+            # re-extracted (REDIRECTED-guard fix).
+            target = "http%3A%2F%2Fdest.com%2F%3Fa%3D1%26b%3D2"
+            other = "http%3A%2F%2Fother.com%2F"
+            self.redirect(f"{self.request.protocol}://{self.request.host}?u={target}&other={other}")
+        elif path == "/" and self.get_query_argument("u", default=None):
+            # Path-less wrapper: redirect to the URL carried (percent-encoded)
+            # in the u query parameter.
+            self.redirect(self.get_query_argument("u"))
         else:
             self.send_response(200)
         self.set_header("Content-Type", "text/plain")
 
 def make_app():
     return tornado.web.Application([
-        (r"(/[^/]+)", MainHandler),
+        (r"(/.*)", MainHandler),
     ])
 
 async def main():

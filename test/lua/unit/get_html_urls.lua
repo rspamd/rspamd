@@ -335,4 +335,128 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("Query-embedded URL extraction is bounded by its parameter", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fdest.com%2F&b=x&c=y">link</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local found
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == "dest.com" then
+        found = u:get_text()
+      end
+    end
+
+    assert_not_nil(found, "embedded query URL should be extracted")
+    assert_equal("http://dest.com/", found,
+        "embedded URL must stop at the parameter boundary, not swallow &b=x&c=y")
+
+    task:destroy()
+  end)
+
+  test("Query-embedded URL inherits CTA from its parent href", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fdest.com%2F">Click here to continue</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local found_cta = false
+    for _, part in ipairs(task:get_text_parts() or {}) do
+      if part:is_html() then
+        for _, u in ipairs(part:get_cta_urls({ original = true }) or {}) do
+          if u:get_host() == "dest.com" then
+            found_cta = true
+          end
+        end
+      end
+    end
+
+    assert_true(found_cta,
+        "query-extracted destination should inherit CTA from its parent href")
+
+    task:destroy()
+  end)
+
+  test("Nested query-embedded URLs are followed to the leaf", function()
+    -- href wraps mid, whose (escaped) query wraps deep
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fmid.com%2F%3Fv%3Dhttp%253A%252F%252Fdeep.com%252F">link</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local hosts = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      hosts[u:get_host()] = true
+    end
+
+    assert_true(hosts["mid.com"], "first-level embedded URL should be extracted")
+    assert_true(hosts["deep.com"], "nested embedded URL should be extracted")
+
+    task:destroy()
+  end)
+
+  test("Nested query-embedded URLs stop at RSPAMD_URL_QUERY_MAX_NESTING", function()
+    -- wrap?u=l1?v=l2?w=l3?x=l4?y=l5?z=l6, each level escaped one layer deeper.
+    -- With the nesting cap at 5, l1..l5 are extracted but l6 (a 6th level) is not.
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+<a href="http://wrap.com/r?u=http%3A%2F%2Fl1.com%2F%3Fu%3Dhttp%253A%252F%252Fl2.com%252F%253Fv%253Dhttp%25253A%25252F%25252Fl3.com%25252F%25253Fw%25253Dhttp%2525253A%2525252F%2525252Fl4.com%2525252F%2525253Fx%2525253Dhttp%252525253A%252525252F%252525252Fl5.com%252525252F%252525253Fy%252525253Dhttp%25252525253A%25252525252F%25252525252Fl6.com%25252525252F">link</a>
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local hosts = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      hosts[u:get_host()] = true
+    end
+
+    assert_true(hosts["l1.com"], "level-1 embedded URL should be extracted")
+    assert_true(hosts["l2.com"], "level-2 embedded URL should be extracted")
+    assert_true(hosts["l3.com"], "level-3 embedded URL should be extracted")
+    assert_true(hosts["l4.com"], "level-4 embedded URL should be extracted")
+    assert_true(hosts["l5.com"], "level-5 embedded URL should be extracted")
+    assert_nil(hosts["l6.com"], "level-6 URL is past the nesting cap and must not be extracted")
+
+    task:destroy()
+  end)
+
 end)
