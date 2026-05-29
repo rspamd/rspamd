@@ -20,7 +20,9 @@
 # Disable specific languages
 # languages_disable = ["fr", "es"]
 
-# Use the following fasttext model for language detection (if Fasttext support is compiled in)
+# Use the following fasttext model for language detection (if Fasttext support is compiled in).
+# When this is unset, a model shipped at "${SHAREDIR}/languages/fasttext_model.ftz"
+# is auto-loaded if present; set this explicitly to use a different model or a map.
 # fasttext_model = "${SHAREDIR}/languages/fasttext_model.ftz"
 
 # Prefer fasttext over all other methods
