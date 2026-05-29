@@ -223,7 +223,7 @@ rspamd_write_pid(struct rspamd_main *main)
 {
 	pid_t pid;
 
-	if (main->cfg->pid_file == NULL) {
+	if (main->cfg->pid_file == NULL || main->cfg->pid_file[0] == '\0') {
 		return -1;
 	}
 	main->pfh = rspamd_pidfile_open(main->cfg->pid_file, 0644, &pid);
@@ -1621,7 +1621,8 @@ int main(int argc, char **argv, char **env)
 	sigpipe_act.sa_flags = 0;
 	sigaction(SIGPIPE, &sigpipe_act, NULL);
 
-	if (rspamd_main->cfg->pid_file == NULL) {
+	if (rspamd_main->cfg->pid_file == NULL ||
+		rspamd_main->cfg->pid_file[0] == '\0') {
 		msg_info_main("pid file is not specified, skipping writing it");
 		skip_pid = TRUE;
 	}
