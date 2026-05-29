@@ -3021,7 +3021,12 @@ static void
 inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 				 GPtrArray *part_urls)
 {
-	if (url->querylen > 0) {
+	/*
+	 * REDIRECTED means url_redirector already resolved this hop to a real target
+	 * (a chain hop), so skip query-param guessing to avoid duplicating it;
+	 * terminal hops (200/dead-end) are never REDIRECTED, so still scanned.
+	 */
+	if (!(url->flags & RSPAMD_URL_FLAG_REDIRECTED) && url->querylen > 0) {
 		struct rspamd_url_query_to_inject_cbd cbd;
 
 		cbd.task = task;
@@ -3029,9 +3034,8 @@ inject_url_query(struct rspamd_task *task, struct rspamd_url *url,
 		cbd.mpart_urls = part_urls;
 		cbd.parent_flags = url->flags;
 
-		rspamd_url_find_multiple(task->task_pool,
-								 rspamd_url_query_unsafe(url), url->querylen,
-								 RSPAMD_URL_FIND_ALL, NULL,
+		rspamd_url_find_in_query(task->task_pool, url,
+								 RSPAMD_URL_FIND_ALL,
 								 inject_url_query_callback, &cbd,
 								 task->cfg ? task->cfg->lua_state : NULL);
 	}
@@ -3057,9 +3061,14 @@ lua_task_inject_url(lua_State *L)
 	if (task && task->message && url && url->url) {
 		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false);
 
-		if (mpart && mpart->urls) {
-			inject_url_query(task, url->url, mpart->urls);
-		}
+		/*
+		 * Scan the injected URL's query string for embedded URLs (e.g. a
+		 * redirector/wrapper hop that carries its real target in ?u=...). This
+		 * must run even without an associated mime part, otherwise URLs
+		 * injected by url_redirector and similar consumers miss the query
+		 * extraction that MIME-parsed URLs receive.
+		 */
+		inject_url_query(task, url->url, (mpart && mpart->urls) ? mpart->urls : NULL);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");

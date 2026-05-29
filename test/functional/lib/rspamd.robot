@@ -175,6 +175,17 @@ Expect Extended URL
   END
   Should Be True  ${found_url}  msg="Expected URL was not found: ${url}"
 
+Do Not Expect Extended URL
+  [Arguments]  ${url}
+  ${found_url} =  Set Variable  ${FALSE}
+  ${url_list} =  Convert To List  ${SCAN_RESULT}[urls]
+  FOR  ${item}  IN  @{url_list}
+    ${d} =  Convert To Dictionary  ${item}
+    ${found_url} =  Evaluate  "${d}[url]" == "${url}"
+    Exit For Loop If  ${found_url} == ${TRUE}
+  END
+  Should Not Be True  ${found_url}  msg="URL should not be present: ${url}"
+
 Expect Symbol With Exact Options
   [Arguments]  ${symbol}  @{options}
   Expect Symbol  ${symbol}
