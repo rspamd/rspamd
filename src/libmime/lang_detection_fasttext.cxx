@@ -90,6 +90,32 @@ private:
 		}
 	}
 
+	/*
+	 * Fallback used when no fasttext_model is configured: load the model that
+	 * ships in the languages data dir if it exists. Stays silent (debug only)
+	 * when the file is absent so stock installs without the model behave as
+	 * before.
+	 */
+	void try_load_default_model()
+	{
+		auto *cfg = cfg_;
+		static const char default_model_path[] =
+			RSPAMD_SHAREDIR "/languages/fasttext_model.ftz";
+
+		if (access(default_model_path, R_OK) != 0) {
+			msg_debug_config("no default fasttext model at %s: %s",
+							 default_model_path, strerror(errno));
+			return;
+		}
+
+		load_model_direct(default_model_path);
+
+		if (owned_model_) {
+			msg_info_config("loaded default fasttext model from %s",
+							default_model_path);
+		}
+	}
+
 	void load_model_map(const char *model_path)
 	{
 		auto *cfg = cfg_;
@@ -193,20 +219,25 @@ public:
 	{
 		const auto *ucl_obj = cfg->cfg_ucl_obj;
 		const auto *opts_section = ucl_object_find_key(ucl_obj, "lang_detection");
+		const ucl_object_t *model = nullptr;
 
 		if (opts_section) {
-			const auto *model = ucl_object_find_key(opts_section, "fasttext_model");
+			model = ucl_object_find_key(opts_section, "fasttext_model");
+		}
 
-			if (model) {
-				const char *model_path = ucl_object_tostring(model);
+		if (model) {
+			const char *model_path = ucl_object_tostring(model);
 
-				if (rspamd_map_is_map(model_path)) {
-					load_model_map(model_path);
-				}
-				else {
-					load_model_direct(model_path);
-				}
+			if (rspamd_map_is_map(model_path)) {
+				load_model_map(model_path);
 			}
+			else {
+				load_model_direct(model_path);
+			}
+		}
+		else {
+			/* No explicit model configured: try the shipped default */
+			try_load_default_model();
 		}
 	}
 
