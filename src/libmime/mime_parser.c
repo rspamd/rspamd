@@ -905,10 +905,28 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 															 p7_signed_content->d.data->length);
 							memcpy(cpy, p7_signed_content->d.data->data,
 								   p7_signed_content->d.data->length);
+
+							/*
+							 * S/MIME re-enters the parser here without going through
+							 * the multipart/message nesting checks, so account for it
+							 * explicitly to bound recursion on deeply nested S/MIME.
+							 */
+							if (st->nesting > max_nested) {
+								g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
+											"S/MIME nesting level is too high: %d",
+											st->nesting);
+								PKCS7_free(p7);
+								BIO_free(bio);
+								CMS_ContentInfo_free(cms);
+								return RSPAMD_MIME_PARSE_NESTING;
+							}
+
+							st->nesting++;
 							ret = rspamd_mime_process_multipart_node(task,
 																	 st, NULL,
 																	 cpy, cpy + p7_signed_content->d.data->length,
 																	 TRUE, err);
+							st->nesting--;
 
 							PKCS7_free(p7);
 							BIO_free(bio);
@@ -1435,7 +1453,9 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	ret = rspamd_multipart_boundaries_filter(task, part, st, &cbdata);
 	/* Cleanup stack */
 	st->nesting--;
-	g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
+	if (st->stack->len > 0) {
+		g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
+	}
 
 	return ret;
 }
@@ -1639,9 +1659,21 @@ rspamd_mime_preprocess_message(struct rspamd_task *task,
 							   struct rspamd_mime_parser_runtime *st)
 {
 	if (top->raw_data.begin >= st->pos) {
+		/*
+		 * Look back one byte so a boundary glued to the very start of the
+		 * body is still detected, but never read before the buffer start.
+		 */
+		const char *lookup_start = top->raw_data.begin;
+		gsize lookup_len = top->raw_data.len;
+
+		if (lookup_start > st->start) {
+			lookup_start--;
+			lookup_len++;
+		}
+
 		rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
-								   top->raw_data.begin - 1,
-								   top->raw_data.len + 1,
+								   lookup_start,
+								   lookup_len,
 								   rspamd_mime_preprocess_cb, st, NULL);
 	}
 	else {
