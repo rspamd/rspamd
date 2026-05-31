@@ -14,8 +14,8 @@ ${REDIS_SCOPE}        Suite
 ${RSPAMD_SCOPE}       Suite
 ${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${SETTINGS}           {symbols_enabled = [MX_INVALID]}
-${PROPER_STATUS}      /tmp/dummy_smtp_greeting_proper.status
-${SLOW_STATUS}        /tmp/dummy_smtp_greeting_slow.status
+${PROPER_STATUS}      ${RSPAMD_TMP_PREFIX}/dummy_smtp_greeting_proper.status
+${SLOW_STATUS}        ${RSPAMD_TMP_PREFIX}/dummy_smtp_greeting_slow.status
 
 *** Test Cases ***
 Multi-line greeting with send_quit=true emits MX_GOOD with QUIT after final line
@@ -32,16 +32,9 @@ Slow second banner line triggers MX_TIMEOUT_READ
 *** Keywords ***
 Start Greeting Dummy
   [Arguments]  ${host}  ${between_wait}  ${status_file}  ${pid_suffix}
-  Start Process  ${RSPAMD_TESTDIR}/util/dummy_smtp.py
-  ...  --port  11125
-  ...  --mode  greeting_multi
-  ...  --host  ${host}
-  ...  --between-wait  ${between_wait}
-  ...  --status-file  ${status_file}
-  ...  --pid-file  /tmp/dummy_smtp_${pid_suffix}.pid
-  ...  stderr=/tmp/dummy_smtp_${pid_suffix}.log
-  ...  stdout=/tmp/dummy_smtp_${pid_suffix}.log
-  Wait Until Created  /tmp/dummy_smtp_${pid_suffix}.pid  timeout=2 second
+  Start Dummy Smtp  11125  greeting_multi  ${host}
+  ...  ${RSPAMD_TMP_PREFIX}/dummy_smtp_${pid_suffix}.pid
+  ...  --between-wait  ${between_wait}  --status-file  ${status_file}
 
 Mx Quit Setup
   Start Greeting Dummy  127.0.0.6  0.2  ${PROPER_STATUS}  greeting_proper

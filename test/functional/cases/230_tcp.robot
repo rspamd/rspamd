@@ -82,9 +82,11 @@ Servers Teardown
 Run Dummy Ssl
   [Arguments]
   ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_ssl-${RSPAMD_PORT_DUMMY_SSL}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_ssl-${RSPAMD_PORT_DUMMY_SSL}.log
   Set Suite Variable  ${DUMMY_SSL_PID_FILE}  ${pid}
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem  ${RSPAMD_PORT_DUMMY_SSL}  ${pid}
-  Wait Until Created  ${pid}  timeout=2 second
+  Start Dummy Service  dummy_ssl.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem  ${RSPAMD_PORT_DUMMY_SSL}  ${pid}
+  Wait Until Dummy Listening  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_DUMMY_SSL}
 
 Teardown Dummy Ssl
   ${ssl_pid} =  Get File  ${DUMMY_SSL_PID_FILE}
