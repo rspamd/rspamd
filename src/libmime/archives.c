@@ -349,6 +349,10 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
 			}
 
+			if (hlen + sizeof(uint16_t) * 2 > (gsize) (extra + extra_len - p)) {
+				/* Truncated or malformed extra field */
+				break;
+			}
 			p += hlen + sizeof(uint16_t) * 2;
 		}
 
@@ -542,6 +546,17 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 				/* HIGH_UNP_SIZE  */
 				RAR_READ_UINT32(tmp);
 				uncomp_sz += tmp;
+			}
+
+			/*
+			 * p advanced past the attrs and optional HIGH_*_SIZE fields
+			 * after fname_len was validated above, so re-check it against
+			 * the remaining buffer before reading the filename.
+			 */
+			if (fname_len > (gsize) (end - p)) {
+				msg_debug_archive("rar archive is invalid (truncated filename)");
+
+				return;
 			}
 
 			f = g_malloc0(sizeof(*f));
@@ -1008,6 +1023,10 @@ rspamd_7zip_read_bits(struct rspamd_task *task,
 
 	for (i = 0; i < nbits; i++) {
 		if (mask == 0) {
+			if (p >= end) {
+				return NULL;
+			}
+
 			avail = *p;
 			SZ_SKIP_BYTES(1);
 			mask = 0x80;
@@ -1032,6 +1051,10 @@ rspamd_7zip_read_digest(struct rspamd_task *task,
 						uint64_t num_streams,
 						unsigned int *pdigest_read)
 {
+	if (p >= end) {
+		return NULL;
+	}
+
 	unsigned char all_defined = *p;
 	uint64_t i;
 	unsigned int num_defined = 0;
@@ -1526,7 +1549,7 @@ rspamd_7zip_read_archive_props(struct rspamd_task *task,
 	 * }
 	 */
 
-	if (p != NULL) {
+	if (p != NULL && p < end) {
 		proptype = *p;
 		SZ_SKIP_BYTES(1);
 
@@ -1702,6 +1725,10 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 							  struct rspamd_archive *arch,
 							  struct rspamd_mime_part *part)
 {
+	if (p >= end) {
+		return NULL;
+	}
+
 	unsigned char t = *p;
 
 	SZ_SKIP_BYTES(1);
