@@ -19,37 +19,39 @@ ${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK]}
 SAVE_INTERMEDIATE_REDIRECTORS_ONLY
   [Documentation]  Test save_intermediate_redirs={redirectors=true, non_redirectors=false}
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 SAVE_INTERMEDIATE_DISABLED
   [Documentation]  Test save_intermediate_redirs with both options disabled
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 DEFAULT_TIMEOUT_VALUE
   [Documentation]  Test default timeout value (8s) from settings
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 CUSTOM_HTTP_TIMEOUT
   [Documentation]  Test custom http_timeout setting overrides default
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 CUSTOM_REDIS_TIMEOUT
   [Documentation]  Test custom redis_timeout setting
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 REDIRECTOR_SYMBOL_DISABLED
   [Documentation]  Test behavior when redirector_symbol is not configured
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 *** Keywords ***
 Urlredirector Config Setup
   Run Dummy Http
   Rspamd Redis Setup
+  ${MESSAGE} =  Render Message Template  ${MESSAGE}
+  Set Suite Variable  ${MESSAGE}
 
 Urlredirector Config Teardown
   Rspamd Redis Teardown

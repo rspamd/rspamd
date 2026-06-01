@@ -19,11 +19,11 @@ ${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK]}
 *** Test Cases ***
 RESOLVE URLS
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 RESOLVE URLS CACHED
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 STEALTH FINGERPRINT HEADERS
   # The live HEAD requests issued by RESOLVE URLS are logged by the dummy
@@ -38,6 +38,13 @@ STEALTH FINGERPRINT HEADERS
 Urlredirector Setup
   Run Dummy Http
   Rspamd Redis Setup
+  # .eml fixtures carry the dummy_http port as a ${RSPAMD_PORT_DUMMY_HTTP}
+  # placeholder; render them now that RSPAMD_TMPDIR exists so the per-worker
+  # offset is baked into the message the scanner reads.
+  ${MESSAGE} =  Render Message Template  ${MESSAGE}
+  Set Suite Variable  ${MESSAGE}
+  ${CHAIN_MESSAGE} =  Render Message Template  ${CHAIN_MESSAGE}
+  Set Suite Variable  ${CHAIN_MESSAGE}
 
 Urlredirector Teardown
   Rspamd Redis Teardown

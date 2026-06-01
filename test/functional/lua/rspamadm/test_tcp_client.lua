@@ -1,13 +1,20 @@
 local logger = require "rspamd_logger"
 local tcp_sync = require "lua_tcp_sync"
 
+-- dummy_http port comes from the test harness. This script runs under
+-- `rspamadm lua` (not the rspamd config loader), so prefer the exported
+-- RSPAMD_PORT_DUMMY_HTTP env var, then rspamd_env, then the historical
+-- literal for ad-hoc runs.
+local http_port = tonumber(os.getenv('RSPAMD_PORT_DUMMY_HTTP'))
+  or tonumber(rspamd_env and rspamd_env.PORT_DUMMY_HTTP) or 18080
+
 local is_ok, connection = tcp_sync.connect {
   config = rspamd_config,
   ev_base = rspamadm_ev_base,
   session = rspamadm_session,
   host = '127.0.0.1',
   timeout = 20,
-  port = 18080,
+  port = http_port,
 }
 if not is_ok then
   logger.errx(rspamd_config, 'connect error: %1', connection)

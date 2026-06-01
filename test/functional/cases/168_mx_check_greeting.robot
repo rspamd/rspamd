@@ -14,7 +14,7 @@ ${REDIS_SCOPE}        Suite
 ${RSPAMD_SCOPE}       Suite
 ${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${SETTINGS}           {symbols_enabled = [MX_INVALID]}
-${SINGLE_STATUS}      /tmp/dummy_smtp_greeting_single.status
+${SINGLE_STATUS}      ${RSPAMD_TMP_PREFIX}/dummy_smtp_greeting_single.status
 
 *** Test Cases ***
 Silent SMTP listener triggers MX_TIMEOUT_READ
@@ -44,20 +44,13 @@ Non-SMTP line triggers MX_INVALID
 *** Keywords ***
 Start Plain Dummy
   [Arguments]  ${mode}  ${host}
-  Start Process  ${RSPAMD_TESTDIR}/util/dummy_smtp.py
-  ...  --port  11125  --mode  ${mode}  --host  ${host}
-  ...  stderr=/tmp/dummy_smtp_${mode}.log
-  ...  stdout=/tmp/dummy_smtp_${mode}.log
-  Wait Until Created  /tmp/dummy_smtp_${mode}.pid  timeout=2 second
+  Start Dummy Smtp  11125  ${mode}  ${host}
+  ...  ${RSPAMD_TMP_PREFIX}/dummy_smtp_${mode}.pid
 
 Mx Greeting Setup
   Start Plain Dummy  silent  127.0.0.1
-  Start Process  ${RSPAMD_TESTDIR}/util/dummy_smtp.py
-  ...  --port  11125  --mode  greeting_single  --host  127.0.0.2
-  ...  --status-file  ${SINGLE_STATUS}
-  ...  stderr=/tmp/dummy_smtp_greeting_single.log
-  ...  stdout=/tmp/dummy_smtp_greeting_single.log
-  Wait Until Created  /tmp/dummy_smtp_greeting_single.pid  timeout=2 second
+  Start Dummy Smtp  11125  greeting_single  127.0.0.2
+  ...  ${RSPAMD_TMP_PREFIX}/dummy_smtp_greeting_single.pid  --status-file  ${SINGLE_STATUS}
   Start Plain Dummy  error   127.0.0.3
   Start Plain Dummy  messy   127.0.0.4
   Rspamd Redis Setup

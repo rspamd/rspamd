@@ -33,6 +33,8 @@ RESOLVE ENCODED QUERY TARGET THROUGH PATH-LESS WRAPPER
 Urlredirector Setup
   Run Dummy Http
   Rspamd Redis Setup
+  ${MESSAGE} =  Render Message Template  ${MESSAGE}
+  Set Suite Variable  ${MESSAGE}
 
 Urlredirector Teardown
   Rspamd Redis Teardown

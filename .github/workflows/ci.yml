@@ -8,6 +8,19 @@ on:
     branches:
       - '**'
 
+# A commit pushed to a branch that also has an open PR fires two runs at
+# once: one for `push` (ref refs/heads/<branch>) and one for `pull_request`
+# (ref refs/pull/<n>/merge). They duplicate each other's work and, sharing
+# the hosted runners, double CPU load -- which is enough to push the heavy
+# 001_merged rspamd's controller startup past the functional suites' fixed
+# readiness timeouts and flake (e.g. 440_ssl_server). The only identifier
+# the two events share is the head commit SHA (their refs differ), so key
+# the concurrency group on it: both events for one commit collapse to a
+# single run, and cancel-in-progress reaps the loser instead of racing it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   linters:
     uses: ./.github/workflows/ci_linters.yml

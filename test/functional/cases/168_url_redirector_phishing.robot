@@ -28,6 +28,8 @@ PHISHING NO FP WHEN DISPLAY TEXT EQUALS REDIRECT DEST
 Urlredirector Setup
   Run Dummy Http
   Rspamd Redis Setup
+  ${MESSAGE} =  Render Message Template  ${MESSAGE}
+  Set Suite Variable  ${MESSAGE}
 
 Urlredirector Teardown
   Rspamd Redis Teardown

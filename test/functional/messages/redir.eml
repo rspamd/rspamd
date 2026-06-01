@@ -1,6 +1,6 @@
 Content-type: text/plain
 
-bla http://127.0.0.1:18080/redirect2
+bla http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect2
 
-lol http://127.0.0.1:18080/redirect3
+lol http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect3
 

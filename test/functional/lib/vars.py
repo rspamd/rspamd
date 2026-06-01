@@ -93,7 +93,7 @@ def _release_slot(slot, owner_pid):
 _WORKER_INDEX = _worker_index()
 # 100 ports per worker. We currently use ~14 distinct ports; 100 leaves
 # headroom for future services and keeps each worker's ports humanly
-# distinguishable in logs (worker 3 -> 56789 + 300 = 57089).
+# distinguishable in logs (worker 3 -> 25789 + 300 = 26089).
 _PORT_OFFSET = _WORKER_INDEX * 100
 
 # Per-worker prefix for unix sockets and pid files that have historically
@@ -119,15 +119,30 @@ RSPAMD_KEY_PUB2 = 'mbggdnw3tdx7r3ruakjecpf5hcqr4cb4nmdp1fxynx3drbyujb3y'
 RSPAMD_KEY_PUB3 = 'zhypei8sartqrtow84dddgp5exh3gsr65kbw88wj7ppot1bwmuiy'
 RSPAMD_LOCAL_ADDR = '127.0.0.1'
 RSPAMD_MAP_WATCH_INTERVAL = '1min'
-RSPAMD_PORT_CONTROLLER = 56790 + _PORT_OFFSET
-RSPAMD_PORT_CONTROLLER_SLAVE = 56793 + _PORT_OFFSET
-RSPAMD_PORT_FUZZY = 56791 + _PORT_OFFSET
-RSPAMD_PORT_FUZZY_SLAVE = 56792 + _PORT_OFFSET
-RSPAMD_PORT_NORMAL = 56789 + _PORT_OFFSET
-RSPAMD_PORT_NORMAL_SLAVE = 56794 + _PORT_OFFSET
-RSPAMD_PORT_PROXY = 56795 + _PORT_OFFSET
-RSPAMD_PORT_CONTROLLER_SSL = 56796 + _PORT_OFFSET
-RSPAMD_PORT_NORMAL_SSL = 56797 + _PORT_OFFSET
+# All listening ports below MUST stay under Linux's default ephemeral
+# range (net.ipv4.ip_local_port_range = 32768..60999). The historical
+# bases sat at 56379/56380/567xx, squarely inside it, so an outbound
+# client socket (redis, monitored DNS, an upstream, a dummy-helper
+# connection) could transiently occupy a server port as its source port;
+# rspamd's later bind() of a listener on that port then failed with
+# EADDRINUSE (98). Because the controller's SSL socket is the LAST of its
+# five ports to bind -- after the controller has already opened many
+# client sockets -- it lost this race most often, surfacing as the flaky
+# 440_ssl_server "SSL controller never came up". Moving the whole
+# rspamd/redis/nginx block down by 31000 keeps it below the ephemeral
+# floor while preserving every relative offset (so the carefully spaced,
+# collision-free per-worker layout is unchanged). Layout across 64 worker
+# slots (100 ports each): dummy_* helpers occupy <= 24383, this block
+# 25379..32097, ephemeral 32768+. Do NOT move these back above 32768.
+RSPAMD_PORT_CONTROLLER = 25790 + _PORT_OFFSET
+RSPAMD_PORT_CONTROLLER_SLAVE = 25793 + _PORT_OFFSET
+RSPAMD_PORT_FUZZY = 25791 + _PORT_OFFSET
+RSPAMD_PORT_FUZZY_SLAVE = 25792 + _PORT_OFFSET
+RSPAMD_PORT_NORMAL = 25789 + _PORT_OFFSET
+RSPAMD_PORT_NORMAL_SLAVE = 25794 + _PORT_OFFSET
+RSPAMD_PORT_PROXY = 25795 + _PORT_OFFSET
+RSPAMD_PORT_CONTROLLER_SSL = 25796 + _PORT_OFFSET
+RSPAMD_PORT_NORMAL_SSL = 25797 + _PORT_OFFSET
 RSPAMD_PORT_CLAM = 2100 + _PORT_OFFSET
 RSPAMD_PORT_FPROT = 2101 + _PORT_OFFSET
 RSPAMD_PORT_FPROT2_DUPLICATE = 2102 + _PORT_OFFSET
@@ -139,9 +154,9 @@ RSPAMD_PORT_DUMMY_UDP = 5005 + _PORT_OFFSET
 RSPAMD_PORT_DUMMY_SSL = 14433 + _PORT_OFFSET
 RSPAMD_P0F_SOCKET = '{}/p0f.sock'.format(RSPAMD_TMP_PREFIX)
 RSPAMD_REDIS_ADDR = '127.0.0.1'
-RSPAMD_REDIS_PORT = 56379 + _PORT_OFFSET
+RSPAMD_REDIS_PORT = 25379 + _PORT_OFFSET
 RSPAMD_NGINX_ADDR = '127.0.0.1'
-RSPAMD_NGINX_PORT = 56380 + _PORT_OFFSET
+RSPAMD_NGINX_PORT = 25380 + _PORT_OFFSET
 RSPAMD_GROUP = 'nogroup'
 RSPAMD_USER = 'nobody'
 SOCK_DGRAM = socket.SOCK_DGRAM

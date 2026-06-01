@@ -41,6 +41,11 @@ if ! command -v pabot >/dev/null 2>&1; then
     exit 1
 fi
 
+# Preflight: every dummy_* helper must be started through the centralized
+# Start Dummy Service barrier (lib/rspamd.robot), never a bare Start Process,
+# or the start/scan race that flakes under parallel execution comes back.
+python3 "$SCRIPT_DIR/util/check_no_bare_dummy_start.py" || exit 1
+
 # Suites that still bake dummy_http/llm/udp/http_early port numbers into
 # Lua test scripts or configs. Track in task #5 follow-up; tag and exclude
 # until those are templated.
