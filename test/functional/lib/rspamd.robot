@@ -334,18 +334,26 @@ Rspamd Redis Teardown
 Wait For Rspamd Ports Released
   [Documentation]  Block until this suite's rspamd listening ports are
   ...  free, so the next suite on the same pabot worker can rebind them.
-  ...  Checks the always-present normal + controller ports; each is given
-  ...  up to ~6s (matches a slow worker shutdown under CPU contention) and
-  ...  failure to free is a warning, not a hard error -- we don't want a
-  ...  stuck port to mask the real test result, just to close the common
-  ...  handoff race. See port_is_free in rspamd.py for why SO_REUSEADDR
-  ...  does not cover this.
-  Run Keyword And Warn On Failure
-  ...  Wait Until Keyword Succeeds  30x  0.2s
-  ...  Port Is Free  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}
-  Run Keyword And Warn On Failure
-  ...  Wait Until Keyword Succeeds  30x  0.2s
-  ...  Port Is Free  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}
+  ...  Covers every port a test rspamd may bind: normal, controller,
+  ...  proxy, and the two TLS listeners (controller + normal SSL). All
+  ...  five RSPAMD_PORT_* vars are always defined in vars.py; a port the
+  ...  current config never bound just refuses connection immediately, so
+  ...  Port Is Free passes at once -- waiting on it is a cheap no-op. The
+  ...  SSL listeners matter specifically: the 440_ssl_server flake was a
+  ...  previous suite's controller-SSL socket lingering on its port, so
+  ...  the next rspamd silently came up WITHOUT its SSL listener (it logs
+  ...  bind 98 for the SSL port, then forks the controller with only the
+  ...  plain socket) and every HTTPS test got connection-refused.
+  ...  Each port gets up to ~6s; failure to free is a warning, not a hard
+  ...  error, so a stuck port can't mask the real test result. See
+  ...  port_is_free in rspamd.py for why SO_REUSEADDR does not cover this.
+  FOR  ${port}  IN
+  ...  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_CONTROLLER}  ${RSPAMD_PORT_PROXY}
+  ...  ${RSPAMD_PORT_CONTROLLER_SSL}  ${RSPAMD_PORT_NORMAL_SSL}
+    Run Keyword And Warn On Failure
+    ...  Wait Until Keyword Succeeds  30x  0.2s
+    ...  Port Is Free  ${RSPAMD_LOCAL_ADDR}  ${port}
+  END
 
 Run Redis
   ${RSPAMD_TMPDIR} =  Make Temporary Directory
