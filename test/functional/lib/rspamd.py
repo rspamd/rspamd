@@ -539,6 +539,33 @@ def TCP_Connect(addr, port):
     s.close()
 
 
+def port_is_free(addr, port):
+    """Assert that nothing is listening on addr:port.
+
+    Used by teardown to confirm a just-terminated rspamd has actually
+    released its listening sockets before the next suite on this pabot
+    worker reuses the same port range. `Wait For Process` only reaps the
+    main rspamd; the listening sockets are shared with forked workers and
+    can linger briefly after main exits. rspamd sets SO_REUSEADDR, so this
+    is NOT about TIME_WAIT -- a still-LISTENing socket from a not-yet-gone
+    worker genuinely fails the next bind() with EADDRINUSE. Connecting and
+    succeeding means someone is still listening -> raise so Wait Until
+    Keyword Succeeds retries; connection refused means the port is free.
+
+    Example:
+    | Wait Until Keyword Succeeds | 10s | 0.2s | Port Is Free | 127.0.0.1 | 56790 |
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    try:
+        s.connect((addr, int(port)))
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        return True
+    finally:
+        s.close()
+    raise AssertionError("port %s:%s is still in use" % (addr, port))
+
+
 def try_reap_zombies():
     try:
         os.waitpid(-1, os.WNOHANG)

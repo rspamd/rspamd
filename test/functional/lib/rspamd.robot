@@ -314,6 +314,14 @@ Rspamd Teardown
   END
   Terminate Process  ${RSPAMD_PROCESS}
   Wait For Process  ${RSPAMD_PROCESS}
+  # Wait For Process only reaps the main rspamd; its listening sockets are
+  # shared with forked workers and can linger a beat after main exits.
+  # Under pabot each worker runs many suites sequentially on the SAME port
+  # range, so if we release this suite before the kernel has closed the
+  # normal+controller sockets, the next suite's rspamd races them and dies
+  # with EADDRINUSE (rspamd sets SO_REUSEADDR, so this is a live socket,
+  # not TIME_WAIT). Block until the ports are actually free.
+  Wait For Rspamd Ports Released
   Save Run Results  ${RSPAMD_TMPDIR}  configdump.stdout configdump.stderr rspamd.stderr rspamd.stdout rspamd.conf rspamd.log redis.log clickhouse-config.xml
   Log does not contain segfault record
   Collect Lua Coverage
@@ -322,6 +330,22 @@ Rspamd Teardown
 Rspamd Redis Teardown
   Rspamd Teardown
   Redis Teardown
+
+Wait For Rspamd Ports Released
+  [Documentation]  Block until this suite's rspamd listening ports are
+  ...  free, so the next suite on the same pabot worker can rebind them.
+  ...  Checks the always-present normal + controller ports; each is given
+  ...  up to ~6s (matches a slow worker shutdown under CPU contention) and
+  ...  failure to free is a warning, not a hard error -- we don't want a
+  ...  stuck port to mask the real test result, just to close the common
+  ...  handoff race. See port_is_free in rspamd.py for why SO_REUSEADDR
+  ...  does not cover this.
+  Run Keyword And Warn On Failure
+  ...  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Port Is Free  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}
+  Run Keyword And Warn On Failure
+  ...  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Port Is Free  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}
 
 Run Redis
   ${RSPAMD_TMPDIR} =  Make Temporary Directory
