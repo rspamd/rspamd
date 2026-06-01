@@ -1452,11 +1452,12 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 
 		double now = ev_now(upstream->ctx->event_loop);
 
-		if (now - upstream->last_resolve < upstream->ctx->limits.resolve_min_interval) {
-			msg_info_upstream("do not resolve upstream %s as it was checked %.0f "
-							  "seconds ago (%.0f is minimum)",
-							  upstream->name, now - upstream->last_resolve,
-							  upstream->ctx->limits.resolve_min_interval);
+		double remaining = upstream->ctx->limits.resolve_min_interval -
+						   (now - upstream->last_resolve);
+		if (remaining > 0) {
+			msg_info_upstream("do not resolve upstream %s: cooldown remains "
+							  "%.0f seconds",
+							  upstream->name, ceil(remaining));
 
 			return;
 		}
