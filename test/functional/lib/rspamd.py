@@ -553,7 +553,7 @@ def port_is_free(addr, port):
     Keyword Succeeds retries; connection refused means the port is free.
 
     Example:
-    | Wait Until Keyword Succeeds | 10s | 0.2s | Port Is Free | 127.0.0.1 | 56790 |
+    | Wait Until Keyword Succeeds | 10s | 0.2s | Port Is Free | 127.0.0.1 | 25790 |
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(0.5)
