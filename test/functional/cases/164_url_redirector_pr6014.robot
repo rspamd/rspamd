@@ -22,19 +22,19 @@ CHAIN REDIRECT RESOLUTION
   [Documentation]  Test PR 6014 feature: resolve redirect chains with intermediate hops
   ...              Tests /redirect2 -> /redirect1 -> /hello chain
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 CHAIN REDIRECT WITH SYMBOL
   [Documentation]  Test that redirector_symbol shows the full redirect path (host1->host2->...->hostN)
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 CHAIN REDIRECT CACHED RESOLUTION
   [Documentation]  Test that cached chain resolution works correctly on second scan
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 REDIRECT CYCLE DETECTION
   [Documentation]  Test cycle detection with /redirect3 <-> /redirect4 cycle
@@ -43,27 +43,33 @@ REDIRECT CYCLE DETECTION
 NESTED LIMIT HANDLING
   [Documentation]  Test ^nested: marker behavior when nested_limit is exceeded
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 TIMEOUT CONFIGURATION
   [Documentation]  Test that timeout, http_timeout, and redis_timeout are correctly applied
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 SAVE INTERMEDIATE REDIRS
   [Documentation]  Test save_intermediate_redirs = {redirectors=false, non_redirectors=true}
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 BASIC URL RESOLUTION
   [Documentation]  Test basic URL resolution without redirects
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 *** Keywords ***
 Urlredirector PR6014 Setup
   Run Dummy Http
   Rspamd Redis Setup
+  ${MESSAGE} =  Render Message Template  ${MESSAGE}
+  Set Suite Variable  ${MESSAGE}
+  ${CHAIN_MESSAGE} =  Render Message Template  ${CHAIN_MESSAGE}
+  Set Suite Variable  ${CHAIN_MESSAGE}
+  ${MULTIPART_MESSAGE} =  Render Message Template  ${MULTIPART_MESSAGE}
+  Set Suite Variable  ${MULTIPART_MESSAGE}
 
 Urlredirector PR6014 Teardown
   Rspamd Redis Teardown

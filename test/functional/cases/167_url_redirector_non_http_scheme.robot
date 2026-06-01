@@ -25,7 +25,7 @@ SKIP NON-HTTP SCHEME REDIRECT
   # but then stop when it encounters the tel: scheme and not attempt HTTP request
   Scan File  ${TEL_MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
   # The original URL should be processed
-  Expect Extended URL  http://127.0.0.1:18080/tel_redirect
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/tel_redirect
   Expect Symbol With Exact Options  URL_REDIRECTOR_NON_HTTP  telephone=127.0.0.1->tel:88006007775
   Do Not Expect Added URL  tel:88006007775
 
@@ -35,7 +35,7 @@ SKIP NON-HTTP SCHEME REDIRECT WITH INTERMEDIATE HOPS
   # Intermediate redirector hops are not saved to chain by default (redirectors=false),
   # so the chain string only shows the original redirector host and the tel: target.
   Scan File  ${CHAIN_TEL_MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/chain_intermediate_1
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/chain_intermediate_1
   Expect Symbol With Exact Options  URL_REDIRECTOR_NON_HTTP  telephone=127.0.0.1->tel:88006007776
   Do Not Expect Added URL  tel:88006007776
 
@@ -45,8 +45,8 @@ MULTIPLE NON-HTTP REDIRECT TARGETS
   # tel_redirect -> tel:88006007775 (rspamd scheme: telephone)
   # mailto_redirect -> mailto:user@example.net (rspamd scheme: mailto)
   Scan File  ${MULTI_NON_HTTP_MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/tel_redirect
-  Expect Extended URL  http://127.0.0.1:18080/mailto_redirect
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/tel_redirect
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/mailto_redirect
   Expect Symbol With Exact Options  URL_REDIRECTOR_NON_HTTP
   ...  telephone=127.0.0.1->tel:88006007775
   ...  mailto=127.0.0.1->mailto:user@example.net
@@ -57,6 +57,12 @@ MULTIPLE NON-HTTP REDIRECT TARGETS
 Urlredirector Setup
   Run Dummy Http
   Rspamd Redis Setup
+  ${TEL_MESSAGE} =  Render Message Template  ${TEL_MESSAGE}
+  Set Suite Variable  ${TEL_MESSAGE}
+  ${CHAIN_TEL_MESSAGE} =  Render Message Template  ${CHAIN_TEL_MESSAGE}
+  Set Suite Variable  ${CHAIN_TEL_MESSAGE}
+  ${MULTI_NON_HTTP_MESSAGE} =  Render Message Template  ${MULTI_NON_HTTP_MESSAGE}
+  Set Suite Variable  ${MULTI_NON_HTTP_MESSAGE}
 
 Urlredirector Teardown
   Rspamd Redis Teardown

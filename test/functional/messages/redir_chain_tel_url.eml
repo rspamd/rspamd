@@ -2,6 +2,6 @@ Content-type: text/html
 
 <html>
 <body>
-<a href="http://127.0.0.1:18080/chain_intermediate_1">Call us via chain</a>
+<a href="http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/chain_intermediate_1">Call us via chain</a>
 </body>
 </html>

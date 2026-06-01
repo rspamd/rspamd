@@ -534,6 +534,22 @@ Run Rspamc
   Log  ${result.stdout}
   RETURN    ${result}
 
+Render Message Template
+  [Documentation]  Read an .eml fixture that contains Robot ${VARIABLE}
+  ...  placeholders (e.g. ${RSPAMD_PORT_DUMMY_HTTP}), expand them, write
+  ...  the result into the suite tmpdir and return the rendered path.
+  ...  .eml files are fed raw to the scanner and are NOT processed by the
+  ...  config-time Jinja engine, so per-pabot-worker values (dummy ports)
+  ...  must be substituted here at runtime. Requires ${RSPAMD_TMPDIR}
+  ...  (set by Rspamd Setup) -- call after the rspamd setup keyword.
+  [Arguments]  ${template_path}
+  ${template} =  Get File  ${template_path}
+  ${rendered} =  Replace Variables  ${template}
+  ${name} =  Evaluate  os.path.basename($template_path)  modules=os
+  ${out} =  Set Variable  ${RSPAMD_TMPDIR}/${name}
+  Create File  ${out}  ${rendered}
+  RETURN  ${out}
+
 Scan File By Reference
   [Arguments]  ${filename}  &{headers}
   Set To Dictionary  ${headers}  File=${filename}

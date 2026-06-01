@@ -19,39 +19,41 @@ ${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK]}
 BASIC CHAIN RESOLUTION AND CACHING
   [Documentation]  Test chain resolution with intermediate hops and caching
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 NESTED LIMIT MARKER
   [Documentation]  Test ^nested: markers for limit exceeded
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 CHAIN AWARE CACHE
   [Documentation]  Test per-hop Redis cache with markers
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 TIMEOUT SETTINGS
   [Documentation]  Test timeout, http_timeout, redis_timeout configuration
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 SAVE INTERMEDIATE REDIRECTS
   [Documentation]  Test save_intermediate_redirs configuration
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 REDIRECTOR SYMBOL
   [Documentation]  Test redirector_symbol with host path output
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
-  Expect Extended URL  http://127.0.0.1:18080/hello
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
 
 *** Keywords ***
 Urlredirector Chain Setup
   Run Dummy Http
   Rspamd Redis Setup
+  ${MESSAGE} =  Render Message Template  ${MESSAGE}
+  Set Suite Variable  ${MESSAGE}
 
 Urlredirector Chain Teardown
   Rspamd Redis Teardown

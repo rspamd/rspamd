@@ -1,3 +1,3 @@
 Content-type: text/plain
 
-click http://127.0.0.1:18080/combo_entry
+click http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/combo_entry
