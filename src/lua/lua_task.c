@@ -1062,6 +1062,22 @@ LUA_FUNCTION_DEF(task, get_settings);
 LUA_FUNCTION_DEF(task, lookup_settings);
 
 /***
+ * @method task:get_metadata()
+ * Gets the custom metadata object supplied with a /checkv3 multipart request.
+ * Returns nil for requests that carried no metadata part (e.g. /checkv2).
+ * @return {lua object|nil} lua object generated from the metadata UCL
+ */
+LUA_FUNCTION_DEF(task, get_metadata);
+
+/***
+ * @method task:get_metadata_field(key)
+ * Gets a single top-level field from the /checkv3 metadata object.
+ * @param {string} key optional; if omitted the whole metadata object is returned (mirrors lookup_settings)
+ * @return {lua object|nil} lua object generated from the metadata field
+ */
+LUA_FUNCTION_DEF(task, get_metadata_field);
+
+/***
  * @method task:get_settings_id()
  * Get numeric hash of settings id if specified for this task. 0 is returned otherwise.
  * @return {number} settings-id hash
@@ -1478,6 +1494,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, set_settings),
 	LUA_INTERFACE_DEF(task, get_settings),
 	LUA_INTERFACE_DEF(task, lookup_settings),
+	LUA_INTERFACE_DEF(task, get_metadata),
+	LUA_INTERFACE_DEF(task, get_metadata_field),
 	LUA_INTERFACE_DEF(task, get_settings_id),
 	LUA_INTERFACE_DEF(task, set_settings_id),
 	LUA_INTERFACE_DEF(task, merge_and_apply_settings),
@@ -6835,6 +6853,68 @@ lua_task_lookup_settings(lua_State *L)
 			}
 			else {
 				elt = ucl_object_lookup(task->settings, key);
+
+				if (elt) {
+					return ucl_object_push_lua(L, elt, true);
+				}
+				else {
+					lua_pushnil(L);
+				}
+			}
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_metadata(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task != NULL) {
+
+		if (task->meta) {
+			return ucl_object_push_lua(L, task->meta, true);
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_metadata_field(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const char *key = NULL;
+	const ucl_object_t *elt;
+
+	if (task != NULL) {
+
+		if (lua_isstring(L, 2)) {
+			key = lua_tostring(L, 2);
+		}
+
+		if (task->meta) {
+			if (key == NULL) {
+				return ucl_object_push_lua(L, task->meta, true);
+			}
+			else {
+				elt = ucl_object_lookup(task->meta, key);
 
 				if (elt) {
 					return ucl_object_push_lua(L, elt, true);

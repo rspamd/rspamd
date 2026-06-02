@@ -88,3 +88,23 @@ checkv3 via rspamc encrypted with msgpack
   ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
   ...  --msgpack  --key  ${RSPAMD_KEY_PUB1}  --settings=${SETTINGS_NOSYMBOLS}  ${GTUBE}
   Check Rspamc  ${result}  GTUBE (
+
+checkv3 custom metadata header via get_request_header
+  [Documentation]  Custom field in the metadata "headers" sub-object is retrievable via task:get_request_header
+  &{V3_HDRS} =  Create Dictionary  X-V3-Custom=hello-from-meta
+  &{V3_META} =  Create Dictionary  headers=${V3_HDRS}
+  Scan File V3  ${MESSAGE}  metadata=${V3_META}
+  Expect Symbol With Option  TEST_V3_META_HEADER  hello-from-meta
+
+checkv3 metadata fields via get_metadata and get_metadata_field
+  [Documentation]  Arbitrary top-level metadata fields are readable via task:get_metadata()/get_metadata_field()
+  &{V3_META} =  Create Dictionary  custom_field=meta-value-42
+  Scan File V3  ${MESSAGE}  metadata=${V3_META}
+  Expect Symbol With Option  TEST_V3_META_FIELD  meta-value-42
+  Expect Symbol With Option  TEST_V3_META_FIELD_LOOKUP  meta-value-42
+
+checkv3 via rspamc with metadata-header
+  [Documentation]  rspamc --metadata-header injects a metadata header retrievable via task:get_request_header
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
+  ...  --metadata-header=X-V3-Custom=from-rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  TEST_V3_META_HEADER (

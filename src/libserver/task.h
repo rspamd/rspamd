@@ -224,6 +224,7 @@ struct rspamd_task {
 	const char *classifier;                /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det; /**< Languages detector								*/
 	struct rspamd_message *message;
+	ucl_object_t *meta; /**< custom metadata object from a checkv3 request (or NULL) */
 
 	/* ESMTP arguments from milter protocol */
 	GHashTable *mail_esmtp_args; /**< ESMTP arguments from MAIL FROM command */
