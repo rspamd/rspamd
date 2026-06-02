@@ -297,6 +297,10 @@ void rspamd_task_free(struct rspamd_task *task)
 			ucl_object_unref(task->settings);
 		}
 
+		if (task->meta != NULL) {
+			ucl_object_unref(task->meta);
+		}
+
 		if (task->settings_elt != NULL) {
 			REF_RELEASE(task->settings_elt);
 		}

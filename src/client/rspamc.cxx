@@ -65,6 +65,7 @@ static const char *local_addr = nullptr;
 static const char *execute = nullptr;
 static const char *sort = nullptr;
 static const char **http_headers = nullptr;
+static const char **metadata_headers = nullptr;
 static const char **exclude_patterns = nullptr;
 static int weight = 0;
 static int flag = 0;
@@ -177,6 +178,8 @@ static GOptionEntry entries[] =
 		 "Write mime body of message with headers instead of just a scan's result", nullptr},
 		{"header", 0, 0, G_OPTION_ARG_STRING_ARRAY, &http_headers,
 		 "Add custom HTTP header to query (can be repeated)", nullptr},
+		{"metadata-header", 0, 0, G_OPTION_ARG_STRING_ARRAY, &metadata_headers,
+		 "Add custom field to v3 metadata headers as KEY=VALUE or KEY:VALUE (can be repeated)", nullptr},
 		{"exclude", 0, 0, G_OPTION_ARG_STRING_ARRAY, &exclude_patterns,
 		 "Exclude specific glob patterns in file names (can be repeated)", nullptr},
 		{"sort", 0, 0, G_OPTION_ARG_STRING, &sort,
@@ -2378,6 +2381,46 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 			}
 			else {
 				ucl_object_unref(flags_arr);
+			}
+
+			/*
+			 * Custom metadata headers: carried in the metadata body part and
+			 * exposed server-side via task:get_request_header(), free of the
+			 * HTTP header size limit.
+			 */
+			if (metadata_headers) {
+				ucl_object_t *hdrs_obj = ucl_object_typed_new(UCL_OBJECT);
+				unsigned int nhdrs = 0;
+
+				for (auto *mhdr = metadata_headers; *mhdr; mhdr++) {
+					std::string_view hdr_view{*mhdr};
+					auto delim_pos = std::find_if(std::begin(hdr_view), std::end(hdr_view),
+												  [](auto c) { return c == ':' || c == '='; });
+					std::string key, val;
+
+					if (delim_pos == std::end(hdr_view)) {
+						key = std::string{hdr_view};
+					}
+					else {
+						auto off = std::distance(std::begin(hdr_view), delim_pos);
+						key = std::string{hdr_view.substr(0, off)};
+						val = std::string{hdr_view.substr(off + 1)};
+					}
+
+					if (!key.empty()) {
+						ucl_object_insert_key(hdrs_obj,
+											  ucl_object_fromstring(val.c_str()),
+											  key.c_str(), 0, true);
+						nhdrs++;
+					}
+				}
+
+				if (nhdrs > 0) {
+					ucl_object_insert_key(metadata, hdrs_obj, "headers", 0, false);
+				}
+				else {
+					ucl_object_unref(hdrs_obj);
+				}
 			}
 
 			rspamd_client_command_v3(conn, "checkv3", metadata, in,

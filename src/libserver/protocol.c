@@ -2328,6 +2328,35 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 }
 
 /*
+ * Inject a single metadata "headers" entry into the task request headers.
+ * The ftok structs point directly into the metadata UCL object (owned by
+ * task->meta for the whole task lifetime), so no copy of the bytes is needed.
+ * Lengths come from the UCL accessors, so embedded NULs (msgpack) are kept.
+ */
+static void
+rspamd_protocol_metadata_add_header(struct rspamd_task *task,
+									const char *key, gsize klen,
+									const ucl_object_t *val_obj)
+{
+	gsize vlen;
+	const char *val = ucl_object_tolstring(val_obj, &vlen);
+	rspamd_ftok_t *name_tok, *val_tok;
+
+	if (val == NULL) {
+		return;
+	}
+
+	name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
+	val_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*val_tok));
+	name_tok->begin = key;
+	name_tok->len = klen;
+	val_tok->begin = val;
+	val_tok->len = vlen;
+
+	rspamd_task_add_request_header(task, name_tok, val_tok);
+}
+
+/*
  * Handle metadata from a parsed UCL object for v3 protocol.
  * Maps structured metadata fields to task fields.
  */
@@ -2579,6 +2608,72 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 				}
 			}
 			rcpt_idx++;
+		}
+	}
+
+	/*
+	 * headers (object: header-name -> string value, or array of strings when a
+	 * name is repeated)
+	 *
+	 * Custom fields carried in the metadata body part are exposed as task
+	 * request headers, so they are retrievable via task:get_request_header()
+	 * exactly like v2 HTTP request headers - but without the HTTP header size
+	 * limit, since the metadata travels in the multipart body.
+	 *
+	 * NB: task->request_headers is also the control channel that
+	 * rspamd_task_load_message consults for message-loading directives
+	 * (shm/file/path/dictionary/Content-Encoding...). Those reserved names are
+	 * skipped here so client-supplied metadata can never collide with them.
+	 */
+	elt = ucl_object_lookup(metadata, "headers");
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		static const char *reserved_hdrs[] = {
+			"shm", "shm-offset", "shm-length", "file", "path",
+			"dictionary", "compression", "content-encoding"};
+		ucl_object_iter_t it = NULL;
+
+		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			gsize klen;
+			const char *key = ucl_object_keyl(cur, &klen);
+			gboolean reserved = FALSE;
+			unsigned int i;
+
+			if (key == NULL || klen == 0) {
+				continue;
+			}
+
+			for (i = 0; i < G_N_ELEMENTS(reserved_hdrs); i++) {
+				if (strlen(reserved_hdrs[i]) == klen &&
+					rspamd_lc_cmp(key, reserved_hdrs[i], klen) == 0) {
+					reserved = TRUE;
+					break;
+				}
+			}
+
+			if (reserved) {
+				msg_info_protocol("ignore reserved metadata header '%*s'",
+								  (int) klen, key);
+				continue;
+			}
+
+			if (ucl_object_type(cur) == UCL_STRING) {
+				rspamd_protocol_metadata_add_header(task, key, klen, cur);
+			}
+			else if (ucl_object_type(cur) == UCL_ARRAY) {
+				/*
+				 * A repeated header name is collapsed by the UCL parser into an
+				 * array under that key; expand each string value into its own
+				 * request header (request headers are multi-valued).
+				 */
+				ucl_object_iter_t ait = NULL;
+				const ucl_object_t *aval;
+
+				while ((aval = ucl_object_iterate(cur, &ait, true)) != NULL) {
+					if (ucl_object_type(aval) == UCL_STRING) {
+						rspamd_protocol_metadata_add_header(task, key, klen, aval);
+					}
+				}
+			}
 		}
 	}
 
@@ -2854,9 +2949,12 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 		return FALSE;
 	}
 
-	rspamd_mempool_add_destructor(task->task_pool,
-								  (rspamd_mempool_destruct_t) ucl_object_unref,
-								  metadata_obj);
+	/*
+	 * The task takes ownership of the metadata object; it is unref'd in
+	 * rspamd_task_free. Keeping it alive for the whole task lifetime also
+	 * exposes it to Lua via task:get_metadata()/get_metadata_field().
+	 */
+	task->meta = metadata_obj;
 
 	/* Apply metadata to task */
 	if (!rspamd_protocol_handle_metadata(task, metadata_obj)) {
