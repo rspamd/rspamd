@@ -280,19 +280,31 @@ local function make_prefix(redis_key, name, bucket)
   }
 end
 
+-- Distinguishes buckets within a single rule so that, e.g. "200 / 1h" and
+-- "30 / 1m" map to separate Redis keys instead of collapsing onto the same
+-- selector value (see issue #6059). Uses burst + rate, mirroring the burst
+-- component that gen_rate_key already prepends for the non-selector path.
+local function bucket_id(bucket)
+  return string.format('%s:%s',
+    lua_util.round(100000.0 / bucket.burst), bucket.rate)
+end
+
 local function limit_to_prefixes(task, k, v, prefixes)
   local n = 0
   for _, bucket in ipairs(v.buckets) do
     if v.selector then
       local selectors = lua_selectors.process_selectors(task, v.selector)
       if selectors then
+        local bid = bucket_id(bucket)
         local combined = lua_selectors.combine_selectors(task, selectors, ':')
         if type(combined) == 'string' then
-          prefixes[combined] = make_prefix(combined, k, bucket)
+          local rkey = bid .. ':' .. combined
+          prefixes[rkey] = make_prefix(rkey, k, bucket)
           n = n + 1
         else
           fun.each(function(p)
-            prefixes[p] = make_prefix(p, k, bucket)
+            local rkey = bid .. ':' .. p
+            prefixes[rkey] = make_prefix(rkey, k, bucket)
             n = n + 1
           end, combined)
         end
