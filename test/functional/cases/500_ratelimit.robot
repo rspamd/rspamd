@@ -46,3 +46,9 @@ RATELIMIT CHECK BUILTIN
 
 RATELIMIT CHECK SELECTOR
   Basic Test  foo@example.net  special@example.net  2
+
+RATELIMIT CHECK MULTIPLE BUCKETS
+  # Regression for #6059: with two buckets (burst 2 and burst 20) the most
+  # restrictive one must fire. Before the fix only the last bucket (burst 20)
+  # was tracked, so a soft reject would never happen at the third message.
+  Basic Test  bar@example.net  multi@example.net  2
