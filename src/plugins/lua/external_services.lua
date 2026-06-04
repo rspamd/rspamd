@@ -222,8 +222,21 @@ if opts and type(opts) == 'table' then
       else
         m = nrule
 
+        -- Every external service is scheduled under a stable <RULE>_CHECK
+        -- callback symbol, so it is a predictable dependency target regardless
+        -- of how the scan result symbols are named. Scanners whose main symbol
+        -- is already a *_CHECK (e.g. VADE_CHECK, CLOUDMARK_CHECK) use it as is;
+        -- otherwise the anchor is derived from the rule key (unique per rule, so
+        -- no collisions between instances) and the result symbol (e.g.
+        -- DCC_REJECT) becomes a virtual child, so its score and results stay
+        -- unchanged.
+        local check_symbol = m.symbol
+        if not check_symbol:match('_CHECK$') then
+          check_symbol = k:upper() .. '_CHECK'
+        end
+
         local t = {
-          name = m.symbol,
+          name = check_symbol,
           callback = cb,
           score = 0.0,
           group = N
@@ -245,6 +258,18 @@ if opts and type(opts) == 'table' then
         end
 
         local id = rspamd_config:register_symbol(t)
+
+        -- The scanner's own result symbol, when distinct from the _CHECK anchor,
+        -- is registered as a virtual child so it still carries the verdict.
+        if m.symbol ~= check_symbol then
+          rspamd_config:register_symbol({
+            type = 'virtual',
+            name = m.symbol,
+            parent = id,
+            score = 0.0,
+            group = N
+          })
+        end
 
         if m.symbol_fail then
           rspamd_config:register_symbol({
