@@ -28,6 +28,15 @@
 #include <unicode/usprep.h>
 #include <unicode/ucnv.h>
 
+/*
+ * Following a query-embedded URL re-enters the URL multipattern scan; the
+ * deepest chain holds RSPAMD_URL_QUERY_MAX_NESTING scratch contexts plus the
+ * enclosing scan and the leaf TLD lookup. Keep that on the fast static-scratch
+ * path of the multipattern matcher (a deeper run still works via the graceful
+ * fallback in rspamd_multipattern_lookup, just without a cached scratch).
+ */
+G_STATIC_ASSERT(RSPAMD_URL_QUERY_MAX_NESTING + 2 <= RSPAMD_MULTIPATTERN_MAX_REENTRANCY);
+
 /* Lua URL filter consultation return values */
 enum rspamd_url_lua_filter_result {
 	RSPAMD_URL_LUA_FILTER_ACCEPT = 0,     /* Continue parsing normally */

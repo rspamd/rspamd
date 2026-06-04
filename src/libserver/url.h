@@ -279,15 +279,17 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
  * How deep to follow URLs nested inside the query of an already query-extracted
  * URL (a properly escaped wrapper carries one target per encoding layer).
  *
+ * This is a functional limit on how far redirect/wrapper chains are unwrapped.
  * Each level re-enters the URL multipattern scan while the enclosing scan is
- * still on the stack. The peak number of simultaneously-held scratch contexts
- * on the deepest chain is therefore this depth plus two: one for the enclosing
- * text/subject scan, and one for the per-URL TLD lookup that rspamd_url_parse
- * runs on the freshly extracted leaf URL. Keep that within the multipattern
- * scratch budget (RSPAMD_MULTIPATTERN_MAX_REENTRANCY) so normal nesting stays
- * on the fast static-scratch path.
+ * still on the stack, so the deepest chain holds this depth plus two scratch
+ * contexts (the enclosing text/subject scan, and the per-URL TLD lookup that
+ * rspamd_url_parse runs on the freshly extracted leaf). It must therefore stay
+ * comfortably below the multipattern scratch budget
+ * (RSPAMD_MULTIPATTERN_MAX_REENTRANCY); the static assert in url.c enforces
+ * that, and rspamd_multipattern_lookup() degrades gracefully if it is ever
+ * exceeded.
  */
-#define RSPAMD_URL_QUERY_MAX_NESTING (RSPAMD_MULTIPATTERN_MAX_REENTRANCY - 2)
+#define RSPAMD_URL_QUERY_MAX_NESTING 5
 
 /**
  * Find URLs embedded in the query parameters of `url`. Unlike
