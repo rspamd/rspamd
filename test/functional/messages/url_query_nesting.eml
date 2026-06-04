@@ -1,0 +1,8 @@
+From: attacker@example.org
+To: victim@example.com
+Subject: nested query urls regression
+Content-Type: text/plain
+Date: Mon, 01 Jun 2026 00:00:00 +0000
+Message-ID: <url-query-nesting-dos@example.org>
+
+Please click http://h0.example.org/?u=http://h1.example.org/?u=http://h2.example.org/?u=http://h3.example.org/?u=http://h4.example.org/?u=http://h5.example.org/?u=http://h6.example.org/?u=http://h7.example.org/?u=http://h8.example.org/?u=http://h9.example.org/?u=http://h10.example.org/?u=http://h11.example.org/?u=http://h12.example.org/ now.

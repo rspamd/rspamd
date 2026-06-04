@@ -32,6 +32,17 @@ extern "C" {
 
 struct ev_loop;
 
+/**
+ * Maximum reentrancy depth of rspamd_multipattern_lookup() on a single
+ * multipattern. Each multipattern keeps a small stack of hyperscan scratch
+ * contexts of this depth, so a lookup may be re-entered (from within a match
+ * callback) up to this many levels deep before the scratch pool is exhausted.
+ * Callers that recurse into the same multipattern from their callback (e.g. URL
+ * query unwrapping, which re-scans an embedded URL while the enclosing scan is
+ * still on the stack) MUST keep their total nesting at or below this bound.
+ */
+#define RSPAMD_MULTIPATTERN_MAX_REENTRANCY 10
+
 enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_DEFAULT = 0,
 	RSPAMD_MULTIPATTERN_ICASE = (1 << 0),

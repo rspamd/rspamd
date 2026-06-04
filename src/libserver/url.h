@@ -23,6 +23,7 @@
 #include "khash.h"
 #include "fstring.h"
 #include "libutil/cxx/utf8_util.h"
+#include "libutil/multipattern.h" /* for RSPAMD_MULTIPATTERN_MAX_REENTRANCY */
 
 #ifdef __cplusplus
 extern "C" {
@@ -277,8 +278,16 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 /**
  * How deep to follow URLs nested inside the query of an already query-extracted
  * URL (a properly escaped wrapper carries one target per encoding layer).
+ *
+ * Each level re-enters the URL multipattern scan while the enclosing scan is
+ * still on the stack. The peak number of simultaneously-held scratch contexts
+ * on the deepest chain is therefore this depth plus two: one for the enclosing
+ * text/subject scan, and one for the per-URL TLD lookup that rspamd_url_parse
+ * runs on the freshly extracted leaf URL. Keep that within the multipattern
+ * scratch budget (RSPAMD_MULTIPATTERN_MAX_REENTRANCY) so normal nesting stays
+ * on the fast static-scratch path.
  */
-#define RSPAMD_URL_QUERY_MAX_NESTING 5
+#define RSPAMD_URL_QUERY_MAX_NESTING (RSPAMD_MULTIPATTERN_MAX_REENTRANCY - 2)
 
 /**
  * Find URLs embedded in the query parameters of `url`. Unlike
