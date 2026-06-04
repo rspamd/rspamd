@@ -725,7 +725,7 @@ if opts then
     else
       rspamd_logger.info(rspamd_config, 'cannot execute %s: %s, disabling module',
           opts['custom_keywords'], res_or_err)
-      lua_util.disable_module(N, "custom_keywords")
+      lua_util.disable_module(N, "config")
     end
   end
 
