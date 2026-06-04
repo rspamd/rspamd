@@ -327,6 +327,42 @@ unsigned int rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
 	return 0;
 }
 
+unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
+											  const char *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	/* Resolve virtual symbols to their parent so the stage reflects where the
+	 * symbol is actually produced (e.g. NEURAL_SPAM -> NEURAL_CHECK postfilter). */
+	auto *sym = real_cache->get_item_by_name(symbol, true);
+
+	if (sym == nullptr) {
+		return 0;
+	}
+
+	switch (sym->get_type()) {
+	case rspamd::symcache::symcache_item_type::CONNFILTER:
+		return SYMBOL_TYPE_CONNFILTER;
+	case rspamd::symcache::symcache_item_type::PREFILTER:
+		return SYMBOL_TYPE_PREFILTER;
+	case rspamd::symcache::symcache_item_type::FILTER:
+		return SYMBOL_TYPE_NORMAL;
+	case rspamd::symcache::symcache_item_type::POSTFILTER:
+		return SYMBOL_TYPE_POSTFILTER;
+	case rspamd::symcache::symcache_item_type::IDEMPOTENT:
+		return SYMBOL_TYPE_IDEMPOTENT;
+	case rspamd::symcache::symcache_item_type::CLASSIFIER:
+		return SYMBOL_TYPE_CLASSIFIER;
+	case rspamd::symcache::symcache_item_type::COMPOSITE:
+		return SYMBOL_TYPE_COMPOSITE;
+	case rspamd::symcache::symcache_item_type::VIRTUAL:
+		/* Unresolved virtual (parent missing); treat stage as unknown */
+		return SYMBOL_TYPE_VIRTUAL;
+	}
+
+	return 0;
+}
+
 const struct rspamd_symcache_item_stat *
 rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 {

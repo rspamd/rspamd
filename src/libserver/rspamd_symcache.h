@@ -268,6 +268,17 @@ const char *rspamd_symcache_get_parent(struct rspamd_symcache *cache,
 unsigned int rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
 											  const char *symbol);
 
+/**
+ * Returns the processing stage of a symbol as a single SYMBOL_TYPE_* bit
+ * (SYMBOL_TYPE_NORMAL for a plain filter). Virtual symbols are resolved to
+ * their parent so the returned stage reflects when the symbol is actually
+ * produced. Returns 0 if the symbol is unknown or its parent cannot be
+ * resolved. Used by the composites two-phase analysis to detect dependencies
+ * on symbols computed after the first composites pass (postfilters).
+ */
+unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
+											  const char *symbol);
+
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,
 										ucl_object_t *this_sym_ucl);

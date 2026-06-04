@@ -412,10 +412,16 @@ symbol_needs_second_pass(struct rspamd_config *cfg, const char *symbol_name)
 		return false;
 	}
 
-	auto flags = rspamd_symcache_get_symbol_flags(cfg->cache, symbol_name);
+	/*
+	 * Only postfilter-stage symbols are unavailable during the first composites
+	 * pass (filters and classifiers already ran). get_symbol_stage() resolves
+	 * virtuals to their parent, so e.g. NEURAL_SPAM reports its NEURAL_CHECK
+	 * postfilter stage. Do NOT key off SYMBOL_TYPE_NOSTAT: it is set on nearly
+	 * every virtual/callback symbol and wrongly deferred most composites.
+	 */
+	auto stage = rspamd_symcache_get_symbol_stage(cfg->cache, symbol_name);
 
-	/* Postfilters and classifiers/statistics symbols require second pass */
-	return (flags & (SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT)) != 0;
+	return stage == SYMBOL_TYPE_POSTFILTER;
 }
 
 /* Callback data for walking expression atoms to find symbol dependencies */
