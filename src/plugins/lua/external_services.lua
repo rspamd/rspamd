@@ -144,10 +144,15 @@ local function add_scanner_rule(sym, opts)
   end
 
   rule.type = opts.type
-  rule.symbol = symbol
-  rule.symbol_fail = symbol_fail
-  rule.symbol_encrypted = symbol_encrypted
-  rule.symbol_macro = symbol_macro
+  -- Prefer the symbols the scanner resolved in configure() -- its own documented
+  -- defaults (e.g. VADE_CHECK / VADE_FAIL) or the user's `symbol =` applied via
+  -- override_defaults. Fall back to the key-derived names (also used for the
+  -- configure()-failed stub above) only when the scanner left them unset, so a
+  -- scanner's default symbol is honoured and stays a stable dependency target.
+  rule.symbol = rule.symbol or symbol
+  rule.symbol_fail = rule.symbol_fail or (rule.symbol .. '_FAIL')
+  rule.symbol_encrypted = rule.symbol_encrypted or (rule.symbol .. '_ENCRYPTED')
+  rule.symbol_macro = rule.symbol_macro or (rule.symbol .. '_MACRO')
 
   rule.redis_params = redis_params
 
