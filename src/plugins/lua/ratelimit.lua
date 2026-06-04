@@ -723,9 +723,9 @@ if opts then
         settings['custom_keywords']['custom'] = res_or_err
       end
     else
-      rspamd_logger.errx(rspamd_config, 'cannot execute %s: %s',
+      rspamd_logger.info(rspamd_config, 'cannot execute %s: %s, disabling module',
           opts['custom_keywords'], res_or_err)
-      settings['custom_keywords'] = {}
+      lua_util.disable_module(N, "custom_keywords")
     end
   end
 
