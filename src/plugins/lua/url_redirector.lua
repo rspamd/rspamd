@@ -593,10 +593,10 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
 
     if code == 200 then
       if orig_url == url then
-        rspamd_logger.infox(task, 'direct url %s, err code 200', url)
+        rspamd_logger.infox(task, 'url %s resolved directly (HTTP 200)', url)
       else
         rspamd_logger.infox(task,
-            'found redirect from %s to %s, err code 200', orig_url, url)
+            'redirect chain resolved: %s -> %s (HTTP 200)', orig_url, url)
       end
       chain_append(chain, url)
       finalize_chain(task, chain, nil)
@@ -616,7 +616,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
               'failed to parse redirect location even after encoding: %s', loc)
         end
       end
-      lua_util.debugm(N, task, 'found redirect from %s to %s, err code %s',
+      lua_util.debugm(N, task, 'redirect from %s to %s (HTTP %s)',
           orig_url, loc, code)
 
       -- 'url' just returned 30x, so it's an intermediate. Save it
