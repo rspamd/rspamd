@@ -434,8 +434,13 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 					}
 					else if (s[i] == '@') {
 						/* Likely email prefix */
-						prefix = "mailto://";
-						dlen += sizeof("mailto://") - 1;
+						/*
+						 * mailto: is non-hierarchical (RFC 6068); inject the
+						 * bare scheme without // so it canonicalises to the
+						 * same string as a parsed mailto: URL and dedups.
+						 */
+						prefix = "mailto:";
+						dlen += sizeof("mailto:") - 1;
 						no_prefix = TRUE;
 					}
 					else if (s[i] == ':' && i != 0) {

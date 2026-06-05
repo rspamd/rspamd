@@ -274,3 +274,49 @@ context("URL check functions", function()
     assert_equal(res[#res], '')
   end)
 end)
+
+context("URL email canonicalisation and dedup", function()
+  local rspamd_task = require "rspamd_task"
+  local rspamd_util = require "rspamd_util"
+  local test_helper = require "rspamd_test_helper"
+
+  local cfg = rspamd_util.config_from_ucl(test_helper.default_config(),
+      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+
+  local function emails_of(mime_type, body)
+    local msg = string.format(
+        "From: s@example.org\r\nTo: r@example.org\r\nSubject: t\r\n" ..
+        "MIME-Version: 1.0\r\nContent-Type: %s\r\n\r\n%s\r\n", mime_type, body)
+    local res, task = rspamd_task.load_from_string(msg, cfg)
+    assert(res, "failed to load message")
+    assert(task:process_message(), "failed to process message")
+    local out = {}
+    for _, u in ipairs(task:get_emails() or {}) do
+      out[#out + 1] = u:get_text()
+    end
+    return out
+  end
+
+  -- A bare-text email and the same address inside an explicit mailto: URL must
+  -- canonicalise to one mailto: form and deduplicate. Regression: the '@'
+  -- matcher injected a literal "mailto://" prefix while a parsed mailto: URL is
+  -- non-hierarchical (RFC 6068) and keeps no //, so the two string forms never
+  -- collapsed and the address was extracted twice.
+  test("bare email and explicit mailto dedupe (text/plain)", function()
+    local em = emails_of("text/plain", "addr@example.com<mailto:addr@example.com>")
+    assert_equal(1, #em, "expected a single email, got " .. #em)
+    assert_equal("mailto:addr@example.com", em[1])
+  end)
+
+  test("bare email and mailto href dedupe (text/html)", function()
+    local em = emails_of("text/html",
+        '<html><body>addr@example.com or <a href="mailto:addr@example.com">x</a></body></html>')
+    assert_equal(1, #em, "expected a single email, got " .. #em)
+    assert_equal("mailto:addr@example.com", em[1])
+  end)
+
+  test("distinct emails are not over-deduped", function()
+    local em = emails_of("text/plain", "a@example.com and b@example.org")
+    assert_equal(2, #em, "expected two distinct emails, got " .. #em)
+  end)
+end)

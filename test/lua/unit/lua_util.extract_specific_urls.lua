@@ -67,7 +67,8 @@ Content-Type: text/html; charset="utf-8"
 
 local function prepare_actual_result(actual)
   return fun.totable(fun.map(
-      function(u) return u:get_raw():gsub('^%w+://', '') end,
+      -- strip the scheme; mailto: is non-hierarchical so the // is optional
+      function(u) return u:get_raw():gsub('^%w+:/*', '') end,
       actual
   ))
 end

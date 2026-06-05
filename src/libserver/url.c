@@ -186,7 +186,12 @@ struct url_matcher static_matchers[] = {
 	 0},
 	/* Likely emails */
 	{
-		"@", "mailto://", url_email_start, url_email_end,
+		/*
+		 * mailto: is non-hierarchical (RFC 6068); inject the bare scheme
+		 * without // so a bare-text email canonicalises to the same string
+		 * as an explicitly parsed mailto: URL and the two deduplicate.
+		 */
+		"@", "mailto:", url_email_start, url_email_end,
 		0}};
 
 struct rspamd_url_flag_name {
