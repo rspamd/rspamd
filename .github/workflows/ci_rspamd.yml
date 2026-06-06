@@ -82,9 +82,12 @@ jobs:
         # --break-system-packages: Ubuntu 24.04 ships Python 3.12 with PEP 668
         # marking the system interpreter as externally-managed. Older pip
         # versions (Fedora image) don't know the flag, so fall back without it.
+        # msgpack/requests/requests-toolbelt are used by the /checkv3 content
+        # negotiation functional tests (msgpack reply decode, HTTP multipart parse).
         run: |
           pip install --break-system-packages robotframework-pabot \
-            || pip install robotframework-pabot
+            msgpack requests requests-toolbelt \
+            || pip install robotframework-pabot msgpack requests requests-toolbelt
 
       - name: Run functional tests
         # Two phases run concurrently:

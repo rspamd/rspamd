@@ -243,7 +243,10 @@ void multipart_response::prepare_iov(void *zstream)
 
 auto multipart_response::content_type() const -> std::string
 {
-	return "multipart/mixed; boundary=\"" + boundary_ + "\"";
+	const char *subtype = envelope_ == multipart_envelope::mixed
+							  ? "multipart/mixed"
+							  : "multipart/form-data";
+	return std::string(subtype) + "; boundary=\"" + boundary_ + "\"";
 }
 
 }// namespace rspamd::http
@@ -264,6 +267,18 @@ struct rspamd_multipart_response_c *
 rspamd_multipart_response_new(void)
 {
 	return new rspamd_multipart_response_c();
+}
+
+void rspamd_multipart_response_set_envelope(
+	struct rspamd_multipart_response_c *resp,
+	enum rspamd_multipart_envelope_c env)
+{
+	if (!resp) {
+		return;
+	}
+	resp->resp.set_envelope(env == RSPAMD_MULTIPART_ENVELOPE_MIXED
+								? rspamd::http::multipart_envelope::mixed
+								: rspamd::http::multipart_envelope::form_data);
 }
 
 void rspamd_multipart_response_add_part(

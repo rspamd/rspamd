@@ -31,6 +31,7 @@
 #include "lua/lua_classnames.h"
 #include "multipart_form.h"
 #include "multipart_response.h"
+#include "http_content_negotiation.h"
 #include "libmime/content_type.h"
 #include <math.h>
 
@@ -2919,6 +2920,8 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 										 metadata_part->content_type_len,
 										 "msgpack",
 										 sizeof("msgpack") - 1) != -1) {
+		/* Remember the input serialization so the reply can mirror it */
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK;
 		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
 								  metadata_part->data_len,
@@ -3111,27 +3114,101 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 }
 
 /*
- * Build a v3 multipart/mixed HTTP reply.
- * Returns the Content-Type string (allocated on task pool) for use as
- * the mime_type parameter in rspamd_http_connection_write_message.
+ * Build a 406 Not Acceptable reply listing the representations /checkv3 can
+ * produce. Used when the client's Accept matches none of them.
+ */
+static const char *
+rspamd_protocol_v3_not_acceptable(struct rspamd_http_message *msg,
+								  struct rspamd_task *task)
+{
+	static const char body[] =
+		"{\"error\":\"Not Acceptable\",\"supported\":["
+		"\"application/json\",\"application/msgpack\","
+		"\"message/rfc822\",\"multipart/form-data\"]}";
+
+	msg->code = 406;
+	if (msg->status) {
+		rspamd_fstring_free(msg->status);
+	}
+	msg->status = rspamd_fstring_new_init("Not Acceptable", sizeof("Not Acceptable") - 1);
+	rspamd_http_message_set_body(msg, body, sizeof(body) - 1);
+
+	msg_info_task("v3 reply: no acceptable representation for requested Accept");
+
+	return "application/json";
+}
+
+/*
+ * Build a v3 HTTP reply, negotiating the representation from Accept and the
+ * compression from Accept-Encoding (see the negotiation contract above).
+ * Returns the Content-Type string (allocated on the task pool, except for the
+ * static literals) for use as the mime_type argument in
+ * rspamd_http_connection_write_message.
  */
 const char *
 rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 							  struct rspamd_task *task)
 {
+	/*
+	 * Proactive content negotiation. The representation is chosen solely from
+	 * the Accept header (never inferred from the request body), and compression
+	 * solely from Accept-Encoding. Advertise both so caches behave.
+	 */
+	rspamd_http_message_add_header(msg, "Vary", "Accept, Accept-Encoding");
+
+	/*
+	 * Supported representations in preference order. MULTIPART_FORM is first so
+	 * that an absent Accept or a wildcard media range (catch-all, or the
+	 * multipart wildcard) resolves to the multipart/form-data default.
+	 */
+	static const enum rspamd_http_content_type desired[] = {
+		RSPAMD_HTTP_CTYPE_MULTIPART_FORM,
+		RSPAMD_HTTP_CTYPE_MESSAGE_RFC822,
+		RSPAMD_HTTP_CTYPE_JSON,
+		RSPAMD_HTTP_CTYPE_MSGPACK,
+		RSPAMD_HTTP_CTYPE_UNKNOWN,
+	};
+
+	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+	enum rspamd_http_content_type rep = RSPAMD_HTTP_CTYPE_MULTIPART_FORM;
+
+	if (accept_hdr && accept_hdr->len > 0) {
+		double quality = 0.0;
+		enum rspamd_http_content_type matched =
+			rspamd_http_parse_accept_header(accept_hdr, desired, &quality);
+
+		if (matched == RSPAMD_HTTP_CTYPE_UNKNOWN || quality <= 0.0) {
+			return rspamd_protocol_v3_not_acceptable(msg, task);
+		}
+
+		rep = matched;
+	}
+
+	/*
+	 * Single-body (v2-style) representations: delegate to the regular reply
+	 * writer, which serializes the result, updates history/stats and the log
+	 * pipe internally. There is no place for a rewritten-message part here.
+	 */
+	if (rep == RSPAMD_HTTP_CTYPE_JSON || rep == RSPAMD_HTTP_CTYPE_MSGPACK) {
+		int out_type = (rep == RSPAMD_HTTP_CTYPE_MSGPACK) ? UCL_EMIT_MSGPACK
+														  : UCL_EMIT_JSON_COMPACT;
+		rspamd_protocol_http_reply(msg, task, NULL, out_type);
+
+		return (rep == RSPAMD_HTTP_CTYPE_MSGPACK) ? "application/msgpack"
+												  : "application/json";
+	}
+
+	/* Multipart representations: form-data (default) or mixed (message/rfc822) */
 	int flags = RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS;
 	ucl_object_t *top = rspamd_protocol_write_ucl(task, flags);
 
 	rspamd_protocol_update_history_and_log(task);
 
-	/* Determine output format from metadata part's Content-Type or Accept header */
-	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+	/* Inner result serialization mirrors the input metadata serialization */
 	int out_type = UCL_EMIT_JSON_COMPACT;
 	const char *result_ctype = "application/json";
 
-	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
-											  "application/msgpack",
-											  sizeof("application/msgpack") - 1) != -1) {
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK) {
 		out_type = UCL_EMIT_MSGPACK;
 		result_ctype = "application/msgpack";
 	}
@@ -3140,16 +3217,20 @@ rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 	rspamd_fstring_t *result_data = rspamd_fstring_sized_new(1000);
 	rspamd_ucl_emit_fstring(top, out_type, &result_data);
 
-	/* Check if client wants compression */
+	/* Compression: honor Accept-Encoding: zstd, otherwise identity */
 	gboolean want_compress = FALSE;
 	const rspamd_ftok_t *ae_hdr = rspamd_task_get_request_header(task, "Accept-Encoding");
-	if (ae_hdr && rspamd_substring_search_caseless(ae_hdr->begin, ae_hdr->len,
-												   "zstd", 4) != -1) {
+	if ((rspamd_http_parse_accept_encoding(ae_hdr) & RSPAMD_HTTP_COMPRESS_ZSTD) != 0) {
 		want_compress = TRUE;
 	}
 
 	/* Build multipart response */
 	struct rspamd_multipart_response_c *resp = rspamd_multipart_response_new();
+
+	rspamd_multipart_response_set_envelope(
+		resp,
+		rep == RSPAMD_HTTP_CTYPE_MESSAGE_RFC822 ? RSPAMD_MULTIPART_ENVELOPE_MIXED
+												: RSPAMD_MULTIPART_ENVELOPE_FORM_DATA);
 
 	rspamd_multipart_response_add_part(resp, "result", result_ctype,
 									   result_data->str, result_data->len,

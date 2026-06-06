@@ -587,11 +587,11 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 		}
 	}
 
-	/* Check if response is multipart/mixed */
+	/* Check if response is a multipart reply (form-data or mixed envelope) */
 	const rspamd_ftok_t *ct = rspamd_http_message_find_header(msg, "Content-Type");
 
 	if (ct && rspamd_substring_search_caseless(ct->begin, ct->len,
-											   "multipart/mixed", sizeof("multipart/mixed") - 1) != -1) {
+											   "multipart/", sizeof("multipart/") - 1) != -1) {
 		/* Parse multipart response to extract result and body */
 		/* Extract boundary from Content-Type */
 		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
@@ -967,13 +967,14 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 	rspamd_snprintf(ct_buf, sizeof(ct_buf),
 					"multipart/form-data; boundary=%s", boundary);
 
-	/* Add Accept headers */
-	if (msgpack) {
-		rspamd_http_message_add_header(req->msg, "Accept", "application/msgpack");
-	}
-	else {
-		rspamd_http_message_add_header(req->msg, "Accept", "application/json");
-	}
+	/*
+	 * Request the multipart protocol explicitly. The result-part serialization
+	 * (json vs msgpack) is mirrored from the metadata Content-Type we send
+	 * above, so the Accept media type only needs to select the envelope, not
+	 * the serialization. Asking for application/json|msgpack here would instead
+	 * select a single-body v2 reply, which this client does not expect.
+	 */
+	rspamd_http_message_add_header(req->msg, "Accept", "multipart/form-data");
 	if (compressed) {
 		rspamd_http_message_add_header(req->msg, "Accept-Encoding", "zstd");
 	}

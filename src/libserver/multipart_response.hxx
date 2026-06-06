@@ -31,12 +31,28 @@ struct response_part {
 	bool compress = false;
 };
 
+/*
+ * Top-level envelope type. Both variants use the same part layout
+ * (Content-Disposition: form-data; name=...); only the multipart subtype in
+ * the response Content-Type differs, which is what lets a client pick between
+ * an HTTP form parser (form_data) and a MIME parser (mixed).
+ */
+enum class multipart_envelope {
+	form_data, /* multipart/form-data */
+	mixed,     /* multipart/mixed */
+};
+
 class multipart_response {
 public:
 	multipart_response();
 
 	void add_part(std::string name, std::string content_type,
 				  std::string_view data, bool compress = false);
+
+	void set_envelope(multipart_envelope env)
+	{
+		envelope_ = env;
+	}
 
 	/**
 	 * Serialize the multipart response.
@@ -78,6 +94,7 @@ public:
 
 private:
 	std::string boundary_;
+	multipart_envelope envelope_ = multipart_envelope::form_data;
 	std::vector<response_part> parts_;
 
 	/* Iov support (populated by prepare_iov) */

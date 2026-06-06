@@ -131,7 +131,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_GROUPS (1u << 6u)
 /* Request is multipart/form-data v3 protocol */
 #define RSPAMD_TASK_PROTOCOL_FLAG_MULTIPART_V3 (1u << 7u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (7u)
+/* v3 request metadata part was msgpack-serialized (mirror it in the reply) */
+#define RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK (1u << 8u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (8u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_SPAMC(task) (G_UNLIKELY((task)->cmd == CMD_CHECK_SPAMC))

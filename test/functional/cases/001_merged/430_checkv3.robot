@@ -108,3 +108,83 @@ checkv3 via rspamc with metadata-header
   ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  --protocol-v3
   ...  --metadata-header=X-V3-Custom=from-rspamc  ${MESSAGE}
   Check Rspamc  ${result}  TEST_V3_META_HEADER (
+
+checkv3 content negotiation on normal worker
+  [Documentation]  Accept / Accept-Encoding content negotiation for /checkv3
+  ...              against the normal scan worker.
+  Run V3 Negotiation Checks  ${RSPAMD_PORT_NORMAL}
+
+checkv3 content negotiation on controller
+  [Documentation]  Same negotiation contract must hold on the controller endpoint.
+  Run V3 Negotiation Checks  ${RSPAMD_PORT_CONTROLLER}
+
+*** Keywords ***
+Run V3 Negotiation Checks
+  [Arguments]  ${port}
+  # 1. No Accept -> multipart/form-data default, Vary advertised, result usable
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  port=${port}  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Start With  ${r}[content_type]  multipart/form-data
+  Should Contain  ${r}[vary]  Accept
+  Should Contain  ${r}[vary]  Accept-Encoding
+  Expect Symbol  GTUBE
+
+  # 2. Accept: application/json -> single JSON body, no multipart parts
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=application/json  port=${port}
+  ...  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Start With  ${r}[content_type]  application/json
+  Should Be Equal  ${r}[parser]  json
+  Should Be Empty  ${r}[parts]
+  Expect Symbol  GTUBE
+
+  # 3. Accept: application/msgpack -> single msgpack body
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=application/msgpack  port=${port}
+  ...  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Start With  ${r}[content_type]  application/msgpack
+  Should Be Equal  ${r}[parser]  msgpack
+  Expect Symbol  GTUBE
+
+  # 4. Accept: message/rfc822 -> multipart/mixed, parseable as MIME
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=message/rfc822  port=${port}
+  ...  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Start With  ${r}[content_type]  multipart/mixed
+  Should Be Equal  ${r}[parser]  mime
+  Should Start With  ${r}[result_ctype]  application/json
+  Expect Symbol  GTUBE
+
+  # 5. Accept: multipart/form-data -> parseable by an HTTP multipart parser
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=multipart/form-data  port=${port}
+  ...  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Start With  ${r}[content_type]  multipart/form-data
+  Should Be Equal  ${r}[parser]  form-data
+  Expect Symbol  GTUBE
+
+  # 6. msgpack metadata, no Accept -> multipart default, result part mirrors input (msgpack)
+  &{meta6} =  Create Dictionary  from=sender@example.com
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  metadata=${meta6}  metadata_format=msgpack
+  ...  port=${port}  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Start With  ${r}[content_type]  multipart/form-data
+  Should Start With  ${r}[result_ctype]  application/msgpack
+  Expect Symbol  GTUBE
+
+  # 7. Accept names only unsupported types -> 406 Not Acceptable
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=application/xml  port=${port}
+  ...  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  406
+
+  # 8. Accept-Encoding: zstd -> parts carry Content-Encoding: zstd
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=multipart/form-data
+  ...  accept_encoding=zstd  port=${port}  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Contain  ${r}[part_encodings]  zstd
+
+  # 8b. No Accept-Encoding -> identity (uncompressed)
+  &{r} =  Scan File V3 Negotiated  ${GTUBE}  accept=multipart/form-data  port=${port}
+  ...  Settings=${SETTINGS_NOSYMBOLS}
+  Should Be Equal As Integers  ${r}[status]  200
+  Should Be Empty  ${r}[part_encodings]
