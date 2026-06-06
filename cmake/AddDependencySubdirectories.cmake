@@ -19,7 +19,7 @@ function(AddDependencySubdirectories)
     add_subdirectory(contrib/lc-btrie)
     add_subdirectory(contrib/libottery)
     add_subdirectory(contrib/simdutf)
-    include_directories("${CMAKE_SOURCE_DIR}/contrib/simdutf/include")
+    include_directories(BEFORE "${CMAKE_SOURCE_DIR}/contrib/simdutf/include")
 
     # Configure zstd
     if (SYSTEM_ZSTD MATCHES "OFF")
