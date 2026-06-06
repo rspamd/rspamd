@@ -968,11 +968,9 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 					"multipart/form-data; boundary=%s", boundary);
 
 	/*
-	 * Request the multipart protocol explicitly. The result-part serialization
-	 * (json vs msgpack) is mirrored from the metadata Content-Type we send
-	 * above, so the Accept media type only needs to select the envelope, not
-	 * the serialization. Asking for application/json|msgpack here would instead
-	 * select a single-body v2 reply, which this client does not expect.
+	 * Request the multipart protocol. The result serialization mirrors the
+	 * metadata Content-Type, so Accept only selects the envelope; asking for
+	 * application/json|msgpack would yield a single-body v2 reply we cannot parse.
 	 */
 	rspamd_http_message_add_header(req->msg, "Accept", "multipart/form-data");
 	if (compressed) {

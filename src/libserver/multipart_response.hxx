@@ -32,10 +32,9 @@ struct response_part {
 };
 
 /*
- * Top-level envelope type. Both variants use the same part layout
- * (Content-Disposition: form-data; name=...); only the multipart subtype in
- * the response Content-Type differs, which is what lets a client pick between
- * an HTTP form parser (form_data) and a MIME parser (mixed).
+ * Top-level envelope. Both keep the same form-data part layout; only the
+ * multipart subtype differs, letting a client pick an HTTP form parser
+ * (form_data) or a MIME parser (mixed).
  */
 enum class multipart_envelope {
 	form_data, /* multipart/form-data */

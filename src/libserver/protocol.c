@@ -3139,28 +3139,18 @@ rspamd_protocol_v3_not_acceptable(struct rspamd_http_message *msg,
 }
 
 /*
- * Build a v3 HTTP reply, negotiating the representation from Accept and the
- * compression from Accept-Encoding (see the negotiation contract above).
- * Returns the Content-Type string (allocated on the task pool, except for the
- * static literals) for use as the mime_type argument in
- * rspamd_http_connection_write_message.
+ * Build a v3 HTTP reply, negotiating the format from Accept and the
+ * compression from Accept-Encoding. Returns the Content-Type for
+ * rspamd_http_connection_write_message (task-pool string or static literal).
  */
 const char *
 rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 							  struct rspamd_task *task)
 {
-	/*
-	 * Proactive content negotiation. The representation is chosen solely from
-	 * the Accept header (never inferred from the request body), and compression
-	 * solely from Accept-Encoding. Advertise both so caches behave.
-	 */
+	/* Format depends on Accept, compression on Accept-Encoding */
 	rspamd_http_message_add_header(msg, "Vary", "Accept, Accept-Encoding");
 
-	/*
-	 * Supported representations in preference order. MULTIPART_FORM is first so
-	 * that an absent Accept or a wildcard media range (catch-all, or the
-	 * multipart wildcard) resolves to the multipart/form-data default.
-	 */
+	/* Preference order; FORM is first so absent/wildcard Accept defaults to it */
 	static const enum rspamd_http_content_type desired[] = {
 		RSPAMD_HTTP_CTYPE_MULTIPART_FORM,
 		RSPAMD_HTTP_CTYPE_MESSAGE_RFC822,
@@ -3184,11 +3174,7 @@ rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 		rep = matched;
 	}
 
-	/*
-	 * Single-body (v2-style) representations: delegate to the regular reply
-	 * writer, which serializes the result, updates history/stats and the log
-	 * pipe internally. There is no place for a rewritten-message part here.
-	 */
+	/* Single-body v2 reply: regular writer does serialization/history/stats */
 	if (rep == RSPAMD_HTTP_CTYPE_JSON || rep == RSPAMD_HTTP_CTYPE_MSGPACK) {
 		int out_type = (rep == RSPAMD_HTTP_CTYPE_MSGPACK) ? UCL_EMIT_MSGPACK
 														  : UCL_EMIT_JSON_COMPACT;
