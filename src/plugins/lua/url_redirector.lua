@@ -583,9 +583,13 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
 
   local function http_callback(err, code, _, headers)
     if err then
-      rspamd_logger.infox(task,
-          'found redirect error from %s to %s, err message: %s',
-          orig_url, url, err)
+      if orig_url == url then
+        rspamd_logger.infox(task,
+            'error checking URL %s: %s', url, err)
+      else
+        rspamd_logger.infox(task,
+            'redirect error: %s -> %s: %s', orig_url, url, err)
+      end
       chain_append(chain, url)
       finalize_chain(task, chain, nil)
       return
