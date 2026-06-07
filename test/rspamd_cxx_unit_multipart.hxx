@@ -446,9 +446,46 @@ TEST_SUITE("multipart_response")
 		rspamd::http::multipart_response resp;
 		auto ct = resp.content_type();
 
-		CHECK(ct.find("multipart/mixed") != std::string::npos);
+		/* form_data is the default envelope */
+		CHECK(ct.find("multipart/form-data") != std::string::npos);
 		CHECK(ct.find("boundary=\"") != std::string::npos);
 		CHECK(ct.find(std::string(resp.get_boundary())) != std::string::npos);
+	}
+
+	TEST_CASE("envelope controls multipart subtype")
+	{
+		rspamd::http::multipart_response resp;
+
+		/* Default is form-data */
+		CHECK(resp.content_type().find("multipart/form-data") != std::string::npos);
+
+		resp.set_envelope(rspamd::http::multipart_envelope::mixed);
+		auto mixed = resp.content_type();
+		CHECK(mixed.find("multipart/mixed") != std::string::npos);
+		CHECK(mixed.find("multipart/form-data") == std::string::npos);
+		CHECK(mixed.find("boundary=\"") != std::string::npos);
+
+		resp.set_envelope(rspamd::http::multipart_envelope::form_data);
+		CHECK(resp.content_type().find("multipart/form-data") != std::string::npos);
+	}
+
+	TEST_CASE("envelope does not change part layout")
+	{
+		/* Both envelopes keep the form-data part headers; only the top-level
+		 * subtype differs. */
+		std::string data = "{\"action\":\"reject\"}";
+
+		rspamd::http::multipart_response form;
+		form.add_part("result", "application/json", data);
+		auto form_body = form.serialize();
+
+		rspamd::http::multipart_response mixed;
+		mixed.set_envelope(rspamd::http::multipart_envelope::mixed);
+		mixed.add_part("result", "application/json", data);
+		auto mixed_body = mixed.serialize();
+
+		CHECK(form_body.find("Content-Disposition: form-data; name=\"result\"") != std::string::npos);
+		CHECK(mixed_body.find("Content-Disposition: form-data; name=\"result\"") != std::string::npos);
 	}
 
 	TEST_CASE("unique boundaries")

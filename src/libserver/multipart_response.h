@@ -29,6 +29,20 @@ struct rspamd_multipart_response_c;
 
 struct rspamd_multipart_response_c *rspamd_multipart_response_new(void);
 
+/* Top-level multipart envelope selector for the response Content-Type */
+enum rspamd_multipart_envelope_c {
+	RSPAMD_MULTIPART_ENVELOPE_FORM_DATA = 0, /* multipart/form-data */
+	RSPAMD_MULTIPART_ENVELOPE_MIXED = 1,     /* multipart/mixed */
+};
+
+/**
+ * Select the top-level multipart subtype reported by the Content-Type.
+ * Part layout is identical for both; only the subtype string differs.
+ */
+void rspamd_multipart_response_set_envelope(
+	struct rspamd_multipart_response_c *resp,
+	enum rspamd_multipart_envelope_c env);
+
 void rspamd_multipart_response_add_part(
 	struct rspamd_multipart_response_c *resp,
 	const char *name,

@@ -63,6 +63,7 @@
 #define PATH_SCAN "/scan"
 #define PATH_CHECK "/check"
 #define PATH_CHECKV2 "/checkv2"
+#define PATH_CHECKV3 "/checkv3"
 #define PATH_STAT "/stat"
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
@@ -2072,7 +2073,16 @@ rspamd_controller_scan_reply(struct rspamd_task *task)
 	msg = rspamd_http_new_message(HTTP_RESPONSE);
 	msg->date = time(NULL);
 	msg->code = 200;
-	rspamd_protocol_http_reply(msg, task, NULL, out_type);
+
+	if (task->cmd == CMD_CHECK_V3) {
+		/* v3 returns a multipart/mixed reply; ctype carries the boundary */
+		rspamd_task_set_finish_time(task);
+		ctype = rspamd_protocol_http_reply_v3(msg, task);
+	}
+	else {
+		rspamd_protocol_http_reply(msg, task, NULL, out_type);
+	}
+
 	rspamd_http_connection_reset(conn_ent->conn);
 	rspamd_http_router_insert_headers(conn_ent->rt, msg);
 	rspamd_http_connection_write_message(conn_ent->conn, msg, NULL,
@@ -2348,7 +2358,15 @@ rspamd_controller_handle_scan(struct rspamd_http_connection_entry *conn_ent,
 		goto end;
 	}
 
-	if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
+	if (task->cmd == CMD_CHECK_V3) {
+		/* checkv3 carries metadata + message inside a multipart/form-data body */
+		if (!rspamd_protocol_handle_v3_request(task, msg,
+											   msg->body_buf.begin,
+											   msg->body_buf.len)) {
+			goto end;
+		}
+	}
+	else if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		goto end;
 	}
 
@@ -4235,6 +4253,9 @@ start_controller_worker(struct rspamd_worker *worker)
 								rspamd_controller_handle_scan);
 	rspamd_http_router_add_path(ctx->http,
 								PATH_CHECKV2,
+								rspamd_controller_handle_scan);
+	rspamd_http_router_add_path(ctx->http,
+								PATH_CHECKV3,
 								rspamd_controller_handle_scan);
 	rspamd_http_router_add_path(ctx->http,
 								PATH_STAT,

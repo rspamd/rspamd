@@ -62,6 +62,18 @@ static const struct rspamd_content_type_mapping content_type_map[] = {
 		.type_enum = RSPAMD_HTTP_CTYPE_OCTET_STREAM,
 		.ucl_emit_type = -1,
 	},
+	{
+		.mime_type = "message/rfc822",
+		.full_type_str = "message/rfc822",
+		.type_enum = RSPAMD_HTTP_CTYPE_MESSAGE_RFC822,
+		.ucl_emit_type = -1,
+	},
+	{
+		.mime_type = "multipart/form-data",
+		.full_type_str = "multipart/form-data",
+		.type_enum = RSPAMD_HTTP_CTYPE_MULTIPART_FORM,
+		.ucl_emit_type = -1,
+	},
 	{NULL, NULL, RSPAMD_HTTP_CTYPE_UNKNOWN, -1},
 };
 
