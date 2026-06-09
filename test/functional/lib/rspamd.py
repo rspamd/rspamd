@@ -465,21 +465,48 @@ def _v3_disposition_name(content_disposition):
 
 
 def _v3_parts_form_data(body, content_type):
-    """Parse a multipart/form-data reply with an HTTP multipart parser.
+    """Parse a multipart/form-data reply with a self-contained HTTP multipart
+    splitter.
 
-    Uses requests_toolbelt (not a MIME parser) to prove the reply is consumable
-    by standard HTTP multipart tooling.
+    Deliberately splits on the boundary delimiter itself (the way HTTP
+    multipart tooling does), rather than reusing the stdlib MIME/email parser
+    used for the message/rfc822 case, to prove the reply is consumable by
+    standard HTTP multipart tooling. Kept dependency-free on purpose so the
+    test needs no third-party module. Binary part payloads (e.g. zstd) are
+    preserved byte-exact: only the single CRLF framing each part is trimmed.
     """
-    from requests_toolbelt.multipart.decoder import MultipartDecoder
-    dec = MultipartDecoder(body, content_type)
+    m = re.search(r'boundary="?([^";]+)"?', content_type or "")
+    if not m:
+        raise ValueError("no boundary in Content-Type: %r" % content_type)
+    delimiter = b"--" + m.group(1).strip().encode()
     parts = []
-    for part in dec.parts:
-        hdrs = {k.decode().lower(): v.decode() for k, v in part.headers.items()}
+    for chunk in body.split(delimiter):
+        # Closing "--boundary--" terminator and the (empty) preamble.
+        if chunk[:2] == b"--" or not chunk:
+            continue
+        # Trim exactly the CRLF after the boundary line and the CRLF before
+        # the next boundary; never strip into binary content.
+        if chunk[:2] == b"\r\n":
+            chunk = chunk[2:]
+        elif chunk[:1] == b"\n":
+            chunk = chunk[1:]
+        if chunk[-2:] == b"\r\n":
+            chunk = chunk[:-2]
+        elif chunk[-1:] == b"\n":
+            chunk = chunk[:-1]
+        head, sep, data = chunk.partition(b"\r\n\r\n")
+        if not sep:
+            continue
+        hdrs = {}
+        for line in head.split(b"\r\n"):
+            k, _, v = line.partition(b":")
+            if _:
+                hdrs[k.decode().strip().lower()] = v.decode().strip()
         parts.append({
             "name": _v3_disposition_name(hdrs.get("content-disposition", "")),
             "ctype": hdrs.get("content-type", ""),
             "encoding": hdrs.get("content-encoding", ""),
-            "data": part.content,
+            "data": data,
         })
     return parts
 
