@@ -29,6 +29,9 @@ redis.call('HDEL', KEYS[3], 'lock')
 redis.call('HSET', KEYS[3], 'obsolete', '1')
 redis.call('EXPIRE', KEYS[3], 600)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+-- Bound the profile zset lifetime to the ANN lifetime so a fully idle rule's
+-- profile registry eventually disappears instead of accumulating tombstones
+redis.call('EXPIRE', KEYS[2], tonumber(ARGV[3]))
 -- expire in 10m, to not face race condition with other rspamd replicas refill deleted keys
 redis.call('EXPIRE', KEYS[3] .. '_spam_set', 600)
 redis.call('EXPIRE', KEYS[3] .. '_ham_set', 600)
