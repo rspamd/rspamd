@@ -621,13 +621,33 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
     })
 end
 
+-- Warn (throttled) when a selected profile points at a key with no trained
+-- blob.  Without throttling this fires every watch_interval and floods the log.
+local function maybe_warn_stale_profile(rule, set, ann_key)
+  local now = rspamd_util.get_time()
+  if not set.last_stale_warn or (now - set.last_stale_warn) > 600 then
+    set.last_stale_warn = now
+    rspamd_logger.warnx(rspamd_config,
+      'ANN profile for %s:%s selects Redis key %s which has no trained blob ' ..
+      '(stale profile entry); falling back to an older live profile',
+      rule.prefix, set.name, ann_key)
+  else
+    lua_util.debugm(N, rspamd_config,
+      'stale ANN profile key %s for %s:%s (warning throttled)',
+      ann_key, rule.prefix, set.name)
+  end
+end
+
 -- This function loads new ann from Redis
 -- This is based on `profile` attribute.
 -- ANN is loaded from `profile.redis_key`
 -- Rank of `profile` key is also increased, unfortunately, it means that we need to
 -- serialize profile one more time and set its rank to the current time
 -- set.ann fields are set according to Redis data received
-local function load_new_ann(rule, ev_base, set, profile, min_diff)
+-- `candidates` (optional) is the best-first list of remaining compatible
+-- profiles ({elt, dist}); if `profile`'s blob is missing we fall back to the
+-- next live candidate so a stale highest-version entry cannot keep inference dark.
+local function load_new_ann(rule, ev_base, set, profile, min_diff, candidates)
   local ann_key = profile.redis_key
 
   local function data_cb(err, data)
@@ -674,6 +694,13 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
                 'ZADD',  -- command
                 { set.prefix, tostring(rspamd_util.get_time()), profile_serialized }
               )
+              -- Keep an actively-reloaded blob alive: without this the blob
+              -- expires ann_expire after training even while still in use, and
+              -- its surviving zset entry becomes a tombstone.  The zset TTL
+              -- itself is refreshed in check_anns every cycle.
+              lua_redis.redis_make_request_taskless(ev_base, rspamd_config,
+                rule.redis, nil, true, rank_cb, 'EXPIRE',
+                { ann_key, tostring(rule.ann_expire) })
               rspamd_logger.infox(rspamd_config,
                 'loaded ANN for %s:%s from %s; %s bytes compressed; version=%s',
                 rule.prefix, set.name, ann_key, #data[1], profile.version)
@@ -684,8 +711,21 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             end
           end
         else
-          lua_util.debugm(N, rspamd_config, 'missing ANN for %s:%s in Redis key %s',
-            rule.prefix, set.name, ann_key)
+          maybe_warn_stale_profile(rule, set, ann_key)
+          -- Fall back to the next compatible profile that actually has a blob.
+          -- Only move to a candidate that would not downgrade what we already
+          -- have loaded (strictly newer than set.ann, or anything when dark).
+          local cur_ver = (set.ann and set.ann.version) or -1
+          for i, cand in ipairs(candidates or {}) do
+            if (cand.elt.version or 0) > cur_ver then
+              local rest = {}
+              for j = i + 1, #candidates do
+                rest[#rest + 1] = candidates[j]
+              end
+              load_new_ann(rule, ev_base, set, cand.elt, cand.dist, rest)
+              break
+            end
+          end
         end
 
         if set.ann and set.ann.ann and type(data[2]) == 'userdata' and data[2].cookie == text_cookie then
@@ -948,24 +988,37 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
   local has_providers = rule.providers and #rule.providers > 0
   local current_providers_digest = has_providers and
       neural_common.providers_config_digest(rule.providers, rule) or nil
-  local min_diff = math.huge
-  local sel_elt
   lua_util.debugm(N, rspamd_config,
     'process_existing_ann: have %s profiles for %s:%s (providers_digest=%s)',
     type(profiles) == 'table' and #profiles or -1, rule.prefix, set.name,
     current_providers_digest or 'none')
 
+  -- Build the best-first list of compatible candidates (smaller distance first,
+  -- tie-break on higher version).  The head is the profile we want to load; the
+  -- tail is handed to load_new_ann as a fallback for when the head's blob turns
+  -- out to be missing (a stale highest-version entry pointing at an expired or
+  -- never-written key).
+  local candidates = {}
   for _, elt in fun.iter(profiles) do
     local compatible, dist = neural_common.is_profile_compatible(
       rule, set, elt, current_providers_digest)
     if compatible then
-      -- Prefer smaller distance; tie-break on higher version
-      if dist < min_diff
-          or (dist == min_diff and sel_elt and (elt.version or 0) > (sel_elt.version or 0)) then
-        min_diff = dist
-        sel_elt = elt
-      end
+      candidates[#candidates + 1] = { elt = elt, dist = dist }
     end
+  end
+  table.sort(candidates, function(a, b)
+    if a.dist ~= b.dist then
+      return a.dist < b.dist
+    end
+    return (a.elt.version or 0) > (b.elt.version or 0)
+  end)
+
+  local sel = candidates[1]
+  local sel_elt = sel and sel.elt
+  local min_diff = sel and sel.dist or math.huge
+  local fallback_tail = {}
+  for i = 2, #candidates do
+    fallback_tail[#fallback_tail + 1] = candidates[i]
   end
 
   if sel_elt then
@@ -1001,7 +1054,7 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
             rule.prefix .. ':' .. set.name,
             set.ann.version,
             sel_elt.version)
-          load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+          load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
         else
           lua_util.debugm(N, rspamd_config, 'ann %s is not changed, ' ..
             'our version = %s, remote version = %s',
@@ -1015,7 +1068,7 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
             'providers schema matches for %s; reload newer version %s (ours = %s)',
             rule.prefix .. ':' .. set.name,
             sel_elt.version, set.ann.version)
-          load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+          load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
         else
           lua_util.debugm(N, rspamd_config,
             'providers schema matches for %s; our version %s >= remote %s, no reload',
@@ -1030,7 +1083,7 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
             rule.prefix .. ':' .. set.name,
             set.ann.distance,
             min_diff)
-          load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+          load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
         else
           lua_util.debugm(N, rspamd_config, 'ann %s is not changed or less specific, ' ..
             'our distance = %s, remote distance = %s',
@@ -1041,7 +1094,7 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
       end
     else
       -- We have no ANN, load new one
-      load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+      load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
     end
   end
   if sel_elt then
@@ -1397,6 +1450,20 @@ local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
         'ZREVRANGE',                                         -- command
         { set.prefix, '0', tostring(settings.max_profiles) } -- arguments
       )
+      -- Refresh the profile-zset TTL while the rule is live, so it never expires
+      -- out from under a running worker (a stable, non-reloading rule would
+      -- otherwise let it lapse).  Per-tombstone cleanup is handled by the GC in
+      -- the invalidate script; this TTL only reclaims the registry after a long
+      -- full shutdown.
+      lua_redis.redis_make_request_taskless(ev_base,
+        cfg,
+        rule.redis,
+        nil,
+        true, -- is write
+        function(_, _) end,
+        'EXPIRE',
+        { set.prefix, tostring(rule.ann_expire) }
+      )
     end
   end -- Cycle over all settings
 
@@ -1422,10 +1489,17 @@ local function cleanup_anns(rule, cfg, ev_base)
     end
 
     if type(set) == 'table' then
+      -- Entries older than this with no blob and no training data are tombstones
+      -- (expired or never-trained profiles) and get GC'd by the script.  The
+      -- grace window must comfortably exceed the rotated-key training-set TTL
+      -- (600s) so a profile being rotated is never mistaken for a tombstone.
+      local grace = math.max(1200, (rule.watch_interval or 60) * 4)
+      local cutoff = rspamd_util.get_time() - grace
       lua_redis.exec_redis_script(neural_common.redis_script_id.maybe_invalidate,
         { ev_base = ev_base, is_write = true },
         invalidate_cb,
-        { set.prefix, tostring(settings.max_profiles) })
+        { set.prefix, tostring(settings.max_profiles) },
+        { tostring(cutoff) })
     end
   end
 end

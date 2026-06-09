@@ -1295,7 +1295,21 @@ local function spawn_train(params)
 
         -- Deserialise ANN from the child process
         local loaded_ann = rspamd_kann.load(parsed.ann_data)
-        local version = (params.set.ann.version or 0) + 1
+        -- Seed the new version from the profile we actually trained from, not
+        -- from the in-memory set.ann: fill_set_ann resets set.ann.version to 0
+        -- whenever this worker never loaded an ANN (restart, or the selected
+        -- profile's blob was missing), which would make the freshly trained ANN
+        -- regress below the stale zset entries.  process_existing_ann selects by
+        -- highest version, so a regressed entry is never picked and the blob is
+        -- stranded.  The trained-from key encodes its version as the trailing
+        -- _<n>; basing the new version on it guarantees the new entry outranks
+        -- the profile it supersedes.
+        local trained_from_version = tonumber(tostring(params.ann_key):match('_(%d+)$'))
+        local base_version = math.max(
+          trained_from_version or 0,
+          (params.set.training_profile and params.set.training_profile.version) or 0,
+          (params.set.ann and params.set.ann.version) or 0)
+        local version = base_version + 1
         params.set.ann.version = version
         params.set.ann.ann = loaded_ann
         params.set.ann.symbols = params.set.symbols
