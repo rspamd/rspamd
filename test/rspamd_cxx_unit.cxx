@@ -39,6 +39,7 @@
 #include "rspamd_cxx_unit_content_negotiation.hxx"
 #include "rspamd_cxx_unit_settings_merge.hxx"
 #include "rspamd_cxx_unit_fpconv.hxx"
+#include "rspamd_cxx_unit_symcache_timeout.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
