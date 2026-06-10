@@ -1364,7 +1364,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 
 	/* For prefilters and postfilters, we just care about priorities */
 	auto pre_postfilter_iter = [&](const items_ptr_vec &vec) -> double {
-		auto saved_priority = -1;
+		auto saved_priority = vec.empty() ? -1 : vec.front()->priority;
 		auto max_timeout = 0.0, added_timeout = 0.0;
 		const cache_item *max_elt = nullptr;
 		for (const auto &it: vec) {
