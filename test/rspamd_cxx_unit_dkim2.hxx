@@ -225,6 +225,226 @@ TEST_SUITE("rspamd_dkim2")
 		CHECK(smtp_addr_domain("foo") == "");
 	}
 
+	TEST_CASE("dkim2 split_body_lines")
+	{
+		auto lines = split_body_lines("foo\r\nbar\nbaz", 100);
+		REQUIRE(lines.has_value());
+		REQUIRE(lines->size() == 3);
+		CHECK((*lines)[0] == "foo");
+		CHECK((*lines)[1] == "bar");
+		CHECK((*lines)[2] == "baz");
+
+		/* A trailing terminator does not produce an extra empty line */
+		auto lines2 = split_body_lines("foo\r\n", 100);
+		REQUIRE(lines2.has_value());
+		CHECK(lines2->size() == 1);
+
+		/* Empty lines are preserved */
+		auto lines3 = split_body_lines("foo\r\n\r\nbar\r\n", 100);
+		REQUIRE(lines3.has_value());
+		REQUIRE(lines3->size() == 3);
+		CHECK((*lines3)[1] == "");
+
+		CHECK(split_body_lines("", 100)->empty());
+
+		/* Line limit */
+		CHECK(!split_body_lines("a\nb\nc\nd\n", 3).has_value());
+	}
+
+	TEST_CASE("dkim2 split_body_lines matches body canonicalization")
+	{
+		/*
+		 * The line-based body hashing used for reconstructed instances must
+		 * agree with the streaming canonicalization used for the current one
+		 */
+		const std::vector<std::string> bodies{
+			"",
+			"foo",
+			"foo\r\n",
+			"foo\r\n\r\n\r\n",
+			"foo\nbar",
+			"foo\rbar\r",
+			"foo \r\n",
+			" \r\n",
+			"foo\r\n\r\nbar\r\n",
+			"\r\n\r\n",
+		};
+
+		for (const auto &body: bodies) {
+			auto lines = split_body_lines(body, 1000);
+			REQUIRE(lines.has_value());
+
+			auto nlines = lines->size();
+			while (nlines > 0 && (*lines)[nlines - 1].empty()) {
+				nlines--;
+			}
+
+			std::string from_lines;
+			if (nlines == 0) {
+				from_lines = "\r\n";
+			}
+			else {
+				for (std::size_t k = 0; k < nlines; k++) {
+					from_lines.append((*lines)[k]);
+					from_lines.append("\r\n");
+				}
+			}
+
+			CHECK(from_lines == body_canon_str(body));
+		}
+	}
+
+	TEST_CASE("dkim2 parse_recipe")
+	{
+		recipe_limits_t limits;
+
+		auto r = parse_recipe(
+			R"({"h":{"Subject":[{"d":["old subject"]}]},"b":[{"c":[1,3]},{"d":["a footer"]}]})",
+			limits);
+		REQUIRE(r.has_value());
+		CHECK(r->has_headers);
+		CHECK(!r->headers_unrecoverable);
+		CHECK(r->has_body);
+		CHECK(!r->body.unrecoverable);
+		REQUIRE(r->headers.size() == 1);
+		CHECK(r->headers[0].first == "subject");
+		REQUIRE(r->headers[0].second.steps.size() == 1);
+		CHECK(!r->headers[0].second.steps[0].is_copy);
+		REQUIRE(r->headers[0].second.steps[0].data.size() == 1);
+		CHECK(r->headers[0].second.steps[0].data[0] == "old subject");
+		REQUIRE(r->body.steps.size() == 2);
+		CHECK(r->body.steps[0].is_copy);
+		CHECK(r->body.steps[0].start == 1);
+		CHECK(r->body.steps[0].end == 3);
+		CHECK(!r->body.steps[1].is_copy);
+
+		/* null parts mean unrecoverable state */
+		auto r2 = parse_recipe(R"({"h":null,"b":[{"c":[1,1]}]})", limits);
+		REQUIRE(r2.has_value());
+		CHECK(r2->headers_unrecoverable);
+
+		auto r3 = parse_recipe(R"({"b":null})", limits);
+		REQUIRE(r3.has_value());
+		CHECK(r3->has_body);
+		CHECK(r3->body.unrecoverable);
+		CHECK(!r3->has_headers);
+
+		/* Errors */
+		CHECK(!parse_recipe(R"({})", limits).has_value());
+		CHECK(!parse_recipe(R"(garbage)", limits).has_value());
+		CHECK(!parse_recipe(R"([1,2])", limits).has_value());
+		/* Step with both c and d */
+		CHECK(!parse_recipe(R"({"b":[{"c":[1,2],"d":["x"]}]})", limits).has_value());
+		/* Step with neither */
+		CHECK(!parse_recipe(R"({"b":[{}]})", limits).has_value());
+		/* Invalid copy range */
+		CHECK(!parse_recipe(R"({"b":[{"c":[3,1]}]})", limits).has_value());
+		CHECK(!parse_recipe(R"({"b":[{"c":[0,1]}]})", limits).has_value());
+		/* CR/LF smuggling in data steps */
+		CHECK(!parse_recipe("{\"b\":[{\"d\":[\"foo\\r\\nbar\"]}]}", limits).has_value());
+
+		/* DoS limits: steps */
+		recipe_limits_t small_limits;
+		small_limits.max_steps = 2;
+		CHECK(!parse_recipe(R"({"b":[{"c":[1,1]},{"c":[1,1]},{"c":[1,1]}]})",
+							small_limits)
+				   .has_value());
+		/* DoS limits: recipe size */
+		small_limits = recipe_limits_t{};
+		small_limits.max_recipe_len = 10;
+		CHECK(!parse_recipe(R"({"b":[{"c":[1,1]}]})", small_limits).has_value());
+		/* DoS limits: header names */
+		small_limits = recipe_limits_t{};
+		small_limits.max_names = 1;
+		CHECK(!parse_recipe(R"({"h":{"a":[{"d":["x"]}],"b":[{"d":["y"]}]}})",
+							small_limits)
+				   .has_value());
+	}
+
+	TEST_CASE("dkim2 apply_recipe_steps")
+	{
+		std::vector<std::string_view> current{"line1", "line2", "line3"};
+		std::size_t budget = 1024;
+
+		std::vector<recipe_step_t> steps;
+		recipe_step_t copy_step;
+		copy_step.is_copy = true;
+		copy_step.start = 2;
+		copy_step.end = 3;
+		steps.push_back(copy_step);
+
+		recipe_step_t data_step;
+		data_step.data = {"inserted"};
+		steps.push_back(data_step);
+
+		auto out = apply_recipe_steps(current, steps, 100, budget);
+		REQUIRE(out.has_value());
+		REQUIRE(out->size() == 3);
+		CHECK((*out)[0] == "line2");
+		CHECK((*out)[1] == "line3");
+		CHECK((*out)[2] == "inserted");
+		/* 5 + 2 + 5 + 2 + 8 + 2 = 24 octets charged */
+		CHECK(budget == 1024 - 24);
+
+		/* Out of bounds copy */
+		recipe_step_t oob;
+		oob.is_copy = true;
+		oob.start = 1;
+		oob.end = 4;
+		std::size_t budget2 = 1024;
+		CHECK(!apply_recipe_steps(current, {oob}, 100, budget2).has_value());
+
+		/* Element count limit */
+		recipe_step_t all;
+		all.is_copy = true;
+		all.start = 1;
+		all.end = 3;
+		std::size_t budget3 = 1024;
+		CHECK(!apply_recipe_steps(current, {all}, 2, budget3).has_value());
+	}
+
+	TEST_CASE("dkim2 recipe amplification bomb is stopped by the budget")
+	{
+		/*
+		 * Each application duplicates the whole state: with N chained
+		 * instances this is 2^N amplification, which the shared byte budget
+		 * must cut short
+		 */
+		std::vector<std::string> arena{std::string(100, 'A')};
+		std::vector<std::string_view> state{arena[0]};
+
+		recipe_step_t dup;
+		dup.is_copy = true;
+		dup.start = 1;
+		dup.end = 1;
+
+		std::size_t budget = 100 * 1024; /* 100KB budget */
+		bool stopped = false;
+
+		for (int round = 0; round < 50; round++) {
+			/* Duplicate every element of the state */
+			std::vector<recipe_step_t> steps;
+			recipe_step_t all;
+			all.is_copy = true;
+			all.start = 1;
+			all.end = state.size();
+			steps.push_back(all);
+			steps.push_back(all);
+
+			auto out = apply_recipe_steps(state, steps, 1000000, budget);
+
+			if (!out) {
+				stopped = true;
+				CHECK(round < 11); /* 100 bytes * 2^10 > 100KB */
+				break;
+			}
+
+			state = std::move(*out);
+		}
+
+		CHECK(stopped);
+	}
+
 	TEST_CASE("dkim2 body canonicalization")
 	{
 		/* Empty body still hashes a CRLF */

@@ -97,6 +97,73 @@ auto parse_mi(std::string_view value) -> tl::expected<mi_header_t, std::string>;
  */
 auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string>;
 
+/*
+ * Recipes (the r= tag of Message-Instance): JSON instructions to recreate
+ * the previous message state. The spec imposes NO limits on them, while copy
+ * steps allow content duplication, which makes an unconstrained recipe chain
+ * a decompression bomb. All limits below are therefore internal hard caps;
+ * exceeding any of them makes the older instances unverifiable, it is never
+ * an error that affects the verdict.
+ */
+
+struct recipe_limits_t {
+	std::size_t max_recipe_len = 256 * 1024; /* decoded recipe JSON size */
+	std::size_t max_steps = 256;             /* steps per recipe part */
+	std::size_t max_names = 256;             /* header field names per recipe */
+	std::size_t max_body_lines = 1000000;    /* body lines per message state */
+	std::size_t max_header_instances = 1000; /* header instances per name */
+};
+
+struct recipe_step_t {
+	bool is_copy = false;
+	/* Copy steps: 1-based inclusive range of elements of the current state */
+	std::size_t start = 0;
+	std::size_t end = 0;
+	/* Data steps: literal elements (header values or body lines) */
+	std::vector<std::string> data;
+};
+
+struct recipe_part_t {
+	bool unrecoverable = false; /* null in JSON: prior state cannot be recreated */
+	std::vector<recipe_step_t> steps;
+};
+
+struct recipe_t {
+	bool has_headers = false;           /* "h" key present */
+	bool headers_unrecoverable = false; /* "h" is null */
+	bool has_body = false;              /* "b" key present */
+	/* lowercased header field name -> recipe part */
+	std::vector<std::pair<std::string, recipe_part_t>> headers;
+	recipe_part_t body;
+};
+
+/**
+ * Parse a decoded (JSON) recipe, enforcing the limits
+ */
+auto parse_recipe(std::string_view json, const recipe_limits_t &limits)
+	-> tl::expected<recipe_t, std::string>;
+
+/**
+ * Apply recipe steps to a list of elements (body lines or header field
+ * instances of one name, index 0 corresponding to element number 1) producing
+ * the previous state. Output views point into `current` elements or into the
+ * data strings of the owning recipe_t, which must outlive the result.
+ * `budget` is the shared output allowance in bytes for the whole chain; it is
+ * decremented by every emitted byte and the application fails when exhausted.
+ */
+auto apply_recipe_steps(const std::vector<std::string_view> &current,
+						const std::vector<recipe_step_t> &steps,
+						std::size_t max_elements,
+						std::size_t &budget)
+	-> tl::expected<std::vector<std::string_view>, std::string>;
+
+/**
+ * Split a message body into lines (line terminators are not included);
+ * a trailing terminator does not produce an extra empty line
+ */
+auto split_body_lines(std::string_view body, std::size_t max_lines)
+	-> tl::expected<std::vector<std::string_view>, std::string>;
+
 /**
  * Canonicalize a header for the *message header hash* (Section 5.2):
  * lowercase name, collapse WSP runs to a single SP, trim trailing WSP and

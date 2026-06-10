@@ -1466,12 +1466,15 @@ dkim2_module_verify_cb(struct rspamd_task *task,
 		const struct rspamd_dkim2_hop_result *last = &res->hops[res->nhops - 1];
 
 		if (res->fail_reason != NULL) {
-			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:%s",
-							last->domain, last->idx, res->fail_reason);
+			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:m=%ud/%ud:%s",
+							last->domain, last->idx,
+							res->verified_instances, res->ninstances,
+							res->fail_reason);
 		}
 		else {
-			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud",
-							last->domain, last->idx);
+			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:m=%ud/%ud",
+							last->domain, last->idx,
+							res->verified_instances, res->ninstances);
 		}
 
 		msg_info_task("DKIM2 chain verification result: %s; %s",

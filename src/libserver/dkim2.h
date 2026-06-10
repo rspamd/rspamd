@@ -63,6 +63,13 @@ struct rspamd_dkim2_verify_result {
 	const char *fail_reason;             /* NULL if ok */
 	unsigned int nhops;
 	const struct rspamd_dkim2_hop_result *hops; /* array of nhops elements */
+	unsigned int ninstances;                    /* number of Message-Instance headers */
+	/*
+	 * Instances with verified hashes, counting from the latest backwards;
+	 * older instances are verified by applying r= recipes within internal
+	 * limits, so this can legitimately be less than ninstances
+	 */
+	unsigned int verified_instances;
 };
 
 struct rspamd_dkim2_verify_params {
