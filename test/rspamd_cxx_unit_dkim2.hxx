@@ -131,6 +131,12 @@ TEST_SUITE("rspamd_dkim2")
 		CHECK(sig2->sigs.size() == 2);
 		CHECK(sig2->sigs[1].selector == "b");
 
+		/* FWS inside base64 values is tolerated (folded header remnants) */
+		auto sig3 = parse_sig("i=1; m=1; mf=PGJvdW5jZUBleGFt cGxlLmNvbT4=; rt=" DKIM2_TEST_RT
+							  "; d=example.com; s=a:rsa-sha256:" DKIM2_TEST_SIG);
+		REQUIRE(sig3.has_value());
+		CHECK(sig3->mf == "<bounce@example.com>");
+
 		/* Missing mandatory tag (d=) */
 		auto bad = parse_sig("i=1; m=1; mf=" DKIM2_TEST_MF "; rt=" DKIM2_TEST_RT
 							 "; s=a:rsa-sha256:" DKIM2_TEST_SIG);

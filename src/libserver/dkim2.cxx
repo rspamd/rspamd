@@ -34,6 +34,7 @@
 #include "dkim2.h"
 #include "dkim2.hxx"
 #include "utlist.h"
+#include "libutil/cxx/util.hxx"
 
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/fmt/include/fmt/core.h"
@@ -42,7 +43,6 @@
 #include <openssl/evp.h>
 
 #include <algorithm>
-#include <charconv>
 #include <memory>
 #include <optional>
 #include <string>
@@ -77,20 +77,14 @@ constexpr std::string_view sha256_alg_name = "sha256";
 constexpr std::string_view rsa_alg_name = "rsa-sha256";
 constexpr std::string_view ed25519_alg_name = "ed25519-sha256";
 
-static constexpr auto
-is_wsp(char c) -> bool
-{
-	/* Values are unfolded by the caller, so treat CR/LF remnants as WSP too */
-	return c == ' ' || c == '\t' || c == '\r' || c == '\n';
-}
-
 static auto
 trim(std::string_view in) -> std::string_view
 {
-	while (!in.empty() && is_wsp(in.front())) {
+	/* Values are unfolded by the caller, g_ascii_isspace covers CR/LF remnants */
+	while (!in.empty() && g_ascii_isspace(in.front())) {
 		in.remove_prefix(1);
 	}
-	while (!in.empty() && is_wsp(in.back())) {
+	while (!in.empty() && g_ascii_isspace(in.back())) {
 		in.remove_suffix(1);
 	}
 
@@ -104,7 +98,7 @@ strip_wsp(std::string_view in) -> std::string
 	out.reserve(in.size());
 
 	for (auto c: in) {
-		if (!is_wsp(c)) {
+		if (!g_ascii_isspace(c)) {
 			out.push_back(c);
 		}
 	}
@@ -115,12 +109,8 @@ strip_wsp(std::string_view in) -> std::string
 static auto
 lc_string(std::string_view in) -> std::string
 {
-	std::string out;
-	out.reserve(in.size());
-
-	for (auto c: in) {
-		out.push_back(static_cast<char>(g_ascii_tolower(c)));
-	}
+	std::string out{in};
+	rspamd_str_lc(out.data(), out.size());
 
 	return out;
 }
@@ -129,23 +119,15 @@ static auto
 eq_icase(std::string_view a, std::string_view b) -> bool
 {
 	return a.size() == b.size() &&
-		   std::equal(a.begin(), a.end(), b.begin(), [](char c1, char c2) {
-			   return g_ascii_tolower(c1) == g_ascii_tolower(c2);
-		   });
+		   rspamd_lc_cmp(a.data(), b.data(), a.size()) == 0;
 }
 
 static auto
-parse_uint(std::string_view in) -> std::optional<unsigned int>
+parse_uint(std::string_view in) -> std::optional<unsigned long>
 {
-	unsigned int res;
+	gulong res;
 
-	if (in.empty()) {
-		return std::nullopt;
-	}
-
-	auto [ptr, ec] = std::from_chars(in.data(), in.data() + in.size(), res);
-
-	if (ec != std::errc{} || ptr != in.data() + in.size()) {
+	if (!rspamd_strtoul(in.data(), in.size(), &res)) {
 		return std::nullopt;
 	}
 
@@ -155,34 +137,22 @@ parse_uint(std::string_view in) -> std::optional<unsigned int>
 static auto
 b64_decode(std::string_view in) -> std::optional<std::string>
 {
-	auto cleaned = strip_wsp(in);
+	/* rspamd_cryptobox_base64_decode skips whitespace internally */
 	std::string out;
-	out.resize(cleaned.size() / 4 * 3 + 3);
+	out.resize(in.size() / 4 * 3 + 3);
 	std::size_t outlen = out.size();
 
-	if (!cleaned.empty() &&
-		!rspamd_cryptobox_base64_decode(cleaned.data(), cleaned.size(),
+	in = trim(in);
+
+	if (!in.empty() &&
+		!rspamd_cryptobox_base64_decode(in.data(), in.size(),
 										reinterpret_cast<unsigned char *>(out.data()), &outlen)) {
 		return std::nullopt;
 	}
 
-	out.resize(cleaned.empty() ? 0 : outlen);
+	out.resize(in.empty() ? 0 : outlen);
 
 	return out;
-}
-
-template<typename Func>
-static void
-split_foreach(std::string_view in, char sep, Func &&f)
-{
-	std::size_t start = 0;
-
-	for (std::size_t pos = 0; pos <= in.size(); pos++) {
-		if (pos == in.size() || in[pos] == sep) {
-			f(in.substr(start, pos - start));
-			start = pos + 1;
-		}
-	}
 }
 
 auto parse_tag_list(std::string_view input) -> tl::expected<std::vector<tag_t>, std::string>
@@ -190,7 +160,7 @@ auto parse_tag_list(std::string_view input) -> tl::expected<std::vector<tag_t>, 
 	std::vector<tag_t> res;
 	std::string err;
 
-	split_foreach(input, ';', [&](std::string_view seg) {
+	rspamd::string_foreach_delim(input, ";", [&](std::string_view seg) {
 		if (!err.empty()) {
 			return;
 		}
@@ -235,16 +205,18 @@ parse_hash_sets(std::string_view value) -> tl::expected<std::vector<hash_set_t>,
 	std::vector<hash_set_t> res;
 	std::string err;
 
-	split_foreach(value, ',', [&](std::string_view set_str) {
+	rspamd::string_foreach_delim(value, ",", [&](std::string_view set_str) {
 		if (!err.empty()) {
 			return;
 		}
 
 		/* hash-set = hash-name ":" header-hash ":" body-hash */
 		std::vector<std::string_view> parts;
-		split_foreach(set_str, ':', [&](std::string_view part) {
-			parts.push_back(part);
-		});
+		rspamd::string_foreach_delim(
+			set_str, ":", [&](std::string_view part) {
+				parts.push_back(part);
+			},
+			false);
 
 		if (parts.size() != 3) {
 			err = fmt::format("invalid hash-set: '{}'", set_str);
@@ -294,7 +266,7 @@ auto parse_mi(std::string_view value) -> tl::expected<mi_header_t, std::string>
 				return tl::make_unexpected(std::string{"duplicate m= tag"});
 			}
 			auto m = parse_uint(tag.value);
-			if (!m || *m == 0) {
+			if (!m || *m == 0 || *m > RSPAMD_DKIM2_MAX_HOPS) {
 				return tl::make_unexpected(fmt::format("invalid m= tag: '{}'", tag.value));
 			}
 			res.m = *m;
@@ -334,16 +306,18 @@ parse_sig_sets(std::string_view value) -> tl::expected<std::vector<sig_set_t>, s
 	std::vector<sig_set_t> res;
 	std::string err;
 
-	split_foreach(value, ',', [&](std::string_view set_str) {
+	rspamd::string_foreach_delim(value, ",", [&](std::string_view set_str) {
 		if (!err.empty()) {
 			return;
 		}
 
 		/* sig-set = selector ":" sig-name ":" message-sig */
 		std::vector<std::string_view> parts;
-		split_foreach(set_str, ':', [&](std::string_view part) {
-			parts.push_back(part);
-		});
+		rspamd::string_foreach_delim(
+			set_str, ":", [&](std::string_view part) {
+				parts.push_back(part);
+			},
+			false);
 
 		if (parts.size() != 3) {
 			err = fmt::format("invalid sig-set: '{}'", set_str);
@@ -401,7 +375,7 @@ auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string
 				return tl::make_unexpected(std::string{"duplicate i= tag"});
 			}
 			auto i = parse_uint(tag.value);
-			if (!i || *i == 0) {
+			if (!i || *i == 0 || *i > RSPAMD_DKIM2_MAX_HOPS) {
 				return tl::make_unexpected(fmt::format("invalid i= tag: '{}'", tag.value));
 			}
 			res.i = *i;
@@ -412,7 +386,7 @@ auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string
 				return tl::make_unexpected(std::string{"duplicate m= tag"});
 			}
 			auto m = parse_uint(tag.value);
-			if (!m || *m == 0) {
+			if (!m || *m == 0 || *m > RSPAMD_DKIM2_MAX_HOPS) {
 				return tl::make_unexpected(fmt::format("invalid m= tag: '{}'", tag.value));
 			}
 			res.m = *m;
@@ -420,7 +394,7 @@ auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string
 		}
 		else if (tag.name == "t") {
 			auto t = parse_uint(tag.value);
-			if (!t) {
+			if (!t || *t > (gulong) G_MAXINT64) {
 				return tl::make_unexpected(fmt::format("invalid t= tag: '{}'", tag.value));
 			}
 			res.t = static_cast<std::time_t>(*t);
@@ -441,7 +415,7 @@ auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string
 				return tl::make_unexpected(std::string{"duplicate rt= tag"});
 			}
 			std::string err;
-			split_foreach(tag.value, ',', [&](std::string_view rcpt_b64) {
+			rspamd::string_foreach_delim(tag.value, ",", [&](std::string_view rcpt_b64) {
 				if (!err.empty()) {
 					return;
 				}
@@ -479,7 +453,7 @@ auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string
 			seen_s = true;
 		}
 		else if (tag.name == "f") {
-			split_foreach(tag.value, ',', [&](std::string_view flag) {
+			rspamd::string_foreach_delim(tag.value, ",", [&](std::string_view flag) {
 				flag = trim(flag);
 				if (flag == "donotmodify") {
 					res.flags |= DKIM2_SIG_FLAG_DONOTMODIFY;
@@ -518,7 +492,7 @@ auto canon_hash_line(std::string_view name, std::string_view unfolded_value) -> 
 	bool got_sp = false;
 
 	for (auto c: value) {
-		if (is_wsp(c)) {
+		if (g_ascii_isspace(c)) {
 			got_sp = true;
 		}
 		else {
@@ -541,7 +515,7 @@ auto canon_sig_line(std::string_view name, std::string_view unfolded_value) -> s
 	out.push_back(':');
 
 	for (auto c: unfolded_value) {
-		if (!is_wsp(c)) {
+		if (!g_ascii_isspace(c)) {
 			out.push_back(c);
 		}
 	}
@@ -568,36 +542,52 @@ auto blank_sig_values(std::string_view canon_line) -> std::string
 	std::string out{line.substr(0, colon_pos + 1)};
 	auto tag_list = line.substr(colon_pos + 1);
 
+	/*
+	 * string_foreach_delim does not emit a trailing empty element, so trailing
+	 * separators are restored explicitly to keep the canonical form byte-exact
+	 */
 	bool first_tag = true;
-	split_foreach(tag_list, ';', [&](std::string_view seg) {
-		if (!first_tag) {
-			out.push_back(';');
-		}
-		first_tag = false;
+	rspamd::string_foreach_delim(
+		tag_list, ";", [&](std::string_view seg) {
+			if (!first_tag) {
+				out.push_back(';');
+			}
+			first_tag = false;
 
-		if (seg.starts_with("s=")) {
-			out.append("s=");
-			auto sets = seg.substr(2);
-			bool first_set = true;
-			split_foreach(sets, ',', [&](std::string_view set_str) {
-				if (!first_set) {
+			if (seg.starts_with("s=")) {
+				out.append("s=");
+				auto sets = seg.substr(2);
+				bool first_set = true;
+				rspamd::string_foreach_delim(
+					sets, ",", [&](std::string_view set_str) {
+						if (!first_set) {
+							out.push_back(',');
+						}
+						first_set = false;
+						/* selector ":" sig-name ":" message-sig -> blank the sig */
+						auto last_colon = set_str.rfind(':');
+						if (last_colon != std::string_view::npos) {
+							out.append(set_str.substr(0, last_colon + 1));
+						}
+						else {
+							out.append(set_str);
+						}
+					},
+					false);
+
+				if (sets.ends_with(',')) {
 					out.push_back(',');
 				}
-				first_set = false;
-				/* selector ":" sig-name ":" message-sig -> blank the sig */
-				auto last_colon = set_str.rfind(':');
-				if (last_colon != std::string_view::npos) {
-					out.append(set_str.substr(0, last_colon + 1));
-				}
-				else {
-					out.append(set_str);
-				}
-			});
-		}
-		else {
-			out.append(seg);
-		}
-	});
+			}
+			else {
+				out.append(seg);
+			}
+		},
+		false);
+
+	if (tag_list.ends_with(';')) {
+		out.push_back(';');
+	}
 
 	out.append("\r\n");
 
@@ -1264,7 +1254,6 @@ dkim2_verify_one_hop(rspamd_dkim2_chain_t *chain,
 			}
 		}
 		else if (ss.alg == ed25519_alg_name) {
-#ifdef HAVE_ED25519
 			supported_algs++;
 
 			if (slot.key == nullptr) {
@@ -1297,10 +1286,6 @@ dkim2_verify_one_hop(rspamd_dkim2_chain_t *chain,
 							   sig.i, sig.domain.c_str(), ss.selector.c_str());
 				merge_hop(RSPAMD_DKIM2_FAIL, "ed25519-sha256 signature did not verify");
 			}
-#else
-			merge_hop(RSPAMD_DKIM2_PERMERROR,
-					  "ed25519 signatures are not supported (OpenSSL 1.1.1+ required)");
-#endif
 		}
 		/* Unknown algorithms are skipped */
 	}
