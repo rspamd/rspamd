@@ -3958,9 +3958,22 @@ void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
 	while (p <= end) {
 		if (p == end || *p == '&' || *p == ';') {
 			if (p > c) {
-				/* Parameter [c, p): scan the value after the first '=' */
+				/*
+				 * Parameter [c, p): scan the value after the first '=', but
+				 * only when the part before '=' looks like a parameter key.
+				 * A bare embedded URL is its own parameter and can contain
+				 * '=' itself (e.g. base64 padding in the path), so a prefix
+				 * with URL structure characters means there is no key and
+				 * the whole parameter must be scanned.
+				 */
 				const char *eq = memchr(c, '=', p - c);
-				const char *vstart = eq ? eq + 1 : c;
+				const char *vstart = c;
+
+				if (eq != NULL &&
+					rspamd_memcspn(c, eq - c, ":/", 2) == (gsize) (eq - c)) {
+					vstart = eq + 1;
+				}
+
 				gsize vlen = p - vstart;
 
 				if (vlen > 0) {
