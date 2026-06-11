@@ -1224,12 +1224,14 @@ void rspamd_openssl_maybe_init(struct rspamd_external_libs_ctx *ctx)
 	static gboolean openssl_initialized = FALSE;
 
 	if (!openssl_initialized) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 		ERR_load_crypto_strings();
 		SSL_load_error_strings();
 
 		OpenSSL_add_all_algorithms();
 		OpenSSL_add_all_digests();
 		OpenSSL_add_all_ciphers();
+#endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
 		ENGINE_load_builtin_engines();

@@ -889,22 +889,24 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 
 						ct_nid = OBJ_obj2nid(p7_signed_content->type);
 
+						/* ASN1_STRING is opaque since OpenSSL 4.0, use accessors */
 						if (ct_nid == NID_pkcs7_data && p7_signed_content->d.data &&
-							p7_signed_content->d.data->length > 0 &&
-							p7_signed_content->d.data->data) {
+							ASN1_STRING_length(p7_signed_content->d.data) > 0 &&
+							ASN1_STRING_get0_data(p7_signed_content->d.data)) {
 							int ret;
+							int p7_data_len = ASN1_STRING_length(p7_signed_content->d.data);
+							const unsigned char *p7_data = ASN1_STRING_get0_data(p7_signed_content->d.data);
 
 							msg_debug_mime("found an additional part inside of "
 										   "smime structure of type %T/%T; length=%d",
-										   &ct->type, &ct->subtype, p7_signed_content->d.data->length);
+										   &ct->type, &ct->subtype, p7_data_len);
 							/*
 							 * Since ASN.1 structures are freed, we need to copy
 							 * the content
 							 */
 							char *cpy = rspamd_mempool_alloc(task->task_pool,
-															 p7_signed_content->d.data->length);
-							memcpy(cpy, p7_signed_content->d.data->data,
-								   p7_signed_content->d.data->length);
+															 p7_data_len);
+							memcpy(cpy, p7_data, p7_data_len);
 
 							/*
 							 * S/MIME re-enters the parser here without going through
@@ -924,7 +926,7 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 							st->nesting++;
 							ret = rspamd_mime_process_multipart_node(task,
 																	 st, NULL,
-																	 cpy, cpy + p7_signed_content->d.data->length,
+																	 cpy, cpy + p7_data_len,
 																	 TRUE, err);
 							st->nesting--;
 
