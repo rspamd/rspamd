@@ -32,6 +32,7 @@ struct html_block {
 	std::int16_t width;
 	rspamd::css::css_display_value display;
 	std::int8_t font_size;
+	bool overflow_hidden;
 
 	unsigned fg_color_mask : 2;
 	unsigned bg_color_mask : 2;
@@ -40,6 +41,7 @@ struct html_block {
 	unsigned font_mask : 2;
 	unsigned display_mask : 2;
 	unsigned visibility_mask : 2;
+	unsigned overflow_mask : 2;
 
 	constexpr static const auto unset = 0;
 	constexpr static const auto inherited = 1;
@@ -105,6 +107,12 @@ struct html_block {
 	{
 		display = v;
 		display_mask = how;
+	}
+
+	auto set_overflow(bool hidden, int how = html_block::set) -> void
+	{
+		overflow_hidden = hidden;
+		overflow_mask = how;
 	}
 
 	auto set_font_size(float fs, bool is_percent = false, int how = html_block::set) -> void
@@ -192,8 +200,20 @@ public:
 												fg_color, other.fg_color);
 		bg_color_mask = html_block::simple_prop(bg_color_mask, other.bg_color_mask,
 												bg_color, other.bg_color);
-		display_mask = html_block::simple_prop(display_mask, other.display_mask,
-											   display, other.display);
+
+		if (other.display_mask && other.display == css::css_display_value::DISPLAY_HIDDEN) {
+			/*
+			 * A hidden ancestor hides all descendants: a child cannot reset
+			 * display of a display:none parent, so ignore the own display
+			 * value in this case
+			 */
+			display = css::css_display_value::DISPLAY_HIDDEN;
+			display_mask = html_block::inherited;
+		}
+		else {
+			display_mask = html_block::simple_prop(display_mask, other.display_mask,
+												   display, other.display);
+		}
 
 		height_mask = html_block::size_prop(height_mask, other.height_mask,
 											height, other.height, static_cast<std::int16_t>(800));
@@ -224,6 +244,7 @@ public:
 		height_mask = set_value(height_mask, other.height_mask, height, other.height);
 		width_mask = set_value(width_mask, other.width_mask, width, other.width);
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
+		overflow_mask = set_value(overflow_mask, other.overflow_mask, overflow_hidden, other.overflow_hidden);
 	}
 
 	auto compute_visibility(void) -> void
@@ -238,6 +259,21 @@ public:
 
 		if (font_mask) {
 			if (font_size == 0) {
+				visibility_mask = html_block::invisible_flag;
+
+				return;
+			}
+		}
+
+		if (overflow_mask && overflow_hidden) {
+			/* Zero height or width with overflow:hidden clips the content entirely */
+			if ((height_mask && height == 0) || (width_mask && width == 0)) {
+				/*
+				 * Convert to hidden display as well: clipping cannot be resurrected
+				 * by descendants, so it should be propagated to children as
+				 * the display value
+				 */
+				set_display(css::css_display_value::DISPLAY_HIDDEN);
 				visibility_mask = html_block::invisible_flag;
 
 				return;
@@ -332,13 +368,15 @@ public:
 						  .width = 0,
 						  .display = rspamd::css::css_display_value::DISPLAY_INLINE,
 						  .font_size = 12,
+						  .overflow_hidden = false,
 						  .fg_color_mask = html_block::inherited,
 						  .bg_color_mask = html_block::inherited,
 						  .height_mask = html_block::unset,
 						  .width_mask = html_block::unset,
 						  .font_mask = html_block::unset,
 						  .display_mask = html_block::inherited,
-						  .visibility_mask = html_block::unset};
+						  .visibility_mask = html_block::unset,
+						  .overflow_mask = html_block::unset};
 	}
 	/**
 	 * Produces html block with no defined values allocated from the pool

@@ -38,9 +38,12 @@ enum class css_property_type : std::uint16_t {
 	PROPERTY_BACKGROUND,
 	PROPERTY_HEIGHT,
 	PROPERTY_WIDTH,
+	PROPERTY_MAX_HEIGHT,
+	PROPERTY_MAX_WIDTH,
 	PROPERTY_DISPLAY,
 	PROPERTY_VISIBILITY,
 	PROPERTY_OPACITY,
+	PROPERTY_OVERFLOW,
 	PROPERTY_NYI,
 };
 
@@ -90,6 +93,12 @@ struct alignas(int) css_property {
 		case css_property_type::PROPERTY_WIDTH:
 			ret = "width";
 			break;
+		case css_property_type::PROPERTY_MAX_HEIGHT:
+			ret = "max-height";
+			break;
+		case css_property_type::PROPERTY_MAX_WIDTH:
+			ret = "max-width";
+			break;
 		case css_property_type::PROPERTY_DISPLAY:
 			ret = "display";
 			break;
@@ -98,6 +107,9 @@ struct alignas(int) css_property {
 			break;
 		case css_property_type::PROPERTY_OPACITY:
 			ret = "opacity";
+			break;
+		case css_property_type::PROPERTY_OVERFLOW:
+			ret = "overflow";
 			break;
 		default:
 			break;
@@ -119,6 +131,8 @@ struct alignas(int) css_property {
 	{
 		return type == css_property_type::PROPERTY_HEIGHT ||
 			   type == css_property_type::PROPERTY_WIDTH ||
+			   type == css_property_type::PROPERTY_MAX_HEIGHT ||
+			   type == css_property_type::PROPERTY_MAX_WIDTH ||
 			   type == css_property_type::PROPERTY_FONT_SIZE ||
 			   type == css_property_type::PROPERTY_FONT;
 	}
@@ -136,6 +150,11 @@ struct alignas(int) css_property {
 	auto is_visibility(void) const -> bool
 	{
 		return type == css_property_type::PROPERTY_VISIBILITY;
+	}
+
+	auto is_overflow(void) const -> bool
+	{
+		return type == css_property_type::PROPERTY_OVERFLOW;
 	}
 
 	auto operator==(const css_property &other) const

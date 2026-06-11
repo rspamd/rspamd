@@ -202,6 +202,24 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			}
 		}
 	}
+	if (prop.is_overflow()) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token) {
+				auto sv = tok.get_string_or_default("");
+
+				/* Distinguish only the clipping values, as they hide
+				 * the content of a zero sized block entirely */
+				if (sv == "hidden" || sv == "clip") {
+					return css_value{css_display_value::DISPLAY_HIDDEN};
+				}
+
+				return css_value{css_display_value::DISPLAY_INLINE};
+			}
+		}
+	}
 
 	return std::nullopt;
 }
@@ -385,7 +403,8 @@ auto css_declarations_block::merge_block(const css_declarations_block &other, me
 auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *
 {
 	auto *block = rspamd_mempool_alloc0_type(pool, rspamd::html::html_block);
-	auto opacity = -1;
+	auto opacity = -1.0f;
+	std::optional<css_dimension> height, width, max_height, max_width;
 	const css_rule *font_rule = nullptr, *background_rule = nullptr;
 
 	for (const auto &rule: rules) {
@@ -408,6 +427,7 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 			if (fs) {
 				block->set_font_size(fs.value().dim, fs.value().is_percent);
 			}
+			break;
 		}
 		case css_property_type::PROPERTY_OPACITY: {
 			opacity = vals.back().to_number().value_or(opacity);
@@ -429,16 +449,25 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 			break;
 		}
 		case css_property_type::PROPERTY_HEIGHT: {
-			auto w = vals.back().to_dimension();
-			if (w) {
-				block->set_width(w.value().dim, w.value().is_percent);
-			}
+			height = vals.back().to_dimension();
 			break;
 		}
 		case css_property_type::PROPERTY_WIDTH: {
-			auto h = vals.back().to_dimension();
-			if (h) {
-				block->set_width(h.value().dim, h.value().is_percent);
+			width = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_MAX_HEIGHT: {
+			max_height = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_MAX_WIDTH: {
+			max_width = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_OVERFLOW: {
+			auto disp = vals.back().to_display();
+			if (disp) {
+				block->set_overflow(disp.value() == css_display_value::DISPLAY_HIDDEN);
 			}
 			break;
 		}
@@ -453,6 +482,41 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 			/* Do nothing for now */
 			break;
 		}
+	}
+
+	/*
+	 * max-height/max-width clamp the corresponding dimension; mixed
+	 * percent/absolute values cannot be compared, so prefer the zero
+	 * limit in that case as it is the only value that matters for
+	 * the visibility detection
+	 */
+	auto clamp_dim = [](std::optional<css_dimension> dim,
+						std::optional<css_dimension> max_dim) -> std::optional<css_dimension> {
+		if (dim && max_dim) {
+			if (dim->is_percent == max_dim->is_percent) {
+				return max_dim->dim < dim->dim ? max_dim : dim;
+			}
+
+			return max_dim->dim == 0 ? max_dim : dim;
+		}
+
+		return dim ? dim : max_dim;
+	};
+
+	if (auto h = clamp_dim(height, max_height); h) {
+		block->set_height(h->dim, h->is_percent);
+	}
+	if (auto w = clamp_dim(width, max_width); w) {
+		block->set_width(w->dim, w->is_percent);
+	}
+
+	if (opacity >= 0 && opacity < 0.1) {
+		/*
+		 * A (nearly) zero opacity makes the block invisible, and, unlike
+		 * display, it cannot be reset by descendants; reuse the display
+		 * value as it has the desired inheritance semantics
+		 */
+		block->set_display(css_display_value::DISPLAY_HIDDEN);
 	}
 
 	/* Optional properties */
@@ -525,6 +589,96 @@ TEST_SUITE("css")
 				CHECK(res->has_property(c.second[i]));
 			}
 		}
+	}
+
+	TEST_CASE("hidden blocks are compiled as invisible")
+	{
+		/* Real-world hiding techniques: text is removed from the rendered
+		 * view to dilute the visible content (e.g. of a phishing message) */
+		const std::vector<const char *> hidden_styles{
+			"display:block; max-width:0; max-height:0; overflow:hidden",
+			"opacity:0; height:0; line-height:0; overflow:hidden",
+			"overflow:hidden; max-height:0",
+			"height:0px; overflow:clip",
+			"width:0; overflow:hidden",
+			"opacity:0.01",
+			"max-height:0; height:50px; overflow:hidden",
+		};
+		const std::vector<const char *> visible_styles{
+			"max-width:600px; width:100%",
+			/* Without overflow:hidden the content of a zero sized block
+			 * is rendered outside of the block */
+			"height:0",
+			"max-height:0",
+			"opacity:0.5",
+			"overflow:hidden; max-height:10px",
+			"overflow:hidden",
+			"display:block",
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		for (const auto *css_text: hidden_styles) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, css_text));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			block->compute_visibility();
+			CHECK_MESSAGE(!block->is_visible(), css_text);
+		}
+
+		for (const auto *css_text: visible_styles) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, css_text));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			block->compute_visibility();
+			CHECK_MESSAGE(block->is_visible(), css_text);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("height and width are applied to the proper fields")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		auto res = process_declaration_tokens(pool,
+											  get_rules_parser_functor(pool, "height:10px;width:20px"));
+		CHECK(res.get() != nullptr);
+		auto *block = res->compile_to_block(pool);
+		CHECK(block != nullptr);
+		CHECK(static_cast<int>(block->height_mask) != 0);
+		CHECK(static_cast<int>(block->width_mask) != 0);
+		CHECK(block->height == 10);
+		CHECK(block->width == 20);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("hidden parent cannot be reset by child display")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		auto parent_res = process_declaration_tokens(pool,
+													 get_rules_parser_functor(pool, "display:none"));
+		auto *parent = parent_res->compile_to_block(pool);
+		parent->compute_visibility();
+		CHECK(!parent->is_visible());
+
+		auto child_res = process_declaration_tokens(pool,
+													get_rules_parser_functor(pool, "display:block"));
+		auto *child = child_res->compile_to_block(pool);
+		child->propagate_block(*parent);
+		child->compute_visibility();
+		CHECK(!child->is_visible());
+
+		rspamd_mempool_delete(pool);
 	}
 
 	TEST_CASE("duplicate color properties - last wins")

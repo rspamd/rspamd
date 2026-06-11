@@ -31,9 +31,12 @@ constexpr const auto prop_names_map = frozen::make_unordered_map<frozen::string,
 	{"background", css_property_type::PROPERTY_BACKGROUND},
 	{"height", css_property_type::PROPERTY_HEIGHT},
 	{"width", css_property_type::PROPERTY_WIDTH},
+	{"max-height", css_property_type::PROPERTY_MAX_HEIGHT},
+	{"max-width", css_property_type::PROPERTY_MAX_WIDTH},
 	{"display", css_property_type::PROPERTY_DISPLAY},
 	{"visibility", css_property_type::PROPERTY_VISIBILITY},
 	{"opacity", css_property_type::PROPERTY_OPACITY},
+	{"overflow", css_property_type::PROPERTY_OVERFLOW},
 });
 
 /* Ensure that we have all cases listed */
