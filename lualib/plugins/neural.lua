@@ -285,9 +285,13 @@ end
 
 -- Attention ANN: learned multi-head attention pooling over a sequence of
 -- word vectors, followed by a dense head on the pooled representation.
--- Requires providers emitting output_mode = "sequence" as the only input:
--- the vector must be exactly max_words * channels (set
--- fusion.include_meta = false to keep metatokens out of the layout).
+-- The sequence provider (output_mode = "sequence") must come FIRST in the
+-- input vector. Anything after it (metatokens, other providers) is routed
+-- around the attention layer and concatenated with the pooled output before
+-- the dense head (late fusion). For such a hybrid layout, set
+-- attention.channels to the per-word dimension so that the sequence length
+-- can be derived; with no tail (fusion.include_meta = false and a single
+-- provider) channels is derived from the input size.
 local function create_attn_ann(n, rule)
   local att = type(rule.attention) == 'table' and rule.attention or {}
   local n_words = att.max_words or 32
@@ -297,26 +301,48 @@ local function create_attn_ann(n, rule)
     error(string.format('attention ANN is incompatible with max_inputs (PCA): ' ..
       'PCA would scramble the sequence layout'))
   end
-  if n % n_words ~= 0 then
-    error(string.format('attention ANN: input dimension %s is not a multiple of ' ..
-      'max_words %s; sequence provider must be the only input ' ..
-      '(set fusion.include_meta = false and disable_symbols_input = true)',
-      n, n_words))
+
+  local channels, tail
+  if att.channels then
+    channels = att.channels
+    tail = n - n_words * channels
+    if tail < 0 then
+      error(string.format('attention ANN: input dimension %s is smaller than ' ..
+        'max_words %s * channels %s', n, n_words, channels))
+    end
+  else
+    if n % n_words ~= 0 then
+      error(string.format('attention ANN: input dimension %s is not a multiple of ' ..
+        'max_words %s; either set attention.channels for a hybrid layout ' ..
+        '(sequence + metatokens) or set fusion.include_meta = false',
+        n, n_words))
+    end
+    channels = n / n_words
+    tail = 0
   end
 
-  local channels = n / n_words
+  local seq_len = n_words * channels
   local pooled = channels * n_heads
-  local hidden = math.max(math.floor(pooled * 0.5), 32)
+  local hidden = math.max(math.floor((pooled + tail) * 0.5), 32)
   local dropout_rate = rule.dropout or 0.1
   local activate_fn = (rspamd_kann.transform.gelu and rule.activation ~= 'relu')
       and rspamd_kann.transform.gelu or rspamd_kann.transform.relu
 
   lua_util.debugm(N, rspamd_config,
-    'creating attention ANN: %s words x %s channels, %s heads, hidden=%s',
-    n_words, channels, n_heads, hidden)
+    'creating attention ANN: %s words x %s channels, %s heads, tail=%s, hidden=%s',
+    n_words, channels, n_heads, tail, hidden)
 
-  local t = rspamd_kann.layer.input(n)
-  t = rspamd_kann.layer.attn_pool(t, n_words, n_heads)
+  local t_in = rspamd_kann.layer.input(n)
+  local t
+  if tail > 0 then
+    -- late fusion: attention over the sequence part, the tail bypasses it
+    local seq = rspamd_kann.transform.slice(t_in, 1, 0, seq_len)
+    local pooled_node = rspamd_kann.layer.attn_pool(seq, n_words, n_heads)
+    local rest = rspamd_kann.transform.slice(t_in, 1, seq_len, n)
+    t = rspamd_kann.transform.concat(1, pooled_node, rest)
+  else
+    t = rspamd_kann.layer.attn_pool(t_in, n_words, n_heads)
+  end
   t = rspamd_kann.layer.dense(t, hidden)
   t = rspamd_kann.layer.layernorm(t)
   t = activate_fn(t)
