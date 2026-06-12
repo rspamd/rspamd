@@ -1747,46 +1747,14 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
 	}
 
-	/* Offscreen heuristic: negative text-indent or large negative left/top */
-	if (auto style = tag->find_style()) {
-		auto sv = *style;
-		/* text-indent */
-		auto p_ti = rspamd_substring_search_caseless(sv.data(), sv.size(), "text-indent", sizeof("text-indent") - 1);
-		if (p_ti != -1) {
-			/* look ahead for '-' before a digit */
-			for (std::size_t i = p_ti; i < sv.size(); i++) {
-				char c = sv[i];
-				if (c == '-') {
-					/* consider offscreen */
-					hc->features.offscreen_blocks++;
-					break;
-				}
-				if (g_ascii_isdigit(c)) break;
-			}
-		}
-		/* left/top negative absolute */
-		auto p_left = rspamd_substring_search_caseless(sv.data(), sv.size(), "left", sizeof("left") - 1);
-		if (p_left != -1) {
-			for (std::size_t i = p_left; i < sv.size(); i++) {
-				char c = sv[i];
-				if (c == '-') {
-					hc->features.offscreen_blocks++;
-					break;
-				}
-				if (g_ascii_isdigit(c)) break;
-			}
-		}
-		auto p_top = rspamd_substring_search_caseless(sv.data(), sv.size(), "top", sizeof("top") - 1);
-		if (p_top != -1) {
-			for (std::size_t i = p_top; i < sv.size(); i++) {
-				char c = sv[i];
-				if (c == '-') {
-					hc->features.offscreen_blocks++;
-					break;
-				}
-				if (g_ascii_isdigit(c)) break;
-			}
-		}
+	/*
+	 * Off-screen positioning / clipping is detected while compiling the
+	 * inline style into the block (position+left/top, text-indent, clip).
+	 * Count it here, per tag with its own style, before children inherit
+	 * a copy of the block
+	 */
+	if (tag->block->offscreen) {
+		hc->features.offscreen_blocks++;
 	}
 }
 

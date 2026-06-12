@@ -37,6 +37,12 @@ constexpr const auto prop_names_map = frozen::make_unordered_map<frozen::string,
 	{"visibility", css_property_type::PROPERTY_VISIBILITY},
 	{"opacity", css_property_type::PROPERTY_OPACITY},
 	{"overflow", css_property_type::PROPERTY_OVERFLOW},
+	{"position", css_property_type::PROPERTY_POSITION},
+	{"left", css_property_type::PROPERTY_LEFT},
+	{"top", css_property_type::PROPERTY_TOP},
+	{"text-indent", css_property_type::PROPERTY_TEXT_INDENT},
+	{"clip", css_property_type::PROPERTY_CLIP},
+	{"clip-path", css_property_type::PROPERTY_CLIP_PATH},
 });
 
 /* Ensure that we have all cases listed */

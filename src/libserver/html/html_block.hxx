@@ -33,6 +33,7 @@ struct html_block {
 	rspamd::css::css_display_value display;
 	std::int8_t font_size;
 	bool overflow_hidden;
+	bool offscreen; /* hidden via off-screen positioning / clipping */
 
 	unsigned fg_color_mask : 2;
 	unsigned bg_color_mask : 2;
@@ -258,7 +259,12 @@ public:
 		}
 
 		if (font_mask) {
-			if (font_size == 0) {
+			/*
+			 * font_size >= 0 is an absolute size in px (percent sizes are
+			 * encoded as negative). A font of a few pixels or less is
+			 * effectively unreadable and is used to hide text
+			 */
+			if (font_size >= 0 && font_size <= 3) {
 				visibility_mask = html_block::invisible_flag;
 
 				return;
@@ -369,6 +375,7 @@ public:
 						  .display = rspamd::css::css_display_value::DISPLAY_INLINE,
 						  .font_size = 12,
 						  .overflow_hidden = false,
+						  .offscreen = false,
 						  .fg_color_mask = html_block::inherited,
 						  .bg_color_mask = html_block::inherited,
 						  .height_mask = html_block::unset,

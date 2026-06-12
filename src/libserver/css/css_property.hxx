@@ -44,6 +44,12 @@ enum class css_property_type : std::uint16_t {
 	PROPERTY_VISIBILITY,
 	PROPERTY_OPACITY,
 	PROPERTY_OVERFLOW,
+	PROPERTY_POSITION,
+	PROPERTY_LEFT,
+	PROPERTY_TOP,
+	PROPERTY_TEXT_INDENT,
+	PROPERTY_CLIP,
+	PROPERTY_CLIP_PATH,
 	PROPERTY_NYI,
 };
 
@@ -111,6 +117,24 @@ struct alignas(int) css_property {
 		case css_property_type::PROPERTY_OVERFLOW:
 			ret = "overflow";
 			break;
+		case css_property_type::PROPERTY_POSITION:
+			ret = "position";
+			break;
+		case css_property_type::PROPERTY_LEFT:
+			ret = "left";
+			break;
+		case css_property_type::PROPERTY_TOP:
+			ret = "top";
+			break;
+		case css_property_type::PROPERTY_TEXT_INDENT:
+			ret = "text-indent";
+			break;
+		case css_property_type::PROPERTY_CLIP:
+			ret = "clip";
+			break;
+		case css_property_type::PROPERTY_CLIP_PATH:
+			ret = "clip-path";
+			break;
 		default:
 			break;
 		}
@@ -133,6 +157,9 @@ struct alignas(int) css_property {
 			   type == css_property_type::PROPERTY_WIDTH ||
 			   type == css_property_type::PROPERTY_MAX_HEIGHT ||
 			   type == css_property_type::PROPERTY_MAX_WIDTH ||
+			   type == css_property_type::PROPERTY_LEFT ||
+			   type == css_property_type::PROPERTY_TOP ||
+			   type == css_property_type::PROPERTY_TEXT_INDENT ||
 			   type == css_property_type::PROPERTY_FONT_SIZE ||
 			   type == css_property_type::PROPERTY_FONT;
 	}
@@ -155,6 +182,17 @@ struct alignas(int) css_property {
 	auto is_overflow(void) const -> bool
 	{
 		return type == css_property_type::PROPERTY_OVERFLOW;
+	}
+
+	auto is_position(void) const -> bool
+	{
+		return type == css_property_type::PROPERTY_POSITION;
+	}
+
+	auto is_clip(void) const -> bool
+	{
+		return type == css_property_type::PROPERTY_CLIP ||
+			   type == css_property_type::PROPERTY_CLIP_PATH;
 	}
 
 	auto operator==(const css_property &other) const

@@ -137,6 +137,64 @@ namespace rspamd::css {
 
 /* Static functions */
 
+/*
+ * Whether a clip / clip-path function collapses the element to a zero
+ * area, fully hiding its content (a common way to hide text):
+ *  - clip: rect(0,0,0,0) / rect(1px,1px,1px,1px)
+ *  - clip-path: inset(100%) (or >= 50% on the first edge)
+ *  - clip-path: circle(0) / ellipse(0)
+ */
+static auto
+clip_function_hides(const css_consumed_block::css_function_block &func) -> bool
+{
+	auto get_num = [](const auto &arg, float &out, bool &is_percent) -> bool {
+		const auto &tok = arg->get_token_or_empty();
+		if (std::holds_alternative<float>(tok.value)) {
+			out = std::get<float>(tok.value);
+			is_percent = (tok.flags & css_parser_token::number_percent) != 0;
+			return true;
+		}
+		return false;
+	};
+
+	auto name = func.as_string();
+
+	if (name == "rect") {
+		auto numeric_seen = false;
+		for (const auto &arg: func.args) {
+			float v = 0;
+			bool pct = false;
+			if (get_num(arg, v, pct)) {
+				numeric_seen = true;
+				if (std::fabs(v) > 1.0f) {
+					return false;
+				}
+			}
+		}
+		return numeric_seen;
+	}
+	else if (name == "inset") {
+		for (const auto &arg: func.args) {
+			float v = 0;
+			bool pct = false;
+			if (get_num(arg, v, pct)) {
+				return pct && v >= 50.0f;
+			}
+		}
+	}
+	else if (name == "circle" || name == "ellipse") {
+		for (const auto &arg: func.args) {
+			float v = 0;
+			bool pct = false;
+			if (get_num(arg, v, pct)) {
+				return v <= 0.0f;
+			}
+		}
+	}
+
+	return false;
+}
+
 static auto
 allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
 	-> std::optional<css_value>
@@ -218,6 +276,31 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 
 				return css_value{css_display_value::DISPLAY_INLINE};
 			}
+		}
+	}
+	if (prop.is_position()) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token) {
+				auto sv = tok.get_string_or_default("");
+
+				/* Only out-of-flow positioning can move content off-screen;
+				 * encode it as a number flag for compile_to_block */
+				return css_value{(sv == "absolute" || sv == "fixed") ? 1.0f : 0.0f};
+			}
+		}
+	}
+	if (prop.is_clip()) {
+		if (parser_block.is_function()) {
+			const auto &func = parser_block.get_function_or_invalid();
+
+			return css_value{clip_function_hides(func) ? 1.0f : 0.0f};
+		}
+		else if (parser_block.is_token()) {
+			/* idents such as auto / none do not hide anything */
+			return css_value{0.0f};
 		}
 	}
 
@@ -405,6 +488,8 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 	auto *block = rspamd_mempool_alloc0_type(pool, rspamd::html::html_block);
 	auto opacity = -1.0f;
 	std::optional<css_dimension> height, width, max_height, max_width;
+	std::optional<css_dimension> left, top, text_indent;
+	auto positioned = false, clip_hidden = false;
 	const css_rule *font_rule = nullptr, *background_rule = nullptr;
 
 	for (const auto &rule: rules) {
@@ -471,6 +556,29 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 			}
 			break;
 		}
+		case css_property_type::PROPERTY_POSITION: {
+			positioned = vals.back().to_number().value_or(0.0f) > 0.5f;
+			break;
+		}
+		case css_property_type::PROPERTY_LEFT: {
+			left = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_TOP: {
+			top = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_TEXT_INDENT: {
+			text_indent = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_CLIP:
+		case css_property_type::PROPERTY_CLIP_PATH: {
+			if (vals.back().to_number().value_or(0.0f) > 0.5f) {
+				clip_hidden = true;
+			}
+			break;
+		}
 		/* Optional attributes */
 		case css_property_type::PROPERTY_FONT:
 			font_rule = rule.get();
@@ -517,6 +625,26 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 		 * value as it has the desired inheritance semantics
 		 */
 		block->set_display(css_display_value::DISPLAY_HIDDEN);
+	}
+
+	/*
+	 * Off-screen positioning and clipping hide the content while keeping it
+	 * in the document. As with opacity, descendants cannot bring it back, so
+	 * model it as a hidden display, additionally flagging it for the
+	 * offscreen feature counter:
+	 *  - position:absolute|fixed with a large negative left/top
+	 *  - a large negative text-indent (image-replacement trick)
+	 *  - clip / clip-path collapsing the element to a zero area
+	 */
+	constexpr const auto offscreen_threshold = -1000.0f;
+	auto is_offscreen = [&](const std::optional<css_dimension> &d) -> bool {
+		return d && !d->is_percent && d->dim <= offscreen_threshold;
+	};
+
+	if ((positioned && (is_offscreen(left) || is_offscreen(top))) ||
+		is_offscreen(text_indent) || clip_hidden) {
+		block->set_display(css_display_value::DISPLAY_HIDDEN);
+		block->offscreen = true;
 	}
 
 	/* Optional properties */
@@ -603,6 +731,24 @@ TEST_SUITE("css")
 			"width:0; overflow:hidden",
 			"opacity:0.01",
 			"max-height:0; height:50px; overflow:hidden",
+			/* Off-screen positioning */
+			"position:absolute; left:-9999px",
+			"position:absolute; top:-9999px; left:0",
+			"position:fixed; left:-10000px",
+			/* Image-replacement text-indent */
+			"text-indent:-9999px",
+			"text-indent:-100000px; white-space:nowrap",
+			/* Clip / clip-path */
+			"clip:rect(0,0,0,0); position:absolute",
+			"clip:rect(1px,1px,1px,1px)",
+			"clip-path:inset(100%)",
+			"clip-path:inset(50%)",
+			"clip-path:circle(0)",
+			/* visibility:collapse */
+			"visibility:collapse",
+			/* Tiny font */
+			"font-size:1px",
+			"font-size:2px",
 		};
 		const std::vector<const char *> visible_styles{
 			"max-width:600px; width:100%",
@@ -614,6 +760,20 @@ TEST_SUITE("css")
 			"overflow:hidden; max-height:10px",
 			"overflow:hidden",
 			"display:block",
+			/* Absolute positioning on-screen is legitimate */
+			"position:absolute; left:10px; top:20px",
+			"position:absolute",
+			/* A negative offset without out-of-flow positioning does not hide */
+			"left:-9999px",
+			/* Small or positive text-indent is normal */
+			"text-indent:-20px",
+			"text-indent:40px",
+			/* Non-collapsing clip values */
+			"clip:rect(auto,auto,auto,auto)",
+			"clip-path:inset(10%)",
+			"clip-path:none",
+			/* Readable font */
+			"font-size:10px",
 		};
 
 		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
@@ -637,6 +797,35 @@ TEST_SUITE("css")
 			CHECK(block != nullptr);
 			block->compute_visibility();
 			CHECK_MESSAGE(block->is_visible(), css_text);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("offscreen flag is set only for offscreen tricks")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		const std::vector<std::pair<const char *, bool>> cases{
+			{"position:absolute; left:-9999px", true},
+			{"text-indent:-9999px", true},
+			{"clip:rect(0,0,0,0)", true},
+			{"clip-path:inset(100%)", true},
+			/* Not offscreen, even if hidden by other means */
+			{"display:none", false},
+			{"opacity:0", false},
+			{"position:absolute; left:10px", false},
+			{"font-size:1px", false},
+		};
+
+		for (const auto &c: cases) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, c.first));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			CHECK_MESSAGE(block->offscreen == c.second, c.first);
 		}
 
 		rspamd_mempool_delete(pool);
