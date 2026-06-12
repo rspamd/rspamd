@@ -521,9 +521,8 @@ neural_common.register_provider('fasttext_embed', {
     end
 
     -- Sequence output mode: emit raw word vectors (zero-padded to max_words)
-    -- and let the ANN learn the pooling (attention pooling layer). Requires
-    -- rule.attention and fusion.include_meta = false so that the vector
-    -- layout stays a pure (max_words x channels) sequence.
+    -- and let the ANN learn the pooling (attention pooling layer); the rule
+    -- must define `attention` (see neural.lua for the layout requirements).
     if pcfg.output_mode == 'sequence' then
       local max_words = pcfg.max_words or 32
       local sif_a = pcfg.sif_a
@@ -536,8 +535,44 @@ neural_common.register_provider('fasttext_embed', {
         model_names[#model_names + 1] = m.lang
       end
 
+      -- Word selection strategy. Attention pooling is order-invariant, so the
+      -- sequence does not have to be a prefix of the text:
+      --  * "prefix" (default): first max_words words
+      --  * "sif": max_words distinct words with the highest SIF weight
+      --    (rarest words across the whole message) -- avoids wasting slots on
+      --    boilerplate openings and covers signal appearing late in the text
+      local seq_words = words
+      if pcfg.word_selection == 'sif' then
+        local seen = {}
+        local scored = {}
+        for i, w in ipairs(words) do
+          if not seen[w] then
+            seen[w] = true
+            local best = 0.0
+            for _, m in ipairs(models) do
+              local freq = m.model:get_word_frequency(w) or 0
+              local wt = sif_a > 0 and (sif_a / (sif_a + freq)) or 1.0
+              if wt > best then
+                best = wt
+              end
+            end
+            scored[#scored + 1] = { w = w, s = best, pos = i }
+          end
+        end
+        table.sort(scored, function(a, b)
+          if a.s ~= b.s then
+            return a.s > b.s
+          end
+          return a.pos < b.pos
+        end)
+        seq_words = {}
+        for i = 1, math.min(#scored, max_words) do
+          seq_words[i] = scored[i].w
+        end
+      end
+
       local combined_vec, total_channels = compute_sequence_features(
-        models, words, max_words, sif_a)
+        models, seq_words, max_words, sif_a)
 
       if not combined_vec or #combined_vec == 0 then
         rspamd_logger.debugm(N, task, 'fasttext_embed: sequence produced empty features; skip')
