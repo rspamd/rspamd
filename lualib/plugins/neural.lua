@@ -43,7 +43,11 @@ local default_options = {
     train_prob = 1.0,
     learn_threads = 1,
     learn_mode = 'balanced', -- Possible values: balanced, proportional
-    learning_rate = 0.01,
+    -- learning_rate is resolved in spawn_train when not set explicitly:
+    -- 0.01 for symbol vectors, 0.001 for dense provider embeddings (the
+    -- historical 0.01 default drives embedding inputs into tanh saturation
+    -- depending on weight init, producing a constant-output model)
+    learning_rate = nil,
     classes_bias = 0.0,      -- balanced mode: what difference is allowed between classes (1:1 proportion means 0 bias)
     spam_skip_prob = 0.0,    -- proportional mode: spam skip probability (0-1)
     ham_skip_prob = 0.0,     -- proportional mode: ham skip probability
@@ -279,13 +283,19 @@ local function create_conv1d_ann(n, rule)
   return create_embedding_ann(n, rule)
 end
 
--- Detects if rule uses LLM embeddings provider
-local function uses_llm_embeddings(rule)
+-- Detects if rule input contains dense embedding features: any provider other
+-- than plain symbols/metatokens (llm, fasttext_embed, text_hash, ...).
+-- Such inputs need the embedding architecture and a lower learning rate:
+-- the simple symbol ANN applies ReLU directly to the input (clipping the
+-- negative half of the embedding space), and RMSprop at lr=0.01 diverges
+-- into tanh saturation on dense vectors depending on weight init.
+local function uses_dense_features(rule)
   if not rule.providers then
     return false
   end
   for _, p in ipairs(rule.providers) do
-    if p.type == 'llm' then
+    local ptype = p.type or p.name
+    if ptype ~= 'symbols' and ptype ~= 'metatokens' then
       return true
     end
   end
@@ -301,8 +311,8 @@ local function create_ann(n, nlayers, rule)
   end
 
   -- Check if we should use the enhanced embedding architecture
-  -- Conditions: has LLM provider, or explicit multi-layer config, or large input dimension
-  local use_embedding_arch = uses_llm_embeddings(rule)
+  -- Conditions: any dense feature provider, or explicit multi-layer config
+  local use_embedding_arch = uses_dense_features(rule)
     or rule.layers ~= nil
     or rule.use_layernorm ~= nil
     or rule.dropout ~= nil
@@ -1144,11 +1154,16 @@ local function spawn_train(params)
         end
       end
 
-      lua_util.debugm(N, rspamd_config, "start neural train for ANN %s:%s",
-        params.rule.prefix, params.set.name)
+      local learning_rate = params.rule.train.learning_rate
+      if not learning_rate then
+        learning_rate = uses_dense_features(params.rule) and 0.001 or 0.01
+      end
+
+      lua_util.debugm(N, rspamd_config, "start neural train for ANN %s:%s (lr=%s)",
+        params.rule.prefix, params.set.name, learning_rate)
       local ret, err = pcall(train_ann.train1, train_ann,
         inputs, outputs, {
-          lr = params.rule.train.learning_rate,
+          lr = learning_rate,
           max_epoch = params.rule.train.max_iterations,
           cb = train_cb,
           pca = pca
@@ -1162,6 +1177,52 @@ local function spawn_train(params)
       else
         lua_util.debugm(N, rspamd_config, "finished neural train for ANN %s:%s",
           params.rule.prefix, params.set.name)
+      end
+
+      -- Quality gate: reject degenerate models before saving. A bad weight
+      -- init can drive the net into tanh saturation: constant output for any
+      -- input (typically exactly +1 or -1), near-zero gradients and a frozen
+      -- loss, while train1 still "succeeds". Saving such a model would
+      -- classify every message into one class until the next retrain.
+      -- Training sets are kept on this path, so the next watch_interval cycle
+      -- retries with a different weight init.
+      do
+        local out_min, out_max = math.huge, -math.huge
+        local pred_spam, pred_ham = 0, 0
+        for i = 1, #inputs do
+          local out = train_ann:apply1(inputs[i], pca)
+          local o = out[1]
+          if o ~= o then
+            -- NaN output, force rejection
+            out_min, out_max = 0, 0
+            break
+          end
+          if o < out_min then
+            out_min = o
+          end
+          if o > out_max then
+            out_max = o
+          end
+          if o > 0 then
+            pred_spam = pred_spam + 1
+          else
+            pred_ham = pred_ham + 1
+          end
+        end
+        local single_class = (#params.spam_vec > 0 and #params.ham_vec > 0)
+            and (pred_spam == 0 or pred_ham == 0)
+        if (out_max - out_min) < 1e-4 or single_class then
+          -- NB: never return nil from this child function: a nil return writes
+          -- no reply to the parent and deadlocks both processes; return an
+          -- explicit rejection marker instead
+          return ucl.to_format({
+            rejected = string.format(
+              'degenerate model: constant or single-class output on the train set ' ..
+              '(output range %s..%s; predicted spam=%s ham=%s of %s samples); ' ..
+              'consider lowering train.learning_rate if this repeats',
+              out_min, out_max, pred_spam, pred_ham, #inputs)
+          }, 'msgpack')
+        end
       end
 
       local roc_thresholds = {}
@@ -1200,7 +1261,10 @@ local function spawn_train(params)
           params.rule.prefix, params.set.name, #final_data)
         return final_data
       else
-        return nil
+        -- See the rejection marker note above: nil return would deadlock
+        return ucl.to_format({
+          rejected = 'NaN cost observed during training'
+        }, 'msgpack')
       end
     end
 
@@ -1247,9 +1311,12 @@ local function spawn_train(params)
 
     local function ann_trained(err, data)
       params.set.learning_spawned = false
-      if err then
+      -- Empty data means the training child rejected the model (NaN cost or
+      -- the degenerate-model quality gate) without a hard error
+      if err or not data or #data == 0 then
         rspamd_logger.errx(rspamd_config, 'cannot train ANN %s:%s : %s',
-          params.rule.prefix, params.set.name, err)
+          params.rule.prefix, params.set.name,
+          err or 'training child returned no model (rejected or failed)')
         lua_redis.redis_make_request_taskless(params.ev_base,
           rspamd_config,
           params.rule.redis,
@@ -1277,6 +1344,24 @@ local function spawn_train(params)
           return
         end
         local parsed = parser:get_object()
+
+        if parsed.rejected then
+          -- The training child refused to produce a model (degenerate output
+          -- or NaN cost); unlock and keep training sets for the next cycle
+          rspamd_logger.errx(rspamd_config, 'rejected ANN %s:%s: %s',
+            params.rule.prefix, params.set.name, parsed.rejected)
+          lua_redis.redis_make_request_taskless(params.ev_base,
+            rspamd_config,
+            params.rule.redis,
+            nil,
+            true,
+            gen_unlock_cb(params.rule, params.set, params.ann_key),
+            'HDEL',
+            { params.ann_key, 'lock' }
+          )
+          return
+        end
+
         local ann_data = rspamd_util.zstd_compress(parsed.ann_data)
         local pca_data = parsed.pca_data
         local roc_thresholds = parsed.roc_thresholds
