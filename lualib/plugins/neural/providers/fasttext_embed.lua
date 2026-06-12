@@ -287,26 +287,18 @@ end
 --   3. Max-pool (and optionally mean-pool) over all window positions
 -- Each scale's features are L2-normalized independently for balanced contribution.
 -- Output: flat table of n_scales * n_pool * C floats (e.g., 3 * 2 * 100 = 600 for mean_max)
-local function compute_conv1d_features(models, words, max_words, sif_a, opts)
-  opts = opts or {}
+-- Collects per-word vectors concatenated across models (with optional SIF
+-- weighting): word_vecs[w][c] for word position w, channel c.
+-- Returns word_vecs, total_channels, nwords.
+local function collect_word_vectors(models, words, max_words, sif_a)
   local use_sif = sif_a and sif_a > 0
   local nwords = math.min(#words, max_words)
-  local kernel_sizes = opts.kernel_sizes or { 1, 3, 5 }
-  local conv_pooling = opts.conv_pooling or 'mean_max'
-  local need_mean = (conv_pooling == 'mean_max' or conv_pooling == 'mean')
-  local need_max = (conv_pooling == 'mean_max' or conv_pooling == 'max')
 
-  if nwords == 0 then
-    return nil, 0, 0
-  end
-
-  -- Compute total channels (sum of all model dimensions)
   local total_channels = 0
   for _, m in ipairs(models) do
     total_channels = total_channels + m.model:get_dimension()
   end
 
-  -- Collect word vectors: word_vecs[w][c] for word position w, channel c
   local word_vecs = {}
   for w = 1, nwords do
     local wv_all = {}
@@ -331,6 +323,45 @@ local function compute_conv1d_features(models, words, max_words, sif_a, opts)
       end
     end
     word_vecs[w] = wv_all
+  end
+
+  return word_vecs, total_channels, nwords
+end
+
+-- Sequence output: the first max_words word vectors flattened word-major and
+-- zero-padded to a fixed max_words * total_channels size. Pooling is deferred
+-- to the ANN (attention pooling layer), which learns it from data.
+local function compute_sequence_features(models, words, max_words, sif_a)
+  local word_vecs, total_channels, nwords = collect_word_vectors(
+    models, words, max_words, sif_a)
+
+  if nwords == 0 then
+    return nil, 0
+  end
+
+  local output = {}
+  for w = 1, max_words do
+    local wv = word_vecs[w]
+    for c = 1, total_channels do
+      output[#output + 1] = wv and (wv[c] or 0.0) or 0.0
+    end
+  end
+
+  return output, total_channels
+end
+
+local function compute_conv1d_features(models, words, max_words, sif_a, opts)
+  opts = opts or {}
+  local kernel_sizes = opts.kernel_sizes or { 1, 3, 5 }
+  local conv_pooling = opts.conv_pooling or 'mean_max'
+  local need_mean = (conv_pooling == 'mean_max' or conv_pooling == 'mean')
+  local need_max = (conv_pooling == 'mean_max' or conv_pooling == 'max')
+
+  local word_vecs, total_channels, nwords = collect_word_vectors(
+    models, words, max_words, sif_a)
+
+  if nwords == 0 then
+    return nil, 0, 0
   end
 
   -- Multi-scale pooling with per-scale L2 normalization
@@ -486,6 +517,49 @@ neural_common.register_provider('fasttext_embed', {
     if #words == 0 then
       rspamd_logger.debugm(N, task, 'fasttext_embed: no words found; skip')
       cont(nil)
+      return
+    end
+
+    -- Sequence output mode: emit raw word vectors (zero-padded to max_words)
+    -- and let the ANN learn the pooling (attention pooling layer). Requires
+    -- rule.attention and fusion.include_meta = false so that the vector
+    -- layout stays a pure (max_words x channels) sequence.
+    if pcfg.output_mode == 'sequence' then
+      local max_words = pcfg.max_words or 32
+      local sif_a = pcfg.sif_a
+      if sif_a == nil then
+        sif_a = (pcfg.sif_weight ~= false) and 1e-3 or 0
+      end
+
+      local model_names = {}
+      for _, m in ipairs(models) do
+        model_names[#model_names + 1] = m.lang
+      end
+
+      local combined_vec, total_channels = compute_sequence_features(
+        models, words, max_words, sif_a)
+
+      if not combined_vec or #combined_vec == 0 then
+        rspamd_logger.debugm(N, task, 'fasttext_embed: sequence produced empty features; skip')
+        cont(nil)
+        return
+      end
+
+      local meta = {
+        name = pcfg.name or 'fasttext_embed',
+        type = 'fasttext_embed',
+        output_mode = 'sequence',
+        channels = total_channels,
+        n_words = max_words,
+        dim = #combined_vec,
+        weight = ctx.weight or 1.0,
+        models = table.concat(model_names, '+'),
+      }
+
+      rspamd_logger.debugm(N, task,
+        'fasttext_embed: sequence dim=%s (%s models, %s channels, %s of %s word slots)',
+        #combined_vec, #models, total_channels, math.min(#words, max_words), max_words)
+      cont(combined_vec, meta)
       return
     end
 

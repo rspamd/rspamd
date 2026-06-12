@@ -283,6 +283,50 @@ local function create_conv1d_ann(n, rule)
   return create_embedding_ann(n, rule)
 end
 
+-- Attention ANN: learned multi-head attention pooling over a sequence of
+-- word vectors, followed by a dense head on the pooled representation.
+-- Requires providers emitting output_mode = "sequence" as the only input:
+-- the vector must be exactly max_words * channels (set
+-- fusion.include_meta = false to keep metatokens out of the layout).
+local function create_attn_ann(n, rule)
+  local att = type(rule.attention) == 'table' and rule.attention or {}
+  local n_words = att.max_words or 32
+  local n_heads = att.heads or 4
+
+  if rule.max_inputs then
+    error(string.format('attention ANN is incompatible with max_inputs (PCA): ' ..
+      'PCA would scramble the sequence layout'))
+  end
+  if n % n_words ~= 0 then
+    error(string.format('attention ANN: input dimension %s is not a multiple of ' ..
+      'max_words %s; sequence provider must be the only input ' ..
+      '(set fusion.include_meta = false and disable_symbols_input = true)',
+      n, n_words))
+  end
+
+  local channels = n / n_words
+  local pooled = channels * n_heads
+  local hidden = math.max(math.floor(pooled * 0.5), 32)
+  local dropout_rate = rule.dropout or 0.1
+  local activate_fn = (rspamd_kann.transform.gelu and rule.activation ~= 'relu')
+      and rspamd_kann.transform.gelu or rspamd_kann.transform.relu
+
+  lua_util.debugm(N, rspamd_config,
+    'creating attention ANN: %s words x %s channels, %s heads, hidden=%s',
+    n_words, channels, n_heads, hidden)
+
+  local t = rspamd_kann.layer.input(n)
+  t = rspamd_kann.layer.attn_pool(t, n_words, n_heads)
+  t = rspamd_kann.layer.dense(t, hidden)
+  t = rspamd_kann.layer.layernorm(t)
+  t = activate_fn(t)
+  if dropout_rate > 0 then
+    t = rspamd_kann.layer.dropout(t, dropout_rate)
+  end
+  t = rspamd_kann.layer.cost(t, 1, rspamd_kann.cost.ceb_neg)
+  return rspamd_kann.new.kann(t)
+end
+
 -- Detects if rule input contains dense embedding features: any provider other
 -- than plain symbols/metatokens (llm, fasttext_embed, text_hash, ...).
 -- Such inputs need the embedding architecture and a lower learning rate:
@@ -304,6 +348,11 @@ end
 
 -- Main ANN factory function - auto-selects architecture based on rule configuration
 local function create_ann(n, nlayers, rule)
+  -- Attention pooling over a word-vector sequence (output_mode = "sequence")
+  if rule.attention then
+    return create_attn_ann(n, rule)
+  end
+
   -- Check for conv1d architecture first
   if rule.conv1d then
     lua_util.debugm(N, rspamd_config, 'creating conv1d ANN with %s inputs', n)
