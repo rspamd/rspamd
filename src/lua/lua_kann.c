@@ -28,28 +28,24 @@
 
 /* Simple macros to define behaviour */
 #define KANN_LAYER_DEF(name) static int lua_kann_layer_##name(lua_State *L)
-#define KANN_LAYER_INTERFACE(name)   \
-	{                                \
-		#name, lua_kann_layer_##name \
-	}
+#define KANN_LAYER_INTERFACE(name) \
+	{                              \
+		#name, lua_kann_layer_##name}
 
 #define KANN_TRANSFORM_DEF(name) static int lua_kann_transform_##name(lua_State *L)
-#define KANN_TRANSFORM_INTERFACE(name)   \
-	{                                    \
-		#name, lua_kann_transform_##name \
-	}
+#define KANN_TRANSFORM_INTERFACE(name) \
+	{                                  \
+		#name, lua_kann_transform_##name}
 
 #define KANN_LOSS_DEF(name) static int lua_kann_loss_##name(lua_State *L)
-#define KANN_LOSS_INTERFACE(name)   \
-	{                               \
-		#name, lua_kann_loss_##name \
-	}
+#define KANN_LOSS_INTERFACE(name) \
+	{                             \
+		#name, lua_kann_loss_##name}
 
 #define KANN_NEW_DEF(name) static int lua_kann_new_##name(lua_State *L)
-#define KANN_NEW_INTERFACE(name)   \
-	{                              \
-		#name, lua_kann_new_##name \
-	}
+#define KANN_NEW_INTERFACE(name) \
+	{                            \
+		#name, lua_kann_new_##name}
 
 
 /*
@@ -71,11 +67,13 @@ KANN_LAYER_DEF(input3d);
 KANN_LAYER_DEF(cost);
 
 static int lua_kann_layer_layerdropout(lua_State *L); /* forward declaration */
+static int lua_kann_layer_attn_pool(lua_State *L);    /* forward declaration */
 
 static luaL_reg rspamd_kann_layers_f[] = {
 	KANN_LAYER_INTERFACE(input),
 	KANN_LAYER_INTERFACE(dense),
 	KANN_LAYER_INTERFACE(layernorm),
+	{"attn_pool", lua_kann_layer_attn_pool},  /* manually registered - extra args */
 	{"dropout", lua_kann_layer_layerdropout}, /* manually registered - different naming */
 	KANN_LAYER_INTERFACE(rnn),
 	KANN_LAYER_INTERFACE(lstm),
@@ -409,6 +407,46 @@ lua_kann_layer_layerdropout(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "invalid arguments, input + rate required");
+	}
+
+	return 1;
+}
+
+/***
+ * @function kann.layer.attn_pool(in, n_words[, n_heads[, flags]])
+ * Creates a multi-head attention pooling layer over a flattened sequence of
+ * zero-padded word vectors. The input dimension must be a multiple of
+ * n_words; the per-word dimension is derived as input_dim / n_words.
+ * Output dimension is n_heads * per-word dimension.
+ * @param {kann_node} in kann node, (batch, n_words * dim)
+ * @param {int} n_words number of word positions in the sequence
+ * @param {int} n_heads number of learned attention queries (default 4)
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
+static int
+lua_kann_layer_attn_pool(lua_State *L)
+{
+	kad_node_t *in = lua_check_kann_node(L, 1);
+	int n_words = luaL_checkinteger(L, 2);
+	int n_heads = luaL_optinteger(L, 3, 4);
+
+	if (in != NULL && n_words > 0 && n_heads > 0) {
+		kad_node_t *t;
+
+		t = kann_layer_attn_pool(in, n_words, n_heads);
+
+		if (t == NULL) {
+			return luaL_error(L, "invalid attn_pool: input dimension %d "
+								 "is not a multiple of n_words %d",
+							  in->n_d == 2 ? in->d[1] : -1, n_words);
+		}
+
+		PROCESS_KAD_FLAGS(t, 4);
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, input + n_words + n_heads required");
 	}
 
 	return 1;
