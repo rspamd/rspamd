@@ -598,10 +598,11 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 			ct->begin, ct->len, rspamd_mempool_new(256, "v3-client", 0));
 		/* Note: we leak this small pool; acceptable for client-side */
 
-		if (parsed_ct && parsed_ct->boundary.len > 0) {
+		if (parsed_ct && parsed_ct->orig_boundary.len > 0) {
+			/* Use the case preserving boundary as HTTP boundaries are case sensitive */
 			struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
 				resp_body, resp_body_len,
-				parsed_ct->boundary.begin, parsed_ct->boundary.len);
+				parsed_ct->orig_boundary.begin, parsed_ct->orig_boundary.len);
 
 			if (form) {
 				const struct rspamd_multipart_entry_c *result_part =

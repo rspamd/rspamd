@@ -1285,13 +1285,14 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
 			ct->begin, ct->len, session->pool);
 
-		if (!parsed_ct || parsed_ct->boundary.len == 0) {
+		if (!parsed_ct || parsed_ct->orig_boundary.len == 0) {
 			msg_err_session("cannot extract boundary from multipart Content-Type");
 			return FALSE;
 		}
 
+		/* Use the case preserving boundary as HTTP boundaries are case sensitive */
 		struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
-			in, inlen, parsed_ct->boundary.begin, parsed_ct->boundary.len);
+			in, inlen, parsed_ct->orig_boundary.begin, parsed_ct->orig_boundary.len);
 
 		if (!form) {
 			msg_err_session("cannot parse multipart/mixed response");

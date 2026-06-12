@@ -2868,14 +2868,18 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	struct rspamd_content_type *ct = rspamd_content_type_parse(
 		ct_hdr->begin, ct_hdr->len, task->task_pool);
 
-	if (!ct || ct->boundary.len == 0) {
+	if (!ct || ct->orig_boundary.len == 0) {
 		g_set_error(&task->err, rspamd_protocol_quark(), 400,
 					"cannot extract boundary from Content-Type");
 		return FALSE;
 	}
 
-	boundary = ct->boundary.begin;
-	boundary_len = ct->boundary.len;
+	/*
+	 * Use the original (case preserving) boundary: RFC 2046 boundaries are
+	 * case sensitive; ct->boundary is lowercased for MIME clients quirks
+	 */
+	boundary = ct->orig_boundary.begin;
+	boundary_len = ct->orig_boundary.len;
 
 	/* Parse multipart body */
 	struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
