@@ -1458,6 +1458,40 @@ rspamd_dkim_key_id(rspamd_dkim_key_t *key)
 	return NULL;
 }
 
+enum rspamd_dkim_key_type
+rspamd_dkim_key_get_type(rspamd_dkim_key_t *key)
+{
+	if (key) {
+		return key->type;
+	}
+
+	return RSPAMD_DKIM_KEY_INVALID;
+}
+
+void *
+rspamd_dkim_key_evp(rspamd_dkim_key_t *key)
+{
+	if (key && key->type != RSPAMD_DKIM_KEY_EDDSA) {
+		return key->specific.key_ssl.key_evp;
+	}
+
+	return NULL;
+}
+
+const unsigned char *
+rspamd_dkim_key_eddsa(rspamd_dkim_key_t *key, gsize *len)
+{
+	if (key && key->type == RSPAMD_DKIM_KEY_EDDSA) {
+		if (len) {
+			*len = key->decoded_len;
+		}
+
+		return key->specific.key_eddsa;
+	}
+
+	return NULL;
+}
+
 /**
 * Free DKIM key
 * @param key
