@@ -105,6 +105,10 @@ KANN_TRANSFORM_DEF(1minus);
 KANN_TRANSFORM_DEF(exp);
 KANN_TRANSFORM_DEF(log);
 KANN_TRANSFORM_DEF(sin);
+
+static int lua_kann_transform_slice(lua_State *L);  /* forward declaration */
+static int lua_kann_transform_concat(lua_State *L); /* forward declaration */
+
 static luaL_reg rspamd_kann_transform_f[] = {
 	KANN_TRANSFORM_INTERFACE(add),
 	KANN_TRANSFORM_INTERFACE(sub),
@@ -122,6 +126,8 @@ static luaL_reg rspamd_kann_transform_f[] = {
 	KANN_TRANSFORM_INTERFACE(exp),
 	KANN_TRANSFORM_INTERFACE(log),
 	KANN_TRANSFORM_INTERFACE(sin),
+	{"slice", lua_kann_transform_slice},   /* manually registered - extra args */
+	{"concat", lua_kann_transform_concat}, /* manually registered - extra args */
 	{NULL, NULL},
 };
 
@@ -448,6 +454,81 @@ lua_kann_layer_attn_pool(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments, input + n_words + n_heads required");
 	}
+
+	return 1;
+}
+
+/***
+ * @function kann.transform.slice(in, axis, start, end)
+ * Takes a slice [start, end) on the axis-th dimension (both 0-based, the
+ * batch dimension is axis 0, so feature slicing of a plain input is axis 1).
+ * @param {kann_node} in kann node
+ * @param {int} axis 0-based dimension index
+ * @param {int} start 0-based start offset (inclusive)
+ * @param {int} end 0-based end offset (exclusive)
+ * @return {kann_node} kann node object
+*/
+static int
+lua_kann_transform_slice(lua_State *L)
+{
+	kad_node_t *in = lua_check_kann_node(L, 1);
+	int axis = luaL_checkinteger(L, 2);
+	int start = luaL_checkinteger(L, 3);
+	int end = luaL_checkinteger(L, 4);
+
+	if (in != NULL && start >= 0 && end > start) {
+		kad_node_t *t;
+
+		t = kad_slice(in, axis, start, end);
+
+		if (t == NULL) {
+			return luaL_error(L, "invalid slice [%d, %d) on axis %d", start, end, axis);
+		}
+
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, input + axis + [start, end) required");
+	}
+
+	return 1;
+}
+
+/***
+ * @function kann.transform.concat(axis, in1, in2[, ...])
+ * Concatenates nodes on the axis-th dimension (0-based; feature
+ * concatenation of plain vectors is axis 1).
+ * @param {int} axis 0-based dimension index
+ * @param {kann_node} in1, in2, ... nodes to concatenate
+ * @return {kann_node} kann node object
+*/
+static int
+lua_kann_transform_concat(lua_State *L)
+{
+	int axis = luaL_checkinteger(L, 1);
+	int n = lua_gettop(L) - 1;
+	kad_node_t *nodes[32];
+
+	if (n < 2 || n > (int) G_N_ELEMENTS(nodes)) {
+		return luaL_error(L, "concat requires from 2 to %d nodes, got %d",
+						  (int) G_N_ELEMENTS(nodes), n);
+	}
+
+	for (int i = 0; i < n; i++) {
+		nodes[i] = lua_check_kann_node(L, i + 2);
+
+		if (nodes[i] == NULL) {
+			return luaL_error(L, "invalid node at position %d", i + 1);
+		}
+	}
+
+	kad_node_t *t = kad_concat_array(axis, n, nodes);
+
+	if (t == NULL) {
+		return luaL_error(L, "cannot concat nodes on axis %d (dimension mismatch?)", axis);
+	}
+
+	PUSH_KAD_NODE(t);
 
 	return 1;
 }
