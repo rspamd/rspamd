@@ -23,8 +23,8 @@ end
 -- Three-layer Redis cache (d:<domain> / m:<mxhost> / i:<ip>) under
 -- <key_prefix>:. Two TCP probe shapes: plain connect-only, or connect +
 -- multi-line SMTP banner validation (verify_greeting / send_quit). Resolved
--- IPs are classified into PUBLIC / LOCAL (RFC1918, CGNAT, ULA) / BOGON
--- (loopback, TEST-NET, multicast, link-local, etc.) before any probe runs.
+-- IPs are classified into PUBLIC / LOCAL (loopback / self-MX, RFC1918, CGNAT,
+-- ULA) / BOGON (TEST-NET, multicast, link-local, etc.) before any probe runs.
 -- Optional trust/skip maps at each cache layer (exclude_domains, exclude_mxs,
 -- exclude_ips). Symbols at any cache layer can short-circuit further work.
 
@@ -102,8 +102,8 @@ local settings = {
   check_local = false,
 
   -- Testing only. When true, loopback (127/8, ::1) is treated as a normal
-  -- probeable address instead of a bogon, so the probe path can be exercised
-  -- against a local listener. NEVER enable this in production.
+  -- probeable (public) address instead of a self-MX LOCAL, so the probe path
+  -- can be exercised against a local listener. NEVER enable this in production.
   test_mode = false,
 
   -- Source domains. One probe + one symbol per unique domain;
@@ -177,6 +177,17 @@ local settings = {
 
 -- Static IP-class ranges; module-private radix maps built at config-load.
 local LOCAL_CIDRS = {
+  -- Loopback. An MX (or A-fallback target) resolving only to loopback means the
+  -- domain is hosted on this very machine -- a self-MX. The usual cause is the
+  -- host's own FQDN mapped to 127.0.0.1 in /etc/hosts (Debian / admin
+  -- convention), which rspamd's resolver honours as a fake reply that shadows
+  -- public DNS, so a published-and-routable MX shows up as loopback here. That
+  -- is the strongest possible "not spam infrastructure" signal, never a bogon;
+  -- classifying it LOCAL avoids a +8.0 false positive on DMARC-aligned mail.
+  -- Lifted out of this set under test_mode so the probe path can hit a local
+  -- listener. See https://github.com/rspamd/rspamd/issues/6101.
+  '127.0.0.0/8',
+  '::1/128',
   -- IPv4 RFC 1918
   '10.0.0.0/8',
   '172.16.0.0/12',
@@ -187,14 +198,12 @@ local LOCAL_CIDRS = {
   'fc00::/7',
 }
 
--- Loopback prefixes lifted out of BOGON_CIDRS at config-load when test_mode
--- is on, so the probe path can be exercised against a local listener.
+-- Loopback prefixes. Normally classified LOCAL (self-MX, see LOCAL_CIDRS);
+-- lifted out of the LOCAL set at config-load when test_mode is on so the probe
+-- path can be exercised against a local listener.
 local LOOPBACK_CIDRS = { ['127.0.0.0/8'] = true, ['::1/128'] = true }
 
 local BOGON_CIDRS = {
-  -- Loopback (dropped under test_mode)
-  '127.0.0.0/8',
-  '::1/128',
   -- Link-local (APIPA / IPv6 link-local)
   '169.254.0.0/16',
   'fe80::/10',
@@ -1753,11 +1762,11 @@ set_metric_all_sources(settings.symbol_mx_broken, 4.0,
 set_metric_all_sources(settings.symbol_mx_dns_fail, 0.0,
   'Transient DNS path failure (SERVFAIL/REFUSED/timeout); sender not at fault')
 set_metric_all_sources(settings.symbol_mx_local_only, 3.0,
-  'All resolved MX IPs are in private ranges (RFC1918 / CGNAT / ULA); no probe run')
+  'All resolved MX IPs are local (loopback / self-MX, RFC1918, CGNAT, ULA); no probe run')
 set_metric_all_sources(settings.symbol_mx_local_mix, 3.0,
-  'Some resolved MX IPs are in private ranges; public subset probed')
+  'Some resolved MX IPs are local (loopback / RFC1918 / CGNAT / ULA); public subset probed')
 set_metric_all_sources(settings.symbol_mx_bogon_only, 8.0,
-  'All resolved MX IPs are bogon / non-routable (loopback, TEST-NET, multicast, etc.); no probe run')
+  'All resolved MX IPs are bogon / non-routable (TEST-NET, multicast, link-local, etc.); no probe run')
 set_metric_all_sources(settings.symbol_mx_bogon_mix, 5.0,
   'Some resolved MX IPs are bogon / non-routable; public subset probed')
 set_metric_all_sources(settings.symbol_mx_skip, 0.0,
@@ -1787,25 +1796,26 @@ set_metric_all_sources(settings.symbol_mx_a_error, 0.0,
 set_metric_all_sources(settings.symbol_mx_a_invalid, 3.0,
   'A-fallback target accepted TCP but listener does not speak SMTP')
 
--- Static radix maps for IP-class classification. test_mode lifts loopback
--- out of the bogon set so the probe path stays exercisable against a local
--- listener; production must NEVER enable this.
-local bogon_cidrs = BOGON_CIDRS
+-- Static radix maps for IP-class classification. Loopback lives in the LOCAL
+-- set (self-MX, see LOCAL_CIDRS); test_mode lifts it out so loopback classifies
+-- as public and the probe path stays exercisable against a local listener.
+-- Production must NEVER enable test_mode.
+local local_cidrs = LOCAL_CIDRS
 if settings.test_mode then
   rspamd_logger.warnx(rspamd_config,
     'mx_check: test_mode is ON, loopback is treated as probeable; '
       .. 'do NOT use this in production')
-  bogon_cidrs = {}
-  for _, r in ipairs(BOGON_CIDRS) do
+  local_cidrs = {}
+  for _, r in ipairs(LOCAL_CIDRS) do
     if not LOOPBACK_CIDRS[r] then
-      bogon_cidrs[#bogon_cidrs + 1] = r
+      local_cidrs[#local_cidrs + 1] = r
     end
   end
 end
-local_ip_map = lua_maps.map_add_from_ucl(LOCAL_CIDRS, 'radix',
-  'mx_check LOCAL ranges (RFC1918, CGNAT, ULA)')
-bogon_ip_map = lua_maps.map_add_from_ucl(bogon_cidrs, 'radix',
-  'mx_check BOGON ranges (loopback, link-local, TEST-NET, multicast, etc.)')
+local_ip_map = lua_maps.map_add_from_ucl(local_cidrs, 'radix',
+  'mx_check LOCAL ranges (loopback / self-MX, RFC1918, CGNAT, ULA)')
+bogon_ip_map = lua_maps.map_add_from_ucl(BOGON_CIDRS, 'radix',
+  'mx_check BOGON ranges (link-local, TEST-NET, multicast, etc.)')
 
 if settings.exclude_domains then
   exclude_domains = lua_maps.map_add('mx_check', 'exclude_domains', 'glob',
