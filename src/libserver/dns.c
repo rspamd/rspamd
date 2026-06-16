@@ -319,6 +319,18 @@ rspamd_dns_server_init(struct upstream *up, unsigned int idx, gpointer ud)
 
 	addr = rspamd_upstream_addr_next(up);
 
+	if (addr == NULL) {
+		/*
+		 * The upstream carries no resolved address (e.g. a nameserver given
+		 * as a hostname that failed to resolve at config time and was left in
+		 * a pending state). We cannot register a server with rdns without a
+		 * concrete address, so skip it rather than dereferencing NULL.
+		 */
+		msg_err("cannot use DNS server %s: no resolved address available",
+				rspamd_upstream_name(up));
+		return;
+	}
+
 	if (r->cfg) {
 		serv = rdns_resolver_add_server(r->r, rspamd_inet_address_to_string(addr),
 										rspamd_inet_address_get_port(addr), 0, r->cfg->dns_io_per_server);

@@ -2219,7 +2219,17 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 				char *pending_host = NULL;
 				uint16_t pending_port = 0;
 
-				if (rspamd_upstream_parse_pending_host(str, &pending_host,
+				/*
+				 * Never defer DNS *resolver* nameservers: their addresses are
+				 * consumed once, synchronously, by rspamd_dns_server_init() ->
+				 * rdns_resolver_add_server(). A deferred nameserver would be a
+				 * zero-address upstream that rdns never learns about even after
+				 * async promotion, and it crashes rspamd_dns_server_init() with
+				 * a NULL address. Fall through to the FAIL path instead so the
+				 * resolver keeps its pre-4.1 behaviour (skip the bad server).
+				 */
+				if (!(ups->flags & RSPAMD_UPSTREAM_FLAG_DNS) &&
+					rspamd_upstream_parse_pending_host(str, &pending_host,
 													   &pending_port, def_port,
 													   ups->ctx ? ups->ctx->pool : NULL)) {
 					/*
