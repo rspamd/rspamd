@@ -202,6 +202,7 @@ struct lua_http_cbdata {
 	int fd;
 	int cbref;
 	struct thread_entry *thread;
+	guint64 thread_generation;
 	ref_entry_t ref;
 };
 
@@ -499,7 +500,7 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	lua_thread_resume(cbd->thread, 2);
+	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
 }
 
 static gboolean
@@ -1291,6 +1292,7 @@ lua_http_request(lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+		cbd->thread_generation = cbd->thread->generation;
 	}
 
 	REF_INIT_RETAIN(cbd, lua_http_cbd_dtor);
@@ -1439,6 +1441,7 @@ lua_http_request(lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+		cbd->thread_generation = cbd->thread->generation;
 		cbd->flags |= RSPAMD_LUA_HTTP_FLAG_YIELDED;
 
 		return lua_thread_yield(cbd->thread, 0);
