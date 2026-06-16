@@ -56,7 +56,8 @@ struct lua_thread_pool {
 	~lua_thread_pool()
 	{
 		for (auto *ent: available_items) {
-			thread_entry_free(L, ent);
+			/* Drop the pool's reference; freed once nothing else holds it */
+			REF_RELEASE(ent);
 		}
 	}
 
@@ -118,7 +119,8 @@ struct lua_thread_pool {
 			msg_debug_lua_threads("%s: removed thread as thread pool has %z items",
 								  loc,
 								  available_items.size());
-			thread_entry_free(L, thread_entry);
+			/* Drop the pool's reference; freed once nothing else holds it */
+			REF_RELEASE(thread_entry);
 		}
 	}
 
@@ -141,7 +143,14 @@ struct lua_thread_pool {
 		thread_entry->state = LUA_THREAD_DEAD;
 
 		msg_debug_lua_threads("%s: terminated thread entry", loc);
-		thread_entry_free(L, thread_entry);
+		/*
+		 * Drop the pool's reference. If an async completion still holds the
+		 * entry (e.g. the owning task is being torn down while a request is in
+		 * flight), the struct stays alive until that completion releases it, so
+		 * the late callback can safely observe the DEAD state instead of
+		 * dereferencing freed memory.
+		 */
+		REF_RELEASE(thread_entry);
 
 		if (available_items.size() <= max_items) {
 			ent = thread_entry_new(L);
@@ -162,24 +171,34 @@ struct lua_thread_pool {
 	};
 };
 
+static void
+thread_entry_dtor(void *p)
+{
+	auto *ent = reinterpret_cast<struct thread_entry *>(p);
+
+	/* Registry slot is owned by the main VM state, unref it there */
+	luaL_unref(ent->pool_state, LUA_REGISTRYINDEX, ent->thread_index);
+	g_free(ent);
+}
+
 static struct thread_entry *
 thread_entry_new(lua_State *L)
 {
 	struct thread_entry *ent;
 	ent = g_new0(struct thread_entry, 1);
 	ent->lua_state = lua_newthread(L);
+	ent->pool_state = L;
 	ent->thread_index = luaL_ref(L, LUA_REGISTRYINDEX);
 	ent->state = LUA_THREAD_FREE;
 	ent->generation = 0;
+	/*
+	 * The pool holds the initial reference. Async libraries that stash the
+	 * entry take their own via lua_thread_pool_retain_entry(); the struct is
+	 * freed (thread_entry_dtor) only once the last reference is dropped.
+	 */
+	REF_INIT_RETAIN(ent, thread_entry_dtor);
 
 	return ent;
-}
-
-static void
-thread_entry_free(lua_State *L, struct thread_entry *ent)
-{
-	luaL_unref(L, LUA_REGISTRYINDEX, ent->thread_index);
-	g_free(ent);
 }
 
 struct lua_thread_pool *
@@ -192,6 +211,16 @@ lua_thread_pool_new(lua_State *L)
 void lua_thread_pool_free(struct lua_thread_pool *pool)
 {
 	delete pool;
+}
+
+void lua_thread_pool_retain_entry(struct thread_entry *thread_entry)
+{
+	REF_RETAIN(thread_entry);
+}
+
+void lua_thread_pool_release_entry(struct thread_entry *thread_entry)
+{
+	REF_RELEASE(thread_entry);
 }
 
 

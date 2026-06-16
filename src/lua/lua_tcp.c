@@ -786,6 +786,8 @@ lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, 
 	// lua_tcp_unregister_event (cbd);
 	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, cbd->thread);
 	lua_thread_resume_checked(thread, cbd->thread_generation, 2);
+	/* Balances the retain taken at the matching yield */
+	lua_thread_pool_release_entry(thread);
 	TCP_RELEASE(cbd);
 }
 
@@ -828,7 +830,10 @@ lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
+	struct thread_entry *thread = cbd->thread;
 	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+	/* Balances the retain taken at the matching yield */
+	lua_thread_pool_release_entry(thread);
 
 	TCP_RELEASE(cbd);
 }
@@ -876,7 +881,10 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 	lua_tcp_shift_handler(cbd);
 
 	// lua_tcp_unregister_event (cbd);
+	struct thread_entry *thread = cbd->thread;
 	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+	/* Balances the retain taken at the matching yield */
+	lua_thread_pool_release_entry(thread);
 	TCP_RELEASE(cbd);
 }
 
@@ -2346,6 +2354,9 @@ lua_tcp_connect_sync(lua_State *L)
 		}
 	}
 
+	/* Keep the coroutine alive until the matching resume; see resume sites */
+	lua_thread_pool_retain_entry(cbd->thread);
+
 	return lua_thread_yield(cbd->thread, 0);
 }
 
@@ -2589,9 +2600,6 @@ lua_tcp_sync_read_once(lua_State *L)
 	}
 
 	struct thread_entry *thread = lua_thread_pool_get_running_entry(cbd->cfg->lua_thread_pool);
-	/* Resume targets cbd->thread, so keep it pointing at the coroutine we yield */
-	cbd->thread = thread;
-	cbd->thread_generation = thread->generation;
 
 	rh = g_malloc0(sizeof(*rh));
 	rh->type = LUA_WANT_READ;
@@ -2603,6 +2611,9 @@ lua_tcp_sync_read_once(lua_State *L)
 	lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 
 	TCP_RETAIN(cbd);
+
+	/* Keep the coroutine alive until the matching resume; see resume sites */
+	lua_thread_pool_retain_entry(thread);
 
 	return lua_thread_yield(thread, 0);
 }
@@ -2623,9 +2634,6 @@ lua_tcp_sync_write(lua_State *L)
 	}
 
 	struct thread_entry *thread = lua_thread_pool_get_running_entry(cbd->cfg->lua_thread_pool);
-	/* Resume targets cbd->thread, so keep it pointing at the coroutine we yield */
-	cbd->thread = thread;
-	cbd->thread_generation = thread->generation;
 
 	tp = lua_type(L, 2);
 	if (tp == LUA_TSTRING || tp == LUA_TUSERDATA) {
@@ -2687,6 +2695,9 @@ lua_tcp_sync_write(lua_State *L)
 	lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 
 	TCP_RETAIN(cbd);
+
+	/* Keep the coroutine alive until the matching resume; see resume sites */
+	lua_thread_pool_retain_entry(thread);
 
 	return lua_thread_yield(thread, 0);
 }

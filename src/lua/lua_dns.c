@@ -139,6 +139,8 @@ lua_dns_request(lua_State *L)
 	if (ret) {
 		cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
 		cbdata->thread_generation = cbdata->thread->generation;
+		/* Keep the entry alive until our callback fires (or is cancelled) */
+		lua_thread_pool_retain_entry(cbdata->thread);
 		cbdata->s = session;
 
 		if (task) {
@@ -183,6 +185,9 @@ void lua_dns_callback(struct rdns_reply *reply, void *arg)
 	if (cbdata->item) {
 		rspamd_symcache_item_async_dec_check(cbdata->task, cbdata->item, M);
 	}
+
+	/* Drop the reference taken when the request was issued */
+	lua_thread_pool_release_entry(cbdata->thread);
 }
 
 static int
