@@ -149,6 +149,7 @@ struct lua_redis_ctx {
 	GQueue *replies;             /* for sync connection only */
 	GQueue *events_cleanup;      /* for sync connection only */
 	struct thread_entry *thread; /* for sync mode, set only if there was yield */
+	guint64 thread_generation;   /* generation of thread snapshotted at yield */
 };
 
 struct lua_redis_result {
@@ -242,6 +243,12 @@ lua_redis_dtor(struct lua_redis_ctx *ctx)
 	if (ctx->replies) {
 		g_queue_free(ctx->replies);
 		ctx->replies = NULL;
+	}
+
+	if (ctx->thread) {
+		/* A coroutine was still parked on this ctx; balance the yield retain */
+		lua_thread_pool_release_entry(ctx->thread);
+		ctx->thread = NULL;
 	}
 
 	g_free(ctx);
@@ -689,6 +696,7 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 		if (ctx->thread) {
 			if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED)) {
 				/* somebody yielded and waits for results */
+				guint64 thread_generation = ctx->thread_generation;
 				thread = ctx->thread;
 				ctx->thread = NULL;
 
@@ -698,13 +706,16 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 					rspamd_symcache_set_cur_item(ud->task, ud->item);
 				}
 
-				lua_thread_resume(thread, results);
+				lua_thread_resume_checked(thread, thread_generation, results);
+				/* Drop the reference taken at yield */
+				lua_thread_pool_release_entry(thread);
 				lua_redis_cleanup_events(ctx);
 			}
 			else {
 				/* We cannot resume the thread as the associated task has gone */
 				lua_thread_pool_terminate_entry_full(ud->cfg->lua_thread_pool,
 													 ctx->thread, G_STRLOC, true);
+				lua_thread_pool_release_entry(ctx->thread);
 				ctx->thread = NULL;
 			}
 		}
@@ -1704,6 +1715,9 @@ lua_redis_exec(lua_State *L)
 		}
 		else {
 			ctx->thread = lua_thread_pool_get_running_entry(ctx->async.cfg->lua_thread_pool);
+			ctx->thread_generation = ctx->thread->generation;
+			/* Held while ctx->thread is set, released when consumed or in dtor */
+			lua_thread_pool_retain_entry(ctx->thread);
 			return lua_thread_yield(ctx->thread, 0);
 		}
 	}

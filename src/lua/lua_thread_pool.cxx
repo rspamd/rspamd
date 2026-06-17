@@ -56,7 +56,8 @@ struct lua_thread_pool {
 	~lua_thread_pool()
 	{
 		for (auto *ent: available_items) {
-			thread_entry_free(L, ent);
+			/* Drop the pool's reference; freed once nothing else holds it */
+			REF_RELEASE(ent);
 		}
 	}
 
@@ -72,6 +73,11 @@ struct lua_thread_pool {
 			ent = thread_entry_new(L);
 		}
 
+		/* Only idle threads may be handed out */
+		g_assert(ent->state == LUA_THREAD_FREE);
+		ent->state = LUA_THREAD_RUNNING;
+		ent->generation++;
+
 		running_entry = ent;
 
 		return ent;
@@ -81,10 +87,20 @@ struct lua_thread_pool {
 	{
 		/* we can't return a running/yielded thread into the pool */
 		g_assert(lua_status(thread_entry->lua_state) == 0);
+		/*
+		 * A thread is only returnable right after it finished executing, i.e.
+		 * while it is still the RUNNING one. Hitting this assert means someone
+		 * returned a suspended (YIELDED) or already recycled (FREE/DEAD)
+		 * thread - a classic source of coroutine corruption.
+		 */
+		g_assert(thread_entry->state == LUA_THREAD_RUNNING);
 
 		if (running_entry == thread_entry) {
 			running_entry = NULL;
 		}
+
+		thread_entry->state = LUA_THREAD_FREE;
+		thread_entry->generation++;
 
 		if (available_items.size() <= max_items) {
 			thread_entry->cd = NULL;
@@ -103,7 +119,8 @@ struct lua_thread_pool {
 			msg_debug_lua_threads("%s: removed thread as thread pool has %z items",
 								  loc,
 								  available_items.size());
-			thread_entry_free(L, thread_entry);
+			/* Drop the pool's reference; freed once nothing else holds it */
+			REF_RELEASE(thread_entry);
 		}
 	}
 
@@ -123,8 +140,17 @@ struct lua_thread_pool {
 			running_entry = NULL;
 		}
 
+		thread_entry->state = LUA_THREAD_DEAD;
+
 		msg_debug_lua_threads("%s: terminated thread entry", loc);
-		thread_entry_free(L, thread_entry);
+		/*
+		 * Drop the pool's reference. If an async completion still holds the
+		 * entry (e.g. the owning task is being torn down while a request is in
+		 * flight), the struct stays alive until that completion releases it, so
+		 * the late callback can safely observe the DEAD state instead of
+		 * dereferencing freed memory.
+		 */
+		REF_RELEASE(thread_entry);
 
 		if (available_items.size() <= max_items) {
 			ent = thread_entry_new(L);
@@ -145,22 +171,34 @@ struct lua_thread_pool {
 	};
 };
 
+static void
+thread_entry_dtor(void *p)
+{
+	auto *ent = reinterpret_cast<struct thread_entry *>(p);
+
+	/* Registry slot is owned by the main VM state, unref it there */
+	luaL_unref(ent->pool_state, LUA_REGISTRYINDEX, ent->thread_index);
+	g_free(ent);
+}
+
 static struct thread_entry *
 thread_entry_new(lua_State *L)
 {
 	struct thread_entry *ent;
 	ent = g_new0(struct thread_entry, 1);
 	ent->lua_state = lua_newthread(L);
+	ent->pool_state = L;
 	ent->thread_index = luaL_ref(L, LUA_REGISTRYINDEX);
+	ent->state = LUA_THREAD_FREE;
+	ent->generation = 0;
+	/*
+	 * The pool holds the initial reference. Async libraries that stash the
+	 * entry take their own via lua_thread_pool_retain_entry(); the struct is
+	 * freed (thread_entry_dtor) only once the last reference is dropped.
+	 */
+	REF_INIT_RETAIN(ent, thread_entry_dtor);
 
 	return ent;
-}
-
-static void
-thread_entry_free(lua_State *L, struct thread_entry *ent)
-{
-	luaL_unref(L, LUA_REGISTRYINDEX, ent->thread_index);
-	g_free(ent);
 }
 
 struct lua_thread_pool *
@@ -173,6 +211,16 @@ lua_thread_pool_new(lua_State *L)
 void lua_thread_pool_free(struct lua_thread_pool *pool)
 {
 	delete pool;
+}
+
+void lua_thread_pool_retain_entry(struct thread_entry *thread_entry)
+{
+	REF_RETAIN(thread_entry);
+}
+
+void lua_thread_pool_release_entry(struct thread_entry *thread_entry)
+{
+	REF_RELEASE(thread_entry);
 }
 
 
@@ -335,6 +383,37 @@ lua_resume_thread_internal_full(struct thread_entry *thread_entry,
 	}
 }
 
+/*
+ * Shared by lua_thread_resume_full()/lua_thread_resume_checked_full(): refuse
+ * to resume anything that is not currently suspended. This makes a duplicate
+ * or stale async completion (double-fired event, completion racing task
+ * teardown, recycled entry) a logged no-op instead of memory corruption.
+ * Returns true if the thread is safe to resume.
+ */
+static bool
+lua_thread_resume_guard(struct thread_entry *thread_entry, const char *loc)
+{
+	struct rspamd_task *task = thread_entry->task;
+
+	if (thread_entry->state != LUA_THREAD_YIELDED) {
+		msg_err_task_check("%s: refusing to resume a coroutine that is not "
+						   "suspended (state=%d, lua_status=%d): likely a "
+						   "duplicate or stale async completion",
+						   loc, (int) thread_entry->state,
+						   lua_status(thread_entry->lua_state));
+
+		return false;
+	}
+
+	/*
+	 * State and lua status must stay in lockstep: a YIELDED entry always has a
+	 * suspended lua_State underneath it.
+	 */
+	g_assert(lua_status(thread_entry->lua_state) == LUA_YIELD);
+
+	return true;
+}
+
 void lua_thread_resume_full(struct thread_entry *thread_entry, int narg,
 							const char *loc)
 {
@@ -343,16 +422,56 @@ void lua_thread_resume_full(struct thread_entry *thread_entry, int narg,
 	 * Another acceptable status is OK (0) but in that case we should push function on stack
 	 * to start the thread from, which is happening in lua_thread_call(), not in this function.
 	 */
-	g_assert(lua_status(thread_entry->lua_state) == LUA_YIELD);
 	msg_debug_lua_threads("%s: lua_thread_resume_full", loc);
+
+	if (!lua_thread_resume_guard(thread_entry, loc)) {
+		return;
+	}
+
+	thread_entry->state = LUA_THREAD_RUNNING;
 	lua_thread_pool_set_running_entry_for_thread(thread_entry, loc);
 	lua_resume_thread_internal_full(thread_entry, narg, loc);
+}
+
+bool lua_thread_resume_checked_full(struct thread_entry *thread_entry,
+									guint64 expected_generation,
+									int narg,
+									const char *loc)
+{
+	struct rspamd_task *task = thread_entry->task;
+
+	msg_debug_lua_threads("%s: lua_thread_resume_checked_full", loc);
+
+	if (thread_entry->generation != expected_generation) {
+		/*
+		 * The entry was recycled (returned to the pool and handed out again)
+		 * between the yield and this completion. The coroutine we captured is
+		 * gone; resuming now would clobber whoever owns the entry now.
+		 */
+		msg_err_task_check("%s: refusing stale coroutine resume: generation "
+						   "mismatch (expected %uL, got %uL)",
+						   loc, expected_generation,
+						   thread_entry->generation);
+
+		return false;
+	}
+
+	if (!lua_thread_resume_guard(thread_entry, loc)) {
+		return false;
+	}
+
+	thread_entry->state = LUA_THREAD_RUNNING;
+	lua_thread_pool_set_running_entry_for_thread(thread_entry, loc);
+	lua_resume_thread_internal_full(thread_entry, narg, loc);
+
+	return true;
 }
 
 void lua_thread_call_full(struct thread_entry *thread_entry,
 						  int narg, const char *loc)
 {
 	g_assert(lua_status(thread_entry->lua_state) == 0);                /* we can't call running/yielded thread */
+	g_assert(thread_entry->state == LUA_THREAD_RUNNING);               /* must be freshly acquired */
 	g_assert(thread_entry->task != NULL || thread_entry->cfg != NULL); /* we can't call without pool */
 
 	lua_resume_thread_internal_full(thread_entry, narg, loc);
@@ -363,7 +482,10 @@ int lua_thread_yield_full(struct thread_entry *thread_entry,
 						  const char *loc)
 {
 	g_assert(lua_status(thread_entry->lua_state) == 0);
+	g_assert(thread_entry->state == LUA_THREAD_RUNNING);
 
 	msg_debug_lua_threads("%s: lua_thread_yield_full", loc);
+	thread_entry->state = LUA_THREAD_YIELDED;
+
 	return lua_yield(thread_entry->lua_state, nresults);
 }

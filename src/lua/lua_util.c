@@ -4475,6 +4475,7 @@ struct rspamd_ev_base_sleep_cbdata {
 	lua_State *L;
 	int cbref;
 	struct thread_entry *thread;
+	guint64 thread_generation;
 	struct rspamd_async_session *session;
 	ev_timer ev;
 };
@@ -4517,7 +4518,13 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 	}
 	else if (cbdata->thread) {
 		/* Sync mode: resume the coroutine */
-		lua_thread_resume(cbdata->thread, 0);
+		lua_thread_resume_checked(cbdata->thread, cbdata->thread_generation, 0);
+	}
+
+	if (cbdata->thread) {
+		/* Balances the retain taken when the coroutine went to sleep */
+		lua_thread_pool_release_entry(cbdata->thread);
+		cbdata->thread = NULL;
 	}
 
 	g_free(cbdata);
@@ -4600,6 +4607,9 @@ lua_ev_base_sleep(lua_State *L)
 
 			if (cfg && cfg->lua_thread_pool) {
 				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+				cbdata->thread_generation = cbdata->thread->generation;
+				/* Held until the timer fires, released in lua_ev_base_sleep_cb() */
+				lua_thread_pool_retain_entry(cbdata->thread);
 
 				/* Register session event if available so wait_session_events waits for us */
 				if (session) {
