@@ -4,21 +4,21 @@ on:
   pull_request:
     branches:
       - master
+  # Push only triggers on master. Feature branches are covered by the
+  # `pull_request` event once a PR is open, so we never fire both `push`
+  # (refs/heads/<branch>) and `pull_request` (refs/pull/<n>/merge) for the
+  # same commit -- which previously left a spurious *cancelled* run that
+  # reads like a CI failure. Trade-off: pushing to a branch with no open
+  # PR doesn't run CI; open (or draft) the PR to get it.
   push:
     branches:
-      - '**'
+      - master
 
-# A commit pushed to a branch that also has an open PR fires two runs at
-# once: one for `push` (ref refs/heads/<branch>) and one for `pull_request`
-# (ref refs/pull/<n>/merge). They duplicate each other's work and, sharing
-# the hosted runners, double CPU load -- which is enough to push the heavy
-# 001_merged rspamd's controller startup past the functional suites' fixed
-# readiness timeouts and flake (e.g. 440_ssl_server). The only identifier
-# the two events share is the head commit SHA (their refs differ), so key
-# the concurrency group on it: both events for one commit collapse to a
-# single run, and cancel-in-progress reaps the loser instead of racing it.
+# Cancel a still-running CI when a newer commit supersedes it: per PR for
+# pull_request events, per ref for master pushes. This only reaps genuinely
+# outdated runs now -- the push/pull_request duplicate is gone at the source.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
