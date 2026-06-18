@@ -30,6 +30,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_udp.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_text.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_text_stats.cxx
 		 			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_worker.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_kann.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_spf.c

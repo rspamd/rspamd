@@ -440,6 +440,13 @@ void luaopen_logger(lua_State *L);
 
 void luaopen_text(lua_State *L);
 
+/*
+ * Augments the rspamd{text} metatable with byte-statistics methods
+ * (entropy/byte_mean/...). Must be called after luaopen_text. Defined in
+ * lua_text_stats.cxx.
+ */
+void rspamd_lua_text_stats_init(lua_State *L);
+
 void luaopen_util(lua_State *L);
 
 void luaopen_tcp(lua_State *L);
