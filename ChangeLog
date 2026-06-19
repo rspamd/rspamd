@@ -1,3 +1,36 @@
+4.1.1: 19 Jun 2026
+
+  ** Features **
+  * [Feature] checkv3: Negotiate representation and compression via Accept/Accept-Encoding
+  * [Feature] css: Detect more text-hiding tricks (off-screen positioning, clip, negative text-indent, tiny fonts)
+  * [Feature] lua_archive: Add opt-in extraction limits (size, count, ratio) to bound zip-bomb expansion
+  * [Feature] lua_text: Add byte-distribution statistics methods (entropy, byte mean/deviation, serial correlation, Monte-Carlo Pi)
+  * [Feature] lua: Add zlib/YARA-compatible crc32 for rspamd_text, rspamd_util, and cryptobox hash
+  * [Feature] multipattern: Add explicit SOM (start-of-match) flag and fix regex-fallback offsets
+  * [Feature] neural: Add pluggable feature-provider and ANN-architecture registries
+  * [Feature] neural: Add sequence output mode and SIF word selection to fasttext_embed
+  * [Feature] kann: Add multi-head attention pooling operator
+  * [Feature] lua_kann: Expose slice and concat graph transforms
+
+  ** Bug fixes **
+  * [Fix] dns: Do not defer resolver nameservers (fixes SIGSEGV at worker startup, regression in 4.1.0)
+  * [Fix] lua: Add state/generation guards and refcounting to the coroutine thread pool to prevent use-after-free on async completion
+  * [Fix] lua_worker: Avoid deadlock when a spawned subprocess returns an invalid value
+  * [Fix] milter: Send QUARANTINE even with a caller-supplied reply (regression from 3.10.0)
+  * [Fix] neural: Stabilise training on dense embedding inputs (funnel architecture, input-typed learning rate, single-class quality gate)
+  * [Fix] neural: Don't strand trained ANNs behind stale high-version tombstones
+  * [Fix] mx_check: Classify loopback-only MX as MX_LOCAL_ONLY instead of MX_BOGON_ONLY
+  * [Fix] monitored: Use alphanumeric-only random DNS prefixes for random_monitored RBL checks
+  * [Fix] protocol: Use case-preserving boundary for v3 HTTP multipart parsing
+  * [Fix] controller: Register the /checkv3 endpoint
+  * [Fix] symcache: Fix timeout inflation in pre/postfilter priority grouping
+  * [Fix] url: Scan bare query-embedded URLs containing '=' as a whole
+  * [Fix] url: Do not multiply URLs with multiple '@' signs and backslashes
+  * [Fix] css: Detect text hidden via overflow clipping, opacity, and max-width/height
+  * [Fix] mime: Fix build with OpenSSL 4.0 opaque ASN1_STRING
+  * [Fix] mime_string: Make iterator const to fix doctest 2.5.0 build
+  * [Fix] Prioritise bundled simdutf headers over system ones
+
 4.1.0: 05 Jun 2026
 
   ** Incompatible changes **
