@@ -34,6 +34,7 @@
 #include "unix-std.h"
 #include "contrib/libottery/ottery.h"
 #include "libutil/ref.h"
+#include <zlib.h> /* for crc32() */
 
 #include <stdalign.h>
 #include <openssl/hmac.h>
@@ -50,6 +51,7 @@ enum lua_cryptobox_hash_type {
 	LUA_CRYPTOBOX_HASH_XXHASH3,
 	LUA_CRYPTOBOX_HASH_MUM,
 	LUA_CRYPTOBOX_HASH_T1HA,
+	LUA_CRYPTOBOX_HASH_CRC32,
 };
 
 struct rspamd_lua_cryptobox_hash {
@@ -62,6 +64,7 @@ struct rspamd_lua_cryptobox_hash {
 		HMAC_CTX *hmac_c;
 #endif
 		rspamd_cryptobox_fast_hash_state_t *fh;
+		uint32_t crc; /* running zlib crc32 for LUA_CRYPTOBOX_HASH_CRC32 */
 	} content;
 
 	unsigned char out[rspamd_cryptobox_HASHBYTES];
@@ -945,6 +948,22 @@ rspamd_lua_hash_update(struct rspamd_lua_cryptobox_hash *h,
 		case LUA_CRYPTOBOX_HASH_T1HA:
 			rspamd_cryptobox_fast_hash_update(h->content.fh, p, len);
 			break;
+		case LUA_CRYPTOBOX_HASH_CRC32: {
+			const unsigned char *cp = (const unsigned char *) p;
+			gsize remain = len;
+			uLong crc = h->content.crc;
+
+			/* zlib crc32() takes a uInt length, so feed it in chunks */
+			while (remain > 0) {
+				uInt chunk = remain > G_MAXUINT ? G_MAXUINT : (uInt) remain;
+				crc = crc32(crc, cp, chunk);
+				cp += chunk;
+				remain -= chunk;
+			}
+
+			h->content.crc = (uint32_t) crc;
+			break;
+		}
 		default:
 			g_assert_not_reached();
 		}
@@ -978,6 +997,9 @@ lua_cryptobox_hash_dtor(struct rspamd_lua_cryptobox_hash *h)
 	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
 		rspamd_explicit_memzero(h->content.h, sizeof(*h->content.h));
 		free(h->content.h); /* Allocated by posix_memalign */
+	}
+	else if (h->type == LUA_CRYPTOBOX_HASH_CRC32) {
+		/* Plain value, nothing to free */
 	}
 	else {
 		rspamd_cryptobox_fast_hash_free(h->content.fh);
@@ -1147,6 +1169,15 @@ rspamd_lua_hash_create(const char *type, const char *key, gsize keylen)
 													 RSPAMD_CRYPTOBOX_T1HA, 0);
 			h->out_len = sizeof(uint64_t);
 		}
+		else if (g_ascii_strcasecmp(type, "crc32") == 0) {
+			/*
+			 * Standard CRC-32 (poly 0xEDB88320, init/final 0xFFFFFFFF XOR);
+			 * uses zlib crc32() so it is bit-exact with YARA hash.crc32.
+			 */
+			h->type = LUA_CRYPTOBOX_HASH_CRC32;
+			h->content.crc = (uint32_t) crc32(0L, Z_NULL, 0);
+			h->out_len = sizeof(uint32_t);
+		}
 		else if (g_ascii_strcasecmp(type, "blake2") == 0) {
 			rspamd_lua_hash_init_default(h, key, keylen);
 		}
@@ -1210,7 +1241,7 @@ lua_cryptobox_hash_create(lua_State *L)
 /***
  * @function rspamd_cryptobox_hash.create_specific(type, [string])
  * Creates new hash context
- * @param {string} type type of hash (blake2, sha256, md5, sha512, mum, xxh64, xxh32, t1ha)
+ * @param {string} type type of hash (blake2, sha256, md5, sha512, mum, xxh64, xxh32, t1ha, crc32)
  * @param {string} string initial data
  * @return {cryptobox_hash} hash object
  */
@@ -1618,6 +1649,9 @@ lua_cryptobox_hash_reset(lua_State *L)
 			rspamd_cryptobox_fast_hash_init_specific(h->content.fh,
 													 RSPAMD_CRYPTOBOX_T1HA, 0);
 			break;
+		case LUA_CRYPTOBOX_HASH_CRC32:
+			h->content.crc = (uint32_t) crc32(0L, Z_NULL, 0);
+			break;
 		default:
 			g_assert_not_reached();
 		}
@@ -1674,6 +1708,16 @@ lua_cryptobox_hash_finish(struct rspamd_lua_cryptobox_hash *h)
 		ll = rspamd_cryptobox_fast_hash_final(h->content.fh);
 		memcpy(h->out, &ll, sizeof(ll));
 		break;
+	case LUA_CRYPTOBOX_HASH_CRC32: {
+		uint32_t crc = h->content.crc;
+		/* Big-endian, so :hex() yields the canonical crc32 text (e.g. cbf43926) */
+		h->out[0] = (crc >> 24) & 0xff;
+		h->out[1] = (crc >> 16) & 0xff;
+		h->out[2] = (crc >> 8) & 0xff;
+		h->out[3] = crc & 0xff;
+		h->out_len = sizeof(uint32_t);
+		break;
+	}
 	default:
 		g_assert_not_reached();
 	}

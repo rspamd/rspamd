@@ -18,6 +18,7 @@
 #include "libcryptobox/cryptobox.h"
 #include "rspamd_simdutf.h"
 #include "unix-std.h"
+#include <zlib.h> /* for crc32() */
 
 /***
  * @module rspamd_text
@@ -243,6 +244,18 @@ LUA_FUNCTION_DEF(text, base64);
  */
 LUA_FUNCTION_DEF(text, hex);
 /***
+ * @method rspamd_text:crc32([start[, len]])
+ * Returns the CRC-32 checksum of the byte range starting at `start`
+ * (1-indexed, default 1) and spanning `len` bytes (default: to the end of the
+ * text). The range is read in place (no copy). This is the standard CRC-32
+ * (zlib crc32 / YARA hash.crc32, polynomial 0xEDB88320) and the result is a Lua
+ * integer suitable for numeric comparison (e.g. `t:crc32() == 0xCBF43926`).
+ * @param {integer} start 1-based start index
+ * @param {integer} len number of bytes
+ * @return {integer} crc32 value as an unsigned 32-bit integer
+ */
+LUA_FUNCTION_DEF(text, crc32);
+/***
  * @method rspamd_text:find(pattern [, init])
  * Looks for the first match of pattern in the string s.
  * If it finds a match, then find returns the indices of s where this occurrence
@@ -295,6 +308,7 @@ static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF(text, base32),
 	LUA_INTERFACE_DEF(text, base64),
 	LUA_INTERFACE_DEF(text, hex),
+	LUA_INTERFACE_DEF(text, crc32),
 	LUA_INTERFACE_DEF(text, find),
 	LUA_INTERFACE_DEF(text, strtoul),
 	{"write", lua_text_save_in_file},
@@ -1578,6 +1592,55 @@ lua_text_hex(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_text_crc32(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
+	int64_t start = 1, len = -1;
+
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments, text required");
+	}
+
+	if (lua_isnumber(L, 2)) {
+		start = lua_tointeger(L, 2);
+	}
+	if (lua_isnumber(L, 3)) {
+		len = lua_tointeger(L, 3);
+	}
+
+	if (start < 1 || (start - 1) > t->len) {
+		return luaL_error(L, "invalid start offset %d (text len %d)",
+						  (int) start, (int) t->len);
+	}
+
+	if (len == -1) {
+		len = t->len - (start - 1);
+	}
+
+	if (len < 0 || len > (t->len - (start - 1))) {
+		return luaL_error(L, "invalid length");
+	}
+
+	/* Standard CRC-32 (poly 0xEDB88320), bit-exact with zlib/YARA hash.crc32 */
+	const unsigned char *p = (const unsigned char *) t->start + (start - 1);
+	gsize remain = (gsize) len;
+	uLong crc = crc32(0L, Z_NULL, 0);
+
+	/* zlib crc32() takes a uInt length, so feed the slice in chunks */
+	while (remain > 0) {
+		uInt chunk = remain > G_MAXUINT ? G_MAXUINT : (uInt) remain;
+		crc = crc32(crc, p, chunk);
+		p += chunk;
+		remain -= chunk;
+	}
+
+	lua_pushinteger(L, (lua_Integer) (uint32_t) crc);
 
 	return 1;
 }
