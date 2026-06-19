@@ -977,6 +977,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_ip(L);
 	luaopen_expression(L);
 	luaopen_text(L);
+	rspamd_lua_text_stats_init(L);
 	luaopen_util(L);
 	luaopen_tcp(L);
 	luaopen_html(L);
