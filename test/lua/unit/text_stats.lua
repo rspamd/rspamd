@@ -95,25 +95,26 @@ context("Text byte-statistics", function()
     assert_equal(0.0, T("abc"):monte_carlo_pi())
   end)
 
-  test("offset/length slicing (0-based offset)", function()
-    local t = T("AAAABBBB") -- 'A'=65 [0..3], 'B'=66 [4..7]
+  test("start/length slicing (1-based start)", function()
+    local t = T("AAAABBBB") -- 'A'=65 at [1..4], 'B'=66 at [5..8]
     -- whole buffer: two equal symbols
     assert_equal(1.0, t:entropy())
     assert_equal(65.5, t:byte_mean())
-    -- slice [4, 4) -> "BBBB"
-    assert_equal(0.0, t:entropy(4, 4))
-    assert_equal(66.0, t:byte_mean(4, 4))
-    -- slice from offset to end
-    assert_equal(0.0, t:entropy(4))
-    assert_equal(66.0, t:byte_mean(4))
+    -- slice starting at position 5, length 4 -> "BBBB"
+    assert_equal(0.0, t:entropy(5, 4))
+    assert_equal(66.0, t:byte_mean(5, 4))
+    -- slice from start position to end
+    assert_equal(0.0, t:entropy(5))
+    assert_equal(66.0, t:byte_mean(5))
     -- length clamped to available bytes
-    assert_equal(66.0, t:byte_mean(4, 1000))
+    assert_equal(66.0, t:byte_mean(5, 1000))
   end)
 
   test("out-of-range slice is defined 0", function()
     local t = T("AAAABBBB")
     assert_equal(0.0, t:entropy(100))
     assert_equal(0.0, t:byte_mean(100))
-    assert_equal(0.0, t:entropy(0, 0))
+    assert_equal(0.0, t:entropy(0))    -- start < 1 is empty
+    assert_equal(0.0, t:entropy(1, 0)) -- zero length is empty
   end)
 end)

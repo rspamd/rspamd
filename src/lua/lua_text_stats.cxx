@@ -28,35 +28,38 @@
  * callers can compare them against fixed thresholds. Each takes an optional
  * byte range:
  *
- *   - `off` is a 0-based byte offset, defaulting to 0;
- *   - `len` is a byte count, defaulting to the rest of the buffer after `off`.
+ *   - `start` is a 1-based byte index (consistent with rspamd_text:span/sub/at),
+ *     defaulting to 1;
+ *   - `len` is a byte count, defaulting to the rest of the buffer after `start`.
  *
- * The range is clamped to the buffer (`off` in `[0, #text)`, `len` truncated to
- * the bytes available after `off`); an out-of-range or empty range yields 0 for
- * every metric.
+ * The range is clamped to the buffer (`start` in `[1, #text]`, `len` truncated
+ * to the bytes available after `start`); an out-of-range or empty range yields 0
+ * for every metric.
  */
 
 using namespace rspamd::text_stats;
 
 /*
- * Validate the optional (off, len) range of a text and return it as a byte
- * span: off must lie in [0, size) and len is truncated to the bytes available
- * after off. An out-of-range or empty request yields an empty span.
+ * Validate the optional (start, len) range of a text and return it as a byte
+ * span. `start` is a 1-based index (consistent with rspamd_text:span/sub/at) and
+ * len is truncated to the bytes available after it. An out-of-range or empty
+ * request yields an empty span.
  */
 static std::span<const std::byte>
 lua_text_stats_slice(lua_State *L, const struct rspamd_lua_text *t,
-					 int off_idx, int len_idx)
+					 int start_idx, int len_idx)
 {
 	const auto n = static_cast<std::size_t>(t->len);
 	const auto *base = reinterpret_cast<const std::byte *>(t->start);
 
-	lua_Integer off = luaL_optinteger(L, off_idx, 0);
+	lua_Integer start = luaL_optinteger(L, start_idx, 1);
 
-	if (off < 0 || static_cast<std::size_t>(off) >= n) {
+	if (start < 1 || static_cast<std::size_t>(start) > n) {
 		return {};
 	}
 
-	const std::size_t avail = n - static_cast<std::size_t>(off);
+	const std::size_t off = static_cast<std::size_t>(start) - 1;
+	const std::size_t avail = n - off;
 	lua_Integer len = luaL_optinteger(L, len_idx, static_cast<lua_Integer>(avail));
 
 	if (len <= 0) {
@@ -69,9 +72,9 @@ lua_text_stats_slice(lua_State *L, const struct rspamd_lua_text *t,
 }
 
 /***
- * @method text:entropy([off[, len]])
+ * @method text:entropy([start[, len]])
  * Shannon entropy of the byte range in bits/byte, in [0, 8].
- * @param {number} off optional 0-based byte offset (default 0)
+ * @param {number} start optional 1-based byte index (default 1)
  * @param {number} len optional byte count (default: to end of text)
  * @return {number} entropy in bits per byte
  */
@@ -91,9 +94,9 @@ lua_text_entropy(lua_State *L)
 }
 
 /***
- * @method text:byte_mean([off[, len]])
+ * @method text:byte_mean([start[, len]])
  * Arithmetic mean of the (unsigned) byte values in the range.
- * @param {number} off optional 0-based byte offset (default 0)
+ * @param {number} start optional 1-based byte index (default 1)
  * @param {number} len optional byte count (default: to end of text)
  * @return {number} mean byte value
  */
@@ -113,11 +116,11 @@ lua_text_byte_mean(lua_State *L)
 }
 
 /***
- * @method text:byte_deviation(mean[, off[, len]])
+ * @method text:byte_deviation(mean[, start[, len]])
  * Mean absolute deviation of the byte values from `mean` (typically
  * `byte_mean` of the same range).
  * @param {number} mean reference mean value
- * @param {number} off optional 0-based byte offset (default 0)
+ * @param {number} start optional 1-based byte index (default 1)
  * @param {number} len optional byte count (default: to end of text)
  * @return {number} mean absolute deviation
  */
@@ -139,9 +142,9 @@ lua_text_byte_deviation(lua_State *L)
 }
 
 /***
- * @method text:serial_correlation([off[, len]])
+ * @method text:serial_correlation([start[, len]])
  * Serial correlation coefficient (ENT) of the byte range.
- * @param {number} off optional 0-based byte offset (default 0)
+ * @param {number} start optional 1-based byte index (default 1)
  * @param {number} len optional byte count (default: to end of text)
  * @return {number} serial correlation coefficient
  */
@@ -161,11 +164,11 @@ lua_text_serial_correlation(lua_State *L)
 }
 
 /***
- * @method text:monte_carlo_pi([off[, len]])
+ * @method text:monte_carlo_pi([start[, len]])
  * Monte-Carlo Pi metric (ENT) of the byte range: the normalized deviation from
  * Pi, `fabs((4*inmont/groups - PI) / PI)` (note: this is the deviation from Pi,
  * not Pi itself).
- * @param {number} off optional 0-based byte offset (default 0)
+ * @param {number} start optional 1-based byte index (default 1)
  * @param {number} len optional byte count (default: to end of text)
  * @return {number} normalized deviation from Pi
  */
