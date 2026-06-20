@@ -6307,6 +6307,7 @@ lua_task_has_flag(lua_State *L)
 		LUA_TASK_GET_FLAG(flag, "skip", RSPAMD_TASK_FLAG_SKIP);
 		LUA_TASK_GET_FLAG(flag, "learn_spam", RSPAMD_TASK_FLAG_LEARN_SPAM);
 		LUA_TASK_GET_FLAG(flag, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM);
+		LUA_TASK_GET_FLAG(flag, "learn_auto", RSPAMD_TASK_FLAG_LEARN_AUTO);
 		LUA_TASK_GET_FLAG(flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
 		LUA_TASK_GET_FLAG(flag, "broken_headers",
 						  RSPAMD_TASK_FLAG_BROKEN_HEADERS);
@@ -6377,6 +6378,10 @@ lua_task_get_flags(lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_LEARN_HAM:
 					lua_pushstring(L, "learn_ham");
+					lua_rawseti(L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_LEARN_AUTO:
+					lua_pushstring(L, "learn_auto");
 					lua_rawseti(L, -2, idx++);
 					break;
 				case RSPAMD_TASK_FLAG_GREYLISTED:
