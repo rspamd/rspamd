@@ -2033,6 +2033,10 @@ lua_parse_symbol_type(const char *str)
 					ret |= SYMBOL_TYPE_GHOST |
 						   SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
 				}
+				else if (g_ascii_strcasecmp(str, "learn") == 0) {
+					ret |= SYMBOL_TYPE_GHOST |
+						   SYMBOL_TYPE_LEARN | SYMBOL_TYPE_CALLBACK;
+				}
 				else {
 					int fl = 0;
 

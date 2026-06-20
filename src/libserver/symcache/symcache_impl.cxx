@@ -231,6 +231,7 @@ auto symcache::init() -> bool
 	std::stable_sort(std::begin(prefilters), std::end(prefilters), prefilters_cmp);
 	std::stable_sort(std::begin(postfilters), std::end(postfilters), postfilters_cmp);
 	std::stable_sort(std::begin(idempotent), std::end(idempotent), postfilters_cmp);
+	std::stable_sort(std::begin(learn), std::end(learn), postfilters_cmp);
 
 	resort();
 
@@ -743,6 +744,7 @@ auto symcache::resort() -> void
 	append_items_vec(prefilters, ord->d, "prefilters");
 	append_items_vec(postfilters, ord->d, "postfilters");
 	append_items_vec(idempotent, ord->d, "idempotent filters");
+	append_items_vec(learn, ord->d, "learn");
 	append_items_vec(composites, ord->d, "composites");
 	append_items_vec(classifiers, ord->d, "classifiers");
 
@@ -1186,6 +1188,8 @@ auto symcache::get_item_specific_vector(const cache_item &it) -> symcache::items
 		return filters;
 	case symcache_item_type::IDEMPOTENT:
 		return idempotent;
+	case symcache_item_type::LEARN:
+		return learn;
 	case symcache_item_type::PREFILTER:
 		return prefilters;
 	case symcache_item_type::POSTFILTER:

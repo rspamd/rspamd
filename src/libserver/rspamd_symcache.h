@@ -60,6 +60,7 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1u << 17u), /* Symbol ignores passthrough result */
 	SYMBOL_TYPE_EXPLICIT_ENABLE = (1u << 18u),    /* Symbol should be enabled explicitly only */
 	SYMBOL_TYPE_USE_CORO = (1u << 19u),           /* Symbol uses lua coroutines */
+	SYMBOL_TYPE_LEARN = (1u << 20u),              /* Executed at the LEARN stage of a learn task */
 };
 
 /**

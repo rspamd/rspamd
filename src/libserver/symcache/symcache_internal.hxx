@@ -274,6 +274,7 @@ private:
 	items_ptr_vec postfilters;
 	items_ptr_vec composites;
 	items_ptr_vec idempotent;
+	items_ptr_vec learn;
 	items_ptr_vec classifiers;
 	items_ptr_vec virtual_symbols;
 
@@ -594,6 +595,14 @@ public:
 	auto idempotent_foreach(Functor f) -> bool
 	{
 		return std::all_of(std::begin(idempotent), std::end(idempotent),
+						   [&](const auto &sym_it) {
+							   return f(sym_it);
+						   });
+	}
+	template<typename Functor>
+	auto learn_foreach(Functor f) -> bool
+	{
+		return std::all_of(std::begin(learn), std::end(learn),
 						   [&](const auto &sym_it) {
 							   return f(sym_it);
 						   });

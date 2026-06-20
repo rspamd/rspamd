@@ -351,6 +351,8 @@ unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 		return SYMBOL_TYPE_POSTFILTER;
 	case rspamd::symcache::symcache_item_type::IDEMPOTENT:
 		return SYMBOL_TYPE_IDEMPOTENT;
+	case rspamd::symcache::symcache_item_type::LEARN:
+		return SYMBOL_TYPE_LEARN;
 	case rspamd::symcache::symcache_item_type::CLASSIFIER:
 		return SYMBOL_TYPE_CLASSIFIER;
 	case rspamd::symcache::symcache_item_type::COMPOSITE:

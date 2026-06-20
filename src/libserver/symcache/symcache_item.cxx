@@ -576,7 +576,7 @@ auto virtual_item::resolve_parent(const symcache &cache) -> bool
 
 auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>
 {
-	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_PREFILTER | SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_COMPOSITE | SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_VIRTUAL;
+	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_PREFILTER | SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_LEARN | SYMBOL_TYPE_COMPOSITE | SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_VIRTUAL;
 
 	constexpr auto all_but_one_ty = [&](int type, int exclude_bit) -> auto {
 		return (type & trivial_types) & (trivial_types & ~exclude_bit);
@@ -602,6 +602,9 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 		}
 		else if (type & SYMBOL_TYPE_IDEMPOTENT) {
 			return check_trivial(SYMBOL_TYPE_IDEMPOTENT, symcache_item_type::IDEMPOTENT);
+		}
+		else if (type & SYMBOL_TYPE_LEARN) {
+			return check_trivial(SYMBOL_TYPE_LEARN, symcache_item_type::LEARN);
 		}
 		else if (type & SYMBOL_TYPE_COMPOSITE) {
 			return check_trivial(SYMBOL_TYPE_COMPOSITE, symcache_item_type::COMPOSITE);
@@ -637,11 +640,22 @@ bool operator<(symcache_item_type lhs, symcache_item_type rhs)
 		}
 		break;
 	case symcache_item_type::POSTFILTER:
-		if (rhs != symcache_item_type::IDEMPOTENT) {
+		if (rhs != symcache_item_type::IDEMPOTENT && rhs != symcache_item_type::LEARN) {
 			ret = true;
 		}
 		break;
 	case symcache_item_type::IDEMPOTENT:
+		/* Earlier than LEARN only */
+		if (rhs == symcache_item_type::LEARN) {
+			ret = true;
+		}
+		break;
+	case symcache_item_type::LEARN:
+		/* The latest real stage: later than every other stage */
+		if (rhs != symcache_item_type::LEARN) {
+			ret = true;
+		}
+		break;
 	default:
 		break;
 	}
