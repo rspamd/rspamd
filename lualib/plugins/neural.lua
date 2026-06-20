@@ -68,6 +68,13 @@ local default_options = {
     -- means "default to disable_symbols_input" (resolved per-rule at init); set to
     -- false to opt out and keep running the full pipeline for forced learns.
     forced_learn_minimal_scan = nil,
+    -- learn_from_controller: when true, a controller learn task (e.g. /learnspam,
+    -- /learnham) also trains this neural rule -- one corpus push feeds bayes and
+    -- neural. Only symbols-independent rules (disable_symbols_input) are eligible
+    -- (a learn task runs no rule symbol). nil means "default to
+    -- disable_symbols_input" (resolved per-rule at init); set to false to keep a
+    -- fusion rule out of the controller learn path.
+    learn_from_controller = nil,
   },
   watch_interval = 60.0,
   lock_expire = 600,

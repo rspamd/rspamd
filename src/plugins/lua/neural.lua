@@ -1729,17 +1729,21 @@ local function ann_learn_task(task)
   end
 
   for _, rule in pairs(settings.rules) do
-    if rule.disable_symbols_input then
+    if not rule.disable_symbols_input then
+      lua_util.debugm(N, task,
+        'neural learn task: rule %s needs symbols, not eligible for learn-task training',
+        rule.prefix)
+    elseif not rule.train.learn_from_controller then
+      lua_util.debugm(N, task,
+        'neural learn task: rule %s opted out of controller learning (learn_from_controller=false)',
+        rule.prefix)
+    else
       local set = neural_common.get_rule_settings(task, rule)
       if set then
         lua_util.debugm(N, task, 'neural learn task: store %s vector for %s:%s',
           cls, rule.prefix, set.name)
         ann_push_task_result(rule, task, nil, 0.0, set, cls)
       end
-    else
-      lua_util.debugm(N, task,
-        'neural learn task: rule %s needs symbols, not eligible for learn-task training',
-        rule.prefix)
     end
   end
 end
@@ -1799,6 +1803,14 @@ for k, r in pairs(rules) do
   -- change the stored vector relative to the live full-scan path).
   if rule_elt.train.forced_learn_minimal_scan == nil then
     rule_elt.train.forced_learn_minimal_scan = rule_elt.disable_symbols_input and true or false
+  end
+
+  -- learn_from_controller defaults ON for symbols-independent rules (so a
+  -- /learnspam corpus push trains them alongside bayes) and OFF otherwise.
+  -- Operators can set it to false to keep a fusion rule out of the controller
+  -- learn path.
+  if rule_elt.train.learn_from_controller == nil then
+    rule_elt.train.learn_from_controller = rule_elt.disable_symbols_input and true or false
   end
 
   if not rule_elt.profile then
