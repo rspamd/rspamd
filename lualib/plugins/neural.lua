@@ -54,6 +54,20 @@ local default_options = {
     store_pool_only = false, -- store tokens in cache only (disables autotrain);
     store_set_only = false,  -- store ham and spam sets in Redis, but do not train ANN (autotrain must be enabled);
     -- neural_vec_mpack stores vector of training data in messagepack neural_profile_digest stores profile digest
+    -- frozen: first-class freeze. Stops automatic training and stops auto-storing
+    -- live vectors (so a frozen model's pools never accrue an imbalanced live
+    -- set), while inference keeps serving the current ANN unchanged. Explicit
+    -- ANN-Train (manual_train) still stores AND trains on demand. Supersedes the
+    -- auto-learn side of store_set_only/store_pool_only (those keep working when
+    -- frozen is not set).
+    frozen = false,
+    -- forced_learn_minimal_scan: when a manual-train scan (ANN-Train header) maps
+    -- to a disable_symbols_input rule, a high-priority neural prefilter disables
+    -- every non-neural symbol so the symbols-independent training vector is built
+    -- without issuing any RBL/DNS, fuzzy, ClickHouse, capture/cluster work. nil
+    -- means "default to disable_symbols_input" (resolved per-rule at init); set to
+    -- false to opt out and keep running the full pipeline for forced learns.
+    forced_learn_minimal_scan = nil,
   },
   watch_interval = 60.0,
   lock_expire = 600,

@@ -911,6 +911,19 @@ LUA_FUNCTION_DEF(task, enable_symbol);
  */
 LUA_FUNCTION_DEF(task, disable_symbol);
 /***
+ * @method task:disable_all_symbols([skip_mask])
+ * Disable execution of every symbol for this particular task except those whose
+ * type/flags intersect `skip_mask`. This is the "process only these" primitive:
+ * it mirrors what the `symbols_enabled` settings key does internally. Combine it
+ * with `task:enable_symbol()` (called afterwards) to run only a chosen subset of
+ * symbols. Typically invoked from a high-priority prefilter so that the disabled
+ * symbols never execute (no wasted DNS/Redis/HTTP work).
+ * @param {number} skip_mask optional bitmask of SYMBOL_TYPE_* flags to keep
+ *   enabled; defaults to `SYMBOL_TYPE_EXPLICIT_DISABLE` (i.e. symbols flagged
+ *   `explicit_disable` are left running, matching the `symbols_enabled` default)
+ */
+LUA_FUNCTION_DEF(task, disable_all_symbols);
+/***
  * @method task:get_date(type[, gmt])
  * Returns timestamp for a connection or for a MIME message. This function can be called with a
  * single table arguments with the following fields:
@@ -1479,6 +1492,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, has_symbol_regexp),
 	LUA_INTERFACE_DEF(task, enable_symbol),
 	LUA_INTERFACE_DEF(task, disable_symbol),
+	LUA_INTERFACE_DEF(task, disable_all_symbols),
 	LUA_INTERFACE_DEF(task, get_date),
 	LUA_INTERFACE_DEF(task, get_message_id),
 	LUA_INTERFACE_DEF(task, get_timeval),
@@ -5613,6 +5627,30 @@ lua_task_disable_symbol(lua_State *L)
 	}
 
 	return 1;
+}
+
+static int
+lua_task_disable_all_symbols(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	unsigned int skip_mask = SYMBOL_TYPE_EXPLICIT_DISABLE;
+
+	if (task) {
+		if (lua_isnumber(L, 2)) {
+			skip_mask = (unsigned int) lua_tointeger(L, 2);
+		}
+
+		/* No runtime means we are not inside a scan; nothing to disable */
+		if (task->symcache_runtime != NULL) {
+			rspamd_symcache_disable_all_symbols(task, task->cfg->cache, skip_mask);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 static int

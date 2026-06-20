@@ -242,6 +242,80 @@ local function get_ann_train_header(task)
   return nil
 end
 
+-- High-priority prefilter for the forced-learn fast path.
+--
+-- When a scan carries an explicit `ANN-Train: spam|ham` header and every neural
+-- rule that applies to this task can train from a symbols-independent vector
+-- (disable_symbols_input + train.forced_learn_minimal_scan), there is no reason
+-- to run any non-neural symbol: the stored training vector is built purely from
+-- registered providers + metatokens, all of which read parsed-message data
+-- (text parts, URLs, headers) that is already available at the prefilter stage
+-- (PROCESS_MESSAGE runs before PRE_FILTERS). So we disable every symbol except
+-- the neural ones, which prevents RBL/DNS, fuzzy, bayes-scoring, ClickHouse,
+-- capture/cluster and other idempotent work from ever being issued.
+--
+-- This never changes the neural settings id or the profile key: with
+-- disable_symbols_input the profile/digest are derived from providers_digest
+-- (see process_settings_elt + is_profile_compatible), so the vector and the key
+-- are byte-for-byte identical to what the live full-scan path would store.
+local function neural_forced_learn_prefilter(task)
+  -- Only act on explicit manual-train scans
+  local hv = get_ann_train_header(task)
+  if not (hv == 'spam' or hv == 'ham') then
+    return
+  end
+
+  -- Always keep the neural symbols runnable. NEURAL_LEARN is flagged
+  -- explicit_disable, so disable_all_symbols (skip_mask = explicit_disable)
+  -- leaves it alone; we still list it for clarity and re-enable NEURAL_CHECK and
+  -- every rule's spam/ham virtuals (these are NOT explicit_disable).
+  local keep = {
+    NEURAL_CHECK = true,
+    NEURAL_LEARN = true,
+  }
+  local any_minimal = false
+
+  for _, rule in pairs(settings.rules) do
+    local set = neural_common.get_rule_settings(task, rule)
+    if set then
+      keep[rule.symbol_spam] = true
+      keep[rule.symbol_ham] = true
+      local minimal = rule.disable_symbols_input and rule.train
+          and rule.train.forced_learn_minimal_scan
+      if minimal then
+        any_minimal = true
+      else
+        -- An applicable neural rule is NOT eligible for the minimal scan: either
+        -- its vector depends on symbols, or the operator opted out. Stripping
+        -- symbols could change that rule's stored vector (or just defeats an
+        -- explicit opt-out), so fall back to a full scan for the whole task.
+        lua_util.debugm(N, task,
+          'forced-learn minimal scan disabled: rule %s is not eligible ' ..
+          '(disable_symbols_input=%s, forced_learn_minimal_scan=%s)',
+          rule.prefix, rule.disable_symbols_input,
+          rule.train and rule.train.forced_learn_minimal_scan)
+        return
+      end
+    end
+  end
+
+  if not any_minimal then
+    return
+  end
+
+  -- Disable every symbol-cache item except explicit_disable ones (keeps
+  -- NEURAL_LEARN), then re-enable the rest of the neural symbols. This is the
+  -- same "process only these" primitive that `symbols_enabled` uses internally,
+  -- so it reliably covers filter, postfilter and idempotent stages.
+  task:disable_all_symbols()
+  for sym in pairs(keep) do
+    task:enable_symbol(sym)
+  end
+
+  lua_util.debugm(N, task,
+    'forced-learn minimal scan: disabled all non-neural symbols for %s training', hv)
+end
+
 local function ann_push_task_result(rule, task, verdict, score, set)
   local train_opts = rule.train
   local learn_spam, learn_ham
@@ -296,7 +370,18 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     has_symbols_provider = true
   end
 
-  if has_llm_provider and not manual_train then
+  if train_opts.frozen and not manual_train then
+    -- Frozen model: never auto-learn and never auto-store a live vector, so the
+    -- pools cannot accrue an imbalanced live set. Inference keeps serving the
+    -- current ANN unchanged; only an explicit ANN-Train (manual_train) below can
+    -- still store and (on demand) retrain. This supersedes the auto-learn side
+    -- of store_set_only/store_pool_only.
+    learn_spam = false
+    learn_ham = false
+    skip_reason = 'model is frozen (train.frozen): auto-learn disabled'
+    lua_util.debugm(N, task, '%s:%s is frozen, skip auto-store of live vector',
+      rule.prefix, set.name)
+  elseif has_llm_provider and not manual_train then
     -- Use expression-based autolearn conditions for LLM providers
     if rule.autolearn and rule.autolearn.enabled then
       local learn_type, reason = neural_learn.get_learn_type(task, rule)
@@ -422,6 +507,28 @@ local function ann_push_task_result(rule, task, verdict, score, set)
               'SADD',             -- command
               { target_key, str } -- arguments
             )
+
+            -- A frozen model trains ONLY when an operator pushes a corpus via
+            -- ANN-Train; record that request so the controller's auto-train
+            -- trigger (which is otherwise short-circuited for frozen models)
+            -- knows to retrain from these manual vectors. TTL keeps it from
+            -- forcing stale retrains long after the corpus push.
+            if rule.train.frozen and manual_train then
+              local marker_key = neural_common.pending_train_key(rule, set) .. '_retrain_req'
+              lua_redis.redis_make_request(task,
+                rule.redis,
+                nil,
+                true, -- is write
+                function(merr)
+                  if merr then
+                    lua_util.debugm(N, task, 'cannot set frozen retrain marker %s: %s',
+                      marker_key, merr)
+                  end
+                end,
+                'SET',
+                { marker_key, tostring(rspamd_util.get_time()), 'EX', tostring(rule.ann_expire) }
+              )
+            end
           end
 
           if rule.providers and #rule.providers > 0 then
@@ -1138,8 +1245,11 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
     -- We have our ANN and that's train vectors, check if we can learn
     local ann_key = sel_elt.redis_key
 
-    -- Check if we need to train ann
-    if rule.train.store_set_only then
+    -- Check if we need to train ann. Frozen supersedes store_set_only: a frozen
+    -- model never auto-trains, but unlike store_set_only it still retrains when an
+    -- operator pushes a corpus via ANN-Train (gated on the retrain-request marker
+    -- below). When not frozen, the historical store_set_only behaviour applies.
+    if not rule.train.frozen and rule.train.store_set_only then
       lua_util.debugm(N, rspamd_config, "skiped check if ANN %s needs to be trained due to store_set_only", ann_key)
       return
     end
@@ -1155,6 +1265,12 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         ann_key, pending_key, lens)
       lua_util.debugm(N, rspamd_config, 'maybe_train_existing_ann: initiating train for key=%s spam=%s ham=%s', ann_key,
         lens.spam or -1, lens.ham or -1)
+      -- Consume the frozen retrain-request marker now that an actual training is
+      -- starting, so one operator corpus push triggers exactly one retrain.
+      if rule.train.frozen then
+        lua_redis.redis_make_request_taskless(ev_base, rspamd_config, rule.redis,
+          nil, true, function(_, _) end, 'DEL', { pending_key .. '_retrain_req' })
+      end
       do_train_ann(worker, ev_base, rule, set, ann_key)
     end
 
@@ -1268,8 +1384,40 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
       )
     end
 
-    -- Start the chain
-    check_spam_len()
+    -- Start the chain. For a frozen model the controller's auto-train trigger is
+    -- short-circuited: it only proceeds when an operator-driven ANN-Train left a
+    -- retrain-request marker (the marker is consumed in initiate_train, so a
+    -- single corpus push yields a single retrain).
+    if rule.train.frozen then
+      local marker_key = pending_key .. '_retrain_req'
+      lua_redis.redis_make_request_taskless(ev_base,
+        rspamd_config,
+        rule.redis,
+        nil,
+        false, -- is read
+        function(err, data)
+          if err then
+            rspamd_logger.errx(rspamd_config, 'cannot read frozen retrain marker %s: %s',
+              marker_key, err)
+            return
+          end
+          -- Redis GET returns a boolean `false` (userdata/boolean) for a missing
+          -- key via lua_redis; treat anything non-string/empty as "no request".
+          if type(data) ~= 'string' or data == '' then
+            lua_util.debugm(N, rspamd_config,
+              'frozen ANN %s: no pending ANN-Train retrain request, skip auto-train', ann_key)
+            return
+          end
+          lua_util.debugm(N, rspamd_config,
+            'frozen ANN %s: ANN-Train retrain requested, counting vectors', ann_key)
+          check_spam_len()
+        end,
+        'GET',
+        { marker_key }
+      )
+    else
+      check_spam_len()
+    end
   end
 end
 
@@ -1591,6 +1739,15 @@ for k, r in pairs(rules) do
     rule_elt.train.max_trains = rule_elt.train.max_train
   end
 
+  -- forced_learn_minimal_scan defaults to ON whenever the rule's training vector
+  -- is symbols-independent (disable_symbols_input): a forced ANN-Train scan then
+  -- skips the whole non-neural pipeline. Operators can set it to false to opt out
+  -- explicitly. For symbol-dependent rules it stays off (stripping symbols would
+  -- change the stored vector relative to the live full-scan path).
+  if rule_elt.train.forced_learn_minimal_scan == nil then
+    rule_elt.train.forced_learn_minimal_scan = rule_elt.disable_symbols_input and true or false
+  end
+
   if not rule_elt.profile then
     rule_elt.profile = {}
   end
@@ -1669,6 +1826,19 @@ rspamd_config:register_symbol({
   type = 'idempotent,callback',
   flags = 'nostat,explicit_disable,ignore_passthrough',
   callback = ann_push_vector
+})
+
+-- Forced-learn fast path: a prefilter that, for qualifying ANN-Train scans of
+-- disable_symbols_input rules, disables the whole non-neural pipeline. Priority
+-- `high` runs it after the settings prefilters (priority `top`) so that
+-- get_settings_id()/get_rule_settings() see the resolved settings, but before
+-- the heavy DNS/Redis filter symbols.
+rspamd_config:register_symbol({
+  name = 'NEURAL_FORCED_LEARN_CHECK',
+  type = 'prefilter',
+  flags = 'empty,nostat,explicit_disable',
+  priority = lua_util.symbols_priorities.high,
+  callback = neural_forced_learn_prefilter
 })
 
 -- We also need to deal with settings
