@@ -2612,9 +2612,11 @@ lua_task_set_pre_result(lua_State *L)
 									  flags,
 									  rspamd_find_metric_result(task, res_name));
 
-		/* Don't classify or filter message if pre-filter sets results */
-
-		if (res_name == NULL && !(flags & (RSPAMD_PASSTHROUGH_LEAST | RSPAMD_PASSTHROUGH_PROCESS_ALL))) {
+		/* Don't classify or filter message if pre-filter sets results.
+		 * A learn task must still run classifiers and symbols (a learner may need
+		 * the symbol scores), so never short-circuit it on a passthrough result. */
+		if (res_name == NULL && !(flags & (RSPAMD_PASSTHROUGH_LEAST | RSPAMD_PASSTHROUGH_PROCESS_ALL)) &&
+			!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM | RSPAMD_TASK_FLAG_LEARN_HAM | RSPAMD_TASK_FLAG_LEARN_CLASS))) {
 			task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);

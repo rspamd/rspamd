@@ -1205,6 +1205,17 @@ auto symcache::get_item_specific_vector(const cache_item &it) -> symcache::items
 	RSPAMD_UNREACHABLE;
 }
 
+auto symcache::learn_needs_check() const -> bool
+{
+	for (const auto &it: learn) {
+		if (it && (it->get_flags() & SYMBOL_TYPE_LEARN_NEEDS_CHECK)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 auto symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 {
 

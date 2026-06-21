@@ -1702,21 +1702,17 @@ local function ann_push_vector(task)
   end
 end
 
--- Learn-stage callback: collects training vectors from a dedicated learn task
--- (e.g. a /learnspam corpus push), which runs only message parsing + the learn
--- stages -- no scan symbols, no idempotent emitters (ClickHouse/history/...),
--- so it is fast and never pollutes downstream stores.
---
--- Only symbols-independent rules (disable_symbols_input) are eligible here: the
--- learn task does not run any rule symbol, so a symbol-dependent vector would be
--- wrong. Those rules keep training from the live scan path (NEURAL_LEARN
--- idempotent) as before; the dependency-driven closure for hybrid rules is a
--- separate step.
+-- Per-rule learn-stage callback: collects a training vector from a dedicated
+-- learn task (e.g. a /learnspam corpus push) for a single neural rule. Each rule
+-- that opts into controller learning gets its own NEURAL_LEARN_<rule> learn
+-- symbol (registered below); a symbol-dependent rule's symbol carries the
+-- `learn_needs_check` flag so the controller runs a full check pass first
+-- (otherwise the learn task runs no rule symbol and the vector would be wrong).
 --
 -- Explicit learn tasks only: an autolearn-during-scan task (learn_auto flag)
 -- also reaches the learn stage, but neural already decides such cases on the
 -- scan path, so we skip it here to avoid double-storing the same message.
-local function ann_learn_task(task)
+local function neural_learn_one(task, rule)
   if task:has_flag('learn_auto') then
     lua_util.debugm(N, task, 'skip neural learn symbol for autolearn-during-scan task')
     return
@@ -1728,23 +1724,11 @@ local function ann_learn_task(task)
     return
   end
 
-  for _, rule in pairs(settings.rules) do
-    if not rule.disable_symbols_input then
-      lua_util.debugm(N, task,
-        'neural learn task: rule %s needs symbols, not eligible for learn-task training',
-        rule.prefix)
-    elseif not rule.train.learn_from_controller then
-      lua_util.debugm(N, task,
-        'neural learn task: rule %s opted out of controller learning (learn_from_controller=false)',
-        rule.prefix)
-    else
-      local set = neural_common.get_rule_settings(task, rule)
-      if set then
-        lua_util.debugm(N, task, 'neural learn task: store %s vector for %s:%s',
-          cls, rule.prefix, set.name)
-        ann_push_task_result(rule, task, nil, 0.0, set, cls)
-      end
-    end
+  local set = neural_common.get_rule_settings(task, rule)
+  if set then
+    lua_util.debugm(N, task, 'neural learn task: store %s vector for %s:%s',
+      cls, rule.prefix, set.name)
+    ann_push_task_result(rule, task, nil, 0.0, set, cls)
   end
 end
 
@@ -1884,6 +1868,27 @@ for k, r in pairs(rules) do
     flags = 'nostat',
     parent = id
   })
+
+  -- Per-rule learn symbol: lets a controller learn task (/learnspam) train this
+  -- rule. Registered only when the rule opts into controller learning. A
+  -- symbol-dependent rule needs a full check pass first (its vector reads symbol
+  -- scores), signalled by the learn_needs_check flag; a disable_symbols_input
+  -- rule trains from the lean learn pipeline (no check).
+  if rule_elt.train.learn_from_controller then
+    local learn_flags = 'nostat,explicit_disable'
+    if not rule_elt.disable_symbols_input then
+      learn_flags = learn_flags .. ',learn_needs_check'
+    end
+    local this_rule = rule_elt
+    rspamd_config:register_symbol({
+      name = 'NEURAL_LEARN_' .. k,
+      type = 'learn',
+      flags = learn_flags,
+      callback = function(task)
+        neural_learn_one(task, this_rule)
+      end
+    })
+  end
 end
 
 rspamd_config:register_symbol({
@@ -1893,14 +1898,6 @@ rspamd_config:register_symbol({
   callback = ann_push_vector
 })
 
--- Learn-stage symbol: trains symbols-independent rules from a dedicated learn
--- task (e.g. /learnspam) without running any scan symbol or idempotent emitter.
-rspamd_config:register_symbol({
-  name = 'NEURAL_LEARN_TASK',
-  type = 'learn',
-  flags = 'nostat,explicit_disable',
-  callback = ann_learn_task
-})
 
 -- Forced-learn fast path: a prefilter that, for qualifying ANN-Train scans of
 -- disable_symbols_input rules, disables the whole non-neural pipeline. Priority

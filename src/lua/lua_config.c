@@ -1982,6 +1982,9 @@ lua_parse_symbol_flags(const char *str)
 		if (strstr(str, "coro") != NULL) {
 			ret |= SYMBOL_TYPE_USE_CORO;
 		}
+		if (strstr(str, "learn_needs_check") != NULL) {
+			ret |= SYMBOL_TYPE_LEARN_NEEDS_CHECK;
+		}
 	}
 
 	return ret;

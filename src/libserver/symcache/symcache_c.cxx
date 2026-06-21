@@ -365,6 +365,14 @@ unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 	return 0;
 }
 
+gboolean
+rspamd_symcache_learn_needs_check(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return real_cache->learn_needs_check() ? TRUE : FALSE;
+}
+
 const struct rspamd_symcache_item_stat *
 rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 {

@@ -607,6 +607,12 @@ public:
 							   return f(sym_it);
 						   });
 	}
+	/**
+	 * Returns true if any learn symbol is flagged SYMBOL_TYPE_LEARN_NEEDS_CHECK,
+	 * i.e. it needs a full check pass (symbol scores) to learn. Defined in
+	 * symcache_impl.cxx where cache_item is a complete type.
+	 */
+	auto learn_needs_check() const -> bool;
 	template<typename Functor>
 	auto filters_foreach(Functor f) -> bool
 	{
