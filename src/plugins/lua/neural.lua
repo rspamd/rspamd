@@ -1789,14 +1789,6 @@ for k, r in pairs(rules) do
     rule_elt.train.forced_learn_minimal_scan = rule_elt.disable_symbols_input and true or false
   end
 
-  -- learn_from_controller defaults ON for symbols-independent rules (so a
-  -- /learnspam corpus push trains them alongside bayes) and OFF otherwise.
-  -- Operators can set it to false to keep a fusion rule out of the controller
-  -- learn path.
-  if rule_elt.train.learn_from_controller == nil then
-    rule_elt.train.learn_from_controller = rule_elt.disable_symbols_input and true or false
-  end
-
   if not rule_elt.profile then
     rule_elt.profile = {}
   end
