@@ -223,6 +223,198 @@ textarea {
     color: var(--rspamd-text-primary);
 }
 
+/*
+ * Tabulator theme.
+ * The bundled bootstrap5 theme hardcodes light colors (#fff, #dee2e6, ...),
+ * which do not respond to data-bs-theme. Map them to Bootstrap CSS variables
+ * (which flip with data-bs-theme) so light/dark follow automatically.
+ * rspamd.css is loaded after tabulator_bs5.min.css, so these win the cascade.
+ */
+.tabulator {
+    border: none;
+    font-size: 11px;
+}
+
+/* Header */
+.tabulator .tabulator-header {
+    background-color: var(--bs-body-bg);
+    border-top: none;
+    border-bottom: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+}
+.tabulator .tabulator-header .tabulator-col {
+    background: var(--bs-body-bg);
+    border-right: none;
+}
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+    padding: 8px;
+}
+/* Keep the first glyph's left bearing clear of the title's overflow:hidden
+   (e.g. the "W" in "Worker type" was clipped on the left). */
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
+    padding-left: 1px;
+}
+/* Header filter input — render as a Bootstrap form-control.
+   appearance:none drops the UA search-input chrome that ignored the
+   dark background (input looked too light in dark mode). */
+.tabulator .tabulator-header-filter input {
+    -webkit-appearance: none;
+    appearance: none;
+    color: var(--bs-body-color);
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+}
+
+/* Table body */
+/* Tabulator sets the tableholder height via inline JS (getHeight()), computed
+   at init when the table is inline-block — that includes a 1px descender, so
+   the holder ends up 1px taller than the table content, leaving a sliver above
+   the footer (visible on row hover). Size the holder to its content (overrides
+   the inline height) and make the table a block (no descender). Safe for
+   paginated tables without a fixed height (no virtual DOM). */
+.tabulator .tabulator-tableholder {
+    height: auto !important;
+}
+.tabulator .tabulator-tableholder .tabulator-table {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    display: block;
+}
+.tabulator-row {
+    background-color: var(--bs-body-bg);
+    border-bottom: none;
+    min-height: 0;
+}
+/* Zebra striping (light theme — rspamd palette) */
+.tabulator-row.tabulator-row-even {
+    background-color: var(--rspamd-bs-table-bg);
+}
+/* Rows are non-interactive (selectable:false): highlight on hover in the
+   rspamd palette and a neutral cursor (no misleading pointer). The
+   .tabulator-selectable variant is covered in case rows still carry it. */
+@media (hover: hover) and (pointer: fine) {
+    .tabulator-row:hover,
+    .tabulator-row.tabulator-selectable:hover {
+        cursor: default;
+    }
+}
+
+.tabulator-row .tabulator-cell {
+    padding: 8px;
+    border-right: none;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+/* Horizontal separators between rows; no vertical dividers (like FooTable).
+   Only between adjacent rows, so no double line at header/footer edges. */
+.tabulator-row + .tabulator-row {
+    border-top: 1px solid var(--bs-border-color);
+}
+
+/* ── Hover backgrounds intentionally disabled ──────────────────────────────
+ *
+ * Tabulator scrolls the page internally on row interactions (sort, expand,
+ * Update). The call lives inside its render/adjustTableSize path and could not
+ * be stopped at the source: overriding Element.prototype.scrollIntoView and
+ * HTMLElement.prototype.focus, and stripping tabindex (tableholder/header) all
+ * failed to prevent it. To keep the page from jumping to the top (the original
+ * complaint), history.js counters the scroll by preserving & restoring
+ * window.scrollY around clicks/renderStarted.
+ *
+ * That counter restores one frame late for the expand scroll: for one frame
+ * the page is shifted, the element under the cursor changes, and its :hover
+ * background flashed (the sortable column's header cell; the top data row).
+ * The first (non-sortable) column never flashed because it had no hover bg.
+ *
+ * So the hover backgrounds below are removed to kill the flash; the page still
+ * doesn't scroll (the counter handles that). If the expand-scroll source is
+ * ever found and prevented at the root — so the scroll counter can be removed
+ * — restore the hover backgrounds:
+ *   sortable col:  .tabulator-col.tabulator-sortable.tabulator-col-sorter-element:hover
+ *                  { background-color: var(--rspamd-nav-active-bg) }
+ *   rows (light):  .tabulator-row:hover { background-color: var(--rspamd-nav-active-bg) }
+ *   rows (dark):   [data-theme="dark"] .tabulator .tabulator-row:hover { ... }
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* Override the bs5 theme's OWN hover backgrounds (#e6e6e6 on sortable cols,
+   #ced4da on .tabulator-selectable rows) with the element's normal background,
+   so hover causes no visible change. !important is needed to beat the theme's
+   high-specificity :hover selectors; without this the theme's default hover
+   color still flashes during the expand-scroll (see the note above). */
+.tabulator-row:hover,
+.tabulator-row.tabulator-selectable:hover,
+.tabulator .tabulator-header .tabulator-col:hover {
+    background-color: var(--bs-body-bg) !important;
+}
+.tabulator-row.tabulator-row-even:hover,
+.tabulator-row.tabulator-selectable.tabulator-row-even:hover {
+    background-color: var(--rspamd-bs-table-bg) !important;
+}
+/* Row hover background is applied to the CELLS in the bs5 theme (not the row),
+   so the row override above doesn't reach it. Make cells transparent on hover
+   so the row's own background (body-bg / zebra) shows through, unchanged. */
+.tabulator-row:hover .tabulator-cell,
+.tabulator-row.tabulator-selectable:hover .tabulator-cell {
+    background-color: transparent !important;
+}
+
+/* Dark mode: the bs5 theme forces a flat #212529 onto rows and cells at high
+   specificity (html[data-bs-theme=dark] .tabulator .tabulator-row/.tabulator-cell),
+   which hides zebra and hover. Re-apply them under [data-theme="dark"] (set on
+   <body> by the rspamd theme), which wins the cascade. */
+[data-theme="dark"] .tabulator .tabulator-row .tabulator-cell {
+    background-color: transparent;
+}
+[data-theme="dark"] .tabulator .tabulator-row.tabulator-row-even {
+    background-color: #343a40;
+}
+[data-theme="dark"] .tabulator .tabulator-row.tabulator-row-even:hover {
+    background-color: #343a40 !important;
+}
+@media (hover: hover) and (pointer: fine) {
+    [data-theme="dark"] .tabulator .tabulator-row:hover {
+        cursor: default;
+    }
+}
+
+/* Responsive collapse (detail row) */
+.tabulator-row .tabulator-responsive-collapse {
+    border-top: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+.tabulator-row .tabulator-responsive-collapse table {
+    font-size: 14px;
+}
+
+/* Footer / pagination */
+.tabulator .tabulator-footer {
+    background-color: var(--bs-tertiary-bg);
+    border-top: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+}
+.tabulator .tabulator-footer .tabulator-paginator {
+    color: var(--bs-secondary-color);
+}
+.tabulator .tabulator-footer .tabulator-page {
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+@media (hover: hover) and (pointer: fine) {
+    .tabulator .tabulator-footer .tabulator-page:hover {
+        background-color: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+    }
+}
+
+/* "No data" placeholder */
+.tabulator .tabulator-placeholder .tabulator-placeholder-contents {
+    color: var(--bs-secondary-color);
+}
+
 /* local overrides */
 .navbar-brand > img {
     height: 50px;

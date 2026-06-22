@@ -2,13 +2,12 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-/* global FooTable */
-
-define(["jquery", "app/common", "app/libft", "footable"],
-    ($, common, libft) => {
+define(["jquery", "app/common", "app/libft", "tabulator"],
+    ($, common, libft, Tabulator) => {
         "use strict";
         const ui = {};
         let prevVersion = null;
+        let scrollIntoViewPatched = false;
 
         // History range: offset and count
         const histFromDef = 0;
@@ -199,43 +198,174 @@ define(["jquery", "app/common", "app/libft", "footable"],
         };
 
         function initErrorsTable(rows) {
-            common.tables.errors = FooTable.init("#errorsLog", {
-                breakpoints: common.breakpoints,
-                cascade: true,
+            common.tables.errors = new Tabulator("#errorsLog", {
+                layout: "fitColumns",
+                responsiveLayout: "collapse",
+                responsiveLayoutCollapseStartOpen: false,
+                selectable: false,
+                pagination: "local",
+                paginationSize: common.page_size.errors,
+                paginationButtonCount: 5,
+                data: rows,
+                initialSort: [{column: "ts", dir: "desc"}],
                 columns: [
-                    {sorted: true,
-                        direction: "DESC",
-                        name: "ts",
+                    {
+                        // Toggle to expand collapsed (responsive) columns
+                        formatter: "responsiveCollapse",
+                        width: 36,
+                        minWidth: 36,
+                        responsive: 0,
+                        hozAlign: "center",
+                        resizable: false,
+                        headerSort: false,
+                    },
+                    {
                         title: "Time",
-                        style: {width: 300, maxWidth: 300},
-                        sortValue: (val) => Number(val.options.sortValue)},
-                    {name: "type",
+                        field: "ts",
+                        sorter: "number",
+                        minWidth: 105,
+                        width: 130,
+                        formatter: (cell) => libft.unix_time_format(cell.getValue()),
+                    },
+                    {
                         title: "Worker type",
-                        breakpoints: "md",
-                        style: {width: 150, maxWidth: 150}},
-                    {name: "pid",
+                        field: "type",
+                        responsive: 4,
+                        width: 110,
+                        minWidth: 110,
+                        headerFilter: "input",
+                    },
+                    {
                         title: "PID",
-                        breakpoints: "md",
-                        style: {width: 110, maxWidth: 110}},
-                    {name: "module", title: "Module"},
-                    {name: "id", title: "Internal ID"},
-                    {name: "message", title: "Message", breakpoints: "md"},
+                        field: "pid",
+                        sorter: "number",
+                        responsive: 5,
+                        width: 50,
+                        minWidth: 50,
+                        headerFilter: "input",
+                    },
+                    {title: "Module", field: "module", responsive: 4, width: 120, minWidth: 85, headerFilter: "input"},
+                    {title: "Internal ID", field: "id", responsive: 3, width: 100, minWidth: 100, headerFilter: "input"},
+                    {
+                        title: "Message",
+                        field: "message",
+                        responsive: 0,
+                        minWidth: 300,
+                        widthGrow: 2,
+                        headerFilter: "input",
+                    },
                 ],
-                rows: rows,
-                paging: {
-                    enabled: true,
-                    limit: 5,
-                    size: common.page_size.errors
-                },
-                filtering: {
-                    enabled: true,
-                    position: "left",
-                    connectors: false
-                },
-                sorting: {
-                    enabled: true
-                }
             });
+
+            // Scroll-prevention state (shared by the click/renderStarted/scroll
+            // handlers below).
+            let preserveY = 0;
+            let preserveUntil = 0;
+            let clickArmed = false;
+
+            // FooTable parity: hide the pagination footer when only one page.
+            // renderComplete fires after data load, filtering and sorting,
+            // when getPageMax() is up to date. Also clears clickArmed so that
+            // non-click renders (initial load, filter) don't extend the scroll-
+            // prevention window with a stale preserveY.
+            common.tables.errors.on("renderComplete", () => {
+                const footer = common.tables.errors.element.querySelector(".tabulator-footer");
+                if (footer) footer.style.display = common.tables.errors.getPageMax() > 1 ? "" : "none";
+                clickArmed = false;
+            });
+
+            // Clicking a body cell focuses the tableholder (tabindex=0), and the
+            // browser scrolls it into view — for a tall table that shifts the page
+            // ~one viewport (the "expand flicker"). The tiny toggle icon is
+            // in-view so out-of-the-box it never happened; clicking anywhere on
+            // the row exposes it. Strip the tableholder's tabindex and keep it
+            // stripped (Tabulator may re-add it).
+            const errorsHolder = common.tables.errors.element.querySelector(".tabulator-tableholder");
+            if (errorsHolder) {
+                errorsHolder.removeAttribute("tabindex");
+                new MutationObserver(() => errorsHolder.removeAttribute("tabindex"))
+                    .observe(errorsHolder, {attributes: true, attributeFilter: ["tabindex"]});
+            }
+
+            // Toggle responsive-collapse by clicking anywhere on the row (not
+            // just the tiny toggle icon). The toggle's own handler calls
+            // stopImmediatePropagation, so clicks on the icon don't bubble here
+            // (no double-toggle). Skip while selecting/copying text.
+            common.tables.errors.element.addEventListener("click", (e) => {
+                const row = e.target.closest(".tabulator-row");
+                if (!row) return;
+                const sel = window.getSelection && window.getSelection();
+                if (sel && sel.toString()) return;
+                const toggle = row.querySelector(".tabulator-responsive-collapse-toggle");
+                // Only toggle when collapse is active (toggle column is visible).
+                // On a wide screen there are no collapsed columns and the toggle
+                // is hidden — clicking it would otherwise pre-mark the row as
+                // expanded, so it shows open when the screen is later narrowed.
+                if (toggle && toggle.offsetParent) toggle.click();
+            });
+
+            // Neutralize scrollIntoView for elements in the errors table.
+            // Tabulator smooth-scrolls the focused/expanded element into view
+            // (scrollIntoView {behavior:"smooth"}); a smooth animation spans many
+            // frames, so it can't be countered before paint without flickering.
+            // No-op it for elements inside the current errors table. Guarded so
+            // it patches the prototype only once (even if initErrorsTable runs
+            // again); uses common.tables.errors.element (live) so a re-created
+            // table is picked up without re-patching.
+            if (!scrollIntoViewPatched) {
+                const nativeScrollIntoView = Element.prototype.scrollIntoView;
+                Element.prototype.scrollIntoView = function (...args) {
+                    const el = common.tables.errors && common.tables.errors.element;
+                    if (!(el && el.contains(this))) {
+                        nativeScrollIntoView.apply(this, args);
+                    }
+                };
+                scrollIntoViewPatched = true;
+            }
+
+            // Tabulator scrolls the page on clicks/sort/expand and after Update.
+            // Restore the position synchronously in the scroll handler (capture,
+            // before paint) so the jump is never painted. Both clicks use a 250ms
+            // window for sync scrolls; async renders (Update's fetch → setData)
+            // are covered by renderStarted, which extends the window — no fixed
+            // timeout, so even a slow response is handled.
+            function arm(ms) {
+                return () => {
+                    const y = window.scrollY;
+                    preserveY = y;
+                    preserveUntil = performance.now() + ms;
+                    clickArmed = true;
+                    Promise.resolve().then(() => {
+                        // Microtask (after sync handlers, before paint): catch
+                        // synchronous scrolls.
+                        if (window.scrollY !== y) window.scrollTo(0, y);
+                        // This rAF is queued from the microtask, so it lands AFTER
+                        // Tabulator's render rAF (queued during the click). It
+                        // runs in the same frame, after the render-scroll but
+                        // before paint — catching the async expand-scroll without
+                        // the 1-frame flicker that the scroll-event handler (one
+                        // frame later) would cause.
+                        requestAnimationFrame(() => {
+                            if (window.scrollY !== y) window.scrollTo(0, y);
+                        });
+                    });
+                };
+            }
+            common.tables.errors.element.addEventListener("click", arm(250), true);
+            const updateBtn = document.getElementById("updateErrors");
+            if (updateBtn) updateBtn.addEventListener("click", arm(250), true);
+            // Async renders (e.g., Update's fetch → setData) fire renderStarted
+            // after the click's window expires. Extend it (if a click recently
+            // armed) to catch the render-scroll. clickArmed is cleared on
+            // renderComplete (above) so non-click renders don't extend with a
+            // stale preserveY.
+            common.tables.errors.on("renderStarted", () => {
+                if (clickArmed) preserveUntil = performance.now() + 400;
+            });
+            window.addEventListener("scroll", () => {
+                if (performance.now() >= preserveUntil) return;
+                if (window.scrollY !== preserveY) window.scrollTo(0, preserveY);
+            }, true);
         }
 
         ui.getErrors = function () {
@@ -248,19 +378,13 @@ define(["jquery", "app/common", "app/libft", "footable"],
                         .map((d) => d.data);
                     const rows = [].concat.apply([], neighbours_data);
                     $.each(rows, (i, item) => {
-                        item.ts = {
-                            value: libft.unix_time_format(item.ts),
-                            options: {
-                                sortValue: item.ts
-                            }
-                        };
                         for (const prop in item) {
                             if (!{}.hasOwnProperty.call(item, prop)) continue;
                             if (typeof item[prop] === "string") item[prop] = common.escapeHTML(item[prop]);
                         }
                     });
                     if (Object.prototype.hasOwnProperty.call(common.tables, "errors")) {
-                        common.tables.errors.rows.load(rows);
+                        common.tables.errors.setData(rows);
                     } else {
                         initErrorsTable(rows);
                     }

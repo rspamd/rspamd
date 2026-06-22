@@ -102,6 +102,7 @@ requirejs.config({
         fontawesome_solid: "solid.min",
         footable: "footable.min",
         linenumbers: "codejar-linenumbers.min",
+        tabulator: "tabulator.min",
         nprogress: "nprogress.min",
         prism: "prism",
         stickytabs: "jquery.stickytabs.min"
