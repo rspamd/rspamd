@@ -626,8 +626,8 @@ table#symbolsTable input[type="number"] {
 
 /* RRD summary */
 #summary-row {
-    padding-left: 80px;
-    padding-right: 80px;
+    padding-left: 50px;
+    padding-right: 50px;
 }
 .col-fixed,
 .col-fluid {
@@ -635,7 +635,7 @@ table#symbolsTable input[type="number"] {
     float: left;
 }
 .col-fixed {
-    width: 200px;
+    width: 192px;
     min-height: 1px; /* make an empty div take space */
 }
 .col-fluid {
@@ -651,13 +651,18 @@ table#symbolsTable input[type="number"] {
     margin-bottom: 2px;
     width: 100% !important;
     text-align: left;
-    font-size: 12px;
     z-index: 100;
 
     --bs-table-bg: var(--rspamd-bs-table-bg);
 }
-#rrd-table td {
-    color: inherit;
+#rrd-table .tabulator-row,
+#rrd-table .tabulator-row .tabulator-cell {
+    color: var(--rrd-row-color, inherit);
+}
+#rrd-table .tabulator-row:hover {
+    background-color: var(--rspamd-nav-active-bg) !important;
+}
+#rrd-table .tabulator-row .tabulator-cell {
     padding-top: 2px;
     padding-bottom: 2px;
 }
