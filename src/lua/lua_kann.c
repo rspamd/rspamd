@@ -1100,6 +1100,8 @@ lua_kann_save(lua_State *L)
 				kann_save_fp(f, k);
 				fclose(f);
 
+				/* Pop the `filename` field before pushing the result */
+				lua_pop(L, 1);
 				lua_pushboolean(L, true);
 			}
 			else {
@@ -1107,8 +1109,6 @@ lua_kann_save(lua_State *L)
 
 				return luaL_error(L, "invalid arguments: missing filename");
 			}
-
-			lua_pop(L, 1);
 		}
 		else {
 			/* Save to Rspamd text */
@@ -1147,7 +1147,11 @@ lua_kann_load(lua_State *L)
 	FILE *f = NULL;
 
 	if (lua_istable(L, 1)) {
-		lua_getfield(L, 2, "filename");
+		/*
+		 * load is a module function (rspamd_kann.load), not a method, so the
+		 * options table is at arg 1 (unlike save where arg 1 is self).
+		 */
+		lua_getfield(L, 1, "filename");
 
 		if (lua_isstring(L, -1)) {
 			const char *fname = lua_tostring(L, -1);
