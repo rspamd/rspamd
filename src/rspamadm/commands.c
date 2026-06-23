@@ -170,25 +170,132 @@ rspamadm_lua_command_help(gboolean full_help,
 	return NULL; /* Must be handled in rspamadm itself */
 }
 
-void rspamadm_fill_lua_commands(lua_State *L, GPtrArray *dest)
+/*
+ * Load a single rspamadm command module from a .lua file and append it to dest.
+ * Returns TRUE if a command has been registered.
+ */
+static gboolean
+rspamadm_load_lua_command(lua_State *L, GPtrArray *dest, const char *path)
 {
-	int i;
-
-	GPtrArray *lua_paths;
-	GError *err = NULL;
-	const char *lualibdir = RSPAMD_LUALIBDIR, *path;
 	struct rspamadm_command *lua_cmd;
-	char search_dir[PATH_MAX];
+	char *cmd_name;
 
-	if (g_hash_table_lookup(ucl_vars, "LUALIBDIR")) {
-		lualibdir = g_hash_table_lookup(ucl_vars, "LUALIBDIR");
+	if (luaL_dofile(L, path) != 0) {
+		msg_err("cannot execute lua script %s: %s",
+				path, lua_tostring(L, -1));
+		lua_settop(L, 0);
+
+		return FALSE;
 	}
 
-	rspamd_snprintf(search_dir, sizeof(search_dir), "%s%crspamadm%c",
-					lualibdir, G_DIR_SEPARATOR, G_DIR_SEPARATOR);
+	if (lua_type(L, -1) != LUA_TTABLE) {
+		/* The script did not return a command table */
+		lua_settop(L, 0);
 
-	if ((lua_paths = rspamd_glob_path(search_dir, "*.lua", FALSE, &err)) == NULL) {
-		msg_err("cannot glob files in %s/*.lua: %e", search_dir, err);
+		return FALSE;
+	}
+
+	/* The command must export a `handler` function */
+	lua_pushstring(L, "handler");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) != LUA_TFUNCTION) {
+		msg_err("rspamadm script %s does not have 'handler' field with type "
+				"function",
+				path);
+		lua_settop(L, 0);
+
+		return FALSE;
+	}
+
+	/* Pop handler */
+	lua_pop(L, 1);
+
+	/* Resolve the command name, falling back to the file basename */
+	lua_pushstring(L, "name");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		cmd_name = g_strdup(lua_tostring(L, -1));
+	}
+	else {
+		goffset ext_pos;
+
+		cmd_name = g_path_get_basename(path);
+		/* Remove .lua from the basename itself (not from the full path) */
+		ext_pos = rspamd_substring_search(cmd_name, strlen(cmd_name), ".lua", 4);
+
+		if (ext_pos != -1) {
+			cmd_name[ext_pos] = '\0';
+		}
+	}
+
+	lua_pop(L, 1);
+
+	/*
+	 * Skip duplicate command names: built-in commands and directories scanned
+	 * earlier take precedence (PATH-like, first wins). This prevents a drop-in
+	 * package from accidentally shadowing a built-in command.
+	 */
+	if (rspamadm_search_command(cmd_name, dest) != NULL) {
+		msg_info("skip rspamadm command %s from %s: already defined",
+				 cmd_name, path);
+		g_free(cmd_name);
+		lua_settop(L, 0);
+
+		return FALSE;
+	}
+
+	lua_cmd = g_malloc0(sizeof(*lua_cmd));
+	lua_cmd->name = cmd_name;
+
+	lua_pushstring(L, "aliases");
+	lua_gettable(L, -2);
+
+	if (lua_type(L, -1) == LUA_TTABLE) {
+		lua_cmd->aliases = g_ptr_array_new_full(
+			rspamd_lua_table_size(L, -1),
+			g_free);
+
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			if (lua_isstring(L, -1)) {
+				g_ptr_array_add(lua_cmd->aliases,
+								g_strdup(lua_tostring(L, -1)));
+			}
+		}
+	}
+
+	lua_pop(L, 1);
+
+	lua_pushvalue(L, -1);
+	/* Reference table itself */
+	lua_cmd->command_data = GINT_TO_POINTER(luaL_ref(L, LUA_REGISTRYINDEX));
+	lua_cmd->flags |= RSPAMADM_FLAG_LUA | RSPAMADM_FLAG_DYNAMIC;
+	lua_cmd->run = rspamadm_lua_command_run;
+	lua_cmd->help = rspamadm_lua_command_help;
+
+	g_ptr_array_add(dest, lua_cmd);
+
+	lua_settop(L, 0);
+
+	return TRUE;
+}
+
+/*
+ * Glob `dir/ *.lua` and load every matching rspamadm command module. A missing
+ * directory is not an error (glob simply yields nothing), so this is safe for
+ * the optional drop-in / extra command paths.
+ */
+static void
+rspamadm_scan_lua_commands_dir(lua_State *L, GPtrArray *dest, const char *dir)
+{
+	GPtrArray *lua_paths;
+	GError *err = NULL;
+	const char *path;
+	unsigned int i;
+
+	if ((lua_paths = rspamd_glob_path(dir, "*.lua", FALSE, &err)) == NULL) {
+		msg_err("cannot glob files in %s/*.lua: %e", dir, err);
 		g_error_free(err);
 
 		return;
@@ -196,85 +303,57 @@ void rspamadm_fill_lua_commands(lua_State *L, GPtrArray *dest)
 
 	PTR_ARRAY_FOREACH(lua_paths, i, path)
 	{
-		if (luaL_dofile(L, path) != 0) {
-			msg_err("cannot execute lua script %s: %s",
-					path, lua_tostring(L, -1));
-			lua_settop(L, 0);
-			continue;
-		}
-		else {
-			if (lua_type(L, -1) == LUA_TTABLE) {
-				lua_pushstring(L, "handler");
-				lua_gettable(L, -2);
-			}
-			else {
-				continue; /* Something goes wrong, huh */
-			}
-
-			if (lua_type(L, -1) != LUA_TFUNCTION) {
-				msg_err("rspamadm script %s does not have 'handler' field with type "
-						"function",
-						path);
-				continue;
-			}
-
-			/* Pop handler */
-			lua_pop(L, 1);
-			lua_cmd = g_malloc0(sizeof(*lua_cmd));
-
-			lua_pushstring(L, "name");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) == LUA_TSTRING) {
-				lua_cmd->name = g_strdup(lua_tostring(L, -1));
-			}
-			else {
-				goffset ext_pos;
-				char *name;
-
-				name = g_path_get_basename(path);
-				/* Remove .lua */
-				ext_pos = rspamd_substring_search(path, strlen(path), ".lua", 4);
-
-				if (ext_pos != -1) {
-					name[ext_pos] = '\0';
-				}
-
-				lua_cmd->name = name;
-			}
-
-			lua_pop(L, 1);
-
-			lua_pushstring(L, "aliases");
-			lua_gettable(L, -2);
-
-			if (lua_type(L, -1) == LUA_TTABLE) {
-				lua_cmd->aliases = g_ptr_array_new_full(
-					rspamd_lua_table_size(L, -1),
-					g_free);
-
-				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					if (lua_isstring(L, -1)) {
-						g_ptr_array_add(lua_cmd->aliases,
-										g_strdup(lua_tostring(L, -1)));
-					}
-				}
-			}
-
-			lua_pop(L, 1);
-
-			lua_pushvalue(L, -1);
-			/* Reference table itself */
-			lua_cmd->command_data = GINT_TO_POINTER(luaL_ref(L, LUA_REGISTRYINDEX));
-			lua_cmd->flags |= RSPAMADM_FLAG_LUA | RSPAMADM_FLAG_DYNAMIC;
-			lua_cmd->run = rspamadm_lua_command_run;
-			lua_cmd->help = rspamadm_lua_command_help;
-
-			g_ptr_array_add(dest, lua_cmd);
-		}
-
-		lua_settop(L, 0);
+		rspamadm_load_lua_command(L, dest, path);
 	}
 
 	g_ptr_array_free(lua_paths, TRUE);
+}
+
+void rspamadm_fill_lua_commands(lua_State *L, GPtrArray *dest)
+{
+	const char *lualibdir = RSPAMD_LUALIBDIR, *confdir = RSPAMD_CONFDIR;
+	const char *extra_path;
+	char search_dir[PATH_MAX];
+
+	if (g_hash_table_lookup(ucl_vars, "LUALIBDIR")) {
+		lualibdir = g_hash_table_lookup(ucl_vars, "LUALIBDIR");
+	}
+
+	if (g_hash_table_lookup(ucl_vars, "CONFDIR")) {
+		confdir = g_hash_table_lookup(ucl_vars, "CONFDIR");
+	}
+
+	/* Built-in commands shipped with the OSS lualib tree */
+	rspamd_snprintf(search_dir, sizeof(search_dir), "%s%crspamadm",
+					lualibdir, G_DIR_SEPARATOR);
+	rspamadm_scan_lua_commands_dir(L, dest, search_dir);
+
+	/*
+	 * Drop-in commands from $CONFDIR/rspamadm.d, consistent with local.d /
+	 * modules.local.d. An absent directory is fine.
+	 */
+	rspamd_snprintf(search_dir, sizeof(search_dir), "%s%crspamadm.d",
+					confdir, G_DIR_SEPARATOR);
+	rspamadm_scan_lua_commands_dir(L, dest, search_dir);
+
+	/*
+	 * Additional command directories from a colon-separated
+	 * RSPAMADM_COMMAND_PATH (mirrors how PATH works). Lets third-party /
+	 * premium packages ship rspamadm commands without writing into the OSS
+	 * lualib tree. Modules load with the same globals and lua_path as the
+	 * built-in ones, so they can require premium lualibs and use lua_redis.
+	 */
+	extra_path = g_getenv("RSPAMADM_COMMAND_PATH");
+
+	if (extra_path != NULL) {
+		char **dirs = g_strsplit(extra_path, ":", -1);
+
+		for (char **d = dirs; d != NULL && *d != NULL; d++) {
+			if (**d != '\0') {
+				rspamadm_scan_lua_commands_dir(L, dest, *d);
+			}
+		}
+
+		g_strfreev(dirs);
+	}
 }
