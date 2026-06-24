@@ -55,6 +55,22 @@ Verbose mode
   Should Match Regexp  ${result.stdout}  hello world\n
   Should Be Equal As Integers  ${result.rc}  0
   
+Password Check Via Stdin Correct
+  ${enc} =  Rspamadm  pw  -p  nq1
+  ${handle} =  Start Process  ${RSPAMADM}  pw  -c  -p  ${enc.stdout}  stdin=PIPE
+  ${output} =  Write to stdin  ${handle}  nq1
+  ${result} =  Wait For Process  ${handle}
+  Should Contain  ${output}  password correct
+  Should Be Equal As Integers  ${result.rc}  0
+
+Password Check Via Stdin Wrong
+  ${enc} =  Rspamadm  pw  -p  nq1
+  ${handle} =  Start Process  ${RSPAMADM}  pw  -c  -p  ${enc.stdout}  stdin=PIPE
+  ${output} =  Write to stdin  ${handle}  wrongpassword
+  ${result} =  Wait For Process  ${handle}
+  Should Contain  ${output}  password incorrect
+  Should Be Equal As Integers  ${result.rc}  1
+
 SecretBox rspamadm encrypt/decrypt
   ${result} =  Rspamadm  secret_box  -B  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
   Should Match Regexp  ${result.stderr}  ^$
