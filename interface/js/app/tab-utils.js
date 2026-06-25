@@ -54,13 +54,15 @@ define(["app/common"],
 
         /**
          * Allow clicking anywhere on a row to toggle responsive-collapse
-         * (instead of just the tiny toggle icon). Skips when selecting text
+         * (instead of just the tiny toggle icon). Skips when selecting text,
+         * clicking form elements (inputs, selects — e.g. the Score column),
          * and when collapse is not active (toggle hidden).
          */
         tabUtils.bindRowClickToggle = function (table) {
             common.tables[table].element.addEventListener("click", (e) => {
                 const row = e.target.closest(".tabulator-row");
                 if (!row) return;
+                if (e.target.closest("input, select, textarea, button")) return;
                 const sel = window.getSelection && window.getSelection();
                 if (sel && sel.toString()) return;
                 const toggle = row.querySelector(".tabulator-responsive-collapse-toggle");

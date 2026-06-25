@@ -8,7 +8,7 @@ test.describe("Symbols", () => {
         await page.locator("#symbols_nav").click();
         await expect(page.locator("#symbolsTable")).toBeVisible();
         // Ensure table data has been loaded before running tests
-        await expect(page.locator("#symbolsTable tbody tr").first()).toBeVisible();
+        await expect(page.locator("#symbolsTable .tabulator-table .tabulator-row").first()).toBeVisible();
     });
 
     test("shows list and allows filtering by group", async ({page}) => {

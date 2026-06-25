@@ -260,6 +260,7 @@ textarea {
 .tabulator .tabulator-header-filter input {
     -webkit-appearance: none;
     appearance: none;
+    width: 100%;
     color: var(--bs-body-color);
     background-color: var(--bs-body-bg);
     border: 1px solid var(--bs-border-color);
@@ -439,7 +440,7 @@ input.form-control[type="number"] {
 input.action-scores {
     margin: 5px -7em 5px 0;
 }
-table#symbolsTable input[type="number"] {
+#symbolsTable input[type="number"] {
     width: 6em;
     font-size: 11px;
 }
@@ -659,7 +660,8 @@ table#symbolsTable input[type="number"] {
 #rrd-table .tabulator-row .tabulator-cell {
     color: var(--rrd-row-color, inherit);
 }
-#rrd-table .tabulator-row:hover {
+#rrd-table .tabulator-row:hover,
+#symbolsTable .tabulator-row:hover {
     background-color: var(--rspamd-nav-active-bg) !important;
 }
 #rrd-table .tabulator-row .tabulator-cell {
@@ -749,11 +751,14 @@ table#symbolsTable input[type="number"] {
   background-image: none;
 }
 
-.scorebar-spam {
+/* Tabulator's input styling has higher specificity than .scorebar-*, so
+   scope these to #symbolsTable to win the cascade. scorebar is used
+   exclusively in the symbols table. */
+#symbolsTable .scorebar-spam {
     background-color: rgb(240 0 0 / 0.1) !important;
 }
-.scorebar-ham {
-    background: rgb(100 230 80 / 0.1) !important;
+#symbolsTable .scorebar-ham {
+    background-color: rgb(100 230 80 / 0.1) !important;
 }
 
 .danger .icon {
