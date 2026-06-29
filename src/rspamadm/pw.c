@@ -269,16 +269,9 @@ rspamadm_pw_check(void)
 			exit(EXIT_FAILURE);
 		}
 
-		if (!isatty(STDIN_FILENO)) {
-			if (fgets(test_password, sizeof(test_password), stdin) != NULL) {
-				plen = strlen(test_password);
-				if (plen > 0 && test_password[plen - 1] == '\n') {
-					test_password[--plen] = '\0';
-				}
-			}
-			else {
-				plen = 0;
-			}
+		const char *env_password = getenv("RSPAMADM_PASSWORD");
+		if (env_password != NULL && env_password[0] != '\0') {
+			plen = rspamd_strlcpy(test_password, env_password, sizeof(test_password));
 		}
 		else {
 			plen = rspamd_read_passphrase(test_password, sizeof(test_password),
