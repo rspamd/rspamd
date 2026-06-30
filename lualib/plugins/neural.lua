@@ -1082,9 +1082,50 @@ local function spawn_train(params)
   if params.set.learning_spawned then
     lua_util.debugm(N, rspamd_config, 'spawn_train: training already in progress for %s:%s, skipping',
       params.rule.prefix, params.set.name)
+    if params.on_complete_cb then
+      params.on_complete_cb('training already in progress')
+    end
     return
   end
   params.set.learning_spawned = true
+
+  -- Stats reported to an optional completion callback (used by the controller
+  -- force-train endpoint to reply with the trained model's metadata). spam/ham
+  -- counts are known up front; version/bytes are filled in once the child
+  -- process returns a model.
+  local train_result = {
+    spam = #params.spam_vec,
+    ham = #params.ham_vec,
+  }
+  -- Fire the completion callback exactly once on every terminal outcome. On
+  -- failure `err` is a string and the result is nil; on success err is nil and
+  -- the populated result table is passed through. Callers that don't pass
+  -- on_complete_cb (the periodic auto-train path) are unaffected.
+  local cb_fired = false
+  local function report(err)
+    if params.on_complete_cb and not cb_fired then
+      cb_fired = true
+      params.on_complete_cb(err, err and nil or train_result)
+    end
+  end
+
+  -- Release the trained-from key's Redis lock on the pre-fork failure paths
+  -- below. The post-fork paths already unlock via gen_unlock_cb / save_unlock;
+  -- before this, a create_ann/insufficient-data bailout stranded the lock the
+  -- caller (do_train_ann) had acquired until it expired. HDEL on a key with no
+  -- lock field (e.g. the handle_learn path, which never locks) is a harmless
+  -- no-op.
+  local function unlock_on_failure()
+    lua_redis.redis_make_request_taskless(params.ev_base,
+      rspamd_config,
+      params.rule.redis,
+      nil,
+      true, -- is write
+      gen_unlock_cb(params.rule, params.set, params.ann_key),
+      'HDEL',
+      { params.ann_key, 'lock' }
+    )
+  end
 
   -- Check training data sanity
   -- Now we need to join inputs and create the appropriate test vectors
@@ -1113,15 +1154,22 @@ local function spawn_train(params)
     rspamd_logger.errx(rspamd_config, 'failed to create ANN for %s:%s: %s',
       params.rule.prefix, params.set.name, train_ann)
     params.set.learning_spawned = false
+    unlock_on_failure()
+    report(string.format('failed to create ANN: %s', train_ann))
     return
   end
 
-  if #params.ham_vec + #params.spam_vec < params.rule.train.max_trains / 2 then
+  -- The minimum-corpus gate is skipped for forced training (controller
+  -- force-train endpoint), which only requires both classes to be non-empty.
+  if not params.force and #params.ham_vec + #params.spam_vec < params.rule.train.max_trains / 2 then
     -- Insufficient training data, reset flag and return
     rspamd_logger.errx(rspamd_config, 'insufficient training data for ANN %s:%s: spam=%s ham=%s (need at least %s total)',
       params.rule.prefix, params.set.name,
       #params.spam_vec, #params.ham_vec, params.rule.train.max_trains / 2)
     params.set.learning_spawned = false
+    unlock_on_failure()
+    report(string.format('insufficient training data: spam=%s ham=%s (need %s total)',
+      #params.spam_vec, #params.ham_vec, params.rule.train.max_trains / 2))
     return
   else
     local inputs, outputs = {}, {}
@@ -1334,9 +1382,11 @@ local function spawn_train(params)
           'HDEL',                                                 -- command
           { params.ann_key, 'lock' }
         )
+        report(string.format('cannot save trained ANN to redis: %s', err))
       else
         rspamd_logger.infox(rspamd_config, 'saved ANN %s:%s to redis: %s',
           params.rule.prefix, params.set.name, params.set.ann.redis_key)
+        report(nil)
 
         -- Clean up pending training keys if they were used
         if params.pending_key then
@@ -1379,6 +1429,7 @@ local function spawn_train(params)
           'HDEL',                                                 -- command
           { params.ann_key, 'lock' }
         )
+        report(err or 'training child returned no model (rejected or failed)')
       else
         local parser = ucl.parser()
         local ok, parse_err = parser:parse_text(data, 'msgpack')
@@ -1394,6 +1445,7 @@ local function spawn_train(params)
             'HDEL',
             { params.ann_key, 'lock' }
           )
+          report(string.format('cannot parse training result: %s', parse_err))
           return
         end
         local parsed = parser:get_object()
@@ -1412,6 +1464,7 @@ local function spawn_train(params)
             'HDEL',
             { params.ann_key, 'lock' }
           )
+          report(string.format('rejected: %s', parsed.rejected))
           return
         end
 
@@ -1452,6 +1505,12 @@ local function spawn_train(params)
         params.set.ann.ann = loaded_ann
         params.set.ann.symbols = params.set.symbols
         params.set.ann.redis_key = new_ann_key(params.rule, params.set, version)
+
+        -- Record the trained model's metadata for the completion callback
+        -- (reported once the save_unlock script confirms the write).
+        train_result.version = version
+        train_result.bytes = #ann_data
+        train_result.redis_key = params.set.ann.redis_key
 
         local profile = {
           symbols = params.set.symbols,
@@ -1513,6 +1572,166 @@ local function spawn_train(params)
     register_lock_extender(params.rule, params.set, params.ev_base, params.ann_key)
     return
   end
+end
+
+-- Decompress (zstd) and parse stored training vectors into tables of numbers.
+local function process_training_vectors(data)
+  return fun.totable(fun.map(function(tok)
+    local _, str = rspamd_util.zstd_decompress(tok)
+    return fun.totable(fun.map(tonumber, lua_util.str_split(tostring(str), ';')))
+  end, data))
+end
+
+-- Force a single training run from the vectors already stored in Redis for the
+-- best-matching profile of `set`, bypassing the max_trains / frozen-marker
+-- gate: only both classes being non-empty is required. This decouples the
+-- corpus feed from the train so feed -> train -> serve is deterministic and
+-- repeatable (used by the controller force-train endpoint).
+--
+-- Single-flight is enforced two ways: the in-memory `set.learning_spawned`
+-- flag (per worker) and the cross-process Redis lock on the profile key. The
+-- lock is always released -- spawn_train unlocks on every terminal path
+-- (including its pre-fork bailouts), and the read/selection failures here
+-- unlock explicitly via unlock_and_fail.
+--
+-- Invokes cb(err) on failure or cb(nil, result) on success, exactly once;
+-- result carries { spam, ham, bytes, version, redis_key }.
+local function force_train_from_redis(worker, ev_base, rule, set, cb)
+  local has_providers = rule.providers and #rule.providers > 0
+  local current_providers_digest = has_providers and
+      providers_config_digest(rule.providers, rule) or nil
+
+  if set.learning_spawned then
+    cb('training already in progress for this rule/settings')
+    return
+  end
+
+  -- Step 1: read the profile registry and pick the profile training vectors
+  -- were accumulated against (compatible, dist == 0, highest version). This
+  -- mirrors the selection in maybe_train_existing_ann / process_existing_ann.
+  local function profiles_cb(err, data)
+    if err then
+      cb(string.format('cannot read ANN profiles from redis: %s', err))
+      return
+    end
+    if type(data) ~= 'table' or #data == 0 then
+      cb('no ANN profiles found for this rule/settings (feed training vectors first)')
+      return
+    end
+
+    local sel_elt
+    for _, raw in ipairs(data) do
+      local parser = ucl.parser()
+      if parser:parse_string(raw) then
+        local elt = parser:get_object()
+        local compatible, dist = is_profile_compatible(rule, set, elt, current_providers_digest)
+        if compatible and dist == 0 then
+          if not sel_elt or (elt.version or 0) > (sel_elt.version or 0) then
+            sel_elt = elt
+          end
+        end
+      end
+    end
+
+    if not sel_elt then
+      cb('no compatible ANN profile found (feed training vectors first)')
+      return
+    end
+
+    local ann_key = sel_elt.redis_key
+    local pending_key = pending_train_key(rule, set)
+
+    -- Step 2: acquire the per-profile training lock (cross-process guard).
+    local function lock_cb(lock_err, lock_data)
+      if lock_err then
+        cb(string.format('cannot acquire training lock: %s', lock_err))
+        return
+      end
+      if not (type(lock_data) == 'number' and lock_data == 1) then
+        local host = (type(lock_data) == 'table' and lock_data[2]) or 'another host'
+        cb(string.format('ANN %s is locked for training by %s', ann_key, host))
+        return
+      end
+
+      -- Lock held from here. Any failure path before spawn_train must release
+      -- it; once spawn_train starts it owns unlocking (all its terminal paths
+      -- unlock).
+      local function unlock_and_fail(msg)
+        lua_redis.redis_make_request_taskless(ev_base, rspamd_config, rule.redis,
+          nil, true, gen_unlock_cb(rule, set, ann_key), 'HDEL', { ann_key, 'lock' })
+        cb(msg)
+      end
+
+      local spam_elts
+
+      -- Step 3: load spam+ham vectors, unioning the versioned key with the
+      -- version-independent pending key (same as do_train_ann).
+      local function ham_cb(herr, hdata)
+        if herr or type(hdata) ~= 'table' then
+          unlock_and_fail(string.format('cannot read ham vectors: %s', herr or 'unexpected reply'))
+          return
+        end
+        local ham_elts = process_training_vectors(hdata)
+
+        if #spam_elts == 0 or #ham_elts == 0 then
+          unlock_and_fail(string.format('both classes must be non-empty (spam=%s ham=%s)',
+            #spam_elts, #ham_elts))
+          return
+        end
+
+        -- Final single-flight check immediately before handing the lock to
+        -- spawn_train. There is no await between this check and spawn_train
+        -- setting learning_spawned, so it is atomic against the controller's
+        -- periodic trainer touching the same set in-process.
+        if set.learning_spawned then
+          unlock_and_fail('training already in progress for this rule/settings')
+          return
+        end
+
+        spawn_train {
+          worker = worker,
+          ev_base = ev_base,
+          rule = rule,
+          set = set,
+          ann_key = ann_key,
+          spam_vec = spam_elts,
+          ham_vec = ham_elts,
+          pending_key = pending_key,
+          force = true,
+          on_complete_cb = cb,
+        }
+      end
+
+      local function spam_cb(serr, sdata)
+        if serr or type(sdata) ~= 'table' then
+          unlock_and_fail(string.format('cannot read spam vectors: %s', serr or 'unexpected reply'))
+          return
+        end
+        spam_elts = process_training_vectors(sdata)
+        lua_redis.redis_make_request_taskless(ev_base, rspamd_config, rule.redis,
+          nil, false, ham_cb, 'SUNION',
+          { ann_key .. '_ham_set', pending_key .. '_ham_set' })
+      end
+
+      lua_redis.redis_make_request_taskless(ev_base, rspamd_config, rule.redis,
+        nil, false, spam_cb, 'SUNION',
+        { ann_key .. '_spam_set', pending_key .. '_spam_set' })
+    end
+
+    lua_redis.exec_redis_script(redis_script_id.maybe_lock,
+      { ev_base = ev_base, is_write = true },
+      lock_cb,
+      {
+        ann_key,
+        tostring(os.time()),
+        tostring(math.floor(math.max(10.0, rule.watch_interval * 2))),
+        rspamd_util.get_hostname()
+      })
+  end
+
+  lua_redis.redis_make_request_taskless(ev_base, rspamd_config, rule.redis,
+    nil, false, profiles_cb, 'ZREVRANGE',
+    { set.prefix, '0', tostring(settings.max_profiles) })
 end
 
 -- This function is used to adjust profiles and allowed setting ids for each rule
@@ -1726,6 +1945,7 @@ return {
   default_options = default_options,
   build_providers_meta = build_providers_meta,
   apply_normalization = apply_normalization,
+  force_train_from_redis = force_train_from_redis,
   gen_unlock_cb = gen_unlock_cb,
   get_provider = get_provider,
   get_rule_settings = get_rule_settings,
