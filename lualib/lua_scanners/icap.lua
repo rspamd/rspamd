@@ -282,7 +282,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
       local function get_http_headers()
         local http_hlen = 2
-        table.insert(http_headers, 'HTTP/1.0 200 OK\r\n')
+        table.insert(http_headers, 1, 'HTTP/1.0 200 OK\r\n')
         table.insert(http_headers, string.format('Date: %s\r\n', rspamd_util.time_to_string(rspamd_util.get_time())))
         table.insert(http_headers, string.format('Server: %s\r\n', 'Apache/2.4'))
         if rule.user_agent ~= "none" then
