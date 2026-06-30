@@ -1982,6 +1982,9 @@ lua_parse_symbol_flags(const char *str)
 		if (strstr(str, "coro") != NULL) {
 			ret |= SYMBOL_TYPE_USE_CORO;
 		}
+		if (strstr(str, "learn_needs_check") != NULL) {
+			ret |= SYMBOL_TYPE_LEARN_NEEDS_CHECK;
+		}
 	}
 
 	return ret;
@@ -2032,6 +2035,10 @@ lua_parse_symbol_type(const char *str)
 				else if (g_ascii_strcasecmp(str, "idempotent") == 0) {
 					ret |= SYMBOL_TYPE_GHOST |
 						   SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
+				}
+				else if (g_ascii_strcasecmp(str, "learn") == 0) {
+					ret |= SYMBOL_TYPE_GHOST |
+						   SYMBOL_TYPE_LEARN | SYMBOL_TYPE_CALLBACK;
 				}
 				else {
 					int fl = 0;

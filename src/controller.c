@@ -2019,7 +2019,7 @@ rspamd_controller_learn_fin_task(void *ud)
 		return TRUE;
 	}
 
-	if (!rspamd_task_process(task, RSPAMD_TASK_PROCESS_LEARN)) {
+	if (!rspamd_task_process(task, rspamd_symcache_learn_needs_check(task->cfg->cache) ? RSPAMD_TASK_PROCESS_LEARN_CHECK : RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_info_task("cannot learn <%s>: %e",
 					  MESSAGE_FIELD_CHECK(task, message_id), task->err);
 
@@ -2184,7 +2184,7 @@ rspamd_controller_handle_learn_common(
 	class_name = is_spam ? "spam" : "ham";
 	rspamd_task_set_autolearn_class(task, class_name);
 
-	if (!rspamd_task_process(task, RSPAMD_TASK_PROCESS_LEARN)) {
+	if (!rspamd_task_process(task, rspamd_symcache_learn_needs_check(task->cfg->cache) ? RSPAMD_TASK_PROCESS_LEARN_CHECK : RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_warn_session("<%s> message cannot be processed",
 						 MESSAGE_FIELD_CHECK(task, message_id));
 		goto end;
@@ -2299,7 +2299,7 @@ rspamd_controller_handle_learnclass(
 	class_name = rspamd_mempool_ftokdup(task->task_pool, class_header);
 	rspamd_task_set_autolearn_class(task, class_name);
 
-	if (!rspamd_task_process(task, RSPAMD_TASK_PROCESS_LEARN)) {
+	if (!rspamd_task_process(task, rspamd_symcache_learn_needs_check(task->cfg->cache) ? RSPAMD_TASK_PROCESS_LEARN_CHECK : RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_warn_session("<%s> message cannot be processed",
 						 MESSAGE_FIELD_CHECK(task, message_id));
 		goto end;
