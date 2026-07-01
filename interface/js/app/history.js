@@ -22,19 +22,13 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
             common.hide("#selSymOrder_history, label[for='selSymOrder_history']");
 
             $.each(data, (i, item) => {
-                item.time = libft.unix_time_format(item.unix_time);
                 libft.preprocess_item(item);
                 item.symbols = Object.keys(item.symbols)
                     .map((key) => item.symbols[key])
                     .sort(compare)
                     .map((e) => e.name)
                     .join(", ");
-                item.time = {
-                    value: libft.unix_time_format(item.unix_time),
-                    options: {
-                        sortValue: item.unix_time
-                    }
-                };
+                item.time = item.unix_time;
 
                 items.push(item);
             });
@@ -44,58 +38,75 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
 
         function columns_legacy() {
             return [{
-                name: "id",
+                formatter: "responsiveCollapse",
+                width: 23,
+                minWidth: 23,
+                responsive: 0,
+                hozAlign: "center",
+                resizable: false,
+                headerSort: false,
+            }, {
                 title: "ID",
-                style: {
-                    width: 300,
-                    maxWidth: 300,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    wordBreak: "keep-all",
-                    whiteSpace: "nowrap"
-                }
+                field: "id",
+                responsive: 0,
+                minWidth: 300,
             }, {
-                name: "ip",
                 title: "IP address",
-                breakpoints: "md",
-                style: {width: 150, maxWidth: 150}
+                field: "ip",
+                responsive: 2,
+                minWidth: 98,
+                width: 98,
             }, {
-                name: "action",
                 title: "Action",
-                style: {width: 110, maxWidth: 110}
+                field: "action",
+                responsive: 0,
+                minWidth: 110,
+                width: 110,
             }, {
-                name: "score",
                 title: "Score",
-                style: {maxWidth: 110},
-                sortValue: (val) => Number(val.options.sortValue)
+                field: "score",
+                responsive: 0,
+                sorter: "number",
+                minWidth: 110,
+                width: 110,
             }, {
-                name: "symbols",
                 title: "Symbols",
-                breakpoints: "all",
-                style: {width: 550, maxWidth: 550}
+                field: "symbols",
+                formatter: "html",
+                // responsive:100 collapses first; the large minWidth forces
+                // overflow at any realistic width so symbols always renders in
+                // the detail row.
+                responsive: 100,
+                minWidth: 4000,
             }, {
-                name: "size",
                 title: "Message size",
-                breakpoints: "md",
-                style: {width: 120, maxWidth: 120},
-                formatter: libft.formatBytesIEC
+                field: "size",
+                responsive: 2,
+                sorter: "number",
+                formatter: (cell) => libft.formatBytesIEC(cell.getValue()),
+                minWidth: 120,
+                width: 120,
             }, {
-                name: "scan_time",
                 title: "Scan time",
-                breakpoints: "md",
-                style: {maxWidth: 80},
-                sortValue: (val) => Number(val)
+                field: "scan_time",
+                responsive: 2,
+                sorter: "number",
+                minWidth: 80,
+                width: 80,
             }, {
-                sorted: true,
-                direction: "DESC",
-                name: "time",
                 title: "Time",
-                sortValue: (val) => Number(val.options.sortValue)
+                field: "time",
+                responsive: 0,
+                sorter: "number",
+                formatter: (cell) => libft.unix_time_format(cell.getValue()),
+                minWidth: 130,
+                width: 130,
             }, {
-                name: "user",
                 title: "Authenticated user",
-                breakpoints: "md",
-                style: {width: 200, maxWidth: 200}
+                field: "user",
+                responsive: 2,
+                minWidth: 200,
+                width: 200,
             }];
         }
 
@@ -175,16 +186,15 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
 
                         if (Object.prototype.hasOwnProperty.call(common.tables, "history") &&
                             version === prevVersion) {
-                            common.tables.history.rows.load(items);
+                            common.tables.history.setData(items);
                         } else {
-                            libft.destroyTable("history").then(() => {
-                                libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
-                                    () => {
-                                        $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
-                                        ui.updateHistoryControlsState();
-                                        if (version) libft.bindFuzzyHashButtons("history");
-                                    });
-                            });
+                            libft.destroyTable("history");
+                            libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
+                                () => {
+                                    $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
+                                    ui.updateHistoryControlsState();
+                                    if (version) libft.bindFuzzyHashButtons("history");
+                                });
                         }
                         prevVersion = version;
                     } else {
@@ -201,6 +211,9 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                 layout: "fitColumns",
                 responsiveLayout: "collapse",
                 responsiveLayoutCollapseStartOpen: false,
+                // Values are HTML-escaped upstream (getErrors); render as HTML so
+                // entities decode instead of showing literally via "plaintext".
+                columnDefaults: {formatter: "html"},
                 selectable: false,
                 pagination: "local",
                 paginationSize: common.page_size.errors,
@@ -211,8 +224,8 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                     {
                         // Toggle to expand collapsed (responsive) columns
                         formatter: "responsiveCollapse",
-                        width: 36,
-                        minWidth: 36,
+                        width: 23,
+                        minWidth: 23,
                         responsive: 0,
                         hozAlign: "center",
                         resizable: false,

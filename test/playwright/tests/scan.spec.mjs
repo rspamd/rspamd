@@ -59,22 +59,26 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
      * @param {boolean} needsExpand - Whether row needs to be expanded
      */
     async function testSymbolOrdering(table, needsExpand) {
-        const tableLocator = page.locator(`#historyTable_${table} tbody`);
-        const firstRow = tableLocator.locator("tr").first();
+        const tableLocator = page.locator(`#historyTable_${table} .tabulator-table`);
+        const firstRow = tableLocator.locator(".tabulator-row").first();
         await expect(firstRow).toBeVisible();
 
-        if (needsExpand) {
+        // Tabulator renders the responsive-collapse detail as a descendant of the
+        // row element (.tabulator-responsive-collapse), not a FooTable sibling row.
+        // Only expand when collapsed: a prior test may have left the row open, and a
+        // blind click would collapse it again.
+        const detailRow = firstRow.locator(".tabulator-responsive-collapse");
+        if (needsExpand && !(await detailRow.isVisible())) {
             await firstRow.click();
-            await page.waitForTimeout(200); // Wait for expand animation
         }
-
-        // Get the detail row that immediately follows the row we clicked/selected
-        const detailRow = firstRow.locator("+ tr.footable-detail-row");
         await expect(detailRow).toBeVisible();
 
-        // Find the symbols row within the detail table (identified by the th containing sort buttons)
-        const symbolsRow = detailRow.locator("tr:has(th:has(.sym-order-toggle))");
-        const symbolsCell = symbolsRow.locator("td");
+        // The collapse lays each hidden column out as
+        // <tr><td><strong>TITLE</strong></td><td>VALUE</td></tr>. The symbols column
+        // title embeds the .sym-order-toggle sort buttons, and the symbol HTML is the
+        // value cell (the second td in that row).
+        const symbolsRow = detailRow.locator("tr:has(.sym-order-toggle)");
+        const symbolsCell = symbolsRow.locator("td").nth(1);
 
         // Get initial symbols order
         let previousSymbols = await symbolsCell.innerHTML();
@@ -137,8 +141,9 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
                 await expectAlertSuccess("Data successfully scanned");
                 await expect(
-                    page.locator(`#historyTable_scan tbody tr:first-child td.footable-first-visible:has-text("${msgId}")`)
-                ).toBeVisible();
+                    page.locator("#historyTable_scan .tabulator-row").first()
+                        .locator('.tabulator-cell[tabulator-field="id"]')
+                ).toContainText(msgId);
             }
         });
 
@@ -154,10 +159,11 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             // Check both scanned messages are present in reverse order
             for (let i = 0; i < scannedSubjects.length; i++) {
                 const subject = scannedSubjects[scannedSubjects.length - 1 - i]; // reverse order
-                await expect(
-                    page.locator("#historyTable_history tbody tr").nth(i)
-                        .locator(`td:has-text("${subject}")`)
-                ).toBeVisible();
+                const row = page.locator("#historyTable_history .tabulator-row").nth(i);
+                // The Subject column can collapse into the detail row depending on
+                // viewport width, so expand the row and match against its full text.
+                await row.click();
+                await expect(row).toContainText(subject);
             }
         });
 
@@ -172,11 +178,19 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             page.once("dialog", (dialog) => dialog.accept());
             await resetBtn.click();
 
-            const updateHistoryBtn = page.locator("#updateHistory");
-            await expect(updateHistoryBtn).toBeDisabled();
-            await expect(updateHistoryBtn).not.toBeDisabled();
+            // The reload disables #updateHistory only for the duration of the
+            // fast, local history request, which is too brief to assert on the
+            // DOM. Wait for the reset and the subsequent reload responses instead.
+            await page.waitForResponse((r) => r.url().includes("historyreset"), {timeout: 10000});
+            await page.waitForResponse(
+                (r) => r.url().includes("history") && r.url().includes("from="),
+                {timeout: 10000}
+            );
 
-            const rows = await page.locator("#historyTable_history tbody tr").count();
+            const updateHistoryBtn = page.locator("#updateHistory");
+            await expect(updateHistoryBtn).toBeEnabled();
+
+            const rows = await page.locator("#historyTable_history .tabulator-row").count();
             // Known bug: Rspamd leaves one row after history reset
             expect([0, 1]).toContain(rows);
         });

@@ -253,11 +253,18 @@ textarea {
    (e.g. the "W" in "Worker type" was clipped on the left). */
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
     padding-left: 1px;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable .tabulator-col-content .tabulator-col-title {
+    padding-right: 15px;
 }
 /* Header filter input — render as a Bootstrap form-control.
    appearance:none drops the UA search-input chrome that ignored the
-   dark background (input looked too light in dark mode). */
-.tabulator .tabulator-header-filter input {
+   dark background (input looked too light in dark mode).
+   Scoped to text-like inputs so it does not strip the native checkbox
+   (the action filter's "not" toggle) of its checkmark and stretch it. */
+.tabulator .tabulator-header-filter input:not([type="checkbox"], [type="radio"]) {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -302,7 +309,7 @@ textarea {
 }
 
 .tabulator-row .tabulator-cell {
-    padding: 8px;
+    padding: 4px;
     border-right: none;
     white-space: normal;
     overflow-wrap: break-word;
@@ -381,13 +388,18 @@ textarea {
 
 /* Responsive collapse (detail row) */
 .tabulator-row .tabulator-responsive-collapse {
-    border-top: 1px solid var(--bs-border-color);
     border-bottom: 1px solid var(--bs-border-color);
     background-color: var(--bs-body-bg);
     color: var(--bs-body-color);
 }
 .tabulator-row .tabulator-responsive-collapse table {
-    font-size: 14px;
+    font-size: 11px;
+    border-collapse: collapse;
+}
+/* Separator between the detail rows (one per collapsed column); except for
+   the first row, whose top border is omitted to avoid doubling the detail's top edge. */
+.tabulator-row .tabulator-responsive-collapse tr:not(:first-child) {
+    border-top: 1px solid var(--bs-border-color);
 }
 
 /* Footer / pagination */
@@ -594,6 +606,7 @@ input.action-scores {
 .status-table td:last-child {
     border-right: none;
 }
+/* stylelint-disable no-descending-specificity -- tabulator selectors are grouped before the legacy .status-table/.footable rules below; harmless until those are removed */
 .status-table thead tr {
     border-top: none;
 }
@@ -601,6 +614,7 @@ input.action-scores {
 .status-table tr:last-child td {
     border-bottom: none;
 }
+/* stylelint-enable no-descending-specificity */
 
 .footable-header,
 .footable tr:not(.footable-detail-row) > td {

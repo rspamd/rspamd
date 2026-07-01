@@ -10,6 +10,10 @@ define(["app/common"],
         const tabUtils = {};
 
         let scrollIntoViewPatched = false;
+        // Tabulator's destroy() clears a table's children but leaves the mount
+        // element (and listeners attached to it) in place, so a destroy+re-init
+        // would stack handlers. Keyed by element to keep one handler per table.
+        const rowToggleHandlers = new WeakMap();
 
         /**
          * Patch Element.prototype.scrollIntoView once so that calls for elements
@@ -57,17 +61,27 @@ define(["app/common"],
          * (instead of just the tiny toggle icon). Skips when selecting text,
          * clicking form elements (inputs, selects — e.g. the Score column),
          * and when collapse is not active (toggle hidden).
+         *
+         * Idempotent across destroy+re-init: destroy() leaves the mount element
+         * and its listeners in place, so without removing the previous handler a
+         * rebuild would bind a second one and row clicks would no-op (the two
+         * handlers toggle the row open then shut).
          */
         tabUtils.bindRowClickToggle = function (table) {
-            common.tables[table].element.addEventListener("click", (e) => {
+            const el = common.tables[table].element;
+            const prev = rowToggleHandlers.get(el);
+            if (prev) el.removeEventListener("click", prev);
+            function handler(e) {
                 const row = e.target.closest(".tabulator-row");
                 if (!row) return;
-                if (e.target.closest("input, select, textarea, button")) return;
+                if (e.target.closest("input, select, textarea, button, .sym-order-toggle")) return;
                 const sel = window.getSelection && window.getSelection();
                 if (sel && sel.toString()) return;
                 const toggle = row.querySelector(".tabulator-responsive-collapse-toggle");
                 if (toggle && toggle.offsetParent) toggle.click();
-            });
+            }
+            el.addEventListener("click", handler);
+            rowToggleHandlers.set(el, handler);
         };
 
         /**
@@ -102,13 +116,23 @@ define(["app/common"],
                 });
             }
 
-            t.element.addEventListener("click", arm, true);
+            // Arm on click plus change/input. A header-filter <select> changes
+            // (and triggers a filter re-render) long after its opening click, by
+            // which time an intervening renderComplete may have disarmed us;
+            // re-arming on change/input keeps the preservation live for that render.
+            ["click", "change", "input"].forEach((evt) => t.element.addEventListener(evt, arm, true));
             armTriggers.forEach((el) => el.addEventListener("click", arm, true));
 
             t.on("renderStarted", () => {
                 if (clickArmed) preserveUntil = performance.now() + renderMs;
             });
             t.on("renderComplete", () => {
+                // The render path scrolls the window asynchronously — the scroll
+                // event (and the listener below) lands a frame late, so the jump
+                // flashes for one frame. Restore synchronously here, before paint.
+                if (clickArmed && window.scrollY !== preserveY) {
+                    window.scrollTo(0, preserveY);
+                }
                 clickArmed = false;
             });
 
