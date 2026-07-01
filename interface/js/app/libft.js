@@ -153,6 +153,117 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             return value + " " + unit;
         };
 
+        // ── Global (boolean) query filter ─────────────────────────────────
+        // A single search box per table driving a Tabulator setFilter(). The
+        // query language is ported from FooTable's built-in filtering:
+        //   `foo bar`        → foo AND bar            (whitespace is AND)
+        //   `foo OR bar`     → foo OR bar
+        //   `foo -bar`       → foo AND NOT bar        (leading "-" negates)
+        //   `"soft reject"`  → exact contiguous phrase
+        //   `foo bar OR baz` → (foo AND bar) OR baz
+        // Matching is case-insensitive substring. Quotes are honoured when
+        // splitting on AND/OR, so a phrase may itself contain those words.
+        // The setFilter() predicate ANDs with the per-column header filters.
+        const SEARCH_FIELDS = ["id", "ip", "sender_mime", "rcpt_mime", "rcpt_mime_short",
+            "subject", "user", "passthrough_module", "file", "action"];
+        // Haystack cache keyed by row data object (see buildSearchHaystack).
+        const haystackCache = new WeakMap();
+
+        function decodeEntities(str) {
+            // Values are HTML-escaped upstream (preprocess_item); decode so a
+            // literal "&" or "<" typed in the box still matches. &amp; last to
+            // avoid double-decoding entities like &amp;lt;.
+            return str.replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+                .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+        }
+
+        // Compile a query string into a {test(haystack)} predicate, or null when
+        // the query is blank (meaning "no filter"). Tokenize keeping quoted
+        // phrases intact; "AND"/"OR" are operators; a leading "-" negates the
+        // following term or phrase.
+        function compileFilterQuery(input) {
+            if (!input || !input.trim()) return null;
+            const tokens = input.match(/"[^"]*"|\S+/g) || [];
+            const groups = [[]]; // OR of AND-groups
+            tokens.forEach((token) => {
+                if (token.toUpperCase() === "OR") {
+                    groups.push([]);
+                    return;
+                }
+                if (token.toUpperCase() === "AND") return;
+                let term = token;
+                const negate = term.charAt(0) === "-";
+                if (negate) term = term.slice(1);
+                const quoted = term.length >= 2 && term.charAt(0) === '"' && term.slice(-1) === '"';
+                if (quoted) term = term.slice(1, -1);
+                if (!term) return;
+                groups[groups.length - 1].push({q: term.toLowerCase(), negate});
+            });
+            // Drop groups left empty by dangling/leading/doubled operators
+            // (e.g. "foo OR", "OR foo", "foo OR OR bar") so they don't match all
+            // rows via [].every() vacuous truth.
+            const orGroups = groups.filter((g) => g.length);
+            if (!orGroups.length) return null;
+            return {
+                test(haystack) {
+                    return orGroups.some((group) => group.every((t) => {
+                        const found = haystack.indexOf(t.q) !== -1;
+                        return t.negate ? !found : found;
+                    }));
+                }
+            };
+        }
+
+        // Lowercased searchable text for a row. Numeric/formatted columns (time,
+        // time_real, size, score) are excluded — their raw values are useless for
+        // free-text search, and the per-column header filters cover them. Memoized
+        // in a WeakMap keyed by the data object so it is built once per row, not
+        // on every keystroke; entries are GC'd when the row data is replaced.
+        function buildSearchHaystack(data) {
+            if (haystackCache.has(data)) return haystackCache.get(data);
+            let s = SEARCH_FIELDS.map((f) => (typeof data[f] === "string" ? data[f] : "")).join(" ");
+            if (data.symbols_obj) {
+                s += " " + Object.values(data.symbols_obj)
+                    .map((sym) => sym.name + " " + (sym.description || ""))
+                    .join(" ");
+            }
+            s = decodeEntities(s).toLowerCase();
+            haystackCache.set(data, s);
+            return s;
+        }
+
+        // Apply the current filter box value to the table, or clear it. Reads the
+        // Tabulator instance lazily so it works across a destroy+re-init.
+        function applyGlobalFilter(table) {
+            const tab = common.tables[table];
+            if (!tab) return;
+            const input = document.getElementById("filter_" + table);
+            const compiled = compileFilterQuery(input ? input.value : null);
+            if (!compiled) {
+                tab.clearFilter();
+                return;
+            }
+            tab.setFilter((data) => compiled.test(buildSearchHaystack(data)));
+        }
+
+        // Bind the filter box: live, debounced. Bound once per table; the handler
+        // resolves the current instance at fire time, so it survives rebuilds.
+        function bindGlobalFilter(table) {
+            const input = document.getElementById("filter_" + table);
+            if (!input) return;
+            input.title = "Search syntax: match all rows containing\n\n" +
+                '"exact phrase" — exact string (including spaces)\n' +
+                "term1 OR term2 — either term\n" +
+                "term1 AND term2 — both terms\n" +
+                "term1 term2 — both terms (same as AND)\n" +
+                "term1 -term2 — term1 but exclude rows with term2";
+            let timer = null;
+            input.addEventListener("input", () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => applyGlobalFilter(table), 250);
+            });
+        }
+
         ui.columns_v2 = function (table) {
             const cols = [{
                 // Toggle to expand collapsed (responsive) columns
@@ -166,18 +277,21 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             }, {
                 title: "ID",
                 field: "id",
+                headerFilter: "input",
                 responsive: 0,
                 minWidth: 130,
                 widthGrow: 2,
             }, {
                 title: "File name",
                 field: "file",
+                headerFilter: "input",
                 responsive: 1,
                 minWidth: 260,
                 widthGrow: 4,
             }, {
                 title: "IP address",
                 field: "ip",
+                headerFilter: "input",
                 responsive: 3,
                 minWidth: 98,
                 width: 98,
@@ -185,6 +299,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             }, {
                 title: "[Envelope From] From",
                 field: "sender_mime",
+                headerFilter: "input",
                 responsive: 3,
                 minWidth: 100,
                 maxWidth: 200,
@@ -203,6 +318,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             }, {
                 title: "Subject",
                 field: "subject",
+                headerFilter: "input",
                 responsive: 3,
                 minWidth: 150,
                 widthGrow: 2,
@@ -218,6 +334,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             }, {
                 title: '<div title="The module that has set the pre-result"><nobr>Pass-through</nobr> module</div>',
                 field: "passthrough_module",
+                headerFilter: "input",
                 minWidth: 98,
                 width: 98,
             }, {
@@ -265,6 +382,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             }, {
                 title: "Authenticated user",
                 field: "user",
+                headerFilter: "input",
                 responsive: 3,
                 minWidth: 100,
                 maxWidth: 130,
@@ -322,6 +440,8 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                 $("#selSymOrder_" + table).val(order);
                 change_symbols_order(order);
             });
+
+            bindGlobalFilter(table);
         };
 
         ui.destroyTable = function (table) {
@@ -369,6 +489,11 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
 
             common.tables[table].on("tableBuilt", () => {
                 setActiveSymOrderButton(table);
+                // Re-apply a global filter in place when the table was rebuilt
+                // (e.g. via the column-options dropdown): a fresh Tabulator
+                // instance starts unfiltered, but the search box keeps its value.
+                const filterBox = document.getElementById("filter_" + table);
+                if (filterBox && filterBox.value.trim()) applyGlobalFilter(table);
             });
             if (postdrawCallback) common.tables[table].on("renderComplete", postdrawCallback);
             // The "Sort by:" buttons are rendered inside each row's collapsed

@@ -247,7 +247,22 @@ textarea {
     border-right: none;
 }
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+    /* Lay out as a column that fills the header cell, so the header-filter can
+       be pushed to a shared bottom baseline. Column titles wrap to differing
+       numbers of lines, which otherwise leaves the filters misaligned. */
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
     padding: 8px;
+}
+/* Grow the title holder to fill the content cell so it pushes the
+   header-filter (its following sibling) down to a shared bottom baseline.
+   Column titles wrap to differing numbers of lines, which otherwise leaves
+   the filters misaligned. Growing the holder is used instead of an auto
+   margin on the filter: the cell's height comes from flex-grow, and auto
+   margins don't distribute reliably against a flex-determined size. */
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder {
+    flex-grow: 1;
 }
 /* Keep the first glyph's left bearing clear of the title's overflow:hidden
    (e.g. the "W" in "Worker type" was clipped on the left). */
@@ -259,6 +274,12 @@ textarea {
 .tabulator .tabulator-header .tabulator-col.tabulator-sortable .tabulator-col-content .tabulator-col-title {
     padding-right: 15px;
 }
+/* Drop the filter to the bottom of the (flex-column) content so every
+   column's filter shares one baseline, regardless of title wrap height. */
+.tabulator .tabulator-header-filter {
+    margin-top: auto;
+}
+
 /* Header filter input — render as a Bootstrap form-control.
    appearance:none drops the UA search-input chrome that ignored the
    dark background (input looked too light in dark mode).
