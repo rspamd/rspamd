@@ -14,6 +14,10 @@ define(["app/common"],
         // element (and listeners attached to it) in place, so a destroy+re-init
         // would stack handlers. Keyed by element to keep one handler per table.
         const rowToggleHandlers = new WeakMap();
+        // Same leak mode as rowToggleHandlers, but installScrollPreservation also
+        // binds a window "scroll" listener and (optionally) arm-trigger listeners;
+        // all stored here so a rebuild can remove the previous set first.
+        const scrollPreservationHandlers = new WeakMap();
 
         /**
          * Patch Element.prototype.scrollIntoView once so that calls for elements
@@ -94,7 +98,20 @@ define(["app/common"],
          */
         tabUtils.installScrollPreservation = function (table, options) {
             const t = common.tables[table];
+            const el = t.element;
             const {clickMs = 250, renderMs = 400, armTriggers = []} = options || {};
+
+            // destroy()+re-init leaves the mount element (and window) in place, so
+            // each rebuild would stack a fresh listener set that is never released
+            // — a memory/listener leak. Tear down the previous set first. Mirrors
+            // bindRowClickToggle's WeakMap guard; keyed by the mount element.
+            const prev = scrollPreservationHandlers.get(el);
+            if (prev) {
+                ["click", "change", "input"].forEach((evt) => el.removeEventListener(evt, prev.arm, true));
+                prev.armTriggerEls.forEach((trigger) => trigger.removeEventListener("click", prev.arm, true));
+                window.removeEventListener("scroll", prev.onScroll, true);
+            }
+
             let preserveY = 0;
             let preserveUntil = 0;
             let clickArmed = false;
@@ -116,12 +133,17 @@ define(["app/common"],
                 });
             }
 
+            function onScroll() {
+                if (performance.now() >= preserveUntil) return;
+                if (window.scrollY !== preserveY) window.scrollTo(0, preserveY);
+            }
+
             // Arm on click plus change/input. A header-filter <select> changes
             // (and triggers a filter re-render) long after its opening click, by
             // which time an intervening renderComplete may have disarmed us;
             // re-arming on change/input keeps the preservation live for that render.
-            ["click", "change", "input"].forEach((evt) => t.element.addEventListener(evt, arm, true));
-            armTriggers.forEach((el) => el.addEventListener("click", arm, true));
+            ["click", "change", "input"].forEach((evt) => el.addEventListener(evt, arm, true));
+            armTriggers.forEach((trigger) => trigger.addEventListener("click", arm, true));
 
             t.on("renderStarted", () => {
                 if (clickArmed) preserveUntil = performance.now() + renderMs;
@@ -136,10 +158,9 @@ define(["app/common"],
                 clickArmed = false;
             });
 
-            window.addEventListener("scroll", () => {
-                if (performance.now() >= preserveUntil) return;
-                if (window.scrollY !== preserveY) window.scrollTo(0, preserveY);
-            }, true);
+            window.addEventListener("scroll", onScroll, true);
+
+            scrollPreservationHandlers.set(el, {arm, onScroll, armTriggerEls: armTriggers});
         };
 
         return tabUtils;
