@@ -27,7 +27,7 @@ The Rspamd WebUI is a single-page application (SPA) providing a web interface fo
 - **D3.js** - Base visualization library
 - **D3Evolution** - Time-series line charts (throughput graphs)
 - **D3Pie** - Pie charts (action distribution)
-- **FooTable** - Responsive data tables with sorting, filtering, and pagination
+- **Tabulator** - Responsive data tables with sorting, filtering, and pagination
 
 ### Code Editing
 - **CodeJar** - Lightweight code editor
@@ -64,8 +64,7 @@ interface/
 │   │   ├── config.js      # Configuration tab (actions, maps)
 │   │   ├── upload.js      # Scan tab (message upload/scanning)
 │   │   ├── selectors.js   # Selectors tab (testing selectors)
-│   │   ├── libft.js       # FooTable utilities (history table rendering)
-│   │   └── footable-fontawesome.js  # FooTable Font Awesome integration
+│   │   └── libft.js       # Tabulator table utilities (history/scan rendering)
 │   └── lib/               # Third-party libraries (minified)
 ├── img/                   # Images and logos
 └── README.md              # Setup instructions
@@ -130,7 +129,7 @@ Renders time-series graphs and pie charts (Throughput tab) using D3Evolution and
 ### Message History
 `js/app/history.js` (data fetching), `js/app/libft.js` (table rendering)
 
-Displays processed message history (History tab), handles FooTable initialization, row expansion, symbol details
+Displays processed message history (History tab), handles Tabulator initialization, row expansion, symbol details
 
 ### Configuration Management
 `js/app/config.js`
@@ -155,12 +154,7 @@ Tests Rspamd selectors against messages (Selectors tab)
 ### Table Utilities
 `js/app/libft.js`
 
-Shared utilities for FooTable: data preprocessing, table initialization, pagination, sorting
-
-### FooTable Icons
-`js/app/footable-fontawesome.js`
-
-Integrates Font Awesome icons with FooTable
+Shared Tabulator table utilities: data preprocessing, table initialization, pagination, sorting
 
 ## Data Flow
 
@@ -180,9 +174,9 @@ Use function expressions `function() {}` when you need `this` context (event tar
 Most API communication goes through `common.query(endpoint, options)` which handles multi-server requests, authentication, progress tracking, and error handling.
 
 ### Table Management
-Tables use FooTable library. Two main patterns:
-- **Initial load**: destroy old table → process data → initialize FooTable → bind event handlers
-- **Update data**: use FooTable API to update existing table without re-initialization
+Tables use Tabulator. Two main patterns:
+- **Initial load**: destroy old table → process data → initialize Tabulator → bind event handlers
+- **Update data**: use Tabulator API to update existing table without re-initialization
 
 ### Module Structure
 Each tab module returns a `ui` object with public methods (e.g., `ui.getSymbols()`, `ui.draw()`). These methods are called when tabs are activated.
@@ -202,7 +196,7 @@ Each tab module returns a `ui` object with public methods (e.g., `ui.getSymbols(
 
 **Global state:**
 - `common.neighbours[]` - Configured servers
-- `common.tables{}` - FooTable instances
+- `common.tables{}` - Tabulator instances
 - `timer_id[]` - Active refresh timers
 - `checked_server` - Currently selected server
 

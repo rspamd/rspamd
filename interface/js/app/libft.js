@@ -155,7 +155,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
 
         // ── Global (boolean) query filter ─────────────────────────────────
         // A single search box per table driving a Tabulator setFilter(). The
-        // query language is ported from FooTable's built-in filtering:
+        // query language:
         //   `foo bar`        → foo AND bar            (whitespace is AND)
         //   `foo OR bar`     → foo OR bar
         //   `foo -bar`       → foo AND NOT bar        (leading "-" negates)
@@ -445,8 +445,8 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         };
 
         ui.destroyTable = function (table) {
-            $("#" + table + " .ft-columns-btn.show").trigger("click.bs.dropdown");
-            $("#" + table + " .ft-columns-btn").attr("disabled", true);
+            $("#" + table + " .tab-columns-btn.show").trigger("click.bs.dropdown");
+            $("#" + table + " .tab-columns-btn").attr("disabled", true);
             if (common.tables[table]) {
                 common.tables[table].destroy();
                 delete common.tables[table];
@@ -532,7 +532,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                 }
 
                 const tbody = $("<tbody/>", {class: "table-group-divider"});
-                $("#" + table + " .ft-columns-dropdown").empty().append(
+                $("#" + table + " .tab-columns-dropdown").empty().append(
                     $("<table/>", {class: "table table-sm table-striped text-center"}).append(
                         $("<thead/>").append(
                             $("<tr/>").append(
@@ -658,7 +658,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                 // Apply deferred "Row" changes when the dropdown closes. The trigger
                 // element survives rebuilds, so namespace the handler and re-bind it
                 // each build to avoid stacking.
-                $("#" + table + " .ft-columns-btn")
+                $("#" + table + " .tab-columns-btn")
                     .off("hidden.bs.dropdown.rspamd")
                     .on("hidden.bs.dropdown.rspamd", applyPendingRebuild)
                     .removeAttr("disabled");

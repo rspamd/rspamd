@@ -47,7 +47,7 @@ define(["jquery", "app/common", "app/libft"],
         }
 
         function enable_disable_scan_btn(disable) {
-            $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .ft-columns-btn)")
+            $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .tab-columns-btn)")
                 .prop("disabled", (disable || $.trim($("#scanMsgSource").val()).length === 0));
         }
 
@@ -98,7 +98,7 @@ define(["jquery", "app/common", "app/libft"],
                                         }, ++fileSet.index);
                                     } else {
                                         enable_disable_scan_btn();
-                                        $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
+                                        $("#cleanScanHistory, #scan .tab-columns-dropdown .btn-dropdown-apply")
                                             .removeAttr("disabled");
                                         libft.bindFuzzyHashButtons("scan");
                                         $("html, body").animate({

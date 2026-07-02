@@ -191,7 +191,7 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                             libft.destroyTable("history");
                             libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
                                 () => {
-                                    $("#history .ft-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
+                                    $("#history .tab-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
                                     ui.updateHistoryControlsState();
                                     if (version) libft.bindFuzzyHashButtons("history");
                                 });

@@ -1,7 +1,7 @@
 /*
  * Tabulator UI helpers shared across tables.
  * Extracted from history.js Phase 0. Depends only on common (for
- * common.tables); no jQuery, no FooTable.
+ * common.tables); no jQuery.
  */
 
 define(["app/common"],
@@ -45,8 +45,8 @@ define(["app/common"],
         };
 
         /**
-         * Hide the pagination footer when the table has only one page (FooTable
-         * parity). Registers a renderComplete handler.
+         * Hide the pagination footer when the table has only one page. Registers
+         * a renderComplete handler.
          */
         tabUtils.hideFooterOnSinglePage = function (table) {
             common.tables[table].on("renderComplete", () => {

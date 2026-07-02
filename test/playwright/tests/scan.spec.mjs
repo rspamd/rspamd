@@ -64,7 +64,7 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
         await expect(firstRow).toBeVisible();
 
         // Tabulator renders the responsive-collapse detail as a descendant of the
-        // row element (.tabulator-responsive-collapse), not a FooTable sibling row.
+        // row element (.tabulator-responsive-collapse).
         // Only expand when collapsed: a prior test may have left the row open, and a
         // blind click would collapse it again.
         const detailRow = firstRow.locator(".tabulator-responsive-collapse");
