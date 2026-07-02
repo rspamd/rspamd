@@ -64,7 +64,8 @@ interface/
 │   │   ├── config.js      # Configuration tab (actions, maps)
 │   │   ├── upload.js      # Scan tab (message upload/scanning)
 │   │   ├── selectors.js   # Selectors tab (testing selectors)
-│   │   └── libft.js       # Tabulator table utilities (history/scan rendering)
+│   │   ├── libft.js       # Tabulator table utilities (history/scan rendering)
+│   │   └── tab-utils.js   # Shared Tabulator UI helpers (footer, scroll, row-toggle)
 │   └── lib/               # Third-party libraries (minified)
 ├── img/                   # Images and logos
 └── README.md              # Setup instructions
@@ -155,6 +156,14 @@ Tests Rspamd selectors against messages (Selectors tab)
 `js/app/libft.js`
 
 Shared Tabulator table utilities: data preprocessing, table initialization, pagination, sorting
+
+### Shared Tabulator UI Helpers
+`js/app/tab-utils.js`
+
+Cross-table UI helpers used by every Tabulator table: scroll-into-view patching,
+tableholder tabindex stripping, single-page footer hiding, click-to-toggle
+responsive rows, and scroll-position preservation across renders. Depends only
+on `common` (no jQuery).
 
 ## Data Flow
 
