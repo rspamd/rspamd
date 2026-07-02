@@ -34,6 +34,7 @@ pcall(require, "plugins/neural/providers/llm")
 pcall(require, "plugins/neural/providers/symbols")
 pcall(require, "plugins/neural/providers/text_hash")
 pcall(require, "plugins/neural/providers/fasttext_embed")
+pcall(require, "plugins/neural/providers/static_embed")
 
 local N = "neural"
 
