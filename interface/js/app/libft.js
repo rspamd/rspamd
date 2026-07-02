@@ -177,6 +177,16 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                 .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
         }
 
+        // The visible To/Cc/Bcc column shows a truncated recipient list
+        // (rcpt_mime_short); match against the full rcpt_mime so recipients
+        // hidden behind "… (N)" are still found. (scan rows keep it as an array.)
+        function rcptFilterFunc(filterVal, _cellVal, rowData) {
+            if (!filterVal) return true;
+            const raw = rowData.rcpt_mime;
+            const hay = Array.isArray(raw) ? raw.join(", ") : (raw || "");
+            return decodeEntities(hay).toLowerCase().includes(filterVal.toLowerCase());
+        }
+
         // Compile a query string into a {test(haystack)} predicate, or null when
         // the query is blank (meaning "no filter"). Tokenize keeping quoted
         // phrases intact; "AND"/"OR" are operators; a leading "-" negates the
@@ -307,7 +317,8 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                 title: "[Envelope To] To/Cc/Bcc",
                 field: "rcpt_mime_short",
                 responsive: 3,
-                headerFilter: false,
+                headerFilter: "input",
+                headerFilterFunc: rcptFilterFunc,
                 minWidth: 100,
                 maxWidth: 200,
             }, {
