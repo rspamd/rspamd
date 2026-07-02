@@ -51,6 +51,10 @@
  *   local dim = model:get_dimension()
  *   -- words is a table of strings (e.g. part:get_words('norm'))
  *   local vec, ntokens = model:get_sentence_vector(words)
+ *   -- per-token sequence access for external consumers (order-aware
+ *   -- feature exports); the provider path uses only the pooled vector
+ *   local vecs, n = model:get_token_vectors(words, {max_tokens = 128})
+ *   local packed = model:get_token_vectors(words, {raw = true})
  * end
  */
 
@@ -83,6 +87,7 @@
 static int lua_static_embed_load(lua_State *L);
 static int lua_static_embed_tokenize(lua_State *L);
 static int lua_static_embed_get_sentence_vector(lua_State *L);
+static int lua_static_embed_get_token_vectors(lua_State *L);
 static int lua_static_embed_get_dimension(lua_State *L);
 static int lua_static_embed_get_vocab_size(lua_State *L);
 static int lua_static_embed_get_unk_id(lua_State *L);
@@ -98,6 +103,7 @@ static const struct luaL_reg staticembedlib_f[] = {
 static const struct luaL_reg staticembedlib_m[] = {
 	{"tokenize", lua_static_embed_tokenize},
 	{"get_sentence_vector", lua_static_embed_get_sentence_vector},
+	{"get_token_vectors", lua_static_embed_get_token_vectors},
 	{"get_dimension", lua_static_embed_get_dimension},
 	{"get_vocab_size", lua_static_embed_get_vocab_size},
 	{"get_unk_id", lua_static_embed_get_unk_id},
@@ -1022,6 +1028,44 @@ lua_static_embed_tokenize(lua_State *L)
 	return 1;
 }
 
+/*
+ * Tokenize the argument at `pos` into subword ids: either a table of word
+ * strings or a whole string/rspamd_text. Shared by get_sentence_vector and
+ * get_token_vectors so both use exactly the same tokenization path.
+ */
+static void
+lua_static_embed_collect_ids(lua_State *L, struct rspamd_lua_static_embed *model,
+							 int pos, std::vector<std::uint32_t> &ids)
+{
+	if (lua_istable(L, pos)) {
+		auto nwords = rspamd_lua_table_size(L, pos);
+
+		for (auto i = 1; i <= nwords; i++) {
+			lua_rawgeti(L, pos, i);
+
+			if (lua_isstring(L, -1)) {
+				std::size_t wlen;
+				const char *w = lua_tolstring(L, -1, &wlen);
+				if (wlen > 0) {
+					model->tk.tokenize(std::string_view{w, wlen}, ids);
+				}
+			}
+
+			lua_pop(L, 1);
+		}
+	}
+	else {
+		auto *t = lua_check_text_or_string(L, pos);
+
+		if (t == nullptr) {
+			luaL_error(L, "invalid arguments");
+			return;
+		}
+
+		model->tk.tokenize(std::string_view{t->start, t->len}, ids);
+	}
+}
+
 /***
  * @method model:get_sentence_vector(words)
  * Compute a sentence embedding: each word is tokenized into WordPiece
@@ -1038,32 +1082,7 @@ lua_static_embed_get_sentence_vector(lua_State *L)
 	auto *model = lua_check_static_embed(L, 1);
 	std::vector<std::uint32_t> ids;
 
-	if (lua_istable(L, 2)) {
-		auto nwords = rspamd_lua_table_size(L, 2);
-
-		for (auto i = 1; i <= nwords; i++) {
-			lua_rawgeti(L, 2, i);
-
-			if (lua_isstring(L, -1)) {
-				std::size_t wlen;
-				const char *w = lua_tolstring(L, -1, &wlen);
-				if (wlen > 0) {
-					model->tk.tokenize(std::string_view{w, wlen}, ids);
-				}
-			}
-
-			lua_pop(L, 1);
-		}
-	}
-	else {
-		auto *t = lua_check_text_or_string(L, 2);
-
-		if (t == nullptr) {
-			return luaL_error(L, "invalid arguments");
-		}
-
-		model->tk.tokenize(std::string_view{t->start, t->len}, ids);
-	}
+	lua_static_embed_collect_ids(L, model, 2, ids);
 
 	auto dim = static_cast<std::size_t>(model->dim);
 	std::vector<double> acc(dim, 0.0);
@@ -1087,6 +1106,103 @@ lua_static_embed_get_sentence_vector(lua_State *L)
 		lua_pushnumber(L, acc[d]);
 		lua_rawseti(L, -2, static_cast<int>(d + 1));
 	}
+	lua_pushinteger(L, static_cast<lua_Integer>(ids.size()));
+
+	return 2;
+}
+
+/***
+ * @method model:get_token_vectors(words[, opts])
+ * Get the per-token embedding sequence instead of the pooled mean: matrix
+ * rows in token order, unk rows included exactly as the pooled path
+ * includes them. Intended for offline consumers (e.g. external trainers
+ * exporting order-aware text features); the neural provider itself only
+ * uses the pooled get_sentence_vector.
+ * Accepts the same input as get_sentence_vector and tokenizes through the
+ * same code path.
+ * Options:
+ *   - max_tokens (positive integer): truncate AFTER tokenization to the
+ *     first N tokens; the returned count is the post-truncation one
+ *   - raw (boolean): return an rspamd_text with ntokens*dim little-endian
+ *     float32s packed row-major (the matrix byte order) instead of a
+ *     table of tables
+ * An empty input produces an empty table (or empty text) and 0, never nil.
+ * @param {table|string|text} words table of word strings, or a whole text
+ * @param {table} opts optional {max_tokens = N, raw = true}
+ * @return {table|text,number} sequence of dim-sized rows and the number of tokens
+ */
+static int
+lua_static_embed_get_token_vectors(lua_State *L)
+{
+	auto *model = lua_check_static_embed(L, 1);
+
+	/* Validate opts strictly before doing any work */
+	std::int64_t max_tokens = -1;
+	bool raw = false;
+
+	if (!lua_isnoneornil(L, 3)) {
+		if (!lua_istable(L, 3)) {
+			return luaL_error(L, "'opts' must be a table");
+		}
+
+		lua_getfield(L, 3, "max_tokens");
+		if (!lua_isnil(L, -1)) {
+			if (lua_type(L, -1) != LUA_TNUMBER) {
+				return luaL_error(L, "'max_tokens' must be a positive integer");
+			}
+			auto num = lua_tonumber(L, -1);
+			max_tokens = static_cast<std::int64_t>(num);
+			if (static_cast<lua_Number>(max_tokens) != num || max_tokens <= 0) {
+				return luaL_error(L, "'max_tokens' must be a positive integer");
+			}
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, 3, "raw");
+		if (!lua_isnil(L, -1)) {
+			if (!lua_isboolean(L, -1)) {
+				return luaL_error(L, "'raw' must be a boolean");
+			}
+			raw = lua_toboolean(L, -1);
+		}
+		lua_pop(L, 1);
+	}
+
+	std::vector<std::uint32_t> ids;
+	lua_static_embed_collect_ids(L, model, 2, ids);
+
+	if (max_tokens > 0 && ids.size() > static_cast<std::size_t>(max_tokens)) {
+		ids.resize(max_tokens);
+	}
+
+	auto dim = static_cast<std::size_t>(model->dim);
+
+	if (raw) {
+		/* Pack rows into an owned rspamd_text, row-major float32 */
+		auto blen = ids.size() * dim * sizeof(float);
+		auto *t = lua_new_text(L, nullptr, blen, TRUE);
+		auto *out = const_cast<char *>(t->start);
+
+		for (std::size_t i = 0; i < ids.size(); i++) {
+			const float *row = model->matrix + static_cast<std::size_t>(ids[i]) * dim;
+			memcpy(out + i * dim * sizeof(float), row, dim * sizeof(float));
+		}
+	}
+	else {
+		lua_createtable(L, static_cast<int>(ids.size()), 0);
+
+		for (std::size_t i = 0; i < ids.size(); i++) {
+			const float *row = model->matrix + static_cast<std::size_t>(ids[i]) * dim;
+
+			lua_createtable(L, static_cast<int>(dim), 0);
+			for (std::size_t d = 0; d < dim; d++) {
+				lua_pushnumber(L, static_cast<lua_Number>(row[d]));
+				lua_rawseti(L, -2, static_cast<int>(d + 1));
+			}
+			lua_rawseti(L, -2, static_cast<int>(i + 1));
+		}
+	}
+
 	lua_pushinteger(L, static_cast<lua_Integer>(ids.size()));
 
 	return 2;

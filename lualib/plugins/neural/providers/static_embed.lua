@@ -19,6 +19,12 @@ as data, like FastText models. Any deviation from the supported spec
 disables the provider with an explicit error - there is no silent
 fallback.
 
+Note: the rspamd_static_embed module also exposes per-token sequence
+access (model:get_token_vectors) for external consumers such as offline
+trainers exporting order-aware text features. The provider path is not
+affected: fusion vectors must stay fixed-dim, so only the pooled
+get_sentence_vector is used here.
+
 Configuration example in neural.conf:
   providers = [
     {

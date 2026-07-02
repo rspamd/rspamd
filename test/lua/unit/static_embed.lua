@@ -194,6 +194,147 @@ context("Static embed model", function()
     assert_equal('2,7,3', table.concat(hf_model:tokenize('Héllo, WORLD'), ','))
   end)
 
+  test("Token vectors align 1:1 with tokenize ids", function()
+    assert_not_nil(model, load_err)
+
+    local text = 'hello unaffable worldly'
+    local ids = model:tokenize(text)
+    local vecs, ntokens = model:get_token_vectors(text)
+    assert_equal(#ids, ntokens)
+    assert_equal(#ids, #vecs)
+    -- row for id == {id, id/2, -id, id/4} in the fixture matrix
+    for i = 1, ntokens do
+      local id = ids[i]
+      local expected = { id, id * 0.5, -id, id * 0.25 }
+      for d = 1, 4 do
+        assert_equal(expected[d], vecs[i][d])
+      end
+    end
+  end)
+
+  local pooled_samples = {
+    { { 'unaffable' }, 'subwords' },
+    { { 'hello', 'unaffable', 'worldly' }, 'several words' },
+    { { 'zzz', 'qqq', 'hello' }, 'unk-heavy input' },
+    { { 'zzz', '中', 'Héllo,' }, 'mixed unk/cjk/punct' },
+  }
+
+  for _, s in ipairs(pooled_samples) do
+    test("Mean of token vectors equals sentence vector: " .. s[2], function()
+      assert_not_nil(model, load_err)
+
+      local vecs, n = model:get_token_vectors(s[1])
+      local pooled, n_pooled = model:get_sentence_vector(s[1])
+      assert_equal(n_pooled, n)
+      assert_gte(n, 1)
+      for d = 1, 4 do
+        local sum = 0.0
+        for i = 1, n do
+          sum = sum + vecs[i][d]
+        end
+        assert_lte(math.abs(sum / n - pooled[d]), 1e-5)
+      end
+    end)
+  end
+
+  test("Token vectors: word list and joined text are equal", function()
+    assert_not_nil(model, load_err)
+
+    local words = { 'hello', 'unaffable', 'worldly' }
+    local v_words, n_words = model:get_token_vectors(words)
+    local v_text, n_text = model:get_token_vectors(table.concat(words, ' '))
+    assert_equal(n_words, n_text)
+    for i = 1, n_words do
+      for d = 1, 4 do
+        assert_equal(v_words[i][d], v_text[i][d])
+      end
+    end
+  end)
+
+  test("Token vectors: max_tokens truncates after tokenization", function()
+    assert_not_nil(model, load_err)
+
+    local text = 'hello unaffable worldly' -- 6 subword tokens
+    local full, n_full = model:get_token_vectors(text)
+    assert_equal(6, n_full)
+
+    local trunc, n_trunc = model:get_token_vectors(text, { max_tokens = 2 })
+    assert_equal(2, n_trunc)
+    assert_equal(2, #trunc)
+    for i = 1, 2 do
+      for d = 1, 4 do
+        assert_equal(full[i][d], trunc[i][d])
+      end
+    end
+
+    -- max_tokens larger than the sequence is a no-op
+    local _, n_same = model:get_token_vectors(text, { max_tokens = 100 })
+    assert_equal(6, n_same)
+  end)
+
+  test("Token vectors: raw packing matches the table form", function()
+    assert_not_nil(model, load_err)
+
+    local text = 'hello unaffable worldly'
+    local vecs, n = model:get_token_vectors(text)
+    local packed, n_raw = model:get_token_vectors(text, { raw = true })
+    assert_equal(n, n_raw)
+    assert_equal(n * 4 * 4, packed:len())
+
+    -- All fixture values are float32-exact, so packing the table form as
+    -- little-endian float32 must reproduce the raw bytes exactly
+    local chunks = {}
+    for i = 1, n do
+      for d = 1, 4 do
+        chunks[#chunks + 1] = f32_le(vecs[i][d])
+      end
+    end
+    assert_equal(table.concat(chunks), packed:str())
+
+    -- Cross-check via rspamd_util.unpack (string.unpack semantics, works
+    -- with rspamd_text directly and on any Lua version)
+    local off = 1
+    for i = 1, n do
+      for d = 1, 4 do
+        local v
+        v, off = rspamd_util.unpack('<f', packed, off)
+        assert_lte(math.abs(v - vecs[i][d]), 1e-6)
+      end
+    end
+  end)
+
+  test("Token vectors: empty input", function()
+    assert_not_nil(model, load_err)
+
+    local vecs, n = model:get_token_vectors({})
+    assert_equal(0, n)
+    assert_equal(0, #vecs)
+
+    local packed, n_raw = model:get_token_vectors({}, { raw = true })
+    assert_equal(0, n_raw)
+    assert_equal(0, packed:len())
+  end)
+
+  test("Token vectors: invalid opts raise errors", function()
+    assert_not_nil(model, load_err)
+
+    assert_error(function()
+      model:get_token_vectors('hello', 'not a table')
+    end)
+    assert_error(function()
+      model:get_token_vectors('hello', { max_tokens = 'x' })
+    end)
+    assert_error(function()
+      model:get_token_vectors('hello', { max_tokens = 0 })
+    end)
+    assert_error(function()
+      model:get_token_vectors('hello', { max_tokens = 1.5 })
+    end)
+    assert_error(function()
+      model:get_token_vectors('hello', { raw = 1 })
+    end)
+  end)
+
   test("Provider helper caches loaded models", function()
     local se = require "plugins/neural/providers/static_embed"
     local m1, err = se.load_model(good_dir)
