@@ -20,25 +20,10 @@ context("Static embed model", function()
     return path
   end
 
-  -- Pack a float32 little-endian without FFI; all fixture values are
-  -- exactly representable so the conversion is lossless
+  -- Pack a float32 little-endian (string.pack semantics, works on any Lua
+  -- version); all fixture values are exactly representable in float32
   local function f32_le(x)
-    if x == 0 then
-      return string.char(0, 0, 0, 0)
-    end
-    local sign = 0
-    if x < 0 then
-      sign = 1
-      x = -x
-    end
-    local m, e = math.frexp(x) -- x = m * 2^e, m in [0.5, 1)
-    local exp = e + 126        -- biased exponent of 1.f * 2^(e-1)
-    local frac = math.floor((m * 2 - 1) * 2 ^ 23 + 0.5)
-    return string.char(
-      frac % 256,
-      math.floor(frac / 256) % 256,
-      math.floor(frac / 65536) + (exp % 2) * 128,
-      sign * 128 + math.floor(exp / 2))
+    return rspamd_util.pack('<f', x)
   end
 
   -- Line i == token id i, no trailing newline (like the reference artifact)
