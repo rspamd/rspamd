@@ -204,15 +204,24 @@ textarea {
    appearance:none drops the UA search-input chrome that ignored the
    dark background (input looked too light in dark mode).
    Scoped to text-like inputs so it does not strip the native checkbox
-   (the action filter's "not" toggle) of its checkmark and stretch it. */
-.tabulator .tabulator-header-filter input:not([type="checkbox"], [type="radio"]) {
+   (the action filter's "not" toggle) of its checkmark and stretch it.
+   The full .tabulator > header > col > header-filter path is required:
+   tabulator_bs5.min.css targets the input by that path with higher
+   specificity, so a shorter selector is overridden. */
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input:not([type="checkbox"], [type="radio"]) {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
+    /* Match Bootstrap .form-control-sm — the same metrics the action filter's
+       form-select-sm uses — so text inputs share one size with the select and
+       read smaller than the UA input default. */
+    font-size: 0.875rem;
+    line-height: 1.5;
+    padding: 0.25rem 0.5rem;
     color: var(--bs-body-color);
     background-color: var(--bs-body-bg);
     border: 1px solid var(--bs-border-color);
-    border-radius: 0.375rem;
+    border-radius: 0.25rem;
 }
 
 /* Table body */
