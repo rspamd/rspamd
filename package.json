@@ -2,13 +2,13 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@stylistic/eslint-plugin": "^5.10.0",
-        "eslint": "^10.5.0",
-        "globals": "^17.6.0",
+        "eslint": "^10.6.0",
+        "globals": "^17.7.0",
         "postcss-html": "^1.8.1",
-        "stylelint": ">=17.13.0",
+        "stylelint": ">=17.14.0",
         "stylelint-config-standard": "^40.0.0"
     },
     "dependencies": {
-        "npm-check-updates": "^22.2.3"
+        "npm-check-updates": "^22.2.9"
     }
 }
