@@ -1,5 +1,5 @@
-define(["jquery", "app/common", "app/tab-utils", "tabulator"],
-    ($, common, tabUtils, Tabulator) => {
+define(["jquery", "app/common", "bootstrap", "app/tab-utils", "tabulator"],
+    ($, common, bootstrap, tabUtils, Tabulator) => {
         "use strict";
         const ui = {};
         const columnsCustom = JSON.parse(localStorage.getItem("columns")) || {};
@@ -456,7 +456,10 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         };
 
         ui.destroyTable = function (table) {
-            $("#" + table + " .tab-columns-btn.show").trigger("click.bs.dropdown");
+            const openColumnsBtn = document.querySelector("#" + table + " .tab-columns-btn.show");
+            if (openColumnsBtn) {
+                bootstrap.Dropdown.getOrCreateInstance(openColumnsBtn).hide();
+            }
             $("#" + table + " .tab-columns-btn").attr("disabled", true);
             if (common.tables[table]) {
                 common.tables[table].destroy();

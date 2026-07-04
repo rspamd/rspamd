@@ -4,8 +4,8 @@
 
 /* global require */
 
-define(["jquery", "app/common"],
-    ($, common) => {
+define(["jquery", "app/common", "bootstrap"],
+    ($, common, bootstrap) => {
         "use strict";
         const ui = {};
 
@@ -178,7 +178,7 @@ define(["jquery", "app/common"],
                     $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
                     $("#modalTitle").html(item.uri);
 
-                    $("#modalDialog").modal("show");
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalDialog")).show();
                 },
                 errorMessage: "Cannot receive maps data",
                 server: common.getServer()
@@ -204,7 +204,7 @@ define(["jquery", "app/common"],
             common.query("savemap", {
                 success: function () {
                     common.alertMessage("alert-success", "Map data successfully saved");
-                    $("#modalDialog").modal("hide");
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalDialog")).hide();
                 },
                 errorMessage: "Save map error",
                 method: "POST",

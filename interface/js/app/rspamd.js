@@ -308,8 +308,8 @@ define(["jquery", "app/common", "bootstrap", "visibility",
                     .on("shown.bs.modal", () => {
                         $("#connectDialog").off("shown.bs.modal");
                         $("#connectPassword").focus();
-                    })
-                    .modal("show");
+                    });
+                bootstrap.Modal.getOrCreateInstance(document.getElementById("connectDialog")).show();
 
                 $("#connectForm").off("submit").on("submit", (e) => {
                     e.preventDefault();
@@ -339,7 +339,7 @@ define(["jquery", "app/common", "bootstrap", "visibility",
                                 sessionStorage.setItem("read_only", data.read_only);
                                 saveCredentials(password);
                                 $("#connectForm").off("submit");
-                                $("#connectDialog").modal("hide");
+                                bootstrap.Modal.getOrCreateInstance(document.getElementById("connectDialog")).hide();
                                 displayUI();
                             }
                         },
@@ -409,7 +409,7 @@ define(["jquery", "app/common", "bootstrap", "visibility",
             );
         }
 
-        $("#settings").popover({
+        bootstrap.Popover.getOrCreateInstance(document.getElementById("settings"), {
             container: "body",
             placement: "bottom",
             html: true,
@@ -418,8 +418,9 @@ define(["jquery", "app/common", "bootstrap", "visibility",
                 // Using .clone() has the side-effect of producing elements with duplicate id attributes.
                 return $("#settings-popover").clone();
             }
+        });
         // Restore the tooltip of the element that the popover is attached to.
-        }).attr("title", function () {
+        $("#settings").attr("title", function () {
             return $(this).attr("data-original-title");
         });
         $("#settings").on("click", (e) => {
@@ -489,7 +490,7 @@ define(["jquery", "app/common", "bootstrap", "visibility",
                     // Button (or icon within a button) that triggers the popover.
                     $(e.target).closest("button").attr("aria-describedby") === this.id
                 ) return;
-                $("#settings").popover("hide");
+                bootstrap.Popover.getOrCreateInstance(document.getElementById("settings")).hide();
             });
         });
     }());
