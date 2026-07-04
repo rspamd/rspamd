@@ -111,8 +111,8 @@ requirejs.config({
         codejar: {exports: "CodeJar", deps: ["linenumbers"]},
         bootstrap: {exports: "bootstrap", deps: ["jquery"]}, // Popovers require jQuery
         d3: {exports: "d3"},
-        d3evolution: {exports: "D3Evolution", deps: ["d3.global", "jquery"]},
-        d3pie: {exports: "D3Pie", deps: ["d3.global", "jquery"]},
+        d3evolution: {exports: "D3Evolution", deps: ["d3.global"]},
+        d3pie: {exports: "D3Pie", deps: ["d3.global"]},
         fontawesome: {exports: "FontAwesome", deps: ["fontawesome_solid"]},
         linenumbers: {exports: "withLineNumbers", deps: ["prism"]},
         prism: {exports: "Prism"},
