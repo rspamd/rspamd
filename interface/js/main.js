@@ -103,8 +103,7 @@ requirejs.config({
         linenumbers: "codejar-linenumbers.min",
         tabulator: "tabulator.min",
         nprogress: "nprogress.min",
-        prism: "prism",
-        stickytabs: "jquery.stickytabs.min"
+        prism: "prism"
     },
     shim: {
         app: {deps: ["jquery"]},
@@ -115,8 +114,7 @@ requirejs.config({
         d3pie: {exports: "D3Pie", deps: ["d3.global"]},
         fontawesome: {exports: "FontAwesome", deps: ["fontawesome_solid"]},
         linenumbers: {exports: "withLineNumbers", deps: ["prism"]},
-        prism: {exports: "Prism"},
-        stickytabs: {deps: ["jquery"]}
+        prism: {exports: "Prism"}
     },
     waitSeconds: 30,
 });

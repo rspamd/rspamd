@@ -5,9 +5,9 @@
 
 /* global require, Visibility */
 
-define(["jquery", "app/common", "stickytabs", "visibility",
-    "bootstrap", "fontawesome"],
-($, common) => {
+define(["jquery", "app/common", "bootstrap", "visibility",
+    "fontawesome"],
+($, common, bootstrap) => {
     "use strict";
     const ui = {};
 
@@ -17,6 +17,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
     const graphs = {};
     let checked_server = "All SERVERS";
     const timer_id = [];
+    let stickyTabsHandle = null;
 
     function ajaxSetup(ajax_timeout, setFieldValue, saveToLocalStorage) {
         const timeout = (ajax_timeout && ajax_timeout >= 0) ? ajax_timeout : defaultAjaxTimeout;
@@ -43,6 +44,39 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         }
     }
 
+    // Sticky Tabs: keep the active tab in sync with the URL hash so that the
+    // selected tab survives reload and is shareable. Vanilla rewrite of the
+    // former jquery.stickytabs plugin; uses the BS5 Tab API directly.
+    function initStickyTabs(navSelector, initialTab) {
+        const nav = document.querySelector(navSelector);
+        function showByHash() {
+            const selector = location.hash
+                ? `a[href="${location.hash}"]`
+                : initialTab;
+            const link = selector ? nav.querySelector(selector) : null;
+            if (link) bootstrap.Tab.getOrCreateInstance(link).show();
+        }
+
+        showByHash();
+        window.addEventListener("hashchange", showByHash);
+
+        function onClick(e) {
+            const [, hash] = e.currentTarget.href.split("#");
+            if (history.pushState) {
+                history.pushState(null, "", location.pathname + location.search + "#" + hash);
+            }
+        }
+        nav.querySelectorAll("a").forEach((link) => link.addEventListener("click", onClick));
+
+        return {
+            destroy() {
+                window.removeEventListener("hashchange", showByHash);
+                nav.querySelectorAll("a").forEach((link) => link.removeEventListener("click", onClick));
+                nav.querySelectorAll(".nav-link.active").forEach((link) => link.classList.remove("active"));
+            }
+        };
+    }
+
     function disconnect() {
         [graphs, common.tables].forEach((o) => {
             Object.keys(o).forEach((key) => {
@@ -51,9 +85,11 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             });
         });
 
-        // Remove jquery-stickytabs listeners
-        $(window).off("hashchange");
-        $(".nav-tabs-sticky > .nav-item > .nav-link").off("click").removeClass("active");
+        // Remove sticky-tabs listeners and reset active tab state
+        if (stickyTabsHandle) {
+            stickyTabsHandle.destroy();
+            stickyTabsHandle = null;
+        }
 
         stopTimers();
         cleanCredentials();
@@ -234,7 +270,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                 $("#preloader").addClass("d-none");
                 $("#navBar, #mainUI").removeClass("d-none");
 
-                $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
+                stickyTabsHandle = initStickyTabs(".nav-tabs-sticky", "#status_nav");
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
