@@ -47,6 +47,11 @@ local function pure_type(ltype)
   return ltype:match('^(.*)_list$')
 end
 
+-- Indexing values of arbitrary types can raise (e.g. numbers), so it is done via pcall
+local function safe_index(obj, key)
+  return obj[key]
+end
+
 local function implicit_tostring(t, ud_or_table)
   if t == 'table' then
     -- Table (very special)
@@ -382,8 +387,20 @@ exports.parse_selector = function(cfg, str)
               -- Plain table field
               ret = inp[method_name]
             else
+              local ok, meth = pcall(safe_index, inp, method_name)
+
+              if not ok or type(meth) ~= 'function' then
+                if transform_function[method_name] then
+                  logger.errx('cannot call method `%s` on %s value; use `.%s` to apply the transform of the same name',
+                      method_name, t, method_name)
+                else
+                  logger.errx('cannot call method `%s` on %s value', method_name, t)
+                end
+                return nil
+              end
+
               -- We call method unpacking arguments and dropping all but the first result returned
-              ret = (inp[method_name](inp, unpack_function(args or E)))
+              ret = (meth(inp, unpack_function(args or E)))
             end
 
             local ret_type = type(ret)

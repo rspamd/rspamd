@@ -420,6 +420,27 @@ context("Selectors test", function()
       assert_rspamd_table_eq_sorted({actual = elts, expect = case.expect})
     end)
   end
+
+  -- Method syntax (`:name`) on a value that has no such method must yield
+  -- nothing instead of raising a runtime error
+  local cases_nil = {
+    ["transform used as method"] = {
+      selector = "time:digest",
+    },
+    ["missing method on string"] = {
+      selector = "header('Subject'):totally_missing_method(1)",
+    },
+  }
+  for case_name, case in lua_util.spairs(cases_nil) do
+    test("nil case " .. case_name, function()
+      local sels = lua_selectors.create_selector_closure_fn(nil, cfg, case.selector, nil,
+          function(_, res, _) return res end)
+      assert_not_nil(sels)
+      local ok, res = pcall(sels, task)
+      assert_true(ok)
+      assert_nil(res)
+    end)
+  end
 end)
 
 
