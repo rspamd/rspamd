@@ -2,8 +2,8 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-define(["jquery", "app/common", "app/libft"],
-    ($, common, libft) => {
+define(["app/common", "app/libft"],
+    (common, libft) => {
         "use strict";
         const ui = {};
         const fileSet = {files: null, index: null};
@@ -14,41 +14,42 @@ define(["jquery", "app/common", "app/libft"],
         let scanTextHeaders = {};
 
         function uploadText(data, url, headers, method = "POST") {
-            const deferred = new $.Deferred();
-
-            function server() {
-                if (common.getSelector("selSrv") === "All SERVERS" &&
-                    common.getSelector("selLearnServers") === "random") {
-                    const servers = $("#selSrv option").slice(1).map((_, o) => o.value);
-                    return servers[Math.floor(Math.random() * servers.length)];
-                }
-                return null;
-            }
-
-            common.query(url, {
-                data: data,
-                params: {
-                    processData: false,
-                },
-                method: method,
-                headers: headers,
-                success: function (json, jqXHR) {
-                    common.alertMessage("alert-success", "Data successfully uploaded");
-                    if (jqXHR.status !== 200) {
-                        common.alertMessage("alert-info", jqXHR.statusText);
+            return new Promise((resolve) => {
+                function server() {
+                    if (common.getSelector("selSrv") === "All SERVERS" &&
+                        common.getSelector("selLearnServers") === "random") {
+                        const servers = Array.from(document.getElementById("selSrv").options)
+                            .slice(1)
+                            .map((o) => o.value);
+                        return servers[Math.floor(Math.random() * servers.length)];
                     }
-                    deferred.resolve();
-                },
-                complete: () => deferred.resolve(),
-                server: server()
-            });
+                    return null;
+                }
 
-            return deferred.promise();
+                common.query(url, {
+                    data: data,
+                    params: {
+                        processData: false,
+                    },
+                    method: method,
+                    headers: headers,
+                    success: function (json, jqXHR) {
+                        common.alertMessage("alert-success", "Data successfully uploaded");
+                        if (jqXHR.status !== 200) {
+                            common.alertMessage("alert-info", jqXHR.statusText);
+                        }
+                    },
+                    complete: () => resolve(),
+                    server: server()
+                });
+            });
         }
 
         function enable_disable_scan_btn(disable) {
-            $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .tab-columns-btn)")
-                .prop("disabled", (disable || $.trim($("#scanMsgSource").val()).length === 0));
+            const scanBtns = "#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .tab-columns-btn)";
+            const empty = document.getElementById("scanMsgSource").value.trim().length === 0;
+            const isDisabled = disable || empty;
+            document.querySelectorAll(scanBtns).forEach((btn) => { btn.disabled = isDisabled; });
         }
 
         function scanText(data) {
@@ -91,19 +92,19 @@ define(["jquery", "app/common", "app/libft"],
                                         common.fileUtils.readFile(files, (result) => {
                                             const {index} = fileSet;
                                             if (index === files.length - 1) {
-                                                $("#scanMsgSource").val(result);
+                                                document.getElementById("scanMsgSource").value = result;
                                                 common.fileUtils.setFileInputFiles("#formFile", files, index);
                                             }
                                             scanText(result);
                                         }, ++fileSet.index);
                                     } else {
                                         enable_disable_scan_btn();
-                                        $("#cleanScanHistory, #scan .tab-columns-dropdown .btn-dropdown-apply")
-                                            .removeAttr("disabled");
+                                        const applyBtns = "#cleanScanHistory, #scan .tab-columns-dropdown .btn-dropdown-apply";
+                                        document.querySelectorAll(applyBtns).forEach((el) => { el.disabled = false; });
                                         libft.bindFuzzyHashButtons("scan");
-                                        $("html, body").animate({
-                                            scrollTop: $("#scanResult").offset().top
-                                        }, 1000);
+                                        const scanResult = document.getElementById("scanResult");
+                                        const top = scanResult.getBoundingClientRect().top + window.scrollY;
+                                        window.scrollTo({top, behavior: "smooth"});
                                     }
                                 });
                         }
@@ -136,18 +137,21 @@ define(["jquery", "app/common", "app/libft"],
 
         function getFuzzyHashes(data) {
             function fillHashTable(rules) {
-                $("#hashTable tbody").empty();
+                const tbody = document.querySelector("#hashTable tbody");
+                tbody.replaceChildren();
                 for (const [rule, hashes] of Object.entries(rules)) {
+                    const rowspan = hashes.length;
                     hashes.forEach((hash, i) => {
-                        $("#hashTable tbody").append("<tr>" +
-                          (i === 0 ? '<td rowspan="' + Object.keys(hashes).length + '">' + rule + "</td>" : "") +
-                          "<td>" + hash + "</td></tr>");
+                        const tr = common.el("tr", null);
+                        if (i === 0) tr.append(common.el("td", {rowspan, text: rule}));
+                        tr.append(common.el("td", {text: hash}));
+                        tbody.append(tr);
                     });
                 }
                 common.show("#hash-card", true);
             }
 
-            common.query("plugins/fuzzy/hashes?flag=" + $("#fuzzy-flag").val(), {
+            common.query("plugins/fuzzy/hashes?flag=" + document.getElementById("fuzzy-flag").value, {
                 data: data,
                 params: {
                     processData: false,
@@ -167,133 +171,140 @@ define(["jquery", "app/common", "app/libft"],
         }
 
 
-        libft.set_page_size("scan", $("#scan_page_size").val());
+        libft.set_page_size("scan", document.getElementById("scan_page_size").value);
         libft.bindHistoryTableEventHandlers("scan", 5);
 
-        $("#cleanScanHistory").off("click");
-        $("#cleanScanHistory").on("click", (e) => {
+        document.getElementById("cleanScanHistory").addEventListener("click", (e) => {
             e.preventDefault();
             if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
                 return;
             }
             libft.destroyTable("scan");
             common.symbols.scan.length = 0;
-            $("#cleanScanHistory").attr("disabled", true);
+            document.getElementById("cleanScanHistory").disabled = true;
         });
 
         enable_disable_scan_btn();
 
-        $("#scanClean").on("click", () => {
+        document.getElementById("scanClean").addEventListener("click", (e) => {
+            e.preventDefault();
             enable_disable_scan_btn(true);
-            $("#scanForm")[0].reset();
-            $("html, body").animate({scrollTop: 0}, 1000);
-            return false;
+            document.getElementById("scanForm").reset();
+            window.scrollTo({top: 0, behavior: "smooth"});
         });
 
-        $(".card-close-btn").on("click", function () {
-            common.hide($(this).closest(".card"), true);
+        document.querySelectorAll(".card-close-btn").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                common.hide(e.currentTarget.closest(".card"), true);
+            });
         });
 
         function getScanTextHeaders() {
             scanTextHeaders = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce((o, header) => {
-                const value = $("#scan-opt-" + header.toLowerCase()).val();
+                const {value} = document.getElementById("scan-opt-" + header.toLowerCase());
                 if (value !== "") o[header] = value;
                 return o;
             }, {});
-            if ($("#scan-opt-pass-all").prop("checked")) scanTextHeaders.Pass = "all";
+            if (document.getElementById("scan-opt-pass-all").checked) scanTextHeaders.Pass = "all";
         }
 
-        $("[data-upload]").on("click", function () {
-            const source = $(this).data("upload");
-            const data = $("#scanMsgSource").val();
-            if ($.trim(data).length > 0) {
-                if (source === "checkv2") {
-                    getScanTextHeaders();
-                    scanText(data);
-                } else if (source === "compute-fuzzy") {
-                    getFuzzyHashes(data);
-                } else {
-                    const headers = {};
-                    const isBayesLearn = source === "learnham" || source === "learnspam" || source === "learnclass";
+        document.querySelectorAll("[data-upload]").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const {upload: source} = e.currentTarget.dataset;
+                const data = document.getElementById("scanMsgSource").value;
+                if (data.trim().length > 0) {
+                    if (source === "checkv2") {
+                        getScanTextHeaders();
+                        scanText(data);
+                    } else if (source === "compute-fuzzy") {
+                        getFuzzyHashes(data);
+                    } else {
+                        const headers = {};
+                        const isBayesLearn = source === "learnham" || source === "learnspam" || source === "learnclass";
 
-                    if (isBayesLearn) {
-                        const classifier = $("#classifier").val();
-                        if (classifier) headers.classifier = classifier;
-                    }
-
-                    if (source === "learnclass") {
-                        const bayesClass = $("#bayes-class").val();
-                        if (!bayesClass) {
-                            common.alertMessage("alert-danger", "Classifier has no classes configured");
-                            return false;
+                        if (isBayesLearn) {
+                            const classifier = document.getElementById("classifier").value;
+                            if (classifier) headers.classifier = classifier;
                         }
-                        headers.class = bayesClass;
-                    }
 
-                    if (source === "fuzzyadd") {
-                        headers.flag = $("#fuzzyFlagText").val();
-                        headers.weight = $("#fuzzyWeightText").val();
-                    }
+                        if (source === "learnclass") {
+                            const bayesClass = document.getElementById("bayes-class").value;
+                            if (!bayesClass) {
+                                common.alertMessage("alert-danger", "Classifier has no classes configured");
+                                return;
+                            }
+                            headers.class = bayesClass;
+                        }
 
-                    if (source === "fuzzydel") {
-                        headers.flag = $("#fuzzyFlagText").val();
-                    }
+                        if (source === "fuzzyadd") {
+                            headers.flag = document.getElementById("fuzzyFlagText").value;
+                            headers.weight = document.getElementById("fuzzyWeightText").value;
+                        }
 
-                    uploadText(data, source, headers);
+                        if (source === "fuzzydel") {
+                            headers.flag = document.getElementById("fuzzyFlagText").value;
+                        }
+
+                        uploadText(data, source, headers);
+                    }
+                } else {
+                    common.alertMessage("alert-danger", "Message source field cannot be blank");
                 }
-            } else {
-                common.alertMessage("alert-danger", "Message source field cannot be blank");
-            }
-            return false;
+            });
         });
 
 
         function setDelhashButtonsDisabled(disabled = true) {
-            ["#deleteHashesBtn", "#clearHashesBtn"].forEach((s) => $(s).prop("disabled", disabled));
+            ["#deleteHashesBtn", "#clearHashesBtn"].forEach((s) => {
+                document.querySelector(s).disabled = disabled;
+            });
         }
 
         /**
          * Parse a textarea (or any input) value into an array of non-empty tokens.
          * Splits on commas, semicolons or any whitespace (space, tab, newline).
          *
-         * @param {string} selector - jQuery selector for the input element.
+         * @param {string} selector - CSS selector for the input element.
          * @returns {string[]} - Trimmed, non-empty tokens.
          */
         function parseHashes(selector) {
-            return $(selector).val()
+            return document.querySelector(selector).value
                 .split(/[,\s;]+/)
                 .map((t) => t.trim())
                 .filter((t) => t.length > 0);
         }
 
-        $("#fuzzyDelList").on("input", () => {
+        document.getElementById("fuzzyDelList").addEventListener("input", () => {
             const hasTokens = parseHashes("#fuzzyDelList").length > 0;
             setDelhashButtonsDisabled(!hasTokens);
         });
 
-        $("#deleteHashesBtn").on("click", () => {
-            $("#fuzzyDelList").prop("disabled", true);
+        document.getElementById("deleteHashesBtn").addEventListener("click", () => {
+            document.getElementById("fuzzyDelList").disabled = true;
             setDelhashButtonsDisabled();
-            $("#deleteHashesBtn").find(".btn-label").text("Deleting…");
+            document.querySelector("#deleteHashesBtn .btn-label").textContent = "Deleting…";
 
             const hashes = parseHashes("#fuzzyDelList");
             const promises = hashes.map((h) => {
                 const headers = {
-                    flag: $("#fuzzyFlagText").val(),
+                    flag: document.getElementById("fuzzyFlagText").value,
                     Hash: h
                 };
                 return uploadText(null, "fuzzydelhash", headers, "GET");
             });
 
-            $.when.apply($, promises).always(() => {
-                $("#fuzzyDelList").prop("disabled", false);
+            Promise.all(promises).finally(() => {
+                document.getElementById("fuzzyDelList").disabled = false;
                 setDelhashButtonsDisabled(false);
-                $("#deleteHashesBtn").find(".btn-label").text("Delete hashes");
+                document.querySelector("#deleteHashesBtn .btn-label").textContent = "Delete hashes";
             });
         });
 
-        $("#clearHashesBtn").on("click", () => {
-            $("#fuzzyDelList").val("").focus();
+        document.getElementById("clearHashesBtn").addEventListener("click", () => {
+            const delList = document.getElementById("fuzzyDelList");
+            delList.value = "";
+            delList.focus();
             setDelhashButtonsDisabled();
         });
 
@@ -335,47 +346,47 @@ define(["jquery", "app/common", "app/libft"],
 
         // Switch UI mode based on selected classifier type
         function updateBayesUI() {
-            const $classifier = $("#classifier");
-            const $class = $("#bayes-class");
-            const $binaryButtons = $("#binary-learn-buttons");
-            const $learnClassBtn = $("#learn-class-btn");
+            const classifierSel = document.getElementById("classifier");
+            const classSel = document.getElementById("bayes-class");
+            const binaryButtons = document.getElementById("binary-learn-buttons");
+            const learnClassBtn = document.getElementById("learn-class-btn");
 
-            const selectedOption = $classifier.find("option:selected");
-            const classifierType = selectedOption.data("type");
-            const classes = selectedOption.data("classes");
+            const selectedOption = classifierSel.options[classifierSel.selectedIndex];
+            const classifierType = selectedOption ? common.data(selectedOption, "type") : null;
+            const classes = selectedOption ? common.data(selectedOption, "classes") ?? [] : [];
 
             if (classifierType === "multi-class") {
                 // Multi-class mode: show class dropdown and Learn button
-                $class.empty();
+                classSel.replaceChildren();
                 if (Array.isArray(classes) && classes.length > 0) {
                     classes.forEach((cls) => {
-                        $class.append($("<option>", {value: cls, text: cls}));
+                        classSel.append(common.el("option", {value: cls, text: cls}));
                     });
                 } else {
                     // No classes available - this shouldn't happen with valid config
-                    $class.append($("<option>", {value: "", text: "No classes available"}));
+                    classSel.append(common.el("option", {value: "", text: "No classes available"}));
                 }
-                $class.removeClass("d-none");
-                $binaryButtons.addClass("d-none");
-                $learnClassBtn.removeClass("d-none");
+                classSel.classList.remove("d-none");
+                binaryButtons.classList.add("d-none");
+                learnClassBtn.classList.remove("d-none");
             } else {
                 // Binary mode: show HAM/SPAM buttons
-                $class.addClass("d-none");
-                $binaryButtons.removeClass("d-none");
-                $learnClassBtn.addClass("d-none");
+                classSel.classList.add("d-none");
+                binaryButtons.classList.remove("d-none");
+                learnClassBtn.classList.add("d-none");
             }
         }
 
         ui.getClassifiers = function () {
             if (!common.read_only) {
                 const server = common.getServer();
-                const sel = $("#classifier");
-                const hadOptions = sel.children().length > 0; // remember pre-state
+                const sel = document.getElementById("classifier");
+                const hadOptions = sel.children.length > 0; // remember pre-state
 
                 // Skip request only if we already had options populated for this config/server
                 if (shouldSkipRequest(server, "classifiers") && hadOptions) return;
 
-                sel.empty();
+                sel.replaceChildren();
 
                 common.query("bayes/classifiers", {
                     success: function (data) {
@@ -403,7 +414,7 @@ define(["jquery", "app/common", "app/libft"],
 
                         // Add "All classifiers" only if no multi-class classifiers present
                         const hasMultiClass = classifiers.some((cl) => cl.type === "multi-class");
-                        if (!hasMultiClass) sel.append($("<option>", {value: "", text: "All classifiers"}));
+                        if (!hasMultiClass) sel.append(common.el("option", {value: "", text: "All classifiers"}));
 
                         classifiers.forEach((cl) => {
                             const badges = [];
@@ -411,15 +422,12 @@ define(["jquery", "app/common", "app/libft"],
                             if (cl.per_user) badges.push("[per-user]");
                             const label = cl.name + (badges.length ? " " + badges.join(" ") : "");
 
-                            const $option = $("<option>", {
-                                value: cl.name,
-                                text: label
-                            });
-                            // Store metadata in jQuery data cache (not as DOM attributes)
-                            $option.data("type", cl.type);
-                            $option.data("per-user", cl.per_user);
-                            $option.data("classes", cl.classes || []);
-                            sel.append($option);
+                            const option = common.el("option", {value: cl.name, text: label});
+                            // Store metadata in a WeakMap (not as DOM attributes)
+                            common.data(option, "type", cl.type);
+                            common.data(option, "per-user", cl.per_user);
+                            common.data(option, "classes", cl.classes || []);
+                            sel.append(option);
                         });
 
                         // Initialize UI state for the first classifier
@@ -435,7 +443,7 @@ define(["jquery", "app/common", "app/libft"],
             {
                 picker: "#fuzzy-flag-picker",
                 input: "#fuzzy-flag",
-                container: ($picker) => $picker.parent(),
+                container: (picker) => picker.parentElement,
                 includeReadOnly: true,
                 requiresWritable: false,
                 emptyText: "No fuzzy storages"
@@ -443,12 +451,14 @@ define(["jquery", "app/common", "app/libft"],
             {
                 picker: "#fuzzyFlagText-picker",
                 input: "#fuzzyFlagText",
-                container: ($picker) => $picker.closest("div.card"),
+                container: (picker) => picker.closest("div.card"),
                 includeReadOnly: false,
                 requiresWritable: true,
                 emptyText: "No writable storages"
             }
         ];
+
+        let fuzzyChangeBound = false;
 
         function toggleWidgets(showPicker, showInput) {
             fuzzyWidgets.forEach(({picker, input}) => {
@@ -460,8 +470,8 @@ define(["jquery", "app/common", "app/libft"],
         function setWidgetsDisabled(disable, predicate = () => true) {
             fuzzyWidgets.forEach((widget) => {
                 if (!predicate(widget)) return;
-                const {picker, container} = widget;
-                container($(picker))[disable ? "addClass" : "removeClass"]("disabled");
+                const pickerEl = document.querySelector(widget.picker);
+                widget.container(pickerEl)?.classList.toggle("disabled", disable);
             });
         }
 
@@ -469,7 +479,9 @@ define(["jquery", "app/common", "app/libft"],
             const server = common.getServer();
             if (shouldSkipRequest(server, "storages")) return;
 
-            fuzzyWidgets.forEach(({picker, container}) => container($(picker)).removeAttr("title"));
+            fuzzyWidgets.forEach(({picker, container}) => {
+                container(document.querySelector(picker))?.removeAttribute("title");
+            });
 
             common.query("plugins/fuzzy/storages", {
                 success: function (data) {
@@ -479,28 +491,38 @@ define(["jquery", "app/common", "app/libft"],
                     toggleWidgets(true, false);
                     setWidgetsDisabled(!hasWritableStorages, (widget) => widget.requiresWritable);
 
+                    // The change handler just mirrors the picker value into its
+                    // paired input; the widgets are static, so bind it once.
+                    if (!fuzzyChangeBound) {
+                        fuzzyWidgets.forEach(({picker, input}) => {
+                            const selEl = document.querySelector(picker);
+                            const inputEl = document.querySelector(input);
+                            selEl.addEventListener("change", () => { inputEl.value = selEl.value; });
+                        });
+                        fuzzyChangeBound = true;
+                    }
+
                     fuzzyWidgets.forEach((widget) => {
                         const {picker, input, includeReadOnly, emptyText} = widget;
-                        const $sel = $(picker);
+                        const selEl = document.querySelector(picker);
 
-                        $sel.empty();
+                        selEl.replaceChildren();
 
                         const applicableStorages = Object.entries(storages)
                             .filter(([, info]) => includeReadOnly || !info.read_only);
 
                         applicableStorages.forEach(([name, info]) => {
                             Object.entries(info.flags).forEach(([symbol, val]) => {
-                                $sel.append($("<option>", {value: val, text: `${name}:${symbol} (${val})`}));
+                                selEl.append(common.el("option", {value: val, text: `${name}:${symbol} (${val})`}));
                             });
                         });
 
-                        if ($sel.children().length > 0) {
-                            $(input).val($sel.val());
-                            $sel.off("change").on("change", () => $(input).val($sel.val()));
+                        const inputEl = document.querySelector(input);
+                        if (selEl.children.length > 0) {
+                            inputEl.value = selEl.value;
                         } else {
-                            $sel.append($("<option>", {value: "", text: emptyText}));
-                            $(input).val("");
-                            $sel.off("change");
+                            selEl.append(common.el("option", {value: "", text: emptyText}));
+                            inputEl.value = "";
                         }
                     });
                 },
@@ -510,13 +532,12 @@ define(["jquery", "app/common", "app/libft"],
                         setWidgetsDisabled(true);
 
                         fuzzyWidgets.forEach(({picker, container}) => {
-                            const $picker = $(picker);
-                            $picker
-                                .empty()
-                                .append($("<option>", {value: "", text: "fuzzy_check disabled"}));
-                            common.show($picker);
-                            container($picker)
-                                .attr("title", "fuzzy_check module is not enabled in server configuration.");
+                            const pickerEl = document.querySelector(picker);
+                            pickerEl.replaceChildren();
+                            pickerEl.append(common.el("option", {value: "", text: "fuzzy_check disabled"}));
+                            common.show(pickerEl);
+                            container(pickerEl)
+                                ?.setAttribute("title", "fuzzy_check module is not enabled in server configuration.");
                         });
                     } else {
                         toggleWidgets(false, true);
@@ -528,7 +549,7 @@ define(["jquery", "app/common", "app/libft"],
         };
 
         // Initialize classifier dropdown change handler
-        $("#classifier").on("change", updateBayesUI);
+        document.getElementById("classifier").addEventListener("change", updateBayesUI);
 
         return ui;
     });
