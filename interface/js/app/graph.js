@@ -3,9 +3,8 @@
  * Copyright (C) 2017 Alexander Moisseev
  */
 
-define(["jquery", "app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "tabulator"],
-    // eslint-disable-next-line max-params -- AMD factory: each dep needs a param
-    ($, common, tabUtils, D3Evolution, D3Pie, d3, Tabulator) => {
+define(["app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "tabulator"],
+    (common, tabUtils, D3Evolution, D3Pie, d3, Tabulator) => {
         "use strict";
 
         const rrd_pie_config = {
@@ -59,23 +58,24 @@ define(["jquery", "app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "
             };
 
             function initGraph() {
-                const graph = new D3Evolution("graph", $.extend({}, graph_options, {
+                const graph = new D3Evolution("graph", {
+                    ...graph_options,
                     yScale: common.getSelector("selYScale"),
                     type: common.getSelector("selType"),
                     interpolate: common.getSelector("selInterpolate"),
                     convert: common.getSelector("selConvert"),
-                }));
-                $("#selYScale").change(function () {
-                    graph.yScale(this.value);
                 });
-                $("#selConvert").change(function () {
-                    graph.convert(this.value);
+                document.getElementById("selYScale").addEventListener("change", (e) => {
+                    graph.yScale(e.currentTarget.value);
                 });
-                $("#selType").change(function () {
-                    graph.type(this.value);
+                document.getElementById("selConvert").addEventListener("change", (e) => {
+                    graph.convert(e.currentTarget.value);
                 });
-                $("#selInterpolate").change(function () {
-                    graph.interpolate(this.value);
+                document.getElementById("selType").addEventListener("change", (e) => {
+                    graph.type(e.currentTarget.value);
+                });
+                document.getElementById("selInterpolate").addEventListener("change", (e) => {
+                    graph.interpolate(e.currentTarget.value);
                 });
 
                 return graph;
@@ -177,7 +177,9 @@ define(["jquery", "app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "
                 graphs.graph.data(data);
                 if (unit !== prevUnit) {
                     graphs.graph.yAxisLabel("Message rate, " + unit);
-                    $(".unit").text(unit);
+                    document.querySelectorAll(".unit").forEach((el) => {
+                        el.textContent = unit;
+                    });
                     prevUnit = unit;
                 }
                 drawRrdTable(rrd_summary.rows, unit);
@@ -225,7 +227,11 @@ define(["jquery", "app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "
                     }
                     updateWidgets(data);
                 },
-                complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
+                complete: function () {
+                    const refreshBtn = document.getElementById("refresh");
+                    refreshBtn.disabled = false;
+                    refreshBtn.classList.remove("disabled");
+                },
                 errorMessage: "Cannot receive throughput data",
                 errorOnceId: "alerted_graph_",
                 data: {type: type}
@@ -234,13 +240,17 @@ define(["jquery", "app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "
 
 
         // Handling mouse events on overlapping elements
-        $("#rrd-pie").mouseover(() => {
-            $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "200");
-            $("#rrd-table_toggle").css("z-index", "300");
+        function setZIndex(selector, value) {
+            document.querySelectorAll(selector).forEach((el) => {
+                el.style.zIndex = value;
+            });
+        }
+        document.getElementById("rrd-pie").addEventListener("mouseover", () => {
+            setZIndex("#rrd-pie, #rrd-pie-tooltip", "200");
+            setZIndex("#rrd-table_toggle", "300");
         });
-        $("#rrd-table_toggle").mouseover(() => {
-            $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "0");
-            $("#rrd-table_toggle").css("z-index", "0");
+        document.getElementById("rrd-table_toggle").addEventListener("mouseover", () => {
+            setZIndex("#rrd-pie, #rrd-pie-tooltip, #rrd-table_toggle", "0");
         });
 
         return ui;
