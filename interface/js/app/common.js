@@ -1,7 +1,5 @@
-/* global jQuery */
-
-define(["jquery", "nprogress"],
-    ($, NProgress) => {
+define(["nprogress"],
+    (NProgress) => {
         "use strict";
         const ui = {
             breakpoints: {
@@ -40,20 +38,157 @@ define(["jquery", "nprogress"],
             showSpinner: false,
         });
 
+        // --- AJAX plumbing (replaces $.ajaxSetup + $(document).ajaxStart/Complete) ---
+
+        let ajaxTimeout = 0; // milliseconds; 0 disables the per-request timeout
+        let activeAjaxCount = 0;
+        const ajaxStartCallbacks = [];
+        const ajaxCompleteCallbacks = [];
+
+        // Mirrors jQuery's global ajax events: ajaxStart fires only on the first
+        // outstanding request (0 -> 1); ajaxComplete fires once per completed
+        // request. Requests with params.global === false are invisible to both.
+        function fireAjaxStart() {
+            if (activeAjaxCount === 0) {
+                ajaxStartCallbacks.forEach((cb) => cb());
+            }
+            activeAjaxCount++;
+        }
+
+        function fireAjaxComplete() {
+            activeAjaxCount = Math.max(0, activeAjaxCount - 1);
+            ajaxCompleteCallbacks.forEach((cb) => cb());
+        }
+
+        ui.setAjaxTimeout = function (ms) {
+            ajaxTimeout = ms;
+        };
+
+        ui.onAjaxStart = function (callback) {
+            ajaxStartCallbacks.push(callback);
+        };
+
+        ui.onAjaxComplete = function (callback) {
+            ajaxCompleteCallbacks.push(callback);
+        };
+
+        // --- Shared vanilla DOM helpers ---
+
+        // True for null/undefined without the `undefined` literal (no-undefined)
+        // or == null (eqeqeq / no-eq-null).
+        function isNil(value) {
+            return value === null || typeof value === "undefined";
+        }
+
+        // Resolve a string selector, Element, NodeList, Array, or jQuery wrapper
+        // into a plain Array of Element. Accepts jQuery objects during the staged
+        // removal so callers still passing $(...) keep working.
+        function toElements(selector) {
+            if (!selector) return [];
+            if (typeof selector === "string") {
+                return Array.from(document.querySelectorAll(selector));
+            }
+            if (typeof selector.length === "number") {
+                return Array.from(selector).filter(Boolean);
+            }
+            return [selector];
+        }
+
+        /**
+         * Create an element, apply attributes/properties/listeners, and append
+         * children. Recognised attrs keys: class, text, html, dataset, any DOM
+         * property, any attribute, and event names (click, change, input, ...)
+         * given as functions. Replaces the $("<tag>", {...}) idiom.
+         */
+        ui.el = function (tag, attrs, ...children) {
+            const node = document.createElement(tag);
+            if (attrs) {
+                for (const [key, value] of Object.entries(attrs)) {
+                    if (isNil(value)) continue;
+                    switch (key) {
+                        case "class": node.className = value; break;
+                        case "text": node.textContent = value; break;
+                        case "html": node.innerHTML = value; break;
+                        case "dataset": Object.assign(node.dataset, value); break;
+                        default:
+                            if (typeof value === "function") {
+                                node.addEventListener(key, value);
+                            } else if (key in node) {
+                                node[key] = value;
+                            } else {
+                                node.setAttribute(key, value);
+                            }
+                    }
+                }
+            }
+            for (const child of children) {
+                if (isNil(child)) continue;
+                node.append(child);
+            }
+            return node;
+        };
+
+        /**
+         * Event delegation: bind a single listener on `root` that invokes `fn`
+         * for the closest ancestor of the event target matching `selector`.
+         * `this` and the second argument are set to the matched element.
+         * Returns a cleanup function. Replaces $(root).on(type, selector, fn).
+         */
+        ui.delegate = function (root, type, selector, fn) {
+            const rootEl = (typeof root === "string") ? document.querySelector(root) : root;
+            function handler(event) {
+                const target = event.target.closest(selector);
+                if (target && rootEl.contains(target)) {
+                    fn.call(target, event, target);
+                }
+            }
+            rootEl.addEventListener(type, handler);
+            return function () {
+                rootEl.removeEventListener(type, handler);
+            };
+        };
+
+        // WeakMap-backed data store for values that cannot live in dataset
+        // (objects, arrays). Mirrors jQuery's .data() get/set for the few call
+        // sites that store non-string values.
+        const dataStore = new WeakMap();
+        ui.data = function (el, key, value) {
+            const node = (typeof el === "string") ? document.querySelector(el) : el;
+            if (!node) return null;
+            if (!dataStore.has(node)) dataStore.set(node, {});
+            const store = dataStore.get(node);
+            if (arguments.length >= 3) {
+                store[key] = value;
+                return node;
+            }
+            return store[key];
+        };
+
         function getPassword() {
             return sessionStorage.getItem("Password");
         }
 
         function alertMessage(alertClass, alertText) {
-            const a = $("<div class=\"alert " + alertClass + " alert-dismissible fade in show\">" +
-                "<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" title=\"Dismiss\"></button>" +
-                "<strong>" + alertText + "</strong>");
-            $(".notification-area").append(a);
+            const a = document.createElement("div");
+            a.className = "alert " + alertClass + " alert-dismissible fade in show";
+            a.innerHTML = "<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" title=\"Dismiss\"></button>" +
+                "<strong>" + alertText + "</strong>";
+            document.querySelector(".notification-area").append(a);
 
+            // Fade out, then collapse the height so siblings slide up, then remove.
             setTimeout(() => {
-                $(a).fadeTo(500, 0).slideUp(500, function () {
-                    $(this).alert("close");
-                });
+                a.animate(
+                    [{opacity: 1}, {opacity: 0}],
+                    {duration: 500, fill: "forwards"}
+                ).onfinish = () => {
+                    a.style.overflow = "hidden";
+                    a.animate(
+                        [{height: a.offsetHeight + "px"}, {height: 0}],
+                        {duration: 500, easing: "ease", fill: "forwards"}
+                    ).onfinish = () => {
+                        a.remove();
+                    };
+                };
             }, 5000);
         }
 
@@ -63,21 +198,21 @@ define(["jquery", "nprogress"],
         function updateErrorBadge() {
             const unseenCount = errorLog.getUnseenCount(); // eslint-disable-line no-use-before-define
             const totalCount = errorLog.errors.length; // eslint-disable-line no-use-before-define
-            const badge = $("#error-log-badge");
-            const counter = $("#error-count");
+            const badge = document.getElementById("error-log-badge");
+            const counter = document.getElementById("error-count");
 
             // Show badge if there are any errors
             if (totalCount > 0) {
-                badge.removeClass("d-none");
+                badge.classList.remove("d-none");
                 // Show counter only if there are unseen errors
                 if (unseenCount > 0) {
-                    counter.removeClass("d-none");
-                    counter.text(unseenCount);
+                    counter.classList.remove("d-none");
+                    counter.textContent = unseenCount;
                 } else {
-                    counter.addClass("d-none");
+                    counter.classList.add("d-none");
                 }
             } else {
-                badge.addClass("d-none");
+                badge.classList.add("d-none");
             }
         }
 
@@ -132,27 +267,28 @@ define(["jquery", "nprogress"],
         };
 
         function updateErrorLogTable() {
-            const tbody = $("#errorLogTable tbody");
-            const noErrors = $("#noErrorsMessage");
-            const copyBtn = $("#copyErrorLog");
-            const clearBtn = $("#clearErrorLog");
+            const table = document.getElementById("errorLogTable");
+            const tbody = table.querySelector("tbody");
+            const noErrors = document.getElementById("noErrorsMessage");
+            const copyBtn = document.getElementById("copyErrorLog");
+            const clearBtn = document.getElementById("clearErrorLog");
 
-            tbody.empty();
+            tbody.replaceChildren();
 
             const hasErrors = errorLog.errors.length > 0;
 
             if (!hasErrors) {
-                $("#errorLogTable").hide();
-                noErrors.show();
-                copyBtn.prop("disabled", true);
-                clearBtn.prop("disabled", true);
+                table.style.display = "none";
+                noErrors.style.display = "";
+                copyBtn.disabled = true;
+                clearBtn.disabled = true;
                 return;
             }
 
-            $("#errorLogTable").show();
-            noErrors.hide();
-            copyBtn.prop("disabled", false);
-            clearBtn.prop("disabled", false);
+            table.style.display = "";
+            noErrors.style.display = "none";
+            copyBtn.disabled = false;
+            clearBtn.disabled = false;
 
             // Show errors in reverse chronological order (newest first)
             errorLog.errors.slice().reverse().forEach((err) => {
@@ -160,7 +296,7 @@ define(["jquery", "nprogress"],
                     ? err.timestamp.toLocaleString(ui.locale)
                     : err.timestamp.toLocaleString();
                 const status = err.httpStatus ?? "-";
-                const row = $("<tr></tr>");
+                const row = document.createElement("tr");
 
                 // Map error types to Bootstrap badge colors
                 const errorTypeColors = {
@@ -173,14 +309,14 @@ define(["jquery", "nprogress"],
                 const badgeClass = errorTypeColors[err.errorType] || "text-bg-secondary";
 
                 // Column order: Time | Error | Server | Endpoint | HTTP Status | Type
-                row.append($('<td class="text-nowrap"></td>').text(time));
-                row.append($("<td></td>").text(err.message));
-                row.append($('<td class="d-none d-sm-table-cell"></td>').text(err.server));
-                row.append($('<td class="d-none d-md-table-cell"></td>')
-                    .append($('<code class="small"></code>').text(err.endpoint)));
-                row.append($('<td class="d-none d-lg-table-cell text-center"></td>').text(status));
-                row.append($('<td class="d-none d-lg-table-cell"></td>')
-                    .append($(`<span class="badge ${badgeClass}"></span>`).text(err.errorType)));
+                row.append(ui.el("td", {class: "text-nowrap", text: time}));
+                row.append(ui.el("td", {text: err.message}));
+                row.append(ui.el("td", {class: "d-none d-sm-table-cell", text: err.server}));
+                row.append(ui.el("td", {class: "d-none d-md-table-cell"},
+                    ui.el("code", {class: "small", text: err.endpoint})));
+                row.append(ui.el("td", {class: "d-none d-lg-table-cell text-center", text: status}));
+                row.append(ui.el("td", {class: "d-none d-lg-table-cell"},
+                    ui.el("span", {class: "badge " + badgeClass, text: err.errorType})));
                 tbody.append(row);
             });
         }
@@ -208,7 +344,7 @@ define(["jquery", "nprogress"],
         }
 
         /**
-         * Perform a request to a single Rspamd neighbour server.
+         * Perform a request to a single Rspamd neighbour server over XHR.
          *
          * @param {Array.<Object>} neighbours_status
          *   Array of neighbour status objects.
@@ -221,100 +357,191 @@ define(["jquery", "nprogress"],
          *
          * @returns {void}
          */
+        // Callers pre-stringify JSON bodies, so we never form-encode (jQuery's
+        // $.param). Normalise any stray object to a JSON string.
+        function normalizeRequestBody(rawBody) {
+            const isFormData = (typeof FormData !== "undefined") && (rawBody instanceof FormData);
+            if (!isNil(rawBody) && typeof rawBody === "object" && !isFormData) {
+                return {body: JSON.stringify(rawBody), isFormData};
+            }
+            return {body: rawBody, isFormData};
+        }
+
+        function hasContentType(headers) {
+            return ("Content-Type" in headers) || ("content-type" in headers);
+        }
+
+        // jQuery appends object data to the URL as a query string for GET/HEAD
+        // requests. Pre-encoded strings are returned unchanged. Only flat
+        // string/number values are supported (no arrays or nested objects);
+        // no current caller needs more — extend it if that changes.
+        function buildQueryString(data) {
+            if (typeof data === "string") return data;
+            if (!isNil(data) && typeof data === "object") {
+                return Object.entries(data)
+                    .map(([key, value]) => encodeURIComponent(key) + "=" + encodeURIComponent(value))
+                    .join("&");
+            }
+            return "";
+        }
+
         function queryServer(neighbours_status, ind, req_url, o) {
             neighbours_status[ind].checked = false;
             neighbours_status[ind].data = {};
             neighbours_status[ind].status = false;
-            const req_params = {
-                jsonp: false,
-                data: o.data,
-                headers: $.extend({Password: getPassword()}, o.headers),
-                url: neighbours_status[ind].url + req_url,
-                xhr: function () {
-                    const xhr = $.ajaxSettings.xhr();
-                    // Download progress
-                    if (req_url !== "neighbours") {
-                        xhr.addEventListener("progress", (e) => {
-                            if (e.lengthComputable) {
-                                neighbours_status[ind].percentComplete = e.loaded / e.total;
-                                const percentComplete = neighbours_status
-                                    .reduce((prev, curr) => (curr.percentComplete ? curr.percentComplete + prev : prev), 0);
-                                NProgress.set(percentComplete / neighbours_status.length);
-                            }
-                        }, false);
+
+            const params = o.params || {};
+            const isGlobal = params.global !== false;
+            const method = (params.method || o.method || "GET").toUpperCase();
+            const timeout = (typeof params.timeout === "number") ? params.timeout : ajaxTimeout;
+            const {dataType} = params;
+            const headers = {Password: getPassword(), ...(o.headers || {})};
+            const url = neighbours_status[ind].url + req_url;
+            const rawBody = !isNil(params.data) ? params.data : o.data;
+            const isGet = method === "GET" || method === "HEAD";
+            const queryString = isGet ? buildQueryString(rawBody) : "";
+            const separator = url.indexOf("?") === -1 ? "?" : "&";
+            const requestUrl = url + (queryString ? separator + queryString : "");
+
+            // jQuery appends data to the URL for GET/HEAD and sends it as the
+            // body otherwise.
+            let body = null;
+            let isFormData = false;
+            if (!isGet) {
+                ({body, isFormData} = normalizeRequestBody(rawBody));
+            }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open(method, requestUrl, true);
+
+            Object.keys(headers).forEach((name) => xhr.setRequestHeader(name, headers[name]));
+
+            // jQuery's default Content-Type for non-FormData bodies. FormData is
+            // sent untouched so the browser sets the multipart boundary.
+            if (!isFormData && !isNil(body) && body !== "" && !hasContentType(headers)) {
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+            }
+
+            if (timeout > 0) xhr.timeout = timeout;
+
+            // Download progress -> NProgress (skip the neighbours probe, as before)
+            if (req_url !== "neighbours") {
+                xhr.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        neighbours_status[ind].percentComplete = e.loaded / e.total;
+                        const percentComplete = neighbours_status
+                            .reduce((prev, curr) => (curr.percentComplete ? curr.percentComplete + prev : prev), 0);
+                        NProgress.set(percentComplete / neighbours_status.length);
                     }
-                    return xhr;
-                },
-                success: function (json) {
-                    neighbours_status[ind].checked = true;
-                    neighbours_status[ind].status = true;
-                    neighbours_status[ind].data = json;
-                },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    neighbours_status[ind].checked = true;
+                }, false);
+            }
 
-                    // Determine error type and create detailed message
-                    let errorType = "network";
-                    let detailedMessage = errorThrown || "Request failed";
+            function parseBody() {
+                if (dataType === "text") return xhr.responseText;
+                if (dataType === "json") return xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                const contentType = xhr.getResponseHeader("Content-Type") || "";
+                if (contentType.indexOf("application/json") === 0 ||
+                    contentType.indexOf("text/javascript") === 0) {
+                    return xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                }
+                return xhr.responseText;
+            }
 
-                    if (textStatus === "timeout") {
-                        errorType = "timeout";
-                        detailedMessage = "Request timeout";
-                    } else if (jqXHR.status === 401 || jqXHR.status === 403) {
-                        errorType = "auth";
-                        detailedMessage = "Authentication failed";
-                    } else if (jqXHR.status >= 400 && jqXHR.status < 600) {
-                        errorType = "http_error";
-                        detailedMessage = "HTTP " + jqXHR.status + (errorThrown ? ": " + errorThrown : "");
-                    } else if (textStatus === "error" && jqXHR.status === 0) {
-                        errorType = "network";
-                        detailedMessage = "Network error";
-                    }
+            // jQuery fires statusCode handlers once per request for the final
+            // status, in addition to success/error.
+            function runStatusCode() {
+                if (o.statusCode && typeof o.statusCode[xhr.status] === "function") {
+                    o.statusCode[xhr.status](xhr.responseText, xhr.statusText, xhr);
+                }
+            }
 
-                    // Log error and show alert
-                    const shouldShowAlert = !o.error &&
-                        !(o.errorOnceId && (o.errorOnceId + neighbours_status[ind].name) in sessionStorage);
-                    if (o.errorOnceId && shouldShowAlert) {
-                        sessionStorage.setItem(o.errorOnceId + neighbours_status[ind].name, true);
-                    }
-                    logError({
-                        server: neighbours_status[ind].name,
-                        endpoint: req_url,
-                        message: o.errorMessage ? o.errorMessage + ": " + detailedMessage : detailedMessage,
-                        httpStatus: jqXHR.status,
-                        errorType: errorType,
-                        showAlert: shouldShowAlert
-                    });
-
-                    // Call custom error handler if provided
-                    if (o.error) o.error(neighbours_status[ind], jqXHR, textStatus, errorThrown);
-                },
-                complete: function (jqXHR) {
-                    if (neighbours_status.every((elt) => elt.checked)) {
-                        if (neighbours_status.some((elt) => elt.status)) {
-                            if (o.success) {
-                                o.success(neighbours_status, jqXHR);
-                            } else {
-                                alertMessage("alert-success", "Request completed");
-                            }
+            function finish() {
+                if (isGlobal) fireAjaxComplete();
+                runStatusCode();
+                if (neighbours_status.every((elt) => elt.checked)) {
+                    if (neighbours_status.some((elt) => elt.status)) {
+                        if (o.success) {
+                            o.success(neighbours_status, xhr);
                         } else {
-                            alertMessage("alert-danger", "Request failed");
+                            alertMessage("alert-success", "Request completed");
                         }
-                        if (o.complete) o.complete();
-                        NProgress.done();
+                    } else {
+                        alertMessage("alert-danger", "Request failed");
                     }
-                },
-                statusCode: o.statusCode
-            };
-            if (o.method) {
-                req_params.method = o.method;
+                    if (o.complete) o.complete();
+                    NProgress.done();
+                }
             }
-            if (o.params) {
-                $.each(o.params, (k, v) => {
-                    req_params[k] = v;
+
+            function handleError(textStatus, errorThrown) {
+                neighbours_status[ind].checked = true;
+
+                // Determine error type and create detailed message
+                let errorType = "network";
+                let detailedMessage = errorThrown || "Request failed";
+
+                if (textStatus === "timeout") {
+                    errorType = "timeout";
+                    detailedMessage = "Request timeout";
+                } else if (xhr.status === 401 || xhr.status === 403) {
+                    errorType = "auth";
+                    detailedMessage = "Authentication failed";
+                } else if (xhr.status >= 400 && xhr.status < 600) {
+                    errorType = "http_error";
+                    detailedMessage = "HTTP " + xhr.status + (errorThrown ? ": " + errorThrown : "");
+                } else if (textStatus === "error" && xhr.status === 0) {
+                    errorType = "network";
+                    detailedMessage = "Network error";
+                }
+
+                // Log error and show alert
+                const shouldShowAlert = !o.error &&
+                    !(o.errorOnceId && (o.errorOnceId + neighbours_status[ind].name) in sessionStorage);
+                if (o.errorOnceId && shouldShowAlert) {
+                    sessionStorage.setItem(o.errorOnceId + neighbours_status[ind].name, true);
+                }
+                logError({
+                    server: neighbours_status[ind].name,
+                    endpoint: req_url,
+                    message: o.errorMessage ? o.errorMessage + ": " + detailedMessage : detailedMessage,
+                    httpStatus: xhr.status,
+                    errorType: errorType,
+                    showAlert: shouldShowAlert
                 });
+
+                // Call custom error handler if provided
+                if (o.error) o.error(neighbours_status[ind], xhr, textStatus, errorThrown);
+                finish();
             }
-            $.ajax(req_params);
+
+            xhr.onload = function () {
+                const ok = (xhr.status >= 200 && xhr.status < 300) || xhr.status === 304;
+                if (!ok) {
+                    handleError("error", xhr.statusText);
+                    return;
+                }
+                try {
+                    neighbours_status[ind].data = parseBody();
+                } catch (err) {
+                    handleError("parsererror", err && err.message ? err.message : "Parse error");
+                    return;
+                }
+                neighbours_status[ind].checked = true;
+                neighbours_status[ind].status = true;
+                finish();
+            };
+            xhr.onerror = function () {
+                handleError("error", "");
+            };
+            xhr.ontimeout = function () {
+                handleError("timeout", "timeout");
+            };
+            xhr.onabort = function () {
+                handleError("abort", "abort");
+            };
+
+            if (isGlobal) fireAjaxStart();
+            xhr.send(!isNil(body) ? body : null);
         }
 
 
@@ -341,9 +568,10 @@ define(["jquery", "nprogress"],
          * @param {string} url
          *   Relative URL, including with optional query string (e.g. "plugins/selectors/check_selector?selector=from").
          * @param {Object} [options]
-         *   Ajax request configuration options.
+         *   Request configuration options.
          * @param {Object|string|Array} [options.data]
-         *   Request body for POST endpoints.
+         *   Request body for POST endpoints. Callers must pre-stringify JSON;
+         *   FormData is sent untouched.
          * @param {Object} [options.headers]
          *   Additional HTTP headers.
          * @param {"GET"|"POST"} [options.method]
@@ -351,7 +579,8 @@ define(["jquery", "nprogress"],
          * @param {string} [options.server]
          *   Name or base-URL of the target server (defaults to the currently selected Rspamd neighbour).
          * @param {Object} [options.params]
-         *   Extra jQuery.ajax() settings (e.g. timeout, dataType).
+         *   Extra request settings: global, timeout, dataType ("json"|"text"),
+         *   statusCode, etc.
          * @param {string} [options.errorMessage]
          *   Text to show inside a Bootstrap alert on generic errors (e.g. network failure).
          * @param {string} [options.errorOnceId]
@@ -369,14 +598,14 @@ define(["jquery", "nprogress"],
          *          data: any,             // parsed JSON or raw text
          *          percentComplete: number
          *        }
-         *     2. jqXHR: jQuery XHR object with properties
-         *        { readyState, status, statusText, responseText, responseJSON, … }
+         *     2. xhr: XMLHttpRequest (jqXHR-compatible: status, statusText,
+         *        responseText, readyState).
          * @param {function(Object, Object, string, string)} [options.error]
          *   Called on HTTP error or network failure. Receives:
          *     1. result: a per-server status object (status:false, data:{}).
-         *     2. jqXHR: jQuery XHR object (responseText, responseJSON, status, statusText).
-         *     3. textStatus: string describing error type ("error", "timeout", etc.).
-         *     4. errorThrown: exception message or HTTP statusText.
+         *     2. xhr: XMLHttpRequest (status, statusText, responseText).
+         *     3. textStatus: "error" | "timeout" | "abort" | "parsererror".
+         *     4. errorThrown: HTTP statusText or exception message.
          * @param {function()} [options.complete]
          *   Called once all servers have been tried; takes no arguments.
          *
@@ -403,7 +632,7 @@ define(["jquery", "nprogress"],
                 queryServer(neighbours_status, 0, "neighbours", {
                     success: function (json) {
                         const [{data}] = json;
-                        if (jQuery.isEmptyObject(data)) {
+                        if (Object.keys(data).length === 0) {
                             ui.neighbours = {
                                 local: {
                                     host: window.location.host,
@@ -413,17 +642,14 @@ define(["jquery", "nprogress"],
                         } else {
                             ui.neighbours = data;
                         }
-                        neighbours_status = [];
-                        $.each(ui.neighbours, (ind) => {
-                            neighbours_status.push({
-                                name: ind,
-                                host: ui.neighbours[ind].host,
-                                url: ui.neighbours[ind].url,
-                            });
-                        });
-                        $.each(neighbours_status, (ind) => {
+                        neighbours_status = Object.keys(ui.neighbours).map((name) => ({
+                            name: name,
+                            host: ui.neighbours[name].host,
+                            url: ui.neighbours[name].url,
+                        }));
+                        for (let ind = 0; ind < neighbours_status.length; ind++) {
                             queryServer(neighbours_status, ind, url, o);
-                        });
+                        }
                     },
                     errorMessage: "Cannot receive neighbours data"
                 });
@@ -456,45 +682,65 @@ define(["jquery", "nprogress"],
 
         /**
          * Hide one or more elements using Bootstrap's d-none class
-         * @param {string|jQuery} selector - CSS selector or jQuery object
-         * @param {boolean} anim - Whether to use animation (slideUp)
+         * @param {string|Element|NodeList|Array} selector - CSS selector or element(s)
+         * @param {boolean} anim - Whether to animate (slide up)
          */
         ui.hide = function (selector, anim = false) {
-            const $el = (typeof selector === "string") ? $(selector) : selector;
-            if (anim) {
-                $el.slideUp(400, function () {
-                    $(this).addClass("d-none");
-                });
-            } else {
-                $el.addClass("d-none");
+            for (const el of toElements(selector)) {
+                if (anim) {
+                    const height = el.offsetHeight;
+                    el.style.overflow = "hidden";
+                    el.animate(
+                        [{height: height + "px"}, {height: 0}],
+                        {duration: 400, easing: "ease", fill: "forwards"}
+                    ).onfinish = () => {
+                        el.classList.add("d-none");
+                        el.style.height = "";
+                        el.style.overflow = "";
+                    };
+                } else {
+                    el.classList.add("d-none");
+                }
             }
         };
 
         /**
          * Show one or more elements using Bootstrap's d-none class
-         * @param {string|jQuery} selector - CSS selector or jQuery object
-         * @param {boolean} anim - Whether to use animation (slideDown)
+         * @param {string|Element|NodeList|Array} selector - CSS selector or element(s)
+         * @param {boolean} anim - Whether to animate (slide down)
          */
         ui.show = function (selector, anim = false) {
-            const $el = (typeof selector === "string") ? $(selector) : selector;
-            if (anim) {
-                $el.removeClass("d-none").hide().slideDown(400);
-            } else {
-                $el.removeClass("d-none");
+            for (const el of toElements(selector)) {
+                if (anim) {
+                    el.classList.remove("d-none");
+                    const height = el.offsetHeight; // measure natural height now visible
+                    el.style.overflow = "hidden";
+                    el.style.height = "0";
+                    el.animate(
+                        [{height: 0}, {height: height + "px"}],
+                        {duration: 400, easing: "ease", fill: "forwards"}
+                    ).onfinish = () => {
+                        el.style.height = "";
+                        el.style.overflow = "";
+                    };
+                } else {
+                    el.classList.remove("d-none");
+                }
             }
         };
 
         /**
          * Toggle visibility of one or more elements using Bootstrap's d-none class
-         * @param {string|jQuery} selector - CSS selector or jQuery object
-         * @param {boolean} anim - Whether to use animation
+         * @param {string|Element|NodeList|Array} selector - CSS selector or element(s)
+         * @param {boolean} anim - Whether to animate
          */
         ui.toggle = function (selector, anim = false) {
-            const $el = (typeof selector === "string") ? $(selector) : selector;
-            if ($el.hasClass("d-none")) {
-                ui.show($el, anim);
-            } else {
-                ui.hide($el, anim);
+            for (const el of toElements(selector)) {
+                if (el.classList.contains("d-none")) {
+                    ui.show(el, anim);
+                } else {
+                    ui.hide(el, anim);
+                }
             }
         };
 
@@ -510,12 +756,15 @@ define(["jquery", "nprogress"],
             setFileInputFiles(fileInput, files, i) {
                 const dt = new DataTransfer();
                 if (arguments.length > 2) dt.items.add(files[i]);
-                $(fileInput).prop("files", dt.files);
+                const input = (typeof fileInput === "string") ? document.querySelector(fileInput) : fileInput;
+                input.files = dt.files;
             },
 
             setupFileHandling(textArea, fileInput, fileSet, enable_btn_cb, multiple_files_cb) {
                 const dragoverClassList = "outline-dashed-primary bg-primary-subtle";
                 const {readFile, setFileInputFiles} = ui.fileUtils;
+                const ta = (typeof textArea === "string") ? document.querySelector(textArea) : textArea;
+                const fi = (typeof fileInput === "string") ? document.querySelector(fileInput) : fileInput;
 
                 function handleFileInput(fileSource) {
                     fileSet.files = fileSource.files;
@@ -526,7 +775,7 @@ define(["jquery", "nprogress"],
                         setFileInputFiles(fileInput, files, 0);
                         enable_btn_cb();
                         readFile(files, (result) => {
-                            $(textArea).val(result);
+                            ta.value = result;
                             enable_btn_cb();
                         });
                     } else if (multiple_files_cb) {
@@ -536,90 +785,106 @@ define(["jquery", "nprogress"],
                     }
                 }
 
-                $(textArea)
-                    .on("dragenter dragover dragleave drop", (e) => {
+                ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
+                    ta.addEventListener(evt, (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                    })
-                    .on("dragenter dragover", () => $(textArea).addClass(dragoverClassList))
-                    .on("dragleave drop", () => $(textArea).removeClass(dragoverClassList))
-                    .on("drop", (e) => handleFileInput(e.originalEvent.dataTransfer))
-                    .on("input", () => {
-                        enable_btn_cb();
-                        if (fileSet.files) {
-                            fileSet.files = null;
-                            setFileInputFiles(fileInput, fileSet.files);
-                        }
                     });
+                });
+                ["dragenter", "dragover"].forEach((evt) => {
+                    ta.addEventListener(evt, () => ta.classList.add(...dragoverClassList.split(" ")));
+                });
+                ["dragleave", "drop"].forEach((evt) => {
+                    ta.addEventListener(evt, () => ta.classList.remove(...dragoverClassList.split(" ")));
+                });
+                ta.addEventListener("drop", (e) => handleFileInput(e.dataTransfer));
+                ta.addEventListener("input", () => {
+                    enable_btn_cb();
+                    if (fileSet.files) {
+                        fileSet.files = null;
+                        setFileInputFiles(fileInput, fileSet.files);
+                    }
+                });
 
-                $(fileInput).on("change", (e) => handleFileInput(e.target));
+                fi.addEventListener("change", (e) => handleFileInput(e.target));
             }
         };
 
-        // Error log event handlers
-        $(document).ready(() => {
+        ui.copyToClipboard = function (text) {
+            // Try modern Clipboard API first (HTTPS only)
+            const clip = navigator.clipboard;
+            if (clip && clip.writeText) return clip.writeText(text);
+
+            // Fallback for HTTP or older browsers using execCommand
+            return new Promise((resolve, reject) => {
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+
+                // Check if any modal is currently open
+                const modal = document.querySelector(".modal.show");
+
+                const modalBody = modal?.querySelector(".modal-body");
+                if (modalBody) {
+                    // Inside open modal: use fixed positioning to avoid focus trap
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "50%";
+                    textarea.style.left = "50%";
+                    textarea.style.opacity = "0";
+                    modalBody.appendChild(textarea);
+                } else {
+                    // Outside modal: use absolute positioning off-screen
+                    textarea.style.position = "absolute";
+                    textarea.style.left = "-9999px";
+                    document.body.appendChild(textarea);
+                }
+
+                try {
+                    textarea.focus({preventScroll: true});
+                    textarea.select();
+                    const successful = document.execCommand("copy");
+                    textarea.remove();
+
+                    if (successful) {
+                        resolve();
+                    } else {
+                        reject(new Error("Copy command failed"));
+                    }
+                } catch (err) {
+                    textarea.remove();
+                    reject(err);
+                }
+            });
+        };
+
+        // Error log event handlers (bound once the DOM is ready)
+        function onReady(fn) {
+            if (document.readyState !== "loading") {
+                fn();
+            } else {
+                document.addEventListener("DOMContentLoaded", fn);
+            }
+        }
+
+        onReady(() => {
+            const errorLogModal = document.getElementById("errorLogModal");
+            const clearBtn = document.getElementById("clearErrorLog");
+            const copyBtn = document.getElementById("copyErrorLog");
+
             // Update error log table when modal is shown
-            $("#errorLogModal").on("show.bs.modal", () => {
+            errorLogModal.addEventListener("show.bs.modal", () => {
                 updateErrorLogTable();
                 // Mark all errors as viewed when modal is opened
                 errorLog.markAsViewed();
             });
 
             // Clear error log
-            $("#clearErrorLog").on("click", () => {
+            clearBtn.addEventListener("click", () => {
                 errorLog.clear();
                 updateErrorLogTable();
             });
 
-            // Copy to clipboard with fallback for HTTP
-            ui.copyToClipboard = function (text) {
-                // Try modern Clipboard API first (HTTPS only)
-                const clip = navigator.clipboard;
-                if (clip && clip.writeText) return clip.writeText(text);
-
-                // Fallback for HTTP or older browsers using execCommand
-                return new Promise((resolve, reject) => {
-                    const textarea = document.createElement("textarea");
-                    textarea.value = text;
-
-                    // Check if any modal is currently open
-                    const modal = document.querySelector(".modal.show");
-
-                    const modalBody = modal?.querySelector(".modal-body");
-                    if (modalBody) {
-                        // Inside open modal: use fixed positioning to avoid focus trap
-                        textarea.style.position = "fixed";
-                        textarea.style.top = "50%";
-                        textarea.style.left = "50%";
-                        textarea.style.opacity = "0";
-                        modalBody.appendChild(textarea);
-                    } else {
-                        // Outside modal: use absolute positioning off-screen
-                        textarea.style.position = "absolute";
-                        textarea.style.left = "-9999px";
-                        document.body.appendChild(textarea);
-                    }
-
-                    try {
-                        textarea.focus({preventScroll: true});
-                        textarea.select();
-                        const successful = document.execCommand("copy");
-                        textarea.remove();
-
-                        if (successful) {
-                            resolve();
-                        } else {
-                            reject(new Error("Copy command failed"));
-                        }
-                    } catch (err) {
-                        textarea.remove();
-                        reject(err);
-                    }
-                });
-            };
-
             // Copy error log to clipboard
-            $("#copyErrorLog").on("click", () => {
+            copyBtn.addEventListener("click", () => {
                 if (errorLog.errors.length === 0) return;
 
                 const selection = window.getSelection();
@@ -646,10 +911,11 @@ define(["jquery", "nprogress"],
                 ui.copyToClipboard(textToCopy)
                     .then(() => {
                         // Show success feedback
-                        const btn = $("#copyErrorLog");
-                        const originalHtml = btn.html();
-                        btn.html('<i class="fas fa-check"></i> Copied!');
-                        setTimeout(() => btn.html(originalHtml), 2000);
+                        const originalHtml = copyBtn.innerHTML;
+                        copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        setTimeout(() => {
+                            copyBtn.innerHTML = originalHtml;
+                        }, 2000);
                     })
                     .catch((err) => alertMessage("alert-danger", "Failed to copy to clipboard: " + err.message));
             });

@@ -24,6 +24,8 @@ define(["jquery", "app/common", "bootstrap", "visibility",
         if (saveToLocalStorage) localStorage.setItem("ajax_timeout", timeout);
         if (setFieldValue) $(ajaxTimeoutBox).val(timeout);
 
+        // Apply to common.query (XHR) and to the remaining direct $.ajax calls.
+        common.setAjaxTimeout(timeout);
         $.ajaxSetup({
             timeout: timeout,
             jsonp: false
@@ -499,14 +501,21 @@ define(["jquery", "app/common", "bootstrap", "visibility",
         tabClick("#throughput_nav");
     });
 
-    $(document).ajaxStart(() => {
+    function refreshSpinStart() {
         $("#refresh > svg").addClass("fa-spin");
-    });
-    $(document).ajaxComplete(() => {
+    }
+    function refreshSpinStop() {
         setTimeout(() => {
             $("#refresh > svg").removeClass("fa-spin");
         }, 1000);
-    });
+    }
+
+    // Drive the refresh spinner from both the remaining jQuery $.ajax calls
+    // and common.query (XHR) requests.
+    $(document).ajaxStart(refreshSpinStart);
+    $(document).ajaxComplete(refreshSpinStop);
+    common.onAjaxStart(refreshSpinStart);
+    common.onAjaxComplete(refreshSpinStop);
 
     $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
         tabClick("#" + $(this).attr("id"));
