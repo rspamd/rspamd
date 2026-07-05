@@ -4,38 +4,39 @@
 
 /* global require */
 
-define(["jquery", "app/common", "bootstrap"],
-    ($, common, bootstrap) => {
+define(["app/common", "bootstrap"],
+    (common, bootstrap) => {
         "use strict";
         const ui = {};
 
         ui.getActions = function getActions() {
             common.query("actions", {
                 success: function (data) {
-                    $("#actionsFormField").empty();
+                    const form = document.getElementById("actionsFormField");
                     const items = [];
-                    $.each(data[0].data, (i, item) => {
+                    data[0].data.forEach((item) => {
                         const actionsOrder = ["greylist", "add header", "rewrite subject", "reject"];
                         const idx = actionsOrder.indexOf(item.action);
                         if (idx >= 0) {
                             items.push({
                                 idx: idx,
-                                html:
-                                '<div class="mb-3">' +
-                                    '<label class="col-form-label col-md-2 float-start">' + item.action + "</label>" +
-                                    '<div class="controls slider-controls col-md-10">' +
-                                        '<input class="action-scores form-control" data-id="action" type="number" value="' +
-                                          item.value + '">' +
-                                    "</div>" +
-                                "</div>"
+                                node: common.el("div", {class: "mb-3"},
+                                    common.el("label", {class: "col-form-label col-md-2 float-start", text: item.action}),
+                                    common.el("div", {class: "controls slider-controls col-md-10"},
+                                        common.el("input", {
+                                            class: "action-scores form-control",
+                                            dataset: {id: "action"},
+                                            type: "number",
+                                            value: item.value,
+                                        })
+                                    )
+                                )
                             });
                         }
                     });
 
                     items.sort((a, b) => a.idx - b.idx);
-
-                    $("#actionsFormField").html(
-                        items.map((e) => e.html).join(""));
+                    form.replaceChildren(...items.map((e) => e.node));
                 },
                 server: common.getServer()
             });
@@ -56,7 +57,7 @@ define(["jquery", "app/common", "bootstrap"],
 
             const elts = (function () {
                 const values = [];
-                const inputs = $("#actionsForm :input[data-id=\"action\"]");
+                const inputs = document.querySelectorAll("#actionsForm input[data-id=\"action\"]");
                 // Rspamd order: [spam, rewrite_subject, probable_spam, greylist]
                 values[0] = parseFloat(inputs[3].value);
                 values[1] = parseFloat(inputs[2].value);
@@ -90,34 +91,36 @@ define(["jquery", "app/common", "bootstrap"],
         };
 
         ui.getMaps = function () {
-            const $listmaps = $("#listMaps");
-            common.hide($listmaps.closest(".card"));
+            const listmaps = document.getElementById("listMaps");
+            const card = listmaps.closest(".card");
+            common.hide(card);
             common.query("maps", {
                 success: function (json) {
                     const [{data}] = json;
-                    const $tbody = $listmaps.children("tbody").empty();
+                    const tbody = listmaps.querySelector("tbody");
+                    tbody.replaceChildren();
 
-                    $.each(data, (i, item) => {
-                        const $td = $("<td>");
-
+                    data.forEach((item) => {
+                        const td = common.el("td");
                         const badges = [
                             {text: "Not loaded", cls: "text-bg-warning", cond: !item.loaded},
                             {text: "Cached", cls: "text-bg-info", cond: item.cached},
                             {text: "Writable", cls: "text-bg-success", cond: !(item.editable === false || common.read_only)}
                         ];
                         badges.forEach((b) => {
-                            if (b.cond) $td.append($(`<span class="badge me-1 ${b.cls}">${b.text}</span>`));
+                            if (b.cond) td.append(common.el("span", {class: "badge me-1 " + b.cls, text: b.text}));
                         });
 
-                        const $tr = $("<tr>").append($td).append($("<td>" + item.type + "</td>"));
-                        if (!item.loaded) $tr.addClass("table-active opacity-50");
+                        const tr = common.el("tr", null, td, common.el("td", {text: item.type}));
+                        if (!item.loaded) tr.classList.add("table-active", "opacity-50");
 
-                        const $span = $('<span class="map-link">' + item.uri + "</span>").data("item", item);
-                        $span.wrap("<td>").parent().appendTo($tr);
-                        $("<td>" + item.description + "</td>").appendTo($tr);
-                        $tr.appendTo($tbody);
+                        const span = common.el("span", {class: "map-link", text: item.uri});
+                        common.data(span, "item", item);
+                        tr.append(common.el("td", null, span));
+                        tr.append(common.el("td", {text: item.description}));
+                        tbody.append(tr);
                     });
-                    common.show($listmaps.closest(".card"));
+                    common.show(card);
                 },
                 server: common.getServer()
             });
@@ -141,19 +144,23 @@ define(["jquery", "app/common", "bootstrap"],
         let mode = "advanced";
 
         // Modal form for maps
-        $(document).on("click", ".map-link", function () {
-            const item = $(this).data("item");
+        common.delegate(document, "click", ".map-link", (event, span) => {
+            const item = common.data(span, "item");
             common.query("getmap", {
                 headers: {
                     Map: item.map
                 },
                 success: function (data) {
                     // Highlighting a large amount of text is unresponsive
-                    mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
+                    const checkedMode = document.querySelector("input[name=\"editorMode\"]:checked")?.value;
+                    mode = (new Blob([data[0].data]).size > 5120) ? "basic" : checkedMode;
 
-                    $("#modalBody").empty();
-                    $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map +
-                        '"></' + editor[mode].elt + ">").appendTo("#modalBody");
+                    const editorElt = common.el(editor[mode].elt, {
+                        id: "editor",
+                        class: editor[mode].class,
+                        dataset: {id: item.map}
+                    });
+                    document.getElementById("modalBody").replaceChildren(editorElt);
 
                     if (editor[mode].codejar) {
                         require(["codejar", "linenumbers", "prism"], (CodeJar, withLineNumbers, Prism) => {
@@ -164,19 +171,23 @@ define(["jquery", "app/common", "bootstrap"],
                             jar.updateCode(data[0].data);
                         });
                     } else {
-                        document.querySelector("#editor").innerHTML = common.escapeHTML(data[0].data);
+                        editorElt.innerHTML = common.escapeHTML(data[0].data);
                     }
 
                     let icon = "fa-pen-to-square";
                     if (item.editable === false || common.read_only) {
-                        $("#editor").attr(editor[mode].readonly_attr);
+                        Object.entries(editor[mode].readonly_attr).forEach(([attr, value]) => {
+                            editorElt.setAttribute(attr, value);
+                        });
                         icon = "fa-eye";
                         common.hide("#modalSaveGroup");
                     } else {
                         common.show("#modalSaveGroup");
                     }
-                    $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
-                    $("#modalTitle").html(item.uri);
+                    document.querySelectorAll("#modalDialog .modal-header [data-fa-i2svg]").forEach((el) => {
+                        el.classList.add(icon);
+                    });
+                    document.getElementById("modalTitle").textContent = item.uri;
 
                     bootstrap.Modal.getOrCreateInstance(document.getElementById("modalDialog")).show();
                 },
@@ -184,21 +195,17 @@ define(["jquery", "app/common", "bootstrap"],
                 server: common.getServer()
             });
         });
-        $("#modalDialog").on("hidden.bs.modal", () => {
+        document.getElementById("modalDialog").addEventListener("hidden.bs.modal", () => {
             if (editor[mode].codejar && jar && typeof jar.destroy === "function") {
                 jar.destroy();
-                $(".codejar-wrap").remove();
+                document.querySelectorAll(".codejar-wrap").forEach((el) => el.remove());
             } else {
-                $("#editor").remove();
+                document.getElementById("editor")?.remove();
             }
         });
 
-        $("#saveActionsBtn").on("click", () => {
-            ui.saveActions();
-        });
-        $("#saveActionsClusterBtn").on("click", () => {
-            ui.saveActions("All SERVERS");
-        });
+        document.getElementById("saveActionsBtn").addEventListener("click", () => ui.saveActions());
+        document.getElementById("saveActionsClusterBtn").addEventListener("click", () => ui.saveActions("All SERVERS"));
 
         function saveMap(server) {
             common.query("savemap", {
@@ -209,21 +216,17 @@ define(["jquery", "app/common", "bootstrap"],
                 errorMessage: "Save map error",
                 method: "POST",
                 headers: {
-                    Map: $("#editor").data("id"),
+                    Map: document.getElementById("editor").dataset.id,
                 },
                 params: {
-                    data: editor[mode].codejar ? jar.toString() : $("#editor").val(),
+                    data: editor[mode].codejar ? jar.toString() : document.getElementById("editor").value,
                     dataType: "text",
                 },
                 server: server
             });
         }
-        $("#modalSave").on("click", () => {
-            saveMap();
-        });
-        $("#modalSaveAll").on("click", () => {
-            saveMap("All SERVERS");
-        });
+        document.getElementById("modalSave").addEventListener("click", () => saveMap());
+        document.getElementById("modalSaveAll").addEventListener("click", () => saveMap("All SERVERS"));
 
         return ui;
     });
