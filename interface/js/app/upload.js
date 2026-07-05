@@ -2,8 +2,6 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-/* global require */
-
 define(["jquery", "app/common", "app/libft"],
     ($, common, libft) => {
         "use strict";
@@ -49,7 +47,7 @@ define(["jquery", "app/common", "app/libft"],
         }
 
         function enable_disable_scan_btn(disable) {
-            $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .ft-columns-btn)")
+            $("#scan button:not(#cleanScanHistory, #deleteHashesBtn, #scanOptionsToggle, .tab-columns-btn)")
                 .prop("disabled", (disable || $.trim($("#scanMsgSource").val()).length === 0));
         }
 
@@ -84,32 +82,30 @@ define(["jquery", "app/common", "app/libft"],
                         if (fileSet.files) items[0].file = fileSet.files[fileSet.index].name;
 
                         if (Object.prototype.hasOwnProperty.call(common.tables, "scan")) {
-                            common.tables.scan.rows.load(items, true);
+                            common.tables.scan.addData(items);
                         } else {
-                            require(["footable"], () => {
-                                libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true,
-                                    () => {
-                                        const {files} = fileSet;
-                                        if (files && fileSet.index < files.length - 1) {
-                                            common.fileUtils.readFile(files, (result) => {
-                                                const {index} = fileSet;
-                                                if (index === files.length - 1) {
-                                                    $("#scanMsgSource").val(result);
-                                                    common.fileUtils.setFileInputFiles("#formFile", files, index);
-                                                }
-                                                scanText(result);
-                                            }, ++fileSet.index);
-                                        } else {
-                                            enable_disable_scan_btn();
-                                            $("#cleanScanHistory, #scan .ft-columns-dropdown .btn-dropdown-apply")
-                                                .removeAttr("disabled");
-                                            libft.bindFuzzyHashButtons("scan");
-                                            $("html, body").animate({
-                                                scrollTop: $("#scanResult").offset().top
-                                            }, 1000);
-                                        }
-                                    });
-                            });
+                            libft.initHistoryTable(data, items, "scan", libft.columns_v2("scan"), true,
+                                () => {
+                                    const {files} = fileSet;
+                                    if (files && fileSet.index < files.length - 1) {
+                                        common.fileUtils.readFile(files, (result) => {
+                                            const {index} = fileSet;
+                                            if (index === files.length - 1) {
+                                                $("#scanMsgSource").val(result);
+                                                common.fileUtils.setFileInputFiles("#formFile", files, index);
+                                            }
+                                            scanText(result);
+                                        }, ++fileSet.index);
+                                    } else {
+                                        enable_disable_scan_btn();
+                                        $("#cleanScanHistory, #scan .tab-columns-dropdown .btn-dropdown-apply")
+                                            .removeAttr("disabled");
+                                        libft.bindFuzzyHashButtons("scan");
+                                        $("html, body").animate({
+                                            scrollTop: $("#scanResult").offset().top
+                                        }, 1000);
+                                    }
+                                });
                         }
                     } else {
                         common.alertMessage("alert-danger", "Cannot scan data");

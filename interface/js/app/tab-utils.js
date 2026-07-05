@@ -1,0 +1,167 @@
+/*
+ * Tabulator UI helpers shared across tables.
+ * Extracted from history.js Phase 0. Depends only on common (for
+ * common.tables); no jQuery.
+ */
+
+define(["app/common"],
+    (common) => {
+        "use strict";
+        const tabUtils = {};
+
+        let scrollIntoViewPatched = false;
+        // Tabulator's destroy() clears a table's children but leaves the mount
+        // element (and listeners attached to it) in place, so a destroy+re-init
+        // would stack handlers. Keyed by element to keep one handler per table.
+        const rowToggleHandlers = new WeakMap();
+        // Same leak mode as rowToggleHandlers, but installScrollPreservation also
+        // binds a window "scroll" listener and (optionally) arm-trigger listeners;
+        // all stored here so a rebuild can remove the previous set first.
+        const scrollPreservationHandlers = new WeakMap();
+
+        /**
+         * Patch Element.prototype.scrollIntoView once so that calls for elements
+         * inside ANY Tabulator table (.tabulator container) are no-ops. Guarded
+         * by a module-level flag so the prototype is patched only once regardless
+         * of how many tables call this.
+         */
+        tabUtils.patchScrollIntoViewOnce = function () {
+            if (scrollIntoViewPatched) return;
+            const native = Element.prototype.scrollIntoView;
+            Element.prototype.scrollIntoView = function (...args) {
+                if (!this.closest(".tabulator")) {
+                    native.apply(this, args);
+                }
+            };
+            scrollIntoViewPatched = true;
+        };
+
+        /**
+         * Remove tabindex from the tableholder and keep it removed (Tabulator
+         * re-adds it on render). Prevents focus-scroll when clicking body cells.
+         */
+        tabUtils.stripTableholderTabindex = function (table) {
+            const holder = common.tables[table].element.querySelector(".tabulator-tableholder");
+            if (!holder) return;
+            holder.removeAttribute("tabindex");
+            new MutationObserver(() => holder.removeAttribute("tabindex"))
+                .observe(holder, {attributes: true, attributeFilter: ["tabindex"]});
+        };
+
+        /**
+         * Hide the pagination footer when the table has only one page. Registers
+         * a renderComplete handler.
+         */
+        tabUtils.hideFooterOnSinglePage = function (table) {
+            common.tables[table].on("renderComplete", () => {
+                const t = common.tables[table];
+                const footer = t.element.querySelector(".tabulator-footer");
+                if (footer) footer.style.display = t.getPageMax() > 1 ? "" : "none";
+            });
+        };
+
+        /**
+         * Allow clicking anywhere on a row to toggle responsive-collapse
+         * (instead of just the tiny toggle icon). Skips when selecting text,
+         * clicking form elements (inputs, selects — e.g. the Score column),
+         * and when collapse is not active (toggle hidden).
+         *
+         * Idempotent across destroy+re-init: destroy() leaves the mount element
+         * and its listeners in place, so without removing the previous handler a
+         * rebuild would bind a second one and row clicks would no-op (the two
+         * handlers toggle the row open then shut).
+         */
+        tabUtils.bindRowClickToggle = function (table) {
+            const el = common.tables[table].element;
+            const prev = rowToggleHandlers.get(el);
+            if (prev) el.removeEventListener("click", prev);
+            function handler(e) {
+                const row = e.target.closest(".tabulator-row");
+                if (!row) return;
+                if (e.target.closest("input, select, textarea, button, .sym-order-toggle")) return;
+                const sel = window.getSelection && window.getSelection();
+                if (sel && sel.toString()) return;
+                const toggle = row.querySelector(".tabulator-responsive-collapse-toggle");
+                if (toggle && toggle.offsetParent) toggle.click();
+            }
+            el.addEventListener("click", handler);
+            rowToggleHandlers.set(el, handler);
+        };
+
+        /**
+         * Install scroll-position preservation for a table. Tabulator scrolls
+         * the page on interactions; this restores the position synchronously
+         * (before paint) so the jump is never visible.
+         *
+         * @param {string} table - Key in common.tables
+         * @param {Object} options - { armTriggers: HTMLElement[], clickMs?: 250, renderMs?: 400 }
+         */
+        tabUtils.installScrollPreservation = function (table, options) {
+            const t = common.tables[table];
+            const el = t.element;
+            const {clickMs = 250, renderMs = 400, armTriggers = []} = options || {};
+
+            // destroy()+re-init leaves the mount element (and window) in place, so
+            // each rebuild would stack a fresh listener set that is never released
+            // — a memory/listener leak. Tear down the previous set first. Mirrors
+            // bindRowClickToggle's WeakMap guard; keyed by the mount element.
+            const prev = scrollPreservationHandlers.get(el);
+            if (prev) {
+                ["click", "change", "input"].forEach((evt) => el.removeEventListener(evt, prev.arm, true));
+                prev.armTriggerEls.forEach((trigger) => trigger.removeEventListener("click", prev.arm, true));
+                window.removeEventListener("scroll", prev.onScroll, true);
+            }
+
+            let preserveY = 0;
+            let preserveUntil = 0;
+            let clickArmed = false;
+
+            function arm() {
+                const y = window.scrollY;
+                preserveY = y;
+                preserveUntil = performance.now() + clickMs;
+                clickArmed = true;
+                Promise.resolve().then(() => {
+                    // Microtask (after sync handlers, before paint): catch sync scrolls.
+                    if (window.scrollY !== y) window.scrollTo(0, y);
+                    // rAF queued from the microtask lands AFTER Tabulator's render rAF
+                    // (queued during the click), in the same frame after the render-
+                    // scroll but before paint.
+                    requestAnimationFrame(() => {
+                        if (window.scrollY !== y) window.scrollTo(0, y);
+                    });
+                });
+            }
+
+            function onScroll() {
+                if (performance.now() >= preserveUntil) return;
+                if (window.scrollY !== preserveY) window.scrollTo(0, preserveY);
+            }
+
+            // Arm on click plus change/input. A header-filter <select> changes
+            // (and triggers a filter re-render) long after its opening click, by
+            // which time an intervening renderComplete may have disarmed us;
+            // re-arming on change/input keeps the preservation live for that render.
+            ["click", "change", "input"].forEach((evt) => el.addEventListener(evt, arm, true));
+            armTriggers.forEach((trigger) => trigger.addEventListener("click", arm, true));
+
+            t.on("renderStarted", () => {
+                if (clickArmed) preserveUntil = performance.now() + renderMs;
+            });
+            t.on("renderComplete", () => {
+                // The render path scrolls the window asynchronously — the scroll
+                // event (and the listener below) lands a frame late, so the jump
+                // flashes for one frame. Restore synchronously here, before paint.
+                if (clickArmed && window.scrollY !== preserveY) {
+                    window.scrollTo(0, preserveY);
+                }
+                clickArmed = false;
+            });
+
+            window.addEventListener("scroll", onScroll, true);
+
+            scrollPreservationHandlers.set(el, {arm, onScroll, armTriggerEls: armTriggers});
+        };
+
+        return tabUtils;
+    });

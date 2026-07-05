@@ -100,8 +100,8 @@ requirejs.config({
         d3pie: "d3pie.min",
         fontawesome: "fontawesome.min",
         fontawesome_solid: "solid.min",
-        footable: "footable.min",
         linenumbers: "codejar-linenumbers.min",
+        tabulator: "tabulator.min",
         nprogress: "nprogress.min",
         prism: "prism",
         stickytabs: "jquery.stickytabs.min"
@@ -114,7 +114,6 @@ requirejs.config({
         d3evolution: {exports: "D3Evolution", deps: ["d3.global", "jquery"]},
         d3pie: {exports: "D3Pie", deps: ["d3.global", "jquery"]},
         fontawesome: {exports: "FontAwesome", deps: ["fontawesome_solid"]},
-        footable: {deps: ["bootstrap", "jquery"]},
         linenumbers: {exports: "withLineNumbers", deps: ["prism"]},
         prism: {exports: "Prism"},
         stickytabs: {deps: ["jquery"]}

@@ -1,10 +1,14 @@
-/* global FooTable */
-
-define(["jquery", "app/common", "footable"],
-    ($, common) => {
+define(["jquery", "app/common", "app/tab-utils", "tabulator"],
+    ($, common, tabUtils, Tabulator) => {
         "use strict";
         const ui = {};
         const columnsCustom = JSON.parse(localStorage.getItem("columns")) || {};
+
+        // responsive:100 alone only collapses a column when the table already
+        // overflows the viewport; pairing it with a very large minWidth forces
+        // the overflow, so the column always renders in the detail row ("Row"
+        // mode). Same trick the symbols/rcpt_mime columns use by default.
+        const FORCE_COLLAPSE_MIN_WIDTH = 4000;
 
         let pageSizeTimerId = null;
 
@@ -32,11 +36,109 @@ define(["jquery", "app/common", "footable"],
                 .join("<br>\n");
         }
 
+        // Highlight the active symbol-order button for a table. The buttons are
+        // part of the symbols column title, which is rendered inside each row's
+        // collapsed detail, so they are recreated on every render — call this
+        // after each build/render, not at handler bind time.
+        function setActiveSymOrderButton(table, order) {
+            const active = order || common.getSelector("selSymOrder_" + table);
+            if (active) {
+                $(".btn-sym-" + table + "-" + active).addClass("active").siblings().removeClass("active");
+            }
+        }
 
-        // Public functions
+        function ipSorter(a, b) {
+            function norm(ip) {
+                return (typeof ip === "string" ? ip.split(".").map((x) => x.padStart(3, "0")).join("") : "0");
+            }
+            return norm(a).localeCompare(norm(b));
+        }
+
+        // ── Action filter for history/scan tables ─────────────────────────────
+
+        const actionValues = ["reject", "add header", "greylist", "no action", "soft reject", "rewrite subject"];
+
+        function actionHeaderFilter(cell, onRendered, success) {
+            const container = document.createElement("div");
+            container.style.display = "flex";
+            container.style.gap = "4px";
+            container.style.alignItems = "center";
+
+            const select = document.createElement("select");
+            select.className = "form-select form-select-sm";
+            select.appendChild(new Option("Any action", ""));
+            actionValues.forEach((a) => select.appendChild(new Option(a, a)));
+
+            const notLabel = document.createElement("label");
+            notLabel.style.whiteSpace = "nowrap";
+            notLabel.title = "Invert action match";
+            const not = document.createElement("input");
+            not.type = "checkbox";
+            notLabel.append(not, " not");
+
+            container.append(notLabel, select);
+
+            function onChange() {
+                if (!select.value) {
+                    success(false);
+                } else {
+                    success({action: select.value, not: not.checked});
+                }
+            }
+            select.addEventListener("change", onChange);
+            not.addEventListener("change", onChange);
+
+            return container;
+        }
+
+        function actionFilterFunc(filterVal, cellVal) {
+            if (!filterVal || !filterVal.action) return true;
+            const match = cellVal === filterVal.action;
+            return filterVal.not ? !match : match;
+        }
+
+        // ── Column formatters ────────────────────────────────────────────────
+
+        function actionFormatter(cell) {
+            const action = cell.getValue();
+            const cls = {
+                "clean": "success",
+                "no action": "success",
+                "rewrite subject": "warning",
+                "add header": "warning",
+                "probable spam": "warning",
+                "spam": "danger",
+                "reject": "danger"
+            }[action] || "info";
+            return `<div style="font-size:11px" class="badge text-bg-${cls}">${action}</div>`;
+        }
+
+        function scoreFormatter(cell) {
+            const data = cell.getData();
+            const score = cell.getValue();
+            const required = data.required_score;
+            const cls = score < required ? "text-success" : "text-danger";
+            return `<span class="${cls}">${score.toFixed(2)} / ${required}</span>`;
+        }
+
+        function symOrderTitle(table) {
+            return "Symbols" +
+                '<div class="sym-order-toggle">' +
+                    '<br><span style="font-weight:normal;">Sort by:</span><br>' +
+                    '<div class="btn-group btn-group-xs btn-sym-order-' + table + '">' +
+                        '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-magnitude">' +
+                            '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
+                        '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-score">' +
+                            '<input type="radio" class="btn-check" value="score">Value</label>' +
+                        '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-name">' +
+                            '<input type="radio" class="btn-check" value="name">Name</label>' +
+                    "</div>" +
+                "</div>";
+        }
+
+        // ── Public functions ─────────────────────────────────────────────────
 
         ui.formatBytesIEC = function (bytes) {
-            // FooTable represents data as text even column type is "number".
             if (!Number.isInteger(Number(bytes)) || bytes < 0) return "NaN";
 
             const base = 1024;
@@ -51,135 +153,260 @@ define(["jquery", "app/common", "footable"],
             return value + " " + unit;
         };
 
+        // ── Global (boolean) query filter ─────────────────────────────────
+        // A single search box per table driving a Tabulator setFilter(). The
+        // query language:
+        //   `foo bar`        → foo AND bar            (whitespace is AND)
+        //   `foo OR bar`     → foo OR bar
+        //   `foo -bar`       → foo AND NOT bar        (leading "-" negates)
+        //   `"soft reject"`  → exact contiguous phrase
+        //   `foo bar OR baz` → (foo AND bar) OR baz
+        // Matching is case-insensitive substring. Quotes are honoured when
+        // splitting on AND/OR, so a phrase may itself contain those words.
+        // The setFilter() predicate ANDs with the per-column header filters.
+        const SEARCH_FIELDS = ["id", "ip", "sender_mime", "rcpt_mime", "rcpt_mime_short",
+            "subject", "user", "passthrough_module", "file", "action"];
+        // Haystack cache keyed by row data object (see buildSearchHaystack).
+        const haystackCache = new WeakMap();
+
+        function decodeEntities(str) {
+            // Values are HTML-escaped upstream (preprocess_item); decode so a
+            // literal "&" or "<" typed in the box still matches. &amp; last to
+            // avoid double-decoding entities like &amp;lt;.
+            return str.replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+                .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+        }
+
+        // The visible To/Cc/Bcc column shows a truncated recipient list
+        // (rcpt_mime_short); match against the full rcpt_mime so recipients
+        // hidden behind "… (N)" are still found. (scan rows keep it as an array.)
+        function rcptFilterFunc(filterVal, _cellVal, rowData) {
+            if (!filterVal) return true;
+            const raw = rowData.rcpt_mime;
+            const hay = Array.isArray(raw) ? raw.join(", ") : (raw || "");
+            return decodeEntities(hay).toLowerCase().includes(filterVal.toLowerCase());
+        }
+
+        // Compile a query string into a {test(haystack)} predicate, or null when
+        // the query is blank (meaning "no filter"). Tokenize keeping quoted
+        // phrases intact; "AND"/"OR" are operators; a leading "-" negates the
+        // following term or phrase.
+        function compileFilterQuery(input) {
+            if (!input || !input.trim()) return null;
+            const tokens = input.match(/"[^"]*"|\S+/g) || [];
+            const groups = [[]]; // OR of AND-groups
+            tokens.forEach((token) => {
+                if (token.toUpperCase() === "OR") {
+                    groups.push([]);
+                    return;
+                }
+                if (token.toUpperCase() === "AND") return;
+                let term = token;
+                const negate = term.charAt(0) === "-";
+                if (negate) term = term.slice(1);
+                const quoted = term.length >= 2 && term.charAt(0) === '"' && term.slice(-1) === '"';
+                if (quoted) term = term.slice(1, -1);
+                if (!term) return;
+                groups[groups.length - 1].push({q: term.toLowerCase(), negate});
+            });
+            // Drop groups left empty by dangling/leading/doubled operators
+            // (e.g. "foo OR", "OR foo", "foo OR OR bar") so they don't match all
+            // rows via [].every() vacuous truth.
+            const orGroups = groups.filter((g) => g.length);
+            if (!orGroups.length) return null;
+            return {
+                test(haystack) {
+                    return orGroups.some((group) => group.every((t) => {
+                        const found = haystack.indexOf(t.q) !== -1;
+                        return t.negate ? !found : found;
+                    }));
+                }
+            };
+        }
+
+        // Lowercased searchable text for a row. Numeric/formatted columns (time,
+        // time_real, size, score) are excluded — their raw values are useless for
+        // free-text search, and the per-column header filters cover them. Memoized
+        // in a WeakMap keyed by the data object so it is built once per row, not
+        // on every keystroke; entries are GC'd when the row data is replaced.
+        function buildSearchHaystack(data) {
+            if (haystackCache.has(data)) return haystackCache.get(data);
+            let s = SEARCH_FIELDS.map((f) => (typeof data[f] === "string" ? data[f] : "")).join(" ");
+            if (data.symbols_obj) {
+                s += " " + Object.values(data.symbols_obj)
+                    .map((sym) => sym.name + " " + (sym.description || ""))
+                    .join(" ");
+            }
+            s = decodeEntities(s).toLowerCase();
+            haystackCache.set(data, s);
+            return s;
+        }
+
+        // Apply the current filter box value to the table, or clear it. Reads the
+        // Tabulator instance lazily so it works across a destroy+re-init.
+        function applyGlobalFilter(table) {
+            const tab = common.tables[table];
+            if (!tab) return;
+            const input = document.getElementById("filter_" + table);
+            const compiled = compileFilterQuery(input ? input.value : null);
+            if (!compiled) {
+                tab.clearFilter();
+                return;
+            }
+            tab.setFilter((data) => compiled.test(buildSearchHaystack(data)));
+        }
+
+        // Bind the filter box: live, debounced. Bound once per table; the handler
+        // resolves the current instance at fire time, so it survives rebuilds.
+        function bindGlobalFilter(table) {
+            const input = document.getElementById("filter_" + table);
+            if (!input) return;
+            input.title = "Search syntax: match all rows containing\n\n" +
+                '"exact phrase" — exact string (including spaces)\n' +
+                "term1 OR term2 — either term\n" +
+                "term1 AND term2 — both terms\n" +
+                "term1 term2 — both terms (same as AND)\n" +
+                "term1 -term2 — term1 but exclude rows with term2";
+            let timer = null;
+            input.addEventListener("input", () => {
+                clearTimeout(timer);
+                timer = setTimeout(() => applyGlobalFilter(table), 250);
+            });
+        }
+
         ui.columns_v2 = function (table) {
-            return [{
-                name: "id",
+            const cols = [{
+                // Toggle to expand collapsed (responsive) columns
+                formatter: "responsiveCollapse",
+                width: 23,
+                minWidth: 23,
+                responsive: 0,
+                hozAlign: "center",
+                resizable: false,
+                headerSort: false,
+            }, {
                 title: "ID",
-                style: {
-                    minWidth: 130,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    wordBreak: "break-all",
-                    whiteSpace: "normal"
-                }
+                field: "id",
+                headerFilter: "input",
+                responsive: 0,
+                minWidth: 130,
+                widthGrow: 2,
             }, {
-                name: "file",
                 title: "File name",
-                breakpoints: "sm",
-                sortValue: (val) => ((typeof val === "undefined") ? "" : val)
+                field: "file",
+                headerFilter: "input",
+                responsive: 1,
+                minWidth: 260,
+                widthGrow: 4,
             }, {
-                name: "ip",
                 title: "IP address",
-                breakpoints: "lg",
-                style: {
-                    "minWidth": "calc(14ch + 8px)",
-                    "word-break": "break-all"
-                },
-                // Normalize IPv4
-                sortValue: (ip) => ((typeof ip === "string") ? ip.split(".").map((x) => x.padStart(3, "0")).join("") : "0")
+                field: "ip",
+                headerFilter: "input",
+                responsive: 3,
+                minWidth: 98,
+                width: 98,
+                sorter: ipSorter,
             }, {
-                name: "sender_mime",
                 title: "[Envelope From] From",
-                breakpoints: "lg",
-                style: {
-                    "minWidth": 100,
-                    "maxWidth": 200,
-                    "word-wrap": "break-word"
-                }
+                field: "sender_mime",
+                headerFilter: "input",
+                responsive: 3,
+                minWidth: 100,
+                maxWidth: 200,
             }, {
-                name: "rcpt_mime_short",
                 title: "[Envelope To] To/Cc/Bcc",
-                breakpoints: "lg",
-                filterable: false,
-                classes: "d-none d-xl-table-cell",
-                style: {
-                    "minWidth": 100,
-                    "maxWidth": 200,
-                    "word-wrap": "break-word"
-                }
+                field: "rcpt_mime_short",
+                responsive: 3,
+                headerFilter: "input",
+                headerFilterFunc: rcptFilterFunc,
+                minWidth: 100,
+                maxWidth: 200,
             }, {
-                name: "rcpt_mime",
                 title: "[Envelope To] To/Cc/Bcc",
-                breakpoints: "all",
-                style: {"word-wrap": "break-word"}
+                field: "rcpt_mime",
+                responsive: 100,
+                minWidth: FORCE_COLLAPSE_MIN_WIDTH,
             }, {
-                name: "subject",
                 title: "Subject",
-                breakpoints: "lg",
-                style: {
-                    "word-break": "break-all",
-                    "minWidth": 150
-                }
+                field: "subject",
+                headerFilter: "input",
+                responsive: 3,
+                minWidth: 150,
+                widthGrow: 2,
             }, {
-                name: "action",
                 title: "Action",
-                style: {minwidth: 82}
+                field: "action",
+                responsive: 0,
+                minWidth: 108,
+                width: 108,
+                formatter: actionFormatter,
+                headerFilter: actionHeaderFilter,
+                headerFilterFunc: actionFilterFunc,
             }, {
-                name: "passthrough_module",
                 title: '<div title="The module that has set the pre-result"><nobr>Pass-through</nobr> module</div>',
-                breakpoints: "sm",
-                style: {minWidth: 98, maxWidth: 98},
-                sortValue: (val) => ((typeof val === "undefined") ? "" : val)
+                field: "passthrough_module",
+                headerFilter: "input",
+                minWidth: 98,
+                width: 98,
             }, {
-                name: "score",
                 title: "Score",
-                style: {
-                    "maxWidth": 110,
-                    "text-align": "right",
-                    "white-space": "nowrap"
-                },
-                sortValue: (val) => Number(val.options.sortValue)
+                field: "score",
+                responsive: 0,
+                sorter: "number",
+                minWidth: 64,
+                width: 64,
+                formatter: scoreFormatter,
             }, {
-                name: "symbols",
-                title: "Symbols" +
-                        '<div class="sym-order-toggle">' +
-                            '<br><span style="font-weight:normal;">Sort by:</span><br>' +
-                            '<div class="btn-group btn-group-xs btn-sym-order-' + table + '">' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-magnitude">' +
-                                    '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-score">' +
-                                    '<input type="radio" class="btn-check" value="score">Value</label>' +
-                                '<label type="button" class="btn btn-outline-secondary btn-sym-' + table + '-name">' +
-                                    '<input type="radio" class="btn-check" value="name">Name</label>' +
-                            "</div>" +
-                        "</div>",
-                breakpoints: "all",
-                style: {width: 550, maxWidth: 550}
+                title: symOrderTitle(table),
+                field: "symbols",
+                formatter: "html",
+                headerSort: false,
+                // Highest responsive priority, so symbols collapses first. The
+                // large minWidth forces overflow at any realistic width, so the
+                // column always renders in the detail row (Tabulator has no native
+                // "always collapse" mode).
+                responsive: 100,
+                minWidth: FORCE_COLLAPSE_MIN_WIDTH,
             }, {
-                name: "size",
                 title: "Msg size",
-                breakpoints: "lg",
-                style: {minwidth: 50},
-                formatter: ui.formatBytesIEC
+                field: "size",
+                responsive: 3,
+                sorter: "number",
+                formatter: (cell) => ui.formatBytesIEC(cell.getValue()),
+                minWidth: 56,
+                width: 56,
             }, {
-                name: "time_real",
                 title: "Scan time",
-                breakpoints: "lg",
-                style: {maxWidth: 72},
-                sortValue: (val) => Number(val)
+                field: "time_real",
+                responsive: 3,
+                sorter: "number",
+                minWidth: 60,
+                width: 60,
             }, {
-                classes: "history-col-time",
-                sorted: true,
-                direction: "DESC",
-                name: "time",
                 title: "Time",
-                sortValue: (val) => Number(val.options.sortValue)
+                field: "time",
+                responsive: 0,
+                sorter: "number",
+                formatter: (cell) => ui.unix_time_format(cell.getValue()),
+                minWidth: 72,
+                width: 72,
             }, {
-                name: "user",
                 title: "Authenticated user",
-                breakpoints: "lg",
-                style: {
-                    "minWidth": 100,
-                    "maxWidth": 130,
-                    "word-wrap": "break-word"
-                }
-            }].filter((col) => {
+                field: "user",
+                headerFilter: "input",
+                responsive: 3,
+                minWidth: 100,
+                maxWidth: 130,
+            }];
+
+            return cols.filter((col) => {
+                if (!col.field) return true; // Toggle column
                 switch (table) {
                     case "history":
-                        return (col.name !== "file");
+                        return (col.field !== "file");
                     case "scan":
                         return ["ip", "sender_mime", "rcpt_mime_short", "rcpt_mime", "subject", "size", "user"]
-                            .every((name) => col.name !== name);
+                            .every((name) => col.field !== name);
                     default:
                         return null;
                 }
@@ -187,41 +414,36 @@ define(["jquery", "app/common", "footable"],
         };
 
         ui.set_page_size = function (table, page_size, changeTablePageSize) {
-            const n = parseInt(page_size, 10); // HTML Input elements return string representing a number
+            const n = parseInt(page_size, 10);
             if (n > 0) {
                 common.page_size[table] = n;
 
-                if (changeTablePageSize &&
-                    $("#historyTable_" + table + " tbody").is(":parent")) { // Table is not empty
-                    if (common.tables[table]) {
-                        // Table exists - debounce rapid changes (e.g., spin button clicks)
-                        clearTimeout(pageSizeTimerId);
-                        pageSizeTimerId = setTimeout(() => {
-                            common.tables[table]?.pageSize(n);
-                        }, 1000);
-                    } else {
-                        // Table doesn't exist - wait for initialization with event
-                        $("#historyTable_" + table).one("postinit.ft.table", () => {
-                            common.tables[table]?.pageSize(n);
-                        });
-                    }
+                if (changeTablePageSize && common.tables[table]) {
+                    clearTimeout(pageSizeTimerId);
+                    pageSizeTimerId = setTimeout(() => {
+                        common.tables[table]?.setPageSize(n);
+                    }, 1000);
                 }
             }
         };
 
-        ui.bindHistoryTableEventHandlers = function (table, symbolsCol) {
+        ui.bindHistoryTableEventHandlers = function (table) {
             function change_symbols_order(order) {
-                $(".btn-sym-" + table + "-" + order).addClass("active").siblings().removeClass("active");
                 const compare_function = get_compare_function(table);
-                $.each(common.tables[table].rows.all, (i, row) => {
-                    const cell_val = sort_symbols(common.symbols[table][i], compare_function);
-                    row.cells[symbolsCol].val(cell_val, false, true);
+                common.tables[table].getRows().forEach((row) => {
+                    const cell_val = sort_symbols(row.getData().symbols_obj, compare_function);
+                    // row.update (not cell.setValue) so the responsive-collapse
+                    // detail row is regenerated; setValue only re-renders the
+                    // hidden cell element and never refreshes the collapsed view.
+                    row.update({symbols: cell_val});
                 });
+                // row.update recreates each detail's buttons (without active);
+                // re-apply the active state to the fresh elements.
+                setActiveSymOrderButton(table, order);
             }
 
             $("#selSymOrder_" + table).unbind().change(function () {
-                const order = this.value;
-                change_symbols_order(order);
+                change_symbols_order(this.value);
             });
             $("#" + table + "_page_size").change((e) => ui.set_page_size(table, e.target.value, true));
             $(document).on("click", ".btn-sym-order-" + table + " input", function () {
@@ -229,177 +451,103 @@ define(["jquery", "app/common", "footable"],
                 $("#selSymOrder_" + table).val(order);
                 change_symbols_order(order);
             });
+
+            bindGlobalFilter(table);
         };
 
         ui.destroyTable = function (table) {
-            $("#" + table + " .ft-columns-btn.show").trigger("click.bs.dropdown"); // Hide dropdown
-            $("#" + table + " .ft-columns-btn").attr("disabled", true);
+            $("#" + table + " .tab-columns-btn.show").trigger("click.bs.dropdown");
+            $("#" + table + " .tab-columns-btn").attr("disabled", true);
             if (common.tables[table]) {
-                const promise = common.tables[table].destroy();
+                common.tables[table].destroy();
                 delete common.tables[table];
-                return promise;
             }
-            return new $.Deferred().resolve().promise();
         };
 
         ui.initHistoryTable = function (data, items, table, columnsDefault, expandFirst, postdrawCallback) {
-            /* eslint-disable no-underscore-dangle */
-            FooTable.Cell.extend("collapse", function () {
-                // call the original method
-                this._super();
-                // Copy cell classes to detail row tr element
-                this._setClasses(this.$detail);
-            });
-            /* eslint-enable no-underscore-dangle */
-
-            /* eslint-disable consistent-this, no-underscore-dangle */
-            FooTable.actionFilter = FooTable.Filtering.extend({
-                construct: function (instance) {
-                    this._super(instance);
-                    this.actions = ["reject", "add header", "greylist",
-                        "no action", "soft reject", "rewrite subject"];
-                    this.def = "Any action";
-                    this.$action = null;
-                },
-                $create: function () {
-                    this._super();
-                    const self = this;
-
-                    if (self.$input && self.$input.length && !self.$input.parent().find(".search-syntax-icon").length) {
-                        self.$input.parent().css("position", "relative");
-                        const $icon = $("<i/>", {
-                            class: "fas fa-circle-question search-syntax-icon text-muted",
-                            title: "Search syntax: match all rows containing\n\n" +
-                                   "\"exact phrase\" — exact string (including spaces)\n" +
-                                   "term1 OR term2 — either term\n" +
-                                   "term1 AND term2 — both terms\n" +
-                                   "term1 term2 — both terms (same as AND)\n" +
-                                   "term1 -term2 — term1 but exclude rows with term2"
-                        });
-                        $icon.insertAfter(self.$input);
-                    }
-
-                    const $form_grp = $("<div/>", {
-                        class: "form-group d-inline-flex align-items-center"
-                    }).append($("<label/>", {
-                        class: "sr-only",
-                        text: "Action"
-                    })).prependTo(self.$form);
-
-                    $("<div/>", {
-                        class: "form-check form-check-inline",
-                        title: "Invert action match."
-                    }).append(
-                        self.$not = $("<input/>", {
-                            type: "checkbox",
-                            class: "form-check-input",
-                            id: "not_" + table
-                        }).on("change", {self: self}, self._onStatusDropdownChanged),
-                        $("<label/>", {
-                            class: "form-check-label",
-                            for: "not_" + table,
-                            text: "not"
-                        })
-                    ).appendTo($form_grp);
-
-                    self.$action = $("<select/>", {
-                        class: "form-select"
-                    }).on("change", {
-                        self: self
-                    }, self._onStatusDropdownChanged).append(
-                        $("<option/>", {
-                            text: self.def
-                        })).appendTo($form_grp);
-
-                    $.each(self.actions, (i, action) => {
-                        self.$action.append($("<option/>").text(action));
-                    });
-
-                    common.appendButtonsToFtFilterDropdown(self);
-                },
-                _onStatusDropdownChanged: function (e) {
-                    const {self} = e.data;
-                    const selected = self.$action.val();
-                    if (selected !== self.def) {
-                        const not = self.$not.is(":checked");
-                        // eslint-disable-next-line no-useless-assignment
-                        let query = null;
-
-                        if (selected === "reject") {
-                            query = not ? "-reject OR soft" : "reject -soft";
-                        } else {
-                            query = not ? selected.replace(/(\b\w+\b)/g, "-$1") : selected;
-                        }
-
-                        self.addFilter("action", query, ["action"]);
-                    } else {
-                        self.removeFilter("action");
-                    }
-                    self.filter();
-                },
-                draw: function () {
-                    // Ensure the dropdown reflects the default value when filters are cleared.
-                    this._super();
-                    const actionFilter = this.find("action");
-                    const isActionFilterApplied = actionFilter instanceof FooTable.Filter;
-                    if (this.$action && !isActionFilterApplied) this.$action.val(this.def);
-                }
-            });
-            /* eslint-enable consistent-this, no-underscore-dangle */
-
-            const columns = (table in columnsCustom)
-                ? columnsDefault.map((column) => $.extend({}, column, columnsCustom[table][column.name]))
+            // A persisted "Row" column is stored as responsive:100; it must also
+            // receive the force-collapse minWidth so it renders in the detail row.
+            const baseColumns = (table in columnsCustom)
+                ? columnsDefault.map((column) => $.extend({}, column, columnsCustom[table][column.field]))
                 : columnsDefault.map((column) => column);
+            const columns = baseColumns.map((column) => (column.responsive === 100
+                ? $.extend({}, column, {minWidth: FORCE_COLLAPSE_MIN_WIDTH})
+                : column));
 
-            common.tables[table] = FooTable.init("#historyTable_" + table, {
-                breakpoints: common.breakpoints,
-                cascade: true,
+            common.tables[table] = new Tabulator("#historyTable_" + table, {
+                layout: "fitColumns",
+                responsiveLayout: "collapse",
+                responsiveLayoutCollapseStartOpen: expandFirst,
+                // Cell values are HTML-escaped upstream (preprocess_item); render
+                // them as HTML so entities decode. The default "plaintext"
+                // formatter re-escapes and would show &quot;/&amp; literally.
+                // Explicit column formatters override this.
+                columnDefaults: {formatter: "html"},
+                selectable: false,
+                pagination: "local",
+                paginationSize: common.page_size[table],
+                paginationButtonCount: 5,
+                data: items,
+                initialSort: [{column: "time", dir: "desc"}],
                 columns: columns,
-                rows: items,
-                expandFirst: expandFirst,
-                paging: {
-                    enabled: true,
-                    limit: 5,
-                    size: common.page_size[table]
-                },
-                filtering: {
-                    enabled: true,
-                    position: "left",
-                    connectors: false
-                },
-                sorting: {
-                    enabled: true
-                },
-                components: {
-                    filtering: FooTable.actionFilter
-                },
-                on: {
-                    "expanded.ft.row": function (e, ft, row) {
-                        const detail_row = row.$el.next();
-                        const order = common.getSelector("selSymOrder_" + table);
-                        detail_row.find(".btn-sym-" + table + "-" + order)
-                            .addClass("active").siblings().removeClass("active");
-                    },
-                    "postdraw.ft.table": postdrawCallback
-                }
             });
+
+            tabUtils.hideFooterOnSinglePage(table);
+            tabUtils.stripTableholderTabindex(table);
+            tabUtils.bindRowClickToggle(table);
+            tabUtils.patchScrollIntoViewOnce();
+            tabUtils.installScrollPreservation(table);
+
+            common.tables[table].on("tableBuilt", () => {
+                setActiveSymOrderButton(table);
+                // Re-apply a global filter in place when the table was rebuilt
+                // (e.g. via the column-options dropdown): a fresh Tabulator
+                // instance starts unfiltered, but the search box keeps its value.
+                const filterBox = document.getElementById("filter_" + table);
+                if (filterBox && filterBox.value.trim()) applyGlobalFilter(table);
+            });
+            if (postdrawCallback) common.tables[table].on("renderComplete", postdrawCallback);
+            // The "Sort by:" buttons are rendered inside each row's collapsed
+            // detail (via the column title), so they are recreated on every
+            // render — re-apply the active state each time.
+            common.tables[table].on("renderComplete", () => setActiveSymOrderButton(table));
 
             // Column options dropdown
             (() => {
-                function updateValue(checked, column, cellIdx) {
-                    const option = ["breakpoints", "visible"][cellIdx];
-                    const value = [(checked) ? "all" : column.breakpoints, !checked][cellIdx];
+                // Changes the ResponsiveLayout module owns — "Row" toggles and
+                // visibility on always-collapsed (responsive:100) columns — can't be
+                // applied incrementally, so they're deferred to dropdown close / Save.
+                // This keeps the dropdown open while toggling several at once.
+                let rebuildPending = false;
 
-                    FooTable.get("#historyTable_" + table).columns.get(column.name)[option] = value;
-                    return value;
+                // Column visibility and the emulated "Row" mode (responsive:100) both
+                // depend on ResponsiveLayout's collapse pointer, which is set once at
+                // construction and never reconciled after a runtime definition change —
+                // the root cause of the erratic collapse/expand behaviour (columns that
+                // expand but never collapse back, neighbours collapsing in sympathy).
+                // Rather than poke at the module's private state, rebuild the whole
+                // table: a fresh instance converges to the correct collapse set, exactly
+                // as on first load. The current data is preserved; the initial-render
+                // callback is skipped (buttons/fuzzy are already wired and delegated).
+                function rebuild() {
+                    const rows = common.tables[table].getData();
+                    ui.destroyTable(table);
+                    ui.initHistoryTable(data, rows, table, columnsDefault, expandFirst);
+                }
+
+                // Apply deferred "Row" changes (if any) and clear the dirty flag.
+                function applyPendingRebuild() {
+                    if (!rebuildPending) return;
+                    rebuildPending = false;
+                    rebuild();
                 }
 
                 const tbody = $("<tbody/>", {class: "table-group-divider"});
-                $("#" + table + " .ft-columns-dropdown").empty().append(
+                $("#" + table + " .tab-columns-dropdown").empty().append(
                     $("<table/>", {class: "table table-sm table-striped text-center"}).append(
                         $("<thead/>").append(
                             $("<tr/>").append(
-                                $("<th/>", {text: "Row", title: "Display column cells in a detail row on all screen widths"}),
+                                $("<th/>", {text: "Row", title: "Display column cells in a detail row"}),
                                 $("<th/>", {text: "Hidden", title: "Hide column completely"}),
                                 $("<th/>", {text: "Column name", class: "text-start"})
                             )
@@ -411,59 +559,95 @@ define(["jquery", "app/common", "footable"],
                         class: "btn btn-xs btn-secondary float-start",
                         text: "Reset to default",
                         click: () => {
-                            columnsDefault.forEach((column, i) => {
-                                const row = tbody[0].rows[i];
-                                [(column.breakpoints === "all"), (column.visible === false)].forEach((checked, cellIdx) => {
-                                    if (row.cells[cellIdx].getElementsByTagName("input")[0].checked !== checked) {
-                                        row.cells[cellIdx].getElementsByTagName("input")[0].checked = checked;
-
-                                        updateValue(checked, column, cellIdx);
-                                        delete columnsCustom[table];
-                                    }
-                                });
+                            const custom = columnsCustom[table] || {};
+                            // A reset needs a rebuild whenever the live table is in a
+                            // state ResponsiveLayout owns: a "Row" override, or a hidden
+                            // always-collapsed (responsive:100) column. Plain hidden
+                            // columns restore via showColumn with no rebuild.
+                            const needsRebuild = rebuildPending || columnsDefault.some((c) => {
+                                if (!c.field) return false;
+                                const cfg = custom[c.field];
+                                return cfg && ((cfg.responsive === 100 && c.responsive !== 100) ||
+                                    (c.responsive === 100 && cfg.visible === false));
                             });
+                            // Only plain (non-responsive:100) hidden columns can be
+                            // restored without a rebuild; responsive ones are rebuilt.
+                            const hiddenFields = columnsDefault
+                                .filter((c) => c.field && c.responsive !== 100 &&
+                                    custom[c.field]?.visible === false)
+                                .map((c) => c.field);
+                            delete columnsCustom[table];
+                            localStorage.setItem("columns", JSON.stringify(columnsCustom));
+                            // Clear before rebuild: the rebuild closes this open dropdown,
+                            // whose close handler (applyPendingRebuild) must see nothing
+                            // pending — otherwise it re-inits again.
+                            rebuildPending = false;
+                            if (needsRebuild) {
+                                rebuild();
+                            } else {
+                                const tab = common.tables[table];
+                                hiddenFields.forEach((f) => {
+                                    tab.showColumn(f);
+                                    tbody.find('input[data-name="' + f + '"][data-option="visible"]')
+                                        .prop("checked", false);
+                                });
+                            }
                         }
                     }),
                     $("<button/>", {
                         type: "button",
                         class: "btn btn-xs btn-primary float-end btn-dropdown-apply",
-                        text: "Apply",
-                        title: "Save settings and redraw the table",
-                        click: (e) => {
-                            $(e.target).attr("disabled", true);
-                            FooTable.get("#historyTable_" + table).draw();
+                        text: "Save",
+                        title: "Save column settings to browser storage",
+                        click: () => {
                             localStorage.setItem("columns", JSON.stringify(columnsCustom));
+                            applyPendingRebuild();
                         }
                     })
                 );
 
                 function checkbox(i, column, cellIdx) {
-                    const option = ["breakpoints", "visible"][cellIdx];
+                    const option = ["responsive", "visible"][cellIdx];
+                    const isRow = option === "responsive";
                     return $("<td/>").append($("<input/>", {
                         "type": "checkbox",
                         "class": "form-check-input",
                         "data-table": table,
-                        "data-name": column.name,
-                        "checked": (option === "breakpoints" && column.breakpoints === "all") ||
-                            (option === "visible" && column.visible === false),
-                        "disabled": (option === "breakpoints" && columnsDefault[i].breakpoints === "all")
+                        "data-name": column.field,
+                        "data-option": option,
+                        "checked": (isRow && column.responsive === 100) ||
+                            (!isRow && column.visible === false),
+                        "disabled": isRow && columnsDefault[i].responsive === 100
                     }).change((e) => {
-                        const value = updateValue(e.target.checked, columnsDefault[i], cellIdx);
-                        if (value == null) { // eslint-disable-line no-eq-null, eqeqeq
-                            delete columnsCustom[table][column.name][option];
-                        } else {
-                            $.extend(true, columnsCustom, {
-                                [table]: {
-                                    [column.name]: {
-                                        [option]: value
-                                    }
+                        const {checked} = e.target;
+                        columnsCustom[table] = columnsCustom[table] || {};
+                        columnsCustom[table][column.field] = columnsCustom[table][column.field] || {};
+                        // Columns currently in "Row" mode (responsive:100) are owned by
+                        // ResponsiveLayout: hiding them no-ops and showing them pops them
+                        // out of the detail row, because the module can't reconcile at
+                        // runtime. So both "Row" and visibility changes on such columns
+                        // are deferred to a rebuild; plain columns toggle in place.
+                        if (isRow || column.responsive === 100) {
+                            if (isRow) {
+                                if (checked) {
+                                    columnsCustom[table][column.field].responsive = 100;
+                                } else {
+                                    delete columnsCustom[table][column.field].responsive;
                                 }
-                            });
+                            } else {
+                                columnsCustom[table][column.field].visible = !checked;
+                            }
+                            rebuildPending = true;
+                        } else {
+                            columnsCustom[table][column.field].visible = !checked;
+                            const tab = common.tables[table];
+                            if (checked) tab.hideColumn(column.field); else tab.showColumn(column.field);
                         }
                     }));
                 }
 
                 $.each(columns, (i, column) => {
+                    if (!column.field) return; // responsiveCollapse toggle is a control, not a column
                     tbody.append(
                         $("<tr/>").append(
                             checkbox(i, column, 0),
@@ -471,10 +655,10 @@ define(["jquery", "app/common", "footable"],
                             $("<td/>", {
                                 class: "text-start",
                                 text: () => {
-                                    switch (column.name) {
+                                    switch (column.field) {
                                         case "passthrough_module": return "Pass-through module";
                                         case "symbols": return "Symbols";
-                                        default: return column.title;
+                                        default: return (column.title || "").replace(/<[^>]*>/g, "");
                                     }
                                 }
                             })
@@ -482,7 +666,13 @@ define(["jquery", "app/common", "footable"],
                     );
                 });
 
-                $("#" + table + " .ft-columns-btn").removeAttr("disabled");
+                // Apply deferred "Row" changes when the dropdown closes. The trigger
+                // element survives rebuilds, so namespace the handler and re-bind it
+                // each build to avoid stacking.
+                $("#" + table + " .tab-columns-btn")
+                    .off("hidden.bs.dropdown.rspamd")
+                    .on("hidden.bs.dropdown.rspamd", applyPendingRebuild)
+                    .removeAttr("disabled");
             })();
         };
 
@@ -518,27 +708,6 @@ define(["jquery", "app/common", "footable"],
                         if (typeof item[prop] === "string") item[prop] = common.escapeHTML(item[prop]);
                 }
             }
-
-            if (item.action === "clean" || item.action === "no action") {
-                item.action = "<div style='font-size:11px' class='badge text-bg-success'>" + item.action + "</div>";
-            } else if (item.action === "rewrite subject" || item.action === "add header" || item.action === "probable spam") {
-                item.action = "<div style='font-size:11px' class='badge text-bg-warning'>" + item.action + "</div>";
-            } else if (item.action === "spam" || item.action === "reject") {
-                item.action = "<div style='font-size:11px' class='badge text-bg-danger'>" + item.action + "</div>";
-            } else {
-                item.action = "<div style='font-size:11px' class='badge text-bg-info'>" + item.action + "</div>";
-            }
-
-            const score_content = (item.score < item.required_score)
-                ? "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>"
-                : "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-
-            item.score = {
-                options: {
-                    sortValue: item.score
-                },
-                value: score_content
-            };
         };
 
         ui.unix_time_format = function (tm) {
@@ -620,7 +789,7 @@ define(["jquery", "app/common", "footable"],
             const unsorted_symbols = [];
             const compare_function = get_compare_function(table);
 
-            common.show("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "]");
+            common.show("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "']");
 
             $.each(data.rows,
                 (i, item) => {
@@ -690,16 +859,12 @@ define(["jquery", "app/common", "footable"],
                         }
                     });
                     unsorted_symbols.push(item.symbols);
+                    item.symbols_obj = item.symbols;
                     item.symbols = sort_symbols(item.symbols, compare_function);
                     if (table === "scan") {
                         item.unix_time = (new Date()).getTime() / 1000;
                     }
-                    item.time = {
-                        value: ui.unix_time_format(item.unix_time),
-                        options: {
-                            sortValue: item.unix_time
-                        }
-                    };
+                    item.time = item.unix_time;
                     item.time_real = item.time_real.toFixed(3);
                     item.id = item["message-id"];
 

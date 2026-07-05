@@ -2,13 +2,12 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-/* global FooTable */
-
-define(["jquery", "app/common", "footable"],
-    ($, common) => {
+define(["jquery", "app/common", "app/tab-utils", "tabulator"],
+    ($, common, tabUtils, Tabulator) => {
         "use strict";
         const ui = {};
         let altered = {};
+        let groupSelectEl = null;
 
         function clear_altered() {
             $("#save-alert").addClass("d-none");
@@ -94,18 +93,25 @@ define(["jquery", "app/common", "footable"],
                 }
             }
 
-            function formatFrequency(value) {
-                return {
-                    value: (value * mult).toFixed(2) + ((exp > 0) ? "e-" + exp : ""),
-                    options: {sortValue: value}
-                };
-            }
-            $.each(items, (i, item) => {
-                item.frequency = formatFrequency(item.frequency);
-                item.frequency_stddev = formatFrequency(item.frequency_stddev);
-            });
-            return [items, distinct_groups];
+            return [items, distinct_groups, {mult, exp}];
         }
+        // Populate a native <select> with distinct sorted groups from the
+        // table data, plus an empty option to clear the filter.
+        function formatFreq(value, params) {
+            return (value * params.mult).toFixed(2) + ((params.exp > 0) ? "e-" + params.exp : "");
+        }
+
+        function populateGroupSelect(select, rows) {
+            const current = select.value;
+            select.innerHTML = "";
+            select.appendChild(new Option("Any group", ""));
+            const data = rows || (common.tables.symbols && common.tables.symbols.getData()) || [];
+            [...new Set(data.map((r) => r.group))]
+                .sort((a, b) => a.localeCompare(b))
+                .forEach((g) => select.appendChild(new Option(g, g)));
+            select.value = current;
+        }
+
         // @get symbols into modal form
         ui.getSymbols = function () {
             $("#refresh, #updateSymbols").attr("disabled", true);
@@ -113,111 +119,107 @@ define(["jquery", "app/common", "footable"],
             common.query("symbols", {
                 success: function (json) {
                     const [{data}] = json;
-                    const items = process_symbols_data(data);
+                    const [rows, , freqParams] = process_symbols_data(data);
 
-                    /* eslint-disable consistent-this, no-underscore-dangle */
-                    FooTable.groupFilter = FooTable.Filtering.extend({
-                        construct: function (instance) {
-                            this._super(instance);
-                            [,this.groups] = items;
-                            this.groups.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-                            this.def = "Any group";
-                            this.$group = null;
-                        },
-                        $create: function () {
-                            this._super();
-                            const self = this;
-                            const $form_grp = $("<div/>", {
-                                class: "form-group"
-                            }).append($("<label/>", {
-                                class: "sr-only",
-                                text: "Group"
-                            })).prependTo(self.$form);
-
-                            self.$group = $("<select/>", {
-                                class: "form-select"
-                            }).on("change", {
-                                self: self
-                            }, self._onStatusDropdownChanged).append(
-                                $("<option/>", {
-                                    text: self.def
-                                })).appendTo($form_grp);
-
-                            $.each(self.groups, (i, group) => {
-                                self.$group.append($("<option/>").text(group));
-                            });
-
-                            common.appendButtonsToFtFilterDropdown(self);
-                        },
-                        _onStatusDropdownChanged: function (e) {
-                            const {self} = e.data;
-                            const selected = $(this).val();
-                            if (selected !== self.def) {
-                                self.addFilter("group", selected, ["group"]);
-                            } else {
-                                self.removeFilter("group");
-                            }
-                            self.filter();
-                        },
-                        draw: function () {
-                            this._super();
-                            const group = this.find("group");
-                            if (group instanceof FooTable.Filter) {
-                                this.$group.val(group.query.val());
-                            } else {
-                                this.$group.val(this.def);
-                            }
-                        }
-                    });
-                    /* eslint-enable consistent-this, no-underscore-dangle */
-
-                    common.tables.symbols = FooTable.init("#symbolsTable", {
-                        breakpoints: common.breakpoints,
-                        cascade: true,
+                    common.tables.symbols = new Tabulator("#symbolsTable", {
+                        layout: "fitColumns",
+                        responsiveLayout: "collapse",
+                        responsiveLayoutCollapseStartOpen: false,
+                        selectable: false,
+                        pagination: "local",
+                        paginationSize: 25,
+                        paginationButtonCount: 5,
+                        data: rows,
+                        initialSort: [{column: "group", dir: "asc"}],
                         columns: [
-                            {sorted: true, direction: "ASC", name: "group", title: "Group"},
-                            {name: "symbol", title: "Symbol"},
-                            {name: "description", title: "Description", breakpoints: "md"},
-                            {name: "weight", title: "Score"},
-                            {name: "frequency",
-                                title: "Frequency, <nobr>hits/s</nobr>",
-                                breakpoints: "md",
-                                sortValue: (val) => val.options.sortValue},
-                            {name: "frequency_stddev",
-                                title: "Stddev, <nobr>hits/s</nobr>",
-                                breakpoints: "lg",
-                                sortValue: (val) => val.options.sortValue},
-                            {name: "time",
-                                title: "Avg. time, s",
-                                breakpoints: "md",
-                                sortValue: (val) => parseFloat(val)},
-                        ],
-                        rows: items[0],
-                        paging: {
-                            enabled: true,
-                            limit: 5,
-                            size: 25
-                        },
-                        filtering: {
-                            enabled: true,
-                            position: "left",
-                            connectors: false
-                        },
-                        sorting: {
-                            enabled: true
-                        },
-                        components: {
-                            filtering: FooTable.groupFilter
-                        },
-                        on: {
-                            "ready.ft.table": function () {
-                                if (common.read_only) {
-                                    $(".mb-disabled").attr("disabled", true);
-                                }
+                            {
+                                // Toggle to expand collapsed (responsive) columns
+                                formatter: "responsiveCollapse",
+                                width: 36,
+                                minWidth: 36,
+                                responsive: 0,
+                                hozAlign: "center",
+                                resizable: false,
+                                headerSort: false,
                             },
-                            "postdraw.ft.table":
-                                () => $("#refresh, #updateSymbols").removeAttr("disabled")
+                            {
+                                title: "Group",
+                                field: "group",
+                                headerFilter: (cell, onRendered, success) => {
+                                    const select = document.createElement("select");
+                                    select.className = "form-select";
+                                    populateGroupSelect(select, rows);
+                                    select.refreshGroups = () => populateGroupSelect(select);
+                                    select.addEventListener("change", () => success(select.value));
+                                    groupSelectEl = select;
+                                    return select;
+                                },
+                                headerFilterFunc: (filterVal, cellVal) => !filterVal || filterVal === cellVal,
+                                minWidth: 110,
+                                width: 205,
+                                responsive: 0,
+                            },
+                            {
+                                title: "Symbol",
+                                field: "symbol",
+                                headerFilter: "input",
+                                minWidth: 270,
+                                responsive: 0,
+                                widthGrow: 2,
+                            },
+                            {
+                                title: "Description",
+                                field: "description",
+                                headerFilter: "input",
+                                minWidth: 105,
+                                responsive: 2,
+                                widthGrow: 4,
+                            },
+                            {
+                                title: "Score",
+                                field: "weight",
+                                formatter: "html",
+                                minWidth: 75,
+                                width: 90,
+                                responsive: 0,
+                            },
+                            {
+                                title: "Frequency, <nobr>hits/s</nobr>",
+                                field: "frequency",
+                                sorter: "number",
+                                formatter: (cell, params) => formatFreq(cell.getValue(), params),
+                                formatterParams: freqParams,
+                                minWidth: 140,
+                            },
+                            {
+                                title: "Stddev, <nobr>hits/s</nobr>",
+                                field: "frequency_stddev",
+                                sorter: "number",
+                                formatter: (cell, params) => formatFreq(cell.getValue(), params),
+                                formatterParams: freqParams,
+                                minWidth: 120,
+                                responsive: 3,
+                            },
+                            {title: "Avg. time, s", field: "time", sorter: "number", minWidth: 110},
+                        ],
+                    });
+
+                    tabUtils.hideFooterOnSinglePage("symbols");
+                    tabUtils.stripTableholderTabindex("symbols");
+                    tabUtils.bindRowClickToggle("symbols");
+                    tabUtils.patchScrollIntoViewOnce();
+                    tabUtils.installScrollPreservation("symbols", {
+                        armTriggers: [document.getElementById("updateSymbols")].filter(Boolean),
+                    });
+
+                    common.tables.symbols.on("tableBuilt", () => {
+                        if (common.read_only) {
+                            $(".mb-disabled").attr("disabled", true);
                         }
+                        $("#refresh, #updateSymbols").removeAttr("disabled");
+                    });
+                    common.tables.symbols.on("renderComplete", () => {
+                        $("#refresh, #updateSymbols").removeAttr("disabled");
                     });
                 },
                 error: () => $("#refresh, #updateSymbols").removeAttr("disabled"),
@@ -232,8 +234,12 @@ define(["jquery", "app/common", "footable"],
             clear_altered();
             common.query("symbols", {
                 success: function (data) {
-                    const [items] = process_symbols_data(data[0].data);
-                    common.tables.symbols.rows.load(items);
+                    const [rows, , freqParams] = process_symbols_data(data[0].data);
+
+                    common.tables.symbols.setData(rows);
+                    if (groupSelectEl) populateGroupSelect(groupSelectEl);
+                    common.tables.symbols.updateColumnDefinition("frequency", {formatterParams: freqParams});
+                    common.tables.symbols.updateColumnDefinition("frequency_stddev", {formatterParams: freqParams});
                 },
                 error: () => $("#refresh, #updateSymbols").removeAttr("disabled"),
                 server: common.getServer()

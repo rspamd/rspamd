@@ -21,7 +21,7 @@ define(["jquery", "app/common"],
                             items.push({
                                 idx: idx,
                                 html:
-                                '<div class="form-group">' +
+                                '<div class="mb-3">' +
                                     '<label class="col-form-label col-md-2 float-start">' + item.action + "</label>" +
                                     '<div class="controls slider-controls col-md-10">' +
                                         '<input class="action-scores form-control" data-id="action" type="number" value="' +
