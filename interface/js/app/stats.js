@@ -2,8 +2,8 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-define(["jquery", "app/common", "d3pie", "d3"],
-    ($, common, D3Pie, d3) => {
+define(["app/common", "d3pie", "d3"],
+    (common, D3Pie, d3) => {
         "use strict";
         // @ ms to date
         function msToTime(seconds) {
@@ -37,58 +37,117 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
         let rowspanHoverHandlersInitialized = false;
 
+        // Parse JSON, returning {} for an empty body or a non-JSON response
+        // (jQuery without dataType hands non-JSON bodies to success as raw text;
+        // {} yields the same undefined property reads downstream).
+        function parseJsonOrEmpty(text) {
+            try {
+                return text ? JSON.parse(text) : {};
+            } catch (err) {
+                return {};
+            }
+        }
+
         function attachRowspanHoverHandlers(tableId) {
-            const $table = $(tableId);
+            const table = document.querySelector(tableId);
 
-            function findRowspanCells($row) {
-                const headerCount = $table.find("thead th").length;
-                if ($row.find("td").length >= headerCount) return [];
+            function prevSiblingCount(el) {
+                let n = 0;
+                let prev = el.previousElementSibling;
+                while (prev) {
+                    n++;
+                    prev = prev.previousElementSibling;
+                }
+                return n;
+            }
 
+            // Cells with rowspan in rows above `row` that still span into it.
+            function findRowspanCells(row) {
+                const headerCount = table.querySelectorAll("thead th").length;
+                if (row.querySelectorAll("td").length >= headerCount) return [];
+
+                const rowIndex = prevSiblingCount(row);
                 const result = [];
-                $row.prevAll().find("td[rowspan]").each((_, el) => {
-                    const $cell = $(el);
-                    const rowspan = parseInt($cell.attr("rowspan"), 10);
-                    const distance = $row.prevAll().length - $cell.parent().prevAll().length;
-                    if (distance < rowspan) {
-                        result.push($cell);
-                    }
-                });
+                let prevRow = row.previousElementSibling;
+                while (prevRow) {
+                    prevRow.querySelectorAll("td[rowspan]").forEach((cell) => {
+                        const rowspan = parseInt(cell.getAttribute("rowspan"), 10);
+                        const distance = rowIndex - prevSiblingCount(cell.parentElement);
+                        if (distance < rowspan) result.push(cell);
+                    });
+                    prevRow = prevRow.previousElementSibling;
+                }
                 return result;
             }
 
-            $table.on("mouseenter", "tbody td", (event) => {
-                const $cell = $(event.currentTarget);
-                const $row = $cell.parent();
+            function addClassTo(cells) {
+                cells.forEach((cell) => cell.classList.add("table-hover-cell"));
+            }
 
-                if ($cell.attr("rowspan")) {
+            function highlightCell(cell) {
+                const row = cell.parentElement;
+
+                if (cell.getAttribute("rowspan")) {
                     // Hovering over rowspan cell - highlight entire group
-                    const rowspan = parseInt($cell.attr("rowspan"), 10);
-                    $cell.addClass("table-hover-cell");
-                    $row.find("td").addClass("table-hover-cell");
-                    $row.nextAll().slice(0, rowspan - 1).find("td").addClass("table-hover-cell");
+                    const rowspan = parseInt(cell.getAttribute("rowspan"), 10);
+                    addClassTo(row.querySelectorAll("td"));
+                    let next = row.nextElementSibling;
+                    for (let i = 0; i < rowspan - 1 && next; i++) {
+                        addClassTo(next.querySelectorAll("td"));
+                        next = next.nextElementSibling;
+                    }
 
-                    // Also highlight parent rowspan cells (e.g., server when hovering classifier)
-                    findRowspanCells($row).forEach(($parentCell) => {
-                        if ($parentCell[0] !== $cell[0]) $parentCell.addClass("table-hover-cell");
+                    // Also highlight parent rowspan cells (e.g. server when hovering classifier)
+                    findRowspanCells(row).forEach((parentCell) => {
+                        if (parentCell !== cell) parentCell.classList.add("table-hover-cell");
                     });
                 } else {
                     // Hovering over regular cell - highlight current row
-                    $row.find("td").addClass("table-hover-cell");
+                    addClassTo(row.querySelectorAll("td"));
 
                     // Highlight all rowspan cells for this row
-                    findRowspanCells($row).forEach(($rowspanCell) => $rowspanCell.addClass("table-hover-cell"));
+                    addClassTo(findRowspanCells(row));
                 }
-            }).on("mouseleave", "tbody td", () => $table.find("tbody td").removeClass("table-hover-cell"));
+            }
+
+            // jQuery's delegated mouseenter/mouseleave is simulated via mouseover/
+            // mouseout (mouseenter/mouseleave don't bubble). Fire only on a genuine
+            // enter/leave of the matched td by checking relatedTarget containment.
+            //
+            // For mouseover `related` is the element the pointer left; for mouseout
+            // the element it entered. Either way the test is the same: a crossing
+            // happened iff `related` is null (entered/left the document) or lies
+            // outside `td`. td.contains(td) is true, so moving between a td and its
+            // own descendant — or staying within it — does not register as a crossing.
+            function crosses(td, related) {
+                return !related || !td.contains(related);
+            }
+
+            table.addEventListener("mouseover", (event) => {
+                const td = event.target.closest("tbody td");
+                if (td && table.contains(td) && crosses(td, event.relatedTarget)) {
+                    highlightCell(td);
+                }
+            });
+            table.addEventListener("mouseout", (event) => {
+                const td = event.target.closest("tbody td");
+                if (td && table.contains(td) && crosses(td, event.relatedTarget)) {
+                    table.querySelectorAll("tbody td").forEach((cell) => {
+                        cell.classList.remove("table-hover-cell");
+                    });
+                }
+            });
         }
 
         function displayStatWidgets(checked_server) {
             const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
             const data = servers[checked_server]?.data ?? {};
 
+            const statWidgets = document.getElementById("statWidgets");
             const stat_w = [];
-            $("#statWidgets").empty();
-            common.hide("#statWidgets");
-            $.each(data, (i, item) => {
+            statWidgets.replaceChildren();
+            common.hide(statWidgets);
+            Object.entries(data).forEach(([i, item]) => {
                 const widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
                 function widget(k, v, cls) {
@@ -108,29 +167,36 @@ define(["jquery", "app/common", "d3pie", "d3"],
                         cls = "";
                         val = msToTime(item);
                     }
-                    $('<div class="' + cls + 'float-start px-3"><strong class="d-block mt-2 mb-1 fw-bold">' +
-                      val + "</strong>" + i + "</div>")
-                        .appendTo("#statWidgets");
+                    statWidgets.insertAdjacentHTML("beforeend",
+                        '<div class="' + cls + 'float-start px-3"><strong class="d-block mt-2 mb-1 fw-bold">' +
+                        val + "</strong>" + i + "</div>");
                 } else if (i === "actions") {
-                    $.each(item, (action, count) => {
+                    Object.entries(item).forEach(([action, count]) => {
                         stat_w[widgetsOrder.indexOf(action)] = widget(action, count);
                     });
                 } else {
                     stat_w[widgetsOrder.indexOf(i)] = widget(i, item, " text-capitalize");
                 }
             });
-            $.each(stat_w, (i, item) => {
-                $(item).appendTo("#statWidgets");
-            });
-            $("#statWidgets > div:not(.stat-box)")
-                .wrapAll('<div class="card stat-box text-center shadow-sm float-end">' +
-                  '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
-            $("#statWidgets").find("div.float-end").appendTo("#statWidgets");
-            common.show("#statWidgets");
+            stat_w.forEach((html) => statWidgets.insertAdjacentHTML("beforeend", html));
 
-            $("#clusterTable tbody").empty();
-            $("#selSrv").empty();
-            $.each(servers, (key, val) => {
+            // Wrap the uptime/version widgets (the non-stat-box children) in a
+            // trailing card, mirroring $.wrapAll + moving the float-end card last.
+            const nonStatBoxDivs = Array.from(statWidgets.children)
+                .filter((child) => child.tagName === "DIV" && !child.classList.contains("stat-box"));
+            if (nonStatBoxDivs.length) {
+                const inner = common.el("div", {class: "widget overflow-hidden p-2 text-capitalize"},
+                    ...nonStatBoxDivs);
+                statWidgets.append(common.el("div",
+                    {class: "card stat-box text-center shadow-sm float-end"}, inner));
+            }
+            common.show(statWidgets);
+
+            const clusterTbody = document.querySelector("#clusterTable tbody");
+            const selSrv = document.getElementById("selSrv");
+            clusterTbody.replaceChildren();
+            selSrv.replaceChildren();
+            Object.entries(servers).forEach(([key, val]) => {
                 let row_class = "danger";
                 let glyph_status = "fas fa-times";
                 let version = "???";
@@ -176,36 +242,40 @@ define(["jquery", "app/common", "d3pie", "d3"],
                     }
                 }
 
-                $("#clusterTable tbody").append('<tr class="' + row_class + '">' +
-                '<td class="align-middle"><input type="radio" class="form-check m-auto" name="clusterName" value="' +
-                    key + '"></td>' +
-                "<td>" + key + "</td>" +
-                "<td>" + val.host + "</td>" +
-                '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                '<td class="text-center"' + scan_times.title + ">" + scan_times.data + "</td>" +
-                '<td class="text-end' +
-                  ((Number.isFinite(val.data.uptime) && val.data.uptime < 3600)
-                      ? ' warning" title="Has been restarted within the last hour"'
-                      : "") +
-                  '">' + uptime + "</td>" +
-                "<td>" + version + "</td>" +
-                "<td>" + short_id + "</td></tr>");
+                const checked = checked_server === key;
+                const disabled = !checked && !val.status;
+                const escKey = common.escapeHTML(key);
+                const escHost = common.escapeHTML(val.host);
+                const radioAttrs = 'value="' + escKey + '"' +
+                    (checked ? " checked" : "") + (disabled ? " disabled" : "");
 
-                $("#selSrv").append($('<option value="' + key + '">' + key + "</option>"));
+                clusterTbody.insertAdjacentHTML("beforeend",
+                    '<tr class="' + row_class + '">' +
+                    '<td class="align-middle"><input type="radio" class="form-check m-auto" name="clusterName" ' +
+                        radioAttrs + "></td>" +
+                    "<td>" + escKey + "</td>" +
+                    "<td>" + escHost + "</td>" +
+                    '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                    '<td class="text-center"' + scan_times.title + ">" + scan_times.data + "</td>" +
+                    '<td class="text-end' +
+                      ((Number.isFinite(val.data.uptime) && val.data.uptime < 3600)
+                          ? ' warning" title="Has been restarted within the last hour"'
+                          : "") +
+                      '">' + uptime + "</td>" +
+                    "<td>" + common.escapeHTML(version) + "</td>" +
+                    "<td>" + common.escapeHTML(short_id) + "</td></tr>"
+                );
 
-                if (checked_server === key) {
-                    $('#clusterTable tbody [value="' + key + '"]').prop("checked", true);
-                    $('#selSrv [value="' + key + '"]').prop("selected", true);
-                } else if (!val.status) {
-                    $('#clusterTable tbody [value="' + key + '"]').prop("disabled", true);
-                    $('#selSrv [value="' + key + '"]').prop("disabled", true);
-                }
+                selSrv.insertAdjacentHTML("beforeend",
+                    '<option value="' + escKey + '"' +
+                    (checked ? " selected" : "") + (disabled ? " disabled" : "") + ">" + escKey + "</option>");
             });
 
             function addStatfiles(server, statfiles) {
                 const safeStatfiles = Array.isArray(statfiles) ? statfiles : [];
                 const classToSymbolClass = {spam: "symbol-positive", ham: "symbol-negative"};
                 const rowsCount = safeStatfiles.length;
+                const bayesTbody = document.querySelector("#bayesTable tbody");
 
                 function coerceNumber(value) { return (Number.isFinite(value) ? value : Number(value) || 0); }
 
@@ -235,7 +305,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
                     return cls ? `<td class="${cls}">${value}</td>` : `<td>${value}</td>`;
                 }
 
-                $.each(safeStatfiles, (i, statfile) => {
+                safeStatfiles.forEach((statfile, i) => {
                     const symbol = statfile.symbol ?? "-";
                     const classValue = statfile.class ?? guessClassFromSymbol(symbol);
                     const cls = classToSymbolClass[classValue] || "";
@@ -255,7 +325,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
                         classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile)}</td>`;
                     }
 
-                    $("#bayesTable tbody").append(`<tr>${serverCell}${classifierCell}${[
+                    bayesTbody.insertAdjacentHTML("beforeend", `<tr>${serverCell}${classifierCell}${[
                         renderCell(common.escapeHTML(classValue), cls),
                         renderCell(common.escapeHTML(symbol), cls),
                         renderCell(common.escapeHTML(statfile.type ?? "-"), cls),
@@ -267,20 +337,22 @@ define(["jquery", "app/common", "d3pie", "d3"],
 
             function addFuzzyStorage(server, storages) {
                 let i = 0;
-                $.each(storages, (storage, hashes) => {
+                const fuzzyTbody = document.querySelector("#fuzzyTable tbody");
+                Object.entries(storages).forEach(([storage, hashes]) => {
                     const serverCell = (i === 0)
                         ? '<td rowspan="' + Object.keys(storages).length + '">' + common.escapeHTML(server) + "</td>"
                         : "";
-                    $("#fuzzyTable tbody").append("<tr>" + serverCell +
+                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCell +
                       "<td>" + common.escapeHTML(storage) + "</td>" +
                       '<td class="text-end">' + hashes + "</td></tr>");
                     i++;
                 });
             }
 
-            $("#bayesTable tbody, #fuzzyTable tbody").empty();
+            document.querySelectorAll("#bayesTable tbody, #fuzzyTable tbody")
+                .forEach((tbody) => tbody.replaceChildren());
             if (checked_server === "All SERVERS") {
-                $.each(servers, (server, val) => {
+                Object.entries(servers).forEach(([server, val]) => {
                     if (server !== "All SERVERS") {
                         addStatfiles(server, val.data.statfiles);
                         addFuzzyStorage(server, val.data.fuzzy_hashes);
@@ -388,17 +460,14 @@ define(["jquery", "app/common", "d3pie", "d3"],
                         // Get config_id, version and uptime using /auth query for Rspamd 2.5 and earlier
                         function get_legacy_stat(e) {
                             const alerted = "alerted_stats_legacy_" + neighbours_status[e].name;
-                            promises.push($.ajax({
-                                url: neighbours_status[e].url + "auth",
-                                headers: {Password: common.getPassword()},
-                                success: function (data) {
-                                    sessionStorage.removeItem(alerted);
-                                    ["config_id", "version", "uptime"].forEach((p) => {
-                                        neighbours_status[e].data[p] = data[p];
-                                    });
-                                    process_node_stat(e);
-                                },
-                                error: function (jqXHR, textStatus, errorThrown) {
+                            promises.push(new Promise((resolve) => {
+                                const xhr = new XMLHttpRequest();
+                                xhr.open("GET", neighbours_status[e].url + "auth", true);
+                                xhr.setRequestHeader("Password", common.getPassword());
+                                const timeout = common.getAjaxTimeout();
+                                if (timeout > 0) xhr.timeout = timeout;
+
+                                function onFailure(errorThrown) {
                                     if (!(alerted in sessionStorage)) {
                                         sessionStorage.setItem(alerted, true);
                                         common.logError({
@@ -406,12 +475,30 @@ define(["jquery", "app/common", "d3pie", "d3"],
                                             endpoint: "graph",
                                             message: "Cannot receive legacy stats data" +
                                                 (errorThrown ? ": " + errorThrown : ""),
-                                            httpStatus: jqXHR.status,
+                                            httpStatus: xhr.status,
                                             errorType: "http_error"
                                         });
                                     }
                                     process_node_stat(e);
+                                    resolve();
                                 }
+
+                                xhr.onload = () => {
+                                    if (xhr.status >= 200 && xhr.status < 300) {
+                                        sessionStorage.removeItem(alerted);
+                                        const data = parseJsonOrEmpty(xhr.responseText);
+                                        ["config_id", "version", "uptime"].forEach((p) => {
+                                            neighbours_status[e].data[p] = data[p];
+                                        });
+                                        process_node_stat(e);
+                                        resolve();
+                                    } else {
+                                        onFailure(xhr.statusText);
+                                    }
+                                };
+                                xhr.onerror = () => onFailure(xhr.statusText);
+                                xhr.ontimeout = () => onFailure("timeout");
+                                xhr.send();
                             }));
                         }
 
@@ -431,7 +518,7 @@ define(["jquery", "app/common", "d3pie", "d3"],
                             }
                         }
                         setTimeout(() => {
-                            $.when.apply($, promises).always(() => {
+                            Promise.all(promises).finally(() => {
                                 neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
                                 to_Credentials["All SERVERS"].data = neighbours_sum;
                                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
@@ -440,7 +527,11 @@ define(["jquery", "app/common", "d3pie", "d3"],
                             });
                         }, promises.length ? 100 : 0);
                     },
-                    complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
+                    complete: function () {
+                        const refreshBtn = document.getElementById("refresh");
+                        refreshBtn.disabled = false;
+                        refreshBtn.classList.remove("disabled");
+                    },
                     errorMessage: "Cannot receive stats data",
                     errorOnceId: "alerted_stats_",
                     server: "All SERVERS"

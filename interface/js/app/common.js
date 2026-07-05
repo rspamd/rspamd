@@ -64,6 +64,12 @@ define(["nprogress"],
             ajaxTimeout = ms;
         };
 
+        // Read by callers that issue direct XHRs (outside common.query) and need
+        // to honour the configured AJAX timeout.
+        ui.getAjaxTimeout = function () {
+            return ajaxTimeout;
+        };
+
         ui.onAjaxStart = function (callback) {
             ajaxStartCallbacks.push(callback);
         };
