@@ -91,7 +91,6 @@ requirejs.config({
     baseUrl: "js/lib",
     paths: {
         app: "../app",
-        jquery: "jquery-3.7.1.min",
         visibility: "visibility.min",
         bootstrap: "bootstrap.bundle.min",
         codejar: "codejar.min",
@@ -106,9 +105,8 @@ requirejs.config({
         prism: "prism"
     },
     shim: {
-        app: {deps: ["jquery"]},
         codejar: {exports: "CodeJar", deps: ["linenumbers"]},
-        bootstrap: {exports: "bootstrap", deps: ["jquery"]}, // Popovers require jQuery
+        bootstrap: {exports: "bootstrap"},
         d3: {exports: "d3"},
         d3evolution: {exports: "D3Evolution", deps: ["d3.global"]},
         d3pie: {exports: "D3Pie", deps: ["d3.global"]},
