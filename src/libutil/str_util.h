@@ -505,6 +505,8 @@ enum rspamd_regexp_escape_flags {
 	RSPAMD_REGEXP_ESCAPE_UTF = 1u << 0,
 	RSPAMD_REGEXP_ESCAPE_GLOB = 1u << 1,
 	RSPAMD_REGEXP_ESCAPE_RE = 1u << 2,
+	/* Wrap the result into ^(?:...)$ so it matches the subject as a whole */
+	RSPAMD_REGEXP_ESCAPE_ANCHOR = 1u << 3,
 };
 
 /**

@@ -3515,6 +3515,11 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 		}
 	}
 
+	if (flags & RSPAMD_REGEXP_ESCAPE_ANCHOR) {
+		/* Room for ^(?: and )$ */
+		len += 6;
+	}
+
 	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
 		if (rspamd_fast_utf8_validate(pattern, slen) != 0) {
 			tmp_utf = rspamd_str_make_utf_valid(pattern, slen, NULL, NULL);
@@ -3546,6 +3551,11 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 	p = pattern;
 	d = res;
 	dend = d + len;
+
+	if (flags & RSPAMD_REGEXP_ESCAPE_ANCHOR) {
+		memcpy(d, "^(?:", 4);
+		d += 4;
+	}
 
 	while (p < end) {
 		g_assert(d < dend);
@@ -3644,6 +3654,11 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 		}
 
 		*d++ = t;
+	}
+
+	if (flags & RSPAMD_REGEXP_ESCAPE_ANCHOR) {
+		*d++ = ')';
+		*d++ = '$';
 	}
 
 	*d = '\0';
