@@ -113,6 +113,26 @@ MAP - FROM REGEXP MISS
   ...   Settings={symbols_enabled = [REGEXP_MAP]}
   Do Not Expect Symbol  REGEXP_MAP
 
+MAP - FROM GLOB EXACT HIT
+  Scan File  ${MESSAGE}  From=user@t.co
+  ...   Settings={symbols_enabled = [GLOB_MAP]}
+  Expect Symbol  GLOB_MAP
+
+MAP - FROM GLOB SUBSTRING MISS
+  Scan File  ${MESSAGE}  From=user@walmart.com
+  ...   Settings={symbols_enabled = [GLOB_MAP]}
+  Do Not Expect Symbol  GLOB_MAP
+
+MAP - FROM GLOB WILDCARD HIT
+  Scan File  ${MESSAGE}  From=user@foo.bit.ly
+  ...   Settings={symbols_enabled = [GLOB_MAP]}
+  Expect Symbol  GLOB_MAP
+
+MAP - FROM GLOB WILDCARD SUPERSTRING MISS
+  Scan File  ${MESSAGE}  From=user@foo.bit.ly.evil.com
+  ...   Settings={symbols_enabled = [GLOB_MAP]}
+  Do Not Expect Symbol  GLOB_MAP
+
 MAP - RCPT DOMAIN HIT
   Scan File  ${MESSAGE}  Rcpt=user@example.com
   ...   Settings={symbols_enabled = [RCPT_DOMAIN]}
