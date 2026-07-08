@@ -3049,7 +3049,7 @@ lua_cryptobox_secretbox_encrypt(lua_State *L)
 		out = lua_new_text(L, NULL, inlen + crypto_secretbox_MACBYTES,
 						   TRUE);
 		crypto_secretbox_easy((unsigned char *) out->start, in, inlen,
-							  nonce, sbox->sk);
+							  real_nonce, sbox->sk);
 
 		return 1;
 	}
@@ -3149,7 +3149,7 @@ lua_cryptobox_secretbox_decrypt(lua_State *L)
 	int text_pos = lua_gettop(L);
 
 	if (crypto_secretbox_open_easy((unsigned char *) out->start, in, inlen,
-								   nonce, sbox->sk) == 0) {
+								   real_nonce, sbox->sk) == 0) {
 		lua_pushboolean(L, true);
 		lua_pushvalue(L, text_pos); /* Prevent gc by copying in stack */
 	}
