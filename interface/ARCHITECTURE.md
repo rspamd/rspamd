@@ -37,11 +37,23 @@ The Rspamd WebUI is a single-page application (SPA) providing a web interface fo
 ### Utilities
 - **NProgress** - Progress bars for async operations
 - **Visibility.js** - Page Visibility API wrapper for timer management
-- **Font Awesome** - Icon library
+- **Font Awesome** - Icon glyphs (local subset SVG sprite, see Icons below)
 - **jQuery Sticky Tabs** - Persistent tab state via URL hash
 
 ### Theme System
 Custom implementation supporting light/dark/auto modes with system preference detection.
+
+### Icons
+Font Awesome glyphs are served as a local **subset SVG sprite** (`img/icons.svg`),
+not the full "SVG with JS" framework. `app/icons.js` replaces
+`<i class="fas fa-<name>">` placeholders with inline
+`<svg><use href="img/icons.svg#fa-<name>"/></svg>` (an initial sweep plus a
+MutationObserver for lazily inserted nodes); its `setIcon()` swaps an icon in
+place (theme toggle, map modal). Each icon keeps its natural aspect ratio:
+the default box is 1em square, and non-square glyphs get explicit widths in
+`css/icons.css`, generated alongside the sprite. The sprite is generated from
+the Font Awesome package by `icons-build.mjs` (repo root); edit
+`icons-manifest.txt` and re-run `node icons-build.mjs` to add or remove icons.
 
 ## Project Structure
 
@@ -51,6 +63,7 @@ interface/
 ├── css/                    # Stylesheets
 │   ├── bootstrap.min.css
 │   ├── rspamd.css         # Custom styles
+│   ├── icons.css          # Generated Font Awesome icon widths
 │   └── ...                # Third-party CSS
 ├── js/
 │   ├── main.js            # Entry point & RequireJS configuration
@@ -65,9 +78,10 @@ interface/
 │   │   ├── upload.js      # Scan tab (message upload/scanning)
 │   │   ├── selectors.js   # Selectors tab (testing selectors)
 │   │   ├── libft.js       # Tabulator table utilities (history/scan rendering)
+│   │   ├── icons.js       # Icon rendering: <i class="fas fa-*"> -> inline SVG from sprite
 │   │   └── tab-utils.js   # Shared Tabulator UI helpers (footer, scroll, row-toggle)
 │   └── lib/               # Third-party libraries (minified)
-├── img/                   # Images and logos
+├── img/                   # Images, logos, and icons.svg (icon subset sprite)
 └── README.md              # Setup instructions
 ```
 
