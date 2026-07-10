@@ -293,17 +293,6 @@ define(["app/common", "bootstrap", "visibility",
         });
     }
 
-
-    // Parse JSON, returning {} for an empty or non-JSON body (the /stat probe
-    // must not throw and strand the connect flow).
-    function parseJsonSafe(text) {
-        try {
-            return text ? JSON.parse(text) : {};
-        } catch (err) {
-            return {};
-        }
-    }
-
     // Show the connect (login) dialog and wire its form submission.
     function showConnectDialog() {
         const connectDialog = document.getElementById("connectDialog");
@@ -385,9 +374,16 @@ define(["app/common", "bootstrap", "visibility",
         if (ajaxTimeout > 0) xhr.timeout = ajaxTimeout;
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                const data = parseJsonSafe(xhr.responseText);
-                sessionStorage.setItem("read_only", data.read_only);
-                displayUI();
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    sessionStorage.setItem("read_only", data.read_only);
+                    displayUI();
+                } catch (err) {
+                    // A 2xx /stat whose body isn't JSON means a broken response
+                    // (truncated by a proxy, a captive-portal page, etc.): show
+                    // the login dialog rather than an empty, half-loaded UI.
+                    showConnectDialog();
+                }
             } else {
                 showConnectDialog();
             }
