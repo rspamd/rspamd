@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-/* Must go first to keep the C linkage of the raw lua headers */
-#include "lua/lua_common.h"
-
 #include <memory>
 #include <vector>
 #include <cmath>
@@ -29,6 +26,7 @@
 #include "libserver/maps/map.h"
 #include "libserver/rspamd_symcache.h"
 #include "libutil/cxx/util.hxx"
+#include "lua/lua_common.h"
 
 namespace rspamd::composites {
 

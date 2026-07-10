@@ -21,7 +21,16 @@
 #include "cfg_file.h"
 #include "contrib/libev/ev.h"
 
+/* Lua headers do not have __cplusplus guards, so keep their C linkage
+ * explicitly; including lua_common.h here is not an option as it creates
+ * an include cycle via rspamd.h -> cfg_file.h -> rspamd_symcache.h */
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <lua.h>
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 extern "C" {

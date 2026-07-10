@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 #include "config.h"
-/* Must go first to keep the C linkage of the raw lua headers */
-#include "lua/lua_common.h"
-
 #include "logger.h"
 #include "expression.h"
 #include "task.h"
@@ -25,6 +22,7 @@
 #include "composites.h"
 #include "contrib/libev/ev.h"
 #include "libutil/util.h"
+#include "lua/lua_common.h"
 
 #include <cmath>
 #include <vector>
