@@ -28,9 +28,6 @@ define(["app/common", "app/libft"],
 
                 common.query(url, {
                     data: data,
-                    params: {
-                        processData: false,
-                    },
                     method: method,
                     headers: headers,
                     success: function (json, jqXHR) {
@@ -56,9 +53,6 @@ define(["app/common", "app/libft"],
             enable_disable_scan_btn(true);
             common.query("checkv2", {
                 data: data,
-                params: {
-                    processData: false,
-                },
                 method: "POST",
                 headers: scanTextHeaders,
                 success: function (neighbours_status) {
@@ -153,9 +147,6 @@ define(["app/common", "app/libft"],
 
             common.query("plugins/fuzzy/hashes?flag=" + document.getElementById("fuzzy-flag").value, {
                 data: data,
-                params: {
-                    processData: false,
-                },
                 method: "POST",
                 success: function (neighbours_status) {
                     const json = neighbours_status[0].data;

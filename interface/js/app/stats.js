@@ -338,9 +338,9 @@ define(["app/common", "d3pie", "d3"],
             function addFuzzyStorage(server, storages) {
                 let i = 0;
                 const fuzzyTbody = document.querySelector("#fuzzyTable tbody");
-                Object.entries(storages).forEach(([storage, hashes]) => {
+                Object.entries(storages || {}).forEach(([storage, hashes]) => {
                     const serverCell = (i === 0)
-                        ? '<td rowspan="' + Object.keys(storages).length + '">' + common.escapeHTML(server) + "</td>"
+                        ? '<td rowspan="' + Object.keys(storages || {}).length + '">' + common.escapeHTML(server) + "</td>"
                         : "";
                     fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCell +
                       "<td>" + common.escapeHTML(storage) + "</td>" +

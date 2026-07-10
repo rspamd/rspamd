@@ -119,7 +119,8 @@ define(["app/common", "bootstrap", "visibility",
         stopTimers();
 
         if (id === "#refresh" || id === "#autoRefresh") {
-            tab_id = "#" + document.querySelector(".nav-link.active").id;
+            const active = document.querySelector(".nav-link.active");
+            if (active) tab_id = "#" + active.id;
         }
 
         document.getElementById("autoRefresh").classList.add("invisible");
@@ -604,7 +605,8 @@ define(["app/common", "bootstrap", "visibility",
         } else {
             document.getElementById("learnServers").classList.add("invisible");
         }
-        tabClick("#" + document.querySelector("#tablist > .nav-item > .nav-link.active").id);
+        const active = document.querySelector("#tablist > .nav-item > .nav-link.active");
+        if (active) tabClick("#" + active.id);
     });
 
     // Radio buttons

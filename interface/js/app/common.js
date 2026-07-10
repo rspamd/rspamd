@@ -94,6 +94,9 @@ define(["nprogress"],
             if (typeof selector === "string") {
                 return Array.from(document.querySelectorAll(selector));
             }
+            // A single Element node — including <select>/<form>, which expose a
+            // numeric .length — must not be mistaken for a collection.
+            if (selector.nodeType === 1) return [selector];
             if (typeof selector.length === "number") {
                 return Array.from(selector).filter(Boolean);
             }
@@ -454,7 +457,9 @@ define(["nprogress"],
             }
 
             // jQuery fires statusCode handlers once per request for the final
-            // status, in addition to success/error.
+            // status, in addition to success/error. Unlike jQuery, which passed
+            // (jqXHR, textStatus, errorThrown), the handler here is invoked as
+            // (responseText, statusText, xhr).
             function runStatusCode() {
                 if (o.statusCode && typeof o.statusCode[xhr.status] === "function") {
                     o.statusCode[xhr.status](xhr.responseText, xhr.statusText, xhr);
@@ -638,7 +643,7 @@ define(["nprogress"],
                 queryServer(neighbours_status, 0, "neighbours", {
                     success: function (json) {
                         const [{data}] = json;
-                        if (Object.keys(data).length === 0) {
+                        if (!data || Object.keys(data).length === 0) {
                             ui.neighbours = {
                                 local: {
                                     host: window.location.host,
@@ -696,13 +701,15 @@ define(["nprogress"],
                 if (anim) {
                     const height = el.offsetHeight;
                     el.style.overflow = "hidden";
-                    el.animate(
+                    const fx = el.animate(
                         [{height: height + "px"}, {height: 0}],
                         {duration: 400, easing: "ease", fill: "forwards"}
-                    ).onfinish = () => {
+                    );
+                    fx.onfinish = () => {
                         el.classList.add("d-none");
                         el.style.height = "";
                         el.style.overflow = "";
+                        fx.cancel();
                     };
                 } else {
                     el.classList.add("d-none");
@@ -722,12 +729,14 @@ define(["nprogress"],
                     const height = el.offsetHeight; // measure natural height now visible
                     el.style.overflow = "hidden";
                     el.style.height = "0";
-                    el.animate(
+                    const fx = el.animate(
                         [{height: 0}, {height: height + "px"}],
                         {duration: 400, easing: "ease", fill: "forwards"}
-                    ).onfinish = () => {
+                    );
+                    fx.onfinish = () => {
                         el.style.height = "";
                         el.style.overflow = "";
+                        fx.cancel();
                     };
                 } else {
                     el.classList.remove("d-none");
