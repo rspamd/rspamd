@@ -532,7 +532,7 @@ define(["nprogress"],
             }
 
             xhr.onload = function () {
-                const ok = (xhr.status >= 200 && xhr.status < 300) || xhr.status === 304;
+                const ok = xhr.status >= 200 && xhr.status < 300;
                 if (!ok) {
                     handleError("error", xhr.statusText);
                     return;
