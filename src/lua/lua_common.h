@@ -284,6 +284,20 @@ void rspamd_lua_ip_push(lua_State *L, rspamd_inet_addr_t *addr);
 void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task);
 
 /**
+* Push a symbol result as a table in the same layout as task:get_symbol();
+* returns FALSE (nothing is pushed) if the symbol is not found or ignored
+*/
+struct rspamd_symbol_result;
+struct rspamd_scan_result;
+gboolean rspamd_lua_push_symbol_result(lua_State *L,
+									   struct rspamd_task *task,
+									   const char *symbol,
+									   struct rspamd_symbol_result *symbol_result,
+									   struct rspamd_scan_result *metric_res,
+									   gboolean add_metric,
+									   gboolean add_name);
+
+/**
 * Return lua ip structure at the specified address
 */
 struct rspamd_lua_ip *lua_check_ip(lua_State *L, int pos);

@@ -362,7 +362,12 @@ LUA_FUNCTION_DEF(config, get_all_actions);
 /**
  * @method rspamd_config:add_composite(name, expression)
  * @param {string} name name of composite symbol
- * @param {string} expression symbolic expression of the composite rule
+ * @param {string|table} expression symbolic expression of the composite rule,
+ * or a full definition table: {expression = ..., score = ..., group = ...,
+ * description = ..., policy = ..., conditions = {SYM = function(task, symbol) ... end},
+ * depends_on = {'SYM1', ...}}. A condition is called as f(task, symbol) where
+ * symbol is a table in the task:get_symbol() layout; it must be synchronous and
+ * may return true/false or a number used as the atom weight.
  * @return {bool} true if a composite has been added successfully
  */
 LUA_FUNCTION_DEF(config, add_composite);
@@ -3069,16 +3074,41 @@ lua_config_add_composite(lua_State *L)
 
 	if (cfg) {
 		name = rspamd_mempool_strdup(cfg->cfg_pool, luaL_checkstring(L, 2));
-		expr_str = luaL_checkstring(L, 3);
 
-		if (name && expr_str) {
-			composite = rspamd_composites_manager_add_from_string(cfg->composites_manager,
-																  name, expr_str);
+		if (name && lua_type(L, 3) == LUA_TTABLE) {
+			/* Full definition table, converted to UCL (functions are
+			 * preserved as closures with registry refs) */
+			ucl_object_t *obj = ucl_object_lua_import(L, 3);
 
-			if (composite) {
-				rspamd_symcache_add_symbol(cfg->cache, name,
-										   0, NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
-				ret = TRUE;
+			if (obj != NULL) {
+				/*
+				 * The object owns lua registry refs of the conditions, so it
+				 * must live as long as the config does
+				 */
+				rspamd_mempool_add_destructor(cfg->cfg_pool,
+											  (rspamd_mempool_destruct_t) ucl_object_unref, obj);
+				composite = rspamd_composites_manager_add_from_ucl(cfg->composites_manager,
+																   name, obj);
+
+				if (composite) {
+					rspamd_symcache_add_symbol(cfg->cache, name,
+											   0, NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
+					ret = TRUE;
+				}
+			}
+		}
+		else if (name) {
+			expr_str = luaL_checkstring(L, 3);
+
+			if (expr_str) {
+				composite = rspamd_composites_manager_add_from_string(cfg->composites_manager,
+																	  name, expr_str);
+
+				if (composite) {
+					rspamd_symcache_add_symbol(cfg->cache, name,
+											   0, NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
+					ret = TRUE;
+				}
 			}
 		}
 	}
