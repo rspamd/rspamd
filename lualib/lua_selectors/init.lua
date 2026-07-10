@@ -280,7 +280,7 @@ local function make_grammar()
     NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * (argument + l.V("LIST_ARGS")) * comma ^ 0) ^ 0),
     LIST_ARGS = l.Ct(tbl_obrace * l.V("LIST_ARG") * tbl_ebrace),
     LIST_ARG = l.Cg(argument * comma ^ 0) ^ 0,
-  }
+  } * spc * l.Cp()
 end
 
 local parser = make_grammar()
@@ -293,6 +293,16 @@ exports.parse_selector = function(cfg, str)
   local output = {}
 
   if not parsed or not parsed[1] then
+    return nil
+  end
+
+  -- The last capture is the parse end position (lpeg.Cp); lpeg matches the
+  -- longest valid prefix, so anything left after that position is a parse
+  -- error, not a selector to be silently ignored
+  local last_pos = table.remove(parsed)
+  if last_pos <= #str then
+    logger.errx(cfg, "invalid selector '%s': unexpected token at position %d ('%s')",
+        str, last_pos, str:sub(last_pos))
     return nil
   end
 
