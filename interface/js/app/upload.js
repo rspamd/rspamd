@@ -13,6 +13,31 @@ define(["app/common", "app/libft"],
         };
         let scanTextHeaders = {};
 
+        // Smooth-scroll the window to `top` via a requestAnimationFrame tween,
+        // as the former jQuery .animate({scrollTop}) did. Unlike the native
+        // scrollTo({behavior:"smooth"}), this is not interrupted by the reflows
+        // Tabulator triggers while rendering, and — like the rest of the UI's
+        // animations (the show/hide slides, the refresh spinner) — does not
+        // honour prefers-reduced-motion, preserving the always-smooth scroll.
+        function smoothScrollTo(top) {
+            const start = window.scrollY;
+            const distance = top - start;
+            if (!distance) return;
+            const duration = 400; // ms; matches the former jQuery default
+            let startTime = null;
+            function step(now) {
+                if (startTime === null) startTime = now;
+                const progress = Math.min((now - startTime) / duration, 1);
+                // easeInOutQuad, approximating jQuery's default "swing" easing
+                const eased = progress < 0.5
+                    ? 2 * progress * progress
+                    : 1 - ((-2 * progress + 2) ** 2) / 2;
+                window.scrollTo(0, start + distance * eased);
+                if (progress < 1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
         function uploadText(data, url, headers, method = "POST") {
             return new Promise((resolve) => {
                 function server() {
@@ -98,7 +123,7 @@ define(["app/common", "app/libft"],
                                         libft.bindFuzzyHashButtons("scan");
                                         const scanResult = document.getElementById("scanResult");
                                         const top = scanResult.getBoundingClientRect().top + window.scrollY;
-                                        window.scrollTo({top, behavior: "smooth"});
+                                        smoothScrollTo(top);
                                     }
                                 });
                         }
@@ -181,7 +206,7 @@ define(["app/common", "app/libft"],
             e.preventDefault();
             enable_disable_scan_btn(true);
             document.getElementById("scanForm").reset();
-            window.scrollTo({top: 0, behavior: "smooth"});
+            smoothScrollTo(0);
         });
 
         document.querySelectorAll(".card-close-btn").forEach((btn) => {
