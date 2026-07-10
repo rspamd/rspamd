@@ -467,7 +467,6 @@ define(["nprogress"],
             }
 
             function finish() {
-                if (isGlobal) fireAjaxComplete();
                 runStatusCode();
                 if (neighbours_status.every((elt) => elt.checked)) {
                     if (neighbours_status.some((elt) => elt.status)) {
@@ -482,6 +481,13 @@ define(["nprogress"],
                     if (o.complete) o.complete();
                     NProgress.done();
                 }
+                // Decrement after the success/complete callbacks (matching
+                // jQuery): a fan-out started inside success must bump the
+                // counter before this request's decrement, otherwise the
+                // in-flight count dips to 0 between the neighbours probe and
+                // the per-neighbour queries, re-firing ajaxStart and restarting
+                // the refresh spinner's animation mid-flight.
+                if (isGlobal) fireAjaxComplete();
             }
 
             function handleError(textStatus, errorThrown) {
