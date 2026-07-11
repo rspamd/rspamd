@@ -225,8 +225,10 @@ local function phishing_cb(task)
   local dsym = task:get_symbol('DMARC_POLICY_ALLOW')
   if dsym then
     dsym = dsym[1] -- legacy stuff, need to take the first element
-    if dsym.options then
-      dmarc_dom = dsym.options[1]
+    if dsym.options and dsym.options[1] then
+      -- DMARC reports the raw From domain (possibly a subdomain),
+      -- normalise it to eSLD to allow comparison with url:get_tld()
+      dmarc_dom = util.get_tld(dsym.options[1])
     end
   end
 
@@ -301,19 +303,19 @@ local function phishing_cb(task)
           return
         end
 
-        -- Now we can safely remove the last dot component if it is the same
-        local b, _ = string.find(tld, '%.[^%.]+$')
-        local b1, _ = string.find(ptld, '%.[^%.]+$')
-
+        -- Compare merely the registrable labels: the first label of an eSLD is
+        -- the registrable label and the rest is the public suffix, which is not
+        -- meaningful for similarity (brand.co.uk vs brand.com is the same label
+        -- and commonly the same brand). Not applicable to numeric hosts and
+        -- hosts with unknown suffixes, where eSLD is the whole hostname.
         local stripped_tld, stripped_ptld = tld, ptld
-        if b1 and b then
-          if string.sub(tld, b) == string.sub(ptld, b1) then
-            stripped_ptld = string.gsub(ptld, '%.[^%.]+$', '')
-            stripped_tld = string.gsub(tld, '%.[^%.]+$', '')
-          end
+        local uflags, puflags = url:get_flags(), purl:get_flags()
+        if not (uflags.numeric or uflags.no_tld or puflags.numeric or puflags.no_tld) then
+          local lbl = string.match(tld, '^([^%.]+)%.')
+          local plbl = string.match(ptld, '^([^%.]+)%.')
 
-          if #ptld == 0 or #tld == 0 then
-            return false
+          if lbl and plbl then
+            stripped_tld, stripped_ptld = lbl, plbl
           end
         end
 
@@ -384,8 +386,14 @@ local function phishing_cb(task)
           end
         end
 
-        if weight > 0 then
+        if tld ~= ptld then
+          -- Check strict domains regardless of the computed weight: displaying
+          -- a strictly protected domain over a different link target is phishing
+          -- even when just the public suffix differs
           found_in_map(strict_domains_maps, purl, 1.0)
+        end
+
+        if weight > 0 then
           if not found_in_map(anchor_exceptions_maps) then
             if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
               if domains then

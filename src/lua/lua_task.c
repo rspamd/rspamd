@@ -5240,14 +5240,14 @@ lua_task_get_dkim_results(lua_State *L)
 	return 1;
 }
 
-static inline gboolean
-lua_push_symbol_result(lua_State *L,
-					   struct rspamd_task *task,
-					   const char *symbol,
-					   struct rspamd_symbol_result *symbol_result,
-					   struct rspamd_scan_result *metric_res,
-					   gboolean add_metric,
-					   gboolean add_name)
+gboolean
+rspamd_lua_push_symbol_result(lua_State *L,
+							  struct rspamd_task *task,
+							  const char *symbol,
+							  struct rspamd_symbol_result *symbol_result,
+							  struct rspamd_scan_result *metric_res,
+							  gboolean add_metric,
+							  gboolean add_name)
 {
 
 	struct rspamd_symbol_result *s = NULL;
@@ -5374,7 +5374,7 @@ lua_task_symbol_push_into_map(lua_State *L,
 							  struct rspamd_scan_result *sres,
 							  unsigned int *count)
 {
-	if (lua_push_symbol_result(L, task, name, s, sres, FALSE, FALSE)) {
+	if (rspamd_lua_push_symbol_result(L, task, name, s, sres, FALSE, FALSE)) {
 		lua_setfield(L, -2, name);
 		(*count)++;
 	}
@@ -5430,8 +5430,8 @@ lua_task_get_symbol(lua_State *L)
 		/* Always push as a table for compatibility :( */
 		lua_createtable(L, 1, 0);
 
-		if ((found = lua_push_symbol_result(L, task, symbol,
-											NULL, sres, TRUE, FALSE))) {
+		if ((found = rspamd_lua_push_symbol_result(L, task, symbol,
+												   NULL, sres, TRUE, FALSE))) {
 			lua_rawseti(L, -2, 1);
 		}
 		else {
@@ -5718,7 +5718,7 @@ lua_task_get_symbols_all(lua_State *L)
 
 			kh_foreach_value(mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
-					lua_push_symbol_result(L, task, s->name, s, mres, FALSE, TRUE);
+					rspamd_lua_push_symbol_result(L, task, s->name, s, mres, FALSE, TRUE);
 					lua_rawseti(L, -2, i++);
 				}
 			});

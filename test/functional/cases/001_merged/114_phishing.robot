@@ -12,6 +12,7 @@ ${MESSAGE_QMULTI}     ${RSPAMD_TESTDIR}/messages/phishing_query_multi.eml
 ${MESSAGE_QNESTED}    ${RSPAMD_TESTDIR}/messages/phishing_query_nested.eml
 ${MESSAGE_QNESTFIRE}  ${RSPAMD_TESTDIR}/messages/phishing_query_nested_fire.eml
 ${MESSAGE_QOVERCAP}   ${RSPAMD_TESTDIR}/messages/phishing_query_overcap.eml
+${MESSAGE_XTLD}       ${RSPAMD_TESTDIR}/messages/phishing_same_label_cross_tld.eml
 ${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,STRICT_PHISHING,STRICTER_PHISHING]}
 
 *** Test Cases ***
@@ -29,6 +30,14 @@ TEST PHISHING STRICT TWO
   Scan File  ${MESSAGE3}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol  STRICTER_PHISHING
+
+TEST PHISHING NO FP FOR SAME LABEL UNDER DIFFERENT PUBLIC SUFFIX
+  # The displayed domain and the href target share the registrable label and
+  # differ only in the public suffix (brand.co.za shown over brand.com) -- a
+  # common legitimate cross-TLD brand link, not phishing.
+  Scan File  ${MESSAGE_XTLD}
+  ...  Settings=${SETTINGS_PHISHING}
+  Do Not Expect Symbol  PHISHING
 
 TEST PHISHING NO FP WHEN HREF QUERY DEST EQUALS DISPLAY TEXT
   # href host differs from the displayed domain, but the href's query embeds a
