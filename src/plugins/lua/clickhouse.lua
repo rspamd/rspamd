@@ -1796,11 +1796,9 @@ if opts then
       -- Select traverse function depending on what we have
       local iter_func = settings.extra_columns[1] and ipairs or pairs
 
-      for col_name, col_data in iter_func(settings.extra_columns) do
+      for col_key, col_data in iter_func(settings.extra_columns) do
         -- Array based extra columns
-        if col_data.name then
-          col_name = col_data.name
-        end
+        local col_name = col_data.name or col_key
         if not col_data.selector or not col_data.type then
           rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: no type or no selector',
               col_name)

@@ -254,12 +254,13 @@ local function dmarc_key_value_case(elts)
   end
   local result = {}
   for k, v in pairs(elts) do
-    k = k:lower()
-    if k ~= "v" then
-      v = v:lower()
+    local key = k:lower()
+    local value = v
+    if key ~= "v" then
+      value = v:lower()
     end
 
-    result[k] = v
+    result[key] = value
   end
 
   return result

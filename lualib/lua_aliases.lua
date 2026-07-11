@@ -332,11 +332,11 @@ function parse_unix_aliases(file_path)
   local current_line = ""
   local line_num = 0
 
-  for line in f:lines() do
+  for raw_line in f:lines() do
     line_num = line_num + 1
 
     -- Strip trailing whitespace
-    line = line:gsub('%s+$', '')
+    local line = raw_line:gsub('%s+$', '')
 
     -- Handle line continuation
     if line:match('\\$') then
@@ -360,8 +360,8 @@ function parse_unix_aliases(file_path)
 
       -- Split targets by comma
       local target_list = {}
-      for target in targets:gmatch('[^,]+') do
-        target = target:gsub('^%s+', ''):gsub('%s+$', '') -- Trim
+      for raw_target in targets:gmatch('[^,]+') do
+        local target = raw_target:gsub('^%s+', ''):gsub('%s+$', '') -- Trim
 
         -- Skip special targets for now (:include:, |program, /file)
         if not target:match('^:include:') and
