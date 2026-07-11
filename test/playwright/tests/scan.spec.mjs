@@ -175,17 +175,22 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             // Reset history
             const resetBtn = page.locator("#resetHistory");
             await expect(resetBtn).toBeVisible();
-            page.once("dialog", (dialog) => dialog.accept());
-            await resetBtn.click();
 
             // The reload disables #updateHistory only for the duration of the
             // fast, local history request, which is too brief to assert on the
             // DOM. Wait for the reset and the subsequent reload responses instead.
-            await page.waitForResponse((r) => r.url().includes("historyreset"), {timeout: 10000});
-            await page.waitForResponse(
+            // Register the waits before clicking: on localhost the responses can
+            // arrive before a listener registered after the click would see them.
+            const resetResponse = page.waitForResponse((r) => r.url().includes("historyreset"), {timeout: 10000});
+            const reloadResponse = page.waitForResponse(
                 (r) => r.url().includes("history") && r.url().includes("from="),
                 {timeout: 10000}
             );
+
+            page.once("dialog", (dialog) => dialog.accept());
+            await resetBtn.click();
+            await resetResponse;
+            await reloadResponse;
 
             const updateHistoryBtn = page.locator("#updateHistory");
             await expect(updateHistoryBtn).toBeEnabled();
