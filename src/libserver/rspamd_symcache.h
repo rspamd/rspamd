@@ -21,7 +21,16 @@
 #include "cfg_file.h"
 #include "contrib/libev/ev.h"
 
+/* Lua headers do not have __cplusplus guards, so keep their C linkage
+ * explicitly; including lua_common.h here is not an option as it creates
+ * an include cycle via rspamd.h -> cfg_file.h -> rspamd_symcache.h */
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <lua.h>
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -266,6 +275,17 @@ const char *rspamd_symcache_get_parent(struct rspamd_symcache *cache,
 									   const char *symbol);
 
 unsigned int rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
+											  const char *symbol);
+
+/**
+ * Returns the processing stage of a symbol as a single SYMBOL_TYPE_* bit
+ * (SYMBOL_TYPE_NORMAL for a plain filter). Virtual symbols are resolved to
+ * their parent so the returned stage reflects when the symbol is actually
+ * produced. Returns 0 if the symbol is unknown or its parent cannot be
+ * resolved. Used by the composites two-phase analysis to detect dependencies
+ * on symbols computed after the first composites pass (postfilters).
+ */
+unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 											  const char *symbol);
 
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
@@ -543,6 +563,17 @@ rspamd_symcache_item_stat(struct rspamd_symcache_item *item);
  * @param task
  */
 void rspamd_symcache_enable_profile(struct rspamd_task *task);
+
+/**
+ * Builds a human-readable description of symbols that have been started but
+ * have not yet finished (i.e. are blocked on async events). Intended for use
+ * from timeout handlers so operators can see which rules stalled the task.
+ * Returns NULL if there are no inflight symbols. Caller owns the returned
+ * GString and MUST free it with g_string_free(..., TRUE).
+ * @param task
+ * @return
+ */
+GString *rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task);
 
 struct rspamd_symcache_timeout_item {
 	double timeout;

@@ -94,7 +94,7 @@ public:
 		return idx != it.idx;
 	}
 
-	iterator_base(difference_type index, Container *instance) noexcept
+	iterator_base(difference_type index, const Container *instance) noexcept
 		: idx(index), cont_instance(instance)
 	{
 	}
@@ -102,11 +102,6 @@ public:
 	iterator_base(const iterator_base &) noexcept = default;
 
 	iterator_base &operator=(const iterator_base &) noexcept = default;
-
-	Container *get_instance() const noexcept
-	{
-		return cont_instance;
-	}
 
 	codepoint_type get_value() const noexcept
 	{
@@ -118,7 +113,7 @@ public:
 
 protected:
 	difference_type idx;
-	Container *cont_instance = nullptr;
+	const Container *cont_instance = nullptr;
 
 protected:
 	void advance(difference_type n) noexcept
@@ -164,7 +159,7 @@ public:
 		return idx != it.idx;
 	}
 
-	iterator_base(difference_type index, Container *instance) noexcept
+	iterator_base(difference_type index, const Container *instance) noexcept
 		: idx(index), cont_instance(instance)
 	{
 	}
@@ -172,10 +167,6 @@ public:
 	iterator_base() noexcept = default;
 	iterator_base(const iterator_base &) noexcept = default;
 	iterator_base &operator=(const iterator_base &) noexcept = default;
-	Container *get_instance() const noexcept
-	{
-		return cont_instance;
-	}
 
 	value_type get_value() const noexcept
 	{
@@ -184,7 +175,7 @@ public:
 
 protected:
 	difference_type idx;
-	Container *cont_instance = nullptr;
+	const Container *cont_instance = nullptr;
 
 protected:
 	//! Advance the iterator n times (negative values allowed!)
@@ -203,23 +194,21 @@ protected:
 	}
 };
 
-template<typename Container, bool Raw>
-struct iterator;
-template<typename Container, bool Raw>
-struct const_iterator;
 
 template<typename Container, bool Raw = false>
 struct iterator : iterator_base<Container, Raw> {
-	iterator(typename iterator_base<Container, Raw>::difference_type index, Container *instance) noexcept
-		: iterator_base<Container, Raw>(index, instance)
+	using base = iterator_base<Container, Raw>;
+	using typename base::difference_type;
+	using typename base::reference_type;
+
+	iterator(difference_type index, const Container *instance) noexcept
+		: base(index, instance)
 	{
 	}
 	iterator() noexcept = default;
 	iterator(const iterator &) noexcept = default;
 
 	iterator &operator=(const iterator &) noexcept = default;
-	/* Disallow creating from const_iterator */
-	iterator(const const_iterator<Container, Raw> &) = delete;
 
 	/* Prefix */
 	iterator &operator++() noexcept
@@ -251,33 +240,33 @@ struct iterator : iterator_base<Container, Raw> {
 		return tmp;
 	}
 
-	iterator operator+(typename iterator_base<Container, Raw>::difference_type n) const noexcept
+	iterator operator+(difference_type n) const noexcept
 	{
 		iterator it{*this};
 		it.advance(n);
 		return it;
 	}
 
-	iterator &operator+=(typename iterator_base<Container, Raw>::difference_type n) noexcept
+	iterator &operator+=(difference_type n) noexcept
 	{
 		this->advance(n);
 		return *this;
 	}
 
-	iterator operator-(typename iterator_base<Container, Raw>::difference_type n) const noexcept
+	iterator operator-(difference_type n) const noexcept
 	{
 		iterator it{*this};
 		it.advance(-n);
 		return it;
 	}
 
-	iterator &operator-=(typename iterator_base<Container, Raw>::difference_type n) noexcept
+	iterator &operator-=(difference_type n) noexcept
 	{
 		this->advance(-n);
 		return *this;
 	}
 
-	typename iterator::reference_type operator*() const noexcept
+	reference_type operator*() const noexcept
 	{
 		return this->get_value();
 	}
@@ -523,22 +512,22 @@ public:
 	}
 
 	/* Iterators */
-	inline auto begin() noexcept -> iterator
+	inline auto begin() const noexcept -> iterator
 	{
 		return {0, this};
 	}
 
-	inline auto raw_begin() noexcept -> raw_iterator
+	inline auto raw_begin() const noexcept -> raw_iterator
 	{
 		return {0, this};
 	}
 
-	inline auto end() noexcept -> iterator
+	inline auto end() const noexcept -> iterator
 	{
 		return {(difference_type) size(), this};
 	}
 
-	inline auto raw_end() noexcept -> raw_iterator
+	inline auto raw_end() const noexcept -> raw_iterator
 	{
 		return {(difference_type) size(), this};
 	}

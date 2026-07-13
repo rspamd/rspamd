@@ -656,8 +656,29 @@ rspamd_lua_execute_lua_subprocess(lua_State *L,
 			}
 		}
 		else {
-			msg_err("subprocess: invalid return value: %s",
-					lua_typename(L, lua_type(L, -1)));
+			/* Report an invalid return value as an error to the parent: if
+			 * nothing is written, the parent keeps waiting for a reply while
+			 * the child blocks waiting for the parent's ack, deadlocking both
+			 * processes (and anything serialised behind them, e.g. neural
+			 * training locks) */
+			char errbuf[128];
+			glong slen;
+
+			slen = rspamd_snprintf(errbuf, sizeof(errbuf),
+								   "invalid return value: %s; text or string expected",
+								   lua_typename(L, lua_type(L, -1)));
+			msg_err("subprocess: %*s", (int) slen, errbuf);
+			wlen = (1ULL << 63u) + slen;
+
+			r = write(cbdata->sp[1], &wlen, sizeof(wlen));
+			if (r == -1) {
+				msg_err("write failed: %s", strerror(errno));
+			}
+
+			r = write(cbdata->sp[1], errbuf, slen);
+			if (r == -1) {
+				msg_err("write failed: %s", strerror(errno));
+			}
 		}
 	}
 

@@ -131,7 +131,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_GROUPS (1u << 6u)
 /* Request is multipart/form-data v3 protocol */
 #define RSPAMD_TASK_PROTOCOL_FLAG_MULTIPART_V3 (1u << 7u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (7u)
+/* v3 request metadata part was msgpack-serialized (mirror it in the reply) */
+#define RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK (1u << 8u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (8u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_SPAMC(task) (G_UNLIKELY((task)->cmd == CMD_CHECK_SPAMC))
@@ -224,6 +226,7 @@ struct rspamd_task {
 	const char *classifier;                /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det; /**< Languages detector								*/
 	struct rspamd_message *message;
+	ucl_object_t *meta; /**< custom metadata object from a checkv3 request (or NULL) */
 
 	/* ESMTP arguments from milter protocol */
 	GHashTable *mail_esmtp_args; /**< ESMTP arguments from MAIL FROM command */
@@ -414,6 +417,25 @@ const char *rspamd_task_stage_name(enum rspamd_task_stage stg);
  * Called on forced timeout
  */
 void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
+
+/**
+ * Creates an async session owned by @task and wires up the default task
+ * diagnostics resolver (used to snapshot the currently-executing symbol name
+ * on every rspamd_session_add_event). All task-scoped sessions should be
+ * created through this helper instead of calling rspamd_session_create
+ * directly, otherwise timeout logs will be missing symbol context.
+ * @param task owning task; must be non-NULL
+ * @param pool memory pool for the session
+ * @param fin session-fin callback
+ * @param restore session-restore callback (or NULL)
+ * @param cleanup session-cleanup callback (or NULL)
+ */
+struct rspamd_async_session *
+rspamd_task_create_session(struct rspamd_task *task,
+						   rspamd_mempool_t *pool,
+						   session_finalizer_t fin,
+						   event_finalizer_t restore,
+						   event_finalizer_t cleanup);
 
 /*
  * Called on unexpected IO error (e.g. ECONNRESET)

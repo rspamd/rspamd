@@ -15,8 +15,7 @@
 	<meta name="msapplication-TileColor" content="#2b5797">
 
 	<link href="./css/bootstrap.min.css" rel="stylesheet">
-	<link rel="stylesheet" type="text/css" href="./css/footable.standalone.min.css"/>
-	<link rel="stylesheet" type="text/css" href="./css/FooTable.FontAwesome.css"/>
+	<link rel="stylesheet" type="text/css" href="./css/tabulator_bs5.min.css"/>
 	<link rel="stylesheet" type="text/css" href="./css/svg-with-js.min.css">
 	<link rel="stylesheet" type="text/css" href="./css/d3evolution.css">
 	<link rel="stylesheet" type="text/css" href="./css/d3pie.css">
@@ -290,7 +289,7 @@
 							<div id="summary-row" class="row">
 								<div class="col-fixed" id="rrd-pie"></div>
 								<div class="col-fluid">
-									<table id="rrd-table" class="table table-striped table-hover"></table>
+									<div id="rrd-table"></div>
 									<div id="rrd-table_toggle"></div>
 									<div id="rrd-total">Total messages: <span id="rrd-total-value"></span></div>
 								</div>
@@ -405,7 +404,7 @@
 						</div>
 					</div>
 					<div class="card-body p-0">
-						<table class="table table-hover" id="symbolsTable"></table>
+						<div id="symbolsTable"></div>
 					</div>
 				</div>
 			</div>
@@ -589,6 +588,7 @@
 						<span class="icon me-3"><i class="fas fa-eye"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Scan results history</span>
 						<div id="scanResult" class="d-flex input-group-sm align-items-center text-nowrap ms-auto me-1">
+								<input type="search" id="filter_scan" class="form-control form-control-sm me-2" style="max-width:14rem" placeholder="Search" autocomplete="off">
 								<label for="selSymOrder_scan">Symbols order:</label>
 								<select id="selSymOrder_scan" class="form-select ms-1">
 									<option value="magnitude" selected>Score magnitude</option>
@@ -597,10 +597,10 @@
 								</select>
 							<label for="scan_page_size" class="ms-2">Rows per page:</label>
 							<input id="scan_page_size" class="form-control ms-1" value="25" min="1" type="number">
-							<button class="btn btn-outline-secondary btn-sm ms-2 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
+							<button class="btn btn-outline-secondary btn-sm ms-2 d-flex align-items-center dropdown-toggle tab-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
 								<i class="fas fa-columns me-1"></i>Columns
 							</button>
-							<div class="dropdown-menu ft-columns-dropdown p-2"></div>
+							<div class="dropdown-menu tab-columns-dropdown p-2"></div>
 							<button class="btn btn-secondary btn-sm ms-2 d-flex align-items-center" id="cleanScanHistory" disabled>
 								<i class="fas fa-trash-alt me-1"></i>Clean history
 							</button>
@@ -608,7 +608,7 @@
 					</div>
 					<div class="card-body p-0">
 						<div id="scanLog">
-							<table class="table mb-0" id="historyTable_scan"></table>
+							<div id="historyTable_scan"></div>
 						</div>
 					</div>
 				</div>
@@ -649,7 +649,7 @@
 											<form class="col-12 d-flex flex-column">
 												<div class="row pt-3">
 													<div class="col">
-														<div class="form-group">
+														<div class="mb-3">
 															<label class="form-label" for="selectorsMsgArea">Message source:</label>
 															<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder='Paste raw message source, drag and drop files here or use "Browse..." button.'></textarea>
 														</div>
@@ -658,7 +658,7 @@
 												</div>
 												<div class="row pt-3">
 													<div class="col">
-														<div class="form-group">
+														<div class="mb-3">
 															<label class="form-label" for="selectorsSelArea">Selector(s):</label>
 															<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
 														</div>
@@ -668,7 +668,7 @@
 												</div>
 												<div class="row pt-3 flex-grow-1">
 													<div class="col d-flex flex-column">
-														<div class="form-group h-100 d-flex flex-column">
+														<div class="mb-3 h-100 d-flex flex-column">
 															<label class="form-label" for="selectorsResArea">Result:</label>
 															<textarea class="form-control flex-grow-1" id="selectorsResArea" disabled readonly></textarea>
 														</div>
@@ -709,6 +709,7 @@
 							title="If you'd like to use the modern version of History, please enable History redis module."
 							 id="legacy-history-badge" class="my-2 ms-2 badge text-bg-info d-none">Legacy version</a>
 						<div class="d-flex input-group-sm align-items-center text-nowrap ms-auto me-1">
+							<input type="search" id="filter_history" class="form-control form-control-sm me-2" style="max-width:14rem" placeholder="Search" autocomplete="off">
 							<label for="selSymOrder_history">Symbols order:</label>
 							<select id="selSymOrder_history" class="form-select ms-1">
 								<option value="magnitude" selected>Score magnitude</option>
@@ -721,10 +722,10 @@
 							<input type="number" id="history-count" class="form-control ms-1" value="1000" min="1" step="1" title="Number of rows to load">
 							<label for="history_page_size" class="ms-2">Rows/page:</label>
 							<input id="history_page_size" class="form-control ms-1" value="25" min="1" type="number">
-							<button class="btn btn-outline-secondary btn-sm ms-3 d-flex align-items-center dropdown-toggle ft-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
+							<button class="btn btn-outline-secondary btn-sm ms-3 d-flex align-items-center dropdown-toggle tab-columns-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" disabled>
 								<i class="fas fa-columns me-1"></i>Columns
 							</button>
-							<div class="dropdown-menu ft-columns-dropdown p-2"></div>
+							<div class="dropdown-menu tab-columns-dropdown p-2"></div>
 
 							<button class="btn btn-danger btn-sm ms-2 d-flex align-items-center ro-hide" id="resetHistory">
 								<i class="fas fa-times-circle me-1"></i>Reset
@@ -736,7 +737,7 @@
 					</div>
 					<div class="card-body p-0">
 						<div id="historyLog">
-							<table class="table" id="historyTable_history"></table>
+							<div id="historyTable_history"></div>
 						</div>
 					</div>
 				</div>
@@ -751,7 +752,7 @@
 						</div>
 					</div>
 					<div class="card-body p-0">
-						<table class="table table-hover mb-0" id="errorsLog"></table>
+						<div id="errorsLog"></div>
 					</div>
 				</div>
 

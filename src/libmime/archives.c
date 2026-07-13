@@ -114,7 +114,7 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 			fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
 			fentry->fname = g_string_new_len(in, inlen);
 
-			return NULL;
+			return false;
 		}
 
 		int i = 0;
@@ -146,7 +146,7 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 			fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
 			fentry->fname = g_string_new_len(in, inlen);
 
-			return NULL;
+			return false;
 		}
 
 		g_free(tmp);
@@ -200,6 +200,14 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f = NULL;
 
+	/*
+	 * Need at least 22 bytes for a minimal EOCD record; otherwise the
+	 * scan below would compute a pointer below parsed_data.begin (UB).
+	 */
+	if (part->parsed_data.len < 22) {
+		return;
+	}
+
 	/* Zip files have interesting data at the end of archive */
 	p = part->parsed_data.begin + part->parsed_data.len - 1;
 	start = part->parsed_data.begin;
@@ -250,8 +258,11 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	memcpy(&cd_offset, eocd + 16, sizeof(cd_offset));
 	cd_offset = GUINT32_FROM_LE(cd_offset);
 
-	/* We need to check sanity as well */
-	if (cd_offset + cd_size > (unsigned int) (eocd - start)) {
+	/*
+	 * We need to check sanity as well. Use a 64-bit add to avoid
+	 * a 32-bit wrap that would let a malicious EOCD bypass the check.
+	 */
+	if ((uint64_t) cd_offset + (uint64_t) cd_size > (uint64_t) (eocd - start)) {
 		msg_info_task("zip archive is invalid (bad size/offset for CD)");
 
 		return;
@@ -338,6 +349,10 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
 			}
 
+			if (hlen + sizeof(uint16_t) * 2 > (gsize) (extra + extra_len - p)) {
+				/* Truncated or malformed extra field */
+				break;
+			}
 			p += hlen + sizeof(uint16_t) * 2;
 		}
 
@@ -531,6 +546,17 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 				/* HIGH_UNP_SIZE  */
 				RAR_READ_UINT32(tmp);
 				uncomp_sz += tmp;
+			}
+
+			/*
+			 * p advanced past the attrs and optional HIGH_*_SIZE fields
+			 * after fname_len was validated above, so re-check it against
+			 * the remaining buffer before reading the filename.
+			 */
+			if (fname_len > (gsize) (end - p)) {
+				msg_debug_archive("rar archive is invalid (truncated filename)");
+
+				return;
 			}
 
 			f = g_malloc0(sizeof(*f));
@@ -779,8 +805,14 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 					f = NULL;
 				}
 
+				/*
+				 * Bound the extra-field block using sizes rather than
+				 * pointer arithmetic: extra_sz is a 64-bit varint and
+				 * "p + fname_len + extra_sz" could otherwise wrap.
+				 */
 				if (f && has_extra && extra_sz > 0 &&
-					p + fname_len + extra_sz < end) {
+					fname_len <= (uint64_t) (end - p) &&
+					extra_sz <= (uint64_t) (end - p) - fname_len) {
 					/* Try to find encryption record in extra field */
 					const unsigned char *ex = p + fname_len;
 					const unsigned char *extra_end = ex + extra_sz;
@@ -874,15 +906,17 @@ rspamd_archive_7zip_read_vint(const unsigned char *start, gsize remain, uint64_t
 	else {
 		int cur_bit = 6, intlen = 1;
 		const unsigned char bmask = 0xFF;
-		uint64_t tgt;
+		uint64_t tgt = 0;
 
 		while (cur_bit > 0) {
 			if (!isset(&t, cur_bit)) {
 				if (remain >= intlen + 1) {
 					memcpy(&tgt, start + 1, intlen);
 					tgt = GUINT64_FROM_LE(tgt);
-					/* Shift back */
-					tgt >>= sizeof(tgt) - NBBY * intlen;
+					/*
+					 * tgt was zero-initialised, so it now holds the
+					 * intlen-byte little-endian value directly.
+					 */
 					/* Add masked value */
 					tgt += (uint64_t) (t & (bmask >> (NBBY - cur_bit)))
 						   << (NBBY * intlen);
@@ -989,6 +1023,10 @@ rspamd_7zip_read_bits(struct rspamd_task *task,
 
 	for (i = 0; i < nbits; i++) {
 		if (mask == 0) {
+			if (p >= end) {
+				return NULL;
+			}
+
 			avail = *p;
 			SZ_SKIP_BYTES(1);
 			mask = 0x80;
@@ -1013,6 +1051,10 @@ rspamd_7zip_read_digest(struct rspamd_task *task,
 						uint64_t num_streams,
 						unsigned int *pdigest_read)
 {
+	if (p >= end) {
+		return NULL;
+	}
+
 	unsigned char all_defined = *p;
 	uint64_t i;
 	unsigned int num_defined = 0;
@@ -1507,14 +1549,18 @@ rspamd_7zip_read_archive_props(struct rspamd_task *task,
 	 * }
 	 */
 
-	if (p != NULL) {
+	if (p != NULL && p < end) {
 		proptype = *p;
 		SZ_SKIP_BYTES(1);
 
 		while (proptype != 0) {
 			SZ_READ_VINT(proplen);
 
-			if (p + proplen < end) {
+			/*
+			 * proplen is a 64-bit varint; compare sizes to avoid
+			 * a pointer-arithmetic wrap (p + proplen < end).
+			 */
+			if (proplen < (uint64_t) (end - p)) {
 				p += proplen;
 			}
 			else {
@@ -1679,6 +1725,10 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 							  struct rspamd_archive *arch,
 							  struct rspamd_mime_part *part)
 {
+	if (p >= end) {
+		return NULL;
+	}
+
 	unsigned char t = *p;
 
 	SZ_SKIP_BYTES(1);

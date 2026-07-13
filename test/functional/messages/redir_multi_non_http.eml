@@ -1,0 +1,8 @@
+Content-type: text/html
+
+<html>
+<body>
+<a href="http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/tel_redirect">Call us</a>
+<a href="http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/mailto_redirect">Email us</a>
+</body>
+</html>

@@ -1032,6 +1032,13 @@ local function openai_check(task, content, sel_part, context_snippet)
     body.model = model
 
     upstream = settings.upstreams:get_upstream_round_robin()
+    if not upstream then
+      rspamd_logger.errx(task,
+          'no GPT upstream available (DNS pending or all dead); skipping model %s',
+          model)
+      results[idx].checked = true
+      results[idx].error = 'no upstream available'
+    else
     local http_params = {
       url = settings.url,
       method = 'post',
@@ -1056,6 +1063,7 @@ local function openai_check(task, content, sel_part, context_snippet)
 
     if not rspamd_http.request(http_params) then
       results[idx].checked = true
+    end
     end
   end
 end
@@ -1169,6 +1177,13 @@ local function ollama_check(task, content, sel_part, context_snippet)
     body.model = model
 
     upstream = settings.upstreams:get_upstream_round_robin()
+    if not upstream then
+      rspamd_logger.errx(task,
+          'no Ollama upstream available (DNS pending or all dead); skipping model %s',
+          model)
+      results[idx].checked = true
+      results[idx].error = 'no upstream available'
+    else
     local http_params = {
       url = settings.url,
       method = 'post',
@@ -1190,6 +1205,7 @@ local function ollama_check(task, content, sel_part, context_snippet)
 
     if not rspamd_http.request(http_params) then
       results[idx].checked = true
+    end
     end
   end
 end

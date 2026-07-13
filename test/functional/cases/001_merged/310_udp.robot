@@ -36,6 +36,8 @@ UDP Teardown
 
 Run Dummy UDP
   [Arguments]
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_udp.py  5005
-  Wait Until Created  /tmp/dummy_udp.pid
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_udp-${RSPAMD_PORT_DUMMY_UDP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_udp-${RSPAMD_PORT_DUMMY_UDP}.log
+  ${result} =  Start Dummy Service  dummy_udp.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_udp.py  ${RSPAMD_PORT_DUMMY_UDP}  ${pid}
   Set Suite Variable  ${DUMMY_UDP_PROC}  ${result}

@@ -32,6 +32,17 @@ extern "C" {
 
 struct ev_loop;
 
+/**
+ * Maximum reentrancy depth of rspamd_multipattern_lookup() on a single
+ * multipattern. Each multipattern keeps a small stack of hyperscan scratch
+ * contexts of this depth, so a lookup may be re-entered (from within a match
+ * callback) up to this many levels deep before the scratch pool is exhausted.
+ * Callers that recurse into the same multipattern from their callback (e.g. URL
+ * query unwrapping, which re-scans an embedded URL while the enclosing scan is
+ * still on the stack) MUST keep their total nesting at or below this bound.
+ */
+#define RSPAMD_MULTIPATTERN_MAX_REENTRANCY 10
+
 enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_DEFAULT = 0,
 	RSPAMD_MULTIPATTERN_ICASE = (1 << 0),
@@ -43,6 +54,15 @@ enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_DOTALL = (1 << 5),
 	RSPAMD_MULTIPATTERN_SINGLEMATCH = (1 << 6),
 	RSPAMD_MULTIPATTERN_NO_START = (1 << 7),
+	/*
+	 * Explicitly request start-of-match offsets for every occurrence. This is
+	 * the default behaviour today (hyperscan is compiled with
+	 * HS_FLAG_SOM_LEFTMOST and the ACISM/regex fallbacks derive the start), so
+	 * the flag mostly documents intent and makes the request explicit and
+	 * future-proof. When set it also wins over RSPAMD_MULTIPATTERN_NO_START and
+	 * RSPAMD_MULTIPATTERN_SINGLEMATCH (which would otherwise drop SOM).
+	 */
+	RSPAMD_MULTIPATTERN_SOM = (1 << 8),
 };
 
 /**
@@ -70,10 +90,21 @@ struct rspamd_cryptobox_library_ctx;
 struct ev_loop;
 
 /**
- * Called on pattern match
+ * Called on pattern match.
+ *
+ * Offset convention: both offsets are byte offsets into @text and are 0-based.
+ * @match_start is inclusive (the first matched byte) and @match_pos is
+ * exclusive (one past the last matched byte), so the matched span is
+ * text[match_start .. match_pos) and its length is match_pos - match_start.
+ * Note that numerically @match_pos equals the 1-based position of the last
+ * matched byte, which is what historical callers treated as "the end position".
+ *
  * @param mp multipattern structure
- * @param strnum number of pattern matched
- * @param textpos position in the text
+ * @param strnum number of pattern matched (0-based pattern id)
+ * @param match_start start byte offset of the match (0-based, inclusive). Only
+ *        meaningful when start-of-match reporting is active (the default, or
+ *        when RSPAMD_MULTIPATTERN_SOM is set); 0 otherwise.
+ * @param match_pos end byte offset of the match (0-based, exclusive)
  * @param text input text
  * @param len length of input text
  * @param context userdata

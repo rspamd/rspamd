@@ -757,6 +757,18 @@ local function handler(args)
     os.exit(1)
   end
 
+  -- rspamadm doesn't run worker on_load callbacks, so the async sentinel
+  -- watcher in lua_redis never fires here; resolve the master synchronously
+  -- before issuing any writes (see #6009).
+  local setup_err
+  lua_redis.prepare_redis_setup(redis_params, function(err)
+    setup_err = err
+  end)
+  if setup_err then
+    logger.errx('Cannot prepare Redis: %s', setup_err)
+    os.exit(1)
+  end
+
   -- Load exclude_rua_addresses map if --recheck-rua flag is set
   if opts.recheck_rua then
     if dmarc_settings.reporting.exclude_rua_addresses then

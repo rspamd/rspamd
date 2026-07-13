@@ -832,6 +832,20 @@ kad_node_t *kann_layer_layernorm(kad_node_t *in)
 	return kann_layer_layernorm2(0, 0, in);
 }
 
+/* Multi-head attention pooling over a sequence of n_words zero-padded word
+ * vectors flattened into the input; the per-word dimension is derived from
+ * the input size. Output: n_heads * dim. */
+kad_node_t *kann_layer_attn_pool(kad_node_t *in, int n_words, int n_heads)
+{
+	kad_node_t *q;
+	int dim;
+	if (in->n_d != 2 || n_words <= 0 || n_heads <= 0) return 0;
+	if (in->d[1] % n_words != 0) return 0;
+	dim = in->d[1] / n_words;
+	q = kann_new_weight(n_heads, dim);
+	return kad_attn_pool(in, q, n_words);
+}
+
 kad_node_t *kann_layer_rnn(kad_node_t *in, int n1, int rnn_flag)
 {
 	kad_node_t *h0;

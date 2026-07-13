@@ -86,7 +86,10 @@ end
 
 local function spamassassin_check(task, content, digest, rule)
   local function spamassassin_check_uncached ()
-    local upstream = rule.upstreams:get_upstream_round_robin()
+    local upstream = common.get_upstream_or_fail(task, rule, nil)
+    if not upstream then
+      return
+    end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
 
@@ -114,6 +117,11 @@ local function spamassassin_check(task, content, digest, rule)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
+          if not upstream then
+            common.yield_result(task, rule,
+                'no upstream available for retry', 0.0, 'fail')
+            return
+          end
           addr = upstream:get_addr()
 
           lua_util.debugm(rule.N, task, '%s: retry IP: %s:%s',

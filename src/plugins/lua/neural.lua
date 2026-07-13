@@ -34,6 +34,7 @@ pcall(require, "plugins/neural/providers/llm")
 pcall(require, "plugins/neural/providers/symbols")
 pcall(require, "plugins/neural/providers/text_hash")
 pcall(require, "plugins/neural/providers/fasttext_embed")
+pcall(require, "plugins/neural/providers/static_embed")
 
 local N = "neural"
 
@@ -57,9 +58,14 @@ end
 local has_blas = rspamd_tensor.has_blas()
 local text_cookie = rspamd_text.cookie
 
+-- Forward declarations
+local maybe_carryover_ann
+local load_ann_profile
+
 -- Creates and stores ANN profile in Redis
 local function new_ann_profile(task, rule, set, version)
   local ann_key = neural_common.new_ann_key(rule, set, version, settings)
+  local providers_digest = neural_common.providers_config_digest(rule.providers, rule)
 
   local profile = {
     symbols = set.symbols,
@@ -67,7 +73,7 @@ local function new_ann_profile(task, rule, set, version)
     version = version,
     digest = set.digest,
     distance = 0, -- Since we are using our own profile
-    providers_digest = neural_common.providers_config_digest(rule.providers, rule),
+    providers_digest = providers_digest,
   }
 
   local ucl = require "ucl"
@@ -80,6 +86,21 @@ local function new_ann_profile(task, rule, set, version)
     else
       rspamd_logger.infox(task, 'created new ANN profile for %s:%s, data stored at prefix %s',
         rule.prefix, set.name, profile.redis_key)
+      -- Carry weights from a prior profile (same providers_digest, different
+      -- symbol-list digest) into the fresh profile key ONLY when the input
+      -- vector schema is decided entirely by providers -- i.e. when
+      -- disable_symbols_input is set. In hybrid mode (providers + symbols)
+      -- the symbol portion of the vector reshapes with symbol drift, and
+      -- load_new_ann then sets set.ann.symbols = profile.symbols (= current
+      -- symbol list), so copied weights would be indexed against features
+      -- they were never trained against -- silent garbage at inference.
+      -- For hybrid mode is_profile_compatible already routes inference to
+      -- the prior profile entry, which carries its own (older) symbol list
+      -- and therefore keeps weights correctly aligned at inference time;
+      -- skipping carryover is the right behaviour.
+      if providers_digest and rule.disable_symbols_input then
+        maybe_carryover_ann(task, rule, set, ann_key, providers_digest)
+      end
     end
   end
 
@@ -222,6 +243,80 @@ local function get_ann_train_header(task)
   return nil
 end
 
+-- High-priority prefilter for the forced-learn fast path.
+--
+-- When a scan carries an explicit `ANN-Train: spam|ham` header and every neural
+-- rule that applies to this task can train from a symbols-independent vector
+-- (disable_symbols_input + train.forced_learn_minimal_scan), there is no reason
+-- to run any non-neural symbol: the stored training vector is built purely from
+-- registered providers + metatokens, all of which read parsed-message data
+-- (text parts, URLs, headers) that is already available at the prefilter stage
+-- (PROCESS_MESSAGE runs before PRE_FILTERS). So we disable every symbol except
+-- the neural ones, which prevents RBL/DNS, fuzzy, bayes-scoring, ClickHouse,
+-- capture/cluster and other idempotent work from ever being issued.
+--
+-- This never changes the neural settings id or the profile key: with
+-- disable_symbols_input the profile/digest are derived from providers_digest
+-- (see process_settings_elt + is_profile_compatible), so the vector and the key
+-- are byte-for-byte identical to what the live full-scan path would store.
+local function neural_forced_learn_prefilter(task)
+  -- Only act on explicit manual-train scans
+  local hv = get_ann_train_header(task)
+  if not (hv == 'spam' or hv == 'ham') then
+    return
+  end
+
+  -- Always keep the neural symbols runnable. NEURAL_LEARN is flagged
+  -- explicit_disable, so disable_all_symbols (skip_mask = explicit_disable)
+  -- leaves it alone; we still list it for clarity and re-enable NEURAL_CHECK and
+  -- every rule's spam/ham virtuals (these are NOT explicit_disable).
+  local keep = {
+    NEURAL_CHECK = true,
+    NEURAL_LEARN = true,
+  }
+  local any_minimal = false
+
+  for _, rule in pairs(settings.rules) do
+    local set = neural_common.get_rule_settings(task, rule)
+    if set then
+      keep[rule.symbol_spam] = true
+      keep[rule.symbol_ham] = true
+      local minimal = rule.disable_symbols_input and rule.train
+          and rule.train.forced_learn_minimal_scan
+      if minimal then
+        any_minimal = true
+      else
+        -- An applicable neural rule is NOT eligible for the minimal scan: either
+        -- its vector depends on symbols, or the operator opted out. Stripping
+        -- symbols could change that rule's stored vector (or just defeats an
+        -- explicit opt-out), so fall back to a full scan for the whole task.
+        lua_util.debugm(N, task,
+          'forced-learn minimal scan disabled: rule %s is not eligible ' ..
+          '(disable_symbols_input=%s, forced_learn_minimal_scan=%s)',
+          rule.prefix, rule.disable_symbols_input,
+          rule.train and rule.train.forced_learn_minimal_scan)
+        return
+      end
+    end
+  end
+
+  if not any_minimal then
+    return
+  end
+
+  -- Disable every symbol-cache item except explicit_disable ones (keeps
+  -- NEURAL_LEARN), then re-enable the rest of the neural symbols. This is the
+  -- same "process only these" primitive that `symbols_enabled` uses internally,
+  -- so it reliably covers filter, postfilter and idempotent stages.
+  task:disable_all_symbols()
+  for sym in pairs(keep) do
+    task:enable_symbol(sym)
+  end
+
+  lua_util.debugm(N, task,
+    'forced-learn minimal scan: disabled all non-neural symbols for %s training', hv)
+end
+
 local function ann_push_task_result(rule, task, verdict, score, set)
   local train_opts = rule.train
   local learn_spam, learn_ham
@@ -276,7 +371,18 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     has_symbols_provider = true
   end
 
-  if has_llm_provider and not manual_train then
+  if train_opts.frozen and not manual_train then
+    -- Frozen model: never auto-learn and never auto-store a live vector, so the
+    -- pools cannot accrue an imbalanced live set. Inference keeps serving the
+    -- current ANN unchanged; only an explicit ANN-Train (manual_train) below can
+    -- still store and (on demand) retrain. This supersedes the auto-learn side
+    -- of store_set_only/store_pool_only.
+    learn_spam = false
+    learn_ham = false
+    skip_reason = 'model is frozen (train.frozen): auto-learn disabled'
+    lua_util.debugm(N, task, '%s:%s is frozen, skip auto-store of live vector',
+      rule.prefix, set.name)
+  elseif has_llm_provider and not manual_train then
     -- Use expression-based autolearn conditions for LLM providers
     if rule.autolearn and rule.autolearn.enabled then
       local learn_type, reason = neural_learn.get_learn_type(task, rule)
@@ -379,7 +485,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
             if manual_train and has_llm_provider and not has_symbols_provider then
               target_key = neural_common.pending_train_key(rule, set) .. '_' .. learn_type .. '_set'
             else
-              target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
+              target_key = (set.training_profile or set.ann).redis_key .. '_' .. learn_type .. '_set'
             end
 
             local function learn_vec_cb(redis_err)
@@ -402,6 +508,28 @@ local function ann_push_task_result(rule, task, verdict, score, set)
               'SADD',             -- command
               { target_key, str } -- arguments
             )
+
+            -- A frozen model trains ONLY when an operator pushes a corpus via
+            -- ANN-Train; record that request so the controller's auto-train
+            -- trigger (which is otherwise short-circuited for frozen models)
+            -- knows to retrain from these manual vectors. TTL keeps it from
+            -- forcing stale retrains long after the corpus push.
+            if rule.train.frozen and manual_train then
+              local marker_key = neural_common.pending_train_key(rule, set) .. '_retrain_req'
+              lua_redis.redis_make_request(task,
+                rule.redis,
+                nil,
+                true, -- is write
+                function(merr)
+                  if merr then
+                    lua_util.debugm(N, task, 'cannot set frozen retrain marker %s: %s',
+                      marker_key, merr)
+                  end
+                end,
+                'SET',
+                { marker_key, tostring(rspamd_util.get_time()), 'EX', tostring(rule.ann_expire) }
+              )
+            end
           end
 
           if rule.providers and #rule.providers > 0 then
@@ -425,11 +553,11 @@ local function ann_push_task_result(rule, task, verdict, score, set)
         elseif type(data) == 'string' then
           -- nil return value
           rspamd_logger.infox(task, "cannot learn %s ANN %s:%s; redis_key: %s: locked for learning: %s",
-            learn_type, rule.prefix, set.name, set.ann.redis_key, data)
+            learn_type, rule.prefix, set.name, (set.training_profile or set.ann).redis_key, data)
         else
           rspamd_logger.errx(task, 'cannot check if we can train %s:%s : type of Redis key %s is %s, expected table' ..
             'please remove this key from Redis manually if you perform upgrade from the previous version',
-            rule.prefix, set.name, set.ann.redis_key, type(data))
+            rule.prefix, set.name, (set.training_profile or set.ann).redis_key, type(data))
         end
       end
     end
@@ -437,11 +565,12 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     -- Check if we can learn
     -- For manual training, bypass can_store_vectors check (it may not be set yet)
     if set.can_store_vectors or manual_train then
-      if not set.ann then
-        -- Need to create or load a profile corresponding to the current configuration
+      if not set.ann and not set.training_profile then
+        -- No ANN and no best-known profile discovered by process_existing_ann
+        -- yet — bootstrap a fresh profile for the current configuration.
         set.ann = new_ann_profile(task, rule, set, 0)
         lua_util.debugm(N, task,
-          'requested new profile for %s, set.ann is missing (manual_train=%s)',
+          'requested new profile for %s, no ann/training target (manual_train=%s)',
           set.name, manual_train)
       end
 
@@ -449,7 +578,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
         { task = task, is_write = false },
         vectors_len_cb,
         {
-          set.ann.redis_key,
+          (set.training_profile or set.ann).redis_key,
         })
     else
       lua_util.debugm(N, task,
@@ -458,7 +587,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
   else
     lua_util.debugm(N, task,
       'do not push data to key %s: train condition not satisfied; reason: %s',
-      (set.ann or {}).redis_key,
+      (set.training_profile or set.ann or {}).redis_key,
       skip_reason)
   end
 end
@@ -600,13 +729,33 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
     })
 end
 
+-- Warn (throttled) when a selected profile points at a key with no trained
+-- blob.  Without throttling this fires every watch_interval and floods the log.
+local function maybe_warn_stale_profile(rule, set, ann_key)
+  local now = rspamd_util.get_time()
+  if not set.last_stale_warn or (now - set.last_stale_warn) > 600 then
+    set.last_stale_warn = now
+    rspamd_logger.warnx(rspamd_config,
+      'ANN profile for %s:%s selects Redis key %s which has no trained blob ' ..
+      '(stale profile entry); falling back to an older live profile',
+      rule.prefix, set.name, ann_key)
+  else
+    lua_util.debugm(N, rspamd_config,
+      'stale ANN profile key %s for %s:%s (warning throttled)',
+      ann_key, rule.prefix, set.name)
+  end
+end
+
 -- This function loads new ann from Redis
 -- This is based on `profile` attribute.
 -- ANN is loaded from `profile.redis_key`
 -- Rank of `profile` key is also increased, unfortunately, it means that we need to
 -- serialize profile one more time and set its rank to the current time
 -- set.ann fields are set according to Redis data received
-local function load_new_ann(rule, ev_base, set, profile, min_diff)
+-- `candidates` (optional) is the best-first list of remaining compatible
+-- profiles ({elt, dist}); if `profile`'s blob is missing we fall back to the
+-- next live candidate so a stale highest-version entry cannot keep inference dark.
+local function load_new_ann(rule, ev_base, set, profile, min_diff, candidates)
   local ann_key = profile.redis_key
 
   local function data_cb(err, data)
@@ -653,6 +802,13 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
                 'ZADD',  -- command
                 { set.prefix, tostring(rspamd_util.get_time()), profile_serialized }
               )
+              -- Keep an actively-reloaded blob alive: without this the blob
+              -- expires ann_expire after training even while still in use, and
+              -- its surviving zset entry becomes a tombstone.  The zset TTL
+              -- itself is refreshed in check_anns every cycle.
+              lua_redis.redis_make_request_taskless(ev_base, rspamd_config,
+                rule.redis, nil, true, rank_cb, 'EXPIRE',
+                { ann_key, tostring(rule.ann_expire) })
               rspamd_logger.infox(rspamd_config,
                 'loaded ANN for %s:%s from %s; %s bytes compressed; version=%s',
                 rule.prefix, set.name, ann_key, #data[1], profile.version)
@@ -663,8 +819,21 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             end
           end
         else
-          lua_util.debugm(N, rspamd_config, 'missing ANN for %s:%s in Redis key %s',
-            rule.prefix, set.name, ann_key)
+          maybe_warn_stale_profile(rule, set, ann_key)
+          -- Fall back to the next compatible profile that actually has a blob.
+          -- Only move to a candidate that would not downgrade what we already
+          -- have loaded (strictly newer than set.ann, or anything when dark).
+          local cur_ver = (set.ann and set.ann.version) or -1
+          for i, cand in ipairs(candidates or {}) do
+            if (cand.elt.version or 0) > cur_ver then
+              local rest = {}
+              for j = i + 1, #candidates do
+                rest[#rest + 1] = candidates[j]
+              end
+              load_new_ann(rule, ev_base, set, cand.elt, cand.dist, rest)
+              break
+            end
+          end
         end
 
         if set.ann and set.ann.ann and type(data[2]) == 'userdata' and data[2].cookie == text_cookie then
@@ -924,40 +1093,76 @@ end
 -- the existing ones.
 -- Use this function to load ANNs as `callback` parameter for `check_anns` function
 local function process_existing_ann(_, ev_base, rule, set, profiles)
-  local my_symbols = set.symbols
-  local min_diff = math.huge
-  local sel_elt
-  lua_util.debugm(N, rspamd_config, 'process_existing_ann: have %s profiles for %s:%s',
-    type(profiles) == 'table' and #profiles or -1, rule.prefix, set.name)
+  local has_providers = rule.providers and #rule.providers > 0
+  local current_providers_digest = has_providers and
+      neural_common.providers_config_digest(rule.providers, rule) or nil
+  lua_util.debugm(N, rspamd_config,
+    'process_existing_ann: have %s profiles for %s:%s (providers_digest=%s)',
+    type(profiles) == 'table' and #profiles or -1, rule.prefix, set.name,
+    current_providers_digest or 'none')
 
+  -- Build the best-first list of compatible candidates (smaller distance first,
+  -- tie-break on higher version).  The head is the profile we want to load; the
+  -- tail is handed to load_new_ann as a fallback for when the head's blob turns
+  -- out to be missing (a stale highest-version entry pointing at an expired or
+  -- never-written key).
+  local candidates = {}
   for _, elt in fun.iter(profiles) do
-    if elt and elt.symbols then
-      local dist = lua_util.distance_sorted(elt.symbols, my_symbols)
-      -- Check distance
-      if dist < #my_symbols * .3 then
-        -- Prefer profiles with smaller distance, or higher version when distance is equal
-        if dist < min_diff or (dist == min_diff and sel_elt and elt.version > sel_elt.version) then
-          min_diff = dist
-          sel_elt = elt
-        end
-      end
+    local compatible, dist = neural_common.is_profile_compatible(
+      rule, set, elt, current_providers_digest)
+    if compatible then
+      candidates[#candidates + 1] = { elt = elt, dist = dist }
     end
+  end
+  table.sort(candidates, function(a, b)
+    if a.dist ~= b.dist then
+      return a.dist < b.dist
+    end
+    return (a.elt.version or 0) > (b.elt.version or 0)
+  end)
+
+  local sel = candidates[1]
+  local sel_elt = sel and sel.elt
+  local min_diff = sel and sel.dist or math.huge
+  local fallback_tail = {}
+  for i = 2, #candidates do
+    fallback_tail[#fallback_tail + 1] = candidates[i]
   end
 
   if sel_elt then
+    -- Track the best-known profile as the training target independently of
+    -- the currently loaded ANN (set.ann).  This lets training vectors flow
+    -- into a freshly-registered profile even while its ANN hasn't been
+    -- trained yet — otherwise workers keep writing to the last-loaded ANN's
+    -- key and the new profile's training sets stay empty forever.
+    set.training_profile = {
+      redis_key = sel_elt.redis_key,
+      version = sel_elt.version,
+      digest = sel_elt.digest,
+      symbols = sel_elt.symbols,
+      distance = min_diff,
+      providers_digest = sel_elt.providers_digest,
+    }
     -- We can load element from ANN
     if set.ann then
-      -- We have an existing ANN, probably the same...
+      -- Providers schema acts as the dominant identity when configured: even
+      -- if the symbol-digest portion drifted (symcache shift), a matching
+      -- providers_digest means the vector shape (and therefore the trained
+      -- weights) are still valid.  Reload purely on version freshness in
+      -- that case.
+      local providers_compatible = has_providers and current_providers_digest
+          and set.ann.providers_digest == current_providers_digest
+          and sel_elt.providers_digest == current_providers_digest
+
       if set.ann.digest == sel_elt.digest then
         -- Same ANN, check version
-        if set.ann.version < sel_elt.version then
-          -- Load new ann
+        if (set.ann.version or 0) < (sel_elt.version or 0) then
           rspamd_logger.infox(rspamd_config, 'ann %s is changed, ' ..
             'our version = %s, remote version = %s',
             rule.prefix .. ':' .. set.name,
             set.ann.version,
             sel_elt.version)
-          load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+          load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
         else
           lua_util.debugm(N, rspamd_config, 'ann %s is not changed, ' ..
             'our version = %s, remote version = %s',
@@ -965,16 +1170,28 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
             set.ann.version,
             sel_elt.version)
         end
+      elseif providers_compatible then
+        if (sel_elt.version or 0) > (set.ann.version or 0) then
+          rspamd_logger.infox(rspamd_config,
+            'providers schema matches for %s; reload newer version %s (ours = %s)',
+            rule.prefix .. ':' .. set.name,
+            sel_elt.version, set.ann.version)
+          load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
+        else
+          lua_util.debugm(N, rspamd_config,
+            'providers schema matches for %s; our version %s >= remote %s, no reload',
+            rule.prefix .. ':' .. set.name,
+            set.ann.version, sel_elt.version)
+        end
       else
         -- We have some different ANN, so we need to compare distance
-        if set.ann.distance > min_diff then
-          -- Load more specific ANN
+        if (set.ann.distance or math.huge) > min_diff then
           rspamd_logger.infox(rspamd_config, 'more specific ann is available for %s, ' ..
             'our distance = %s, remote distance = %s',
             rule.prefix .. ':' .. set.name,
             set.ann.distance,
             min_diff)
-          load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+          load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
         else
           lua_util.debugm(N, rspamd_config, 'ann %s is not changed or less specific, ' ..
             'our distance = %s, remote distance = %s',
@@ -985,7 +1202,7 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
       end
     else
       -- We have no ANN, load new one
-      load_new_ann(rule, ev_base, set, sel_elt, min_diff)
+      load_new_ann(rule, ev_base, set, sel_elt, min_diff, fallback_tail)
     end
   end
   if sel_elt then
@@ -1001,7 +1218,9 @@ end
 -- ANN. By our we mean that it has exactly the same symbols in profile.
 -- Use this function to train ANN as `callback` parameter for `check_anns` function
 local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
-  local my_symbols = set.symbols
+  local has_providers = rule.providers and #rule.providers > 0
+  local current_providers_digest = has_providers and
+      neural_common.providers_config_digest(rule.providers, rule) or nil
   local sel_elt
   local lens = {
     spam = 0,
@@ -1010,14 +1229,16 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
   lua_util.debugm(N, rspamd_config, 'maybe_train_existing_ann: %s profiles for %s:%s',
     type(profiles) == 'table' and #profiles or -1, rule.prefix, set.name)
 
+  -- Strict match: training data accumulated against an existing profile
+  -- must come from a compatible vector schema.  is_profile_compatible
+  -- returns dist=0 when symbols are irrelevant (disable_symbols_input) or
+  -- when symbol-lists actually match.
   for _, elt in fun.iter(profiles) do
-    if elt and elt.symbols then
-      local dist = lua_util.distance_sorted(elt.symbols, my_symbols)
-      -- Check distance
-      if dist == 0 then
-        sel_elt = elt
-        break
-      end
+    local compatible, dist = neural_common.is_profile_compatible(
+      rule, set, elt, current_providers_digest)
+    if compatible and dist == 0 then
+      sel_elt = elt
+      break
     end
   end
 
@@ -1025,8 +1246,11 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
     -- We have our ANN and that's train vectors, check if we can learn
     local ann_key = sel_elt.redis_key
 
-    -- Check if we need to train ann
-    if rule.train.store_set_only then
+    -- Check if we need to train ann. Frozen supersedes store_set_only: a frozen
+    -- model never auto-trains, but unlike store_set_only it still retrains when an
+    -- operator pushes a corpus via ANN-Train (gated on the retrain-request marker
+    -- below). When not frozen, the historical store_set_only behaviour applies.
+    if not rule.train.frozen and rule.train.store_set_only then
       lua_util.debugm(N, rspamd_config, "skiped check if ANN %s needs to be trained due to store_set_only", ann_key)
       return
     end
@@ -1042,6 +1266,12 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         ann_key, pending_key, lens)
       lua_util.debugm(N, rspamd_config, 'maybe_train_existing_ann: initiating train for key=%s spam=%s ham=%s', ann_key,
         lens.spam or -1, lens.ham or -1)
+      -- Consume the frozen retrain-request marker now that an actual training is
+      -- starting, so one operator corpus push triggers exactly one retrain.
+      if rule.train.frozen then
+        lua_redis.redis_make_request_taskless(ev_base, rspamd_config, rule.redis,
+          nil, true, function(_, _) end, 'DEL', { pending_key .. '_retrain_req' })
+      end
       do_train_ann(worker, ev_base, rule, set, ann_key)
     end
 
@@ -1155,13 +1385,45 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
       )
     end
 
-    -- Start the chain
-    check_spam_len()
+    -- Start the chain. For a frozen model the controller's auto-train trigger is
+    -- short-circuited: it only proceeds when an operator-driven ANN-Train left a
+    -- retrain-request marker (the marker is consumed in initiate_train, so a
+    -- single corpus push yields a single retrain).
+    if rule.train.frozen then
+      local marker_key = pending_key .. '_retrain_req'
+      lua_redis.redis_make_request_taskless(ev_base,
+        rspamd_config,
+        rule.redis,
+        nil,
+        false, -- is read
+        function(err, data)
+          if err then
+            rspamd_logger.errx(rspamd_config, 'cannot read frozen retrain marker %s: %s',
+              marker_key, err)
+            return
+          end
+          -- Redis GET returns a boolean `false` (userdata/boolean) for a missing
+          -- key via lua_redis; treat anything non-string/empty as "no request".
+          if type(data) ~= 'string' or data == '' then
+            lua_util.debugm(N, rspamd_config,
+              'frozen ANN %s: no pending ANN-Train retrain request, skip auto-train', ann_key)
+            return
+          end
+          lua_util.debugm(N, rspamd_config,
+            'frozen ANN %s: ANN-Train retrain requested, counting vectors', ann_key)
+          check_spam_len()
+        end,
+        'GET',
+        { marker_key }
+      )
+    else
+      check_spam_len()
+    end
   end
 end
 
 -- Used to deserialise ANN element from a list
-local function load_ann_profile(element)
+load_ann_profile = function(element)
   local ucl = require "ucl"
 
   local parser = ucl.parser()
@@ -1180,6 +1442,127 @@ local function load_ann_profile(element)
     end
     return checked
   end
+end
+
+-- Async carryover: look up the most recent zset entry with the same
+-- providers_digest and a trained ANN blob, then copy its
+-- ann/roc_thresholds/pca/providers_meta/norm_stats fields into the freshly
+-- created profile's redis_key.  Only runs when the new key has no ANN yet,
+-- so this never overwrites a freshly-trained model.
+maybe_carryover_ann = function(task, rule, set, new_key, target_providers_digest)
+  local function zrange_cb(err, data)
+    if err or type(data) ~= 'table' then
+      lua_util.debugm(N, task, 'carryover: cannot read zset %s: %s',
+        set.prefix, err)
+      return
+    end
+
+    local source_key
+    for _, raw in ipairs(data) do
+      local profile = load_ann_profile(raw)
+      if profile
+          and profile.providers_digest == target_providers_digest
+          and profile.redis_key ~= new_key then
+        source_key = profile.redis_key
+        break
+      end
+    end
+
+    if not source_key then
+      lua_util.debugm(N, task,
+        'carryover: no prior profile with matching providers_digest for %s:%s',
+        rule.prefix, set.name)
+      return
+    end
+
+    local function hmset_cb(hmset_err)
+      if hmset_err then
+        rspamd_logger.errx(task,
+          'carryover: cannot copy ANN from %s to %s: %s',
+          source_key, new_key, hmset_err)
+      else
+        rspamd_logger.infox(task,
+          'carryover: copied ANN weights from %s into fresh profile %s ' ..
+          '(providers_digest unchanged)',
+          source_key, new_key)
+      end
+    end
+
+    local function hmget_cb(hmget_err, hmget_data)
+      if hmget_err or type(hmget_data) ~= 'table' then
+        lua_util.debugm(N, task,
+          'carryover: HMGET error for %s: %s', source_key, hmget_err)
+        return
+      end
+      if not (type(hmget_data[1]) == 'userdata' and hmget_data[1].cookie == text_cookie) then
+        lua_util.debugm(N, task,
+          'carryover: source key %s has no ANN blob', source_key)
+        return
+      end
+
+      local fields = { 'ann', 'roc_thresholds', 'pca', 'providers_meta', 'norm_stats' }
+      local args = { new_key }
+      for i, fname in ipairs(fields) do
+        local v = hmget_data[i]
+        if type(v) == 'userdata' and v.cookie == text_cookie then
+          args[#args + 1] = fname
+          args[#args + 1] = v
+        end
+      end
+
+      if #args <= 1 then
+        lua_util.debugm(N, task,
+          'carryover: nothing to copy from %s', source_key)
+        return
+      end
+
+      lua_redis.redis_make_request(task,
+        rule.redis,
+        nil,
+        true,
+        hmset_cb,
+        'HMSET',
+        args)
+    end
+
+    local function exists_cb(hex_err, hex_data)
+      if hex_err then
+        lua_util.debugm(N, task,
+          'carryover: HEXISTS error for %s: %s', new_key, hex_err)
+        return
+      end
+      if tonumber(hex_data) == 1 then
+        lua_util.debugm(N, task,
+          'carryover: %s already has an ANN, skipping copy', new_key)
+        return
+      end
+
+      lua_redis.redis_make_request(task,
+        rule.redis,
+        nil,
+        false,
+        hmget_cb,
+        'HMGET',
+        { source_key, 'ann', 'roc_thresholds', 'pca', 'providers_meta', 'norm_stats' },
+        { opaque_data = true })
+    end
+
+    lua_redis.redis_make_request(task,
+      rule.redis,
+      nil,
+      false,
+      exists_cb,
+      'HEXISTS',
+      { new_key, 'ann' })
+  end
+
+  lua_redis.redis_make_request(task,
+    rule.redis,
+    nil,
+    false,
+    zrange_cb,
+    'ZREVRANGE',
+    { set.prefix, '0', tostring(settings.max_profiles) })
 end
 
 -- Function to check or load ANNs from Redis
@@ -1216,6 +1599,20 @@ local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
         'ZREVRANGE',                                         -- command
         { set.prefix, '0', tostring(settings.max_profiles) } -- arguments
       )
+      -- Refresh the profile-zset TTL while the rule is live, so it never expires
+      -- out from under a running worker (a stable, non-reloading rule would
+      -- otherwise let it lapse).  Per-tombstone cleanup is handled by the GC in
+      -- the invalidate script; this TTL only reclaims the registry after a long
+      -- full shutdown.
+      lua_redis.redis_make_request_taskless(ev_base,
+        cfg,
+        rule.redis,
+        nil,
+        true, -- is write
+        function(_, _) end,
+        'EXPIRE',
+        { set.prefix, tostring(rule.ann_expire) }
+      )
     end
   end -- Cycle over all settings
 
@@ -1241,10 +1638,17 @@ local function cleanup_anns(rule, cfg, ev_base)
     end
 
     if type(set) == 'table' then
+      -- Entries older than this with no blob and no training data are tombstones
+      -- (expired or never-trained profiles) and get GC'd by the script.  The
+      -- grace window must comfortably exceed the rotated-key training-set TTL
+      -- (600s) so a profile being rotated is never mistaken for a tombstone.
+      local grace = math.max(1200, (rule.watch_interval or 60) * 4)
+      local cutoff = rspamd_util.get_time() - grace
       lua_redis.exec_redis_script(neural_common.redis_script_id.maybe_invalidate,
         { ev_base = ev_base, is_write = true },
         invalidate_cb,
-        { set.prefix, tostring(settings.max_profiles) })
+        { set.prefix, tostring(settings.max_profiles) },
+        { tostring(cutoff) })
     end
   end
 end
@@ -1336,6 +1740,15 @@ for k, r in pairs(rules) do
     rule_elt.train.max_trains = rule_elt.train.max_train
   end
 
+  -- forced_learn_minimal_scan defaults to ON whenever the rule's training vector
+  -- is symbols-independent (disable_symbols_input): a forced ANN-Train scan then
+  -- skips the whole non-neural pipeline. Operators can set it to false to opt out
+  -- explicitly. For symbol-dependent rules it stays off (stripping symbols would
+  -- change the stored vector relative to the live full-scan path).
+  if rule_elt.train.forced_learn_minimal_scan == nil then
+    rule_elt.train.forced_learn_minimal_scan = rule_elt.disable_symbols_input and true or false
+  end
+
   if not rule_elt.profile then
     rule_elt.profile = {}
   end
@@ -1414,6 +1827,19 @@ rspamd_config:register_symbol({
   type = 'idempotent,callback',
   flags = 'nostat,explicit_disable,ignore_passthrough',
   callback = ann_push_vector
+})
+
+-- Forced-learn fast path: a prefilter that, for qualifying ANN-Train scans of
+-- disable_symbols_input rules, disables the whole non-neural pipeline. Priority
+-- `high` runs it after the settings prefilters (priority `top`) so that
+-- get_settings_id()/get_rule_settings() see the resolved settings, but before
+-- the heavy DNS/Redis filter symbols.
+rspamd_config:register_symbol({
+  name = 'NEURAL_FORCED_LEARN_CHECK',
+  type = 'prefilter',
+  flags = 'empty,nostat,explicit_disable',
+  priority = lua_util.symbols_priorities.high,
+  callback = neural_forced_learn_prefilter
 })
 
 -- We also need to deal with settings

@@ -25,6 +25,7 @@
 #  limitations under the License.
 
 from urllib.request import urlopen
+import email
 import glob
 import grp
 import http.client
@@ -442,6 +443,193 @@ def Scan_File_V3_Single_Part(part_name, part_data, content_type_part=None, **hea
     return status
 
 
+def _build_multipart_meta(boundary, meta_bytes, meta_ctype, message_bytes):
+    """multipart/form-data body with an explicit metadata Content-Type."""
+    if isinstance(message_bytes, str):
+        message_bytes = message_bytes.encode('utf-8')
+    body = b""
+    body += ("--" + boundary + "\r\n").encode()
+    body += b'Content-Disposition: form-data; name="metadata"\r\n'
+    body += ("Content-Type: %s\r\n\r\n" % meta_ctype).encode()
+    body += meta_bytes + b"\r\n"
+    body += ("--" + boundary + "\r\n").encode()
+    body += b'Content-Disposition: form-data; name="message"\r\n\r\n'
+    body += message_bytes + b"\r\n"
+    body += ("--" + boundary + "--\r\n").encode()
+    return body
+
+
+def _v3_disposition_name(content_disposition):
+    m = re.search(r'name="?([^";]+)"?', content_disposition or "")
+    return m.group(1) if m else None
+
+
+def _v3_parts_form_data(body, content_type):
+    """Parse a multipart/form-data reply with a self-contained HTTP multipart
+    splitter.
+
+    Deliberately splits on the boundary delimiter itself (the way HTTP
+    multipart tooling does), rather than reusing the stdlib MIME/email parser
+    used for the message/rfc822 case, to prove the reply is consumable by
+    standard HTTP multipart tooling. Kept dependency-free on purpose so the
+    test needs no third-party module. Binary part payloads (e.g. zstd) are
+    preserved byte-exact: only the single CRLF framing each part is trimmed.
+    """
+    m = re.search(r'boundary="?([^";]+)"?', content_type or "")
+    if not m:
+        raise ValueError("no boundary in Content-Type: %r" % content_type)
+    delimiter = b"--" + m.group(1).strip().encode()
+    parts = []
+    for chunk in body.split(delimiter):
+        # Closing "--boundary--" terminator and the (empty) preamble.
+        if chunk[:2] == b"--" or not chunk:
+            continue
+        # Trim exactly the CRLF after the boundary line and the CRLF before
+        # the next boundary; never strip into binary content.
+        if chunk[:2] == b"\r\n":
+            chunk = chunk[2:]
+        elif chunk[:1] == b"\n":
+            chunk = chunk[1:]
+        if chunk[-2:] == b"\r\n":
+            chunk = chunk[:-2]
+        elif chunk[-1:] == b"\n":
+            chunk = chunk[:-1]
+        head, sep, data = chunk.partition(b"\r\n\r\n")
+        if not sep:
+            continue
+        hdrs = {}
+        for line in head.split(b"\r\n"):
+            k, _, v = line.partition(b":")
+            if _:
+                hdrs[k.decode().strip().lower()] = v.decode().strip()
+        parts.append({
+            "name": _v3_disposition_name(hdrs.get("content-disposition", "")),
+            "ctype": hdrs.get("content-type", ""),
+            "encoding": hdrs.get("content-encoding", ""),
+            "data": data,
+        })
+    return parts
+
+
+def _v3_parts_mime(body, content_type):
+    """Parse a multipart/mixed reply with the stdlib MIME parser (email)."""
+    full = b"Content-Type: " + content_type.encode() + b"\r\n\r\n" + body
+    msg = email.message_from_bytes(full)
+    parts = []
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        parts.append({
+            "name": part.get_param("name", header="content-disposition"),
+            "ctype": part.get_content_type(),
+            "encoding": part.get("Content-Encoding", "") or "",
+            "data": part.get_payload(decode=True),
+        })
+    return parts
+
+
+def _v3_decode_result(part):
+    """Decode a 'result' part's payload into a dict per its Content-Type."""
+    if not part or part.get("encoding"):
+        # Compressed payloads are not decoded here (zstd has no stdlib codec)
+        return None
+    data = part["data"]
+    if "msgpack" in (part["ctype"] or ""):
+        import msgpack
+        return msgpack.unpackb(data, raw=False)
+    return json.loads(data)
+
+
+def Scan_File_V3_Negotiated(filename, accept=None, accept_encoding=None,
+                            port=None, metadata=None, metadata_format="json",
+                            **headers):
+    """Send /checkv3 with explicit Accept / Accept-Encoding and parse the reply.
+
+    Sets ${SCAN_RESULT} to the parsed scan result (when the reply carries one,
+    i.e. not a 406) so the usual Expect Symbol/Action keywords work. Returns a
+    dict describing the negotiated reply: status, content_type, vary, parser,
+    result_ctype, parts (name -> content-type), part_encodings.
+    """
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+
+    meta = metadata if metadata else {}
+    if metadata_format == "msgpack":
+        import msgpack
+        meta_bytes = msgpack.packb(meta)
+        meta_ctype = "application/msgpack"
+    else:
+        meta_bytes = json.dumps(meta).encode('utf-8')
+        meta_ctype = "application/json"
+
+    message_data = open(filename, "rb").read()
+    boundary = "----rspamd-test-%016x" % random.getrandbits(64)
+    body = _build_multipart_meta(boundary, meta_bytes, meta_ctype, message_data)
+
+    headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
+    if accept is not None:
+        headers["Accept"] = accept
+    if accept_encoding is not None:
+        headers["Accept-Encoding"] = accept_encoding
+    if "Queue-Id" not in headers:
+        headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv3", body, headers)
+    r = c.getresponse()
+    resp_body = r.read()
+    ct = r.getheader("Content-Type", "") or ""
+    vary = r.getheader("Vary", "") or ""
+    status = r.status
+    c.close()
+
+    info = {
+        "status": status,
+        "content_type": ct,
+        "vary": vary,
+        "parser": "none",
+        "result_ctype": "",
+        "parts": {},
+        "part_encodings": [],
+    }
+
+    if status != 200:
+        return info
+
+    result = None
+    if ct.startswith("application/json"):
+        info["parser"] = "json"
+        info["result_ctype"] = "application/json"
+        result = json.loads(resp_body)
+    elif ct.startswith("application/msgpack"):
+        import msgpack
+        info["parser"] = "msgpack"
+        info["result_ctype"] = "application/msgpack"
+        result = msgpack.unpackb(resp_body, raw=False)
+    elif ct.startswith("multipart/mixed"):
+        info["parser"] = "mime"
+        parts = _v3_parts_mime(resp_body, ct)
+        info["parts"] = {p["name"]: p["ctype"] for p in parts}
+        info["part_encodings"] = [p["encoding"] for p in parts if p["encoding"]]
+        rp = next((p for p in parts if p["name"] == "result"), None)
+        info["result_ctype"] = rp["ctype"] if rp else ""
+        result = _v3_decode_result(rp)
+    elif ct.startswith("multipart/form-data"):
+        info["parser"] = "form-data"
+        parts = _v3_parts_form_data(resp_body, ct)
+        info["parts"] = {p["name"]: p["ctype"] for p in parts}
+        info["part_encodings"] = [p["encoding"] for p in parts if p["encoding"]]
+        rp = next((p for p in parts if p["name"] == "result"), None)
+        info["result_ctype"] = rp["ctype"] if rp else ""
+        result = _v3_decode_result(rp)
+
+    if result is not None:
+        BuiltIn().set_test_variable("${SCAN_RESULT}", result)
+
+    return info
+
+
 def Scan_File_SSL(filename, port=None, **headers):
     """Like Scan_File but over HTTPS (TLS) to the normal worker SSL port."""
     addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
@@ -537,6 +725,33 @@ def TCP_Connect(addr, port):
     s.settimeout(5)  # seconds
     s.connect((addr, port))
     s.close()
+
+
+def port_is_free(addr, port):
+    """Assert that nothing is listening on addr:port.
+
+    Used by teardown to confirm a just-terminated rspamd has actually
+    released its listening sockets before the next suite on this pabot
+    worker reuses the same port range. `Wait For Process` only reaps the
+    main rspamd; the listening sockets are shared with forked workers and
+    can linger briefly after main exits. rspamd sets SO_REUSEADDR, so this
+    is NOT about TIME_WAIT -- a still-LISTENing socket from a not-yet-gone
+    worker genuinely fails the next bind() with EADDRINUSE. Connecting and
+    succeeding means someone is still listening -> raise so Wait Until
+    Keyword Succeeds retries; connection refused means the port is free.
+
+    Example:
+    | Wait Until Keyword Succeeds | 10s | 0.2s | Port Is Free | 127.0.0.1 | 25790 |
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    try:
+        s.connect((addr, int(port)))
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        return True
+    finally:
+        s.close()
+    raise AssertionError("port %s:%s is still in use" % (addr, port))
 
 
 def try_reap_zombies():

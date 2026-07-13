@@ -108,28 +108,51 @@ local function add_scanner_rule(sym, opts)
     return nil
   end
 
+  -- Resolve symbol names up-front so a failed configure() can still register
+  -- the fail symbol and surface the misconfiguration on every scan.
+  local symbol = opts.symbol or sym:upper()
+  local symbol_fail = opts.symbol_fail or (symbol .. '_FAIL')
+  local symbol_encrypted = opts.symbol_encrypted or (symbol .. '_ENCRYPTED')
+  local symbol_macro = opts.symbol_macro or (symbol .. '_MACRO')
+
   local rule = cfg.configure(opts)
 
   if not rule then
-    rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-        opts.type, rule.symbol or sym:upper())
-    return nil
+    rspamd_logger.errx(rspamd_config,
+        'cannot configure %s for %s; registering fail-only rule that always emits %s',
+        opts.type, symbol, symbol_fail)
+
+    local fail_reason = string.format('%s: configuration failed (see startup log)',
+        opts.type)
+
+    local stub_rule = {
+      type = opts.type,
+      name = opts.name or sym,
+      symbol = symbol,
+      symbol_fail = symbol_fail,
+      symbol_encrypted = symbol_encrypted,
+      symbol_macro = symbol_macro,
+      log_prefix = opts.name or sym,
+      configuration_failed = true,
+    }
+
+    local function fail_cb(task)
+      task:insert_result(symbol_fail, 1.0, fail_reason)
+    end
+
+    return fail_cb, stub_rule
   end
 
   rule.type = opts.type
-  -- Fill missing symbols
-  if not rule.symbol then
-    rule.symbol = sym:upper()
-  end
-  if not rule.symbol_fail then
-    rule.symbol_fail = rule.symbol .. '_FAIL'
-  end
-  if not rule.symbol_encrypted then
-    rule.symbol_encrypted = rule.symbol .. '_ENCRYPTED'
-  end
-  if not rule.symbol_macro then
-    rule.symbol_macro = rule.symbol .. '_MACRO'
-  end
+  -- Prefer the symbols the scanner resolved in configure() -- its own documented
+  -- defaults (e.g. VADE_CHECK / VADE_FAIL) or the user's `symbol =` applied via
+  -- override_defaults. Fall back to the key-derived names (also used for the
+  -- configure()-failed stub above) only when the scanner left them unset, so a
+  -- scanner's default symbol is honoured and stays a stable dependency target.
+  rule.symbol = rule.symbol or symbol
+  rule.symbol_fail = rule.symbol_fail or (rule.symbol .. '_FAIL')
+  rule.symbol_encrypted = rule.symbol_encrypted or (rule.symbol .. '_ENCRYPTED')
+  rule.symbol_macro = rule.symbol_macro or (rule.symbol .. '_MACRO')
 
   rule.redis_params = redis_params
 
@@ -199,8 +222,21 @@ if opts and type(opts) == 'table' then
       else
         m = nrule
 
+        -- Every external service is scheduled under a stable <RULE>_CHECK
+        -- callback symbol, so it is a predictable dependency target regardless
+        -- of how the scan result symbols are named. Scanners whose main symbol
+        -- is already a *_CHECK (e.g. VADE_CHECK, CLOUDMARK_CHECK) use it as is;
+        -- otherwise the anchor is derived from the rule key (unique per rule, so
+        -- no collisions between instances) and the result symbol (e.g.
+        -- DCC_REJECT) becomes a virtual child, so its score and results stay
+        -- unchanged.
+        local check_symbol = m.symbol
+        if not check_symbol:match('_CHECK$') then
+          check_symbol = k:upper() .. '_CHECK'
+        end
+
         local t = {
-          name = m.symbol,
+          name = check_symbol,
           callback = cb,
           score = 0.0,
           group = N
@@ -222,6 +258,18 @@ if opts and type(opts) == 'table' then
         end
 
         local id = rspamd_config:register_symbol(t)
+
+        -- The scanner's own result symbol, when distinct from the _CHECK anchor,
+        -- is registered as a virtual child so it still carries the verdict.
+        if m.symbol ~= check_symbol then
+          rspamd_config:register_symbol({
+            type = 'virtual',
+            name = m.symbol,
+            parent = id,
+            score = 0.0,
+            group = N
+          })
+        end
 
         if m.symbol_fail then
           rspamd_config:register_symbol({

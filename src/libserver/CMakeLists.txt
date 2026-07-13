@@ -47,6 +47,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/http/http_context.c
         ${CMAKE_CURRENT_SOURCE_DIR}/maps/map.c
         ${CMAKE_CURRENT_SOURCE_DIR}/maps/map_helpers.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/memory_stat.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_entities.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_url.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/html/html_cta.cxx

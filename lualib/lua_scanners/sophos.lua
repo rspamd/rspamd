@@ -80,7 +80,10 @@ end
 
 local function sophos_check(task, content, digest, rule, maybe_part)
   local function sophos_check_uncached ()
-    local upstream = rule.upstreams:get_upstream_round_robin()
+    local upstream = common.get_upstream_or_fail(task, rule, maybe_part)
+    if not upstream then
+      return
+    end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
     local protocol = 'SSSP/1.0\n'
@@ -97,6 +100,11 @@ local function sophos_check(task, content, digest, rule, maybe_part)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
+          if not upstream then
+            common.yield_result(task, rule,
+                'no upstream available for retry', 0.0, 'fail', maybe_part)
+            return
+          end
           addr = upstream:get_addr()
 
           lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',

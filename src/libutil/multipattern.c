@@ -30,7 +30,16 @@
 #include "libutil/regexp.h"
 #include <stdalign.h>
 
-#define MAX_SCRATCH 4
+/*
+ * Depth of the per-multipattern scratch stack. A hyperscan scratch context is
+ * ~2.5-4 KiB, so a stack of RSPAMD_MULTIPATTERN_MAX_REENTRANCY costs only a few
+ * tens of KiB per multipattern while letting lookups be safely re-entered from
+ * within a match callback (see RSPAMD_MULTIPATTERN_MAX_REENTRANCY).
+ */
+#define MAX_SCRATCH RSPAMD_MULTIPATTERN_MAX_REENTRANCY
+
+/* scratch_used is an unsigned int bitmask, so the stack cannot exceed its width */
+G_STATIC_ASSERT(MAX_SCRATCH <= sizeof(unsigned int) * 8);
 
 /*
  * Threshold for "small" multipatterns that are compiled in memory
@@ -74,7 +83,7 @@ struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 	GArray *hs_pats;
 	GArray *hs_ids;
 	GArray *hs_flags;
-	unsigned int scratch_used;
+	unsigned int scratch_used; /* bitmask of busy scratch[] slots */
 #endif
 	ac_trie_t *t;
 	GArray *pats;
@@ -410,6 +419,15 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 		}
 		if (adjusted_flags & RSPAMD_MULTIPATTERN_NO_START) {
 			fl &= ~HS_FLAG_SOM_LEFTMOST;
+		}
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_SOM) {
+			/*
+			 * Explicit start-of-match request wins over the cost-saving
+			 * opt-outs above. SINGLEMATCH is incompatible with SOM in
+			 * hyperscan, so drop it here.
+			 */
+			fl |= HS_FLAG_SOM_LEFTMOST;
+			fl &= ~HS_FLAG_SINGLEMATCH;
 		}
 
 		g_array_append_val(mp->hs_flags, fl);
@@ -924,6 +942,31 @@ rspamd_multipattern_acism_cb(int strnum, int textpos, void *context)
 	return ret;
 }
 
+/*
+ * Report a regex match using the real start/end offsets obtained from
+ * rspamd_regexp_search(). Unlike the literal ACISM path, a regex match length
+ * is not equal to the pattern string length, so the start MUST come from the
+ * regex engine rather than being derived as end - pattern_len (which would be
+ * bogus). Both offsets are byte offsets into cbd->in, 0-based, with match_pos
+ * exclusive (see rspamd_multipattern_cb_t).
+ */
+static int
+rspamd_multipattern_regex_cb(struct rspamd_multipattern_cbdata *cbd,
+							 unsigned int strnum,
+							 int match_start,
+							 int match_pos)
+{
+	int ret;
+
+	ret = cbd->cb(cbd->mp, strnum, match_start, match_pos,
+				  cbd->in, cbd->len, cbd->ud);
+
+	cbd->nfound++;
+	cbd->ret = ret;
+
+	return ret;
+}
+
 int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 							   const char *in, gsize len, rspamd_multipattern_cb_t cb,
 							   gpointer ud, unsigned int *pnfound)
@@ -949,6 +992,7 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 	/* Use hyperscan if it's compiled and ready */
 	if (mp->state == RSPAMD_MP_STATE_COMPILED && mp->hs_db != NULL) {
 		hs_scratch_t *scr = NULL;
+		gboolean scr_temporary = FALSE;
 		unsigned int i;
 
 		for (i = 0; i < MAX_SCRATCH; i++) {
@@ -959,12 +1003,39 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 			}
 		}
 
-		g_assert(scr != NULL);
+		if (scr == NULL) {
+			/*
+			 * The static scratch stack (MAX_SCRATCH deep) is exhausted by an
+			 * unusually deep reentrant lookup - a lookup re-entered from within
+			 * a match callback more than MAX_SCRATCH levels deep (e.g. a
+			 * pathologically nested chain of query-embedded URLs). Callers are
+			 * expected to bound their recursion below MAX_SCRATCH
+			 * (see RSPAMD_MULTIPATTERN_MAX_REENTRANCY), so this is a cold safety
+			 * net: allocate a one-off scratch for this scan rather than abort
+			 * the whole worker on attacker-controlled input.
+			 */
+			int rc = hs_alloc_scratch(rspamd_hyperscan_get_database(mp->hs_db),
+									  &scr);
+
+			if (rc != HS_SUCCESS || scr == NULL) {
+				msg_err("cannot allocate temporary hyperscan scratch "
+						"(error code %d) at reentrancy depth > %d; skipping lookup",
+						rc, (int) MAX_SCRATCH);
+				return 0;
+			}
+
+			scr_temporary = TRUE;
+		}
 
 		ret = hs_scan(rspamd_hyperscan_get_database(mp->hs_db), in, len, 0, scr,
 					  rspamd_multipattern_hs_cb, &cbd);
 
-		mp->scratch_used &= ~(1 << i);
+		if (scr_temporary) {
+			hs_free_scratch(scr);
+		}
+		else {
+			mp->scratch_used &= ~(1 << i);
+		}
 
 		if (ret == HS_SUCCESS) {
 			ret = 0;
@@ -1012,7 +1083,9 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 				if (start >= end) {
 					break;
 				}
-				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
+				if (rspamd_multipattern_regex_cb(&cbd, i,
+												 (int) (start - in),
+												 (int) (end - in))) {
 					goto hs_fallback_out;
 				}
 			}
@@ -1047,7 +1120,9 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 				if (start >= end) {
 					break;
 				}
-				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
+				if (rspamd_multipattern_regex_cb(&cbd, i,
+												 (int) (start - in),
+												 (int) (end - in))) {
 					goto out;
 				}
 			}

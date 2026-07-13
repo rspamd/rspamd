@@ -1285,13 +1285,14 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
 			ct->begin, ct->len, session->pool);
 
-		if (!parsed_ct || parsed_ct->boundary.len == 0) {
+		if (!parsed_ct || parsed_ct->orig_boundary.len == 0) {
 			msg_err_session("cannot extract boundary from multipart Content-Type");
 			return FALSE;
 		}
 
+		/* Use the case preserving boundary as HTTP boundaries are case sensitive */
 		struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
-			in, inlen, parsed_ct->boundary.begin, parsed_ct->boundary.len);
+			in, inlen, parsed_ct->orig_boundary.begin, parsed_ct->orig_boundary.len);
 
 		if (!form) {
 			msg_err_session("cannot parse multipart/mixed response");
@@ -2203,6 +2204,10 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			if (err) {
 				g_error_free(err);
 			}
+			/* Selection happened but no request will be sent: retire the
+			 * inflight counter so P2C scoring isn't skewed by abandoned
+			 * picks. */
+			rspamd_upstream_release(bk_conn->up);
 			continue;
 		}
 
@@ -2800,8 +2805,8 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 
 	task->fin_arg = session;
 	task->resolver = session->ctx->resolver;
-	task->s = rspamd_session_create(task->task_pool, rspamd_proxy_task_fin,
-									NULL, (event_finalizer_t) rspamd_task_free, task);
+	task->s = rspamd_task_create_session(task, task->task_pool, rspamd_proxy_task_fin,
+										 NULL, (event_finalizer_t) rspamd_task_free);
 	data = rspamd_http_message_get_body(msg, &len);
 
 	if (session->backend->settings_id) {
@@ -2984,6 +2989,10 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 				g_error_free(err);
 			}
 
+			/* Selection succeeded but no request will be sent: retire the
+			 * inflight counter so P2C scoring isn't skewed by abandoned
+			 * picks. */
+			rspamd_upstream_release(session->master_conn->up);
 			goto err; /* No fallback here */
 		}
 

@@ -2,6 +2,7 @@
 #define LUA_THREAD_POOL_H_
 
 #include <lua.h>
+#include "ref.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,8 +15,22 @@ typedef void (*lua_thread_finish_t)(struct thread_entry *thread, int ret);
 
 typedef void (*lua_thread_error_t)(struct thread_entry *thread, int ret, const char *msg);
 
+/*
+ * Lifecycle of a pooled Lua coroutine. Transitions are enforced by the
+ * thread pool so that a thread can never be resumed twice, returned while
+ * suspended, or reused after it has been recycled into another task.
+ */
+enum thread_entry_state {
+	LUA_THREAD_FREE = 0, /* idle in the pool or freshly created */
+	LUA_THREAD_RUNNING,  /* currently executing Lua on the C stack */
+	LUA_THREAD_YIELDED,  /* suspended at an async yield point */
+	LUA_THREAD_DEAD,     /* errored/terminated, must not be reused */
+};
+
 struct thread_entry {
 	lua_State *lua_state;
+	/* Main VM state that owns the registry slot below; used to unref on free */
+	lua_State *pool_state;
 	int thread_index;
 	gpointer cd;
 
@@ -26,6 +41,25 @@ struct thread_entry {
 	lua_thread_error_t error_callback;
 	struct rspamd_task *task;
 	struct rspamd_config *cfg;
+
+	/*
+	 * Bumped on every acquire and release. Async libraries snapshot it at the
+	 * yield point and pass it back to lua_thread_resume_checked(): a mismatch
+	 * means the entry was recycled while a stale completion was in flight, so
+	 * the resume is refused instead of corrupting another task's coroutine.
+	 */
+	guint64 generation;
+	enum thread_entry_state state;
+
+	/*
+	 * Lifetime is refcounted. The pool holds one reference for as long as the
+	 * entry is managed by it; an async library that stashes the entry for a
+	 * later completion must take its own reference (lua_thread_pool_retain_entry)
+	 * and drop it when done (lua_thread_pool_release_entry). This guarantees the
+	 * struct outlives any in-flight completion even if the owning task is torn
+	 * down, so the generation/state guards never read freed memory.
+	 */
+	ref_entry_t ref;
 };
 
 struct lua_callback_state {
@@ -174,6 +208,39 @@ void lua_thread_resume_full(struct thread_entry *thread_entry,
 
 #define lua_thread_resume(thread_entry, narg) \
 	lua_thread_resume_full(thread_entry, narg, G_STRLOC)
+
+/**
+ * Like lua_thread_resume(), but additionally verifies that the entry has not
+ * been recycled since the caller snapshotted its generation at the yield
+ * point. If the generation does not match, or the thread is not suspended,
+ * the resume is refused (logged, no-op) rather than risking memory
+ * corruption. Returns true if the thread was actually resumed.
+ *
+ * @param thread_entry
+ * @param expected_generation value of thread_entry->generation captured at yield
+ * @param narg
+ */
+bool lua_thread_resume_checked_full(struct thread_entry *thread_entry,
+									guint64 expected_generation,
+									int narg,
+									const char *loc);
+
+#define lua_thread_resume_checked(thread_entry, expected_generation, narg) \
+	lua_thread_resume_checked_full(thread_entry, expected_generation, narg, G_STRLOC)
+
+/**
+ * Take a reference on a thread entry. An async library that stashes an entry
+ * for a later completion must call this so the struct cannot be freed (e.g. by
+ * task teardown) while the completion pointer is still live. Pair with
+ * lua_thread_pool_release_entry(). NULL-safe.
+ */
+void lua_thread_pool_retain_entry(struct thread_entry *thread_entry);
+
+/**
+ * Drop a reference taken by lua_thread_pool_retain_entry(). When the last
+ * reference goes away the entry is destroyed. NULL-safe.
+ */
+void lua_thread_pool_release_entry(struct thread_entry *thread_entry);
 
 /**
  * Terminates thread pool entry and fill the pool with another thread entry if needed

@@ -48,10 +48,16 @@ end
 -- @param flags number - URL parsing flags
 -- @return number - ACCEPT/SUSPICIOUS/REJECT
 function exports.filter_url_string(url_text, flags)
-  -- Sanity check: URL length
+  -- Note: this is invoked mid-parse from the C state machine with whatever
+  -- bytes have been seen so far (often just the userinfo span, not a full
+  -- URL). A blanket length REJECT here silently drops legitimate phishing
+  -- patterns like https://legit.com<lots-of-spaces>@evil.com/... where the
+  -- userinfo is intentionally bloated to obscure the real host. The C parser
+  -- already caps total URL length at G_MAXUINT16/2; this threshold is just a
+  -- DoS guard against catastrophic sizes.
   local url_len = url_text:len()
-  if url_len > 2048 then
-    return exports.REJECT -- Overly long URL
+  if url_len > 16384 then
+    return exports.REJECT -- Catastrophic length, abort
   end
 
   -- Build control character set: 0x00-0x08, 0x0B-0x1F, 0x7F

@@ -685,8 +685,10 @@ void rspamd_map_helper_insert_re(gpointer st, gconstpointer key, gconstpointer v
 
 	/* Check regexp stuff */
 	if (re_map->map_flags & RSPAMD_REGEXP_MAP_FLAG_GLOB) {
+		/* Glob semantics: the pattern must match the subject as a whole */
 		escaped = rspamd_str_regexp_escape(key, strlen(key), &escaped_len,
-										   RSPAMD_REGEXP_ESCAPE_GLOB | RSPAMD_REGEXP_ESCAPE_UTF);
+										   RSPAMD_REGEXP_ESCAPE_GLOB | RSPAMD_REGEXP_ESCAPE_UTF |
+											   RSPAMD_REGEXP_ESCAPE_ANCHOR);
 		re = rspamd_regexp_new(escaped, NULL, &err);
 		g_free(escaped);
 	}

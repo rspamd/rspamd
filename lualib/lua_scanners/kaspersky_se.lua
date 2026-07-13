@@ -110,7 +110,10 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
       return url
     end
 
-    local upstream = rule.upstreams:get_upstream_round_robin()
+    local upstream = common.get_upstream_or_fail(task, rule, maybe_part)
+    if not upstream then
+      return
+    end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
 
@@ -189,6 +192,11 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
+          if not upstream then
+            common.yield_result(task, rule,
+                'no upstream available for retry', 0.0, 'fail', maybe_part)
+            return
+          end
           addr = upstream:get_addr()
           url = make_url(addr)
 

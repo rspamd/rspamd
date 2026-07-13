@@ -2,8 +2,14 @@ local logger = require "rspamd_logger"
 local redis = require "lua_redis"
 local upstream_list = require "rspamd_upstream_list"
 
-local upstreams_write = upstream_list.create('127.0.0.1', 56379)
-local upstreams_read = upstream_list.create('127.0.0.1', 56379)
+-- redis port comes from the test harness; under parallel pabot each
+-- worker has its own redis instance on a different port. rspamadm
+-- (unlike rspamd) does NOT populate the rspamd_env global, so read
+-- the RSPAMD_ env var directly. Fall back to the historical literal
+-- for standalone invocations.
+local redis_port = tonumber(os.getenv("RSPAMD_REDIS_PORT")) or 25379
+local upstreams_write = upstream_list.create('127.0.0.1', redis_port)
+local upstreams_read = upstream_list.create('127.0.0.1', redis_port)
 
 local is_ok, connection = redis.redis_connect_sync({
   write_servers = upstreams_write,

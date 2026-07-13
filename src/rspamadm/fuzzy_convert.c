@@ -15,8 +15,7 @@
  */
 
 /*-
- * Copyright (c) 2016, Andrew Lewis <nerf@judo.za.org>
- * Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
+ * Copyright (c) 2016-2026, Vsevolod Stakhov <vsevolod@rspamd.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

@@ -1849,15 +1849,16 @@ function M.filters.wordwrap(s, width, break_long_words, wrapstring)
       line = ''
     end
     if #word > width and break_long_words then
+      local remaining = word
       if #line > 0 then
         lines[#lines + 1] = line
         line = ''
       end
-      while #word > width do
-        lines[#lines + 1] = word:sub(1, width)
-        word = word:sub(width + 1)
+      while #remaining > width do
+        lines[#lines + 1] = remaining:sub(1, width)
+        remaining = remaining:sub(width + 1)
       end
-      line = word
+      line = remaining
     elseif #line > 0 then
       line = line .. ' ' .. word
     else

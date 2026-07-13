@@ -89,6 +89,11 @@ class MainHandler(tornado.web.RequestHandler):
             raise tornado.web.HTTPError(404)
 
     def head(self, path):
+        # Log the request headers in the exact order they arrived on the
+        # wire so functional tests can assert on header presence and order
+        # (used by the url_redirector stealth fingerprint test).
+        hdrs = ", ".join(f"{k}={v}" for k, v in self.request.headers.get_all())
+        print(f"dummy_http.py: HEAD {path} headers: {hdrs}", file=sys.stderr)
         self.set_header("Content-Type", "text/plain")
         if path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
@@ -96,19 +101,62 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/redirect2":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect1")
-        elif self.path == "/redirect3":
+        elif path == "/redirect3":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect4")
-        elif self.path == "/redirect4":
+        elif path == "/redirect4":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect3")
+        elif path == "/tel_redirect":
+            # Send an HTTP redirect to a tel: URL (non-HTTP scheme)
+            self.redirect("tel:88006007775")
+        elif path == "/mailto_redirect":
+            # Send an HTTP redirect to a mailto: URL (non-HTTP scheme)
+            self.redirect("mailto:user@example.net")
+        elif path == "/redir_to_example":
+            # Redirect to a domain matching the displayed text, so the phishing
+            # module sees a 1:1 redirect target and must not fire (no FP).
+            self.redirect("http://www.example.com/")
+        elif path == "/chain_intermediate_1":
+            # Intermediate hop to chain_to_tel2
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain_intermediate_2")
+        elif path == "/chain_intermediate_2":
+            # Final hop to a tel: URL
+            self.redirect("tel:88006007776")
+        elif path == "/chain1":
+            # Intermediate hop to chain2
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain2")
+        elif path == "/chain2":
+            # Intermediate hop to chain3
+            self.redirect(f"{self.request.protocol}://{self.request.host}/chain3")
+        elif path == "/chain3":
+            # Final hop
+            self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
+        elif path == "/slow":
+            # Slow redirect
+            self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
+        elif path == "/combo_entry":
+            # Redirect to a PATH-LESS wrapper that carries a percent-encoded
+            # target (with its own &-separated params) plus an extra distinct
+            # URL. Resolving the full target needs: keeping the query on a
+            # path-less request (http path-less fix) and sending it
+            # percent-encoded (redirector raw-request fix); and the extra URL
+            # must NOT surface, because the followed wrapper's query is not
+            # re-extracted (REDIRECTED-guard fix).
+            target = "http%3A%2F%2Fdest.com%2F%3Fa%3D1%26b%3D2"
+            other = "http%3A%2F%2Fother.com%2F"
+            self.redirect(f"{self.request.protocol}://{self.request.host}?u={target}&other={other}")
+        elif path == "/" and self.get_query_argument("u", default=None):
+            # Path-less wrapper: redirect to the URL carried (percent-encoded)
+            # in the u query parameter.
+            self.redirect(self.get_query_argument("u"))
         else:
             self.send_response(200)
         self.set_header("Content-Type", "text/plain")
 
 def make_app():
     return tornado.web.Application([
-        (r"(/[^/]+)", MainHandler),
+        (r"(/.*)", MainHandler),
     ])
 
 async def main():

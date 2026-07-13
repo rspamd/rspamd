@@ -36,13 +36,43 @@ enum rspamd_upstream_rotation {
 	RSPAMD_UPSTREAM_MASTER_SLAVE,
 	RSPAMD_UPSTREAM_SEQUENTIAL,
 	RSPAMD_UPSTREAM_TOKEN_BUCKET, /* Token bucket weighted balancing */
+	/*
+	 * Power of Two Choices: pick two alive upstreams at random, choose the
+	 * one with lower load (inflight + recent errors). Provably within a
+	 * constant factor of optimal max-load. RANDOM callers are silently
+	 * upgraded to P2C since it strictly dominates uniform random.
+	 */
+	RSPAMD_UPSTREAM_P2C,
 	RSPAMD_UPSTREAM_UNDEF
 };
 
 enum rspamd_upstream_flag {
 	RSPAMD_UPSTREAM_FLAG_NORESOLVE = (1 << 0),
+	/*
+	 * Upstream is an SRV "parent": a placeholder that owns SRV-derived
+	 * member upstreams. Never put into the alive list, never selected
+	 * directly; its only job is to host the lazy SRV re-resolve timer
+	 * and a hash table of members keyed by "fqdn:port".
+	 */
 	RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE = (1 << 1),
 	RSPAMD_UPSTREAM_FLAG_DNS = (1 << 2),
+	/*
+	 * Upstream was created with a hostname that could not be resolved at
+	 * config-parse time. It is kept out of the `alive` list until a later
+	 * lazy/forced resolution succeeds, at which point the flag is cleared
+	 * and the upstream becomes selectable.
+	 */
+	RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE = (1 << 3),
+	/*
+	 * SRV-derived member: a first-class upstream created by expanding a
+	 * single SRV target into its own struct upstream. Holds its own error
+	 * budget, latency EWMA, weight, addresses, and is selectable via the
+	 * normal rotation algorithms. Lifetime is bound to the parent's SRV
+	 * member table; on graceful drain (target gone from re-resolve), the
+	 * member is removed from selection and released after its inflight
+	 * refs drop.
+	 */
+	RSPAMD_UPSTREAM_FLAG_SRV_MEMBER = (1 << 4),
 };
 
 struct rspamd_config;
@@ -87,6 +117,16 @@ void rspamd_upstream_fail(struct upstream *upstream, gboolean addr_failure, cons
  * Increase upstream successes count
  */
 void rspamd_upstream_ok(struct upstream *up);
+
+/**
+ * Retire an upstream selection without affecting error counters or latency.
+ * Use this when neither success nor failure semantics apply: message-copy
+ * failures after a successful selection, fire-and-forget address lookups,
+ * or hand-off paths where success/failure is signalled by a different
+ * layer. Decrements the inflight counter so P2C load comparisons stay
+ * accurate; otherwise abandoned selections would skew selection forever.
+ */
+void rspamd_upstream_release(struct upstream *up);
 
 /**
  * Set weight for an upstream
@@ -143,11 +183,22 @@ void rspamd_upstreams_set_rotation(struct upstream_list *ups,
 void rspamd_upstreams_destroy(struct upstream_list *ups);
 
 /**
- * Returns count of upstreams in a list
+ * Returns count of upstreams in a list. SRV parent placeholders are excluded
+ * (they are not selectable themselves); use this when sizing the dispatchable
+ * cluster (e.g. weight calculations, output table preallocation).
  * @param ups
  * @return
  */
 gsize rspamd_upstreams_count(struct upstream_list *ups);
+
+/**
+ * Returns the total count of configured upstreams, including SRV parents that
+ * have not yet been resolved into members. Use this for "is anything configured
+ * at all" checks at config-load time, before async SRV resolution has run.
+ * @param ups
+ * @return
+ */
+gsize rspamd_upstreams_count_total(struct upstream_list *ups);
 
 /**
  * Returns the number of upstreams in the list
@@ -359,6 +410,42 @@ void rspamd_upstreams_set_token_bucket(struct upstream_list *ups,
 									   gsize scale_factor,
 									   gsize min_tokens,
 									   gsize base_cost);
+
+/**
+ * Configure slow-start window for revived upstreams.
+ * When set, a freshly revived upstream's effective weight ramps linearly
+ * from 0 to its configured weight over the given window. Avoids the
+ * thundering herd that would otherwise hit the just-revived backend.
+ * @param ups upstream list
+ * @param slow_start_ms ramp duration in milliseconds (0 = disabled)
+ */
+void rspamd_upstreams_set_slow_start(struct upstream_list *ups,
+									 unsigned int slow_start_ms);
+
+/**
+ * Record a per-request latency observation for the upstream.
+ * Updates a time-weighted EWMA that decays old samples on a
+ * configurable half-life. The EWMA feeds into P2C selection so
+ * faster backends are preferred when load is otherwise comparable.
+ * Cheap to call; no allocation.
+ * @param up upstream
+ * @param seconds observed latency (e.g. request RTT)
+ */
+void rspamd_upstream_record_latency(struct upstream *up, double seconds);
+
+/**
+ * Read the current latency EWMA in seconds. Zero if no samples yet.
+ */
+double rspamd_upstream_get_latency(const struct upstream *up);
+
+/**
+ * Configure latency EWMA half-life. Defaults to 60s; setting to 0
+ * disables time-weighting (becomes a flat moving average).
+ * @param ups upstream list
+ * @param half_life_s decay half-life in seconds
+ */
+void rspamd_upstreams_set_latency_half_life(struct upstream_list *ups,
+											double half_life_s);
 
 /**
  * Get upstream using token bucket algorithm.

@@ -47,6 +47,11 @@ local function pure_type(ltype)
   return ltype:match('^(.*)_list$')
 end
 
+-- Indexing values of arbitrary types can raise (e.g. numbers), so it is done via pcall
+local function safe_index(obj, key)
+  return obj[key]
+end
+
 local function implicit_tostring(t, ud_or_table)
   if t == 'table' then
     -- Table (very special)
@@ -275,7 +280,7 @@ local function make_grammar()
     NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * (argument + l.V("LIST_ARGS")) * comma ^ 0) ^ 0),
     LIST_ARGS = l.Ct(tbl_obrace * l.V("LIST_ARG") * tbl_ebrace),
     LIST_ARG = l.Cg(argument * comma ^ 0) ^ 0,
-  }
+  } * spc * l.Cp()
 end
 
 local parser = make_grammar()
@@ -288,6 +293,16 @@ exports.parse_selector = function(cfg, str)
   local output = {}
 
   if not parsed or not parsed[1] then
+    return nil
+  end
+
+  -- The last capture is the parse end position (lpeg.Cp); lpeg matches the
+  -- longest valid prefix, so anything left after that position is a parse
+  -- error, not a selector to be silently ignored
+  local last_pos = table.remove(parsed)
+  if last_pos <= #str then
+    logger.errx(cfg, "invalid selector '%s': unexpected token at position %d ('%s')",
+        str, last_pos, str:sub(last_pos))
     return nil
   end
 
@@ -382,8 +397,20 @@ exports.parse_selector = function(cfg, str)
               -- Plain table field
               ret = inp[method_name]
             else
+              local ok, meth = pcall(safe_index, inp, method_name)
+
+              if not ok or type(meth) ~= 'function' then
+                if transform_function[method_name] then
+                  logger.errx('cannot call method `%s` on %s value; use `.%s` to apply the transform of the same name',
+                      method_name, t, method_name)
+                else
+                  logger.errx('cannot call method `%s` on %s value', method_name, t)
+                end
+                return nil
+              end
+
               -- We call method unpacking arguments and dropping all but the first result returned
-              ret = (inp[method_name](inp, unpack_function(args or E)))
+              ret = (meth(inp, unpack_function(args or E)))
             end
 
             local ret_type = type(ret)

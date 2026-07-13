@@ -170,6 +170,19 @@ struct rspamd_lua_map {
 struct rspamd_lua_upstream {
 	struct upstream *up;
 	int upref;
+	/*
+	 * Inflight bookkeeping for the C-side P2C load comparator. acquired is
+	 * set when this wrapper holds the inflight reference produced by a
+	 * get_* call (round-robin / hashed / master-slave). retired is set the
+	 * first time :ok or :fail is called. If acquired && !retired at __gc
+	 * time, the destructor calls rspamd_upstream_release so abandoned
+	 * selections don't permanently skew P2C scoring. Wrappers handed out
+	 * by all_upstreams() or watch callbacks set acquired = 0 and the
+	 * destructor leaves inflight alone. Bitfields keep the wrapper at
+	 * sizeof(ptr) + 8 instead of bloating it with two padded gint slots.
+	 */
+	unsigned int acquired : 1;
+	unsigned int retired : 1;
 };
 
 /* Common utility functions */
@@ -238,6 +251,12 @@ void rspamd_lua_close(lua_State *L);
 void rspamd_lua_start_gc(struct rspamd_config *cfg);
 
 /**
+ * Returns the total amount of memory currently used by the Lua heap, in bytes.
+ * Combines LUA_GCCOUNT (kilobytes) and LUA_GCCOUNTB (bytes remainder).
+ */
+gsize rspamd_lua_get_memory_used(lua_State *L);
+
+/**
 * Sets field in a global variable
 * @param L
 * @param global_name
@@ -263,6 +282,20 @@ void rspamd_lua_ip_push(lua_State *L, rspamd_inet_addr_t *addr);
 * Push rspamd task structure to lua
 */
 void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task);
+
+/**
+* Push a symbol result as a table in the same layout as task:get_symbol();
+* returns FALSE (nothing is pushed) if the symbol is not found or ignored
+*/
+struct rspamd_symbol_result;
+struct rspamd_scan_result;
+gboolean rspamd_lua_push_symbol_result(lua_State *L,
+									   struct rspamd_task *task,
+									   const char *symbol,
+									   struct rspamd_symbol_result *symbol_result,
+									   struct rspamd_scan_result *metric_res,
+									   gboolean add_metric,
+									   gboolean add_name);
 
 /**
 * Return lua ip structure at the specified address
@@ -421,6 +454,13 @@ void luaopen_logger(lua_State *L);
 
 void luaopen_text(lua_State *L);
 
+/*
+ * Augments the rspamd{text} metatable with byte-statistics methods
+ * (entropy/byte_mean/...). Must be called after luaopen_text. Defined in
+ * lua_text_stats.cxx.
+ */
+void rspamd_lua_text_stats_init(lua_State *L);
+
 void luaopen_util(lua_State *L);
 
 void luaopen_tcp(lua_State *L);
@@ -448,6 +488,8 @@ void luaopen_parsers(lua_State *L);
 void luaopen_shingle(lua_State *L);
 
 void luaopen_fasttext(lua_State *L);
+
+void luaopen_static_embed(lua_State *L);
 
 /* libarchive-based archive module */
 void luaopen_libarchive(lua_State *L);

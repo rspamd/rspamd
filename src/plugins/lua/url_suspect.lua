@@ -55,6 +55,8 @@ local symbols = {
   backslash = "URL_BACKSLASH_PATH",
   excessive_dots = "URL_EXCESSIVE_DOTS",
   very_long = "URL_VERY_LONG",
+  -- Query symbols
+  query_multiple_urls = "URL_QUERY_MULTIPLE_URLS",
   -- Obfuscated text symbol
   obfuscated_text = "URL_OBFUSCATED_TEXT"
 }
@@ -99,6 +101,11 @@ local settings = {
       check_length = true,
       max_url_length = 2048
     },
+    query_urls = {
+      enabled = true,
+      -- More than this many URLs embedded in a single URL's query is anomalous
+      max_query_urls = 1
+    },
     obfuscated_text = {
       enabled = true,
       -- DoS protection limits
@@ -142,6 +149,8 @@ local settings = {
     backslash = "URL_BACKSLASH_PATH",
     excessive_dots = "URL_EXCESSIVE_DOTS",
     very_long = "URL_VERY_LONG",
+    -- Query symbols
+    query_multiple_urls = "URL_QUERY_MULTIPLE_URLS",
     -- Obfuscated text symbol
     obfuscated_text = "URL_OBFUSCATED_TEXT"
   },
@@ -204,7 +213,7 @@ local function normalize_obfuscated_text(text, max_len)
   return lua_util.str_trim(text)
 end
 
-local function extract_url_from_normalized(text)
+local function extract_url_from_normalized(text, obf_type)
   if not text or #text == 0 then
     return nil, nil
   end
@@ -225,7 +234,11 @@ local function extract_url_from_normalized(text)
   if naked then
     -- Validate: must have valid TLD (at least 2 chars)
     local tld = naked:match("%.([%a][%w%-]*)$")
-    if tld and #tld >= 2 and #tld <= 10 then
+    -- For word_dot matches, require TLD >= 3 chars to avoid false positives:
+    -- 2-char country TLDs (.so, .to, .me, .in, .us etc.) overlap with common
+    -- English words and produce false positives in normal prose.
+    local min_tld = (obf_type == 'word_dot') and 3 or 2
+    if tld and #tld >= min_tld and #tld <= 10 then
       -- Additional check: must not be too many dots (likely random text)
       local _, dot_count = naked:gsub("%.", "")
       if dot_count <= 4 then
@@ -555,6 +568,25 @@ function checks.structure_analysis(task, url, cfg)
   return findings
 end
 
+-- Check: multiple URLs embedded in the query string
+function checks.query_urls_analysis(task, url, cfg)
+  local findings = {}
+
+  -- One URL embedded in a query is common (redirectors/trackers); more than
+  -- one in a single URL's query is anomalous.
+  local n = url:get_query_embedded_urls()
+
+  if n and n > cfg.max_query_urls then
+    lua_util.debugm(N, task, "URL query embeds %d URLs", n)
+    table.insert(findings, {
+      symbol = symbols.query_multiple_urls,
+      options = { string.format("%d", n) }
+    })
+  end
+
+  return findings
+end
+
 -- Main analysis function
 local function analyze_url(task, url, cfg)
   local all_findings = {}
@@ -604,6 +636,13 @@ local function analyze_url(task, url, cfg)
     end
   end
 
+  if cfg.checks.query_urls and cfg.checks.query_urls.enabled then
+    local findings = checks.query_urls_analysis(task, url, cfg.checks.query_urls)
+    for _, f in ipairs(findings) do
+      table.insert(all_findings, f)
+    end
+  end
+
   -- Run custom checks (advanced users)
   for name, check_func in pairs(cfg.custom_checks) do
     local ok, findings = pcall(check_func, task, url, cfg)
@@ -627,6 +666,7 @@ local function url_suspect_callback(task)
   -- TLD and structure checks don't have corresponding URL flags, so need all URLs
   local need_all_urls = (
       (settings.checks.tld and settings.checks.tld.enabled) or
+          (settings.checks.query_urls and settings.checks.query_urls.enabled) or
           (settings.checks.structure and settings.checks.structure.enabled and
               (settings.checks.structure.check_multiple_at or
                   settings.checks.structure.check_excessive_dots or
@@ -841,7 +881,7 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
             return 0
           end
 
-          local extracted_url = extract_url_from_normalized(normalized)
+          local extracted_url = extract_url_from_normalized(normalized, obf_type)
           if not extracted_url then
             return 0
           end

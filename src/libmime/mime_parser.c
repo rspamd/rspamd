@@ -329,7 +329,7 @@ rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 			}
 		}
 		else if (memcmp(p, "begin-base64 ", sizeof("begin-base64 ") - 1) == 0) {
-			uue_start = p + sizeof("begin ") - 1;
+			uue_start = p + sizeof("begin-base64 ") - 1;
 
 			while (uue_start < end && g_ascii_isspace(*uue_start)) {
 				uue_start++;
@@ -882,29 +882,53 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 				if (p7) {
 					ct_nid = OBJ_obj2nid(p7->type);
 
-					if (ct_nid == NID_pkcs7_signed) {
+					if (ct_nid == NID_pkcs7_signed && p7->d.sign &&
+						p7->d.sign->contents &&
+						p7->d.sign->contents->type) {
 						PKCS7 *p7_signed_content = p7->d.sign->contents;
 
 						ct_nid = OBJ_obj2nid(p7_signed_content->type);
 
-						if (ct_nid == NID_pkcs7_data && p7_signed_content->d.data) {
+						/* ASN1_STRING is opaque since OpenSSL 4.0, use accessors */
+						if (ct_nid == NID_pkcs7_data && p7_signed_content->d.data &&
+							ASN1_STRING_length(p7_signed_content->d.data) > 0 &&
+							ASN1_STRING_get0_data(p7_signed_content->d.data)) {
 							int ret;
+							int p7_data_len = ASN1_STRING_length(p7_signed_content->d.data);
+							const unsigned char *p7_data = ASN1_STRING_get0_data(p7_signed_content->d.data);
 
 							msg_debug_mime("found an additional part inside of "
 										   "smime structure of type %T/%T; length=%d",
-										   &ct->type, &ct->subtype, p7_signed_content->d.data->length);
+										   &ct->type, &ct->subtype, p7_data_len);
 							/*
 							 * Since ASN.1 structures are freed, we need to copy
 							 * the content
 							 */
 							char *cpy = rspamd_mempool_alloc(task->task_pool,
-															 p7_signed_content->d.data->length);
-							memcpy(cpy, p7_signed_content->d.data->data,
-								   p7_signed_content->d.data->length);
+															 p7_data_len);
+							memcpy(cpy, p7_data, p7_data_len);
+
+							/*
+							 * S/MIME re-enters the parser here without going through
+							 * the multipart/message nesting checks, so account for it
+							 * explicitly to bound recursion on deeply nested S/MIME.
+							 */
+							if (st->nesting > max_nested) {
+								g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
+											"S/MIME nesting level is too high: %d",
+											st->nesting);
+								PKCS7_free(p7);
+								BIO_free(bio);
+								CMS_ContentInfo_free(cms);
+								return RSPAMD_MIME_PARSE_NESTING;
+							}
+
+							st->nesting++;
 							ret = rspamd_mime_process_multipart_node(task,
 																	 st, NULL,
-																	 cpy, cpy + p7_signed_content->d.data->length,
+																	 cpy, cpy + p7_data_len,
 																	 TRUE, err);
+							st->nesting--;
 
 							PKCS7_free(p7);
 							BIO_free(bio);
@@ -1086,6 +1110,9 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	goffset hdr_pos, body_pos;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_FATAL;
 
+	if (start == NULL || end == NULL || start >= end) {
+		return RSPAMD_MIME_PARSE_NO_PART;
+	}
 
 	str.str = (char *) start;
 	str.len = end - start;
@@ -1168,6 +1195,10 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	if (hdr != NULL) {
 		DL_FOREACH(hdr, cur)
 		{
+			if (!cur->value) {
+				continue;
+			}
+
 			ct = rspamd_content_type_parse(cur->value, strlen(cur->value),
 										   task->task_pool);
 
@@ -1424,7 +1455,9 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	ret = rspamd_multipart_boundaries_filter(task, part, st, &cbdata);
 	/* Cleanup stack */
 	st->nesting--;
-	g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
+	if (st->stack->len > 0) {
+		g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
+	}
 
 	return ret;
 }
@@ -1628,9 +1661,21 @@ rspamd_mime_preprocess_message(struct rspamd_task *task,
 							   struct rspamd_mime_parser_runtime *st)
 {
 	if (top->raw_data.begin >= st->pos) {
+		/*
+		 * Look back one byte so a boundary glued to the very start of the
+		 * body is still detected, but never read before the buffer start.
+		 */
+		const char *lookup_start = top->raw_data.begin;
+		gsize lookup_len = top->raw_data.len;
+
+		if (lookup_start > st->start) {
+			lookup_start--;
+			lookup_len++;
+		}
+
 		rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
-								   top->raw_data.begin - 1,
-								   top->raw_data.len + 1,
+								   lookup_start,
+								   lookup_len,
 								   rspamd_mime_preprocess_cb, st, NULL);
 	}
 	else {
@@ -1816,6 +1861,10 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	else {
 		DL_FOREACH(hdr, cur)
 		{
+			if (!cur->value) {
+				continue;
+			}
+
 			ct = rspamd_content_type_parse(cur->value, strlen(cur->value),
 										   task->task_pool);
 
@@ -1873,6 +1922,9 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	}
 
 	if (ret != RSPAMD_MIME_PARSE_OK) {
+		if (nst != st) {
+			rspamd_mime_parse_stack_free(nst);
+		}
 		return ret;
 	}
 

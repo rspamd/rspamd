@@ -509,6 +509,26 @@ local function check_metric_results(task, rule)
   end
 end
 
+--[[
+Pick a round-robin upstream from `rule.upstreams` and emit `symbol_fail` if
+none is currently usable (e.g. all hostnames are still pending DNS resolution
+or every backend has been marked dead). Returns the upstream on success or
+nil on failure — in the nil case `symbol_fail` has already been recorded, so
+the caller should just return.
+--]]
+local function get_upstream_or_fail(task, rule, maybe_part, reason)
+  local upstream = rule.upstreams and rule.upstreams:get_upstream_round_robin()
+
+  if not upstream then
+    yield_result(task, rule,
+        reason or 'no upstream available (DNS pending or all dead)',
+        0.0, 'fail', maybe_part)
+    return nil
+  end
+
+  return upstream
+end
+
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
@@ -517,6 +537,7 @@ exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match
 exports.check_metric_results = check_metric_results
+exports.get_upstream_or_fail = get_upstream_or_fail
 
 setmetatable(exports, {
   __call = function(t, override)

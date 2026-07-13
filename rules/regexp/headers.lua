@@ -533,7 +533,13 @@ reconf['FORGED_MUA_POSTBOX_MSGID_UNKNOWN'] = {
 }
 
 -- Message id validity
-local sane_msgid = 'Message-Id=/^<?[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\@[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+>?\\s*$/H'
+-- Permit non-ASCII bytes in EAI/SMTPUTF8 Message-IDs (RFC 6532) when mime_utf8 is enabled
+local sane_msgid
+if rspamd_config:is_mime_utf8() then
+  sane_msgid = 'Message-Id=/^<?[^<>\\\\ \\t\\n\\r\\x0b]+\\@[^<>\\\\ \\t\\n\\r\\x0b]+>?\\s*$/H'
+else
+  sane_msgid = 'Message-Id=/^<?[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\@[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+>?\\s*$/H'
+end
 local msgid_comment = 'Message-Id=/\\(.*\\)/H'
 reconf['INVALID_MSGID'] = {
   re = string.format('(%s) & !((%s) | (%s))', has_mid, sane_msgid, msgid_comment),

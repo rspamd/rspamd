@@ -1,3 +1,119 @@
+4.1.1: 19 Jun 2026
+
+  ** Features **
+  * [Feature] checkv3: Negotiate representation and compression via Accept/Accept-Encoding
+  * [Feature] css: Detect more text-hiding tricks (off-screen positioning, clip, negative text-indent, tiny fonts)
+  * [Feature] lua_archive: Add opt-in extraction limits (size, count, ratio) to bound zip-bomb expansion
+  * [Feature] lua_text: Add byte-distribution statistics methods (entropy, byte mean/deviation, serial correlation, Monte-Carlo Pi)
+  * [Feature] lua: Add zlib/YARA-compatible crc32 for rspamd_text, rspamd_util, and cryptobox hash
+  * [Feature] multipattern: Add explicit SOM (start-of-match) flag and fix regex-fallback offsets
+  * [Feature] neural: Add pluggable feature-provider and ANN-architecture registries
+  * [Feature] neural: Add sequence output mode and SIF word selection to fasttext_embed
+  * [Feature] kann: Add multi-head attention pooling operator
+  * [Feature] lua_kann: Expose slice and concat graph transforms
+
+  ** Bug fixes **
+  * [Fix] dns: Do not defer resolver nameservers (fixes SIGSEGV at worker startup, regression in 4.1.0)
+  * [Fix] lua: Add state/generation guards and refcounting to the coroutine thread pool to prevent use-after-free on async completion
+  * [Fix] lua_worker: Avoid deadlock when a spawned subprocess returns an invalid value
+  * [Fix] milter: Send QUARANTINE even with a caller-supplied reply (regression from 3.10.0)
+  * [Fix] neural: Stabilise training on dense embedding inputs (funnel architecture, input-typed learning rate, single-class quality gate)
+  * [Fix] neural: Don't strand trained ANNs behind stale high-version tombstones
+  * [Fix] mx_check: Classify loopback-only MX as MX_LOCAL_ONLY instead of MX_BOGON_ONLY
+  * [Fix] monitored: Use alphanumeric-only random DNS prefixes for random_monitored RBL checks
+  * [Fix] protocol: Use case-preserving boundary for v3 HTTP multipart parsing
+  * [Fix] controller: Register the /checkv3 endpoint
+  * [Fix] symcache: Fix timeout inflation in pre/postfilter priority grouping
+  * [Fix] url: Scan bare query-embedded URLs containing '=' as a whole
+  * [Fix] url: Do not multiply URLs with multiple '@' signs and backslashes
+  * [Fix] css: Detect text hidden via overflow clipping, opacity, and max-width/height
+  * [Fix] mime: Fix build with OpenSSL 4.0 opaque ASN1_STRING
+  * [Fix] mime_string: Make iterator const to fix doctest 2.5.0 build
+  * [Fix] Prioritise bundled simdutf headers over system ones
+
+4.1.0: 05 Jun 2026
+
+  ** Incompatible changes **
+  * [Rework] mx_check: three-layer Redis cache and finer outcome symbols (MX_NONE replaces MX_NXDOMAIN/MX_MISSING)
+  * [Conf] fuzzy_check: discover rspamd.com servers via SRV by default
+
+  ** Major features **
+  * [Feature] protocol: Expose custom metadata for /checkv3 via metadata headers and task:get_metadata()
+  * [Feature] composites: Add hot-reloadable dynamic composites map
+  * [Feature] lua_task: Add bulk and regexp symbol lookups
+  * [Feature] lua_tcp: Add phase-specific timeouts (connect/read/write) and on_error callback
+  * [Feature] task: Report pending async events and stalled symbols at scan timeout
+  * [Feature] upstream: Load-aware selection with Power of Two Choices, latency EWMA, and slow start on revive
+  * [Feature] upstream: Expand each SRV target into its own upstream, honouring SRV weights and per-target error budgets
+  * [Feature] upstream: Defer DNS resolution for unreachable hosts so transient startup DNS failures no longer drop upstreams
+  * [Feature] mx_check: Add IP-class classification, bad_mxs/bad_ips trust maps, and per-source checks
+  * [Feature] external_services: Add per-service <RULE>_CHECK anchor symbol for dependency ordering
+  * [Feature] url_redirector: Add chain-aware cache with intermediate hop injection
+  * [Feature] url_redirector: Add coherent browser fingerprint profiles for stealth resolution
+  * [Feature] url_redirector: Switch redirector_hosts_map from set to glob
+  * [Feature] url_redirector: Allow GET for a user-defined list of URLs
+  * [Feature] http: Optional insertion-ordered header emission
+  * [Feature] elastic: Log Reply-To, received IPs, URL metadata, and forcing module
+  * [Feature] clickhouse: Add named extra_columns presets with an outbound preset
+  * [Feature] selectors: Add fuzzy_digest, fuzzy_shingles, authenticated, and received_count
+  * [Feature] html: Add HTML5 tag definitions (video/audio/picture/svg/...)
+  * [Feature] dmarc_report: Add --batch-wait option to throttle batches
+  * [Feature] autolearnstats: Add --sort-by and --group options
+  * [Feature] lualib: Add lua_feedback_parsers for DSN and ARF reports
+  * [Feature] lua_extras: Structured loader for custom selectors, maps, and regexps with cross-kind dependency ordering
+  * [Feature] lua_scanners: Add eXpurgate engine support
+  * [Feature] Add rspamadm control memstat for per-worker memory dumps (RSS, mempool callsites, Lua heap, jemalloc)
+  * [Feature] Make baseline pidfile and logging env-overridable for containers
+  * [Feature] Auto-load shipped fasttext model when present
+  * [Feature] fpconv: Add fixed-point (%.Nf) formatting with correct rounding
+
+  ** Bug fixes **
+  * [CritFix] mime_parser: Avoid NULL deref on S/MIME with empty pkcs7-data
+  * [Fix] mime_parser: Bound S/MIME recursion depth to prevent stack exhaustion (DoS)
+  * [Fix] mime_parser: Defensive guards against NULL deref and resource leaks
+  * [Fix] multipattern: Bound URL query scan reentrancy to prevent crash on nested query URLs (DoS)
+  * [Fix] composites: Avoid over-eager second-pass deferral so filter-stage composites are visible from postfilters
+  * [Fix] ratelimit: Track all buckets in selector rules
+  * [Fix] archives: Harden RAR/ZIP/7-zip parsers against malformed input (bounds, varint, infinite loop, OOB reads)
+  * [Fix] images: Guard image linking against NULL decoded header
+  * [Fix] css: Fix out-of-bounds read in ident escape scanner
+  * [Fix] str_util: Fix lookahead over-read in find_eoh
+  * [Fix] spf: Fix over-read on a bare "spf2." sender-id record
+  * [Fix] rdns: Reject DNS labels that overrun the packet
+  * [Fix] html: Prevent buffer overflow in entity decoding
+  * [Fix] html: Preserve verbatim href as url->raw
+  * [Fix] url: Fix out-of-bounds read on empty/all-dots host
+  * [Fix] url: Canonicalise mailto: URIs and bare emails to a consistent slash-less form (RFC 6068)
+  * [Fix] url: Do not drop URLs with long userinfo (userinfo-obfuscation phishing)
+  * [Fix] url_suspect: Require TLD >= 3 chars for word_dot naked domain matches
+  * [Fix] mime_headers: Avoid uninitialised bytes in rfc2047 decode
+  * [Fix] mime_headers/encoding: Correct lengths after in-place rewrites
+  * [Fix] arc: Emit ARC headers in a deterministic order
+  * [Fix] Map DKIM permfail to dkim=permerror in Authentication-Results
+  * [Fix] Honor mime_utf8 option in INVALID_MSGID rule
+  * [Fix] fuzzy_storage: Harden network input paths
+  * [Fix] fuzzy_storage: Fix peer-pipe partial-write resume and shutdown drain
+  * [Fix] fuzzy_storage: Avoid per-refresh leak in dynamic ban inserts
+  * [Fix] fuzzy_storage: Fix per-frame memory leak on persistent TCP connections
+  * [Fix] fuzzy: Do not block allowed clients on TCP
+  * [Fix] neural: Preserve trained ANN across symbol-list drift and symcache-driven profile rotation
+  * [Fix] neural: Stabilise profile digest under disable_symbols_input and retarget training to the newest profile
+  * [Fix] protocol: Apply inline metadata.settings on /checkv3
+  * [Fix] protocol: Populate request headers in /checkv3
+  * [Fix] upstream: Refill token bucket over time so a flapping upstream recovers
+  * [Fix] upstream: Avoid infinite loop in get_random when the only candidate is excluded
+  * [Fix] lua_tcp: Avoid connection leak on read without write
+  * [Fix] lua_redis: Resolve Redis master for rspamadm tools under Sentinel
+  * [Fix] elastic: Use Queue:new() instead of non-existent lua_util.newdeque()
+  * [Fix] dmarc: Floor connect timestamp before os.date for PUC Lua compatibility
+  * [Fix] greylist: Separate greylisting period from Redis connection timeout
+  * [Fix] rspamadm vault: Write formatted output to stdout directly
+  * [Fix] regexp: Do not discard capture groups following an empty one
+  * [Fix] Skip ICU conversion for synthetic x-binaryenc charset
+  * [Fix] Warn on task_timeout less than symcache symbol timeout
+  * [Fix] Port security fixes from libucl upstream (msgpack, parser bounds, schema)
+  * [Fix] Use string_view::data() for pointer access to fix libc++ builds
+
 4.0.1: 05 Apr 2026
 
   ** Features **

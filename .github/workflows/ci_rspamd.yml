@@ -78,17 +78,87 @@ jobs:
         run: |
           sudo mv /usr/bin/miltertest /usr/bin/miltertest.is.broken.on.fedora || true
 
+      - name: Install pabot
+        # --break-system-packages: Ubuntu 24.04 ships Python 3.12 with PEP 668
+        # marking the system interpreter as externally-managed. Older pip
+        # versions (Fedora image) don't know the flag, so fall back without it.
+        # msgpack/requests are used by functional tests (msgpack reply decode
+        # in the /checkv3 content negotiation suite; requests by clickhouse).
+        run: |
+          pip install --break-system-packages robotframework-pabot \
+            msgpack requests \
+            || pip install robotframework-pabot msgpack requests
+
       - name: Run functional tests
+        # Two phases run concurrently:
+        #   1. pabot, --processes 4, suites NOT tagged `notparallel` (worker
+        #      isolation via the vars.py file-based slot allocator -> port
+        #      offset + per-worker /tmp prefix).
+        #   2. plain robot, suites tagged `notparallel`. These suites still
+        #      bake dummy_http / dummy_llm / dummy_http_early port numbers
+        #      into Lua test scripts and a handful of configs, so they only
+        #      work on a single worker's port range.
+        # Both phases claim disjoint slots from vars.py so their rspamds
+        # don't collide. Running them in parallel (rather than sequentially)
+        # drops wall-clock from ~4:00 to ~max(phase1, phase2) ~2:20.
+        # Each phase writes to its own outputdir; we exit non-zero if
+        # either phase failed.
         run: |
           cd ${GITHUB_WORKSPACE}/build
           ulimit -c unlimited
           ulimit -s unlimited
+          mkdir -p parallel serial
           set +e
-          RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot  -v RSPAMD_USER:root -v RSPAMD_GROUP:root --removekeywords wuks --exclude isbroken ${GITHUB_WORKSPACE}/src/test/functional/cases; EXIT_CODE=$?
+          # Each phase writes its own stdout+stderr to a log file so
+          # the two never interleave; we cat them in order at the
+          # end so the GH Actions step output reads sequentially
+          # (parallel-phase summary first, then serial-phase) even
+          # though the two ran concurrently and saved wall-clock.
+          RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install pabot \
+            --processes 4 \
+            --outputdir ${GITHUB_WORKSPACE}/build/parallel \
+            -v RSPAMD_USER:root -v RSPAMD_GROUP:root \
+            --removekeywords wuks \
+            --exclude isbroken \
+            --exclude notparallel \
+            ${GITHUB_WORKSPACE}/src/test/functional/cases \
+            > ${GITHUB_WORKSPACE}/build/phase1-parallel.log 2>&1 &
+          PABOT_PID=$!
+          RSPAMD_INSTALLROOT=${GITHUB_WORKSPACE}/install robot \
+            --outputdir ${GITHUB_WORKSPACE}/build/serial \
+            -v RSPAMD_USER:root -v RSPAMD_GROUP:root \
+            --removekeywords wuks \
+            --exclude isbroken \
+            --include notparallel \
+            ${GITHUB_WORKSPACE}/src/test/functional/cases \
+            > ${GITHUB_WORKSPACE}/build/phase2-serial.log 2>&1 &
+          ROBOT_PID=$!
+          wait $PABOT_PID;  PARALLEL_RC=$?
+          wait $ROBOT_PID;  SERIAL_RC=$?
+          echo "::group::Phase 1 (pabot, parallel-safe suites) -- rc=$PARALLEL_RC"
+          cat ${GITHUB_WORKSPACE}/build/phase1-parallel.log
+          echo "::endgroup::"
+          echo "::group::Phase 2 (robot, notparallel suites) -- rc=$SERIAL_RC"
+          cat ${GITHUB_WORKSPACE}/build/phase2-serial.log
+          echo "::endgroup::"
+          # Merge the two phases into one unified report at the
+          # build root (build/output.xml, log.html, report.html) --
+          # this matches the artifact shape master serial produces,
+          # so reviewers see a single total instead of two halves.
+          # --nostatusrc: merging itself never affects step exit code.
+          if [ -f parallel/output.xml ] && [ -f serial/output.xml ]; then
+            echo "::group::Merge parallel + serial outputs"
+            rebot --nostatusrc --outputdir . --output output.xml \
+              parallel/output.xml serial/output.xml || true
+            echo "::endgroup::"
+          fi
           set -e
           core_files=$(find /var/tmp/ -name '*.core')
           for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done
-          exit $EXIT_CODE
+          if [ $PARALLEL_RC -ne 0 ] || [ $SERIAL_RC -ne 0 ]; then
+            echo "Parallel phase rc=$PARALLEL_RC, serial phase rc=$SERIAL_RC"
+            exit 1
+          fi
 
       - name: Save workspace directory
         if: (success() || failure())
@@ -100,7 +170,10 @@ jobs:
         with:
           name: robotlog-${{ inputs.name }}
           path: |
+            ${{ env.CONTAINER_WORKSPACE }}/build/parallel/*.*ml
+            ${{ env.CONTAINER_WORKSPACE }}/build/serial/*.*ml
             ${{ env.CONTAINER_WORKSPACE }}/build/*.*ml
+            ${{ env.CONTAINER_WORKSPACE }}/build/phase*.log
           retention-days: 1
 
       - name: Upload rspamd logs

@@ -131,6 +131,83 @@ is_transfer_proto(struct rspamd_url *u) -> bool
 	return (u->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_FTP)) != 0;
 }
 
+struct query_target_scan_cbd {
+	unsigned int count;        /* embedded URLs at this level */
+	struct rspamd_url *single; /* the sole embedded URL, when count == 1 */
+};
+
+static gboolean
+html_query_target_cb(struct rspamd_url *url, gsize start_offset,
+					  gsize end_offset, gpointer ud)
+{
+	auto *cbd = static_cast<query_target_scan_cbd *>(ud);
+
+	if (!is_transfer_proto(url) || url->tldlen == 0) {
+		return TRUE; /* keep scanning the query for other urls */
+	}
+
+	cbd->count++;
+	cbd->single = url;
+
+	return TRUE;
+}
+
+/*
+ * True if the href is a single-target wrapper/redirector whose (possibly nested)
+ * leaf URL matches the displayed domain - so the host mismatch is not phishing.
+ * Follows one embedded URL per query level (e.g. linkprotect?a=https://disp.tld,
+ * or a wrapper whose target is itself a wrapper); any level holding more than
+ * one embedded URL is ambiguous and never suppresses.
+ */
+static auto
+html_href_query_targets_display(rspamd_mempool_t *pool,
+								struct rspamd_url *href_url,
+								std::string_view disp_tld,
+								lua_State *L) -> bool
+{
+	if (disp_tld.empty()) {
+		return false;
+	}
+
+	struct rspamd_url *leaf = nullptr;
+	struct rspamd_url *cur = href_url;
+	bool fully_consumed = false;
+
+	for (unsigned int depth = 0; depth < RSPAMD_URL_QUERY_MAX_NESTING; depth++) {
+		if (cur->querylen == 0) {
+			fully_consumed = true; /* natural end: no further query */
+			break;
+		}
+
+		query_target_scan_cbd cbd{0, nullptr};
+		rspamd_url_query_foreach_embedded(pool, cur, RSPAMD_URL_FIND_ALL,
+										  html_query_target_cb, &cbd, L);
+
+		if (cbd.count == 0) {
+			fully_consumed = true; /* natural end: query carries no embedded url */
+			break;
+		}
+		if (cbd.count != 1) {
+			return false; /* ambiguous: more than one embedded url at this level */
+		}
+
+		leaf = cbd.single; /* descend into the single embedded url */
+		cur = cbd.single;
+	}
+
+	/* Exited via nesting budget exhaustion: the real leaf is deeper than we
+	 * are willing to follow, so we cannot decide on a match against an
+	 * intermediate hop. Safe default: do not suppress. */
+	if (!fully_consumed || leaf == nullptr) {
+		return false;
+	}
+
+	auto leaf_tld = convert_idna_hostname_maybe(pool, leaf, true);
+	return sv_equals(leaf_tld, disp_tld) ||
+		   rspamd_url_is_subdomain(leaf_tld, disp_tld) ||
+		   rspamd_url_is_subdomain(disp_tld, leaf_tld);
+}
+
 auto html_url_is_phished(rspamd_mempool_t *pool,
 						 struct rspamd_url *href_url,
 						 std::string_view text_data,
@@ -182,7 +259,8 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 					if (!sv_equals(disp_tok, href_tok)) {
 						/* Check if one url is a subdomain for another */
 
-						if (!rspamd_url_is_subdomain(disp_tok, href_tok)) {
+						if (!rspamd_url_is_subdomain(disp_tok, href_tok) &&
+							!html_href_query_targets_display(pool, href_url, disp_tok, L)) {
 							href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 							text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 
@@ -356,8 +434,13 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 					}
 					else if (s[i] == '@') {
 						/* Likely email prefix */
-						prefix = "mailto://";
-						dlen += sizeof("mailto://") - 1;
+						/*
+						 * mailto: is non-hierarchical (RFC 6068); inject the
+						 * bare scheme without // so it canonicalises to the
+						 * same string as a parsed mailto: URL and dedups.
+						 */
+						prefix = "mailto:";
+						dlen += sizeof("mailto:") - 1;
 						no_prefix = TRUE;
 					}
 					else if (s[i] == ':' && i != 0) {

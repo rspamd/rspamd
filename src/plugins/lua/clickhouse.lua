@@ -477,6 +477,12 @@ end
 local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, extra_rows)
   local log_object = task or rspamd_config
   local upstream = settings.upstream:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(log_object,
+        "no clickhouse upstream available (DNS pending or all dead); skipping send (%s)",
+        why)
+    return
+  end
   local ip_addr = upstream:get_addr():to_string(true)
   rspamd_logger.infox(log_object, "trying to send %s rows to clickhouse server %s; started as %s",
       #gen_rows + #cust_rows, ip_addr, why)
@@ -1173,6 +1179,12 @@ end
 local function do_remove_partition(ev_base, cfg, table_name, partition, method_override)
   lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition)
   local upstream = settings.upstream:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(rspamd_config,
+        "no clickhouse upstream available; cannot remove partition %s.%s",
+        table_name, partition)
+    return
+  end
   local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION '${partition}'"
   local method = method_override or settings.retention.method
   local remove_method = (method == 'drop') and 'DROP' or 'DETACH'
@@ -1330,6 +1342,11 @@ local function clickhouse_remove_old_partitions(cfg, ev_base)
   end
 
   local upstream = settings.upstream:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(rspamd_config,
+        "no clickhouse upstream available; cannot run retention pass")
+    return false
+  end
   local partition_to_remove_sql = "SELECT partition, table " ..
       "FROM system.parts WHERE table IN ('${tables}') " ..
       "GROUP BY partition, table " ..
@@ -1577,6 +1594,12 @@ local function check_rspamd_table(upstream, ev_base, cfg)
 end
 
 local function check_clickhouse_upstream(upstream, ev_base, cfg)
+  if not upstream:get_addr() then
+    rspamd_logger.infox(rspamd_config,
+        'skipping clickhouse upstream %s: address not resolved yet',
+        upstream:get_name())
+    return
+  end
   local ch_params = {
     ev_base = ev_base,
     config = cfg,
@@ -1773,11 +1796,9 @@ if opts then
       -- Select traverse function depending on what we have
       local iter_func = settings.extra_columns[1] and ipairs or pairs
 
-      for col_name, col_data in iter_func(settings.extra_columns) do
+      for col_key, col_data in iter_func(settings.extra_columns) do
         -- Array based extra columns
-        if col_data.name then
-          col_name = col_data.name
-        end
+        local col_name = col_data.name or col_key
         if not col_data.selector or not col_data.type then
           rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: no type or no selector',
               col_name)

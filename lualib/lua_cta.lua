@@ -70,10 +70,6 @@ local DEFAULT_STOPWORDS = {
   "mailerlite", "mailerq", "mailrelay", "mailup", "omnisend", "clickdimensions", "dotdigital", "pepipost"
 }
 
-local DEFAULT_WHITELIST = {
-  -- Intentionally empty by default. Users can add trusted eTLD+1 domains here
-}
-
 local DEFAULT_BLACKLIST = {
   -- Popular shorteners / redirection eTLD+1
   "t.co", "bit.ly", "goo.gl", "tinyurl.com", "lnkd.in", "buff.ly", "ow.ly", "rebrand.ly", "bitly.com", "is.gd", "v.gd",
@@ -112,8 +108,6 @@ local function load_settings()
     if type(settings.whitelist) ~= 'table' or not settings.whitelist.get_key then
       settings.whitelist = lua_maps.map_add_from_ucl(settings.whitelist, 'set', 'link affiliation whitelist')
     end
-  else
-    settings.whitelist = lua_maps.map_add_from_ucl(DEFAULT_WHITELIST, 'set', 'link affiliation whitelist (default)')
   end
   if settings.blacklist then
     if type(settings.blacklist) ~= 'table' or not settings.blacklist.get_key then

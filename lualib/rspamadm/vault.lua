@@ -193,10 +193,23 @@ local function maybe_print_vault_data(opts, data, func)
     if not res then
       printf('vault reply for cannot be parsed: %s', parser_err)
     else
+      -- Issue #6005: large UCL/JSON output (e.g. `vault list` against
+      -- a Vault that holds hundreds of DKIM entries) was silently lost
+      -- when piped through `printf` because that helper feeds its
+      -- argument to `rspamd_logger.slog` as a *format string*. Any `%`
+      -- inside the formatted body — or simply hitting an internal
+      -- buffer limit — produced no output and exit code 0. Write the
+      -- formatted payload to stdout directly so the user always sees
+      -- it, regardless of size or punctuation.
+      local payload
       if func then
-        printf(ucl.to_format(func(res), opts.output))
+        payload = ucl.to_format(func(res), opts.output)
       else
-        printf(ucl.to_format(res, opts.output))
+        payload = ucl.to_format(res, opts.output)
+      end
+      io.write(payload)
+      if not payload:match('\n$') then
+        io.write('\n')
       end
     end
   else

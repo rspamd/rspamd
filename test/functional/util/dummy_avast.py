@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
-PID = "/tmp/dummy_avast.pid"
-
 import os
 import socket
 import socketserver
 import sys
 
 import dummy_killer
+import dummy_pidfile
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
@@ -43,7 +42,8 @@ if __name__ == "__main__":
     server.server_activate()
 
     dummy_killer.setup_killer(server)
-    dummy_killer.write_pid(PID)
+    pid_path = sys.argv[3] if alen > 3 else dummy_pidfile.pid_path('avast', port)
+    dummy_killer.write_pid(pid_path)
 
     try:
         server.handle_request()

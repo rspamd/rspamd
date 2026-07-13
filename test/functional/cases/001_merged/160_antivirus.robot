@@ -49,7 +49,7 @@ FPROT MISS
 
 FPROT HIT - PATTERN
   ${process1} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}  1
-  ${process2} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
+  ${process2} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  ${RSPAMD_TMP_PREFIX}/dummy_fprot_dupe-${RSPAMD_PORT_FPROT2_DUPLICATE}.pid
   Scan File  ${MESSAGE}
   ...  Settings=${SETTINGS_FPROT}
   Expect Symbol  FPROT_EICAR
@@ -106,32 +106,23 @@ Double FProt Teardown
   Terminate Process  ${process1}
   Terminate Process  ${process2}
 
-Run Dummy
-  [Arguments]  @{varargs}
-  ${process} =  Start Process  @{varargs}
-  ${pid} =  Get From List  ${varargs}  -1
-  ${pass} =  Run Keyword And Return Status  Wait Until Created  ${pid}
-  IF  ${pass}
-    Return From Keyword
-  END
-  Wait For Process  ${process}
-  ${res} =  Get Process Result  ${process}
-  Log To Console  ${res.stdout}
-  Log To Console  ${res.stderr}
-  Fail  Dummy server failed to start
-  [Return]  ${process}
-
 Run Dummy Clam
-  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_clamav.pid
-  ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
-  [Return]  ${process}
+  [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_clamav-${port}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_clamav-${port}.log
+  ${process} =  Start Dummy Service  dummy_clam.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
+  RETURN    ${process}
 
 Run Dummy Fprot
-  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
-  ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
-  [Return]  ${process}
+  [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_fprot-${port}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_fprot-${port}.log
+  ${process} =  Start Dummy Service  dummy_fprot.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
+  RETURN    ${process}
 
 Run Dummy Avast
-  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_avast.pid
-  ${process} =  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
-  [Return]  ${process}
+  [Arguments]  ${port}  ${found}=  ${pid}=${RSPAMD_TMP_PREFIX}/dummy_avast-${port}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_avast-${port}.log
+  ${process} =  Start Dummy Service  dummy_avast.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
+  RETURN    ${process}

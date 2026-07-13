@@ -15,6 +15,7 @@
  */
 #include "config.h"
 #include "upstream.h"
+#include "upstream_internal.h"
 #include "ottery.h"
 #include "ref.h"
 #include "cfg_file.h"
@@ -24,7 +25,6 @@
 #include "contrib/libev/ev.h"
 #include "logger.h"
 #include "contrib/librdns/rdns.h"
-#include "heap.h"
 
 #include <math.h>
 #include <netdb.h>
@@ -56,21 +56,18 @@ struct upstream_ring_point {
 	struct upstream *up;
 };
 
-/* Heap element for token bucket selection */
-struct upstream_token_heap_entry {
-	unsigned int pri;    /* Priority = inflight_tokens (lower = better) */
-	unsigned int idx;    /* Heap index (managed by heap) */
-	struct upstream *up; /* Pointer to upstream */
-};
-
-RSPAMD_HEAP_DECLARE(upstream_token_heap, struct upstream_token_heap_entry);
-
 struct upstream {
 	unsigned int weight;
 	unsigned int cur_weight;
 	unsigned int errors;
 	unsigned int checked;
 	unsigned int dns_requests;
+	/*
+	 * Passive in-flight counter: incremented on every selection via
+	 * rspamd_upstream_get_common, decremented in rspamd_upstream_ok /
+	 * rspamd_upstream_fail. Used by P2C as the load comparator.
+	 */
+	unsigned int inflight;
 	int active_idx;
 	unsigned int ttl;
 	char *name;
@@ -81,6 +78,22 @@ struct upstream {
 	double next_probe_at;
 	double probe_backoff;
 	unsigned int half_open_inflight;
+	/*
+	 * Wall time (ev_now/ticks) of the most recent revive. Zero when the
+	 * upstream is in steady state. While non-zero and within the configured
+	 * slow_start window, selection scales the upstream's effective weight
+	 * up linearly from 0 to 1.
+	 */
+	double revived_at;
+
+	/*
+	 * Latency EWMA in seconds. Zero when no samples have been recorded.
+	 * Updated by rspamd_upstream_record_latency with time-weighted decay
+	 * controlled by upstream_limits.latency_half_life_s.
+	 */
+	double latency_ewma;
+	double latency_last_at;
+	unsigned int latency_n;
 	gpointer ud;
 	enum rspamd_upstream_flag flags;
 	struct upstream_list *ls;
@@ -95,13 +108,49 @@ struct upstream {
 	struct upstream_inet_addr_entry *new_addrs;
 	gpointer data;
 	char uid[8];
+	/*
+	 * Port to apply to addresses returned by the first DNS resolution when
+	 * the upstream was created in PENDING_RESOLVE state (no initial addrs
+	 * to copy the port from). Zero otherwise.
+	 */
+	uint16_t deferred_port;
 	ref_entry_t ref;
 
 	/* Token bucket fields for weighted load balancing */
 	gsize max_tokens;       /* Maximum token capacity */
 	gsize available_tokens; /* Current available tokens */
 	gsize inflight_tokens;  /* Tokens reserved by in-flight requests */
-	unsigned int heap_idx;  /* Index in token heap (UINT_MAX if not in heap) */
+	double last_refill_at;  /* Last lazy-refill timestamp (ev_now/ticks); 0 = uninit */
+
+	/*
+	 * SRV-derived member fields. Set on members (FLAG_SRV_MEMBER); zero
+	 * on non-SRV upstreams and on SRV parents. srv_priority and srv_weight
+	 * mirror RFC 2782 fields from the originating SRV reply entry; they
+	 * survive re-resolves until the corresponding target disappears.
+	 * srv_parent is a weak back-pointer used to remove the member from the
+	 * parent's hash table during drain. It does not hold a ref on the
+	 * parent.
+	 */
+	struct upstream *srv_parent;
+	unsigned int srv_priority;
+	unsigned int srv_weight;
+
+	/*
+	 * Owned by SRV parents (FLAG_SRV_RESOLVE). Hash table from "fqdn:port"
+	 * to struct upstream * (the member). Used by the re-resolve diff path
+	 * to identify add/remove/update of members. NULL on members and on
+	 * non-SRV upstreams.
+	 */
+	GHashTable *srv_members;
+
+	/*
+	 * Tombstone for graceful drain. Set when a member is removed from the
+	 * parent's set (target disappeared from a re-resolve). Once true, the
+	 * revive timer must not re-activate the upstream — it should silently
+	 * release the timer ref and leave the upstream waiting for inflight
+	 * selectors to release their refs, after which the dtor runs.
+	 */
+	gboolean is_draining;
 #ifdef UPSTREAMS_THREAD_SAFE
 	rspamd_mutex_t *lock;
 #endif
@@ -120,10 +169,26 @@ struct upstream_limits {
 	unsigned int dns_retransmits;
 
 	/* Token bucket configuration */
-	gsize token_bucket_max;       /* Max tokens per upstream (default: 10000) */
-	gsize token_bucket_scale;     /* Bytes per token (default: 1024) */
-	gsize token_bucket_min;       /* Min tokens for selection (default: 1) */
-	gsize token_bucket_base_cost; /* Base cost per request (default: 10) */
+	gsize token_bucket_max;          /* Max tokens per upstream (default: 10000) */
+	gsize token_bucket_scale;        /* Bytes per token (default: 1024) */
+	gsize token_bucket_min;          /* Min tokens for selection (default: 1) */
+	gsize token_bucket_base_cost;    /* Base cost per request (default: 10) */
+	gsize token_bucket_refill_per_s; /* Lazy refill rate (default: max/60) */
+
+	/*
+	 * Slow start window (milliseconds). When non-zero, a freshly revived
+	 * upstream's effective weight ramps linearly from 0 to its configured
+	 * weight over this window, smoothing the thundering herd that otherwise
+	 * lands on the just-revived backend. Default 0 (disabled).
+	 */
+	unsigned int slow_start_ms;
+
+	/*
+	 * Latency EWMA half-life in seconds. Larger = slower to react, smaller
+	 * = noisier. Default 60.0. Set to 0 to weight every sample equally
+	 * (degrades to a 1/n moving average regardless of inter-arrival time).
+	 */
+	double latency_half_life_s;
 };
 
 struct upstream_list {
@@ -142,10 +207,6 @@ struct upstream_list {
 	struct upstream_ring_point *ring;
 	unsigned int ring_len;
 	gboolean ring_dirty;
-
-	/* Token bucket heap for weighted selection */
-	upstream_token_heap_t token_heap;
-	gboolean token_bucket_initialized;
 #ifdef UPSTREAMS_THREAD_SAFE
 	rspamd_mutex_t *lock;
 #endif
@@ -215,6 +276,17 @@ static const double default_probe_jitter = DEFAULT_PROBE_JITTER;
 #define DEFAULT_TOKEN_BUCKET_SCALE 1024
 #define DEFAULT_TOKEN_BUCKET_MIN 1
 #define DEFAULT_TOKEN_BUCKET_BASE_COST 10
+/* Default refill rate: full bucket regenerates in 60s of wall time. */
+#define DEFAULT_TOKEN_BUCKET_REFILL_PER_S (DEFAULT_TOKEN_BUCKET_MAX / 60)
+/* EWMA half-life: stale samples lose half their weight every 60s. */
+#define DEFAULT_LATENCY_HALF_LIFE_S 60.0
+
+/*
+ * Initial delay before retrying DNS for a PENDING_RESOLVE upstream, and the
+ * cap for the exponential back-off used while the upstream stays pending.
+ */
+#define UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY 1.0
+#define UPSTREAM_PENDING_RESOLVE_MAX_DELAY 60.0
 
 static const struct upstream_limits default_limits = {
 	.revive_time = DEFAULT_REVIVE_TIME,
@@ -231,9 +303,50 @@ static const struct upstream_limits default_limits = {
 	.token_bucket_scale = DEFAULT_TOKEN_BUCKET_SCALE,
 	.token_bucket_min = DEFAULT_TOKEN_BUCKET_MIN,
 	.token_bucket_base_cost = DEFAULT_TOKEN_BUCKET_BASE_COST,
+	.token_bucket_refill_per_s = DEFAULT_TOKEN_BUCKET_REFILL_PER_S,
+	.latency_half_life_s = DEFAULT_LATENCY_HALF_LIFE_S,
 };
 
 static void rspamd_upstream_lazy_resolve_cb(struct ev_loop *, ev_timer *, int);
+static void rspamd_upstream_revive_cb(struct ev_loop *loop, ev_timer *w, int revents);
+static void rspamd_upstream_dtor(struct upstream *up);
+static void rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
+										  struct upstream *upstream);
+static void rspamd_upstream_set_inactive(struct upstream_list *ls,
+										 struct upstream *upstream);
+
+/*
+ * Time helpers. We use ev_now() — the loop's cached time — wherever an event
+ * loop is available, so all decisions in a single loop iteration agree on
+ * "now" and tests can drive time deterministically via the libev fake-clock
+ * hook. The rspamd_get_ticks() fallback covers paths that may run before the
+ * event loop is wired up (early init, unit tests of pure helpers).
+ */
+static inline double
+rspamd_upstream_now(const struct upstream *up)
+{
+	if (up->ctx && up->ctx->event_loop) {
+		return ev_now(up->ctx->event_loop);
+	}
+	return rspamd_get_ticks(FALSE);
+}
+
+/*
+ * Same as rspamd_upstream_now() but first refreshes the loop's cached
+ * monotonic time. Use on rare paths (e.g. fail handling) where multiple
+ * timestamps may be sampled in a single loop iteration and we want each
+ * sample to reflect actual elapsed time. The "_if_cheap" variant only
+ * touches the monotonic clock; no realtime read.
+ */
+static inline double
+rspamd_upstream_now_fresh(const struct upstream *up)
+{
+	if (up->ctx && up->ctx->event_loop) {
+		ev_now_update_if_cheap(up->ctx->event_loop);
+		return ev_now(up->ctx->event_loop);
+	}
+	return rspamd_get_ticks(FALSE);
+}
 
 void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 									 struct upstream_ctx *ctx,
@@ -298,6 +411,10 @@ void rspamd_upstreams_library_config(struct rspamd_config *cfg,
 				if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
 					/* Resolve them immediately ! */
 					when = 0.0;
+				}
+				else if (upstream->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE) {
+					when = rspamd_time_jitter(UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY,
+											  UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY * .25);
 				}
 				else {
 					when = rspamd_time_jitter(upstream->ls->limits->lazy_resolve_time,
@@ -402,35 +519,52 @@ rspamd_upstream_addr_sort_func(gconstpointer a, gconstpointer b)
 static void
 rspamd_upstream_set_active(struct upstream_list *ls, struct upstream *upstream)
 {
+	gboolean is_pending = FALSE;
+
 	RSPAMD_UPSTREAM_LOCK(ls);
-	g_ptr_array_add(ls->alive, upstream);
-	upstream->active_idx = ls->alive->len - 1;
 
-	/* Invalidate ring hash */
-	ls->ring_dirty = TRUE;
-
-	/* Initialize token bucket state */
-	upstream->heap_idx = UINT_MAX;
-	if (ls->rot_alg == RSPAMD_UPSTREAM_TOKEN_BUCKET) {
-		upstream->max_tokens = ls->limits->token_bucket_max;
-		upstream->available_tokens = upstream->max_tokens;
-		upstream->inflight_tokens = 0;
-
-		/* Add to token heap if already initialized */
-		if (ls->token_bucket_initialized) {
-			struct upstream_token_heap_entry entry;
-			entry.pri = 0;
-			entry.idx = 0;
-			entry.up = upstream;
-			rspamd_heap_push_safe(upstream_token_heap, &ls->token_heap, &entry, skip_heap);
-			upstream->heap_idx = rspamd_heap_size(upstream_token_heap, &ls->token_heap) - 1;
-		skip_heap:;
-		}
+	/*
+	 * SRV parents are placeholders that own member upstreams; they must
+	 * never become selectable. Skip the alive-list bookkeeping but keep
+	 * the lazy-resolve timer setup below — that timer is what drives the
+	 * periodic SRV re-resolution.
+	 */
+	if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+		upstream->active_idx = -1;
+		goto schedule_resolve;
 	}
 
+	is_pending = (upstream->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE) != 0;
+
+	if (!is_pending) {
+		g_ptr_array_add(ls->alive, upstream);
+		upstream->active_idx = ls->alive->len - 1;
+
+		/* Invalidate ring hash */
+		ls->ring_dirty = TRUE;
+
+		/* Initialize token bucket state */
+		if (ls->rot_alg == RSPAMD_UPSTREAM_TOKEN_BUCKET) {
+			upstream->max_tokens = ls->limits->token_bucket_max;
+			upstream->available_tokens = upstream->max_tokens;
+			upstream->inflight_tokens = 0;
+		}
+	}
+	else {
+		upstream->active_idx = -1;
+	}
+
+schedule_resolve:
 	if (upstream->ctx && upstream->ctx->configured &&
 		!((upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE) ||
 		  (upstream->flags & RSPAMD_UPSTREAM_FLAG_DNS))) {
+
+		/*
+		 * Snapshot any backoff state already accumulated by lazy_resolve_cb
+		 * before we stop the timer, so we can preserve it for pending
+		 * upstreams that aren't yet resolved.
+		 */
+		double prev_repeat = ev_can_stop(&upstream->ev) ? upstream->ev.repeat : 0.0;
 
 		if (ev_can_stop(&upstream->ev)) {
 			ev_timer_stop(upstream->ctx->event_loop, &upstream->ev);
@@ -443,6 +577,20 @@ rspamd_upstream_set_active(struct upstream_list *ls, struct upstream *upstream)
 			/* Resolve them immediately ! */
 			when = 0.0;
 		}
+		else if (is_pending) {
+			/*
+			 * Keep the backoff already grown by repeated lazy_resolve_cb
+			 * runs; falling back to the initial delay would mask repeated
+			 * DNS failure with optimistic 1s retries.
+			 */
+			if (prev_repeat >= UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY) {
+				when = prev_repeat;
+			}
+			else {
+				when = rspamd_time_jitter(UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY,
+										  UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY * .25);
+			}
+		}
 		else {
 			when = rspamd_time_jitter(upstream->ls->limits->lazy_resolve_time,
 									  upstream->ls->limits->lazy_resolve_time * .1);
@@ -450,7 +598,8 @@ rspamd_upstream_set_active(struct upstream_list *ls, struct upstream *upstream)
 		ev_timer_init(&upstream->ev, rspamd_upstream_lazy_resolve_cb,
 					  when, 0);
 		upstream->ev.data = upstream;
-		msg_debug_upstream("start lazy resolving for %s in %.0f seconds",
+		msg_debug_upstream("start %s resolving for %s in %.0f seconds",
+						   is_pending ? "deferred" : "lazy",
 						   upstream->name, when);
 		ev_timer_start(upstream->ctx->event_loop, &upstream->ev);
 	}
@@ -469,25 +618,57 @@ rspamd_upstream_addr_elt_dtor(gpointer a)
 	}
 }
 
+/* Forward decl: defined a few lines below */
+static void rspamd_upstream_promote_pending(struct upstream *upstream);
+
 static void
 rspamd_upstream_update_addrs(struct upstream *upstream)
 {
 	unsigned int addr_cnt, i, port;
-	gboolean seen_addr, reset_errors = FALSE;
+	gboolean seen_addr, reset_errors = FALSE, was_pending = FALSE;
 	struct upstream_inet_addr_entry *cur, *tmp;
 	GPtrArray *new_addrs;
 	struct upstream_addr_elt *addr_elt, *naddr;
 
 	/*
+	 * Drained members exit early — drain has unlinked them from the
+	 * list; rebuilding addresses now would just leak the address array
+	 * once the member's dtor runs.
+	 */
+	if (upstream->is_draining) {
+		struct upstream_inet_addr_entry *cur_pending, *tmp_pending;
+		LL_FOREACH_SAFE(upstream->new_addrs, cur_pending, tmp_pending)
+		{
+			rspamd_inet_address_free(cur_pending->addr);
+			g_free(cur_pending);
+		}
+		upstream->new_addrs = NULL;
+		return;
+	}
+
+	/*
 	 * We need first of all get the saved port, since DNS gives us no
-	 * idea about what port has been used previously
+	 * idea about what port has been used previously. For PENDING_RESOLVE
+	 * upstreams there is no prior address: use the port stashed at parse
+	 * time on `upstream->deferred_port`.
 	 */
 	RSPAMD_UPSTREAM_LOCK(upstream);
 
-	if (upstream->addrs.addr->len > 0 && upstream->new_addrs) {
+	if (upstream->new_addrs &&
+		(upstream->addrs.addr == NULL || upstream->addrs.addr->len == 0)) {
+		was_pending = (upstream->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE) != 0;
+		port = upstream->deferred_port;
+	}
+	else if (upstream->addrs.addr && upstream->addrs.addr->len > 0 &&
+			 upstream->new_addrs) {
 		addr_elt = g_ptr_array_index(upstream->addrs.addr, 0);
 		port = rspamd_inet_address_get_port(addr_elt->addr);
+	}
+	else {
+		port = 0;
+	}
 
+	if (upstream->new_addrs) {
 		/* Now calculate new addrs count */
 		addr_cnt = 0;
 		LL_FOREACH(upstream->new_addrs, cur)
@@ -512,15 +693,17 @@ rspamd_upstream_update_addrs(struct upstream *upstream)
 			/* Ports are problematic, set to compare in the next block */
 			rspamd_inet_address_set_port(cur->addr, port);
 
-			PTR_ARRAY_FOREACH(upstream->addrs.addr, i, addr_elt)
-			{
-				if (rspamd_inet_address_compare(addr_elt->addr, cur->addr, FALSE) == 0) {
-					naddr = g_malloc0(sizeof(*naddr));
-					naddr->addr = cur->addr;
-					naddr->errors = reset_errors ? 0 : addr_elt->errors;
-					seen_addr = TRUE;
+			if (upstream->addrs.addr) {
+				PTR_ARRAY_FOREACH(upstream->addrs.addr, i, addr_elt)
+				{
+					if (rspamd_inet_address_compare(addr_elt->addr, cur->addr, FALSE) == 0) {
+						naddr = g_malloc0(sizeof(*naddr));
+						naddr->addr = cur->addr;
+						naddr->errors = reset_errors ? 0 : addr_elt->errors;
+						seen_addr = TRUE;
 
-					break;
+						break;
+					}
 				}
 			}
 
@@ -542,7 +725,9 @@ rspamd_upstream_update_addrs(struct upstream *upstream)
 		}
 
 		/* Free old addresses */
-		g_ptr_array_free(upstream->addrs.addr, TRUE);
+		if (upstream->addrs.addr) {
+			g_ptr_array_free(upstream->addrs.addr, TRUE);
+		}
 
 		upstream->addrs.cur = 0;
 		upstream->addrs.addr = new_addrs;
@@ -557,6 +742,59 @@ rspamd_upstream_update_addrs(struct upstream *upstream)
 
 	upstream->new_addrs = NULL;
 	RSPAMD_UPSTREAM_UNLOCK(upstream);
+
+	if (was_pending && upstream->addrs.addr && upstream->addrs.addr->len > 0) {
+		rspamd_upstream_promote_pending(upstream);
+	}
+}
+
+/*
+ * Move a previously PENDING_RESOLVE upstream into the alive list now that
+ * addresses have been resolved. Mirrors the alive-side bookkeeping of
+ * rspamd_upstream_set_active without re-entering the resolution-scheduling
+ * branch (the lazy-resolve timer is already running).
+ */
+static void
+rspamd_upstream_promote_pending(struct upstream *upstream)
+{
+	struct upstream_list *ls = upstream->ls;
+	struct upstream_list_watcher *w;
+
+	if (ls == NULL || upstream->is_draining) {
+		return;
+	}
+
+	RSPAMD_UPSTREAM_LOCK(ls);
+
+	if (!(upstream->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE)) {
+		RSPAMD_UPSTREAM_UNLOCK(ls);
+		return;
+	}
+
+	upstream->flags &= ~RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE;
+
+	g_ptr_array_add(ls->alive, upstream);
+	upstream->active_idx = ls->alive->len - 1;
+	ls->ring_dirty = TRUE;
+
+	if (ls->rot_alg == RSPAMD_UPSTREAM_TOKEN_BUCKET) {
+		upstream->max_tokens = ls->limits->token_bucket_max;
+		upstream->available_tokens = upstream->max_tokens;
+		upstream->inflight_tokens = 0;
+	}
+
+	msg_info_upstream("resolved deferred upstream %s; promoted to alive",
+					  upstream->name);
+
+	DL_FOREACH(ls->watchers, w)
+	{
+		if (w->events_mask & RSPAMD_UPSTREAM_WATCH_ONLINE) {
+			w->func(upstream, RSPAMD_UPSTREAM_WATCH_ONLINE, upstream->errors,
+					w->ud);
+		}
+	}
+
+	RSPAMD_UPSTREAM_UNLOCK(ls);
 }
 
 static void
@@ -566,6 +804,19 @@ rspamd_upstream_dns_cb(struct rdns_reply *reply, void *arg)
 	struct rdns_reply_entry *entry;
 	struct upstream_inet_addr_entry *up_ent;
 
+	/*
+	 * Drained SRV members may still receive their last A/AAAA reply
+	 * after drain. Don't accumulate addresses or call update_addrs —
+	 * the member is on its way out and any address mutation is wasted
+	 * work (and risks a UAF on the addrs array if drain races with the
+	 * callback).
+	 */
+	if (up->is_draining) {
+		up->dns_requests--;
+		REF_RELEASE(up);
+		return;
+	}
+
 	if (reply->code == RDNS_RC_NOERROR) {
 		entry = reply->entries;
 
@@ -599,124 +850,475 @@ rspamd_upstream_dns_cb(struct rdns_reply *reply, void *arg)
 	REF_RELEASE(up);
 }
 
-struct rspamd_upstream_srv_dns_cb {
-	struct upstream *up;
-	unsigned int priority;
-	unsigned int port;
-	unsigned int requests_inflight;
-};
-
-/* Used when we have resolved SRV record and resolved addrs */
-static void
-rspamd_upstream_dns_srv_phase2_cb(struct rdns_reply *reply, void *arg)
+/*
+ * Build a stable "fqdn:port" key for indexing SRV members on the parent.
+ * Allocated with g_malloc; the parent's hash table owns the string and
+ * frees it via the value-destroy callback registered at hash creation.
+ */
+static char *
+rspamd_upstream_srv_member_key(const char *target, uint16_t port)
 {
-	struct rspamd_upstream_srv_dns_cb *cbdata =
-		(struct rspamd_upstream_srv_dns_cb *) arg;
-	struct upstream *up;
-	struct rdns_reply_entry *entry;
-	struct upstream_inet_addr_entry *up_ent;
-
-	up = cbdata->up;
-
-	if (reply->code == RDNS_RC_NOERROR) {
-		entry = reply->entries;
-
-		RSPAMD_UPSTREAM_LOCK(up);
-		while (entry) {
-
-			if (entry->type == RDNS_REQUEST_A) {
-				up_ent = g_malloc0(sizeof(*up_ent));
-				up_ent->addr = rspamd_inet_address_new(AF_INET,
-													   &entry->content.a.addr);
-				up_ent->priority = cbdata->priority;
-				rspamd_inet_address_set_port(up_ent->addr, cbdata->port);
-				LL_PREPEND(up->new_addrs, up_ent);
-			}
-			else if (entry->type == RDNS_REQUEST_AAAA) {
-				up_ent = g_malloc0(sizeof(*up_ent));
-				up_ent->addr = rspamd_inet_address_new(AF_INET6,
-													   &entry->content.aaa.addr);
-				up_ent->priority = cbdata->priority;
-				rspamd_inet_address_set_port(up_ent->addr, cbdata->port);
-				LL_PREPEND(up->new_addrs, up_ent);
-			}
-			entry = entry->next;
-		}
-
-		RSPAMD_UPSTREAM_UNLOCK(up);
-	}
-
-	up->dns_requests--;
-	cbdata->requests_inflight--;
-
-	if (cbdata->requests_inflight == 0) {
-		g_free(cbdata);
-	}
-
-	if (up->dns_requests == 0) {
-		rspamd_upstream_update_addrs(up);
-	}
-
-	REF_RELEASE(up);
+	return g_strdup_printf("%s:%u", target, (unsigned int) port);
 }
 
+/*
+ * Create a brand-new SRV member upstream, register it with the parent,
+ * push it into the upstream list and ctx queue, and kick off A/AAAA
+ * resolution. The member starts in PENDING_RESOLVE state and becomes
+ * selectable only after rspamd_upstream_promote_pending fires from
+ * rspamd_upstream_update_addrs once a non-empty A/AAAA reply arrives.
+ *
+ * Caller holds parent's lock. ls and ctx must be non-NULL (i.e. parent
+ * is still attached to a live list).
+ */
+static struct upstream *
+rspamd_upstream_srv_create_member(struct upstream *parent,
+								  const char *target,
+								  uint16_t port,
+								  uint16_t srv_weight,
+								  uint16_t srv_priority)
+{
+	struct upstream_list *ls = parent->ls;
+	struct upstream_ctx *ctx = parent->ctx;
+	struct upstream *member;
+	rspamd_mempool_t *pool = ctx ? ctx->pool : NULL;
+	unsigned int h;
+	char *key;
+
+	g_assert(ls != NULL);
+	g_assert(ctx != NULL);
+
+	member = g_malloc0(sizeof(*member));
+	member->name = pool ? rspamd_mempool_strdup(pool, target) : g_strdup(target);
+	member->srv_parent = parent;
+	member->srv_priority = srv_priority;
+	member->srv_weight = srv_weight;
+	/*
+	 * RFC 2782 weight 0 means "rarely used but selectable". We clamp to >=1
+	 * so the existing weighted-RR path doesn't treat the member as
+	 * effectively disabled. True weight-0 semantics are a follow-up.
+	 */
+	member->weight = MAX((unsigned int) srv_weight, 1u);
+	member->cur_weight = member->weight;
+	member->deferred_port = port;
+	member->active_idx = -1;
+	/*
+	 * Members inherit the list-level flags applied to the parent at
+	 * creation time but never carry the SRV_RESOLVE marker themselves —
+	 * that flag is the parent placeholder's identifying mark.
+	 */
+	member->flags = (parent->flags & ~RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) |
+					RSPAMD_UPSTREAM_FLAG_SRV_MEMBER |
+					RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE;
+
+	g_ptr_array_add(ls->ups, member);
+	member->ud = parent->ud;
+	member->ls = ls;
+	REF_INIT_RETAIN(member, rspamd_upstream_dtor);
+#ifdef UPSTREAMS_THREAD_SAFE
+	member->lock = rspamd_mutex_new();
+#endif
+	member->ctx = ctx;
+	REF_RETAIN(ctx);
+	g_queue_push_tail(ctx->upstreams, member);
+	member->ctx_pos = g_queue_peek_tail_link(ctx->upstreams);
+
+	h = rspamd_cryptobox_fast_hash(member->name, strlen(member->name), 0);
+	memset(member->uid, 0, sizeof(member->uid));
+	rspamd_encode_base32_buf((const unsigned char *) &h, sizeof(h),
+							 member->uid, sizeof(member->uid) - 1,
+							 RSPAMD_BASE32_DEFAULT);
+
+	key = rspamd_upstream_srv_member_key(target, port);
+	g_hash_table_insert(parent->srv_members, key, member);
+
+	{
+		struct upstream *upstream = member;
+		msg_info_upstream("created SRV member %s for %s "
+						  "(target=%s port=%ud weight=%ud priority=%ud)",
+						  member->uid, parent->name, target,
+						  (unsigned int) port,
+						  (unsigned int) srv_weight,
+						  (unsigned int) srv_priority);
+	}
+
+	/*
+	 * set_active arms the lazy-resolve timer; for PENDING_RESOLVE members
+	 * it leaves them out of `alive`. The first successful A/AAAA reply
+	 * promotes the member via rspamd_upstream_promote_pending.
+	 */
+	rspamd_upstream_set_active(ls, member);
+	/*
+	 * Issue the A/AAAA query immediately rather than waiting for the lazy
+	 * timer; users expect new SRV targets to start serving traffic
+	 * promptly after a re-resolve.
+	 */
+	rspamd_upstream_resolve_addrs(ls, member);
+
+	return member;
+}
+
+/*
+ * Graceful drain: remove a member from selection, unlink it from the
+ * parent's hash, drop its presence in `ls->ups`. The set_inactive call
+ * keeps the upstream pinned in memory until its revive timer fires —
+ * by that point any in-flight selectors will have called fail/ok/release
+ * and the dtor can run safely.
+ *
+ * The is_draining flag tells revive_cb to skip set_active when the
+ * timer fires, so the drained member stays out of selection forever.
+ */
+static void
+rspamd_upstream_srv_drain_member(struct upstream *member)
+{
+	struct upstream *parent = member->srv_parent;
+	struct upstream_list *ls = member->ls;
+	struct upstream *upstream = member; /* for the logging macro */
+
+	if (!(member->flags & RSPAMD_UPSTREAM_FLAG_SRV_MEMBER)) {
+		return;
+	}
+
+	msg_info_upstream("drain SRV member %s (%s)",
+					  member->uid, member->name);
+
+	member->is_draining = TRUE;
+
+	/*
+	 * If the member was mid-probe at drain time, clearing
+	 * half_open_inflight prevents the eventual fail/ok callback from
+	 * the inflight selector from advancing the probe state machine
+	 * (and the is_draining check in rspamd_upstream_ok blocks
+	 * re-activation as a belt-and-braces measure).
+	 */
+	member->half_open_inflight = 0;
+	member->next_probe_at = 0;
+
+	/* Stop any timer that might re-activate the member. */
+	if (member->ctx && member->ctx->event_loop && ev_can_stop(&member->ev)) {
+		ev_timer_stop(member->ctx->event_loop, &member->ev);
+	}
+
+	/* Unlink from the parent's index. */
+	if (parent && parent->srv_members) {
+		GHashTableIter it;
+		gpointer k, v;
+
+		g_hash_table_iter_init(&it, parent->srv_members);
+		while (g_hash_table_iter_next(&it, &k, &v)) {
+			if (v == member) {
+				g_hash_table_iter_remove(&it);
+				break;
+			}
+		}
+	}
+
+	/*
+	 * Pull from the alive list directly, mirroring the relevant subset
+	 * of set_inactive. We deliberately do NOT go through set_inactive
+	 * itself: it pins the upstream with REF_RETAIN+revive timer
+	 * expecting the timer to release later, but for a drained member
+	 * there is no "later" — we want the dtor to run as soon as inflight
+	 * selectors release their refs.
+	 */
+	if (ls != NULL && member->active_idx != -1) {
+		struct upstream_list_watcher *w;
+
+		RSPAMD_UPSTREAM_LOCK(ls);
+		g_ptr_array_remove_index(ls->alive, member->active_idx);
+		member->active_idx = -1;
+		ls->ring_dirty = TRUE;
+
+		if (ls->rot_alg == RSPAMD_UPSTREAM_TOKEN_BUCKET &&
+			member->inflight_tokens > 0) {
+			member->available_tokens += member->inflight_tokens;
+			if (member->available_tokens > member->max_tokens) {
+				member->available_tokens = member->max_tokens;
+			}
+			member->inflight_tokens = 0;
+		}
+
+		/* Reindex */
+		for (unsigned int i = 0; i < ls->alive->len; i++) {
+			struct upstream *cur = g_ptr_array_index(ls->alive, i);
+			cur->active_idx = i;
+		}
+
+		DL_FOREACH(ls->watchers, w)
+		{
+			if (w->events_mask & RSPAMD_UPSTREAM_WATCH_OFFLINE) {
+				w->func(member, RSPAMD_UPSTREAM_WATCH_OFFLINE,
+						member->errors, w->ud);
+			}
+		}
+
+		RSPAMD_UPSTREAM_UNLOCK(ls);
+	}
+
+	/* Remove from ls->ups so traversal/probe paths stop seeing it. */
+	if (ls != NULL) {
+		for (unsigned int i = 0; i < ls->ups->len; i++) {
+			if (g_ptr_array_index(ls->ups, i) == member) {
+				g_ptr_array_remove_index(ls->ups, i);
+				break;
+			}
+		}
+	}
+
+	/* Sever the parent link so the dtor doesn't re-touch parent state. */
+	member->srv_parent = NULL;
+
+	/*
+	 * Production grace window: a caller may have just received this
+	 * member from rspamd_upstream_get_* and not yet called fail/ok.
+	 * Arm a one-shot timer (reusing revive_cb, which checks is_draining
+	 * and bails to REF_RELEASE on fire) to keep the upstream alive long
+	 * enough for inflight selectors to drain naturally. We use
+	 * revive_time as the grace period — same TTL the rest of the system
+	 * already assumes for inactive upstreams.
+	 *
+	 * Without a configured event loop (tests, early startup, ctx mid-
+	 * teardown), no inflight is possible; we skip the timer and let
+	 * REF_RELEASE below run the dtor synchronously. The two conditions
+	 * — `event_loop` and `configured` — are checked together so we
+	 * never REF_RETAIN without guaranteeing the timer that releases
+	 * that ref will actually run.
+	 */
+	if (member->ctx && member->ctx->event_loop && member->ctx->configured &&
+		ls != NULL) {
+		double ntim = rspamd_time_jitter(ls->limits->revive_time,
+										 ls->limits->revive_time *
+											 ls->limits->revive_jitter);
+		REF_RETAIN(member);
+		ev_timer_init(&member->ev, rspamd_upstream_revive_cb, ntim, 0);
+		member->ev.data = member;
+		ev_timer_start(member->ctx->event_loop, &member->ev);
+	}
+
+	/*
+	 * Now that the alive bookkeeping and grace timer are set up using
+	 * the local `ls`, sever the back-pointer so any callback that fires
+	 * later on this drained member sees a NULL ls and bails (revive_cb,
+	 * record_latency, return_tokens already guard on this).
+	 */
+	member->ls = NULL;
+
+	/* Release the original creation ref. */
+	REF_RELEASE(member);
+}
+
+/*
+ * Apply a snapshot of SRV targets to a parent. Public-internal entry
+ * point: takes a plain-data array decoupled from the DNS client struct
+ * layout, so tests can drive expansion without DNS.
+ *
+ * Caller must ensure parent has srv_members allocated (true for any
+ * upstream created via "service=..."). Acquires/releases the parent
+ * lock internally.
+ */
+void rspamd_upstream_srv_apply(struct upstream *parent,
+							   const struct rspamd_upstream_srv_entry *entries,
+							   size_t n)
+{
+	GHashTable *seen;
+	GList *to_drain = NULL, *cur;
+	GHashTableIter iter;
+	gpointer k, v;
+	size_t i;
+	struct upstream *upstream = parent; /* for the logging macro */
+
+	if (parent == NULL || parent->srv_members == NULL) {
+		return;
+	}
+
+	/*
+	 * No parent lock here on purpose. Both `srv_create_member` and
+	 * `srv_drain_member` take the list lock further down — locking the
+	 * parent first would invert the ls -> upstream order used everywhere
+	 * else (set_inactive, return_tokens, …) and deadlock thread-safe
+	 * builds. Mutations to `srv_members` are serialized by the event
+	 * loop (DNS replies don't run concurrently with each other on the
+	 * same parent), and tests are single-threaded.
+	 */
+
+	seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+
+	for (i = 0; i < n; i++) {
+		const struct rspamd_upstream_srv_entry *e = &entries[i];
+		struct upstream *existing;
+		char *key;
+
+		msg_debug_upstream("apply SRV target for %s: %s "
+						   "(weight=%ud priority=%ud port=%ud)",
+						   parent->name, e->target,
+						   (unsigned int) e->weight,
+						   (unsigned int) e->priority,
+						   (unsigned int) e->port);
+
+		key = rspamd_upstream_srv_member_key(e->target, e->port);
+		existing = g_hash_table_lookup(parent->srv_members, key);
+
+		if (existing != NULL) {
+			gboolean topology_changed = FALSE;
+
+			if (existing->srv_weight != e->weight) {
+				existing->srv_weight = e->weight;
+				existing->weight = MAX((unsigned int) e->weight, 1u);
+				if (existing->cur_weight == 0) {
+					existing->cur_weight = existing->weight;
+				}
+				topology_changed = TRUE;
+			}
+			if (existing->srv_priority != e->priority) {
+				existing->srv_priority = e->priority;
+				topology_changed = TRUE;
+			}
+			if (topology_changed && parent->ls != NULL) {
+				parent->ls->ring_dirty = TRUE;
+			}
+			/* Refresh A/AAAA so address changes propagate. */
+			if (parent->ls != NULL) {
+				rspamd_upstream_resolve_addrs(parent->ls, existing);
+			}
+		}
+		else {
+			rspamd_upstream_srv_create_member(parent, e->target, e->port,
+											  e->weight, e->priority);
+		}
+
+		g_hash_table_insert(seen, key, NULL);
+	}
+
+	/* Anything in srv_members not in `seen` is gone — drain it. */
+	g_hash_table_iter_init(&iter, parent->srv_members);
+	while (g_hash_table_iter_next(&iter, &k, &v)) {
+		if (!g_hash_table_contains(seen, k)) {
+			to_drain = g_list_prepend(to_drain, v);
+		}
+	}
+
+	for (cur = to_drain; cur != NULL; cur = cur->next) {
+		rspamd_upstream_srv_drain_member((struct upstream *) cur->data);
+	}
+	g_list_free(to_drain);
+	g_hash_table_unref(seen);
+}
+
+struct upstream *
+rspamd_upstream_srv_test_get_parent(struct upstream_list *ups)
+{
+	unsigned int i;
+
+	if (ups == NULL) {
+		return NULL;
+	}
+
+	for (i = 0; i < ups->ups->len; i++) {
+		struct upstream *up = g_ptr_array_index(ups->ups, i);
+		if (up->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+			return up;
+		}
+	}
+
+	return NULL;
+}
+
+void rspamd_upstream_ctx_set_event_loop_for_test(struct upstream_ctx *ctx,
+												 struct ev_loop *event_loop)
+{
+	g_assert(ctx != NULL);
+	ctx->event_loop = event_loop;
+}
+
+void rspamd_upstream_member_force_alive_for_test(struct upstream *member,
+												 const char *ip_str)
+{
+	rspamd_inet_addr_t *addr = NULL;
+
+	g_assert(member != NULL);
+	g_assert(member->flags & RSPAMD_UPSTREAM_FLAG_SRV_MEMBER);
+
+	if (!rspamd_parse_inet_address(&addr, ip_str, strlen(ip_str),
+								   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+		g_assert_not_reached();
+	}
+
+	rspamd_inet_address_set_port(addr, member->deferred_port);
+	rspamd_upstream_add_addr(member, addr);
+
+	/*
+	 * Drop the PENDING_RESOLVE flag and place the member into the alive
+	 * list directly. set_active would re-arm the lazy-resolve timer; in
+	 * tests the runtime has no event loop, so we do the bookkeeping by
+	 * hand to keep the test deterministic.
+	 */
+	RSPAMD_UPSTREAM_LOCK(member->ls);
+	member->flags &= ~RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE;
+	g_ptr_array_add(member->ls->alive, member);
+	member->active_idx = member->ls->alive->len - 1;
+	member->ls->ring_dirty = TRUE;
+	RSPAMD_UPSTREAM_UNLOCK(member->ls);
+}
+
+/*
+ * SRV reply handler: convert the rdns reply into the plain-data entry
+ * vector and hand it to rspamd_upstream_srv_apply. Each SRV target lives
+ * as its own struct upstream — own error budget, latency EWMA,
+ * addresses, and full first-class participation in every selection
+ * algorithm.
+ *
+ * On reply errors (NXDOMAIN, timeout) we deliberately do nothing: the
+ * existing member set remains in place and the next re-resolve gets to
+ * try again. Otherwise one bad query would tear down the whole cluster.
+ */
 static void
 rspamd_upstream_dns_srv_cb(struct rdns_reply *reply, void *arg)
 {
-	struct upstream *upstream = (struct upstream *) arg;
+	struct upstream *parent = (struct upstream *) arg;
+	struct upstream *upstream = parent; /* for the logging macro */
 	struct rdns_reply_entry *entry;
-	struct rspamd_upstream_srv_dns_cb *ncbdata;
 
-	if (reply->code == RDNS_RC_NOERROR) {
-		entry = reply->entries;
-
-		RSPAMD_UPSTREAM_LOCK(upstream);
-		while (entry) {
-			/* XXX: we ignore weight as it contradicts with upstreams logic */
-			if (entry->type == RDNS_REQUEST_SRV) {
-				msg_debug_upstream("got srv reply for %s: %s "
-								   "(weight=%d, priority=%d, port=%d)",
-								   upstream->name, entry->content.srv.target,
-								   entry->content.srv.weight, entry->content.srv.priority,
-								   entry->content.srv.port);
-				ncbdata = g_malloc0(sizeof(*ncbdata));
-				ncbdata->priority = entry->content.srv.weight;
-				ncbdata->port = entry->content.srv.port;
-				/* XXX: for all entries? */
-				upstream->ttl = entry->ttl;
-
-				if (rdns_make_request_full(upstream->ctx->res,
-										   rspamd_upstream_dns_srv_phase2_cb, ncbdata,
-										   upstream->ls->limits->dns_timeout,
-										   upstream->ls->limits->dns_retransmits,
-										   1, entry->content.srv.target, RDNS_REQUEST_A) != NULL) {
-					upstream->dns_requests++;
-					REF_RETAIN(upstream);
-					ncbdata->requests_inflight++;
-				}
-
-				if (rdns_make_request_full(upstream->ctx->res,
-										   rspamd_upstream_dns_srv_phase2_cb, ncbdata,
-										   upstream->ls->limits->dns_timeout,
-										   upstream->ls->limits->dns_retransmits,
-										   1, entry->content.srv.target, RDNS_REQUEST_AAAA) != NULL) {
-					upstream->dns_requests++;
-					REF_RETAIN(upstream);
-					ncbdata->requests_inflight++;
-				}
-
-				if (ncbdata->requests_inflight == 0) {
-					g_free(ncbdata);
-				}
-			}
-			entry = entry->next;
-		}
-
-		RSPAMD_UPSTREAM_UNLOCK(upstream);
+	if (parent->ls == NULL || parent->is_draining) {
+		/* Parent destroyed or drained mid-flight; just release the ref. */
+		parent->dns_requests--;
+		REF_RELEASE(parent);
+		return;
 	}
 
-	upstream->dns_requests--;
-	REF_RELEASE(upstream);
+	if (reply->code == RDNS_RC_NOERROR) {
+		GArray *flat = g_array_new(FALSE, FALSE,
+								   sizeof(struct rspamd_upstream_srv_entry));
+
+		for (entry = reply->entries; entry != NULL; entry = entry->next) {
+			if (entry->type != RDNS_REQUEST_SRV) {
+				continue;
+			}
+
+			parent->ttl = entry->ttl;
+
+			struct rspamd_upstream_srv_entry e = {
+				.target = entry->content.srv.target,
+				.port = entry->content.srv.port,
+				.weight = entry->content.srv.weight,
+				.priority = entry->content.srv.priority,
+			};
+			g_array_append_val(flat, e);
+		}
+
+		rspamd_upstream_srv_apply(parent,
+								  (const struct rspamd_upstream_srv_entry *) flat->data,
+								  flat->len);
+		g_array_free(flat, TRUE);
+	}
+	else {
+		msg_info_upstream("SRV resolution for %s returned %s; keeping "
+						  "existing %ud member(s)",
+						  parent->name, rdns_strerror(reply->code),
+						  parent->srv_members ? (unsigned int) g_hash_table_size(parent->srv_members) : 0u);
+	}
+
+	parent->dns_requests--;
+	REF_RELEASE(parent);
 }
 
 static void
@@ -727,9 +1329,25 @@ rspamd_upstream_revive_cb(struct ev_loop *loop, ev_timer *w, int revents)
 	RSPAMD_UPSTREAM_LOCK(upstream);
 	ev_timer_stop(loop, w);
 
+	/*
+	 * Drained SRV members must not re-enter the alive list. The drain
+	 * helper unlinks them from `ls->ups` and `srv_members` and flips this
+	 * flag; the only thing left is to release the timer ref so the dtor
+	 * runs once inflight selectors release theirs.
+	 */
+	if (upstream->is_draining) {
+		msg_debug_upstream("skip revive for drained upstream %s",
+						   upstream->name);
+		RSPAMD_UPSTREAM_UNLOCK(upstream);
+		REF_RELEASE(upstream);
+		return;
+	}
+
 	msg_debug_upstream("revive upstream %s", upstream->name);
 
 	if (upstream->ls) {
+		/* Mark the time so selection paths can apply slow-start ramping. */
+		upstream->revived_at = ev_now(loop);
 		rspamd_upstream_set_active(upstream->ls, upstream);
 	}
 
@@ -742,6 +1360,15 @@ static void
 rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 							  struct upstream *upstream)
 {
+	/*
+	 * Drained SRV members and SRV parents must never resolve. Parents
+	 * resolve SRV through the dedicated path below; the early bail here
+	 * matters when set_inactive is invoked on a draining member: it would
+	 * otherwise re-issue A/AAAA and pollute the just-released state.
+	 */
+	if (upstream->is_draining) {
+		return;
+	}
 
 	if ((upstream->flags & RSPAMD_UPSTREAM_FLAG_DNS)) {
 		/* For DNS upstreams: resolve synchronously using getaddrinfo if name */
@@ -825,11 +1452,12 @@ rspamd_upstream_resolve_addrs(const struct upstream_list *ls,
 
 		double now = ev_now(upstream->ctx->event_loop);
 
-		if (now - upstream->last_resolve < upstream->ctx->limits.resolve_min_interval) {
-			msg_info_upstream("do not resolve upstream %s as it was checked %.0f "
-							  "seconds ago (%.0f is minimum)",
-							  upstream->name, now - upstream->last_resolve,
-							  upstream->ctx->limits.resolve_min_interval);
+		double remaining = upstream->ctx->limits.resolve_min_interval -
+						   (now - upstream->last_resolve);
+		if (remaining > 0) {
+			msg_info_upstream("do not resolve upstream %s: cooldown remains "
+							  "%.0f seconds",
+							  upstream->name, ceil(remaining));
 
 			return;
 		}
@@ -908,7 +1536,22 @@ rspamd_upstream_lazy_resolve_cb(struct ev_loop *loop, ev_timer *w, int revents)
 	if (up->ls) {
 		rspamd_upstream_resolve_addrs(up->ls, up);
 
-		if (up->ttl == 0 || up->ttl > up->ls->limits->lazy_resolve_time) {
+		if (up->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE) {
+			/*
+			 * Still no addresses — back off exponentially but cap so we keep
+			 * trying every minute or so. Once update_addrs runs successfully
+			 * the flag is cleared and the next branch takes over.
+			 */
+			double next = w->repeat * 2.0;
+			if (next < UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY) {
+				next = UPSTREAM_PENDING_RESOLVE_INITIAL_DELAY;
+			}
+			if (next > UPSTREAM_PENDING_RESOLVE_MAX_DELAY) {
+				next = UPSTREAM_PENDING_RESOLVE_MAX_DELAY;
+			}
+			w->repeat = rspamd_time_jitter(next, next * .25);
+		}
+		else if (up->ttl == 0 || up->ttl > up->ls->limits->lazy_resolve_time) {
 			w->repeat = rspamd_time_jitter(up->ls->limits->lazy_resolve_time,
 										   up->ls->limits->lazy_resolve_time * .1);
 		}
@@ -938,33 +1581,19 @@ rspamd_upstream_set_inactive(struct upstream_list *ls, struct upstream *upstream
 	/* Invalidate ring hash */
 	ls->ring_dirty = TRUE;
 
-	/* Remove from token bucket heap if present */
-	if (ls->token_bucket_initialized && upstream->heap_idx != UINT_MAX) {
-		struct upstream_token_heap_entry *entry;
-
+	/*
+	 * Restore inflight tokens to available pool when transitioning to
+	 * inactive — those requests are abandoned, the tokens should be
+	 * available when the upstream comes back.
+	 */
+	if (ls->rot_alg == RSPAMD_UPSTREAM_TOKEN_BUCKET &&
+		upstream->inflight_tokens > 0) {
 		RSPAMD_UPSTREAM_LOCK(upstream);
-
-		if (upstream->heap_idx < rspamd_heap_size(upstream_token_heap, &ls->token_heap)) {
-			entry = rspamd_heap_index(upstream_token_heap, &ls->token_heap, upstream->heap_idx);
-			if (entry && entry->up == upstream) {
-				rspamd_heap_remove(upstream_token_heap, &ls->token_heap, entry);
-			}
+		upstream->available_tokens += upstream->inflight_tokens;
+		if (upstream->available_tokens > upstream->max_tokens) {
+			upstream->available_tokens = upstream->max_tokens;
 		}
-		upstream->heap_idx = UINT_MAX;
-
-		/*
-		 * Return inflight tokens to available pool - these represent
-		 * requests that were in-flight when upstream failed. The tokens
-		 * should be restored so they're available when upstream comes back.
-		 */
-		if (upstream->inflight_tokens > 0) {
-			upstream->available_tokens += upstream->inflight_tokens;
-			if (upstream->available_tokens > upstream->max_tokens) {
-				upstream->available_tokens = upstream->max_tokens;
-			}
-			upstream->inflight_tokens = 0;
-		}
-
+		upstream->inflight_tokens = 0;
 		RSPAMD_UPSTREAM_UNLOCK(upstream);
 	}
 
@@ -1033,8 +1662,13 @@ void rspamd_upstream_fail(struct upstream *upstream,
 					   upstream->name,
 					   reason);
 
+	/* Pair with the increment in rspamd_upstream_get_common. */
+	if (upstream->inflight > 0) {
+		upstream->inflight--;
+	}
+
 	if (upstream->ctx && upstream->active_idx != -1 && upstream->ls) {
-		sec_cur = rspamd_get_ticks(FALSE);
+		sec_cur = rspamd_upstream_now_fresh(upstream);
 
 		RSPAMD_UPSTREAM_LOCK(upstream);
 		if (upstream->errors == 0) {
@@ -1156,14 +1790,27 @@ void rspamd_upstream_ok(struct upstream *upstream)
 	struct upstream_list_watcher *w;
 
 	RSPAMD_UPSTREAM_LOCK(upstream);
-	/* Success handling */
-	if (upstream->half_open_inflight > 0) {
+	/* Pair with the increment in rspamd_upstream_get_common. */
+	if (upstream->inflight > 0) {
+		upstream->inflight--;
+	}
+	/*
+	 * Success handling. Drained SRV members must not slip back into the
+	 * alive list through the half-open probe path: a member could have
+	 * been mid-probe at drain time, with an inflight selector still
+	 * holding its pointer; that selector's eventual ok() must not
+	 * undo the drain.
+	 */
+	if (upstream->half_open_inflight > 0 && !upstream->is_draining) {
 		/* Successful probe: mark alive and reset backoff */
 		upstream->half_open_inflight = 0;
 		upstream->probe_backoff = upstream->ls ? upstream->ls->limits->revive_time : default_revive_time;
 		upstream->next_probe_at = 0;
 		if (upstream->ls && upstream->active_idx == -1) {
-			/* Activate this upstream */
+			/* Activate this upstream; mark for slow-start ramping. */
+			upstream->revived_at = upstream->ctx && upstream->ctx->event_loop
+									   ? ev_now(upstream->ctx->event_loop)
+									   : rspamd_get_ticks(FALSE);
 			rspamd_upstream_set_active(upstream->ls, upstream);
 		}
 	}
@@ -1187,6 +1834,22 @@ void rspamd_upstream_ok(struct upstream *upstream)
 	}
 
 	RSPAMD_UPSTREAM_UNLOCK(upstream);
+}
+
+void rspamd_upstream_release(struct upstream *up)
+{
+	if (up == NULL) {
+		return;
+	}
+
+	RSPAMD_UPSTREAM_LOCK(up);
+	/* Pair with the increment in rspamd_upstream_get_common /
+	 * rspamd_upstream_get_token_bucket without disturbing error or
+	 * latency state. */
+	if (up->inflight > 0) {
+		up->inflight--;
+	}
+	RSPAMD_UPSTREAM_UNLOCK(up);
 }
 
 void rspamd_upstream_set_weight(struct upstream *up, unsigned int weight)
@@ -1227,7 +1890,41 @@ rspamd_upstreams_create(struct upstream_ctx *ctx)
 
 gsize rspamd_upstreams_count(struct upstream_list *ups)
 {
-	return ups != NULL ? ups->ups->len : 0;
+	gsize n = 0;
+	unsigned int i;
+	struct upstream *up;
+
+	if (ups == NULL) {
+		return 0;
+	}
+
+	/*
+	 * SRV parents are placeholders, not selectable upstreams. Count only
+	 * first-class entries so callers see the real cluster size.
+	 */
+	for (i = 0; i < ups->ups->len; i++) {
+		up = g_ptr_array_index(ups->ups, i);
+		if (!(up->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE)) {
+			n++;
+		}
+	}
+
+	return n;
+}
+
+gsize rspamd_upstreams_count_total(struct upstream_list *ups)
+{
+	if (ups == NULL) {
+		return 0;
+	}
+
+	/*
+	 * Includes SRV parent placeholders. Used by "is anything configured"
+	 * gates that run at config-load time, before async SRV resolution has
+	 * populated members; a parent-only list must read non-empty here or
+	 * the rule would be rejected on every fresh start.
+	 */
+	return ups->ups->len;
 }
 
 gsize rspamd_upstreams_alive(struct upstream_list *ups)
@@ -1253,6 +1950,20 @@ rspamd_upstream_dtor(struct upstream *up)
 		g_ptr_array_free(up->addrs.addr, TRUE);
 	}
 
+	/*
+	 * SRV parents own a hash table of "fqdn:port" → member upstream.
+	 * The hash's value-destroy is NULL by design: members are released
+	 * independently through `ls->ups` iteration in
+	 * `rspamd_upstreams_destroy` (or via the grace-timer ref drop after
+	 * a drain). Only the keys are freed by the hash unref. Calling
+	 * unref on a hash that still holds live entries is safe — only
+	 * the keys leak, not the upstream pointers.
+	 */
+	if (up->srv_members != NULL) {
+		g_hash_table_unref(up->srv_members);
+		up->srv_members = NULL;
+	}
+
 #ifdef UPSTREAMS_THREAD_SAFE
 	rspamd_mutex_free(up->lock);
 #endif
@@ -1273,8 +1984,8 @@ rspamd_upstream_dtor(struct upstream *up)
 rspamd_inet_addr_t *
 rspamd_upstream_addr_next(struct upstream *up)
 {
-	unsigned int idx = up->addrs.cur, next_idx = up->addrs.cur, cur_af,
-				 min_errors, min_errors_idx;
+	unsigned int idx, next_idx, cur_af,
+		min_errors, min_errors_idx;
 	struct upstream_addr_elt *e1, *e2;
 
 	/*
@@ -1285,6 +1996,14 @@ rspamd_upstream_addr_next(struct upstream *up)
 	 * 4) If we cannot find such element, then we return the next element (switching AF)
 	 */
 
+	if (up == NULL || up->addrs.addr == NULL ||
+		up->addrs.addr->len == 0) {
+		/* Pending DNS resolution or never had any addresses */
+		return NULL;
+	}
+
+	idx = up->addrs.cur;
+	next_idx = up->addrs.cur;
 	e1 = g_ptr_array_index(up->addrs.addr, up->addrs.cur);
 	cur_af = rspamd_inet_address_get_af(e1->addr);
 	min_errors = e1->errors;
@@ -1334,6 +2053,11 @@ rspamd_upstream_addr_cur(const struct upstream *up)
 {
 	struct upstream_addr_elt *elt;
 
+	if (up == NULL || up->addrs.addr == NULL ||
+		up->addrs.addr->len == 0) {
+		return NULL;
+	}
+
 	elt = g_ptr_array_index(up->addrs.addr, up->addrs.cur);
 
 	return elt->addr;
@@ -1349,8 +2073,70 @@ int rspamd_upstream_port(struct upstream *up)
 {
 	struct upstream_addr_elt *elt;
 
+	if (up == NULL || up->addrs.addr == NULL ||
+		up->addrs.addr->len == 0) {
+		/* Pending or never resolved: fall back to the parsed port if known */
+		return up != NULL ? (int) up->deferred_port : -1;
+	}
+
 	elt = g_ptr_array_index(up->addrs.addr, up->addrs.cur);
 	return rspamd_inet_address_get_port(elt->addr);
+}
+
+/*
+ * Fallback parser used when DNS resolution fails for a hostname-style upstream.
+ * Extracts host and port from "host[:port[:priority]]" so the upstream can be
+ * created in PENDING_RESOLVE state and resolved later.
+ *
+ * Returns TRUE on a syntactically valid hostname; FALSE otherwise (in which
+ * case the upstream cannot be deferred and creation must fail).
+ */
+static gboolean
+rspamd_upstream_parse_pending_host(const char *str, char **out_host,
+								   uint16_t *out_port, uint16_t def_port,
+								   rspamd_mempool_t *pool)
+{
+	const char *colon, *host_end;
+	size_t hlen;
+	uint16_t port = def_port;
+
+	if (str == NULL || str[0] == '\0' || str[0] == '[' || str[0] == '/' ||
+		str[0] == '.' || str[0] == '*' || str[0] == ':') {
+		return FALSE;
+	}
+
+	colon = strchr(str, ':');
+
+	if (colon != NULL) {
+		host_end = colon;
+		if (colon[1] != '\0') {
+			char *endptr = NULL;
+			unsigned long pn = strtoul(colon + 1, &endptr, 10);
+			if (pn == 0 || pn > UINT16_MAX) {
+				return FALSE;
+			}
+			port = (uint16_t) pn;
+		}
+	}
+	else {
+		host_end = str + strlen(str);
+	}
+
+	hlen = host_end - str;
+	if (hlen == 0 || hlen > 253) {
+		return FALSE;
+	}
+
+	if (pool) {
+		*out_host = rspamd_mempool_alloc(pool, hlen + 1);
+	}
+	else {
+		*out_host = g_malloc(hlen + 1);
+	}
+	rspamd_strlcpy(*out_host, str, hlen + 1);
+	*out_port = port;
+
+	return TRUE;
 }
 
 gboolean
@@ -1404,6 +2190,15 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 								(int) (plus_pos - service_pos), service_pos,
 								(int) (semicolon_pos - (plus_pos + 1)), plus_pos + 1);
 				upstream->flags |= RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE;
+				/*
+				 * Pre-allocate the member index. The hash owns the keys
+				 * (g_free destructor) and not the values; member upstreams
+				 * are released through their own ref counts during drain
+				 * or list teardown.
+				 */
+				upstream->srv_members = g_hash_table_new_full(g_str_hash,
+															  g_str_equal,
+															  g_free, NULL);
 				ret = RSPAMD_PARSE_ADDR_RESOLVED;
 
 				if (ups->ctx) {
@@ -1419,6 +2214,48 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 												  &upstream->name, def_port,
 												  FALSE,
 												  ups->ctx ? ups->ctx->pool : NULL);
+
+			if (ret == RSPAMD_PARSE_ADDR_FAIL) {
+				char *pending_host = NULL;
+				uint16_t pending_port = 0;
+
+				/*
+				 * Never defer DNS *resolver* nameservers: their addresses are
+				 * consumed once, synchronously, by rspamd_dns_server_init() ->
+				 * rdns_resolver_add_server(). A deferred nameserver would be a
+				 * zero-address upstream that rdns never learns about even after
+				 * async promotion, and it crashes rspamd_dns_server_init() with
+				 * a NULL address. Fall through to the FAIL path instead so the
+				 * resolver keeps its pre-4.1 behaviour (skip the bad server).
+				 */
+				if (!(ups->flags & RSPAMD_UPSTREAM_FLAG_DNS) &&
+					rspamd_upstream_parse_pending_host(str, &pending_host,
+													   &pending_port, def_port,
+													   ups->ctx ? ups->ctx->pool : NULL)) {
+					/*
+					 * DNS failed but the input looks like a hostname.
+					 * Create the upstream in PENDING_RESOLVE state so the
+					 * lazy resolver can populate addresses later. The upstream
+					 * stays out of the alive list until resolution succeeds.
+					 */
+					upstream->name = pending_host;
+					upstream->deferred_port = pending_port;
+					upstream->flags |= RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE;
+					addrs = g_ptr_array_sized_new(0);
+					if (ups->ctx) {
+						rspamd_mempool_add_destructor(ups->ctx->pool,
+													  (rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+													  addrs);
+					}
+					ret = RSPAMD_PARSE_ADDR_RESOLVED;
+					rspamd_default_log_function(G_LOG_LEVEL_WARNING,
+												"upstream", NULL, G_STRFUNC,
+												"address resolution for %s "
+												"failed at config time; "
+												"deferring (will retry asynchronously)",
+												pending_host);
+				}
+			}
 		}
 		break;
 	case RSPAMD_UPSTREAM_PARSE_NAMESERVER:
@@ -1561,8 +2398,10 @@ rspamd_upstreams_add_upstream(struct upstream_list *ups, const char *str,
 							 upstream->uid, sizeof(upstream->uid) - 1, RSPAMD_BASE32_DEFAULT);
 
 	msg_debug_upstream("added upstream %s (%s)", upstream->name,
-					   upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE ? "numeric ip" : "DNS name");
-	g_ptr_array_sort(upstream->addrs.addr, rspamd_upstream_addr_sort_func);
+					   upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE ? "numeric ip" : (upstream->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE ? "DNS name (deferred)" : "DNS name"));
+	if (upstream->addrs.addr) {
+		g_ptr_array_sort(upstream->addrs.addr, rspamd_upstream_addr_sort_func);
+	}
 	rspamd_upstream_set_active(ups, upstream);
 
 	return TRUE;
@@ -1700,12 +2539,6 @@ void rspamd_upstreams_destroy(struct upstream_list *ups)
 		ups->ring = NULL;
 		ups->ring_len = 0;
 
-		/* Clean up token bucket heap */
-		if (ups->token_bucket_initialized) {
-			rspamd_heap_destroy(upstream_token_heap, &ups->token_heap);
-			ups->token_bucket_initialized = FALSE;
-		}
-
 		g_ptr_array_free(ups->alive, TRUE);
 
 		for (i = 0; i < ups->ups->len; i++) {
@@ -1766,18 +2599,162 @@ static struct upstream *
 rspamd_upstream_get_random(struct upstream_list *ups,
 						   struct upstream *except)
 {
-	for (;;) {
-		unsigned int idx = ottery_rand_range(ups->alive->len - 1);
-		struct upstream *up;
+	unsigned int n = ups->alive->len;
+	struct upstream *up;
 
+	if (n == 0) {
+		return NULL;
+	}
+	if (n == 1) {
+		up = g_ptr_array_index(ups->alive, 0);
+		return (except != NULL && up == except) ? NULL : up;
+	}
+
+	/* n >= 2: at most one excluded, retry-on-collision is bounded */
+	for (;;) {
+		unsigned int idx = ottery_rand_range(n - 1);
 		up = g_ptr_array_index(ups->alive, idx);
 
-		if (except && up == except) {
+		if (except != NULL && up == except) {
 			continue;
 		}
 
 		return up;
 	}
+}
+
+/*
+ * Slow start factor in [0, 1]: 1.0 in steady state, ramping linearly from
+ * 0 toward 1 over `slow_start_ms` after a revive. Returns 1.0 when slow
+ * start is disabled or the upstream has never been revived. Mutates
+ * revived_at to clear the cache once the window expires.
+ */
+static inline double
+rspamd_upstream_slow_start_factor(struct upstream *up, double now)
+{
+	const struct upstream_limits *limits;
+	double elapsed_ms;
+	double factor;
+
+	if (up->ls == NULL || up->revived_at <= 0) {
+		return 1.0;
+	}
+	limits = up->ls->limits;
+	if (limits->slow_start_ms == 0) {
+		return 1.0;
+	}
+
+	elapsed_ms = (now - up->revived_at) * 1000.0;
+	if (elapsed_ms <= 0) {
+		return 0.0;
+	}
+	if (elapsed_ms >= (double) limits->slow_start_ms) {
+		up->revived_at = 0; /* clear: no further work for this upstream */
+		return 1.0;
+	}
+
+	factor = elapsed_ms / (double) limits->slow_start_ms;
+	if (factor < 0.0) factor = 0.0;
+	return factor;
+}
+
+/*
+ * Load score used by P2C: combines passive in-flight count with a small
+ * penalty for recent errors and (when available) latency EWMA. Lower is
+ * better.
+ *
+ * Phase 2 score, when latency samples exist:
+ *   score = latency * (inflight + 1) + errors_penalty
+ *
+ * This is a lightweight approximation of PeakEWMA used by Linkerd/Finagle:
+ * a slow backend with low load still loses to a fast one with comparable
+ * load; a fast backend with high load can still lose to an idle slow one
+ * if the latency gap is small enough.
+ *
+ * Phase 1 fallback (no latency yet):
+ *   score = inflight + errors * 2
+ *
+ * During slow start the score is scaled *up* by the inverse factor so a
+ * barely-warmed-up upstream looks loaded relative to its peers and
+ * receives proportionally less traffic.
+ */
+static inline double
+rspamd_upstream_load_score(struct upstream *up, double now)
+{
+	double base;
+	double factor;
+
+	if (up->latency_n > 0 && up->latency_ewma > 0) {
+		base = up->latency_ewma * (double) (up->inflight + 1) +
+			   (double) up->errors * 5.0 * up->latency_ewma;
+	}
+	else {
+		base = (double) up->inflight + (double) up->errors * 2.0;
+	}
+
+	factor = rspamd_upstream_slow_start_factor(up, now);
+	if (factor < 1.0) {
+		/* As factor -> 0, score -> infinity (heavily deprioritised). */
+		if (factor < 0.01) {
+			factor = 0.01;
+		}
+		return base / factor + (1.0 - factor) * 100.0;
+	}
+	return base;
+}
+
+/*
+ * Power of Two Choices: pick two distinct alive upstreams uniformly at
+ * random and return the one with the lower load score. Provably within a
+ * constant factor of optimal max-load and the modern default for
+ * load-aware random selection.
+ */
+static struct upstream *
+rspamd_upstream_get_p2c(struct upstream_list *ups, struct upstream *except)
+{
+	unsigned int n = ups->alive->len;
+	struct upstream *a, *b;
+	double now;
+
+	if (n == 0) {
+		return NULL;
+	}
+	if (n == 1) {
+		a = g_ptr_array_index(ups->alive, 0);
+		return (except != NULL && a == except) ? NULL : a;
+	}
+	if (n == 2 && except != NULL) {
+		/* If one of the two is excluded, the choice is forced. */
+		a = g_ptr_array_index(ups->alive, 0);
+		b = g_ptr_array_index(ups->alive, 1);
+		if (a == except) return b;
+		if (b == except) return a;
+		/* Neither excluded: fall through to standard P2C. */
+	}
+
+	/* Sample two distinct indices. */
+	unsigned int i = ottery_rand_range(n - 1);
+	unsigned int j;
+	do {
+		j = ottery_rand_range(n - 1);
+	} while (j == i);
+
+	a = g_ptr_array_index(ups->alive, i);
+	b = g_ptr_array_index(ups->alive, j);
+
+	if (except != NULL) {
+		if (a == except) return b;
+		if (b == except) return a;
+	}
+
+	if (ups->ctx && ups->ctx->event_loop) {
+		now = ev_now(ups->ctx->event_loop);
+	}
+	else {
+		now = rspamd_get_ticks(FALSE);
+	}
+
+	return rspamd_upstream_load_score(a, now) <= rspamd_upstream_load_score(b, now) ? a : b;
 }
 
 static struct upstream *
@@ -1788,28 +2765,38 @@ rspamd_upstream_get_round_robin(struct upstream_list *ups,
 	unsigned int max_weight = 0, min_checked = G_MAXUINT;
 	struct upstream *up = NULL, *selected = NULL, *min_checked_sel = NULL;
 	unsigned int i;
+	double now;
 
 	/* Select upstream with the maximum cur_weight */
 	RSPAMD_UPSTREAM_LOCK(ups);
 
+	if (ups->ctx && ups->ctx->event_loop) {
+		now = ev_now(ups->ctx->event_loop);
+	}
+	else {
+		now = rspamd_get_ticks(FALSE);
+	}
+
 	for (i = 0; i < ups->alive->len; i++) {
+		unsigned int eff;
+		double factor;
+
 		up = g_ptr_array_index(ups->alive, i);
 
 		if (except != NULL && up == except) {
 			continue;
 		}
 
-		if (use_cur) {
-			if (up->cur_weight > max_weight) {
-				selected = up;
-				max_weight = up->cur_weight;
-			}
+		factor = rspamd_upstream_slow_start_factor(up, now);
+		eff = use_cur ? up->cur_weight : up->weight;
+		if (factor < 1.0) {
+			/* Scale weight down during the slow-start ramp. */
+			eff = (unsigned int) ((double) eff * factor);
 		}
-		else {
-			if (up->weight > max_weight) {
-				selected = up;
-				max_weight = up->weight;
-			}
+
+		if (eff > max_weight) {
+			selected = up;
+			max_weight = eff;
 		}
 
 		/*
@@ -2069,6 +3056,21 @@ rspamd_upstream_get_common(struct upstream_list *ups,
 			if (cur->active_idx >= 0 || (except && cur == except)) {
 				continue;
 			}
+			/*
+			 * SRV parents never enter selection; they only own member
+			 * upstreams. Skip them so probe mode considers real backends.
+			 */
+			if (cur->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+				continue;
+			}
+			/*
+			 * Pending-resolve upstreams have no addresses yet — they can't
+			 * be probed. The lazy resolver will move them into `alive` once
+			 * DNS comes back.
+			 */
+			if (cur->flags & RSPAMD_UPSTREAM_FLAG_PENDING_RESOLVE) {
+				continue;
+			}
 
 			if (cur->next_probe_at == 0) {
 				/* Initialize probe schedule based on revive_time */
@@ -2099,7 +3101,8 @@ rspamd_upstream_get_common(struct upstream_list *ups,
 	RSPAMD_UPSTREAM_UNLOCK(ups);
 
 	if (ups->alive->len == 1 && default_type != RSPAMD_UPSTREAM_SEQUENTIAL) {
-		/* Fast path */
+		/* Fast path: single alive upstream is returned even when it equals
+		 * `except` (documented last-resort behaviour to avoid NULL return). */
 		up = g_ptr_array_index(ups->alive, 0);
 		goto end;
 	}
@@ -2119,7 +3122,14 @@ rspamd_upstream_get_common(struct upstream_list *ups,
 	switch (type) {
 	default:
 	case RSPAMD_UPSTREAM_RANDOM:
-		up = rspamd_upstream_get_random(ups, except);
+		/*
+		 * Silent upgrade: P2C strictly dominates uniform random. Existing
+		 * RANDOM callers get load-aware selection at no cost.
+		 */
+		up = rspamd_upstream_get_p2c(ups, except);
+		break;
+	case RSPAMD_UPSTREAM_P2C:
+		up = rspamd_upstream_get_p2c(ups, except);
 		break;
 	case RSPAMD_UPSTREAM_HASHED:
 		up = rspamd_upstream_get_hashed(ups, except, key, keylen);
@@ -2133,10 +3143,10 @@ rspamd_upstream_get_common(struct upstream_list *ups,
 	case RSPAMD_UPSTREAM_TOKEN_BUCKET:
 		/*
 		 * Token bucket requires message size, which isn't available here.
-		 * Fall back to round robin. Use rspamd_upstream_get_token_bucket()
-		 * for proper token bucket selection.
+		 * Fall back to P2C. Use rspamd_upstream_get_token_bucket() for
+		 * proper token bucket selection.
 		 */
-		up = rspamd_upstream_get_round_robin(ups, except, TRUE);
+		up = rspamd_upstream_get_p2c(ups, except);
 		break;
 	case RSPAMD_UPSTREAM_SEQUENTIAL:
 		if (ups->cur_elt >= ups->alive->len) {
@@ -2151,6 +3161,7 @@ rspamd_upstream_get_common(struct upstream_list *ups,
 end:
 	if (up) {
 		up->checked++;
+		up->inflight++;
 	}
 
 	return up;
@@ -2217,12 +3228,22 @@ void rspamd_upstreams_foreach(struct upstream_list *ups,
 							  rspamd_upstream_traverse_func cb, void *ud)
 {
 	struct upstream *up;
-	unsigned int i;
+	unsigned int i, idx = 0;
 
 	for (i = 0; i < ups->ups->len; i++) {
 		up = g_ptr_array_index(ups->ups, i);
 
-		cb(up, i, ud);
+		/*
+		 * Skip SRV parent placeholders — they aren't selectable
+		 * upstreams and exposing them to consumers (foreach is the
+		 * public iteration API) would surprise callers that expect
+		 * to enumerate real backends.
+		 */
+		if (up->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+			continue;
+		}
+
+		cb(up, idx++, ud);
 	}
 }
 
@@ -2303,20 +3324,18 @@ void rspamd_upstreams_set_token_bucket(struct upstream_list *ups,
 {
 	struct upstream_limits *nlimits;
 	g_assert(ups != NULL);
+	g_assert(ups->ctx != NULL && ups->ctx->pool != NULL);
 
-	/* Allocate new limits if we have a pool, otherwise modify in place */
-	if (ups->ctx && ups->ctx->pool) {
-		nlimits = rspamd_mempool_alloc(ups->ctx->pool, sizeof(*nlimits));
-		memcpy(nlimits, ups->limits, sizeof(*nlimits));
-	}
-	else {
-		/* No pool, we need to be careful here */
-		nlimits = g_malloc(sizeof(*nlimits));
-		memcpy(nlimits, ups->limits, sizeof(*nlimits));
-	}
+	nlimits = rspamd_mempool_alloc(ups->ctx->pool, sizeof(*nlimits));
+	memcpy(nlimits, ups->limits, sizeof(*nlimits));
 
 	if (max_tokens > 0) {
 		nlimits->token_bucket_max = max_tokens;
+		/* Keep refill rate proportional: full bucket regenerates in 60s. */
+		nlimits->token_bucket_refill_per_s = max_tokens / 60;
+		if (nlimits->token_bucket_refill_per_s == 0) {
+			nlimits->token_bucket_refill_per_s = 1;
+		}
 	}
 	if (scale_factor > 0) {
 		nlimits->token_bucket_scale = scale_factor;
@@ -2331,6 +3350,105 @@ void rspamd_upstreams_set_token_bucket(struct upstream_list *ups,
 	ups->limits = nlimits;
 }
 
+void rspamd_upstreams_set_slow_start(struct upstream_list *ups,
+									 unsigned int slow_start_ms)
+{
+	struct upstream_limits *nlimits;
+	g_assert(ups != NULL);
+	g_assert(ups->ctx != NULL && ups->ctx->pool != NULL);
+
+	nlimits = rspamd_mempool_alloc(ups->ctx->pool, sizeof(*nlimits));
+	memcpy(nlimits, ups->limits, sizeof(*nlimits));
+	nlimits->slow_start_ms = slow_start_ms;
+	ups->limits = nlimits;
+}
+
+void rspamd_upstreams_set_latency_half_life(struct upstream_list *ups,
+											double half_life_s)
+{
+	struct upstream_limits *nlimits;
+	g_assert(ups != NULL);
+	g_assert(ups->ctx != NULL && ups->ctx->pool != NULL);
+
+	if (half_life_s < 0) {
+		half_life_s = 0;
+	}
+	nlimits = rspamd_mempool_alloc(ups->ctx->pool, sizeof(*nlimits));
+	memcpy(nlimits, ups->limits, sizeof(*nlimits));
+	nlimits->latency_half_life_s = half_life_s;
+	ups->limits = nlimits;
+}
+
+/*
+ * Time-weighted EWMA for latency. Older samples decay so that a
+ * once-slow-but-recovered upstream isn't forever penalised.
+ *
+ * Mathematically: alpha = 1 - exp(-dt / tau), where tau is set so the
+ * weight halves over `latency_half_life_s` of wall time. tau = hl/ln(2).
+ *
+ * If half_life is 0 we degrade to a flat moving average where every
+ * sample has equal weight regardless of arrival time.
+ */
+void rspamd_upstream_record_latency(struct upstream *up, double seconds)
+{
+	double now;
+	double dt;
+	double tau;
+	double alpha;
+	double half_life;
+
+	if (up == NULL || seconds < 0) {
+		return;
+	}
+
+	RSPAMD_UPSTREAM_LOCK(up);
+
+	if (up->ctx && up->ctx->event_loop) {
+		now = ev_now(up->ctx->event_loop);
+	}
+	else {
+		now = rspamd_get_ticks(FALSE);
+	}
+
+	if (up->latency_n == 0 || up->latency_last_at <= 0) {
+		up->latency_ewma = seconds;
+	}
+	else {
+		half_life = up->ls ? up->ls->limits->latency_half_life_s : DEFAULT_LATENCY_HALF_LIFE_S;
+		if (half_life <= 0) {
+			/* Flat moving average. */
+			alpha = 1.0 / (double) (up->latency_n + 1);
+		}
+		else {
+			dt = now - up->latency_last_at;
+			if (dt < 0.0) {
+				dt = 0.0;
+			}
+			tau = half_life / 0.6931471805599453; /* ln(2) */
+			alpha = 1.0 - exp(-dt / tau);
+			/* Cap so we never wholly forget the prior estimate. */
+			if (alpha > 0.5) alpha = 0.5;
+			if (alpha < 0.01) alpha = 0.01;
+		}
+		up->latency_ewma = alpha * seconds + (1.0 - alpha) * up->latency_ewma;
+	}
+
+	up->latency_last_at = now;
+	if (up->latency_n < UINT_MAX) {
+		up->latency_n++;
+	}
+
+	RSPAMD_UPSTREAM_UNLOCK(up);
+}
+
+double rspamd_upstream_get_latency(const struct upstream *up)
+{
+	if (up == NULL) {
+		return 0.0;
+	}
+	return up->latency_ewma;
+}
+
 /*
  * Calculate token cost for a message of given size
  */
@@ -2343,114 +3461,67 @@ rspamd_upstream_calculate_tokens(const struct upstream_limits *limits,
 }
 
 /*
- * Initialize token bucket heap for an upstream list (lazy initialization)
+ * Lazy per-upstream token bucket initialization. Called from selection paths
+ * to ensure max_tokens is set for upstreams that joined before the rotation
+ * algorithm was switched to TOKEN_BUCKET.
  */
-static gboolean
-rspamd_upstream_token_bucket_init(struct upstream_list *ups)
+static inline void
+rspamd_upstream_ensure_tokens(struct upstream_list *ups, struct upstream *up)
 {
-	unsigned int i;
-	struct upstream *up;
-	struct upstream_token_heap_entry entry;
-
-	if (ups->token_bucket_initialized) {
-		return TRUE;
-	}
-
-	rspamd_heap_init(upstream_token_heap, &ups->token_heap);
-
-	/* Add all alive upstreams to the heap */
-	for (i = 0; i < ups->alive->len; i++) {
-		up = g_ptr_array_index(ups->alive, i);
-
-		/* Initialize token bucket state for this upstream */
+	if (up->max_tokens == 0) {
 		up->max_tokens = ups->limits->token_bucket_max;
 		up->available_tokens = up->max_tokens;
 		up->inflight_tokens = 0;
-
-		/* Add to heap with priority = inflight_tokens (0 initially) */
-		entry.pri = 0;
-		entry.idx = 0;
-		entry.up = up;
-
-		rspamd_heap_push_safe(upstream_token_heap, &ups->token_heap, &entry, init_error);
-		up->heap_idx = rspamd_heap_size(upstream_token_heap, &ups->token_heap) - 1;
+		up->last_refill_at = 0;
 	}
-
-	ups->token_bucket_initialized = TRUE;
-	return TRUE;
-
-init_error:
-	/* Heap allocation failed, destroy what we have */
-	rspamd_heap_destroy(upstream_token_heap, &ups->token_heap);
-	return FALSE;
 }
 
 /*
- * Find upstream in heap by pointer (for removal or update after finding mismatch).
- * Also refreshes up->heap_idx as a side effect.
+ * Lazy time-based refill. Adds floor(dt * refill_per_s) tokens to
+ * available_tokens, capped at max_tokens. Called from selection and return
+ * paths so that an upstream that has been quiet (or that lost tokens to a
+ * failure) gradually regains capacity without any timer fan-out.
  */
-static struct upstream_token_heap_entry *
-rspamd_upstream_find_in_heap(struct upstream_list *ups, struct upstream *up)
+static inline void
+rspamd_upstream_refill_tokens(struct upstream *up,
+							  const struct upstream_limits *limits,
+							  double now)
 {
-	unsigned int i;
-	struct upstream_token_heap_entry *entry;
+	gsize add;
+	double dt;
 
-	for (i = 0; i < rspamd_heap_size(upstream_token_heap, &ups->token_heap); i++) {
-		entry = rspamd_heap_index(upstream_token_heap, &ups->token_heap, i);
-		if (entry && entry->up == up) {
-			up->heap_idx = i;
-			return entry;
-		}
-	}
-	return NULL;
-}
-
-/*
- * Update heap position after changing inflight_tokens.
- *
- * The intrusive heap stores elements by value and swaps entire structs during
- * swim/sink operations. This means up->heap_idx can become stale after any
- * heap modification (the entry at that index may now belong to a different
- * upstream). We handle this by:
- * 1. Trying the cached heap_idx first (fast path)
- * 2. Falling back to linear search if the cache is stale
- * 3. Refreshing heap_idx after the update via linear search
- *
- * Linear search is acceptable since upstream count is typically small (2-10).
- */
-static void
-rspamd_upstream_token_heap_update(struct upstream_list *ups, struct upstream *up)
-{
-	struct upstream_token_heap_entry *entry = NULL;
-
-	if (!ups->token_bucket_initialized || up->heap_idx == UINT_MAX) {
+	if (limits->token_bucket_refill_per_s == 0 || up->max_tokens == 0) {
+		up->last_refill_at = now;
 		return;
 	}
 
-	/* Try cached index first (fast path) */
-	if (up->heap_idx < rspamd_heap_size(upstream_token_heap, &ups->token_heap)) {
-		struct upstream_token_heap_entry *candidate =
-			rspamd_heap_index(upstream_token_heap, &ups->token_heap, up->heap_idx);
-		if (candidate && candidate->up == up) {
-			entry = candidate;
-		}
+	if (up->last_refill_at <= 0) {
+		up->last_refill_at = now;
+		return;
 	}
 
-	/* Cache miss: linear search */
-	if (!entry) {
-		entry = rspamd_upstream_find_in_heap(ups, up);
-		if (!entry) {
-			return;
-		}
+	dt = now - up->last_refill_at;
+	if (dt <= 0) {
+		return;
 	}
 
-	unsigned int new_pri = (unsigned int) MIN(up->inflight_tokens, UINT_MAX);
-	rspamd_heap_update(upstream_token_heap, &ups->token_heap, entry, new_pri);
+	add = (gsize) (dt * (double) limits->token_bucket_refill_per_s);
+	if (add == 0) {
+		/* Don't update last_refill_at; let small increments accumulate. */
+		return;
+	}
 
-	/* Refresh heap_idx: heap_update swaps whole structs during swim/sink,
-	 * so the entry pointer now points to whatever element ended up at that
-	 * array slot - not necessarily our upstream. */
-	rspamd_upstream_find_in_heap(ups, up);
+	if (up->available_tokens + add < up->available_tokens) {
+		/* Overflow guard */
+		up->available_tokens = up->max_tokens;
+	}
+	else {
+		up->available_tokens += add;
+		if (up->available_tokens > up->max_tokens) {
+			up->available_tokens = up->max_tokens;
+		}
+	}
+	up->last_refill_at = now;
 }
 
 struct upstream *
@@ -2460,11 +3531,11 @@ rspamd_upstream_get_token_bucket(struct upstream_list *ups,
 								 gsize *reserved_tokens)
 {
 	struct upstream *selected = NULL;
-	struct upstream_token_heap_entry *entry;
+	struct upstream *fallback = NULL;
+	gsize best_eligible_inflight = G_MAXSIZE;
+	gsize least_loaded_inflight = G_MAXSIZE;
 	gsize token_cost;
 	unsigned int i;
-	gsize min_inflight = G_MAXSIZE;
-	struct upstream *fallback = NULL;
 
 	if (ups == NULL || reserved_tokens == NULL) {
 		return NULL;
@@ -2480,81 +3551,61 @@ rspamd_upstream_get_token_bucket(struct upstream_list *ups,
 		return NULL;
 	}
 
-	/* Initialize token bucket if not done yet */
-	if (!ups->token_bucket_initialized) {
-		if (!rspamd_upstream_token_bucket_init(ups)) {
-			/* Fall back to round robin on init failure */
-			RSPAMD_UPSTREAM_UNLOCK(ups);
-			return rspamd_upstream_get_round_robin(ups, except, TRUE);
-		}
-	}
-
-	/* Calculate token cost for this message */
 	token_cost = rspamd_upstream_calculate_tokens(ups->limits, message_size);
 
+	double now;
+	if (ups->ctx && ups->ctx->event_loop) {
+		now = ev_now(ups->ctx->event_loop);
+	}
+	else {
+		now = rspamd_get_ticks(FALSE);
+	}
+
 	/*
-	 * Use heap property: the root (index 0) has minimum inflight_tokens.
-	 * Check a few candidates from the top of the heap rather than scanning all.
+	 * Linear scan over alive[]: prefer the lowest-inflight upstream that has
+	 * sufficient available tokens. If no upstream is eligible, fall back to
+	 * the least-loaded one (whose available_tokens we will clamp to 0).
+	 *
+	 * Alive sets are typically small (2-10); a flat scan is faster than a
+	 * heap once you account for the by-value heap macros' O(n) repair cost.
 	 */
-	unsigned int heap_size = rspamd_heap_size(upstream_token_heap, &ups->token_heap);
-	unsigned int candidates_checked = 0;
-	const unsigned int max_candidates = 8; /* Check up to 8 lowest-loaded upstreams */
+	for (i = 0; i < ups->alive->len; i++) {
+		struct upstream *up = g_ptr_array_index(ups->alive, i);
 
-	for (i = 0; i < heap_size && candidates_checked < max_candidates; i++) {
-		entry = rspamd_heap_index(upstream_token_heap, &ups->token_heap, i);
-
-		if (entry == NULL || entry->up == NULL) {
+		if (except != NULL && up == except) {
 			continue;
 		}
 
-		struct upstream *up = entry->up;
+		rspamd_upstream_ensure_tokens(ups, up);
+		rspamd_upstream_refill_tokens(up, ups->limits, now);
 
-		/* Skip inactive upstreams */
-		if (up->active_idx < 0) {
-			continue;
-		}
-
-		/* Skip excluded upstream */
-		if (except && up == except) {
-			continue;
-		}
-
-		candidates_checked++;
-
-		/* Track upstream with minimum inflight for fallback */
-		if (up->inflight_tokens < min_inflight) {
-			min_inflight = up->inflight_tokens;
+		if (up->inflight_tokens < least_loaded_inflight) {
+			least_loaded_inflight = up->inflight_tokens;
 			fallback = up;
 		}
 
-		/* Check if upstream has sufficient tokens */
-		if (up->available_tokens >= token_cost) {
+		if (up->available_tokens >= token_cost &&
+			up->inflight_tokens < best_eligible_inflight) {
+			best_eligible_inflight = up->inflight_tokens;
 			selected = up;
-			break;
 		}
 	}
 
-	/* If no upstream has sufficient tokens, use the least loaded one */
-	if (selected == NULL && fallback != NULL) {
+	if (selected == NULL) {
 		selected = fallback;
 	}
 
 	if (selected != NULL) {
-		/* Reserve tokens */
 		if (selected->available_tokens >= token_cost) {
 			selected->available_tokens -= token_cost;
 		}
 		else {
-			/* Clamp to 0 if we don't have enough */
 			selected->available_tokens = 0;
 		}
 		selected->inflight_tokens += token_cost;
 		*reserved_tokens = token_cost;
-
-		/* Update heap position */
-		rspamd_upstream_token_heap_update(ups, selected);
-
 		selected->checked++;
+		selected->inflight++; /* paired with ok()/fail() decrement */
 	}
 
 	RSPAMD_UPSTREAM_UNLOCK(ups);
@@ -2572,10 +3623,6 @@ void rspamd_upstream_return_tokens(struct upstream *up, gsize tokens, gboolean s
 
 	ls = up->ls;
 
-	/*
-	 * Lock ordering: always lock list before upstream to prevent deadlocks.
-	 * This is consistent with rspamd_upstream_get_token_bucket.
-	 */
 	if (ls) {
 		RSPAMD_UPSTREAM_LOCK(ls);
 	}
@@ -2591,7 +3638,8 @@ void rspamd_upstream_return_tokens(struct upstream *up, gsize tokens, gboolean s
 		up->inflight_tokens = 0;
 	}
 
-	/* Only restore available tokens on success */
+	/* Only restore available tokens on success; failure relies on lazy
+	 * refill below to gradually restore capacity. */
 	if (success) {
 		up->available_tokens += tokens;
 		/* Cap at max tokens */
@@ -2600,9 +3648,11 @@ void rspamd_upstream_return_tokens(struct upstream *up, gsize tokens, gboolean s
 		}
 	}
 
-	/* Update heap position if we have a list */
-	if (ls && ls->token_bucket_initialized) {
-		rspamd_upstream_token_heap_update(ls, up);
+	/* Lazy refill makes failure non-permanent: a flapping upstream that
+	 * loses tokens to failures regains them over time when the bucket is
+	 * touched. */
+	if (ls != NULL) {
+		rspamd_upstream_refill_tokens(up, ls->limits, rspamd_upstream_now(up));
 	}
 
 	RSPAMD_UPSTREAM_UNLOCK(up);

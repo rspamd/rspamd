@@ -200,6 +200,27 @@ static int grisu2 (double d, char *digits, int *K) {
 	return generate_digits (&w, &upper, &lower, digits, K);
 }
 
+int
+fpconv_grisu2 (double d, char digits[18], int *K, int *is_negative)
+{
+	uint64_t bits = get_dbits (d);
+	*is_negative = (bits & signmask) != 0;
+
+	if (d == 0.0) {
+		return FPCONV_GRISU_ZERO;
+	}
+
+	if ((bits & expmask) == expmask) {
+		if (bits & fracmask) {
+			return FPCONV_GRISU_NAN;
+		}
+
+		return FPCONV_GRISU_INF;
+	}
+
+	return grisu2 (d, digits, K);
+}
+
 static inline int emit_integer (char *digits, int ndigits,
 								char *dest, int K, bool neg,
 								unsigned precision)
@@ -445,7 +466,7 @@ static int filter_special (double fp, char *dest, unsigned precision)
 	return nchars;
 }
 
-int
+static int
 fpconv_dtoa (double d, char dest[FPCONV_BUFLEN],
 			 unsigned precision, bool scientific)
 {

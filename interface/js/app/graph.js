@@ -3,10 +3,9 @@
  * Copyright (C) 2017 Alexander Moisseev
  */
 
-/* global FooTable */
-
-define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
-    ($, common, D3Evolution, D3Pie, d3) => {
+define(["jquery", "app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "tabulator"],
+    // eslint-disable-next-line max-params -- AMD factory: each dep needs a param
+    ($, common, tabUtils, D3Evolution, D3Pie, d3, Tabulator) => {
         "use strict";
 
         const rrd_pie_config = {
@@ -38,6 +37,13 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
 
         const ui = {};
         let prevUnit = "msg/s";
+
+        const rrdUnitColumns = ["min", "avg", "max", "last"];
+        function rrdColumnTitle(field, unit) {
+            const titles = {min: "Minimum", avg: "Average", max: "Maximum", last: "Last"};
+            const label = titles[field];
+            return label ? label + ", <span class=\"unit\">" + unit + "</span>" : "";
+        }
 
         ui.draw = function (graphs, neighbours, checked_server, type) {
             const graph_options = {
@@ -107,36 +113,38 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function initSummaryTable(rows, unit) {
-                common.tables.rrd_summary = FooTable.init("#rrd-table", {
-                    breakpoints: common.breakpoints,
-                    cascade: true,
-                    sorting: {
-                        enabled: true
-                    },
+                common.tables.rrd_summary = new Tabulator("#rrd-table", {
+                    layout: "fitColumns",
+                    selectable: false,
+                    index: "label",
+                    data: rows,
                     columns: [
-                        {name: "label", title: "Action"},
-                        {name: "value", title: "Messages", defaultContent: ""},
-                        {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                        {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                        {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                        {name: "last", title: "Last, " + unit},
+                        {title: "Action", field: "label", minWidth: 90},
+                        {title: "Messages", field: "value", minWidth: 100},
+                        {title: rrdColumnTitle("min", unit), field: "min", minWidth: 149},
+                        {title: rrdColumnTitle("avg", unit), field: "avg", minWidth: 143},
+                        {title: rrdColumnTitle("max", unit), field: "max", minWidth: 151},
+                        {title: rrdColumnTitle("last", unit), field: "last", minWidth: 121},
                     ],
-                    rows: rows.map((curr, i) => ({
-                        options: {
-                            style: {
-                                color: graph_options.legend.entries[i].color
-                            }
-                        },
-                        value: curr
-                    }), [])
+                    rowFormatter: function (row) {
+                        const c = row.getData().color;
+                        if (c) row.getElement().style.setProperty("--rrd-row-color", c);
+                    },
                 });
+                tabUtils.patchScrollIntoViewOnce();
+                tabUtils.stripTableholderTabindex("rrd_summary");
             }
 
             function drawRrdTable(rows, unit) {
                 if (Object.prototype.hasOwnProperty.call(common.tables, "rrd_summary")) {
-                    $.each(common.tables.rrd_summary.rows.all, (i, row) => {
-                        row.val(rows[i], false, true);
-                    });
+                    common.tables.rrd_summary.updateData(rows);
+                    if (unit !== prevUnit) {
+                        rrdUnitColumns.forEach((field) => {
+                            common.tables.rrd_summary.updateColumnDefinition(field, {
+                                title: rrdColumnTitle(field, unit),
+                            });
+                        });
+                    }
                 } else {
                     initSummaryTable(rows, unit);
                 }

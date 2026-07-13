@@ -175,6 +175,17 @@ Expect Extended URL
   END
   Should Be True  ${found_url}  msg="Expected URL was not found: ${url}"
 
+Do Not Expect Extended URL
+  [Arguments]  ${url}
+  ${found_url} =  Set Variable  ${FALSE}
+  ${url_list} =  Convert To List  ${SCAN_RESULT}[urls]
+  FOR  ${item}  IN  @{url_list}
+    ${d} =  Convert To Dictionary  ${item}
+    ${found_url} =  Evaluate  "${d}[url]" == "${url}"
+    Exit For Loop If  ${found_url} == ${TRUE}
+  END
+  Should Not Be True  ${found_url}  msg="URL should not be present: ${url}"
+
 Expect Symbol With Exact Options
   [Arguments]  ${symbol}  @{options}
   Expect Symbol  ${symbol}
@@ -303,6 +314,14 @@ Rspamd Teardown
   END
   Terminate Process  ${RSPAMD_PROCESS}
   Wait For Process  ${RSPAMD_PROCESS}
+  # Wait For Process only reaps the main rspamd; its listening sockets are
+  # shared with forked workers and can linger a beat after main exits.
+  # Under pabot each worker runs many suites sequentially on the SAME port
+  # range, so if we release this suite before the kernel has closed the
+  # normal+controller sockets, the next suite's rspamd races them and dies
+  # with EADDRINUSE (rspamd sets SO_REUSEADDR, so this is a live socket,
+  # not TIME_WAIT). Block until the ports are actually free.
+  Wait For Rspamd Ports Released
   Save Run Results  ${RSPAMD_TMPDIR}  configdump.stdout configdump.stderr rspamd.stderr rspamd.stdout rspamd.conf rspamd.log redis.log clickhouse-config.xml
   Log does not contain segfault record
   Collect Lua Coverage
@@ -311,6 +330,30 @@ Rspamd Teardown
 Rspamd Redis Teardown
   Rspamd Teardown
   Redis Teardown
+
+Wait For Rspamd Ports Released
+  [Documentation]  Block until this suite's rspamd listening ports are
+  ...  free, so the next suite on the same pabot worker can rebind them.
+  ...  Covers every port a test rspamd may bind: normal, controller,
+  ...  proxy, and the two TLS listeners (controller + normal SSL). All
+  ...  five RSPAMD_PORT_* vars are always defined in vars.py; a port the
+  ...  current config never bound just refuses connection immediately, so
+  ...  Port Is Free passes at once -- waiting on it is a cheap no-op. The
+  ...  SSL listeners matter specifically: the 440_ssl_server flake was a
+  ...  previous suite's controller-SSL socket lingering on its port, so
+  ...  the next rspamd silently came up WITHOUT its SSL listener (it logs
+  ...  bind 98 for the SSL port, then forks the controller with only the
+  ...  plain socket) and every HTTPS test got connection-refused.
+  ...  Each port gets up to ~6s; failure to free is a warning, not a hard
+  ...  error, so a stuck port can't mask the real test result. See
+  ...  port_is_free in rspamd.py for why SO_REUSEADDR does not cover this.
+  FOR  ${port}  IN
+  ...  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_CONTROLLER}  ${RSPAMD_PORT_PROXY}
+  ...  ${RSPAMD_PORT_CONTROLLER_SSL}  ${RSPAMD_PORT_NORMAL_SSL}
+    Run Keyword And Warn On Failure
+    ...  Wait Until Keyword Succeeds  30x  0.2s
+    ...  Port Is Free  ${RSPAMD_LOCAL_ADDR}  ${port}
+  END
 
 Run Redis
   ${RSPAMD_TMPDIR} =  Make Temporary Directory
@@ -404,23 +447,67 @@ Run Rspamd
 
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PROCESS=${result}
 
-  # Confirm worker is reachable
+  # Confirm worker is reachable. The original loop used CONTINUE on
+  # success, which meant it kept polling for the full 37 iterations
+  # even after the first successful ping. Break on success so the
+  # caller sees a tight startup.
   FOR    ${index}    IN RANGE    37
     ${ok} =  Rspamd Startup Check  ${check_port}
-    IF  ${ok}  CONTINUE
+    IF  ${ok}    BREAK
     Sleep  0.4s
   END
+  # rspamd ping succeeds as soon as the controller binds its HTTP
+  # socket, but for suites whose config includes options.inc the
+  # main process also creates a unix control socket at
+  # $DBDIR/rspamd.sock, and the workers list isn't populated there
+  # until each worker has registered back with main. Under parallel
+  # pabot + concurrent serial robot that gap can stretch out and
+  # the first `rspamadm control stat` in 099_control returns empty.
+  #
+  # If the suite's config produces a control socket, wait until
+  # `rspamadm control stat` actually contains "workers" before
+  # letting tests run. If it never does (minimal configs without
+  # options.inc), proceed without the extra check -- those suites
+  # don't talk to the control socket anyway.
+  ${sock_path} =  Set Variable  ${RSPAMD_TMPDIR}/rspamd.sock
+  ${sock_ready} =  Run Keyword And Return Status
+  ...    Wait Until Created  ${sock_path}  timeout=2s
+  IF    ${sock_ready}
+    Wait Until Keyword Succeeds  30x  0.2s  Verify Controller Workers Registered  ${sock_path}
+  END
+
+Verify Controller Workers Registered
+  [Documentation]  Used by Run Rspamd to wait until the controller
+  ...              has published its workers list to the local
+  ...              control socket. Cheap when fast, retried up to
+  ...              ~6s when rspamd is starting under CPU contention
+  ...              (4 pabot workers + concurrent serial robot).
+  [Arguments]  ${sock}
+  ${result} =  Run Process  ${RSPAMADM}  control  -s  ${sock}  stat  timeout=2s
+  Should Be Equal As Integers  ${result.rc}  0
+  Should Contain  ${result.stdout}  workers
 
 Rspamd Startup Check
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}
   ${handle} =  Get Process Object
   ${res} =  Evaluate  $handle.poll()
   IF  ${res} != None
-    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
-    Fail  Process Is Gone, stderr: ${stderr}
+    # rspamd exited; rspamd.stderr typically only has the early
+    # "loading configuration" line because the real logger is set up
+    # later. The actual cause lives in rspamd.log -- include both and
+    # the exit code so failures aren't just opaque.
+    ${stderr} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr  encoding_errors=ignore
+    ${log_exists} =  Run Keyword And Return Status  File Should Exist  ${RSPAMD_TMPDIR}/rspamd.log
+    IF  ${log_exists}
+      ${log_full} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
+      ${log_tail} =  Evaluate  "\\n".join($log_full.splitlines()[-80:])
+    ELSE
+      ${log_tail} =  Set Variable  <rspamd.log was never created>
+    END
+    Fail  Process Is Gone (rc=${res}, port=${check_port}, tmpdir=${RSPAMD_TMPDIR})\n--- stderr ---\n${stderr}\n--- rspamd.log (tail) ---\n${log_tail}
   END
   ${ping} =  Run Keyword And Return Status  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${check_port}
-  [Return]  ${ping}
+  RETURN    ${ping}
 
 Rspamadm Setup
   ${RSPAMADM_TMPDIR} =  Make Temporary Directory
@@ -436,7 +523,7 @@ Rspamadm
   ...  --var\=DBDIR\=${RSPAMADM_TMPDIR}
   ...  --var\=LOCAL_CONFDIR\=/nonexistent
   ...  @{args}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Nginx
   ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
@@ -477,18 +564,34 @@ Run Rspamc
     ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
   END
   Log  ${result.stdout}
-  [Return]  ${result}
+  RETURN    ${result}
+
+Render Message Template
+  [Documentation]  Read an .eml fixture that contains Robot ${VARIABLE}
+  ...  placeholders (e.g. ${RSPAMD_PORT_DUMMY_HTTP}), expand them, write
+  ...  the result into the suite tmpdir and return the rendered path.
+  ...  .eml files are fed raw to the scanner and are NOT processed by the
+  ...  config-time Jinja engine, so per-pabot-worker values (dummy ports)
+  ...  must be substituted here at runtime. Requires ${RSPAMD_TMPDIR}
+  ...  (set by Rspamd Setup) -- call after the rspamd setup keyword.
+  [Arguments]  ${template_path}
+  ${template} =  Get File  ${template_path}
+  ${rendered} =  Replace Variables  ${template}
+  ${name} =  Evaluate  os.path.basename($template_path)  modules=os
+  ${out} =  Set Variable  ${RSPAMD_TMPDIR}/${name}
+  Create File  ${out}  ${rendered}
+  RETURN  ${out}
 
 Scan File By Reference
   [Arguments]  ${filename}  &{headers}
   Set To Dictionary  ${headers}  File=${filename}
   ${result} =  Scan File  /dev/null  &{headers}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
   ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  @{vargs}  ${msg_file}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
@@ -510,7 +613,7 @@ Run Control Command
   ...  ${socket}  ${command}  timeout=10s
   Log  ${result.stdout}
   Log  ${result.stderr}
-  [Return]  ${result}
+  RETURN    ${result}
 
 Run Control Command JSON
   [Documentation]  Run a control socket command and return JSON result
@@ -519,53 +622,76 @@ Run Control Command JSON
   ...  ${socket}  ${command}  timeout=10s
   Log  ${result.stdout}
   Log  ${result.stderr}
-  [Return]  ${result}
+  RETURN    ${result}
+
+Start Dummy Service
+  [Documentation]  Start a dummy_* helper and block until it is ready,
+  ...  then return its process handle. Readiness is the PID file: every
+  ...  dummy_* helper calls dummy_killer.write_pid() only AFTER it has
+  ...  bound and activated its listening socket (see server_bind /
+  ...  server_activate / server.start in util/dummy_*.py), so the moment
+  ...  the PID file appears the kernel is already accepting connections.
+  ...  This keyword is the ONE place that barrier lives -- start every
+  ...  dummy through here (or a Run Dummy * / Start Dummy * wrapper),
+  ...  never via a bare Start Process followed straight by a scan, or you
+  ...  reintroduce the start/scan race that flakes under parallel pabot.
+  [Arguments]  ${name}  ${pidfile}  ${logfile}  @{command}
+  # Drop any stale PID file from a previous instance on this same path.
+  # One-shot helpers (clam/fprot/avast/p0f) exit after a single request
+  # and leave their PID file behind; without this a same-port restart
+  # would satisfy Wait Until Created instantly and race the new bind.
+  Remove File  ${pidfile}
+  ${result} =  Start Process  @{command}  stdout=${logfile}  stderr=${logfile}
+  ${status}  ${error} =  Run Keyword And Ignore Error
+  ...  Wait Until Created  ${pidfile}  timeout=5 second
+  IF  '${status}' == 'FAIL'
+    ${logstatus}  ${out} =  Run Keyword And Ignore Error  Get File  ${logfile}
+    IF  '${logstatus}' == 'PASS'
+      Log  ${name} failed to start. Log output:\n${out}  level=ERROR
+    ELSE
+      Log  ${name} failed to start. No log file found at ${logfile}  level=ERROR
+    END
+    Fail  ${name} did not create PID file in 5 seconds
+  END
+  RETURN  ${result}
+
+Wait Until Dummy Listening
+  [Documentation]  Belt-and-suspenders readiness probe on top of the PID
+  ...  barrier: block until a TCP connect to host:port actually succeeds.
+  ...  Self-contained (BuiltIn Evaluate, no library dependency). Use ONLY
+  ...  for helpers that loop and accept many connections (http/https/ssl).
+  ...  Do NOT probe one-shot helpers (clam/fprot/avast/p0f) or the
+  ...  single-threaded smtp helper -- a probe connection would consume or
+  ...  block the very session the scan needs; for those the PID barrier in
+  ...  Start Dummy Service is the correct and sufficient readiness signal.
+  [Arguments]  ${host}  ${port}
+  Wait Until Keyword Succeeds  15x  0.2s
+  ...  Evaluate  __import__('socket').create_connection(("${host}", ${port}), 1).close()
 
 Run Dummy Http
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
-  ...  stderr=/tmp/dummy_http.log  stdout=/tmp/dummy_http.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
-  IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http.log
-    IF  '${logstatus}' == 'PASS'
-      Log  dummy_http.py failed to start. Log output:\n${log}  level=ERROR
-    ELSE
-      Log  dummy_http.py failed to start. No log file found at /tmp/dummy_http.log  level=ERROR
-    END
-    Fail  dummy_http.py did not create PID file in 2 seconds
-  END
-  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http-${RSPAMD_PORT_DUMMY_HTTP}.log
+  ${result} =  Start Dummy Service  dummy_http.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTP}
+  Wait Until Dummy Listening  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_DUMMY_HTTP}
+  Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_PROC=${result}  DUMMY_HTTP_LOG=${log}
 
 Run Dummy Https
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_https-${RSPAMD_PORT_DUMMY_HTTPS}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_https-${RSPAMD_PORT_DUMMY_HTTPS}.log
+  ${result} =  Start Dummy Service  dummy_https.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
-  ...  -pf  /tmp/dummy_https.pid  -p  18081
-  ...  stderr=/tmp/dummy_https.log  stdout=/tmp/dummy_https.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
-  IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_https.log
-    IF  '${logstatus}' == 'PASS'
-      Log  dummy_https.py failed to start. Log output:\n${log}  level=ERROR
-    ELSE
-      Log  dummy_https.py failed to start. No log file found at /tmp/dummy_https.log  level=ERROR
-    END
-    Fail  dummy_https.py did not create PID file in 2 seconds
-  END
+  ...  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTPS}
+  Wait Until Dummy Listening  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_DUMMY_HTTPS}
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTPS_PROC=${result}
 
 Run Dummy Llm
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_llm.py  18080
-  ...  stderr=/tmp/dummy_llm.log  stdout=/tmp/dummy_llm.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_llm.pid  timeout=2 second
-  IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_llm.log
-    IF  '${logstatus}' == 'PASS'
-      Log  dummy_llm.py failed to start. Log output:\n${log}  level=ERROR
-    ELSE
-      Log  dummy_llm.py failed to start. No log file found at /tmp/dummy_llm.log  level=ERROR
-    END
-    Fail  dummy_llm.py did not create PID file in 2 seconds
-  END
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_llm-${RSPAMD_PORT_DUMMY_HTTP}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_llm-${RSPAMD_PORT_DUMMY_HTTP}.log
+  ${result} =  Start Dummy Service  dummy_llm.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_llm.py  ${RSPAMD_PORT_DUMMY_HTTP}  ${pid}
+  Wait Until Dummy Listening  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_DUMMY_HTTP}
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_LLM_PROC=${result}
 
 Dummy Llm Teardown
@@ -581,20 +707,28 @@ Dummy Https Teardown
   Wait For Process  ${DUMMY_HTTPS_PROC}
 
 Run Dummy Http Early Response
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  /tmp/dummy_http_early.pid  -p  18083
-  ...  stderr=/tmp/dummy_http_early.log  stdout=/tmp/dummy_http_early.log
-  ${status}  ${error} =  Run Keyword And Ignore Error  Wait Until Created  /tmp/dummy_http_early.pid  timeout=2 second
-  IF  '${status}' == 'FAIL'
-    ${logstatus}  ${log} =  Run Keyword And Ignore Error  Get File  /tmp/dummy_http_early.log
-    IF  '${logstatus}' == 'PASS'
-      Log  dummy_http_early_response.py failed to start. Log output:\n${log}  level=ERROR
-    ELSE
-      Log  dummy_http_early_response.py failed to start. No log file found at /tmp/dummy_http_early.log  level=ERROR
-    END
-    Fail  dummy_http_early_response.py did not create PID file in 2 seconds
-  END
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http_early-${RSPAMD_PORT_DUMMY_HTTP_EARLY}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_http_early-${RSPAMD_PORT_DUMMY_HTTP_EARLY}.log
+  ${result} =  Start Dummy Service  dummy_http_early_response.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_http_early_response.py  -pf  ${pid}  -p  ${RSPAMD_PORT_DUMMY_HTTP_EARLY}
+  Wait Until Dummy Listening  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_DUMMY_HTTP_EARLY}
   Export Scoped Variables  ${RSPAMD_SCOPE}  DUMMY_HTTP_EARLY_PROC=${result}
 
 Dummy Http Early Teardown
   Terminate Process  ${DUMMY_HTTP_EARLY_PROC}
   Wait For Process  ${DUMMY_HTTP_EARLY_PROC}
+
+Start Dummy Smtp
+  [Documentation]  Start dummy_smtp.py and block until it is listening,
+  ...  then return the process handle for teardown. No connect probe here:
+  ...  the smtp helper runs single-threaded and its modes hold the handler
+  ...  (silent sleeps 30s; greeting modes drive a state machine and write a
+  ...  status file), so a probe connection would borrow the very session
+  ...  the scan needs -- the PID barrier in Start Dummy Service is correct.
+  ...  @{extra} carries optional flags such as --status-file / --between-wait.
+  [Arguments]  ${port}  ${mode}  ${host}  ${pidfile}  @{extra}
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_smtp-${mode}-${host}.log
+  ${result} =  Start Dummy Service  dummy_smtp.py  ${pidfile}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_smtp.py  --port  ${port}  --mode  ${mode}
+  ...  --host  ${host}  --pid-file  ${pidfile}  @{extra}
+  RETURN  ${result}

@@ -67,8 +67,10 @@
 
 LUA_FUNCTION_DEF(archive, pack);
 /***
- * @function archive.unpack(data[, format])
+ * @function archive.unpack(data[, format][, password][, opts])
  * Unpacks an archive from a Lua string (or rspamd_text) using libarchive.
+ * The optional `opts` table bounds extraction to guard against decompression
+ * bombs; a second return value flags truncation. See the full definition below.
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
  * @return {table} array of files: { name = string, content = string } (non-regular entries are skipped)
@@ -89,10 +91,12 @@ LUA_FUNCTION_DEF(archive, supported_formats);
 LUA_FUNCTION_DEF(archive, zip);
 LUA_FUNCTION_DEF(archive, zip_encrypt);
 /***
- * @function archive.unzip(data)
+ * @function archive.unzip(data[, opts])
  * Extract files from a ZIP archive.
  * @param {string|text} data archive contents
+ * @param {table} opts optional extraction limits (see archive.unpack)
  * @return {table} array of files: { name = string, content = text }
+ * @return {boolean} truncated: true if a limit stopped, truncated, or dropped content
  */
 LUA_FUNCTION_DEF(archive, unzip);
 /***
@@ -105,10 +109,12 @@ LUA_FUNCTION_DEF(archive, unzip);
  */
 LUA_FUNCTION_DEF(archive, tar);
 /***
- * @function archive.untar(data)
+ * @function archive.untar(data[, opts])
  * Extract files from a TAR archive. Compression is auto-detected (gz/xz/zstd/bz2/...).
  * @param {string|text} data archive contents
+ * @param {table} opts optional extraction limits (see archive.unpack)
  * @return {table} array of files: { name = string, content = text }
+ * @return {boolean} truncated: true if a limit stopped, truncated, or dropped content
  */
 LUA_FUNCTION_DEF(archive, untar);
 LUA_FUNCTION_DEF(archive, zip);
@@ -412,11 +418,19 @@ lua_archive_enable_read_filter_by_name(struct archive *a, const char *fl)
 static int
 lua_archive_unzip(lua_State *L)
 {
-	/* unzip(data) -> files */
+	/* unzip(data[, opts]) -> files, truncated */
 	luaL_checkany(L, 1);
-	lua_settop(L, 1);
-	/* Stack: [data] -> [data, "zip"] */
-	lua_pushstring(L, "zip");
+	if (lua_istable(L, 2)) {
+		/* Stack: [data, opts] -> [data, "zip", opts] */
+		lua_settop(L, 2);
+		lua_pushstring(L, "zip");
+		lua_insert(L, 2);
+	}
+	else {
+		/* Stack: [data] -> [data, "zip"] */
+		lua_settop(L, 1);
+		lua_pushstring(L, "zip");
+	}
 	return lua_archive_unpack(L);
 }
 
@@ -464,11 +478,19 @@ lua_archive_tar(lua_State *L)
 static int
 lua_archive_untar(lua_State *L)
 {
-	/* untar(data) -> files; compression autodetected */
+	/* untar(data[, opts]) -> files, truncated; compression autodetected */
 	luaL_checkany(L, 1);
-	lua_settop(L, 1);
-	/* Restrict to tar format */
-	lua_pushstring(L, "tar");
+	if (lua_istable(L, 2)) {
+		/* Stack: [data, opts] -> [data, "tar", opts] */
+		lua_settop(L, 2);
+		lua_pushstring(L, "tar");
+		lua_insert(L, 2);
+	}
+	else {
+		/* Stack: [data] -> [data, "tar"] */
+		lua_settop(L, 1);
+		lua_pushstring(L, "tar");
+	}
 	return lua_archive_unpack(L);
 }
 
@@ -655,13 +677,83 @@ lua_archive_pack(lua_State *L)
 	return 1;
 }
 
+/*
+ * Extraction limits used to bound in-memory decompression of hostile archives
+ * (decompression bombs). All values are opt-in: 0 disables the corresponding
+ * limit, which preserves the historical "no limits" behaviour when no opts
+ * table is supplied.
+ */
+struct rspamd_archive_limits {
+	guint64 max_output;    /* total uncompressed bytes across all members */
+	guint64 max_file_size; /* per-member uncompressed cap */
+	guint64 max_files;     /* member count cap */
+	double max_ratio;      /* per-member uncompressed/compressed ratio cap */
+};
+
+/*
+ * Members smaller than this (uncompressed) are exempt from the ratio check:
+ * tiny, highly-compressible files trivially exceed any sane ratio yet pose no
+ * memory threat, and memory is bounded by the size caps regardless.
+ */
+#define RSPAMD_ARCHIVE_RATIO_MIN_BYTES (64ULL * 1024)
+
+static void
+lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limits *lim)
+{
+	memset(lim, 0, sizeof(*lim));
+
+	if (opts_idx <= 0 || !lua_istable(L, opts_idx)) {
+		return;
+	}
+
+	lua_getfield(L, opts_idx, "max_output");
+	if (lua_isnumber(L, -1)) {
+		lua_Number v = lua_tonumber(L, -1);
+		lim->max_output = v > 0 ? (guint64) v : 0;
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, opts_idx, "max_file_size");
+	if (lua_isnumber(L, -1)) {
+		lua_Number v = lua_tonumber(L, -1);
+		lim->max_file_size = v > 0 ? (guint64) v : 0;
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, opts_idx, "max_files");
+	if (lua_isnumber(L, -1)) {
+		lua_Number v = lua_tonumber(L, -1);
+		lim->max_files = v > 0 ? (guint64) v : 0;
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, opts_idx, "max_ratio");
+	if (lua_isnumber(L, -1)) {
+		double v = (double) lua_tonumber(L, -1);
+		lim->max_ratio = v > 0 ? v : 0;
+	}
+	lua_pop(L, 1);
+}
+
 /***
- * @function archive.unpack(data[, format][, password])
+ * @function archive.unpack(data[, format][, password][, opts])
  * Unpacks an archive from a Lua string (or rspamd_text) using libarchive.
+ *
+ * Extraction is bounded by the optional `opts` table to guard against
+ * decompression bombs. Limits are enforced while reading, so memory stays
+ * bounded; a second return value flags whether the result was truncated by a
+ * limit (so a capped extraction is never mistaken for a complete one).
+ *
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
  * @param {string} password optional passphrase for encrypted archives (ZIP: ZipCrypto/AES)
+ * @param {table} opts optional extraction limits (any field omitted/0 = unlimited):
+ *  - max_output: total uncompressed bytes across all members
+ *  - max_file_size: per-member uncompressed cap (members are truncated at this size)
+ *  - max_files: maximum number of members to extract
+ *  - max_ratio: per-member max uncompressed/compressed ratio (members exceeding it are dropped)
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
+ * @return {boolean} truncated: true if any limit stopped, truncated, or dropped content
  */
 static int
 lua_archive_unpack(lua_State *L)
@@ -671,6 +763,8 @@ lua_archive_unpack(lua_State *L)
 	const char *format = NULL;
 	const char *password = NULL;
 	struct archive *a = NULL;
+	struct rspamd_archive_limits lim;
+	int opts_idx = 0;
 
 	t = lua_check_text_or_string(L, 1);
 
@@ -684,6 +778,15 @@ lua_archive_unpack(lua_State *L)
 	if (lua_type(L, 3) == LUA_TSTRING) {
 		password = lua_tostring(L, 3);
 	}
+
+	/* The optional limits table is the first table argument after the data */
+	for (int i = 2, top = lua_gettop(L); i <= top && opts_idx == 0; i++) {
+		if (lua_istable(L, i)) {
+			opts_idx = i;
+		}
+	}
+
+	lua_archive_parse_limits(L, opts_idx, &lim);
 
 	a = archive_read_new();
 	if (a == NULL) {
@@ -727,6 +830,8 @@ lua_archive_unpack(lua_State *L)
 
 	struct archive_entry *ae;
 	int n = 0;
+	guint64 total_output = 0;
+	gboolean truncated = FALSE;
 
 	while ((r = archive_read_next_header(a, &ae)) == ARCHIVE_OK) {
 		const char *name = archive_entry_pathname_utf8(ae);
@@ -736,47 +841,124 @@ lua_archive_unpack(lua_State *L)
 			name = archive_entry_pathname(ae);
 		}
 
-		if (ftype == AE_IFREG && name != NULL) {
-			GByteArray *ba = g_byte_array_new();
-			char buf[8192];
+		if (ftype != AE_IFREG || name == NULL) {
+			archive_read_data_skip(a);
+			continue;
+		}
 
-			for (;;) {
-				la_ssize_t rr = archive_read_data(a, buf, sizeof(buf));
-				if (rr == 0) {
-					break;
-				}
-				else if (rr < 0) {
-					const char *aerr = archive_error_string(a);
-					lua_pushfstring(L, "cannot read data: %s", aerr ? aerr : "unknown error");
-					g_byte_array_free(ba, TRUE);
-					archive_read_free(a);
-					return lua_error(L);
-				}
-				g_byte_array_append(ba, (const guint8 *) buf, (guint) rr);
+		/* Member count cap: stop before extracting one member too many */
+		if (lim.max_files > 0 && (guint64) n >= lim.max_files) {
+			truncated = TRUE;
+			break;
+		}
+
+		/* Total output cap: no budget left means the rest is dropped */
+		if (lim.max_output > 0 && total_output >= lim.max_output) {
+			truncated = TRUE;
+			break;
+		}
+
+		GByteArray *ba = g_byte_array_new();
+		char buf[8192];
+		guint64 member_bytes = 0;
+		gboolean member_truncated = FALSE; /* size cap clipped this member */
+		gboolean drop_member = FALSE;      /* ratio cap rejected this member */
+		gboolean output_full = FALSE;      /* total cap reached, stop after this */
+		/* Raw (compressed) input consumed so far, for the per-member ratio */
+		la_int64_t comp_before = archive_filter_bytes(a, -1);
+
+		for (;;) {
+			la_ssize_t rr = archive_read_data(a, buf, sizeof(buf));
+
+			if (rr == 0) {
+				break;
+			}
+			else if (rr < 0) {
+				const char *aerr = archive_error_string(a);
+				lua_pushfstring(L, "cannot read data: %s", aerr ? aerr : "unknown error");
+				g_byte_array_free(ba, TRUE);
+				archive_read_free(a);
+				return lua_error(L);
 			}
 
-			lua_newtable(L);
-			lua_pushstring(L, "name");
-			lua_pushstring(L, name);
-			lua_settable(L, -3);
+			guint64 chunk = (guint64) rr;
 
-			lua_pushstring(L, "content");
-			size_t blen = ba->len;
-			guint8 *bdata = g_byte_array_free(ba, FALSE);
-			struct rspamd_lua_text *cnt = lua_new_text(L, (const char *) bdata, blen, FALSE);
-			cnt->flags |= RSPAMD_TEXT_FLAG_OWN;
-			lua_settable(L, -3);
+			/* Per-member uncompressed cap: keep only up to the limit */
+			if (lim.max_file_size > 0 && member_bytes + chunk > lim.max_file_size) {
+				chunk = lim.max_file_size - member_bytes;
+				member_truncated = TRUE;
+			}
 
-			lua_rawseti(L, -2, ++n);
+			/* Total uncompressed cap across all members */
+			if (lim.max_output > 0 && total_output + chunk > lim.max_output) {
+				chunk = lim.max_output - total_output;
+				output_full = TRUE;
+			}
+
+			if (chunk > 0) {
+				g_byte_array_append(ba, (const guint8 *) buf, (guint) chunk);
+				member_bytes += chunk;
+				total_output += chunk;
+			}
+
+			/*
+			 * Per-member compression-ratio guard (decompression-bomb defence).
+			 * Checked every chunk once the member is large enough to matter, so
+			 * a bomb is stopped early and memory stays bounded even if no size
+			 * cap is set: a member can grow to at most ~max_ratio * (its
+			 * compressed bytes) before being rejected.
+			 */
+			if (lim.max_ratio > 0 && member_bytes >= RSPAMD_ARCHIVE_RATIO_MIN_BYTES) {
+				la_int64_t comp_now = archive_filter_bytes(a, -1) - comp_before;
+				if (comp_now > 0 &&
+					(double) member_bytes > (double) comp_now * lim.max_ratio) {
+					drop_member = TRUE;
+					break;
+				}
+			}
+
+			if (member_truncated || output_full) {
+				break;
+			}
 		}
-		else {
-			archive_read_data_skip(a);
+
+		if (member_truncated || drop_member || output_full) {
+			truncated = TRUE;
+		}
+
+		if (drop_member) {
+			/* Reject the whole member: never expose bomb output */
+			g_byte_array_free(ba, TRUE);
+			if (output_full) {
+				break;
+			}
+			continue;
+		}
+
+		lua_newtable(L);
+		lua_pushstring(L, "name");
+		lua_pushstring(L, name);
+		lua_settable(L, -3);
+
+		lua_pushstring(L, "content");
+		size_t blen = ba->len;
+		guint8 *bdata = g_byte_array_free(ba, FALSE);
+		struct rspamd_lua_text *cnt = lua_new_text(L, (const char *) bdata, blen, FALSE);
+		cnt->flags |= RSPAMD_TEXT_FLAG_OWN;
+		lua_settable(L, -3);
+
+		lua_rawseti(L, -2, ++n);
+
+		if (output_full) {
+			break;
 		}
 	}
 
 	archive_read_free(a);
 
-	return 1;
+	lua_pushboolean(L, truncated);
+
+	return 2;
 }
 
 /***

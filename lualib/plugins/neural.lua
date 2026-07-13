@@ -43,13 +43,31 @@ local default_options = {
     train_prob = 1.0,
     learn_threads = 1,
     learn_mode = 'balanced', -- Possible values: balanced, proportional
-    learning_rate = 0.01,
+    -- learning_rate is resolved in spawn_train when not set explicitly:
+    -- 0.01 for symbol vectors, 0.001 for dense provider embeddings (the
+    -- historical 0.01 default drives embedding inputs into tanh saturation
+    -- depending on weight init, producing a constant-output model)
+    learning_rate = nil,
     classes_bias = 0.0,      -- balanced mode: what difference is allowed between classes (1:1 proportion means 0 bias)
     spam_skip_prob = 0.0,    -- proportional mode: spam skip probability (0-1)
     ham_skip_prob = 0.0,     -- proportional mode: ham skip probability
     store_pool_only = false, -- store tokens in cache only (disables autotrain);
     store_set_only = false,  -- store ham and spam sets in Redis, but do not train ANN (autotrain must be enabled);
     -- neural_vec_mpack stores vector of training data in messagepack neural_profile_digest stores profile digest
+    -- frozen: first-class freeze. Stops automatic training and stops auto-storing
+    -- live vectors (so a frozen model's pools never accrue an imbalanced live
+    -- set), while inference keeps serving the current ANN unchanged. Explicit
+    -- ANN-Train (manual_train) still stores AND trains on demand. Supersedes the
+    -- auto-learn side of store_set_only/store_pool_only (those keep working when
+    -- frozen is not set).
+    frozen = false,
+    -- forced_learn_minimal_scan: when a manual-train scan (ANN-Train header) maps
+    -- to a disable_symbols_input rule, a high-priority neural prefilter disables
+    -- every non-neural symbol so the symbols-independent training vector is built
+    -- without issuing any RBL/DNS, fuzzy, ClickHouse, capture/cluster work. nil
+    -- means "default to disable_symbols_input" (resolved per-rule at init); set to
+    -- false to opt out and keep running the full pipeline for forced learns.
+    forced_learn_minimal_scan = nil,
   },
   watch_interval = 60.0,
   lock_expire = 600,
@@ -131,6 +149,26 @@ end
 
 local function get_provider(name)
   return registered_providers[name]
+end
+
+-- ANN architecture registry. An architecture is a builder
+--   function(n_inputs, rule) -> kann object
+-- that turns an input vector of size n_inputs into a compiled network. The
+-- built-in 'symbol', 'embedding' and 'conv1d' architectures are registered
+-- below; third-party modules can register their own (e.g. attention pooling)
+-- via the public register_architecture API and select them with
+-- `rule.architecture = "<name>"`.
+local registered_architectures = {}
+
+--- Registers an ANN architecture builder
+-- @param name string
+-- @param builder function(n, rule) -> kann object
+local function register_architecture(name, builder)
+  registered_architectures[name] = builder
+end
+
+local function get_architecture(name)
+  return registered_architectures[name]
 end
 
 -- Forward declaration
@@ -279,41 +317,66 @@ local function create_conv1d_ann(n, rule)
   return create_embedding_ann(n, rule)
 end
 
--- Detects if rule uses LLM embeddings provider
-local function uses_llm_embeddings(rule)
+-- Attention ANN: learned multi-head attention pooling over a sequence of
+-- word vectors, followed by a dense head on the pooled representation.
+-- The sequence provider (output_mode = "sequence") must come FIRST in the
+-- input vector. Anything after it (metatokens, other providers) is routed
+-- around the attention layer and concatenated with the pooled output before
+-- the dense head (late fusion). For such a hybrid layout, set
+-- attention.channels to the per-word dimension so that the sequence length
+-- can be derived; with no tail (fusion.include_meta = false and a single
+-- provider) channels is derived from the input size.
+-- Detects if rule input contains dense embedding features: any provider other
+-- than plain symbols/metatokens (llm, fasttext_embed, text_hash, ...).
+-- Such inputs need the embedding architecture and a lower learning rate:
+-- the simple symbol ANN applies ReLU directly to the input (clipping the
+-- negative half of the embedding space), and RMSprop at lr=0.01 diverges
+-- into tanh saturation on dense vectors depending on weight init.
+local function uses_dense_features(rule)
   if not rule.providers then
     return false
   end
   for _, p in ipairs(rule.providers) do
-    if p.type == 'llm' then
+    local ptype = p.type or p.name
+    if ptype ~= 'symbols' and ptype ~= 'metatokens' then
       return true
     end
   end
   return false
 end
 
--- Main ANN factory function - auto-selects architecture based on rule configuration
-local function create_ann(n, nlayers, rule)
-  -- Check for conv1d architecture first
+-- Resolves the architecture name for a rule when not set explicitly. Keeps the
+-- historical auto-selection so existing configs (no `architecture` field) build
+-- the same network as before.
+local function default_architecture(rule)
   if rule.conv1d then
-    lua_util.debugm(N, rspamd_config, 'creating conv1d ANN with %s inputs', n)
-    return create_conv1d_ann(n, rule)
+    return 'conv1d'
   end
-
-  -- Check if we should use the enhanced embedding architecture
-  -- Conditions: has LLM provider, or explicit multi-layer config, or large input dimension
-  local use_embedding_arch = uses_llm_embeddings(rule)
-    or rule.layers ~= nil
-    or rule.use_layernorm ~= nil
-    or rule.dropout ~= nil
-
-  if use_embedding_arch then
-    lua_util.debugm(N, rspamd_config, 'creating multi-layer embedding ANN with %s inputs', n)
-    return create_embedding_ann(n, rule)
-  else
-    lua_util.debugm(N, rspamd_config, 'creating simple symbol ANN with %s inputs', n)
-    return create_symbol_ann(n, rule)
+  if uses_dense_features(rule) or rule.layers ~= nil
+      or rule.use_layernorm ~= nil or rule.dropout ~= nil then
+    return 'embedding'
   end
+  return 'symbol'
+end
+
+-- Built-in architectures. Third-party modules register their own via
+-- register_architecture and select them with `rule.architecture = "<name>"`.
+register_architecture('symbol', create_symbol_ann)
+register_architecture('embedding', create_embedding_ann)
+register_architecture('conv1d', create_conv1d_ann)
+
+-- Main ANN factory: dispatches to a registered architecture builder. An
+-- explicit `rule.architecture` wins; otherwise the architecture is auto-
+-- selected from the rule shape for backward compatibility.
+local function create_ann(n, nlayers, rule)
+  local arch = rule.architecture or default_architecture(rule)
+  local builder = get_architecture(arch)
+  if not builder then
+    error(string.format('unknown neural architecture %q for rule %s ' ..
+      '(is the module providing it loaded?)', tostring(arch), rule.prefix or '?'))
+  end
+  lua_util.debugm(N, rspamd_config, 'creating %s ANN with %s inputs', arch, n)
+  return builder(n, rule)
 end
 
 -- Fills ANN data for a specific settings element
@@ -717,6 +780,67 @@ local function pending_train_key(rule, set)
     settings.prefix, rule.prefix, set.name)
 end
 
+-- Check whether a candidate profile (loaded from the zset) is compatible with
+-- the running rule/set configuration for the purposes of loading the trained
+-- ANN.  Compatibility is governed by the vector schema fingerprint:
+--
+--   * has_providers + disable_symbols_input: symbols never enter the input
+--     vector, so providers_digest alone is authoritative. Symbol-list drift
+--     is ignored (dist = 0 when providers_digest matches).
+--   * has_providers (hybrid mode): providers_digest must match (otherwise the
+--     fused vector dimensions differ); symbol drift is tolerated and surfaced
+--     as the returned dist for the caller's tie-breaking.
+--   * pure symbols (no providers): legacy Levenshtein-tolerance — accept when
+--     dist < 30% of |set.symbols|.
+--
+-- Profiles trained with providers are rejected for pure-symbol rules (mixed
+-- vector schemas) and vice versa.
+--
+-- Returns (compatible_bool, dist_number).  `dist` is math.huge on rejection.
+local function is_profile_compatible(rule, set, profile_elt, current_providers_digest)
+  if not profile_elt then return false, math.huge end
+  local has_providers = rule.providers and #rule.providers > 0
+
+  if has_providers then
+    if not current_providers_digest or not profile_elt.providers_digest then
+      return false, math.huge
+    end
+    if profile_elt.providers_digest ~= current_providers_digest then
+      return false, math.huge
+    end
+    if rule.disable_symbols_input then
+      return true, 0
+    end
+    local dist = 0
+    if profile_elt.symbols and set.symbols then
+      dist = lua_util.distance_sorted(profile_elt.symbols, set.symbols)
+    end
+    return true, dist
+  end
+
+  -- Pure symbols mode: reject profiles trained with providers (vector schemas
+  -- would be incompatible).
+  if profile_elt.providers_digest then
+    return false, math.huge
+  end
+  if not profile_elt.symbols or not set.symbols then
+    return false, math.huge
+  end
+  -- Accept profiles whose symbol list still overlaps the current one by at
+  -- least 50% (i.e. Levenshtein drift < 50% of |set.symbols|). The previous
+  -- 30% threshold rejected the old profile on every modest config change
+  -- and inference went completely dark until a new ANN trained from scratch
+  -- (weeks under realistic class imbalance). With this looser cap the worker
+  -- keeps using the old profile's redis_key -- and crucially its OWN symbol
+  -- list, since result_to_vector uses profile.symbols -- so the trained
+  -- weights stay correctly indexed against the features that produced them.
+  local dist = lua_util.distance_sorted(profile_elt.symbols, set.symbols)
+  if dist >= #set.symbols * 0.5 then
+    return false, dist
+  end
+  return true, dist
+end
+
 -- Compute a stable digest for providers configuration
 local function providers_config_digest(providers_cfg, rule)
   if not providers_cfg then return nil end
@@ -1083,11 +1207,16 @@ local function spawn_train(params)
         end
       end
 
-      lua_util.debugm(N, rspamd_config, "start neural train for ANN %s:%s",
-        params.rule.prefix, params.set.name)
+      local learning_rate = params.rule.train.learning_rate
+      if not learning_rate then
+        learning_rate = uses_dense_features(params.rule) and 0.001 or 0.01
+      end
+
+      lua_util.debugm(N, rspamd_config, "start neural train for ANN %s:%s (lr=%s)",
+        params.rule.prefix, params.set.name, learning_rate)
       local ret, err = pcall(train_ann.train1, train_ann,
         inputs, outputs, {
-          lr = params.rule.train.learning_rate,
+          lr = learning_rate,
           max_epoch = params.rule.train.max_iterations,
           cb = train_cb,
           pca = pca
@@ -1101,6 +1230,52 @@ local function spawn_train(params)
       else
         lua_util.debugm(N, rspamd_config, "finished neural train for ANN %s:%s",
           params.rule.prefix, params.set.name)
+      end
+
+      -- Quality gate: reject degenerate models before saving. A bad weight
+      -- init can drive the net into tanh saturation: constant output for any
+      -- input (typically exactly +1 or -1), near-zero gradients and a frozen
+      -- loss, while train1 still "succeeds". Saving such a model would
+      -- classify every message into one class until the next retrain.
+      -- Training sets are kept on this path, so the next watch_interval cycle
+      -- retries with a different weight init.
+      do
+        local out_min, out_max = math.huge, -math.huge
+        local pred_spam, pred_ham = 0, 0
+        for i = 1, #inputs do
+          local out = train_ann:apply1(inputs[i], pca)
+          local o = out[1]
+          if o ~= o then
+            -- NaN output, force rejection
+            out_min, out_max = 0, 0
+            break
+          end
+          if o < out_min then
+            out_min = o
+          end
+          if o > out_max then
+            out_max = o
+          end
+          if o > 0 then
+            pred_spam = pred_spam + 1
+          else
+            pred_ham = pred_ham + 1
+          end
+        end
+        local single_class = (#params.spam_vec > 0 and #params.ham_vec > 0)
+            and (pred_spam == 0 or pred_ham == 0)
+        if (out_max - out_min) < 1e-4 or single_class then
+          -- NB: never return nil from this child function: a nil return writes
+          -- no reply to the parent and deadlocks both processes; return an
+          -- explicit rejection marker instead
+          return ucl.to_format({
+            rejected = string.format(
+              'degenerate model: constant or single-class output on the train set ' ..
+              '(output range %s..%s; predicted spam=%s ham=%s of %s samples); ' ..
+              'consider lowering train.learning_rate if this repeats',
+              out_min, out_max, pred_spam, pred_ham, #inputs)
+          }, 'msgpack')
+        end
       end
 
       local roc_thresholds = {}
@@ -1139,7 +1314,10 @@ local function spawn_train(params)
           params.rule.prefix, params.set.name, #final_data)
         return final_data
       else
-        return nil
+        -- See the rejection marker note above: nil return would deadlock
+        return ucl.to_format({
+          rejected = 'NaN cost observed during training'
+        }, 'msgpack')
       end
     end
 
@@ -1186,9 +1364,12 @@ local function spawn_train(params)
 
     local function ann_trained(err, data)
       params.set.learning_spawned = false
-      if err then
+      -- Empty data means the training child rejected the model (NaN cost or
+      -- the degenerate-model quality gate) without a hard error
+      if err or not data or #data == 0 then
         rspamd_logger.errx(rspamd_config, 'cannot train ANN %s:%s : %s',
-          params.rule.prefix, params.set.name, err)
+          params.rule.prefix, params.set.name,
+          err or 'training child returned no model (rejected or failed)')
         lua_redis.redis_make_request_taskless(params.ev_base,
           rspamd_config,
           params.rule.redis,
@@ -1216,6 +1397,24 @@ local function spawn_train(params)
           return
         end
         local parsed = parser:get_object()
+
+        if parsed.rejected then
+          -- The training child refused to produce a model (degenerate output
+          -- or NaN cost); unlock and keep training sets for the next cycle
+          rspamd_logger.errx(rspamd_config, 'rejected ANN %s:%s: %s',
+            params.rule.prefix, params.set.name, parsed.rejected)
+          lua_redis.redis_make_request_taskless(params.ev_base,
+            rspamd_config,
+            params.rule.redis,
+            nil,
+            true,
+            gen_unlock_cb(params.rule, params.set, params.ann_key),
+            'HDEL',
+            { params.ann_key, 'lock' }
+          )
+          return
+        end
+
         local ann_data = rspamd_util.zstd_compress(parsed.ann_data)
         local pca_data = parsed.pca_data
         local roc_thresholds = parsed.roc_thresholds
@@ -1234,7 +1433,21 @@ local function spawn_train(params)
 
         -- Deserialise ANN from the child process
         local loaded_ann = rspamd_kann.load(parsed.ann_data)
-        local version = (params.set.ann.version or 0) + 1
+        -- Seed the new version from the profile we actually trained from, not
+        -- from the in-memory set.ann: fill_set_ann resets set.ann.version to 0
+        -- whenever this worker never loaded an ANN (restart, or the selected
+        -- profile's blob was missing), which would make the freshly trained ANN
+        -- regress below the stale zset entries.  process_existing_ann selects by
+        -- highest version, so a regressed entry is never picked and the blob is
+        -- stranded.  The trained-from key encodes its version as the trailing
+        -- _<n>; basing the new version on it guarantees the new entry outranks
+        -- the profile it supersedes.
+        local trained_from_version = tonumber(tostring(params.ann_key):match('_(%d+)$'))
+        local base_version = math.max(
+          trained_from_version or 0,
+          (params.set.training_profile and params.set.training_profile.version) or 0,
+          (params.set.ann and params.set.ann.version) or 0)
+        local version = base_version + 1
         params.set.ann.version = version
         params.set.ann.ann = loaded_ann
         params.set.ann.symbols = params.set.symbols
@@ -1343,12 +1556,33 @@ local function process_rules_settings()
 
     table.sort(selt.symbols)
 
-    selt.digest = lua_util.table_digest(selt.symbols)
+    -- Profile digest -- forms part of the Redis key holding the trained ANN
+    -- (rn_<rule>_<settings>_<digest>_<v>). It MUST be stable across config
+    -- changes that don't alter the model's input-vector schema; otherwise
+    -- the trained ANN is abandoned and inference silently degrades until a
+    -- new sample set retrains it (weeks under realistic class imbalance).
+    --
+    -- With disable_symbols_input + providers, symbols never enter the input
+    -- vector (see is_profile_compatible above); the architecture is fully
+    -- determined by providers + fusion + max_inputs config. Hashing the
+    -- unrelated symbol catalogue here used to rotate the digest whenever
+    -- any rspamd symbol was added/removed elsewhere (a new RBL, multimap
+    -- rule, etc.), and operators had to manually COPY the Redis key over
+    -- to the new digest to recover.
+    local has_providers = rule.providers and #rule.providers > 0
+    local digest_source
+    if has_providers and rule.disable_symbols_input then
+      selt.digest = providers_config_digest(rule.providers, rule)
+      digest_source = 'providers'
+    else
+      selt.digest = lua_util.table_digest(selt.symbols)
+      digest_source = 'symbols'
+    end
     selt.prefix = redis_ann_prefix(rule, selt.name)
 
     rspamd_logger.messagex(rspamd_config,
-      'use NN prefix for rule %s; settings id "%s"; symbols digest: "%s"',
-      selt.prefix, selt.name, selt.digest)
+      'use NN prefix for rule %s; settings id "%s"; %s digest: "%s"',
+      selt.prefix, selt.name, digest_source, selt.digest)
 
     lua_redis.register_prefix(selt.prefix, N,
       string.format('NN prefix for rule "%s"; settings id "%s"',
@@ -1495,12 +1729,15 @@ return {
   gen_unlock_cb = gen_unlock_cb,
   get_provider = get_provider,
   get_rule_settings = get_rule_settings,
+  is_profile_compatible = is_profile_compatible,
   load_scripts = load_scripts,
   module_config = module_config,
   new_ann_key = new_ann_key,
   pending_train_key = pending_train_key,
   providers_config_digest = providers_config_digest,
   register_provider = register_provider,
+  register_architecture = register_architecture,
+  get_architecture = get_architecture,
   plugin_ver = plugin_ver,
   process_rules_settings = process_rules_settings,
   redis_ann_prefix = redis_ann_prefix,

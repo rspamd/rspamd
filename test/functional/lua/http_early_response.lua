@@ -4,11 +4,18 @@ Test HTTP client behavior when server sends early responses.
 This tests edge cases where a server responds before the client has finished
 sending the request body (which is allowed by HTTP/1.1 spec).
 
-The test server (dummy_http_early_response.py) runs on port 18083.
+The test server (dummy_http_early_response.py) runs on port 18083
+(per-pabot-worker offset applied via rspamd_env.PORT_DUMMY_HTTP_EARLY).
 ]]
 
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
+
+-- dummy_http_early_response port comes from the test harness; rspamd_env
+-- strips the RSPAMD_ prefix so PORT_DUMMY_HTTP_EARLY carries the per-pabot
+-- worker slot value. Default to the historical literal for ad-hoc runs.
+local early_port = tonumber(rspamd_env and rspamd_env.PORT_DUMMY_HTTP_EARLY) or 18083
+local base_url = string.format('http://127.0.0.1:%d', early_port)
 
 -- Register all possible result symbols upfront
 -- These are the symbols that will be inserted based on HTTP response codes
@@ -94,7 +101,7 @@ local function test_early_reply(task)
   end
 
   rspamd_http.request({
-    url = 'http://127.0.0.1:18083/early-reply',
+    url = base_url .. '/early-reply',
     task = task,
     method = 'post',
     body = large_body,
@@ -125,7 +132,7 @@ local function test_early_error_413(task)
   end
 
   rspamd_http.request({
-    url = 'http://127.0.0.1:18083/early-error-413',
+    url = base_url .. '/early-error-413',
     task = task,
     method = 'post',
     body = large_body,
@@ -151,7 +158,7 @@ local function test_keepalive_early(task)
   end
 
   rspamd_http.request({
-    url = 'http://127.0.0.1:18083/keepalive-early',
+    url = base_url .. '/keepalive-early',
     task = task,
     method = 'post',
     body = body,
@@ -172,7 +179,7 @@ local function test_early_reply_coro(task)
   local body = table.concat(body_parts)
 
   local err, response = rspamd_http.request({
-    url = 'http://127.0.0.1:18083/early-reply',
+    url = base_url .. '/early-reply',
     task = task,
     method = 'post',
     body = body,
@@ -203,7 +210,7 @@ local function test_normal_request(task)
   end
 
   rspamd_http.request({
-    url = 'http://127.0.0.1:18083/request',
+    url = base_url .. '/request',
     task = task,
     method = 'post',
     body = 'normal test body',
@@ -258,7 +265,7 @@ local function test_keepalive_sequential(task)
   -- Make 3 sequential requests using keepalive
   for i = 1, 3 do
     local err, response = rspamd_http.request({
-      url = 'http://127.0.0.1:18083/keepalive-normal',
+      url = base_url .. '/keepalive-normal',
       task = task,
       method = 'post',
       body = string.format('request %d body', i),
@@ -312,7 +319,7 @@ local function test_early_keepalive_stress(task)
     end
 
     local err, response = rspamd_http.request({
-      url = 'http://127.0.0.1:18083' .. endpoint,
+      url = base_url .. endpoint,
       task = task,
       method = 'post',
       body = table.concat(body_parts),
@@ -365,7 +372,7 @@ local function test_immediate_close_large(task)
   end
 
   rspamd_http.request({
-    url = 'http://127.0.0.1:18083/immediate-close-413',
+    url = base_url .. '/immediate-close-413',
     task = task,
     method = 'post',
     body = large_body,
@@ -393,7 +400,7 @@ local function test_slow_response_large(task)
   local body = table.concat(body_parts)
 
   local err, response = rspamd_http.request({
-    url = 'http://127.0.0.1:18083/slow-response-no-drain',
+    url = base_url .. '/slow-response-no-drain',
     task = task,
     method = 'post',
     body = body,
@@ -427,7 +434,7 @@ local function test_rapid_close_requests(task)
 
   for i = 1, 5 do
     local err, response = rspamd_http.request({
-      url = 'http://127.0.0.1:18083/immediate-close-413',
+      url = base_url .. '/immediate-close-413',
       task = task,
       method = 'post',
       body = body,
@@ -481,7 +488,7 @@ local function test_block_and_reply(task)
   end
 
   rspamd_http.request({
-    url = 'http://127.0.0.1:18083/block-and-reply',
+    url = base_url .. '/block-and-reply',
     task = task,
     method = 'post',
     body = huge_body,
@@ -506,7 +513,7 @@ local function test_block_and_reply_coro(task)
   local huge_body = string.rep("Y", 512 * 1024)
 
   local err, response = rspamd_http.request({
-    url = 'http://127.0.0.1:18083/block-and-reply',
+    url = base_url .. '/block-and-reply',
     task = task,
     method = 'post',
     body = huge_body,
@@ -538,7 +545,7 @@ local function test_block_slow(task)
   local huge_body = string.rep("Z", 1024 * 1024)
 
   local err, response = rspamd_http.request({
-    url = 'http://127.0.0.1:18083/block-and-reply-slow',
+    url = base_url .. '/block-and-reply-slow',
     task = task,
     method = 'post',
     body = huge_body,
@@ -571,7 +578,7 @@ local function test_instant_reply(task)
   local huge_body = string.rep("Z", 512 * 1024)
 
   local err, response = rspamd_http.request({
-    url = 'http://127.0.0.1:18083/instant-reply',
+    url = base_url .. '/instant-reply',
     task = task,
     method = 'post',
     body = huge_body,

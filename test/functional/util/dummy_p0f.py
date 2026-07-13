@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-PID = "/tmp/dummy_p0f.pid"
-
 import os
 import sys
 import struct
@@ -9,6 +7,7 @@ import socket
 import socketserver
 
 import dummy_killer
+import dummy_pidfile
 
 class MyStreamHandler(socketserver.BaseRequestHandler):
 
@@ -87,7 +86,15 @@ if __name__ == "__main__":
     server.server_activate()
 
     dummy_killer.setup_killer(server)
-    dummy_killer.write_pid(PID)
+    # PID path: explicit 4th arg if the harness passed one (so it can wait
+    # on exactly this path), else derive from the socket basename so
+    # multiple workers/instances never collide on the historical
+    # /tmp/dummy_p0f.pid.
+    if alen > 4:
+        pid_path = sys.argv[4]
+    else:
+        pid_path = dummy_pidfile.pid_path('p0f', os.path.basename(SOCK))
+    dummy_killer.write_pid(pid_path)
 
     try:
         server.handle_request()

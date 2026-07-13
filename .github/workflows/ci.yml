@@ -4,15 +4,42 @@ on:
   pull_request:
     branches:
       - master
+  # In rspamd/rspamd push only triggers on master -- feature branches are
+  # covered by the `pull_request` event once a PR is open, so we never fire
+  # both `push` (refs/heads/<branch>) and `pull_request` (refs/pull/<n>/merge)
+  # for the same commit, which previously left a spurious *cancelled* run that
+  # reads like a CI failure.
+  # In forks push triggers on all branches so that CI runs without opening a PR.
   push:
     branches:
       - '**'
 
+# A commit pushed to a branch that also has an open PR fires two runs at once:
+# one for `push` (refs/heads/<branch>) and one for `pull_request`
+# (refs/pull/<n>/merge). Key the concurrency group on the head SHA so both
+# events for the same commit share a group: cancel-in-progress reaps the older
+# run. In rspamd/rspamd the push trigger is restricted to master so the
+# duplicate never occurs there; the SHA key is a no-op for that repo but keeps
+# the behaviour correct in forks where push fires on all branches.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   linters:
+    # In rspamd/rspamd skip push runs on feature branches: pull_request already
+    # covers them. In forks run on every push so CI works without an open PR.
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_linters.yml
 
   fedora:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
@@ -20,13 +47,22 @@ jobs:
       enable_luajit: 'OFF'
 
   ubuntu_amd64:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci-amd64
 
   ubuntu_arm64:
-    if: ${{ !vars.NO_ARM }}
+    if: |
+      !vars.NO_ARM && (
+        github.event_name == 'pull_request' ||
+        github.ref == 'refs/heads/master' ||
+        github.repository != 'rspamd/rspamd'
+      )
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
@@ -34,18 +70,30 @@ jobs:
       runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
 
   ubuntu-focal:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-focal
       name: ubuntu-focal
 
   centos-8:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:centos-8
       name: centos-8
 
   centos-9:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:centos-9
@@ -53,6 +101,10 @@ jobs:
 
   webui-e2e-playwright:
     needs: ubuntu_amd64
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_webui_e2e_playwright.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci

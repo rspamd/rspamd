@@ -2417,9 +2417,10 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 					reply = rspamd_fstring_new_init(milter_ctx->quarantine_message,
 													strlen(milter_ctx->quarantine_message));
 				}
-				rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE, reply);
 			}
 
+			/* A caller-supplied reply is used as the quarantine reason */
+			rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE, reply);
 			/* Quarantine also requires accept action, all hail Sendmail */
 			rspamd_milter_send_action(session, RSPAMD_MILTER_ACCEPT);
 		}
@@ -2507,9 +2508,10 @@ void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
 				reply = rspamd_fstring_new_init(milter_ctx->quarantine_message,
 												strlen(milter_ctx->quarantine_message));
 			}
-			rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE, reply);
 		}
 
+		/* A caller-supplied reply is used as the quarantine reason */
+		rspamd_milter_send_action(session, RSPAMD_MILTER_QUARANTINE, reply);
 		/* Quarantine also requires accept action, all hail Sendmail */
 		rspamd_milter_send_action(session, RSPAMD_MILTER_ACCEPT);
 		break;

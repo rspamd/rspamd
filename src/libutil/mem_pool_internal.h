@@ -47,6 +47,12 @@ struct rspamd_mempool_entry_point {
 	uint32_t cur_vars;
 	uint32_t cur_dtors; /**< suggested number of destructors to preallocate */
 	struct entry_elt elts[ENTRY_NELTS];
+	/* Live counters for per-callsite reporting */
+	uint64_t pools_allocated;       /**< lifetime: pools created at this callsite */
+	uint64_t pools_freed;           /**< lifetime: pools deleted at this callsite */
+	uint64_t chunks_allocated;      /**< lifetime: chunks (initial + extra) allocated */
+	uint64_t bytes_allocated_total; /**< lifetime: bytes allocated for chains */
+	uint64_t bytes_currently_used;  /**< bytes currently held by live chains */
 };
 
 /**

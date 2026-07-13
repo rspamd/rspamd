@@ -2538,14 +2538,14 @@ start_spf_parse(struct spf_record *rec, struct spf_resolved_element *resolved,
 		}
 	}
 	else if (g_ascii_strncasecmp(begin, SPF_VER2_STR, sizeof(SPF_VER2_STR) - 1) == 0) {
-		/* Skip one number of record, so no we are here spf2.0/ */
-		begin += sizeof(SPF_VER2_STR);
-		if (*begin != '/') {
+		/* Skip the validated "spf2." prefix, then the version digit and '/' */
+		begin += sizeof(SPF_VER2_STR) - 1;
+		if (begin[0] == '\0' || begin[1] != '/') {
 			msg_notice_spf("spf error for domain %s: sender id is invalid",
 						   rec->sender_domain);
 		}
 		else {
-			begin++;
+			begin += 2;
 			parse_spf_scopes(rec, &begin);
 		}
 		/* Now common spf record */

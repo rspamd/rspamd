@@ -594,6 +594,30 @@ float rspamd_sum_floats(float *ar, gsize *nelts);
  */
 void rspamd_normalize_path_inplace(char *path, unsigned int len, gsize *nlen);
 
+/**
+ * Per-process memory information collected from OS-specific sources.
+ * All fields are in bytes; unsupported fields are left at zero.
+ */
+struct rspamd_proc_mem_info {
+	uint64_t vm_size;   /**< total virtual memory size                       */
+	uint64_t vm_rss;    /**< resident set size                                */
+	uint64_t vm_data;   /**< data segment size (Linux only)                   */
+	uint64_t vm_stack;  /**< stack size (Linux only)                          */
+	uint64_t vm_text;   /**< text/code size (Linux only)                      */
+	uint64_t vm_lib;    /**< shared library size (Linux only)                 */
+	uint64_t vm_pte;    /**< page table entries size (Linux only)             */
+	uint64_t rss_anon;  /**< anonymous resident pages (Linux only)            */
+	uint64_t rss_file;  /**< file-backed resident pages (Linux only)          */
+	uint64_t rss_shmem; /**< shared memory resident pages (Linux only)        */
+};
+
+/**
+ * Fill the structure with current process memory info using OS-specific APIs.
+ * Returns TRUE if at least vm_rss could be obtained. Fields that are not
+ * available on the current platform are left set to zero.
+ */
+gboolean rspamd_get_process_memory_info(struct rspamd_proc_mem_info *info);
+
 #ifdef __cplusplus
 }
 #endif

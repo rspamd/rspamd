@@ -28,28 +28,24 @@
 
 /* Simple macros to define behaviour */
 #define KANN_LAYER_DEF(name) static int lua_kann_layer_##name(lua_State *L)
-#define KANN_LAYER_INTERFACE(name)   \
-	{                                \
-		#name, lua_kann_layer_##name \
-	}
+#define KANN_LAYER_INTERFACE(name) \
+	{                              \
+		#name, lua_kann_layer_##name}
 
 #define KANN_TRANSFORM_DEF(name) static int lua_kann_transform_##name(lua_State *L)
-#define KANN_TRANSFORM_INTERFACE(name)   \
-	{                                    \
-		#name, lua_kann_transform_##name \
-	}
+#define KANN_TRANSFORM_INTERFACE(name) \
+	{                                  \
+		#name, lua_kann_transform_##name}
 
 #define KANN_LOSS_DEF(name) static int lua_kann_loss_##name(lua_State *L)
-#define KANN_LOSS_INTERFACE(name)   \
-	{                               \
-		#name, lua_kann_loss_##name \
-	}
+#define KANN_LOSS_INTERFACE(name) \
+	{                             \
+		#name, lua_kann_loss_##name}
 
 #define KANN_NEW_DEF(name) static int lua_kann_new_##name(lua_State *L)
-#define KANN_NEW_INTERFACE(name)   \
-	{                              \
-		#name, lua_kann_new_##name \
-	}
+#define KANN_NEW_INTERFACE(name) \
+	{                            \
+		#name, lua_kann_new_##name}
 
 
 /*
@@ -71,11 +67,13 @@ KANN_LAYER_DEF(input3d);
 KANN_LAYER_DEF(cost);
 
 static int lua_kann_layer_layerdropout(lua_State *L); /* forward declaration */
+static int lua_kann_layer_attn_pool(lua_State *L);    /* forward declaration */
 
 static luaL_reg rspamd_kann_layers_f[] = {
 	KANN_LAYER_INTERFACE(input),
 	KANN_LAYER_INTERFACE(dense),
 	KANN_LAYER_INTERFACE(layernorm),
+	{"attn_pool", lua_kann_layer_attn_pool},  /* manually registered - extra args */
 	{"dropout", lua_kann_layer_layerdropout}, /* manually registered - different naming */
 	KANN_LAYER_INTERFACE(rnn),
 	KANN_LAYER_INTERFACE(lstm),
@@ -107,6 +105,10 @@ KANN_TRANSFORM_DEF(1minus);
 KANN_TRANSFORM_DEF(exp);
 KANN_TRANSFORM_DEF(log);
 KANN_TRANSFORM_DEF(sin);
+
+static int lua_kann_transform_slice(lua_State *L);  /* forward declaration */
+static int lua_kann_transform_concat(lua_State *L); /* forward declaration */
+
 static luaL_reg rspamd_kann_transform_f[] = {
 	KANN_TRANSFORM_INTERFACE(add),
 	KANN_TRANSFORM_INTERFACE(sub),
@@ -124,6 +126,8 @@ static luaL_reg rspamd_kann_transform_f[] = {
 	KANN_TRANSFORM_INTERFACE(exp),
 	KANN_TRANSFORM_INTERFACE(log),
 	KANN_TRANSFORM_INTERFACE(sin),
+	{"slice", lua_kann_transform_slice},   /* manually registered - extra args */
+	{"concat", lua_kann_transform_concat}, /* manually registered - extra args */
 	{NULL, NULL},
 };
 
@@ -410,6 +414,121 @@ lua_kann_layer_layerdropout(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments, input + rate required");
 	}
+
+	return 1;
+}
+
+/***
+ * @function kann.layer.attn_pool(in, n_words[, n_heads[, flags]])
+ * Creates a multi-head attention pooling layer over a flattened sequence of
+ * zero-padded word vectors. The input dimension must be a multiple of
+ * n_words; the per-word dimension is derived as input_dim / n_words.
+ * Output dimension is n_heads * per-word dimension.
+ * @param {kann_node} in kann node, (batch, n_words * dim)
+ * @param {int} n_words number of word positions in the sequence
+ * @param {int} n_heads number of learned attention queries (default 4)
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
+static int
+lua_kann_layer_attn_pool(lua_State *L)
+{
+	kad_node_t *in = lua_check_kann_node(L, 1);
+	int n_words = luaL_checkinteger(L, 2);
+	int n_heads = luaL_optinteger(L, 3, 4);
+
+	if (in != NULL && n_words > 0 && n_heads > 0) {
+		kad_node_t *t;
+
+		t = kann_layer_attn_pool(in, n_words, n_heads);
+
+		if (t == NULL) {
+			return luaL_error(L, "invalid attn_pool: input dimension %d "
+								 "is not a multiple of n_words %d",
+							  in->n_d == 2 ? in->d[1] : -1, n_words);
+		}
+
+		PROCESS_KAD_FLAGS(t, 4);
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, input + n_words + n_heads required");
+	}
+
+	return 1;
+}
+
+/***
+ * @function kann.transform.slice(in, axis, start, end)
+ * Takes a slice [start, end) on the axis-th dimension (both 0-based, the
+ * batch dimension is axis 0, so feature slicing of a plain input is axis 1).
+ * @param {kann_node} in kann node
+ * @param {int} axis 0-based dimension index
+ * @param {int} start 0-based start offset (inclusive)
+ * @param {int} end 0-based end offset (exclusive)
+ * @return {kann_node} kann node object
+*/
+static int
+lua_kann_transform_slice(lua_State *L)
+{
+	kad_node_t *in = lua_check_kann_node(L, 1);
+	int axis = luaL_checkinteger(L, 2);
+	int start = luaL_checkinteger(L, 3);
+	int end = luaL_checkinteger(L, 4);
+
+	if (in != NULL && start >= 0 && end > start) {
+		kad_node_t *t;
+
+		t = kad_slice(in, axis, start, end);
+
+		if (t == NULL) {
+			return luaL_error(L, "invalid slice [%d, %d) on axis %d", start, end, axis);
+		}
+
+		PUSH_KAD_NODE(t);
+	}
+	else {
+		return luaL_error(L, "invalid arguments, input + axis + [start, end) required");
+	}
+
+	return 1;
+}
+
+/***
+ * @function kann.transform.concat(axis, in1, in2[, ...])
+ * Concatenates nodes on the axis-th dimension (0-based; feature
+ * concatenation of plain vectors is axis 1).
+ * @param {int} axis 0-based dimension index
+ * @param {kann_node} in1, in2, ... nodes to concatenate
+ * @return {kann_node} kann node object
+*/
+static int
+lua_kann_transform_concat(lua_State *L)
+{
+	int axis = luaL_checkinteger(L, 1);
+	int n = lua_gettop(L) - 1;
+	kad_node_t *nodes[32];
+
+	if (n < 2 || n > (int) G_N_ELEMENTS(nodes)) {
+		return luaL_error(L, "concat requires from 2 to %d nodes, got %d",
+						  (int) G_N_ELEMENTS(nodes), n);
+	}
+
+	for (int i = 0; i < n; i++) {
+		nodes[i] = lua_check_kann_node(L, i + 2);
+
+		if (nodes[i] == NULL) {
+			return luaL_error(L, "invalid node at position %d", i + 1);
+		}
+	}
+
+	kad_node_t *t = kad_concat_array(axis, n, nodes);
+
+	if (t == NULL) {
+		return luaL_error(L, "cannot concat nodes on axis %d (dimension mismatch?)", axis);
+	}
+
+	PUSH_KAD_NODE(t);
 
 	return 1;
 }
@@ -981,6 +1100,8 @@ lua_kann_save(lua_State *L)
 				kann_save_fp(f, k);
 				fclose(f);
 
+				/* Pop the `filename` field before pushing the result */
+				lua_pop(L, 1);
 				lua_pushboolean(L, true);
 			}
 			else {
@@ -988,8 +1109,6 @@ lua_kann_save(lua_State *L)
 
 				return luaL_error(L, "invalid arguments: missing filename");
 			}
-
-			lua_pop(L, 1);
 		}
 		else {
 			/* Save to Rspamd text */
@@ -1028,7 +1147,11 @@ lua_kann_load(lua_State *L)
 	FILE *f = NULL;
 
 	if (lua_istable(L, 1)) {
-		lua_getfield(L, 2, "filename");
+		/*
+		 * load is a module function (rspamd_kann.load), not a method, so the
+		 * options table is at arg 1 (unlike save where arg 1 is self).
+		 */
+		lua_getfield(L, 1, "filename");
 
 		if (lua_isstring(L, -1)) {
 			const char *fname = lua_tostring(L, -1);

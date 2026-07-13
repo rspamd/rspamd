@@ -20,5 +20,7 @@ EMPTY TEST
 Systemd Teardown
   Touch  ${RSPAMD_TMPDIR}/rspamd.log
   Rspamd Teardown
-  ${log} =  Get File  ${EXECDIR}/robot-save/rspamd.stderr.last
+  # See sibling 001_timestamps.robot for why .last is unsafe under
+  # parallel pabot -- read the per-suite save instead.
+  ${log} =  Get File  ${EXECDIR}/robot-save/${SUITE_NAME}/rspamd.stderr
   Should Match Regexp  ${log}  \\n\\(main\\) lua; lua_cfg_transform\\.lua:\\d+: overriding actions from the legacy metric settings\\n

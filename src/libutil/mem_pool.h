@@ -363,15 +363,56 @@ void rspamd_mempool_runlock_rwlock(rspamd_mempool_rwlock_t *lock);
 void rspamd_mempool_wunlock_rwlock(rspamd_mempool_rwlock_t *lock);
 
 /**
- * Get pool allocator statistics
+ * Get pool allocator statistics aggregated across every process that
+ * shares the rspamd mempool counters page (i.e. rspamd_main plus all
+ * forked workers, since the page is mmap'd MAP_SHARED before fork).
  * @param st stat pool struct
  */
 void rspamd_mempool_stat(rspamd_mempool_stat_t *st);
 
 /**
- * Reset memory pool stat
+ * Get the calling process's local view of the mempool counters. Unlike
+ * rspamd_mempool_stat(), the underlying counters live in the BSS and are
+ * duplicated on fork, so each worker reports its own running totals from
+ * program start (counters accumulated before fork are inherited as the
+ * baseline; resetting at fork time is the caller's responsibility).
+ * @param st destination stat struct, must be non-NULL
+ */
+void rspamd_mempool_stat_local(rspamd_mempool_stat_t *st);
+
+/**
+ * Reset memory pool stat (both the shared aggregate and the local copy).
  */
 void rspamd_mempool_stat_reset(void);
+
+/**
+ * Per-callsite mempool statistics, aggregated from the rolling history
+ */
+typedef struct rspamd_mempool_entry_stat_s {
+	const char *src;            /**< callsite location string (file:line)    */
+	uint32_t cur_suggestion;    /**< current suggested pool size              */
+	uint32_t cur_elts;          /**< suggested number of preallocated elts    */
+	uint32_t cur_vars;          /**< suggested number of preallocated vars    */
+	uint32_t cur_dtors;         /**< suggested number of preallocated dtors   */
+	uint32_t avg_fragmentation; /**< average fragmentation across history     */
+	uint32_t avg_leftover;      /**< average leftover across history          */
+	uint32_t samples;           /**< number of valid samples used for averages */
+	uint64_t pools_allocated;   /**< lifetime: pools allocated at this callsite */
+	uint64_t pools_freed;       /**< lifetime: pools freed at this callsite   */
+	uint64_t chunks_allocated;  /**< lifetime: chunks allocated at this callsite */
+	uint64_t bytes_allocated_total; /**< lifetime: bytes allocated for chains at this callsite */
+	uint64_t bytes_currently_used;  /**< current bytes held by live pool chains at this callsite */
+} rspamd_mempool_entry_stat_t;
+
+typedef void (*rspamd_mempool_entry_cb)(const rspamd_mempool_entry_stat_t *stat,
+										void *ud);
+
+/**
+ * Iterate over all currently registered mempool callsite entries.
+ * The callback is invoked synchronously for each entry; the rspamd_mempool_entry_stat_t
+ * pointer and its src field are valid only for the duration of the callback.
+ */
+void rspamd_mempool_entries_foreach(rspamd_mempool_entry_cb cb, void *ud);
 
 /**
  * Get optimal pool size based on page size for this system

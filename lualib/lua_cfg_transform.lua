@@ -37,7 +37,8 @@ local function surbl_section_convert(cfg, section)
         converted.whitelist = wl
       end
 
-      for k, v in value:pairs() do
+      for opt, v in value:pairs() do
+        local k = opt
         local skip = false
         -- Rename
         if k == 'suffix' then
@@ -103,7 +104,8 @@ local function emails_section_convert(cfg, section)
         converted.whitelist = wl
       end
 
-      for k, v in value:pairs() do
+      for opt, v in value:pairs() do
+        local k = opt
         local skip = false
         -- Rename
         if k == 'dnsbl' then
@@ -180,12 +182,13 @@ local function group_transform(cfg, k, v)
   local symbol_section = v:at('symbol')
   if symbol_section and symbol_section:type() == 'object' then
     for sk, sv in symbol_section:pairs() do
+      local sym_name = sk
       if sv:type() == 'object' and sv:at('name') then
-        sk = sv:at('name'):unwrap()
+        sym_name = sv:at('name'):unwrap()
         sv.name = nil -- Remove field
       end
 
-      new_group.symbols[sk] = sv
+      new_group.symbols[sym_name] = sv
     end
   end
 

@@ -113,7 +113,14 @@ lua_upstream_get_addr(lua_State *L)
 	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
-		rspamd_lua_ip_push(L, rspamd_upstream_addr_next(up->up));
+		rspamd_inet_addr_t *addr = rspamd_upstream_addr_next(up->up);
+		if (addr) {
+			rspamd_lua_ip_push(L, addr);
+		}
+		else {
+			/* Upstream has no addresses yet (pending DNS resolution) */
+			lua_pushnil(L);
+		}
 	}
 	else {
 		lua_pushnil(L);
@@ -190,6 +197,7 @@ lua_upstream_fail(lua_State *L)
 		}
 
 		rspamd_upstream_fail(up->up, fail_addr, reason);
+		up->retired = 1;
 	}
 
 	return 0;
@@ -207,6 +215,7 @@ lua_upstream_ok(lua_State *L)
 
 	if (up) {
 		rspamd_upstream_ok(up->up);
+		up->retired = 1;
 	}
 
 	return 0;
@@ -219,6 +228,15 @@ lua_upstream_destroy(lua_State *L)
 	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
+		/*
+		 * Lua callers can forget to pair :get_upstream_*() with :ok()/:fail().
+		 * Retire the inflight reference here so abandoned selections don't
+		 * permanently skew P2C scoring. Wrappers from all_upstreams() and
+		 * watch callbacks set acquired = FALSE and are skipped.
+		 */
+		if (up->acquired && !up->retired) {
+			rspamd_upstream_release(up->up);
+		}
 		/* Remove reference to the parent */
 		luaL_unref(L, LUA_REGISTRYINDEX, up->upref);
 		/* Upstream belongs to the upstream list, so no free here */
@@ -239,7 +257,8 @@ lua_check_upstream_list(lua_State *L)
 }
 
 static struct rspamd_lua_upstream *
-lua_push_upstream(lua_State *L, int up_idx, struct upstream *up)
+lua_push_upstream(lua_State *L, int up_idx, struct upstream *up,
+				  gboolean acquired)
 {
 	struct rspamd_lua_upstream *lua_ups;
 
@@ -249,6 +268,8 @@ lua_push_upstream(lua_State *L, int up_idx, struct upstream *up)
 
 	lua_ups = lua_newuserdata(L, sizeof(*lua_ups));
 	lua_ups->up = up;
+	lua_ups->acquired = acquired ? 1 : 0;
+	lua_ups->retired = 0;
 	rspamd_lua_setclass(L, rspamd_upstream_classname, -1);
 	/* Store parent in the upstream to prevent gc */
 	lua_pushvalue(L, up_idx);
@@ -367,7 +388,7 @@ lua_upstream_list_get_upstream_by_hash(lua_State *L)
 										   (unsigned int) keyl);
 
 			if (selected) {
-				lua_push_upstream(L, 1, selected);
+				lua_push_upstream(L, 1, selected, TRUE);
 			}
 			else {
 				lua_pushnil(L);
@@ -401,7 +422,7 @@ lua_upstream_list_get_upstream_round_robin(lua_State *L)
 
 		selected = rspamd_upstream_get(upl, RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 		if (selected) {
-			lua_push_upstream(L, 1, selected);
+			lua_push_upstream(L, 1, selected, TRUE);
 		}
 		else {
 			lua_pushnil(L);
@@ -433,7 +454,7 @@ lua_upstream_list_get_upstream_master_slave(lua_State *L)
 									   NULL,
 									   0);
 		if (selected) {
-			lua_push_upstream(L, 1, selected);
+			lua_push_upstream(L, 1, selected, TRUE);
 		}
 		else {
 			lua_pushnil(L);
@@ -455,7 +476,8 @@ static void lua_upstream_inserter(struct upstream *up, unsigned int idx, void *u
 {
 	struct upstream_foreach_cbdata *cbd = (struct upstream_foreach_cbdata *) ud;
 
-	lua_push_upstream(cbd->L, cbd->ups_pos, up);
+	/* all_upstreams() is a pure view; no inflight to retire on __gc. */
+	lua_push_upstream(cbd->L, cbd->ups_pos, up, FALSE);
 	lua_rawseti(cbd->L, -2, idx + 1);
 }
 /***
@@ -563,6 +585,9 @@ lua_upstream_watch_func(struct upstream *up,
 
 	struct rspamd_lua_upstream *lua_ups = lua_newuserdata(L, sizeof(*lua_ups));
 	lua_ups->up = up;
+	/* Watcher event: no inflight reference, leave it that way on __gc. */
+	lua_ups->acquired = 0;
+	lua_ups->retired = 0;
 	rspamd_lua_setclass(L, rspamd_upstream_classname, -1);
 	/* Store parent in the upstream to prevent gc */
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cdata->parent_cbref);

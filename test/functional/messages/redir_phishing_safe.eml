@@ -1,0 +1,3 @@
+Content-type: text/html
+
+<a href="http://redir.example.net:${RSPAMD_PORT_DUMMY_HTTP}/redir_to_example">http://www.example.com/</a>

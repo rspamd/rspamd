@@ -1434,6 +1434,20 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	/* Propagate source/classification flags from the parent (outer) URL */
 	url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
 
+	/*
+	 * Link the query URL to its parent so CTA/button weight can propagate to it
+	 * (it owns no tag). Only if unset: a later PHISHED/REDIRECTED decision may
+	 * override linked_url, and get_phished/get_redirected only follow it then.
+	 */
+	if (cbd->url) {
+		if (url->ext == nullptr) {
+			url->ext = rspamd_mempool_alloc0_type(pool, rspamd_url_ext);
+		}
+		if (url->ext->linked_url == nullptr) {
+			url->ext->linked_url = cbd->url;
+		}
+	}
+
 	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false)) {
 		html_part_add_url(cbd->part_urls, url);
 	}
@@ -1456,9 +1470,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		qcbd.part_urls = part_urls;
 		qcbd.parent_flags = url->flags;
 
-		rspamd_url_find_multiple(pool,
-								 rspamd_url_query_unsafe(url), url->querylen,
-								 RSPAMD_URL_FIND_ALL, NULL,
+		rspamd_url_find_in_query(pool, url, RSPAMD_URL_FIND_ALL,
 								 html_url_query_callback, &qcbd, L);
 	}
 
@@ -1735,46 +1747,14 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
 	}
 
-	/* Offscreen heuristic: negative text-indent or large negative left/top */
-	if (auto style = tag->find_style()) {
-		auto sv = *style;
-		/* text-indent */
-		auto p_ti = rspamd_substring_search_caseless(sv.data(), sv.size(), "text-indent", sizeof("text-indent") - 1);
-		if (p_ti != -1) {
-			/* look ahead for '-' before a digit */
-			for (std::size_t i = p_ti; i < sv.size(); i++) {
-				char c = sv[i];
-				if (c == '-') {
-					/* consider offscreen */
-					hc->features.offscreen_blocks++;
-					break;
-				}
-				if (g_ascii_isdigit(c)) break;
-			}
-		}
-		/* left/top negative absolute */
-		auto p_left = rspamd_substring_search_caseless(sv.data(), sv.size(), "left", sizeof("left") - 1);
-		if (p_left != -1) {
-			for (std::size_t i = p_left; i < sv.size(); i++) {
-				char c = sv[i];
-				if (c == '-') {
-					hc->features.offscreen_blocks++;
-					break;
-				}
-				if (g_ascii_isdigit(c)) break;
-			}
-		}
-		auto p_top = rspamd_substring_search_caseless(sv.data(), sv.size(), "top", sizeof("top") - 1);
-		if (p_top != -1) {
-			for (std::size_t i = p_top; i < sv.size(); i++) {
-				char c = sv[i];
-				if (c == '-') {
-					hc->features.offscreen_blocks++;
-					break;
-				}
-				if (g_ascii_isdigit(c)) break;
-			}
-		}
+	/*
+	 * Off-screen positioning / clipping is detected while compiling the
+	 * inline style into the block (position+left/top, text-indent, clip).
+	 * Count it here, per tag with its own style, before children inherit
+	 * a copy of the block
+	 */
+	if (tag->block->offscreen) {
+		hc->features.offscreen_blocks++;
 	}
 }
 

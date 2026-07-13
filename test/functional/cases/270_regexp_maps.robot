@@ -11,6 +11,7 @@ ${MESSAGE1}        ${RSPAMD_TESTDIR}/messages/advance_fee_fraud.eml
 ${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/sa_header_body_raw.eml
 ${FULLMSG}         ${RSPAMD_TESTDIR}/messages/sa_full_boundary.eml
 ${URL1}            ${RSPAMD_TESTDIR}/messages/url1.eml
+${SPOOFMSG}        ${RSPAMD_TESTDIR}/messages/sa_display_name_spoof.eml
 ${RSPAMD_SCOPE}    Suite
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
@@ -103,3 +104,28 @@ SA-Like: Meta Complex
     [Documentation]    Complex meta combining negation and rawbody
     Scan File  ${MESSAGE2}
     Expect Symbol  SA_META_COMPLEX
+
+SA-Like: Display Name Match
+    [Documentation]    Selector =~ on from:name matches Bank of America display name
+    Scan File  ${SPOOFMSG}
+    Expect Symbol  SA_SEL_BOFA_DISPLAY
+
+SA-Like: Display Name Match Miss
+    [Documentation]    SA_SEL_BOFA_DISPLAY must not fire when display name differs
+    Scan File  ${MESSAGE2}
+    Do Not Expect Symbol  SA_SEL_BOFA_DISPLAY
+
+SA-Like: Domain Negation Match
+    [Documentation]    Selector !~ on from:domain fires when domain is not the legit one
+    Scan File  ${SPOOFMSG}
+    Expect Symbol  SA_SEL_BOFA_NOT_DOMAIN
+
+SA-Like: BOFA Spoof Meta
+    [Documentation]    Meta of display-match AND domain-mismatch fires on spoofed message
+    Scan File  ${SPOOFMSG}
+    Expect Symbol With Score  SA_META_BOFA_SPOOF  6.0
+
+SA-Like: BOFA Spoof Meta Miss
+    [Documentation]    BOFA meta does not fire on a non-spoofed message
+    Scan File  ${MESSAGE2}
+    Do Not Expect Symbol  SA_META_BOFA_SPOOF

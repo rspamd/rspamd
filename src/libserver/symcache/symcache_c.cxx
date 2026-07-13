@@ -104,6 +104,13 @@ bool rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
 
 	/* Handle empty or absent strings equally */
 	if (value == nullptr || value[0] == '\0') {
+		/* Check if augmentation uses "key=value" format */
+		const char *eq = strchr(augmentation, '=');
+		if (eq != nullptr && eq != augmentation && eq[1] != '\0') {
+			return item->add_augmentation(*real_cache,
+										  std::string_view{augmentation, static_cast<size_t>(eq - augmentation)},
+										  std::string_view{eq + 1});
+		}
 		return item->add_augmentation(*real_cache, augmentation, std::nullopt);
 	}
 
@@ -320,11 +327,59 @@ unsigned int rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
 	return 0;
 }
 
+unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
+											  const char *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	/* Resolve virtual symbols to their parent so the stage reflects where the
+	 * symbol is actually produced (e.g. NEURAL_SPAM -> NEURAL_CHECK postfilter). */
+	auto *sym = real_cache->get_item_by_name(symbol, true);
+
+	if (sym == nullptr) {
+		return 0;
+	}
+
+	switch (sym->get_type()) {
+	case rspamd::symcache::symcache_item_type::CONNFILTER:
+		return SYMBOL_TYPE_CONNFILTER;
+	case rspamd::symcache::symcache_item_type::PREFILTER:
+		return SYMBOL_TYPE_PREFILTER;
+	case rspamd::symcache::symcache_item_type::FILTER:
+		return SYMBOL_TYPE_NORMAL;
+	case rspamd::symcache::symcache_item_type::POSTFILTER:
+		return SYMBOL_TYPE_POSTFILTER;
+	case rspamd::symcache::symcache_item_type::IDEMPOTENT:
+		return SYMBOL_TYPE_IDEMPOTENT;
+	case rspamd::symcache::symcache_item_type::CLASSIFIER:
+		return SYMBOL_TYPE_CLASSIFIER;
+	case rspamd::symcache::symcache_item_type::COMPOSITE:
+		return SYMBOL_TYPE_COMPOSITE;
+	case rspamd::symcache::symcache_item_type::VIRTUAL:
+		/* Unresolved virtual (parent missing); treat stage as unknown */
+		return SYMBOL_TYPE_VIRTUAL;
+	}
+
+	return 0;
+}
+
 const struct rspamd_symcache_item_stat *
 rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	return real_item->st;
+}
+
+GString *
+rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task)
+{
+	if (task == nullptr || task->symcache_runtime == nullptr) {
+		return nullptr;
+	}
+
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	return cache_runtime->describe_inflight_symbols();
 }
 
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,

@@ -2296,7 +2296,7 @@ rspamd_string_find_eoh(GString *input, goffset *body_start)
 				 * if it is '\n', then we have \r\r\n sequence, that is NOT
 				 * double end of line
 				 */
-				if (p < end && p[1] == '\n') {
+				if (p + 1 < end && p[1] == '\n') {
 					p++;
 					state = got_lf;
 				}
@@ -3102,10 +3102,11 @@ rspamd_decode_qp2047_buf(const char *in, gsize inlen,
 			remain--;
 
 			if (remain == 0) {
+				/* Last '=' character without following hex digits */
 				if (end - o > 0) {
-					*o++ = *p;
-					break;
+					*o++ = '=';
 				}
+				break;
 			}
 		decode:
 			/* Decode character after '=' */
@@ -3170,6 +3171,14 @@ rspamd_decode_qp2047_buf(const char *in, gsize inlen,
 						p++;
 						/* Skip comparison, as we know that we have found match */
 						remain--;
+
+						if (remain == 0) {
+							/* Trailing '=' without hex digits */
+							if (end - o > 0) {
+								*o++ = '=';
+							}
+							break;
+						}
 						goto decode;
 					}
 					else {
@@ -3506,6 +3515,11 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 		}
 	}
 
+	if (flags & RSPAMD_REGEXP_ESCAPE_ANCHOR) {
+		/* Room for ^(?: and )$ */
+		len += 6;
+	}
+
 	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
 		if (rspamd_fast_utf8_validate(pattern, slen) != 0) {
 			tmp_utf = rspamd_str_make_utf_valid(pattern, slen, NULL, NULL);
@@ -3537,6 +3551,11 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 	p = pattern;
 	d = res;
 	dend = d + len;
+
+	if (flags & RSPAMD_REGEXP_ESCAPE_ANCHOR) {
+		memcpy(d, "^(?:", 4);
+		d += 4;
+	}
 
 	while (p < end) {
 		g_assert(d < dend);
@@ -3635,6 +3654,11 @@ rspamd_str_regexp_escape(const char *pattern, gsize slen,
 		}
 
 		*d++ = t;
+	}
+
+	if (flags & RSPAMD_REGEXP_ESCAPE_ANCHOR) {
+		*d++ = ')';
+		*d++ = '$';
 	}
 
 	*d = '\0';

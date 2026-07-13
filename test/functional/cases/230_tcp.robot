@@ -4,6 +4,7 @@ Suite Teardown   Servers Teardown
 Library          Process
 Library          ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource         ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Test Tags       notparallel
 Variables        ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
@@ -48,6 +49,25 @@ Sync API TCP get request
 #  Check url  /request  post  HTTP_SYNC_EOF_post  hello post
 #  Check url  /content-length  post  HTTP_SYNC_CONTENT_post  hello post
 
+Phased timeouts on success path
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [PHASED_TIMEOUT_TEST]}
+  Expect Symbol  PHASED_TCP_OK
+  Do Not Expect Symbol  PHASED_TCP_ERROR
+
+on_error fires on connect refused
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [ON_ERROR_REFUSED_TEST]}
+  Expect Symbol  ON_ERROR_FIRED
+  Do Not Expect Symbol  ON_ERROR_REGULAR_CB_FIRED
+
+on_error not fired post-connect
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [ON_ERROR_POST_CONNECT_TEST]}
+  Expect Symbol  POST_CONNECT_READ_TIMEOUT
+  Do Not Expect Symbol  POST_CONNECT_ON_ERROR_FIRED
+  Do Not Expect Symbol  POST_CONNECT_READ_OK
+
 *** Keywords ***
 Servers Setup
   Run Dummy Http
@@ -61,11 +81,15 @@ Servers Teardown
 
 Run Dummy Ssl
   [Arguments]
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem
-  Wait Until Created  /tmp/dummy_ssl.pid  timeout=2 second
+  ${pid} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_ssl-${RSPAMD_PORT_DUMMY_SSL}.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_ssl-${RSPAMD_PORT_DUMMY_SSL}.log
+  Set Suite Variable  ${DUMMY_SSL_PID_FILE}  ${pid}
+  Start Dummy Service  dummy_ssl.py  ${pid}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem  ${RSPAMD_PORT_DUMMY_SSL}  ${pid}
+  Wait Until Dummy Listening  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_DUMMY_SSL}
 
 Teardown Dummy Ssl
-  ${ssl_pid} =  Get File  /tmp/dummy_ssl.pid
+  ${ssl_pid} =  Get File  ${DUMMY_SSL_PID_FILE}
   Shutdown Process With Children  ${ssl_pid}
 
 Check url

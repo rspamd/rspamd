@@ -872,6 +872,9 @@ end
 --[[[
 -- @function lua_mime.modify_headers(task, {add = {hname = {value = 'value', order = 1}}, remove = {hname = {1,2}}})
 -- Adds/removes headers both internal and in the milter reply
+-- An optional `order` list of header names makes the resulting header sequence
+-- deterministic in both the milter reply and the internal message (without it
+-- the headers are emitted in arbitrary hash order)
 -- Mode defines to be compatible with Rspamd <=3.2 and is the default (equal to 'compat')
 --]]
 exports.modify_headers = function(task, hdr_alterations, mode)
@@ -884,6 +887,8 @@ exports.modify_headers = function(task, hdr_alterations, mode)
 
   local add_headers = {} -- For Milter reply
   local hdr_flattened = {} -- For C API
+  local add_order = {} -- Ordered, de-duplicated list of added header names
+  local add_seen = {} -- Tracks header names already recorded in add_order
 
   local function flatten_add_header(hname, hdr)
     if not add_headers[hname] then
@@ -918,14 +923,27 @@ exports.modify_headers = function(task, hdr_alterations, mode)
       add_headers[hname] = add_headers[hname][1]
     end
   end
+  -- Record the order in which `add` headers are processed. With an explicit
+  -- `hdr_alterations.order` list this order is honoured for both the milter
+  -- reply and the internal header path, so callers such as arc.lua get a
+  -- deterministic header layout.
+  local function record_and_flatten(hname, hdr)
+    if hdr == nil then
+      return
+    end
+    if not add_seen[hname] then
+      add_seen[hname] = true
+      add_order[#add_order + 1] = hname
+    end
+    flatten_add_header(hname, hdr)
+  end
   if hdr_alterations.order then
-    -- Get headers alterations ordered
     for _, hname in ipairs(hdr_alterations.order) do
-      flatten_add_header(hname, add[hname])
+      record_and_flatten(hname, add[hname])
     end
   else
     for hname, hdr in pairs(add) do
-      flatten_add_header(hname, hdr)
+      record_and_flatten(hname, hdr)
     end
   end
 
@@ -958,13 +976,47 @@ exports.modify_headers = function(task, hdr_alterations, mode)
       hdr_alterations.remove = nil
     end
   end
-  task:set_milter_reply({
-    add_headers = add_headers,
-    remove_headers = hdr_alterations.remove
-  })
+  -- Emit the milter reply. When an explicit order was requested, send one
+  -- reply per header in that order: set_milter_reply merges replies
+  -- cumulatively, and a single-key reply has no ambiguous iteration order, so
+  -- the merged add_headers object keeps the requested sequence. A plain
+  -- multi-key Lua table would otherwise be serialised in arbitrary hash order.
+  if add_headers and hdr_alterations.order and #add_order > 1 then
+    local pending_remove = hdr_alterations.remove
+    for _, hname in ipairs(add_order) do
+      local hdr = add_headers[hname]
+      if hdr ~= nil then
+        task:set_milter_reply({
+          add_headers = { [hname] = hdr },
+          remove_headers = pending_remove,
+        })
+        pending_remove = nil
+      end
+    end
+    if pending_remove then
+      task:set_milter_reply({ remove_headers = pending_remove })
+    end
+  else
+    task:set_milter_reply({
+      add_headers = add_headers,
+      remove_headers = hdr_alterations.remove
+    })
+  end
 
+  -- Apply internal header modifications in a deterministic order: added
+  -- headers first, following add_order (the caller-requested order when given,
+  -- arbitrary otherwise), then any headers that only have removals.
+  local applied = {}
+  for _, hname in ipairs(add_order) do
+    if hdr_flattened[hname] and not applied[hname] then
+      applied[hname] = true
+      task:modify_header(hname, hdr_flattened[hname])
+    end
+  end
   for hname, flat_rules in pairs(hdr_flattened) do
-    task:modify_header(hname, flat_rules)
+    if not applied[hname] then
+      task:modify_header(hname, flat_rules)
+    end
   end
 end
 

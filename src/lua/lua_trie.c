@@ -264,11 +264,22 @@ lua_trie_search_str(lua_State *L, struct rspamd_multipattern *trie,
 
 /***
  * @method trie:match(input, [cb][, report_start])
- * Search for patterns in `input` invoking `cb` optionally ignoring case
+ * Search for patterns in `input` invoking `cb` optionally ignoring case.
+ *
+ * Offset convention: the pattern index `idx` is 1-based (Lua style). Match
+ * offsets are byte offsets and are 0-based: when `report_start` is set the
+ * `start` is the inclusive offset of the first matched byte and the `end` is
+ * the exclusive offset one past the last matched byte (so `end - start` is the
+ * match length). When `report_start` is not set only the (exclusive) end
+ * offset is reported, matching the historical behaviour. Start offsets are
+ * available for every occurrence by default; pass `rspamd_trie.flags.som` at
+ * creation time to request them explicitly (and to keep them even when
+ * combined with `single_match`/`no_start`).
+ *
  * @param {table or string} input one or several (if `input` is an array) strings of input text
- * @param {function} cb callback called on each pattern match in form `function (idx, pos)` where `idx` is a numeric index of pattern (starting from 1) and `pos` is a numeric offset where the pattern ends
+ * @param {function} cb callback called on each pattern match in form `function (idx, pos)` where `idx` is the 1-based pattern index and `pos` is the match end offset; when `report_start` is set `pos` is instead a table `{start, end}`
  * @param {boolean} report_start report both start and end offset when matching patterns
- * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however). If `cb` is not defined then it returns a table of match positions indexed by pattern number
+ * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however). If `cb` is not defined then it returns a table indexed by pattern number, each entry being a list of every occurrence (either the end offset, or `{start, end}` when `report_start` is set)
  */
 static int
 lua_trie_match(lua_State *L)
@@ -484,6 +495,8 @@ lua_load_trie(lua_State *L)
 	lua_setfield(L, -2, "single_match");
 	lua_pushinteger(L, RSPAMD_MULTIPATTERN_NO_START);
 	lua_setfield(L, -2, "no_start");
+	lua_pushinteger(L, RSPAMD_MULTIPATTERN_SOM);
+	lua_setfield(L, -2, "som");
 	lua_settable(L, -3);
 
 	/* Main content */

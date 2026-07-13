@@ -231,7 +231,14 @@ rspamd_monitored_dns_random(struct rspamd_monitored *m,
 							struct rspamd_dns_monitored_conf *conf)
 {
 	char random_prefix[32];
-	const char dns_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+	/*
+	 * Only use alphanumeric characters to form a valid DNS label: a label must
+	 * not start or end with a hyphen (RFC 952/1123) and underscores are invalid
+	 * in hostnames used for A queries. Including them produced prefixes such as
+	 * `_Q8...0-` or `-7d0...` that authoritative DNSBL servers reject with
+	 * SERVFAIL (see #6103).
+	 */
+	const char dns_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	int len;
 
 	len = rspamd_random_uint64_fast() % sizeof(random_prefix);

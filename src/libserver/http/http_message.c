@@ -122,6 +122,21 @@ rspamd_http_message_from_url(const char *url)
 	msg->host = g_string_new_len(host, pu.field_data[UF_HOST].len);
 	msg->url = rspamd_fstring_append(msg->url, path, pathlen);
 
+	if ((pu.field_set & (1 << UF_PATH)) == 0 &&
+		(pu.field_set & (1 << UF_QUERY)) != 0) {
+		/*
+		 * URL has a query but no path (e.g. http://host?a=b): the default
+		 * path "/" was used above, which is a literal not pointing into the
+		 * query, so the query was not included. Append "?<query>" explicitly,
+		 * otherwise the request-target would be just "/" and the query string
+		 * would be silently dropped.
+		 */
+		msg->url = rspamd_fstring_append(msg->url, "?", 1);
+		msg->url = rspamd_fstring_append(msg->url,
+										 url + pu.field_data[UF_QUERY].off,
+										 pu.field_data[UF_QUERY].len);
+	}
+
 	REF_INIT_RETAIN(msg, rspamd_http_message_free);
 
 	return msg;
@@ -572,6 +587,7 @@ void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 		hdr->name.len = nlen;
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
+		hdr->order = msg->header_cnt++;
 
 		k = kh_put(rspamd_http_headers_hash, msg->headers, &hdr->name,
 				   &r);
@@ -616,6 +632,7 @@ void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
 		hdr->name.len = nlen;
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
+		hdr->order = msg->header_cnt++;
 
 		k = kh_put(rspamd_http_headers_hash, msg->headers, &hdr->name,
 				   &r);

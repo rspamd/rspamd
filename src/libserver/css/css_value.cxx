@@ -124,7 +124,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 			else if (dbl < 0) {
 				dbl = 0;
 			}
-			ret = (std::uint8_t)(dbl / 100.0 * 255.0);
+			ret = (std::uint8_t) (dbl / 100.0 * 255.0);
 		}
 		else {
 			if (dbl > 255) {
@@ -134,7 +134,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 				dbl = 0;
 			}
 
-			ret = (std::uint8_t)(dbl);
+			ret = (std::uint8_t) (dbl);
 		}
 	}
 
@@ -170,7 +170,7 @@ constexpr static inline auto alpha_component_convert(const css_parser_token &tok
 		}
 	}
 
-	return (std::uint8_t)(ret * 255.0);
+	return (std::uint8_t) (ret * 255.0);
 }
 
 constexpr static inline auto h_component_convert(const css_parser_token &tok)
@@ -244,9 +244,9 @@ static inline auto hsl_to_rgb(double h, double s, double l)
 	else {
 		auto q = l <= 0.5 ? l * (1.0 + s) : l + s - l * s;
 		auto p = 2.0 * l - q;
-		ret.r = (std::uint8_t)(hue2rgb(p, q, h + 1.0 / 3.0) * 255);
-		ret.g = (std::uint8_t)(hue2rgb(p, q, h) * 255);
-		ret.b = (std::uint8_t)(hue2rgb(p, q, h - 1.0 / 3.0) * 255);
+		ret.r = (std::uint8_t) (hue2rgb(p, q, h + 1.0 / 3.0) * 255);
+		ret.g = (std::uint8_t) (hue2rgb(p, q, h) * 255);
+		ret.b = (std::uint8_t) (hue2rgb(p, q, h - 1.0 / 3.0) * 255);
 	}
 
 	ret.alpha = 255;
@@ -320,6 +320,7 @@ auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 
 constexpr const auto display_names_map = frozen::make_unordered_map<frozen::string, css_display_value>({
 	{"hidden", css_display_value::DISPLAY_HIDDEN},
+	{"collapse", css_display_value::DISPLAY_HIDDEN},
 	{"none", css_display_value::DISPLAY_HIDDEN},
 	{"inline", css_display_value::DISPLAY_INLINE},
 	{"block", css_display_value::DISPLAY_BLOCK},

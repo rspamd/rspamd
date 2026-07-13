@@ -1329,11 +1329,28 @@ rspamd_http_connection_new_client(struct rspamd_http_context *ctx,
 				return NULL;
 			}
 
+			/* The selected proxy upstream is handed off to new_common but
+			 * never tracked through the request lifecycle here; retire the
+			 * inflight counter at connect-success time so P2C scoring stays
+			 * accurate. Wiring per-request success/failure is left for a
+			 * follow-up. */
+			rspamd_upstream_release(up);
+
 			return rspamd_http_connection_new_common(ctx, fd, body_handler,
 													 error_handler, finish_handler, opts,
 													 RSPAMD_HTTP_CLIENT,
 													 RSPAMD_HTTP_CONN_OWN_SOCKET | RSPAMD_HTTP_CONN_FLAG_PROXY,
 													 up);
+		}
+		else {
+			/*
+			 * Proxies are configured but none usable right now (all dead or
+			 * pending DNS resolution). Surface this so the admin knows
+			 * traffic is going direct instead of silently bypassing the
+			 * configured proxy chain.
+			 */
+			msg_info("no http proxy upstream available "
+					 "(all dead or pending DNS); falling back to direct connect");
 		}
 	}
 
@@ -1548,6 +1565,7 @@ rspamd_http_connection_copy_msg(struct rspamd_http_message *msg, GError **err)
 	new_msg->port = msg->port;
 	new_msg->date = msg->date;
 	new_msg->last_modified = msg->last_modified;
+	new_msg->header_cnt = msg->header_cnt;
 
 	kh_foreach_value(msg->headers, hdr, {
 		nhdrs = NULL;
@@ -1564,6 +1582,7 @@ rspamd_http_connection_copy_msg(struct rspamd_http_message *msg, GError **err)
 			nhdr->value.begin = nhdr->combined->str +
 								(hcur->value.begin - hcur->combined->str);
 			nhdr->value.len = hcur->value.len;
+			nhdr->order = hcur->order;
 			DL_APPEND(nhdrs, nhdr);
 		}
 
@@ -1675,6 +1694,28 @@ void rspamd_http_connection_read_message_shared(struct rspamd_http_connection *c
 											   RSPAMD_HTTP_FLAG_SHMEM);
 }
 
+/*
+ * Comparator for sorting header nodes by their insertion order. Used when
+ * RSPAMD_HTTP_FLAG_ORDERED_HEADERS is set so headers leave on the wire in the
+ * exact order the caller added them, instead of hash bucket order. Each header
+ * gets a unique `order` value, so qsort's instability never bites here.
+ */
+static int
+rspamd_http_header_cmp_order(const void *a, const void *b)
+{
+	const struct rspamd_http_header *ha = *(struct rspamd_http_header *const *) a;
+	const struct rspamd_http_header *hb = *(struct rspamd_http_header *const *) b;
+
+	if (ha->order < hb->order) {
+		return -1;
+	}
+	else if (ha->order > hb->order) {
+		return 1;
+	}
+
+	return 0;
+}
+
 static void
 rspamd_http_connection_encrypt_message(
 	struct rspamd_http_connection *conn,
@@ -1729,12 +1770,37 @@ rspamd_http_connection_encrypt_message(
 	}
 
 
-	kh_foreach_value (msg->headers, hdr, {
-		DL_FOREACH (hdr, hcur) {
-			segments[i].data = hcur->combined->str;
-			segments[i++].len = hcur->combined->len;
+	if (msg->flags & RSPAMD_HTTP_FLAG_ORDERED_HEADERS) {
+		struct rspamd_http_header **hdrs_sorted;
+		unsigned int nhdrs = 0;
+
+		hdrs_sorted = g_malloc(sizeof(*hdrs_sorted) * (hdrcount + 1));
+
+		kh_foreach_value (msg->headers, hdr, {
+			DL_FOREACH (hdr, hcur) {
+				hdrs_sorted[nhdrs++] = hcur;
+	}
+});
+
+qsort(hdrs_sorted, nhdrs, sizeof(*hdrs_sorted),
+	  rspamd_http_header_cmp_order);
+
+for (unsigned int j = 0; j < nhdrs; j++) {
+	segments[i].data = hdrs_sorted[j]->combined->str;
+	segments[i++].len = hdrs_sorted[j]->combined->len;
+}
+
+g_free(hdrs_sorted);
+}
+else
+{
+		kh_foreach_value (msg->headers, hdr, {
+			DL_FOREACH (hdr, hcur) {
+				segments[i].data = hcur->combined->str;
+				segments[i++].len = hcur->combined->len;
 }
 });
+}
 
 /* crlfp should point now at the second crlf */
 segments[i].data = crlfp;
@@ -2265,6 +2331,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			hdr->name.len = srch.len;
 			hdr->value.begin = hdr->combined->str + srch.len + 2;
 			hdr->value.len = vlen;
+			hdr->order = msg->header_cnt++;
 			hdr->prev = hdr; /* for utlists */
 
 			kh_value(msg->headers, k) = hdr;
@@ -2485,12 +2552,37 @@ if (encrypted) {
 else {
 	i = 1;
 	if (msg->method < HTTP_SYMBOLS) {
+		if (msg->flags & RSPAMD_HTTP_FLAG_ORDERED_HEADERS) {
+			struct rspamd_http_header **hdrs_sorted;
+			unsigned int nhdrs = 0;
+
+			hdrs_sorted = g_malloc(sizeof(*hdrs_sorted) * (hdrcount + 1));
+
+			kh_foreach_value (msg->headers, hdr, {
+				DL_FOREACH (hdr, hcur) {
+					hdrs_sorted[nhdrs++] = hcur;
+		}
+	});
+
+	qsort(hdrs_sorted, nhdrs, sizeof(*hdrs_sorted),
+		  rspamd_http_header_cmp_order);
+
+	for (unsigned int j = 0; j < nhdrs; j++) {
+		priv->out[i].iov_base = hdrs_sorted[j]->combined->str;
+		priv->out[i++].iov_len = hdrs_sorted[j]->combined->len;
+	}
+
+	g_free(hdrs_sorted);
+}
+else
+{
 			kh_foreach_value (msg->headers, hdr, {
 				DL_FOREACH (hdr, hcur) {
 					priv->out[i].iov_base = hcur->combined->str;
 					priv->out[i++].iov_len = hcur->combined->len;
-	}
+}
 });
+}
 
 priv->out[i].iov_base = "\r\n";
 priv->out[i++].iov_len = 2;

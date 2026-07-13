@@ -23,6 +23,7 @@
 #include "khash.h"
 #include "fstring.h"
 #include "libutil/cxx/utf8_util.h"
+#include "libutil/multipattern.h" /* for RSPAMD_MULTIPATTERN_MAX_REENTRANCY */
 
 #ifdef __cplusplus
 extern "C" {
@@ -123,6 +124,8 @@ struct rspamd_url_ext {
 	struct rspamd_url *linked_url;
 
 	uint16_t port;
+	/* Number of URLs found embedded in this URL's query string */
+	uint16_t query_embedded_urls;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -271,6 +274,62 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 							enum rspamd_url_find_type how,
 							url_insert_function func,
 							gpointer ud);
+
+/**
+ * How deep to follow URLs nested inside the query of an already query-extracted
+ * URL (a properly escaped wrapper carries one target per encoding layer).
+ *
+ * This is a functional limit on how far redirect/wrapper chains are unwrapped.
+ * Each level re-enters the URL multipattern scan while the enclosing scan is
+ * still on the stack, so the deepest chain holds this depth plus two scratch
+ * contexts (the enclosing text/subject scan, and the per-URL TLD lookup that
+ * rspamd_url_parse runs on the freshly extracted leaf). It must therefore stay
+ * comfortably below the multipattern scratch budget
+ * (RSPAMD_MULTIPATTERN_MAX_REENTRANCY); the static assert in url.c enforces
+ * that, and rspamd_multipattern_lookup() degrades gracefully if it is ever
+ * exceeded.
+ */
+#define RSPAMD_URL_QUERY_MAX_NESTING 5
+
+/**
+ * Find URLs embedded in the query parameters of `url`. Unlike
+ * rspamd_url_find_multiple, this walks the url's raw (still percent-encoded)
+ * query, splits it on the parameter separators '&' and ';', and decodes each
+ * value before scanning it. This bounds an embedded URL to its own parameter
+ * (its internal separators are %26/%3B at that point) instead of greedily
+ * swallowing the following parameters. URLs nested inside an extracted URL's
+ * own query are followed up to RSPAMD_URL_QUERY_MAX_NESTING levels.
+ * @param pool
+ * @param url url whose query is scanned
+ * @param how
+ * @param func callback invoked for each url found
+ * @param ud
+ * @param lua_state Lua state for consultation (may be NULL)
+ */
+void rspamd_url_find_in_query(rspamd_mempool_t *pool,
+							  struct rspamd_url *url,
+							  enum rspamd_url_find_type how,
+							  url_insert_function func,
+							  gpointer ud,
+							  void *lua_state);
+
+/**
+ * Invoke `func` for every URL embedded in `url`'s query, scanning a single
+ * level only (no nesting). Uses the same raw, per-parameter, decode-each-value
+ * bounding as rspamd_url_find_in_query.
+ * @param pool
+ * @param url url whose query is scanned
+ * @param how
+ * @param func callback invoked for each url found
+ * @param ud
+ * @param lua_state Lua state for consultation (may be NULL)
+ */
+void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
+									   struct rspamd_url *url,
+									   enum rspamd_url_find_type how,
+									   url_insert_function func,
+									   gpointer ud,
+									   void *lua_state);
 
 /**
  * Generic callback to insert URLs into rspamd_task

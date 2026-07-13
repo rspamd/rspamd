@@ -55,6 +55,11 @@ end
 -- Detect cloudmark max size
 local function cloudmark_preload(rule, cfg, ev_base, _)
   local upstream = rule.upstreams:get_upstream_round_robin()
+  if not upstream then
+    rspamd_logger.errx(ev_base or rspamd_config,
+        'cloudmark preload: no upstream available, will retry on next scan')
+    return
+  end
   local addr = upstream:get_addr()
   local function max_message_size_cb(http_err, code, body, _)
     if http_err then
@@ -258,7 +263,10 @@ end
 
 local function cloudmark_check(task, content, digest, rule, maybe_part)
   local function cloudmark_check_uncached()
-    local upstream = rule.upstreams:get_upstream_round_robin()
+    local upstream = common.get_upstream_or_fail(task, rule, maybe_part)
+    if not upstream then
+      return
+    end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
 
@@ -336,6 +344,11 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
+          if not upstream then
+            common.yield_result(task, rule,
+                'no upstream available for retry', 0.0, 'fail', maybe_part)
+            return
+          end
           addr = upstream:get_addr()
           url = cloudmark_url(rule, addr)
 

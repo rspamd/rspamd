@@ -67,7 +67,7 @@ p0f NO MATCH
 p0f BAD QUERY
   Run Dummy p0f  ${RSPAMD_P0F_SOCKET}  windows  bad_query
   Scan File  ${MESSAGE}  IP=1.1.1.7
-  Expect Symbol With Exact Options  P0F_FAIL  Malformed Query: /tmp/p0f.sock
+  Expect Symbol With Exact Options  P0F_FAIL  Malformed Query: ${RSPAMD_P0F_SOCKET}
   Do Not Expect Symbol  WINDOWS
   Shutdown p0f
 
@@ -88,10 +88,15 @@ p0f Teardown
   Terminate All Processes    kill=True
 
 Shutdown p0f
-  ${p0f_pid} =  Get File if exists  /tmp/dummy_p0f.pid
+  ${pidfile} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_p0f.pid
+  ${p0f_pid} =  Get File if exists  ${pidfile}
   Run Keyword if  ${p0f_pid}  Shutdown Process With Children  ${p0f_pid}
 
 Run Dummy p0f
   [Arguments]  ${socket}=${RSPAMD_P0F_SOCKET}  ${os}=linux  ${status}=ok
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_p0f.py  ${socket}  ${os}  ${status}
-  Wait Until Created  /tmp/dummy_p0f.pid
+  # Pass an explicit pid path so the helper writes exactly where we wait,
+  # and route through Start Dummy Service for the stale-pid-safe barrier.
+  ${pidfile} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_p0f.pid
+  ${log} =  Set Variable  ${RSPAMD_TMP_PREFIX}/dummy_p0f.log
+  Start Dummy Service  dummy_p0f.py  ${pidfile}  ${log}
+  ...  ${RSPAMD_TESTDIR}/util/dummy_p0f.py  ${socket}  ${os}  ${status}  ${pidfile}

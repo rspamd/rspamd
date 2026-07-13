@@ -105,10 +105,40 @@ void rspamd_composites_get_stats(void *cm_ptr, struct rspamd_composites_stats_ex
  * Mark symbols used in whitelist composites (negative score) with SYMBOL_TYPE_FINE
  * so they won't be skipped when reject threshold is reached. This ensures
  * whitelist composites can still evaluate correctly.
+ *
+ * Also performs the last step of static composites load — pinning the
+ * static-config generation as the base and recording its names — so that
+ * subsequent dynamic-map publishes can clone from a stable base. Safe to
+ * call multiple times.
+ *
  * @param cm_ptr composites manager pointer
  * @param cfg config structure
  */
 void rspamd_composites_mark_whitelist_deps(void *cm_ptr, struct rspamd_config *cfg);
+
+/**
+ * Register a dynamic composites map. The map is read as a UCL object
+ * mapping composite name → { expression, score, group, policy, description,
+ * groups, enabled }. On every reload the manager builds a fresh staging
+ * generation off the static base, layers the map's composites, materialises
+ * disabled stubs for names this map previously published but no longer
+ * mentions, and atomically swaps it in. In-flight tasks keep their
+ * pinned snapshot and continue with the previous generation.
+ *
+ * @param cm_ptr composites manager pointer
+ * @param obj UCL object describing the map (string URL, array of URLs,
+ *            or full map UCL with backends/signature/etc.)
+ * @param cfg config structure
+ * @return true if the map was registered with the watcher
+ */
+bool rspamd_composites_add_dynamic_map(void *cm_ptr, const ucl_object_t *obj,
+									   struct rspamd_config *cfg);
+
+/**
+ * Returns the current composites generation id (monotonically increasing
+ * across publishes). 0 if the manager has not published anything yet.
+ */
+uint64_t rspamd_composites_current_generation(void *cm_ptr);
 
 #ifdef __cplusplus
 }

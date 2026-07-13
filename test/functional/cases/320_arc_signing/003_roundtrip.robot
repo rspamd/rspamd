@@ -166,7 +166,7 @@ Write Mime Message To File
     END
   END
 
-  [Return]  ${temp_file}
+  RETURN    ${temp_file}
 
 Write Signed Message To File
   [Arguments]  ${scan_result}  ${filename}
@@ -175,4 +175,4 @@ Write Signed Message To File
   Log  WARNING: Write Signed Message To File is deprecated, use Write Mime Message To File
   ${temp_file} =  Set Variable  ${RSPAMD_TMPDIR}/${filename}
   Create File  ${temp_file}  ${scan_result.stdout}
-  [Return]  ${temp_file}
+  RETURN    ${temp_file}

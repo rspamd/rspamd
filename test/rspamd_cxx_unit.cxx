@@ -31,8 +31,17 @@
 #include "rspamd_cxx_unit_upstream_token_bucket.hxx"
 #include "rspamd_cxx_unit_upstream_ring_hash.hxx"
 #include "rspamd_cxx_unit_upstream_round_robin.hxx"
+#include "rspamd_cxx_unit_upstream_p2c.hxx"
+#include "rspamd_cxx_unit_upstream_slow_start.hxx"
+#include "rspamd_cxx_unit_upstream_latency.hxx"
+#include "rspamd_cxx_unit_upstream_srv.hxx"
 #include "rspamd_cxx_unit_multipart.hxx"
+#include "rspamd_cxx_unit_content_negotiation.hxx"
 #include "rspamd_cxx_unit_settings_merge.hxx"
+#include "rspamd_cxx_unit_fpconv.hxx"
+#include "rspamd_cxx_unit_symcache_timeout.hxx"
+#include "rspamd_cxx_unit_text_stats.hxx"
+#include "rspamd_cxx_unit_multipattern.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

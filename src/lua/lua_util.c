@@ -22,6 +22,7 @@
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
 #include "libutil/str_util.h"
+#include <zlib.h> /* for crc32() */
 #include "libserver/html/html.h"
 #include "libserver/hyperscan_tools.h"
 #include "libserver/async_session.h"
@@ -715,6 +716,20 @@ LUA_FUNCTION_DEF(util, caseless_hash);
 LUA_FUNCTION_DEF(util, caseless_hash_fast);
 
 /***
+ *  @function util.crc32(input[, start[, len]])
+ * Calculates the CRC-32 checksum of a string or rspamd_text, optionally over the
+ * byte range starting at `start` (1-indexed, default 1) and spanning `len` bytes
+ * (default: to the end). The range is read in place (no copy). This is the
+ * standard CRC-32 (zlib crc32 / YARA hash.crc32, polynomial 0xEDB88320) and the
+ * result is a Lua integer suitable for numeric comparison.
+ * @param {string|text} input data to checksum
+ * @param {integer} start 1-based start index
+ * @param {integer} len number of bytes
+ * @return {integer} crc32 value as an unsigned 32-bit integer
+ */
+LUA_FUNCTION_DEF(util, crc32);
+
+/***
  *  @function util.get_hostname()
  * Returns hostname for this machine
  * @return {string} hostname
@@ -836,6 +851,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, normalize_prob),
 	LUA_INTERFACE_DEF(util, caseless_hash),
 	LUA_INTERFACE_DEF(util, caseless_hash_fast),
+	LUA_INTERFACE_DEF(util, crc32),
 	LUA_INTERFACE_DEF(util, is_utf_spoofed),
 	LUA_INTERFACE_DEF(util, is_utf_mixed_script),
 	LUA_INTERFACE_DEF(util, is_utf_outside_range),
@@ -1076,8 +1092,8 @@ lua_util_process_message(lua_State *L)
 		task->fin_callback = lua_util_task_fin;
 		task->fin_arg = &res;
 		task->resolver = rspamd_dns_resolver_init(NULL, base, cfg);
-		task->s = rspamd_session_create(task->task_pool, rspamd_task_fin,
-										NULL, (event_finalizer_t) rspamd_task_free, task);
+		task->s = rspamd_task_create_session(task, task->task_pool, rspamd_task_fin,
+											 NULL, (event_finalizer_t) rspamd_task_free);
 
 		if (!rspamd_task_load_message(task, NULL, message, mlen)) {
 			lua_pushnil(L);
@@ -2435,6 +2451,57 @@ lua_util_caseless_hash_fast(lua_State *L)
 	h = rspamd_icase_hash(t->start, t->len, seed);
 	u.i = G_GUINT64_CONSTANT(0x3FF) << 52 | h >> 12;
 	lua_pushnumber(L, u.d - 1.0);
+
+	return 1;
+}
+
+static int
+lua_util_crc32(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = NULL;
+	int64_t start = 1, len = -1;
+
+	t = lua_check_text_or_string(L, 1);
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (lua_isnumber(L, 2)) {
+		start = lua_tointeger(L, 2);
+	}
+	if (lua_isnumber(L, 3)) {
+		len = lua_tointeger(L, 3);
+	}
+
+	if (start < 1 || (start - 1) > t->len) {
+		return luaL_error(L, "invalid start offset %d (input len %d)",
+						  (int) start, (int) t->len);
+	}
+
+	if (len == -1) {
+		len = t->len - (start - 1);
+	}
+
+	if (len < 0 || len > (t->len - (start - 1))) {
+		return luaL_error(L, "invalid length");
+	}
+
+	/* Standard CRC-32 (poly 0xEDB88320), bit-exact with zlib/YARA hash.crc32 */
+	const unsigned char *p = (const unsigned char *) t->start + (start - 1);
+	gsize remain = (gsize) len;
+	uLong crc = crc32(0L, Z_NULL, 0);
+
+	/* zlib crc32() takes a uInt length, so feed the slice in chunks */
+	while (remain > 0) {
+		uInt chunk = remain > G_MAXUINT ? G_MAXUINT : (uInt) remain;
+		crc = crc32(crc, p, chunk);
+		p += chunk;
+		remain -= chunk;
+	}
+
+	lua_pushinteger(L, (lua_Integer) (uint32_t) crc);
 
 	return 1;
 }
@@ -4475,6 +4542,7 @@ struct rspamd_ev_base_sleep_cbdata {
 	lua_State *L;
 	int cbref;
 	struct thread_entry *thread;
+	guint64 thread_generation;
 	struct rspamd_async_session *session;
 	ev_timer ev;
 };
@@ -4517,7 +4585,13 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 	}
 	else if (cbdata->thread) {
 		/* Sync mode: resume the coroutine */
-		lua_thread_resume(cbdata->thread, 0);
+		lua_thread_resume_checked(cbdata->thread, cbdata->thread_generation, 0);
+	}
+
+	if (cbdata->thread) {
+		/* Balances the retain taken when the coroutine went to sleep */
+		lua_thread_pool_release_entry(cbdata->thread);
+		cbdata->thread = NULL;
 	}
 
 	g_free(cbdata);
@@ -4600,6 +4674,9 @@ lua_ev_base_sleep(lua_State *L)
 
 			if (cfg && cfg->lua_thread_pool) {
 				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+				cbdata->thread_generation = cbdata->thread->generation;
+				/* Held until the timer fires, released in lua_ev_base_sleep_cb() */
+				lua_thread_pool_retain_entry(cbdata->thread);
 
 				/* Register session event if available so wait_session_events waits for us */
 				if (session) {

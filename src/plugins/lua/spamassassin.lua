@@ -711,8 +711,8 @@ local function process_sa_conf(f)
 
   local skip_to_endif = false
   local if_nested = 0
-  for l in f:lines() do
-    (function()
+  for raw_l in f:lines() do
+    (function(l)
       l = lua_util.rspamd_str_trim(l)
       -- Replace bla=~/re/ with bla =~ /re/ (#2372)
       l = l:gsub('([^%s])%s*([=!]~)%s*([^%s])', '%1 %2 %3')
@@ -1076,7 +1076,7 @@ local function process_sa_conf(f)
         end,
             fun.drop_n(1, words))
       end
-    end)()
+    end)(raw_l)
   end
   if valid_rule then
     insert_cur_rule()

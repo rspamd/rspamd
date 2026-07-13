@@ -28,6 +28,15 @@
 #include <unicode/usprep.h>
 #include <unicode/ucnv.h>
 
+/*
+ * Following a query-embedded URL re-enters the URL multipattern scan; the
+ * deepest chain holds RSPAMD_URL_QUERY_MAX_NESTING scratch contexts plus the
+ * enclosing scan and the leaf TLD lookup. Keep that on the fast static-scratch
+ * path of the multipattern matcher (a deeper run still works via the graceful
+ * fallback in rspamd_multipattern_lookup, just without a cached scratch).
+ */
+G_STATIC_ASSERT(RSPAMD_URL_QUERY_MAX_NESTING + 2 <= RSPAMD_MULTIPATTERN_MAX_REENTRANCY);
+
 /* Lua URL filter consultation return values */
 enum rspamd_url_lua_filter_result {
 	RSPAMD_URL_LUA_FILTER_ACCEPT = 0,     /* Continue parsing normally */
@@ -177,7 +186,12 @@ struct url_matcher static_matchers[] = {
 	 0},
 	/* Likely emails */
 	{
-		"@", "mailto://", url_email_start, url_email_end,
+		/*
+		 * mailto: is non-hierarchical (RFC 6068); inject the bare scheme
+		 * without // so a bare-text email canonicalises to the same string
+		 * as an explicitly parsed mailto: URL and the two deduplicate.
+		 */
+		"@", "mailto:", url_email_start, url_email_end,
 		0}};
 
 struct rspamd_url_flag_name {
@@ -746,7 +760,7 @@ rspamd_mailto_parse(struct http_parser_url *u,
 				p++;
 			}
 			else {
-				*flags |= RSPAMD_URL_FLAG_MISSINGSLASHES;
+				/* mailto: is non-hierarchical (RFC 6068); // is not required */
 				st = parse_slash_slash;
 			}
 			break;
@@ -1218,7 +1232,14 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				goto out;
 			}
 			else if (p - c > max_email_user) {
-				/* Oversized user field - consult Lua filter (fixes #5731) */
+				/*
+				 * Oversized user field is itself an obfuscation signal
+				 * (e.g. https://legit.com<lots-of-spaces>@evil.com/...),
+				 * so mark obscured regardless of what the Lua filter says.
+				 */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_HAS_USER;
+
+				/* Consult Lua filter (fixes #5731) */
 				enum rspamd_url_lua_filter_result lua_decision =
 					rspamd_url_lua_consult(c, p - c, *flags, (lua_State *) lua_state);
 
@@ -1226,12 +1247,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					/* REJECT: Lua says this is garbage, abort parsing */
 					goto out;
 				}
-				else if (lua_decision == RSPAMD_URL_LUA_FILTER_SUSPICIOUS) {
-					/* SUSPICIOUS: Mark as obscured for plugin analysis */
-					*flags |= RSPAMD_URL_FLAG_OBSCURED;
-				}
 				/* ACCEPT or SUSPICIOUS: continue parsing */
-				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 			}
 
 			p++;
@@ -1847,6 +1863,10 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 	gboolean ret = FALSE, check_num = TRUE;
 	uint32_t n, dots, t = 0, i = 0, shift, nshift;
 
+	if (uri->hostlen == 0) {
+		return FALSE;
+	}
+
 	p = rspamd_url_host_unsafe(uri);
 	end = p + uri->hostlen;
 
@@ -1855,7 +1875,8 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 		end--;
 	}
 
-	while (*(end - 1) == '.' && end > p) {
+	/* Bound check must come first: an all-dots host walks end down to p */
+	while (end > p && *(end - 1) == '.') {
 		end--;
 	}
 
@@ -2443,6 +2464,16 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 &unquoted_len, uri->flags);
 
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+
+	/*
+	 * URL-decoding the host can collapse it to nothing (e.g. a host that
+	 * is just a truncated "%" escape decodes to zero bytes). The hostlen
+	 * check above runs before decoding, so re-check here to keep an empty
+	 * host out of the downstream host parsing.
+	 */
+	if (uri->hostlen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
 
 	/*
 	 * Remove extra slashes between host and path.
@@ -3754,9 +3785,8 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 	if (url->querylen > 0) {
 		struct rspamd_url_mimepart_cbdata qcbd = *cbd;
 		qcbd.parent_flags = url->flags;
-		rspamd_url_find_multiple(task->task_pool,
-								 rspamd_url_query_unsafe(url), url->querylen,
-								 RSPAMD_URL_FIND_ALL, NULL,
+		rspamd_url_find_in_query(task->task_pool, url,
+								 RSPAMD_URL_FIND_ALL,
 								 rspamd_url_query_callback, &qcbd,
 								 task->cfg ? task->cfg->lua_state : NULL);
 	}
@@ -3839,6 +3869,165 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 	}
 }
 
+static void rspamd_url_find_in_query_depth(rspamd_mempool_t *pool,
+										   struct rspamd_url *url,
+										   enum rspamd_url_find_type how,
+										   url_insert_function func,
+										   gpointer ud,
+										   void *lua_state,
+										   unsigned int depth);
+
+struct rspamd_url_query_count_cbd {
+	rspamd_mempool_t *pool;
+	enum rspamd_url_find_type how;
+	url_insert_function func;
+	gpointer ud;
+	void *lua_state;
+	unsigned int depth;
+	unsigned int count;
+};
+
+static gboolean
+rspamd_url_query_count_cb(struct rspamd_url *url, gsize start_offset,
+						  gsize end_offset, gpointer ud)
+{
+	struct rspamd_url_query_count_cbd *cbd =
+		(struct rspamd_url_query_count_cbd *) ud;
+	gboolean ret;
+
+	cbd->count++;
+	ret = cbd->func(url, start_offset, end_offset, cbd->ud);
+
+	/* Recurse into the extracted URL's own query to unwrap nested (properly
+	 * escaped) targets, bounded by the nesting limit. Stop if the insert
+	 * callback bailed (e.g. max_urls reached). */
+	if (ret && cbd->depth + 1 < RSPAMD_URL_QUERY_MAX_NESTING &&
+		url->querylen > 0) {
+		rspamd_url_find_in_query_depth(cbd->pool, url, cbd->how, cbd->func,
+									   cbd->ud, cbd->lua_state, cbd->depth + 1);
+	}
+
+	return ret;
+}
+
+void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
+									   struct rspamd_url *url,
+									   enum rspamd_url_find_type how,
+									   url_insert_function func,
+									   gpointer ud,
+									   void *lua_state)
+{
+	const char *raw, *query, *end, *p, *c;
+
+	if (url->raw == NULL || url->rawlen == 0) {
+		return;
+	}
+
+	/*
+	 * Use the raw (percent-encoded) query: an embedded URL's own separators are
+	 * %26/%3B there, so splitting on literal '&'/';' bounds it to its parameter
+	 * instead of greedily reading into the following parameters.
+	 */
+	raw = url->raw;
+	query = memchr(raw, '?', url->rawlen);
+	if (query == NULL) {
+		return;
+	}
+	query++; /* skip '?' */
+	end = raw + url->rawlen;
+
+	{
+		const char *frag = memchr(query, '#', end - query);
+		if (frag != NULL) {
+			end = frag;
+		}
+	}
+
+	/*
+	 * Worst case the whole query decodes into one buffer; each parameter writes
+	 * into its own non-overlapping slot, so rspamd_url_parse can safely keep
+	 * raw pointers into it (the buffer lives for the pool's lifetime). Lazy
+	 * alloc keeps queries with no embedded URL paying nothing.
+	 */
+	const gsize query_total = (gsize) (end - query);
+	char *scratch = NULL;
+	gsize scratch_off = 0;
+
+	p = query;
+	c = query;
+	while (p <= end) {
+		if (p == end || *p == '&' || *p == ';') {
+			if (p > c) {
+				/*
+				 * Parameter [c, p): scan the value after the first '=', but
+				 * only when the part before '=' looks like a parameter key.
+				 * A bare embedded URL is its own parameter and can contain
+				 * '=' itself (e.g. base64 padding in the path), so a prefix
+				 * with URL structure characters means there is no key and
+				 * the whole parameter must be scanned.
+				 */
+				const char *eq = memchr(c, '=', p - c);
+				const char *vstart = c;
+
+				if (eq != NULL &&
+					rspamd_memcspn(c, eq - c, ":/", 2) == (gsize) (eq - c)) {
+					vstart = eq + 1;
+				}
+
+				gsize vlen = p - vstart;
+
+				if (vlen > 0) {
+					if (scratch == NULL) {
+						scratch = rspamd_mempool_alloc(pool, query_total + 1);
+					}
+					char *slot = scratch + scratch_off;
+					gsize dlen = rspamd_url_decode(slot, vstart, vlen);
+					slot[dlen] = '\0';
+					rspamd_url_find_multiple(pool, slot, dlen, how, NULL,
+											 func, ud, lua_state);
+					scratch_off += dlen + 1;
+				}
+			}
+			c = p + 1;
+		}
+		p++;
+	}
+}
+
+static void rspamd_url_find_in_query_depth(rspamd_mempool_t *pool,
+										   struct rspamd_url *url,
+										   enum rspamd_url_find_type how,
+										   url_insert_function func,
+										   gpointer ud,
+										   void *lua_state,
+										   unsigned int depth)
+{
+	struct rspamd_url_query_count_cbd cbd = {pool, how, func, ud, lua_state,
+											 depth, 0};
+
+	rspamd_url_query_foreach_embedded(pool, url, how,
+									  rspamd_url_query_count_cb, &cbd, lua_state);
+
+	/* Record how many URLs are embedded in this URL's query. */
+	if (cbd.count > 0) {
+		if (url->ext == NULL) {
+			url->ext = rspamd_mempool_alloc0_type(pool, struct rspamd_url_ext);
+		}
+		url->ext->query_embedded_urls =
+			cbd.count > UINT16_MAX ? UINT16_MAX : (uint16_t) cbd.count;
+	}
+}
+
+void rspamd_url_find_in_query(rspamd_mempool_t *pool,
+							  struct rspamd_url *url,
+							  enum rspamd_url_find_type how,
+							  url_insert_function func,
+							  gpointer ud,
+							  void *lua_state)
+{
+	rspamd_url_find_in_query_depth(pool, url, how, func, ud, lua_state, 0);
+}
+
 void rspamd_url_find_single(rspamd_mempool_t *pool,
 							const char *in,
 							gsize inlen,
@@ -3895,15 +4084,40 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 }
 
 
+struct rspamd_url_subject_query_cbd {
+	struct rspamd_task *task;
+	uint32_t parent_flags;
+};
+
+static gboolean
+rspamd_url_subject_query_callback(struct rspamd_url *query_url, gsize start_offset,
+								  gsize end_offset, gpointer ud)
+{
+	struct rspamd_url_subject_query_cbd *cbd = ud;
+	struct rspamd_task *task = cbd->task;
+
+	if (query_url->hostlen == 0) {
+		return TRUE;
+	}
+
+	query_url->flags |= RSPAMD_URL_FLAG_QUERY;
+	/* Propagate source/classification flags from the parent URL */
+	query_url->flags |= (cbd->parent_flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
+
+	if (query_url->protocol == PROTOCOL_MAILTO && query_url->userlen == 0) {
+		return TRUE;
+	}
+
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), query_url, false);
+
+	return TRUE;
+}
+
 gboolean
 rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 								 gsize end_offset, gpointer ud)
 {
 	struct rspamd_task *task = ud;
-	char *url_str = NULL;
-	struct rspamd_url *query_url;
-	int rc;
-	gboolean prefix_added;
 
 	/* It is just a displayed URL, we should not check it for certain things */
 	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED | RSPAMD_URL_FLAG_SUBJECT;
@@ -3918,42 +4132,14 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
-		if (rspamd_url_find(task->task_pool, rspamd_url_query_unsafe(url), url->querylen,
-							&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
-
-			query_url = rspamd_mempool_alloc0(task->task_pool,
-											  sizeof(struct rspamd_url));
-			rc = rspamd_url_parse(query_url,
-								  url_str,
-								  strlen(url_str),
-								  task->task_pool,
-								  RSPAMD_URL_PARSE_TEXT,
-								  task->cfg ? task->cfg->lua_state : NULL);
-
-			if (rc == URI_ERRNO_OK &&
-				query_url->hostlen > 0) {
-				msg_debug_task("found url %s in query of url"
-							   " %*s",
-							   url_str, url->querylen, rspamd_url_query_unsafe(url));
-
-				query_url->flags |= RSPAMD_URL_FLAG_QUERY;
-				/* Propagate source/classification flags from the parent URL */
-				query_url->flags |= (url->flags & RSPAMD_URL_FLAG_PROPAGATE_MASK);
-
-				if (prefix_added) {
-					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
-				}
-
-				if (query_url->protocol == PROTOCOL_MAILTO) {
-					if (query_url->userlen == 0) {
-						return TRUE;
-					}
-				}
-
-				rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls),
-											   query_url, false);
-			}
-		}
+		struct rspamd_url_subject_query_cbd qcbd = {
+			.task = task,
+			.parent_flags = url->flags,
+		};
+		rspamd_url_find_in_query(task->task_pool, url,
+								 RSPAMD_URL_FIND_ALL,
+								 rspamd_url_subject_query_callback, &qcbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
 	}
 
 	return TRUE;

@@ -14,4 +14,7 @@ ${RSPAMD_SCOPE}                   Test
 *** Test Cases ***
 JSON LOGS
   Rspamd Teardown
-  Check JSON Log  ${EXECDIR}/robot-save/rspamd.log.last
+  # robot-save/rspamd.log.last is the global "last run" file and can
+  # be overwritten by another pabot worker's teardown between us
+  # writing it and reading it. Read the per-suite/per-test copy.
+  Check JSON Log  ${EXECDIR}/robot-save/${SUITE_NAME}/${TEST_NAME}/rspamd.log

@@ -31,6 +31,7 @@
 #include "lua/lua_classnames.h"
 #include "multipart_form.h"
 #include "multipart_response.h"
+#include "http_content_negotiation.h"
 #include "libmime/content_type.h"
 #include <math.h>
 
@@ -2328,6 +2329,35 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 }
 
 /*
+ * Inject a single metadata "headers" entry into the task request headers.
+ * The ftok structs point directly into the metadata UCL object (owned by
+ * task->meta for the whole task lifetime), so no copy of the bytes is needed.
+ * Lengths come from the UCL accessors, so embedded NULs (msgpack) are kept.
+ */
+static void
+rspamd_protocol_metadata_add_header(struct rspamd_task *task,
+									const char *key, gsize klen,
+									const ucl_object_t *val_obj)
+{
+	gsize vlen;
+	const char *val = ucl_object_tolstring(val_obj, &vlen);
+	rspamd_ftok_t *name_tok, *val_tok;
+
+	if (val == NULL) {
+		return;
+	}
+
+	name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
+	val_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*val_tok));
+	name_tok->begin = key;
+	name_tok->len = klen;
+	val_tok->begin = val;
+	val_tok->len = vlen;
+
+	rspamd_task_add_request_header(task, name_tok, val_tok);
+}
+
+/*
  * Handle metadata from a parsed UCL object for v3 protocol.
  * Maps structured metadata fields to task fields.
  */
@@ -2429,7 +2459,14 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	/* deliver_to */
 	elt = ucl_object_lookup(metadata, "deliver_to");
 	if (elt && ucl_object_type(elt) == UCL_STRING) {
-		task->deliver_to = rspamd_mempool_strdup(task->task_pool, ucl_object_tostring(elt));
+		size_t deliver_len;
+		const char *deliver_str = ucl_object_tolstring(elt, &deliver_len);
+
+		if (deliver_len > 0) {
+			rspamd_ftok_t deliver_tok = {.begin = deliver_str, .len = deliver_len};
+			/* Match v2 Deliver-To header semantics: strip <...> braces */
+			task->deliver_to = rspamd_protocol_escape_braces(task, &deliver_tok);
+		}
 	}
 
 	/* settings_id */
@@ -2444,9 +2481,40 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
 		if (task->settings_elt) {
 			msg_info_protocol("both settings_id and inline settings present, "
-							  "settings will be merged");
+							  "inline settings will take precedence");
 		}
-		task->settings = ucl_object_ref(elt);
+
+		/*
+		 * Serialize the inline UCL settings to JSON and synthesize a 'settings'
+		 * request header so the existing settings.lua check_query_settings
+		 * pipeline picks them up and runs the apply path uniformly with the v2
+		 * Settings HTTP header. Without this, action thresholds, symbols
+		 * enable/disable lists, subject rewriting, etc. would never take
+		 * effect on /checkv3.
+		 */
+		size_t json_len = 0;
+		unsigned char *json = ucl_object_emit_len(elt, UCL_EMIT_JSON_COMPACT,
+												  &json_len);
+
+		if (json && json_len > 0) {
+			char *val_dup = rspamd_mempool_alloc(task->task_pool, json_len);
+			memcpy(val_dup, json, json_len);
+
+			rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool,
+														   sizeof(*name_tok));
+			rspamd_ftok_t *val_tok = rspamd_mempool_alloc(task->task_pool,
+														  sizeof(*val_tok));
+
+			RSPAMD_FTOK_ASSIGN(name_tok, SETTINGS_HEADER);
+			val_tok->begin = val_dup;
+			val_tok->len = json_len;
+
+			rspamd_task_add_request_header(task, name_tok, val_tok);
+		}
+
+		if (json) {
+			free(json);
+		}
 	}
 
 	/* tls.cipher - sets SSL flag */
@@ -2544,6 +2612,72 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 		}
 	}
 
+	/*
+	 * headers (object: header-name -> string value, or array of strings when a
+	 * name is repeated)
+	 *
+	 * Custom fields carried in the metadata body part are exposed as task
+	 * request headers, so they are retrievable via task:get_request_header()
+	 * exactly like v2 HTTP request headers - but without the HTTP header size
+	 * limit, since the metadata travels in the multipart body.
+	 *
+	 * NB: task->request_headers is also the control channel that
+	 * rspamd_task_load_message consults for message-loading directives
+	 * (shm/file/path/dictionary/Content-Encoding...). Those reserved names are
+	 * skipped here so client-supplied metadata can never collide with them.
+	 */
+	elt = ucl_object_lookup(metadata, "headers");
+	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+		static const char *reserved_hdrs[] = {
+			"shm", "shm-offset", "shm-length", "file", "path",
+			"dictionary", "compression", "content-encoding"};
+		ucl_object_iter_t it = NULL;
+
+		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			gsize klen;
+			const char *key = ucl_object_keyl(cur, &klen);
+			gboolean reserved = FALSE;
+			unsigned int i;
+
+			if (key == NULL || klen == 0) {
+				continue;
+			}
+
+			for (i = 0; i < G_N_ELEMENTS(reserved_hdrs); i++) {
+				if (strlen(reserved_hdrs[i]) == klen &&
+					rspamd_lc_cmp(key, reserved_hdrs[i], klen) == 0) {
+					reserved = TRUE;
+					break;
+				}
+			}
+
+			if (reserved) {
+				msg_info_protocol("ignore reserved metadata header '%*s'",
+								  (int) klen, key);
+				continue;
+			}
+
+			if (ucl_object_type(cur) == UCL_STRING) {
+				rspamd_protocol_metadata_add_header(task, key, klen, cur);
+			}
+			else if (ucl_object_type(cur) == UCL_ARRAY) {
+				/*
+				 * A repeated header name is collapsed by the UCL parser into an
+				 * array under that key; expand each string value into its own
+				 * request header (request headers are multi-valued).
+				 */
+				ucl_object_iter_t ait = NULL;
+				const ucl_object_t *aval;
+
+				while ((aval = ucl_object_iterate(cur, &ait, true)) != NULL) {
+					if (ucl_object_type(aval) == UCL_STRING) {
+						rspamd_protocol_metadata_add_header(task, key, klen, aval);
+					}
+				}
+			}
+		}
+	}
+
 	return TRUE;
 }
 
@@ -2574,6 +2708,53 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	gsize boundary_len = 0;
 	const char *body_data = chunk;
 	gsize body_len = len;
+
+	/*
+	 * Register every HTTP request header as a task request header so Lua
+	 * code can retrieve arbitrary client-supplied headers via
+	 * task:get_request_header(), matching v2 semantics.  This must also
+	 * happen before response serialization, since the v3 reply path reads
+	 * Accept / Accept-Encoding through the same API.
+	 *
+	 * Skip Shm / Shm-Offset / Shm-Length: at the HTTP level these carry the
+	 * proxy-to-upstream body transfer, but as task request headers they
+	 * would collide with the metadata-synthesized "shm" zero-copy message
+	 * pointer and make rspamd_task_load_message pick the wrong source.
+	 */
+	for (khiter_t kit = kh_begin(msg->headers); kit != kh_end(msg->headers); ++kit) {
+		if (!kh_exist(msg->headers, kit)) {
+			continue;
+		}
+
+		struct rspamd_http_header *header = kh_val(msg->headers, kit);
+		struct rspamd_http_header *h;
+
+		DL_FOREACH(header, h)
+		{
+			if ((h->name.len == 3 &&
+				 rspamd_lc_cmp(h->name.begin, "shm", 3) == 0) ||
+				(h->name.len == 10 &&
+				 (rspamd_lc_cmp(h->name.begin, "shm-offset", 10) == 0 ||
+				  rspamd_lc_cmp(h->name.begin, "shm-length", 10) == 0))) {
+				continue;
+			}
+
+			char *ntok;
+			rspamd_ftok_t *hn_tok, *hv_tok;
+
+			ntok = rspamd_mempool_ftokdup(task->task_pool, &h->name);
+			hn_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*hn_tok));
+			hn_tok->begin = ntok;
+			hn_tok->len = h->name.len;
+
+			ntok = rspamd_mempool_ftokdup(task->task_pool, &h->value);
+			hv_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*hv_tok));
+			hv_tok->begin = ntok;
+			hv_tok->len = h->value.len;
+
+			rspamd_task_add_request_header(task, hn_tok, hv_tok);
+		}
+	}
 
 	/*
 	 * When the proxy forwards to a local upstream, it uses shared memory
@@ -2687,14 +2868,18 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	struct rspamd_content_type *ct = rspamd_content_type_parse(
 		ct_hdr->begin, ct_hdr->len, task->task_pool);
 
-	if (!ct || ct->boundary.len == 0) {
+	if (!ct || ct->orig_boundary.len == 0) {
 		g_set_error(&task->err, rspamd_protocol_quark(), 400,
 					"cannot extract boundary from Content-Type");
 		return FALSE;
 	}
 
-	boundary = ct->boundary.begin;
-	boundary_len = ct->boundary.len;
+	/*
+	 * Use the original (case preserving) boundary: RFC 2046 boundaries are
+	 * case sensitive; ct->boundary is lowercased for MIME clients quirks
+	 */
+	boundary = ct->orig_boundary.begin;
+	boundary_len = ct->orig_boundary.len;
 
 	/* Parse multipart body */
 	struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
@@ -2739,6 +2924,8 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 										 metadata_part->content_type_len,
 										 "msgpack",
 										 sizeof("msgpack") - 1) != -1) {
+		/* Remember the input serialization so the reply can mirror it */
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK;
 		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
 								  metadata_part->data_len,
@@ -2769,9 +2956,12 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 		return FALSE;
 	}
 
-	rspamd_mempool_add_destructor(task->task_pool,
-								  (rspamd_mempool_destruct_t) ucl_object_unref,
-								  metadata_obj);
+	/*
+	 * The task takes ownership of the metadata object; it is unref'd in
+	 * rspamd_task_free. Keeping it alive for the whole task lifetime also
+	 * exposes it to Lua via task:get_metadata()/get_metadata_field().
+	 */
+	task->meta = metadata_obj;
 
 	/* Apply metadata to task */
 	if (!rspamd_protocol_handle_metadata(task, metadata_obj)) {
@@ -2928,27 +3118,87 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 }
 
 /*
- * Build a v3 multipart/mixed HTTP reply.
- * Returns the Content-Type string (allocated on task pool) for use as
- * the mime_type parameter in rspamd_http_connection_write_message.
+ * Build a 406 Not Acceptable reply listing the representations /checkv3 can
+ * produce. Used when the client's Accept matches none of them.
+ */
+static const char *
+rspamd_protocol_v3_not_acceptable(struct rspamd_http_message *msg,
+								  struct rspamd_task *task)
+{
+	static const char body[] =
+		"{\"error\":\"Not Acceptable\",\"supported\":["
+		"\"application/json\",\"application/msgpack\","
+		"\"message/rfc822\",\"multipart/form-data\"]}";
+
+	msg->code = 406;
+	if (msg->status) {
+		rspamd_fstring_free(msg->status);
+	}
+	msg->status = rspamd_fstring_new_init("Not Acceptable", sizeof("Not Acceptable") - 1);
+	rspamd_http_message_set_body(msg, body, sizeof(body) - 1);
+
+	msg_info_task("v3 reply: no acceptable representation for requested Accept");
+
+	return "application/json";
+}
+
+/*
+ * Build a v3 HTTP reply, negotiating the format from Accept and the
+ * compression from Accept-Encoding. Returns the Content-Type for
+ * rspamd_http_connection_write_message (task-pool string or static literal).
  */
 const char *
 rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 							  struct rspamd_task *task)
 {
+	/* Format depends on Accept, compression on Accept-Encoding */
+	rspamd_http_message_add_header(msg, "Vary", "Accept, Accept-Encoding");
+
+	/* Preference order; FORM is first so absent/wildcard Accept defaults to it */
+	static const enum rspamd_http_content_type desired[] = {
+		RSPAMD_HTTP_CTYPE_MULTIPART_FORM,
+		RSPAMD_HTTP_CTYPE_MESSAGE_RFC822,
+		RSPAMD_HTTP_CTYPE_JSON,
+		RSPAMD_HTTP_CTYPE_MSGPACK,
+		RSPAMD_HTTP_CTYPE_UNKNOWN,
+	};
+
+	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+	enum rspamd_http_content_type rep = RSPAMD_HTTP_CTYPE_MULTIPART_FORM;
+
+	if (accept_hdr && accept_hdr->len > 0) {
+		double quality = 0.0;
+		enum rspamd_http_content_type matched =
+			rspamd_http_parse_accept_header(accept_hdr, desired, &quality);
+
+		if (matched == RSPAMD_HTTP_CTYPE_UNKNOWN || quality <= 0.0) {
+			return rspamd_protocol_v3_not_acceptable(msg, task);
+		}
+
+		rep = matched;
+	}
+
+	/* Single-body v2 reply: regular writer does serialization/history/stats */
+	if (rep == RSPAMD_HTTP_CTYPE_JSON || rep == RSPAMD_HTTP_CTYPE_MSGPACK) {
+		int out_type = (rep == RSPAMD_HTTP_CTYPE_MSGPACK) ? UCL_EMIT_MSGPACK
+														  : UCL_EMIT_JSON_COMPACT;
+		rspamd_protocol_http_reply(msg, task, NULL, out_type);
+
+		return (rep == RSPAMD_HTTP_CTYPE_MSGPACK) ? "application/msgpack"
+												  : "application/json";
+	}
+
+	/* Multipart representations: form-data (default) or mixed (message/rfc822) */
 	int flags = RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS;
 	ucl_object_t *top = rspamd_protocol_write_ucl(task, flags);
 
 	rspamd_protocol_update_history_and_log(task);
 
-	/* Determine output format from metadata part's Content-Type or Accept header */
-	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
+	/* Inner result serialization mirrors the input metadata serialization */
 	int out_type = UCL_EMIT_JSON_COMPACT;
 	const char *result_ctype = "application/json";
 
-	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
-											  "application/msgpack",
-											  sizeof("application/msgpack") - 1) != -1) {
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK) {
 		out_type = UCL_EMIT_MSGPACK;
 		result_ctype = "application/msgpack";
 	}
@@ -2957,16 +3207,20 @@ rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 	rspamd_fstring_t *result_data = rspamd_fstring_sized_new(1000);
 	rspamd_ucl_emit_fstring(top, out_type, &result_data);
 
-	/* Check if client wants compression */
+	/* Compression: honor Accept-Encoding: zstd, otherwise identity */
 	gboolean want_compress = FALSE;
 	const rspamd_ftok_t *ae_hdr = rspamd_task_get_request_header(task, "Accept-Encoding");
-	if (ae_hdr && rspamd_substring_search_caseless(ae_hdr->begin, ae_hdr->len,
-												   "zstd", 4) != -1) {
+	if ((rspamd_http_parse_accept_encoding(ae_hdr) & RSPAMD_HTTP_COMPRESS_ZSTD) != 0) {
 		want_compress = TRUE;
 	}
 
 	/* Build multipart response */
 	struct rspamd_multipart_response_c *resp = rspamd_multipart_response_new();
+
+	rspamd_multipart_response_set_envelope(
+		resp,
+		rep == RSPAMD_HTTP_CTYPE_MESSAGE_RFC822 ? RSPAMD_MULTIPART_ENVELOPE_MIXED
+												: RSPAMD_MULTIPART_ENVELOPE_FORM_DATA);
 
 	rspamd_multipart_response_add_part(resp, "result", result_ctype,
 									   result_data->str, result_data->len,

@@ -587,21 +587,22 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 		}
 	}
 
-	/* Check if response is multipart/mixed */
+	/* Check if response is a multipart reply (form-data or mixed envelope) */
 	const rspamd_ftok_t *ct = rspamd_http_message_find_header(msg, "Content-Type");
 
 	if (ct && rspamd_substring_search_caseless(ct->begin, ct->len,
-											   "multipart/mixed", sizeof("multipart/mixed") - 1) != -1) {
+											   "multipart/", sizeof("multipart/") - 1) != -1) {
 		/* Parse multipart response to extract result and body */
 		/* Extract boundary from Content-Type */
 		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
 			ct->begin, ct->len, rspamd_mempool_new(256, "v3-client", 0));
 		/* Note: we leak this small pool; acceptable for client-side */
 
-		if (parsed_ct && parsed_ct->boundary.len > 0) {
+		if (parsed_ct && parsed_ct->orig_boundary.len > 0) {
+			/* Use the case preserving boundary as HTTP boundaries are case sensitive */
 			struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
 				resp_body, resp_body_len,
-				parsed_ct->boundary.begin, parsed_ct->boundary.len);
+				parsed_ct->orig_boundary.begin, parsed_ct->orig_boundary.len);
 
 			if (form) {
 				const struct rspamd_multipart_entry_c *result_part =
@@ -967,13 +968,12 @@ rspamd_client_command_v3(struct rspamd_client_connection *conn,
 	rspamd_snprintf(ct_buf, sizeof(ct_buf),
 					"multipart/form-data; boundary=%s", boundary);
 
-	/* Add Accept headers */
-	if (msgpack) {
-		rspamd_http_message_add_header(req->msg, "Accept", "application/msgpack");
-	}
-	else {
-		rspamd_http_message_add_header(req->msg, "Accept", "application/json");
-	}
+	/*
+	 * Request the multipart protocol. The result serialization mirrors the
+	 * metadata Content-Type, so Accept only selects the envelope; asking for
+	 * application/json|msgpack would yield a single-body v2 reply we cannot parse.
+	 */
+	rspamd_http_message_add_header(req->msg, "Accept", "multipart/form-data");
 	if (compressed) {
 		rspamd_http_message_add_header(req->msg, "Accept-Encoding", "zstd");
 	}

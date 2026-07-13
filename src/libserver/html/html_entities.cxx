@@ -2260,8 +2260,17 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 
 		auto replace_entity = [&]() -> void {
 			auto l = strlen(entity_def->replacement);
-			memcpy(t, entity_def->replacement, l);
-			t += l;
+			/*
+			 * The decoder works in place, so the replacement may only be
+			 * written while it fits the remaining buffer. Some short entity
+			 * names expand to longer multi-codepoint replacements, which
+			 * would otherwise overflow when the entity sits at the very end
+			 * of the buffer. Drop such a truncated entity instead.
+			 */
+			if (end - t >= (decltype(end - t)) l) {
+				memcpy(t, entity_def->replacement, l);
+				t += l;
+			}
 		};
 
 		if (entity_def) {

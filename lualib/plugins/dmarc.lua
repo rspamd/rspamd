@@ -1,6 +1,5 @@
 --[[
-Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
-Copyright (c) 2015-2016, Andrew Lewis <nerf@judo.za.org>
+Copyright (c) 2015-2026, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -255,12 +254,13 @@ local function dmarc_key_value_case(elts)
   end
   local result = {}
   for k, v in pairs(elts) do
-    k = k:lower()
-    if k ~= "v" then
-      v = v:lower()
+    local key = k:lower()
+    local value = v
+    if key ~= "v" then
+      value = v:lower()
     end
 
-    result[k] = v
+    result[key] = value
   end
 
   return result

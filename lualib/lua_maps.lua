@@ -167,6 +167,14 @@ local function query_external_map(map_config, upstreams, key, callback, task_or_
     log_obj = task_or_ctx.config
   end
 
+  if not upstream then
+    rspamd_logger.errx(log_obj,
+        'no upstream available for external map %s (all backends dead or pending DNS resolution)',
+        map_config.backend)
+    callback(false, 'no upstream available', 502, task_or_ctx)
+    return
+  end
+
   if type(key) == 'string' or type(key) == 'userdata' then
     if map_config.method == 'body' then
       http_body = key
@@ -389,6 +397,19 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           cache_key:sub(1, 8), description)
 
       return maps_cache[cache_key]
+    end
+
+    if not next(opt) then
+      -- Empty table: return a static empty map without involving C map infrastructure,
+      -- avoiding a spurious error log when an intentionally empty default is used.
+      rspamd_logger.warnx(rspamd_config, 'empty static map definition for: %s', description)
+      ret.get_key = function(_, _) return nil end
+      ret.foreach = function(_, _) return true end
+      ret.on_load = function(_, cb)
+        rspamd_config:add_on_load(function(_, _, _) cb() end)
+      end
+      maps_cache[cache_key] = ret
+      return ret
     end
 
     if opt[1] then

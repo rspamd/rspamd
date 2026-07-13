@@ -977,6 +977,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_ip(L);
 	luaopen_expression(L);
 	luaopen_text(L);
+	rspamd_lua_text_stats_init(L);
 	luaopen_util(L);
 	luaopen_tcp(L);
 	luaopen_html(L);
@@ -993,6 +994,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_libarchive(L);
 	luaopen_shingle(L);
 	luaopen_fasttext(L);
+	luaopen_static_embed(L);
 	luaopen_caseless_table(L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload(L, "bit", luaopen_bit);
@@ -1103,6 +1105,28 @@ void rspamd_lua_start_gc(struct rspamd_config *cfg)
 	lua_gc(L, LUA_GCSETPAUSE, cfg->lua_gc_pause);
 #endif
 	lua_gc(L, LUA_GCRESTART, 0);
+}
+
+gsize rspamd_lua_get_memory_used(lua_State *L)
+{
+	int kb;
+	int rem;
+
+	if (L == NULL) {
+		return 0;
+	}
+
+	kb = lua_gc(L, LUA_GCCOUNT, 0);
+	rem = lua_gc(L, LUA_GCCOUNTB, 0);
+
+	if (kb < 0) {
+		kb = 0;
+	}
+	if (rem < 0) {
+		rem = 0;
+	}
+
+	return (gsize) kb * 1024 + (gsize) rem;
 }
 
 

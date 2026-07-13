@@ -41,6 +41,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_COMPOSITES_STATS,
 	RSPAMD_CONTROL_MULTIPATTERN_LOADED,
 	RSPAMD_CONTROL_REGEXP_MAP_LOADED,
+	RSPAMD_CONTROL_MEMORY_STAT,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -128,6 +129,9 @@ struct rspamd_control_command {
 		struct {
 			unsigned int unused;
 		} composites_stats;
+		struct {
+			unsigned int unused;
+		} memory_stat;
 	} cmd;
 };
 
@@ -182,6 +186,13 @@ struct rspamd_control_reply {
 			double time_fast_mean;   /**< EMA mean time in fast path (ms) */
 			double time_fast_stddev; /**< EMA stddev time in fast path (ms) */
 		} composites_stats;
+		struct {
+			unsigned int status;
+			uint64_t rss_kb;             /**< process resident set, KiB           */
+			uint64_t lua_kb;             /**< Lua heap usage, KiB                 */
+			uint64_t mempool_bytes;      /**< rspamd_mempool aggregate bytes      */
+			uint64_t jemalloc_allocated; /**< jemalloc stats.allocated; 0 if N/A  */
+		} memory_stat;
 	} reply;
 };
 

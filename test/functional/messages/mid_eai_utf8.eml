@@ -1,0 +1,12 @@
+From: Sender <sender@example.com>
+To: Receiver <receiver@example.com>
+Date: Fri, 5 Oct 2018 19:56:40 -0400
+Message-Id: <49faaad5-3d90-2713-583b-6cb8a5d06345@wildduck.äää.test>
+Subject: EAI/SMTPUTF8 message with internationalized Message-ID
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+This message has a valid Message-ID containing a UTF-8 internationalized
+domain (RFC 6532) and must not trigger INVALID_MSGID when
+enable_mime_utf8 is enabled.

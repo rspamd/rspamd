@@ -1,6 +1,12 @@
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
 
+-- dummy_http / dummy_https ports come from the test harness; rspamd_env
+-- strips the RSPAMD_ prefix so PORT_DUMMY_HTTP/HTTPS carry the per-pabot
+-- worker slot value. Default to the historical literals for ad-hoc runs.
+local http_port = tonumber(rspamd_env and rspamd_env.PORT_DUMMY_HTTP) or 18080
+local https_port = tonumber(rspamd_env and rspamd_env.PORT_DUMMY_HTTPS) or 18081
+
 local function http_symbol(task)
 
   local url = tostring(task:get_request_header('url'))
@@ -27,7 +33,7 @@ local function http_symbol(task)
 
   rspamd_logger.errx(task, 'do http request with callback')
   rspamd_http.request({
-    url = 'http://127.0.0.1:18080' .. url,
+    url = string.format('http://127.0.0.1:%d%s', http_port, url),
     task = task,
     method = method,
     callback = http_callback,
@@ -37,7 +43,7 @@ local function http_symbol(task)
   --[[ request to this address involved DNS resolver subsystem ]]
   rspamd_logger.errx(task, 'do http request with callback + dns resolving')
   rspamd_http.request({
-    url = 'http://site.resolveme:18080' .. url,
+    url = string.format('http://site.resolveme:%d%s', http_port, url),
     task = task,
     method = method,
     callback = http_dns_callback,
@@ -47,7 +53,7 @@ local function http_symbol(task)
   rspamd_logger.errx(task, 'rspamd_http.request[before]')
 
   local err, response = rspamd_http.request({
-    url = 'http://127.0.0.1:18080' .. url,
+    url = string.format('http://127.0.0.1:%d%s', http_port, url),
     task = task,
     method = method,
     timeout = 1,
@@ -62,7 +68,7 @@ local function http_symbol(task)
 
   rspamd_logger.errx(task, 'do http request after coroutine finished')
   err, response = rspamd_http.request({
-    url = 'http://site.resolveme:18080' .. url,
+    url = string.format('http://site.resolveme:%d%s', http_port, url),
     task = task,
     method = method,
     timeout = 1,
@@ -79,7 +85,7 @@ end
 local function finish(task)
   rspamd_logger.errx('function finish')
   local err, response = rspamd_http.request({
-    url = 'http://site.resolveme:18080/timeout',
+    url = string.format('http://site.resolveme:%d/timeout', http_port),
     task = task,
     method = 'get',
     timeout = 1,
@@ -93,7 +99,7 @@ end
 
 local function periodic(cfg, ev_base)
   local err, response = rspamd_http.request({
-    url = 'http://site.resolveme:18080/request/periodic',
+    url = string.format('http://site.resolveme:%d/request/periodic', http_port),
     config = cfg,
   })
   if err then
@@ -134,7 +140,7 @@ local function http_large_symbol(task)
       end
     end
     rspamd_http.request({
-      url = 'https://127.0.0.1:18081/',
+      url = string.format('https://127.0.0.1:%d/', https_port),
       task = task,
       method = 'post',
       callback = http_callback,
@@ -156,7 +162,7 @@ rspamd_config:register_finish_script(finish)
 
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   local err, response = rspamd_http.request({
-    url = 'http://site.resolveme:18080/request/add_on_load',
+    url = string.format('http://site.resolveme:%d/request/add_on_load', http_port),
     config = cfg,
   })
   if err then

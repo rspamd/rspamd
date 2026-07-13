@@ -274,3 +274,95 @@ context("URL check functions", function()
     assert_equal(res[#res], '')
   end)
 end)
+
+context("URL email canonicalisation and dedup", function()
+  local rspamd_task = require "rspamd_task"
+  local rspamd_util = require "rspamd_util"
+  local test_helper = require "rspamd_test_helper"
+
+  local cfg = rspamd_util.config_from_ucl(test_helper.default_config(),
+      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+
+  local function emails_of(mime_type, body)
+    local msg = string.format(
+        "From: s@example.org\r\nTo: r@example.org\r\nSubject: t\r\n" ..
+        "MIME-Version: 1.0\r\nContent-Type: %s\r\n\r\n%s\r\n", mime_type, body)
+    local res, task = rspamd_task.load_from_string(msg, cfg)
+    assert(res, "failed to load message")
+    assert(task:process_message(), "failed to process message")
+    local out = {}
+    for _, u in ipairs(task:get_emails() or {}) do
+      out[#out + 1] = u:get_text()
+    end
+    return out
+  end
+
+  -- A bare-text email and the same address inside an explicit mailto: URL must
+  -- canonicalise to one mailto: form and deduplicate. Regression: the '@'
+  -- matcher injected a literal "mailto://" prefix while a parsed mailto: URL is
+  -- non-hierarchical (RFC 6068) and keeps no //, so the two string forms never
+  -- collapsed and the address was extracted twice.
+  test("bare email and explicit mailto dedupe (text/plain)", function()
+    local em = emails_of("text/plain", "addr@example.com<mailto:addr@example.com>")
+    assert_equal(1, #em, "expected a single email, got " .. #em)
+    assert_equal("mailto:addr@example.com", em[1])
+  end)
+
+  test("bare email and mailto href dedupe (text/html)", function()
+    local em = emails_of("text/html",
+        '<html><body>addr@example.com or <a href="mailto:addr@example.com">x</a></body></html>')
+    assert_equal(1, #em, "expected a single email, got " .. #em)
+    assert_equal("mailto:addr@example.com", em[1])
+  end)
+
+  test("distinct emails are not over-deduped", function()
+    local em = emails_of("text/plain", "a@example.com and b@example.org")
+    assert_equal(2, #em, "expected two distinct emails, got " .. #em)
+  end)
+end)
+
+context("Query-embedded URL extraction", function()
+  local rspamd_task = require "rspamd_task"
+  local rspamd_util = require "rspamd_util"
+  local test_helper = require "rspamd_test_helper"
+
+  local cfg = rspamd_util.config_from_ucl(test_helper.default_config(),
+      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+
+  local function urls_of(body)
+    local msg = string.format(
+        "From: s@example.org\r\nTo: r@example.org\r\nSubject: t\r\n" ..
+        "MIME-Version: 1.0\r\nContent-Type: text/plain\r\n\r\n%s\r\n", body)
+    local res, task = rspamd_task.load_from_string(msg, cfg)
+    assert(res, "failed to load message")
+    assert(task:process_message(), "failed to process message")
+    local out = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      out[u:get_host()] = u:get_text()
+    end
+    return out
+  end
+
+  -- Regression: a bare URL parameter (no key=) whose path ends with base64
+  -- padding was mistaken for "key=value" because of the '=' inside it, so only
+  -- the text after the first '=' was scanned and the embedded URL was lost
+  test("bare query parameter containing '=' is scanned whole", function()
+    local urls = urls_of(
+        "https://tracker.example.com/track?type=click&enid=" ..
+        "ZWFzPTEmbXNpZD0mYXVpZD0mbWFpbGluZ2lkPTExMTExMSZtZXNzYWdlaWQ9MTExMTExJmRhdGFiYXNlaWQ9MTExMTExJnNlcmlhbD0xMTExMTExMSZlbWFpbGlkPXVzZXJAZXhhbXBsZS5jb20mdXNlcmlkPTExMTExMSZ0YXJnZXRpZD0mbW49JmZsPSZtdmlkPSZleHRyYT0mJiYmJg==" ..
+        "&&&9999&&&https://dest.example.org/abcd/XyZpQ/dXNlckBleGFtcGxlLm5ldA==")
+    assert_not_nil(urls["dest.example.org"],
+        "embedded bare-parameter URL must be extracted")
+  end)
+
+  test("key=value parameter still scans only the value", function()
+    local urls = urls_of("http://wrap.com/r?u=http%3A%2F%2Fdest.com%2F&b=x")
+    assert_not_nil(urls["dest.com"], "escaped value URL must be extracted")
+  end)
+
+  test("schemaless www url in a value is still found", function()
+    local urls = urls_of("http://wrap.com/r?u=www.dest2.com&b=x")
+    assert_not_nil(urls["www.dest2.com"],
+        "schemaless www url at value start must be extracted")
+  end)
+end)

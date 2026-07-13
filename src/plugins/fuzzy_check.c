@@ -162,6 +162,7 @@ struct fuzzy_ctx {
 	int cleanup_rules_ref;
 	uint32_t retransmits;
 	gboolean enabled;
+	GHashTable *writable_flags; /* flag -> rule_name, for collision detection */
 };
 
 static inline uint8_t
@@ -2179,7 +2180,13 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 						  strlen(shingles_key_str), NULL, 0);
 	rule->shingles_key->len = 16;
 
-	if (rspamd_upstreams_count(rule->read_servers) == 0) {
+	/*
+	 * Use the *total* count so a rule whose only entry is an SRV
+	 * placeholder (service=...) loads cleanly; rspamd_upstreams_count
+	 * would return 0 here because the SRV parent isn't a dispatchable
+	 * upstream until async resolution materialises members.
+	 */
+	if (rspamd_upstreams_count_total(rule->read_servers) == 0) {
 		msg_err_config("no servers defined for fuzzy rule with name: %s",
 					   rule->name);
 		return -1;
@@ -2273,6 +2280,30 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	rspamd_mempool_add_destructor(cfg->cfg_pool, fuzzy_free_rule,
 								  rule);
+
+	if (rule->mode != fuzzy_rule_read_only && fuzzy_module_ctx->writable_flags != NULL) {
+		GHashTableIter fit;
+		gpointer fk, fv;
+		g_hash_table_iter_init(&fit, rule->mappings);
+
+		while (g_hash_table_iter_next(&fit, &fk, &fv)) {
+			const char *existing = g_hash_table_lookup(fuzzy_module_ctx->writable_flags, fk);
+
+			if (existing != NULL) {
+				msg_warn_config(
+					"fuzzy flag %d is used by both writable rules '%s' and '%s'; "
+					"write operations will be sent to all matching rules — "
+					"use unique flags or set `read_only = true` on rules that should not receive writes",
+					GPOINTER_TO_INT(fk),
+					existing,
+					rule->name ? rule->name : "(unnamed)");
+			}
+			else {
+				g_hash_table_insert(fuzzy_module_ctx->writable_flags, fk,
+									(gpointer) (rule->name ? rule->name : "(unnamed)"));
+			}
+		}
+	}
 
 	return 0;
 }
@@ -2885,6 +2916,11 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 								 0,
 								 1,
 								 1);
+
+		fuzzy_module_ctx->writable_flags = g_hash_table_new(g_direct_hash, g_direct_equal);
+		rspamd_mempool_add_destructor(cfg->cfg_pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref,
+									  fuzzy_module_ctx->writable_flags);
 
 		/*
 		 * Here we can have 2 possibilities:
@@ -5717,7 +5753,8 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				/* Mark that we used TCP for this request */
 				rule->rate_tracker.last_was_tcp = TRUE;
 
-				rspamd_session_add_event(task->s, fuzzy_io_fin, session, M);
+				rspamd_session_add_event_full(task->s, fuzzy_io_fin, session, M,
+											  rule->name);
 				session->item = rspamd_symcache_get_cur_item(task);
 
 				if (session->item) {
@@ -5795,7 +5832,8 @@ register_fuzzy_client_call(struct rspamd_task *task,
 				rspamd_ev_watcher_start(session->event_loop, &session->ev,
 										rule->io_timeout);
 
-				rspamd_session_add_event(task->s, fuzzy_io_fin, session, M);
+				rspamd_session_add_event_full(task->s, fuzzy_io_fin, session, M,
+											  rule->name);
 				session->item = rspamd_symcache_get_cur_item(task);
 
 				if (session->item) {
@@ -6294,10 +6332,11 @@ fuzzy_check_send_lua_learn(struct fuzzy_rule *rule,
 				rspamd_ev_watcher_start(s->event_loop, &s->ev,
 										rule->io_timeout);
 
-				rspamd_session_add_event(task->s,
-										 fuzzy_controller_lua_fin,
-										 s,
-										 M);
+				rspamd_session_add_event_full(task->s,
+											  fuzzy_controller_lua_fin,
+											  s,
+											  M,
+											  rule->name);
 
 				(*saved)++;
 				ret = 1;
@@ -7160,7 +7199,17 @@ fuzzy_lua_ping_storage(lua_State *L)
 	else {
 		struct upstream *selected = rspamd_upstream_get(rule_found->read_servers,
 														RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+		if (selected == NULL) {
+			lua_pushboolean(L, FALSE);
+			lua_pushfstring(L, "no fuzzy storage upstream available for rule %s",
+							rule_found->name);
+			return 2;
+		}
 		addr = rspamd_upstream_addr_next(selected);
+		/* Fire-and-forget ping: the session below tracks the address
+		 * directly, not the upstream, so retire the inflight counter
+		 * immediately rather than leaking it. */
+		rspamd_upstream_release(selected);
 	}
 
 	if (addr != NULL) {
@@ -7189,7 +7238,8 @@ fuzzy_lua_ping_storage(lua_State *L)
 			lua_pushvalue(L, 2);
 			session->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-			rspamd_session_add_event(task->s, fuzzy_lua_session_fin, session, M);
+			rspamd_session_add_event_full(task->s, fuzzy_lua_session_fin, session, M,
+										  rule_found->name);
 			rspamd_ev_watcher_init(&session->ev,
 								   sock,
 								   EV_WRITE,
