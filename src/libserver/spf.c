@@ -2670,7 +2670,11 @@ rspamd_spf_cache_domain(struct rspamd_task *task)
 	struct rspamd_email_address *addr;
 	struct rspamd_spf_cred *cred = NULL;
 
-	addr = rspamd_task_get_sender(task);
+	/*
+	 * SPF checks the RFC5321.MailFrom as it was transmitted, so use the
+	 * original sender even if the envelope from has been rewritten
+	 */
+	addr = rspamd_task_get_original_sender(task);
 	if (!addr || (addr->flags & RSPAMD_EMAIL_ADDR_EMPTY)) {
 		/* Get domain from helo */
 

@@ -954,6 +954,16 @@ rspamd_task_get_sender(struct rspamd_task *task)
 	return task->from_envelope;
 }
 
+struct rspamd_email_address *
+rspamd_task_get_original_sender(struct rspamd_task *task)
+{
+	if (task->from_envelope_orig) {
+		return task->from_envelope_orig;
+	}
+
+	return task->from_envelope;
+}
+
 static const char *
 rspamd_task_cache_principal_recipient(struct rspamd_task *task,
 									  const char *rcpt, gsize len)
