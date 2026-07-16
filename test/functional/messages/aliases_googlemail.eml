@@ -1,0 +1,7 @@
+From: First Last <first.last@googlemail.com>
+To: user@example.com
+Subject: Test googlemail domain preservation
+Message-ID: <test-googlemail@example.com>
+Date: Mon, 01 Jan 2025 10:00:00 +0000
+
+Googlemail user part is canonicalized, but the domain must stay googlemail.com.

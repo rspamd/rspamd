@@ -106,6 +106,16 @@ DMARC PCT ZERO SP QUARANTINE
   ...  Settings=${DMARC_SETTINGS}
   Expect Symbol  DMARC_POLICY_SOFTFAIL
 
+DMARC EVALUATES WIRE FROM AFTER REWRITE
+  [Documentation]  DMARC must align and look up the policy for the From domain
+  ...  as it was seen in the message, even if another module rewrote the MIME
+  ...  From via task:set_from (issue 6137)
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/pass_none.eml
+  ...  Rewrite-Mime-From=yes
+  ...  Settings={symbols_enabled = [REWRITE_MIME_FROM, DMARC_CHECK, DKIM_CHECK, SPF_CHECK]}
+  Expect Symbol With Option  DMARC_POLICY_ALLOW  cacophony.za.org
+  Do Not Expect Symbol  DMARC_NA
+
 # DMARC Reporting Tests
 # These tests verify that DMARC report data is saved to Redis when reporting is enabled.
 # The domain reject.cacophony.za.org has rua=mailto:dmarc-reports@rspamd.com configured.

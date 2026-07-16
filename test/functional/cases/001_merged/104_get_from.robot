@@ -55,3 +55,15 @@ task:get_from('mime') - quoted in the middle of DN (inner spaces)
   Scan File  ${RSPAMD_TESTDIR}/messages/from/from_quoted_dn_middle_inner.eml
   ...  Settings=${SETTINGS_GETFROM}
   Expect Symbol With Exact Options  ${SYMBOL}  ${OPTIONS3}
+
+task:get_from('mime') - orig without rewrite
+  Scan File  ${RSPAMD_TESTDIR}/messages/from/from_dn.eml
+  ...  Settings={symbols_enabled = [GET_FROM_ORIG]}
+  Expect Symbol With Exact Options  GET_FROM_ORIG  First Last,user@example.org,user,example.org,1
+
+task:get_from('mime') - orig returns wire address after rewrite
+  Scan File  ${RSPAMD_TESTDIR}/messages/from/from_dn.eml
+  ...  Rewrite-Mime-From=yes
+  ...  Settings={symbols_enabled = [REWRITE_MIME_FROM, GET_FROM, GET_FROM_ORIG]}
+  Expect Symbol With Exact Options  ${SYMBOL}  Forged,forged@forged.example.net,forged,forged.example.net
+  Expect Symbol With Exact Options  GET_FROM_ORIG  First Last,user@example.org,user,example.org,1

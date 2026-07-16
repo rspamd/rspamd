@@ -154,3 +154,33 @@ FROM AND RCPT TAGGED
   ...  Rcpt=user+tag@example.com
   Expect Symbol  TAGGED_FROM
   Expect Symbol  TAGGED_RCPT
+
+# From identity protection tests (issue 6137)
+
+GOOGLEMAIL FROM - DOMAIN PRESERVED
+  [Documentation]  Gmail user-part rules apply to googlemail.com, but the
+  ...  domain must not be rewritten to gmail.com: the two are DNS-distinct
+  ...  and publish different SPF/DMARC records
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_googlemail.eml
+  ...  From=sender@external.com
+  ...  Rcpt=user@example.com
+  Expect Symbol  ALIAS_RESOLVED
+  Expect Symbol With Exact Options  GET_FROM  First Last,firstlast@googlemail.com,firstlast,googlemail.com
+
+FROM CROSS-DOMAIN ALIAS - NOT APPLIED
+  [Documentation]  Alias resolution that would change the From domain must be
+  ...  discarded: the From domain is an authentication identifier
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_from_virtual.eml
+  ...  From=sender@external.com
+  ...  Rcpt=user@example.com
+  Do Not Expect Symbol  ALIAS_RESOLVED
+  Expect Symbol With Exact Options  GET_FROM  Virtual Sender,virtual@example.com,virtual,example.com
+
+FROM SAME-DOMAIN ALIAS - APPLIED
+  [Documentation]  Same-domain alias resolution of the From local part is
+  ...  still allowed
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_from_unix.eml
+  ...  From=sender@external.com
+  ...  Rcpt=user@example.com
+  Expect Symbol  ALIAS_RESOLVED
+  Expect Symbol With Exact Options  GET_FROM  Abuse Desk,admin@example.com,admin,example.com
