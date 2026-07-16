@@ -184,3 +184,14 @@ FROM SAME-DOMAIN ALIAS - APPLIED
   ...  Rcpt=user@example.com
   Expect Symbol  ALIAS_RESOLVED
   Expect Symbol With Exact Options  GET_FROM  Abuse Desk,admin@example.com,admin,example.com
+
+RCPT CROSS-DOMAIN ALIAS - NOT FORGED
+  [Documentation]  A recipient rewritten to another domain (allowed for
+  ...  recipients) must not make the matching wire To header look forged:
+  ...  forged_recipients compares the addresses as transmitted
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_rcpt_virtual.eml
+  ...  From=sender@external.com
+  ...  Rcpt=virtual@example.com
+  Expect Symbol  ALIAS_RESOLVED
+  Do Not Expect Symbol  FORGED_RECIPIENTS
+  Do Not Expect Symbol  FORGED_SENDER

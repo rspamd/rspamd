@@ -37,8 +37,11 @@ local E = {}
 local function check_forged_headers(task)
   local auser = task:get_user()
   local delivered_to = task:get_header('Delivered-To')
-  local smtp_rcpts = task:get_recipients(1)
-  local smtp_from = task:get_from(1)
+  -- Compare the envelope and the headers as they were transmitted: alias
+  -- rewrites (e.g. a cross-domain virtual alias applied to the envelope
+  -- recipients) must not make the wire To/Cc headers look forged
+  local smtp_rcpts = task:get_recipients({ 'smtp', 'orig' })
+  local smtp_from = task:get_from({ 'smtp', 'orig' })
 
   if not smtp_rcpts then
     return
@@ -144,7 +147,7 @@ local function check_forged_headers(task)
 
   -- Check sender
   if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' then
-    local mime_from = task:get_from(2)
+    local mime_from = task:get_from({ 'mime', 'orig' })
     if not mime_from or not mime_from[1] or
         not rspamd_util.strequal_caseless_utf8(mime_from[1]['addr'], smtp_from[1]['addr']) then
       task:insert_result(symbol_sender, 1, ((mime_from or E)[1] or E).addr or '', smtp_from[1].addr)
