@@ -1316,11 +1316,6 @@ local function gpt_check(task)
         maybe_proceed()
       end
     end
-
-    -- If no fetches were initiated, proceed immediately
-    if pending_fetches == 0 then
-      proceed(nil)
-    end
   else
     proceed(nil)
   end
