@@ -340,6 +340,9 @@ local function aliases_callback(task)
   })
 
   --- Check and resolve From address
+  -- The From address is the sender's identity: SPF, DKIM and DMARC all key on
+  -- its domain, so only the local part may be rewritten here; any rewrite that
+  -- would change the domain is discarded
   -- @param addr_type 'smtp' or 'mime'
   local function check_from(addr_type)
     if not task:has_from(addr_type) then
@@ -347,11 +350,23 @@ local function aliases_callback(task)
     end
 
     local addr = task:get_from(addr_type)[1]
-    local original_addr = addr.addr
+    local original_domain = addr.domain
+    local modified = false
+
+    local function same_domain(domain)
+      return domain and original_domain and
+          domain:lower() == original_domain:lower()
+    end
 
     -- Apply service-specific rules (Gmail, plus-aliases)
     if settings.enable_gmail_rules or settings.enable_plus_aliases then
       local nu, tags, nd = lua_aliases.apply_service_rules(addr)
+
+      if nd and not same_domain(nd) then
+        lua_util.debugm(N, task, 'refuse to rewrite %s from domain: %s -> %s',
+            addr_type, original_domain, nd)
+        nd = nil
+      end
 
       if nu or nd then
         set_addr(addr, nu, nd)
@@ -364,24 +379,30 @@ local function aliases_callback(task)
           end, tags)
         end
 
-        alias_resolved = true
+        modified = true
       end
     end
 
     -- Resolve through alias system
     local canonical = lua_aliases.resolve_address(addr, resolve_opts)
-    if canonical and canonical:lower() ~= original_addr:lower() then
+    if canonical and canonical:lower() ~= addr.addr:lower() then
       -- Update address
       local user, domain = canonical:match('^([^@]+)@(.+)$')
       if user and domain then
-        set_addr(addr, user, domain)
-        alias_resolved = true
+        if same_domain(domain) then
+          set_addr(addr, user, domain)
+          modified = true
+        else
+          lua_util.debugm(N, task, 'refuse to resolve %s from %s -> %s: domain change',
+              addr_type, addr.addr, canonical)
+        end
       end
     end
 
     -- Update in task
-    if alias_resolved then
+    if modified then
       task:set_from(addr_type, addr, 'alias')
+      alias_resolved = true
     end
   end
 
