@@ -172,6 +172,7 @@ local settings = {
   use_gzip = true,
   use_keepalive = true,
   allow_local = false,
+  ecs_mode = false,
   user = nil,
   password = nil,
 }
@@ -438,7 +439,9 @@ local function build_urls_metadata(urls, max_urls, full_urls, cta_keys, cta_mode
     if max_urls > 0 and i > max_urls then
       break
     end
-    table.insert(list, url_to_record(entry.url, full_urls, entry.count))
+    local rec = url_to_record(entry.url, full_urls, entry.count)
+    if entry.is_cta then rec.is_cta = true end
+    table.insert(list, rec)
   end
 
   local repeat_ratio = 0
@@ -496,7 +499,7 @@ local function create_bulk_json(es_index, logs_to_send)
   local tbl = {}
   for _, row in pairs(logs_to_send) do
     local pipeline = ''
-    if settings['geoip']['enabled'] then
+    if not settings['ecs_mode'] and settings['geoip']['enabled'] then
       pipeline = ',"pipeline":"' .. settings['geoip']['pipeline_name'] .. '"'
     end
     table.insert(tbl, '{"index":{"_index":"' .. es_index .. '"' .. pipeline .. '}}')
@@ -697,9 +700,7 @@ local function get_general_metadata(task)
     local rcpt = task:get_recipients('smtp')
     local l = {}
     for _, a in ipairs(rcpt) do
-      if a['user'] and #a['user'] > 0 and a['domain'] and #a['domain'] > 0 then
-        table.insert(l, a['user'] .. '@' .. a['domain']:lower())
-      end
+      table.insert(l, a['addr'])
     end
     if #l > 0 then
       r.rcpt = l
@@ -894,6 +895,395 @@ local function get_general_metadata(task)
   return r
 end
 
+local function get_ecs_document(task)
+  local doc = {}
+
+  -- @timestamp (milliseconds, string to match legacy format)
+  doc['@timestamp'] = tostring(rspamd_util.get_time() * 1000)
+
+  -- ECS metadata
+  doc['ecs'] = { version = '9.4.0' }
+
+  -- event.*
+  local action = task:get_metric_action() or 'unknown'
+  local score = task:get_metric_score()[1] or 0
+  local failure_actions = { reject = true, discard = true, ['soft reject'] = true }
+  local outcome = failure_actions[action] and 'failure' or 'success'
+  local scan_real = task:get_scan_time() or 0
+  if scan_real < 0 then scan_real = 0 end
+  local has_pre_result, _, _, pre_result_module = task:has_pre_result()
+
+  doc['event'] = {
+    kind       = 'event',
+    category   = { 'email' },
+    type       = { 'info' },
+    action     = action,
+    outcome    = outcome,
+    risk_score = lua_util.round(score, 3),
+    duration   = math.floor(scan_real * 1e9),
+    id         = task:get_digest() or '',
+    module     = 'rspamd',
+    dataset    = 'rspamd.email',
+  }
+  if has_pre_result and pre_result_module then
+    doc['event']['reason'] = pre_result_module
+  end
+
+  -- observer.*
+  doc['observer'] = {
+    hostname = rspamd_hostname or '',
+    type     = 'spam-filter',
+    vendor   = 'Rspamd',
+    product  = 'Rspamd',
+  }
+
+  -- client.* / connection IP
+  local client_ip_str = nil
+  local ip_addr = task:get_ip()
+  if ip_addr and ip_addr:is_valid() then
+    local s = tostring(ip_addr)
+    if s ~= '...' then
+      client_ip_str = s
+    end
+  end
+  local is_local = false
+  if client_ip_str then
+    is_local = ip_addr:is_local()
+  end
+
+  local user = task:get_user()
+
+  doc['client'] = {
+    ip     = client_ip_str or '::',
+    domain = task:get_hostname() or '',
+  }
+
+  -- email.from (MIME From)
+  local mime_from_addr = nil
+  local mime_from_domain = nil
+  if task:has_from('mime') then
+    local mf = task:get_from({ 'mime', 'orig' })[1]
+    if mf and mf['user'] and #mf['user'] > 0 and mf['domain'] and #mf['domain'] > 0 then
+      mime_from_domain = mf['domain']:lower()
+      mime_from_addr = mf['addr']
+    end
+  end
+
+  -- email.sender (SMTP envelope from)
+  local smtp_from_addr = nil
+  local smtp_from_domain = nil
+  if task:has_from('smtp') then
+    local sf = task:get_from({ 'smtp', 'orig' })[1]
+    if sf and sf['addr'] and sf['domain'] and #sf['domain'] > 0 then
+      smtp_from_domain = sf['domain']:lower()
+      smtp_from_addr = sf['addr']
+    end
+  end
+
+  -- email.recipient (SMTP envelope recipients)
+  local smtp_rcpt_list = nil
+  if task:has_recipients('smtp') then
+    local rcpts = task:get_recipients('smtp')
+    local l = {}
+    for _, a in ipairs(rcpts) do
+      table.insert(l, a['addr'])
+    end
+    if #l > 0 then smtp_rcpt_list = l end
+  end
+
+  -- email.to (MIME recipients)
+  local mime_to_list = nil
+  if task:has_recipients('mime') then
+    local rcpts = task:get_recipients('mime')
+    local l = {}
+    for _, a in ipairs(rcpts) do
+      table.insert(l, a['addr'])
+    end
+    if #l > 0 then mime_to_list = l end
+  end
+
+  -- email.reply_to
+  local reply_to_addr = nil
+  local reply_to_domain = nil
+  local reply_to_hdr = task:get_header_full('Reply-To')
+  if reply_to_hdr and reply_to_hdr[1] and reply_to_hdr[1].decoded then
+    local reply_to = rspamd_util.parse_mail_address(reply_to_hdr[1].decoded, task:get_mempool())
+    if reply_to and reply_to[1] and
+      reply_to[1].addr and
+      reply_to[1].domain and #reply_to[1].domain > 0
+    then
+      reply_to_addr = reply_to[1].addr
+      reply_to_domain = reply_to[1].domain:lower()
+    end
+  end
+
+  -- Cc and Bcc (always collected in ECS mode)
+  local function parse_addr_header(hdr_name)
+    local hdr = task:get_header_full(hdr_name)
+    if not (hdr and hdr[1] and hdr[1].decoded) then return nil end
+    local parsed = rspamd_util.parse_mail_address(hdr[1].decoded, task:get_mempool())
+    if not parsed then return nil end
+    local l = {}
+    for _, a in ipairs(parsed) do
+      table.insert(l, a['addr'])
+    end
+    return #l > 0 and l or nil
+  end
+
+  local cc_list = parse_addr_header('Cc')
+  local bcc_list = parse_addr_header('Bcc')
+
+  -- X-Originating-IP
+  local xoip_str = nil
+  local origin = task:get_header('X-Originating-IP')
+  if origin then
+    origin = origin:gsub('^%[', ''):gsub('%]:[0-9]+$', ''):gsub('%]$', '')
+    local rspamd_ip = require 'rspamd_ip'
+    local origin_ip = rspamd_ip.from_string(origin)
+    if origin_ip and origin_ip:is_valid() then
+      local s = tostring(origin_ip)
+      if s ~= '...' then xoip_str = s end
+    end
+  end
+
+  -- Received-header IPs
+  local received_delay, received_ips = get_received_info(task:get_received_headers())
+
+  -- email.header.*
+  local email_header = {}
+  if #received_ips > 0 then
+    email_header['received'] = received_ips
+  end
+  if xoip_str then
+    email_header['x_originating_ip'] = xoip_str
+  end
+
+  -- extra_collect_headers -> email.header.<normalized_name>
+  local function get_header_simple(name)
+    local hdr = task:get_header(name)
+    return hdr and hdr ~= '' and hdr or nil
+  end
+
+  for _, hname in ipairs(settings['extra_collect_headers']) do
+    local normalized = hname:lower():gsub('[%s%-]', '_')
+    if not email_header[normalized] then
+      local v = get_header_simple(hname)
+      if v then email_header[normalized] = v end
+    end
+  end
+
+  -- email.x_mailer: prefer User-Agent, fall back to X-Mailer
+  local x_mailer = get_header_simple('User-Agent') or get_header_simple('X-Mailer')
+
+  -- direction
+  local direction = user and 'outbound' or 'inbound'
+
+  -- message_id
+  local message_id = task:get_message_id()
+  if message_id == 'undef' then message_id = nil end
+
+  doc['email'] = {
+    direction  = direction,
+    message_id = message_id,
+    subject    = task:get_subject(),
+    local_id   = task:get_queue_id(),
+    x_mailer   = x_mailer,
+  }
+  if mime_from_addr then
+    doc['email']['from'] = { address = mime_from_addr }
+  end
+  if smtp_from_addr then
+    doc['email']['sender'] = { address = smtp_from_addr }
+  end
+  if mime_to_list then
+    doc['email']['to'] = { address = mime_to_list }
+  end
+  if cc_list then
+    doc['email']['cc'] = { address = cc_list }
+  end
+  if bcc_list then
+    doc['email']['bcc'] = { address = bcc_list }
+  end
+  if smtp_rcpt_list then
+    doc['email']['recipient'] = { address = smtp_rcpt_list }
+  end
+  if reply_to_addr then
+    doc['email']['reply_to'] = { address = reply_to_addr }
+  end
+  if next(email_header) then
+    doc['email']['header'] = email_header
+  end
+
+  -- related.ip (deduplicated)
+  local related_ip_seen = {}
+  local related_ip = {}
+  local function add_related_ip(s)
+    if s and not related_ip_seen[s] then
+      related_ip_seen[s] = true
+      table.insert(related_ip, s)
+    end
+  end
+  add_related_ip(client_ip_str)
+  add_related_ip(xoip_str)
+  for _, rip in ipairs(received_ips) do add_related_ip(rip) end
+
+  -- related.hosts (deduplicated)
+  local related_hosts_seen = {}
+  local related_hosts = {}
+  local function add_related_host(s)
+    if s and s ~= '' and not related_hosts_seen[s] then
+      related_hosts_seen[s] = true
+      table.insert(related_hosts, s)
+    end
+  end
+  add_related_host(doc['client']['domain'])
+  add_related_host(rspamd_hostname)
+  add_related_host(smtp_from_domain)
+  add_related_host(mime_from_domain)
+  add_related_host(reply_to_domain)
+
+  doc['related'] = {}
+  if #related_ip > 0 then doc['related']['ip'] = related_ip end
+  if #related_hosts > 0 then doc['related']['hosts'] = related_hosts end
+
+  -- email.attachments and related.hash
+  local related_hash = {}
+  local attachments = {}
+  local rspamd_cryptobox_hash = require 'rspamd_cryptobox_hash'
+  for _, part in ipairs(task:get_parts()) do
+    local fname = part:get_filename()
+    if fname then
+      local att = { file = {} }
+      att.file.name = fname
+      att.file.size = part:get_length()
+      local ptype, psubtype = part:get_type()
+      if ptype and psubtype then
+        att.file.mime_type = ptype .. '/' .. psubtype
+      end
+      local ext = fname:match('%.([^%.]+)$')
+      if ext then att.file.extension = ext end
+
+      local content = part:get_content('raw_parsed')
+      if content and #content > 0 then
+        local h256 = rspamd_cryptobox_hash.create_specific('sha256')
+        h256:update(content)
+        local sha256_hex = h256:hex()
+
+        local hmd5 = rspamd_cryptobox_hash.create_specific('md5')
+        hmd5:update(content)
+        local md5_hex = hmd5:hex()
+
+        att.file.hash = {
+          sha256 = sha256_hex,
+          md5    = md5_hex,
+        }
+        table.insert(related_hash, sha256_hex)
+        table.insert(related_hash, md5_hex)
+      end
+
+      table.insert(attachments, att)
+    end
+  end
+  if #attachments > 0 then
+    doc['email']['attachments'] = attachments
+  end
+  if #related_hash > 0 then
+    doc['related']['hash'] = related_hash
+  end
+
+  -- url array (ECS-shaped), when collect_urls enabled
+  if settings['collect_urls']['enabled'] then
+    local task_urls = task:get_urls(settings['collect_urls']['get_url_params'])
+    local cta_urls = collect_cta_urls(task)
+    local cta_keys = {}
+    for _, u in ipairs(cta_urls) do
+      cta_keys[url_key(u, false)] = true
+    end
+
+    local url_meta = build_urls_metadata(task_urls,
+      settings['collect_urls']['max_urls'],
+      settings['collect_urls']['full_urls'],
+      cta_keys, 'mark')
+
+    local ecs_urls = {}
+    for _, rec in ipairs(url_meta.list) do
+      local eu = {
+        domain            = rec.host,
+        scheme            = rec.protocol,
+        registered_domain = rec.etld,
+        count             = rec.count,
+      }
+      if rec.url then eu.full = rec.url end
+      if rec.flags then eu.flags = rec.flags end
+      if rec.is_cta then eu.is_cta = true end
+      table.insert(ecs_urls, eu)
+    end
+    if #ecs_urls > 0 then
+      doc['url'] = ecs_urls
+    end
+  end
+
+  -- rspamd.* (custom namespace)
+  local pool = task:get_mempool()
+  local asn_num = tonumber(pool:get_variable('asn')) or 0
+  local asn_net = pool:get_variable('ipnet') or '::/128'
+
+  local symbols = task:get_symbols_all()
+  for _, sym in ipairs(symbols) do
+    sym.groups = nil
+    if type(sym.score) == 'number' then
+      sym.score = lua_util.round(sym.score, 3)
+    end
+    if type(sym.weight) == 'number' then
+      sym.weight = lua_util.round(sym.weight, 3)
+    end
+  end
+
+  local lang_t = {}
+  local text_parts = task:get_text_parts()
+  if text_parts then
+    for _, part in ipairs(text_parts) do
+      local l = part:get_language()
+      if l and not contains(lang_t, l) then
+        table.insert(lang_t, l)
+      end
+    end
+  end
+
+  local non_en = true
+  if #lang_t == 1 and lang_t[1] == 'en' then
+    non_en = false
+  end
+
+  local fuzzy_hashes = pool:get_variable('fuzzy_hashes', 'fstrings')
+
+  local settings_id_val = task:get_settings_id()
+  if settings_id_val then
+    local lua_settings = require 'lua_settings'
+    settings_id_val = lua_settings.settings_by_id(settings_id_val)
+    if settings_id_val then
+      settings_id_val = settings_id_val.name
+    end
+  end
+
+  doc['rspamd'] = {
+    symbols        = symbols,
+    settings_id    = settings_id_val,
+    helo           = task:get_helo(),
+    asn            = {
+      number  = asn_num,
+      network = asn_net,
+    },
+    language       = #lang_t > 0 and lang_t or nil,
+    non_en         = non_en,
+    fuzzy_hashes   = fuzzy_hashes,
+    received_delay = received_delay,
+    is_local       = is_local,
+  }
+
+  return doc
+end
+
 local function elastic_collect(task)
   if task:has_flag('skip') then
     return
@@ -921,8 +1311,13 @@ local function elastic_collect(task)
     return
   end
 
-  local now = tostring(rspamd_util.get_time() * 1000)
-  local row = { ['rspamd_meta'] = get_general_metadata(task), ['@timestamp'] = now }
+  local row
+  if settings['ecs_mode'] then
+    row = get_ecs_document(task)
+  else
+    local now = tostring(rspamd_util.get_time() * 1000)
+    row = { ['rspamd_meta'] = get_general_metadata(task), ['@timestamp'] = now }
+  end
   buffer['logs']:push(row)
   lua_util.debugm(N, task, 'saved log to buffer')
 end
@@ -1883,7 +2278,7 @@ if opts then
       end
       if worker:is_primary_controller() then
         rspamd_config:add_periodic(ev_base, settings.periodic_interval, function(p_cfg, p_ev_base)
-          if not settings['index_template']['managed'] then
+          if settings['ecs_mode'] or not settings['index_template']['managed'] then
             return false
           elseif not detected_distro['supported'] then
             return true
@@ -1897,7 +2292,7 @@ if opts then
           end
         end)
         rspamd_config:add_periodic(ev_base, settings.periodic_interval, function(p_cfg, p_ev_base)
-          if not settings['index_policy']['enabled'] or not settings['index_policy']['managed'] then
+          if settings['ecs_mode'] or not settings['index_policy']['enabled'] or not settings['index_policy']['managed'] then
             return false
           elseif not detected_distro['supported'] then
             return true
@@ -1911,7 +2306,7 @@ if opts then
           end
         end)
         rspamd_config:add_periodic(ev_base, settings.periodic_interval, function(p_cfg, p_ev_base)
-          if not settings['geoip']['enabled'] or not settings['geoip']['managed'] then
+          if settings['ecs_mode'] or not settings['geoip']['enabled'] or not settings['geoip']['managed'] then
             return false
           elseif not detected_distro['supported'] then
             return true
