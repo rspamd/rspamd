@@ -94,7 +94,8 @@ For example, `list('foo', 'bar')` returns a list {'foo', 'bar'}]],
       return nil
     end,
     ['description'] = [[Get MIME or SMTP from (e.g. `from('smtp')` or `from('mime')`,
-uses any type by default)]],
+uses any type by default); add `orig` (e.g. `from('mime', 'orig')`) to get the
+address as it was seen in the message, before any rewrite (e.g. by the aliases module)]],
   },
   ['rcpts'] = {
     ['get_value'] = function(task, args)
@@ -110,7 +111,8 @@ uses any type by default)]],
       return nil
     end,
     ['description'] = [[Get MIME or SMTP rcpts (e.g. `rcpts('smtp')` or `rcpts('mime')`,
-uses any type by default)]],
+uses any type by default); add `orig` (e.g. `rcpts('mime', 'orig')`) to get the
+addresses as they were seen in the message, before any rewrite (e.g. by the aliases module)]],
   },
   -- Get country (ASN module must be executed first)
   ['country'] = {

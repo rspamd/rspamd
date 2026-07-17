@@ -627,7 +627,9 @@ LUA_FUNCTION_DEF(task, has_from);
  *   - [empty] - empty address
  *   - [backslash] - user part contains backslash
  *   - [8bit] - contains 8bit characters
- * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only
+ *   - [aliased] - address was rewritten by aliases resolution
+ *   - [original] - address is the pre-rewrite original preserved by `task:set_from`
+ * @param {integer|string|table} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only. A table of strings may combine the type with additional flavours: `orig` (or `original`) returns the addresses as they were seen in the message, before any rewrite done via `task:set_from`, e.g. `task:get_from({'mime', 'orig'})`
  * @return {address} sender or `nil`
  */
 LUA_FUNCTION_DEF(task, get_from);
@@ -4005,7 +4007,7 @@ lua_push_email_address(lua_State *L, struct rspamd_email_address *addr)
 		}
 
 		lua_pushstring(L, "flags");
-		lua_createtable(L, 0, 7);
+		lua_createtable(L, 0, 9);
 
 		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_VALID, "valid");
 		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_IP, "ip");
@@ -4014,6 +4016,8 @@ lua_push_email_address(lua_State *L, struct rspamd_email_address *addr)
 		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_EMPTY, "empty");
 		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_HAS_BACKSLASH, "backslash");
 		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_HAS_8BIT, "8bit");
+		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_ALIASED, "aliased");
+		EMAIL_CHECK_FLAG(RSPAMD_EMAIL_ADDR_ORIGINAL, "original");
 
 		lua_settable(L, -3);
 	}
@@ -4023,24 +4027,44 @@ void lua_push_emails_address_list(lua_State *L, GPtrArray *addrs, int flags)
 {
 	struct rspamd_email_address *addr;
 	unsigned int i, pos = 1;
+	gboolean has_original = FALSE;
+
+	if (flags & LUA_ADDRESS_ORIGINAL) {
+		for (i = 0; i < addrs->len; i++) {
+			addr = g_ptr_array_index(addrs, i);
+
+			if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+				has_original = TRUE;
+				break;
+			}
+		}
+	}
 
 	lua_createtable(L, addrs->len, 0);
 
 	for (i = 0; i < addrs->len; i++) {
 		addr = g_ptr_array_index(addrs, i);
 
-		if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
-			if (flags & LUA_ADDRESS_ORIGINAL) {
-				lua_push_email_address(L, addr);
-				lua_rawseti(L, -2, pos);
-				pos++;
+		if (flags & LUA_ADDRESS_ORIGINAL) {
+			/*
+			 * Return addresses as they were seen in the message: if some of
+			 * them were preserved as originals during a rewrite, hide the
+			 * rewritten versions
+			 */
+			if (has_original && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				continue;
 			}
 		}
 		else {
-			lua_push_email_address(L, addr);
-			lua_rawseti(L, -2, pos);
-			pos++;
+			/* Return the current (possibly rewritten) view */
+			if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+				continue;
+			}
 		}
+
+		lua_push_email_address(L, addr);
+		lua_rawseti(L, -2, pos);
+		pos++;
 	}
 }
 

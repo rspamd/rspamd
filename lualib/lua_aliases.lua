@@ -581,18 +581,12 @@ local function apply_service_rules(email_addr)
     return nil
   end
 
-  local function check_googlemail(addr)
-    local nd = 'gmail.com'
-    local nu, tags = check_gmail_user(addr)
-    if nu then
-      return nu, tags, nd
-    end
-    return nil, nil, nd
-  end
-
   local specific_domains = {
     ['gmail.com'] = check_gmail,
-    ['googlemail.com'] = check_googlemail,
+    -- googlemail.com shares gmail.com user-part semantics, but the domain is
+    -- never rewritten: it is DNS-distinct from gmail.com (own SPF/DMARC
+    -- records), so a rewrite would break alignment and policy lookups
+    ['googlemail.com'] = check_gmail,
   }
 
   if email_addr then

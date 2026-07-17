@@ -76,7 +76,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local spf_tmpfail = false
   local dkim_tmpfail = false
 
-  local spf_domain = ((task:get_from(1) or E)[1] or E).domain
+  -- SPF alignment is checked against the envelope domain as it was seen in
+  -- the message, before any rewrite (e.g. by the aliases module)
+  local spf_domain = ((task:get_from({ 'smtp', 'orig' }) or E)[1] or E).domain
 
   if not spf_domain or spf_domain == '' then
     spf_domain = task:get_helo() or ''
@@ -450,7 +452,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 end
 
 local function dmarc_callback(task)
-  local from = task:get_from(2)
+  -- DMARC must evaluate the RFC5322.From domain as it was seen in the
+  -- message; rewrites done via task:set_from (e.g. by the aliases module)
+  -- must not affect alignment, policy lookup or reporting
+  local from = task:get_from({ 'mime', 'orig' })
   local hfromdom = ((from or E)[1] or E).domain
   local dmarc_domain
   local ip_addr = task:get_ip()

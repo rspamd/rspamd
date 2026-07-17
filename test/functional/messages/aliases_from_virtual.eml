@@ -1,0 +1,7 @@
+From: Virtual Sender <virtual@example.com>
+To: user@example.com
+Subject: Test cross-domain virtual alias on From
+Message-ID: <test-from-virtual@example.com>
+Date: Mon, 01 Jan 2025 10:00:00 +0000
+
+A virtual alias pointing to another domain must not rewrite the From domain.

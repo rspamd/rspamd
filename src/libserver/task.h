@@ -281,6 +281,14 @@ gboolean rspamd_task_process(struct rspamd_task *task, unsigned int stages);
 struct rspamd_email_address *rspamd_task_get_sender(struct rspamd_task *task);
 
 /**
+ * Return the original (pre-rewrite) envelope sender if the envelope from has
+ * been modified (e.g. by aliases resolution), or the current sender otherwise
+ * @param task
+ * @return
+ */
+struct rspamd_email_address *rspamd_task_get_original_sender(struct rspamd_task *task);
+
+/**
  * Return addresses in the following precedence:
  * - deliver to
  * - the first smtp recipient
