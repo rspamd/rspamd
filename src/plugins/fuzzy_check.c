@@ -4792,6 +4792,11 @@ fuzzy_insert_metric_results(struct rspamd_task *task, struct fuzzy_rule *rule,
 	if (task->message) {
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
 		{
+			if (tp->mime_part && (tp->mime_part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+				/* Injected parts do not affect hashes weights */
+				continue;
+			}
+
 			if (!IS_TEXT_PART_EMPTY(tp) && kv_size(tp->utf_words) > 0) {
 				seen_text_part = TRUE;
 
@@ -5512,6 +5517,12 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 	{
 		check_part = FALSE;
 		fuzzy_check = FALSE;
+
+		if (mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+			/* Never learn or check injected (computed) parts */
+			msg_debug_fuzzy_check("skip injected part %ud", mime_part->part_number);
+			continue;
+		}
 
 		if (fuzzy_rule_check_mimepart(task, rule, mime_part, &check_part,
 									  &fuzzy_check)) {
@@ -6783,6 +6794,10 @@ fuzzy_lua_hex_hashes_handler(lua_State *L)
 			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, mp)
 			{
 				struct rspamd_cached_shingles *cached;
+
+				if (mp->flags & RSPAMD_MIME_PART_COMPUTED) {
+					continue;
+				}
 
 				cached = fuzzy_cmd_get_cached(rule, task, mp);
 
