@@ -394,6 +394,34 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 		ucl_object_insert_key(this_sym_ucl,
 							  ucl_object_fromstring(sym->get_type_str()),
 							  "type", strlen("type"), false);
+
+		/* Modifier flags; structural types are already covered by `type` */
+		static constexpr const std::pair<int, const char *> flag_names[] = {
+			{SYMBOL_TYPE_FINE, "fine"},
+			{SYMBOL_TYPE_EMPTY, "empty"},
+			{SYMBOL_TYPE_EXPLICIT_DISABLE, "explicit_disable"},
+			{SYMBOL_TYPE_EXPLICIT_ENABLE, "explicit_enable"},
+			{SYMBOL_TYPE_IGNORE_PASSTHROUGH, "ignore_passthrough"},
+			{SYMBOL_TYPE_NOSTAT, "nostat"},
+			{SYMBOL_TYPE_IDEMPOTENT, "idempotent"},
+			{SYMBOL_TYPE_MIME_ONLY, "mime"},
+			{SYMBOL_TYPE_TRIVIAL, "trivial"},
+			{SYMBOL_TYPE_SKIPPED, "skip"},
+			{SYMBOL_TYPE_COMPOSITE, "composite"},
+			{SYMBOL_TYPE_GHOST, "ghost"},
+			{SYMBOL_TYPE_USE_CORO, "coro"},
+		};
+
+		auto *flags_ucl = ucl_object_typed_new(UCL_ARRAY);
+
+		for (const auto &[flag, name]: flag_names) {
+			if (sym->get_flags() & flag) {
+				ucl_array_append(flags_ucl, ucl_object_fromstring(name));
+			}
+		}
+
+		ucl_object_insert_key(this_sym_ucl, flags_ucl,
+							  "flags", strlen("flags"), false);
 	}
 }
 
