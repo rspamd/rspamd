@@ -491,11 +491,13 @@ LUA_FUNCTION_DEF(config, get_groups);
 LUA_FUNCTION_DEF(config, promote_symbols_cache_resort);
 
 /***
- * @method rspamd_config:register_settings_id(name, symbols_enabled, symbols_disabled)
+ * @method rspamd_config:register_settings_id(name, symbols_enabled, symbols_disabled[, policy])
  * Register new static settings id in config
  * @param {string} name id name (not numeric!)
  * @param {map|string->string} symbols_enabled map from symbol's name to boolean (currently)
  * @param {map|string->string} symbols_disabled map from symbol's name to boolean (currently)
+ * @param {string} policy one of `default`, `implicit_allow` or `implicit_deny`; when omitted,
+ * `implicit_allow` is assumed if `symbols_enabled` is empty, `default` (whitelist) otherwise
  * @available 2.0+
  */
 LUA_FUNCTION_DEF(config, register_settings_id);

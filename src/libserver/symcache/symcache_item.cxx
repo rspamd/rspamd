@@ -393,10 +393,24 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 			if (!allowed_ids.check_id(task->settings_elt->id)) {
 
 				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
-					msg_debug_cache_task("allow execution of %s settings id %ud "
-										 "allows implicit execution of the symbols;",
+					if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+						auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
+
+						if (!(runtime && runtime->is_force_enabled(id))) {
+							msg_debug_cache_task("deny %s of %s as it must be explicitly enabled, "
+												 "but settings id %ud merely allows implicit execution",
+												 what,
+												 symbol.c_str(),
+												 task->settings_elt->id);
+
+							return false;
+						}
+					}
+
+					msg_debug_cache_task("allow execution of %s as settings id %ud "
+										 "allows implicit execution of the symbols",
 										 symbol.c_str(),
-										 id);
+										 task->settings_elt->id);
 
 					return true;
 				}
@@ -426,11 +440,15 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 								 task->settings_elt->id);
 		}
 	}
-	else if ((flags & SYMBOL_TYPE_EXPLICIT_ENABLE) && !task->settings) {
-		msg_debug_cache_task("deny %s of %s as it must be explicitly enabled",
-							 what,
-							 symbol.c_str());
-		return false;
+	else if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+		auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
+
+		if (!(runtime && runtime->is_force_enabled(id))) {
+			msg_debug_cache_task("deny %s of %s as it must be explicitly enabled",
+								 what,
+								 symbol.c_str());
+			return false;
+		}
 	}
 
 	/* Allow all symbols with no settings id */
