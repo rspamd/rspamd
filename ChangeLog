@@ -1,3 +1,38 @@
+4.1.2: 21 Jul 2026
+
+  ** Incompatible changes **
+  * [Rework] lua_task: Make the 'orig' address flavour return only the wire addresses when a rewrite preserved the originals
+  * [Rework] WebUI: Migrate all tables from FooTable to Tabulator (per-column filters, global history/scan search) and remove FooTable
+
+  ** Features **
+  * [Feature] composites: Add per-symbol Lua conditions and explicit dependencies
+  * [Feature] configdump: Show symcache flags in --symbol-details
+  * [Feature] neural: Add static_embed provider (WordPiece subword tokenizer over a static embedding matrix, with per-token vector access)
+  * [Feature] neural: Add forced-learn minimal-scan fast path and train.frozen control to stop automatic training
+  * [Feature] rspamadm: Discover command modules from external directories (rspamadm.d and RSPAMADM_COMMAND_PATH)
+  * [Feature] rspamadm: Allow reading the password from the environment for automation
+  * [Feature] settings: Add apply policy option (implicit_allow) with additive symbols_enabled and strict explicit_enable gating
+
+  ** Bug fixes **
+  * [CritFix] mime_parser: Bound message/rfc822 recursion depth (remote DoS via deeply nested messages)
+  * [Fix] aliases: Refuse to rewrite From address domains (SPF, DKIM and DMARC key on the sender identity)
+  * [Fix] aliases: Never rewrite the googlemail.com domain to gmail.com
+  * [Fix] dmarc: Evaluate the From and envelope domains as seen in the message, not after alias rewriting
+  * [Fix] spf: Check the original envelope sender even if it was rewritten
+  * [Fix] forged_recipients: Compare envelope and header addresses as they were transmitted
+  * [Fix] mime: Split address lists on semicolons as well as commas (Outlook-style recipient lists)
+  * [Fix] fuzzy: Skip injected (computed) parts on learn and check
+  * [Fix] phishing: Don't penalise the same label under another TLD (brand.co.uk displayed over brand.com)
+  * [Fix] maps: Anchor glob map patterns to match the whole subject; entries relying on substring matching need explicit wildcards
+  * [Fix] lua_selectors: Reject selectors that parse only as a prefix instead of silently evaluating the truncated part
+  * [Fix] lua_selectors: Don't crash the scan on a method call missing on the extracted value
+  * [Fix] lua_cryptobox: Pass the padded nonce to secretbox encrypt/decrypt (out-of-bounds read with short nonces)
+  * [Fix] lua_kann: Fix load({filename}) argument index and save() return value
+  * [Fix] gpt: Don't send a duplicate request when context_augment invokes its callback synchronously
+  * [Fix] icap: Fix insertion of HTTP header in get_http_headers
+  * [Fix] dmarc_report: Don't call blocking sleep from an async callback when throttling batches
+  * [Fix] Lua 5.5 compatibility: do not assign to for-loop variables (fixes startup error in Jinja templates via lupa)
+
 4.1.1: 19 Jun 2026
 
   ** Features **
