@@ -168,6 +168,27 @@ Thank you,
     task:destroy()
   end)
 
+  test("Process mime nesting: deep message/rfc822 chain is bounded", function()
+    -- Regression for the unbounded message/rfc822 recursion DoS: a long chain
+    -- of bare "Content-Type: message/rfc822" wrappers must not recurse past
+    -- the parser's max_nested limit (64). Before the fix the nesting counter
+    -- was copied to the new parser runtime before being incremented, so the
+    -- limit never fired and the parser recursed once per level (stack
+    -- exhaustion / quadratic CPU). The bound is observable as the number of
+    -- parsed MIME parts: capped near max_nested rather than growing with the
+    -- chain length.
+    local depth = 500
+    local msg = string.rep('Content-Type: message/rfc822\n\n', depth) ..
+      'Subject: poc\n\nInner body http://nested.example.com/\n'
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local parts = task:get_parts()
+    assert_true(#parts <= 128,
+      string.format("nesting not bounded: %d parts for a %d-level chain", #parts, depth))
+    task:destroy()
+  end)
+
   test("Part URLs are not deduplicated across MIME parts", function()
     local msg = table.concat {
       hdrs,

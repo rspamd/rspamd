@@ -1908,6 +1908,19 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		ret = rspamd_mime_parse_multipart_part(task, npart, nst, err);
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
+		/*
+		 * We descend into an embedded message through nst, so the nesting
+		 * limit must be accounted against nst (the runtime that is carried
+		 * into the recursion), not st. Mirror the multipart branch above and
+		 * rspamd_mime_process_multipart_node: push onto the stack and bump
+		 * nst->nesting so the recursive call's cleanup (see below) pops and
+		 * decrements it symmetrically. Without this a chain of message/rfc822
+		 * parts recurses unbounded because max_nested is never reached, which
+		 * exhausts the worker stack.
+		 */
+		g_ptr_array_add(nst->stack, npart);
+		nst->nesting++;
+
 		if ((ret = rspamd_mime_parse_normal_part(task, npart, nst, sel, err)) == RSPAMD_MIME_PARSE_OK) {
 			npart->part_type = RSPAMD_MIME_PART_MESSAGE;
 			ret = rspamd_mime_parse_message(task, npart, nst, err);
