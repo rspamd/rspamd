@@ -116,30 +116,58 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 	ucl_object_iter_t it = nullptr;
 	const ucl_object_t *cur;
 
+	/*
+	 * Settings policy: with the default policy, `symbols_enabled` is a whitelist
+	 * (disable everything, then enable listed symbols); with `implicit_allow`,
+	 * it is additive: all symbols stay enabled and the listed ones are merely
+	 * unlocked (this is the only way to run `explicit_enable` symbols without
+	 * switching to the whitelist mode).
+	 * The policy is read from the applied settings themselves, as the registered
+	 * settings element might not be attached to the task at this point (the
+	 * settings plugin applies settings before setting the id).
+	 */
+	auto implicit_allow = false;
+	const auto *policy_obj = ucl_object_lookup(task->settings, "policy");
+
+	if (policy_obj && ucl_object_type(policy_obj) == UCL_STRING) {
+		const auto *policy_str = ucl_object_tostring(policy_obj);
+
+		if (g_ascii_strcasecmp(policy_str, "implicit_allow") == 0) {
+			implicit_allow = true;
+		}
+		else if (g_ascii_strcasecmp(policy_str, "default") != 0 &&
+				 g_ascii_strcasecmp(policy_str, "implicit_deny") != 0) {
+			msg_warn_task("unknown settings policy: %s; ignore it", policy_str);
+		}
+	}
+
 	const auto *enabled = ucl_object_lookup(task->settings, "symbols_enabled");
 
 	/*
-	 * Track force-enabled symbols: if settings_elt has a symbol in forbidden_ids
-	 * but the merged settings explicitly enable it, we need to override the bitset
+	 * Track explicitly enabled symbols: they both override settings_elt
+	 * forbidden_ids and unlock symbols with the `explicit_enable` flag
 	 */
 	auto force_enable = [&](const char *sym) {
 		enable_symbol(task, cache, sym);
 
-		if (task->settings_elt) {
-			const auto *item = cache.get_item_by_name(sym, true);
-			if (item && item->forbidden_ids.check_id(task->settings_elt->id)) {
-				add_force_enabled(item->id);
-				msg_debug_cache_task("force-enable %s (id=%d) overriding settings_elt forbidden_ids",
-									 sym, item->id);
-			}
+		const auto *item = cache.get_item_by_name(sym, true);
+		if (item) {
+			add_force_enabled(item->id);
+			msg_debug_cache_task("force-enable %s (id=%d)", sym, item->id);
 		}
 	};
 
 	if (enabled) {
-		msg_debug_cache_task("disable all symbols as `symbols_enabled` is found");
-		/* Disable all symbols but selected */
-		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
-		already_disabled = true;
+		if (implicit_allow) {
+			msg_debug_cache_task("enable symbols from `symbols_enabled` additively "
+								 "as the policy is `implicit_allow`");
+		}
+		else {
+			msg_debug_cache_task("disable all symbols as `symbols_enabled` is found");
+			/* Disable all symbols but selected */
+			disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
+			already_disabled = true;
+		}
 		it = nullptr;
 
 		while ((cur = ucl_iterate_object(enabled, &it, true)) != nullptr) {
@@ -149,7 +177,7 @@ auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache
 
 	/* Enable groups of symbols */
 	enabled = ucl_object_lookup(task->settings, "groups_enabled");
-	if (enabled && !already_disabled) {
+	if (enabled && !already_disabled && !implicit_allow) {
 		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
 	}
 	process_group(enabled, [&](const char *sym) {
@@ -252,6 +280,12 @@ auto symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &c
 
 		if (dyn_item) {
 			dyn_item->status = cache_item_status::not_started;
+
+			if (item->get_flags() & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+				/* An explicit enable call unlocks `explicit_enable` symbols */
+				add_force_enabled(item->id);
+			}
+
 			msg_debug_cache_task("enable execution of %s", name.data());
 
 			return true;

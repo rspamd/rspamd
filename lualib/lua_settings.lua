@@ -43,6 +43,10 @@ local function register_settings_cb(from_postload)
       return v.flags.explicit_disable
     end, all_symbols))
 
+    local explicit_enable_symbols = lua_util.keys(fun.filter(function(k, v)
+      return v.flags.explicit_enable
+    end, all_symbols))
+
     local symnames = lua_util.list_to_hash(lua_util.keys(all_symbols))
 
     for _, set in pairs(known_ids) do
@@ -53,10 +57,25 @@ local function register_settings_cb(from_postload)
       local disabled_symbols = {}
       local seen_disabled = false
 
+      local policy = s.policy
+      if policy and not (policy == 'default' or policy == 'implicit_allow' or policy == 'implicit_deny') then
+        rspamd_logger.errx(rspamd_config, "invalid settings policy '%s' in settings id %s; ignore it",
+            policy, set.name)
+        policy = nil
+      end
+
       -- Enabled map
-      if s.symbols_enabled then
+      if s.symbols_enabled and policy ~= 'implicit_allow' then
         -- Remove all symbols from set.symbols aside of explicit_disable symbols
         set.symbols = lua_util.list_to_hash(explicit_symbols)
+      else
+        -- All symbols are implicitly allowed, but explicit_enable symbols
+        -- still require to be listed in symbols_enabled
+        for _, sym in ipairs(explicit_enable_symbols) do
+          set.symbols[sym] = nil
+        end
+      end
+      if s.symbols_enabled then
         seen_enabled = true
         for _, sym in ipairs(s.symbols_enabled) do
           enabled_symbols[sym] = true
@@ -112,7 +131,7 @@ local function register_settings_cb(from_postload)
         set.has_specific_symbols = true
       end
 
-      rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
+      rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols, policy)
 
       -- Note: we do NOT remove groups_*/symbols_* here anymore, as the C++ runtime
       -- needs them for processing settings when they are applied to tasks.

@@ -66,3 +66,33 @@ rspamd_config:register_symbol({
 })
 
 rspamd_config:register_dependency('DEP_VIRTUAL', 'EXPLICIT_VIRTUAL1')
+
+rspamd_config:register_symbol({
+  name = 'EXPLICIT_ENABLE_TEST',
+  score = 1.0,
+  flags = 'explicit_enable',
+  callback = function()
+    return true, 'Fires when explicitly enabled'
+  end
+})
+
+rspamd_config:register_symbol({
+  name = 'EXPLICIT_ENABLE_OTHER',
+  score = 1.0,
+  flags = 'explicit_enable',
+  callback = function()
+    return true, 'Fires when explicitly enabled'
+  end
+})
+
+rspamd_config:register_symbol({
+  name = 'ENABLE_EXPLICIT_PRE',
+  score = 0.0,
+  type = 'prefilter',
+  priority = 5, -- after settings
+  callback = function(task)
+    if task:get_request_header('Enable-Explicit') then
+      task:enable_symbol('EXPLICIT_ENABLE_TEST')
+    end
+  end
+})
