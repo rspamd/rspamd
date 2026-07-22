@@ -1312,7 +1312,8 @@ struct html_tag {
 	html_tag_extra_t extra;
 	mutable struct html_block *block = nullptr;
 	std::vector<struct html_tag *> children;
-	struct html_tag *parent;
+	struct html_tag *parent = nullptr;
+	unsigned int depth = 0;
 
 	// Template method to find component by type
 	template<typename T>
@@ -1464,6 +1465,8 @@ struct html_tag {
 		flags = 0;
 		block = nullptr;
 		children.clear();
+		parent = nullptr;
+		depth = 0;
 		closing.clear();
 	}
 

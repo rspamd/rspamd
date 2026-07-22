@@ -88,39 +88,52 @@ struct html_content {
 	auto traverse_block_tags(fu2::function<bool(const html_tag *)> &&func,
 							 traverse_type how = traverse_type::PRE_ORDER) const -> bool
 	{
-
 		if (root_tag == nullptr) {
 			return false;
 		}
 
-		auto rec_functor_pre_order = [&](const html_tag *root, auto &&rec) -> bool {
-			if (func(root)) {
+		switch (how) {
+		case traverse_type::PRE_ORDER: {
+			std::vector<const html_tag *> stack{root_tag};
 
-				for (const auto *c: root->children) {
-					if (!rec(c, rec)) {
+			while (!stack.empty()) {
+				auto *tag = stack.back();
+				stack.pop_back();
+
+				if (!func(tag)) {
+					return false;
+				}
+
+				for (auto it = tag->children.rbegin(); it != tag->children.rend(); ++it) {
+					stack.push_back(*it);
+				}
+			}
+
+			return true;
+		}
+		case traverse_type::POST_ORDER: {
+			using stack_entry = std::pair<const html_tag *, bool>;
+			std::vector<stack_entry> stack{{root_tag, false}};
+
+			while (!stack.empty()) {
+				auto [tag, visited] = stack.back();
+				stack.pop_back();
+
+				if (visited) {
+					if (!func(tag)) {
 						return false;
 					}
 				}
-
-				return true;
-			}
-			return false;
-		};
-		auto rec_functor_post_order = [&](const html_tag *root, auto &&rec) -> bool {
-			for (const auto *c: root->children) {
-				if (!rec(c, rec)) {
-					return false;
+				else {
+					stack.emplace_back(tag, true);
+					for (auto it = tag->children.rbegin(); it != tag->children.rend(); ++it) {
+						stack.emplace_back(*it, false);
+					}
 				}
 			}
 
-			return func(root);
-		};
-
-		switch (how) {
-		case traverse_type::PRE_ORDER:
-			return rec_functor_pre_order(root_tag, rec_functor_pre_order);
-		case traverse_type::POST_ORDER:
-			return rec_functor_post_order(root_tag, rec_functor_post_order);
+			return true;
+		}
 		default:
 			RSPAMD_UNREACHABLE;
 		}

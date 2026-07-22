@@ -1870,222 +1870,227 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						khash_t(rspamd_url_hash) * url_set,
 						lua_State *L) -> goffset
 {
-	auto is_visible = true, is_block = false, is_spaces = false, is_transparent = false;
-	goffset next_tag_offset = tag->closing.end,
-			initial_parsed_offset = hc->parsed.size(),
-			initial_invisible_offset = hc->invisible.size();
+	struct append_frame {
+		html_tag *tag;
+		std::size_t next_child = 0;
+		goffset next_tag_offset = 0;
+		goffset initial_parsed_offset = 0;
+		goffset initial_invisible_offset = 0;
+		goffset cur_offset = 0;
+		bool entered = false;
+		bool finished = false;
+		bool is_visible = true;
+		bool is_block = false;
+		bool is_spaces = false;
+		bool is_transparent = false;
+	};
 
-	auto calculate_final_tag_offsets = [&]() -> void {
-		if (is_visible) {
-			tag->content_offset = initial_parsed_offset;
-			tag->closing.start = hc->parsed.size();
+	auto calculate_final_tag_offsets = [hc](append_frame &frame) -> void {
+		if (frame.is_visible) {
+			frame.tag->content_offset = frame.initial_parsed_offset;
+			frame.tag->closing.start = hc->parsed.size();
 		}
 		else {
-			tag->content_offset = initial_invisible_offset;
-			tag->closing.start = hc->invisible.size();
+			frame.tag->content_offset = frame.initial_invisible_offset;
+			frame.tag->closing.start = hc->invisible.size();
 		}
 	};
 
-	if (tag->closing.end == -1) {
-		if (tag->closing.start != -1) {
-			next_tag_offset = tag->closing.start;
-			tag->closing.end = tag->closing.start;
-		}
-		else {
-			next_tag_offset = tag->content_offset;
-			tag->closing.end = tag->content_offset;
-		}
-	}
-	if (tag->closing.start == -1) {
-		tag->closing.start = tag->closing.end;
-	}
-
-	auto append_margin = [&](char c) -> void {
-		/* We do care about visible margins only */
-		if (is_visible) {
-			if (!hc->parsed.empty() && hc->parsed.back() != c && hc->parsed.back() != '\n') {
-				if (hc->parsed.back() == ' ') {
-					/* We also strip extra spaces at the end, but limiting the start */
-					auto last = std::make_reverse_iterator(hc->parsed.begin() + initial_parsed_offset);
-					auto first = std::find_if(hc->parsed.rbegin(), last,
-											  [](auto ch) -> auto {
-												  return ch != ' ';
-											  });
-					hc->parsed.erase(first.base(), hc->parsed.end());
-					g_assert(hc->parsed.size() >= initial_parsed_offset);
-				}
-				hc->parsed.push_back(c);
+	auto append_margin = [hc](append_frame &frame, char margin) -> void {
+		if (frame.is_visible && !hc->parsed.empty() &&
+			hc->parsed.back() != margin && hc->parsed.back() != '\n') {
+			if (hc->parsed.back() == ' ') {
+				auto last = std::make_reverse_iterator(
+					hc->parsed.begin() + frame.initial_parsed_offset);
+				auto first = std::find_if(hc->parsed.rbegin(), last,
+										  [](auto ch) -> auto {
+											  return ch != ' ';
+										  });
+				hc->parsed.erase(first.base(), hc->parsed.end());
+				g_assert(hc->parsed.size() >= frame.initial_parsed_offset);
 			}
+			hc->parsed.push_back(margin);
 		}
 	};
 
-	if (tag->id == Tag_BR || tag->id == Tag_HR) {
+	auto enter_frame = [&](append_frame &frame) -> void {
+		auto *cur = frame.tag;
+		frame.next_tag_offset = cur->closing.end;
+		frame.initial_parsed_offset = hc->parsed.size();
+		frame.initial_invisible_offset = hc->invisible.size();
 
-		if (!(tag->flags & FL_IGNORE)) {
-			hc->parsed.append("\n");
-		}
-
-		auto ret = tag->content_offset;
-		calculate_final_tag_offsets();
-
-		return ret;
-	}
-	else if ((tag->id == Tag_HEAD && (tag->flags & FL_IGNORE)) || (tag->flags & CM_HEAD)) {
-		auto ret = tag->closing.end;
-		calculate_final_tag_offsets();
-
-		return ret;
-	}
-
-	if ((tag->flags & (FL_COMMENT | FL_XML | FL_IGNORE | CM_HEAD))) {
-		is_visible = false;
-	}
-	else {
-		if (!tag->block) {
-			is_visible = true;
-		}
-		else if (!tag->block->is_visible()) {
-			if (!tag->block->is_transparent()) {
-				is_visible = false;
+		if (cur->closing.end == -1) {
+			if (cur->closing.start != -1) {
+				frame.next_tag_offset = cur->closing.start;
+				cur->closing.end = cur->closing.start;
 			}
 			else {
-				if (tag->block->has_display() &&
-					tag->block->display == css::css_display_value::DISPLAY_HIDDEN) {
-					is_visible = false;
-				}
-				else {
-					is_transparent = true;
-				}
+				frame.next_tag_offset = cur->content_offset;
+				cur->closing.end = cur->content_offset;
 			}
 		}
-		else {
-			if (tag->block->display == css::css_display_value::DISPLAY_BLOCK) {
-				is_block = true;
-			}
-			else if (tag->block->display == css::css_display_value::DISPLAY_TABLE_ROW) {
-				is_spaces = true;
-			}
+		if (cur->closing.start == -1) {
+			cur->closing.start = cur->closing.end;
 		}
-	}
 
-	if (is_block) {
-		append_margin('\n');
-	}
-	else if (is_spaces) {
-		append_margin(' ');
-	}
+		if (cur->id == Tag_BR || cur->id == Tag_HR) {
+			if (!(cur->flags & FL_IGNORE)) {
+				hc->parsed.append("\n");
+			}
+			frame.next_tag_offset = cur->content_offset;
+			calculate_final_tag_offsets(frame);
+			frame.finished = true;
+			frame.entered = true;
+			return;
+		}
+		if ((cur->id == Tag_HEAD && (cur->flags & FL_IGNORE)) ||
+			(cur->flags & CM_HEAD)) {
+			frame.next_tag_offset = cur->closing.end;
+			calculate_final_tag_offsets(frame);
+			frame.finished = true;
+			frame.entered = true;
+			return;
+		}
 
-	goffset cur_offset = tag->content_offset;
-
-	for (auto *cld: tag->children) {
-		auto enclosed_start = cld->tag_start;
-		goffset initial_part_len = enclosed_start - cur_offset;
-
-		if (initial_part_len > 0) {
-			if (is_visible) {
-				html_append_parsed(hc,
-								   {start + cur_offset, std::size_t(initial_part_len)},
-								   is_transparent, len, hc->parsed);
+		if ((cur->flags & (FL_COMMENT | FL_XML | FL_IGNORE | CM_HEAD))) {
+			frame.is_visible = false;
+		}
+		else if (cur->block && !cur->block->is_visible()) {
+			if (!cur->block->is_transparent() ||
+				(cur->block->has_display() &&
+				 cur->block->display == css::css_display_value::DISPLAY_HIDDEN)) {
+				frame.is_visible = false;
 			}
 			else {
-				html_append_parsed(hc,
-								   {start + cur_offset, std::size_t(initial_part_len)},
-								   is_transparent, len, hc->invisible);
+				frame.is_transparent = true;
+			}
+		}
+		else if (cur->block) {
+			if (cur->block->display == css::css_display_value::DISPLAY_BLOCK) {
+				frame.is_block = true;
+			}
+			else if (cur->block->display == css::css_display_value::DISPLAY_TABLE_ROW) {
+				frame.is_spaces = true;
 			}
 		}
 
-		auto next_offset = html_append_tag_content(pool, start, len,
-												   hc, cld, exceptions, url_set, L);
-
-		/* Do not allow shifting back */
-		if (next_offset > cur_offset) {
-			cur_offset = next_offset;
+		if (frame.is_block) {
+			append_margin(frame, '\n');
 		}
-	}
+		else if (frame.is_spaces) {
+			append_margin(frame, ' ');
+		}
 
-	if (cur_offset < tag->closing.start) {
-		goffset final_part_len = tag->closing.start - cur_offset;
+		frame.cur_offset = cur->content_offset;
+		frame.entered = true;
+	};
 
-		if (final_part_len > 0) {
-			if (is_visible) {
+	auto finish_frame = [&](append_frame &frame) -> void {
+		auto *cur = frame.tag;
+
+		if (frame.cur_offset < cur->closing.start) {
+			goffset final_part_len = cur->closing.start - frame.cur_offset;
+
+			if (final_part_len > 0) {
+				auto &dest = frame.is_visible ? hc->parsed : hc->invisible;
 				html_append_parsed(hc,
-								   {start + cur_offset, std::size_t(final_part_len)},
-								   is_transparent,
-								   len,
-								   hc->parsed);
-			}
-			else {
-				html_append_parsed(hc,
-								   {start + cur_offset, std::size_t(final_part_len)},
-								   is_transparent,
-								   len,
-								   hc->invisible);
+								   {start + frame.cur_offset, std::size_t(final_part_len)},
+								   frame.is_transparent, len, dest);
 			}
 		}
-	}
-	if (is_block) {
-		append_margin('\n');
-	}
-	else if (is_spaces) {
-		append_margin(' ');
-	}
 
-	if (is_visible) {
-		if (tag->id == Tag_A) {
-			auto written_len = hc->parsed.size() - initial_parsed_offset;
-			html_process_displayed_href_tag(pool, hc,
-											{hc->parsed.data() + initial_parsed_offset, std::size_t(written_len)},
-											tag, exceptions,
-											url_set, initial_parsed_offset,
-											L);
-			/* Count display URL mismatches when URL is present */
-			if (std::holds_alternative<rspamd_url *>(tag->extra)) {
-				auto *u = std::get<rspamd_url *>(tag->extra);
-				if (u && (u->flags & RSPAMD_URL_FLAG_DISPLAY_URL) && (u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED)) {
-					/* html_process_displayed_href_tag sets linked_url when display URL differs */
-					if (u->ext && u->ext->linked_url && u->ext->linked_url != u) {
+		if (frame.is_block) {
+			append_margin(frame, '\n');
+		}
+		else if (frame.is_spaces) {
+			append_margin(frame, ' ');
+		}
+
+		if (frame.is_visible) {
+			if (cur->id == Tag_A) {
+				auto written_len = hc->parsed.size() - frame.initial_parsed_offset;
+				html_process_displayed_href_tag(
+					pool, hc,
+					{hc->parsed.data() + frame.initial_parsed_offset,
+					 std::size_t(written_len)},
+					cur, exceptions, url_set, frame.initial_parsed_offset, L);
+
+				if (std::holds_alternative<rspamd_url *>(cur->extra)) {
+					auto *u = std::get<rspamd_url *>(cur->extra);
+					if (u && (u->flags & RSPAMD_URL_FLAG_DISPLAY_URL) &&
+						(u->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED) &&
+						u->ext && u->ext->linked_url && u->ext->linked_url != u) {
 						hc->features.links.display_mismatch_links++;
 					}
 				}
 			}
-		}
-		else if (tag->id == Tag_IMG) {
-			/* Process ALT if presented */
-			auto maybe_alt = tag->find_alt();
+			else if (cur->id == Tag_IMG) {
+				auto maybe_alt = cur->find_alt();
 
-			if (maybe_alt) {
-				if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
-					/* Add a space */
-					hc->parsed += ' ';
-				}
+				if (maybe_alt) {
+					if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
+						hc->parsed += ' ';
+					}
 
-				hc->parsed.append(maybe_alt.value());
+					hc->parsed.append(maybe_alt.value());
 
-				if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
-					/* Add a space */
-					hc->parsed += ' ';
+					if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
+						hc->parsed += ' ';
+					}
 				}
 			}
 		}
-	}
-	else {
-		/* Invisible stuff */
-		if (std::holds_alternative<rspamd_url *>(tag->extra)) {
-			auto *url_enclosed = std::get<rspamd_url *>(tag->extra);
+		else if (std::holds_alternative<rspamd_url *>(cur->extra)) {
+			auto *url_enclosed = std::get<rspamd_url *>(cur->extra);
 
-			/*
-			 * TODO: when hash is fixed to include flags we need to remove and add
-			 * url to the hash set
-			 */
 			if (url_enclosed) {
 				url_enclosed->flags |= RSPAMD_URL_FLAG_INVISIBLE;
 			}
 		}
+
+		calculate_final_tag_offsets(frame);
+	};
+
+	std::vector<append_frame> stack;
+	stack.reserve(128);
+	stack.push_back({tag});
+	goffset result = tag->closing.end;
+
+	while (!stack.empty()) {
+		auto &frame = stack.back();
+
+		if (!frame.entered) {
+			enter_frame(frame);
+		}
+
+		if (!frame.finished && frame.next_child < frame.tag->children.size()) {
+			auto *child = frame.tag->children[frame.next_child++];
+			goffset initial_part_len = child->tag_start - frame.cur_offset;
+
+			if (initial_part_len > 0) {
+				auto &dest = frame.is_visible ? hc->parsed : hc->invisible;
+				html_append_parsed(hc,
+								   {start + frame.cur_offset, std::size_t(initial_part_len)},
+								   frame.is_transparent, len, dest);
+			}
+
+			stack.push_back({child});
+			continue;
+		}
+
+		if (!frame.finished) {
+			finish_frame(frame);
+		}
+
+		result = frame.next_tag_offset;
+		stack.pop_back();
+
+		if (!stack.empty() && result > stack.back().cur_offset) {
+			stack.back().cur_offset = result;
+		}
 	}
 
-	calculate_final_tag_offsets();
-
-	return next_tag_offset;
+	return result;
 }
 
 auto html_process_input(struct rspamd_task *task,
@@ -2470,14 +2475,9 @@ auto html_process_input(struct rspamd_task *task,
 
 		/* Track DOM tag count and max depth */
 		hc->features.tags_count++;
-		{
-			unsigned int depth = 0;
-			for (auto *pdepth = cur_tag->parent; pdepth != nullptr; pdepth = pdepth->parent) {
-				depth++;
-			}
-			if (depth > hc->features.max_dom_depth) {
-				hc->features.max_dom_depth = depth;
-			}
+		cur_tag->depth = cur_tag->parent ? cur_tag->parent->depth + 1 : 0;
+		if (cur_tag->depth > hc->features.max_dom_depth) {
+			hc->features.max_dom_depth = cur_tag->depth;
 		}
 
 		if (!(cur_tag->flags & CM_EMPTY)) {
@@ -3194,10 +3194,15 @@ auto html_debug_structure(const html_content &hc) -> std::string
 	std::string output;
 
 	if (hc.root_tag) {
-		auto rec_functor = [&](const html_tag *t, int level, auto rec_functor) -> void {
-			std::string pluses(level, '+');
+		std::vector<std::pair<const html_tag *, int>> stack{{hc.root_tag, 1}};
+
+		while (!stack.empty()) {
+			auto [t, level] = stack.back();
+			stack.pop_back();
 
 			if (!(t->flags & (FL_VIRTUAL | FL_IGNORE))) {
+				std::string pluses(level, '+');
+
 				if (t->flags & FL_XML) {
 					output += fmt::format("{}xml;", pluses);
 				}
@@ -3207,12 +3212,11 @@ auto html_debug_structure(const html_content &hc) -> std::string
 				}
 				level++;
 			}
-			for (const auto *cld: t->children) {
-				rec_functor(cld, level, rec_functor);
-			}
-		};
 
-		rec_functor(hc.root_tag, 1, rec_functor);
+			for (auto it = t->children.rbegin(); it != t->children.rend(); ++it) {
+				stack.emplace_back(*it, level);
+			}
+		}
 	}
 
 	return output;

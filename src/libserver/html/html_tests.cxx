@@ -299,6 +299,51 @@ TEST_SUITE("html")
 
 		rspamd_mempool_delete(pool);
 	}
+
+	TEST_CASE("html deep nesting")
+	{
+		/* Just below max_tags, so every div is parsed as a real DOM node */
+		constexpr unsigned int num_divs = 8190;
+
+		rspamd_url_init(NULL);
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"html", 0);
+		struct rspamd_task fake_task;
+		memset(&fake_task, 0, sizeof(fake_task));
+		fake_task.task_pool = pool;
+
+		std::string input;
+		input.reserve(num_divs * 11 + sizeof("deep"));
+		for (unsigned int i = 0; i < num_divs; i++) {
+			input += "<div>";
+		}
+		input += "deep";
+		for (unsigned int i = 0; i < num_divs; i++) {
+			input += "</div>";
+		}
+
+		GByteArray *tmp = g_byte_array_sized_new(input.size());
+		g_byte_array_append(tmp, (const uint8_t *) input.data(), input.size());
+		auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
+		CHECK(hc != nullptr);
+		/* A virtual root tag is inserted above the first div */
+		CHECK(hc->features.max_dom_depth == num_divs);
+		CHECK(hc->parsed.find("deep") != std::string::npos);
+
+		auto dump = html_debug_structure(*hc);
+		CHECK(!dump.empty());
+
+		auto traversed = 0U;
+		hc->traverse_block_tags([&](const html_tag *) -> bool {
+			traversed++;
+			return true;
+		},
+								html_content::traverse_type::POST_ORDER);
+		CHECK(traversed == num_divs + 1);
+
+		g_byte_array_free(tmp, TRUE);
+		rspamd_mempool_delete(pool);
+	}
 }
 
 } /* namespace rspamd::html */
