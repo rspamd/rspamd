@@ -2,20 +2,31 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-define(["jquery", "app/common", "app/tab-utils", "tabulator"],
-    ($, common, tabUtils, Tabulator) => {
+define(["app/common", "app/tab-utils", "tabulator"],
+    (common, tabUtils, Tabulator) => {
         "use strict";
         const ui = {};
         let altered = {};
         let groupSelectEl = null;
 
+        function setSymbolsControlsDisabled(disabled) {
+            document.querySelectorAll("#refresh, #updateSymbols").forEach((el) => {
+                el.disabled = disabled;
+            });
+        }
+        function setSaveButtonsDisabled(disabled) {
+            document.querySelectorAll("#save-alert button").forEach((el) => {
+                el.disabled = disabled;
+            });
+        }
+
         function clear_altered() {
-            $("#save-alert").addClass("d-none");
+            document.getElementById("save-alert").classList.add("d-none");
             altered = {};
         }
 
         function saveSymbols(server) {
-            $("#save-alert button").attr("disabled", true);
+            setSaveButtonsDisabled(true);
 
             const values = [];
             Object.entries(altered).forEach(([key, value]) => values.push({name: key, value: value}));
@@ -25,7 +36,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                     clear_altered();
                     common.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
-                complete: () => $("#save-alert button").removeAttr("disabled"),
+                complete: () => setSaveButtonsDisabled(false),
                 errorMessage: "Save symbols error",
                 method: "POST",
                 params: {
@@ -114,7 +125,7 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
 
         // @get symbols into modal form
         ui.getSymbols = function () {
-            $("#refresh, #updateSymbols").attr("disabled", true);
+            setSymbolsControlsDisabled(true);
             clear_altered();
             common.query("symbols", {
                 success: function (json) {
@@ -214,23 +225,25 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
 
                     common.tables.symbols.on("tableBuilt", () => {
                         if (common.read_only) {
-                            $(".mb-disabled").attr("disabled", true);
+                            document.querySelectorAll(".mb-disabled").forEach((el) => {
+                                el.disabled = true;
+                            });
                         }
-                        $("#refresh, #updateSymbols").removeAttr("disabled");
+                        setSymbolsControlsDisabled(false);
                     });
                     common.tables.symbols.on("renderComplete", () => {
-                        $("#refresh, #updateSymbols").removeAttr("disabled");
+                        setSymbolsControlsDisabled(false);
                     });
                 },
-                error: () => $("#refresh, #updateSymbols").removeAttr("disabled"),
+                error: () => setSymbolsControlsDisabled(false),
                 server: common.getServer()
             });
         };
 
 
-        $("#updateSymbols").on("click", (e) => {
+        document.getElementById("updateSymbols").addEventListener("click", (e) => {
             e.preventDefault();
-            $("#refresh, #updateSymbols").attr("disabled", true);
+            setSymbolsControlsDisabled(true);
             clear_altered();
             common.query("symbols", {
                 success: function (data) {
@@ -241,28 +254,27 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                     common.tables.symbols.updateColumnDefinition("frequency", {formatterParams: freqParams});
                     common.tables.symbols.updateColumnDefinition("frequency_stddev", {formatterParams: freqParams});
                 },
-                error: () => $("#refresh, #updateSymbols").removeAttr("disabled"),
+                error: () => setSymbolsControlsDisabled(false),
                 server: common.getServer()
             });
         });
 
-        $("#symbolsTable")
-            .on("input", ".scorebar", ({target}) => {
-                const t = $(target);
-                t.removeClass("scorebar-ham scorebar-spam");
-                if (target.value < 0) {
-                    t.addClass("scorebar-ham");
-                } else if (target.value > 0) {
-                    t.addClass("scorebar-spam");
-                }
-            })
-            .on("change", ".scorebar", ({target}) => {
-                altered[$(target).attr("id").substring(5)] = parseFloat(target.value);
-                $("#save-alert").removeClass("d-none");
-            });
+        common.delegate("#symbolsTable", "input", ".scorebar", (event, target) => {
+            target.classList.remove("scorebar-ham", "scorebar-spam");
+            if (target.value < 0) {
+                target.classList.add("scorebar-ham");
+            } else if (target.value > 0) {
+                target.classList.add("scorebar-spam");
+            }
+        });
+        common.delegate("#symbolsTable", "change", ".scorebar", (event, target) => {
+            altered[target.id.substring(5)] = parseFloat(target.value);
+            document.getElementById("save-alert").classList.remove("d-none");
+        });
 
-        $("#save-alert button")
-            .on("click", ({target}) => saveSymbols($(target).data("save")));
+        document.querySelectorAll("#save-alert button").forEach((el) => {
+            el.addEventListener("click", () => saveSymbols(el.dataset.save));
+        });
 
         return ui;
     });

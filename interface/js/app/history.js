@@ -2,8 +2,8 @@
  * Copyright (C) 2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
  */
 
-define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
-    ($, common, libft, tabUtils, Tabulator) => {
+define(["app/common", "app/libft", "app/tab-utils", "tabulator"],
+    (common, libft, tabUtils, Tabulator) => {
         "use strict";
         const ui = {};
         let prevVersion = null;
@@ -21,7 +21,7 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
 
             common.hide("#selSymOrder_history, label[for='selSymOrder_history']");
 
-            $.each(data, (i, item) => {
+            data.forEach((item) => {
                 libft.preprocess_item(item);
                 item.symbols = Object.keys(item.symbols)
                     .map((key) => item.symbols[key])
@@ -115,6 +115,16 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
             legacy: columns_legacy()
         };
 
+        // Toggle the Refresh and Update-history buttons together: the `disabled`
+        // property controls behaviour, the `disabled` class keeps Bootstrap
+        // `.btn` styling in sync (redundant for the attribute alone on buttons).
+        function setControlsDisabled(disabled) {
+            document.querySelectorAll("#refresh, #updateHistory").forEach((el) => {
+                el.disabled = disabled;
+                el.classList.toggle("disabled", disabled);
+            });
+        }
+
         function process_history_data(data) {
             const process_functions = {
                 2: libft.process_history_v2,
@@ -146,7 +156,7 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
         }
 
         ui.getHistory = function () {
-            $("#refresh, #updateHistory").attr("disabled", true);
+            setControlsDisabled(true);
             const histTo = histFrom - 1 + histCount;
             common.query(`history?from=${histFrom}&to=${histTo}`, {
                 success: function (req_data) {
@@ -191,7 +201,10 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                             libft.destroyTable("history");
                             libft.initHistoryTable(data, items, "history", get_history_columns(data), false,
                                 () => {
-                                    $("#history .tab-columns-dropdown .btn-dropdown-apply").removeAttr("disabled");
+                                    document.querySelectorAll("#history .tab-columns-dropdown .btn-dropdown-apply")
+                                        .forEach((el) => {
+                                            el.disabled = false;
+                                        });
                                     ui.updateHistoryControlsState();
                                     if (version) libft.bindFuzzyHashButtons("history");
                                 });
@@ -288,7 +301,7 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                         .filter((d) => d.status) // filter out unavailable neighbours
                         .map((d) => d.data);
                     const rows = [].concat.apply([], neighbours_data);
-                    $.each(rows, (i, item) => {
+                    rows.forEach((item) => {
                         for (const prop in item) {
                             if (!{}.hasOwnProperty.call(item, prop)) continue;
                             if (typeof item[prop] === "string") item[prop] = common.escapeHTML(item[prop]);
@@ -301,24 +314,13 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                     }
                 }
             });
-
-            $("#updateErrors").off("click");
-            $("#updateErrors").on("click", (e) => {
-                e.preventDefault();
-                ui.getErrors();
-            });
         };
 
         ui.updateHistoryControlsState = function () {
-            const from = parseInt($("#history-from").val(), 10);
-            const count = parseInt($("#history-count").val(), 10);
+            const from = parseInt(document.getElementById("history-from").value, 10);
+            const count = parseInt(document.getElementById("history-count").value, 10);
             const valid = !(isNaN(from) || from < 0 || isNaN(count) || count < 1);
-
-            if (valid) {
-                $("#refresh, #updateHistory").removeAttr("disabled").removeClass("disabled");
-            } else {
-                $("#refresh, #updateHistory").attr("disabled", true).addClass("disabled");
-            }
+            setControlsDisabled(!valid);
         };
 
         function validateAndClampInput(el) {
@@ -326,42 +328,42 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
             let v = parseInt(el.value, 10);
             if (isNaN(v) || v < min) {
                 v = min;
-                $(el).addClass("is-invalid");
+                el.classList.add("is-invalid");
             } else {
-                $(el).removeClass("is-invalid");
+                el.classList.remove("is-invalid");
             }
             return v;
         }
 
-        $("#history-from").val(histFrom);
-        $("#history-count").val(histCount);
-        $("#history-from, #history-count").on("input", (e) => {
-            validateAndClampInput(e.currentTarget);
-            ui.updateHistoryControlsState();
-        });
-        $("#history-from, #history-count").on("blur", (e) => {
-            const el = e.currentTarget;
-            const v = validateAndClampInput(el);
-            $(el).val(v).removeClass("is-invalid");
-            ui.updateHistoryControlsState();
-        });
-        $("#history-from,#history-count").on("change", () => {
-            histFrom = parseInt($("#history-from").val(), 10) || histFromDef;
-            histCount = parseInt($("#history-count").val(), 10) || historyCountDef;
+        document.getElementById("history-from").value = histFrom;
+        document.getElementById("history-count").value = histCount;
+        document.querySelectorAll("#history-from, #history-count").forEach((el) => {
+            el.addEventListener("input", () => {
+                validateAndClampInput(el);
+                ui.updateHistoryControlsState();
+            });
+            el.addEventListener("blur", () => {
+                const v = validateAndClampInput(el);
+                el.value = v;
+                el.classList.remove("is-invalid");
+                ui.updateHistoryControlsState();
+            });
+            el.addEventListener("change", () => {
+                histFrom = parseInt(document.getElementById("history-from").value, 10) || histFromDef;
+                histCount = parseInt(document.getElementById("history-count").value, 10) || historyCountDef;
+            });
         });
 
-        libft.set_page_size("history", $("#history_page_size").val());
+        libft.set_page_size("history", document.getElementById("history_page_size").value);
         libft.bindHistoryTableEventHandlers("history", 9);
 
-        $("#updateHistory").off("click");
-        $("#updateHistory").on("click", (e) => {
+        document.getElementById("updateHistory").addEventListener("click", (e) => {
             e.preventDefault();
             ui.getHistory();
         });
 
         // @reset history log
-        $("#resetHistory").off("click");
-        $("#resetHistory").on("click", (e) => {
+        document.getElementById("resetHistory").addEventListener("click", (e) => {
             e.preventDefault();
             if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
                 return;
@@ -376,6 +378,11 @@ define(["jquery", "app/common", "app/libft", "app/tab-utils", "tabulator"],
                 },
                 errorMessage: "Cannot reset history log"
             });
+        });
+
+        document.getElementById("updateErrors").addEventListener("click", (e) => {
+            e.preventDefault();
+            ui.getErrors();
         });
 
         return ui;

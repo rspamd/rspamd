@@ -5,9 +5,9 @@
 
 /* global require, Visibility */
 
-define(["jquery", "app/common", "stickytabs", "visibility",
-    "bootstrap", "fontawesome"],
-($, common) => {
+define(["app/common", "bootstrap", "visibility",
+    "fontawesome"],
+(common, bootstrap) => {
     "use strict";
     const ui = {};
 
@@ -17,23 +17,22 @@ define(["jquery", "app/common", "stickytabs", "visibility",
     const graphs = {};
     let checked_server = "All SERVERS";
     const timer_id = [];
+    let stickyTabsHandle = null;
 
     function ajaxSetup(ajax_timeout, setFieldValue, saveToLocalStorage) {
         const timeout = (ajax_timeout && ajax_timeout >= 0) ? ajax_timeout : defaultAjaxTimeout;
         if (saveToLocalStorage) localStorage.setItem("ajax_timeout", timeout);
-        if (setFieldValue) $(ajaxTimeoutBox).val(timeout);
+        if (setFieldValue) document.querySelector(ajaxTimeoutBox).value = timeout;
 
-        $.ajaxSetup({
-            timeout: timeout,
-            jsonp: false
-        });
+        common.setAjaxTimeout(timeout);
     }
 
     function cleanCredentials() {
         sessionStorage.clear();
-        $("#statWidgets").empty();
-        $("#listMaps").children("tbody").empty();
-        $("#modalBody").empty();
+        document.getElementById("statWidgets").replaceChildren();
+        const listMapsTbody = document.querySelector("#listMaps tbody");
+        if (listMapsTbody) listMapsTbody.replaceChildren();
+        document.getElementById("modalBody").replaceChildren();
     }
 
     function stopTimers() {
@@ -41,6 +40,39 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             if (!{}.hasOwnProperty.call(timer_id, key)) continue;
             Visibility.stop(timer_id[key]);
         }
+    }
+
+    // Sticky Tabs: keep the active tab in sync with the URL hash so that the
+    // selected tab survives reload and is shareable. Vanilla rewrite of the
+    // former jquery.stickytabs plugin; uses the BS5 Tab API directly.
+    function initStickyTabs(navSelector, initialTab) {
+        const nav = document.querySelector(navSelector);
+        function showByHash() {
+            const selector = location.hash
+                ? `a[href="${location.hash}"]`
+                : initialTab;
+            const link = selector ? nav.querySelector(selector) : null;
+            if (link) bootstrap.Tab.getOrCreateInstance(link).show();
+        }
+
+        showByHash();
+        window.addEventListener("hashchange", showByHash);
+
+        function onClick(e) {
+            const [, hash] = e.currentTarget.href.split("#");
+            if (history.pushState) {
+                history.pushState(null, "", location.pathname + location.search + "#" + hash);
+            }
+        }
+        nav.querySelectorAll("a").forEach((link) => link.addEventListener("click", onClick));
+
+        return {
+            destroy() {
+                window.removeEventListener("hashchange", showByHash);
+                nav.querySelectorAll("a").forEach((link) => link.removeEventListener("click", onClick));
+                nav.querySelectorAll(".nav-link.active").forEach((link) => link.classList.remove("active"));
+            }
+        };
     }
 
     function disconnect() {
@@ -51,70 +83,90 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             });
         });
 
-        // Remove jquery-stickytabs listeners
-        $(window).off("hashchange");
-        $(".nav-tabs-sticky > .nav-item > .nav-link").off("click").removeClass("active");
+        // Remove sticky-tabs listeners and reset active tab state
+        if (stickyTabsHandle) {
+            stickyTabsHandle.destroy();
+            stickyTabsHandle = null;
+        }
 
         stopTimers();
         cleanCredentials();
         ui.connect();
     }
 
+    // Bootstrap disables non-button nav items (li/a) via the `disabled` attribute
+    // + `.disabled` class together; buttons additionally honour the attribute.
+    function disableNav(el) {
+        el.setAttribute("disabled", "disabled");
+        el.classList.add("disabled");
+    }
+    function enableNav(el) {
+        el.removeAttribute("disabled");
+        el.classList.remove("disabled");
+    }
+    // Active dropdown item's numeric data-value (jQuery .data() coerced to number).
+    function activeMenuValue(menuClass) {
+        const el = document.querySelector(".dropdown-menu a.active." + menuClass);
+        return el ? parseInt(el.dataset.value, 10) : null;
+    }
+
     function tabClick(id) {
         let tab_id = id;
-        if ($(id).attr("disabled")) return;
-        let navBarControls = $("#selSrv, #navBar li, #navBar a, #navBar button");
-        if (id !== "#autoRefresh") navBarControls.attr("disabled", true).addClass("disabled", true);
+        if (document.querySelector(id)?.hasAttribute("disabled")) return;
+        let navBarControls = Array.from(document.querySelectorAll("#selSrv, #navBar li, #navBar a, #navBar button"));
+        if (id !== "#autoRefresh") navBarControls.forEach(disableNav);
 
         stopTimers();
 
         if (id === "#refresh" || id === "#autoRefresh") {
-            tab_id = "#" + $(".nav-link.active").attr("id");
+            const active = document.querySelector(".nav-link.active");
+            if (active) tab_id = "#" + active.id;
         }
 
-        $("#autoRefresh").addClass("invisible");
-        $("#refresh").addClass("radius-right");
+        document.getElementById("autoRefresh").classList.add("invisible");
+        document.getElementById("refresh").classList.add("radius-right");
 
         function setAutoRefresh(refreshInterval, timer, callback) {
+            const refreshBtn = document.getElementById("refresh");
             function countdown(interval) {
                 Visibility.stop(timer_id.countdown);
                 if (!interval) {
-                    $("#countdown").text("--:--");
+                    document.getElementById("countdown").textContent = "--:--";
                     return;
                 }
 
                 let timeLeft = interval;
-                $("#countdown").text("00:00");
+                document.getElementById("countdown").textContent = "00:00";
                 timer_id.countdown = Visibility.every(1000, 1000, () => {
                     timeLeft -= 1000;
-                    $("#countdown").text(new Date(timeLeft).toISOString().substr(14, 5));
+                    document.getElementById("countdown").textContent = new Date(timeLeft).toISOString().substr(14, 5);
                     if (timeLeft <= 0) Visibility.stop(timer_id.countdown);
                 });
             }
 
-            $("#refresh").removeClass("radius-right");
-            $("#autoRefresh").removeClass("invisible");
+            refreshBtn.classList.remove("radius-right");
+            document.getElementById("autoRefresh").classList.remove("invisible");
 
             countdown(refreshInterval);
             if (!refreshInterval) return;
             timer_id[timer] = Visibility.every(refreshInterval, () => {
                 countdown(refreshInterval);
-                if ($("#refresh").attr("disabled")) return;
-                $("#refresh").attr("disabled", true).addClass("disabled", true);
+                if (refreshBtn.hasAttribute("disabled")) return;
+                disableNav(refreshBtn);
                 callback();
             });
         }
 
         if (["#scan_nav", "#selectors_nav", "#disconnect"].indexOf(tab_id) !== -1) {
-            $("#refresh").addClass("invisible");
+            document.getElementById("refresh").classList.add("invisible");
         } else {
-            $("#refresh").removeClass("invisible");
+            document.getElementById("refresh").classList.remove("invisible");
         }
 
         switch (tab_id) {
             case "#status_nav":
                 require(["app/stats"], (module) => {
-                    const refreshInterval = $(".dropdown-menu a.active.preset").data("value");
+                    const refreshInterval = activeMenuValue("preset");
                     setAutoRefresh(refreshInterval, "status",
                         () => module.statWidgets(graphs, checked_server));
                     if (id !== "#autoRefresh") module.statWidgets(graphs, checked_server);
@@ -132,9 +184,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         week: 300000
                     };
                     let refreshInterval = step[selData] || 3600000;
-                    $("#dynamic-item").text((refreshInterval / 60000) + " min");
+                    document.getElementById("dynamic-item").textContent = (refreshInterval / 60000) + " min";
 
-                    if (!$(".dropdown-menu a.active.dynamic").data("value")) {
+                    if (!activeMenuValue("dynamic")) {
                         refreshInterval = null;
                     }
                     setAutoRefresh(refreshInterval, "throughput",
@@ -170,7 +222,7 @@ define(["jquery", "app/common", "stickytabs", "visibility",
                         module.getHistory();
                         module.getErrors();
                     }
-                    const refreshInterval = $(".dropdown-menu a.active.history").data("value");
+                    const refreshInterval = activeMenuValue("history");
                     setAutoRefresh(refreshInterval, "history",
                         () => getHistoryAndErrors());
                     if (id !== "#autoRefresh") getHistoryAndErrors();
@@ -190,9 +242,9 @@ define(["jquery", "app/common", "stickytabs", "visibility",
 
         setTimeout(() => {
             // Do not enable Refresh button until AJAX requests to all neighbours are finished
-            if (tab_id === "#history_nav") navBarControls = $(navBarControls).not("#refresh");
+            if (tab_id === "#history_nav") navBarControls = navBarControls.filter((el) => el.id !== "refresh");
 
-            navBarControls.removeAttr("disabled").removeClass("disabled");
+            navBarControls.forEach(enableNav);
         }, (id === "#autoRefresh") ? 0 : 1000);
     }
 
@@ -207,15 +259,16 @@ define(["jquery", "app/common", "stickytabs", "visibility",
 
         common.query("auth", {
             success: function (neighbours_status) {
-                $("#selSrv").empty();
-                $("#selSrv").append($('<option value="All SERVERS">All SERVERS</option>'));
+                const selSrv = document.getElementById("selSrv");
+                selSrv.replaceChildren();
+                selSrv.append(common.el("option", {value: "All SERVERS", text: "All SERVERS"}));
                 neighbours_status.forEach((e) => {
-                    $("#selSrv").append($('<option value="' + e.name + '">' + e.name + "</option>"));
-                    if (checked_server === e.name) {
-                        $('#selSrv [value="' + e.name + '"]').prop("selected", true);
-                    } else if (!e.status) {
-                        $('#selSrv [value="' + e.name + '"]').prop("disabled", true);
-                    }
+                    const selected = checked_server === e.name;
+                    const disabled = !selected && !e.status;
+                    selSrv.insertAdjacentHTML("beforeend",
+                        '<option value="' + common.escapeHTML(e.name) + '"' +
+                        (selected ? " selected" : "") + (disabled ? " disabled" : "") + ">" +
+                        common.escapeHTML(e.name) + "</option>");
                 });
             },
             complete: function () {
@@ -223,22 +276,86 @@ define(["jquery", "app/common", "stickytabs", "visibility",
 
                 if (require.defined("app/upload")) require(["app/upload"], (module) => module.getClassifiers());
 
+                document.querySelectorAll(".ro-disable").forEach((el) => { el.disabled = common.read_only; });
                 if (common.read_only) {
-                    $(".ro-disable").attr("disabled", true);
                     common.hide(".ro-hide");
                 } else {
-                    $(".ro-disable").removeAttr("disabled", true);
                     common.show(".ro-hide");
                 }
 
-                $("#preloader").addClass("d-none");
-                $("#navBar, #mainUI").removeClass("d-none");
+                document.getElementById("preloader").classList.add("d-none");
+                document.querySelectorAll("#navBar, #mainUI").forEach((el) => el.classList.remove("d-none"));
 
-                $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
+                stickyTabsHandle = initStickyTabs(".nav-tabs-sticky", "#status_nav");
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
         });
+    }
+
+    // Show the connect (login) dialog and wire its form submission.
+    function showConnectDialog() {
+        const connectDialog = document.getElementById("connectDialog");
+        const connectForm = document.getElementById("connectForm");
+        const connectPassword = document.getElementById("connectPassword");
+
+        function clearFeedback() {
+            connectPassword.oninput = null;
+            connectPassword.classList.remove("is-invalid");
+            common.hide("#authInvalidCharFeedback,#authUnauthorizedFeedback");
+        }
+
+        connectDialog.addEventListener("show.bs.modal", () => clearFeedback(), {once: true});
+        connectDialog.addEventListener("shown.bs.modal", () => connectPassword.focus(), {once: true});
+        bootstrap.Modal.getOrCreateInstance(connectDialog).show();
+
+        connectForm.onsubmit = (e) => {
+            e.preventDefault();
+            const password = connectPassword.value;
+
+            function invalidFeedback(tooltip) {
+                connectPassword.classList.add("is-invalid");
+                connectPassword.oninput = () => clearFeedback();
+                common.show(tooltip);
+            }
+
+            if (!(/^[ -~]*$/).test(password)) {
+                invalidFeedback("#authInvalidCharFeedback");
+                connectPassword.focus();
+                return;
+            }
+
+            common.query("auth", {
+                headers: {
+                    Password: password
+                },
+                success: function (json) {
+                    const [{data}] = json;
+                    connectPassword.value = "";
+                    if (data.auth === "ok") {
+                        sessionStorage.setItem("read_only", data.read_only);
+                        saveCredentials(password);
+                        connectForm.onsubmit = null;
+                        bootstrap.Modal.getOrCreateInstance(connectDialog).hide();
+                        displayUI();
+                    }
+                },
+                error: function (_result, xhr, textStatus) {
+                    if (xhr.statusText === "Unauthorized") {
+                        invalidFeedback("#authUnauthorizedFeedback");
+                    } else {
+                        common.alertMessage("alert-modal alert-danger",
+                            textStatus === "timeout" ? "Request timeout" : xhr.statusText);
+                    }
+                    connectPassword.value = "";
+                    connectPassword.focus();
+                },
+                params: {
+                    global: false,
+                },
+                server: "local"
+            });
+        };
     }
 
 
@@ -251,87 +368,44 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         ajaxSetup(timeout);
 
         // Query "/stat" to check if user is already logged in or client ip matches "secure_ip"
-        $.ajax({
-            type: "GET",
-            url: "stat",
-            success: function (data) {
-                sessionStorage.setItem("read_only", data.read_only);
-                displayUI();
-            },
-            error: function () {
-                function clearFeedback() {
-                    $("#connectPassword").off("input").removeClass("is-invalid");
-                    common.hide("#authInvalidCharFeedback,#authUnauthorizedFeedback");
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", "stat", true);
+        const ajaxTimeout = common.getAjaxTimeout();
+        if (ajaxTimeout > 0) xhr.timeout = ajaxTimeout;
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    sessionStorage.setItem("read_only", data.read_only);
+                    displayUI();
+                } catch (err) {
+                    // A 2xx /stat whose body isn't JSON means a broken response
+                    // (truncated by a proxy, a captive-portal page, etc.): show
+                    // the login dialog rather than an empty, half-loaded UI.
+                    showConnectDialog();
                 }
-
-                $("#connectDialog")
-                    .on("show.bs.modal", () => {
-                        $("#connectDialog").off("show.bs.modal");
-                        clearFeedback();
-                    })
-                    .on("shown.bs.modal", () => {
-                        $("#connectDialog").off("shown.bs.modal");
-                        $("#connectPassword").focus();
-                    })
-                    .modal("show");
-
-                $("#connectForm").off("submit").on("submit", (e) => {
-                    e.preventDefault();
-                    const password = $("#connectPassword").val();
-
-                    function invalidFeedback(tooltip) {
-                        $("#connectPassword")
-                            .addClass("is-invalid")
-                            .off("input").on("input", () => clearFeedback());
-                        common.show(tooltip);
-                    }
-
-                    if (!(/^[\u0020-\u007e]*$/).test(password)) {
-                        invalidFeedback("#authInvalidCharFeedback");
-                        $("#connectPassword").focus();
-                        return;
-                    }
-
-                    common.query("auth", {
-                        headers: {
-                            Password: password
-                        },
-                        success: function (json) {
-                            const [{data}] = json;
-                            $("#connectPassword").val("");
-                            if (data.auth === "ok") {
-                                sessionStorage.setItem("read_only", data.read_only);
-                                saveCredentials(password);
-                                $("#connectForm").off("submit");
-                                $("#connectDialog").modal("hide");
-                                displayUI();
-                            }
-                        },
-                        error: function (jqXHR, textStatus) {
-                            if (textStatus.statusText === "Unauthorized") {
-                                invalidFeedback("#authUnauthorizedFeedback");
-                            } else {
-                                common.alertMessage("alert-modal alert-danger", textStatus.statusText);
-                            }
-                            $("#connectPassword").val("");
-                            $("#connectPassword").focus();
-                        },
-                        params: {
-                            global: false,
-                        },
-                        server: "local"
-                    });
-                });
+            } else {
+                showConnectDialog();
             }
-        });
+        };
+        xhr.onerror = () => showConnectDialog();
+        xhr.ontimeout = () => showConnectDialog();
+        xhr.send();
     };
 
     function updateThemeIcon(theme) {
-        const icon = $("#theme-icon");
-        icon.removeClass("fa-moon fa-sun fa-display");
+        const icon = document.getElementById("theme-icon");
+        icon.classList.remove("fa-moon", "fa-sun", "fa-display");
 
         const iconMap = {light: "fa-sun", dark: "fa-moon", auto: "fa-display"};
-        icon.addClass(iconMap[theme] || "fa-display");
+        icon.classList.add(iconMap[theme] || "fa-display");
+    }
+
+    // Check the radio within `selector` whose value matches.
+    function checkRadio(selector, value) {
+        document.querySelectorAll(selector).forEach((radio) => {
+            radio.checked = radio.value === value;
+        });
     }
 
     (function initSettings() {
@@ -342,8 +416,10 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         const historyCountSelector = ".popover #settings-popover #settings-history-count";
 
         function validateLocale(saveToLocalStorage) {
+            const localeInput = document.querySelector(localeTextbox);
             function toggle_form_group_class(remove, add) {
-                $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
+                localeInput.classList.remove("is-" + remove);
+                localeInput.classList.add("is-" + add);
             }
 
             const now = new Date();
@@ -362,132 +438,147 @@ define(["jquery", "app/common", "stickytabs", "visibility",
             } else {
                 if (saveToLocalStorage) localStorage.setItem("custom_locale", null);
                 common.locale = null;
-                $(localeTextbox).removeClass("is-valid is-invalid");
+                localeInput.classList.remove("is-valid", "is-invalid");
             }
 
             // Display date example
-            $(".popover #settings-popover #date-example").text(
+            document.querySelector(".popover #settings-popover #date-example").textContent =
                 (common.locale)
                     ? now.toLocaleString(common.locale)
-                    : now.toLocaleString()
-            );
+                    : now.toLocaleString();
         }
 
-        $("#settings").popover({
+        const settingsBtn = document.getElementById("settings");
+        bootstrap.Popover.getOrCreateInstance(settingsBtn, {
             container: "body",
             placement: "bottom",
             html: true,
             sanitize: false,
             content: function () {
                 // Using .clone() has the side-effect of producing elements with duplicate id attributes.
-                return $("#settings-popover").clone();
+                return document.getElementById("settings-popover").cloneNode(true);
             }
-        // Restore the tooltip of the element that the popover is attached to.
-        }).attr("title", function () {
-            return $(this).attr("data-original-title");
         });
-        $("#settings").on("click", (e) => {
+        // Restore the tooltip of the element that the popover is attached to.
+        const originalTitle = settingsBtn.getAttribute("data-original-title");
+        if (originalTitle !== null) settingsBtn.setAttribute("title", originalTitle);
+        settingsBtn.addEventListener("click", (e) => {
             e.preventDefault();
         });
-        $("#settings").on("inserted.bs.popover", () => {
+        settingsBtn.addEventListener("inserted.bs.popover", () => {
             selected_locale = localStorage.getItem("selected_locale") || "browser";
             custom_locale = localStorage.getItem("custom_locale") || "";
             validateLocale();
 
-            $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
-            $(localeTextbox).val(custom_locale);
+            checkRadio('.popover #settings-popover input[type="radio"][name="locale"]', selected_locale);
+            document.querySelector(localeTextbox).value = custom_locale;
 
             ajaxSetup(localStorage.getItem("ajax_timeout"), true);
 
-            $(historyCountSelector).val(parseInt(localStorage.getItem("historyCount"), 10) || historyCountDef);
+            document.querySelector(historyCountSelector).value =
+                parseInt(localStorage.getItem("historyCount"), 10) || historyCountDef;
 
             // Restore theme selection
             const savedTheme = localStorage.getItem("theme") || "auto";
-            $('.popover #settings-popover input:radio[name="theme"]').val([savedTheme]);
+            checkRadio('.popover #settings-popover input[type="radio"][name="theme"]', savedTheme);
         });
-        $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
-            selected_locale = this.value;
-            localStorage.setItem("selected_locale", selected_locale);
-            validateLocale();
-        });
-        $(document).on("input", localeTextbox, () => {
-            custom_locale = $(localeTextbox).val();
+        common.delegate(document, "change", '.popover #settings-popover input[type="radio"][name="locale"]',
+            (event, target) => {
+                selected_locale = target.value;
+                localStorage.setItem("selected_locale", selected_locale);
+                validateLocale();
+            });
+        common.delegate(document, "input", localeTextbox, (event, target) => {
+            custom_locale = target.value;
             validateLocale(true);
         });
-        $(document).on("change", '.popover #settings-popover input:radio[name="theme"]', function () {
-            const theme = this.value;
-            if (window.rspamd && window.rspamd.theme) {
-                window.rspamd.theme.applyPreference(theme);
-            }
-            updateThemeIcon(theme || "auto");
-        });
+        common.delegate(document, "change", '.popover #settings-popover input[type="radio"][name="theme"]',
+            (event, target) => {
+                const theme = target.value;
+                if (window.rspamd && window.rspamd.theme) {
+                    window.rspamd.theme.applyPreference(theme);
+                }
+                updateThemeIcon(theme || "auto");
+            });
         updateThemeIcon(localStorage.getItem("theme") || "auto");
-        $(document).on("input", ajaxTimeoutBox, () => {
-            ajaxSetup($(ajaxTimeoutBox).val(), false, true);
+        common.delegate(document, "input", ajaxTimeoutBox, (event, target) => {
+            ajaxSetup(target.value, false, true);
         });
-        $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", () => {
+        common.delegate(document, "click", ".popover #settings-popover #ajax-timeout-restore", () => {
             ajaxSetup(null, true, true);
         });
 
-        $(document).on("input", historyCountSelector, (e) => {
-            const v = parseInt($(e.currentTarget).val(), 10);
+        common.delegate(document, "input", historyCountSelector, (event, target) => {
+            const v = parseInt(target.value, 10);
             if (v > 0) {
                 localStorage.setItem("historyCount", v);
-                $(e.currentTarget).removeClass("is-invalid");
-                $("#history-count").val(v).trigger("change");
+                target.classList.remove("is-invalid");
+                const historyCount = document.getElementById("history-count");
+                historyCount.value = v;
+                historyCount.dispatchEvent(new Event("change", {bubbles: true}));
             } else {
-                $(e.currentTarget).addClass("is-invalid");
+                target.classList.add("is-invalid");
             }
         });
-        $(document).on("click", ".popover #settings-popover #settings-history-count-restore", () => {
-            localStorage.removeItem("historyCount");
-            $(historyCountSelector).val(historyCountDef);
-        });
+        common.delegate(document, "click", ".popover #settings-popover #settings-history-count-restore",
+            () => {
+                localStorage.removeItem("historyCount");
+                document.querySelector(historyCountSelector).value = historyCountDef;
+            });
 
         // Dismiss Bootstrap popover by clicking outside
-        $("body").on("click", (e) => {
-            $(".popover").each(function () {
-                if (
-                    // Popover's descendant
-                    $(this).has(e.target).length ||
-                    // Button (or icon within a button) that triggers the popover.
-                    $(e.target).closest("button").attr("aria-describedby") === this.id
-                ) return;
-                $("#settings").popover("hide");
+        document.body.addEventListener("click", (e) => {
+            document.querySelectorAll(".popover").forEach((popover) => {
+                const triggerBtn = e.target.closest("button");
+                if (popover.contains(e.target) ||
+                    (triggerBtn && triggerBtn.getAttribute("aria-describedby") === popover.id)) return;
+                bootstrap.Popover.getOrCreateInstance(settingsBtn).hide();
             });
         });
     }());
 
-    $("#selData").change(() => {
+    document.getElementById("selData").addEventListener("change", () => {
         tabClick("#throughput_nav");
     });
 
-    $(document).ajaxStart(() => {
-        $("#refresh > svg").addClass("fa-spin");
-    });
-    $(document).ajaxComplete(() => {
+    function refreshSpinStart() {
+        document.querySelectorAll("#refresh > svg").forEach((el) => el.classList.add("fa-spin"));
+    }
+    function refreshSpinStop() {
         setTimeout(() => {
-            $("#refresh > svg").removeClass("fa-spin");
+            document.querySelectorAll("#refresh > svg").forEach((el) => el.classList.remove("fa-spin"));
         }, 1000);
+    }
+
+    // Drive the refresh spinner from common.query (XHR) requests.
+    common.onAjaxStart(refreshSpinStart);
+    common.onAjaxComplete(refreshSpinStop);
+
+    document.querySelectorAll('a[data-bs-toggle="tab"]').forEach((link) => {
+        link.addEventListener("shown.bs.tab", (e) => {
+            tabClick("#" + e.currentTarget.id);
+        });
+    });
+    document.querySelectorAll("#refresh, #disconnect").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            tabClick("#" + e.currentTarget.id);
+        });
+    });
+    document.querySelectorAll(".dropdown-menu a").forEach((item) => {
+        item.addEventListener("click", (e) => {
+            e.preventDefault();
+            const match = (/\b(?:dynamic|history|preset)\b/).exec(e.currentTarget.className);
+            if (!match) return;
+            const [menuClass] = match;
+            document.querySelectorAll(".dropdown-menu a.active." + menuClass)
+                .forEach((el) => el.classList.remove("active"));
+            e.currentTarget.classList.add("active");
+            tabClick("#autoRefresh");
+        });
     });
 
-    $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
-        tabClick("#" + $(this).attr("id"));
-    });
-    $("#refresh, #disconnect").on("click", function (e) {
-        e.preventDefault();
-        tabClick("#" + $(this).attr("id"));
-    });
-    $(".dropdown-menu a").click(function (e) {
-        e.preventDefault();
-        const classList = $(this).attr("class");
-        const [menuClass] = (/\b(?:dynamic|history|preset)\b/).exec(classList);
-        $(".dropdown-menu a.active." + menuClass).removeClass("active");
-        $(this).addClass("active");
-        tabClick("#autoRefresh");
-    });
-
-    $("#theme-toggle").on("click", (e) => {
+    document.getElementById("theme-toggle").addEventListener("click", (e) => {
         e.preventDefault();
         const currentTheme = localStorage.getItem("theme") || "auto";
         // Cycle through: light -> dark -> auto -> light
@@ -500,29 +591,29 @@ define(["jquery", "app/common", "stickytabs", "visibility",
         updateThemeIcon(newTheme);
 
         // Update radio button in settings popover if it's open
-        $('.popover #settings-popover input:radio[name="theme"]').val([newTheme]);
+        checkRadio('.popover #settings-popover input[type="radio"][name="theme"]', newTheme);
     });
 
-    $("#selSrv").change(function () {
-        checked_server = this.value;
-        $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
+    document.getElementById("selSrv").addEventListener("change", (e) => {
+        checked_server = e.currentTarget.value;
         if (checked_server === "All SERVERS") {
-            $("#learnServers").removeClass("invisible");
+            document.getElementById("learnServers").classList.remove("invisible");
         } else {
-            $("#learnServers").addClass("invisible");
+            document.getElementById("learnServers").classList.add("invisible");
         }
-        tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
+        const active = document.querySelector("#tablist > .nav-item > .nav-link.active");
+        if (active) tabClick("#" + active.id);
     });
 
     // Radio buttons
-    $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
-        if (!this.disabled) {
-            checked_server = this.value;
+    common.delegate(document, "click", 'input[type="radio"][name="clusterName"]', (event, target) => {
+        if (!target.disabled) {
+            checked_server = target.value;
             tabClick("#status_nav");
         }
     });
 
-    $("#loading").addClass("d-none");
+    document.getElementById("loading").classList.add("d-none");
 
     return ui;
 });

@@ -1,5 +1,5 @@
-define(["jquery", "app/common", "app/tab-utils", "tabulator"],
-    ($, common, tabUtils, Tabulator) => {
+define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
+    (common, bootstrap, tabUtils, Tabulator) => {
         "use strict";
         const ui = {};
         const columnsCustom = JSON.parse(localStorage.getItem("columns")) || {};
@@ -11,6 +11,18 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         const FORCE_COLLAPSE_MIN_WIDTH = 4000;
 
         let pageSizeTimerId = null;
+
+        // Per-selector cleanups for the delegated fuzzy-hash button handlers,
+        // so rebinding (on every scan/history render) removes the previous
+        // listener. Keys are selectors embedding the table name, which assumes
+        // table names are unique (two tables cannot share a DOM id anyway).
+        const fuzzyCleanups = new Map();
+
+        // bindHistoryTableEventHandlers binds to static elements that survive
+        // table rebuilds, so it must run at most once per table — a repeat call
+        // would stack change/click listeners. (The original .unbind() only
+        // deduped selSymOrder; this guard covers all three bindings.)
+        const boundSymOrderTables = new Set();
 
         function get_compare_function(table) {
             const compare_functions = {
@@ -42,9 +54,15 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         // after each build/render, not at handler bind time.
         function setActiveSymOrderButton(table, order) {
             const active = order || common.getSelector("selSymOrder_" + table);
-            if (active) {
-                $(".btn-sym-" + table + "-" + active).addClass("active").siblings().removeClass("active");
-            }
+            if (!active) return;
+            // The buttons are rendered inside each row's collapsed detail, so
+            // there are many instances — set active on all of them.
+            document.querySelectorAll(".btn-sym-" + table + "-" + active).forEach((btn) => {
+                btn.classList.add("active");
+                Array.from(btn.parentElement.children).forEach((sib) => {
+                    if (sib !== btn) sib.classList.remove("active");
+                });
+            });
         }
 
         function ipSorter(a, b) {
@@ -428,6 +446,8 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         };
 
         ui.bindHistoryTableEventHandlers = function (table) {
+            if (boundSymOrderTables.has(table)) return;
+            boundSymOrderTables.add(table);
             function change_symbols_order(order) {
                 const compare_function = get_compare_function(table);
                 common.tables[table].getRows().forEach((row) => {
@@ -442,13 +462,14 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                 setActiveSymOrderButton(table, order);
             }
 
-            $("#selSymOrder_" + table).unbind().change(function () {
+            document.getElementById("selSymOrder_" + table).addEventListener("change", function () {
                 change_symbols_order(this.value);
             });
-            $("#" + table + "_page_size").change((e) => ui.set_page_size(table, e.target.value, true));
-            $(document).on("click", ".btn-sym-order-" + table + " input", function () {
-                const order = this.value;
-                $("#selSymOrder_" + table).val(order);
+            document.getElementById(table + "_page_size")
+                .addEventListener("change", (e) => ui.set_page_size(table, e.target.value, true));
+            common.delegate(document, "click", ".btn-sym-order-" + table + " input", (event, target) => {
+                const order = target.value;
+                document.getElementById("selSymOrder_" + table).value = order;
                 change_symbols_order(order);
             });
 
@@ -456,8 +477,11 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         };
 
         ui.destroyTable = function (table) {
-            $("#" + table + " .tab-columns-btn.show").trigger("click.bs.dropdown");
-            $("#" + table + " .tab-columns-btn").attr("disabled", true);
+            const openColumnsBtn = document.querySelector("#" + table + " .tab-columns-btn.show");
+            if (openColumnsBtn) {
+                bootstrap.Dropdown.getOrCreateInstance(openColumnsBtn).hide();
+            }
+            document.querySelectorAll("#" + table + " .tab-columns-btn").forEach((el) => { el.disabled = true; });
             if (common.tables[table]) {
                 common.tables[table].destroy();
                 delete common.tables[table];
@@ -468,10 +492,10 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
             // A persisted "Row" column is stored as responsive:100; it must also
             // receive the force-collapse minWidth so it renders in the detail row.
             const baseColumns = (table in columnsCustom)
-                ? columnsDefault.map((column) => $.extend({}, column, columnsCustom[table][column.field]))
+                ? columnsDefault.map((column) => ({...column, ...(columnsCustom[table][column.field] || {})}))
                 : columnsDefault.map((column) => column);
             const columns = baseColumns.map((column) => (column.responsive === 100
-                ? $.extend({}, column, {minWidth: FORCE_COLLAPSE_MIN_WIDTH})
+                ? {...column, minWidth: FORCE_COLLAPSE_MIN_WIDTH}
                 : column));
 
             common.tables[table] = new Tabulator("#historyTable_" + table, {
@@ -542,19 +566,20 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                     rebuild();
                 }
 
-                const tbody = $("<tbody/>", {class: "table-group-divider"});
-                $("#" + table + " .tab-columns-dropdown").empty().append(
-                    $("<table/>", {class: "table table-sm table-striped text-center"}).append(
-                        $("<thead/>").append(
-                            $("<tr/>").append(
-                                $("<th/>", {text: "Row", title: "Display column cells in a detail row"}),
-                                $("<th/>", {text: "Hidden", title: "Hide column completely"}),
-                                $("<th/>", {text: "Column name", class: "text-start"})
+                const tbody = common.el("tbody", {class: "table-group-divider"});
+                const dropdown = document.querySelector("#" + table + " .tab-columns-dropdown");
+                dropdown.replaceChildren(
+                    common.el("table", {class: "table table-sm table-striped text-center"},
+                        common.el("thead", null,
+                            common.el("tr", null,
+                                common.el("th", {text: "Row", title: "Display column cells in a detail row"}),
+                                common.el("th", {text: "Hidden", title: "Hide column completely"}),
+                                common.el("th", {text: "Column name", class: "text-start"})
                             )
                         ),
                         tbody
                     ),
-                    $("<button/>", {
+                    common.el("button", {
                         type: "button",
                         class: "btn btn-xs btn-secondary float-start",
                         text: "Reset to default",
@@ -588,13 +613,13 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                                 const tab = common.tables[table];
                                 hiddenFields.forEach((f) => {
                                     tab.showColumn(f);
-                                    tbody.find('input[data-name="' + f + '"][data-option="visible"]')
-                                        .prop("checked", false);
+                                    const cb = tbody.querySelector('input[data-name="' + f + '"][data-option="visible"]');
+                                    if (cb) cb.checked = false;
                                 });
                             }
                         }
                     }),
-                    $("<button/>", {
+                    common.el("button", {
                         type: "button",
                         class: "btn btn-xs btn-primary float-end btn-dropdown-apply",
                         text: "Save",
@@ -606,73 +631,75 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                     })
                 );
 
+                function columnLabel(column) {
+                    switch (column.field) {
+                        case "passthrough_module": return "Pass-through module";
+                        case "symbols": return "Symbols";
+                        default: return (column.title || "").replace(/<[^>]*>/g, "");
+                    }
+                }
+
                 function checkbox(i, column, cellIdx) {
                     const option = ["responsive", "visible"][cellIdx];
                     const isRow = option === "responsive";
-                    return $("<td/>").append($("<input/>", {
-                        "type": "checkbox",
-                        "class": "form-check-input",
-                        "data-table": table,
-                        "data-name": column.field,
-                        "data-option": option,
-                        "checked": (isRow && column.responsive === 100) ||
-                            (!isRow && column.visible === false),
-                        "disabled": isRow && columnsDefault[i].responsive === 100
-                    }).change((e) => {
-                        const {checked} = e.target;
-                        columnsCustom[table] = columnsCustom[table] || {};
-                        columnsCustom[table][column.field] = columnsCustom[table][column.field] || {};
-                        // Columns currently in "Row" mode (responsive:100) are owned by
-                        // ResponsiveLayout: hiding them no-ops and showing them pops them
-                        // out of the detail row, because the module can't reconcile at
-                        // runtime. So both "Row" and visibility changes on such columns
-                        // are deferred to a rebuild; plain columns toggle in place.
-                        if (isRow || column.responsive === 100) {
-                            if (isRow) {
-                                if (checked) {
-                                    columnsCustom[table][column.field].responsive = 100;
+                    return common.el("td", null,
+                        common.el("input", {
+                            type: "checkbox",
+                            class: "form-check-input",
+                            dataset: {table, name: column.field, option},
+                            checked: (isRow && column.responsive === 100) ||
+                                (!isRow && column.visible === false),
+                            disabled: isRow && columnsDefault[i].responsive === 100,
+                            change: (e) => {
+                                const {checked} = e.target;
+                                columnsCustom[table] = columnsCustom[table] || {};
+                                columnsCustom[table][column.field] = columnsCustom[table][column.field] || {};
+                                // Columns currently in "Row" mode (responsive:100) are owned by
+                                // ResponsiveLayout: hiding them no-ops and showing them pops them
+                                // out of the detail row, because the module can't reconcile at
+                                // runtime. So both "Row" and visibility changes on such columns
+                                // are deferred to a rebuild; plain columns toggle in place.
+                                if (isRow || column.responsive === 100) {
+                                    if (isRow) {
+                                        if (checked) {
+                                            columnsCustom[table][column.field].responsive = 100;
+                                        } else {
+                                            delete columnsCustom[table][column.field].responsive;
+                                        }
+                                    } else {
+                                        columnsCustom[table][column.field].visible = !checked;
+                                    }
+                                    rebuildPending = true;
                                 } else {
-                                    delete columnsCustom[table][column.field].responsive;
+                                    columnsCustom[table][column.field].visible = !checked;
+                                    const tab = common.tables[table];
+                                    if (checked) tab.hideColumn(column.field); else tab.showColumn(column.field);
                                 }
-                            } else {
-                                columnsCustom[table][column.field].visible = !checked;
                             }
-                            rebuildPending = true;
-                        } else {
-                            columnsCustom[table][column.field].visible = !checked;
-                            const tab = common.tables[table];
-                            if (checked) tab.hideColumn(column.field); else tab.showColumn(column.field);
-                        }
-                    }));
+                        })
+                    );
                 }
 
-                $.each(columns, (i, column) => {
+                columns.forEach((column, i) => {
                     if (!column.field) return; // responsiveCollapse toggle is a control, not a column
                     tbody.append(
-                        $("<tr/>").append(
+                        common.el("tr", null,
                             checkbox(i, column, 0),
                             checkbox(i, column, 1),
-                            $("<td/>", {
-                                class: "text-start",
-                                text: () => {
-                                    switch (column.field) {
-                                        case "passthrough_module": return "Pass-through module";
-                                        case "symbols": return "Symbols";
-                                        default: return (column.title || "").replace(/<[^>]*>/g, "");
-                                    }
-                                }
-                            })
+                            common.el("td", {class: "text-start", text: columnLabel(column)})
                         )
                     );
                 });
 
                 // Apply deferred "Row" changes when the dropdown closes. The trigger
-                // element survives rebuilds, so namespace the handler and re-bind it
-                // each build to avoid stacking.
-                $("#" + table + " .tab-columns-btn")
-                    .off("hidden.bs.dropdown.rspamd")
-                    .on("hidden.bs.dropdown.rspamd", applyPendingRebuild)
-                    .removeAttr("disabled");
+                // element survives rebuilds, so track the handler and re-bind it each
+                // build to avoid stacking.
+                const columnsBtn = document.querySelector("#" + table + " .tab-columns-btn");
+                const prevHandler = common.data(columnsBtn, "dropdownHandler");
+                if (prevHandler) columnsBtn.removeEventListener("hidden.bs.dropdown", prevHandler);
+                columnsBtn.addEventListener("hidden.bs.dropdown", applyPendingRebuild);
+                common.data(columnsBtn, "dropdownHandler", applyPendingRebuild);
+                columnsBtn.disabled = false;
             })();
         };
 
@@ -791,8 +818,8 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
 
             common.show("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "']");
 
-            $.each(data.rows,
-                (i, item) => {
+            data.rows.forEach(
+                (item) => {
                     function more(p) {
                         const l = item[p].length;
                         return (l > rcpt_lim) ? " … (" + l + ")" : "";
@@ -874,8 +901,8 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                         if (!item.rcpt_mime.length) {
                             rcpt = format_rcpt(true, false);
                         } else if (
-                            $(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 ||
-                            $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0
+                            item.rcpt_mime.some((x) => !item.rcpt_smtp.includes(x)) ||
+                            item.rcpt_smtp.some((x) => !item.rcpt_mime.includes(x))
                         ) {
                             rcpt = format_rcpt(true, true);
                         } else {
@@ -897,16 +924,17 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
         ui.bindFuzzyHashButtons = function (table) {
             function bindAction(action, handler) {
                 const selector = `.fuzzy-${action}[data-table="${table}"]:not(:disabled)`;
-                $(document).off("click", selector);
-                $(document).on("click", selector, function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
+                const prevCleanup = fuzzyCleanups.get(selector);
+                if (prevCleanup) prevCleanup();
+                fuzzyCleanups.set(selector, common.delegate(document, "click", selector, (event, target) => {
+                    event.preventDefault();
+                    event.stopPropagation();
 
                     // eslint-disable-next-line init-declarations
                     let hashes, indices;
                     try {
-                        indices = JSON.parse($(this).attr("data-indices") || "[]");
-                        hashes = JSON.parse($(this).attr("data-hashes") || "[]");
+                        indices = JSON.parse(target.getAttribute("data-indices") || "[]");
+                        hashes = JSON.parse(target.getAttribute("data-hashes") || "[]");
                     } catch (err) {
                         common.alertMessage("alert-danger", "Invalid hash data: " + err.message);
                         return;
@@ -918,25 +946,24 @@ define(["jquery", "app/common", "app/tab-utils", "tabulator"],
                     }
 
                     const fullHashes = [...new Set(indices.map((i) => hashes[i]))];
-                    handler.call(this, fullHashes);
-                });
+                    handler(target, fullHashes);
+                }));
             }
 
-            bindAction("copy", function (fullHashes) {
+            bindAction("copy", (btn, fullHashes) => {
                 const textToCopy = fullHashes.join("\n");
                 common.copyToClipboard(textToCopy)
                     .then(() => {
-                        const btn = $(this);
-                        const originalHtml = btn.html();
-                        btn.html('<i class="fas fa-check"></i> Copied!');
-                        setTimeout(() => btn.html(originalHtml), 2000);
+                        const originalHtml = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
                     })
                     .catch((err) => {
                         common.alertMessage("alert-danger", "Copy failed: " + err.message);
                     });
             });
 
-            bindAction("delist", (fullHashes) => {
+            bindAction("delist", (_btn, fullHashes) => {
                 const url = "https://bl.rspamd.com/removal?type=fuzzy&hash=" + encodeURIComponent(fullHashes.join(","));
                 window.open(url, "_blank");
             });

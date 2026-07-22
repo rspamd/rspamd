@@ -91,7 +91,6 @@ requirejs.config({
     baseUrl: "js/lib",
     paths: {
         app: "../app",
-        jquery: "jquery-3.7.1.min",
         visibility: "visibility.min",
         bootstrap: "bootstrap.bundle.min",
         codejar: "codejar.min",
@@ -103,20 +102,17 @@ requirejs.config({
         linenumbers: "codejar-linenumbers.min",
         tabulator: "tabulator.min",
         nprogress: "nprogress.min",
-        prism: "prism",
-        stickytabs: "jquery.stickytabs.min"
+        prism: "prism"
     },
     shim: {
-        app: {deps: ["jquery"]},
         codejar: {exports: "CodeJar", deps: ["linenumbers"]},
-        bootstrap: {exports: "bootstrap", deps: ["jquery"]}, // Popovers require jQuery
+        bootstrap: {exports: "bootstrap"},
         d3: {exports: "d3"},
-        d3evolution: {exports: "D3Evolution", deps: ["d3.global", "jquery"]},
-        d3pie: {exports: "D3Pie", deps: ["d3.global", "jquery"]},
+        d3evolution: {exports: "D3Evolution", deps: ["d3.global"]},
+        d3pie: {exports: "D3Pie", deps: ["d3.global"]},
         fontawesome: {exports: "FontAwesome", deps: ["fontawesome_solid"]},
         linenumbers: {exports: "withLineNumbers", deps: ["prism"]},
-        prism: {exports: "Prism"},
-        stickytabs: {deps: ["jquery"]}
+        prism: {exports: "Prism"}
     },
     waitSeconds: 30,
 });

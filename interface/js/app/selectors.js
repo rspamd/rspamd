@@ -1,18 +1,18 @@
-define(["jquery", "app/common"],
-    ($, common) => {
+define(["app/common"],
+    (common) => {
         "use strict";
         const ui = {};
         const fileSet = {files: null, index: null};
 
         function enable_disable_check_btn() {
-            $("#selectorsChkMsgBtn").prop("disabled", (
-                $.trim($("#selectorsMsgArea").val()).length === 0 ||
-                !$("#selectorsSelArea").hasClass("is-valid")
-            ));
+            const msgArea = document.getElementById("selectorsMsgArea");
+            const selArea = document.getElementById("selectorsSelArea");
+            document.getElementById("selectorsChkMsgBtn").disabled =
+                msgArea.value.trim().length === 0 || !selArea.classList.contains("is-valid");
         }
 
         function checkMsg(data) {
-            const selector = $("#selectorsSelArea").val();
+            const selector = document.getElementById("selectorsSelArea").value;
             common.query("plugins/selectors/check_message?selector=" + encodeURIComponent(selector), {
                 data: data,
                 method: "POST",
@@ -20,8 +20,8 @@ define(["jquery", "app/common"],
                     const json = neighbours_status[0].data;
                     if (json.success) {
                         common.alertMessage("alert-success", "Message successfully processed");
-                        $("#selectorsResArea")
-                            .val(Object.prototype.hasOwnProperty.call(json, "data") ? json.data.toString() : "");
+                        document.getElementById("selectorsResArea").value =
+                            Object.prototype.hasOwnProperty.call(json, "data") ? json.data.toString() : "";
                     } else {
                         common.alertMessage("alert-danger", "Unexpected error processing message");
                     }
@@ -31,11 +31,13 @@ define(["jquery", "app/common"],
         }
 
         function checkSelectors() {
+            const selArea = document.getElementById("selectorsSelArea");
             function toggle_form_group_class(remove, add) {
-                $("#selectorsSelArea").removeClass("is-" + remove).addClass("is-" + add);
+                selArea.classList.remove("is-" + remove);
+                selArea.classList.add("is-" + add);
                 enable_disable_check_btn();
             }
-            const selector = $("#selectorsSelArea").val();
+            const selector = selArea.value;
             if (selector.length && !common.read_only) {
                 common.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
                     method: "GET",
@@ -49,7 +51,7 @@ define(["jquery", "app/common"],
                     server: common.getServer()
                 });
             } else {
-                $("#selectorsSelArea").removeClass("is-valid is-invalid");
+                selArea.classList.remove("is-valid", "is-invalid");
                 enable_disable_check_btn();
             }
         }
@@ -57,11 +59,11 @@ define(["jquery", "app/common"],
         function buildLists() {
             function build_table_from_json(json, table_id) {
                 Object.keys(json).forEach((key) => {
-                    const td = $("<td/>");
-                    const tr = $("<tr/>")
-                        .append(td.clone().html("<code>" + key + "</code>"))
-                        .append(td.clone().html(json[key].description));
-                    $(table_id + " tbody").append(tr);
+                    const tr = common.el("tr", null,
+                        common.el("td", null, common.el("code", {text: key})),
+                        common.el("td", {text: json[key].description})
+                    );
+                    document.querySelector(table_id + " tbody").append(tr);
                 });
             }
 
@@ -82,52 +84,50 @@ define(["jquery", "app/common"],
 
         ui.displayUI = function () {
             if (!common.read_only &&
-                !$("#selectorsTable-extractors>tbody>tr").length &&
-                !$("#selectorsTable-transforms>tbody>tr").length) buildLists();
-            if (!$("#selectorsSelArea").is(".is-valid, .is-invalid")) checkSelectors();
+                !document.querySelector("#selectorsTable-extractors>tbody>tr") &&
+                !document.querySelector("#selectorsTable-transforms>tbody>tr")) buildLists();
+            if (!document.getElementById("selectorsSelArea").matches(".is-valid, .is-invalid")) checkSelectors();
         };
 
 
         function toggleSidebar(side) {
-            $("#sidebar-" + side).toggleClass("collapsed");
-            const openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
-                $("#sidebar-right").hasClass("collapsed");
+            document.getElementById("sidebar-" + side).classList.toggle("collapsed");
+            const openSidebarsCount = document.getElementById("sidebar-left").classList.contains("collapsed") +
+                document.getElementById("sidebar-right").classList.contains("collapsed");
             const layoutMap = {1: "col-lg-9", 2: "col-lg-12"};
             const contentClass = layoutMap[openSidebarsCount] || "col-lg-6";
-            $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
-                .addClass(contentClass);
+            const content = document.getElementById("content");
+            content.classList.remove("col-lg-12", "col-lg-9", "col-lg-6");
+            content.classList.add(contentClass);
         }
-        $("#sidebar-tab-left>a").click(() => {
+        document.querySelector("#sidebar-tab-left > a").addEventListener("click", (e) => {
+            e.preventDefault();
             toggleSidebar("left");
-            return false;
         });
-        $("#sidebar-tab-right>a").click(() => {
+        document.querySelector("#sidebar-tab-right > a").addEventListener("click", (e) => {
+            e.preventDefault();
             toggleSidebar("right");
-            return false;
         });
 
-        $("#selectorsMsgClean").on("click", () => {
-            $("#selectorsChkMsgBtn").attr("disabled", true);
-            $("#selectorsMsgArea").val("");
-            return false;
+        document.getElementById("selectorsMsgClean").addEventListener("click", (e) => {
+            e.preventDefault();
+            document.getElementById("selectorsChkMsgBtn").disabled = true;
+            document.getElementById("selectorsMsgArea").value = "";
+            document.getElementById("selectorsFile").value = "";
         });
-        $("#selectorsClean").on("click", () => {
-            $("#selectorsSelArea").val("");
+        document.getElementById("selectorsClean").addEventListener("click", (e) => {
+            e.preventDefault();
+            document.getElementById("selectorsSelArea").value = "";
             checkSelectors();
-            return false;
         });
-        $("#selectorsChkMsgBtn").on("click", () => {
-            $("#selectorsResArea").val("");
-            checkMsg($("#selectorsMsgArea").val());
-            return false;
+        document.getElementById("selectorsChkMsgBtn").addEventListener("click", (e) => {
+            e.preventDefault();
+            document.getElementById("selectorsResArea").value = "";
+            checkMsg(document.getElementById("selectorsMsgArea").value);
         });
 
-        $("#selectorsSelArea").on("input", () => {
+        document.getElementById("selectorsSelArea").addEventListener("input", () => {
             checkSelectors();
-        });
-        $("#selectorsMsgClean").on("click", () => {
-            $("#selectorsMsgArea").val("");
-            $("#selectorsFile").val("");
         });
 
         common.fileUtils.setupFileHandling("#selectorsMsgArea", "#selectorsFile", fileSet, enable_disable_check_btn);
