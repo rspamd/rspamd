@@ -323,6 +323,25 @@ Thank you,
     task:destroy()
   end)
 
+  test("Text newline metadata is bounded", function()
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: text/plain; charset=utf-8\n",
+      "\n",
+      string.rep("x\n", 100001),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local text_parts = task:get_text_parts()
+    assert_equal(1, #text_parts)
+    local stats = text_parts[1]:get_stats()
+    assert_true(stats.newlines_truncated,
+      "newline metadata limit was not reported")
+    task:destroy()
+  end)
+
   test("MIME header count is bounded", function()
     local msg = string.rep('X:\n', 100001) .. '\nbody\n'
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)
