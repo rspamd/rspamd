@@ -28,6 +28,9 @@
 
 namespace rspamd::mime {
 
+static constexpr std::size_t max_received_parts = 64;
+static constexpr std::size_t max_received_comments = 64;
+
 enum class received_part_type {
 	RSPAMD_RECEIVED_PART_FROM,
 	RSPAMD_RECEIVED_PART_BY,
@@ -107,7 +110,7 @@ received_process_part(const std::string_view &data,
 
 				if (ebraces >= obraces) {
 					if (type != received_part_type::RSPAMD_RECEIVED_PART_UNKNOWN) {
-						if (p > c) {
+						if (p > c && npart.comments.size() < max_received_comments) {
 							npart.comments.emplace_back(received_char_filter);
 							auto &comment = npart.comments.back();
 							received_part_set_or_append(c, p - c,
@@ -300,7 +303,7 @@ received_spill(const std::string_view &in,
 	auto maybe_process_part = [&](received_part_type what) -> bool {
 		parts.emplace_back(what);
 		auto &rcvd_part = parts.back();
-		auto chunk = std::string_view{p, (std::size_t)(end - p)};
+		auto chunk = std::string_view{p, (std::size_t) (end - p)};
 
 		if (!received_process_part(chunk, what, pos, rcvd_part)) {
 			parts.pop_back();
@@ -345,6 +348,10 @@ received_spill(const std::string_view &in,
 	}
 
 	while (p < end) {
+		if (parts.size() >= max_received_parts) {
+			break;
+		}
+
 		bool got_part = false;
 		if (*p == ';') {
 			/* We are at the date separator, stop here */
@@ -1026,5 +1033,33 @@ TEST_SUITE("received")
 		}
 
 		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("received parts are bounded")
+	{
+		std::string input{"from sender.example by receiver.example"};
+
+		for (auto i = 0; i < 10000; i++) {
+			input.append(" with esmtp");
+		}
+
+		std::ptrdiff_t date_pos = -1;
+		auto parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() <= rspamd::mime::max_received_parts);
+	}
+
+	TEST_CASE("received comments are bounded")
+	{
+		std::string input{"from sender.example"};
+
+		for (auto i = 0; i < 10000; i++) {
+			input.append(" (comment)");
+		}
+
+		input.append(" by receiver.example");
+		std::ptrdiff_t date_pos = -1;
+		auto parts = rspamd::mime::received_spill(input, date_pos);
+		REQUIRE(!parts.empty());
+		CHECK(parts.front().comments.size() <= rspamd::mime::max_received_comments);
 	}
 }

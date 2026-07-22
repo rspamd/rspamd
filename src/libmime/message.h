@@ -196,6 +196,8 @@ struct rspamd_message {
 	khash_t(rspamd_url_hash) * urls;
 	struct rspamd_mime_headers_table *raw_headers; /**< list of raw headers						*/
 	struct rspamd_mime_header *headers_order;      /**< order of raw headers							*/
+	unsigned int nheaders;                         /**< total parsed headers across all MIME parts */
+	gboolean headers_limit_reached;
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;

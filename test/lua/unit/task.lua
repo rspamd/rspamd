@@ -239,6 +239,19 @@ Thank you,
     task:destroy()
   end)
 
+  test("MIME header count is bounded", function()
+    local msg = string.rep('X:\n', 100001) .. '\nbody\n'
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_true(task:has_flag('broken_headers'),
+      "MIME header limit was not applied")
+    assert_true(task:get_header_count('X') <= 100000,
+      string.format("too many MIME headers parsed: %d",
+        task:get_header_count('X')))
+    task:destroy()
+  end)
+
   test("Part URLs are not deduplicated across MIME parts", function()
     local msg = table.concat {
       hdrs,

@@ -24,6 +24,8 @@
 #include "libutil/util.h"
 #include <unicode/utf8.h>
 
+static const unsigned int max_mime_headers = 100000;
+
 KHASH_INIT(rspamd_mime_headers_htb, char *,
 		   struct rspamd_mime_header *, 1,
 		   rspamd_strcase_hash, rspamd_strcase_equal);
@@ -32,6 +34,26 @@ struct rspamd_mime_headers_table {
 	khash_t(rspamd_mime_headers_htb) htb;
 	ref_entry_t ref;
 };
+
+static gboolean
+rspamd_mime_headers_check_limit(struct rspamd_task *task)
+{
+	if (MESSAGE_FIELD(task, nheaders) >= max_mime_headers) {
+		if (!MESSAGE_FIELD(task, headers_limit_reached)) {
+			msg_warn_task("MIME headers limit of %ud is reached; "
+						  "ignoring the remaining headers",
+						  max_mime_headers);
+			MESSAGE_FIELD(task, headers_limit_reached) = TRUE;
+			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+		}
+
+		return FALSE;
+	}
+
+	MESSAGE_FIELD(task, nheaders) += 1;
+
+	return TRUE;
+}
 
 static void
 rspamd_mime_header_check_special(struct rspamd_task *task,
@@ -228,6 +250,11 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 		case 1:
 			/* We got something like header's name */
 			if (*p == ':') {
+				if (!rspamd_mime_headers_check_limit(task)) {
+					p = end;
+					break;
+				}
+
 				nh = rspamd_mempool_alloc0(task->task_pool,
 										   sizeof(struct rspamd_mime_header));
 				l = p - c;
