@@ -251,6 +251,35 @@ Thank you,
     task:destroy()
   end)
 
+  test("Alternative text parts are linked", function()
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/alternative; boundary=ALT\n',
+      '\n',
+      '--ALT\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'plain text\n',
+      '--ALT\n',
+      'Content-Type: text/html\n',
+      '\n',
+      '<b>html text</b>\n',
+      '--ALT--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local tp = task:get_text_parts()
+    assert_equal(#tp, 2, string.format("expected 2 text parts, got %d", #tp))
+    for _, p in ipairs(tp) do
+      local alt = p:get_alt_part()
+      assert_true(alt ~= nil, "text part has no alternative linked")
+      assert_true(alt:is_html() ~= p:is_html(),
+        "alternative part has the same type as the original")
+    end
+    task:destroy()
+  end)
+
   test("MIME header count is bounded", function()
     local msg = string.rep('X:\n', 100001) .. '\nbody\n'
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)

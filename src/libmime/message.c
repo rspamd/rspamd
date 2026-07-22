@@ -1059,7 +1059,7 @@ rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
 				continue;
 			}
 
-			gboolean is_html = IS_TEXT_PART_HTML(txt);
+			gboolean is_html = IS_TEXT_PART_HTML(txt) ? TRUE : FALSE;
 			if (want_html == is_html) {
 				return txt;
 			}
@@ -1095,7 +1095,7 @@ rspamd_mime_text_part_find_alternative(struct rspamd_mime_text_part *text_part)
 	}
 
 	struct rspamd_mime_part *mime_part = text_part->mime_part;
-	gboolean is_html = IS_TEXT_PART_HTML(text_part);
+	gboolean is_html = IS_TEXT_PART_HTML(text_part) ? TRUE : FALSE;
 
 	/* Find the multipart/alternative ancestor */
 	struct rspamd_mime_part *alt_parent =
