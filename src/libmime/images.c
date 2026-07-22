@@ -19,13 +19,6 @@
 #include "message.h"
 #include "libserver/html/html.h"
 
-#define msg_debug_images(...) rspamd_conditional_debug_fast(NULL, NULL,                                               \
-															rspamd_images_log_id, "images", task->task_pool->tag.uid, \
-															G_STRFUNC,                                                \
-															__VA_ARGS__)
-
-INIT_LOG_MODULE(images)
-
 #ifdef USABLE_GD
 #include "gd.h"
 #include "hash.h"
@@ -674,13 +667,13 @@ rspamd_image_type_str(enum rspamd_image_type type)
 }
 
 static void
-rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *part)
+rspamd_image_add_content_id(struct rspamd_task *task,
+							struct rspamd_mime_part *part,
+							GHashTable *cid_images)
 {
 	struct rspamd_mime_header *rh;
-	struct rspamd_mime_text_part *tp;
-	struct html_image *himg;
 	const char *cid;
-	unsigned int cid_len, i;
+	gsize cid_len;
 	struct rspamd_image *img;
 
 	img = (struct rspamd_image *) part->specific.img;
@@ -704,28 +697,9 @@ rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *par
 					cid_len--;
 				}
 
-				PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
-				{
-					if (IS_TEXT_PART_HTML(tp) && tp->html != NULL) {
-						himg = rspamd_html_find_embedded_image(tp->html, cid, cid_len);
-
-						if (himg != NULL) {
-							img->html_image = himg;
-							himg->embedded_image = img;
-
-							msg_debug_images("found linked image by cid: <%s>",
-											 cid);
-
-							if (himg->height == 0) {
-								himg->height = img->height;
-							}
-
-							if (himg->width == 0) {
-								himg->width = img->width;
-							}
-						}
-					}
-				}
+				char *cid_copy = rspamd_mempool_strdup_len(task->task_pool,
+														   cid, cid_len);
+				g_hash_table_replace(cid_images, cid_copy, img);
 			}
 		}
 	}
@@ -734,12 +708,27 @@ rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *par
 void rspamd_images_link(struct rspamd_task *task)
 {
 	struct rspamd_mime_part *part;
+	struct rspamd_mime_text_part *tp;
 	unsigned int i;
+	GHashTable *cid_images;
+
+	cid_images = g_hash_table_new(g_str_hash, g_str_equal);
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
 	{
 		if (part->part_type == RSPAMD_MIME_PART_IMAGE) {
-			rspamd_image_process_part(task, part);
+			rspamd_image_add_content_id(task, part, cid_images);
 		}
 	}
+
+	if (g_hash_table_size(cid_images) > 0) {
+		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
+		{
+			if (IS_TEXT_PART_HTML(tp) && tp->html != NULL) {
+				rspamd_html_link_embedded_images(tp->html, cid_images);
+			}
+		}
+	}
+
+	g_hash_table_destroy(cid_images);
 }

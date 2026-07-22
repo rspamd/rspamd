@@ -3375,6 +3375,33 @@ rspamd_html_find_embedded_image(void *html_content,
 	return nullptr;
 }
 
+void rspamd_html_link_embedded_images(void *html_content,
+									  GHashTable *cid_images)
+{
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+
+	for (auto *html_image: hc->images) {
+		if (html_image->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED &&
+			html_image->src != nullptr) {
+			auto *parsed_image = static_cast<rspamd_image *>(
+				g_hash_table_lookup(cid_images, html_image->src));
+
+			if (parsed_image != nullptr) {
+				parsed_image->html_image = html_image;
+				html_image->embedded_image = parsed_image;
+
+				if (html_image->height == 0) {
+					html_image->height = parsed_image->height;
+				}
+
+				if (html_image->width == 0) {
+					html_image->width = parsed_image->width;
+				}
+			}
+		}
+	}
+}
+
 bool rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest)
 {
 	auto *hc = rspamd::html::html_content::from_ptr(html_content);

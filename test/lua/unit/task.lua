@@ -330,6 +330,39 @@ Thank you,
     task:destroy()
   end)
 
+  test("Embedded image dimensions are linked by Content-ID", function()
+    local png = "\137PNG\r\n\26\n" ..
+        "\0\0\0\13IHDR" ..
+        "\0\0\1\64\0\0\0\240"
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: multipart/related; boundary=LINKED-IMAGE\n",
+      "\n",
+      "--LINKED-IMAGE\n",
+      "Content-Type: text/html\n",
+      "\n",
+      "<img src=\"cid:shared-image\">\n",
+      "--LINKED-IMAGE\n",
+      "Content-Type: image/png\n",
+      "Content-ID: <shared-image>\n",
+      "Content-Transfer-Encoding: binary\n",
+      "\n",
+      png,
+      "\n--LINKED-IMAGE--\n",
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local text_parts = task:get_text_parts()
+    assert_equal(1, #text_parts)
+    local html_images = text_parts[1]:get_html():get_images()
+    assert_equal(1, #html_images)
+    assert_equal(320, html_images[1].width)
+    assert_equal(240, html_images[1].height)
+    task:destroy()
+  end)
+
   test("Part URLs are not deduplicated across MIME parts", function()
     local msg = table.concat {
       hdrs,

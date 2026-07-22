@@ -116,6 +116,14 @@ struct html_image *rspamd_html_find_embedded_image(void *html_content,
 												   const char *cid, gsize cid_len);
 
 /**
+ * Link all embedded HTML images using a Content-ID to rspamd_image hash table
+ * @param html_content
+ * @param cid_images
+ */
+void rspamd_html_link_embedded_images(void *html_content,
+									  GHashTable *cid_images);
+
+/**
  * Stores parsed content in ftok_t structure
  * @param html_content
  * @param dest
