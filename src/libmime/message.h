@@ -198,6 +198,8 @@ struct rspamd_message {
 	struct rspamd_mime_header *headers_order;      /**< order of raw headers							*/
 	unsigned int nheaders;                         /**< total parsed headers across all MIME parts */
 	gboolean headers_limit_reached;
+	unsigned int narchive_files; /**< total archive file metadata entries */
+	gboolean archive_files_limit_reached;
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;

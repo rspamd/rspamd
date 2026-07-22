@@ -40,6 +40,8 @@
 
 INIT_LOG_MODULE(archive)
 
+static const unsigned int max_archive_files = 100000;
+
 static GQuark
 rspamd_archives_err_quark(void)
 {
@@ -52,6 +54,16 @@ rspamd_archives_err_quark(void)
 }
 
 static void
+rspamd_archive_file_free(struct rspamd_archive_file *f)
+{
+	if (f->fname) {
+		g_string_free(f->fname, TRUE);
+	}
+
+	g_free(f);
+}
+
+static void
 rspamd_archive_dtor(gpointer p)
 {
 	struct rspamd_archive *arch = p;
@@ -60,15 +72,58 @@ rspamd_archive_dtor(gpointer p)
 
 	for (i = 0; i < arch->files->len; i++) {
 		f = g_ptr_array_index(arch->files, i);
-
-		if (f->fname) {
-			g_string_free(f->fname, TRUE);
-		}
-
-		g_free(f);
+		rspamd_archive_file_free(f);
 	}
 
 	g_ptr_array_free(arch->files, TRUE);
+}
+
+static gboolean
+rspamd_archive_file_limit_check(struct rspamd_task *task,
+								struct rspamd_archive *arch)
+{
+	if (MESSAGE_FIELD(task, narchive_files) >= max_archive_files) {
+		arch->flags |= RSPAMD_ARCHIVE_FILES_TRUNCATED;
+
+		if (!MESSAGE_FIELD(task, archive_files_limit_reached)) {
+			msg_warn_task("archive file metadata limit of %ud is reached; "
+						  "ignoring the remaining entries",
+						  max_archive_files);
+			MESSAGE_FIELD(task, archive_files_limit_reached) = TRUE;
+		}
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_archive_file_add(struct rspamd_task *task,
+						struct rspamd_archive *arch,
+						struct rspamd_archive_file *f)
+{
+	if (!rspamd_archive_file_limit_check(task, arch)) {
+		rspamd_archive_file_free(f);
+
+		return FALSE;
+	}
+
+	MESSAGE_FIELD(task, narchive_files) += 1;
+	g_ptr_array_add(arch->files, f);
+
+	return TRUE;
+}
+
+static void
+rspamd_archive_files_reset(struct rspamd_task *task,
+						   struct rspamd_archive *arch)
+{
+	g_assert(MESSAGE_FIELD(task, narchive_files) >= arch->files->len);
+	MESSAGE_FIELD(task, narchive_files) -= arch->files->len;
+	rspamd_archive_dtor(arch);
+	arch->files = g_ptr_array_new();
+	arch->flags &= ~RSPAMD_ARCHIVE_FILES_TRUNCATED;
 }
 
 
@@ -278,6 +333,9 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	}
 	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
 								  arch);
+	if (!rspamd_archive_file_limit_check(task, arch)) {
+		goto set;
+	}
 
 	while (cd < start + cd_offset + cd_size) {
 		uint16_t flags;
@@ -324,7 +382,9 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 				arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 			}
 
-			g_ptr_array_add(arch->files, f);
+			if (!rspamd_archive_file_add(task, arch, f)) {
+				break;
+			}
 			msg_debug_archive("found file in zip archive: %v", f->fname);
 		}
 		else {
@@ -359,6 +419,7 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
 	}
 
+set:
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 
@@ -480,6 +541,9 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 	}
 	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
 								  arch);
+	if (!rspamd_archive_file_limit_check(task, arch)) {
+		goto end;
+	}
 
 	while (p < end) {
 		/* Crc16 */
@@ -597,7 +661,9 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 				}
-				g_ptr_array_add(arch->files, f);
+				if (!rspamd_archive_file_add(task, arch, f)) {
+					goto end;
+				}
 			}
 			else {
 				g_free(f);
@@ -662,6 +728,9 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 	}
 	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
 								  arch);
+	if (!rspamd_archive_file_limit_check(task, arch)) {
+		goto end;
+	}
 
 	/* Now we can have either encryption header or archive header */
 	/* Crc 32 */
@@ -795,7 +864,10 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 
 				if (f->fname) {
 					msg_debug_archive("added rarv5 file: %v", f->fname);
-					g_ptr_array_add(arch->files, f);
+					if (!rspamd_archive_file_add(task, arch, f)) {
+						f = NULL;
+						goto end;
+					}
 					if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 					}
@@ -1690,7 +1762,10 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 					if (res != NULL) {
 						fentry = g_malloc0(sizeof(*fentry));
 						fentry->fname = res;
-						g_ptr_array_add(arch->files, fentry);
+						if (!rspamd_archive_file_add(task, arch, fentry)) {
+							p = NULL;
+							goto end;
+						}
 						msg_debug_archive("7zip: found file %v", res);
 					}
 					else {
@@ -1756,8 +1831,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 			}
 
 			/* Clean the existing files if any */
-			rspamd_archive_dtor(arch);
-			arch->files = g_ptr_array_new();
+			rspamd_archive_files_reset(task, arch);
 
 			struct archive_entry *ae;
 
@@ -1767,7 +1841,9 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 					msg_debug_archive("7zip: found file %s", name);
 					struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
 					f->fname = g_string_new(name);
-					g_ptr_array_add(arch->files, f);
+					if (!rspamd_archive_file_add(task, arch, f)) {
+						break;
+					}
 				}
 				archive_read_data_skip(a);
 			}
@@ -1831,6 +1907,9 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 	arch->type = RSPAMD_ARCHIVE_7ZIP;
 	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
 								  arch);
+	if (!rspamd_archive_file_limit_check(task, arch)) {
+		goto end;
+	}
 
 	/* Magic (6 bytes) + version (2 bytes) + crc32 (4 bytes) */
 	p += sizeof(uint64_t) + sizeof(uint32_t);
@@ -1858,6 +1937,7 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 
 	while ((p = rspamd_7zip_read_next_section(task, p, end, arch, part)) != NULL);
 
+end:
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 	if (part->cd != NULL) {
@@ -1893,6 +1973,9 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 	}
 	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
 								  arch);
+	if (!rspamd_archive_file_limit_check(task, arch)) {
+		goto set;
+	}
 
 	flags = p[3];
 
@@ -1940,7 +2023,9 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 												fname_start, p - fname_start);
 
 					if (f->fname) {
-						g_ptr_array_add(arch->files, f);
+						if (!rspamd_archive_file_add(task, arch, f)) {
+							goto set;
+						}
 
 						if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 							arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
@@ -1987,7 +2072,9 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 				msg_debug_archive("fallback to gzip filename based on cd: %v",
 								  f->fname);
 
-				g_ptr_array_add(arch->files, f);
+				if (!rspamd_archive_file_add(task, arch, f)) {
+					goto set;
+				}
 
 				goto set;
 			}
@@ -2012,7 +2099,9 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 				msg_debug_archive("fallback to gzip filename based on cd: %v",
 								  f->fname);
 
-				g_ptr_array_add(arch->files, f);
+				if (!rspamd_archive_file_add(task, arch, f)) {
+					goto set;
+				}
 
 				goto set;
 			}

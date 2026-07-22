@@ -44,8 +44,8 @@ local id = rspamd_config:register_symbol {
           end
         end
 
-        local files = arc:get_files_full()
-        local max_check = math.min(#files, 10)
+        local files = arc:get_files_full(10)
+        local max_check = #files
 
         for i = 1, max_check do
           local info = files[i]

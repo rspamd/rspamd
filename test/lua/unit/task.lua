@@ -25,6 +25,18 @@ From: <>
 To: <nobody@example.com>
 Subject: test
 ]]
+  local function make_many_file_zip(nfiles)
+    local rspamd_util = require("rspamd_util")
+    local local_header = "PK\3\4" .. string.rep("\0", 26)
+    local cd_record = "PK\1\2" .. string.rep("\0", 24) ..
+        "\1\0" .. string.rep("\0", 16) .. "x"
+    local cd = string.rep(cd_record, nfiles)
+    local eocd = "PK\5\6" .. string.rep("\0", 8) ..
+        rspamd_util.pack("<I4", #cd) ..
+        rspamd_util.pack("<I4", #local_header) .. "\0\0"
+
+    return local_header .. cd .. eocd
+  end
   local mpart = [[
 Content-Type: multipart/mixed; boundary=XXX
 ]]
@@ -249,6 +261,72 @@ Thank you,
     assert_true(task:get_header_count('X') <= 100000,
       string.format("too many MIME headers parsed: %d",
         task:get_header_count('X')))
+    task:destroy()
+  end)
+
+  test("Archive file metadata count is bounded", function()
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: application/zip\n",
+      "Content-Disposition: attachment; filename=many.zip\n",
+      "Content-Transfer-Encoding: binary\n",
+      "\n",
+      make_many_file_zip(100001),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local archives = task:get_archives()
+    assert_equal(1, #archives, "archive was not detected")
+    local files = archives[1]:get_files()
+    assert_equal(100000, #files,
+      string.format("unexpected archive file count: %d", #files))
+    assert_true(archives[1]:is_truncated(),
+      "archive metadata truncation was not exposed")
+    task:destroy()
+  end)
+
+  test("Archive file metadata count is bounded across parts", function()
+    local zip = make_many_file_zip(1000)
+    local body = {}
+
+    for i = 1, 101 do
+      body[#body + 1] = table.concat {
+        "--MANY-ARCHIVES\n",
+        "Content-Type: application/zip\n",
+        string.format(
+          "Content-Disposition: attachment; filename=archive-%d.zip\n", i),
+        "Content-Transfer-Encoding: binary\n",
+        "\n",
+        zip,
+        "\n",
+      }
+    end
+    body[#body + 1] = "--MANY-ARCHIVES--\n"
+
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: multipart/mixed; boundary=MANY-ARCHIVES\n",
+      "\n",
+      table.concat(body),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local archives = task:get_archives()
+    assert_equal(101, #archives, "archives were not detected")
+    local nfiles = 0
+    for _, archive in ipairs(archives) do
+      nfiles = nfiles + #archive:get_files()
+    end
+    assert_equal(100000, nfiles,
+      string.format("unexpected archive file count across parts: %d", nfiles))
+    assert_false(archives[100]:is_truncated(),
+      "archive within the task budget was marked truncated")
+    assert_true(archives[101]:is_truncated(),
+      "archive exceeding the task budget was not marked truncated")
     task:destroy()
   end)
 

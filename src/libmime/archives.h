@@ -33,6 +33,7 @@ enum rspamd_archive_flags {
 	RSPAMD_ARCHIVE_ENCRYPTED = (1u << 0u),
 	RSPAMD_ARCHIVE_CANNOT_READ = (1u << 1u),
 	RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES = (1u << 2u),
+	RSPAMD_ARCHIVE_FILES_TRUNCATED = (1u << 3u),
 };
 
 enum rspamd_archive_file_flags {

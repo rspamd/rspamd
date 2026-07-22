@@ -757,6 +757,7 @@ LUA_FUNCTION_DEF(task, get_images);
  * * `get_files` - return list of strings with filenames inside archive
  * * `get_files_full` - return list of tables with all information about files
  * * `is_encrypted` - return true if an archive is encrypted
+ * * `is_truncated` - return true if the archive file list hit the task limit
  * * `get_type` - return string representation of image's type (e.g. 'zip')
  * * `get_filename` - return string with archive's file name
  * * `get_size` - return size in bytes
@@ -1566,6 +1567,7 @@ LUA_FUNCTION_DEF(archive, get_files_full);
 LUA_FUNCTION_DEF(archive, is_encrypted);
 LUA_FUNCTION_DEF(archive, is_obfuscated);
 LUA_FUNCTION_DEF(archive, is_unreadable);
+LUA_FUNCTION_DEF(archive, is_truncated);
 LUA_FUNCTION_DEF(archive, get_filename);
 LUA_FUNCTION_DEF(archive, get_size);
 
@@ -1576,6 +1578,7 @@ static const struct luaL_reg archivelib_m[] = {
 	LUA_INTERFACE_DEF(archive, is_encrypted),
 	LUA_INTERFACE_DEF(archive, is_obfuscated),
 	LUA_INTERFACE_DEF(archive, is_unreadable),
+	LUA_INTERFACE_DEF(archive, is_truncated),
 	LUA_INTERFACE_DEF(archive, get_filename),
 	LUA_INTERFACE_DEF(archive, get_size),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -8389,6 +8392,22 @@ lua_archive_is_unreadable(lua_State *L)
 
 	if (arch != NULL) {
 		lua_pushboolean(L, (arch->flags & RSPAMD_ARCHIVE_CANNOT_READ) ? true : false);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_archive_is_truncated(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_archive *arch = lua_check_archive(L);
+
+	if (arch != NULL) {
+		lua_pushboolean(L, (arch->flags & RSPAMD_ARCHIVE_FILES_TRUNCATED) ? true : false);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
