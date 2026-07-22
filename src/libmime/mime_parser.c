@@ -112,6 +112,8 @@ int rspamd_mime_parser_get_lua_magic_cbref(const struct rspamd_mime_parser_confi
 
 static const unsigned int max_nested = 64;
 static const unsigned int max_key_usages = 10000;
+static const unsigned int max_mime_parts = 10000;
+static const unsigned int max_boundary_candidates = 100000;
 
 #define msg_debug_mime(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                \
 														  rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
@@ -134,11 +136,14 @@ struct rspamd_mime_boundary {
 struct rspamd_mime_parser_runtime {
 	GPtrArray *stack;   /* Stack of parts */
 	GArray *boundaries; /* Boundaries found in the whole message */
+	struct rspamd_mime_parser_runtime *root;
 	const char *start;
 	const char *pos;
 	const char *end;
 	struct rspamd_task *task;
 	unsigned int nesting;
+	unsigned int boundary_candidates;
+	gboolean boundary_limit_reached;
 };
 
 static enum rspamd_mime_parse_error
@@ -175,6 +180,18 @@ static GQuark
 rspamd_mime_parser_quark(void)
 {
 	return g_quark_from_static_string("mime-parser");
+}
+
+static gboolean
+rspamd_mime_parser_check_part_limit(struct rspamd_task *task, GError **err)
+{
+	if (MESSAGE_FIELD(task, parts)->len >= max_mime_parts) {
+		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
+					"MIME parts limit is reached: %u", max_mime_parts);
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 const char *
@@ -739,6 +756,9 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	gssize r;
 
 	g_assert(part != NULL);
+	if (!rspamd_mime_parser_check_part_limit(task, err)) {
+		return RSPAMD_MIME_PARSE_LIMIT;
+	}
 
 	rspamd_mime_part_get_cte(task, part, part->raw_headers, FALSE);
 	rspamd_mime_part_get_cd(task, part);
@@ -1304,18 +1324,36 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 {
 	struct rspamd_mime_boundary *cur;
 	goffset last_offset;
-	unsigned int i, sel = 0;
+	unsigned int i, sel, left, right;
 	enum rspamd_mime_parse_error ret;
 	bool enforce_closing = false;
+	goffset part_offset;
 
-	last_offset = (multipart->raw_data.begin - st->start) +
+	part_offset = multipart->raw_data.begin - st->start;
+	last_offset = part_offset +
 				  multipart->raw_data.len;
 
-	/* Find the first offset suitable for this part */
-	for (i = 0; i < st->boundaries->len; i++) {
+	/* Boundaries are ordered by offset: skip all candidates before this part. */
+	left = 0;
+	right = st->boundaries->len;
+	while (left < right) {
+		unsigned int mid = left + (right - left) / 2;
+		cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, mid);
+
+		if (cur->start < part_offset) {
+			left = mid + 1;
+		}
+		else {
+			right = mid;
+		}
+	}
+
+	sel = st->boundaries->len;
+	/* Find the first boundary suitable for this part. */
+	for (i = left; i < st->boundaries->len; i++) {
 		cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, i);
 
-		if (cur->start >= multipart->raw_data.begin - st->start) {
+		if (cur->start >= part_offset) {
 			if (cb->cur_boundary) {
 				/* Check boundary */
 				msg_debug_mime("compare %L and %L (and %L)",
@@ -1423,6 +1461,9 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
 					st->nesting);
 		return RSPAMD_MIME_PARSE_NESTING;
+	}
+	if (!rspamd_mime_parser_check_part_limit(task, err)) {
+		return RSPAMD_MIME_PARSE_LIMIT;
 	}
 
 	part->part_number = MESSAGE_FIELD(task, parts)->len;
@@ -1582,6 +1623,21 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 			if (blen + 2 >= sizeof(lc_copy_buf)) {
 				g_free(lc_copy);
 			}
+			struct rspamd_mime_parser_runtime *root = st->root;
+
+			if (root->boundary_candidates >= max_boundary_candidates) {
+				if (!root->boundary_limit_reached) {
+					msg_warn_task("MIME boundary candidate limit of %ud is reached; "
+								  "ignoring the remaining candidates",
+								  max_boundary_candidates);
+					root->boundary_limit_reached = TRUE;
+					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				}
+
+				return 1;
+			}
+
+			root->boundary_candidates++;
 			g_array_append_val(st->boundaries, b);
 		}
 	}
@@ -1812,6 +1868,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		nst->pos = nst->start;
 		nst->task = st->task;
 		nst->nesting = st->nesting;
+		nst->root = st->root;
 		st->nesting++;
 
 		str.str = (char *) part->parsed_data.begin;
@@ -2020,6 +2077,14 @@ rspamd_mime_parse_task(struct rspamd_task *task, GError **err)
 	struct rspamd_mime_parser_runtime *st;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 
+	if (task->cfg->max_message > 0 && task->msg.len > task->cfg->max_message) {
+		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
+					"Message size exceeds configured maximum: %" G_GSIZE_FORMAT
+					" > %" G_GSIZE_FORMAT,
+					task->msg.len, task->cfg->max_message);
+		return RSPAMD_MIME_PARSE_LIMIT;
+	}
+
 	rspamd_mime_parser_init_shared(task->cfg);
 
 	if (++task->cfg->mime_parser_cfg->key_usages > max_key_usages) {
@@ -2035,6 +2100,7 @@ rspamd_mime_parse_task(struct rspamd_task *task, GError **err)
 	st->boundaries = g_array_sized_new(FALSE, FALSE,
 									   sizeof(struct rspamd_mime_boundary), 8);
 	st->task = task;
+	st->root = st;
 
 	if (st->pos == NULL) {
 		st->pos = task->msg.begin;

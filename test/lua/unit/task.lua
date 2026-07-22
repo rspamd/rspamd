@@ -189,6 +189,56 @@ Thank you,
     task:destroy()
   end)
 
+  test("MIME boundary candidates are bounded", function()
+    local epilogue = {}
+
+    for i = 1, 100001 do
+      epilogue[i] = '--not-the-boundary--\n'
+    end
+
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/mixed; boundary=REAL\n',
+      '\n',
+      '--REAL\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'legitimate body\n',
+      '--REAL--\n',
+      table.concat(epilogue),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_true(task:has_flag('broken_headers'),
+      "boundary candidate limit was not applied")
+    task:destroy()
+  end)
+
+  test("MIME part count is bounded", function()
+    local body_parts = {}
+
+    for i = 1, 10100 do
+      body_parts[i] = '--MANY\n\npart\n'
+    end
+
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/mixed; boundary=MANY\n',
+      '\n',
+      table.concat(body_parts),
+      '--MANY--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_true(task:has_flag('broken_headers'),
+      "MIME part limit was not applied")
+    assert_true(#task:get_parts() <= 10000,
+      string.format("too many MIME parts parsed: %d", #task:get_parts()))
+    task:destroy()
+  end)
+
   test("Part URLs are not deduplicated across MIME parts", function()
     local msg = table.concat {
       hdrs,

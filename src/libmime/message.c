@@ -1604,6 +1604,7 @@ rspamd_message_parse(struct rspamd_task *task)
 			}
 			break;
 		case RSPAMD_MIME_PARSE_NESTING:
+		case RSPAMD_MIME_PARSE_LIMIT:
 			msg_warn_task("cannot construct full mime from stream: %e", err);
 			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 			break;

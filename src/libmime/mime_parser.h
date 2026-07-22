@@ -42,6 +42,7 @@ enum rspamd_mime_parse_error {
 	RSPAMD_MIME_PARSE_FATAL,
 	RSPAMD_MIME_PARSE_NESTING,
 	RSPAMD_MIME_PARSE_NO_PART,
+	RSPAMD_MIME_PARSE_LIMIT,
 };
 
 enum rspamd_mime_parse_error rspamd_mime_parse_task(struct rspamd_task *task,
