@@ -1014,18 +1014,23 @@ rspamd_mime_part_is_ancestor(struct rspamd_mime_part *part,
 	return FALSE;
 }
 
+/* Total children visited when linking all alternative text parts of a task */
+static const unsigned int max_alt_search_iterations = 1000000;
+
 /*
  * Recursively search for a text part in a subtree.
  * - `root` is the multipart to search in
  * - `exclude` is the subtree to skip (the branch containing the original part)
  * - `want_html` TRUE means we want HTML part, FALSE means we want plain text
+ * - `budget` bounds the total number of children visited across all searches
  * - Returns the first matching text part, or NULL
  * - Stops recursion if we hit a message/rfc822 part
  */
 static struct rspamd_mime_text_part *
 rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
 									  struct rspamd_mime_part *exclude,
-									  gboolean want_html)
+									  gboolean want_html,
+									  unsigned int *budget)
 {
 	if (!root || !IS_PART_MULTIPART(root) || !root->specific.mp) {
 		return NULL;
@@ -1039,6 +1044,11 @@ rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
 
 	for (unsigned int i = 0; i < mp->children->len; i++) {
 		struct rspamd_mime_part *child = g_ptr_array_index(mp->children, i);
+
+		if (*budget == 0) {
+			return NULL;
+		}
+		(*budget)--;
 
 		/* Skip the excluded subtree */
 		if (exclude && rspamd_mime_part_is_ancestor(exclude, child)) {
@@ -1068,7 +1078,7 @@ rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
 		/* Recurse into multiparts */
 		if (IS_PART_MULTIPART(child)) {
 			struct rspamd_mime_text_part *found =
-				rspamd_mime_part_find_text_in_subtree(child, NULL, want_html);
+				rspamd_mime_part_find_text_in_subtree(child, NULL, want_html, budget);
 			if (found) {
 				return found;
 			}
@@ -1088,7 +1098,8 @@ rspamd_mime_part_find_text_in_subtree(struct rspamd_mime_part *root,
  * 4. Stop if we hit message/rfc822 (embedded message)
  */
 static struct rspamd_mime_text_part *
-rspamd_mime_text_part_find_alternative(struct rspamd_mime_text_part *text_part)
+rspamd_mime_text_part_find_alternative(struct rspamd_mime_text_part *text_part,
+									   unsigned int *budget)
 {
 	if (!text_part || !text_part->mime_part) {
 		return NULL;
@@ -1114,7 +1125,8 @@ rspamd_mime_text_part_find_alternative(struct rspamd_mime_text_part *text_part)
 	}
 
 	/* Search other branches for a text part of the opposite type */
-	return rspamd_mime_part_find_text_in_subtree(alt_parent, our_branch, !is_html);
+	return rspamd_mime_part_find_text_in_subtree(alt_parent, our_branch, !is_html,
+												 budget);
 }
 
 static enum rspamd_message_part_is_text_result
@@ -1977,9 +1989,21 @@ void rspamd_message_process(struct rspamd_task *task)
 	}
 
 	/* Compute alternative text parts for each text part */
+	unsigned int alt_budget = max_alt_search_iterations;
+
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
 	{
-		text_part->alt_text_part = rspamd_mime_text_part_find_alternative(text_part);
+		if (alt_budget == 0) {
+			msg_warn_task("alternative text parts linking limit of %ud iterations "
+						  "is reached; %ud of %ud text parts are not linked",
+						  max_alt_search_iterations,
+						  MESSAGE_FIELD(task, text_parts)->len - i,
+						  MESSAGE_FIELD(task, text_parts)->len);
+			break;
+		}
+
+		text_part->alt_text_part = rspamd_mime_text_part_find_alternative(text_part,
+																		  &alt_budget);
 	}
 
 	/* Calculate distance for alternative parts */

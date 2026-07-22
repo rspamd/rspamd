@@ -620,6 +620,8 @@ public:
 
 	void word2vec(std::string_view word, std::vector<std::int32_t> &ngrams) const
 	{
+		/* No real dictionary word is that long; bound OOV subword expansion */
+		static constexpr std::size_t max_oov_word_len = 1024;
 		auto wid = dict.find(word);
 
 		if (wid >= 0) {
@@ -636,7 +638,7 @@ public:
 		}
 		else {
 			/* OOV: compute subwords on the fly */
-			if (args.maxn > 0) {
+			if (args.maxn > 0 && word.size() <= max_oov_word_len) {
 				std::string wrapped = "<" + std::string(word) + ">";
 				dict.compute_subwords(wrapped, ngrams);
 			}

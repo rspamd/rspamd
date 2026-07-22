@@ -280,6 +280,49 @@ Thank you,
     task:destroy()
   end)
 
+  test("Alternative text part linking is bounded", function()
+    -- One multipart/alternative with many HTML branches and a single plain
+    -- branch at the end: every HTML part scans almost all siblings to find
+    -- the plain one, so unbounded linking is quadratic in the part count.
+    local nparts = 9000
+    local body_parts = {}
+
+    for i = 1, nparts do
+      body_parts[i] = '--ALT\nContent-Type: text/html\n\n<b>x</b>\n'
+    end
+
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/alternative; boundary=ALT\n',
+      '\n',
+      table.concat(body_parts),
+      '--ALT\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'plain text\n',
+      '--ALT--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local tp = task:get_text_parts()
+    assert_equal(#tp, nparts + 1,
+      string.format("expected %d text parts, got %d", nparts + 1, #tp))
+
+    local linked = 0
+    for _, p in ipairs(tp) do
+      if p:get_alt_part() then
+        linked = linked + 1
+      end
+    end
+    -- Linking works while the budget lasts, then it is cut off; without the
+    -- bound every HTML part would be linked at a quadratic cost
+    assert_true(linked >= 1, "no text part has an alternative linked")
+    assert_true(linked < nparts / 2,
+      string.format("alternative linking was not bounded: %d parts linked", linked))
+    task:destroy()
+  end)
+
   test("MIME header count is bounded", function()
     local msg = string.rep('X:\n', 100001) .. '\nbody\n'
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)
