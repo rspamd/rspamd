@@ -446,6 +446,7 @@ struct rspamd_config {
 	double map_timeout;               /**< maps watch timeout									*/
 	double map_file_watch_multiplier; /**< multiplier for watch timeout when maps are files	*/
 	char *maps_cache_dir;             /**< where to save HTTP cached data						*/
+	gsize max_map_size;               /**< maximum size of a map, compressed or expanded		*/
 
 	double monitored_interval;  /**< interval between monitored checks					*/
 	gboolean disable_monitored; /**< disable monitoring completely						*/

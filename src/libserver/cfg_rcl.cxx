@@ -2075,6 +2075,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Directory to save maps cached data (default: $DBDIR)");
 		rspamd_rcl_add_default_handler(sub,
+									   "max_map_size",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, max_map_size),
+									   RSPAMD_CL_FLAG_INT_SIZE,
+									   "Maximum size of a map, compressed or expanded (256Mb by default, 0 to disable the limit)");
+		rspamd_rcl_add_default_handler(sub,
 									   "monitoring_watch_interval",
 									   rspamd_rcl_parse_struct_time,
 									   G_STRUCT_OFFSET(struct rspamd_config, monitored_interval),

@@ -87,6 +87,7 @@
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 60.0 * 5
 #define DEFAULT_MAP_FILE_WATCH_MULTIPLIER 1
+#define DEFAULT_MAX_MAP_SIZE (256 * 1024 * 1024)
 #define DEFAULT_MIN_WORD 0
 #define DEFAULT_MAX_WORD 40
 #define DEFAULT_WORDS_DECAY 600
@@ -291,6 +292,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 	cfg->map_file_watch_multiplier = DEFAULT_MAP_FILE_WATCH_MULTIPLIER;
+	cfg->max_map_size = DEFAULT_MAX_MAP_SIZE;
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_flags = RSPAMD_LOG_FLAG_DEFAULT;

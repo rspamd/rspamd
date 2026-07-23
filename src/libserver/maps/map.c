@@ -586,6 +586,16 @@ rspamd_map_payload_is_zstd(const unsigned char *p, gsize len)
 	return FALSE;
 }
 
+static inline gsize
+rspamd_map_effective_max_size(struct http_callback_data *cbd)
+{
+	if (cbd->data->max_size > 0) {
+		return cbd->data->max_size;
+	}
+
+	return cbd->map->cfg ? cbd->map->cfg->max_map_size : 0;
+}
+
 static void
 rspamd_map_try_load_secretbox_key(struct rspamd_config *cfg,
 								  struct rspamd_map_backend *bk)
@@ -793,9 +803,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			ZSTD_inBuffer zin;
 			ZSTD_outBuffer zout;
 			gsize outlen, r;
-
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			gsize max_size = rspamd_map_effective_max_size(cbd);
 
 			zin.pos = 0;
 			zin.src = payload;
@@ -804,6 +812,21 @@ http_map_finish(struct rspamd_http_connection *conn,
 			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
 				outlen = ZSTD_DStreamOutSize();
 			}
+			else if (max_size > 0 && outlen > max_size) {
+				msg_err_map("%s(%s): declared decompressed size %z exceeds max_map_size %z",
+							cbd->bk->uri,
+							rspamd_inet_address_to_string_pretty(cbd->addr),
+							outlen, max_size);
+				if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
+					rspamd_explicit_memzero(payload, payload_len);
+					g_free(payload);
+				}
+				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				goto err;
+			}
+
+			zstream = ZSTD_createDStream();
+			ZSTD_initDStream(zstream);
 
 			final_out = g_malloc(outlen);
 
@@ -831,7 +854,27 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
+					if (max_size > 0 && zout.size >= max_size) {
+						msg_err_map("%s(%s): decompressed data exceeds max_map_size %z",
+									cbd->bk->uri,
+									rspamd_inet_address_to_string_pretty(cbd->addr),
+									max_size);
+						ZSTD_freeDStream(zstream);
+						g_free(final_out);
+						if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
+							rspamd_explicit_memzero(payload, payload_len);
+							g_free(payload);
+						}
+						MAP_RELEASE(cbd->shmem_data, "shmem_data");
+						goto err;
+					}
+
 					zout.size = zout.size * 2 + 1.0;
+
+					if (max_size > 0 && zout.size > max_size) {
+						zout.size = max_size;
+					}
+
 					final_out = g_realloc(zout.dst, zout.size);
 					zout.dst = final_out;
 				}
@@ -1751,6 +1794,11 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 													  cbd->addr);
 
 		if (cbd->conn != NULL) {
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+
+			if (max_size > 0) {
+				rspamd_http_connection_set_max_size(cbd->conn, max_size);
+			}
 			/* Apply optional staged timeouts and keepalive tuning */
 			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
 				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
@@ -2481,6 +2529,11 @@ check:
 			addr);
 
 		if (cbd->conn != NULL) {
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+
+			if (max_size > 0) {
+				rspamd_http_connection_set_max_size(cbd->conn, max_size);
+			}
 			/* Apply optional staged timeouts and keepalive tuning */
 			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
 				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
@@ -3437,6 +3490,9 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 				opt = ucl_object_lookup_any(src,
 											"max_reuse", "max-reuse", "keepalive_max_reuse", NULL);
 				if (opt) hdata->max_reuse = (unsigned int) ucl_object_toint(opt);
+				opt = ucl_object_lookup_any(src,
+											"max_size", "max-size", NULL);
+				if (opt) hdata->max_size = (gsize) ucl_object_toint(opt);
 			}
 		}
 
