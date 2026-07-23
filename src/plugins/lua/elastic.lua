@@ -635,6 +635,7 @@ local function get_general_metadata(task)
   local user = task:get_user()
   r.rspamd_server = rspamd_hostname or empty
   r.digest = task:get_digest() or empty
+  r.size = task:get_size() or 0
 
   local has_pre_result, _, _, pre_result_module = task:has_pre_result()
   r.action_forced = has_pre_result and (pre_result_module or 'unknown module') or 'no force'
