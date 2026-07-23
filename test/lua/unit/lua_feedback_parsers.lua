@@ -243,6 +243,112 @@ context("Lua feedback parsers - DSN/ARF on synthetic tasks", function()
     task:destroy()
   end)
 
+  test("parse_arf enriches a sparse Microsoft JMRP report from original headers", function()
+    -- JMRP ships a feedback-report block with only Feedback-Type/User-Agent/
+    -- Version and puts the useful data in a text/rfc822-headers part.
+    local message = "Return-Path: <staff@hotmail.com>\r\n" ..
+        "From: staff@hotmail.com\r\n" ..
+        "To: fbl@example.org\r\n" ..
+        "Subject: complaint\r\n" ..
+        "Date: Thu, 23 Jul 2026 10:00:00 +0000\r\n" ..
+        "Message-ID: <jmrp-001@hotmail.com>\r\n" ..
+        "MIME-Version: 1.0\r\n" ..
+        "Content-Type: multipart/report; report-type=feedback-report; boundary=\"bnd2\"\r\n" ..
+        "\r\n" ..
+        "--bnd2\r\n" ..
+        "Content-Type: text/plain; charset=us-ascii\r\n" ..
+        "\r\n" ..
+        "This is an abuse report from JMRP.\r\n" ..
+        "\r\n" ..
+        "--bnd2\r\n" ..
+        "Content-Type: message/feedback-report\r\n" ..
+        "\r\n" ..
+        "Feedback-Type: abuse\r\n" ..
+        "User-Agent: JMRP/1.0\r\n" ..
+        "Version: 1\r\n" ..
+        "\r\n" ..
+        "--bnd2\r\n" ..
+        "Content-Type: text/rfc822-headers\r\n" ..
+        "\r\n" ..
+        "Return-Path: <bounce@sender.example>\r\n" ..
+        "Delivered-To: victim@hotmail.com\r\n" ..
+        "Received: from mail.sender.example (mail.sender.example [203.0.113.9])\r\n" ..
+        " by mx.hotmail.com with ESMTPS id abc123;\r\n" ..
+        " Thu, 23 Jul 2026 09:58:12 +0000\r\n" ..
+        "Received-SPF: Pass (protection.outlook.com: domain of sender.example\r\n" ..
+        " designates 203.0.113.9 as permitted sender) client-ip=203.0.113.9;\r\n" ..
+        " helo=mail.sender.example;\r\n" ..
+        "From: newsletter@sender.example\r\n" ..
+        "To: victim@hotmail.com\r\n" ..
+        "Subject: Special offer\r\n" ..
+        "Date: Thu, 23 Jul 2026 09:58:00 +0000\r\n" ..
+        "Message-ID: <orig-jmrp-001@sender.example>\r\n" ..
+        "\r\n" ..
+        "--bnd2--\r\n"
+
+    local task = load_task(message)
+    assert_not_nil(task, "failed to load JMRP message")
+    local arf = lua_feedback_parsers.parse_arf(task)
+    assert_not_nil(arf)
+    assert_equal("abuse", arf.feedback_type)
+    assert_equal("JMRP/1.0", arf.user_agent)
+    -- Source-IP recovered from Received-SPF client-ip
+    assert_equal("203.0.113.9", arf.source_ip)
+    assert_equal("received-spf", arf.derived.source_ip)
+    -- Arrival-Date recovered from the topmost Received header timestamp
+    assert_equal("Thu, 23 Jul 2026 09:58:12 +0000", arf.arrival_date)
+    assert_equal("received", arf.derived.arrival_date)
+    -- Envelope addresses recovered from Return-Path / Delivered-To
+    assert_equal("bounce@sender.example", arf.original_mail_from)
+    assert_equal("return-path", arf.derived.original_mail_from)
+    assert_equal("victim@hotmail.com", arf.original_rcpt_to)
+    assert_equal("delivered-to", arf.derived.original_rcpt_to)
+    -- Reported domain falls back to the envelope-from domain
+    assert_equal("sender.example", arf.reported_domain)
+    assert_not_nil(arf.original_message)
+    assert_equal("orig-jmrp-001@sender.example", arf.original_message.message_id)
+    task:destroy()
+  end)
+
+  test("parse_arf source-ip fallback prefers a public IP in the Received chain", function()
+    -- No Received-SPF or X-Originating-IP: the parser must walk the Received
+    -- chain and skip the internal hop in favour of the public sender IP.
+    local message = "From: staff@hotmail.com\r\n" ..
+        "To: fbl@example.org\r\n" ..
+        "Subject: complaint\r\n" ..
+        "MIME-Version: 1.0\r\n" ..
+        "Content-Type: multipart/report; report-type=feedback-report; boundary=\"bnd3\"\r\n" ..
+        "\r\n" ..
+        "--bnd3\r\n" ..
+        "Content-Type: message/feedback-report\r\n" ..
+        "\r\n" ..
+        "Feedback-Type: abuse\r\n" ..
+        "User-Agent: JMRP/1.0\r\n" ..
+        "Version: 1\r\n" ..
+        "\r\n" ..
+        "--bnd3\r\n" ..
+        "Content-Type: text/rfc822-headers\r\n" ..
+        "\r\n" ..
+        "Received: from internal.hotmail.com (internal.hotmail.com [10.0.0.5])\r\n" ..
+        " by store.hotmail.com; Thu, 23 Jul 2026 10:01:00 +0000\r\n" ..
+        "Received: from mail.sender.example (mail.sender.example [198.51.100.7])\r\n" ..
+        " by mx.hotmail.com; Thu, 23 Jul 2026 10:00:30 +0000\r\n" ..
+        "From: newsletter@sender.example\r\n" ..
+        "Message-ID: <orig-jmrp-002@sender.example>\r\n" ..
+        "\r\n" ..
+        "--bnd3--\r\n"
+
+    local task = load_task(message)
+    assert_not_nil(task, "failed to load JMRP message")
+    local arf = lua_feedback_parsers.parse_arf(task)
+    assert_not_nil(arf)
+    assert_equal("198.51.100.7", arf.source_ip)
+    assert_equal("received", arf.derived.source_ip)
+    -- Arrival date is the topmost (most recent) Received hop
+    assert_equal("Thu, 23 Jul 2026 10:01:00 +0000", arf.arrival_date)
+    task:destroy()
+  end)
+
   test("parse_arf returns nil when report-type is not feedback-report", function()
     local message = "From: a@example.com\r\n" ..
         "To: b@example.com\r\n" ..
