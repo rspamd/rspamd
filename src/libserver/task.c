@@ -669,6 +669,14 @@ rspamd_task_load_message(struct rspamd_task *task,
 			if ((outlen = ZSTD_getDecompressedSize(task->msg.begin, task->msg.len)) == 0) {
 				outlen = ZSTD_DStreamOutSize();
 			}
+			else if (task->cfg->max_message > 0 && outlen > task->cfg->max_message) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"decompressed message exceeds max_message limit: %lu > %lu",
+							(unsigned long) outlen, (unsigned long) task->cfg->max_message);
+
+				return FALSE;
+			}
 
 			out = g_malloc(outlen);
 			zout.dst = out;
@@ -682,12 +690,24 @@ rspamd_task_load_message(struct rspamd_task *task,
 					g_set_error(&task->err, rspamd_task_quark(),
 								RSPAMD_PROTOCOL_ERROR,
 								"Decompression error: %s", ZSTD_getErrorName(r));
+					g_free(zout.dst);
 
 					return FALSE;
 				}
 
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
+					if (task->cfg->max_message > 0 &&
+						zout.size > task->cfg->max_message) {
+						g_set_error(&task->err, rspamd_task_quark(),
+									RSPAMD_PROTOCOL_ERROR,
+									"decompressed message exceeds max_message limit: %lu > %lu",
+									(unsigned long) zout.size, (unsigned long) task->cfg->max_message);
+						g_free(zout.dst);
+
+						return FALSE;
+					}
+
 					zout.size = zout.size * 2 + 1;
 					zout.dst = g_realloc(zout.dst, zout.size);
 				}
