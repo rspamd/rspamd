@@ -1687,10 +1687,17 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				for (auto i = 0; i < substr.size(); i++) {
 					auto t = substr[i];
 					if (g_ascii_isdigit(t)) {
+						/* Parse the digit run starting at this position */
+						auto digit_end = i;
+						while (digit_end < substr.size() &&
+							   g_ascii_isdigit(substr[digit_end])) {
+							digit_end++;
+						}
 						unsigned long val;
-						rspamd_strtoul(substr.data(),
-									   substr.size(), &val);
-						img->height = val;
+						if (rspamd_strtoul(substr.data() + i,
+										   digit_end - i, &val)) {
+							img->height = val;
+						}
 						break;
 					}
 					else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
@@ -1710,10 +1717,17 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				for (auto i = 0; i < substr.size(); i++) {
 					auto t = substr[i];
 					if (g_ascii_isdigit(t)) {
+						/* Parse the digit run starting at this position */
+						auto digit_end = i;
+						while (digit_end < substr.size() &&
+							   g_ascii_isdigit(substr[digit_end])) {
+							digit_end++;
+						}
 						unsigned long val;
-						rspamd_strtoul(substr.data(),
-									   substr.size(), &val);
-						img->width = val;
+						if (rspamd_strtoul(substr.data() + i,
+										   digit_end - i, &val)) {
+							img->width = val;
+						}
 						break;
 					}
 					else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
