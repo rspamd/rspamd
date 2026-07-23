@@ -59,7 +59,8 @@ struct rspamd_content_type {
 	rspamd_ftok_t boundary;
 	rspamd_ftok_t orig_boundary;
 	enum rspamd_content_type_flags flags;
-	GHashTable *attrs; /* Can be empty */
+	unsigned int nparams; /* Number of parameters added (saturates at the cap) */
+	GHashTable *attrs;    /* Can be empty */
 };
 
 enum rspamd_content_disposition_type {
@@ -72,7 +73,8 @@ struct rspamd_content_disposition {
 	char *lc_data;
 	enum rspamd_content_disposition_type type;
 	rspamd_ftok_t filename;
-	GHashTable *attrs; /* Can be empty */
+	unsigned int nparams; /* Number of parameters added (saturates at the cap) */
+	GHashTable *attrs;    /* Can be empty */
 };
 
 /**

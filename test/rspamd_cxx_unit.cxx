@@ -37,6 +37,7 @@
 #include "rspamd_cxx_unit_upstream_latency.hxx"
 #include "rspamd_cxx_unit_upstream_srv.hxx"
 #include "rspamd_cxx_unit_multipart.hxx"
+#include "rspamd_cxx_unit_content_type.hxx"
 #include "rspamd_cxx_unit_content_negotiation.hxx"
 #include "rspamd_cxx_unit_settings_merge.hxx"
 #include "rspamd_cxx_unit_fpconv.hxx"
