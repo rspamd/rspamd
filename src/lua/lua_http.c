@@ -304,6 +304,29 @@ lua_http_push_error(struct lua_http_cbdata *cbd, const char *err)
 	struct lua_callback_state lcbd;
 	lua_State *L;
 
+	if (cbd->cbref == -1) {
+		/* Coroutine-style call: resume the yielded thread with (err, nil) */
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+
+			L = cbd->thread->lua_state;
+			lua_pushstring(L, err);
+			lua_pushnil(L);
+
+			if (cbd->item) {
+				rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+			}
+
+			lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+		}
+		else {
+			msg_info("lost HTTP error for %s in coroutines mess: %s",
+					 cbd->host ? cbd->host : "unknown host", err);
+		}
+
+		return;
+	}
+
 	lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &lcbd);
 
 	L = lcbd.L;
@@ -975,6 +998,14 @@ lua_http_request(lua_State *L)
 		msg = rspamd_http_message_from_url(url);
 		if (msg == NULL) {
 			msg_err_task_check("cannot create HTTP message from url %s", url);
+
+			if (cbref == -1) {
+				/* Coroutine callers expect (err, response), not a bare false */
+				lua_pushstring(L, "cannot create HTTP message from url");
+				lua_pushnil(L);
+				return 2;
+			}
+
 			lua_pushboolean(L, FALSE);
 			return 1;
 		}
@@ -1243,8 +1274,6 @@ lua_http_request(lua_State *L)
 	}
 
 	if (session && rspamd_session_blocked(session)) {
-		lua_pushboolean(L, FALSE);
-
 		g_free(auth);
 		rspamd_http_message_unref(msg);
 		if (body) {
@@ -1253,6 +1282,16 @@ lua_http_request(lua_State *L)
 		if (local_kp) {
 			rspamd_keypair_unref(local_kp);
 		}
+
+		if (cbref == -1) {
+			/* Coroutine callers expect (err, response), not a bare false */
+			lua_pushstring(L, "session is terminating");
+			lua_pushnil(L);
+
+			return 2;
+		}
+
+		lua_pushboolean(L, FALSE);
 
 		return 1;
 	}
@@ -1406,6 +1445,15 @@ lua_http_request(lua_State *L)
 			}
 
 			REF_RELEASE(cbd);
+
+			if (cbref == -1) {
+				/* Coroutine callers expect (err, response), not a bare false */
+				lua_pushstring(L, "cannot make HTTP connection");
+				lua_pushnil(L);
+
+				return 2;
+			}
+
 			lua_pushboolean(L, FALSE);
 
 			return 1;
@@ -1431,6 +1479,15 @@ lua_http_request(lua_State *L)
 				}
 
 				REF_RELEASE(cbd);
+
+				if (cbref == -1) {
+					/* Coroutine callers expect (err, response), not a bare false */
+					lua_pushstring(L, "cannot make DNS request");
+					lua_pushnil(L);
+
+					return 2;
+				}
+
 				lua_pushboolean(L, FALSE);
 
 				return 1;
@@ -1449,6 +1506,15 @@ lua_http_request(lua_State *L)
 				}
 
 				REF_RELEASE(cbd);
+
+				if (cbref == -1) {
+					/* Coroutine callers expect (err, response), not a bare false */
+					lua_pushstring(L, "cannot make DNS request");
+					lua_pushnil(L);
+
+					return 2;
+				}
+
 				lua_pushboolean(L, FALSE);
 
 				return 1;
