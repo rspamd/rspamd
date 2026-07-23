@@ -143,6 +143,26 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 INIT_LOG_MODULE(html)
 
 /*
+ * The only way to create a tag: all insertions into hc->all_tags must go
+ * through this function to enforce the max_tags limit
+ */
+static auto
+html_tag_alloc(struct html_content *hc, int flags = 0) -> html_tag *
+{
+	if (hc->all_tags.size() >= max_tags) {
+		hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+
+		return nullptr;
+	}
+
+	hc->all_tags.emplace_back(std::make_unique<html_tag>());
+	auto *ntag = hc->all_tags.back().get();
+	ntag->flags = flags;
+
+	return ntag;
+}
+
+/*
  * This function is expected to be called on a closing tag to fill up all tags
  * and return the current parent (meaning unclosed) tag
  */
@@ -189,20 +209,22 @@ html_check_balance(struct html_content *hc,
 		}
 
 		/*
-		 * If we have found a closing pair, then we need to close all tags and
-		 * return the top-most tag
+		 * If we have found a closing pair, then we need to close all tags
+		 * up to and including that pair, and return its parent as the new
+		 * current (unclosed) tag
 		 */
 		if (found_pair) {
 			for (it = tag->parent; it != nullptr; it = it->parent) {
+				auto is_pair = it->id == tag->id && !(it->flags & FL_CLOSED);
 				it->flags |= FL_CLOSED;
 				/* Insert a virtual closing tag for all tags that are not closed */
 				calculate_content_length(it);
-				if (it->id == tag->id && !(it->flags & FL_CLOSED)) {
+				if (is_pair) {
 					break;
 				}
 			}
 
-			return it;
+			return it ? it->parent : nullptr;
 		}
 		else {
 			/*
@@ -243,10 +265,13 @@ html_check_balance(struct html_content *hc,
 		 */
 
 		if (hc->all_tags.empty()) {
-			hc->all_tags.push_back(std::make_unique<html_tag>());
-			auto *vtag = hc->all_tags.back().get();
+			auto *vtag = html_tag_alloc(hc, FL_VIRTUAL);
+
+			if (vtag == nullptr) {
+				return nullptr;
+			}
+
 			vtag->id = Tag_HTML;
-			vtag->flags = FL_VIRTUAL;
 			vtag->tag_start = 0;
 			vtag->content_offset = 0;
 			calculate_content_length(vtag);
@@ -2180,23 +2205,16 @@ auto html_process_input(struct rspamd_task *task,
 	}
 
 	auto new_tag = [&](int flags = 0) -> struct html_tag * {
-		if (hc->all_tags.size() > rspamd::html::max_tags) {
-			hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+		auto *ntag = html_tag_alloc(hc, flags);
 
+		if (ntag == nullptr) {
 			return nullptr;
 		}
 
-		hc->all_tags.emplace_back(std::make_unique<html_tag>());
-		auto *ntag = hc->all_tags.back().get();
 		ntag->tag_start = c - start;
-		ntag->flags = flags;
 
 		if (cur_tag && !(cur_tag->flags & (CM_EMPTY | FL_CLOSED)) && cur_tag != &cur_closing_tag) {
 			parent_tag = cur_tag;
-		}
-
-		if (flags & FL_XML) {
-			return ntag;
 		}
 
 		return ntag;
@@ -2326,17 +2344,18 @@ auto html_process_input(struct rspamd_task *task,
 				}
 				else {
 					/* Insert a fake html tag */
-					hc->all_tags.emplace_back(std::make_unique<html_tag>());
-					auto *top_tag = hc->all_tags.back().get();
-					top_tag->tag_start = 0;
-					top_tag->flags = FL_VIRTUAL;
-					top_tag->id = Tag_HTML;
-					top_tag->content_offset = 0;
-					top_tag->children.push_back(cur_tag);
-					cur_tag->parent = top_tag;
-					g_assert(cur_tag->parent != cur_tag);
-					hc->root_tag = top_tag;
-					parent_tag = top_tag;
+					auto *top_tag = html_tag_alloc(hc, FL_VIRTUAL);
+
+					if (top_tag) {
+						top_tag->tag_start = 0;
+						top_tag->id = Tag_HTML;
+						top_tag->content_offset = 0;
+						top_tag->children.push_back(cur_tag);
+						cur_tag->parent = top_tag;
+						g_assert(cur_tag->parent != cur_tag);
+						hc->root_tag = top_tag;
+						parent_tag = top_tag;
+					}
 				}
 			}
 		}
@@ -2995,16 +3014,20 @@ auto html_process_input(struct rspamd_task *task,
 						cur_opening_tag = hc->root_tag;
 					}
 
-					auto &&vtag = std::make_unique<html_tag>();
+					auto *vtag = html_tag_alloc(hc, FL_VIRTUAL | FL_CLOSED | cur_tag->flags);
+
+					if (vtag == nullptr) {
+						state = tags_limit_overflow;
+						break;
+					}
+
 					vtag->id = cur_tag->id;
-					vtag->flags = FL_VIRTUAL | FL_CLOSED | cur_tag->flags;
 					vtag->tag_start = cur_tag->closing.start;
 					vtag->content_offset = p - start + 1;
 					vtag->closing = cur_tag->closing;
 					vtag->parent = cur_opening_tag;
 					g_assert(vtag->parent != &cur_closing_tag);
-					cur_opening_tag->children.push_back(vtag.get());
-					hc->all_tags.emplace_back(std::move(vtag));
+					cur_opening_tag->children.push_back(vtag);
 					cur_tag = cur_opening_tag;
 					parent_tag = cur_tag->parent;
 					g_assert(cur_tag->parent != &cur_closing_tag);
