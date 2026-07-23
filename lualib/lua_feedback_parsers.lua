@@ -202,6 +202,11 @@ end
 
 -- Extract the standard subset of original-message headers we care about from
 -- the content of a message/rfc822 (or text/rfc822-headers) sub-part.
+--
+-- Returns (out, headers, headers_multi) where `out` is the parsed subset and
+-- `headers`/`headers_multi` are the raw single/multi field maps. Callers may
+-- use the raw maps to enrich a sparse report (see the JMRP handling in
+-- parse_arf) without those raw maps leaking into the returned structure.
 local function extract_original_message(part)
   local content = part:get_content()
   if not content then
@@ -215,7 +220,7 @@ local function extract_original_message(part)
   if not lines then
     return nil
   end
-  local headers = parse_field_block(lines, 1)
+  local headers, headers_multi = parse_field_block(lines, 1)
   if not headers or next(headers) == nil then
     return nil
   end
@@ -229,7 +234,203 @@ local function extract_original_message(part)
   if not (out.message_id or out.from or out.to or out.subject or out.date) then
     return nil
   end
-  return out
+  return out, headers, headers_multi
+end
+
+-- ----------------------------------------------------------------------------
+-- Enrichment helpers for sparse feedback reports
+--
+-- Some providers (most notably Microsoft's JMRP, but also a few consumer
+-- FBLs) ship a `message/feedback-report` block that only carries
+-- `Feedback-Type`, `User-Agent` and `Version`, omitting the useful metadata
+-- (Source-IP, Arrival-Date, Original-Mail-From, Original-Rcpt-To). All of
+-- that data still lives in the embedded original-message headers, so we
+-- recover it from there when the report itself is silent.
+-- ----------------------------------------------------------------------------
+
+-- Validate a candidate IP string, tolerating surrounding [], (), an `IPv6:`
+-- tag and a trailing `:port` on IPv4. Returns (canonical_string, ip_object)
+-- or nil.
+local function validate_ip(candidate)
+  if not candidate then
+    return nil
+  end
+  local rspamd_ip = require 'rspamd_ip'
+  local s = str_trim(candidate)
+  s = s:gsub('^[%[%(]', ''):gsub('[%]%)]$', '')
+  s = s:gsub('^[Ii][Pp][Vv]6:', '')
+  -- Strip a trailing :port for a bare IPv4 literal (a.b.c.d:NNN)
+  local v4 = s:match('^(%d+%.%d+%.%d+%.%d+)')
+  if v4 then
+    s = v4
+  end
+  local ip = rspamd_ip.from_string(s)
+  if ip and ip:is_valid() then
+    return ip:to_string(), ip
+  end
+  return nil
+end
+
+-- Classify an IP as non-routable (loopback, RFC1918/ULA private, CGNAT or
+-- link-local). `ip:is_local()` only covers loopback and IPv6 link/site-local,
+-- so we extend it to the private ranges that show up as internal Received
+-- hops. Used to prefer a public sender IP when walking a Received chain.
+local function is_nonpublic_ip(ipobj)
+  if ipobj:is_local() then
+    return true
+  end
+  local ver = ipobj:get_version()
+  if ver == 4 then
+    local o1, o2 = ipobj:to_string():match('^(%d+)%.(%d+)%.')
+    o1, o2 = tonumber(o1), tonumber(o2)
+    if not o1 then
+      return false
+    end
+    if o1 == 10 or o1 == 127 or o1 == 0 then
+      return true
+    end
+    if o1 == 192 and o2 == 168 then
+      return true
+    end
+    if o1 == 172 and o2 >= 16 and o2 <= 31 then
+      return true
+    end
+    if o1 == 169 and o2 == 254 then
+      return true
+    end
+    if o1 == 100 and o2 >= 64 and o2 <= 127 then
+      return true
+    end
+    return false
+  elseif ver == 6 then
+    local s = ipobj:to_string():lower()
+    -- fc00::/7 (ULA) or fe80::/10 (link-local)
+    if s:match('^f[cd]') or s:match('^fe[89ab]') then
+      return true
+    end
+    return false
+  end
+  return false
+end
+
+-- Derive the sender (source) IP from the original-message headers.
+-- Priority: X-Originating-IP, then the client-ip of Received-SPF /
+-- Authentication-Results, then the first *public* bracketed IP found while
+-- walking the Received chain top-to-bottom (falling back to the first valid
+-- IP if every hop is private). Returns (ip_string, provenance) or nil.
+local function derive_source_ip(headers, headers_multi)
+  local xoip = headers['x-originating-ip']
+  if xoip then
+    local ip = validate_ip(xoip)
+    if ip then
+      return ip, 'x-originating-ip'
+    end
+  end
+
+  local spf = headers['received-spf']
+  if spf then
+    local c = spf:match('[Cc]lient%-[Ii][Pp]=([^;%s]+)')
+    local ip = validate_ip(c)
+    if ip then
+      return ip, 'received-spf'
+    end
+  end
+
+  local ar = headers['authentication-results']
+  if ar then
+    local c = ar:match('[Cc]lient%-[Ii][Pp]=([^;%s]+)') or
+        ar:match('smtp%.remote%-ip=([^;%s]+)') or
+        ar:match('[Ss]ender IP is ([%x%.:]+)')
+    local ip = validate_ip(c)
+    if ip then
+      return ip, 'authentication-results'
+    end
+  end
+
+  local recv = headers_multi and headers_multi['received']
+  if recv then
+    local first_valid
+    for _, hdr in ipairs(recv) do
+      for cand in hdr:gmatch('%[([^%]]+)%]') do
+        local ipstr, ipobj = validate_ip(cand)
+        if ipstr then
+          if not is_nonpublic_ip(ipobj) then
+            return ipstr, 'received'
+          end
+          first_valid = first_valid or ipstr
+        end
+      end
+      for cand in hdr:gmatch('%(([^%)]+)%)') do
+        local ipstr, ipobj = validate_ip(cand)
+        if ipstr then
+          if not is_nonpublic_ip(ipobj) then
+            return ipstr, 'received'
+          end
+          first_valid = first_valid or ipstr
+        end
+      end
+    end
+    if first_valid then
+      return first_valid, 'received'
+    end
+  end
+
+  return nil
+end
+
+-- Derive the arrival (receive) date from the original-message headers: the
+-- timestamp of the topmost Received header if present, otherwise the Date
+-- header. Returns (date_string, provenance) or nil.
+local function derive_arrival_date(headers, headers_multi)
+  local recv = headers_multi and headers_multi['received']
+  if recv and recv[1] then
+    -- The date is the clause following the last ';' of a Received header.
+    local d = recv[1]:match('.*;%s*(.+)$')
+    if d then
+      d = str_trim(d)
+      if d ~= '' then
+        return d, 'received'
+      end
+    end
+  end
+  if headers['date'] and headers['date'] ~= '' then
+    return headers['date'], 'date'
+  end
+  return nil
+end
+
+-- Derive the envelope sender from the original-message headers: Return-Path
+-- is authoritative in stored headers; otherwise fall back to the smtp.mailfrom
+-- reported by Authentication-Results. Returns (addr, provenance) or nil.
+local function derive_mail_from(headers)
+  local rp = strip_angles(headers['return-path'])
+  if rp and rp ~= '' then
+    return rp, 'return-path'
+  end
+  local ar = headers['authentication-results']
+  if ar then
+    local mf = ar:match('smtp%.mailfrom=([^;%s]+)')
+    if mf and mf ~= '' then
+      return mf, 'authentication-results'
+    end
+  end
+  return nil
+end
+
+-- Derive the envelope recipient from the original-message headers, trying the
+-- usual delivery-agent headers in turn. Returns (addr, provenance) or nil.
+local function derive_rcpt_to(headers)
+  local candidates = {
+    'delivered-to', 'x-delivered-to', 'envelope-to',
+    'x-envelope-to', 'x-original-to',
+  }
+  for _, h in ipairs(candidates) do
+    local v = strip_angles(headers[h])
+    if v and v ~= '' then
+      return v, h
+    end
+  end
+  return nil
 end
 
 -- ----------------------------------------------------------------------------
@@ -329,6 +530,18 @@ end
 -- the feedback-report body is unparseable, a table is still returned (with
 -- mostly-nil fields and `reported_uri = {}`).
 --
+-- Sparse-report enrichment: some providers (notably Microsoft's JMRP) emit a
+-- feedback-report block containing only `Feedback-Type`, `User-Agent` and
+-- `Version`, leaving `Source-IP`, `Arrival-Date`, `Original-Mail-From` and
+-- `Original-Rcpt-To` empty and shipping the useful data only as the embedded
+-- original-message headers. For any of those four fields that the report
+-- itself did not provide, this function recovers a value from the original
+-- headers (Received-SPF / Received / X-Originating-IP for the IP; the topmost
+-- Received or Date for the arrival date; Return-Path / Delivered-To for the
+-- envelope addresses). When one or more fields are recovered this way, a
+-- `derived` sub-table maps each recovered field name to the header it came
+-- from, so callers can distinguish reported values from inferred ones.
+--
 -- @param {rspamd_task} task message to inspect
 -- @return {table|nil} parsed ARF, see module doc for the shape
 --]]
@@ -373,7 +586,7 @@ function exports.parse_arf(task)
       result.user_agent = f['user-agent']
       result.original_mail_from = strip_angles(f['original-mail-from'])
       result.original_rcpt_to = strip_angles(f['original-rcpt-to'])
-      result.arrival_date = f['arrival-date']
+      result.arrival_date = f['arrival-date'] or f['received-date']
       result.source_ip = f['source-ip']
       result.reported_domain = f['reported-domain']
       result.authentication_results = f['authentication-results']
@@ -398,13 +611,67 @@ function exports.parse_arf(task)
 
   local orig_part = find_original_message_part(task)
   if orig_part then
-    local om = extract_original_message(orig_part)
+    local om, oheaders, oheaders_multi = extract_original_message(orig_part)
     if om then
       -- RFC 5965 consumers typically only care about Message-ID and From.
       result.original_message = {
         message_id = om.message_id,
         from = om.from,
       }
+    end
+
+    -- Enrich sparse reports (e.g. Microsoft JMRP) from the embedded original
+    -- headers. We only fill fields the report itself left empty, and we record
+    -- where each value came from in `result.derived` so consumers can tell
+    -- reported data from inferred data.
+    if oheaders then
+      local derived = {}
+
+      if not result.source_ip then
+        local ip, from = derive_source_ip(oheaders, oheaders_multi)
+        if ip then
+          result.source_ip = ip
+          derived.source_ip = from
+        end
+      end
+
+      if not result.arrival_date then
+        local d, from = derive_arrival_date(oheaders, oheaders_multi)
+        if d then
+          result.arrival_date = d
+          derived.arrival_date = from
+        end
+      end
+
+      if not result.original_mail_from then
+        local mf, from = derive_mail_from(oheaders)
+        if mf then
+          result.original_mail_from = mf
+          derived.original_mail_from = from
+        end
+      end
+
+      if not result.original_rcpt_to then
+        local rt, from = derive_rcpt_to(oheaders)
+        if rt then
+          result.original_rcpt_to = rt
+          derived.original_rcpt_to = from
+        end
+      end
+
+      -- If the reported domain is missing, fall back to the domain of the
+      -- (possibly derived) envelope sender.
+      if not result.reported_domain and result.original_mail_from then
+        local dom = result.original_mail_from:match('@([^@%s>]+)%s*$')
+        if dom then
+          result.reported_domain = dom:lower()
+          derived.reported_domain = 'original_mail_from'
+        end
+      end
+
+      if next(derived) then
+        result.derived = derived
+      end
     end
   end
 
