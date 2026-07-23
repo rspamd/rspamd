@@ -154,6 +154,11 @@ local settings = {
   --proxy = "http://example.com:3128", -- send request through proxy, not yet implemented
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
+  -- SSRF protection: message URLs and their redirect targets are attacker
+  -- controlled, so never follow them into loopback, link-local or
+  -- local_addrs networks (e.g. cloud metadata services). Disable only if
+  -- internal redirectors must be resolved.
+  forbid_local = true,
   max_urls = 5, -- how many urls to check (CTA checked in first place)
   max_size = 10 * 1024, -- maximum body to process
   -- Optional operator override. When set (a string, or a list of
@@ -741,6 +746,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     max_size = settings.max_size,
     opaque_body = true,
     no_ssl_verify = not settings.check_ssl,
+    forbid_local = settings.forbid_local,
     callback = http_callback,
   }
 
@@ -775,7 +781,13 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   end
 
   apply_http_timeout(http_params)
-  rspamd_http.request(http_params)
+  if not rspamd_http.request(http_params) then
+    -- Synchronous refusal (e.g. forbid_local blocked a numeric-IP URL):
+    -- the callback will never fire, so terminate the walk here
+    rspamd_logger.infox(task, 'cannot start HTTP request for %s', url)
+    chain_append(chain, url)
+    finalize_chain(task, chain, nil)
+  end
 end
 
 -- Top-level entry: walk the cached chain from orig_url, then either

@@ -170,6 +170,7 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
 #define RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE (1 << 3)
 #define RSPAMD_LUA_HTTP_FLAG_YIELDED (1 << 4)
+#define RSPAMD_LUA_HTTP_FLAG_NO_LOCAL (1 << 5)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -535,6 +536,22 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 static gboolean
 lua_http_make_connection(struct lua_http_cbdata *cbd)
 {
+	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NO_LOCAL) {
+		struct rspamd_config *cfg = cbd->cfg;
+
+		if (cfg == NULL && cbd->task) {
+			cfg = cbd->task->cfg;
+		}
+
+		if (rspamd_ip_is_local_cfg(cfg, cbd->addr)) {
+			msg_info("forbid HTTP request to local address %s (host: %s) as 'forbid_local' is set",
+					 rspamd_inet_address_to_string(cbd->addr),
+					 cbd->host ? cbd->host : "unknown");
+
+			return FALSE;
+		}
+	}
+
 	rspamd_inet_address_set_port(cbd->addr, cbd->msg->port);
 	unsigned http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
 
@@ -827,6 +844,7 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {boolean} forbid_local refuse to connect when the destination resolves to a loopback, link-local or `local_addrs` address (SSRF protection for requests to untrusted URLs)
  * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
@@ -1181,6 +1199,15 @@ lua_http_request(lua_State *L)
 
 		if (!!lua_toboolean(L, -1)) {
 			flags |= RSPAMD_LUA_HTTP_FLAG_NOVERIFY;
+		}
+
+		lua_pop(L, 1);
+
+		lua_pushstring(L, "forbid_local");
+		lua_gettable(L, 1);
+
+		if (!!lua_toboolean(L, -1)) {
+			flags |= RSPAMD_LUA_HTTP_FLAG_NO_LOCAL;
 		}
 
 		lua_pop(L, 1);
