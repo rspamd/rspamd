@@ -138,7 +138,7 @@ struct query_target_scan_cbd {
 
 static gboolean
 html_query_target_cb(struct rspamd_url *url, gsize start_offset,
-					  gsize end_offset, gpointer ud)
+					 gsize end_offset, gpointer ud)
 {
 	auto *cbd = static_cast<query_target_scan_cbd *>(ud);
 
@@ -310,7 +310,8 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 							  std::string_view visible_part,
 							  goffset href_offset,
 							  struct rspamd_url *url,
-							  lua_State *L)
+							  lua_State *L,
+							  unsigned int max_urls)
 {
 	struct rspamd_url *displayed_url = nullptr;
 	struct rspamd_url *turl;
@@ -355,7 +356,8 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 	}
 
 	if (displayed_url && url_set) {
-		turl = rspamd_url_set_add_or_return((khash_t(rspamd_url_hash) *) url_set, displayed_url);
+		turl = rspamd_url_set_add_or_return((khash_t(rspamd_url_hash) *) url_set,
+											displayed_url, max_urls);
 
 		if (turl != nullptr) {
 			/* Here, we assume the following:
@@ -381,7 +383,7 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 			turl->count++;
 		}
 		else {
-			/* Already inserted by `rspamd_url_set_add_or_return` */
+			/* Too many urls in the set; the displayed url is not tracked */
 		}
 	}
 
