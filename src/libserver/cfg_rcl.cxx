@@ -2334,6 +2334,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   RSPAMD_CL_FLAG_INT_SIZE,
 									   "Maximum size of the picture to be normalized (1Mb by default)");
 		rspamd_rcl_add_default_handler(sub,
+									   "max_lua_http_response",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, max_lua_http_response),
+									   RSPAMD_CL_FLAG_INT_SIZE,
+									   "Maximum size of an HTTP reply in the Lua HTTP client when no explicit max_size is set (256Mb by default, 0 to disable the limit)");
+		rspamd_rcl_add_default_handler(sub,
 									   "images_cache",
 									   rspamd_rcl_parse_struct_integer,
 									   G_STRUCT_OFFSET(struct rspamd_config, max_pic_size),

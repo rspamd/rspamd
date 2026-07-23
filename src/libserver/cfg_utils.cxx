@@ -93,6 +93,7 @@
 #define DEFAULT_WORDS_DECAY 600
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
+#define DEFAULT_MAX_LUA_HTTP_RESPONSE (256 * 1024 * 1024)
 #define DEFAULT_MAX_SHOTS 100
 #define DEFAULT_MAX_SESSIONS 100
 #define DEFAULT_MAX_WORKERS 4
@@ -353,6 +354,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->ssl_ciphers = rspamd_mempool_strdup(cfg->cfg_pool, "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4");
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
 	cfg->max_pic_size = DEFAULT_MAX_PIC;
+	cfg->max_lua_http_response = DEFAULT_MAX_LUA_HTTP_RESPONSE;
 	cfg->images_cache_size = 256;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init();
 	cfg->neighbours = ucl_object_typed_new(UCL_OBJECT);

@@ -395,6 +395,7 @@ struct rspamd_config {
 	char *cores_dir;             /**< directory for core files							*/
 	gsize max_message;           /**< maximum size for messages							*/
 	gsize max_pic_size;          /**< maximum size for a picture to process				*/
+	gsize max_lua_http_response; /**< maximum size of a reply in the Lua HTTP client		*/
 	gsize images_cache_size;     /**< size of LRU cache for DCT data from images			*/
 	double task_timeout;         /**< maximum message processing time					*/
 	int default_max_shots;       /**< default maximum count of symbols hits permitted (-1 for unlimited) */
