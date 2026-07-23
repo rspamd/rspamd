@@ -3364,6 +3364,9 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 			proxy_client_finish_handler,
 			http_opts);
 
+		rspamd_http_connection_set_max_size(session->client_conn,
+											ctx->cfg->max_message);
+
 		if (ctx->key) {
 			rspamd_http_connection_set_key(session->client_conn, ctx->key);
 		}

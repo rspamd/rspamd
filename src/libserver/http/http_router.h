@@ -60,6 +60,7 @@ struct rspamd_http_connection_router {
 	rspamd_http_router_error_handler_t error_handler;
 	rspamd_http_router_finish_handler_t finish_handler;
 	gpointer server_ssl_ctx;
+	gsize max_size;
 };
 
 /**
@@ -134,6 +135,15 @@ void rspamd_http_router_add_regexp(struct rspamd_http_connection_router *router,
  */
 void rspamd_http_router_set_ssl(struct rspamd_http_connection_router *router,
 								gpointer ssl_ctx);
+
+/**
+ * Set the maximum size of a request body accepted by the router
+ * (0 means no limit)
+ * @param router router object
+ * @param sz maximum body size in bytes
+ */
+void rspamd_http_router_set_max_size(struct rspamd_http_connection_router *router,
+									 gsize sz);
 
 /**
  * Handle new accepted socket

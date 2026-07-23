@@ -4171,6 +4171,7 @@ start_controller_worker(struct rspamd_worker *worker)
 	ctx->http = rspamd_http_router_new(rspamd_controller_error_handler,
 									   rspamd_controller_finish_handler, ctx->timeout,
 									   ctx->static_files_dir, ctx->http_ctx);
+	rspamd_http_router_set_max_size(ctx->http, ctx->cfg->max_message);
 
 	if (rspamd_worker_has_ssl_socket(worker)) {
 		if (ctx->ssl_cert && ctx->ssl_key) {
