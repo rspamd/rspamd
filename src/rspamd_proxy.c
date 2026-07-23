@@ -47,11 +47,7 @@
 #include <netinet/tcp.h> /* for TCP_NODELAY */
 #endif
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
@@ -1310,7 +1306,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 
 		const char *result_data = result_part->data;
 		gsize result_len = result_part->data_len;
-		unsigned char *decompressed = NULL;
+		rspamd_fstring_t *decompressed = NULL;
 
 		/* Check for per-part zstd compression */
 		if (result_part->content_encoding &&
@@ -1318,33 +1314,23 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 			rspamd_substring_search_caseless(result_part->content_encoding,
 											 result_part->content_encoding_len,
 											 "zstd", 4) != -1) {
-			ZSTD_DStream *zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
-			ZSTD_inBuffer zin = {result_data, result_len, 0};
-			gsize outlen = ZSTD_getDecompressedSize(result_data, result_len);
-			if (outlen == 0) outlen = ZSTD_DStreamOutSize();
-			decompressed = g_malloc(outlen);
-			ZSTD_outBuffer zout = {decompressed, outlen, 0};
+			GError *derr = NULL;
 
-			while (zin.pos < zin.size) {
-				gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
-				if (ZSTD_isError(r)) {
-					g_free(decompressed);
-					ZSTD_freeDStream(zstream);
-					rspamd_multipart_form_free(form);
-					msg_err_session("result decompression error: %s",
-									ZSTD_getErrorName(r));
-					return FALSE;
-				}
-				if (zout.pos == zout.size) {
-					zout.size *= 2;
-					decompressed = g_realloc(zout.dst, zout.size);
-					zout.dst = decompressed;
-				}
+			decompressed = rspamd_zstd_decompress_bounded(NULL,
+														  result_data, result_len,
+														  session->ctx->cfg->max_message,
+														  &derr);
+
+			if (decompressed == NULL) {
+				msg_err_session("result decompression error: %s",
+								derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				rspamd_multipart_form_free(form);
+				return FALSE;
 			}
-			ZSTD_freeDStream(zstream);
-			result_data = (const char *) zout.dst;
-			result_len = zout.pos;
+
+			result_data = decompressed->str;
+			result_len = decompressed->len;
 		}
 
 		/* Parse UCL from result part */
@@ -1363,7 +1349,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 			ucl_parser_add_chunk(parser, (const unsigned char *) result_data, result_len);
 		}
 
-		g_free(decompressed);
+		rspamd_fstring_free(decompressed);
 
 		if (ucl_parser_get_error(parser)) {
 			msg_err_session("cannot parse result UCL: %s",
@@ -1390,38 +1376,28 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 				rspamd_substring_search_caseless(body_part_entry->content_encoding,
 												 body_part_entry->content_encoding_len,
 												 "zstd", 4) != -1) {
-				ZSTD_DStream *zstream = ZSTD_createDStream();
-				ZSTD_initDStream(zstream);
-				ZSTD_inBuffer zin = {bp_data, bp_len, 0};
-				gsize outlen = ZSTD_getDecompressedSize(bp_data, bp_len);
-				if (outlen == 0) outlen = ZSTD_DStreamOutSize();
-				unsigned char *bp_decompressed = g_malloc(outlen);
-				ZSTD_outBuffer zout = {bp_decompressed, outlen, 0};
-				gboolean decompress_ok = TRUE;
+				GError *derr = NULL;
+				rspamd_fstring_t *bp_decompressed;
 
-				while (zin.pos < zin.size) {
-					gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
-					if (ZSTD_isError(r)) {
-						msg_warn_session("body decompression error: %s",
-										 ZSTD_getErrorName(r));
-						decompress_ok = FALSE;
-						break;
-					}
-					if (zout.pos == zout.size) {
-						zout.size *= 2;
-						bp_decompressed = g_realloc(zout.dst, zout.size);
-						zout.dst = bp_decompressed;
-					}
+				bp_decompressed = rspamd_zstd_decompress_bounded(NULL,
+																 bp_data, bp_len,
+																 session->ctx->cfg->max_message,
+																 &derr);
+
+				if (bp_decompressed == NULL) {
+					msg_warn_session("body decompression error: %s",
+									 derr ? derr->message : "unknown error");
+					g_clear_error(&derr);
 				}
-				ZSTD_freeDStream(zstream);
-
-				if (decompress_ok) {
+				else {
 					/* Copy to pool so it persists */
-					conn->body_data = rspamd_mempool_alloc(session->pool, zout.pos);
-					memcpy((void *) conn->body_data, zout.dst, zout.pos);
-					conn->body_len = zout.pos;
+					conn->body_data = rspamd_mempool_alloc(session->pool,
+														   bp_decompressed->len);
+					memcpy((void *) conn->body_data, bp_decompressed->str,
+						   bp_decompressed->len);
+					conn->body_len = bp_decompressed->len;
+					rspamd_fstring_free(bp_decompressed);
 				}
-				g_free(bp_decompressed);
 			}
 			else {
 				/* Uncompressed body — copy to pool */
@@ -1645,60 +1621,31 @@ proxy_request_compress(struct rspamd_http_message *msg)
 }
 
 static void
-proxy_request_decompress(struct rspamd_http_message *msg)
+proxy_request_decompress(struct rspamd_http_message *msg, gsize max_size)
 {
 	rspamd_fstring_t *body;
 	const char *in;
-	gsize inlen, outlen, r;
-	ZSTD_DStream *zstream;
-	ZSTD_inBuffer zin;
-	ZSTD_outBuffer zout;
+	gsize inlen;
 
 	if (rspamd_http_message_find_header(msg, COMPRESSION_HEADER)) {
+		GError *err = NULL;
+
 		in = rspamd_http_message_get_body(msg, &inlen);
 
 		if (in == NULL || inlen == 0) {
 			return;
 		}
 
-		zstream = ZSTD_createDStream();
-		ZSTD_initDStream(zstream);
+		body = rspamd_zstd_decompress_bounded(NULL, in, inlen, max_size, &err);
 
-		zin.pos = 0;
-		zin.src = in;
-		zin.size = inlen;
+		if (body == NULL) {
+			msg_err("cannot decompress body: %s",
+					err ? err->message : "unknown error");
+			g_clear_error(&err);
 
-		if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-			outlen = ZSTD_DStreamOutSize();
+			return;
 		}
 
-		body = rspamd_fstring_sized_new(outlen);
-		zout.dst = body->str;
-		zout.pos = 0;
-		zout.size = outlen;
-
-		while (zin.pos < zin.size) {
-			r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-			if (ZSTD_isError(r)) {
-				msg_err("Decompression error: %s", ZSTD_getErrorName(r));
-				ZSTD_freeDStream(zstream);
-				rspamd_fstring_free(body);
-
-				return;
-			}
-
-			if (zout.pos == zout.size) {
-				/* We need to extend output buffer */
-				zout.size = zout.size * 2 + 1;
-				body = rspamd_fstring_grow(body, zout.size);
-				zout.size = body->allocated;
-				zout.dst = body->str;
-			}
-		}
-
-		body->len = zout.pos;
-		ZSTD_freeDStream(zstream);
 		rspamd_http_message_set_body_from_fstring_steal(msg, body);
 		rspamd_http_message_remove_header(msg, COMPRESSION_HEADER);
 		rspamd_http_message_remove_header(msg, CONTENT_ENCODING_HEADER);
@@ -1932,7 +1879,7 @@ proxy_backend_mirror_finish_handler(struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 
-	proxy_request_decompress(msg);
+	proxy_request_decompress(msg, session->ctx->cfg->max_message);
 	orig_ct = rspamd_http_message_find_header(msg, "Content-Type");
 
 	if (!proxy_backend_parse_results(session, bk_conn, session->ctx->lua_state,
@@ -2460,7 +2407,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg(session->master_conn->backend_conn);
-	proxy_request_decompress(msg);
+	proxy_request_decompress(msg, session->ctx->cfg->max_message);
 
 	/*
 	 * These are likely set by an http library, so we will double these headers
