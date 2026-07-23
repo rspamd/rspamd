@@ -45,6 +45,7 @@
 #include "rspamd_cxx_unit_text_stats.hxx"
 #include "rspamd_cxx_unit_multipattern.hxx"
 #include "rspamd_cxx_unit_compression.hxx"
+#include "rspamd_cxx_unit_http_timeout.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
