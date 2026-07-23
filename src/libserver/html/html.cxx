@@ -47,7 +47,9 @@
 
 namespace rspamd::html {
 
-static const unsigned int max_tags = 8192; /* Ignore tags if this maximum is reached */
+static const unsigned int max_tags = 8192;            /* Ignore tags if this maximum is reached */
+static const unsigned int max_attrs_per_tag = 128;    /* Ignore attributes of a single tag if this maximum is reached */
+static const unsigned int max_attrs_per_task = 65536; /* Ignore attributes in all HTML parts of a task if this maximum is reached */
 
 static const html_tags_storage html_tags_defs;
 
@@ -919,9 +921,10 @@ enum tag_parser_state {
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
-	std::string attr_name;            // Store current attribute name
-	const char *value_start = nullptr;// Track where attribute value starts in input
-	const char *html_start = nullptr; // Base pointer to HTML buffer start
+	std::string attr_name;              // Store current attribute name
+	const char *value_start = nullptr;  // Track where attribute value starts in input
+	const char *html_start = nullptr;   // Base pointer to HTML buffer start
+	unsigned int *attrs_count = nullptr;// Task-global attributes counter (task pool variable)
 
 	void reset()
 	{
@@ -947,6 +950,27 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	 */
 	auto store_component_value = [&]() -> void {
 		if (!parser_env.attr_name.empty()) {
+			/*
+			 * Enforce both per-tag and task-global attribute budgets: a single
+			 * tag must not evade the tags limit by cramming everything into
+			 * attributes
+			 */
+			if (tag->components.size() >= max_attrs_per_tag ||
+				*parser_env.attrs_count >= max_attrs_per_task) {
+				if (!(hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS)) {
+					msg_warn_pool("too many attributes in HTML tags; ignoring the rest");
+					hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_ATTRS;
+				}
+
+				parser_env.buf.clear();
+				parser_env.attr_name.clear();
+				parser_env.value_start = nullptr;
+
+				return;
+			}
+
+			(*parser_env.attrs_count)++;
+
 			std::string_view attr_name_view, value_view;
 
 			// Store attribute name in persistent memory
@@ -2549,6 +2573,20 @@ auto html_process_input(struct rspamd_task *task,
 	end = p + process_size;
 	start = c;
 	content_parser_env.html_start = start;// Initialize for span tracking
+
+	/*
+	 * Attributes budget is task-global, as a task can have multiple HTML parts;
+	 * the counter is stashed in the task pool to survive across parts
+	 */
+	static const char attrs_count_var[] = "html_attrs_count";
+	auto *task_attrs_count = static_cast<unsigned int *>(rspamd_mempool_get_variable(pool, attrs_count_var));
+
+	if (task_attrs_count == nullptr) {
+		task_attrs_count = rspamd_mempool_alloc0_type(pool, unsigned int);
+		rspamd_mempool_set_variable(pool, attrs_count_var, task_attrs_count, nullptr);
+	}
+
+	content_parser_env.attrs_count = task_attrs_count;
 
 	while (p < end) {
 		t = *p;
