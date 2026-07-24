@@ -4,8 +4,8 @@
 
 /* global require */
 
-define(["app/common", "bootstrap"],
-    (common, bootstrap) => {
+define(["app/common", "app/icons", "bootstrap"],
+    (common, icons, bootstrap) => {
         "use strict";
         const ui = {};
 
@@ -184,9 +184,13 @@ define(["app/common", "bootstrap"],
                     } else {
                         common.show("#modalSaveGroup");
                     }
-                    document.querySelectorAll("#modalDialog .modal-header [data-fa-i2svg]").forEach((el) => {
-                        el.classList.add(icon);
-                    });
+                    // The map-modal header holds a single icon (<i class="fas my-auto">);
+                    // setIcon swaps it (or its already-rendered <svg>) for `icon`.
+                    const header = document.querySelector("#modalDialog .modal-header");
+                    const headerIcon = header?.querySelector("svg[data-icon], i.fas");
+                    if (headerIcon) {
+                        icons.setIcon(headerIcon, icon);
+                    }
                     document.getElementById("modalTitle").textContent = item.uri;
 
                     bootstrap.Modal.getOrCreateInstance(document.getElementById("modalDialog")).show();
