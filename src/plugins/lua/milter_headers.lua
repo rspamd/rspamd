@@ -626,13 +626,33 @@ local function milter_headers(task)
   end
 
   routines['fuzzy-hashes'] = function()
-    local res = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
+    local matches = task:get_fuzzy_results()
+    local out = {}
 
-    if res and #res > 0 then
+    if matches and #matches > 0 then
+      for _, m in ipairs(matches) do
+        local ann = string.format('rule=%s; flag=%s; prob=%.2f', m.rule, m.flag, m.prob)
+
+        if not m.exact then
+          ann = ann .. string.format('; queried=%s', m.queried)
+        end
+
+        if m.added and m.added > 0 then
+          ann = ann .. string.format('; added=%s', os.date('!%Y-%m-%d %H:%M:%S', m.added))
+        end
+
+        out[#out + 1] = string.format('%s (%s)', m.found, ann)
+      end
+    else
+      -- Legacy pool variable set by external fuzzy implementations
+      out = task:get_mempool():get_variable("fuzzy_hashes", "fstrings") or {}
+    end
+
+    if #out > 0 then
       if settings.headers_modify_mode == 'compat' then
-        add_header('fuzzy-hashes', table.concat(res, ','))
+        add_header('fuzzy-hashes', table.concat(out, ','))
       else
-        for _, h in ipairs(res) do
+        for _, h in ipairs(out) do
           add_header('fuzzy-hashes', h)
         end
       end
