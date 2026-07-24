@@ -1577,6 +1577,26 @@ rspamd_check_worker(struct rspamd_config *cfg, worker_t *wrk)
 	return ret;
 }
 
+static void
+rspamd_config_check_duplicate_sections(struct rspamd_config *cfg, const char *mname)
+{
+	const ucl_object_t *sec = ucl_object_lookup(cfg->cfg_ucl_obj, mname);
+
+	if (sec != nullptr && sec->next != nullptr) {
+		unsigned int nsec = 0;
+
+		for (const ucl_object_t *cur = sec; cur != nullptr; cur = cur->next) {
+			nsec++;
+		}
+
+		msg_warn_config("section '%s' is defined %ud times in the configuration, "
+						"but module %s reads only the first one; the remaining "
+						"sections are IGNORED; merge them into a single section "
+						"(check for stray files in modules.d or duplicate includes)",
+						mname, nsec, mname);
+	}
+}
+
 gboolean
 rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 {
@@ -1618,6 +1638,7 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 		if (mod_ctx) {
 			mod = mod_ctx->mod;
 			mod_ctx->enabled = rspamd_config_is_module_enabled(cfg, mod->name);
+			rspamd_config_check_duplicate_sections(cfg, mod->name);
 
 			if (reconfig) {
 				if (!mod->module_reconfig_func(cfg)) {
