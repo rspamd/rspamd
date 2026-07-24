@@ -231,6 +231,30 @@ rspamd_mime_part_detect_language(struct rspamd_task *task,
 	}
 }
 
+/* Bound newline metadata for the whole message; the text itself is still normalized fully */
+static const unsigned int max_message_newlines = 100000;
+
+static inline void
+rspamd_text_part_maybe_add_newline(struct rspamd_task *task,
+								   struct rspamd_mime_text_part *part)
+{
+	if (G_LIKELY(MESSAGE_FIELD(task, ntext_newlines) < max_message_newlines)) {
+		g_ptr_array_add(part->newlines,
+						(((gpointer) (goffset) (part->utf_stripped_content->len))));
+		MESSAGE_FIELD(task, ntext_newlines) += 1;
+	}
+	else {
+		if (!MESSAGE_FIELD(task, text_newlines_limit_reached)) {
+			msg_warn_task("too many newlines in message; only %ud newline "
+						  "positions are recorded across all text parts",
+						  max_message_newlines);
+			MESSAGE_FIELD(task, text_newlines_limit_reached) = TRUE;
+		}
+
+		part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED;
+	}
+}
+
 static void
 rspamd_strip_newlines_parse(struct rspamd_task *task,
 							const char *begin, const char *pe,
@@ -310,8 +334,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 					g_byte_array_append(part->utf_stripped_content,
 										(const uint8_t *) " ", 1);
 					crlf_added = TRUE;
-					g_ptr_array_add(part->newlines,
-									(((gpointer) (goffset) (part->utf_stripped_content->len))));
+					rspamd_text_part_maybe_add_newline(task, part);
 				}
 
 				part->nlines++;
@@ -344,8 +367,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				if (IS_TEXT_PART_HTML(part) || !url_open_bracket) {
 					g_byte_array_append(part->utf_stripped_content,
 										(const uint8_t *) " ", 1);
-					g_ptr_array_add(part->newlines,
-									(((gpointer) (goffset) (part->utf_stripped_content->len))));
+					rspamd_text_part_maybe_add_newline(task, part);
 					crlf_added = TRUE;
 				}
 				else {
@@ -362,8 +384,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 						crlf_added = TRUE;
 					}
 
-					g_ptr_array_add(part->newlines,
-									(((gpointer) (goffset) (part->utf_stripped_content->len))));
+					rspamd_text_part_maybe_add_newline(task, part);
 				}
 
 				c = p + 1;
@@ -376,8 +397,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 					g_byte_array_append(part->utf_stripped_content,
 										(const uint8_t *) " ", 1);
 					crlf_added = TRUE;
-					g_ptr_array_add(part->newlines,
-									(((gpointer) (goffset) (part->utf_stripped_content->len))));
+					rspamd_text_part_maybe_add_newline(task, part);
 				}
 
 				part->nlines++;
@@ -430,8 +450,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				part->nlines++;
 
 				if (!crlf_added) {
-					g_ptr_array_add(part->newlines,
-									(((gpointer) (goffset) (part->utf_stripped_content->len))));
+					rspamd_text_part_maybe_add_newline(task, part);
 				}
 
 				/* Skip initial spaces */
@@ -498,8 +517,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 			if (!crlf_added) {
 				g_byte_array_append(part->utf_stripped_content,
 									(const uint8_t *) " ", 1);
-				g_ptr_array_add(part->newlines,
-								(((gpointer) (goffset) (part->utf_stripped_content->len))));
+				rspamd_text_part_maybe_add_newline(task, part);
 			}
 
 			part->nlines++;

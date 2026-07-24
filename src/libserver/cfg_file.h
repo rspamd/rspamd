@@ -395,6 +395,7 @@ struct rspamd_config {
 	char *cores_dir;             /**< directory for core files							*/
 	gsize max_message;           /**< maximum size for messages							*/
 	gsize max_pic_size;          /**< maximum size for a picture to process				*/
+	gsize max_lua_http_response; /**< maximum size of a reply in the Lua HTTP client		*/
 	gsize images_cache_size;     /**< size of LRU cache for DCT data from images			*/
 	double task_timeout;         /**< maximum message processing time					*/
 	int default_max_shots;       /**< default maximum count of symbols hits permitted (-1 for unlimited) */
@@ -446,6 +447,7 @@ struct rspamd_config {
 	double map_timeout;               /**< maps watch timeout									*/
 	double map_file_watch_multiplier; /**< multiplier for watch timeout when maps are files	*/
 	char *maps_cache_dir;             /**< where to save HTTP cached data						*/
+	gsize max_map_size;               /**< maximum size of a map, compressed or expanded		*/
 
 	double monitored_interval;  /**< interval between monitored checks					*/
 	gboolean disable_monitored; /**< disable monitoring completely						*/

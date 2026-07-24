@@ -125,6 +125,7 @@ LUA_FUNCTION_DEF(textpart, get_lines_count);
  * - `empty_lines`: number of empty lines
  * - `non_ascii_characters`: number of non ascii characters
  * - `ascii_characters`: number of ascii characters
+ * - `newlines_truncated`: whether newline metadata was capped
  * @return {table} table of stats
  */
 LUA_FUNCTION_DEF(textpart, get_stats);
@@ -1648,13 +1649,13 @@ lua_textpart_get_alt_part(lua_State *L)
 /***
  * @method mime_part:get_stats()
  * Returns a table with the following data:
- * -
  * - `lines`: number of lines
  * - `spaces`: number of spaces
  * - `double_spaces`: double spaces
  * - `empty_lines`: number of empty lines
  * - `non_ascii_characters`: number of non ascii characters
  * - `ascii_characters`: number of ascii characters
+ * - `newlines_truncated`: whether newline metadata was capped
  * @return {table} table of stats
  */
 static int
@@ -1664,7 +1665,7 @@ lua_textpart_get_stats(lua_State *L)
 	struct rspamd_mime_text_part *part = lua_check_textpart(L);
 
 	if (part != NULL) {
-		lua_createtable(L, 0, 9);
+		lua_createtable(L, 0, 10);
 
 		lua_pushstring(L, "lines");
 		lua_pushinteger(L, part->nlines);
@@ -1692,6 +1693,9 @@ lua_textpart_get_stats(lua_State *L)
 		lua_settable(L, -3);
 		lua_pushstring(L, "numeric_characters");
 		lua_pushinteger(L, part->numeric_characters);
+		lua_settable(L, -3);
+		lua_pushstring(L, "newlines_truncated");
+		lua_pushboolean(L, part->flags & RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED);
 		lua_settable(L, -3);
 	}
 	else {

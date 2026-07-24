@@ -122,6 +122,7 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_RAW (1 << 3)
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED (1 << 4)
 #define RSPAMD_MIME_TEXT_PART_ATTACHMENT (1 << 5)
+#define RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED (1 << 6)
 
 #define IS_TEXT_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_TEXT_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -200,6 +201,8 @@ struct rspamd_message {
 	gboolean headers_limit_reached;
 	unsigned int narchive_files; /**< total archive file metadata entries */
 	gboolean archive_files_limit_reached;
+	unsigned int ntext_newlines; /**< total tracked text newline positions */
+	gboolean text_newlines_limit_reached;
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;

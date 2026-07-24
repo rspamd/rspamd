@@ -788,6 +788,9 @@ void rspamd_control_process_client_socket(struct rspamd_main *rspamd_main,
 													  rspamd_control_error_handler,
 													  rspamd_control_finish_handler,
 													  0);
+	/* Control commands are URL based, so the body is not used at all */
+	rspamd_http_connection_set_max_size(session->conn,
+										rspamd_main->cfg->max_message);
 	session->rspamd_main = rspamd_main;
 	session->addr = addr;
 	session->event_loop = rspamd_main->event_loop;

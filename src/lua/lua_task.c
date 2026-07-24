@@ -3049,7 +3049,8 @@ inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
 		g_ptr_array_add(cbd->mpart_urls, url);
 	}
 
-	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+								   task->cfg ? task->cfg->max_urls : 0);
 
 	return TRUE;
 }
@@ -3096,7 +3097,8 @@ lua_task_inject_url(lua_State *L)
 					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
 	}
 	if (task && task->message && url && url->url) {
-		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false);
+		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false,
+									   task->cfg ? task->cfg->max_urls : 0);
 
 		/*
 		 * Scan the injected URL's query string for embedded URLs (e.g. a

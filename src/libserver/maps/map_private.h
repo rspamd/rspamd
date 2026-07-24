@@ -127,6 +127,8 @@ struct http_map_data {
 	double connection_ttl;
 	double idle_timeout;
 	unsigned int max_reuse;
+	/* Optional per-map size limit; 0 means use cfg->max_map_size */
+	gsize max_size;
 };
 
 struct static_map_data {
@@ -202,11 +204,11 @@ struct rspamd_map {
 	double poll_timeout;
 	time_t next_check;
 	bool active_http;
-	bool non_trivial;  /* E.g. has http backends in active mode */
-	bool file_only;    /* No HTTP backends found */
-	bool static_only;  /* No need to check */
-	bool no_file_read; /* Do not read files, pass filename to consumer */
-	bool seen;         /* This map has already been watched or pre-loaded */
+	bool non_trivial;          /* E.g. has http backends in active mode */
+	bool file_only;            /* No HTTP backends found */
+	bool static_only;          /* No need to check */
+	bool no_file_read;         /* Do not read files, pass filename to consumer */
+	bool seen;                 /* This map has already been watched or pre-loaded */
 	gsize no_file_read_offset; /* Payload offset when consumer mmaps the file (0 for file, 4096 for HTTP cache) */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	struct rspamd_map_shared_data *shared;

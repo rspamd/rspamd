@@ -63,6 +63,11 @@ SSL Large HTTP request
   ...  Settings={symbols_enabled = [LARGE_HTTP_TEST]}
   Expect Symbol  HTTP_SSL_LARGE
 
+Forbid local addresses
+  Scan File  ${MESSAGE}  Url=/request  Method=get
+  ...  Settings={symbols_enabled = [FORBID_LOCAL_TEST]}
+  Expect Symbols  HTTP_FORBID_NUMERIC_DENIED  HTTP_FORBID_DNS_ERROR
+
 *** Keywords ***
 Http Setup
   Run Dummy Http

@@ -1162,6 +1162,24 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 
 					return;
 				}
+
+				/*
+				 * The one-shot timer has already expired, so if the drained
+				 * data did not complete the message, the connection would be
+				 * left with no deadline at all: report a timeout instead
+				 */
+				if (!conn->finished && !IS_CONN_RESETED(priv)) {
+					err = g_error_new(HTTP_ERROR, 408,
+									  "IO timeout: incomplete message at deadline");
+					rspamd_http_connection_stop_watcher(priv);
+					conn->error_handler(conn, err);
+					g_error_free(err);
+				}
+
+				REF_RELEASE(pbuf);
+				rspamd_http_connection_unref(conn);
+
+				return;
 			}
 			else {
 				err = g_error_new(HTTP_ERROR, 408,

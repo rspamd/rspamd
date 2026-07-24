@@ -32,11 +32,7 @@
 
 #include <worker_util.h>
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 #undef MAP_DEBUG_REFS
 #ifdef MAP_DEBUG_REFS
@@ -586,6 +582,16 @@ rspamd_map_payload_is_zstd(const unsigned char *p, gsize len)
 	return FALSE;
 }
 
+static inline gsize
+rspamd_map_effective_max_size(struct http_callback_data *cbd)
+{
+	if (cbd->data->max_size > 0) {
+		return cbd->data->max_size;
+	}
+
+	return cbd->map->cfg ? cbd->map->cfg->max_map_size : 0;
+}
+
 static void
 rspamd_map_try_load_secretbox_key(struct rspamd_config *cfg,
 								  struct rspamd_map_backend *bk)
@@ -771,7 +777,6 @@ http_map_finish(struct rspamd_http_connection *conn,
 		/* Prepare payload: decrypt (if needed) then optionally decompress */
 		unsigned char *payload = NULL;
 		gsize payload_len = 0;
-		unsigned char *final_out = NULL;
 
 		if (cbd->bk->is_encrypted) {
 			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, dlen, &payload, &payload_len)) {
@@ -789,63 +794,37 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		/* If compressed flag is set OR payload looks like zstd, decompress */
 		if (cbd->bk->is_compressed || rspamd_map_payload_is_zstd(payload, payload_len)) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			gsize outlen, r;
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			decompressed = rspamd_zstd_decompress_bounded(NULL, payload, payload_len,
+														  max_size, &derr);
 
-			zin.pos = 0;
-			zin.src = payload;
-			zin.size = payload_len;
-
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+			if (decompressed == NULL) {
+				msg_err_map("%s(%s): cannot decompress data: %s",
+							cbd->bk->uri_log,
+							rspamd_inet_address_to_string_pretty(cbd->addr),
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
+					rspamd_explicit_memzero(payload, payload_len);
+					g_free(payload);
+				}
+				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				goto err;
 			}
 
-			final_out = g_malloc(outlen);
-
-			zout.dst = final_out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					msg_err_map("%s(%s): cannot decompress data: %s",
-								cbd->bk->uri_log,
-								rspamd_inet_address_to_string_pretty(cbd->addr),
-								ZSTD_getErrorName(r));
-					ZSTD_freeDStream(zstream);
-					g_free(final_out);
-					if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
-						rspamd_explicit_memzero(payload, payload_len);
-						g_free(payload);
-					}
-					MAP_RELEASE(cbd->shmem_data, "shmem_data");
-					goto err;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1.0;
-					final_out = g_realloc(zout.dst, zout.size);
-					zout.dst = final_out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
 			msg_info_map("%s(%s): read map data %z bytes compressed, "
 						 "%z uncompressed, next check at %s",
 						 cbd->bk->uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
-						 payload_len, zout.pos, next_check_date);
-			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, final_out, zout.pos)) {
+						 payload_len, decompressed->len, next_check_date);
+			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data,
+												  (const unsigned char *) decompressed->str,
+												  decompressed->len)) {
 				msg_err_map("%s: failed to save cache file", bk->uri_log);
-				g_free(final_out);
+				rspamd_fstring_free(decompressed);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
 				goto err;
 			}
@@ -860,9 +839,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 								   &cbd->periodic->cbdata, TRUE);
 			}
 			else {
-				map->read_callback(final_out, zout.pos, &cbd->periodic->cbdata, TRUE);
+				map->read_callback(decompressed->str, decompressed->len,
+								   &cbd->periodic->cbdata, TRUE);
 			}
-			g_free(final_out);
+			rspamd_fstring_free(decompressed);
 		}
 		else {
 			msg_info_map("%s(%s): read map data %z bytes, next check at %s",
@@ -1269,61 +1249,33 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 
 				/* If compressed flag is set OR payload looks like zstd, decompress */
 				if (bk->is_compressed || rspamd_map_payload_is_zstd((const unsigned char *) payload, payload_len)) {
-					ZSTD_DStream *zstream;
-					ZSTD_inBuffer zin;
-					ZSTD_outBuffer zout;
-					unsigned char *out;
-					gsize outlen, r;
+					GError *derr = NULL;
+					rspamd_fstring_t *decompressed;
 
-					zstream = ZSTD_createDStream();
-					ZSTD_initDStream(zstream);
+					decompressed = rspamd_zstd_decompress_bounded(NULL, payload, payload_len,
+																  map->cfg ? map->cfg->max_map_size : 0,
+																  &derr);
 
-					zin.pos = 0;
-					zin.src = payload;
-					zin.size = payload_len;
-
-					if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-						outlen = ZSTD_DStreamOutSize();
+					if (decompressed == NULL) {
+						msg_err_map("%s: cannot decompress data: %s",
+									data->filename,
+									derr ? derr->message : "unknown error");
+						g_clear_error(&derr);
+						if (dec) {
+							rspamd_explicit_memzero(dec, declen);
+							g_free(dec);
+						}
+						munmap(bytes, len);
+						return FALSE;
 					}
 
-					out = g_malloc(outlen);
-
-					zout.dst = out;
-					zout.pos = 0;
-					zout.size = outlen;
-
-					while (zin.pos < zin.size) {
-						r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-						if (ZSTD_isError(r)) {
-							msg_err_map("%s: cannot decompress data: %s",
-										data->filename,
-										ZSTD_getErrorName(r));
-							ZSTD_freeDStream(zstream);
-							g_free(out);
-							if (dec) {
-								rspamd_explicit_memzero(dec, declen);
-								g_free(dec);
-							}
-							munmap(bytes, len);
-							return FALSE;
-						}
-
-						if (zout.pos == zout.size) {
-							/* We need to extend output buffer */
-							zout.size = zout.size * 2 + 1;
-							out = g_realloc(zout.dst, zout.size);
-							zout.dst = out;
-						}
-					}
-
-					ZSTD_freeDStream(zstream);
 					msg_info_map("%s: read map data, %z bytes compressed, "
 								 "%z uncompressed)",
 								 data->filename,
-								 payload_len, zout.pos);
-					map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-					g_free(out);
+								 payload_len, decompressed->len);
+					map->read_callback(decompressed->str, decompressed->len,
+									   &periodic->cbdata, TRUE);
+					rspamd_fstring_free(decompressed);
 
 					if (dec) {
 						rspamd_explicit_memzero(dec, declen);
@@ -1386,57 +1338,29 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 
 	if (len > 0) {
 		if (bk->is_compressed) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			decompressed = rspamd_zstd_decompress_bounded(NULL, bytes, len,
+														  map->cfg ? map->cfg->max_map_size : 0,
+														  &derr);
 
-			zin.pos = 0;
-			zin.src = bytes;
-			zin.size = len;
+			if (decompressed == NULL) {
+				msg_err_map("%s: cannot decompress data: %s",
+							map->name,
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
 
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+				return FALSE;
 			}
 
-			out = g_malloc(outlen);
-
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					msg_err_map("%s: cannot decompress data: %s",
-								map->name,
-								ZSTD_getErrorName(r));
-					ZSTD_freeDStream(zstream);
-					g_free(out);
-
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
 			msg_info_map("%s: read map data, %z bytes compressed, "
 						 "%z uncompressed)",
 						 map->name,
-						 len, zout.pos);
-			map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-			g_free(out);
+						 len, decompressed->len);
+			map->read_callback(decompressed->str, decompressed->len,
+							   &periodic->cbdata, TRUE);
+			rspamd_fstring_free(decompressed);
 		}
 		else {
 			msg_info_map("%s: read map data, %z bytes",
@@ -1751,6 +1675,11 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 													  cbd->addr);
 
 		if (cbd->conn != NULL) {
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+
+			if (max_size > 0) {
+				rspamd_http_connection_set_max_size(cbd->conn, max_size);
+			}
 			/* Apply optional staged timeouts and keepalive tuning */
 			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
 				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
@@ -1885,61 +1814,33 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 
 		/* If compressed flag is set OR payload looks like zstd, decompress */
 		if (bk->is_compressed || rspamd_map_payload_is_zstd(payload, payload_len)) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			decompressed = rspamd_zstd_decompress_bounded(NULL, payload, payload_len,
+														  map->cfg ? map->cfg->max_map_size : 0,
+														  &derr);
 
-			zin.pos = 0;
-			zin.src = payload;
-			zin.size = payload_len;
-
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+			if (decompressed == NULL) {
+				msg_err_map("%s: cannot decompress data: %s",
+							bk->uri_log,
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				if (dec) {
+					rspamd_explicit_memzero(dec, declen);
+					g_free(dec);
+				}
+				munmap(in, mmap_len);
+				return FALSE;
 			}
 
-			out = g_malloc(outlen);
-
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					msg_err_map("%s: cannot decompress data: %s",
-								bk->uri_log,
-								ZSTD_getErrorName(r));
-					ZSTD_freeDStream(zstream);
-					g_free(out);
-					if (dec) {
-						rspamd_explicit_memzero(dec, declen);
-						g_free(dec);
-					}
-					munmap(in, mmap_len);
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
 			msg_info_map("%s: read map data cached %z bytes compressed, "
 						 "%z uncompressed",
 						 bk->uri,
-						 payload_len, zout.pos);
-			map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-			g_free(out);
+						 payload_len, decompressed->len);
+			map->read_callback(decompressed->str, decompressed->len,
+							   &periodic->cbdata, TRUE);
+			rspamd_fstring_free(decompressed);
 			if (dec) {
 				rspamd_explicit_memzero(dec, declen);
 				g_free(dec);
@@ -2481,6 +2382,11 @@ check:
 			addr);
 
 		if (cbd->conn != NULL) {
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+
+			if (max_size > 0) {
+				rspamd_http_connection_set_max_size(cbd->conn, max_size);
+			}
 			/* Apply optional staged timeouts and keepalive tuning */
 			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
 				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
@@ -3507,6 +3413,9 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 				opt = ucl_object_lookup_any(src,
 											"max_reuse", "max-reuse", "keepalive_max_reuse", NULL);
 				if (opt) hdata->max_reuse = (unsigned int) ucl_object_toint(opt);
+				opt = ucl_object_lookup_any(src,
+											"max_size", "max-size", NULL);
+				if (opt) hdata->max_size = (gsize) ucl_object_toint(opt);
 			}
 		}
 

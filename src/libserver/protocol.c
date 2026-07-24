@@ -35,11 +35,7 @@
 #include "libmime/content_type.h"
 #include <math.h>
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 INIT_LOG_MODULE(protocol)
 
@@ -3043,10 +3039,8 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 											 msg_part->content_encoding_len,
 											 "zstd", 4) != -1) {
 			/* Decompress message */
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			gsize outlen, r;
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
 			if (!rspamd_libs_reset_decompression(task->cfg->libs_ctx)) {
 				g_set_error(&task->err, rspamd_protocol_quark(), 500,
@@ -3054,54 +3048,34 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 				return FALSE;
 			}
 
-			zstream = task->cfg->libs_ctx->in_zstream;
-			zin.src = msg_part->data;
-			zin.size = msg_part->data_len;
-			zin.pos = 0;
+			decompressed = rspamd_zstd_decompress_bounded(task->cfg->libs_ctx->in_zstream,
+														  msg_part->data, msg_part->data_len,
+														  task->cfg->max_message, &derr);
 
-			outlen = ZSTD_getDecompressedSize(msg_part->data, msg_part->data_len);
-			if (outlen == 0) {
-				outlen = ZSTD_DStreamOutSize();
-			}
+			if (decompressed == NULL) {
+				int http_code = 400;
 
-			unsigned char *out = (unsigned char *) g_malloc(outlen);
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					g_set_error(&task->err, rspamd_protocol_quark(), 400,
-								"message decompression error: %s",
-								ZSTD_getErrorName(r));
-					g_free(out);
-					return FALSE;
+				if (derr != NULL && derr->code == RSPAMD_DECOMPRESS_ERROR_TOO_LARGE) {
+					http_code = 413;
 				}
 
-				if (zout.pos == zout.size) {
-					if (zout.size > task->cfg->max_message) {
-						g_set_error(&task->err, rspamd_protocol_quark(), 413,
-									"decompressed message exceeds max_message limit: %lu > %lu",
-									(unsigned long) zout.size, (unsigned long) task->cfg->max_message);
-						g_free(out);
-						return FALSE;
-					}
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
+				g_set_error(&task->err, rspamd_protocol_quark(), http_code,
+							"message decompression error: %s",
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				return FALSE;
 			}
 
-			rspamd_mempool_add_destructor(task->task_pool, g_free, zout.dst);
-			task->msg.begin = (const char *) zout.dst;
-			task->msg.len = zout.pos;
+			rspamd_mempool_add_destructor(task->task_pool,
+										  (rspamd_mempool_destruct_t) rspamd_fstring_free,
+										  decompressed);
+			task->msg.begin = decompressed->str;
+			task->msg.len = decompressed->len;
 			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED;
 
 			msg_info_protocol("v3: loaded message from zstd compressed part; "
 							  "compressed: %ul; uncompressed: %ul",
-							  (gulong) zin.size, (gulong) zout.pos);
+							  (gulong) msg_part->data_len, (gulong) decompressed->len);
 		}
 		else {
 			/* Zero-copy: point directly into the multipart buffer */

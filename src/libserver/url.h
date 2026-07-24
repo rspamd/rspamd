@@ -408,20 +408,25 @@ KHASH_DECLARE(rspamd_url_host_hash, struct rspamd_url *, char);
  * Add an url to set or increase the existing url count
  * @param set
  * @param u
+ * @param max_urls maximum number of urls in the set (0 = unlimited); a new
+ * url is silently rejected when the set is already full
  * @return true if a new url has been added
  */
 bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
-									bool enforce_replace);
+									bool enforce_replace,
+									unsigned int max_urls);
 
 /**
  * Same as rspamd_url_set_add_or_increase but returns the existing url if found
  * @param set
  * @param u
- * @return
+ * @param max_urls maximum number of urls in the set (0 = unlimited)
+ * @return the url stored in the set, or NULL if the set is missing or full
  */
 struct rspamd_url *rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
-												struct rspamd_url *u);
+												struct rspamd_url *u,
+												unsigned int max_urls);
 /**
  * Helper for url host set
  * @param set

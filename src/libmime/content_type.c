@@ -20,6 +20,14 @@
 #include "libserver/url.h"
 #include "libmime/mime_encoding.h"
 
+/*
+ * Upper bound on the number of parameters we materialise for a single
+ * Content-Type or Content-Disposition header. Real messages use a handful;
+ * this cap exists purely to stop a crafted header (e.g. `text/plain; a=;a=;...`)
+ * from amplifying a bounded input into millions of per-parameter allocations.
+ */
+static const unsigned int max_content_type_params = 1024;
+
 static gboolean
 rspamd_rfc2231_decode(rspamd_mempool_t *pool,
 					  struct rspamd_content_type_param *param,
@@ -166,7 +174,19 @@ rspamd_param_maybe_rfc2231_process(rspamd_mempool_t *pool,
 static int32_t
 rspamd_cmp_pieces(struct rspamd_content_type_param *p1, struct rspamd_content_type_param *p2)
 {
-	return p1->rfc2231_id - p2->rfc2231_id;
+	/*
+	 * Explicit comparison: subtracting two unsigned ids and truncating to
+	 * int32_t overflows when they differ by more than INT32_MAX, which yields
+	 * an inconsistent ordering for the sort below.
+	 */
+	if (p1->rfc2231_id < p2->rfc2231_id) {
+		return -1;
+	}
+	else if (p1->rfc2231_id > p2->rfc2231_id) {
+		return 1;
+	}
+
+	return 0;
 }
 
 static void
@@ -317,6 +337,13 @@ void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 
 	g_assert(ct != NULL);
 
+	if (ct->nparams >= max_content_type_params) {
+		/* Refuse to amplify a crafted header into unbounded allocations */
+		ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+		return;
+	}
+
+	ct->nparams++;
 	nparam = rspamd_mempool_alloc0(pool, sizeof(*nparam));
 	rspamd_str_lc(name_start, name_end - name_start);
 
@@ -810,6 +837,12 @@ void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 
 	g_assert(cd != NULL);
 
+	if (cd->nparams >= max_content_type_params) {
+		/* Refuse to amplify a crafted header into unbounded allocations */
+		return;
+	}
+
+	cd->nparams++;
 	name_cpy = rspamd_mempool_alloc(pool, name_end - name_start);
 	memcpy(name_cpy, name_start, name_end - name_start);
 	name_cpy_end = name_cpy + (name_end - name_start);

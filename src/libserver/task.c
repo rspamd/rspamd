@@ -41,11 +41,7 @@
 
 #include <math.h>
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
@@ -619,11 +615,6 @@ rspamd_task_load_message(struct rspamd_task *task,
 		t.len = 4;
 
 		if (rspamd_ftok_casecmp(tok, &t) == 0) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
 			gulong dict_id;
 
 			if (!rspamd_libs_reset_decompression(task->cfg->libs_ctx)) {
@@ -660,47 +651,34 @@ rspamd_task_load_message(struct rspamd_task *task,
 				}
 			}
 
-			zstream = task->cfg->libs_ctx->in_zstream;
+			GError *derr = NULL;
+			gsize compressed_len = task->msg.len;
+			rspamd_fstring_t *decompressed;
 
-			zin.pos = 0;
-			zin.src = task->msg.begin;
-			zin.size = task->msg.len;
+			decompressed = rspamd_zstd_decompress_bounded(task->cfg->libs_ctx->in_zstream,
+														  task->msg.begin, task->msg.len,
+														  task->cfg->max_message, &derr);
 
-			if ((outlen = ZSTD_getDecompressedSize(task->msg.begin, task->msg.len)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+			if (decompressed == NULL) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Decompression error: %s",
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+
+				return FALSE;
 			}
 
-			out = g_malloc(outlen);
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					g_set_error(&task->err, rspamd_task_quark(),
-								RSPAMD_PROTOCOL_ERROR,
-								"Decompression error: %s", ZSTD_getErrorName(r));
-
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					zout.dst = g_realloc(zout.dst, zout.size);
-				}
-			}
-
-			rspamd_mempool_add_destructor(task->task_pool, g_free, zout.dst);
-			task->msg.begin = zout.dst;
-			task->msg.len = zout.pos;
+			rspamd_mempool_add_destructor(task->task_pool,
+										  (rspamd_mempool_destruct_t) rspamd_fstring_free,
+										  decompressed);
+			task->msg.begin = decompressed->str;
+			task->msg.len = decompressed->len;
 			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED;
 
 			msg_info_task("loaded message from zstd compressed stream; "
 						  "compressed: %ul; uncompressed: %ul",
-						  (gulong) zin.size, (gulong) zout.pos);
+						  (gulong) compressed_len, (gulong) decompressed->len);
 		}
 		else {
 			g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
