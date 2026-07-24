@@ -115,9 +115,9 @@ struct fuzzy_rule {
 	gboolean skip_unknown;
 	gboolean no_share;
 	gboolean no_subject;
-	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
-	gboolean text_hashes;       /* Enable/disable generation of text hashes */
-	unsigned int min_html_tags; /* Minimum tags for HTML hash */
+	gboolean html_shingles;       /* Enable HTML fuzzy hashing */
+	gboolean text_hashes;         /* Enable/disable generation of text hashes */
+	unsigned int min_html_tags;   /* Minimum tags for HTML hash */
 	gboolean html_ignore_domains; /* Ignore link domains in HTML structural tokens */
 	int learn_condition_cb;
 	uint32_t retransmits;
@@ -1554,14 +1554,24 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	}
 	else if (rep->v1.value == 403) {
 		/* In fact, it should be 429, but we preserve compatibility */
+		msg_info_task("fuzzy rule %s: rate limit reached on %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 503) {
+		msg_info_task("fuzzy rule %s: access denied by %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 415) {
+		msg_info_task("fuzzy rule %s: encryption is required by %s; "
+					  "add encryption_key option to the rule",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 								  rule->name);
 	}
@@ -4730,14 +4740,24 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 			}
 			else if (rep->v1.value == 403) {
 				/* In fact, it should be 429, but we preserve compatibility */
+				msg_info_task("fuzzy rule %s: rate limit reached on %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 503) {
+				msg_info_task("fuzzy rule %s: access denied by %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 415) {
+				msg_info_task("fuzzy rule %s: encryption is required by %s; "
+							  "add encryption_key option to the rule",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 										  session->rule->name);
 			}
