@@ -351,6 +351,8 @@ unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 		return SYMBOL_TYPE_POSTFILTER;
 	case rspamd::symcache::symcache_item_type::IDEMPOTENT:
 		return SYMBOL_TYPE_IDEMPOTENT;
+	case rspamd::symcache::symcache_item_type::LEARN:
+		return SYMBOL_TYPE_LEARN;
 	case rspamd::symcache::symcache_item_type::CLASSIFIER:
 		return SYMBOL_TYPE_CLASSIFIER;
 	case rspamd::symcache::symcache_item_type::COMPOSITE:
@@ -361,6 +363,14 @@ unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 	}
 
 	return 0;
+}
+
+gboolean
+rspamd_symcache_learn_needs_check(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return real_cache->learn_needs_check() ? TRUE : FALSE;
 }
 
 const struct rspamd_symcache_item_stat *

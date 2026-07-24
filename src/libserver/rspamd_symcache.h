@@ -69,6 +69,8 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1u << 17u), /* Symbol ignores passthrough result */
 	SYMBOL_TYPE_EXPLICIT_ENABLE = (1u << 18u),    /* Symbol should be enabled explicitly only */
 	SYMBOL_TYPE_USE_CORO = (1u << 19u),           /* Symbol uses lua coroutines */
+	SYMBOL_TYPE_LEARN = (1u << 20u),              /* Executed at the LEARN stage of a learn task */
+	SYMBOL_TYPE_LEARN_NEEDS_CHECK = (1u << 21u),  /* A learn symbol that needs a full check pass first */
 };
 
 /**
@@ -287,6 +289,16 @@ unsigned int rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
  */
 unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 											  const char *symbol);
+
+/**
+ * Returns TRUE if any registered learn symbol is flagged
+ * SYMBOL_TYPE_LEARN_NEEDS_CHECK, i.e. some learner needs a full check pass
+ * (symbol scores) during a learn task. The controller uses this to pick the
+ * learn process mask.
+ * @param cache
+ * @return
+ */
+gboolean rspamd_symcache_learn_needs_check(struct rspamd_symcache *cache);
 
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,

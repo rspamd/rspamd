@@ -860,6 +860,19 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 					}
 				}
 			}
+
+			/*
+			 * Run registered `learn` symbols (e.g. neural) at the main LEARN
+			 * stage of a learning task. They read the learn class via the
+			 * autolearn_class mempool variable, exactly like the stat learner
+			 * above, and are async-aware via the standard session machinery.
+			 * The learn-flag gate on the enclosing block keeps them from firing
+			 * on a plain scan.
+			 */
+			if (st == RSPAMD_TASK_STAGE_LEARN && task->err == NULL) {
+				all_done = rspamd_symcache_process_symbols(task, task->cfg->cache, st) &&
+						   all_done;
+			}
 		}
 		break;
 	case RSPAMD_TASK_STAGE_COMPOSITES_POST:

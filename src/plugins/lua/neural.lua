@@ -317,14 +317,25 @@ local function neural_forced_learn_prefilter(task)
     'forced-learn minimal scan: disabled all non-neural symbols for %s training', hv)
 end
 
-local function ann_push_task_result(rule, task, verdict, score, set)
+local function ann_push_task_result(rule, task, verdict, score, set, forced_class)
   local train_opts = rule.train
   local learn_spam, learn_ham
   local skip_reason = 'unknown'
   local manual_train = false
 
+  -- A forced class is supplied by the learn-task path (e.g. /learnspam routed to
+  -- the neural learn symbol). It is authoritative and bypasses the
+  -- header/autolearn/verdict determination below, behaving like a manual train.
+  if forced_class == 'spam' then
+    learn_spam = true
+    manual_train = true
+  elseif forced_class == 'ham' then
+    learn_ham = true
+    manual_train = true
+  end
+
   -- First, honor explicit manual training header if present
-  do
+  if not manual_train then
     local hv = get_ann_train_header(task)
     if hv then
       lua_util.debugm(N, task, 'found ANN-Train header, enable manual train mode: %s', hv)
@@ -1692,6 +1703,36 @@ local function ann_push_vector(task)
   end
 end
 
+-- Per-rule learn-stage callback: collects a training vector from a dedicated
+-- learn task (e.g. a /learnspam corpus push) for a single neural rule. Each rule
+-- that opts into controller learning gets its own NEURAL_LEARN_<rule> learn
+-- symbol (registered below); a symbol-dependent rule's symbol carries the
+-- `learn_needs_check` flag so the controller runs a full check pass first
+-- (otherwise the learn task runs no rule symbol and the vector would be wrong).
+--
+-- Explicit learn tasks only: an autolearn-during-scan task (learn_auto flag)
+-- also reaches the learn stage, but neural already decides such cases on the
+-- scan path, so we skip it here to avoid double-storing the same message.
+local function neural_learn_one(task, rule)
+  if task:has_flag('learn_auto') then
+    lua_util.debugm(N, task, 'skip neural learn symbol for autolearn-during-scan task')
+    return
+  end
+
+  local cls = task:get_mempool():get_variable('autolearn_class')
+  if cls ~= 'spam' and cls ~= 'ham' then
+    lua_util.debugm(N, task, 'neural learn symbol: no spam/ham class (%s), skip', cls)
+    return
+  end
+
+  local set = neural_common.get_rule_settings(task, rule)
+  if set then
+    lua_util.debugm(N, task, 'neural learn task: store %s vector for %s:%s',
+      cls, rule.prefix, set.name)
+    ann_push_task_result(rule, task, nil, 0.0, set, cls)
+  end
+end
+
 
 -- Initialization part
 if not (neural_common.module_config and type(neural_common.module_config) == 'table')
@@ -1820,6 +1861,27 @@ for k, r in pairs(rules) do
     flags = 'nostat',
     parent = id
   })
+
+  -- Per-rule learn symbol: lets a controller learn task (/learnspam) train this
+  -- rule. Registered only when the rule opts into controller learning. A
+  -- symbol-dependent rule needs a full check pass first (its vector reads symbol
+  -- scores), signalled by the learn_needs_check flag; a disable_symbols_input
+  -- rule trains from the lean learn pipeline (no check).
+  if rule_elt.train.learn_from_controller then
+    local learn_flags = 'nostat,explicit_disable'
+    if not rule_elt.disable_symbols_input then
+      learn_flags = learn_flags .. ',learn_needs_check'
+    end
+    local this_rule = rule_elt
+    rspamd_config:register_symbol({
+      name = 'NEURAL_LEARN_' .. k,
+      type = 'learn',
+      flags = learn_flags,
+      callback = function(task)
+        neural_learn_one(task, this_rule)
+      end
+    })
+  end
 end
 
 rspamd_config:register_symbol({
@@ -1828,6 +1890,7 @@ rspamd_config:register_symbol({
   flags = 'nostat,explicit_disable,ignore_passthrough',
   callback = ann_push_vector
 })
+
 
 -- Forced-learn fast path: a prefilter that, for qualifying ANN-Train scans of
 -- disable_symbols_input rules, disables the whole non-neural pipeline. Priority
