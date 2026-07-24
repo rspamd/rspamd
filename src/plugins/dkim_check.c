@@ -33,6 +33,7 @@
 #include "config.h"
 #include "libmime/message.h"
 #include "libserver/dkim.h"
+#include "libserver/dkim2.h"
 #include "libutil/hash.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
@@ -47,6 +48,11 @@
 #define DEFAULT_SYMBOL_ALLOW "R_DKIM_ALLOW"
 #define DEFAULT_SYMBOL_NA "R_DKIM_NA"
 #define DEFAULT_SYMBOL_PERMFAIL "R_DKIM_PERMFAIL"
+#define DKIM2_SYMBOL_REJECT "R_DKIM2_REJECT"
+#define DKIM2_SYMBOL_TEMPFAIL "R_DKIM2_TEMPFAIL"
+#define DKIM2_SYMBOL_ALLOW "R_DKIM2_ALLOW"
+#define DKIM2_SYMBOL_NA "R_DKIM2_NA"
+#define DKIM2_SYMBOL_PERMFAIL "R_DKIM2_PERMFAIL"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_TIME_JITTER 60
 #define DEFAULT_MAX_SIGS 5
@@ -87,6 +93,7 @@ struct dkim_ctx {
 	gboolean trusted_only;
 	gboolean check_local;
 	gboolean check_authed;
+	gboolean enable_dkim2;
 };
 
 struct dkim_check_result {
@@ -103,6 +110,9 @@ struct dkim_check_result {
 static void dkim_symbol_callback(struct rspamd_task *task,
 								 struct rspamd_symcache_dynamic_item *item,
 								 void *unused);
+static void dkim2_symbol_callback(struct rspamd_task *task,
+								  struct rspamd_symcache_dynamic_item *item,
+								  void *unused);
 
 static int lua_dkim_sign_handler(lua_State *L);
 static int lua_dkim_verify_handler(lua_State *L);
@@ -242,6 +252,15 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   NULL,
 							   0,
 							   DEFAULT_SYMBOL_PERMFAIL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "dkim",
+							   "Enable experimental DKIM2 (draft-ietf-dkim-dkim2-spec) verification",
+							   "enable_dkim2",
+							   UCL_BOOLEAN,
+							   NULL,
+							   0,
+							   "false",
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
@@ -470,6 +489,14 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 	}
 
 	if ((value =
+			 rspamd_config_get_module_opt(cfg, "dkim", "enable_dkim2")) != NULL) {
+		dkim_module_ctx->enable_dkim2 = ucl_object_toboolean(value);
+	}
+	else {
+		dkim_module_ctx->enable_dkim2 = FALSE;
+	}
+
+	if ((value =
 			 rspamd_config_get_module_opt(cfg, "dkim", "whitelist")) != NULL) {
 
 		rspamd_config_radix_from_ucl(cfg, value, "DKIM whitelist",
@@ -662,6 +689,59 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 								 1,
 								 1);
 		rspamd_config_add_symbol_group(cfg, "DKIM_TRACE", "dkim");
+
+		if (dkim_module_ctx->enable_dkim2) {
+			int dkim2_cb_id;
+
+			dkim2_cb_id = rspamd_symcache_add_symbol(cfg->cache,
+													 "DKIM2_CHECK",
+													 0,
+													 dkim2_symbol_callback,
+													 NULL,
+													 SYMBOL_TYPE_CALLBACK,
+													 -1);
+			rspamd_config_add_symbol(cfg,
+									 "DKIM2_CHECK",
+									 0.0,
+									 "DKIM2 check callback",
+									 "policies",
+									 RSPAMD_SYMBOL_FLAG_IGNORE_METRIC,
+									 1,
+									 1);
+			rspamd_config_add_symbol_group(cfg, "DKIM2_CHECK", "dkim");
+			rspamd_symcache_add_symbol(cfg->cache,
+									   DKIM2_SYMBOL_ALLOW,
+									   0,
+									   NULL, NULL,
+									   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+									   dkim2_cb_id);
+			rspamd_symcache_add_symbol(cfg->cache,
+									   DKIM2_SYMBOL_REJECT,
+									   0,
+									   NULL, NULL,
+									   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+									   dkim2_cb_id);
+			rspamd_symcache_add_symbol(cfg->cache,
+									   DKIM2_SYMBOL_TEMPFAIL,
+									   0,
+									   NULL, NULL,
+									   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+									   dkim2_cb_id);
+			rspamd_symcache_add_symbol(cfg->cache,
+									   DKIM2_SYMBOL_PERMFAIL,
+									   0,
+									   NULL, NULL,
+									   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+									   dkim2_cb_id);
+			rspamd_symcache_add_symbol(cfg->cache,
+									   DKIM2_SYMBOL_NA,
+									   0,
+									   NULL, NULL,
+									   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+									   dkim2_cb_id);
+
+			msg_info_config("enabled experimental DKIM2 verification");
+		}
 
 		msg_info_config("init internal dkim module");
 #ifndef HAVE_OPENSSL
@@ -1357,6 +1437,108 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 	}
 
 	dkim_module_check(res);
+}
+
+static void
+dkim2_module_verify_cb(struct rspamd_task *task,
+					   const struct rspamd_dkim2_verify_result *res,
+					   void *ud)
+{
+	const char *symbol;
+	char optbuf[512];
+
+	switch (res->rcode) {
+	case RSPAMD_DKIM2_PASS:
+		symbol = DKIM2_SYMBOL_ALLOW;
+		break;
+	case RSPAMD_DKIM2_FAIL:
+		symbol = DKIM2_SYMBOL_REJECT;
+		break;
+	case RSPAMD_DKIM2_TEMPERROR:
+		symbol = DKIM2_SYMBOL_TEMPFAIL;
+		break;
+	default:
+		symbol = DKIM2_SYMBOL_PERMFAIL;
+		break;
+	}
+
+	if (res->nhops > 0) {
+		const struct rspamd_dkim2_hop_result *last = &res->hops[res->nhops - 1];
+
+		if (res->fail_reason != NULL) {
+			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:m=%ud/%ud:%s",
+							last->domain, last->idx,
+							res->verified_instances, res->ninstances,
+							res->fail_reason);
+		}
+		else {
+			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:m=%ud/%ud",
+							last->domain, last->idx,
+							res->verified_instances, res->ninstances);
+		}
+
+		msg_info_task("DKIM2 chain verification result: %s; %s",
+					  symbol, optbuf);
+		rspamd_task_insert_result(task, symbol, 1.0,
+								  rspamd_mempool_strdup(task->task_pool, optbuf));
+	}
+	else {
+		rspamd_task_insert_result(task, symbol, 1.0, res->fail_reason);
+	}
+}
+
+static void
+dkim2_symbol_callback(struct rspamd_task *task,
+					  struct rspamd_symcache_dynamic_item *item,
+					  void *unused)
+{
+	GError *err = NULL;
+	rspamd_dkim2_chain_t *chain;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context(task->cfg);
+	struct rspamd_dkim2_verify_params params;
+
+	/* Honour the same local/authenticated exclusions as DKIM */
+	if ((!dkim_module_ctx->check_authed && task->auth_user != NULL) ||
+		(!dkim_module_ctx->check_local &&
+		 rspamd_ip_is_local_cfg(task->cfg, task->from_addr))) {
+		rspamd_symcache_finalize_item(task, item);
+
+		return;
+	}
+
+	chain = rspamd_dkim2_chain_parse(task, &err);
+
+	if (chain == NULL) {
+		if (err != NULL) {
+			msg_info_task("cannot parse DKIM2 chain: %e", err);
+			rspamd_task_insert_result(task, DKIM2_SYMBOL_PERMFAIL, 1.0,
+									  rspamd_mempool_strdup(task->task_pool,
+															err->message));
+			g_error_free(err);
+		}
+		else {
+			rspamd_task_insert_result(task, DKIM2_SYMBOL_NA, 1.0, NULL);
+		}
+
+		rspamd_symcache_finalize_item(task, item);
+
+		return;
+	}
+
+	memset(&params, 0, sizeof(params));
+	params.time_jitter = dkim_module_ctx->time_jitter;
+	params.max_age = 0; /* Use the default (14 days) */
+	params.check_envelope = task->from_envelope != NULL;
+
+	rspamd_symcache_item_async_inc(task, item, M);
+
+	if (!rspamd_dkim2_chain_verify(chain, task, &params,
+								   dkim2_module_verify_cb, NULL)) {
+		rspamd_task_insert_result(task, DKIM2_SYMBOL_TEMPFAIL, 1.0,
+								  "cannot start DKIM2 verification");
+	}
+
+	rspamd_symcache_item_async_dec_check(task, item, M);
 }
 
 static void
