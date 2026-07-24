@@ -110,14 +110,16 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_pubkey *write_peer_key;
 	double hits_limit;
 	double weight_threshold;
+	double prob_bias;   /* Anchor of the probability weight curve (default 0.5, the shingle match threshold) */
+	double prob_power;  /* Exponent of the curve (default 1.0) */
 	double html_weight; /* Weight multiplier for HTML hashes (default 1.0) */
 	enum fuzzy_rule_mode mode;
 	gboolean skip_unknown;
 	gboolean no_share;
 	gboolean no_subject;
-	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
-	gboolean text_hashes;       /* Enable/disable generation of text hashes */
-	unsigned int min_html_tags; /* Minimum tags for HTML hash */
+	gboolean html_shingles;       /* Enable HTML fuzzy hashing */
+	gboolean text_hashes;         /* Enable/disable generation of text hashes */
+	unsigned int min_html_tags;   /* Minimum tags for HTML hash */
 	gboolean html_ignore_domains; /* Ignore link domains in HTML structural tokens */
 	int learn_condition_cb;
 	uint32_t retransmits;
@@ -532,6 +534,27 @@ fuzzy_normalize(int32_t in, double weight)
 #endif
 }
 
+/*
+ * Convert the reply probability into a weight multiplier.
+ *
+ * The server never replies with prob below the shingle match threshold
+ * (0.5), so a curve anchored at zero (like the old sqrt(prob)) collapses
+ * the whole reachable range into (~0.73 .. 1.0] and barely depends on the
+ * match quality: a marginal 17/32 shingle overlap yields almost the same
+ * score as an exact match. Anchor at prob_bias instead:
+ * ((prob - bias) / (1 - bias)) ^ prob_power, which spreads match quality
+ * over the full 0..1 range.
+ */
+static double
+fuzzy_weight_from_prob(struct fuzzy_rule *rule, double prob)
+{
+	double norm = (prob - rule->prob_bias) / (1.0 - rule->prob_bias);
+
+	norm = MIN(1.0, MAX(0.0, norm));
+
+	return pow(norm, rule->prob_power);
+}
+
 static struct fuzzy_rule *
 fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 {
@@ -546,6 +569,8 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 								  rule->mappings);
 	rule->mode = fuzzy_rule_read_write;
 	rule->weight_threshold = NAN;
+	rule->prob_bias = 0.5;
+	rule->prob_power = 1.0;
 	rule->html_weight = 1.0;
 	rule->html_shingles = FALSE;
 	rule->text_hashes = TRUE;
@@ -1554,14 +1579,24 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	}
 	else if (rep->v1.value == 403) {
 		/* In fact, it should be 429, but we preserve compatibility */
+		msg_info_task("fuzzy rule %s: rate limit reached on %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 503) {
+		msg_info_task("fuzzy rule %s: access denied by %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 415) {
+		msg_info_task("fuzzy rule %s: encryption is required by %s; "
+					  "add encryption_key option to the rule",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 								  rule->name);
 	}
@@ -2223,6 +2258,28 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->weight_threshold = ucl_object_todouble(value);
 	}
 
+	if ((value = ucl_object_lookup(obj, "prob_power")) != NULL) {
+		rule->prob_power = ucl_object_todouble(value);
+
+		if (!(rule->prob_power > 0)) {
+			msg_warn_config("prob_power must be positive in rule %s, "
+							"using the default 1.0",
+							rule->name);
+			rule->prob_power = 1.0;
+		}
+	}
+
+	if ((value = ucl_object_lookup(obj, "prob_bias")) != NULL) {
+		rule->prob_bias = ucl_object_todouble(value);
+
+		if (rule->prob_bias < 0 || rule->prob_bias >= 1.0) {
+			msg_warn_config("prob_bias must be in [0, 1) in rule %s, "
+							"using the default 0.5",
+							rule->name);
+			rule->prob_bias = 0.5;
+		}
+	}
+
 	if ((value = ucl_object_lookup(obj, "text_hashes")) != NULL) {
 		rule->text_hashes = ucl_obj_toboolean(value);
 	}
@@ -2490,6 +2547,27 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   "Legacy name: max_score",
 							   "hits_limit",
 							   UCL_INT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Exponent of the probability weight curve: score multiplier is "
+							   "((prob - prob_bias) / (1 - prob_bias)) ^ prob_power, so weak shingle "
+							   "matches score much lower than exact ones (default: 1.0)",
+							   "prob_power",
+							   UCL_FLOAT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Anchor of the probability weight curve, normally the shingle match "
+							   "threshold (default: 0.5)",
+							   "prob_bias",
+							   UCL_FLOAT,
 							   NULL,
 							   0,
 							   NULL,
@@ -4515,7 +4593,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
 			/* HTML domain-sensitive hash (structure + domains) */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 			nval *= session->rule->html_weight;
 
 			type = "htmld";
@@ -4523,7 +4601,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
 			/* HTML structural hash (template mode, domains ignored) */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 			/* Apply HTML weight multiplier from rule config */
 			nval *= session->rule->html_weight;
 
@@ -4532,7 +4610,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else {
 			/* Calc real probability */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 
 			if (cmd->shingles_count > 0) {
 				type = "txt";
@@ -4730,14 +4808,24 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 			}
 			else if (rep->v1.value == 403) {
 				/* In fact, it should be 429, but we preserve compatibility */
+				msg_info_task("fuzzy rule %s: rate limit reached on %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 503) {
+				msg_info_task("fuzzy rule %s: access denied by %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 415) {
+				msg_info_task("fuzzy rule %s: encryption is required by %s; "
+							  "add encryption_key option to the rule",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 										  session->rule->name);
 			}
