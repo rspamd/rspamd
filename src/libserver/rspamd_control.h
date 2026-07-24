@@ -42,6 +42,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_MULTIPATTERN_LOADED,
 	RSPAMD_CONTROL_REGEXP_MAP_LOADED,
 	RSPAMD_CONTROL_MEMORY_STAT,
+	RSPAMD_CONTROL_FUZZY_HASH,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -107,6 +108,9 @@ struct rspamd_control_command {
 			unsigned int unused;
 		} fuzzy_sync;
 		struct {
+			unsigned char digest[64];
+		} fuzzy_hash;
+		struct {
 			enum {
 				rspamd_child_offline,
 				rspamd_child_online,
@@ -168,6 +172,10 @@ struct rspamd_control_reply {
 			unsigned int status;
 			char storage_id[MEMPOOL_UID_LEN];
 		} fuzzy_stat;
+		struct {
+			unsigned int status;
+			char storage_id[MEMPOOL_UID_LEN];
+		} fuzzy_hash;
 		struct {
 			unsigned int status;
 		} fuzzy_sync;

@@ -82,7 +82,7 @@ struct rspamd_leaky_bucket_elt {
 };
 
 struct rspamd_fuzzy_dynamic_ban {
-	double expire_ts; /* monotonic clock; 0.0 = never expires */
+	double expire_ts;      /* monotonic clock; 0.0 = never expires */
 	int32_t response_code; /* fuzzy reply code; 0 = use default (503) */
 	char reason[64];
 };
@@ -182,6 +182,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_http_context *http_ctx;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
+	/* Aggregate + per-IP stats for unkeyed clients (allowed by allow_update etc) */
+	struct fuzzy_key_stat *unkeyed_stat;
 	struct rspamd_fuzzy_backend *backend;
 	GArray *updates_pending;
 	unsigned int updates_failed;
@@ -222,7 +224,7 @@ struct fuzzy_session {
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
-	struct rspamd_fuzzy_shingle_cmd cmd;       /* Can handle both shingles and non-shingles */
+	struct rspamd_fuzzy_shingle_cmd cmd; /* Can handle both shingles and non-shingles */
 	union {
 		struct rspamd_fuzzy_encrypted_reply v1;
 		struct rspamd_fuzzy_encrypted_reply_v2 v2;
@@ -348,5 +350,11 @@ gboolean rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 								   int attached_fd,
 								   struct rspamd_control_command *cmd,
 								   gpointer ud);
+
+gboolean rspamd_fuzzy_storage_hash_info(struct rspamd_main *rspamd_main,
+										struct rspamd_worker *worker, int fd,
+										int attached_fd,
+										struct rspamd_control_command *cmd,
+										gpointer ud);
 
 #endif

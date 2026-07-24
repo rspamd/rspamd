@@ -51,6 +51,8 @@ typedef void (*rspamd_fuzzy_update_cb)(gboolean success,
 typedef void (*rspamd_fuzzy_version_cb)(uint64_t rev, void *ud);
 
 typedef void (*rspamd_fuzzy_count_cb)(uint64_t count, void *ud);
+/* Called with an ucl object describing the hash (ownership transferred) or NULL */
+typedef void (*rspamd_fuzzy_inspect_cb)(ucl_object_t *res, void *ud);
 
 typedef gboolean (*rspamd_fuzzy_periodic_cb)(void *ud);
 
@@ -93,6 +95,14 @@ void rspamd_fuzzy_backend_process_updates(struct rspamd_fuzzy_backend *bk,
  * @param cb
  * @param ud
  */
+/**
+ * Get diagnostic information about a specific hash: flags, values, creation
+ * time, ttl and shingle slot ownership (where the backend supports it)
+ */
+void rspamd_fuzzy_backend_inspect(struct rspamd_fuzzy_backend *bk,
+								  const unsigned char *digest,
+								  rspamd_fuzzy_inspect_cb cb, void *ud);
+
 void rspamd_fuzzy_backend_count(struct rspamd_fuzzy_backend *bk,
 								rspamd_fuzzy_count_cb cb, void *ud);
 
