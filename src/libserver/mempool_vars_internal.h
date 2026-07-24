@@ -38,6 +38,8 @@
 #define RSPAMD_MEMPOOL_ARC_SIGN_SELECTOR "arc_selector"
 #define RSPAMD_MEMPOOL_STAT_SIGNATURE "stat_signature"
 #define RSPAMD_MEMPOOL_FUZZY_RESULT "fuzzy_hashes"
+#define RSPAMD_MEMPOOL_FUZZY_MATCHES "fuzzy_matches"
+#define RSPAMD_MEMPOOL_FUZZY_CHECKED "fuzzy_checked"
 #define RSPAMD_MEMPOOL_SPAM_LEARNS "spam_learns"
 #define RSPAMD_MEMPOOL_HAM_LEARNS "ham_learns"
 #define RSPAMD_MEMPOOL_RE_MAPS_CACHE "re_maps_cache"

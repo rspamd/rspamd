@@ -80,6 +80,15 @@ RSPAMD_PACKED(rspamd_fuzzy_reply_v1)
 	float prob;
 };
 
+/*
+ * Flags stored in the first reserved byte of a reply.
+ * MATCHED_DIGEST is set when the digest field contains the actual digest
+ * stored in the storage (a direct or shingle match resolved by the
+ * backend); legacy storages leave the reserved bytes zeroed, so its
+ * absence merely means "unknown".
+ */
+#define RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST (1u << 0u)
+
 RSPAMD_PACKED(rspamd_fuzzy_reply)
 {
 	struct rspamd_fuzzy_reply_v1 v1;

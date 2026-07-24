@@ -619,6 +619,8 @@ enum rspamd_fuzzy_reply_flags {
 	RSPAMD_FUZZY_REPLY_ENCRYPTED = 0x1u << 0u,
 	RSPAMD_FUZZY_REPLY_SHINGLE = 0x1u << 1u,
 	RSPAMD_FUZZY_REPLY_DELAY = 0x1u << 2u,
+	/* The reply digest is the actual digest resolved by the backend */
+	RSPAMD_FUZZY_REPLY_MATCHED = 0x1u << 3u,
 };
 
 /*
@@ -743,6 +745,10 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 			/* Filter forbidden flags from primary and extra flags */
 			rspamd_fuzzy_filter_forbidden_v2(rep_v2, session, flags);
 
+			if ((flags & RSPAMD_FUZZY_REPLY_MATCHED) && rep_v2->v1.prob > 0.5f) {
+				rep_v2->reserved[0] |= RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST;
+			}
+
 			if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
 
 				/* Use a temporary v1 reply for stats (stats API expects rspamd_fuzzy_reply) */
@@ -805,6 +811,11 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 				session->reply.v1.rep.ts = 0;
 				session->reply.v1.rep.v1.prob = 0.0f;
 				session->reply.v1.rep.v1.value = 0;
+			}
+
+			if ((flags & RSPAMD_FUZZY_REPLY_MATCHED) &&
+				session->reply.v1.rep.v1.prob > 0.5f) {
+				session->reply.v1.rep.reserved[0] |= RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST;
 			}
 
 			bool default_disabled = false;
@@ -1183,6 +1194,11 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_multiflag_result *mf_result, voi
 				g_free(up_req);
 			}
 		}
+	}
+
+	if (result->v1.prob > 0.5) {
+		/* The digest in the reply is the one resolved by the backend */
+		send_flags |= RSPAMD_FUZZY_REPLY_MATCHED;
 	}
 
 	rspamd_fuzzy_make_reply(cmd, result, mf_result, session, send_flags);
