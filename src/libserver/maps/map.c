@@ -235,7 +235,7 @@ http_map_error(struct rspamd_http_connection *conn,
 		cbd->periodic->errored = TRUE;
 		msg_err_map("error reading %s(%s): "
 					"connection with http server terminated incorrectly: %e",
-					cbd->bk->uri,
+					cbd->bk->uri_log,
 					cbd->addr ? rspamd_inet_address_to_string_pretty(cbd->addr) : "",
 					err);
 
@@ -462,13 +462,13 @@ rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
 	struct rspamd_map *map = bk ? bk->map : NULL;
 
 	if (!bk->has_secretbox_key) {
-		msg_err_map("%s: secretbox key is not configured", bk->uri);
+		msg_err_map("%s: secretbox key is not configured", bk->uri_log);
 		return FALSE;
 	}
 
 	if (inlen < crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES) {
 		msg_err_map("%s: too short buffer for secretbox: %z bytes (need >= %d)",
-					bk->uri, inlen, (int) (crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES));
+					bk->uri_log, inlen, (int) (crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES));
 		return FALSE;
 	}
 
@@ -478,7 +478,7 @@ rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
 
 	if (clen < crypto_secretbox_MACBYTES) {
 		msg_err_map("%s: invalid ciphertext length for secretbox: %z (< MAC %d)",
-					bk->uri, clen, (int) crypto_secretbox_MACBYTES);
+					bk->uri_log, clen, (int) crypto_secretbox_MACBYTES);
 		return FALSE;
 	}
 
@@ -490,7 +490,7 @@ rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
 
 	if (crypto_secretbox_open_easy(pt, ct, clen, nonce, bk->secretbox_key) != 0) {
 		msg_err_map("%s: secretbox authentication failed (nonce_len=%d, ct_len=%z)",
-					bk->uri, (int) crypto_secretbox_NONCEBYTES, clen);
+					bk->uri_log, (int) crypto_secretbox_NONCEBYTES, clen);
 		g_free(pt);
 		return FALSE;
 	}
@@ -780,7 +780,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		if (cbd->bk->is_encrypted) {
 			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, dlen, &payload, &payload_len)) {
-				msg_err_map("%s(%s): cannot decrypt data", cbd->bk->uri,
+				msg_err_map("%s(%s): cannot decrypt data", cbd->bk->uri_log,
 							rspamd_inet_address_to_string_pretty(cbd->addr));
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
 				goto err;
@@ -803,7 +803,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 			if (decompressed == NULL) {
 				msg_err_map("%s(%s): cannot decompress data: %s",
-							cbd->bk->uri,
+							cbd->bk->uri_log,
 							rspamd_inet_address_to_string_pretty(cbd->addr),
 							derr ? derr->message : "unknown error");
 				g_clear_error(&derr);
@@ -823,7 +823,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data,
 												  (const unsigned char *) decompressed->str,
 												  decompressed->len)) {
-				msg_err_map("%s: failed to save cache file", bk->uri);
+				msg_err_map("%s: failed to save cache file", bk->uri_log);
 				rspamd_fstring_free(decompressed);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
 				goto err;
@@ -851,7 +851,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 						 payload_len, next_check_date);
 
 			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, payload, payload_len)) {
-				msg_err_map("%s: failed to save cache file", bk->uri);
+				msg_err_map("%s: failed to save cache file", bk->uri_log);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
 				goto err;
 			}
@@ -1716,7 +1716,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 				cbd->periodic->errored = TRUE;
 				msg_err_map("error reading %s(%s): "
 							"connection with http server terminated incorrectly: %s",
-							cbd->bk->uri,
+							cbd->bk->uri_log,
 							cbd->addr ? rspamd_inet_address_to_string_pretty(cbd->addr) : "",
 							strerror(errno));
 
@@ -1748,7 +1748,7 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		struct stat st;
 
 		if (map->cfg->maps_cache_dir == NULL || map->cfg->maps_cache_dir[0] == '\0') {
-			msg_err_map("%s: no maps cache dir configured for no_file_read map", bk->uri);
+			msg_err_map("%s: no maps cache dir configured for no_file_read map", bk->uri_log);
 			return FALSE;
 		}
 
@@ -1823,7 +1823,7 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 
 			if (decompressed == NULL) {
 				msg_err_map("%s: cannot decompress data: %s",
-							bk->uri,
+							bk->uri_log,
 							derr ? derr->message : "unknown error");
 				g_clear_error(&derr);
 				if (dec) {
@@ -2921,6 +2921,75 @@ void rspamd_map_remove_all(struct rspamd_config *cfg)
 	cfg->maps = NULL;
 }
 
+/*
+ * Return a freshly allocated copy of @uri with the HTTP userinfo
+ * (the "user:pass@" prefix of the authority) replaced by "***@", so
+ * the result is safe to write to logs (e.g. the /errors ring buffer).
+ * URIs without a scheme or without userinfo are duplicated as-is.
+ */
+/* Non-static for unit testing */
+char *
+rspamd_map_uri_redacted(const char *uri)
+{
+	const char *scheme_sep, *authority, *at, *auth_end, *p;
+	char *res;
+	gsize prefix_len, rest_len;
+
+	g_assert(uri != NULL);
+
+	scheme_sep = strstr(uri, "://");
+
+	if (scheme_sep == NULL) {
+		return g_strdup(uri);
+	}
+
+	authority = scheme_sep + 3;
+	/* The authority ends at the first '/', '?' or '#' (or end of string) */
+	auth_end = authority + strcspn(authority, "/?#");
+	/* Userinfo, if present, is everything before the last '@' in the
+	 * authority. Using the last '@' (rather than the first) also covers
+	 * malformed inputs where a raw password itself contains '@'; an IPv6
+	 * host literal in brackets is unaffected since it follows the userinfo
+	 * and never contains '@'. */
+	at = NULL;
+	for (p = auth_end; p-- > authority;) {
+		if (*p == '@') {
+			at = p;
+			break;
+		}
+	}
+
+	if (at == NULL) {
+		return g_strdup(uri);
+	}
+
+	prefix_len = authority - uri; /* scheme + "://" */
+	rest_len = strlen(at + 1);
+	res = g_malloc(prefix_len + 4 /* "***@" */ + rest_len + 1);
+	memcpy(res, uri, prefix_len);
+	memcpy(res + prefix_len, "***@", 4);
+	memcpy(res + prefix_len + 4, at + 1, rest_len + 1); /* includes NUL */
+
+	return res;
+}
+
+/*
+ * Assign the backend uri and a matching redacted copy used for logging.
+ * The real uri is kept verbatim because it serves as a configuration key
+ * (the "maps { <uri> {} }" block) and carries the HTTP userinfo needed to
+ * build the Authorization header; bk->uri_log must be used in log messages
+ * instead.
+ */
+static void
+rspamd_map_backend_set_uri(struct rspamd_map_backend *bk, const char *uri)
+{
+	g_assert(bk != NULL);
+	g_assert(uri != NULL);
+
+	bk->uri = g_strdup(uri);
+	bk->uri_log = rspamd_map_uri_redacted(uri);
+}
+
 static const char *
 rspamd_map_check_proto(struct rspamd_config *cfg,
 					   const char *map_line, struct rspamd_map_backend *bk)
@@ -2935,13 +3004,13 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 	/* Static check */
 	if (g_ascii_strcasecmp(pos, "static") == 0) {
 		bk->protocol = MAP_PROTO_STATIC;
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 
 		return pos;
 	}
 	else if (g_ascii_strcasecmp(pos, "zst+static") == 0) {
 		bk->protocol = MAP_PROTO_STATIC;
-		bk->uri = g_strdup(pos + 4);
+		rspamd_map_backend_set_uri(bk, pos + 4);
 		bk->is_compressed = TRUE;
 
 		return pos + 4;
@@ -3002,23 +3071,23 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 	if (g_ascii_strncasecmp(pos, "http://", sizeof("http://") - 1) == 0) {
 		bk->protocol = MAP_PROTO_HTTP;
 		/* Include http:// */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 		pos += sizeof("http://") - 1;
 	}
 	else if (g_ascii_strncasecmp(pos, "https://", sizeof("https://") - 1) == 0) {
 		bk->protocol = MAP_PROTO_HTTPS;
 		/* Include https:// */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 		pos += sizeof("https://") - 1;
 	}
 	else if (g_ascii_strncasecmp(pos, "file://", sizeof("file://") - 1) == 0) {
 		pos += sizeof("file://") - 1;
 		/* Exclude file:// */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 	}
 	else if (*pos == '/') {
 		/* Trivial file case */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 	}
 	else {
 		msg_err_config("invalid map fetching protocol: %s", map_line);
@@ -3129,6 +3198,7 @@ rspamd_map_backend_dtor(struct rspamd_map_backend *bk)
 		rspamd_pubkey_unref(bk->trusted_pubkey);
 	}
 
+	g_free(bk->uri_log);
 	g_free(bk->uri);
 	g_free(bk);
 }
@@ -3152,7 +3222,7 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 	}
 
 	if (bk->is_fallback && bk->protocol != MAP_PROTO_FILE) {
-		msg_err_config("fallback backend must be file for %s", bk->uri);
+		msg_err_config("fallback backend must be file for %s", bk->uri_log);
 
 		goto err;
 	}
@@ -3201,12 +3271,12 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 		memset(&up, 0, sizeof(up));
 		if (http_parser_parse_url(bk->uri, strlen(bk->uri), FALSE,
 								  &up) != 0) {
-			msg_err_config("cannot parse HTTP url: %s", bk->uri);
+			msg_err_config("cannot parse HTTP url: %s", bk->uri_log);
 			goto err;
 		}
 		else {
 			if (!(up.field_set & 1u << UF_HOST)) {
-				msg_err_config("cannot parse HTTP url: %s: no host", bk->uri);
+				msg_err_config("cannot parse HTTP url: %s: no host", bk->uri_log);
 				goto err;
 			}
 
@@ -3518,7 +3588,7 @@ rspamd_map_add(struct rspamd_config *cfg,
 	}
 
 	if (bk->is_fallback) {
-		msg_err_config("cannot add map with fallback only backend: %s", bk->uri);
+		msg_err_config("cannot add map with fallback only backend: %s", bk->uri_log);
 		REF_RELEASE(bk);
 
 		return NULL;
