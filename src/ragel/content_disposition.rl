@@ -26,10 +26,22 @@
   content_disposition = disposition_type (";" disposition_parm)*;
 
   prepush {
+    if (top >= RSPAMD_RAGEL_MAX_COMMENT_NESTING) {
+      /* Too deeply nested comments, bail out instead of growing the stack */
+      fbreak;
+    }
+
     if (top >= st_storage.size) {
-      st_storage.size = (top + 1) * 2;
-      st_storage.data = realloc (st_storage.data, st_storage.size * sizeof (int));
-      g_assert (st_storage.data != NULL);
+      gsize _new_size = (top + 1) * 2;
+      int *_new_data = realloc (st_storage.data, _new_size * sizeof (int));
+
+      if (_new_data == NULL) {
+        /* Keep the old allocation so that it can still be freed */
+        fbreak;
+      }
+
+      st_storage.size = _new_size;
+      st_storage.data = _new_data;
       stack = st_storage.data;
     }
   }
