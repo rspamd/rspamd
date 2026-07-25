@@ -181,6 +181,21 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 						  "delayed_hashes",
 						  0,
 						  false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromint(ctx->stat.blocked_requests),
+						  "blocked_requests",
+						  0,
+						  false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromint(ctx->stat.decrypt_errors),
+						  "decrypt_errors",
+						  0,
+						  false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromint(ctx->stat.ratelimited_requests),
+						  "ratelimited_requests",
+						  0,
+						  false);
 
 	if (ctx->errors_ips && ip_stat) {
 		gpointer k, v;

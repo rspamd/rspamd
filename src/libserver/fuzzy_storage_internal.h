@@ -56,6 +56,17 @@ struct fuzzy_global_stat {
 	uint64_t fuzzy_hashes_found[RSPAMD_FUZZY_EPOCH_MAX];
 	uint64_t invalid_requests;
 	uint64_t delayed_hashes;
+	/*
+	 * Requests dropped before parsing because the source is blocklisted,
+	 * and requests whose encrypted header failed key lookup or MAC check.
+	 * Both are logged at debug level only (a spoofed-source flood would
+	 * otherwise turn into one error line per datagram), so these counters
+	 * are the sole operational signal that either is happening.
+	 */
+	uint64_t blocked_requests;
+	uint64_t decrypt_errors;
+	/* PING/STAT dropped by the per-source rate limit rather than answered */
+	uint64_t ratelimited_requests;
 };
 
 struct fuzzy_key_stat {
@@ -240,6 +251,15 @@ struct fuzzy_session {
 	struct fuzzy_key *key;
 	struct rspamd_fuzzy_cmd_extension *extensions;
 	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
+
+	/*
+	 * Set when the source address was already run through
+	 * rspamd_fuzzy_check_client before the session was created (the UDP
+	 * path checks it up front, prior to parsing). Lets the per-command
+	 * check be skipped for that path without losing it for TCP, where a
+	 * dynamic block can land after the connection was accepted.
+	 */
+	bool client_checked;
 
 	/* If this is a TCP session, this pointer will be set */
 	struct fuzzy_tcp_session *tcp_session;

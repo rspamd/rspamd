@@ -1376,12 +1376,21 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		return;
 	}
 
-	int block_code = rspamd_fuzzy_check_client(session->ctx, session->addr);
-	if (block_code > 0) {
-		result.v1.value = block_code;
-		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
-		return;
+	/*
+	 * UDP sessions were already screened before parsing, so re-checking here
+	 * would just repeat the radix lookups on every accepted datagram. TCP
+	 * command sessions still need it: the connection is only screened at
+	 * accept time, and a dynamic block can land while it is open.
+	 */
+	if (!session->client_checked) {
+		int block_code = rspamd_fuzzy_check_client(session->ctx, session->addr);
+		if (block_code > 0) {
+			session->ctx->stat.blocked_requests++;
+			result.v1.value = block_code;
+			result.v1.prob = 0.0f;
+			rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
+			return;
+		}
 	}
 
 	if (session->key && session->addr) {
@@ -1431,20 +1440,33 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		session->ip_stat = ip_stat;
 	}
 
-	if (cmd->cmd == FUZZY_CHECK) {
-		bool is_rate_allowed = true;
+	/*
+	 * The per-source bucket covers every command that produces a reply
+	 * without needing write authorisation: CHECK, PING and STAT. PING and
+	 * STAT are answered unauthenticated, so leaving them unmetered let a
+	 * source spend our parse and reply budget for free. Writes and deletes
+	 * are gated by rspamd_fuzzy_check_write instead.
+	 *
+	 * This is inert unless ratelimit_rate and ratelimit_burst are configured,
+	 * and rspamd_fuzzy_check_ratelimit already exempts ratelimit_whitelist
+	 * and local addresses, which is where monitoring probes belong.
+	 */
+	bool is_rate_allowed = true;
 
-		if (session->ctx->ratelimit_buckets) {
-			if (session->ctx->ratelimit_log_only) {
-				(void) rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
-													session->worker, session->timestamp); /* Check but ignore */
-			}
-			else {
-				is_rate_allowed = rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
-															   session->worker, session->timestamp);
-			}
+	if (session->ctx->ratelimit_buckets &&
+		(cmd->cmd == FUZZY_CHECK || cmd->cmd == FUZZY_PING ||
+		 cmd->cmd == FUZZY_STAT)) {
+		if (session->ctx->ratelimit_log_only) {
+			(void) rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
+												session->worker, session->timestamp); /* Check but ignore */
 		}
+		else {
+			is_rate_allowed = rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
+														   session->worker, session->timestamp);
+		}
+	}
 
+	if (cmd->cmd == FUZZY_CHECK) {
 		if (session->key && session->key->rl_bucket) {
 			/* Check per-key bucket */
 
@@ -1560,17 +1582,33 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
 		}
 	}
-	else if (cmd->cmd == FUZZY_STAT) {
-		/* Store approximation (if needed) */
-		result.v1.prob = session->ctx->stat.fuzzy_hashes;
-		/* Store high qword in value and low qword in flag */
-		result.v1.value = (int32_t) ((uint64_t) session->ctx->stat.fuzzy_hashes >> 32);
-		result.v1.flag = (uint32_t) (session->ctx->stat.fuzzy_hashes & G_MAXUINT32);
-		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
-	}
-	else if (cmd->cmd == FUZZY_PING) {
-		result.v1.prob = 1.0f;
-		result.v1.value = cmd->value;
+	else if (cmd->cmd == FUZZY_STAT || cmd->cmd == FUZZY_PING) {
+		/*
+		 * Unlike CHECK, a rate limited PING or STAT is dropped rather than
+		 * answered with 403: the reply *is* the entire cost of these
+		 * commands, so replying anyway would leave egress unchanged and
+		 * defeat the limit. This matches how a blocklisted source is handled.
+		 */
+		if (!is_rate_allowed) {
+			session->ctx->stat.ratelimited_requests++;
+			msg_debug("dropping ratelimited %s from %s",
+					  cmd->cmd == FUZZY_PING ? "ping" : "stat",
+					  rspamd_inet_address_to_string(session->addr));
+			return;
+		}
+
+		if (cmd->cmd == FUZZY_STAT) {
+			/* Store approximation (if needed) */
+			result.v1.prob = session->ctx->stat.fuzzy_hashes;
+			/* Store high qword in value and low qword in flag */
+			result.v1.value = (int32_t) ((uint64_t) session->ctx->stat.fuzzy_hashes >> 32);
+			result.v1.flag = (uint32_t) (session->ctx->stat.fuzzy_hashes & G_MAXUINT32);
+		}
+		else {
+			result.v1.prob = 1.0f;
+			result.v1.value = cmd->value;
+		}
+
 		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
 	}
 	else {
@@ -1745,8 +1783,15 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 	rk = rspamd_pubkey_from_bin(hdr.pubkey, sizeof(hdr.pubkey), RSPAMD_KEYPAIR_KEX);
 
 	if (rk == NULL) {
-		msg_err("bad key; ip=%s",
-				rspamd_inet_address_to_string(s->addr));
+		/*
+		 * Debug level on purpose: this is reachable by any host that can
+		 * send us a datagram, before any rate limit applies, so logging it
+		 * at error level turns a spoofed-source flood into one log line per
+		 * packet. The decrypt_errors counter carries the signal instead.
+		 */
+		s->ctx->stat.decrypt_errors++;
+		msg_debug("bad key; ip=%s",
+				  rspamd_inet_address_to_string(s->addr));
 		return FALSE;
 	}
 
@@ -1757,8 +1802,10 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 	if (!rspamd_cryptobox_decrypt_nm_inplace(buf, buflen, hdr.nonce,
 											 rspamd_pubkey_get_nm(rk, key->key),
 											 hdr.mac)) {
-		msg_err("decryption failed; ip=%s",
-				rspamd_inet_address_to_string(s->addr));
+		/* Debug level for the same reason as the bad key case above */
+		s->ctx->stat.decrypt_errors++;
+		msg_debug("decryption failed; ip=%s",
+				  rspamd_inet_address_to_string(s->addr));
 		rspamd_pubkey_unref(rk);
 
 		return FALSE;
@@ -2185,6 +2232,27 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 					client_addr = NULL;
 				}
 
+				/*
+				 * Drop blocklisted sources before doing any work on the
+				 * datagram. This only needs the source address, so a blocked
+				 * peer costs one radix lookup instead of a session
+				 * allocation, command parsing, an ECDH plus MAC verification
+				 * for encrypted commands, and the Lua pre-handlers.
+				 *
+				 * Nothing is sent back: building a reply would require
+				 * parsing the command first, which is exactly the work being
+				 * avoided. The TCP path already drops blocked peers without
+				 * a reply (see accept_tcp_socket), so this makes the two
+				 * transports behave alike.
+				 */
+				if (client_addr && rspamd_fuzzy_check_client(ctx, client_addr) > 0) {
+					ctx->stat.blocked_requests++;
+					msg_debug("dropping fuzzy command from blocked address %s",
+							  rspamd_inet_address_to_string(client_addr));
+					rspamd_inet_address_free(client_addr);
+					continue;
+				}
+
 				session = g_malloc0(sizeof(*session));
 				REF_INIT_RETAIN(session, fuzzy_session_destroy);
 				session->worker = worker;
@@ -2192,6 +2260,7 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 				session->ctx = ctx;
 				session->timestamp = ev_now(ctx->event_loop);
 				session->addr = client_addr;
+				session->client_checked = true;
 				worker->nconns++;
 
 				/* Each message can have its length in case of recvmmsg */
@@ -2209,6 +2278,18 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 					session->ctx->stat.invalid_requests++;
 					msg_debug("invalid fuzzy command of size %z received", r);
 
+					/*
+					 * errors_ips is telemetry only: it is reported by
+					 * fuzzystat and deliberately never feeds a blocking
+					 * decision. It is incremented exactly when parsing
+					 * failed, which takes no key and no handshake, so on UDP
+					 * the source address here is trivially forgeable. Banning
+					 * on it would let anyone silence an arbitrary third party
+					 * by sending a handful of malformed datagrams carrying
+					 * that victim's address. Operators who know their network
+					 * is spoof resistant can implement their own policy with
+					 * worker:block_fuzzy_client().
+					 */
 					if (session->addr) {
 						nerrors = rspamd_lru_hash_lookup(session->ctx->errors_ips,
 														 session->addr, -1);

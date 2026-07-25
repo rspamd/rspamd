@@ -118,6 +118,17 @@ rspamd_fuzzy_check_ratelimit(struct rspamd_fuzzy_storage_ctx *ctx,
 		return TRUE;
 	}
 
+	/*
+	 * Rate limiting is disabled unless both rate and burst are configured.
+	 * rspamd_fuzzy_check_ratelimit_bucket short circuits on NaN, but it is
+	 * only reached when a bucket already exists, so without this guard every
+	 * new masked source would still allocate and insert an LRU entry that can
+	 * never limit anything.
+	 */
+	if (isnan(ctx->leaky_bucket_burst) || isnan(ctx->leaky_bucket_rate)) {
+		return TRUE;
+	}
+
 	if (ctx->ratelimit_whitelist != NULL) {
 		if (rspamd_match_radix_map_addr(ctx->ratelimit_whitelist,
 										addr) != NULL) {
