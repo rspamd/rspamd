@@ -319,16 +319,8 @@ rspamd_dkim_parse_signalg(rspamd_dkim_context_t *ctx,
 	}
 	else if (len == 14) {
 		if (memcmp(param, "ed25519-sha256", len) == 0) {
-#ifdef HAVE_ED25519
 			ctx->sig_alg = DKIM_SIGN_EDDSASHA256;
 			return true;
-#else
-			g_set_error(err,
-						DKIM_ERROR,
-						DKIM_SIGERROR_BADSIG,
-						"ed25519 signatures are not supported (OpenSSL 1.1.1+ required)");
-			return false;
-#endif
 		}
 	}
 
@@ -1293,11 +1285,8 @@ rspamd_create_dkim_context(const char *sig,
 		md_alg = EVP_sha1();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256
-#ifdef HAVE_ED25519
-			 || ctx->sig_alg == DKIM_SIGN_EDDSASHA256
-#endif
-	) {
+			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+			 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 		md_alg = EVP_sha256();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
@@ -3018,11 +3007,8 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		nid = NID_sha1;
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256
-#ifdef HAVE_ED25519
-			 || ctx->sig_alg == DKIM_SIGN_EDDSASHA256
-#endif
-	) {
+			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+			 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 		nid = NID_sha256;
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
@@ -3044,9 +3030,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		GError *err = NULL;
 
 		if (ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
-#ifdef HAVE_ED25519
 			ctx->sig_alg == DKIM_SIGN_EDDSASHA256 ||
-#endif
 			ctx->sig_alg == DKIM_SIGN_ECDSASHA512) {
 			/* RSA key provided for ECDSA/EDDSA signature */
 			res->rcode = DKIM_PERM_ERROR;
@@ -3149,7 +3133,6 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		break;
 
 	case RSPAMD_DKIM_KEY_EDDSA:
-#ifdef HAVE_ED25519
 		if (ctx->sig_alg != DKIM_SIGN_EDDSASHA256) {
 			/* EDDSA key provided for RSA/ECDSA signature */
 			res->rcode = DKIM_PERM_ERROR;
@@ -3181,20 +3164,6 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				res->fail_reason = "headers eddsa verify failed";
 			}
 		}
-#else
-		/* ED25519 not supported in this OpenSSL version */
-		res->rcode = DKIM_PERM_ERROR;
-		res->fail_reason = "ed25519 signatures are not supported (OpenSSL 1.1.1+ required)";
-		msg_info_dkim(
-			"%s: ed25519 signatures not supported (OpenSSL 1.1.1+ required); "
-			"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-			rspamd_dkim_type_to_string(ctx->common.type),
-			(int) (body_end - body_start), ctx->common.body_canonicalised,
-			ctx->common.headers_canonicalised,
-			ctx->domain, ctx->selector,
-			RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-			ctx->dkim_header);
-#endif
 		break;
 	}
 
@@ -3324,15 +3293,12 @@ rspamd_dkim_sign_digest(rspamd_dkim_sign_key_t *key,
 	}
 	else
 #endif
-#ifdef HAVE_ED25519
 		if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = crypto_sign_bytes();
 		sig_buf = g_alloca(sig_len);
 		rspamd_cryptobox_sign(sig_buf, NULL, digest, dlen, key->specific.key_eddsa);
 	}
-	else
-#endif
-	{
+	else {
 		g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
 					"unsupported key type");
 		return FALSE;
@@ -3518,6 +3484,14 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 			nkey->type = RSPAMD_DKIM_KEY_ECDSA;
 			nkey->keylen = EVP_PKEY_size(nkey->specific.key_ssl.key_evp);
 			break;
+
+			/*
+		 * This is the only place that genuinely needs OpenSSL Ed25519 support:
+		 * PEM/DER private keys are parsed by OpenSSL, so unwrapping one requires
+		 * the EVP_PKEY_ED25519 NID and EVP_PKEY_get_raw_private_key() (1.1.1+).
+		 * Everything else in the Ed25519 path is libsodium, which is mandatory,
+		 * so signature verification never depends on this macro.
+		 */
 #ifdef HAVE_ED25519
 		case EVP_PKEY_ED25519: {
 			/* For Ed25519, extract the raw key and store it in the eddsa field.
@@ -3569,10 +3543,11 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 		default: {
 			const char *key_type_str = OBJ_nid2sn(key_type);
 #ifndef HAVE_ED25519
-			/* Check if this is an ED25519 key without support */
+			/* Only signing keys are affected: verification uses libsodium */
 			if (key_type_str && strcmp(key_type_str, "ED25519") == 0) {
 				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
-							"ed25519 keys are not supported (OpenSSL 1.1.1+ required)");
+							"cannot load ed25519 private key: OpenSSL 1.1.1+ required "
+							"(ed25519 verification is unaffected)");
 			}
 			else
 #endif
@@ -3961,14 +3936,12 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		}
 		EVP_PKEY_CTX_free(pctx);
 	}
-#ifdef HAVE_ED25519
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = crypto_sign_bytes();
 		sig_buf = g_alloca(sig_len);
 
 		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen, ctx->key->specific.key_eddsa);
 	}
-#endif
 	else {
 		g_string_free(hdr, true);
 		msg_err_task("unsupported key type for signing");
@@ -4006,7 +3979,6 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 		return false;
 	}
 
-#ifdef HAVE_ED25519
 	if (pk->type == RSPAMD_DKIM_KEY_EDDSA) {
 		if (memcmp(sk->specific.key_eddsa + 32, pk->specific.key_eddsa, 32) != 0) {
 			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
@@ -4014,9 +3986,7 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 			return false;
 		}
 	}
-	else
-#endif
-	{
+	else {
 #if OPENSSL_VERSION_MAJOR >= 3
 		if (EVP_PKEY_eq(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1)
 #else
