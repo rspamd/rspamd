@@ -1355,11 +1355,32 @@ rspamd_dkim_make_key(const char *keydata,
 {
 	rspamd_dkim_key_t *key = NULL;
 
+	/*
+	 * Real p= values are small: 44 base64 characters for ed25519, 124 for
+	 * ecdsa256, 736 for a 4096 bit RSA key and 2784 for the 16384 bit modulus
+	 * that is the largest OpenSSL will verify against. A TXT record can carry
+	 * 64k once the resolver falls back to TCP, and an accepted key holds
+	 * raw_key, keydata and the parsed EVP_PKEY for as long as it stays in the
+	 * key cache, so an unbounded p= lets one zone pin a lot of memory.
+	 */
+	static const unsigned int max_dkim_key_len = 4096;
+	static const int max_dkim_key_bits = 8192;
+
 	if (keylen < 3) {
 		g_set_error(err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_KEYFAIL,
 					"DKIM key is too short to be valid");
+		return NULL;
+	}
+
+	if (keylen > max_dkim_key_len) {
+		/* g_set_error formats through GLib, so %u rather than the rspamd %ud */
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_KEYFAIL,
+					"DKIM key is too long: %u, maximum is %u",
+					keylen, max_dkim_key_len);
 		return NULL;
 	}
 
@@ -1447,6 +1468,26 @@ rspamd_dkim_make_key(const char *keydata,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
 						"cannot extract pubkey from bio");
+			REF_RELEASE(key);
+
+			return NULL;
+		}
+
+		/*
+		 * RFC 8301 requires verifiers to handle 1024 to 4096 bit RSA keys;
+		 * this doubles that ceiling. Verification cost grows with the modulus
+		 * - a 16384 bit key costs an order of magnitude more than a 4096 bit
+		 * one - and the length cap above still admits moduli beyond what
+		 * OpenSSL itself will operate on.
+		 */
+		int key_bits = EVP_PKEY_bits(key->specific.key_ssl.key_evp);
+
+		if (key_bits > max_dkim_key_bits) {
+			g_set_error(err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_KEYFAIL,
+						"DKIM key has too many bits: %d, maximum is %d",
+						key_bits, max_dkim_key_bits);
 			REF_RELEASE(key);
 
 			return NULL;

@@ -1,0 +1,17 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=bigkey.za.org; s=wide;
+ q=dns/txt; t=1528637909; h=from : to : subject : date;
+ bh=2jUSOH9NhtVGCQWNr9BrIAPreKQjO6Sn7XIkfJVOzv8=;
+ b=/gCrinpcQOoIfuHNQIbq4pgh9kyIK3AQUdt9OdqQehSwhEIug4D11Bus
+ Fa3bT3FY5OsU7ZbnKELq+eXdp1Q1Dw==
+From: Joe SixPack <joe@bigkey.za.org>
+To: Suzie Q <suzie@shopping.example.net>
+Subject: Test oversized key modulus
+Date: Fri, 11 Jul 2003 21:00:37 -0700 (PDT)
+Message-ID: <20030712040037.46341.WIDE@bigkey.za.org>
+
+Hi.
+
+The domain key of this signature is a 16384 bit RSA key.
+
+Joe.

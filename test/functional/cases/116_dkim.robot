@@ -80,6 +80,18 @@ DKIM Verify Unknown Key Type
   Scan File  ${RSPAMD_TESTDIR}/messages/dkim_broken_key.eml
   Expect Symbol  R_DKIM_PERMFAIL
 
+DKIM Reject Oversized Key Record
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_key_too_long.eml
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Reject Oversized Key Modulus
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_key_too_wide.eml
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Accept Large Key Below Limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_key_wide_ok.eml
+  Expect Symbol  R_DKIM_REJECT
+
 DKIM Verify Revoked Key (missing p=)
   Scan File  ${RSPAMD_TESTDIR}/messages/dkim_revoked_key.eml
   Expect Symbol  R_DKIM_PERMFAIL
