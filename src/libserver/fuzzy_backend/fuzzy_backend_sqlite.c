@@ -429,7 +429,12 @@ rspamd_fuzzy_backend_sqlite_open_db(const char *path, GError **err)
 	rspamd_cryptobox_hash_init(&st, NULL, 0);
 	rspamd_cryptobox_hash_update(&st, path, strlen(path));
 	rspamd_cryptobox_hash_final(&st, hash_out);
-	rspamd_snprintf(bk->id, sizeof(bk->id), "%xs", hash_out);
+	/*
+	 * hash_out is a raw digest, not a NUL terminated string: %xs would call
+	 * strlen on it and read past the buffer. Pass the length explicitly.
+	 */
+	rspamd_snprintf(bk->id, sizeof(bk->id), "%*xs",
+					(int) sizeof(hash_out), hash_out);
 	memcpy(bk->pool->tag.uid, bk->id, sizeof(bk->pool->tag.uid));
 
 	return bk;
