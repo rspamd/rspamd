@@ -121,6 +121,14 @@ struct fuzzy_tcp_session {
 	uint16_t cur_frame_state;
 	uint16_t bytes_unprocessed;
 
+	/*
+	 * Set once by rspamd_fuzzy_tcp_session_close. The connection is gone,
+	 * but the object can outlive it while in-flight commands still hold
+	 * references, so every path that touches the socket or the watchers
+	 * must check this first.
+	 */
+	bool closed;
+
 	struct fuzzy_common_session common;
 	ref_entry_t ref;
 
@@ -146,6 +154,12 @@ enum fuzzy_peer_send_status {
 	FUZZY_PEER_SEND_FATAL,    /* unrecoverable write error */
 };
 
+enum fuzzy_tcp_write_status {
+	FUZZY_TCP_WRITE_DONE = 0, /* reply fully sent and dequeued */
+	FUZZY_TCP_WRITE_AGAIN,    /* short write or EAGAIN/EWOULDBLOCK/EINTR */
+	FUZZY_TCP_WRITE_FATAL,    /* unrecoverable write error */
+};
+
 struct rspamd_updates_cbdata {
 	GArray *updates_pending;
 	struct rspamd_fuzzy_storage_ctx *ctx;
@@ -154,8 +168,9 @@ struct rspamd_updates_cbdata {
 };
 
 static void rspamd_fuzzy_write_reply(struct fuzzy_session *session);
-static bool rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
-										 struct fuzzy_tcp_reply_queue_elt *reply);
+static enum fuzzy_tcp_write_status rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
+																struct fuzzy_tcp_reply_queue_elt *reply);
+static void rspamd_fuzzy_tcp_session_close(struct fuzzy_tcp_session *session);
 static gboolean rspamd_fuzzy_process_updates_queue(struct rspamd_fuzzy_storage_ctx *ctx,
 												   const char *source, gboolean final);
 static void rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents);
@@ -379,6 +394,19 @@ rspamd_fuzzy_tcp_enqueue_reply(struct fuzzy_session *session)
 
 	if (tcp_session == NULL) {
 		msg_err("internal error: tcp_session is NULL in rspamd_fuzzy_tcp_enqueue_reply");
+		return;
+	}
+
+	if (tcp_session->closed) {
+		/*
+		 * A command that outlived its connection (e.g. a Redis reply arriving
+		 * after EOF or timeout). There is nowhere to write it: the socket is
+		 * gone, and restarting the watcher here would resurrect I/O on a dead
+		 * session.
+		 */
+		msg_debug_fuzzy_storage("discard reply for the closed TCP session from %s",
+								rspamd_inet_address_to_string(session->addr));
+
 		return;
 	}
 
@@ -2022,6 +2050,11 @@ fuzzy_tcp_session_destroy(gpointer d)
 	msg_debug_fuzzy_storage("destroying TCP session from %s",
 							rspamd_inet_address_to_string(session->common.addr));
 
+	/*
+	 * Normally rspamd_fuzzy_tcp_session_close has already done all of this;
+	 * these are kept as a safety net for a session that is destroyed without
+	 * ever having been closed.
+	 */
 	if (ev_can_stop(&session->common.io)) {
 		ev_io_stop(session->common.ctx->event_loop, &session->common.io);
 	}
@@ -2038,7 +2071,11 @@ fuzzy_tcp_session_destroy(gpointer d)
 		g_free(elt);
 	}
 
-	close(session->common.fd);
+	if (session->common.fd != -1) {
+		close(session->common.fd);
+		session->common.fd = -1;
+	}
+
 	rspamd_inet_address_free(session->common.addr);
 	session->common.worker->nconns--;
 
@@ -2201,6 +2238,55 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 
 /* TCP-specific reply and I/O handlers */
 
+/*
+ * Terminate a TCP connection exactly once.
+ *
+ * The session object is refcounted and shared with every in-flight command
+ * session, so reaching a terminal condition on the socket cannot simply
+ * REF_RELEASE: outstanding commands keep the refcount above zero, the
+ * destructor does not run, and the watchers would stay armed. The next
+ * readiness event (EOF is permanently readable) or the next tick of the
+ * repeating timeout would then release the owner reference again, dropping
+ * the refcount below what the in-flight commands actually hold and freeing
+ * the session while their callbacks still point at it.
+ *
+ * So do the teardown here instead: disarm both watchers, close the socket,
+ * mark the session closed, and drop the single owner reference — all of it
+ * guarded by the `closed` flag so repeated calls are harmless. Whatever
+ * commands are still in flight keep the object alive and their replies get
+ * discarded by rspamd_fuzzy_tcp_enqueue_reply.
+ */
+static void
+rspamd_fuzzy_tcp_session_close(struct fuzzy_tcp_session *session)
+{
+	if (session->closed) {
+		return;
+	}
+
+	session->closed = true;
+
+	if (ev_can_stop(&session->common.io)) {
+		ev_io_stop(session->common.ctx->event_loop, &session->common.io);
+	}
+
+	if (ev_can_stop(&session->tm)) {
+		ev_timer_stop(session->common.ctx->event_loop, &session->tm);
+	}
+
+	/*
+	 * Release the descriptor now rather than waiting for the last in-flight
+	 * command to complete, and poison it so no late path can write to a fd
+	 * number that has been recycled by another connection.
+	 */
+	if (session->common.fd != -1) {
+		close(session->common.fd);
+		session->common.fd = -1;
+	}
+
+	/* Drop the reference taken by accept_tcp_socket */
+	REF_RELEASE(session);
+}
+
 static void
 rspamd_fuzzy_tcp_timeout(EV_P_ ev_timer *w, int revents)
 {
@@ -2209,10 +2295,10 @@ rspamd_fuzzy_tcp_timeout(EV_P_ ev_timer *w, int revents)
 	msg_debug_fuzzy_storage("TCP session from %s timed out",
 							rspamd_inet_address_to_string(session->common.addr));
 
-	REF_RELEASE(session);
+	rspamd_fuzzy_tcp_session_close(session);
 }
 
-static bool
+static enum fuzzy_tcp_write_status
 rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
 							 struct fuzzy_tcp_reply_queue_elt *reply)
 {
@@ -2225,11 +2311,14 @@ rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
 
 	if (r == -1) {
 		if (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN) {
-			return false;
+			return FUZZY_TCP_WRITE_AGAIN;
 		}
 		else {
-			msg_err("error while writing TCP reply: %s", strerror(errno));
-			return false;
+			msg_err("error while writing TCP reply to %s: %s",
+					rspamd_inet_address_to_string(session->common.addr),
+					strerror(errno));
+
+			return FUZZY_TCP_WRITE_FATAL;
 		}
 	}
 
@@ -2244,10 +2333,10 @@ rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
 								rspamd_inet_address_to_string(session->common.addr),
 								(size_t) r);
 
-		return true;
+		return FUZZY_TCP_WRITE_DONE;
 	}
 
-	return false;
+	return FUZZY_TCP_WRITE_AGAIN;
 }
 
 static void
@@ -2255,6 +2344,11 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_tcp_session *session = (struct fuzzy_tcp_session *) w->data;
 	gssize r;
+
+	if (session->closed) {
+		/* Should not happen: closing disarms this watcher */
+		return;
+	}
 
 	if (revents & EV_READ) {
 		/* Read available data */
@@ -2276,7 +2370,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 										rspamd_inet_address_to_string(session->common.addr));
 			}
 
-			REF_RELEASE(session);
+			rspamd_fuzzy_tcp_session_close(session);
 			return;
 		}
 
@@ -2322,7 +2416,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 						msg_err("invalid frame length %d from %s, closing connection",
 								(int) real_len,
 								rspamd_inet_address_to_string(session->common.addr));
-						REF_RELEASE(session);
+						rspamd_fuzzy_tcp_session_close(session);
 						return;
 					}
 					session->cur_frame_state = 0xC000 | real_len;
@@ -2340,7 +2434,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 				msg_err("invalid frame length %d from %s, closing connection",
 						(int) frame_len,
 						rspamd_inet_address_to_string(session->common.addr));
-				REF_RELEASE(session);
+				rspamd_fuzzy_tcp_session_close(session);
 				return;
 			}
 
@@ -2408,8 +2502,20 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 		struct fuzzy_tcp_reply_queue_elt *elt;
 
 		while ((elt = session->replies_queue) != NULL) {
-			if (!rspamd_fuzzy_tcp_write_reply(session, elt)) {
+			enum fuzzy_tcp_write_status status;
+
+			status = rspamd_fuzzy_tcp_write_reply(session, elt);
+
+			if (status == FUZZY_TCP_WRITE_AGAIN) {
 				/* Cannot write more, wait for next write event */
+				return;
+			}
+			else if (status == FUZZY_TCP_WRITE_FATAL) {
+				/*
+				 * The socket is unusable; leaving the write watcher armed
+				 * would just spin on a permanently writable error condition.
+				 */
+				rspamd_fuzzy_tcp_session_close(session);
 				return;
 			}
 		}
