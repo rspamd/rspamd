@@ -119,7 +119,7 @@ struct rspamd_http_mirror {
 	gboolean local;
 	gboolean compress;
 	gboolean ssl;
-	gboolean keepalive; /* Whether to use keepalive for this mirror */
+	gboolean keepalive;     /* Whether to use keepalive for this mirror */
 	gboolean follow_master; /* Tie mirror lifetime to master upstream */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	ucl_object_t *extra_headers;
@@ -2070,7 +2070,7 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 						}
 						else {
 							if (session->fname) {
-								msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
+								rspamd_http_message_drop_shared_body(msg);
 								rspamd_http_message_set_body(msg, session->map, session->map_len);
 							}
 
@@ -2232,7 +2232,7 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 		}
 		else {
 			if (session->fname) {
-				msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
+				rspamd_http_message_drop_shared_body(msg);
 				rspamd_http_message_set_body(msg, session->map, session->map_len);
 			}
 
@@ -3021,7 +3021,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		}
 		else {
 			if (session->fname) {
-				msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
+				rspamd_http_message_drop_shared_body(msg);
 				rspamd_http_message_set_body(msg,
 											 session->map, session->map_len);
 			}

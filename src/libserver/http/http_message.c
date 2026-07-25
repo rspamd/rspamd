@@ -40,6 +40,14 @@ rspamd_http_new_message(enum rspamd_http_message_type type)
 	new->type = type;
 	new->method = HTTP_INVALID;
 	new->headers = kh_init(rspamd_http_headers_hash);
+	/*
+	 * `shm_fd` lives past the pointer that `normal` shares the union with, so
+	 * initialising it here is safe for both storage kinds. It must never be
+	 * left as a valid looking zero: a message can be flagged as shared before
+	 * a segment is actually created for it, and the cleanup would then close a
+	 * completely unrelated descriptor 0.
+	 */
+	new->body_buf.c.shared.shm_fd = -1;
 
 	REF_INIT_RETAIN(new, rspamd_http_message_free);
 
@@ -204,6 +212,11 @@ rspamd_http_message_set_body(struct rspamd_http_message *msg,
 	rspamd_http_message_storage_cleanup(msg);
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+		if (len == G_MAXSIZE) {
+			/* Unknown length is treated as an empty body */
+			len = 0;
+		}
+
 		storage->shared.name = g_malloc(sizeof(*storage->shared.name));
 		REF_INIT_RETAIN(storage->shared.name, rspamd_http_shname_dtor);
 #ifdef HAVE_SANE_SHMEM
@@ -225,7 +238,7 @@ rspamd_http_message_set_body(struct rspamd_http_message *msg,
 			return FALSE;
 		}
 
-		if (len != 0 && len != G_MAXSIZE) {
+		if (len != 0) {
 			if (ftruncate(storage->shared.shm_fd, len) == -1) {
 				return FALSE;
 			}
@@ -303,6 +316,8 @@ rspamd_http_message_set_body_from_fd(struct rspamd_http_message *msg,
 	storage = &msg->body_buf.c;
 	msg->flags |= RSPAMD_HTTP_FLAG_SHMEM | RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE;
 
+	/* We do not own the segment, so there is no name to unlink afterwards */
+	storage->shared.name = NULL;
 	storage->shared.shm_fd = dup(fd);
 	msg->body_buf.str = MAP_FAILED;
 
@@ -311,6 +326,11 @@ rspamd_http_message_set_body_from_fd(struct rspamd_http_message *msg,
 	}
 
 	if (fstat(storage->shared.shm_fd, &st) == -1) {
+		return FALSE;
+	}
+
+	if (!S_ISREG(st.st_mode) || st.st_size <= 0) {
+		/* Nothing that can be mapped: not a regular file or an empty one */
 		return FALSE;
 	}
 
@@ -384,6 +404,11 @@ rspamd_http_message_grow_body(struct rspamd_http_message *msg, gsize len)
 			return FALSE;
 		}
 
+		if (len > G_MAXSIZE - msg->body_buf.len) {
+			/* Integer overflow in the requested size */
+			return FALSE;
+		}
+
 		if (fstat(storage->shared.shm_fd, &st) == -1) {
 			return FALSE;
 		}
@@ -394,8 +419,9 @@ rspamd_http_message_grow_body(struct rspamd_http_message *msg, gsize len)
 			newlen = rspamd_fstring_suggest_size(msg->body_buf.len, st.st_size,
 												 len);
 			/* Unmap as we need another size of segment */
-			if (msg->body_buf.str != MAP_FAILED) {
+			if (RSPAMD_HTTP_BODY_IS_MAPPED(msg)) {
 				munmap(msg->body_buf.str, st.st_size);
+				msg->body_buf.str = MAP_FAILED;
 			}
 
 			if (ftruncate(storage->shared.shm_fd, newlen) == -1) {
@@ -485,11 +511,21 @@ void rspamd_http_message_storage_cleanup(struct rspamd_http_message *msg)
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
 		storage = &msg->body_buf.c;
 
-		if (storage->shared.shm_fd > 0) {
-			g_assert(fstat(storage->shared.shm_fd, &st) != -1);
-
-			if (msg->body_buf.str != MAP_FAILED) {
-				munmap(msg->body_buf.str, st.st_size);
+		if (storage->shared.shm_fd >= 0) {
+			if (RSPAMD_HTTP_BODY_IS_MAPPED(msg)) {
+				/*
+				 * We map the whole segment, hence its current size is the
+				 * mapping length. If fstat fails somehow, we have no reliable
+				 * length to unmap, so we have to leak the mapping instead of
+				 * unmapping a wrong range.
+				 */
+				if (fstat(storage->shared.shm_fd, &st) != -1) {
+					munmap(msg->body_buf.str, st.st_size);
+				}
+				else {
+					msg_err("cannot fstat shmem fd %d: %s; mapping is leaked",
+							storage->shared.shm_fd, strerror(errno));
+				}
 			}
 
 			close(storage->shared.shm_fd);
@@ -499,6 +535,12 @@ void rspamd_http_message_storage_cleanup(struct rspamd_http_message *msg)
 			REF_RELEASE(storage->shared.name);
 		}
 
+		/*
+		 * `name` shares the storage with `normal` (it is a union), so it must
+		 * be reset unconditionally: leaving a dangling pointer here would make
+		 * the next cleanup release it for the second time
+		 */
+		storage->shared.name = NULL;
 		storage->shared.shm_fd = -1;
 		msg->body_buf.str = MAP_FAILED;
 	}
@@ -511,6 +553,23 @@ void rspamd_http_message_storage_cleanup(struct rspamd_http_message *msg)
 	}
 
 	msg->body_buf.len = 0;
+}
+
+void rspamd_http_message_drop_shared_body(struct rspamd_http_message *msg)
+{
+	if (!(msg->flags & RSPAMD_HTTP_FLAG_SHMEM)) {
+		return;
+	}
+
+	/* Cleanup whilst the flags still describe the storage we actually have */
+	rspamd_http_message_storage_cleanup(msg);
+
+	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM | RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
+	msg->body_buf.c.normal = NULL;
+	msg->body_buf.begin = NULL;
+	msg->body_buf.str = NULL;
+	msg->body_buf.len = 0;
+	msg->body_buf.allocated_len = 0;
 }
 
 void rspamd_http_message_free(struct rspamd_http_message *msg)

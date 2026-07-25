@@ -1501,11 +1501,15 @@ rspamd_http_connection_copy_msg(struct rspamd_http_message *msg, GError **err)
 	if (msg->body_buf.len > 0) {
 
 		if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+			gsize body_off = 0;
+
 			/* Avoid copying by just mapping a shared segment */
 			new_msg->flags |= RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE;
 
 			storage = &new_msg->body_buf.c;
+			storage->shared.name = NULL;
 			storage->shared.shm_fd = dup(msg->body_buf.c.shared.shm_fd);
+			new_msg->body_buf.str = MAP_FAILED;
 
 			if (storage->shared.shm_fd == -1) {
 				rspamd_http_message_unref(new_msg);
@@ -1520,6 +1524,24 @@ rspamd_http_connection_copy_msg(struct rspamd_http_message *msg, GError **err)
 				g_set_error(err, http_error_quark(), errno,
 							"cannot stat shmem fd: %d: %s",
 							storage->shared.shm_fd, strerror(errno));
+				rspamd_http_message_unref(new_msg);
+
+				return NULL;
+			}
+
+			if (RSPAMD_HTTP_BODY_IS_MAPPED(msg) &&
+				msg->body_buf.begin >= msg->body_buf.str) {
+				body_off = msg->body_buf.begin - msg->body_buf.str;
+			}
+
+			if (st.st_size <= 0 ||
+				(gsize) st.st_size < body_off ||
+				msg->body_buf.len > (gsize) st.st_size - body_off) {
+				g_set_error(err, http_error_quark(), EINVAL,
+							"shmem fd %d does not fit the body: %zu bytes at "
+							"offset %zu of %lld",
+							storage->shared.shm_fd, msg->body_buf.len,
+							body_off, (long long) st.st_size);
 				rspamd_http_message_unref(new_msg);
 
 				return NULL;
@@ -1545,10 +1567,9 @@ rspamd_http_connection_copy_msg(struct rspamd_http_message *msg, GError **err)
 				return NULL;
 			}
 
-			new_msg->body_buf.begin = new_msg->body_buf.str;
+			new_msg->body_buf.begin = new_msg->body_buf.str + body_off;
 			new_msg->body_buf.len = msg->body_buf.len;
-			new_msg->body_buf.begin = new_msg->body_buf.str +
-									  (msg->body_buf.begin - msg->body_buf.str);
+			new_msg->body_buf.allocated_len = st.st_size;
 		}
 		else {
 			old_body = rspamd_http_message_get_body(msg, &old_len);
@@ -1874,7 +1895,14 @@ rspamd_http_detach_shared(struct rspamd_http_message *msg)
 {
 	rspamd_fstring_t *cpy_str;
 
-	cpy_str = rspamd_fstring_new_init(msg->body_buf.begin, msg->body_buf.len);
+	if (msg->body_buf.begin != NULL && msg->body_buf.len > 0) {
+		cpy_str = rspamd_fstring_new_init(msg->body_buf.begin,
+										  msg->body_buf.len);
+	}
+	else {
+		cpy_str = rspamd_fstring_new();
+	}
+
 	rspamd_http_message_set_body_from_fstring_steal(msg, cpy_str);
 }
 
@@ -2316,14 +2344,20 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 			allow_shared = FALSE;
 		}
 		else {
+			gsize shm_offset = 0;
+
+			if (RSPAMD_HTTP_BODY_IS_MAPPED(msg) &&
+				msg->body_buf.begin >= msg->body_buf.str) {
+				shm_offset = msg->body_buf.begin - msg->body_buf.str;
+			}
+
 			/* Insert new headers */
 			rspamd_http_message_add_header(msg, "Shm",
 										   msg->body_buf.c.shared.name->shm_name);
-			rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "%d",
-							(int) (msg->body_buf.begin - msg->body_buf.str));
+			rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "%uz", shm_offset);
 			rspamd_http_message_add_header(msg, "Shm-Offset",
 										   tmpbuf);
-			rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "%z",
+			rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "%uz",
 							msg->body_buf.len);
 			rspamd_http_message_add_header(msg, "Shm-Length",
 										   tmpbuf);
