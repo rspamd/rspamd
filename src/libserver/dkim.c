@@ -1215,7 +1215,8 @@ rspamd_create_dkim_context(const char *sig,
 			}
 		}
 		else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-				 ctx->sig_alg == DKIM_SIGN_ECDSASHA256) {
+				 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+				 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 			if (ctx->bhlen !=
 				(unsigned int) EVP_MD_size(EVP_sha256())) {
 				g_set_error(err,
@@ -2837,6 +2838,22 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
 		dlen = EVP_MD_CTX_size(ctx->common.body_hash);
+
+		/*
+		 * Body hash length must match the digest size exactly: all bh
+		 * comparisons below use ctx->bhlen against EVP_MAX_MD_SIZE buffers,
+		 * so a longer attacker supplied bh= would read out of bounds.
+		 */
+		if (ctx->bhlen != dlen) {
+			msg_info_dkim("%s: bh length mismatch: %z != %z; d=%s; s=%s",
+						  rspamd_dkim_type_to_string(ctx->common.type),
+						  ctx->bhlen, dlen, ctx->domain, ctx->selector);
+			res->fail_reason = "body hash length mismatch";
+			res->rcode = DKIM_REJECT;
+
+			return res;
+		}
+
 		cached_bh = rspamd_dkim_check_bh_cached(&ctx->common, task,
 												dlen, false);
 
