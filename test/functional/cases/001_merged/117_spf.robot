@@ -185,3 +185,31 @@ SPF PERMFAIL TOO MANY MX NAMES
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_PERMFAIL
   Do Not Expect Symbol  R_SPF_FAIL
+
+SPF NESTING LIMIT
+  [Documentation]  An include chain is followed up to max_dns_nesting levels
+  ...  (10 by default) and no further: 8.8.8.8 is listed by the last allowed
+  ...  level, 8.8.4.4 by the level below it that must never be resolved
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@nest.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.4.4  From=x@nest.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF DNS REQUESTS LIMIT
+  [Documentation]  Exactly max_dns_requests DNS elements (30 by default) are
+  ...  evaluated, the 31st one is not, so only the shorter record authorises
+  ...  8.8.8.8 by its last element
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@fewreq.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@manyreq.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW

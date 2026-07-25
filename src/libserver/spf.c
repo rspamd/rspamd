@@ -44,11 +44,11 @@
 struct spf_resolved_element {
 	GPtrArray *elts;
 	char *cur_domain;
+	unsigned int nested; /* Depth of this element in the include/redirect chain */
 	gboolean redirected; /* Ignore level, it's redirected */
 };
 
 struct spf_record {
-	int nested;
 	int dns_requests;
 	unsigned int dns_expansions; /* Address requests spawned by mx/ptr expansion */
 	int requests_inflight;
@@ -144,17 +144,40 @@ struct spf_dns_cb {
 static inline bool
 spf_record_can_dns(const struct spf_record *rec)
 {
-	if (spf_lib_ctx->max_dns_nesting > 0 &&
-		rec->nested > spf_lib_ctx->max_dns_nesting) {
-		msg_warn_spf("spf nesting limit: %d > %d is reached, domain: %s",
-					 rec->nested, spf_lib_ctx->max_dns_nesting,
+	if (spf_lib_ctx->max_dns_requests > 0 &&
+		rec->dns_requests >= spf_lib_ctx->max_dns_requests) {
+		msg_warn_spf("spf dns requests limit: %d >= %d is reached, domain: %s",
+					 rec->dns_requests, spf_lib_ctx->max_dns_requests,
 					 rec->sender_domain);
 		return false;
 	}
-	if (spf_lib_ctx->max_dns_requests > 0 &&
-		rec->dns_requests > spf_lib_ctx->max_dns_requests) {
-		msg_warn_spf("spf dns requests limit: %d > %d is reached, domain: %s",
-					 rec->dns_requests, spf_lib_ctx->max_dns_requests,
+
+	return true;
+}
+
+/*
+ * Check whether a new element can be nested under `parent`, that is whether an
+ * include or a redirect found in `parent` may be followed. Depth is stored per
+ * element as the resolution is asynchronous and there is no call stack to
+ * reflect the position in the include/redirect tree.
+ */
+static inline bool
+spf_record_can_nest(const struct spf_record *rec,
+					const struct spf_resolved_element *parent)
+{
+	unsigned int nested = parent->nested + 1;
+
+	if (nested > SPF_MAX_NESTING_HARD) {
+		msg_warn_spf("spf hard nesting limit: %ud > %ud is reached, domain: %s",
+					 nested, (unsigned int) SPF_MAX_NESTING_HARD,
+					 rec->sender_domain);
+		return false;
+	}
+
+	if (spf_lib_ctx->max_dns_nesting > 0 &&
+		nested > spf_lib_ctx->max_dns_nesting) {
+		msg_warn_spf("spf nesting limit: %ud > %ud is reached, domain: %s",
+					 nested, spf_lib_ctx->max_dns_nesting,
 					 rec->sender_domain);
 		return false;
 	}
@@ -165,6 +188,11 @@ spf_record_can_dns(const struct spf_record *rec)
 #define CHECK_REC(rec)                              \
 	do {                                            \
 		if (!spf_record_can_dns(rec)) return FALSE; \
+	} while (0)
+
+#define CHECK_NESTING(rec, parent)                           \
+	do {                                                     \
+		if (!spf_record_can_nest(rec, parent)) return FALSE; \
 	} while (0)
 
 RSPAMD_CONSTRUCTOR(rspamd_spf_lib_ctx_ctor)
@@ -412,11 +440,28 @@ rspamd_flatten_record_dtor(struct spf_resolved *r)
 
 static void
 rspamd_spf_process_reference(struct spf_resolved *target,
-							 struct spf_addr *addr, struct spf_record *rec, gboolean top)
+							 struct spf_addr *addr, struct spf_record *rec,
+							 gboolean top, unsigned int depth)
 {
 	struct spf_resolved_element *elt, *relt;
 	struct spf_addr *cur = NULL, taddr, *cur_addr;
 	unsigned int i;
+
+	/*
+	 * References always point to an element that has been added after the
+	 * current one, so the graph cannot contain loops. Depth, however, follows
+	 * the include/redirect chain, hence the same bound as for the resolution
+	 * stage is applied here to keep this recursion shallow
+	 */
+	if (depth > SPF_MAX_NESTING_HARD) {
+		msg_warn_spf("spf flattening depth limit: %ud > %ud is reached, "
+					 "domain: %s",
+					 depth, (unsigned int) SPF_MAX_NESTING_HARD,
+					 rec->sender_domain);
+		target->flags |= RSPAMD_SPF_RESOLVED_PERM_FAILED;
+
+		return;
+	}
 
 	if (addr) {
 		g_assert(addr->m.idx < rec->resolved->len);
@@ -490,11 +535,11 @@ rspamd_spf_process_reference(struct spf_resolved *target,
 			/* Process reference */
 			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
 				/* Stop on redirected domain */
-				rspamd_spf_process_reference(target, cur, rec, top);
+				rspamd_spf_process_reference(target, cur, rec, top, depth + 1);
 				break;
 			}
 			else {
-				rspamd_spf_process_reference(target, cur, rec, FALSE);
+				rspamd_spf_process_reference(target, cur, rec, FALSE, depth + 1);
 			}
 		}
 		else {
@@ -537,7 +582,7 @@ rspamd_spf_record_flatten(struct spf_record *rec)
 									  rec->resolved->len);
 
 		if (rec->resolved->len > 0) {
-			rspamd_spf_process_reference(res, NULL, rec, TRUE);
+			rspamd_spf_process_reference(res, NULL, rec, TRUE, 0);
 		}
 	}
 	else {
@@ -1727,13 +1772,15 @@ parse_spf_ip6(struct spf_record *rec, struct spf_addr *addr)
 
 
 static gboolean
-parse_spf_include(struct spf_record *rec, struct spf_addr *addr)
+parse_spf_include(struct spf_record *rec,
+				  struct spf_resolved_element *resolved, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	const char *domain;
 	struct rspamd_task *task = rec->task;
 
 	CHECK_REC(rec);
+	CHECK_NESTING(rec, resolved);
 	domain = strchr(addr->spf_string, ':');
 
 	if (domain == NULL) {
@@ -1757,6 +1804,7 @@ parse_spf_include(struct spf_record *rec, struct spf_addr *addr)
 	cb->initiated_by = SPF_RESOLVE_INCLUDE;
 	addr->m.idx = rec->resolved->len;
 	cb->resolved = rspamd_spf_new_addr_list(rec, domain);
+	cb->resolved->nested = resolved->nested + 1;
 	cb->initiated_dns_name = domain;
 	/* Set reference */
 	addr->flags |= RSPAMD_SPF_FLAG_REFERENCE;
@@ -1793,6 +1841,7 @@ parse_spf_redirect(struct spf_record *rec,
 	struct rspamd_task *task = rec->task;
 
 	CHECK_REC(rec);
+	CHECK_NESTING(rec, resolved);
 
 	domain = strchr(addr->spf_string, '=');
 
@@ -1821,6 +1870,7 @@ parse_spf_redirect(struct spf_record *rec,
 	cb->addr = addr;
 	cb->initiated_by = SPF_RESOLVE_REDIRECT;
 	cb->resolved = rspamd_spf_new_addr_list(rec, domain);
+	cb->resolved->nested = resolved->nested + 1;
 	cb->initiated_dns_name = domain;
 	msg_debug_spf("resolve redirect %s", domain);
 
@@ -2442,7 +2492,7 @@ spf_process_element(struct spf_record *rec,
 			res = parse_spf_ip4(rec, addr);
 		}
 		else if (g_ascii_strncasecmp(begin, SPF_INCLUDE, sizeof(SPF_INCLUDE) - 1) == 0) {
-			res = parse_spf_include(rec, addr);
+			res = parse_spf_include(rec, resolved, addr);
 		}
 		else if (g_ascii_strncasecmp(begin, SPF_IP6, sizeof(SPF_IP6) - 1) == 0) {
 			res = parse_spf_ip6(rec, addr);
