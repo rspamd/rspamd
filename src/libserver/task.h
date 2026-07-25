@@ -267,6 +267,43 @@ gboolean rspamd_task_load_message(struct rspamd_task *task,
 								  const char *start, gsize len);
 
 /**
+ * A shared memory segment passed by a local client instead of the message body
+ */
+struct rspamd_shmem_segment {
+	const char *name; /**< decoded segment name (allocated from the pool)   */
+	const char *data; /**< payload start, that is `map` + `offset`          */
+	gsize data_len;   /**< payload length                                   */
+	gpointer map;     /**< start of the mapping                             */
+	gsize map_len;    /**< length of the whole mapping                      */
+	gsize offset;     /**< payload offset within the mapping                */
+	int fd;           /**< descriptor kept open while the mapping is alive  */
+};
+
+/**
+ * Open and map a shared memory segment described by the `Shm`, `Shm-Offset` and
+ * `Shm-Length` values of a request.
+ *
+ * All inputs come from a (trusted, but not necessarily sane) client, so they are
+ * fully validated here: the resulting payload is always guaranteed to lie within
+ * the mapping. The mapping is unmapped and the descriptor is closed when `pool`
+ * is destroyed.
+ *
+ * @param pool pool to allocate the result from and to attach the mapping to
+ * @param name_tok value of the `Shm` header (url encoded, optionally quoted)
+ * @param offset_tok value of the `Shm-Offset` header or NULL
+ * @param length_tok value of the `Shm-Length` header or NULL
+ * @param max_size reject payloads larger than this value (0 disables the check)
+ * @param err error to set on failure
+ * @return mapped segment or NULL on any error
+ */
+struct rspamd_shmem_segment *rspamd_shmem_segment_map(rspamd_mempool_t *pool,
+													  const rspamd_ftok_t *name_tok,
+													  const rspamd_ftok_t *offset_tok,
+													  const rspamd_ftok_t *length_tok,
+													  gsize max_size,
+													  GError **err);
+
+/**
  * Process task
  * @param task task to process
  * @return task has been successfully parsed and processed

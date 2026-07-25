@@ -2677,21 +2677,6 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	return TRUE;
 }
 
-/* Shared memory mapping cleanup for v3 request body */
-struct rspamd_v3_shm_map {
-	gpointer begin;
-	gulong len;
-	int fd;
-};
-
-static void
-rspamd_v3_shm_unmapper(gpointer ud)
-{
-	struct rspamd_v3_shm_map *m = ud;
-	munmap(m->begin, m->len);
-	close(m->fd);
-}
-
 /*
  * Handle v3 multipart/form-data request.
  */
@@ -2762,88 +2747,33 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 		const rspamd_ftok_t *shm_tok = rspamd_http_message_find_header(msg, "Shm");
 
 		if (shm_tok) {
-			char filepath[PATH_MAX], *fp;
-			int fd;
-			struct stat st;
-			gulong offset = 0, shmem_size = 0;
+			const rspamd_ftok_t *off_tok, *len_tok;
+			struct rspamd_shmem_segment *seg;
+			GError *shm_err = NULL;
 
-			rspamd_strlcpy(filepath, shm_tok->begin,
-						   MIN(sizeof(filepath), shm_tok->len + 1));
-			rspamd_url_decode(filepath, filepath, strlen(filepath) + 1);
+			off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
+			len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
 
-			int flen = strlen(filepath);
-			if (filepath[0] == '"' && flen > 2) {
-				fp = &filepath[1];
-				fp[flen - 2] = '\0';
-			}
-			else {
-				fp = &filepath[0];
-			}
+			seg = rspamd_shmem_segment_map(task->task_pool, shm_tok,
+										   off_tok, len_tok,
+										   task->cfg ? task->cfg->max_message : 0,
+										   &shm_err);
 
-#ifdef HAVE_SANE_SHMEM
-			fd = shm_open(fp, O_RDONLY, 00600);
-#else
-			fd = open(fp, O_RDONLY, 00600);
-#endif
-			if (fd == -1) {
-				g_set_error(&task->err, rspamd_protocol_quark(), 500,
-							"cannot open shm segment (%s): %s", fp, strerror(errno));
+			if (seg == NULL) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 400,
+							"%s",
+							shm_err ? shm_err->message : "cannot map shm segment");
+				g_clear_error(&shm_err);
+
 				return FALSE;
 			}
 
-			if (fstat(fd, &st) == -1) {
-				g_set_error(&task->err, rspamd_protocol_quark(), 500,
-							"cannot stat shm segment (%s): %s", fp, strerror(errno));
-				close(fd);
-				return FALSE;
-			}
+			body_data = seg->data;
+			body_len = seg->data_len;
 
-			gpointer map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-			if (map == MAP_FAILED) {
-				g_set_error(&task->err, rspamd_protocol_quark(), 500,
-							"cannot mmap shm segment (%s): %s", fp, strerror(errno));
-				close(fd);
-				return FALSE;
-			}
-
-			const rspamd_ftok_t *off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
-			if (off_tok) {
-				rspamd_strtoul(off_tok->begin, off_tok->len, &offset);
-				if (offset > (gulong) st.st_size) {
-					munmap(map, st.st_size);
-					close(fd);
-					g_set_error(&task->err, rspamd_protocol_quark(), 500,
-								"invalid shm offset");
-					return FALSE;
-				}
-			}
-
-			shmem_size = st.st_size;
-			const rspamd_ftok_t *len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
-			if (len_tok) {
-				rspamd_strtoul(len_tok->begin, len_tok->len, &shmem_size);
-				if (shmem_size > (gulong) st.st_size) {
-					munmap(map, st.st_size);
-					close(fd);
-					g_set_error(&task->err, rspamd_protocol_quark(), 500,
-								"invalid shm length");
-					return FALSE;
-				}
-			}
-
-			body_data = ((const char *) map) + offset;
-			body_len = shmem_size;
-
-			/* Register cleanup for the mapping */
-			struct rspamd_v3_shm_map *m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
-			m->begin = map;
-			m->len = st.st_size;
-			m->fd = fd;
-			rspamd_mempool_add_destructor(task->task_pool,
-										  rspamd_v3_shm_unmapper, m);
-
-			msg_info_task("v3 request: loaded body from shm %s (%ul size, %ul offset)",
-						  fp, (unsigned long) shmem_size, (unsigned long) offset);
+			msg_info_task("v3 request: loaded body from shm %s "
+						  "(%uz size, %uz offset)",
+						  seg->name, seg->data_len, seg->offset);
 		}
 		else if (msg->body_buf.len > 0) {
 			/* Fallback: use the HTTP message body buffer directly */
@@ -2970,54 +2900,82 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 
 	if (file_elt && ucl_object_type(file_elt) == UCL_STRING) {
 		/* Set file path and let rspamd_task_load_message handle it via task header */
-		const char *fpath = ucl_object_tostring(file_elt);
+		gsize fplen;
+		const char *fpath = ucl_object_tolstring(file_elt, &fplen);
+
+		if (fpath == NULL || fplen == 0) {
+			g_set_error(&task->err, rspamd_protocol_quark(), 400,
+						"empty 'file' in metadata");
+			return FALSE;
+		}
+
 		task->msg.fpath = rspamd_mempool_strdup(task->task_pool, fpath);
 
 		/* Synthesize a request header so rspamd_task_load_message's file path works */
-		rspamd_fstring_t *fhdr = rspamd_fstring_new_init(fpath, strlen(fpath));
-		rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
-		rspamd_ftok_t *val_tok = rspamd_ftok_map(fhdr);
-
-		RSPAMD_FTOK_ASSIGN(name_tok, "file");
-		rspamd_task_add_request_header(task, name_tok, val_tok);
+		rspamd_protocol_metadata_add_header(task, "file", sizeof("file") - 1,
+											file_elt);
 
 		/* Now load the message from file */
 		return rspamd_task_load_message(task, NULL, NULL, 0);
 	}
 	else if (shm_elt && ucl_object_type(shm_elt) == UCL_STRING) {
 		/* Synthesize shm headers */
-		const char *shm_name = ucl_object_tostring(shm_elt);
-		rspamd_fstring_t *fhdr = rspamd_fstring_new_init(shm_name, strlen(shm_name));
-		rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
-		rspamd_ftok_t *val_tok = rspamd_ftok_map(fhdr);
+		gsize shmlen;
 
-		RSPAMD_FTOK_ASSIGN(name_tok, "shm");
-		rspamd_task_add_request_header(task, name_tok, val_tok);
-
-		const ucl_object_t *off_elt = ucl_object_lookup(metadata_obj, "shm_offset");
-		if (off_elt) {
-			char buf[32];
-			int blen = rspamd_snprintf(buf, sizeof(buf), "%L",
-									   ucl_object_toint(off_elt));
-			rspamd_fstring_t *foff = rspamd_fstring_new_init(buf, blen);
-			rspamd_ftok_t *off_name = rspamd_mempool_alloc(task->task_pool, sizeof(*off_name));
-			rspamd_ftok_t *off_val = rspamd_ftok_map(foff);
-
-			RSPAMD_FTOK_ASSIGN(off_name, "shm-offset");
-			rspamd_task_add_request_header(task, off_name, off_val);
+		if (ucl_object_tolstring(shm_elt, &shmlen) == NULL || shmlen == 0) {
+			g_set_error(&task->err, rspamd_protocol_quark(), 400,
+						"empty 'shm' in metadata");
+			return FALSE;
 		}
 
-		const ucl_object_t *len_elt = ucl_object_lookup(metadata_obj, "shm_length");
-		if (len_elt) {
-			char buf[32];
-			int blen = rspamd_snprintf(buf, sizeof(buf), "%L",
-									   ucl_object_toint(len_elt));
-			rspamd_fstring_t *flen = rspamd_fstring_new_init(buf, blen);
-			rspamd_ftok_t *len_name = rspamd_mempool_alloc(task->task_pool, sizeof(*len_name));
-			rspamd_ftok_t *len_val = rspamd_ftok_map(flen);
+		rspamd_protocol_metadata_add_header(task, "shm", sizeof("shm") - 1,
+											shm_elt);
 
-			RSPAMD_FTOK_ASSIGN(len_name, "shm-length");
-			rspamd_task_add_request_header(task, len_name, len_val);
+		/*
+		 * Offset and length are validated by rspamd_shmem_segment_map, but a
+		 * negative value would be printed as a huge unsigned one there, so
+		 * reject those already here where the actual type is known
+		 */
+		static const struct {
+			const char *meta_name;
+			const char *hdr_name;
+			gsize hdr_len;
+		} shm_num_fields[] = {
+			{"shm_offset", "shm-offset", sizeof("shm-offset") - 1},
+			{"shm_length", "shm-length", sizeof("shm-length") - 1},
+		};
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(shm_num_fields); i++) {
+			const ucl_object_t *num_elt = ucl_object_lookup(metadata_obj,
+															shm_num_fields[i].meta_name);
+			int64_t num;
+			char *buf;
+			rspamd_ftok_t *name_tok, *val_tok;
+
+			if (num_elt == NULL) {
+				continue;
+			}
+
+			num = ucl_object_toint(num_elt);
+
+			if (num < 0) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 400,
+							"negative '%s' in metadata: %lld",
+							shm_num_fields[i].meta_name, (long long) num);
+				return FALSE;
+			}
+
+			buf = rspamd_mempool_alloc(task->task_pool, sizeof("18446744073709551615"));
+			name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
+			val_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*val_tok));
+
+			val_tok->begin = buf;
+			val_tok->len = rspamd_snprintf(buf, sizeof("18446744073709551615"),
+										   "%L", num);
+			name_tok->begin = shm_num_fields[i].hdr_name;
+			name_tok->len = shm_num_fields[i].hdr_len;
+
+			rspamd_task_add_request_header(task, name_tok, val_tok);
 		}
 
 		return rspamd_task_load_message(task, NULL, NULL, 0);
