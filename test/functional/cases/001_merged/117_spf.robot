@@ -200,6 +200,24 @@ SPF NESTING LIMIT
   Expect Symbol  R_SPF_FAIL
   Do Not Expect Symbol  R_SPF_ALLOW
 
+SPF ALLOW EXISTS
+  [Documentation]  RFC 7208 5.7: an exists element whose name resolves matches
+  ...  any sender, here it follows an include that has appended an element of
+  ...  its own to the record
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@exists.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF FAIL UNRESOLVEABLE EXISTS
+  [Documentation]  An exists element whose name does not resolve matches
+  ...  nothing, so the trailing -all applies
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@noexists.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
 SPF DNS REQUESTS LIMIT
   [Documentation]  Exactly max_dns_requests DNS elements (30 by default) are
   ...  evaluated, the 31st one is not, so only the shorter record authorises

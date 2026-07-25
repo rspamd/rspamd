@@ -1889,14 +1889,13 @@ parse_spf_redirect(struct spf_record *rec,
 }
 
 static gboolean
-parse_spf_exists(struct spf_record *rec, struct spf_addr *addr)
+parse_spf_exists(struct spf_record *rec,
+				 struct spf_resolved_element *resolved, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	const char *host;
 	struct rspamd_task *task = rec->task;
-	struct spf_resolved_element *resolved;
 
-	resolved = g_ptr_array_index(rec->resolved, rec->resolved->len - 1);
 	CHECK_REC(rec);
 
 	/* Check if element has unresolved macros */
@@ -2537,7 +2536,7 @@ spf_process_element(struct spf_record *rec,
 		}
 		else if (g_ascii_strncasecmp(begin, SPF_EXISTS,
 									 sizeof(SPF_EXISTS) - 1) == 0) {
-			res = parse_spf_exists(rec, addr);
+			res = parse_spf_exists(rec, resolved, addr);
 		}
 		else {
 			msg_notice_spf("spf error for domain %s: bad spf command %s",
