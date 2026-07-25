@@ -2137,10 +2137,15 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				}
 			}
 			else {
-				if (g_ascii_isspace(*(p - 1))) {
-					if (type == DKIM_CANON_RELAXED) {
-						p -= 1;
-					}
+				/*
+				 * p is at start, so everything from start onwards is a line
+				 * ending and the body is empty. Do not probe *(p - 1): it is
+				 * before the slice we were handed. For a message that byte is
+				 * the header/body separator, whitespace, and the branch it
+				 * used to select is the one taken here.
+				 */
+				if (type == DKIM_CANON_RELAXED) {
+					p = start - 1;
 				}
 				goto end;
 			}
@@ -2166,10 +2171,9 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				}
 			}
 			else {
-				if (g_ascii_isspace(*(p - 1))) {
-					if (type == DKIM_CANON_RELAXED) {
-						p -= 1;
-					}
+				/* As in got_cr: *(p - 1) is before start, the body is empty */
+				if (type == DKIM_CANON_RELAXED) {
+					p = start - 1;
 				}
 				goto end;
 			}
@@ -2197,10 +2201,13 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				}
 			}
 			else {
-				if (g_ascii_isspace(*(p - 2))) {
-					if (type == DKIM_CANON_RELAXED) {
-						p -= 2;
-					}
+				/*
+				 * got_crlf is only entered with p >= start + 1, so this is
+				 * p == start + 1 and *(p - 2) is the byte before start.
+				 * The slice holds just the CRLF, hence an empty body.
+				 */
+				if (type == DKIM_CANON_RELAXED) {
+					p = start - 1;
 				}
 				goto end;
 			}
