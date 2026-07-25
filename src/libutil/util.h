@@ -400,9 +400,9 @@ int rspamd_uuid_v7(char uuid_out[37], char *opt_uid_buf, gsize uid_buflen, doubl
 void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len);
 
 /**
- * Returns
+ * Create an exclusively owned shared memory segment using a random name
  * @param pattern pattern to create (should end with some number of X symbols), modified by this function
- * @return
+ * @return opened descriptor or -1 in case of error (errno is set accordingly)
  */
 int rspamd_shmem_mkstemp(char *pattern);
 
@@ -460,7 +460,8 @@ gpointer rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
  * Map named shared memory segment
  * @param fname filename
  * @param mode mode to open
- * @param size target size (must NOT be NULL)
+ * @param size target size (must NOT be NULL); it is set to 0 if the segment is
+ *             empty and to `(gsize)-1` for any other error
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
 gpointer rspamd_shmem_xmap(const char *fname, unsigned int mode,
