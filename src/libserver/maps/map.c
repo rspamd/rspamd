@@ -1144,8 +1144,14 @@ rspamd_map_check_file_sig(const char *fname,
 		pk = rspamd_pubkey_ref(bk->trusted_pubkey);
 	}
 
+	/*
+	 * `fname` is a filesystem path here (the same one we have just read the
+	 * `.pub` counterpart from), so it must be mapped as a file: shm_open(2)
+	 * operates on a flat namespace and rejects such names outright
+	 */
 	rspamd_snprintf(fpath, sizeof(fpath), "%s.sig", fname);
-	data = rspamd_shmem_xmap(fpath, PROT_READ, &len);
+	len = 0;
+	data = rspamd_file_xmap(fpath, PROT_READ, &len, TRUE);
 
 	if (data == NULL) {
 		msg_err_map("can't open signature %s: %s", fpath, strerror(errno));
