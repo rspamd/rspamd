@@ -161,6 +161,7 @@ struct rspamd_map_backend {
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;
 	char *uri;
+	char *uri_log; /* uri with HTTP userinfo redacted; safe for logging */
 	ref_entry_t ref;
 };
 
