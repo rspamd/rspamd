@@ -141,14 +141,21 @@ struct spf_dns_cb {
 	unsigned expanded_names;    /* number of mx/ptr names expanded to addresses */
 };
 
+/*
+ * A record that hits a DNS limit cannot be evaluated to the end, so RFC 7208
+ * 4.6.4 requires permerror for it. Reporting a definitive fail instead would
+ * mean judging a record by the part of it that happened to fit in the budget
+ */
 static inline bool
-spf_record_can_dns(const struct spf_record *rec)
+spf_record_can_dns(struct spf_record *rec)
 {
 	if (spf_lib_ctx->max_dns_requests > 0 &&
 		rec->dns_requests >= spf_lib_ctx->max_dns_requests) {
 		msg_warn_spf("spf dns requests limit: %d >= %d is reached, domain: %s",
 					 rec->dns_requests, spf_lib_ctx->max_dns_requests,
 					 rec->sender_domain);
+		rec->permfail = true;
+
 		return false;
 	}
 
@@ -162,7 +169,7 @@ spf_record_can_dns(const struct spf_record *rec)
  * reflect the position in the include/redirect tree.
  */
 static inline bool
-spf_record_can_nest(const struct spf_record *rec,
+spf_record_can_nest(struct spf_record *rec,
 					const struct spf_resolved_element *parent)
 {
 	unsigned int nested = parent->nested + 1;
@@ -171,6 +178,8 @@ spf_record_can_nest(const struct spf_record *rec,
 		msg_warn_spf("spf hard nesting limit: %ud > %ud is reached, domain: %s",
 					 nested, (unsigned int) SPF_MAX_NESTING_HARD,
 					 rec->sender_domain);
+		rec->permfail = true;
+
 		return false;
 	}
 
@@ -179,6 +188,8 @@ spf_record_can_nest(const struct spf_record *rec,
 		msg_warn_spf("spf nesting limit: %ud > %ud is reached, domain: %s",
 					 nested, spf_lib_ctx->max_dns_nesting,
 					 rec->sender_domain);
+		rec->permfail = true;
+
 		return false;
 	}
 

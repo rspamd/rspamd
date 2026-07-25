@@ -186,19 +186,24 @@ SPF PERMFAIL TOO MANY MX NAMES
   Expect Symbol  R_SPF_PERMFAIL
   Do Not Expect Symbol  R_SPF_FAIL
 
-SPF NESTING LIMIT
+SPF ALLOW NESTING AT LIMIT
   [Documentation]  An include chain is followed up to max_dns_nesting levels
-  ...  (10 by default) and no further: 8.8.8.8 is listed by the last allowed
-  ...  level, 8.8.4.4 by the level below it that must never be resolved
+  ...  (10 by default), 8.8.8.8 is listed by the last allowed one
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  IP=8.8.8.8  From=x@nest.org.org.za
+  ...  IP=8.8.8.8  From=x@nestok.org.org.za
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_ALLOW
+
+SPF PERMFAIL NESTING BEYOND LIMIT
+  [Documentation]  The same chain entered one level deeper cannot be evaluated
+  ...  to the end, which is permerror per RFC 7208 4.6.4 rather than a fail
+  ...  based on the part of the record that fitted in the limit
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  IP=8.8.4.4  From=x@nest.org.org.za
+  ...  IP=8.8.8.8  From=x@nestdeep.org.org.za
   ...  Settings=${SETTINGS_SPF}
-  Expect Symbol  R_SPF_FAIL
+  Expect Symbol  R_SPF_PERMFAIL
   Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
 
 SPF ALLOW EXISTS
   [Documentation]  RFC 7208 5.7: an exists element whose name resolves matches
@@ -218,16 +223,20 @@ SPF FAIL UNRESOLVEABLE EXISTS
   Expect Symbol  R_SPF_FAIL
   Do Not Expect Symbol  R_SPF_ALLOW
 
-SPF DNS REQUESTS LIMIT
+SPF ALLOW DNS REQUESTS AT LIMIT
   [Documentation]  Exactly max_dns_requests DNS elements (30 by default) are
-  ...  evaluated, the 31st one is not, so only the shorter record authorises
-  ...  8.8.8.8 by its last element
+  ...  evaluated, here the last of them authorises 8.8.8.8
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fewreq.org.org.za
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_ALLOW
+
+SPF PERMFAIL DNS REQUESTS BEYOND LIMIT
+  [Documentation]  RFC 7208 4.6.4: a record with one DNS element more than the
+  ...  limit allows cannot be evaluated to the end and yields permerror
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@manyreq.org.org.za
   ...  Settings=${SETTINGS_SPF}
-  Expect Symbol  R_SPF_FAIL
+  Expect Symbol  R_SPF_PERMFAIL
   Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
