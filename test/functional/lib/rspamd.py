@@ -71,27 +71,84 @@ def cleanup_temporary_directory(directory):
     shutil.rmtree(directory)
 
 
+def _pabot_slice_id():
+    """Return this process' pabot queue index, or None under plain robot.
+
+    pabot passes `--variable PABOTQUEUEINDEX:<n>` to every suite slice it
+    executes and prints the same index next to the suite name in its own
+    log (`[ID:<n>] EXECUTING Cases.001 Merged.100 General`), so the index
+    maps a saved directory back to the sub-suite that produced it. pabot
+    uses -1 when there is no slice, plain robot defines nothing at all.
+    """
+    idx = BuiltIn().get_variable_value("${PABOTQUEUEINDEX}")
+    if idx is None:
+        return None
+    idx = str(idx).strip()
+    if not idx.lstrip('-').isdigit() or int(idx) < 0:
+        return None
+    return idx
+
+
+def _save_file(source_file, destination_file):
+    """Copy source_file to destination_file atomically, best effort.
+
+    Several processes can aim at the same destination: pabot slices of a
+    split directory suite share the suite-level directory, and the `*.last`
+    copies are global to the whole run. Copy into a unique temporary in the
+    destination directory and rename it into place so no reader ever sees a
+    half-written log, and only warn on failure -- saving diagnostics must
+    never turn a green suite red.
+    """
+    destination_directory = os.path.dirname(destination_file)
+    try:
+        fd, tmp_file = tempfile.mkstemp(dir=destination_directory, prefix='.saving-')
+        os.close(fd)
+    except OSError as e:
+        logger.warn('cannot create a temporary file in %s: %s' % (destination_directory, e))
+        return
+    try:
+        shutil.copyfile(source_file, tmp_file)
+        os.chmod(tmp_file, 0o644)
+        os.replace(tmp_file, destination_file)
+    except OSError as e:
+        logger.warn('cannot save %s as %s: %s' % (source_file, destination_file, e))
+        try:
+            os.unlink(tmp_file)
+        except OSError:
+            pass
+
+
 def save_run_results(directory, filenames):
     current_directory = os.getcwd()
+    save_root = "%s/robot-save" % current_directory
     suite_name = BuiltIn().get_variable_value("${SUITE_NAME}")
     test_name = BuiltIn().get_variable_value("${TEST NAME}")
     if os.path.exists(directory):
         onlyfiles = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
         logger.debug('%s content before cleanup: %s' % (directory, onlyfiles))
         if test_name is None:
-            # this is suite-level tear down
-            destination_directory = "%s/robot-save/%s" % (current_directory, suite_name)
+            # This is suite-level tear down. A directory suite whose
+            # __init__.robot owns rspamd (001_merged) is split by pabot into
+            # one slice per sub-suite, and every slice runs this very
+            # teardown with the same ${SUITE_NAME}: without a per-slice
+            # directory they race on the mkdir below and then overwrite each
+            # other's logs. Leaf (.robot) suites run whole in one process, so
+            # they keep the historical flat layout.
+            destination_directory = "%s/%s" % (save_root, suite_name)
+            slice_id = _pabot_slice_id()
+            suite_source = BuiltIn().get_variable_value("${SUITE_SOURCE}")
+            if slice_id is not None and suite_source is not None and os.path.isdir(suite_source):
+                destination_directory = "%s/pabot-%s" % (destination_directory, slice_id)
         else:
-            destination_directory = "%s/robot-save/%s/%s" % (current_directory, suite_name, test_name)
-        if not os.path.isdir(destination_directory):
-            os.makedirs(destination_directory)
+            destination_directory = "%s/%s/%s" % (save_root, suite_name, test_name)
+        os.makedirs(destination_directory, exist_ok=True)
         for file in filenames.split(' '):
             source_file = "%s/%s" % (directory, file)
             logger.debug('check if we can save %s' % source_file)
             if os.path.isfile(source_file):
                 logger.debug('found %s, save it' % file)
-                shutil.copy(source_file, "%s/%s" % (destination_directory, file))
-                shutil.copy(source_file, "%s/robot-save/%s.last" % (current_directory, file))
+                _save_file(source_file, "%s/%s" % (destination_directory, file))
+                _save_file(source_file, "%s/%s.last" % (save_root, file))
 
 
 def encode_filename(filename):
