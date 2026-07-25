@@ -483,12 +483,30 @@ rspamd_dkim_parse_hdrlist_common(struct rspamd_dkim_common_ctx *ctx,
 	void *found;
 	union rspamd_dkim_header_stat u;
 
+	/*
+	 * Real world h= lists hold a few dozen entries. Every counted item costs
+	 * a pointer in hlist plus, when non empty, a string and a header struct,
+	 * so an unbounded list turns a size limited message into a much larger
+	 * allocation. It also drives the per header selection loop below, which
+	 * is only bounded per entry by max_list_iters.
+	 */
+	const unsigned int max_hdr_list_items = 1000;
+
 	p = param;
 	while (p <= end) {
 		if ((p == end || *p == ':')) {
 			count++;
 		}
 		p++;
+	}
+
+	if (count > max_hdr_list_items) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_INVALID_H,
+					"too many header list items: %u, limit is %u",
+					count, max_hdr_list_items);
+		return false;
 	}
 
 	if (count > 0) {

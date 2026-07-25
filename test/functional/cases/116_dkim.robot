@@ -35,6 +35,16 @@ DKIM Ignore Unknown Tags
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/dkim_unknown_tags.eml
   Expect Symbol  R_DKIM_ALLOW
 
+DKIM Reject Oversized Header List
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_huge_hlist.eml
+  ...  IP=37.48.67.26
+  Do Not Expect Symbol  R_DKIM_ALLOW
+
+DKIM Accept Large Header List Below Limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_large_hlist.eml
+  ...  IP=37.48.67.26
+  Expect Symbol  R_DKIM_PERMFAIL
+
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
   ${result} =  Scan Message With Rspamc  ${RSPAMD_TESTDIR}/messages/spam_message.eml  --mime  --header=dodkim=1
