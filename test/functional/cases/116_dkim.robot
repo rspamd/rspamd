@@ -45,6 +45,14 @@ DKIM Accept Large Header List Below Limit
   ...  IP=37.48.67.26
   Expect Symbol  R_DKIM_PERMFAIL
 
+DKIM Unparseable Signatures Count Towards Limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs.eml
+  Do Not Expect Symbol  R_DKIM_ALLOW
+
+DKIM Signatures At Limit Are Still Checked
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_sigs_at_limit.eml
+  Expect Symbol  R_DKIM_ALLOW
+
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
   ${result} =  Scan Message With Rspamc  ${RSPAMD_TESTDIR}/messages/spam_message.eml  --mime  --header=dodkim=1
