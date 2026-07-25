@@ -83,6 +83,13 @@ typedef enum spf_action_e {
 /** Default SPF limits for avoiding abuse **/
 #define SPF_MAX_NESTING 10
 #define SPF_MAX_DNS_REQUESTS 30
+/*
+ * RFC 7208 4.6.4: evaluation of each `mx` or `ptr` record must not result in
+ * querying more than 10 address records
+ */
+#define SPF_MAX_ADDRESS_LOOKUPS 10
+/* Total number of address lookups spawned by all mx/ptr expansions */
+#define SPF_MAX_DNS_EXPANSIONS 100
 #define SPF_MIN_CACHE_TTL (60 * 5) /* 5 minutes */
 
 struct spf_addr {

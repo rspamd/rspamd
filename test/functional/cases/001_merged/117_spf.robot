@@ -169,3 +169,19 @@ SPF PLUSALL
   ...  IP=8.8.8.8  From=x@plusall.com
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_PLUSALL
+
+SPF ALLOW MX
+  [Documentation]  A normal mx element is expanded to the addresses of its names
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@fewmx.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF PERMFAIL TOO MANY MX NAMES
+  [Documentation]  RFC 7208 4.6.4: an mx element must not query more than 10
+  ...  address records, exceeding that limit yields permerror
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@manymx.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_FAIL
