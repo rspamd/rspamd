@@ -71,7 +71,6 @@ local settings = {
     user_password = {
       enabled = true,
       length_thresholds = {
-        suspicious = 64,
         long = 128,
         very_long = 256
       }
@@ -272,6 +271,14 @@ function checks.user_password_analysis(task, url, cfg)
   local url_flags_tab = rspamd_url.flags
   local flags = url:get_flags_num()
 
+  -- Emails always carry a user part (the local part of the address), so this
+  -- check is meaningless for them: it would fire on every address in a
+  -- message. The mailto parser does not set has_user, but do not rely on that
+  -- alone - reject mailto explicitly.
+  if url:get_protocol() == 'mailto' then
+    return findings
+  end
+
   -- Check if user field present
   if bit.band(flags, url_flags_tab.has_user) == 0 then
     return findings
@@ -286,7 +293,9 @@ function checks.user_password_analysis(task, url, cfg)
 
   lua_util.debugm(N, task, "Checking user field length: %d chars", user_len)
 
-  -- Length-based detection (get host only when needed for options)
+  -- Escalating severity, one symbol per URL: an oversized user field is a
+  -- stronger signal than the mere presence of one. Whether a password follows
+  -- the user is irrelevant here (and the parser does not keep it anyway).
   if user_len > cfg.length_thresholds.very_long then
     table.insert(findings, {
       symbol = symbols.user_very_long,
@@ -298,20 +307,12 @@ function checks.user_password_analysis(task, url, cfg)
       options = { string.format("%d", user_len) }
     })
   else
-    -- Get host only for these cases where we need it in options
+    -- Get host only for this case where we need it in options
     local host = url:get_host()
-    if user_len > cfg.length_thresholds.suspicious then
-      table.insert(findings, {
-        symbol = symbols.user_password,
-        options = { host or "unknown" }
-      })
-    else
-      -- Normal length user
-      table.insert(findings, {
-        symbol = symbols.user_password,
-        options = { host or "unknown" }
-      })
-    end
+    table.insert(findings, {
+      symbol = symbols.user_password,
+      options = { host or "unknown" }
+    })
   end
 
   -- Optional: check pattern map if configured
