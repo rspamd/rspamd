@@ -144,12 +144,41 @@ if op == "add" then
   redis.call('EXPIRE', key, expire)
   redis.call('INCR', count_key)
 
-  -- Handle shingles: SETEX each shingle key with expire and digest as value
-  for i = 3, #KEYS do
-    redis.call('SETEX', KEYS[i], expire, digest)
+  -- Handle shingles: SETEX each shingle key with expire and digest as value.
+  -- Also persist the shingle set in the 'S' field of the digest hash
+  -- ("idx_value" suffixes, comma separated), so digest-only deletes and
+  -- refreshes can locate the slots without knowing the source message.
+  if #KEYS > 2 then
+    local suffixes = {}
+
+    for i = 3, #KEYS do
+      local suf = string.match(KEYS[i], '(%d+_%d+)$')
+      if suf then
+        suffixes[#suffixes + 1] = suf
+      end
+      redis.call('SETEX', KEYS[i], expire, digest)
+    end
+
+    if #suffixes > 0 then
+      redis.call('HSET', key, 'S', table.concat(suffixes, ','))
+    end
   end
 
 elseif op == "del" then
+  -- Reconstruct this digest's own shingle slots from the persisted set and
+  -- delete those still owned by it: digest-only deletes (e.g. deletions by
+  -- a hash list) carry no shingle keys, which used to leave orphaned slots
+  local stored = redis.call('HGET', key, 'S')
+  if stored then
+    local prefix = string.sub(key, 1, #key - #digest)
+    for suf in string.gmatch(stored, '[^,]+') do
+      local skey = prefix .. '_' .. suf
+      if redis.call('GET', skey) == digest then
+        redis.call('DEL', skey)
+      end
+    end
+  end
+
   redis.call('DEL', key)
   redis.call('DECR', count_key)
 
@@ -160,8 +189,25 @@ elseif op == "del" then
 elseif op == "refresh" then
   redis.call('EXPIRE', key, expire)
 
-  for i = 3, #KEYS do
-    redis.call('EXPIRE', KEYS[i], expire)
+  -- Prefer the persisted shingle set: refresh the slots this digest still
+  -- owns and reclaim expired ones, instead of touching the slots of the
+  -- message that merely triggered the refresh
+  local stored = redis.call('HGET', key, 'S')
+  if stored then
+    local prefix = string.sub(key, 1, #key - #digest)
+    for suf in string.gmatch(stored, '[^,]+') do
+      local skey = prefix .. '_' .. suf
+      local owner = redis.call('GET', skey)
+      if owner == digest then
+        redis.call('EXPIRE', skey, expire)
+      elseif not owner then
+        redis.call('SETEX', skey, expire, digest)
+      end
+    end
+  else
+    for i = 3, #KEYS do
+      redis.call('EXPIRE', KEYS[i], expire)
+    end
   end
 end
 

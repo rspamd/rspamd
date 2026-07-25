@@ -572,6 +572,11 @@ rspamd_fuzzy_update_stats(struct rspamd_fuzzy_storage_ctx *ctx,
 		ctx->stat.delayed_hashes++;
 	}
 
+	if (key == NULL && ip_stat != NULL && ctx->unkeyed_stat != NULL) {
+		/* Unkeyed client: update the aggregate bucket */
+		rspamd_fuzzy_update_key_stat(matched, ctx->unkeyed_stat, cmd, res, timestamp);
+	}
+
 	if (key) {
 		rspamd_fuzzy_update_key_stat(matched, key->stat, cmd, res, timestamp);
 
@@ -1360,6 +1365,37 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			ip_stat = g_malloc0(sizeof(*ip_stat));
 			REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
 			rspamd_lru_hash_insert(session->key->stat->last_ips,
+								   naddr, ip_stat, -1, 0);
+		}
+
+		REF_RETAIN(ip_stat);
+		session->ip_stat = ip_stat;
+	}
+	else if (session->addr) {
+		/*
+		 * Unkeyed client (e.g. allowed by IP): track its traffic under the
+		 * dedicated bucket, otherwise such writers are invisible in the stats
+		 */
+		if (session->ctx->unkeyed_stat == NULL) {
+			struct fuzzy_key_stat *unkeyed = g_malloc0(sizeof(*unkeyed));
+
+			REF_INIT_RETAIN(unkeyed, fuzzy_key_stat_dtor);
+			unkeyed->last_ips = rspamd_lru_hash_new_full(1024,
+														 (GDestroyNotify) rspamd_inet_address_free,
+														 fuzzy_key_stat_unref,
+														 rspamd_inet_address_hash,
+														 rspamd_inet_address_equal);
+			session->ctx->unkeyed_stat = unkeyed;
+		}
+
+		ip_stat = rspamd_lru_hash_lookup(session->ctx->unkeyed_stat->last_ips,
+										 session->addr, -1);
+
+		if (ip_stat == NULL) {
+			naddr = rspamd_inet_address_copy(session->addr, NULL);
+			ip_stat = g_malloc0(sizeof(*ip_stat));
+			REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
+			rspamd_lru_hash_insert(session->ctx->unkeyed_stat->last_ips,
 								   naddr, ip_stat, -1, 0);
 		}
 
@@ -3276,6 +3312,8 @@ start_fuzzy(struct rspamd_worker *worker)
 										  rspamd_fuzzy_storage_reload, ctx);
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_FUZZY_STAT,
 										  rspamd_fuzzy_storage_stat, ctx);
+	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_FUZZY_HASH,
+										  rspamd_fuzzy_storage_hash_info, ctx);
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_FUZZY_SYNC,
 										  rspamd_fuzzy_storage_sync, ctx);
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_FUZZY_BLOCKED,
