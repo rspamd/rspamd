@@ -45,6 +45,10 @@ jobs:
       image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
       name: fedora-ci
       enable_luajit: 'OFF'
+      # rpm/rspamd.spec builds with jemalloc, but the fedora-ci image installs
+      # neither jemalloc nor jemalloc-devel. Flip this on once the image carries
+      # jemalloc-devel (rspamd/rspamd-build-docker).
+      enable_jemalloc: 'OFF'
 
   ubuntu_amd64:
     if: |
@@ -55,6 +59,11 @@ jobs:
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci-amd64
+      # The shipped configuration: debian/rules enables jemalloc everywhere
+      # except arm64, and the amd64 image carries libjemalloc-dev. This is the
+      # only job that runs the functional suite against it, and the binary it
+      # uploads is what webui-e2e-playwright then exercises.
+      enable_jemalloc: 'ON'
 
   ubuntu_arm64:
     if: |
@@ -68,6 +77,9 @@ jobs:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci-arm64
       runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
+      # Deliberately off: debian/rules also disables jemalloc on arm64, and the
+      # arm64 image takes the vectorscan branch which skips libjemalloc-dev.
+      enable_jemalloc: 'OFF'
 
   ubuntu-focal:
     if: |
@@ -78,6 +90,9 @@ jobs:
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-focal
       name: ubuntu-focal
+      # amd64 runner, and the focal image carries libjemalloc-dev; this covers
+      # the jemalloc build on the gcc-10 floor.
+      enable_jemalloc: 'ON'
 
   centos-8:
     if: |
@@ -88,6 +103,9 @@ jobs:
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:centos-8
       name: centos-8
+      # rpm/rspamd.spec builds with jemalloc, but the image installs only the
+      # runtime `jemalloc`, not `jemalloc-devel`. Flip on once the image has it.
+      enable_jemalloc: 'OFF'
 
   centos-9:
     if: |
@@ -98,6 +116,8 @@ jobs:
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:centos-9
       name: centos-9
+      # As centos-8: image has runtime `jemalloc` only, no `jemalloc-devel`.
+      enable_jemalloc: 'OFF'
 
   webui-e2e-playwright:
     needs: ubuntu_amd64
