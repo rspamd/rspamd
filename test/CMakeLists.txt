@@ -15,12 +15,14 @@ set(RSPAMD_TEST_SOURCES
         rspamd_cryptobox_test.c
         rspamd_heap_test.c
         rspamd_test_suite.c
+        ${CMAKE_SOURCE_DIR}/src/sanitizer_conf.c
 )
 
 # Main C test executable
 add_executable(rspamd-test ${RSPAMD_TEST_SOURCES})
 target_compile_definitions(rspamd-test PRIVATE RSPAMD_TEST)
 target_link_libraries(rspamd-test PRIVATE rspamd-server)
+RspamdLinkJemalloc(rspamd-test)
 set_target_properties(rspamd-test PROPERTIES
         LINKER_LANGUAGE CXX
 )
@@ -32,11 +34,12 @@ add_test(
 )
 
 # C++ unit tests
-set(CXX_TEST_SOURCES rspamd_cxx_unit.cxx)
+set(CXX_TEST_SOURCES rspamd_cxx_unit.cxx ${CMAKE_SOURCE_DIR}/src/sanitizer_conf.c)
 
 # C++ test executable
 add_executable(rspamd-test-cxx ${CXX_TEST_SOURCES})
 target_link_libraries(rspamd-test-cxx PRIVATE rspamd-server)
+RspamdLinkJemalloc(rspamd-test-cxx)
 set_target_properties(rspamd-test-cxx PROPERTIES
         LINKER_LANGUAGE CXX
 )

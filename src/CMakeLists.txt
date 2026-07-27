@@ -94,6 +94,7 @@ set(RSPAMD_SOURCES
         controller.c
         fuzzy_storage.c
         rspamd.c
+        sanitizer_conf.c
         worker.c
         rspamd_proxy.c)
 
@@ -258,6 +259,10 @@ endif ()
 # Link all required system libraries
 target_link_libraries(rspamd-server PUBLIC ${RSPAMD_REQUIRED_LIBRARIES})
 
+# libserver is the only place that calls into jemalloc directly (mallctl and
+# friends), so it must resolve those symbols at link time
+RspamdLinkJemalloc(rspamd-server)
+
 # Add Backward support for stacktrace
 add_backward(rspamd-server)
 
@@ -278,6 +283,7 @@ endif ()
 
 # Link rspamd executable with the server library
 target_link_libraries(rspamd PRIVATE rspamd-server)
+RspamdLinkJemalloc(rspamd)
 
 # Install targets
 install(TARGETS rspamd
