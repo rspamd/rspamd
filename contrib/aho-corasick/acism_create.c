@@ -132,7 +132,7 @@ acism_create(MEMREF const* strv, int nstrs)
 
     goto DONE;
     FAIL: acism_destroy(psp), psp = NULL;
-    DONE: free(troot), free(v1), free(v2);
+    DONE: g_free(troot), g_free(v1), g_free(v2);
     return psp;
 }
 
@@ -319,7 +319,7 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
         *dstp = NULL;
     }
 
-    free(usev);
+    g_free(usev);
     return last_trans + 1;
 }
 
@@ -349,7 +349,7 @@ fill_hashv(ACISM *psp, TNODE const treev[], int nnodes)
         psp->hashv[i] = *sp;
     }
 
-    free(sv);
+    g_free(sv);
 }
 
 static void
