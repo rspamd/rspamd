@@ -1061,6 +1061,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 	glong pt;
 	int ret = 1;
 	gboolean user_seen = FALSE;
+	gboolean user_oversized = FALSE;
 	enum {
 		parse_protocol,
 		parse_slash,
@@ -1210,6 +1211,15 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				if (p - c == 0) {
 					goto out;
 				}
+
+				/* Final consultation with the complete user field */
+				if (user_oversized &&
+					rspamd_url_lua_consult(c, p - c, *flags,
+										   (lua_State *) lua_state) ==
+						RSPAMD_URL_LUA_FILTER_REJECT) {
+					goto out;
+				}
+
 				user_start = c;
 				st = parse_password_start;
 			}
@@ -1224,6 +1234,14 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					continue;
 				}
 
+				/* Final consultation with the complete user field */
+				if (user_oversized &&
+					rspamd_url_lua_consult(c, p - c, *flags,
+										   (lua_State *) lua_state) ==
+						RSPAMD_URL_LUA_FILTER_REJECT) {
+					goto out;
+				}
+
 				SET_U(u, UF_USERINFO);
 				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 				st = parse_at;
@@ -1231,12 +1249,20 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			else if (!g_ascii_isgraph(t)) {
 				goto out;
 			}
-			else if (p - c > max_email_user) {
+			else if (!user_oversized && p - c > max_email_user) {
 				/*
 				 * Oversized user field is itself an obfuscation signal
 				 * (e.g. https://legit.com<lots-of-spaces>@evil.com/...),
 				 * so mark obscured regardless of what the Lua filter says.
+				 *
+				 * Consult Lua merely twice: here, when the limit is first
+				 * exceeded, and once again when the user field ends. Doing it
+				 * for every byte past the limit means re-scanning the whole
+				 * prefix each time, which is quadratic in the length of the
+				 * user field and costs thousands of C -> Lua transitions for a
+				 * rather small input.
 				 */
+				user_oversized = TRUE;
 				*flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_HAS_USER;
 
 				/* Consult Lua filter (fixes #5731) */
