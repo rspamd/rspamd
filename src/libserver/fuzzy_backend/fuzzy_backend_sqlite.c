@@ -97,6 +97,8 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID,
 	RSPAMD_FUZZY_BACKEND_DELETE,
 	RSPAMD_FUZZY_BACKEND_COUNT,
+	RSPAMD_FUZZY_BACKEND_INSPECT,
+	RSPAMD_FUZZY_BACKEND_SHINGLES_COUNT,
 	RSPAMD_FUZZY_BACKEND_EXPIRE,
 	RSPAMD_FUZZY_BACKEND_VACUUM,
 	RSPAMD_FUZZY_BACKEND_DELETE_ORPHANED,
@@ -175,6 +177,16 @@ static struct rspamd_fuzzy_stmts {
 		{.idx = RSPAMD_FUZZY_BACKEND_COUNT,
 		 .sql = "SELECT COUNT(*) FROM digests;",
 		 .args = "",
+		 .stmt = NULL,
+		 .result = SQLITE_ROW},
+		{.idx = RSPAMD_FUZZY_BACKEND_INSPECT,
+		 .sql = "SELECT id, value, time, flag FROM digests WHERE digest==?1;",
+		 .args = "D",
+		 .stmt = NULL,
+		 .result = SQLITE_ROW},
+		{.idx = RSPAMD_FUZZY_BACKEND_SHINGLES_COUNT,
+		 .sql = "SELECT COUNT(*) FROM shingles WHERE digest_id=?1;",
+		 .args = "I",
 		 .stmt = NULL,
 		 .result = SQLITE_ROW},
 		{.idx = RSPAMD_FUZZY_BACKEND_EXPIRE,
@@ -417,7 +429,12 @@ rspamd_fuzzy_backend_sqlite_open_db(const char *path, GError **err)
 	rspamd_cryptobox_hash_init(&st, NULL, 0);
 	rspamd_cryptobox_hash_update(&st, path, strlen(path));
 	rspamd_cryptobox_hash_final(&st, hash_out);
-	rspamd_snprintf(bk->id, sizeof(bk->id), "%xs", hash_out);
+	/*
+	 * hash_out is a raw digest, not a NUL terminated string: %xs would call
+	 * strlen on it and read past the buffer. Pass the length explicitly.
+	 */
+	rspamd_snprintf(bk->id, sizeof(bk->id), "%*xs",
+					(int) sizeof(hash_out), hash_out);
 	memcpy(bk->pool->tag.uid, bk->id, sizeof(bk->pool->tag.uid));
 
 	return bk;
@@ -997,6 +1014,63 @@ gsize rspamd_fuzzy_backend_sqlite_count(struct rspamd_fuzzy_backend_sqlite *back
 	}
 
 	return 0;
+}
+
+ucl_object_t *
+rspamd_fuzzy_backend_sqlite_inspect(struct rspamd_fuzzy_backend_sqlite *backend,
+									const unsigned char *digest)
+{
+	ucl_object_t *res;
+	int rc;
+
+	if (backend == NULL) {
+		return NULL;
+	}
+
+	res = ucl_object_typed_new(UCL_OBJECT);
+
+	rc = rspamd_fuzzy_backend_sqlite_run_stmt(backend, FALSE,
+											  RSPAMD_FUZZY_BACKEND_INSPECT, digest);
+
+	if (rc == SQLITE_OK) {
+		int64_t id = sqlite3_column_int64(
+			prepared_stmts[RSPAMD_FUZZY_BACKEND_INSPECT].stmt, 0);
+
+		ucl_object_insert_key(res, ucl_object_frombool(true), "found", 0, false);
+		ucl_object_insert_key(res,
+							  ucl_object_fromint(sqlite3_column_int64(
+								  prepared_stmts[RSPAMD_FUZZY_BACKEND_INSPECT].stmt, 1)),
+							  "value", 0, false);
+		ucl_object_insert_key(res,
+							  ucl_object_fromint(sqlite3_column_int64(
+								  prepared_stmts[RSPAMD_FUZZY_BACKEND_INSPECT].stmt, 2)),
+							  "created", 0, false);
+		ucl_object_insert_key(res,
+							  ucl_object_fromint(sqlite3_column_int(
+								  prepared_stmts[RSPAMD_FUZZY_BACKEND_INSPECT].stmt, 3)),
+							  "flag", 0, false);
+		rspamd_fuzzy_backend_sqlite_cleanup_stmt(backend, RSPAMD_FUZZY_BACKEND_INSPECT);
+
+		if (rspamd_fuzzy_backend_sqlite_run_stmt(backend, FALSE,
+												 RSPAMD_FUZZY_BACKEND_SHINGLES_COUNT, id) == SQLITE_OK) {
+			int64_t nshingles = sqlite3_column_int64(
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_SHINGLES_COUNT].stmt, 0);
+			ucl_object_t *sgl = ucl_object_typed_new(UCL_OBJECT);
+
+			/* Shingles are bound to the digest id in sqlite, so all are owned */
+			ucl_object_insert_key(sgl, ucl_object_fromint(nshingles), "total", 0, false);
+			ucl_object_insert_key(sgl, ucl_object_fromint(nshingles), "owned", 0, false);
+			ucl_object_insert_key(res, sgl, "shingles", 0, false);
+		}
+
+		rspamd_fuzzy_backend_sqlite_cleanup_stmt(backend, RSPAMD_FUZZY_BACKEND_SHINGLES_COUNT);
+	}
+	else {
+		ucl_object_insert_key(res, ucl_object_frombool(false), "found", 0, false);
+		rspamd_fuzzy_backend_sqlite_cleanup_stmt(backend, RSPAMD_FUZZY_BACKEND_INSPECT);
+	}
+
+	return res;
 }
 
 int rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend,

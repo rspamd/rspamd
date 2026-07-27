@@ -5,9 +5,9 @@
 
 /* global require, Visibility */
 
-define(["app/common", "bootstrap", "visibility",
-    "fontawesome"],
-(common, bootstrap) => {
+define(["app/common", "app/icons", "bootstrap",
+    "visibility"],
+(common, icons, bootstrap) => {
     "use strict";
     const ui = {};
 
@@ -394,11 +394,11 @@ define(["app/common", "bootstrap", "visibility",
     };
 
     function updateThemeIcon(theme) {
-        const icon = document.getElementById("theme-icon");
-        icon.classList.remove("fa-moon", "fa-sun", "fa-display");
-
         const iconMap = {light: "fa-sun", dark: "fa-moon", auto: "fa-display"};
-        icon.classList.add(iconMap[theme] || "fa-display");
+        const icon = document.getElementById("theme-icon");
+        if (icon) {
+            icons.setIcon(icon, iconMap[theme] || "fa-display");
+        }
     }
 
     // Check the radio within `selector` whose value matches.

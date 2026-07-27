@@ -110,14 +110,16 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_pubkey *write_peer_key;
 	double hits_limit;
 	double weight_threshold;
+	double prob_bias;   /* Anchor of the probability weight curve (default 0.5, the shingle match threshold) */
+	double prob_power;  /* Exponent of the curve (default 1.0) */
 	double html_weight; /* Weight multiplier for HTML hashes (default 1.0) */
 	enum fuzzy_rule_mode mode;
 	gboolean skip_unknown;
 	gboolean no_share;
 	gboolean no_subject;
-	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
-	gboolean text_hashes;       /* Enable/disable generation of text hashes */
-	unsigned int min_html_tags; /* Minimum tags for HTML hash */
+	gboolean html_shingles;       /* Enable HTML fuzzy hashing */
+	gboolean text_hashes;         /* Enable/disable generation of text hashes */
+	unsigned int min_html_tags;   /* Minimum tags for HTML hash */
 	gboolean html_ignore_domains; /* Ignore link domains in HTML structural tokens */
 	int learn_condition_cb;
 	uint32_t retransmits;
@@ -325,6 +327,7 @@ static int fuzzy_lua_gen_hashes_handler(lua_State *L);
 static int fuzzy_lua_hex_hashes_handler(lua_State *L);
 static int fuzzy_lua_list_storages(lua_State *L);
 static int fuzzy_lua_ping_storage(lua_State *L);
+static int fuzzy_lua_check_storage(lua_State *L);
 
 module_t fuzzy_check_module = {
 	"fuzzy_check",
@@ -532,6 +535,27 @@ fuzzy_normalize(int32_t in, double weight)
 #endif
 }
 
+/*
+ * Convert the reply probability into a weight multiplier.
+ *
+ * The server never replies with prob below the shingle match threshold
+ * (0.5), so a curve anchored at zero (like the old sqrt(prob)) collapses
+ * the whole reachable range into (~0.73 .. 1.0] and barely depends on the
+ * match quality: a marginal 17/32 shingle overlap yields almost the same
+ * score as an exact match. Anchor at prob_bias instead:
+ * ((prob - bias) / (1 - bias)) ^ prob_power, which spreads match quality
+ * over the full 0..1 range.
+ */
+static double
+fuzzy_weight_from_prob(struct fuzzy_rule *rule, double prob)
+{
+	double norm = (prob - rule->prob_bias) / (1.0 - rule->prob_bias);
+
+	norm = MIN(1.0, MAX(0.0, norm));
+
+	return pow(norm, rule->prob_power);
+}
+
 static struct fuzzy_rule *
 fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 {
@@ -546,6 +570,8 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 								  rule->mappings);
 	rule->mode = fuzzy_rule_read_write;
 	rule->weight_threshold = NAN;
+	rule->prob_bias = 0.5;
+	rule->prob_power = 1.0;
 	rule->html_weight = 1.0;
 	rule->html_shingles = FALSE;
 	rule->text_hashes = TRUE;
@@ -1446,6 +1472,7 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 			synthetic_rep.v1 = rep_v2->v1;
 			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
 			synthetic_rep.ts = rep_v2->ts;
+			synthetic_rep.reserved[0] = rep_v2->reserved[0];
 			rep = &synthetic_rep;
 		}
 		else {
@@ -1471,6 +1498,7 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 			synthetic_rep.v1 = rep_v2->v1;
 			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
 			synthetic_rep.ts = rep_v2->ts;
+			synthetic_rep.reserved[0] = rep_v2->reserved[0];
 			rep = &synthetic_rep;
 		}
 		else {
@@ -1554,14 +1582,24 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	}
 	else if (rep->v1.value == 403) {
 		/* In fact, it should be 429, but we preserve compatibility */
+		msg_info_task("fuzzy rule %s: rate limit reached on %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 503) {
+		msg_info_task("fuzzy rule %s: access denied by %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 415) {
+		msg_info_task("fuzzy rule %s: encryption is required by %s; "
+					  "add encryption_key option to the rule",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 								  rule->name);
 	}
@@ -2223,6 +2261,28 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->weight_threshold = ucl_object_todouble(value);
 	}
 
+	if ((value = ucl_object_lookup(obj, "prob_power")) != NULL) {
+		rule->prob_power = ucl_object_todouble(value);
+
+		if (!(rule->prob_power > 0)) {
+			msg_warn_config("prob_power must be positive in rule %s, "
+							"using the default 1.0",
+							rule->name);
+			rule->prob_power = 1.0;
+		}
+	}
+
+	if ((value = ucl_object_lookup(obj, "prob_bias")) != NULL) {
+		rule->prob_bias = ucl_object_todouble(value);
+
+		if (rule->prob_bias < 0 || rule->prob_bias >= 1.0) {
+			msg_warn_config("prob_bias must be in [0, 1) in rule %s, "
+							"using the default 0.5",
+							rule->name);
+			rule->prob_bias = 0.5;
+		}
+	}
+
 	if ((value = ucl_object_lookup(obj, "text_hashes")) != NULL) {
 		rule->text_hashes = ucl_obj_toboolean(value);
 	}
@@ -2490,6 +2550,27 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   "Legacy name: max_score",
 							   "hits_limit",
 							   UCL_INT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Exponent of the probability weight curve: score multiplier is "
+							   "((prob - prob_bias) / (1 - prob_bias)) ^ prob_power, so weak shingle "
+							   "matches score much lower than exact ones (default: 1.0)",
+							   "prob_power",
+							   UCL_FLOAT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Anchor of the probability weight curve, normally the shingle match "
+							   "threshold (default: 0.5)",
+							   "prob_bias",
+							   UCL_FLOAT,
 							   NULL,
 							   0,
 							   NULL,
@@ -3004,6 +3085,9 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		lua_settable(L, -3);
 		lua_pushstring(L, "ping_storage");
 		lua_pushcfunction(L, fuzzy_lua_ping_storage);
+		lua_settable(L, -3);
+		lua_pushstring(L, "check");
+		lua_pushcfunction(L, fuzzy_lua_check_storage);
 		lua_settable(L, -3);
 		/* Finish fuzzy_check key */
 		lua_settable(L, -3);
@@ -4418,6 +4502,7 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 		synthetic_rep.v1 = rv2->v1;
 		memcpy(synthetic_rep.digest, rv2->digest, sizeof(synthetic_rep.digest));
 		synthetic_rep.ts = rv2->ts;
+		synthetic_rep.reserved[0] = rv2->reserved[0];
 		rep = &synthetic_rep;
 		if (p_rep_v2) {
 			*p_rep_v2 = rv2;
@@ -4515,7 +4600,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
 			/* HTML domain-sensitive hash (structure + domains) */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 			nval *= session->rule->html_weight;
 
 			type = "htmld";
@@ -4523,7 +4608,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
 			/* HTML structural hash (template mode, domains ignored) */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 			/* Apply HTML weight multiplier from rule config */
 			nval *= session->rule->html_weight;
 
@@ -4532,7 +4617,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else {
 			/* Calc real probability */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 
 			if (cmd->shingles_count > 0) {
 				type = "txt";
@@ -4576,6 +4661,13 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 							  hexbuf, sizeof(hexbuf) - 1);
 		hexbuf[sizeof(hexbuf) - 1] = '\0';
 
+		char qhexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		gboolean confirmed = (rep->reserved[0] & RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST) != 0;
+
+		rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
+							  qhexbuf, sizeof(qhexbuf) - 1);
+		qhexbuf[sizeof(qhexbuf) - 1] = '\0';
+
 		rspamd_gmtime(rep->ts, &tm_split);
 		rspamd_snprintf(timebuf, sizeof(timebuf), "%02d.%02d.%4d %02d:%02d:%02d GMT",
 						tm_split.tm_mday,
@@ -4611,15 +4703,60 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 				timebuf);
 		}
 
-		rspamd_snprintf(buf,
-						sizeof(buf),
-						"%d:%*s:%.2f:%s",
-						rep->v1.flag,
-						(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(rep->digest) * 2), hexbuf,
-						rep->v1.prob,
-						type);
+		if (is_fuzzy) {
+			/* Non-exact match: append the queried hash to make the option self-contained */
+			rspamd_snprintf(buf,
+							sizeof(buf),
+							"%d:%*s:%.2f:%s:%*s",
+							rep->v1.flag,
+							(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(rep->digest) * 2), hexbuf,
+							rep->v1.prob,
+							type,
+							(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(cmd->digest) * 2), qhexbuf);
+		}
+		else {
+			rspamd_snprintf(buf,
+							sizeof(buf),
+							"%d:%*s:%.2f:%s",
+							rep->v1.flag,
+							(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(rep->digest) * 2), hexbuf,
+							rep->v1.prob,
+							type);
+		}
 		res->option = rspamd_mempool_strdup(task->task_pool, buf);
 		g_ptr_array_add(session->results, res);
+
+		/* Store a structured match record for log/export consumers */
+		{
+			ucl_object_t *matches = (ucl_object_t *) rspamd_mempool_get_variable(
+				task->task_pool, RSPAMD_MEMPOOL_FUZZY_MATCHES);
+
+			if (matches == NULL) {
+				matches = ucl_object_typed_new(UCL_ARRAY);
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_FUZZY_MATCHES, matches,
+											(rspamd_mempool_destruct_t) ucl_object_unref);
+			}
+
+			ucl_object_t *m = ucl_object_typed_new(UCL_OBJECT);
+			ucl_object_insert_key(m, ucl_object_fromstring(session->rule->name),
+								  "rule", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(symbol), "symbol", 0, false);
+			ucl_object_insert_key(m,
+								  ucl_object_fromstring(session->server ? rspamd_upstream_name(session->server) : "unknown"),
+								  "server", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(hexbuf), "found", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(qhexbuf), "queried", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(type), "type", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromdouble(rep->v1.prob), "prob", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromdouble(nval), "score", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromint(rep->v1.flag), "flag", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromint(rep->v1.value), "value", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromint(rep->ts), "added", 0, false);
+			ucl_object_insert_key(m, ucl_object_frombool(!is_fuzzy), "exact", 0, false);
+			ucl_object_insert_key(m, ucl_object_frombool(confirmed), "confirmed", 0, false);
+			ucl_array_append(matches, m);
+		}
 
 		/* Store hex string in pool variable */
 		hex_result = rspamd_mempool_alloc(task->task_pool,
@@ -4730,14 +4867,24 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 			}
 			else if (rep->v1.value == 403) {
 				/* In fact, it should be 429, but we preserve compatibility */
+				msg_info_task("fuzzy rule %s: rate limit reached on %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 503) {
+				msg_info_task("fuzzy rule %s: access denied by %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 415) {
+				msg_info_task("fuzzy rule %s: encryption is required by %s; "
+							  "add encryption_key option to the rule",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 										  session->rule->name);
 			}
@@ -5474,6 +5621,28 @@ cleanup:
 	}
 }
 
+static const char *
+fuzzy_cmd_type_string(struct fuzzy_cmd_io *io)
+{
+	if (io->flags & FUZZY_CMD_FLAG_IMAGE) {
+		return "img";
+	}
+	if (io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS) {
+		return "htmld";
+	}
+	if (io->flags & FUZZY_CMD_FLAG_HTML) {
+		return "html";
+	}
+	if (io->flags & FUZZY_CMD_FLAG_CONTENT) {
+		return "content";
+	}
+	if (io->cmd.shingles_count > 0) {
+		return "txt";
+	}
+
+	return "bin";
+}
+
 static GPtrArray *
 fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						int c, int flag, uint32_t value, unsigned int flags)
@@ -5678,6 +5847,44 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 		g_ptr_array_free(res, TRUE);
 
 		return NULL;
+	}
+
+	if (c == FUZZY_CHECK && res != NULL) {
+		/* Record all queried hashes for post-hoc correlation, misses included */
+		GList *checked_var;
+		unsigned int ck_i;
+		struct fuzzy_cmd_io *ck_io;
+
+		checked_var = rspamd_mempool_get_variable(task->task_pool,
+												  RSPAMD_MEMPOOL_FUZZY_CHECKED);
+
+		PTR_ARRAY_FOREACH(res, ck_i, ck_io)
+		{
+			char ckbuf[rspamd_cryptobox_HASHBYTES * 2 + 128];
+			rspamd_fstring_t *ck_res;
+			int r;
+
+			r = rspamd_snprintf(ckbuf, sizeof(ckbuf), "%s:%s:%*xs",
+								rule->name,
+								fuzzy_cmd_type_string(ck_io),
+								(int) sizeof(ck_io->cmd.digest), ck_io->cmd.digest);
+
+			ck_res = rspamd_mempool_alloc(task->task_pool,
+										  sizeof(rspamd_fstring_t) + r + 1);
+			memcpy(ck_res->str, ckbuf, r + 1);
+			ck_res->len = r;
+			ck_res->allocated = (gsize) -1;
+
+			if (checked_var == NULL) {
+				checked_var = g_list_prepend(NULL, ck_res);
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_FUZZY_CHECKED, checked_var,
+											(rspamd_mempool_destruct_t) g_list_free);
+			}
+			else {
+				checked_var = g_list_append(checked_var, ck_res);
+			}
+		}
 	}
 
 	return res;
@@ -6950,6 +7157,11 @@ fuzzy_lua_list_storages(lua_State *L)
 	return 1;
 }
 
+enum fuzzy_lua_session_mode {
+	FUZZY_LUA_SESSION_PING = 0,
+	FUZZY_LUA_SESSION_CHECK,
+};
+
 struct fuzzy_lua_session {
 	struct rspamd_task *task;
 	lua_State *L;
@@ -6957,6 +7169,7 @@ struct fuzzy_lua_session {
 	GPtrArray *commands;
 	struct fuzzy_rule *rule;
 	struct rspamd_io_ev ev;
+	enum fuzzy_lua_session_mode mode;
 	int cbref;
 	int fd;
 };
@@ -7032,6 +7245,62 @@ fuzzy_lua_push_error(struct fuzzy_lua_session *session, const char *err_fmt, ...
 	lua_pcall(session->L, 3, 0, 0);
 }
 
+static void
+fuzzy_lua_push_check_result(struct fuzzy_lua_session *session,
+							const struct rspamd_fuzzy_reply *rep,
+							struct rspamd_fuzzy_cmd *cmd,
+							struct fuzzy_cmd_io *io)
+{
+	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	int r;
+
+	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(session->L, TRUE);
+	rspamd_lua_ip_push(session->L, session->addr);
+
+	lua_createtable(session->L, 0, 9);
+
+	r = rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
+							  hexbuf, sizeof(hexbuf) - 1);
+	lua_pushlstring(session->L, hexbuf, r);
+	lua_setfield(session->L, -2, "queried");
+
+	lua_pushstring(session->L, fuzzy_cmd_type_string(io));
+	lua_setfield(session->L, -2, "type");
+
+	lua_pushnumber(session->L, rep->v1.prob);
+	lua_setfield(session->L, -2, "prob");
+
+	lua_pushinteger(session->L, rep->v1.value);
+	lua_setfield(session->L, -2, "value");
+
+	lua_pushinteger(session->L, rep->v1.flag);
+	lua_setfield(session->L, -2, "flag");
+
+	if (rep->v1.prob > 0.5) {
+		lua_pushboolean(session->L, TRUE);
+		lua_setfield(session->L, -2, "found");
+
+		r = rspamd_encode_hex_buf(rep->digest, sizeof(rep->digest),
+								  hexbuf, sizeof(hexbuf) - 1);
+		lua_pushlstring(session->L, hexbuf, r);
+		lua_setfield(session->L, -2, "digest");
+
+		lua_pushinteger(session->L, rep->ts);
+		lua_setfield(session->L, -2, "added");
+
+		lua_pushboolean(session->L,
+						(rep->reserved[0] & RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST) != 0);
+		lua_setfield(session->L, -2, "confirmed");
+	}
+	else {
+		lua_pushboolean(session->L, FALSE);
+		lua_setfield(session->L, -2, "found");
+	}
+
+	lua_pcall(session->L, 3, 0, 0);
+}
+
 static int
 fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 {
@@ -7058,7 +7327,11 @@ fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 		while ((rep = fuzzy_process_reply(&p, &r,
 										  session->commands, session->rule, &cmd, &io, NULL)) != NULL) {
 
-			if (rep->v1.prob > 0.5) {
+			if (session->mode == FUZZY_LUA_SESSION_CHECK && cmd->cmd == FUZZY_CHECK) {
+				/* Misses and error codes are valid results for the check mode */
+				fuzzy_lua_push_check_result(session, rep, cmd, io);
+			}
+			else if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_PING) {
 					fuzzy_lua_push_result(session, fuzzy_milliseconds_since_midnight() - rep->v1.value);
 				}
@@ -7263,6 +7536,164 @@ fuzzy_lua_ping_storage(lua_State *L)
 			rspamd_ev_watcher_start(session->task->event_loop, &session->ev,
 									lua_tonumber(L, 4));
 		}
+	}
+
+	lua_pushboolean(L, TRUE);
+	return 1;
+}
+
+/***
+ * @function fuzzy_check.check(task, callback, rule, timeout[, hashes][, server_override])
+ * Sends fuzzy check requests either for the hashes generated from the task
+ * message (the default) or for an explicit list of hex digests. The callback
+ * is invoked per reply as (success, server, result) where result is a table:
+ * queried, type, prob, value, flag, found; when found is true it also
+ * contains digest (the stored hash), added (timestamp) and confirmed (the
+ * storage explicitly marked the digest as the matched one).
+ */
+static int
+fuzzy_lua_check_storage(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments: task");
+	}
+
+	if (lua_type(L, 2) != LUA_TFUNCTION || lua_type(L, 3) != LUA_TSTRING || lua_type(L, 4) != LUA_TNUMBER) {
+		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
+	}
+
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context(task->cfg);
+	struct fuzzy_rule *rule, *rule_found = NULL;
+	int i;
+	const char *rule_name = lua_tostring(L, 3);
+
+	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+	{
+		if (strcmp(rule->name, rule_name) == 0) {
+			rule_found = rule;
+			break;
+		}
+	}
+
+	if (rule_found == NULL) {
+		return luaL_error(L, "invalid arguments: no such rule defined");
+	}
+
+	GPtrArray *commands = NULL;
+
+	if (lua_type(L, 5) == LUA_TTABLE) {
+		/* Explicit list of hex digests to query */
+		commands = g_ptr_array_new();
+
+		for (lua_pushnil(L); lua_next(L, 5); lua_pop(L, 1)) {
+			gsize hlen = 0;
+			const char *hex = lua_tolstring(L, -1, &hlen);
+			rspamd_ftok_t tok = {.begin = hex, .len = hlen};
+			struct fuzzy_cmd_io *io = fuzzy_cmd_hash(rule_found, FUZZY_CHECK, &tok,
+													 0, 0, task->task_pool);
+
+			if (io == NULL) {
+				lua_pop(L, 2);
+				g_ptr_array_free(commands, TRUE);
+				lua_pushboolean(L, FALSE);
+				lua_pushstring(L, "invalid hash in the list (must be 128 hex characters)");
+				return 2;
+			}
+
+			g_ptr_array_add(commands, io);
+		}
+
+		if (commands->len == 0) {
+			g_ptr_array_free(commands, TRUE);
+			lua_pushboolean(L, FALSE);
+			lua_pushstring(L, "empty hashes list");
+			return 2;
+		}
+	}
+	else {
+		commands = fuzzy_generate_commands(task, rule_found, FUZZY_CHECK, 0, 0, 0);
+
+		if (commands == NULL) {
+			lua_pushboolean(L, FALSE);
+			lua_pushstring(L, "cannot generate fuzzy hashes from the task message");
+			return 2;
+		}
+	}
+
+	rspamd_inet_addr_t *addr = NULL;
+
+	if (lua_type(L, 6) == LUA_TSTRING) {
+		const char *server_name = lua_tostring(L, 6);
+		enum rspamd_parse_host_port_result res;
+		GPtrArray *addrs = g_ptr_array_new();
+
+		/* We resolve address synchronously here as it is an explicit override */
+		res = rspamd_parse_host_port_priority(server_name, &addrs, 0, NULL,
+											  11335, FALSE, task->task_pool);
+
+		if (res == RSPAMD_PARSE_ADDR_FAIL) {
+			g_ptr_array_free(commands, TRUE);
+			lua_pushboolean(L, FALSE);
+			lua_pushfstring(L, "invalid arguments: cannot resolve %s", server_name);
+			return 2;
+		}
+
+		addr = rspamd_inet_address_copy(g_ptr_array_index(addrs, rspamd_random_uint64_fast() % addrs->len),
+										task->task_pool);
+		rspamd_mempool_add_destructor(task->task_pool,
+									  rspamd_ptr_array_free_hard, addrs);
+	}
+	else {
+		struct upstream *selected = rspamd_upstream_get(rule_found->read_servers,
+														RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+		if (selected == NULL) {
+			g_ptr_array_free(commands, TRUE);
+			lua_pushboolean(L, FALSE);
+			lua_pushfstring(L, "no fuzzy storage upstream available for rule %s",
+							rule_found->name);
+			return 2;
+		}
+		addr = rspamd_upstream_addr_next(selected);
+		/* The session tracks the address directly, not the upstream */
+		rspamd_upstream_release(selected);
+	}
+
+	int sock;
+
+	if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
+		g_ptr_array_free(commands, TRUE);
+		lua_pushboolean(L, FALSE);
+		lua_pushfstring(L, "cannot connect to %s, %s",
+						rspamd_inet_address_to_string_pretty(addr),
+						strerror(errno));
+		return 2;
+	}
+	else {
+		struct fuzzy_lua_session *session =
+			rspamd_mempool_alloc0(task->task_pool,
+								  sizeof(struct fuzzy_lua_session));
+		session->task = task;
+		session->fd = sock;
+		session->addr = addr;
+		session->commands = commands;
+		session->L = L;
+		session->rule = rule_found;
+		session->mode = FUZZY_LUA_SESSION_CHECK;
+		/* Store callback */
+		lua_pushvalue(L, 2);
+		session->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		rspamd_session_add_event_full(task->s, fuzzy_lua_session_fin, session, M,
+									  rule_found->name);
+		rspamd_ev_watcher_init(&session->ev,
+							   sock,
+							   EV_WRITE,
+							   fuzzy_lua_io_callback,
+							   session);
+		rspamd_ev_watcher_start(session->task->event_loop, &session->ev,
+								lua_tonumber(L, 4));
 	}
 
 	lua_pushboolean(L, TRUE);

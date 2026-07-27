@@ -49,6 +49,10 @@ static void rspamd_fuzzy_backend_version_sqlite(struct rspamd_fuzzy_backend *bk,
 												void *subr_ud);
 static const char *rspamd_fuzzy_backend_id_sqlite(struct rspamd_fuzzy_backend *bk,
 												  void *subr_ud);
+static void rspamd_fuzzy_backend_inspect_sqlite_wrapper(struct rspamd_fuzzy_backend *bk,
+														const unsigned char *digest,
+														rspamd_fuzzy_inspect_cb cb, void *ud,
+														void *subr_ud);
 static void rspamd_fuzzy_backend_expire_sqlite(struct rspamd_fuzzy_backend *bk,
 											   void *subr_ud);
 static void rspamd_fuzzy_backend_close_sqlite(struct rspamd_fuzzy_backend *bk,
@@ -69,6 +73,10 @@ struct rspamd_fuzzy_backend_subr {
 	void (*count)(struct rspamd_fuzzy_backend *bk,
 				  rspamd_fuzzy_count_cb cb, void *ud,
 				  void *subr_ud);
+	void (*inspect)(struct rspamd_fuzzy_backend *bk,
+					const unsigned char *digest,
+					rspamd_fuzzy_inspect_cb cb, void *ud,
+					void *subr_ud);
 	void (*version)(struct rspamd_fuzzy_backend *bk,
 					const char *src,
 					rspamd_fuzzy_version_cb cb, void *ud,
@@ -84,6 +92,7 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.check = rspamd_fuzzy_backend_check_sqlite,
 		.update = rspamd_fuzzy_backend_update_sqlite,
 		.count = rspamd_fuzzy_backend_count_sqlite,
+		.inspect = rspamd_fuzzy_backend_inspect_sqlite_wrapper,
 		.version = rspamd_fuzzy_backend_version_sqlite,
 		.id = rspamd_fuzzy_backend_id_sqlite,
 		.periodic = rspamd_fuzzy_backend_expire_sqlite,
@@ -94,6 +103,7 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.check = rspamd_fuzzy_backend_check_redis,
 		.update = rspamd_fuzzy_backend_update_redis,
 		.count = rspamd_fuzzy_backend_count_redis,
+		.inspect = rspamd_fuzzy_backend_inspect_redis,
 		.version = rspamd_fuzzy_backend_version_redis,
 		.id = rspamd_fuzzy_backend_id_redis,
 		.periodic = rspamd_fuzzy_backend_expire_redis,
@@ -466,6 +476,33 @@ void rspamd_fuzzy_backend_count(struct rspamd_fuzzy_backend *bk,
 	g_assert(bk != NULL);
 
 	bk->subr->count(bk, cb, ud, bk->subr_ud);
+}
+
+void rspamd_fuzzy_backend_inspect(struct rspamd_fuzzy_backend *bk,
+								  const unsigned char *digest,
+								  rspamd_fuzzy_inspect_cb cb, void *ud)
+{
+	g_assert(bk != NULL);
+
+	if (bk->subr->inspect) {
+		bk->subr->inspect(bk, digest, cb, ud, bk->subr_ud);
+	}
+	else if (cb) {
+		cb(NULL, ud);
+	}
+}
+
+static void
+rspamd_fuzzy_backend_inspect_sqlite_wrapper(struct rspamd_fuzzy_backend *bk,
+											const unsigned char *digest,
+											rspamd_fuzzy_inspect_cb cb, void *ud,
+											void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+
+	if (cb) {
+		cb(rspamd_fuzzy_backend_sqlite_inspect(sq, digest), ud);
+	}
 }
 
 

@@ -18,6 +18,22 @@ URL Suspect - Very Long User Field
   ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_USER_LONG, URL_USER_VERY_LONG, URL_USER_PASSWORD]}
   Expect Symbol With Exact Options  URL_USER_VERY_LONG  300
 
+URL Suspect - User Without Password
+  # A user part with no password is still a credential-shaped URL and must fire
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_user_no_password.eml
+  ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_USER_LONG, URL_USER_VERY_LONG, URL_USER_PASSWORD]}
+  Expect Symbol With Exact Options  URL_USER_PASSWORD  phishing.com
+  Do Not Expect Symbol  URL_USER_LONG
+  Do Not Expect Symbol  URL_USER_VERY_LONG
+
+URL Suspect - Email Addresses Are Not URL Users
+  # Every email address has a local part; it must never trigger the user check
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_email_user.eml
+  ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_USER_LONG, URL_USER_VERY_LONG, URL_USER_PASSWORD]}
+  Do Not Expect Symbol  URL_USER_PASSWORD
+  Do Not Expect Symbol  URL_USER_LONG
+  Do Not Expect Symbol  URL_USER_VERY_LONG
+
 URL Suspect - Numeric IP
   # Test numeric IP detection
   Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_numeric_ip.eml

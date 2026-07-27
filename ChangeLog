@@ -1,3 +1,72 @@
+4.1.3: 25 Jul 2026
+
+  ** Incompatible changes **
+  * [Rework] WebUI: Drop jQuery dependency (all modules migrated to native DOM and XMLHttpRequest)
+  * [Rework] WebUI: Drop the Font Awesome framework in favour of a local subset SVG sprite
+  * [Rework] dkim: Scope HAVE_ED25519 to OpenSSL key parsing, so ed25519 verification works on OpenSSL builds without it
+
+  ** Features **
+  * [Feature] fuzzy_check: Structured match results, diagnostics API and task:get_fuzzy_results()
+  * [Feature] fuzzy_check: Anchor the probability weight curve at the match threshold (prob_bias, prob_power)
+  * [Feature] fuzzy: Persist shingle sets with digests in redis, fixing orphaned slots on DEL and decay on REFRESH
+  * [Feature] fuzzy: Per-hash introspection via rspamadm control fuzzyhash
+  * [Feature] fuzzy: Track unkeyed clients in fuzzystat
+  * [Feature] rspamadm: Add fuzzy_hash command
+  * [Feature] clickhouse: Export fuzzy match details (schema version 11)
+  * [Feature] milter_headers: Annotate the X-Rspamd-Fuzzy header with rule, flag, probability and timestamp
+  * [Feature] lua_http: Add forbid_local option to block requests to local networks, enabled by default in url_redirector
+  * [Feature] lua_feedback_parsers: Enrich sparse ARF reports from the original message headers
+
+  ** Bug fixes **
+  * [CritFix] dkim: Bound bh= length before the body hash comparison (out-of-bounds read via ed25519 signatures)
+  * [CritFix] fuzzy: Release TCP session ownership exactly once (use-after-free on aborted connections)
+  * [CritFix] protocol: Validate shared memory segment bounds and reject non-regular segments
+  * [CritFix] http: Fix shared body storage lifecycle (double free, descriptor 0 leak and closing an unrelated socket)
+  * [Fix] dkim: Bound public key size and modulus width from DNS
+  * [Fix] dkim: Stop reading before the body slice in empty line skipping
+  * [Fix] dkim: Apply max_sigs before any work and count every signature header
+  * [Fix] dkim: Bound the number of h= header list items
+  * [Fix] spf: Return permerror when a DNS limit is hit
+  * [Fix] spf: Enforce the include/redirect nesting limit
+  * [Fix] spf: Bound address lookups spawned by mx/ptr expansion (max_dns_expansions)
+  * [Fix] spf: Use the enclosing element for exists
+  * [Fix] fuzzy: Check admission before parsing UDP commands, and rate limit PING and STAT
+  * [Fix] fuzzy: Fix stack overread in the sqlite backend id
+  * [Fix] fuzzy_check: Log the rule and the server for error replies
+  * [Fix] ragel: Bound nested comment depth in the header parsers
+  * [Fix] mime_parser: Bound parser resource usage
+  * [Fix] mime_headers: Bound parser resource usage
+  * [Fix] content_type: Bound parameters per header and fix RFC 2231 continuation ordering
+  * [Fix] message: Bound per-part newline metadata and make the budget task-global
+  * [Fix] message: Link plain text parts to their HTML alternative
+  * [Fix] message: Bound alt-part linking and fasttext langdet cost
+  * [Fix] html: Eliminate DOM recursion to survive deeply nested messages
+  * [Fix] html: Bound attributes per tag and per task
+  * [Fix] html: Cap synthetic tags and fix the balance loop
+  * [Fix] html: Correct image style dimension parsing
+  * [Fix] images: Avoid quadratic Content-ID linking
+  * [Fix] archives: Bound metadata resource usage
+  * [Fix] 7zip: Bound folder count and guarantee parser progress
+  * [Fix] url: Enforce max_urls at the central insertion boundary
+  * [Fix] url_suspect: Drop dead branch in the user field check and skip mailto URLs
+  * [Fix] task: Bound zstd decompression by max_message and plug an error-path leak
+  * [Fix] zstd: Share one bounded decompression helper across HTTP, proxy and maps
+  * [Fix] http: Bound request bodies on the controller, proxy and control sockets
+  * [Fix] http: Enforce the read deadline when data is pending at timer expiry
+  * [Fix] map: Bound remote HTTP map sizes, compressed and decompressed (max_map_size)
+  * [Fix] maps: Map the signature file as a file, not as shmem
+  * [Fix] maps: Redact credentials from map error logs
+  * [Fix] util: Harden the shared memory mapping helpers
+  * [Fix] lua_http: Bound HTTP responses by default (max_lua_http_response)
+  * [Fix] lua_http: Deliver errors to coroutine callers
+  * [Fix] lua_tcp: Make the connection ref release one-shot to avoid a double free
+  * [Fix] lua_content/pdf: Emit newlines for Td/TD line breaks
+  * [Fix] cfg: Warn when a module section is defined multiple times
+  * [Fix] WebUI: Route a malformed /stat response to the login dialog
+  * [Fix] WebUI: Restore smooth scroll on the Scan tab
+  * [Fix] WebUI: Stop the refresh spinner restarting mid fan-out
+  * [Fix] WebUI: Guard the optional fuzzy_hashes key and other jQuery-removal regressions
+
 4.1.2: 21 Jul 2026
 
   ** Incompatible changes **

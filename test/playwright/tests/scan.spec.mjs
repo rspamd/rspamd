@@ -208,12 +208,15 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
         test("Throughput `Total messages` counter increased", async ({}, testInfo) => {
             testInfo.setTimeout(140000);
-            // With empty RRD the first PDP is lost, so only +1 is visible
-            // Depending on row boundaries, throughput may show +2 or even +3
+            // With empty RRD the first PDP is lost, so only +1 is visible.
+            // #rrd-total-value is an integral of the message rate (truncated per
+            // series, summed over the 6 action series), so depending on row
+            // boundaries it can overshoot the messages scanned (+2 .. +4).
             const targetValues = [
                 scannedBefore.throughput + 1,
                 scannedBefore.throughput + 2,
                 scannedBefore.throughput + 3,
+                scannedBefore.throughput + 4,
             ];
 
             let lastValue = null;
@@ -248,6 +251,11 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             // Login as read-only
             await login(page2, readOnlyPassword);
             await page2.waitForSelector("#navBar:not(.d-none)");
+            // Bootstrap dismisses #connectDialog asynchronously (fade transition).
+            // navBar loses d-none from the /auth "complete" callback, which can fire
+            // before the modal finishes closing — the lingering .show then intercepts
+            // nav clicks (seen on WebKit under CI load).
+            await expect(page2.locator("#connectDialog")).toBeHidden({timeout: 10000});
 
             // Go to Scan in RO
             await gotoTabLocal("scan");
@@ -264,6 +272,7 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             );
             await page2.locator("#connectButton").click();
             await page2.waitForSelector("#navBar:not(.d-none)");
+            await expect(page2.locator("#connectDialog")).toBeHidden({timeout: 10000});
             await p;
 
             // Expect classifiers to be populated

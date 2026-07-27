@@ -94,6 +94,13 @@ void rspamd_fuzzy_backend_sqlite_close(struct rspamd_fuzzy_backend_sqlite *backe
 
 gsize rspamd_fuzzy_backend_sqlite_count(struct rspamd_fuzzy_backend_sqlite *backend);
 
+/**
+ * Get diagnostic info for a specific digest (or NULL if the backend is not available):
+ * flags, values, creation time and the number of shingles stored for the digest
+ */
+ucl_object_t *rspamd_fuzzy_backend_sqlite_inspect(struct rspamd_fuzzy_backend_sqlite *backend,
+												  const unsigned char *digest);
+
 int rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend, const char *source);
 
 gsize rspamd_fuzzy_backend_sqlite_expired(struct rspamd_fuzzy_backend_sqlite *backend);

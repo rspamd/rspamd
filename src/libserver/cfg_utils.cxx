@@ -87,11 +87,13 @@
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 60.0 * 5
 #define DEFAULT_MAP_FILE_WATCH_MULTIPLIER 1
+#define DEFAULT_MAX_MAP_SIZE (256 * 1024 * 1024)
 #define DEFAULT_MIN_WORD 0
 #define DEFAULT_MAX_WORD 40
 #define DEFAULT_WORDS_DECAY 600
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
+#define DEFAULT_MAX_LUA_HTTP_RESPONSE (256 * 1024 * 1024)
 #define DEFAULT_MAX_SHOTS 100
 #define DEFAULT_MAX_SESSIONS 100
 #define DEFAULT_MAX_WORKERS 4
@@ -291,6 +293,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 	cfg->map_file_watch_multiplier = DEFAULT_MAP_FILE_WATCH_MULTIPLIER;
+	cfg->max_map_size = DEFAULT_MAX_MAP_SIZE;
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_flags = RSPAMD_LOG_FLAG_DEFAULT;
@@ -351,6 +354,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->ssl_ciphers = rspamd_mempool_strdup(cfg->cfg_pool, "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4");
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
 	cfg->max_pic_size = DEFAULT_MAX_PIC;
+	cfg->max_lua_http_response = DEFAULT_MAX_LUA_HTTP_RESPONSE;
 	cfg->images_cache_size = 256;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init();
 	cfg->neighbours = ucl_object_typed_new(UCL_OBJECT);
@@ -1573,6 +1577,26 @@ rspamd_check_worker(struct rspamd_config *cfg, worker_t *wrk)
 	return ret;
 }
 
+static void
+rspamd_config_check_duplicate_sections(struct rspamd_config *cfg, const char *mname)
+{
+	const ucl_object_t *sec = ucl_object_lookup(cfg->cfg_ucl_obj, mname);
+
+	if (sec != nullptr && sec->next != nullptr) {
+		unsigned int nsec = 0;
+
+		for (const ucl_object_t *cur = sec; cur != nullptr; cur = cur->next) {
+			nsec++;
+		}
+
+		msg_warn_config("section '%s' is defined %ud times in the configuration, "
+						"but module %s reads only the first one; the remaining "
+						"sections are IGNORED; merge them into a single section "
+						"(check for stray files in modules.d or duplicate includes)",
+						mname, nsec, mname);
+	}
+}
+
 gboolean
 rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 {
@@ -1614,6 +1638,7 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 		if (mod_ctx) {
 			mod = mod_ctx->mod;
 			mod_ctx->enabled = rspamd_config_is_module_enabled(cfg, mod->name);
+			rspamd_config_check_duplicate_sections(cfg, mod->name);
 
 			if (reconfig) {
 				if (!mod->module_reconfig_func(cfg)) {

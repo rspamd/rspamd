@@ -25,6 +25,8 @@
 #include "upstream.h"
 #include "khash.h"
 
+#include <sys/mman.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -93,6 +95,14 @@ struct rspamd_http_message {
 	unsigned int header_cnt;
 	ref_entry_t ref;
 };
+
+/*
+ * True if the message body currently lives in a shared mapping that we own and
+ * hence have to unmap. `str` is NULL for a message with no body yet and
+ * MAP_FAILED once the storage has been cleaned up or a mapping attempt failed.
+ */
+#define RSPAMD_HTTP_BODY_IS_MAPPED(msg) \
+	((msg)->body_buf.str != NULL && (msg)->body_buf.str != (char *) MAP_FAILED)
 
 struct rspamd_keepalive_hash_key {
 	rspamd_inet_addr_t *addr;

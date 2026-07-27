@@ -63,15 +63,16 @@ static GOptionEntry entries[] = {
 	 "Set IO timeout (1s by default)", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
-#define RSPAMADM_CONTROL_COMMAND_LIST                                  \
-	"Supported commands:\n"                                            \
-	"  stat            - show statistics\n"                            \
-	"  reload          - reload workers dynamic data\n"                \
-	"  reresolve       - resolve upstreams addresses\n"                \
-	"  recompile       - recompile hyperscan regexes\n"                \
-	"  fuzzystat       - show fuzzy statistics\n"                      \
-	"  fuzzysync       - immediately sync fuzzy database to storage\n" \
-	"  compositesstats - show composites processing statistics\n"      \
+#define RSPAMADM_CONTROL_COMMAND_LIST                                          \
+	"Supported commands:\n"                                                    \
+	"  stat            - show statistics\n"                                    \
+	"  reload          - reload workers dynamic data\n"                        \
+	"  reresolve       - resolve upstreams addresses\n"                        \
+	"  recompile       - recompile hyperscan regexes\n"                        \
+	"  fuzzystat       - show fuzzy statistics\n"                              \
+	"  fuzzysync       - immediately sync fuzzy database to storage\n"         \
+	"  fuzzyhash <hex> - show storage info for a fuzzy hash (128 hex chars)\n" \
+	"  compositesstats - show composites processing statistics\n"              \
 	"  memstat         - show memory usage statistics across all workers\n"
 
 static const char *
@@ -231,6 +232,20 @@ rspamadm_control(int argc, char **argv, const struct rspamadm_command *_cmd)
 	else if (g_ascii_strcasecmp(cmd, "fuzzysync") == 0 ||
 			 g_ascii_strcasecmp(cmd, "fuzzy_sync") == 0) {
 		path = "/fuzzysync";
+	}
+	else if (g_ascii_strcasecmp(cmd, "fuzzyhash") == 0 ||
+			 g_ascii_strcasecmp(cmd, "fuzzy_hash") == 0) {
+		static char hash_path_buf[256];
+
+		if (argc < 3 || strlen(argv[2]) != 128) {
+			rspamd_fprintf(stderr,
+						   "fuzzyhash requires a 128 characters hex digest argument\n");
+			exit(EXIT_FAILURE);
+		}
+
+		rspamd_snprintf(hash_path_buf, sizeof(hash_path_buf),
+						"/fuzzyhash?digest=%s", argv[2]);
+		path = hash_path_buf;
 	}
 	else if (g_ascii_strcasecmp(cmd, "compositesstats") == 0 ||
 			 g_ascii_strcasecmp(cmd, "composites_stats") == 0) {

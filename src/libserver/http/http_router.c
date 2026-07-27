@@ -523,6 +523,13 @@ void rspamd_http_router_set_ssl(struct rspamd_http_connection_router *router,
 	router->server_ssl_ctx = ssl_ctx;
 }
 
+void rspamd_http_router_set_max_size(struct rspamd_http_connection_router *router,
+									 gsize sz)
+{
+	g_assert(router != NULL);
+	router->max_size = sz;
+}
+
 void rspamd_http_router_handle_socket_ssl(struct rspamd_http_connection_router *router,
 										  int fd, gpointer ud, gboolean ssl)
 {
@@ -539,6 +546,8 @@ void rspamd_http_router_handle_socket_ssl(struct rspamd_http_connection_router *
 												   rspamd_http_router_error_handler,
 												   rspamd_http_router_finish_handler,
 												   0);
+
+	rspamd_http_connection_set_max_size(conn->conn, router->max_size);
 
 	if (router->key) {
 		rspamd_http_connection_set_key(conn->conn, router->key);

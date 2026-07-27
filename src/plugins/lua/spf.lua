@@ -33,10 +33,13 @@ spf {
   spf_cache_expire = 1d;
   # Whitelist IPs from checks
   whitelist = "/path/to/some/file";
-  # Maximum number of recursive DNS subrequests (e.g. includes chanin length)
+  # Maximum number of recursive DNS subrequests (e.g. includes chanin length),
+  # 0 disables the limit but the chain is still capped at 64 levels
   max_dns_nesting = 10;
   # Maximum count of DNS requests per record
   max_dns_requests = 30;
+  # Maximum count of address requests spawned by all mx/ptr elements in a record
+  max_dns_expansions = 100;
   # Minimum TTL enforced for all elements in SPF records
   min_cache_ttl = 5min;
   # Disable all IPv6 lookups
@@ -63,6 +66,7 @@ local default_config = {
   spf_cache_size = 2048,
   max_dns_nesting = 10,
   max_dns_requests = 30,
+  max_dns_expansions = 100,
   whitelist = nil,
   min_cache_ttl = 60 * 5,
   disable_ipv6 = false,

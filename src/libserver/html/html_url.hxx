@@ -48,6 +48,7 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
  * @param visible_part
  * @param href_offset
  * @param url
+ * @param max_urls maximum number of urls in url_set (0 = unlimited)
  */
 auto html_check_displayed_url(rspamd_mempool_t *pool,
 							  GList **exceptions,
@@ -55,7 +56,8 @@ auto html_check_displayed_url(rspamd_mempool_t *pool,
 							  std::string_view visible_part,
 							  goffset href_offset,
 							  struct rspamd_url *url,
-							  lua_State *L) -> void;
+							  lua_State *L,
+							  unsigned int max_urls) -> void;
 
 /**
  * Process HTML url (e.g. for href component)

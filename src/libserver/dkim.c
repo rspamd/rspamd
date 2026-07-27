@@ -319,16 +319,8 @@ rspamd_dkim_parse_signalg(rspamd_dkim_context_t *ctx,
 	}
 	else if (len == 14) {
 		if (memcmp(param, "ed25519-sha256", len) == 0) {
-#ifdef HAVE_ED25519
 			ctx->sig_alg = DKIM_SIGN_EDDSASHA256;
 			return true;
-#else
-			g_set_error(err,
-						DKIM_ERROR,
-						DKIM_SIGERROR_BADSIG,
-						"ed25519 signatures are not supported (OpenSSL 1.1.1+ required)");
-			return false;
-#endif
 		}
 	}
 
@@ -491,12 +483,30 @@ rspamd_dkim_parse_hdrlist_common(struct rspamd_dkim_common_ctx *ctx,
 	void *found;
 	union rspamd_dkim_header_stat u;
 
+	/*
+	 * Real world h= lists hold a few dozen entries. Every counted item costs
+	 * a pointer in hlist plus, when non empty, a string and a header struct,
+	 * so an unbounded list turns a size limited message into a much larger
+	 * allocation. It also drives the per header selection loop below, which
+	 * is only bounded per entry by max_list_iters.
+	 */
+	const unsigned int max_hdr_list_items = 1000;
+
 	p = param;
 	while (p <= end) {
 		if ((p == end || *p == ':')) {
 			count++;
 		}
 		p++;
+	}
+
+	if (count > max_hdr_list_items) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_INVALID_H,
+					"too many header list items: %u, limit is %u",
+					count, max_hdr_list_items);
+		return false;
 	}
 
 	if (count > 0) {
@@ -1215,7 +1225,8 @@ rspamd_create_dkim_context(const char *sig,
 			}
 		}
 		else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-				 ctx->sig_alg == DKIM_SIGN_ECDSASHA256) {
+				 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+				 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 			if (ctx->bhlen !=
 				(unsigned int) EVP_MD_size(EVP_sha256())) {
 				g_set_error(err,
@@ -1292,11 +1303,8 @@ rspamd_create_dkim_context(const char *sig,
 		md_alg = EVP_sha1();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256
-#ifdef HAVE_ED25519
-			 || ctx->sig_alg == DKIM_SIGN_EDDSASHA256
-#endif
-	) {
+			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+			 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 		md_alg = EVP_sha256();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
@@ -1347,11 +1355,32 @@ rspamd_dkim_make_key(const char *keydata,
 {
 	rspamd_dkim_key_t *key = NULL;
 
+	/*
+	 * Real p= values are small: 44 base64 characters for ed25519, 124 for
+	 * ecdsa256, 736 for a 4096 bit RSA key and 2784 for the 16384 bit modulus
+	 * that is the largest OpenSSL will verify against. A TXT record can carry
+	 * 64k once the resolver falls back to TCP, and an accepted key holds
+	 * raw_key, keydata and the parsed EVP_PKEY for as long as it stays in the
+	 * key cache, so an unbounded p= lets one zone pin a lot of memory.
+	 */
+	static const unsigned int max_dkim_key_len = 4096;
+	static const int max_dkim_key_bits = 8192;
+
 	if (keylen < 3) {
 		g_set_error(err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_KEYFAIL,
 					"DKIM key is too short to be valid");
+		return NULL;
+	}
+
+	if (keylen > max_dkim_key_len) {
+		/* g_set_error formats through GLib, so %u rather than the rspamd %ud */
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_KEYFAIL,
+					"DKIM key is too long: %u, maximum is %u",
+					keylen, max_dkim_key_len);
 		return NULL;
 	}
 
@@ -1439,6 +1468,26 @@ rspamd_dkim_make_key(const char *keydata,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
 						"cannot extract pubkey from bio");
+			REF_RELEASE(key);
+
+			return NULL;
+		}
+
+		/*
+		 * RFC 8301 requires verifiers to handle 1024 to 4096 bit RSA keys;
+		 * this doubles that ceiling. Verification cost grows with the modulus
+		 * - a 16384 bit key costs an order of magnitude more than a 4096 bit
+		 * one - and the length cap above still admits moduli beyond what
+		 * OpenSSL itself will operate on.
+		 */
+		int key_bits = EVP_PKEY_bits(key->specific.key_ssl.key_evp);
+
+		if (key_bits > max_dkim_key_bits) {
+			g_set_error(err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_KEYFAIL,
+						"DKIM key has too many bits: %d, maximum is %d",
+						key_bits, max_dkim_key_bits);
 			REF_RELEASE(key);
 
 			return NULL;
@@ -2129,10 +2178,15 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				}
 			}
 			else {
-				if (g_ascii_isspace(*(p - 1))) {
-					if (type == DKIM_CANON_RELAXED) {
-						p -= 1;
-					}
+				/*
+				 * p is at start, so everything from start onwards is a line
+				 * ending and the body is empty. Do not probe *(p - 1): it is
+				 * before the slice we were handed. For a message that byte is
+				 * the header/body separator, whitespace, and the branch it
+				 * used to select is the one taken here.
+				 */
+				if (type == DKIM_CANON_RELAXED) {
+					p = start - 1;
 				}
 				goto end;
 			}
@@ -2158,10 +2212,9 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				}
 			}
 			else {
-				if (g_ascii_isspace(*(p - 1))) {
-					if (type == DKIM_CANON_RELAXED) {
-						p -= 1;
-					}
+				/* As in got_cr: *(p - 1) is before start, the body is empty */
+				if (type == DKIM_CANON_RELAXED) {
+					p = start - 1;
 				}
 				goto end;
 			}
@@ -2189,10 +2242,13 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				}
 			}
 			else {
-				if (g_ascii_isspace(*(p - 2))) {
-					if (type == DKIM_CANON_RELAXED) {
-						p -= 2;
-					}
+				/*
+				 * got_crlf is only entered with p >= start + 1, so this is
+				 * p == start + 1 and *(p - 2) is the byte before start.
+				 * The slice holds just the CRLF, hence an empty body.
+				 */
+				if (type == DKIM_CANON_RELAXED) {
+					p = start - 1;
 				}
 				goto end;
 			}
@@ -2837,6 +2893,22 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
 		dlen = EVP_MD_CTX_size(ctx->common.body_hash);
+
+		/*
+		 * Body hash length must match the digest size exactly: all bh
+		 * comparisons below use ctx->bhlen against EVP_MAX_MD_SIZE buffers,
+		 * so a longer attacker supplied bh= would read out of bounds.
+		 */
+		if (ctx->bhlen != dlen) {
+			msg_info_dkim("%s: bh length mismatch: %z != %z; d=%s; s=%s",
+						  rspamd_dkim_type_to_string(ctx->common.type),
+						  ctx->bhlen, dlen, ctx->domain, ctx->selector);
+			res->fail_reason = "body hash length mismatch";
+			res->rcode = DKIM_REJECT;
+
+			return res;
+		}
+
 		cached_bh = rspamd_dkim_check_bh_cached(&ctx->common, task,
 												dlen, false);
 
@@ -3001,11 +3073,8 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		nid = NID_sha1;
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256
-#ifdef HAVE_ED25519
-			 || ctx->sig_alg == DKIM_SIGN_EDDSASHA256
-#endif
-	) {
+			 ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+			 ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 		nid = NID_sha256;
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
@@ -3027,9 +3096,7 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		GError *err = NULL;
 
 		if (ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
-#ifdef HAVE_ED25519
 			ctx->sig_alg == DKIM_SIGN_EDDSASHA256 ||
-#endif
 			ctx->sig_alg == DKIM_SIGN_ECDSASHA512) {
 			/* RSA key provided for ECDSA/EDDSA signature */
 			res->rcode = DKIM_PERM_ERROR;
@@ -3132,7 +3199,6 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 		break;
 
 	case RSPAMD_DKIM_KEY_EDDSA:
-#ifdef HAVE_ED25519
 		if (ctx->sig_alg != DKIM_SIGN_EDDSASHA256) {
 			/* EDDSA key provided for RSA/ECDSA signature */
 			res->rcode = DKIM_PERM_ERROR;
@@ -3164,20 +3230,6 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 				res->fail_reason = "headers eddsa verify failed";
 			}
 		}
-#else
-		/* ED25519 not supported in this OpenSSL version */
-		res->rcode = DKIM_PERM_ERROR;
-		res->fail_reason = "ed25519 signatures are not supported (OpenSSL 1.1.1+ required)";
-		msg_info_dkim(
-			"%s: ed25519 signatures not supported (OpenSSL 1.1.1+ required); "
-			"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
-			rspamd_dkim_type_to_string(ctx->common.type),
-			(int) (body_end - body_start), ctx->common.body_canonicalised,
-			ctx->common.headers_canonicalised,
-			ctx->domain, ctx->selector,
-			RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id(key),
-			ctx->dkim_header);
-#endif
 		break;
 	}
 
@@ -3307,15 +3359,12 @@ rspamd_dkim_sign_digest(rspamd_dkim_sign_key_t *key,
 	}
 	else
 #endif
-#ifdef HAVE_ED25519
 		if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = crypto_sign_bytes();
 		sig_buf = g_alloca(sig_len);
 		rspamd_cryptobox_sign(sig_buf, NULL, digest, dlen, key->specific.key_eddsa);
 	}
-	else
-#endif
-	{
+	else {
 		g_set_error(err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
 					"unsupported key type");
 		return FALSE;
@@ -3501,6 +3550,14 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 			nkey->type = RSPAMD_DKIM_KEY_ECDSA;
 			nkey->keylen = EVP_PKEY_size(nkey->specific.key_ssl.key_evp);
 			break;
+
+			/*
+		 * This is the only place that genuinely needs OpenSSL Ed25519 support:
+		 * PEM/DER private keys are parsed by OpenSSL, so unwrapping one requires
+		 * the EVP_PKEY_ED25519 NID and EVP_PKEY_get_raw_private_key() (1.1.1+).
+		 * Everything else in the Ed25519 path is libsodium, which is mandatory,
+		 * so signature verification never depends on this macro.
+		 */
 #ifdef HAVE_ED25519
 		case EVP_PKEY_ED25519: {
 			/* For Ed25519, extract the raw key and store it in the eddsa field.
@@ -3552,10 +3609,11 @@ rspamd_dkim_sign_key_load(const char *key, size_t len,
 		default: {
 			const char *key_type_str = OBJ_nid2sn(key_type);
 #ifndef HAVE_ED25519
-			/* Check if this is an ED25519 key without support */
+			/* Only signing keys are affected: verification uses libsodium */
 			if (key_type_str && strcmp(key_type_str, "ED25519") == 0) {
 				g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYFAIL,
-							"ed25519 keys are not supported (OpenSSL 1.1.1+ required)");
+							"cannot load ed25519 private key: OpenSSL 1.1.1+ required "
+							"(ed25519 verification is unaffected)");
 			}
 			else
 #endif
@@ -3944,14 +4002,12 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 		}
 		EVP_PKEY_CTX_free(pctx);
 	}
-#ifdef HAVE_ED25519
 	else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
 		sig_len = crypto_sign_bytes();
 		sig_buf = g_alloca(sig_len);
 
 		rspamd_cryptobox_sign(sig_buf, NULL, raw_digest, dlen, ctx->key->specific.key_eddsa);
 	}
-#endif
 	else {
 		g_string_free(hdr, true);
 		msg_err_task("unsupported key type for signing");
@@ -3989,7 +4045,6 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 		return false;
 	}
 
-#ifdef HAVE_ED25519
 	if (pk->type == RSPAMD_DKIM_KEY_EDDSA) {
 		if (memcmp(sk->specific.key_eddsa + 32, pk->specific.key_eddsa, 32) != 0) {
 			g_set_error(err, dkim_error_quark(), DKIM_SIGERROR_KEYHASHMISMATCH,
@@ -3997,9 +4052,7 @@ bool rspamd_dkim_match_keys(rspamd_dkim_key_t *pk,
 			return false;
 		}
 	}
-	else
-#endif
-	{
+	else {
 #if OPENSSL_VERSION_MAJOR >= 3
 		if (EVP_PKEY_eq(pk->specific.key_ssl.key_evp, sk->specific.key_ssl.key_evp) != 1)
 #else

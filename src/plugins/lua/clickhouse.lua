@@ -33,7 +33,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 10 -- Current schema version
+local schema_version = 11 -- Current schema version
 
 local extra_tables = {}
 local extra_table_rows = {}
@@ -177,6 +177,11 @@ CREATE TABLE IF NOT EXISTS rspamd
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
     `Urls.Flags` Array(UInt32) COMMENT 'Corresponding url flags, see `enum rspamd_url_flags` in libserver/url.h for details',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
+    `Fuzzy.Hash` Array(String) COMMENT 'Stored fuzzy digest that matched',
+    `Fuzzy.Queried` Array(String) COMMENT 'Fuzzy digest of the message part that was queried',
+    `Fuzzy.Rule` Array(LowCardinality(String)) COMMENT 'Fuzzy rule name',
+    `Fuzzy.Prob` Array(Float32) COMMENT 'Fuzzy match probability (shingle overlap ratio)',
+    `Fuzzy.Flag` Array(UInt32) COMMENT 'Fuzzy storage flag',
     ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     Country FixedString(2) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     IPNet String,
@@ -306,6 +311,18 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (10)]],
   },
+  [10] = {
+    -- Add fuzzy matches information
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Hash` Array(String) AFTER Emails,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Queried` Array(String) AFTER `Fuzzy.Hash`,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Rule` Array(LowCardinality(String)) AFTER `Fuzzy.Queried`,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Prob` Array(Float32) AFTER `Fuzzy.Rule`,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Flag` Array(UInt32) AFTER `Fuzzy.Prob`
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (11)]],
+  },
 }
 
 local predefined_actions = {
@@ -389,6 +406,19 @@ end
 local function clickhouse_emails_row(res)
   local fields = {
     'Emails',
+  }
+  for _, v in ipairs(fields) do
+    table.insert(res, v)
+  end
+end
+
+local function clickhouse_fuzzy_row(res)
+  local fields = {
+    'Fuzzy.Hash',
+    'Fuzzy.Queried',
+    'Fuzzy.Rule',
+    'Fuzzy.Prob',
+    'Fuzzy.Flag',
   }
   for _, v in ipairs(fields) do
     table.insert(res, v)
@@ -527,6 +557,7 @@ local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, ext
   clickhouse_attachments_row(fields)
   clickhouse_urls_row(fields)
   clickhouse_emails_row(fields)
+  clickhouse_fuzzy_row(fields)
   clickhouse_asn_row(fields)
 
   if settings.enable_symbols then
@@ -1046,6 +1077,27 @@ local function clickhouse_collect(task)
   else
     table.insert(row, {})
   end
+
+  -- Fuzzy matches
+  local fuzzy_hashes = {}
+  local fuzzy_queried = {}
+  local fuzzy_rules = {}
+  local fuzzy_probs = {}
+  local fuzzy_flags = {}
+
+  for _, m in ipairs(task:get_fuzzy_results() or {}) do
+    fuzzy_hashes[#fuzzy_hashes + 1] = m.found
+    fuzzy_queried[#fuzzy_queried + 1] = m.queried
+    fuzzy_rules[#fuzzy_rules + 1] = m.rule
+    fuzzy_probs[#fuzzy_probs + 1] = m.prob
+    fuzzy_flags[#fuzzy_flags + 1] = m.flag
+  end
+
+  table.insert(row, fuzzy_hashes)
+  table.insert(row, fuzzy_queried)
+  table.insert(row, fuzzy_rules)
+  table.insert(row, fuzzy_probs)
+  table.insert(row, fuzzy_flags)
 
   -- ASN information
   local asn, country, ipnet = 0, '--', '--'

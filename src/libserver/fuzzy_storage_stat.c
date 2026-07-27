@@ -135,6 +135,29 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 		});
 	}
 
+	if (ctx->unkeyed_stat) {
+		/* Pseudo-key entry for unkeyed clients (e.g. allowed by IP) */
+		elt = rspamd_fuzzy_storage_stat_key(ctx->unkeyed_stat);
+
+		if (ctx->unkeyed_stat->last_ips && ip_stat) {
+			int i = 0;
+			gpointer k, v;
+
+			ip_elt = ucl_object_typed_new(UCL_OBJECT);
+
+			while ((i = rspamd_lru_hash_foreach(ctx->unkeyed_stat->last_ips,
+												i, &k, &v)) != -1) {
+				ucl_object_insert_key(ip_elt,
+									  rspamd_fuzzy_storage_stat_key(v),
+									  rspamd_inet_address_to_string(k), 0, true);
+			}
+
+			ucl_object_insert_key(elt, ip_elt, "ips", 0, false);
+		}
+
+		ucl_object_insert_key(keys_obj, elt, "unkeyed", 0, false);
+	}
+
 	ucl_object_insert_key(obj, keys_obj, "keys", 0, false);
 
 	/* Now generic stats */
@@ -156,6 +179,21 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 	ucl_object_insert_key(obj,
 						  ucl_object_fromint(ctx->stat.delayed_hashes),
 						  "delayed_hashes",
+						  0,
+						  false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromint(ctx->stat.blocked_requests),
+						  "blocked_requests",
+						  0,
+						  false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromint(ctx->stat.decrypt_errors),
+						  "decrypt_errors",
+						  0,
+						  false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromint(ctx->stat.ratelimited_requests),
+						  "ratelimited_requests",
 						  0,
 						  false);
 
@@ -295,6 +333,127 @@ rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 	if (outfd != -1) {
 		close(outfd);
 	}
+
+	return TRUE;
+}
+
+struct rspamd_fuzzy_hash_info_cbdata {
+	struct rspamd_main *rspamd_main;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	uint64_t id;
+	int fd;
+};
+
+static void
+rspamd_fuzzy_hash_info_cb(ucl_object_t *res, void *ud)
+{
+	struct rspamd_fuzzy_hash_info_cbdata *cbd = ud;
+	struct rspamd_main *rspamd_main = cbd->rspamd_main;
+	struct rspamd_control_reply rep;
+	struct ucl_emitter_functions *emit_subr;
+	unsigned char fdspace[CMSG_SPACE(sizeof(int))];
+	struct iovec iov;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	int outfd = -1;
+	char tmppath[PATH_MAX];
+
+	memset(&rep, 0, sizeof(rep));
+	rep.type = RSPAMD_CONTROL_FUZZY_HASH;
+	rep.id = cbd->id;
+
+	if (res == NULL) {
+		rep.reply.fuzzy_hash.status = ENOENT;
+	}
+	else {
+		const char *backend_id = rspamd_fuzzy_backend_id(cbd->ctx->backend);
+
+		if (backend_id) {
+			memcpy(rep.reply.fuzzy_hash.storage_id,
+				   backend_id,
+				   sizeof(rep.reply.fuzzy_hash.storage_id));
+		}
+
+		rspamd_snprintf(tmppath, sizeof(tmppath), "%s%c%s-XXXXXXXXXX",
+						rspamd_main->cfg->temp_dir, G_DIR_SEPARATOR, "fuzzy-hash");
+
+		if ((outfd = mkstemp(tmppath)) == -1) {
+			rep.reply.fuzzy_hash.status = errno;
+			msg_info_main("cannot make temporary file for fuzzy hash info: %s",
+						  strerror(errno));
+		}
+		else {
+			rep.reply.fuzzy_hash.status = 0;
+			emit_subr = ucl_object_emit_fd_funcs(outfd);
+			ucl_object_emit_full(res, UCL_EMIT_JSON_COMPACT, emit_subr, NULL);
+			ucl_object_emit_funcs_free(emit_subr);
+			/* Rewind output file */
+			close(outfd);
+			outfd = open(tmppath, O_RDONLY);
+			unlink(tmppath);
+		}
+
+		ucl_object_unref(res);
+	}
+
+	memset(&msg, 0, sizeof(msg));
+
+	if (outfd != -1) {
+		memset(fdspace, 0, sizeof(fdspace));
+		msg.msg_control = fdspace;
+		msg.msg_controllen = sizeof(fdspace);
+		cmsg = CMSG_FIRSTHDR(&msg);
+
+		if (cmsg) {
+			cmsg->cmsg_level = SOL_SOCKET;
+			cmsg->cmsg_type = SCM_RIGHTS;
+			cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+			memcpy(CMSG_DATA(cmsg), &outfd, sizeof(int));
+		}
+	}
+
+	iov.iov_base = &rep;
+	iov.iov_len = sizeof(rep);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	if (sendmsg(cbd->fd, &msg, 0) == -1) {
+		msg_err_main("cannot send fuzzy hash info: %s", strerror(errno));
+	}
+
+	if (outfd != -1) {
+		close(outfd);
+	}
+
+	g_free(cbd);
+}
+
+gboolean
+rspamd_fuzzy_storage_hash_info(struct rspamd_main *rspamd_main,
+							   struct rspamd_worker *worker, int fd,
+							   int attached_fd,
+							   struct rspamd_control_command *cmd,
+							   gpointer ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+	struct rspamd_fuzzy_hash_info_cbdata *cbd;
+
+	if (attached_fd != -1) {
+		close(attached_fd);
+	}
+
+	cbd = g_malloc0(sizeof(*cbd));
+	cbd->rspamd_main = rspamd_main;
+	cbd->ctx = ctx;
+	cbd->id = cmd->id;
+	cbd->fd = fd;
+
+	/*
+	 * The reply is sent from the backend callback: the control pipe is
+	 * persistent, so a deferred reply is safe here
+	 */
+	rspamd_fuzzy_backend_inspect(ctx->backend, cmd->cmd.fuzzy_hash.digest,
+								 rspamd_fuzzy_hash_info_cb, cbd);
 
 	return TRUE;
 }

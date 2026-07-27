@@ -1374,24 +1374,32 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 			SZ_READ_VINT(num_folders);
 			msg_debug_archive("7zip: nfolders=%L", num_folders);
 
-			if (*p != 0) {
-				/* External folders */
-				SZ_SKIP_BYTES(1);
-				SZ_READ_VINT(tmp);
+			if (num_folders > 8192) {
+				/* Gah */
+				msg_debug_archive("7zip: too many folders: %L", num_folders);
+				return NULL;
 			}
-			else {
-				SZ_SKIP_BYTES(1);
 
-				if (num_folders > 8192) {
-					/* Gah */
-					return NULL;
-				}
+			if (p >= end) {
+				msg_debug_archive("7zip archive is invalid (truncated); %s", G_STRLOC);
+				return NULL;
+			}
 
-				if (folder_nstreams) {
-					g_free(folder_nstreams);
-				}
+			if (*p != 0) {
+				/*
+				 * External folders are described in a separate stream that
+				 * is not parsed here, so all subsequent folder metadata
+				 * would be inconsistent
+				 */
+				msg_debug_archive("7zip: external folders are not supported");
+				return NULL;
+			}
 
-				folder_nstreams = g_malloc(sizeof(int) * num_folders);
+			SZ_SKIP_BYTES(1);
+
+			if (num_folders > 0) {
+				folder_nstreams = rspamd_mempool_alloc0(task->task_pool,
+														sizeof(*folder_nstreams) * num_folders);
 
 				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 					p = rspamd_7zip_read_folder(task, p, end, arch,
@@ -1400,17 +1408,19 @@ rspamd_7zip_read_coders_info(struct rspamd_task *task,
 			}
 			break;
 		case kCodersUnPackSize:
-			for (i = 0; i < num_folders && p != NULL && p < end; i++) {
-				if (folder_nstreams) {
-					for (unsigned int j = 0; j < folder_nstreams[i]; j++) {
-						SZ_READ_VINT(tmp); /* Unpacked size */
-						msg_debug_archive("7zip: unpacked size "
-										  "(folder=%d, stream=%d) = %L",
-										  (int) i, j, tmp);
-					}
-				}
-				else {
-					msg_err_task("internal 7zip error");
+			if (num_folders > 0 && folder_nstreams == NULL) {
+				msg_debug_archive("7zip: unpacked sizes without a folders "
+								  "definition; %s",
+								  G_STRLOC);
+				return NULL;
+			}
+
+			for (i = 0; i < num_folders; i++) {
+				for (unsigned int j = 0; j < folder_nstreams[i]; j++) {
+					SZ_READ_VINT(tmp); /* Unpacked size */
+					msg_debug_archive("7zip: unpacked size "
+									  "(folder=%d, stream=%d) = %L",
+									  (int) i, j, tmp);
 				}
 			}
 			break;
@@ -1448,11 +1458,8 @@ end:
 		*pnum_nodigest = num_digests - digests_read;
 	}
 	if (pnum_folders) {
-		*pnum_folders = num_folders;
-	}
-
-	if (folder_nstreams) {
-		g_free(folder_nstreams);
+		/* Bounded by the check in the kFolder branch */
+		*pnum_folders = (unsigned int) num_folders;
 	}
 
 	return p;
@@ -1473,8 +1480,8 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 		return NULL;
 	}
 
-	folder_nstreams = g_alloca(sizeof(uint64_t) * num_folders);
-	memset(folder_nstreams, 0, sizeof(uint64_t) * num_folders);
+	folder_nstreams = rspamd_mempool_alloc0(task->task_pool,
+											sizeof(uint64_t) * num_folders);
 
 	while (p != NULL && p < end) {
 		/*

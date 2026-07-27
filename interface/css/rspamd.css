@@ -533,13 +533,30 @@ input.action-scores {
     text-decoration: underline;
 }
 
-/* Font Awesome icons size */
+/* Font Awesome icon glyphs: rendered from interface/img/icons.svg by app/icons.js */
 .svg-inline--fa { /* stylelint-disable-line selector-class-pattern */
+    display: inline-block;
+    fill: currentcolor;
     font-size: 16px;
+    height: 1em;
+    overflow: visible;
+    vertical-align: -0.125em;
+    width: 1em;
 }
-/* Increase refresh button spinner speed */
+/* fa-spin (Refresh button spinner); default 2s, Refresh overrides to 1s */
+@keyframes fa-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+.svg-inline--fa.fa-spin { /* stylelint-disable-line selector-class-pattern */
+    animation: fa-spin 2s linear infinite;
+}
 #refresh .fa-spin {
-    -webkit-animation: fa-spin 1s linear infinite;
     animation: fa-spin 1s linear infinite;
 }
 

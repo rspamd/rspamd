@@ -1070,6 +1070,26 @@ LUA_FUNCTION_DEF(task, merge_and_apply_settings);
 LUA_FUNCTION_DEF(task, get_settings);
 
 /***
+ * @method task:get_fuzzy_results()
+ * Returns an array of fuzzy matches found during the fuzzy check. Each element
+ * is a table with the following fields:
+ *
+ * - `rule` - fuzzy rule name
+ * - `symbol` - symbol inserted for the match
+ * - `server` - upstream that returned the match
+ * - `found` - hex digest stored in the storage that matched
+ * - `queried` - hex digest of the message part that was queried
+ * - `type` - hash type: txt, img, html, htmld, content or bin
+ * - `prob` - match probability (shingle overlap ratio, 1.0 for exact matches)
+ * - `score` - normalized score multiplier
+ * - `flag` - storage flag, `value` - stored value, `added` - hash timestamp
+ * - `exact` - true when the found digest equals the queried one
+ * - `confirmed` - true when the storage explicitly marked the digest as matched
+ * @return {table} array of match tables (empty if there were no matches)
+ */
+LUA_FUNCTION_DEF(task, get_fuzzy_results);
+
+/***
  * @method task:lookup_settings(key)
  * Gets users settings object with the specified key for a task.
  * @param {string} key key to lookup
@@ -1510,6 +1530,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, learn),
 	LUA_INTERFACE_DEF(task, set_settings),
 	LUA_INTERFACE_DEF(task, get_settings),
+	LUA_INTERFACE_DEF(task, get_fuzzy_results),
 	LUA_INTERFACE_DEF(task, lookup_settings),
 	LUA_INTERFACE_DEF(task, get_metadata),
 	LUA_INTERFACE_DEF(task, get_metadata_field),
@@ -3049,7 +3070,8 @@ inject_url_query_callback(struct rspamd_url *url, gsize start_offset,
 		g_ptr_array_add(cbd->mpart_urls, url);
 	}
 
-	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+								   task->cfg ? task->cfg->max_urls : 0);
 
 	return TRUE;
 }
@@ -3096,7 +3118,8 @@ lua_task_inject_url(lua_State *L)
 					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
 	}
 	if (task && task->message && url && url->url) {
-		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false);
+		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false,
+									   task->cfg ? task->cfg->max_urls : 0);
 
 		/*
 		 * Scan the injected URL's query string for embedded URLs (e.g. a
@@ -6874,6 +6897,29 @@ lua_task_set_milter_reply(lua_State *L)
 	}
 
 	return 0;
+}
+
+static int
+lua_task_get_fuzzy_results(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task != NULL) {
+		const ucl_object_t *matches = rspamd_mempool_get_variable(task->task_pool,
+																  RSPAMD_MEMPOOL_FUZZY_MATCHES);
+
+		if (matches != NULL) {
+			return ucl_object_push_lua(L, matches, true);
+		}
+
+		lua_newtable(L);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static int

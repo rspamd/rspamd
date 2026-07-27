@@ -1415,6 +1415,24 @@ dkim_symbol_callback(struct rspamd_task *task,
 
 		DL_FOREACH(rh, rh_cur)
 		{
+			/*
+			 * The limit is checked before any work is done for this header and
+			 * counts every signature header we look at, not just the ones that
+			 * reach a key lookup. Signatures that fail to parse or are skipped
+			 * by trusted_only still cost a pool allocation, a parse and a log
+			 * line each, and a message may carry up to the global MIME header
+			 * limit of them.
+			 */
+			if (checked >= dkim_module_ctx->max_sigs) {
+				msg_info_task("message has multiple signatures but we"
+							  " stopped after %ud checked signatures as limit"
+							  " is reached",
+							  checked);
+				break;
+			}
+
+			checked++;
+
 			if (rh_cur->decoded == NULL || rh_cur->decoded[0] == '\0') {
 				msg_info_task("cannot load empty DKIM signature");
 				continue;
@@ -1496,16 +1514,6 @@ dkim_symbol_callback(struct rspamd_task *task,
 						continue;
 					}
 				}
-			}
-
-			checked++;
-
-			if (checked > dkim_module_ctx->max_sigs) {
-				msg_info_task("message has multiple signatures but we"
-							  " stopped after %d checked signatures as limit"
-							  " is reached",
-							  checked);
-				break;
 			}
 		}
 	}

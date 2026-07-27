@@ -1689,9 +1689,11 @@ void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len)
 
 int rspamd_shmem_mkstemp(char *pattern)
 {
+	static const unsigned int max_attempts = 1024;
 	int fd = -1;
 	char *nbuf, *xpos;
 	gsize blen;
+	unsigned int i;
 
 	xpos = strchr(pattern, 'X');
 
@@ -1705,14 +1707,20 @@ int rspamd_shmem_mkstemp(char *pattern)
 	rspamd_strlcpy(nbuf, pattern, blen + 1);
 	xpos = nbuf + (xpos - pattern);
 
-	for (;;) {
+	/*
+	 * Bounded retry: a permanently colliding namespace (or a hostile
+	 * neighbour recreating our names) must not spin here forever
+	 */
+	for (i = 0; i < max_attempts; i++) {
 		rspamd_random_hex(xpos, blen - (xpos - nbuf));
 
 		fd = shm_open(nbuf, O_RDWR | O_EXCL | O_CREAT, 0600);
 
 		if (fd != -1) {
 			rspamd_strlcpy(pattern, nbuf, blen + 1);
-			break;
+			g_free(nbuf);
+
+			return fd;
 		}
 		else if (errno != EEXIST) {
 			g_free(nbuf);
@@ -1722,8 +1730,9 @@ int rspamd_shmem_mkstemp(char *pattern)
 	}
 
 	g_free(nbuf);
+	errno = EEXIST;
 
-	return fd;
+	return -1;
 }
 
 void rspamd_ptr_array_free_hard(gpointer p)
@@ -2046,12 +2055,14 @@ gpointer
 rspamd_shmem_xmap(const char *fname, unsigned int mode,
 				  gsize *size)
 {
-	int fd;
+	int fd, serrno;
 	struct stat sb;
 	gpointer map;
 
 	g_assert(fname != NULL);
 	g_assert(size != NULL);
+
+	*size = (gsize) -1;
 
 #ifdef HAVE_SANE_SHMEM
 	if (mode & PROT_WRITE) {
@@ -2074,15 +2085,44 @@ rspamd_shmem_xmap(const char *fname, unsigned int mode,
 	}
 
 	if (fstat(fd, &sb) == -1) {
+		serrno = errno;
 		close(fd);
+		errno = serrno;
+
+		return NULL;
+	}
+
+	/* Only mappable objects are allowed here: no fifos, devices or dirs */
+	if (!S_ISREG(sb.st_mode)) {
+		close(fd);
+		errno = EINVAL;
+
+		return NULL;
+	}
+
+	if (sb.st_size <= 0) {
+		close(fd);
+		*size = 0;
+		errno = EINVAL;
+
+		return NULL;
+	}
+
+	if ((uint64_t) sb.st_size > (uint64_t) G_MAXSIZE) {
+		/* Cannot be mapped on this platform (32 bits address space) */
+		close(fd);
+		errno = EFBIG;
 
 		return NULL;
 	}
 
 	map = mmap(NULL, sb.st_size, mode, MAP_SHARED, fd, 0);
+	serrno = errno;
 	close(fd);
 
 	if (map == MAP_FAILED) {
+		errno = serrno;
+
 		return NULL;
 	}
 

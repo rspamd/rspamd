@@ -47,7 +47,9 @@
 
 namespace rspamd::html {
 
-static const unsigned int max_tags = 8192; /* Ignore tags if this maximum is reached */
+static const unsigned int max_tags = 8192;            /* Ignore tags if this maximum is reached */
+static const unsigned int max_attrs_per_tag = 128;    /* Ignore attributes of a single tag if this maximum is reached */
+static const unsigned int max_attrs_per_task = 65536; /* Ignore attributes in all HTML parts of a task if this maximum is reached */
 
 static const html_tags_storage html_tags_defs;
 
@@ -143,6 +145,26 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 INIT_LOG_MODULE(html)
 
 /*
+ * The only way to create a tag: all insertions into hc->all_tags must go
+ * through this function to enforce the max_tags limit
+ */
+static auto
+html_tag_alloc(struct html_content *hc, int flags = 0) -> html_tag *
+{
+	if (hc->all_tags.size() >= max_tags) {
+		hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+
+		return nullptr;
+	}
+
+	hc->all_tags.emplace_back(std::make_unique<html_tag>());
+	auto *ntag = hc->all_tags.back().get();
+	ntag->flags = flags;
+
+	return ntag;
+}
+
+/*
  * This function is expected to be called on a closing tag to fill up all tags
  * and return the current parent (meaning unclosed) tag
  */
@@ -189,20 +211,22 @@ html_check_balance(struct html_content *hc,
 		}
 
 		/*
-		 * If we have found a closing pair, then we need to close all tags and
-		 * return the top-most tag
+		 * If we have found a closing pair, then we need to close all tags
+		 * up to and including that pair, and return its parent as the new
+		 * current (unclosed) tag
 		 */
 		if (found_pair) {
 			for (it = tag->parent; it != nullptr; it = it->parent) {
+				auto is_pair = it->id == tag->id && !(it->flags & FL_CLOSED);
 				it->flags |= FL_CLOSED;
 				/* Insert a virtual closing tag for all tags that are not closed */
 				calculate_content_length(it);
-				if (it->id == tag->id && !(it->flags & FL_CLOSED)) {
+				if (is_pair) {
 					break;
 				}
 			}
 
-			return it;
+			return it ? it->parent : nullptr;
 		}
 		else {
 			/*
@@ -243,10 +267,13 @@ html_check_balance(struct html_content *hc,
 		 */
 
 		if (hc->all_tags.empty()) {
-			hc->all_tags.push_back(std::make_unique<html_tag>());
-			auto *vtag = hc->all_tags.back().get();
+			auto *vtag = html_tag_alloc(hc, FL_VIRTUAL);
+
+			if (vtag == nullptr) {
+				return nullptr;
+			}
+
 			vtag->id = Tag_HTML;
-			vtag->flags = FL_VIRTUAL;
 			vtag->tag_start = 0;
 			vtag->content_offset = 0;
 			calculate_content_length(vtag);
@@ -894,9 +921,10 @@ enum tag_parser_state {
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
-	std::string attr_name;            // Store current attribute name
-	const char *value_start = nullptr;// Track where attribute value starts in input
-	const char *html_start = nullptr; // Base pointer to HTML buffer start
+	std::string attr_name;              // Store current attribute name
+	const char *value_start = nullptr;  // Track where attribute value starts in input
+	const char *html_start = nullptr;   // Base pointer to HTML buffer start
+	unsigned int *attrs_count = nullptr;// Task-global attributes counter (task pool variable)
 
 	void reset()
 	{
@@ -922,6 +950,27 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	 */
 	auto store_component_value = [&]() -> void {
 		if (!parser_env.attr_name.empty()) {
+			/*
+			 * Enforce both per-tag and task-global attribute budgets: a single
+			 * tag must not evade the tags limit by cramming everything into
+			 * attributes
+			 */
+			if (tag->components.size() >= max_attrs_per_tag ||
+				*parser_env.attrs_count >= max_attrs_per_task) {
+				if (!(hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS)) {
+					msg_warn_pool("too many attributes in HTML tags; ignoring the rest");
+					hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_ATTRS;
+				}
+
+				parser_env.buf.clear();
+				parser_env.attr_name.clear();
+				parser_env.value_start = nullptr;
+
+				return;
+			}
+
+			(*parser_env.attrs_count)++;
+
 			std::string_view attr_name_view, value_view;
 
 			// Store attribute name in persistent memory
@@ -1398,6 +1447,7 @@ struct rspamd_html_url_query_cbd {
 	struct rspamd_url *url;
 	GPtrArray *part_urls;
 	uint32_t parent_flags; /* Flags from outer URL to propagate */
+	unsigned int max_urls; /* Limit for url_set (0 = unlimited) */
 };
 
 static inline auto
@@ -1448,7 +1498,7 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false)) {
+	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false, cbd->max_urls)) {
 		html_part_add_url(cbd->part_urls, url);
 	}
 
@@ -1459,7 +1509,8 @@ static void
 html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 					   khash_t(rspamd_url_hash) * url_set,
 					   GPtrArray *part_urls,
-					   lua_State *L)
+					   lua_State *L,
+					   unsigned int max_urls)
 {
 	if (url->querylen > 0) {
 		struct rspamd_html_url_query_cbd qcbd;
@@ -1469,6 +1520,7 @@ html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		qcbd.url = url;
 		qcbd.part_urls = part_urls;
 		qcbd.parent_flags = url->flags;
+		qcbd.max_urls = max_urls;
 
 		rspamd_url_find_in_query(pool, url, RSPAMD_URL_FIND_ALL,
 								 html_url_query_callback, &qcbd, L);
@@ -1530,7 +1582,8 @@ html_process_img_tag(rspamd_mempool_t *pool,
 					 struct html_content *hc,
 					 khash_t(rspamd_url_hash) * url_set,
 					 GPtrArray *part_urls,
-					 lua_State *L)
+					 lua_State *L,
+					 unsigned int max_urls)
 {
 	struct html_image *img;
 
@@ -1579,20 +1632,30 @@ html_process_img_tag(rspamd_mempool_t *pool,
 
 					if (maybe_url) {
 						img->url = maybe_url.value();
-						struct rspamd_url *existing;
 
 						img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
-						existing = rspamd_url_set_add_or_return(url_set,
-																img->url);
 
-						if (existing && existing != img->url) {
-							/*
-							 * We have some other URL that could be
-							 * found, e.g. from another part. However,
-							 * we still want to set an image flag on it
-							 */
-							existing->flags |= img->url->flags;
-							existing->count++;
+						if (url_set != NULL) {
+							struct rspamd_url *existing;
+
+							existing = rspamd_url_set_add_or_return(url_set,
+																	img->url, max_urls);
+
+							if (existing == nullptr) {
+								/* Too many urls in the set; do not track this one */
+							}
+							else if (existing != img->url) {
+								/*
+								 * We have some other URL that could be
+								 * found, e.g. from another part. However,
+								 * we still want to set an image flag on it
+								 */
+								existing->flags |= img->url->flags;
+								existing->count++;
+							}
+							else {
+								html_part_add_url(part_urls, img->url);
+							}
 						}
 						else {
 							html_part_add_url(part_urls, img->url);
@@ -1624,10 +1687,17 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				for (auto i = 0; i < substr.size(); i++) {
 					auto t = substr[i];
 					if (g_ascii_isdigit(t)) {
+						/* Parse the digit run starting at this position */
+						auto digit_end = i;
+						while (digit_end < substr.size() &&
+							   g_ascii_isdigit(substr[digit_end])) {
+							digit_end++;
+						}
 						unsigned long val;
-						rspamd_strtoul(substr.data(),
-									   substr.size(), &val);
-						img->height = val;
+						if (rspamd_strtoul(substr.data() + i,
+										   digit_end - i, &val)) {
+							img->height = val;
+						}
 						break;
 					}
 					else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
@@ -1647,10 +1717,17 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				for (auto i = 0; i < substr.size(); i++) {
 					auto t = substr[i];
 					if (g_ascii_isdigit(t)) {
+						/* Parse the digit run starting at this position */
+						auto digit_end = i;
+						while (digit_end < substr.size() &&
+							   g_ascii_isdigit(substr[digit_end])) {
+							digit_end++;
+						}
 						unsigned long val;
-						rspamd_strtoul(substr.data(),
-									   substr.size(), &val);
-						img->width = val;
+						if (rspamd_strtoul(substr.data() + i,
+										   digit_end - i, &val)) {
+							img->width = val;
+						}
 						break;
 					}
 					else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
@@ -1696,13 +1773,14 @@ html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 					  struct html_content *hc,
 					  khash_t(rspamd_url_hash) * url_set,
 					  GPtrArray *part_urls,
-					  lua_State *L) -> void
+					  lua_State *L,
+					  unsigned int max_urls) -> void
 {
 	auto found_rel_maybe = tag->find_rel();
 
 	if (found_rel_maybe) {
 		if (found_rel_maybe.value() == "icon") {
-			html_process_img_tag(pool, tag, hc, url_set, part_urls, L);
+			html_process_img_tag(pool, tag, hc, url_set, part_urls, L, max_urls);
 		}
 	}
 }
@@ -1847,7 +1925,8 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 								GList **exceptions,
 								khash_t(rspamd_url_hash) * url_set,
 								goffset dest_offset,
-								lua_State *L) -> void
+								lua_State *L,
+								unsigned int max_urls) -> void
 {
 
 	if (std::holds_alternative<rspamd_url *>(cur_tag->extra)) {
@@ -1857,7 +1936,7 @@ html_process_displayed_href_tag(rspamd_mempool_t *pool,
 								 exceptions, url_set,
 								 data,
 								 dest_offset,
-								 url, L);
+								 url, L, max_urls);
 	}
 }
 
@@ -1868,7 +1947,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						html_tag *tag,
 						GList **exceptions,
 						khash_t(rspamd_url_hash) * url_set,
-						lua_State *L) -> goffset
+						lua_State *L,
+						unsigned int max_urls) -> goffset
 {
 	struct append_frame {
 		html_tag *tag;
@@ -2013,7 +2093,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 					pool, hc,
 					{hc->parsed.data() + frame.initial_parsed_offset,
 					 std::size_t(written_len)},
-					cur, exceptions, url_set, frame.initial_parsed_offset, L);
+					cur, exceptions, url_set, frame.initial_parsed_offset, L,
+					max_urls);
 
 				if (std::holds_alternative<rspamd_url *>(cur->extra)) {
 					auto *u = std::get<rspamd_url *>(cur->extra);
@@ -2144,6 +2225,7 @@ auto html_process_input(struct rspamd_task *task,
 
 	auto *pool = task->task_pool;
 	auto cur_url_part_order = 0u;
+	const unsigned int max_urls = task->cfg ? task->cfg->max_urls : 0;
 
 	auto *hc = new html_content;
 	rspamd_mempool_add_destructor(task->task_pool, html_content::html_content_dtor, hc);
@@ -2180,23 +2262,16 @@ auto html_process_input(struct rspamd_task *task,
 	}
 
 	auto new_tag = [&](int flags = 0) -> struct html_tag * {
-		if (hc->all_tags.size() > rspamd::html::max_tags) {
-			hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+		auto *ntag = html_tag_alloc(hc, flags);
 
+		if (ntag == nullptr) {
 			return nullptr;
 		}
 
-		hc->all_tags.emplace_back(std::make_unique<html_tag>());
-		auto *ntag = hc->all_tags.back().get();
 		ntag->tag_start = c - start;
-		ntag->flags = flags;
 
 		if (cur_tag && !(cur_tag->flags & (CM_EMPTY | FL_CLOSED)) && cur_tag != &cur_closing_tag) {
 			parent_tag = cur_tag;
-		}
-
-		if (flags & FL_XML) {
-			return ntag;
 		}
 
 		return ntag;
@@ -2326,17 +2401,18 @@ auto html_process_input(struct rspamd_task *task,
 				}
 				else {
 					/* Insert a fake html tag */
-					hc->all_tags.emplace_back(std::make_unique<html_tag>());
-					auto *top_tag = hc->all_tags.back().get();
-					top_tag->tag_start = 0;
-					top_tag->flags = FL_VIRTUAL;
-					top_tag->id = Tag_HTML;
-					top_tag->content_offset = 0;
-					top_tag->children.push_back(cur_tag);
-					cur_tag->parent = top_tag;
-					g_assert(cur_tag->parent != cur_tag);
-					hc->root_tag = top_tag;
-					parent_tag = top_tag;
+					auto *top_tag = html_tag_alloc(hc, FL_VIRTUAL);
+
+					if (top_tag) {
+						top_tag->tag_start = 0;
+						top_tag->id = Tag_HTML;
+						top_tag->content_offset = 0;
+						top_tag->children.push_back(cur_tag);
+						cur_tag->parent = top_tag;
+						g_assert(cur_tag->parent != cur_tag);
+						hc->root_tag = top_tag;
+						parent_tag = top_tag;
+					}
 				}
 			}
 		}
@@ -2350,15 +2426,20 @@ auto html_process_input(struct rspamd_task *task,
 
 				if (url_set != NULL) {
 					struct rspamd_url *maybe_existing =
-						rspamd_url_set_add_or_return(url_set, maybe_url.value());
-					if (maybe_existing == maybe_url.value()) {
+						rspamd_url_set_add_or_return(url_set, maybe_url.value(), max_urls);
+					if (maybe_existing == nullptr) {
+						/* Too many urls in the message; do not track this one */
+						url = nullptr;
+					}
+					else if (maybe_existing == maybe_url.value()) {
 						if (cur_url_order) {
 							url->order = (*cur_url_order)++;
 						}
 						url->part_order = cur_url_part_order++;
 						html_process_query_url(pool, url, url_set,
 											   part_urls,
-											   task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+											   task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
+											   max_urls);
 					}
 					else {
 						url = maybe_existing;
@@ -2368,71 +2449,74 @@ auto html_process_input(struct rspamd_task *task,
 						url->count++;
 					}
 				}
-				html_part_add_url(part_urls, url);
 
-				/* Minimal link features collection */
-				hc->features.links.total_links++;
-				if (url->flags & RSPAMD_URL_FLAG_IDN) {
-					hc->features.links.punycode_links++;
-				}
-				if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
-					hc->features.links.ip_links++;
-				}
-				if (url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
-					hc->features.links.port_links++;
-				}
-				if (url->flags & RSPAMD_URL_FLAG_QUERY) {
-					/* Heuristic: long query length */
-					if (url->querylen > 64) {
-						hc->features.links.long_query_links++;
+				if (url != nullptr) {
+					html_part_add_url(part_urls, url);
+
+					/* Minimal link features collection */
+					hc->features.links.total_links++;
+					if (url->flags & RSPAMD_URL_FLAG_IDN) {
+						hc->features.links.punycode_links++;
 					}
-				}
-				/* Scheme type */
-				if (url->protocol == PROTOCOL_MAILTO) {
-					hc->features.links.mailto_links++;
-				}
-				else if (url->protocol == PROTOCOL_HTTP || url->protocol == PROTOCOL_HTTPS) {
-					hc->features.links.http_links++;
-				}
-				/* data/javascript schemes can be detected by flags set during parsing */
-				if (url->protocol == PROTOCOL_UNKNOWN) {
-					/* We don't have explicit scheme enum for data/js; check raw prefix quickly */
-					if (url->raw && url->rawlen >= 5) {
-						if (g_ascii_strncasecmp(url->raw, "data:", 5) == 0) {
-							hc->features.links.data_scheme_links++;
-						}
-						else if (url->rawlen >= 11 && g_ascii_strncasecmp(url->raw, "javascript:", 11) == 0) {
-							hc->features.links.js_scheme_links++;
+					if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
+						hc->features.links.ip_links++;
+					}
+					if (url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+						hc->features.links.port_links++;
+					}
+					if (url->flags & RSPAMD_URL_FLAG_QUERY) {
+						/* Heuristic: long query length */
+						if (url->querylen > 64) {
+							hc->features.links.long_query_links++;
 						}
 					}
-				}
-				/* Domain counting + affiliation */
-				if (url->hostlen > 0) {
-					std::string host{rspamd_url_host_unsafe(url), url->hostlen};
-					auto &cnt = hc->link_domain_counts[host];
-					cnt++;
-					if (cnt > hc->features.links.max_links_single_domain) {
-						hc->features.links.max_links_single_domain = cnt;
+					/* Scheme type */
+					if (url->protocol == PROTOCOL_MAILTO) {
+						hc->features.links.mailto_links++;
 					}
-					/* same eTLD+1 as first-party? */
-					if (!hc->first_party_etld1.empty()) {
-						rspamd_ftok_t tld2;
-						if (rspamd_url_find_tld(host.c_str(), host.size(), &tld2)) {
-							const char *h = host.c_str();
-							const char *p2 = tld2.begin;
-							while (p2 > h && *(p2 - 1) != '.') {
-								p2--;
+					else if (url->protocol == PROTOCOL_HTTP || url->protocol == PROTOCOL_HTTPS) {
+						hc->features.links.http_links++;
+					}
+					/* data/javascript schemes can be detected by flags set during parsing */
+					if (url->protocol == PROTOCOL_UNKNOWN) {
+						/* We don't have explicit scheme enum for data/js; check raw prefix quickly */
+						if (url->raw && url->rawlen >= 5) {
+							if (g_ascii_strncasecmp(url->raw, "data:", 5) == 0) {
+								hc->features.links.data_scheme_links++;
 							}
-							std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
-							if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
-								hc->features.links.same_etld1_links++;
+							else if (url->rawlen >= 11 && g_ascii_strncasecmp(url->raw, "javascript:", 11) == 0) {
+								hc->features.links.js_scheme_links++;
 							}
 						}
 					}
-				}
-				/* Query presence */
-				if (url->querylen > 0) {
-					hc->features.links.query_links++;
+					/* Domain counting + affiliation */
+					if (url->hostlen > 0) {
+						std::string host{rspamd_url_host_unsafe(url), url->hostlen};
+						auto &cnt = hc->link_domain_counts[host];
+						cnt++;
+						if (cnt > hc->features.links.max_links_single_domain) {
+							hc->features.links.max_links_single_domain = cnt;
+						}
+						/* same eTLD+1 as first-party? */
+						if (!hc->first_party_etld1.empty()) {
+							rspamd_ftok_t tld2;
+							if (rspamd_url_find_tld(host.c_str(), host.size(), &tld2)) {
+								const char *h = host.c_str();
+								const char *p2 = tld2.begin;
+								while (p2 > h && *(p2 - 1) != '.') {
+									p2--;
+								}
+								std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
+								if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
+									hc->features.links.same_etld1_links++;
+								}
+							}
+						}
+					}
+					/* Query presence */
+					if (url->querylen > 0) {
+						hc->features.links.query_links++;
+					}
 				}
 
 				href_offset = hc->parsed.size();
@@ -2465,12 +2549,14 @@ auto html_process_input(struct rspamd_task *task,
 		if (cur_tag->id == Tag_IMG) {
 			html_process_img_tag(pool, cur_tag, hc, url_set,
 								 part_urls,
-								 task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+								 task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
+								 max_urls);
 		}
 		else if (cur_tag->id == Tag_LINK) {
 			html_process_link_tag(pool, cur_tag, hc, url_set,
 								  part_urls,
-								  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+								  task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
+								  max_urls);
 		}
 
 		/* Track DOM tag count and max depth */
@@ -2501,6 +2587,20 @@ auto html_process_input(struct rspamd_task *task,
 	end = p + process_size;
 	start = c;
 	content_parser_env.html_start = start;// Initialize for span tracking
+
+	/*
+	 * Attributes budget is task-global, as a task can have multiple HTML parts;
+	 * the counter is stashed in the task pool to survive across parts
+	 */
+	static const char attrs_count_var[] = "html_attrs_count";
+	auto *task_attrs_count = static_cast<unsigned int *>(rspamd_mempool_get_variable(pool, attrs_count_var));
+
+	if (task_attrs_count == nullptr) {
+		task_attrs_count = rspamd_mempool_alloc0_type(pool, unsigned int);
+		rspamd_mempool_set_variable(pool, attrs_count_var, task_attrs_count, nullptr);
+	}
+
+	content_parser_env.attrs_count = task_attrs_count;
 
 	while (p < end) {
 		t = *p;
@@ -2995,16 +3095,20 @@ auto html_process_input(struct rspamd_task *task,
 						cur_opening_tag = hc->root_tag;
 					}
 
-					auto &&vtag = std::make_unique<html_tag>();
+					auto *vtag = html_tag_alloc(hc, FL_VIRTUAL | FL_CLOSED | cur_tag->flags);
+
+					if (vtag == nullptr) {
+						state = tags_limit_overflow;
+						break;
+					}
+
 					vtag->id = cur_tag->id;
-					vtag->flags = FL_VIRTUAL | FL_CLOSED | cur_tag->flags;
 					vtag->tag_start = cur_tag->closing.start;
 					vtag->content_offset = p - start + 1;
 					vtag->closing = cur_tag->closing;
 					vtag->parent = cur_opening_tag;
 					g_assert(vtag->parent != &cur_closing_tag);
-					cur_opening_tag->children.push_back(vtag.get());
-					hc->all_tags.emplace_back(std::move(vtag));
+					cur_opening_tag->children.push_back(vtag);
 					cur_tag = cur_opening_tag;
 					parent_tag = cur_tag->parent;
 					g_assert(cur_tag->parent != &cur_closing_tag);
@@ -3100,7 +3204,8 @@ auto html_process_input(struct rspamd_task *task,
 	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
 								exceptions, url_set,
-								task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+								task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
+								max_urls);
 	}
 
 	/* Leftover after content */

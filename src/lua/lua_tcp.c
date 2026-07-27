@@ -303,6 +303,7 @@ struct lua_tcp_dtor {
 #define LUA_TCP_FLAG_RESOLVED (1u << 6u)
 #define LUA_TCP_FLAG_SSL (1u << 7u)
 #define LUA_TCP_FLAG_SSL_NOVERIFY (1u << 8u)
+#define LUA_TCP_FLAG_FIN_RELEASED (1u << 9u)
 
 #undef TCP_DEBUG_REFS
 #ifdef TCP_DEBUG_REFS
@@ -535,6 +536,29 @@ lua_tcp_maybe_free(struct lua_tcp_cbdata *cbd)
 	}
 }
 
+/*
+ * Drop the connection ownership reference (created by REF_INIT_RETAIN in the
+ * request constructor) exactly once. Termination is detected via sticky flags
+ * (LUA_TCP_FLAG_FINISHED set by the `close` method or by draining the
+ * handlers queue), so several call sites can observe the same termination:
+ * e.g. the check inside lua_tcp_push_data and the one in lua_tcp_handler
+ * after the write helper returns. Without this guard the reference is
+ * released twice, leading to a premature free and use-after-free on the
+ * remaining releases.
+ */
+static void
+lua_tcp_release_conn(struct lua_tcp_cbdata *cbd)
+{
+	if (cbd->flags & LUA_TCP_FLAG_FIN_RELEASED) {
+		msg_debug_tcp("connection reference is already released");
+
+		return;
+	}
+
+	cbd->flags |= LUA_TCP_FLAG_FIN_RELEASED;
+	TCP_RELEASE(cbd);
+}
+
 #ifdef __GNUC__
 static void
 lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
@@ -608,7 +632,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 
 		if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
 			(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 		}
 
 		lua_thread_pool_restore_callback(&cbs);
@@ -667,7 +691,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 			if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
 				(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
 				/* A callback has called `close` method, so we need to release a refcount */
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 			}
 
 			callback_called = TRUE;
@@ -766,7 +790,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 		if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
 			(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
 			/* A callback has called `close` method, so we need to release a refcount */
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 		}
 	}
 
@@ -976,7 +1000,7 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 								   (int) remain, strerror(errno));
 
 				msg_debug_tcp("write error, terminate connection");
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 			}
 		}
 
@@ -1135,7 +1159,7 @@ lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
 
 			if ((cbd->flags & LUA_TCP_FLAG_FINISHED)) {
 				/* A callback has called `close` method, so we need to release a refcount */
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 			}
 		}
 
@@ -1163,7 +1187,7 @@ lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
 
 			if ((cbd->flags & LUA_TCP_FLAG_FINISHED)) {
 				/* A callback has called `close` method, so we need to release a refcount */
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 			}
 		}
 
@@ -1230,13 +1254,13 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 			if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &so_len) == -1) {
 				lua_tcp_push_error(cbd, TRUE, "Cannot get socket error: %s",
 								   strerror(errno));
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 				goto out;
 			}
 			else if (so_error != 0) {
 				lua_tcp_push_error(cbd, TRUE, "Socket error detected: %s",
 								   strerror(so_error));
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 				goto out;
 			}
 			else {
@@ -1271,7 +1295,7 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 					if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
 						(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
 						/* A callback has called `close` method, so we need to release a refcount */
-						TCP_RELEASE(cbd);
+						lua_tcp_release_conn(cbd);
 					}
 				}
 			}
@@ -1290,12 +1314,12 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 		if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
 			(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
 			/* A callback has called `close` method, so we need to release a refcount */
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 		}
 	}
 	else {
 		lua_tcp_push_error(cbd, TRUE, "IO timeout");
-		TCP_RELEASE(cbd);
+		lua_tcp_release_conn(cbd);
 	}
 
 out:
@@ -1315,7 +1339,7 @@ lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd, gboolean can_read,
 			/* We are finished with a connection */
 			msg_debug_tcp("no handlers left, finish session");
 			cbd->flags |= LUA_TCP_FLAG_FINISHED;
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 		}
 	}
 	else {
@@ -1431,7 +1455,7 @@ lua_tcp_ssl_on_error(gpointer ud, GError *err)
 		lua_tcp_push_error(cbd, TRUE, "ssl error: unknown error");
 	}
 
-	TCP_RELEASE(cbd);
+	lua_tcp_release_conn(cbd);
 }
 
 static gboolean
@@ -1522,7 +1546,7 @@ lua_tcp_dns_handler(struct rdns_reply *reply, gpointer ud)
 		rn = rdns_request_get_name(reply->request, NULL);
 		lua_tcp_push_error(cbd, TRUE, "unable to resolve host: %s",
 						   rn->name);
-		TCP_RELEASE(cbd);
+		lua_tcp_release_conn(cbd);
 	}
 	else {
 		/*
@@ -1549,7 +1573,7 @@ lua_tcp_dns_handler(struct rdns_reply *reply, gpointer ud)
 			rn = rdns_request_get_name(reply->request, NULL);
 			lua_tcp_push_error(cbd, TRUE, "unable to resolve host: %s; no records with this name",
 							   rn->name);
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 			return;
 		}
 
@@ -1559,7 +1583,7 @@ lua_tcp_dns_handler(struct rdns_reply *reply, gpointer ud)
 		if (!lua_tcp_make_connection(cbd)) {
 			lua_tcp_push_error(cbd, TRUE, "unable to make connection to the host %s",
 							   rspamd_inet_address_to_string(cbd->addr));
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 		}
 	}
 }
@@ -2090,7 +2114,7 @@ lua_tcp_request(lua_State *L)
 
 		if (rspamd_session_blocked(session)) {
 			lua_tcp_push_error(cbd, TRUE, "async session is the blocked state");
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 			cbd->item = NULL; /* To avoid decrease with no watcher */
 			lua_pushboolean(L, FALSE);
 
@@ -2112,7 +2136,7 @@ lua_tcp_request(lua_State *L)
 			rspamd_upstream_fail(cbd->up, true, "failed to connect");
 
 			/* No reset of the item as watcher has been registered */
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 
 			return 1;
 		}
@@ -2128,7 +2152,7 @@ lua_tcp_request(lua_State *L)
 			lua_pushboolean(L, FALSE);
 
 			/* No reset of the item as watcher has been registered */
-			TCP_RELEASE(cbd);
+			lua_tcp_release_conn(cbd);
 
 			return 1;
 		}
@@ -2140,7 +2164,7 @@ lua_tcp_request(lua_State *L)
 				lua_tcp_push_error(cbd, TRUE, "cannot resolve host: %s", host);
 				lua_pushboolean(L, FALSE);
 				cbd->item = NULL; /* To avoid decrease with no watcher */
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 
 				return 1;
 			}
@@ -2155,7 +2179,7 @@ lua_tcp_request(lua_State *L)
 				lua_pushboolean(L, FALSE);
 				cbd->item = NULL; /* To avoid decrease with no watcher */
 
-				TCP_RELEASE(cbd);
+				lua_tcp_release_conn(cbd);
 
 				return 1;
 			}

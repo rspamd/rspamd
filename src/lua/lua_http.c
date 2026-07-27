@@ -170,6 +170,7 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
 #define RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE (1 << 3)
 #define RSPAMD_LUA_HTTP_FLAG_YIELDED (1 << 4)
+#define RSPAMD_LUA_HTTP_FLAG_NO_LOCAL (1 << 5)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -303,6 +304,29 @@ lua_http_push_error(struct lua_http_cbdata *cbd, const char *err)
 {
 	struct lua_callback_state lcbd;
 	lua_State *L;
+
+	if (cbd->cbref == -1) {
+		/* Coroutine-style call: resume the yielded thread with (err, nil) */
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+
+			L = cbd->thread->lua_state;
+			lua_pushstring(L, err);
+			lua_pushnil(L);
+
+			if (cbd->item) {
+				rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+			}
+
+			lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+		}
+		else {
+			msg_info("lost HTTP error for %s in coroutines mess: %s",
+					 cbd->host ? cbd->host : "unknown host", err);
+		}
+
+		return;
+	}
 
 	lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &lcbd);
 
@@ -512,6 +536,22 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 static gboolean
 lua_http_make_connection(struct lua_http_cbdata *cbd)
 {
+	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NO_LOCAL) {
+		struct rspamd_config *cfg = cbd->cfg;
+
+		if (cfg == NULL && cbd->task) {
+			cfg = cbd->task->cfg;
+		}
+
+		if (rspamd_ip_is_local_cfg(cfg, cbd->addr)) {
+			msg_info("forbid HTTP request to local address %s (host: %s) as 'forbid_local' is set",
+					 rspamd_inet_address_to_string(cbd->addr),
+					 cbd->host ? cbd->host : "unknown");
+
+			return FALSE;
+		}
+	}
+
 	rspamd_inet_address_set_port(cbd->addr, cbd->msg->port);
 	unsigned http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
 
@@ -800,9 +840,11 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
+ * @param {number} max_size maximum size of the reply body in bytes (default is the `max_lua_http_response` global option, 256Mb; 0 disables the limit)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {boolean} forbid_local refuse to connect when the destination resolves to a loopback, link-local or `local_addrs` address (SSRF protection for requests to untrusted URLs)
  * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
@@ -839,7 +881,7 @@ lua_http_request(lua_State *L)
 	int flags = 0;
 	char *mime_type = NULL;
 	char *auth = NULL;
-	gsize max_size = 0;
+	gssize max_size = -1; /* -1 = use the global default; 0 = unlimited */
 	gboolean gzip = FALSE;
 
 	if (lua_gettop(L) >= 2) {
@@ -974,6 +1016,14 @@ lua_http_request(lua_State *L)
 		msg = rspamd_http_message_from_url(url);
 		if (msg == NULL) {
 			msg_err_task_check("cannot create HTTP message from url %s", url);
+
+			if (cbref == -1) {
+				/* Coroutine callers expect (err, response), not a bare false */
+				lua_pushstring(L, "cannot create HTTP message from url");
+				lua_pushnil(L);
+				return 2;
+			}
+
 			lua_pushboolean(L, FALSE);
 			return 1;
 		}
@@ -1153,6 +1203,15 @@ lua_http_request(lua_State *L)
 
 		lua_pop(L, 1);
 
+		lua_pushstring(L, "forbid_local");
+		lua_gettable(L, 1);
+
+		if (!!lua_toboolean(L, -1)) {
+			flags |= RSPAMD_LUA_HTTP_FLAG_NO_LOCAL;
+		}
+
+		lua_pop(L, 1);
+
 		lua_pushstring(L, "keepalive");
 		lua_gettable(L, 1);
 
@@ -1166,7 +1225,15 @@ lua_http_request(lua_State *L)
 		lua_gettable(L, 1);
 
 		if (lua_type(L, -1) == LUA_TNUMBER) {
-			max_size = lua_tointeger(L, -1);
+			lua_Integer i = lua_tointeger(L, -1);
+
+			if (i >= 0) {
+				max_size = i;
+			}
+			else {
+				msg_err_task_check("ignore negative max_size %L in HTTP request to %s",
+								   (int64_t) i, url);
+			}
 		}
 
 		lua_pop(L, 1);
@@ -1234,8 +1301,6 @@ lua_http_request(lua_State *L)
 	}
 
 	if (session && rspamd_session_blocked(session)) {
-		lua_pushboolean(L, FALSE);
-
 		g_free(auth);
 		rspamd_http_message_unref(msg);
 		if (body) {
@@ -1244,6 +1309,16 @@ lua_http_request(lua_State *L)
 		if (local_kp) {
 			rspamd_keypair_unref(local_kp);
 		}
+
+		if (cbref == -1) {
+			/* Coroutine callers expect (err, response), not a bare false */
+			lua_pushstring(L, "session is terminating");
+			lua_pushnil(L);
+
+			return 2;
+		}
+
+		lua_pushboolean(L, FALSE);
 
 		return 1;
 	}
@@ -1286,7 +1361,12 @@ lua_http_request(lua_State *L)
 	cbd->peer_pk = peer_key;
 	cbd->local_kp = local_kp;
 	cbd->flags = flags;
-	cbd->max_size = max_size;
+	if (max_size >= 0) {
+		cbd->max_size = max_size;
+	}
+	else {
+		cbd->max_size = cfg ? cfg->max_lua_http_response : 0;
+	}
 	cbd->url = url;
 	cbd->auth = auth;
 	cbd->task = task;
@@ -1392,6 +1472,15 @@ lua_http_request(lua_State *L)
 			}
 
 			REF_RELEASE(cbd);
+
+			if (cbref == -1) {
+				/* Coroutine callers expect (err, response), not a bare false */
+				lua_pushstring(L, "cannot make HTTP connection");
+				lua_pushnil(L);
+
+				return 2;
+			}
+
 			lua_pushboolean(L, FALSE);
 
 			return 1;
@@ -1417,6 +1506,15 @@ lua_http_request(lua_State *L)
 				}
 
 				REF_RELEASE(cbd);
+
+				if (cbref == -1) {
+					/* Coroutine callers expect (err, response), not a bare false */
+					lua_pushstring(L, "cannot make DNS request");
+					lua_pushnil(L);
+
+					return 2;
+				}
+
 				lua_pushboolean(L, FALSE);
 
 				return 1;
@@ -1435,6 +1533,15 @@ lua_http_request(lua_State *L)
 				}
 
 				REF_RELEASE(cbd);
+
+				if (cbref == -1) {
+					/* Coroutine callers expect (err, response), not a bare false */
+					lua_pushstring(L, "cannot make DNS request");
+					lua_pushnil(L);
+
+					return 2;
+				}
+
 				lua_pushboolean(L, FALSE);
 
 				return 1;

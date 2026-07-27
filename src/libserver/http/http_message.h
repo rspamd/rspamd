@@ -238,6 +238,18 @@ struct rspamd_storage_shmem *rspamd_http_message_shmem_ref(struct rspamd_http_me
 void rspamd_http_message_shmem_unref(struct rspamd_storage_shmem *p);
 
 /**
+ * Release shared memory storage of a message (if any) and switch it back to the
+ * ordinary heap storage.
+ *
+ * The body content is NOT preserved, so this is merely a way to say "forget the
+ * shared body, I'm going to set a new one". Clearing RSPAMD_HTTP_FLAG_SHMEM
+ * manually instead of calling this function leaks the mapping and the segment
+ * descriptor, and makes the next cleanup treat the shmem storage as an fstring.
+ * @param msg
+ */
+void rspamd_http_message_drop_shared_body(struct rspamd_http_message *msg);
+
+/**
  * Returns message's flags
  * @param msg
  * @return

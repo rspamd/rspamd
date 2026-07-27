@@ -344,6 +344,93 @@ TEST_SUITE("html")
 		g_byte_array_free(tmp, TRUE);
 		rspamd_mempool_delete(pool);
 	}
+
+	TEST_CASE("html attributes limits")
+	{
+		/* Must match max_attrs_per_tag and max_attrs_per_task in html.cxx */
+		constexpr unsigned int max_attrs_per_tag = 128;
+		constexpr unsigned int max_attrs_per_task = 65536;
+
+		rspamd_url_init(NULL);
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"html", 0);
+		struct rspamd_task fake_task;
+		memset(&fake_task, 0, sizeof(fake_task));
+		fake_task.task_pool = pool;
+
+		auto process = [&](const std::string &input) -> html_content * {
+			GByteArray *tmp = g_byte_array_sized_new(input.size());
+			g_byte_array_append(tmp, (const uint8_t *) input.data(), input.size());
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
+			g_byte_array_free(tmp, TRUE);
+			return hc;
+		};
+
+		auto find_tag = [](html_content *hc, tag_id_t id) -> const html_tag * {
+			const html_tag *found = nullptr;
+			hc->traverse_all_tags([&](const html_tag *t) -> bool {
+				if (t->id == id) {
+					found = t;
+					return false;
+				}
+				return true;
+			});
+			return found;
+		};
+
+		SUBCASE("per-tag budget")
+		{
+			/* A single tag with twice the per-tag attributes budget */
+			std::string input = "<a href=\"http://example.com\"";
+			for (unsigned int i = 0; i < max_attrs_per_tag * 2; i++) {
+				input += fmt::format(" data-x{}=\"{}\"", i, i);
+			}
+			input += ">link</a>";
+
+			auto *hc = process(input);
+			CHECK(hc != nullptr);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS) != 0);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			CHECK(atag != nullptr);
+			CHECK(atag->components.size() == max_attrs_per_tag);
+			/* The first attribute must survive */
+			CHECK(atag->find_component_by_name("href").has_value());
+		}
+
+		SUBCASE("task-global budget spans parts")
+		{
+			/* Exhaust the task budget exactly in the first part */
+			constexpr unsigned int ntags = max_attrs_per_task / max_attrs_per_tag;
+			std::string input;
+			input.reserve(ntags * (max_attrs_per_tag * 8 + 16));
+			for (unsigned int i = 0; i < ntags; i++) {
+				input += "<span";
+				for (unsigned int j = 0; j < max_attrs_per_tag; j++) {
+					input += " a=\"1\"";
+				}
+				input += ">x</span>";
+			}
+
+			auto *hc = process(input);
+			CHECK(hc != nullptr);
+			/* Budget is reached, but nothing is dropped yet */
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS) == 0);
+			const auto *stag = find_tag(hc, Tag_SPAN);
+			CHECK(stag != nullptr);
+			CHECK(stag->components.size() == max_attrs_per_tag);
+
+			/* The second part of the same task gets no attributes at all */
+			auto *hc2 = process("<a href=\"http://example.com\">link</a>");
+			CHECK(hc2 != nullptr);
+			CHECK((hc2->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS) != 0);
+			const auto *atag = find_tag(hc2, Tag_A);
+			CHECK(atag != nullptr);
+			CHECK(atag->components.empty());
+		}
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 } /* namespace rspamd::html */

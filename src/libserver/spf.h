@@ -83,6 +83,19 @@ typedef enum spf_action_e {
 /** Default SPF limits for avoiding abuse **/
 #define SPF_MAX_NESTING 10
 #define SPF_MAX_DNS_REQUESTS 30
+/*
+ * Absolute limit for the include/redirect chain depth. Flattening a record is
+ * recursive, hence this bound is applied even when the configurable limits are
+ * relaxed or disabled by setting them to zero
+ */
+#define SPF_MAX_NESTING_HARD 64
+/*
+ * RFC 7208 4.6.4: evaluation of each `mx` or `ptr` record must not result in
+ * querying more than 10 address records
+ */
+#define SPF_MAX_ADDRESS_LOOKUPS 10
+/* Total number of address lookups spawned by all mx/ptr expansions */
+#define SPF_MAX_DNS_EXPANSIONS 100
 #define SPF_MIN_CACHE_TTL (60 * 5) /* 5 minutes */
 
 struct spf_addr {

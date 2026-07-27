@@ -3680,7 +3680,7 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	}
 	/* Also check max urls */
 	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
-		if (kh_size(MESSAGE_FIELD(task, urls)) > cbd->task->cfg->max_urls) {
+		if (kh_size(MESSAGE_FIELD(task, urls)) >= cbd->task->cfg->max_urls) {
 			msg_err_task("part has too many URLs, we cannot process more: "
 						 "%d urls extracted ",
 						 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
@@ -3696,7 +3696,8 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+									   task->cfg ? task->cfg->max_urls : 0)) {
 
 		url->part_order = cbd->cur_part_order++;
 
@@ -3744,7 +3745,7 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 	}
 	/* Also check max urls */
 	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
-		if (kh_size(MESSAGE_FIELD(task, urls)) > cbd->task->cfg->max_urls) {
+		if (kh_size(MESSAGE_FIELD(task, urls)) >= cbd->task->cfg->max_urls) {
 			msg_err_task("part has too many URLs, we cannot process more: "
 						 "%d urls extracted ",
 						 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
@@ -3767,9 +3768,8 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 
 	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
-		rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
-
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+									   task->cfg ? task->cfg->max_urls : 0)) {
 		url->part_order = cbd->cur_part_order++;
 
 		if (cbd->cur_url_order) {
@@ -4108,7 +4108,8 @@ rspamd_url_subject_query_callback(struct rspamd_url *query_url, gsize start_offs
 		return TRUE;
 	}
 
-	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), query_url, false);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), query_url, false,
+								   task->cfg ? task->cfg->max_urls : 0);
 
 	return TRUE;
 }
@@ -4128,7 +4129,8 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+								   task->cfg ? task->cfg->max_urls : 0);
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
@@ -4559,7 +4561,8 @@ rspamd_url_protocol_from_string(const char *str)
 
 bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
-									bool enforce_replace)
+									bool enforce_replace,
+									unsigned int max_urls)
 {
 	khiter_t k;
 	int r;
@@ -4593,6 +4596,11 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 		return false;
 	}
 	else {
+		if (max_urls > 0 && kh_size(set) >= max_urls) {
+			/* The set is full, silently reject the new url */
+			return false;
+		}
+
 		k = kh_put(rspamd_url_hash, set, u, &r);
 	}
 
@@ -4601,7 +4609,8 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 
 struct rspamd_url *
 rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
-							 struct rspamd_url *u)
+							 struct rspamd_url *u,
+							 unsigned int max_urls)
 {
 	khiter_t k;
 	int r;
@@ -4613,6 +4622,11 @@ rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
 			return kh_key(set, k);
 		}
 		else {
+			if (max_urls > 0 && kh_size(set) >= max_urls) {
+				/* The set is full, reject the new url */
+				return NULL;
+			}
+
 			k = kh_put(rspamd_url_hash, set, u, &r);
 
 			return kh_key(set, k);

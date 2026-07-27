@@ -1,0 +1,41 @@
+# Icon names used in the WebUI markup as class="fas fa-<name>".
+# One name per line (without the "fa-" prefix). Lines starting with "#"
+# and blank lines are ignored.
+# v5 aliases (e.g. "times") are resolved to their FA6 canonical names
+# (e.g. "xmark") in icons-build.mjs.
+# Re-run after editing:  npm install && node icons-build.mjs
+bars
+chart-area
+chart-pie
+check
+circle-plus
+cog
+columns
+copy
+dice
+display
+envelope
+eraser
+external-link
+exclamation-triangle
+eye
+graduation-cap
+hashtag
+key
+list
+moon
+power-off
+pen-to-square
+redo-alt
+save
+search
+server
+sync-alt
+sun
+tasks
+thumbs-down
+thumbs-up
+times
+times-circle
+trash-alt
+trash-can

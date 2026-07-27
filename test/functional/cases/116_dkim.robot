@@ -35,6 +35,24 @@ DKIM Ignore Unknown Tags
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/dkim_unknown_tags.eml
   Expect Symbol  R_DKIM_ALLOW
 
+DKIM Reject Oversized Header List
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_huge_hlist.eml
+  ...  IP=37.48.67.26
+  Do Not Expect Symbol  R_DKIM_ALLOW
+
+DKIM Accept Large Header List Below Limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_large_hlist.eml
+  ...  IP=37.48.67.26
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Unparseable Signatures Count Towards Limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs.eml
+  Do Not Expect Symbol  R_DKIM_ALLOW
+
+DKIM Signatures At Limit Are Still Checked
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_sigs_at_limit.eml
+  Expect Symbol  R_DKIM_ALLOW
+
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
   ${result} =  Scan Message With Rspamc  ${RSPAMD_TESTDIR}/messages/spam_message.eml  --mime  --header=dodkim=1
@@ -61,6 +79,18 @@ DKIM Verify ED25519 REJECT
 DKIM Verify Unknown Key Type
   Scan File  ${RSPAMD_TESTDIR}/messages/dkim_broken_key.eml
   Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Reject Oversized Key Record
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_key_too_long.eml
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Reject Oversized Key Modulus
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_key_too_wide.eml
+  Expect Symbol  R_DKIM_PERMFAIL
+
+DKIM Accept Large Key Below Limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_key_wide_ok.eml
+  Expect Symbol  R_DKIM_REJECT
 
 DKIM Verify Revoked Key (missing p=)
   Scan File  ${RSPAMD_TESTDIR}/messages/dkim_revoked_key.eml

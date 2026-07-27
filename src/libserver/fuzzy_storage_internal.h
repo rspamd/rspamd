@@ -56,6 +56,17 @@ struct fuzzy_global_stat {
 	uint64_t fuzzy_hashes_found[RSPAMD_FUZZY_EPOCH_MAX];
 	uint64_t invalid_requests;
 	uint64_t delayed_hashes;
+	/*
+	 * Requests dropped before parsing because the source is blocklisted,
+	 * and requests whose encrypted header failed key lookup or MAC check.
+	 * Both are logged at debug level only (a spoofed-source flood would
+	 * otherwise turn into one error line per datagram), so these counters
+	 * are the sole operational signal that either is happening.
+	 */
+	uint64_t blocked_requests;
+	uint64_t decrypt_errors;
+	/* PING/STAT dropped by the per-source rate limit rather than answered */
+	uint64_t ratelimited_requests;
 };
 
 struct fuzzy_key_stat {
@@ -82,7 +93,7 @@ struct rspamd_leaky_bucket_elt {
 };
 
 struct rspamd_fuzzy_dynamic_ban {
-	double expire_ts; /* monotonic clock; 0.0 = never expires */
+	double expire_ts;      /* monotonic clock; 0.0 = never expires */
 	int32_t response_code; /* fuzzy reply code; 0 = use default (503) */
 	char reason[64];
 };
@@ -182,6 +193,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_http_context *http_ctx;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
+	/* Aggregate + per-IP stats for unkeyed clients (allowed by allow_update etc) */
+	struct fuzzy_key_stat *unkeyed_stat;
 	struct rspamd_fuzzy_backend *backend;
 	GArray *updates_pending;
 	unsigned int updates_failed;
@@ -222,7 +235,7 @@ struct fuzzy_session {
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
-	struct rspamd_fuzzy_shingle_cmd cmd;       /* Can handle both shingles and non-shingles */
+	struct rspamd_fuzzy_shingle_cmd cmd; /* Can handle both shingles and non-shingles */
 	union {
 		struct rspamd_fuzzy_encrypted_reply v1;
 		struct rspamd_fuzzy_encrypted_reply_v2 v2;
@@ -238,6 +251,15 @@ struct fuzzy_session {
 	struct fuzzy_key *key;
 	struct rspamd_fuzzy_cmd_extension *extensions;
 	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
+
+	/*
+	 * Set when the source address was already run through
+	 * rspamd_fuzzy_check_client before the session was created (the UDP
+	 * path checks it up front, prior to parsing). Lets the per-command
+	 * check be skipped for that path without losing it for TCP, where a
+	 * dynamic block can land after the connection was accepted.
+	 */
+	bool client_checked;
 
 	/* If this is a TCP session, this pointer will be set */
 	struct fuzzy_tcp_session *tcp_session;
@@ -348,5 +370,11 @@ gboolean rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 								   int attached_fd,
 								   struct rspamd_control_command *cmd,
 								   gpointer ud);
+
+gboolean rspamd_fuzzy_storage_hash_info(struct rspamd_main *rspamd_main,
+										struct rspamd_worker *worker, int fd,
+										int attached_fd,
+										struct rspamd_control_command *cmd,
+										gpointer ud);
 
 #endif

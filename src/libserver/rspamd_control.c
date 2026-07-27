@@ -84,6 +84,7 @@ static const struct rspamd_control_cmd_match {
 	{.name = {.begin = "/recompile", .len = sizeof("/recompile") - 1}, .type = RSPAMD_CONTROL_RECOMPILE},
 	{.name = {.begin = "/fuzzystat", .len = sizeof("/fuzzystat") - 1}, .type = RSPAMD_CONTROL_FUZZY_STAT},
 	{.name = {.begin = "/fuzzysync", .len = sizeof("/fuzzysync") - 1}, .type = RSPAMD_CONTROL_FUZZY_SYNC},
+	{.name = {.begin = "/fuzzyhash", .len = sizeof("/fuzzyhash") - 1}, .type = RSPAMD_CONTROL_FUZZY_HASH},
 	{.name = {.begin = "/compositesstats", .len = sizeof("/compositesstats") - 1}, .type = RSPAMD_CONTROL_COMPOSITES_STATS},
 	{.name = {.begin = "/memstat", .len = sizeof("/memstat") - 1}, .type = RSPAMD_CONTROL_MEMORY_STAT},
 };
@@ -198,7 +199,8 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 	{
 		/* Skip incompatible worker for fuzzy_stat */
 		if ((session->cmd.type == RSPAMD_CONTROL_FUZZY_STAT ||
-			 session->cmd.type == RSPAMD_CONTROL_FUZZY_SYNC) &&
+			 session->cmd.type == RSPAMD_CONTROL_FUZZY_SYNC ||
+			 session->cmd.type == RSPAMD_CONTROL_FUZZY_HASH) &&
 			elt->wrk_type != g_quark_from_static_string("fuzzy")) {
 			continue;
 		}
@@ -278,6 +280,34 @@ rspamd_control_write_reply(struct rspamd_control_session *session)
 			break;
 		case RSPAMD_CONTROL_FUZZY_SYNC:
 			ucl_object_insert_key(cur, ucl_object_fromint(elt->reply.reply.fuzzy_sync.status), "status", 0, false);
+			break;
+		case RSPAMD_CONTROL_FUZZY_HASH:
+			ucl_object_insert_key(cur,
+								  ucl_object_fromint(elt->reply.reply.fuzzy_hash.status),
+								  "status", 0, false);
+
+			if (elt->attached_fd != -1) {
+				parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+
+				if (ucl_parser_add_fd(parser, elt->attached_fd)) {
+					ucl_object_insert_key(cur, ucl_parser_get_object(parser),
+										  "data", 0, false);
+				}
+				else {
+					ucl_object_insert_key(cur,
+										  ucl_object_fromstring(ucl_parser_get_error(parser)),
+										  "error", 0, false);
+				}
+
+				ucl_parser_free(parser);
+				ucl_object_insert_key(cur,
+									  ucl_object_fromlstring(
+										  elt->reply.reply.fuzzy_hash.storage_id,
+										  MEMPOOL_UID_LEN - 1),
+									  "id",
+									  0,
+									  false);
+			}
 			break;
 		case RSPAMD_CONTROL_COMPOSITES_STATS:
 			ucl_object_insert_key(cur, ucl_object_fromint(elt->reply.reply.composites_stats.checked_slow),
@@ -741,6 +771,16 @@ rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 		srch.begin = msg->url->str;
 		srch.len = msg->url->len;
 
+		/* Some commands carry arguments in the query string */
+		const char *qpos = memchr(msg->url->str, '?', msg->url->len);
+		rspamd_ftok_t query = {.begin = NULL, .len = 0};
+
+		if (qpos != NULL) {
+			query.begin = qpos + 1;
+			query.len = msg->url->len - (qpos - msg->url->str) - 1;
+			srch.len = qpos - msg->url->str;
+		}
+
 		session->is_reply = TRUE;
 
 		for (i = 0; i < G_N_ELEMENTS(cmd_matches); i++) {
@@ -748,6 +788,25 @@ rspamd_control_finish_handler(struct rspamd_http_connection *conn,
 				session->cmd.type = cmd_matches[i].type;
 				found = TRUE;
 				break;
+			}
+		}
+
+		if (found && session->cmd.type == RSPAMD_CONTROL_FUZZY_HASH) {
+			/* Parse digest=<128 hex chars> */
+			static const char digest_pfx[] = "digest=";
+			gsize hexlen = sizeof(session->cmd.cmd.fuzzy_hash.digest) * 2;
+
+			if (query.len == sizeof(digest_pfx) - 1 + hexlen &&
+				memcmp(query.begin, digest_pfx, sizeof(digest_pfx) - 1) == 0 &&
+				rspamd_decode_hex_buf(query.begin + sizeof(digest_pfx) - 1, hexlen,
+									  session->cmd.cmd.fuzzy_hash.digest,
+									  sizeof(session->cmd.cmd.fuzzy_hash.digest)) != -1) {
+				/* Parsed fine */
+			}
+			else {
+				rspamd_control_send_error(session, 400,
+										  "fuzzyhash requires ?digest=<%z hex characters>", hexlen);
+				return 0;
 			}
 		}
 
@@ -788,6 +847,9 @@ void rspamd_control_process_client_socket(struct rspamd_main *rspamd_main,
 													  rspamd_control_error_handler,
 													  rspamd_control_finish_handler,
 													  0);
+	/* Control commands are URL based, so the body is not used at all */
+	rspamd_http_connection_set_max_size(session->conn,
+										rspamd_main->cfg->max_message);
 	session->rspamd_main = rspamd_main;
 	session->addr = addr;
 	session->event_loop = rspamd_main->event_loop;
@@ -854,6 +916,7 @@ rspamd_control_default_cmd_handler(int fd,
 	case RSPAMD_CONTROL_MONITORED_CHANGE:
 	case RSPAMD_CONTROL_FUZZY_STAT:
 	case RSPAMD_CONTROL_FUZZY_SYNC:
+	case RSPAMD_CONTROL_FUZZY_HASH:
 	case RSPAMD_CONTROL_LOG_PIPE:
 	case RSPAMD_CONTROL_CHILD_CHANGE:
 	case RSPAMD_CONTROL_FUZZY_BLOCKED:
@@ -1800,6 +1863,9 @@ rspamd_control_command_from_string(const char *str)
 	else if (g_ascii_strcasecmp(str, "fuzzy_sync") == 0) {
 		ret = RSPAMD_CONTROL_FUZZY_SYNC;
 	}
+	else if (g_ascii_strcasecmp(str, "fuzzy_hash") == 0) {
+		ret = RSPAMD_CONTROL_FUZZY_HASH;
+	}
 	else if (g_ascii_strcasecmp(str, "monitored_change") == 0) {
 		ret = RSPAMD_CONTROL_MONITORED_CHANGE;
 	}
@@ -1845,6 +1911,9 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 		break;
 	case RSPAMD_CONTROL_FUZZY_SYNC:
 		reply = "fuzzy_sync";
+		break;
+	case RSPAMD_CONTROL_FUZZY_HASH:
+		reply = "fuzzy_hash";
 		break;
 	case RSPAMD_CONTROL_MONITORED_CHANGE:
 		reply = "monitored_change";

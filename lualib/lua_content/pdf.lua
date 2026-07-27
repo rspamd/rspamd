@@ -544,11 +544,16 @@ local function gen_text_grammar()
   end
 
   local function ternary_op_handler(...)
+    -- Called for the text positioning operators `tx ty Td` and `tx ty TD`.
+    -- Captures arrive as { tx, ty, op }: a non-zero vertical displacement (ty)
+    -- moves to a new text line, so it must be rendered as a newline. Note that
+    -- the operator name has to be captured explicitly, otherwise it cannot be
+    -- distinguished from the numeric operands.
     local args = { ... }
     local op = args[#args]
-    local a2 = args[#args - 2]
+    local ty = args[#args - 1]
 
-    if (op == 'Td' or op == 'TD') and type(a2) == 'number' and a2 ~= 0 then
+    if (op == 'Td' or op == 'TD') and type(ty) == 'number' and ty ~= 0 then
       return '\n'
     end
 
@@ -560,7 +565,10 @@ local function gen_text_grammar()
       C(gen_graphics_unary()) / empty
   local binary_ops = P("Tc") + P("Tw") + P("Tz") + P("TL") + P("Tr") + P("Ts") +
       gen_graphics_binary()
-  local ternary_ops = P("TD") + P("Td") + gen_graphics_ternary()
+  -- Text line positioning operators must be captured so the handler can tell
+  -- them apart from the graphics ternary operators (d/m/l) which are dropped.
+  local text_ternary_op = C(P("TD") + P("Td"))
+  local graphics_ternary_op = gen_graphics_ternary()
   local nary_op = P("Tm") + gen_graphics_nary()
   local text_binary_op = C(P("Tj") + P("TJ") + P("'"))
   local text_quote_op = C(P('"'))
@@ -573,7 +581,8 @@ local function gen_text_grammar()
         V("FONT") + gen.comment) * gen.ws ^ 0,
     UNARY = unary_ops,
     BINARY = V("ARG") / empty * gen.ws ^ 1 * binary_ops,
-    TERNARY = (V("ARG") * gen.ws ^ 1 * V("ARG") * gen.ws ^ 1 * ternary_ops) / ternary_op_handler,
+    TERNARY = ((V("ARG") * gen.ws ^ 1 * V("ARG") * gen.ws ^ 1 * text_ternary_op) / ternary_op_handler) +
+        ((V("ARG") / empty * gen.ws ^ 1 * V("ARG") / empty * gen.ws ^ 1 * graphics_ternary_op) / empty),
     NARY = lpeg.Ct((V("ARG") * gen.ws ^ 1) ^ 1) * (gen.id / empty * gen.ws ^ 0) ^ -1 * nary_op / nary_op_handler,
     ARG = V("ARRAY") + V("DICT") + V("ATOM"),
     ATOM = (gen.comment + gen.boolean + gen.ref +

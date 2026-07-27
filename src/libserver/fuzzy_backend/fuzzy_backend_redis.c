@@ -67,7 +67,8 @@ struct rspamd_fuzzy_backend_redis {
 enum rspamd_fuzzy_redis_command {
 	RSPAMD_FUZZY_REDIS_COMMAND_COUNT,
 	RSPAMD_FUZZY_REDIS_COMMAND_VERSION,
-	RSPAMD_FUZZY_REDIS_COMMAND_CHECK
+	RSPAMD_FUZZY_REDIS_COMMAND_CHECK,
+	RSPAMD_FUZZY_REDIS_COMMAND_INSPECT
 };
 
 struct rspamd_fuzzy_redis_session {
@@ -86,6 +87,7 @@ struct rspamd_fuzzy_redis_session {
 		rspamd_fuzzy_check_cb cb_check;
 		rspamd_fuzzy_version_cb cb_version;
 		rspamd_fuzzy_count_cb cb_count;
+		rspamd_fuzzy_inspect_cb cb_inspect;
 	} callback;
 	void *cbdata;
 
@@ -853,6 +855,196 @@ rspamd_fuzzy_redis_count_callback(redisAsyncContext *c, gpointer r,
 	}
 
 	rspamd_fuzzy_redis_session_dtor(session, FALSE);
+}
+
+/*
+ * Runs entirely on the redis side to gather per-hash diagnostics in a single
+ * round trip: flag slots, ttl and shingle slot ownership computed from the
+ * persisted 'S' field (see fuzzy_update.lua)
+ */
+static const char *rspamd_fuzzy_redis_inspect_script =
+	"local key = KEYS[1]\n"
+	"if redis.call('EXISTS', key) == 0 then return cjson.encode({found=false}) end\n"
+	"local o = {found=true, ttl=redis.call('TTL', key)}\n"
+	"local data = redis.call('HGETALL', key)\n"
+	"local fields = {}\n"
+	"for i=1,#data,2 do fields[data[i]] = data[i+1] end\n"
+	"o.flag = tonumber(fields['F'])\n"
+	"o.value = tonumber(fields['V'])\n"
+	"o.created = tonumber(fields['C'])\n"
+	"local extra = {}\n"
+	"for i=1,7 do\n"
+	"  if fields['F'..i] and fields['V'..i] then\n"
+	"    extra[#extra+1] = {flag=tonumber(fields['F'..i]), value=tonumber(fields['V'..i])}\n"
+	"  end\n"
+	"end\n"
+	"if #extra > 0 then o.extra_flags = extra end\n"
+	"if fields['S'] then\n"
+	"  local owned, total, vacant = 0, 0, 0\n"
+	"  local prefix = string.sub(key, 1, #key - #ARGV[1])\n"
+	"  for suf in string.gmatch(fields['S'], '[^,]+') do\n"
+	"    total = total + 1\n"
+	"    local owner = redis.call('GET', prefix .. '_' .. suf)\n"
+	"    if owner == ARGV[1] then owned = owned + 1\n"
+	"    elseif owner == false then vacant = vacant + 1 end\n"
+	"  end\n"
+	"  o.shingles = {total=total, owned=owned, vacant=vacant, foreign=total-owned-vacant}\n"
+	"end\n"
+	"return cjson.encode(o)\n";
+
+static void
+rspamd_fuzzy_redis_inspect_callback(redisAsyncContext *c, gpointer r,
+									gpointer priv)
+{
+	struct rspamd_fuzzy_redis_session *session = priv;
+	redisReply *reply = r;
+	ucl_object_t *res = NULL;
+
+	ev_timer_stop(session->event_loop, &session->timeout);
+
+	if (c->err == 0 && reply != NULL) {
+		rspamd_upstream_ok(session->up);
+
+		if (reply->type == REDIS_REPLY_STRING) {
+			struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+
+			if (ucl_parser_add_chunk(parser, reply->str, reply->len)) {
+				res = ucl_parser_get_object(parser);
+			}
+			else {
+				msg_err_redis_session("cannot parse inspect reply: %s",
+									  ucl_parser_get_error(parser));
+			}
+
+			ucl_parser_free(parser);
+		}
+		else if (reply->type == REDIS_REPLY_ERROR) {
+			msg_err_redis_session("fuzzy backend redis error: \"%s\"",
+								  reply->str);
+		}
+	}
+	else {
+		if (c->errstr) {
+			msg_err_redis_session("error inspecting hash on %s: %s",
+								  rspamd_inet_address_to_string_pretty(rspamd_upstream_addr_cur(session->up)),
+								  c->errstr);
+			rspamd_upstream_fail(session->up, FALSE, c->errstr);
+		}
+	}
+
+	if (session->callback.cb_inspect) {
+		session->callback.cb_inspect(res, session->cbdata);
+	}
+	else if (res) {
+		ucl_object_unref(res);
+	}
+
+	rspamd_fuzzy_redis_session_dtor(session, FALSE);
+}
+
+void rspamd_fuzzy_backend_inspect_redis(struct rspamd_fuzzy_backend *bk,
+										const unsigned char *digest,
+										rspamd_fuzzy_inspect_cb cb, void *ud,
+										void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
+	struct rspamd_fuzzy_redis_session *session;
+	struct upstream *up;
+	struct upstream_list *ups;
+	rspamd_inet_addr_t *addr;
+	GString *key;
+
+	g_assert(backend != NULL);
+
+	ups = rspamd_redis_get_servers(backend, "read_servers");
+	if (!ups) {
+		if (cb) {
+			cb(NULL, ud);
+		}
+
+		return;
+	}
+
+	session = g_malloc0(sizeof(*session));
+	session->backend = backend;
+	REF_RETAIN(session->backend);
+
+	session->callback.cb_inspect = cb;
+	session->cbdata = ud;
+	session->command = RSPAMD_FUZZY_REDIS_COMMAND_INSPECT;
+	session->event_loop = rspamd_fuzzy_backend_event_base(bk);
+
+	/* EVAL script 1 <hash key> <raw digest> */
+	session->nargs = 5;
+	session->argv = g_malloc0(sizeof(char *) * session->nargs);
+	session->argv_lens = g_malloc0(sizeof(gsize) * session->nargs);
+	session->argv[0] = g_strdup("EVAL");
+	session->argv_lens[0] = 4;
+	session->argv[1] = g_strdup(rspamd_fuzzy_redis_inspect_script);
+	session->argv_lens[1] = strlen(rspamd_fuzzy_redis_inspect_script);
+	session->argv[2] = g_strdup("1");
+	session->argv_lens[2] = 1;
+	key = g_string_new(backend->redis_object);
+	g_string_append_len(key, digest, rspamd_cryptobox_HASHBYTES);
+	session->argv[3] = key->str;
+	session->argv_lens[3] = key->len;
+	g_string_free(key, FALSE); /* Do not free underlying array */
+	session->argv[4] = g_malloc(rspamd_cryptobox_HASHBYTES);
+	memcpy(session->argv[4], digest, rspamd_cryptobox_HASHBYTES);
+	session->argv_lens[4] = rspamd_cryptobox_HASHBYTES;
+
+	up = rspamd_upstream_get(ups,
+							 RSPAMD_UPSTREAM_ROUND_ROBIN,
+							 NULL,
+							 0);
+
+	if (up == NULL) {
+		msg_err_redis_session("cannot select fuzzy redis upstream for inspect: "
+							  "all backends are dead or pending DNS resolution");
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			cb(NULL, ud);
+		}
+		return;
+	}
+
+	session->up = rspamd_upstream_ref(up);
+	addr = rspamd_upstream_addr_next(up);
+	g_assert(addr != NULL);
+	session->ctx = rspamd_redis_pool_connect(backend->pool,
+											 backend->dbname,
+											 backend->username, backend->password,
+											 rspamd_inet_address_to_string(addr),
+											 rspamd_inet_address_get_port(addr));
+
+	if (session->ctx == NULL) {
+		rspamd_upstream_fail(up, TRUE, strerror(errno));
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+
+		if (cb) {
+			cb(NULL, ud);
+		}
+	}
+	else {
+		if (redisAsyncCommandArgv(session->ctx, rspamd_fuzzy_redis_inspect_callback,
+								  session, session->nargs,
+								  (const char **) session->argv, session->argv_lens) != REDIS_OK) {
+			rspamd_fuzzy_redis_session_dtor(session, TRUE);
+
+			if (cb) {
+				cb(NULL, ud);
+			}
+		}
+		else {
+			/* Add timeout */
+			session->timeout.data = session;
+			ev_now_update_if_cheap((struct ev_loop *) session->event_loop);
+			ev_timer_init(&session->timeout,
+						  rspamd_fuzzy_redis_timeout,
+						  session->backend->timeout, 0.0);
+			ev_timer_start(session->event_loop, &session->timeout);
+		}
+	}
 }
 
 void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,

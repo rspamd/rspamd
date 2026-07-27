@@ -97,8 +97,6 @@ requirejs.config({
         d3: "d3.min",
         d3evolution: "d3evolution.min",
         d3pie: "d3pie.min",
-        fontawesome: "fontawesome.min",
-        fontawesome_solid: "solid.min",
         linenumbers: "codejar-linenumbers.min",
         tabulator: "tabulator.min",
         nprogress: "nprogress.min",
@@ -110,7 +108,6 @@ requirejs.config({
         d3: {exports: "d3"},
         d3evolution: {exports: "D3Evolution", deps: ["d3.global"]},
         d3pie: {exports: "D3Pie", deps: ["d3.global"]},
-        fontawesome: {exports: "FontAwesome", deps: ["fontawesome_solid"]},
         linenumbers: {exports: "withLineNumbers", deps: ["prism"]},
         prism: {exports: "Prism"}
     },

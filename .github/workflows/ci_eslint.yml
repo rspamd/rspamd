@@ -25,3 +25,6 @@ jobs:
 
       - name: Run stylelint
         run: ./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js
+
+      - name: Check icon subset is in sync
+        run: npm run check:icons
