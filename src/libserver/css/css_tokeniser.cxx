@@ -22,6 +22,9 @@
 #include <string>
 #include <cmath>
 
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
+
 namespace rspamd::css {
 
 /* Helpers to create tokens */
@@ -521,16 +524,26 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 		return res;
 	};
 
-	/* Main tokenisation loop */
-	for (auto i = offset; i < input.size(); ++i) {
+	/*
+	 * Main tokenisation loop
+	 *
+	 * Every branch below either returns a token or, for comments, moves `i`
+	 * past the comment and continues. Recursing on comments would consume
+	 * stack proportionally to their count in the input.
+	 */
+	auto i = offset;
+
+	while (i < input.size()) {
 		auto c = input[i];
 
 		switch (c) {
 		case '/':
 			if (i + 1 < input.size() && input[i + 1] == '*') {
 				offset = i + 2;
-				consume_comment();   /* Consume comment and go forward */
-				return next_token(); /* Tail call */
+				consume_comment(); /* Consume comment and restart from the new offset */
+				/* consume_comment never moves offset backwards, so this always progresses */
+				i = offset;
+				continue;
 			}
 			else {
 				offset = i + 1;
@@ -725,6 +738,9 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 			}
 			break;
 		}
+
+		/* Not reached: all cases above either return or continue */
+		break;
 	}
 
 	return make_token<css_parser_token::token_type::eof_token>();
@@ -833,6 +849,63 @@ auto css_parser_token::debug_token_str() -> std::string
 	}
 
 	return ret; /* Copy elision */
+}
+
+TEST_SUITE("css")
+{
+	TEST_CASE("comments are skipped")
+	{
+		using tt = css_parser_token::token_type;
+		const std::vector<std::pair<const char *, std::vector<tt>>> cases{
+			{"/**/", {tt::eof_token}},
+			/* An unterminated comment stops one character before the end */
+			{"/* unterminated", {tt::ident_token, tt::eof_token}},
+			{"/", {tt::delim_token, tt::eof_token}},
+			{"/*a*/b", {tt::ident_token, tt::eof_token}},
+			{"a/*b*/c", {tt::ident_token, tt::ident_token, tt::eof_token}},
+			{"/*a*//*b*//*c*/d", {tt::ident_token, tt::eof_token}},
+			{"/* /* nested */ still */e", {tt::ident_token, tt::eof_token}},
+			{"/*a*/ /*b*/\n/*c*/f", {tt::whitespace_token, tt::whitespace_token, tt::ident_token, tt::eof_token}},
+			{"p/*x*/{/*y*/color/*z*/:red}",
+			 {tt::ident_token, tt::ocurlbrace_token, tt::ident_token, tt::colon_token, tt::ident_token,
+			  tt::ecurlbrace_token, tt::eof_token}},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto &c: cases) {
+			css_tokeniser tok{pool, c.first};
+
+			for (auto expected: c.second) {
+				auto t = tok.next_token();
+				CHECK_MESSAGE(t.type == expected, std::string{c.first});
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("many sequential comments do not exhaust stack")
+	{
+		constexpr auto ncomments = 100000;
+		std::string input;
+
+		input.reserve(ncomments * 4 + 4);
+
+		for (auto i = 0; i < ncomments; i++) {
+			input += "/**/";
+		}
+
+		input += "end";
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		css_tokeniser tok{pool, input};
+
+		CHECK(tok.next_token().type == css_parser_token::token_type::ident_token);
+		CHECK(tok.next_token().type == css_parser_token::token_type::eof_token);
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 }// namespace rspamd::css
