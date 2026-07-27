@@ -118,11 +118,9 @@ rspamd_regexp_dtor(rspamd_regexp_t *re)
 		if (re->raw_re && re->raw_re != re->re) {
 #ifndef WITH_PCRE2
 			/* PCRE1 version */
-#ifdef HAVE_PCRE_JIT
 			if (re->raw_extra) {
 				pcre_free_study(re->raw_extra);
 			}
-#endif
 #else
 			/* PCRE 2 version */
 			if (re->raw_mcontext) {
@@ -135,11 +133,9 @@ rspamd_regexp_dtor(rspamd_regexp_t *re)
 		if (re->re) {
 #ifndef WITH_PCRE2
 			/* PCRE1 version */
-#ifdef HAVE_PCRE_JIT
 			if (re->extra) {
 				pcre_free_study(re->extra);
 			}
-#endif
 #else
 			/* PCRE 2 version */
 			if (re->mcontext) {
@@ -157,6 +153,76 @@ rspamd_regexp_dtor(rspamd_regexp_t *re)
 	}
 }
 
+/*
+ * Resource limits applied to every single match. Without them a pathological
+ * pattern can burn an unbounded amount of CPU and memory on attacker
+ * controlled input.
+ */
+#define RSPAMD_RE_MAX_BACKTRACK 1000000
+
+#ifdef WITH_PCRE2
+#define RSPAMD_RE_MAX_DEPTH 100000
+/*
+ * Heap used by the interpreter for its backtracking frames vector, in KiB.
+ * The vector grows as `framesize * depth`, so with the depth limit above and
+ * a large frame it can reach gigabytes; the PCRE2 build time default
+ * (PCRE2_HEAP_LIMIT, 20 GB) is effectively no limit at all. This only binds
+ * the interpreter: JIT matching uses its own preallocated stack, so it
+ * matters exactly when JIT is unavailable or has been refused for a pattern.
+ *
+ * The vector is grown by doubling, so the transient peak is about twice this
+ * value; keep that in mind when tuning it.
+ */
+#define RSPAMD_RE_MAX_HEAP_KB (64 * 1024)
+
+static void
+rspamd_pcre2_set_limits(pcre2_match_context *mcontext)
+{
+	pcre2_set_match_limit(mcontext, RSPAMD_RE_MAX_BACKTRACK);
+#if defined(PCRE2_MAJOR) && (PCRE2_MAJOR > 10 || (PCRE2_MAJOR == 10 && PCRE2_MINOR >= 30))
+	pcre2_set_depth_limit(mcontext, RSPAMD_RE_MAX_DEPTH);
+	pcre2_set_heap_limit(mcontext, RSPAMD_RE_MAX_HEAP_KB);
+#else
+	/* Pre 10.30 name of the depth limit, no heap limit is available there */
+	pcre2_set_recursion_limit(mcontext, RSPAMD_RE_MAX_DEPTH);
+#endif
+}
+#else
+/*
+ * PCRE1 backtracks on the C stack (a couple of hundred bytes per level unless
+ * it has been built with --disable-stack-for-recursion), so the depth limit
+ * must be much lower than the PCRE2 one to stay within a normal 8 MB stack.
+ * The library defaults (10000000 for both limits) are far too permissive.
+ */
+#define RSPAMD_RE_MAX_DEPTH 10000
+
+static pcre_extra *
+rspamd_pcre1_set_limits(pcre_extra *extra)
+{
+	if (extra == NULL) {
+		/*
+		 * pcre_study legitimately returns NULL when there is nothing to
+		 * optimise, but we still need an extra block to carry the limits.
+		 * It is released by pcre_free_study, which ends up calling pcre_free,
+		 * hence pcre_malloc here.
+		 */
+		extra = pcre_malloc(sizeof(*extra));
+
+		if (extra == NULL) {
+			return NULL;
+		}
+
+		memset(extra, 0, sizeof(*extra));
+	}
+
+	extra->flags |= PCRE_EXTRA_MATCH_LIMIT | PCRE_EXTRA_MATCH_LIMIT_RECURSION;
+	extra->match_limit = RSPAMD_RE_MAX_BACKTRACK;
+	extra->match_limit_recursion = RSPAMD_RE_MAX_DEPTH;
+
+	return extra;
+}
+#endif
+
 static void
 rspamd_regexp_post_process(rspamd_regexp_t *r)
 {
@@ -164,19 +230,15 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 		rspamd_regexp_library_init(NULL);
 	}
 #if defined(WITH_PCRE2)
-	static const unsigned int max_recursion_depth = 100000, max_backtrack = 1000000;
-
 	/* Create match context */
 	r->mcontext = pcre2_match_context_create(NULL);
 	g_assert(r->mcontext != NULL);
-	pcre2_set_recursion_limit(r->mcontext, max_recursion_depth);
-	pcre2_set_match_limit(r->mcontext, max_backtrack);
+	rspamd_pcre2_set_limits(r->mcontext);
 
 	if (r->raw_re && r->re != r->raw_re) {
 		r->raw_mcontext = pcre2_match_context_create(NULL);
 		g_assert(r->raw_mcontext != NULL);
-		pcre2_set_recursion_limit(r->raw_mcontext, max_recursion_depth);
-		pcre2_set_match_limit(r->raw_mcontext, max_backtrack);
+		rspamd_pcre2_set_limits(r->raw_mcontext);
 	}
 	else if (r->raw_re) {
 		r->raw_mcontext = r->mcontext;
@@ -323,17 +385,32 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	}
 
 	if (r->raw_re && r->raw_re != r->re) {
-		r->raw_extra = pcre_study(r->re, study_flags, &err_str);
+		r->raw_extra = pcre_study(r->raw_re, study_flags, &err_str);
+
+		if (r->raw_extra == NULL) {
+			msg_debug("cannot optimize raw regexp pattern: '%s': %s",
+					  r->pattern, err_str);
+			try_raw_jit = FALSE;
+		}
 	}
 	else if (r->raw_re == r->re) {
-		r->raw_extra = r->extra;
+		try_raw_jit = try_jit;
+	}
+	else {
+		try_raw_jit = FALSE;
 	}
 
-	if (r->raw_extra == NULL) {
+	/*
+	 * Attach the limits, allocating an extra block when there is no study
+	 * data, and restore the aliasing that a fresh allocation could break.
+	 */
+	r->extra = rspamd_pcre1_set_limits(r->extra);
 
-		msg_debug("cannot optimize raw regexp pattern: '%s': %s",
-				  r->pattern, err_str);
-		try_raw_jit = FALSE;
+	if (r->raw_re == r->re) {
+		r->raw_extra = r->extra;
+	}
+	else if (r->raw_re) {
+		r->raw_extra = rspamd_pcre1_set_limits(r->raw_extra);
 	}
 	/* JIT path */
 	if (try_jit) {
