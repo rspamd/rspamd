@@ -96,7 +96,7 @@ rspamd_regexp_quark(void)
 }
 
 static void
-rspamd_regexp_generate_id(const char *pattern, const char *flags,
+rspamd_regexp_generate_id(const char *pattern, gsize patlen, const char *flags,
 						  regexp_id_t out)
 {
 	rspamd_cryptobox_hash_state_t st;
@@ -107,7 +107,7 @@ rspamd_regexp_generate_id(const char *pattern, const char *flags,
 		rspamd_cryptobox_hash_update(&st, flags, strlen(flags));
 	}
 
-	rspamd_cryptobox_hash_update(&st, pattern, strlen(pattern));
+	rspamd_cryptobox_hash_update(&st, pattern, patlen);
 	rspamd_cryptobox_hash_final(&st, out);
 }
 
@@ -438,9 +438,10 @@ rspamd_regexp_new_len(const char *pattern, gsize len, const char *flags,
 			char *last_sep = rspamd_memrchr(pattern, sep, len);
 
 			if (last_sep == NULL || last_sep <= start) {
+				/* g_set_error uses the system printf, hence %.*s and not %*s */
 				g_set_error(err, rspamd_regexp_quark(), EINVAL,
-							"pattern is not enclosed with %c: %s",
-							sep, pattern);
+							"pattern is not enclosed with %c: %.*s",
+							sep, (int) len, pattern);
 				return NULL;
 			}
 			flags_str = last_sep + 1;
@@ -513,11 +514,12 @@ rspamd_regexp_new_len(const char *pattern, gsize len, const char *flags,
 			default:
 				if (strict_flags) {
 					g_set_error(err, rspamd_regexp_quark(), EINVAL,
-								"invalid regexp flag: %c in pattern %s",
-								*flags_str, pattern);
+								"invalid regexp flag: %c in pattern %.*s",
+								*flags_str, (int) len, pattern);
 					return NULL;
 				}
-				msg_warn("invalid flag '%c' in pattern %s", *flags_str, pattern);
+				msg_warn("invalid flag '%c' in pattern %*s", *flags_str,
+						 (int) len, pattern);
 				goto fin;
 				break;
 			}
@@ -589,7 +591,7 @@ fin:
 	}
 
 	rspamd_regexp_post_process(res);
-	rspamd_regexp_generate_id(pattern, flags, res->id);
+	rspamd_regexp_generate_id(pattern, len, flags, res->id);
 
 #ifndef WITH_PCRE2
 	/* Check number of captures */
@@ -1124,7 +1126,7 @@ rspamd_regexp_cache_query(struct rspamd_regexp_cache *cache,
 	}
 
 	g_assert(cache != NULL);
-	rspamd_regexp_generate_id(pattern, flags, id);
+	rspamd_regexp_generate_id(pattern, strlen(pattern), flags, id);
 
 	res = g_hash_table_lookup(cache->tbl, id);
 

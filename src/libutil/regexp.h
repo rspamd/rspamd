@@ -61,8 +61,9 @@ rspamd_regexp_t *rspamd_regexp_new(const char *pattern, const char *flags,
 								   GError **err);
 
 /**
- * Create new rspamd regexp
- * @param pattern regexp pattern
+ * Create new rspamd regexp from a non NULL terminated pattern
+ * @param pattern regexp pattern (not necessarily NULL terminated)
+ * @param len length of the pattern
  * @param flags flags (may be enclosed inside pattern)
  * @param err error pointer set if compilation failed
  * @return new regexp object

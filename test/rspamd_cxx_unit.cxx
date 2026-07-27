@@ -45,6 +45,7 @@
 #include "rspamd_cxx_unit_symcache_timeout.hxx"
 #include "rspamd_cxx_unit_text_stats.hxx"
 #include "rspamd_cxx_unit_multipattern.hxx"
+#include "rspamd_cxx_unit_regexp.hxx"
 #include "rspamd_cxx_unit_compression.hxx"
 #include "rspamd_cxx_unit_tokenizer.hxx"
 #include "rspamd_cxx_unit_http_timeout.hxx"
