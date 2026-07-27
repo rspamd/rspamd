@@ -1767,7 +1767,7 @@ rspamd_controller_handle_errors(struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_controller_check_password(conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 

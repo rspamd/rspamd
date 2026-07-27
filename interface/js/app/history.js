@@ -293,8 +293,6 @@ define(["app/common", "app/libft", "app/tab-utils", "tabulator"],
         }
 
         ui.getErrors = function () {
-            if (common.read_only) return;
-
             common.query("errors", {
                 success: function (data) {
                     const neighbours_data = data
