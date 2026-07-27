@@ -243,8 +243,54 @@ rspamd_utf_word_valid(const unsigned char *text, const unsigned char *end,
 		}                                                       \
 	} while (0)
 
+/*
+ * Account a token that is about to be retained against the message wide budget.
+ * Returns FALSE when the budget is exhausted, meaning that tokenization must
+ * stop: the token must not be added in that case.
+ */
+static inline gboolean
+rspamd_tokenize_budget_take(struct rspamd_tokenize_budget *budget, gsize len)
+{
+	if (budget == NULL) {
+		return TRUE;
+	}
+
+	if ((budget->max_words > 0 && budget->words >= budget->max_words) ||
+		(budget->max_bytes > 0 && budget->bytes + len > budget->max_bytes)) {
+		budget->exceeded = TRUE;
+
+		return FALSE;
+	}
+
+	budget->words++;
+	budget->bytes += len;
+
+	return TRUE;
+}
+
+/*
+ * Time checks are not free, so they are performed for the inputs that are
+ * likely to be slow: large parts and, regardless of the part size, the inputs
+ * that have already produced a lot of tokens (e.g. many small parts of the
+ * same message)
+ */
+static inline gboolean
+rspamd_tokenize_needs_time_check(gboolean long_text_mode,
+								 const struct rspamd_tokenize_budget *budget,
+								 gsize nwords)
+{
+	static const gsize long_text_words = 4096;
+
+	if (long_text_mode || nwords >= long_text_words) {
+		return TRUE;
+	}
+
+	return budget != NULL && budget->words >= long_text_words;
+}
+
 static inline void
-rspamd_tokenize_exception(struct rspamd_process_exception *ex, rspamd_words_t *res)
+rspamd_tokenize_exception(struct rspamd_process_exception *ex, rspamd_words_t *res,
+						  struct rspamd_tokenize_budget *budget)
 {
 	rspamd_word_t token;
 
@@ -254,6 +300,10 @@ rspamd_tokenize_exception(struct rspamd_process_exception *ex, rspamd_words_t *r
 		token.original.begin = "!!EX!!";
 		token.original.len = sizeof("!!EX!!") - 1;
 		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+
+		if (!rspamd_tokenize_budget_take(budget, token.original.len)) {
+			return;
+		}
 
 		kv_push_safe(rspamd_word_t, *res, token, exception_error);
 		token.flags = 0;
@@ -273,6 +323,11 @@ rspamd_tokenize_exception(struct rspamd_process_exception *ex, rspamd_words_t *r
 		}
 
 		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+
+		if (!rspamd_tokenize_budget_take(budget, token.original.len)) {
+			return;
+		}
+
 		kv_push_safe(rspamd_word_t, *res, token, exception_error);
 		token.flags = 0;
 	}
@@ -292,6 +347,7 @@ rspamd_tokenize_text(const char *text, gsize len,
 					 GList *exceptions,
 					 uint64_t *hash,
 					 rspamd_words_t *output_kvec,
+					 struct rspamd_tokenize_budget *budget,
 					 rspamd_mempool_t *pool)
 {
 	rspamd_word_t token, buf;
@@ -320,8 +376,13 @@ rspamd_tokenize_text(const char *text, gsize len,
 		 * In this mode we do additional checks to avoid performance issues
 		 */
 		long_text_mode = TRUE;
-		start = ev_time();
 	}
+
+	/*
+	 * Time checks can also be enabled by the number of the produced tokens, so
+	 * the start time is always needed
+	 */
+	start = ev_time();
 
 	buf.original.begin = text;
 	buf.original.len = len;
@@ -363,6 +424,16 @@ rspamd_tokenize_text(const char *text, gsize len,
 
 				/* Copy custom tokenizer results to output kvec */
 				for (unsigned int i = 0; i < kv_size(*custom_res); i++) {
+					if (!rspamd_tokenize_budget_take(budget,
+													 kv_A(*custom_res, i).original.len)) {
+						msg_debug_pool_check(
+							"words budget is exhausted, stop tokenization: "
+							"%z words of %z are copied from the custom tokenizer",
+							(gsize) i, kv_size(*custom_res));
+
+						break;
+					}
+
 					kv_push_safe(rspamd_word_t, *res, kv_A(*custom_res, i), custom_tokenizer_error);
 				}
 
@@ -411,7 +482,8 @@ rspamd_tokenize_text(const char *text, gsize len,
 				}
 			}
 
-			if (long_text_mode) {
+			if (rspamd_tokenize_needs_time_check(long_text_mode, budget,
+												 kv_size(*res))) {
 				if ((kv_size(*res) + 1) % 16 == 0) {
 					ev_tstamp now = ev_time();
 
@@ -425,6 +497,15 @@ rspamd_tokenize_text(const char *text, gsize len,
 						goto end;
 					}
 				}
+			}
+
+			if (!rspamd_tokenize_budget_take(budget, token.original.len)) {
+				msg_debug_pool_check(
+					"words budget is exhausted: %uL words, %uL bytes; "
+					"stop tokenization",
+					budget->words, budget->bytes);
+
+				goto end;
 			}
 
 			kv_push_safe(rspamd_word_t, *res, token, tokenize_error);
@@ -474,7 +555,7 @@ rspamd_tokenize_text(const char *text, gsize len,
 						while (cur && ex->pos <= last) {
 							/* We have an exception at the beginning, skip those */
 							last += ex->len;
-							rspamd_tokenize_exception(ex, res);
+							rspamd_tokenize_exception(ex, res, budget);
 
 							if (last > p) {
 								/* Exception spread over the boundaries */
@@ -514,7 +595,7 @@ rspamd_tokenize_text(const char *text, gsize len,
 							/* Process the current exception */
 							last += ex->len + (ex->pos - last);
 
-							rspamd_tokenize_exception(ex, res);
+							rspamd_tokenize_exception(ex, res, budget);
 
 							if (last > p) {
 								/* Exception spread over the boundaries */
@@ -586,7 +667,13 @@ rspamd_tokenize_text(const char *text, gsize len,
 						decay = TRUE;
 					}
 					else {
-						token.flags |= RSPAMD_STAT_TOKEN_FLAG_SKIPPED;
+						/*
+						 * Drop the decayed token as the raw tokenizer does:
+						 * keeping it in the vector defeats the decay, as all
+						 * retained tokens are normalized and stemmed later on
+						 */
+						token.original.len = 0;
+						token.flags = 0;
 					}
 				}
 			}
@@ -601,11 +688,21 @@ rspamd_tokenize_text(const char *text, gsize len,
 					goto end;
 				}
 
+				if (!rspamd_tokenize_budget_take(budget, token.original.len)) {
+					msg_debug_pool_check(
+						"words budget is exhausted: %uL words, %uL bytes; "
+						"stop tokenization",
+						budget->words, budget->bytes);
+
+					goto end;
+				}
+
 				kv_push_safe(rspamd_word_t, *res, token, tokenize_error);
 			}
 
-			/* Also check for long text mode */
-			if (long_text_mode) {
+			/* Also check for long text mode or a large number of words */
+			if (rspamd_tokenize_needs_time_check(long_text_mode, budget,
+												 kv_size(*res))) {
 				/* Check time each 128 words added */
 				const int words_check_mask = 0x7F;
 
@@ -666,6 +763,8 @@ rspamd_add_metawords_from_str(const char *beg, gsize len,
 	unsigned int i = 0;
 	UChar32 uc;
 	gboolean valid_utf = TRUE;
+	/* Meta words share the message wide budget with the text parts */
+	struct rspamd_tokenize_budget *budget = task->message ? &MESSAGE_FIELD(task, words_budget) : NULL;
 
 	while (i < len) {
 		U8_NEXT(beg, i, len, uc);
@@ -703,6 +802,7 @@ rspamd_add_metawords_from_str(const char *beg, gsize len,
 							 &utxt, RSPAMD_TOKENIZE_UTF,
 							 task->cfg, NULL, NULL,
 							 &task->meta_words,
+							 budget,
 							 task->task_pool);
 
 		utext_close(&utxt);
@@ -712,6 +812,7 @@ rspamd_add_metawords_from_str(const char *beg, gsize len,
 							 NULL, RSPAMD_TOKENIZE_RAW,
 							 task->cfg, NULL, NULL,
 							 &task->meta_words,
+							 budget,
 							 task->task_pool);
 	}
 }
@@ -935,6 +1036,15 @@ void rspamd_normalize_words(rspamd_words_t *words, rspamd_mempool_t *pool)
 
 	for (i = 0; i < kv_size(*words); i++) {
 		tok = &kv_A(*words, i);
+
+		/*
+		 * Statistics and shingles ignore skipped words, so there is no point
+		 * in spending allocations on normalizing them
+		 */
+		if (tok->flags & RSPAMD_WORD_FLAG_SKIPPED) {
+			continue;
+		}
+
 		rspamd_normalize_single_word(tok, pool);
 	}
 }
@@ -982,6 +1092,11 @@ void rspamd_stem_words(rspamd_words_t *words, rspamd_mempool_t *pool,
 	}
 	for (i = 0; i < kv_size(*words); i++) {
 		tok = &kv_A(*words, i);
+
+		/* Skipped words are not normalized, so there is nothing to stem */
+		if (tok->flags & RSPAMD_WORD_FLAG_SKIPPED) {
+			continue;
+		}
 
 		/* Skip stemming if token has already been stemmed by custom tokenizer */
 		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_STEMMED) {

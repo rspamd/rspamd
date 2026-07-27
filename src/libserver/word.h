@@ -62,6 +62,22 @@ typedef struct rspamd_word_s {
  */
 typedef kvec_t(rspamd_word_t) rspamd_words_t;
 
+/**
+ * Bounds tokenization for a single message: both the number of the retained
+ * words and the amount of text behind them, as every retained word is
+ * normalized and stemmed afterwards, and that costs several allocations from
+ * the task pool. The same budget is used for all text parts of a message, so
+ * that many small parts cannot bypass the per-part limits.
+ * Zero limits mean 'unlimited'.
+ */
+struct rspamd_tokenize_budget {
+	uint64_t max_words; /**< maximum number of the retained words */
+	uint64_t max_bytes; /**< maximum total length of the retained words */
+	uint64_t words;     /**< words retained so far */
+	uint64_t bytes;     /**< bytes retained so far */
+	gboolean exceeded;  /**< set when one of the limits has been hit */
+};
+
 /* Legacy typedefs for backward compatibility */
 typedef rspamd_word_t rspamd_stat_token_t;
 
