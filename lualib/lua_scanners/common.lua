@@ -23,6 +23,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_util = require "rspamd_util"
+local rspamd_cryptobox = require "rspamd_cryptobox_hash"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local lua_maps = require "lua_maps"
@@ -64,13 +65,51 @@ local function match_patterns(default_sym, found, patterns, dyn_weight)
   end
 end
 
-local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
+local av_result_cache_key = 'av_result_cache'
+
+--[[
+Merge one scanner's per-mime-part verdict into the task-wide av_result_cache
+(keyed by mime-part digest, holding hash_sha256/hash_sha1/filename/scanners
+per digest). sha256/sha1 and the filename are computed exactly once per
+digest, on the first scanner to record a result for it.
+--]]
+local function update_av_result_cache(task, rule, category, threats, symbols, maybe_part)
+  if not maybe_part then
+    return
+  end
+
+  local av_cache = task:cache_get(av_result_cache_key) or {}
+  local digest = maybe_part:get_digest()
+  local part_entry = av_cache[digest]
+
+  if not part_entry then
+    local content = maybe_part:get_content('raw_parsed')
+    part_entry = {
+      hash_sha256 = rspamd_cryptobox.create_specific('sha256', content):hex(),
+      hash_sha1 = rspamd_cryptobox.create_specific('sha1', content):hex(),
+      filename = maybe_part:get_filename(),
+      scanners = {},
+    }
+    av_cache[digest] = part_entry
+  end
+
+  part_entry.scanners[rule.log_prefix] = {
+    category = category or 'virus',
+    threats = threats,
+    symbols = symbols,
+  }
+
+  task:cache_set(av_result_cache_key, av_cache)
+end
+
+local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
   local all_whitelisted = true
   local patterns
   local symbol
   local threat_table
   local threat_info
   local flags
+  local symbols_table = {}
 
   if type(vname) == 'string' then
     threat_table = { vname }
@@ -80,24 +119,24 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
 
 
   -- This should be more generic
-  if not is_fail then
+  if not category then
     patterns = rule.patterns
     symbol = rule.symbol
     threat_info = rule.detection_category .. 'found'
     if not dyn_weight then
       dyn_weight = 1.0
     end
-  elseif is_fail == 'fail' then
+  elseif category == 'fail' then
     patterns = rule.patterns_fail
     symbol = rule.symbol_fail
     threat_info = "FAILED with error"
     dyn_weight = 0.0
-  elseif is_fail == 'encrypted' then
+  elseif category == 'encrypted' then
     patterns = rule.patterns
     symbol = rule.symbol_encrypted
     threat_info = "Scan has returned that input was encrypted"
     dyn_weight = 1.0
-  elseif is_fail == 'macro' then
+  elseif category == 'macro' then
     patterns = rule.patterns
     symbol = rule.symbol_macro
     threat_info = "Scan has returned that input contains macros"
@@ -122,6 +161,7 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
       all_whitelisted = false
       rspamd_logger.infox(task, '%s: result - %s: "%s - score: %s"',
         rule.log_prefix, threat_info, tm, symscore)
+      table.insert(symbols_table, symname)
 
       if maybe_part and rule.show_attachments and maybe_part:get_filename() then
         local fname = maybe_part:get_filename()
@@ -133,7 +173,9 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     end
   end
 
-  if rule.action and is_fail ~= 'fail' and not all_whitelisted then
+  update_av_result_cache(task, rule, category, threat_table, symbols_table, maybe_part)
+
+  if rule.action and category ~= 'fail' and not all_whitelisted then
     threat_table = table.concat(threat_table, '; ')
     if rule.action ~= 'reject' then
       flags = 'least'
