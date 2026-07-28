@@ -554,4 +554,55 @@ exports.cleanup_rules = function()
   rules = {}
 end
 
+-- Returns the list of servers a storage would be queried on, or nil when the
+-- upstreams are not resolved yet. `list_storages` reports a single `servers`
+-- field when read and write upstreams share one list, and a split pair
+-- otherwise
+local function storage_servers(storage)
+  return storage.servers or storage.read_servers
+end
+
+--[[[
+-- @function lua_fuzzy.wait_for_storages(cfg, task, names, timeout, callback)
+-- Waits until every selected fuzzy storage has at least one resolved server,
+-- then calls `callback()`. `names` is a set of rule names to wait for, or nil
+-- to wait for all of them; `callback` is called anyway once `timeout` seconds
+-- have passed so that the caller can report a proper error.
+--
+-- Server lists built from SRV records (`servers = "service=name+domain"`) or
+-- from host names that failed to resolve at configuration time are filled in
+-- asynchronously, so right after loading a configuration there is nothing to
+-- talk to yet. Workers resolve these while they run; one shot rspamadm
+-- commands have to give the event loop a chance to do it first.
+--]]
+exports.wait_for_storages = function(cfg, task, names, timeout, callback)
+  local rspamd_util = require "rspamd_util"
+  local deadline = rspamd_util.get_ticks() + (timeout or 5.0)
+
+  local function all_resolved()
+    for name, storage in pairs(rspamd_plugins.fuzzy_check.list_storages(cfg)) do
+      if not names or names[name] then
+        local servers = storage_servers(storage)
+
+        if not servers or #servers == 0 then
+          return false
+        end
+      end
+    end
+
+    return true
+  end
+
+  local function poll()
+    if all_resolved() or rspamd_util.get_ticks() >= deadline then
+      callback()
+    else
+      -- A timer cannot re-arm itself, so schedule a fresh one on each tick
+      task:add_timer(0.05, poll)
+    end
+  end
+
+  poll()
+end
+
 return exports
