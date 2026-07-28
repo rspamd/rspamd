@@ -18,7 +18,6 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
-local fun = require "fun"
 local lua_scanners = require("lua_scanners").filter('scanner')
 local common = require "lua_scanners/common"
 local redis_params
@@ -110,37 +109,13 @@ local function add_scanner_rule(sym, opts)
 
   -- Resolve symbol names up-front so a failed configure() can still register
   -- the fail symbol and surface the misconfiguration on every scan.
-  local symbol = opts.symbol or sym:upper()
-  local symbol_fail = opts.symbol_fail or (symbol .. '_FAIL')
-  local symbol_encrypted = opts.symbol_encrypted or (symbol .. '_ENCRYPTED')
-  local symbol_macro = opts.symbol_macro or (symbol .. '_MACRO')
+  local symbol, symbol_fail, symbol_encrypted, symbol_macro = common.derive_symbols(sym, opts)
 
   local rule = cfg.configure(opts)
 
   if not rule then
-    rspamd_logger.errx(rspamd_config,
-        'cannot configure %s for %s; registering fail-only rule that always emits %s',
-        opts.type, symbol, symbol_fail)
-
-    local fail_reason = string.format('%s: configuration failed (see startup log)',
-        opts.type)
-
-    local stub_rule = {
-      type = opts.type,
-      name = opts.name or sym,
-      symbol = symbol,
-      symbol_fail = symbol_fail,
-      symbol_encrypted = symbol_encrypted,
-      symbol_macro = symbol_macro,
-      log_prefix = opts.name or sym,
-      configuration_failed = true,
-    }
-
-    local function fail_cb(task)
-      task:insert_result(symbol_fail, 1.0, fail_reason)
-    end
-
-    return fail_cb, stub_rule
+    return common.configure_failed_stub(opts.type, sym, opts,
+      symbol, symbol_fail, symbol_encrypted, symbol_macro)
   end
 
   rule.type = opts.type
@@ -155,6 +130,7 @@ local function add_scanner_rule(sym, opts)
   rule.symbol_macro = rule.symbol_macro or (rule.symbol .. '_MACRO')
 
   rule.redis_params = redis_params
+  rule.eicar_fake_pattern = opts.eicar_fake_pattern
 
   lua_redis.register_prefix(rule.prefix .. '_*', N,
       string.format('External services cache for rule "%s"',
@@ -177,29 +153,12 @@ local function add_scanner_rule(sym, opts)
 
   rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
 
-  if opts.whitelist then
-    rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
-  end
-
-  local function scan_cb(task)
-    if rule.scan_mime_parts then
-
-      fun.each(function(p)
-        local content = p:get_content()
-        if content and #content > 0 then
-          cfg.check(task, content, p:get_digest(), rule, p)
-        end
-      end, common.check_parts_match(task, rule))
-
-    else
-      cfg.check(task, task:get_content(), task:get_digest(), rule, nil)
-    end
-  end
+  common.configure_whitelist(rule, opts, 'external services whitelist for ' .. rule.log_prefix)
 
   rspamd_logger.infox(rspamd_config, 'registered external services rule: symbol %s; type %s',
       rule.symbol, rule.type)
 
-  return scan_cb, rule
+  return common.make_scan_callback(cfg, rule), rule
 end
 
 -- Registration
@@ -208,7 +167,7 @@ if opts and type(opts) == 'table' then
   redis_params = lua_redis.parse_redis_server(N)
   local has_valid = false
   for k, m in pairs(opts) do
-    if type(m) == 'table' and m.servers then
+    if type(m) == 'table' then
       if not m.type then
         m.type = k
       end
@@ -219,6 +178,7 @@ if opts and type(opts) == 'table' then
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
+        lua_util.config_utils.push_config_error(N, 'cannot add external services rule: "' .. k .. '"')
       else
         m = nrule
 
@@ -235,191 +195,12 @@ if opts and type(opts) == 'table' then
           check_symbol = k:upper() .. '_CHECK'
         end
 
-        local t = {
-          name = check_symbol,
-          callback = cb,
-          score = 0.0,
-          group = N
-        }
-
-        if m.symbol_type == 'postfilter' then
-          t.type = 'postfilter'
-          t.priority = lua_util.symbols_priorities.medium
-        else
-          t.type = 'normal'
-        end
-
-        t.augmentations = {}
-
-        if type(m.timeout) == 'number' then
-          -- Here, we ignore possible DNS timeout and timeout from multiple retries
-          -- as these situations are not usual nor likely for the external_services module
-          table.insert(t.augmentations, string.format("timeout=%f", m.timeout))
-        end
-
+        local t = common.scanner_symbol_registration(check_symbol, cb, m, N)
         local id = rspamd_config:register_symbol(t)
 
-        -- The scanner's own result symbol, when distinct from the _CHECK anchor,
-        -- is registered as a virtual child so it still carries the verdict.
-        if m.symbol ~= check_symbol then
-          rspamd_config:register_symbol({
-            type = 'virtual',
-            name = m.symbol,
-            parent = id,
-            score = 0.0,
-            group = N
-          })
-        end
+        common.register_scanner_symbols(id, check_symbol, m, N)
 
-        if m.symbol_fail then
-          rspamd_config:register_symbol({
-            type = 'virtual',
-            name = m['symbol_fail'],
-            parent = id,
-            score = 0.0,
-            group = N
-          })
-        end
-
-        if m.symbol_encrypted then
-          rspamd_config:register_symbol({
-            type = 'virtual',
-            name = m['symbol_encrypted'],
-            parent = id,
-            score = 0.0,
-            group = N
-          })
-        end
-        if m.symbol_macro then
-          rspamd_config:register_symbol({
-            type = 'virtual',
-            name = m['symbol_macro'],
-            parent = id,
-            score = 0.0,
-            group = N
-          })
-        end
         has_valid = true
-        if type(m['patterns']) == 'table' then
-          if m['patterns'][1] then
-            for _, p in ipairs(m['patterns']) do
-              if type(p) == 'table' then
-                for sym in pairs(p) do
-                  lua_util.debugm(N, rspamd_config, 'registering: %1', {
-                    type = 'virtual',
-                    name = sym,
-                    parent = m['symbol'],
-                    parent_id = id,
-                  })
-                  rspamd_config:register_symbol({
-                    type = 'virtual',
-                    name = sym,
-                    parent = id,
-                    score = 0.0,
-                    group = N
-                  })
-                end
-              end
-            end
-          else
-            for sym in pairs(m['patterns']) do
-              rspamd_config:register_symbol({
-                type = 'virtual',
-                name = sym,
-                parent = id,
-                score = 0.0,
-                group = N
-              })
-            end
-          end
-        end
-        if type(m['patterns_fail']) == 'table' then
-          if m['patterns_fail'][1] then
-            for _, p in ipairs(m['patterns_fail']) do
-              if type(p) == 'table' then
-                for sym in pairs(p) do
-                  lua_util.debugm(N, rspamd_config, 'registering: %1', {
-                    type = 'virtual',
-                    name = sym,
-                    parent = m['symbol'],
-                    parent_id = id,
-                  })
-                  rspamd_config:register_symbol({
-                    type = 'virtual',
-                    name = sym,
-                    parent = id,
-                    score = 0.0,
-                    group = N
-                  })
-                end
-              end
-            end
-          else
-            for sym in pairs(m['patterns_fail']) do
-              rspamd_config:register_symbol({
-                type = 'virtual',
-                name = sym,
-                parent = id,
-                score = 0.0,
-                group = N
-              })
-            end
-          end
-        end
-        if m.symbols then
-          local function reg_symbols(tbl)
-            for _, sym in pairs(tbl) do
-              if type(sym) == 'string' then
-                rspamd_config:register_symbol({
-                  type = 'virtual',
-                  name = sym,
-                  parent = id,
-                  group = N
-                })
-              elseif type(sym) == 'table' then
-                if sym.symbol then
-                  rspamd_config:register_symbol({
-                    type = 'virtual',
-                    name = sym.symbol,
-                    parent = id,
-                    group = N
-                  })
-
-                  if sym.score then
-                    rspamd_config:set_metric_symbol({
-                      name = sym.symbol,
-                      score = sym.score,
-                      description = sym.description,
-                      group = sym.group or N,
-                    })
-                  end
-                else
-                  reg_symbols(sym)
-                end
-              end
-            end
-          end
-
-          reg_symbols(m.symbols)
-        end
-
-        if m['score'] then
-          -- Register metric symbol
-          local description = 'external services symbol'
-          local group = N
-          if m['description'] then
-            description = m['description']
-          end
-          if m['group'] then
-            group = m['group']
-          end
-          rspamd_config:set_metric_symbol({
-            name = m['symbol'],
-            score = m['score'],
-            description = description,
-            group = group
-          })
-        end
 
         -- Add preloads if a module requires that
         if type(m.preloads) == 'table' then

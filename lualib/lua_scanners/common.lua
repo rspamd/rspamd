@@ -22,8 +22,10 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local lua_maps = require "lua_maps"
 local lua_magic_types = require "lua_magic/types"
 local fun = require "fun"
 
@@ -529,6 +531,242 @@ local function get_upstream_or_fail(task, rule, maybe_part, reason)
   return upstream
 end
 
+--[[
+Shared plumbing for antivirus.lua and external_services.lua: symbol
+derivation/whitelist/eicar-testing/scan-callback/registration helpers.
+--]]
+
+--[[
+Derive the standard symbol / symbol_fail / symbol_encrypted / symbol_macro
+names for a scanner rule instance from its config key `sym`, without
+mutating `opts`. Existing `opts.symbol*` overrides always win.
+--]]
+local function derive_symbols(sym, opts)
+  local symbol = opts.symbol or sym:upper()
+  local symbol_fail = opts.symbol_fail or (symbol .. '_FAIL')
+  local symbol_encrypted = opts.symbol_encrypted or (symbol .. '_ENCRYPTED')
+  local symbol_macro = opts.symbol_macro or (symbol .. '_MACRO')
+
+  return symbol, symbol_fail, symbol_encrypted, symbol_macro
+end
+
+--[[
+Configure `rule.whitelist` from `opts.whitelist` using the modern lua_maps
+API (replaces the legacy `rspamd_config:add_hash_map`, which has no other
+callers left in the tree).
+--]]
+local function configure_whitelist(rule, opts, description)
+  if opts.whitelist then
+    rule.whitelist = lua_maps.map_add_from_ucl(opts.whitelist, 'hash',
+      description or (rule.log_prefix .. ' whitelist'))
+  end
+end
+
+--[[
+When a scanner's `cfg.configure(opts)` fails (e.g. bad `servers=`), register
+a stub rule that always emits `symbol_fail` with a clear reason instead of
+silently dropping the rule. Returns the fail-callback and the stub rule,
+in the same shape `make_scan_callback`'s caller expects.
+--]]
+local function configure_failed_stub(scanner_type, sym, opts, symbol, symbol_fail,
+                                      symbol_encrypted, symbol_macro)
+  rspamd_logger.errx(rspamd_config,
+    'cannot configure %s for %s; registering fail-only rule that always emits %s',
+    scanner_type, symbol, symbol_fail)
+
+  local fail_reason = string.format('%s: configuration failed (see startup log)', scanner_type)
+
+  local stub_rule = {
+    type = scanner_type,
+    name = opts.name or sym,
+    symbol = symbol,
+    symbol_fail = symbol_fail,
+    symbol_encrypted = symbol_encrypted,
+    symbol_macro = symbol_macro,
+    symbol_type = opts.symbol_type,
+    timeout = opts.timeout,
+    log_prefix = opts.name or sym,
+    configuration_failed = true,
+  }
+
+  local function fail_cb(task)
+    task:insert_result(symbol_fail, 1.0, fail_reason)
+  end
+
+  return fail_cb, stub_rule
+end
+
+-- Encoded as base32 in the source to avoid crappy stuff.
+local eicar_pattern = rspamd_util.decode_base32(
+  [[akp6woykfbonrepmwbzyfpbmibpone3mj3pgwbffzj9e1nfjdkorisckwkohrnfe1nt41y3jwk1cirjki4w4nkieuni4ndfjcktnn1yjmb1wn]]
+)
+
+--[[
+If `rule.eicar_fake_pattern` is set and `content` matches it exactly, swap in
+the real (base32-decoded) EICAR test string. Useful for E2E testing when
+another party removes/blocks EICAR attachments before they reach the
+scanner.
+--]]
+local function maybe_apply_eicar_fake_pattern(task, rule, content, fname)
+  local pattern = rule.eicar_fake_pattern
+  if not pattern then
+    return content
+  end
+
+  if type(pattern) == 'string' then
+    local rspamd_text = require "rspamd_text"
+    pattern = rspamd_text.fromstring(pattern)
+    rule.eicar_fake_pattern = pattern
+  end
+
+  if #content == #pattern and content == pattern then
+    rspamd_logger.infox(task, '%s: found eicar fake replacement part in the part (filename="%s")',
+      rule.log_prefix, fname)
+    return eicar_pattern
+  end
+
+  return content
+end
+
+--[[
+Build the mime-part/whole-message scan callback shared by antivirus.lua and
+external_services.lua. `cfg` is the scanner module (providing `check`),
+`rule` is the already configured rule table.
+--]]
+local function make_scan_callback(cfg, rule)
+  return function(task)
+    if rule.scan_mime_parts then
+      fun.each(function(p)
+        local content = p:get_content()
+        if content and #content > 0 then
+          content = maybe_apply_eicar_fake_pattern(task, rule, content, p:get_filename())
+          cfg.check(task, content, p:get_digest(), rule, p)
+        end
+      end, check_parts_match(task, rule))
+    else
+      cfg.check(task, task:get_content(), task:get_digest(), rule)
+    end
+  end
+end
+
+--[[
+Build the `rspamd_config:register_symbol()` parameter table for a scanner
+rule's main scheduled callback symbol (`anchor_symbol`).
+--]]
+local function scanner_symbol_registration(anchor_symbol, cb, m, group)
+  local t = {
+    name = anchor_symbol,
+    callback = cb,
+    score = 0.0,
+    group = group,
+  }
+
+  if m.symbol_type == 'postfilter' then
+    t.type = 'postfilter'
+    t.priority = lua_util.symbols_priorities.medium
+  else
+    t.type = 'normal'
+  end
+
+  t.augmentations = {}
+
+  if type(m.timeout) == 'number' then
+    -- Here, we ignore possible DNS timeout and timeout from multiple retries
+    -- as these situations are not usual nor likely for these modules
+    table.insert(t.augmentations, string.format("timeout=%f", m.timeout))
+  end
+
+  return t
+end
+
+--[[
+Register the virtual child symbols (fail/encrypted/macro, pattern-derived,
+category `symbols` tree, and the metric symbol) for a scanner rule, plus the
+scanner's own main result symbol when it differs from `anchor_symbol` (e.g.
+the `_CHECK` anchor used by external_services.lua for scanners with
+hardcoded default symbols). `id` is the id returned when registering the
+main callback symbol (see `scanner_symbol_registration`).
+--]]
+local function register_scanner_symbols(id, anchor_symbol, m, group)
+  local function reg_virtual(name)
+    if name then
+      rspamd_config:register_symbol({
+        type = 'virtual',
+        name = name,
+        parent = id,
+        score = 0.0,
+        group = group,
+      })
+    end
+  end
+
+  if m.symbol and m.symbol ~= anchor_symbol then
+    reg_virtual(m.symbol)
+  end
+
+  reg_virtual(m.symbol_fail)
+  reg_virtual(m.symbol_encrypted)
+  reg_virtual(m.symbol_macro)
+
+  local function reg_pattern_symbols(patterns)
+    if type(patterns) ~= 'table' then
+      return
+    end
+    if patterns[1] then
+      for _, p in ipairs(patterns) do
+        if type(p) == 'table' then
+          for sym in pairs(p) do
+            reg_virtual(sym)
+          end
+        end
+      end
+    else
+      for sym in pairs(patterns) do
+        reg_virtual(sym)
+      end
+    end
+  end
+
+  reg_pattern_symbols(m.patterns)
+  reg_pattern_symbols(m.patterns_fail)
+
+  local function reg_symbols(tbl)
+    for _, sym in pairs(tbl) do
+      if type(sym) == 'string' then
+        reg_virtual(sym)
+      elseif type(sym) == 'table' then
+        if sym.symbol then
+          reg_virtual(sym.symbol)
+
+          if sym.score then
+            rspamd_config:set_metric_symbol({
+              name = sym.symbol,
+              score = sym.score,
+              description = sym.description,
+              group = sym.group or group,
+            })
+          end
+        else
+          reg_symbols(sym)
+        end
+      end
+    end
+  end
+
+  if m.symbols then
+    reg_symbols(m.symbols)
+  end
+
+  if m.score then
+    rspamd_config:set_metric_symbol({
+      name = m.symbol,
+      score = m.score,
+      description = m.description or (group .. ' symbol'),
+      group = m.group or group,
+    })
+  end
+end
+
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
@@ -538,6 +776,13 @@ exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match
 exports.check_metric_results = check_metric_results
 exports.get_upstream_or_fail = get_upstream_or_fail
+exports.derive_symbols = derive_symbols
+exports.configure_whitelist = configure_whitelist
+exports.configure_failed_stub = configure_failed_stub
+exports.maybe_apply_eicar_fake_pattern = maybe_apply_eicar_fake_pattern
+exports.make_scan_callback = make_scan_callback
+exports.scanner_symbol_registration = scanner_symbol_registration
+exports.register_scanner_symbols = register_scanner_symbols
 
 setmetatable(exports, {
   __call = function(t, override)
