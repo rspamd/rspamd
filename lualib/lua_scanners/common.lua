@@ -73,7 +73,7 @@ Merge one scanner's per-mime-part verdict into the task-wide av_result_cache
 per digest). sha256/sha1 and the filename are computed exactly once per
 digest, on the first scanner to record a result for it.
 --]]
-local function update_av_result_cache(task, rule, category, threats, symbols, maybe_part)
+local function update_av_result_cache(task, rule, category, threats, symbols, is_whitelisted, maybe_part)
   if not maybe_part then
     return
   end
@@ -94,9 +94,10 @@ local function update_av_result_cache(task, rule, category, threats, symbols, ma
   end
 
   part_entry.scanners[rule.log_prefix] = {
-    category = category or 'virus',
+    category = category or rule.detection_category or 'virus',
     threats = threats,
     symbols = symbols,
+    is_whitelisted = is_whitelisted,
   }
 
   task:cache_set(av_result_cache_key, av_cache)
@@ -141,6 +142,13 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
     symbol = rule.symbol_macro
     threat_info = "Scan has returned that input contains macros"
     dyn_weight = 1.0
+  else
+    patterns = rule.patterns
+    symbol = rule.symbol
+    threat_info = category
+    if not dyn_weight then
+      dyn_weight = 1.0
+    end
   end
 
   for _, tm in ipairs(threat_table) do
@@ -149,6 +157,7 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
       rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, tm)
 
       if rule.symbol_ignore then
+        table.insert(symbols_table, rule.symbol_ignore)
         if maybe_part and rule.show_attachments and maybe_part:get_filename() then
           local fname = maybe_part:get_filename()
           task:insert_result(rule.symbol_ignore, symscore, string.format("%s|%s",
@@ -173,7 +182,8 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
     end
   end
 
-  update_av_result_cache(task, rule, category, threat_table, symbols_table, maybe_part)
+  update_av_result_cache(task, rule, category, threat_table, symbols_table,
+    all_whitelisted, maybe_part)
 
   if rule.action and category ~= 'fail' and not all_whitelisted then
     threat_table = table.concat(threat_table, '; ')

@@ -141,7 +141,7 @@ if opts and type(opts) == 'table' then
   redis_params = lua_redis.parse_redis_server(N)
   local has_valid = false
   for k, m in pairs(opts) do
-    if type(m) == 'table' then
+    if type(m) == 'table' and (m.servers or m.socket) then
       if not m.type then
         m.type = k
       end
