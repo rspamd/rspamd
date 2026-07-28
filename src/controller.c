@@ -244,11 +244,16 @@ rspamd_is_encrypted_password(const char *password,
 }
 
 static const char *
-rspamd_encrypted_password_get_str(const char *password, gsize skip,
+rspamd_encrypted_password_get_str(const char *password, gsize pwlen, gsize skip,
 								  gsize *length)
 {
 	const char *str, *start, *end;
 	gsize size;
+
+	if (skip >= pwlen) {
+		/* Malformed hash: this component is missing entirely */
+		return NULL;
+	}
 
 	start = password + skip;
 	end = start;
@@ -278,8 +283,12 @@ rspamd_check_encrypted_password(struct rspamd_controller_worker_ctx *ctx,
 {
 	const char *salt, *hash;
 	char *salt_decoded, *key_decoded;
-	gsize salt_len = 0, key_len = 0;
-	gboolean ret = TRUE;
+	gsize pwlen, salt_len = 0, key_len = 0;
+	/*
+	 * Authentication must fail closed: `ret` is only ever set to TRUE after a
+	 * complete KDF comparison has succeeded below.
+	 */
+	gboolean ret = FALSE;
 	unsigned char *local_key;
 	rspamd_ftok_t *cache;
 	gpointer m;
@@ -328,10 +337,11 @@ rspamd_check_encrypted_password(struct rspamd_controller_worker_ctx *ctx,
 
 check_uncached:
 	g_assert(pbkdf != NULL);
+	pwlen = strlen(check);
 	/* get salt */
-	salt = rspamd_encrypted_password_get_str(check, 3, &salt_len);
+	salt = rspamd_encrypted_password_get_str(check, pwlen, 3, &salt_len);
 	/* get hash */
-	hash = rspamd_encrypted_password_get_str(check, 3 + salt_len + 1,
+	hash = rspamd_encrypted_password_get_str(check, pwlen, 3 + salt_len + 1,
 											 &key_len);
 	if (salt != NULL && hash != NULL) {
 
@@ -365,13 +375,20 @@ check_uncached:
 							   local_key, pbkdf->key_len, pbkdf->complexity,
 							   pbkdf->type);
 
-		if (!rspamd_constant_memcmp(key_decoded, local_key, pbkdf->key_len)) {
+		if (rspamd_constant_memcmp(key_decoded, local_key, pbkdf->key_len)) {
+			ret = TRUE;
+		}
+		else {
 			msg_info_ctx("incorrect or absent password has been specified");
-			ret = FALSE;
 		}
 
 		g_free(salt_decoded);
 		g_free(key_decoded);
+	}
+	else {
+		msg_err_ctx("cannot check password: the configured hash is malformed, "
+					"it has a valid id but no salt and/or no key component; "
+					"denying authentication");
 	}
 
 	if (ret) {
@@ -3724,11 +3741,50 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 										 rspamd_worker_is_ssl_socket(worker, w->fd));
 }
 
+/*
+ * Verifies that an encrypted password is complete, i.e. that it carries both a
+ * salt and a key of the length expected by its own pbkdf. A password that only
+ * has a valid `$id` prefix can never be verified at runtime.
+ */
+static gboolean
+rspamd_controller_encrypted_password_is_complete(const char *password,
+												 const struct rspamd_controller_pbkdf *pbkdf)
+{
+	const char *salt, *hash;
+	char *salt_decoded, *key_decoded;
+	gsize pwlen, salt_len = 0, key_len = 0;
+	gboolean ret = FALSE;
+
+	pwlen = strlen(password);
+	salt = rspamd_encrypted_password_get_str(password, pwlen, 3, &salt_len);
+	hash = rspamd_encrypted_password_get_str(password, pwlen,
+											 3 + salt_len + 1, &key_len);
+
+	if (salt == NULL || hash == NULL) {
+		return FALSE;
+	}
+
+	salt_decoded = rspamd_decode_base32(salt, salt_len, &salt_len,
+										RSPAMD_BASE32_DEFAULT);
+	key_decoded = rspamd_decode_base32(hash, key_len, &key_len,
+									   RSPAMD_BASE32_DEFAULT);
+
+	if (salt_decoded != NULL && key_decoded != NULL &&
+		salt_len == pbkdf->salt_len && key_len == pbkdf->key_len) {
+		ret = TRUE;
+	}
+
+	g_free(salt_decoded); /* valid even if NULL */
+	g_free(key_decoded);
+
+	return ret;
+}
+
 static void
 rspamd_controller_password_sane(struct rspamd_controller_worker_ctx *ctx,
 								const char *password, const char *type)
 {
-	const struct rspamd_controller_pbkdf *pbkdf = &pbkdf_list[0];
+	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 
 	if (password == NULL) {
 		msg_warn_ctx("%s is not set, so you should filter controller "
@@ -3738,14 +3794,19 @@ rspamd_controller_password_sane(struct rspamd_controller_worker_ctx *ctx,
 		return;
 	}
 
-	g_assert(pbkdf != NULL);
-
-	if (!rspamd_is_encrypted_password(password, NULL)) {
+	if (!rspamd_is_encrypted_password(password, &pbkdf)) {
 		/* Suggest encryption to a user */
 
 		msg_warn_ctx("your %s is not encrypted, we strongly "
 					 "recommend to replace it with the encrypted one",
 					 type);
+	}
+	else if (!rspamd_controller_encrypted_password_is_complete(password, pbkdf)) {
+		msg_err_ctx("your %s has a valid encryption id but is malformed: the "
+					"salt and/or the key is missing or has an unexpected "
+					"length; authentication will always be denied for it, "
+					"please regenerate it using `rspamadm pw`",
+					type);
 	}
 }
 
