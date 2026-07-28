@@ -202,7 +202,7 @@ context("lua_scanners common", function()
       task:destroy()
     end)
 
-    test("records arbitrary categories using the normal result symbol", function()
+    test("uses an arbitrary category string as the result symbol itself", function()
       local task = load_task_with_attachment()
       local part = find_attachment_part(task)
       local rule = {
@@ -212,14 +212,14 @@ context("lua_scanners common", function()
         detection_category = 'hash',
       }
 
-      common.yield_result(task, rule, 'listed', 1.0, 'reputation', part)
+      common.yield_result(task, rule, 'listed', 1.0, 'PEEKABOO_IN_PROCESS', part)
 
       local entry = task:cache_get('av_result_cache')[part:get_digest()]
       local scanner_entry = entry.scanners['custom_scanner']
-      assert_equal(scanner_entry.category, 'reputation')
+      assert_equal(scanner_entry.category, 'PEEKABOO_IN_PROCESS')
       assert_rspamd_table_eq_sorted({
         actual = scanner_entry.symbols,
-        expect = { 'TEST_CUSTOM' },
+        expect = { 'PEEKABOO_IN_PROCESS' },
       })
       task:destroy()
     end)

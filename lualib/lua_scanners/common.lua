@@ -144,11 +144,9 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
     dyn_weight = 1.0
   else
     patterns = rule.patterns
-    symbol = rule.symbol
-    threat_info = category
-    if not dyn_weight then
-      dyn_weight = 1.0
-    end
+    symbol = category
+    threat_info = string.format("special scan result set by %s: %s", rule.name, category)
+    dyn_weight = 1.0
   end
 
   for _, tm in ipairs(threat_table) do
@@ -810,6 +808,8 @@ local function build_symbol_registration(name, cb, m, group, symbol_type)
   elseif symbol_type == 'prefilter' then
     t.type = 'prefilter'
     t.priority = lua_util.symbols_priorities.medium
+  elseif symbol_type == 'callback' then
+    t.type = 'callback'
   else
     t.type = 'normal'
   end
