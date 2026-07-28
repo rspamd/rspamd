@@ -118,17 +118,21 @@ local function add_antivirus_rule(sym, opts)
       type = 'string',
     })
 
+  rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
+  rule.mime_parts_filter_regex_exclude = common.create_regex_table(opts.mime_parts_filter_regex_exclude or {})
+
+  rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
+  rule.mime_parts_filter_ext_exclude = common.create_regex_table(opts.mime_parts_filter_ext_exclude or {})
+
   -- if any mime_part filter defined, do not scan all attachments
-  if opts.mime_parts_filter_regex ~= nil
-      or opts.mime_parts_filter_ext ~= nil then
+  if next(rule.mime_parts_filter_regex) ~= nil
+      or next(rule.mime_parts_filter_regex_exclude) ~= nil
+      or next(rule.mime_parts_filter_ext) ~= nil
+      or next(rule.mime_parts_filter_ext_exclude) ~= nil then
     rule.scan_all_mime_parts = false
   else
     rule.scan_all_mime_parts = true
   end
-
-  rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
-
-  rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
 
   common.configure_whitelist(rule, opts, 'antivirus whitelist for ' .. rule.log_prefix)
 

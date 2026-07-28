@@ -339,4 +339,178 @@ context("lua_scanners common", function()
       end)
     end)
   end)
+
+  context("check_parts_match / mime_parts_filter exclude", function()
+    local fun = require "fun"
+    local lua_util = require "lua_util"
+
+    -- Lightweight fake task/part doubles: check_parts_match() only calls
+    -- task:get_parts() and a handful of methods on each returned part, so we
+    -- avoid depending on real MIME parsing / lua_magic detection here.
+    local function fake_task_with_parts(parts)
+      return {
+        get_parts = function()
+          return parts
+        end,
+      }
+    end
+
+    local function fake_part(spec)
+      return {
+        get_type = function()
+          return spec.mtype, spec.msubtype
+        end,
+        get_detected_ext = function()
+          return spec.detected_ext
+        end,
+        get_filename = function()
+          return spec.filename
+        end,
+        is_archive = function()
+          return spec.is_archive or false
+        end,
+        is_text = function()
+          return false
+        end,
+        is_image = function()
+          return false
+        end,
+        is_attachment = function()
+          return false
+        end,
+        get_archive = function()
+          local files = spec.archive_files or {}
+          return {
+            get_files_full = function(_, _n)
+              return files
+            end,
+          }
+        end,
+      }
+    end
+
+    local function matched_filenames(task, rule)
+      local names = {}
+      fun.each(function(p)
+        table.insert(names, p:get_filename())
+      end, common.check_parts_match(task, rule))
+      return names
+    end
+
+    local function build_task()
+      return fake_task_with_parts({
+        fake_part({ filename = 'invoice.doc', mtype = 'application', msubtype = 'msword' }),
+        fake_part({ filename = 'malware.exe', mtype = 'application', msubtype = 'octet-stream' }),
+        fake_part({ filename = 'photo.jpg', mtype = 'image', msubtype = 'jpeg' }),
+      })
+    end
+
+    test("mime_parts_filter_ext (include only) restricts scanning to matching extensions", function()
+      local task = build_task()
+      local rule = {
+        name = 'incl_only',
+        log_prefix = 'incl_only',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = { doc = 'doc' },
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = {},
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = { 'invoice.doc' },
+      })
+    end)
+
+    test("mime_parts_filter_ext_exclude suppresses a part that also matches the include filter", function()
+      local task = build_task()
+      local rule = {
+        name = 'incl_excl_same',
+        log_prefix = 'incl_excl_same',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = { doc = 'doc' },
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = { doc = 'doc' },
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = {},
+      })
+    end)
+
+    test("exclude-only rules imply match-all-except-excluded (blacklist mode)", function()
+      local task = build_task()
+      local rule = {
+        name = 'excl_only_ext',
+        log_prefix = 'excl_only_ext',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = {},
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = { exe = 'exe' },
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = { 'invoice.doc', 'photo.jpg' },
+      })
+    end)
+
+    test("mime_parts_filter_regex_exclude matches by content-type in blacklist mode", function()
+      local task = build_task()
+      local rule = {
+        name = 'excl_only_regex',
+        log_prefix = 'excl_only_regex',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = {},
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = {},
+        mime_parts_filter_regex_exclude = common.create_regex_table({ IMG = '^image/' }),
+      }
+
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = { 'invoice.doc', 'malware.exe' },
+      })
+    end)
+
+    test("mime_parts_match_archive = false skips filename matching inside archives", function()
+      local task = fake_task_with_parts({
+        fake_part({
+          filename = 'archive.zip',
+          mtype = 'application',
+          msubtype = 'zip',
+          is_archive = true,
+          archive_files = { { name = 'secret.exe' } },
+        }),
+      })
+      local base_rule = {
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = { exe = 'exe' },
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = {},
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      local rule_default = lua_util.shallowcopy(base_rule)
+      rule_default.name = 'archive_default'
+      rule_default.log_prefix = 'archive_default'
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule_default),
+        expect = { 'archive.zip' },
+      })
+
+      local rule_no_archive = lua_util.shallowcopy(base_rule)
+      rule_no_archive.name = 'archive_disabled'
+      rule_no_archive.log_prefix = 'archive_disabled'
+      rule_no_archive.mime_parts_match_archive = false
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule_no_archive),
+        expect = {},
+      })
+    end)
+  end)
 end)

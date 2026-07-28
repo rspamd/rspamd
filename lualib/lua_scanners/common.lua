@@ -461,11 +461,17 @@ local function gen_extension(fname)
   return ext[1], ext[2], filename_parts
 end
 
+local function table_is_empty(t)
+  return next(t or {}) == nil
+end
+
 local function check_parts_match(task, rule)
   local filter_func = function(p)
     local mtype, msubtype = p:get_type()
     local detected_ext = p:get_detected_ext()
     local fname = p:get_filename()
+    local match = false
+    local match_exclude = false
     local ext, ext2
 
     if rule.scan_all_mime_parts == false then
@@ -474,13 +480,22 @@ local function check_parts_match(task, rule)
       if fname ~= nil then
         ext, ext2 = gen_extension(fname)
         --lua_util.debugm(rule.name, task, '%s: extension, fname: |%s|%s|%s|', rule.log_prefix, ext, ext2, fname)
+        -- include match
         if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
             or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
           lua_util.debugm(rule.name, task, '%s: extension matched: |%s|%s|', rule.log_prefix, ext, ext2)
-          return true
+          match = true
         elseif match_filter(task, rule, fname, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: filename regex matched', rule.log_prefix)
-          return true
+          match = true
+        end
+        -- exclude match (not ext2 match)
+        if match_filter(task, rule, ext, rule.mime_parts_filter_ext_exclude, 'ext') then
+          lua_util.debugm(rule.name, task, '%s: exclude - extension matched: |%s|%s|', rule.log_prefix, ext, ext2)
+          match_exclude = true
+        elseif match_filter(task, rule, fname, rule.mime_parts_filter_regex_exclude, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: exclude - filename regex matched', rule.log_prefix)
+          match_exclude = true
         end
       end
       -- check content type string regex matching
@@ -488,7 +503,11 @@ local function check_parts_match(task, rule)
         local ct = string.format('%s/%s', mtype, msubtype):lower()
         if match_filter(task, rule, ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex content-type: %s', rule.log_prefix, ct)
-          return true
+          match = true
+        end
+        if match_filter(task, rule, ct, rule.mime_parts_filter_regex_exclude, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: exclude - regex content-type: %s', rule.log_prefix, ct)
+          match_exclude = true
         end
       end
       -- check detected content type (libmagic) regex matching
@@ -496,29 +515,61 @@ local function check_parts_match(task, rule)
         local magic = lua_magic_types[detected_ext] or {}
         if match_filter(task, rule, detected_ext, rule.mime_parts_filter_ext, 'ext') then
           lua_util.debugm(rule.name, task, '%s: detected extension matched: |%s|', rule.log_prefix, detected_ext)
-          return true
+          match = true
         elseif magic.ct and match_filter(task, rule, magic.ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s',
             rule.log_prefix, magic.ct)
-          return true
+          match = true
+        end
+        if match_filter(task, rule, detected_ext, rule.mime_parts_filter_ext_exclude, 'ext') then
+          lua_util.debugm(rule.name, task, '%s: exclude - detected extension matched: |%s|',
+            rule.log_prefix, detected_ext)
+          match_exclude = true
+        elseif magic.ct and match_filter(task, rule, magic.ct, rule.mime_parts_filter_regex_exclude, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: exclude - regex detected libmagic content-type: %s',
+            rule.log_prefix, magic.ct)
+          match_exclude = true
         end
       end
       -- check filenames in archives
-      if p:is_archive() then
+      if p:is_archive() and rule.mime_parts_match_archive ~= false then
         local arch = p:get_archive()
         local filelist = arch:get_files_full(1000)
         for _, f in ipairs(filelist) do
           ext, ext2 = gen_extension(f.name)
+          -- only include check here
           if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
               or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
             lua_util.debugm(rule.name, task, '%s: extension matched in archive: |%s|%s|', rule.log_prefix, ext, ext2)
             --lua_util.debugm(rule.name, task, '%s: extension matched in archive: %s', rule.log_prefix, ext)
-            return true
+            match = true
           elseif match_filter(task, rule, f.name, rule.mime_parts_filter_regex, 'regex') then
             lua_util.debugm(rule.name, task, '%s: filename regex matched in archive', rule.log_prefix)
-            return true
+            match = true
           end
         end
+      end
+
+      if match then
+        if match_exclude then
+          lua_util.debugm(rule.name, task, '%s: found a match, but also an exclude match - not scanning',
+            rule.log_prefix)
+        else
+          return true
+        end
+      elseif table_is_empty(rule.mime_parts_filter_ext) and table_is_empty(rule.mime_parts_filter_regex)
+          and (not table_is_empty(rule.mime_parts_filter_ext_exclude)
+            or not table_is_empty(rule.mime_parts_filter_regex_exclude)) then
+        -- assuming only blacklisting when no include rules are set: match all - exclude some
+        if match_exclude then
+          lua_util.debugm(rule.name, task, '%s: assuming match all, but also an exclude match - not scanning',
+            rule.log_prefix)
+        else
+          lua_util.debugm(rule.name, task, '%s: assuming match all and found no exclude match', rule.log_prefix)
+          return true
+        end
+      else
+        lua_util.debugm(rule.name, task, '%s: no include or exclude rule matched', rule.log_prefix)
       end
     end
 
