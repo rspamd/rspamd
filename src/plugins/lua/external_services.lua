@@ -109,13 +109,13 @@ local function add_scanner_rule(sym, opts)
 
   -- Resolve symbol names up-front so a failed configure() can still register
   -- the fail symbol and surface the misconfiguration on every scan.
-  local symbol, symbol_fail, symbol_encrypted, symbol_macro = common.derive_symbols(sym, opts)
+  local symbol, symbol_fail, symbol_encrypted, symbol_macro, symbol_ignore = common.derive_symbols(sym, opts)
 
   local rule = cfg.configure(opts)
 
   if not rule then
     return common.configure_failed_stub(opts.type, sym, opts,
-      symbol, symbol_fail, symbol_encrypted, symbol_macro)
+      symbol, symbol_fail, symbol_encrypted, symbol_macro, symbol_ignore)
   end
 
   rule.type = opts.type
@@ -128,6 +128,7 @@ local function add_scanner_rule(sym, opts)
   rule.symbol_fail = rule.symbol_fail or (rule.symbol .. '_FAIL')
   rule.symbol_encrypted = rule.symbol_encrypted or (rule.symbol .. '_ENCRYPTED')
   rule.symbol_macro = rule.symbol_macro or (rule.symbol .. '_MACRO')
+  rule.symbol_ignore = rule.symbol_ignore or (rule.symbol .. '_IGNORE')
 
   rule.redis_params = redis_params
   rule.eicar_fake_pattern = opts.eicar_fake_pattern
@@ -158,7 +159,7 @@ local function add_scanner_rule(sym, opts)
   rspamd_logger.infox(rspamd_config, 'registered external services rule: symbol %s; type %s',
       rule.symbol, rule.type)
 
-  return common.make_scan_callback(cfg, rule), rule
+  return common.make_scan_callback(cfg, rule), common.make_report_callback(cfg, rule), rule
 end
 
 -- Registration
@@ -174,7 +175,7 @@ if opts and type(opts) == 'table' then
       if not m.name then
         m.name = k
       end
-      local cb, nrule = add_scanner_rule(k, m)
+      local cb, report_cb, nrule = add_scanner_rule(k, m)
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
@@ -197,6 +198,11 @@ if opts and type(opts) == 'table' then
 
         local t = common.scanner_symbol_registration(check_symbol, cb, m, N)
         local id = rspamd_config:register_symbol(t)
+
+        if report_cb and m.symbol_report then
+          rspamd_logger.infox(rspamd_config, 'added external services report symbol %s -> %s', k, m.symbol_report)
+          rspamd_config:register_symbol(common.report_symbol_registration(m.symbol_report, report_cb, m, N))
+        end
 
         common.register_scanner_symbols(id, check_symbol, m, N)
 

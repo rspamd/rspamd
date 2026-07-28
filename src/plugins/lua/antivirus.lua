@@ -76,7 +76,7 @@ local function add_antivirus_rule(sym, opts)
     return nil
   end
 
-  opts.symbol, opts.symbol_fail, opts.symbol_encrypted, opts.symbol_macro =
+  opts.symbol, opts.symbol_fail, opts.symbol_encrypted, opts.symbol_macro, opts.symbol_ignore =
     common.derive_symbols(sym, opts)
 
   local cfg = lua_antivirus[opts.type]
@@ -98,13 +98,14 @@ local function add_antivirus_rule(sym, opts)
   local rule = cfg.configure(opts)
   if not rule then
     return common.configure_failed_stub(opts.type, sym, opts,
-      opts.symbol, opts.symbol_fail, opts.symbol_encrypted, opts.symbol_macro)
+      opts.symbol, opts.symbol_fail, opts.symbol_encrypted, opts.symbol_macro, opts.symbol_ignore)
   end
 
   rule.type = opts.type
   rule.symbol_fail = opts.symbol_fail
   rule.symbol_encrypted = opts.symbol_encrypted
   rule.symbol_macro = opts.symbol_macro
+  rule.symbol_ignore = opts.symbol_ignore
   rule.redis_params = redis_params
   rule.eicar_fake_pattern = opts.eicar_fake_pattern
 
@@ -131,7 +132,7 @@ local function add_antivirus_rule(sym, opts)
 
   common.configure_whitelist(rule, opts, 'antivirus whitelist for ' .. rule.log_prefix)
 
-  return common.make_scan_callback(cfg, rule), rule
+  return common.make_scan_callback(cfg, rule), common.make_report_callback(cfg, rule), rule
 end
 
 -- Registration
@@ -147,7 +148,7 @@ if opts and type(opts) == 'table' then
       if not m.name then
         m.name = k
       end
-      local cb, rule = add_antivirus_rule(k, m)
+      local cb, report_cb, rule = add_antivirus_rule(k, m)
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
@@ -158,6 +159,11 @@ if opts and type(opts) == 'table' then
 
         local t = common.scanner_symbol_registration(m.symbol, cb, m, N)
         local id = rspamd_config:register_symbol(t)
+
+        if report_cb and m.symbol_report then
+          rspamd_logger.infox(rspamd_config, 'added antivirus report symbol %s -> %s', k, m.symbol_report)
+          rspamd_config:register_symbol(common.report_symbol_registration(m.symbol_report, report_cb, m, N))
+        end
 
         common.register_scanner_symbols(id, m.symbol, m, N)
 

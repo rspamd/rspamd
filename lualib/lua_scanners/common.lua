@@ -108,6 +108,16 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     local symname, symscore = match_patterns(symbol, tm, patterns, dyn_weight)
     if rule.whitelist and rule.whitelist:get_key(tm) then
       rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, tm)
+
+      if rule.symbol_ignore then
+        if maybe_part and rule.show_attachments and maybe_part:get_filename() then
+          local fname = maybe_part:get_filename()
+          task:insert_result(rule.symbol_ignore, symscore, string.format("%s|%s",
+            tm, fname))
+        else
+          task:insert_result(rule.symbol_ignore, symscore, tm)
+        end
+      end
     else
       all_whitelisted = false
       rspamd_logger.infox(task, '%s: result - %s: "%s - score: %s"',
@@ -537,17 +547,18 @@ derivation/whitelist/eicar-testing/scan-callback/registration helpers.
 --]]
 
 --[[
-Derive the standard symbol / symbol_fail / symbol_encrypted / symbol_macro
-names for a scanner rule instance from its config key `sym`, without
-mutating `opts`. Existing `opts.symbol*` overrides always win.
+Derive the standard symbol / symbol_fail / symbol_encrypted / symbol_macro /
+symbol_ignore names for a scanner rule instance from its config key `sym`,
+without mutating `opts`. Existing `opts.symbol*` overrides always win.
 --]]
 local function derive_symbols(sym, opts)
   local symbol = opts.symbol or sym:upper()
   local symbol_fail = opts.symbol_fail or (symbol .. '_FAIL')
   local symbol_encrypted = opts.symbol_encrypted or (symbol .. '_ENCRYPTED')
   local symbol_macro = opts.symbol_macro or (symbol .. '_MACRO')
+  local symbol_ignore = opts.symbol_ignore or (symbol .. '_IGNORE')
 
-  return symbol, symbol_fail, symbol_encrypted, symbol_macro
+  return symbol, symbol_fail, symbol_encrypted, symbol_macro, symbol_ignore
 end
 
 --[[
@@ -565,11 +576,12 @@ end
 --[[
 When a scanner's `cfg.configure(opts)` fails (e.g. bad `servers=`), register
 a stub rule that always emits `symbol_fail` with a clear reason instead of
-silently dropping the rule. Returns the fail-callback and the stub rule,
-in the same shape `make_scan_callback`'s caller expects.
+silently dropping the rule. Returns the fail-callback, a nil report-callback
+(a stub rule never has anything to report), and the stub rule, in the same
+shape `add_antivirus_rule`/`add_scanner_rule` callers expect.
 --]]
 local function configure_failed_stub(scanner_type, sym, opts, symbol, symbol_fail,
-                                      symbol_encrypted, symbol_macro)
+                                      symbol_encrypted, symbol_macro, symbol_ignore)
   rspamd_logger.errx(rspamd_config,
     'cannot configure %s for %s; registering fail-only rule that always emits %s',
     scanner_type, symbol, symbol_fail)
@@ -583,6 +595,7 @@ local function configure_failed_stub(scanner_type, sym, opts, symbol, symbol_fai
     symbol_fail = symbol_fail,
     symbol_encrypted = symbol_encrypted,
     symbol_macro = symbol_macro,
+    symbol_ignore = symbol_ignore,
     symbol_type = opts.symbol_type,
     timeout = opts.timeout,
     log_prefix = opts.name or sym,
@@ -593,7 +606,7 @@ local function configure_failed_stub(scanner_type, sym, opts, symbol, symbol_fai
     task:insert_result(symbol_fail, 1.0, fail_reason)
   end
 
-  return fail_cb, stub_rule
+  return fail_cb, nil, stub_rule
 end
 
 -- Encoded as base32 in the source to avoid crappy stuff.
@@ -650,19 +663,49 @@ local function make_scan_callback(cfg, rule)
 end
 
 --[[
-Build the `rspamd_config:register_symbol()` parameter table for a scanner
-rule's main scheduled callback symbol (`anchor_symbol`).
+Build the mime-part/whole-message report callback for scanners that expose a
+`report` function alongside `check` (e.g. an async scanner that polls a job
+result separately from submitting it). Returns nil when `cfg.report` isn't a
+function, so callers can treat the result the same way as an absent report
+symbol.
 --]]
-local function scanner_symbol_registration(anchor_symbol, cb, m, group)
+local function make_report_callback(cfg, rule)
+  if type(cfg.report) ~= 'function' then
+    return nil
+  end
+
+  return function(task)
+    if rule.scan_mime_parts then
+      fun.each(function(p)
+        local content = p:get_content()
+        if content and #content > 0 then
+          cfg.report(task, content, p:get_digest(), rule, p)
+        end
+      end, check_parts_match(task, rule))
+    else
+      cfg.report(task, task:get_content(), task:get_digest(), rule)
+    end
+  end
+end
+
+--[[
+Build the `rspamd_config:register_symbol()` parameter table for a callback
+symbol scheduled as `symbol_type` ('normal' (default), 'postfilter' or
+'prefilter').
+--]]
+local function build_symbol_registration(name, cb, m, group, symbol_type)
   local t = {
-    name = anchor_symbol,
+    name = name,
     callback = cb,
     score = 0.0,
     group = group,
   }
 
-  if m.symbol_type == 'postfilter' then
+  if symbol_type == 'postfilter' then
     t.type = 'postfilter'
+    t.priority = lua_util.symbols_priorities.medium
+  elseif symbol_type == 'prefilter' then
+    t.type = 'prefilter'
     t.priority = lua_util.symbols_priorities.medium
   else
     t.type = 'normal'
@@ -680,12 +723,33 @@ local function scanner_symbol_registration(anchor_symbol, cb, m, group)
 end
 
 --[[
-Register the virtual child symbols (fail/encrypted/macro, pattern-derived,
-category `symbols` tree, and the metric symbol) for a scanner rule, plus the
-scanner's own main result symbol when it differs from `anchor_symbol` (e.g.
-the `_CHECK` anchor used by external_services.lua for scanners with
-hardcoded default symbols). `id` is the id returned when registering the
-main callback symbol (see `scanner_symbol_registration`).
+Build the `rspamd_config:register_symbol()` parameter table for a scanner
+rule's main scheduled callback symbol (`anchor_symbol`), scheduled per
+`m.symbol_type`.
+--]]
+local function scanner_symbol_registration(anchor_symbol, cb, m, group)
+  return build_symbol_registration(anchor_symbol, cb, m, group, m.symbol_type)
+end
+
+--[[
+Build the `rspamd_config:register_symbol()` parameter table for a scanner
+rule's independent report symbol (`m.symbol_report`), scheduled per
+`m.symbol_report_type`. Unlike the fail/encrypted/macro symbols, the report
+symbol is not a virtual child of the main callback symbol -- it is its own
+scheduled callback, since it typically polls a result independently of the
+main check (see `make_report_callback`).
+--]]
+local function report_symbol_registration(symbol_report, cb, m, group)
+  return build_symbol_registration(symbol_report, cb, m, group, m.symbol_report_type)
+end
+
+--[[
+Register the virtual child symbols (fail/encrypted/macro/ignore,
+pattern-derived, category `symbols` tree, and the metric symbol) for a
+scanner rule, plus the scanner's own main result symbol when it differs
+from `anchor_symbol` (e.g. the `_CHECK` anchor used by external_services.lua
+for scanners with hardcoded default symbols). `id` is the id returned when
+registering the main callback symbol (see `scanner_symbol_registration`).
 --]]
 local function register_scanner_symbols(id, anchor_symbol, m, group)
   local function reg_virtual(name)
@@ -707,6 +771,7 @@ local function register_scanner_symbols(id, anchor_symbol, m, group)
   reg_virtual(m.symbol_fail)
   reg_virtual(m.symbol_encrypted)
   reg_virtual(m.symbol_macro)
+  reg_virtual(m.symbol_ignore)
 
   local function reg_pattern_symbols(patterns)
     if type(patterns) ~= 'table' then
@@ -781,7 +846,9 @@ exports.configure_whitelist = configure_whitelist
 exports.configure_failed_stub = configure_failed_stub
 exports.maybe_apply_eicar_fake_pattern = maybe_apply_eicar_fake_pattern
 exports.make_scan_callback = make_scan_callback
+exports.make_report_callback = make_report_callback
 exports.scanner_symbol_registration = scanner_symbol_registration
+exports.report_symbol_registration = report_symbol_registration
 exports.register_scanner_symbols = register_scanner_symbols
 
 setmetatable(exports, {
