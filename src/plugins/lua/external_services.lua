@@ -85,8 +85,9 @@ if confighelp then
         potm = "potm";
         ppsm = "ppsm";
       }
-      # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
-      whitelist = "/etc/rspamd/antivirus.wl";
+      # `whitelist` points to a map of threat names/signatures to ignore. When a
+      # detected threat name is in this map, the `_IGNORE` symbol is set instead.
+      whitelist = "/etc/rspamd/external_services.wl";
     }
   }
   ]])
