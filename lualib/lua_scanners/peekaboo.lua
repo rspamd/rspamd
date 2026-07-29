@@ -50,7 +50,7 @@ local function peekaboo_config(opts)
     keepalive = true,
     timeout = 3.0,
     log_clean = false,
-    symbol_clean = false,
+    set_clean_symbol = false,
     retransmits = 2,
     cache_expire = 7200, -- expire redis in 1d
     min_size = 300,
@@ -395,7 +395,7 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
           lua_util.debugm(N, task, '%s: job-id %s - found ignored result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
         elseif tostring(result.result) == 'unknown' then
-          if rule.symbol_clean then
+          if rule.set_clean_symbol then
             common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
               rule.symbols.peekaboo_pass.score, rule.symbols.peekaboo_pass.symbol, maybe_part)
           end
