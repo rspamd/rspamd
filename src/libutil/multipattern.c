@@ -536,8 +536,8 @@ rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
 		return;
 	}
 
-	rspamd_snprintf(fp, sizeof(fp), "%s%shs-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
-					hs_cache_dir);
+	rspamd_snprintf(fp, sizeof(fp), "%s%shs-XXXXXXXXXXXXX", hs_cache_dir,
+					G_DIR_SEPARATOR_S);
 
 	if ((fd = g_mkstemp_full(fp, O_CREAT | O_EXCL | O_WRONLY, 00644)) != -1) {
 		/* Serialize with unified header format (magic, platform, CRC) */
@@ -1857,13 +1857,25 @@ rspamd_multipattern_load_from_cache_cb(gboolean success,
 				}
 			}
 		}
+		else {
+			msg_debug("multipattern is not in the compiling state (%d), cannot hot-swap it",
+					  (int) mp->state);
+		}
+	}
+	else if (rspamd_hs_cache_error_is_miss(err)) {
+		/* Not compiled yet or a read replica has not caught up with the master */
+		msg_info("multipattern hyperscan database %s is not cached yet",
+				 ctx->cache_key);
 	}
 	else {
-		(void) err;
+		/* Report the error, otherwise the failure is unexplainable */
+		msg_warn("cannot load multipattern hyperscan database %s from cache backend: %s",
+				 ctx->cache_key, err);
 	}
 
 	if (!ok && gerr) {
-		msg_debug("multipattern hs load failed: %s", gerr->message);
+		msg_warn("cannot deserialize multipattern hyperscan database %s: %s",
+				 ctx->cache_key, gerr->message);
 	}
 	g_clear_error(&gerr);
 

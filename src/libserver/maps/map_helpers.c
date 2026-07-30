@@ -16,6 +16,8 @@
 
 #include "map_helpers.h"
 #include "map_private.h"
+#include "libserver/rspamd_control.h"
+#include "libserver/worker_util.h"
 #include "khash.h"
 #include "radix.h"
 #include "rspamd.h"
@@ -23,12 +25,12 @@
 #include "mempool_vars_internal.h"
 #include "rspamd_simdutf.h"
 #include "contrib/cdb/cdb.h"
+#include "unix-std.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "hyperscan_tools.h"
 #include "hs_cache_backend.h"
-#include "unix-std.h"
 #endif
 #ifndef WITH_PCRE2
 #include <pcre.h>
@@ -1155,6 +1157,24 @@ rspamd_try_save_re_map_cache(struct rspamd_regexp_map_helper *re_map)
 	return FALSE;
 }
 
+static void
+rspamd_regexp_map_cache_probe_cb(gboolean success, void *ud)
+{
+	char *name = ud;
+
+	if (success) {
+		msg_info("hot-swapped queued regexp map '%s' to a hyperscan database "
+				 "found in the cache backend",
+				 name);
+	}
+	else {
+		msg_debug("no cached hyperscan database for the queued regexp map '%s'",
+				  name);
+	}
+
+	g_free(name);
+}
+
 #endif
 
 static void
@@ -1296,6 +1316,22 @@ rspamd_re_map_finalize(struct rspamd_regexp_map_helper *re_map)
 					 map->name, re_map->regexps->len);
 
 		rspamd_regexp_map_add_pending(re_map, map->name);
+
+		/*
+		 * Somebody might have compiled this very content already: another
+		 * process of ours, or another instance sharing the cache backend. A
+		 * notification is only broadcast when a database is compiled anew, so
+		 * without looking into the cache here a map that has been read after
+		 * that would keep using the fallback until the next compilation.
+		 */
+		if (rspamd_hs_cache_has_lua_backend() && map->event_loop != NULL &&
+			!rspamd_worker_is_primary_controller(map->wrk)) {
+			rspamd_regexp_map_load_from_cache_async(re_map,
+													map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR,
+													map->event_loop,
+													rspamd_regexp_map_cache_probe_cb,
+													g_strdup(map->name));
+		}
 	}
 #endif
 }
@@ -1910,6 +1946,7 @@ void rspamd_regexp_map_add_pending(struct rspamd_regexp_map_helper *re_map,
 								  struct rspamd_regexp_map_pending, i);
 		if (strcmp(existing->name, name) == 0) {
 			existing->re_map = re_map;
+			existing->queued_by = getpid();
 			rspamd_regexp_map_get_hash(re_map, existing->hash);
 
 			msg_info_map("updated pending regexp map '%s' (%ud patterns) in compilation queue",
@@ -1920,6 +1957,7 @@ void rspamd_regexp_map_add_pending(struct rspamd_regexp_map_helper *re_map,
 
 	entry.re_map = re_map;
 	entry.name = g_strdup(name);
+	entry.queued_by = getpid();
 	rspamd_regexp_map_get_hash(re_map, entry.hash);
 
 	g_array_append_val(pending_regexp_maps, entry);
@@ -1956,6 +1994,48 @@ void rspamd_regexp_map_clear_pending(void)
 
 	g_array_free(pending_regexp_maps, TRUE);
 	pending_regexp_maps = NULL;
+}
+
+void rspamd_regexp_map_remove_pending(const char *name)
+{
+	if (pending_regexp_maps == NULL || name == NULL) {
+		return;
+	}
+
+	for (unsigned int i = 0; i < pending_regexp_maps->len; i++) {
+		struct rspamd_regexp_map_pending *entry;
+
+		entry = &g_array_index(pending_regexp_maps,
+							   struct rspamd_regexp_map_pending, i);
+
+		if (strcmp(entry->name, name) == 0) {
+			g_free(entry->name);
+			g_array_remove_index(pending_regexp_maps, i);
+
+			return;
+		}
+	}
+}
+
+struct rspamd_regexp_map_helper *
+rspamd_regexp_map_find_pending_by_hash(const unsigned char *hash)
+{
+	if (pending_regexp_maps == NULL || hash == NULL) {
+		return NULL;
+	}
+
+	for (unsigned int i = 0; i < pending_regexp_maps->len; i++) {
+		struct rspamd_regexp_map_pending *entry;
+
+		entry = &g_array_index(pending_regexp_maps,
+							   struct rspamd_regexp_map_pending, i);
+
+		if (memcmp(entry->hash, hash, rspamd_cryptobox_HASHBYTES) == 0) {
+			return entry->re_map;
+		}
+	}
+
+	return NULL;
 }
 
 struct rspamd_regexp_map_helper *
@@ -2302,12 +2382,54 @@ rspamd_regexp_map_load_from_cache(struct rspamd_regexp_map_helper *re_map,
 }
 
 struct rspamd_regexp_map_async_load_ctx {
-	struct rspamd_regexp_map_helper *re_map;
+	/*
+	 * The helper is not kept here on purpose: a map can be re-read whilst the
+	 * load is in flight and the old helper is then destroyed. The map itself
+	 * lives as long as the configuration and knows the digest of its current
+	 * content, which is enough to find the helper to install the database in
+	 */
+	struct rspamd_map *map;
+	uint64_t map_digest;
 	void (*cb)(gboolean success, void *ud);
 	void *ud;
 	char *cache_dir;
 	gboolean callback_processed;
 };
+
+/*
+ * Digests of the databases being loaded right now: a map is put in the queue by
+ * the read callback and announced by a notification, so without this the very
+ * same database would be fetched twice, and these are megabytes
+ */
+static GArray *inflight_map_loads = NULL;
+
+static gboolean
+rspamd_regexp_map_load_inflight(uint64_t digest, gboolean add)
+{
+	if (inflight_map_loads == NULL) {
+		if (!add) {
+			return FALSE;
+		}
+
+		inflight_map_loads = g_array_new(FALSE, FALSE, sizeof(uint64_t));
+	}
+
+	for (unsigned int i = 0; i < inflight_map_loads->len; i++) {
+		if (g_array_index(inflight_map_loads, uint64_t, i) == digest) {
+			if (!add) {
+				g_array_remove_index_fast(inflight_map_loads, i);
+			}
+
+			return TRUE;
+		}
+	}
+
+	if (add) {
+		g_array_append_val(inflight_map_loads, digest);
+	}
+
+	return FALSE;
+}
 
 static void
 rspamd_regexp_map_async_load_cb(gboolean success,
@@ -2317,16 +2439,27 @@ rspamd_regexp_map_async_load_cb(gboolean success,
 								void *ud)
 {
 	struct rspamd_regexp_map_async_load_ctx *ctx = ud;
-	struct rspamd_map *map;
+	struct rspamd_map *map = ctx->map;
+	struct rspamd_regexp_map_helper *re_map = NULL;
 	gboolean result = FALSE;
 
 	if (ctx->callback_processed) {
 		return;
 	}
 	ctx->callback_processed = TRUE;
-	map = ctx->re_map->map;
+	rspamd_regexp_map_load_inflight(ctx->map_digest, FALSE);
 
-	if (!success || data == NULL || len == 0) {
+	if (map->user_data != NULL && map->digest == ctx->map_digest) {
+		re_map = (struct rspamd_regexp_map_helper *) *map->user_data;
+	}
+
+	if (re_map == NULL) {
+		/* The map has been re-read: the database we have asked for is stale */
+		msg_info_map("skip the hyperscan database from the cache backend for %s, "
+					 "the map has been re-read in the meantime",
+					 map->name);
+	}
+	else if (!success || data == NULL || len == 0) {
 		msg_warn_map("failed to load regexp map from cache backend: %s",
 					 error ? error : "no data");
 	}
@@ -2338,23 +2471,23 @@ rspamd_regexp_map_async_load_cb(gboolean success,
 		}
 		else {
 			/* Free old database if any */
-			if (ctx->re_map->hs_db != NULL) {
-				rspamd_hyperscan_free(ctx->re_map->hs_db, true);
-				ctx->re_map->hs_db = NULL;
+			if (re_map->hs_db != NULL) {
+				rspamd_hyperscan_free(re_map->hs_db, true);
+				re_map->hs_db = NULL;
 			}
 
-			if (ctx->re_map->hs_scratch != NULL) {
-				hs_free_scratch(ctx->re_map->hs_scratch);
-				ctx->re_map->hs_scratch = NULL;
+			if (re_map->hs_scratch != NULL) {
+				hs_free_scratch(re_map->hs_scratch);
+				re_map->hs_scratch = NULL;
 			}
 
-			ctx->re_map->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+			re_map->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
 
-			if (hs_alloc_scratch(rspamd_hyperscan_get_database(ctx->re_map->hs_db),
-								 &ctx->re_map->hs_scratch) != HS_SUCCESS) {
+			if (hs_alloc_scratch(rspamd_hyperscan_get_database(re_map->hs_db),
+								 &re_map->hs_scratch) != HS_SUCCESS) {
 				msg_err_map("cannot allocate scratch space for hyperscan");
-				rspamd_hyperscan_free(ctx->re_map->hs_db, true);
-				ctx->re_map->hs_db = NULL;
+				rspamd_hyperscan_free(re_map->hs_db, true);
+				re_map->hs_db = NULL;
 			}
 			else {
 				msg_info_map("loaded hyperscan database from cache backend for %s",
@@ -2388,15 +2521,431 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
+	uint64_t map_digest;
+
+	/* Same tag the map keeps for its current content, see rspamd_regexp_list_fin */
+	memcpy(&map_digest, re_map->re_digest, sizeof(map_digest));
+
+	if (rspamd_regexp_map_load_inflight(map_digest, TRUE)) {
+		struct rspamd_map *map = re_map->map;
+
+		msg_debug_map("the very database is already being loaded for %s",
+					  map->name);
+
+		if (cb) {
+			cb(FALSE, ud);
+		}
+
+		return;
+	}
+
 	struct rspamd_regexp_map_async_load_ctx *ctx = g_malloc0(sizeof(*ctx));
-	ctx->re_map = re_map;
+	ctx->map = re_map->map;
 	ctx->cb = cb;
 	ctx->ud = ud;
 	ctx->cache_dir = g_strdup(cache_dir);
+	ctx->map_digest = map_digest;
 
 	rspamd_hs_cache_lua_load_async(cache_key,
 								   re_map->map ? re_map->map->name : "regexp_map",
 								   rspamd_regexp_map_async_load_cb, ctx);
+}
+
+/*
+ * Compile the queued regexp maps and notify the workers so that they hot-swap
+ * their databases. The queue is process local, so every process that has read
+ * a map on its own has to drive this: hs_helper only inherits what has been
+ * read before the fork.
+ */
+struct rspamd_regexp_map_pending_ctx {
+	struct rspamd_worker *worker;
+	struct ev_loop *event_loop;
+	char *cache_dir;
+	/*
+	 * Own copy of the queued names: the queue itself is an array that a map
+	 * read can reallocate whilst we are working, so pointers into it must not
+	 * be kept, and the helper behind a name can be replaced by a map reload
+	 */
+	GPtrArray *names;
+	unsigned int idx;
+	unsigned int flags;
+	/* An entry has been left queued, so another round is due */
+	gboolean requeue;
+	/* Digest of the version we are working on, to detect a map reload */
+	unsigned char hash[rspamd_cryptobox_HASHBYTES];
+	gboolean compile_cb_called;
+	ref_entry_t ref;
+};
+
+/* Only one drain at a time, as every map update triggers another attempt */
+static gboolean pending_regexp_maps_compiling = FALSE;
+
+static void rspamd_regexp_map_compile_pending_next(struct rspamd_regexp_map_pending_ctx *rmctx);
+
+/* Deferred restart of the draining, see the context destructor */
+struct rspamd_regexp_map_requeue {
+	struct rspamd_worker *worker;
+	struct ev_loop *event_loop;
+	char *cache_dir;
+	unsigned int flags;
+	ev_timer tm;
+};
+
+static void
+rspamd_regexp_map_requeue_cb(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_regexp_map_requeue *rq = (struct rspamd_regexp_map_requeue *) w->data;
+
+	ev_timer_stop(EV_A_ w);
+	rspamd_regexp_map_compile_pending_async(rq->worker, rq->event_loop,
+											rq->cache_dir, rq->flags);
+	g_free(rq->cache_dir);
+	g_free(rq);
+}
+
+static void
+rspamd_regexp_map_pending_ctx_dtor(void *p)
+{
+	struct rspamd_regexp_map_pending_ctx *rmctx = p;
+
+	pending_regexp_maps_compiling = FALSE;
+
+	/*
+	 * A map has been re-read whilst we were compiling it, so its new version is
+	 * still queued: compile it at once instead of waiting for the next map
+	 * update to trigger the draining again
+	 */
+	if (rmctx->requeue && rmctx->worker->state == rspamd_worker_state_running) {
+		struct rspamd_regexp_map_requeue *rq = g_malloc0(sizeof(*rq));
+
+		rq->worker = rmctx->worker;
+		rq->event_loop = rmctx->event_loop;
+		rq->cache_dir = g_strdup(rmctx->cache_dir);
+		rq->flags = rmctx->flags;
+		rq->tm.data = rq;
+		ev_timer_init(&rq->tm, rspamd_regexp_map_requeue_cb, 0.0, 0.0);
+		ev_timer_start(rq->event_loop, &rq->tm);
+	}
+
+	g_ptr_array_free(rmctx->names, TRUE);
+	g_free(rmctx->cache_dir);
+	g_free(rmctx);
+}
+
+/*
+ * Resolve the helper currently queued under this name and remember its digest.
+ * It has to be done afresh at every step, as a map reload replaces the helper
+ * and frees the old one whilst we are working
+ */
+static struct rspamd_regexp_map_helper *
+rspamd_regexp_map_pending_resolve(struct rspamd_regexp_map_pending_ctx *rmctx,
+								  const char *name)
+{
+	struct rspamd_regexp_map_helper *re_map;
+
+	re_map = rspamd_regexp_map_find_pending(name);
+
+	if (re_map != NULL) {
+		rspamd_regexp_map_get_hash(re_map, rmctx->hash);
+	}
+
+	return re_map;
+}
+
+/*
+ * Drop the entry unless the map has been re-read whilst we were compiling: in
+ * that case the queue holds a newer version that still has to be compiled
+ */
+static void
+rspamd_regexp_map_pending_done_with(struct rspamd_regexp_map_pending_ctx *rmctx,
+									const char *name)
+{
+	struct rspamd_regexp_map_helper *re_map;
+	unsigned char hash[rspamd_cryptobox_HASHBYTES];
+
+	re_map = rspamd_regexp_map_find_pending(name);
+
+	if (re_map == NULL) {
+		return;
+	}
+
+	rspamd_regexp_map_get_hash(re_map, hash);
+
+	if (memcmp(hash, rmctx->hash, sizeof(hash)) == 0) {
+		rspamd_regexp_map_remove_pending(name);
+	}
+	else {
+		msg_debug_hyperscan("regexp map '%s' has been re-read, leaving it queued",
+							name);
+		rmctx->requeue = TRUE;
+	}
+}
+
+static void
+rspamd_regexp_map_pending_notify(struct rspamd_regexp_map_pending_ctx *rmctx,
+								 const char *name)
+{
+	struct rspamd_srv_command srv_cmd;
+
+	memset(&srv_cmd, 0, sizeof(srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_REGEXP_MAP_LOADED;
+	memcpy(srv_cmd.cmd.re_map_loaded.digest, rmctx->hash,
+		   sizeof(srv_cmd.cmd.re_map_loaded.digest));
+	rspamd_strlcpy(srv_cmd.cmd.re_map_loaded.name, name,
+				   sizeof(srv_cmd.cmd.re_map_loaded.name));
+
+	rspamd_srv_send_command(rmctx->worker, rmctx->event_loop, &srv_cmd, -1,
+							NULL, NULL);
+	msg_debug_hyperscan("sent regexp map loaded notification for '%s'", name);
+}
+
+/*
+ * Load the database for our own copy of the map: compiling merely stores it,
+ * and the notification we have just sent never comes back to us, as the main
+ * process excludes the sender from the broadcast
+ */
+static void
+rspamd_regexp_map_pending_install(struct rspamd_regexp_map_pending_ctx *rmctx,
+								  const char *name)
+{
+	struct rspamd_regexp_map_helper *re_map;
+
+	if (!(rmctx->flags & RSPAMD_REGEXP_MAP_PENDING_INSTALL)) {
+		return;
+	}
+
+	re_map = rspamd_regexp_map_find_pending(name);
+
+	if (re_map != NULL) {
+		rspamd_regexp_map_load_from_cache_async(re_map, rmctx->cache_dir,
+												rmctx->event_loop,
+												rspamd_regexp_map_cache_probe_cb,
+												g_strdup(name));
+	}
+}
+
+static void
+rspamd_regexp_map_pending_compiled_cb(struct rspamd_regexp_map_helper *re_map,
+									  gboolean success,
+									  GError *err,
+									  void *ud)
+{
+	struct rspamd_regexp_map_pending_ctx *rmctx = ud;
+	const char *name;
+
+	(void) re_map;
+
+	if (rmctx->compile_cb_called) {
+		REF_RELEASE(rmctx);
+		return;
+	}
+	rmctx->compile_cb_called = TRUE;
+
+	name = g_ptr_array_index(rmctx->names, rmctx->idx);
+	rspamd_worker_set_busy(rmctx->worker, rmctx->event_loop, NULL);
+
+	if (!success) {
+		msg_err("failed to compile regexp map '%s': %e", name, err);
+	}
+	else {
+		rspamd_regexp_map_pending_notify(rmctx, name);
+		rspamd_regexp_map_pending_install(rmctx, name);
+	}
+
+	/* Done either way: a broken map would burn CPU on every map update */
+	rspamd_regexp_map_pending_done_with(rmctx, name);
+	rmctx->idx++;
+	rspamd_regexp_map_compile_pending_next(rmctx);
+	REF_RELEASE(rmctx);
+}
+
+static void
+rspamd_regexp_map_pending_exists_cb(gboolean success,
+									const unsigned char *data,
+									gsize len,
+									const char *error,
+									void *ud)
+{
+	struct rspamd_regexp_map_pending_ctx *rmctx = ud;
+	const char *name = g_ptr_array_index(rmctx->names, rmctx->idx);
+	bool exists = (success && data == NULL && len == 1);
+	struct rspamd_regexp_map_helper *re_map;
+
+	(void) error;
+
+	if (exists) {
+		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation",
+							name);
+		rspamd_regexp_map_pending_notify(rmctx, name);
+		rspamd_regexp_map_pending_install(rmctx, name);
+		rspamd_regexp_map_pending_done_with(rmctx, name);
+		rmctx->idx++;
+		rspamd_regexp_map_compile_pending_next(rmctx);
+		REF_RELEASE(rmctx);
+		return;
+	}
+
+	/* The event loop has been running whilst the check was in flight */
+	re_map = rspamd_regexp_map_pending_resolve(rmctx, name);
+
+	if (re_map == NULL) {
+		msg_debug_hyperscan("regexp map '%s' has left the queue", name);
+		rmctx->idx++;
+		rspamd_regexp_map_compile_pending_next(rmctx);
+		REF_RELEASE(rmctx);
+		return;
+	}
+
+	/* Need to compile+store */
+	rspamd_worker_set_busy(rmctx->worker, rmctx->event_loop, "compile regexp map");
+	/*
+	 * DO NOT call ev_run() here - we're inside a Redis callback chain and
+	 * ev_run can trigger Lua GC which may try to finalize lua_redis userdata
+	 * while we're still processing. The busy notification will be sent on
+	 * the next event loop iteration after this callback returns.
+	 */
+	rmctx->compile_cb_called = FALSE;
+	REF_RETAIN(rmctx);
+	rspamd_regexp_map_compile_hs_to_cache_async(re_map, rmctx->cache_dir,
+												rmctx->event_loop,
+												rspamd_regexp_map_pending_compiled_cb,
+												rmctx);
+	/* Release the reference from exists_async callback */
+	REF_RELEASE(rmctx);
+}
+
+static void
+rspamd_regexp_map_compile_pending_next(struct rspamd_regexp_map_pending_ctx *rmctx)
+{
+	struct rspamd_regexp_map_helper *re_map;
+	const char *name;
+
+	while (rmctx->idx < rmctx->names->len) {
+		if (rmctx->worker->state != rspamd_worker_state_running) {
+			msg_debug_hyperscan("worker terminating, stopping regexp map compilation");
+			goto done;
+		}
+
+		name = g_ptr_array_index(rmctx->names, rmctx->idx);
+		re_map = rspamd_regexp_map_pending_resolve(rmctx, name);
+
+		if (re_map == NULL) {
+			/* Compiled by an earlier drain or the map is gone */
+			rmctx->idx++;
+			continue;
+		}
+
+		msg_debug_hyperscan("processing regexp map '%s'", name);
+
+		if (rspamd_hs_cache_has_lua_backend()) {
+			char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
+
+			rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
+							(int) rspamd_cryptobox_HASHBYTES / 2, rmctx->hash);
+			REF_RETAIN(rmctx);
+			rspamd_hs_cache_lua_exists_async(cache_key, name,
+											 rspamd_regexp_map_pending_exists_cb, rmctx);
+			return;
+		}
+
+		/* File backend path: check if cache file exists */
+		char fp[PATH_MAX];
+
+		rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hsmc", rmctx->cache_dir,
+						(int) rspamd_cryptobox_HASHBYTES / 2, rmctx->hash);
+
+		if (access(fp, R_OK) == 0) {
+			msg_debug_hyperscan("cache file %s already exists for regexp map '%s', "
+								"skipping compilation",
+								fp, name);
+		}
+		else {
+			GError *err = NULL;
+
+			rspamd_worker_set_busy(rmctx->worker, rmctx->event_loop, "compile regexp map");
+			/* Flush the busy notification before blocking on compilation */
+			ev_run(rmctx->event_loop, EVRUN_NOWAIT);
+			/* That could have re-read the map, so resolve the helper again */
+			re_map = rspamd_regexp_map_pending_resolve(rmctx, name);
+
+			if (re_map != NULL &&
+				!rspamd_regexp_map_compile_hs_to_cache(re_map, rmctx->cache_dir, &err)) {
+				msg_err("failed to compile regexp map '%s': %e", name, err);
+
+				if (err) {
+					g_error_free(err);
+				}
+			}
+
+			rspamd_worker_set_busy(rmctx->worker, rmctx->event_loop, NULL);
+		}
+
+		rspamd_regexp_map_pending_notify(rmctx, name);
+		rspamd_regexp_map_pending_done_with(rmctx, name);
+		rmctx->idx++;
+	}
+
+done:
+	REF_RELEASE(rmctx);
+}
+
+void rspamd_regexp_map_compile_pending_async(struct rspamd_worker *worker,
+											 struct ev_loop *event_loop,
+											 const char *cache_dir,
+											 unsigned int flags)
+{
+	struct rspamd_regexp_map_pending *pending;
+	unsigned int count = 0, i;
+
+	if (worker == NULL || event_loop == NULL || cache_dir == NULL) {
+		return;
+	}
+
+	if (pending_regexp_maps_compiling) {
+		msg_debug_hyperscan("regexp map compilation is already in progress");
+		return;
+	}
+
+	pending = rspamd_regexp_map_get_pending(&count);
+
+	if (pending == NULL || count == 0) {
+		msg_debug_hyperscan("no pending regexp map compilations");
+		return;
+	}
+
+	msg_debug_hyperscan("processing %ud pending regexp map compilations", count);
+
+	struct rspamd_regexp_map_pending_ctx *rmctx = g_malloc0(sizeof(*rmctx));
+	rmctx->worker = worker;
+	rmctx->event_loop = event_loop;
+	rmctx->cache_dir = g_strdup(cache_dir);
+	rmctx->flags = flags;
+	rmctx->names = g_ptr_array_new_full(count, g_free);
+
+	for (i = 0; i < count; i++) {
+		if ((flags & RSPAMD_REGEXP_MAP_PENDING_OWN_ONLY) &&
+			pending[i].queued_by != getpid()) {
+			/* Inherited from the main process, hence hs_helper deals with it */
+			msg_debug_hyperscan("skip regexp map '%s' queued before the fork",
+								pending[i].name);
+			continue;
+		}
+
+		g_ptr_array_add(rmctx->names, g_strdup(pending[i].name));
+	}
+
+	if (rmctx->names->len == 0) {
+		g_ptr_array_free(rmctx->names, TRUE);
+		g_free(rmctx->cache_dir);
+		g_free(rmctx);
+
+		return;
+	}
+
+	pending_regexp_maps_compiling = TRUE;
+	REF_INIT_RETAIN(rmctx, rspamd_regexp_map_pending_ctx_dtor);
+
+	rspamd_regexp_map_compile_pending_next(rmctx);
 }
 
 #else /* !WITH_HYPERSCAN */
@@ -2452,6 +3001,16 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	if (cb) {
 		cb(FALSE, ud);
 	}
+}
+
+void rspamd_regexp_map_compile_pending_async(struct rspamd_worker *worker,
+											 struct ev_loop *event_loop,
+											 const char *cache_dir,
+											 unsigned int flags)
+{
+	(void) worker;
+	(void) event_loop;
+	(void) cache_dir;
 }
 
 #endif /* WITH_HYPERSCAN */

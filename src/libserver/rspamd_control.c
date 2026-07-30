@@ -1336,6 +1336,9 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				/* Broadcast command to all workers */
 				memset(&wcmd, 0, sizeof(wcmd));
 				wcmd.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
+				memcpy(wcmd.cmd.re_map_loaded.digest,
+					   cmd.cmd.re_map_loaded.digest,
+					   sizeof(wcmd.cmd.re_map_loaded.digest));
 				rspamd_strlcpy(wcmd.cmd.re_map_loaded.name,
 							   cmd.cmd.re_map_loaded.name,
 							   sizeof(wcmd.cmd.re_map_loaded.name));

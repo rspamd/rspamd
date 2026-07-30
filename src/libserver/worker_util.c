@@ -556,19 +556,32 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
 	 * PCRE for missing/stale patterns. Async notifications still handle updates.
 	 */
 	if (rspamd_hs_cache_has_lua_backend() && worker->srv->cfg->re_cache) {
-		const char *cache_dir = worker->srv->cfg->hs_cache_dir ? worker->srv->cfg->hs_cache_dir : RSPAMD_DBDIR "/";
-		enum rspamd_hyperscan_status hs_status;
+		const char *cache_dir = worker->srv->cfg->hs_cache_dir ? worker->srv->cfg->hs_cache_dir : RSPAMD_DBDIR;
 
-		hs_status = rspamd_re_cache_load_hyperscan_scoped(worker->srv->cfg->re_cache,
-														  cache_dir, true);
-		if (hs_status == RSPAMD_HYPERSCAN_LOADED_FULL) {
-			msg_info("worker startup: hyperscan fully loaded from cache");
-		}
-		else if (hs_status == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
-			msg_info("worker startup: hyperscan partially loaded, waiting for hs_helper");
+		if (!rspamd_hs_cache_backend_is_file()) {
+			/*
+			 * Remote backends (redis, http) can only be queried asynchronously,
+			 * there are no local files to read here
+			 */
+			msg_debug("worker startup: loading hyperscan from '%s' cache backend",
+					  rspamd_hs_cache_backend_name());
+			rspamd_re_cache_load_hyperscan_scoped_async(worker->srv->cfg->re_cache,
+														event_loop, cache_dir, true);
 		}
 		else {
-			msg_debug("worker startup: no hyperscan available yet, waiting for hs_helper");
+			enum rspamd_hyperscan_status hs_status;
+
+			hs_status = rspamd_re_cache_load_hyperscan_scoped(worker->srv->cfg->re_cache,
+															  cache_dir, true);
+			if (hs_status == RSPAMD_HYPERSCAN_LOADED_FULL) {
+				msg_info("worker startup: hyperscan fully loaded from cache");
+			}
+			else if (hs_status == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+				msg_info("worker startup: hyperscan partially loaded, waiting for hs_helper");
+			}
+			else {
+				msg_debug("worker startup: no hyperscan available yet, waiting for hs_helper");
+			}
 		}
 	}
 #endif
@@ -2057,13 +2070,19 @@ rspamd_worker_multipattern_async_loaded(gboolean success, void *ud)
 		msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan (backend)", cbd->name);
 	}
 	else {
-		/* Try file fallback if available */
-		if (cbd->mp && cbd->cache_dir && rspamd_multipattern_load_from_cache(cbd->mp, cbd->cache_dir)) {
+		/*
+		 * Try file fallback, but merely for the file backend: with redis or http
+		 * backends databases are never stored in `hs_cache_dir`, so reading it
+		 * would just fail with a misleading `No such file or directory` error
+		 */
+		if (rspamd_hs_cache_backend_is_file() && cbd->mp && cbd->cache_dir &&
+			rspamd_multipattern_load_from_cache(cbd->mp, cbd->cache_dir)) {
 			msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan (file fallback)", cbd->name);
 		}
 		else {
-			msg_warn("failed to hot-swap multipattern '%s' to hyperscan, continuing with ACISM fallback",
-					 cbd->name);
+			msg_warn("failed to hot-swap multipattern '%s' to hyperscan using '%s' cache backend, "
+					 "continuing with ACISM fallback",
+					 cbd->name, rspamd_hs_cache_backend_name());
 		}
 	}
 
@@ -2203,7 +2222,9 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_regexp_map_helper *re_map;
 	const char *name = cmd->cmd.re_map_loaded.name;
-	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir ?
+								worker->srv->cfg->hs_cache_dir :
+								RSPAMD_DBDIR;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
@@ -2211,7 +2232,12 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 
 	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
-	re_map = rspamd_regexp_map_find_pending(name);
+	/*
+	 * Look the map up by the digest of the content that has been compiled: our
+	 * own copy of that map might be of another version, and then there is
+	 * nothing to install here
+	 */
+	re_map = rspamd_regexp_map_find_pending_by_hash(cmd->cmd.re_map_loaded.digest);
 
 	if (re_map != NULL) {
 		/* All file operations go through Lua backend */
@@ -2226,7 +2252,12 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 		rep.reply.hs_loaded.status = 0;
 	}
 	else {
-		msg_warn("received regexp map notification for unknown '%s'", name);
+		/*
+		 * Normal whenever our copy of that map is of another version: it gets
+		 * its own database as soon as it is queued
+		 */
+		msg_info("no copy of regexp map '%s' with the compiled content here",
+				 name);
 		rep.reply.hs_loaded.status = ENOENT;
 	}
 
