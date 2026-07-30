@@ -2517,6 +2517,9 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	/* All file operations go through Lua backend */
 	g_assert(rspamd_hs_cache_has_lua_backend());
 
+	/* msg_debug_map expects a `map` in scope */
+	struct rspamd_map *map = re_map->map;
+
 	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 					(int) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
@@ -2526,11 +2529,19 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	/* Same tag the map keeps for its current content, see rspamd_regexp_list_fin */
 	memcpy(&map_digest, re_map->re_digest, sizeof(map_digest));
 
-	if (rspamd_regexp_map_load_inflight(map_digest, TRUE)) {
-		struct rspamd_map *map = re_map->map;
+	if (re_map->hs_db != NULL) {
+		/* A helper belongs to one version of the content, so this one is ours */
+		msg_debug_map("hyperscan database is already installed for %s", map->name);
 
-		msg_debug_map("the very database is already being loaded for %s",
-					  map->name);
+		if (cb) {
+			cb(TRUE, ud);
+		}
+
+		return;
+	}
+
+	if (rspamd_regexp_map_load_inflight(map_digest, TRUE)) {
+		msg_debug_map("the very database is already being loaded for %s", map->name);
 
 		if (cb) {
 			cb(FALSE, ud);
@@ -3011,6 +3022,7 @@ void rspamd_regexp_map_compile_pending_async(struct rspamd_worker *worker,
 	(void) worker;
 	(void) event_loop;
 	(void) cache_dir;
+	(void) flags;
 }
 
 #endif /* WITH_HYPERSCAN */
