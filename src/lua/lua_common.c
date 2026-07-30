@@ -2007,6 +2007,32 @@ unsigned int rspamd_lua_table_size(lua_State *L, int tbl_pos)
 	return tbl_size;
 }
 
+/*
+ * Get a class name of an object for diagnostics purposes. `__index` is not
+ * necessarily a table: e.g. `redis{null}` has a function there, and indexing a
+ * function would raise an error instead of reporting the type mismatch we are
+ * about to complain about. Values are left on the stack to keep the returned
+ * string alive, a caller is expected to restore the stack afterwards.
+ */
+static const char *
+rspamd_lua_class_name_diag(lua_State *L, int pos)
+{
+	const char *ret = NULL;
+
+	if (lua_getmetatable(L, pos)) {
+		lua_pushstring(L, "__index");
+		lua_rawget(L, -2);
+
+		if (lua_istable(L, -1)) {
+			lua_pushstring(L, "class");
+			lua_rawget(L, -2);
+			ret = lua_tostring(L, -1);
+		}
+	}
+
+	return ret ? ret : "unknown";
+}
+
 static void *
 rspamd_lua_check_udata_common(lua_State *L, int pos, const char *classname,
 							  gboolean fatal)
@@ -2048,12 +2074,8 @@ err:
 	if (fatal) {
 		const char *actual_classname = NULL;
 
-		if (lua_type(L, pos) == LUA_TUSERDATA && lua_getmetatable(L, pos)) {
-			lua_pushstring(L, "__index");
-			lua_gettable(L, -2);
-			lua_pushstring(L, "class");
-			lua_gettable(L, -2);
-			actual_classname = lua_tostring(L, -1);
+		if (lua_type(L, pos) == LUA_TUSERDATA) {
+			actual_classname = rspamd_lua_class_name_diag(L, pos);
 		}
 		else {
 			actual_classname = lua_typename(L, lua_type(L, pos));
@@ -2062,6 +2084,22 @@ err:
 		luaL_Buffer buf;
 		char tmp[512];
 		int r;
+		int nstack = MIN(top, 10);
+		const char *stack_classnames[10] = {NULL};
+
+		/*
+		 * Resolve class names before the buffer is initialised: pushing anything
+		 * on the stack whilst luaL_Buffer is in use would break it. Each lookup
+		 * needs a few slots, and running out of them here would raise an error
+		 * on top of the one we are reporting
+		 */
+		if (lua_checkstack(L, nstack * 3 + 8)) {
+			for (i = 1; i <= nstack; i++) {
+				if (lua_type(L, i) == LUA_TUSERDATA) {
+					stack_classnames[i - 1] = rspamd_lua_class_name_diag(L, i);
+				}
+			}
+		}
 
 		luaL_buffinit(L, &buf);
 		r = rspamd_snprintf(tmp, sizeof(tmp),
@@ -2073,23 +2111,12 @@ err:
 		r = rspamd_snprintf(tmp, sizeof(tmp), " stack(%d): ", top);
 		luaL_addlstring(&buf, tmp, r);
 
-		for (i = 1; i <= MIN(top, 10); i++) {
+		for (i = 1; i <= nstack; i++) {
 			if (lua_type(L, i) == LUA_TUSERDATA) {
-				const char *clsname;
-
-				if (lua_getmetatable(L, i)) {
-					lua_pushstring(L, "__index");
-					lua_gettable(L, -2);
-					lua_pushstring(L, "class");
-					lua_gettable(L, -2);
-					clsname = lua_tostring(L, -1);
-				}
-				else {
-					clsname = lua_typename(L, lua_type(L, i));
-				}
-
 				r = rspamd_snprintf(tmp, sizeof(tmp), "[%d: ud=%s] ", i,
-									clsname);
+									stack_classnames[i - 1] ?
+										stack_classnames[i - 1] :
+										"unknown");
 				luaL_addlstring(&buf, tmp, r);
 			}
 			else {

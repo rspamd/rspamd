@@ -20,6 +20,7 @@
 #include "config.h"
 #include "map.h"
 #include "map_private.h"
+#include "map_helpers.h"
 #include "libserver/http/http_connection.h"
 #include "libserver/http/http_private.h"
 #include "rspamd.h"
@@ -1396,6 +1397,21 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 
 		if (map->on_load_function) {
 			map->on_load_function(map, map->on_load_ud);
+		}
+
+		/*
+		 * A large regexp map is queued for hyperscan compilation by the read
+		 * callback above. That queue is process local and hs_helper inherits
+		 * merely the maps that have been read before the fork, so a map read
+		 * later on would stay on the PCRE fallback forever unless we compile
+		 * it here. Do it in the primary controller only, as every worker reads
+		 * the same maps and would otherwise duplicate the work.
+		 */
+		if (rspamd_worker_is_primary_controller(map->wrk)) {
+			rspamd_regexp_map_compile_pending_async(map->wrk, map->event_loop,
+													map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR,
+													RSPAMD_REGEXP_MAP_PENDING_OWN_ONLY |
+														RSPAMD_REGEXP_MAP_PENDING_INSTALL);
 		}
 	}
 	else {
@@ -3978,7 +3994,7 @@ void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
 
 			/* Use default settings for compilation */
 			rspamd_re_cache_compile_hyperscan_scoped_single(scope, scope_for_check,
-															map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR "/",
+															map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR,
 															1.0,   /* max_time */
 															FALSE, /* silent */
 															worker->ctx ? ((struct rspamd_abstract_worker_ctx *) worker->ctx)->event_loop : NULL,

@@ -2569,4 +2569,21 @@ exports.prepare_redis_setup = function(redis_params, opts, callback)
   return callback(nil)
 end
 
+--[[[
+-- @function lua_redis.is_null(data)
+-- Checks if a Redis reply carries no data: a nil reply is represented by a
+-- sentinel userdata, which is truthy and cannot be compared to nil directly
+-- @param {any} data data as passed to a Redis callback
+-- @return {boolean} true if there is no data
+--]]
+exports.is_null = function(data)
+  if data == nil then
+    return true
+  end
+
+  local rspamd_redis = require "rspamd_redis"
+
+  return data == rspamd_redis.null
+end
+
 return exports

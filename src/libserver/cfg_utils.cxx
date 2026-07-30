@@ -334,7 +334,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->full_gc_iters = DEFAULT_GC_MAXITERS;
 
 	/* Default hyperscan cache */
-	cfg->hs_cache_dir = rspamd_mempool_strdup(cfg->cfg_pool, RSPAMD_DBDIR "/");
+	cfg->hs_cache_dir = rspamd_mempool_strdup(cfg->cfg_pool, RSPAMD_DBDIR);
 
 	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
 		cfg->lua_state = (void *) rspamd_lua_init(flags & RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
@@ -1020,7 +1020,7 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 
 		/* Try load Hypersan */
 		auto hs_ret = rspamd_re_cache_load_hyperscan(cfg->re_cache,
-													 cfg->hs_cache_dir ? cfg->hs_cache_dir : RSPAMD_DBDIR "/",
+													 cfg->hs_cache_dir ? cfg->hs_cache_dir : RSPAMD_DBDIR,
 													 true);
 
 		if (hs_ret == RSPAMD_HYPERSCAN_LOAD_ERROR) {

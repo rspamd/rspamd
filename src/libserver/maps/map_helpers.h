@@ -39,6 +39,7 @@ struct rspamd_radix_map_helper;
 struct rspamd_hash_map_helper;
 struct rspamd_regexp_map_helper;
 struct ev_loop;
+struct rspamd_worker;
 struct rspamd_cdb_map_helper;
 struct rspamd_map_helper_value;
 
@@ -270,6 +271,18 @@ struct rspamd_regexp_map_pending {
 	struct rspamd_regexp_map_helper *re_map;
 	char *name;             /* Map identifier for logging/IPC */
 	unsigned char hash[64]; /* Cache key hash (rspamd_cryptobox_HASHBYTES) */
+	pid_t queued_by;        /* Process that has read the map and queued it */
+};
+
+/**
+ * Flags for rspamd_regexp_map_compile_pending_async()
+ */
+enum rspamd_regexp_map_pending_flags {
+	RSPAMD_REGEXP_MAP_PENDING_DEFAULT = 0,
+	/* Skip the entries inherited from the main process: hs_helper has them too */
+	RSPAMD_REGEXP_MAP_PENDING_OWN_ONLY = (1u << 0),
+	/* Load the compiled database for own use, as hs_helper does not scan */
+	RSPAMD_REGEXP_MAP_PENDING_INSTALL = (1u << 1),
 };
 
 /**
@@ -293,6 +306,40 @@ struct rspamd_regexp_map_pending *rspamd_regexp_map_get_pending(unsigned int *co
  * Clear pending queue after hs_helper has processed it.
  */
 void rspamd_regexp_map_clear_pending(void);
+
+/**
+ * Remove a single processed entry from the pending queue.
+ * @param name identifier the map has been queued with
+ */
+void rspamd_regexp_map_remove_pending(const char *name);
+
+/**
+ * Compile all queued regexp maps to the hyperscan cache and notify the workers
+ * so that they hot-swap the databases, clearing the queue afterwards. Nothing
+ * happens if a compilation is already in progress or the queue is empty.
+ *
+ * The queue is process local, so it has to be driven by every process that
+ * reads maps on its own: hs_helper inherits only the maps that have been read
+ * before the fork, whilst maps read later are known just to the process that
+ * has read them.
+ *
+ * @param worker worker used to notify the main process
+ * @param event_loop event loop to run the asynchronous operations on
+ * @param cache_dir hyperscan cache directory (used by the file backend)
+ * @param flags see enum rspamd_regexp_map_pending_flags
+ */
+void rspamd_regexp_map_compile_pending_async(struct rspamd_worker *worker,
+											 struct ev_loop *event_loop,
+											 const char *cache_dir,
+											 unsigned int flags);
+
+/**
+ * Find a pending regexp map by its digest, which identifies the very content
+ * that has been compiled, unlike a name.
+ * @param hash digest of rspamd_cryptobox_HASHBYTES bytes
+ * @return regexp map helper or NULL if not found
+ */
+struct rspamd_regexp_map_helper *rspamd_regexp_map_find_pending_by_hash(const unsigned char *hash);
 
 /**
  * Find a pending regexp map by name.
