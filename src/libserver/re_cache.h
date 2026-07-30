@@ -219,6 +219,13 @@ unsigned int rspamd_re_cache_set_limit(struct rspamd_re_cache *cache, unsigned i
 unsigned int rspamd_re_cache_set_limit_scoped(struct rspamd_re_cache *cache_head, const char *scope, unsigned int limit);
 
 /**
+ * Set limit for all regular expressions in all scopes of the cache list, returns
+ * the previous limit of the default scope. Scopes created afterwards inherit this
+ * limit from the default scope.
+ */
+unsigned int rspamd_re_cache_set_limit_all_scopes(struct rspamd_re_cache *cache_head, unsigned int limit);
+
+/**
  * Convert re type to a human readable string (constant one)
  */
 const char *rspamd_re_cache_type_to_string(enum rspamd_re_type type);

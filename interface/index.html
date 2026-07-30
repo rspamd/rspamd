@@ -48,7 +48,7 @@
 				<li role="presentation" class="nav-item"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-bs-toggle="tab" class="nav-link">Configuration</a></li>
 				<li role="presentation" class="nav-item"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-bs-toggle="tab" class="nav-link">Symbols</a></li>
 				<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-bs-toggle="tab" class="nav-link">Scan<span class="ro-hide d-none">/Learn</span></a></li>
-				<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-bs-toggle="tab" class="nav-link ro-hide d-none">Test selectors</a></li>
+				<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-bs-toggle="tab" class="nav-link">Test selectors</a></li>
 				<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-bs-toggle="tab" class="nav-link">History</a></li>
 			</ul>
 		</div>
@@ -619,7 +619,8 @@
 					<div class="card-header text-secondary py-2 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-envelope"></i></span>
 						<span class="h6 fw-bolder my-auto">Test Rspamd selectors</span>
-						<div class="d-flex input-group-sm align-items-center ms-auto">
+						<span class="badge text-bg-info ms-2 ro-show d-none" title="Read-only mode: message evaluation is unavailable. You can browse extractors and transforms and validate selector syntax.">Read-only</span>
+						<div class="d-flex input-group-sm align-items-center ms-auto ro-hide">
 							<label for="formFile" class="col-auto col-form-label-sm me-1">Choose a file:</label>
 							<input class="form-control form-control-sm btn btn-secondary" id="selectorsFile" type="file">
 						</div>
@@ -647,7 +648,7 @@
 									<div class="col-lg col-12 mh-100 overflow-auto">
 										<div class="row h-100">
 											<form class="col-12 d-flex flex-column">
-												<div class="row pt-3">
+												<div class="row pt-3 ro-hide">
 													<div class="col">
 														<div class="mb-3">
 															<label class="form-label" for="selectorsMsgArea">Message source:</label>
@@ -662,11 +663,11 @@
 															<label class="form-label" for="selectorsSelArea">Selector(s):</label>
 															<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
 														</div>
-														<button type="submit" class="btn btn-primary d-inline-flex align-items-center" id="selectorsChkMsgBtn"><i class="fas fa-search me-2"></i>Check message</button>
+														<button type="submit" class="btn btn-primary d-inline-flex align-items-center ro-hide" id="selectorsChkMsgBtn"><i class="fas fa-search me-2"></i>Check message</button>
 														<button class="btn btn-secondary d-inline-flex align-items-center float-end" id="selectorsClean"><i class="fas fa-trash-alt me-2"></i>Clean form</button>
 													</div>
 												</div>
-												<div class="row pt-3 flex-grow-1">
+												<div class="row pt-3 flex-grow-1 ro-hide">
 													<div class="col d-flex flex-column">
 														<div class="mb-3 h-100 d-flex flex-column">
 															<label class="form-label" for="selectorsResArea">Result:</label>
@@ -741,7 +742,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card shadow my-3 ro-hide" id="errors-history">
+				<div class="card shadow my-3" id="errors-history">
 					<div class="card-header text-secondary py-1 d-flex align-items-center">
 						<span class="icon me-3"><i class="fas fa-exclamation-triangle"></i></span>
 						<span class="h6 fw-bolder my-auto ms-0">Errors</span>

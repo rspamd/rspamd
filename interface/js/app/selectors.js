@@ -38,7 +38,7 @@ define(["app/common"],
                 enable_disable_check_btn();
             }
             const selector = selArea.value;
-            if (selector.length && !common.read_only) {
+            if (selector.length) {
                 common.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
                     method: "GET",
                     success: function (json) {
@@ -83,8 +83,7 @@ define(["app/common"],
         }
 
         ui.displayUI = function () {
-            if (!common.read_only &&
-                !document.querySelector("#selectorsTable-extractors>tbody>tr") &&
+            if (!document.querySelector("#selectorsTable-extractors>tbody>tr") &&
                 !document.querySelector("#selectorsTable-transforms>tbody>tr")) buildLists();
             if (!document.getElementById("selectorsSelArea").matches(".is-valid, .is-invalid")) checkSelectors();
         };

@@ -1,3 +1,25 @@
+4.1.4: 29 Jul 2026
+
+  ** Incompatible changes **
+  * [Rework] cmake: Link one shared jemalloc instance per process and refuse static-only jemalloc (duplicated allocators segfaulted at startup)
+
+  ** Features **
+  * [Feature] WebUI: Read-only access to the selectors tab
+  * [Feature] WebUI: Expose the Errors history to read-only users
+
+  ** Bug fixes **
+  * [CritFix] controller: Fail closed on a malformed password hash (any password was accepted)
+  * [CritFix] regexp: Do not leak PCRE2 match data on invalid UTF input
+  * [Fix] regexp: Bound the heap used by a single match (PCRE2 heap limit, PCRE1 match limits)
+  * [Fix] regexp: Stop re:matchn() from looping forever on empty matches
+  * [Fix] regexp: Do not read past the end of a bounded pattern when generating ids
+  * [Fix] re_cache: Propagate the regexp data limit to named scopes
+  * [Fix] url: Consult the Lua URL filter at most twice per user field, not per byte
+  * [Fix] tokenizer: Bound the words retained for a message with a message-wide budget
+  * [Fix] css: Skip comments iteratively in the tokeniser (stack overflow on many sequential comments)
+  * [Fix] actrie: Release GLib allocations with g_free (startup segfault with jemalloc)
+  * [Fix] rspamadm: Resolve SRV based upstreams and wait for storages in fuzzy_ping and fuzzy_hash
+
 4.1.3: 25 Jul 2026
 
   ** Incompatible changes **

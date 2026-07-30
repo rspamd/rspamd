@@ -17,6 +17,7 @@ limitations under the License.
 local argparse = require "argparse"
 local ansicolors = require "ansicolors"
 local rspamd_logger = require "rspamd_logger"
+local lua_fuzzy = require "lua_fuzzy"
 
 local E = {}
 
@@ -142,12 +143,21 @@ local function make_task(fname)
   return task
 end
 
-local function query_hashes(opts)
-  if not opts.rule then
-    print(highlight_err('-H/--hash requires an explicit rule (-r)'))
-    os.exit(1)
+-- Storages can only be queried once their upstreams are known: SRV based
+-- server lists are resolved asynchronously after the configuration is loaded
+local function with_storages(opts, names, cb)
+  if opts.server then
+    -- Explicit override, the configured upstreams are not used at all
+    cb()
+    return
   end
 
+  -- The task is only needed to drive the event loop while resolving
+  lua_fuzzy.wait_for_storages(rspamd_config, make_task(nil), names,
+      opts.timeout, cb)
+end
+
+local function query_hashes(opts)
   local task = make_task(nil)
   local ret, err = rspamd_plugins.fuzzy_check.check(task, print_check_result,
       opts.rule, opts.timeout, opts.hash, opts.server)
@@ -193,7 +203,15 @@ local function handler(args)
   load_config(opts)
 
   if #opts.hash > 0 then
-    query_hashes(opts)
+    if not opts.rule then
+      print(highlight_err('-H/--hash requires an explicit rule (-r)'))
+      os.exit(1)
+    end
+
+    with_storages(opts, { [opts.rule] = true }, function()
+      query_hashes(opts)
+    end)
+
     return
   end
 
@@ -203,8 +221,17 @@ local function handler(args)
 
   local rules = selected_rules(opts)
 
-  for _, fname in ipairs(opts.file) do
-    process_file(opts, fname, rules)
+  local function process_all()
+    for _, fname in ipairs(opts.file) do
+      process_file(opts, fname, rules)
+    end
+  end
+
+  if opts.check then
+    -- `rules` is keyed by rule name, so it doubles as the set to wait for
+    with_storages(opts, rules, process_all)
+  else
+    process_all()
   end
 end
 

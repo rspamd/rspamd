@@ -279,8 +279,10 @@ define(["app/common", "app/icons", "bootstrap",
                 document.querySelectorAll(".ro-disable").forEach((el) => { el.disabled = common.read_only; });
                 if (common.read_only) {
                     common.hide(".ro-hide");
+                    common.show(".ro-show");
                 } else {
                     common.show(".ro-hide");
+                    common.hide(".ro-show");
                 }
 
                 document.getElementById("preloader").classList.add("d-none");
