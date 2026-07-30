@@ -937,6 +937,7 @@ if settings.whitelisted_signers_map then
     score = -2.0,
     group = 'policies',
     groups = { 'arc' },
+    one_shot = true,
   })
 end
 
