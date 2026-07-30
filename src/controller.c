@@ -51,6 +51,13 @@
 /* Bounds the memory used by the throttling state */
 #define AUTH_FAILURES_CACHE_SIZE 1024
 
+/*
+ * Admission control limits, both disabled by default so that this release
+ * behaves exactly as the previous ones unless an operator opts in.
+ */
+#define DEFAULT_MAX_CONNECTIONS 0
+#define DEFAULT_MAX_CONNECTIONS_PER_SOURCE 0
+
 /* HTTP paths */
 #define PATH_AUTH "/auth"
 #define PATH_SYMBOLS "/symbols"
@@ -166,6 +173,19 @@ struct rspamd_controller_worker_ctx {
 	rspamd_lru_hash_t *auth_failures;
 	unsigned int max_auth_failures;
 	double auth_failure_window;
+	/*
+	 * Admission control. Both limits are disabled (0) by default to preserve
+	 * the historical behaviour; `conns_per_source` counts the connections that
+	 * are currently being served, keyed by peer address.
+	 */
+	unsigned int max_connections;
+	unsigned int max_connections_per_source;
+	GHashTable *conns_per_source;
+	/*
+	 * Whether TCP clients of this worker may use the privileged File/Path/Shm
+	 * message source inputs. Unix socket peers always may.
+	 */
+	gboolean allow_file_and_shm_inputs;
 	/* HTTP server */
 	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
@@ -535,6 +555,69 @@ rspamd_controller_check_forwarded(struct rspamd_controller_session *session,
 	}
 
 	return ret;
+}
+
+/*
+ * Whether this connection may use the privileged File/Path/Shm message source
+ * inputs, which make rspamd open an object named by the client in the server's
+ * own filesystem or shared memory.
+ *
+ * This is a property of the transport the connection was accepted on and of
+ * nothing else. Authentication and this capability are deliberately separate:
+ * a correct `enable_password` proves who the client is, it does not make the
+ * client local, so it must not unlock filesystem access. The password-less
+ * shortcuts of `rspamd_controller_check_password` must not leak in here either
+ * — the AF_UNIX one happens to coincide with the rule below, but a `secure_ip`
+ * peer is still an ordinary TCP client and stays gated.
+ *
+ * Nothing that the client controls (headers, `Forwarded`, `User-Agent`, query
+ * arguments, request metadata) may be consulted here.
+ */
+static gboolean
+rspamd_controller_allow_file_shm(struct rspamd_controller_session *session)
+{
+	if (session->from_addr != NULL &&
+		rspamd_inet_address_get_af(session->from_addr) == AF_UNIX) {
+		/*
+		 * A unix socket peer already needs filesystem access to reach us, so
+		 * naming a file adds no privileges it does not have.
+		 */
+		return TRUE;
+	}
+
+	return session->ctx->allow_file_and_shm_inputs;
+}
+
+/*
+ * Propagates the properties of the accepted transport onto a task created for
+ * this session. Must be called before anything can reach
+ * `rspamd_task_load_message` (or the v3 request parser), as those are the
+ * points where a privileged input would otherwise be opened.
+ */
+static void
+rspamd_controller_task_set_transport(struct rspamd_controller_session *session,
+									 struct rspamd_task *task)
+{
+	if (!rspamd_controller_allow_file_shm(session)) {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
+	}
+
+	/* Locality is derived from the peer address only, never from a header */
+	if (session->from_addr != NULL &&
+		rspamd_worker_addr_is_loopback(session->from_addr)) {
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+	else {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+
+	/*
+	 * The session owns its address and outlives the task only in the sense that
+	 * it frees it in the finish handler, so the task gets its own copy.
+	 */
+	if (task->client_addr == NULL && session->from_addr != NULL) {
+		task->client_addr = rspamd_inet_address_copy(session->from_addr, NULL);
+	}
 }
 
 /*
@@ -1790,6 +1873,7 @@ rspamd_controller_handle_lua_history(lua_State *L,
 													 NULL,
 													 (event_finalizer_t) rspamd_task_free);
 				task->fin_arg = conn_ent;
+				rspamd_controller_task_set_transport(session, task);
 
 				ptask = lua_newuserdata(L, sizeof(*ptask));
 				*ptask = task;
@@ -2141,6 +2225,7 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	if (msg->body_buf.len > 0) {
 		if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
@@ -2348,6 +2433,7 @@ rspamd_controller_handle_learn_common(
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
@@ -2463,6 +2549,7 @@ rspamd_controller_handle_learnclass(
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
@@ -2534,6 +2621,11 @@ rspamd_controller_handle_scan(struct rspamd_http_connection_entry *conn_ent,
 	task->sock = conn_ent->conn->fd;
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->resolver = ctx->resolver;
+	/*
+	 * Before the request is parsed: the v3 handler below can map a shm segment
+	 * on its own, without going through rspamd_task_load_message
+	 */
+	rspamd_controller_task_set_transport(session, task);
 
 	if (!rspamd_protocol_handle_request(task, msg)) {
 		task->flags |= RSPAMD_TASK_FLAG_SKIP;
@@ -3046,8 +3138,8 @@ rspamd_controller_handle_stat_common(
 									cbdata);
 	task->fin_arg = cbdata;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = conn_ent->conn->fd;
+	rspamd_controller_task_set_transport(session, task);
 
 	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
@@ -3347,6 +3439,7 @@ rspamd_controller_handle_metrics_common(
 	task->fin_arg = cbdata;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = conn_ent->conn->fd;
+	rspamd_controller_task_set_transport(session, task);
 
 	if (stat_copy.messages_scanned > 0 && do_reset) {
 		for (int i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
@@ -3694,9 +3787,9 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	if (msg->body_buf.len > 0) {
 		if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
@@ -3788,14 +3881,14 @@ rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *
 
 		classifier_obj = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_insert_key(classifier_obj,
-				ucl_object_fromstring(clc->name),
-				"name", 0, false);
+							  ucl_object_fromstring(clc->name),
+							  "name", 0, false);
 		ucl_object_insert_key(classifier_obj,
-				ucl_object_fromstring(rspamd_classifier_type(clc)),
-				"type", 0, false);
+							  ucl_object_fromstring(rspamd_classifier_type(clc)),
+							  "type", 0, false);
 		ucl_object_insert_key(classifier_obj,
-				ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
-				"per_user", 0, false);
+							  ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
+							  "per_user", 0, false);
 
 		/* Collect unique class names from statfiles.
 		 * Linear search is used since N < 10 in practice, avoiding hash table overhead. */
@@ -3845,6 +3938,78 @@ rspamd_controller_error_handler(struct rspamd_http_connection_entry *conn_ent,
 	msg_err_session("http error occurred: %s", err->message);
 }
 
+/*
+ * Pending connections accounting per source address. The global limit alone
+ * would let a single peer occupy the whole budget of the worker, so in-flight
+ * connections are also counted per source. Entries are dropped as soon as a
+ * source has no connection left, which bounds the table by the number of peers
+ * that are actually connected right now.
+ *
+ * Returns FALSE when the source is already at its limit; the caller must then
+ * not create a session (nothing has been accounted in that case).
+ */
+static gboolean
+rspamd_controller_source_conn_add(struct rspamd_controller_worker_ctx *ctx,
+								  const rspamd_inet_addr_t *addr)
+{
+	unsigned int *nconns;
+
+	if (ctx->conns_per_source == NULL || ctx->max_connections_per_source == 0 ||
+		addr == NULL || rspamd_inet_address_get_af(addr) == AF_UNIX) {
+		/* Disabled, or a local peer that is not subject to the limit */
+		return TRUE;
+	}
+
+	nconns = g_hash_table_lookup(ctx->conns_per_source, addr);
+
+	if (nconns != NULL) {
+		if (*nconns >= ctx->max_connections_per_source) {
+			return FALSE;
+		}
+
+		(*nconns)++;
+	}
+	else {
+		nconns = g_malloc(sizeof(*nconns));
+		*nconns = 1;
+		g_hash_table_insert(ctx->conns_per_source,
+							rspamd_inet_address_copy(addr, NULL),
+							nconns);
+	}
+
+	return TRUE;
+}
+
+/*
+ * Releases one pending connection of a source. Mirrors
+ * `rspamd_controller_source_conn_add` and must be called exactly once for every
+ * successful call of it.
+ */
+static void
+rspamd_controller_source_conn_remove(struct rspamd_controller_worker_ctx *ctx,
+									 const rspamd_inet_addr_t *addr)
+{
+	unsigned int *nconns;
+
+	if (ctx->conns_per_source == NULL || ctx->max_connections_per_source == 0 ||
+		addr == NULL || rspamd_inet_address_get_af(addr) == AF_UNIX) {
+		return;
+	}
+
+	nconns = g_hash_table_lookup(ctx->conns_per_source, addr);
+
+	if (nconns == NULL) {
+		return;
+	}
+
+	if (*nconns > 1) {
+		(*nconns)--;
+	}
+	else {
+		g_hash_table_remove(ctx->conns_per_source, addr);
+	}
+}
+
 static void
 rspamd_controller_finish_handler(struct rspamd_http_connection_entry *conn_ent)
 {
@@ -3857,6 +4022,7 @@ rspamd_controller_finish_handler(struct rspamd_http_connection_entry *conn_ent)
 	}
 
 	session->wrk->nconns--;
+	rspamd_controller_source_conn_remove(session->ctx, session->from_addr);
 	rspamd_inet_address_free(session->from_addr);
 	CFG_REF_RELEASE(session->cfg);
 
@@ -3891,6 +4057,36 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 		return;
 	}
 
+	/*
+	 * Admission control runs before anything is allocated for this connection:
+	 * a session pool, a TLS handshake or a password KDF are all far more
+	 * expensive than the accept itself, so the limits must be applied while the
+	 * connection is still just a file descriptor. The connection is accepted
+	 * and closed at once instead of being left in the listen queue, otherwise
+	 * the level triggered accept watcher would spin on a readable listener.
+	 */
+	if (ctx->max_connections > 0 && worker->nconns >= ctx->max_connections) {
+		msg_info_ctx("deny connection from %s: the worker already serves "
+					 "%ud connections, the limit is %ud",
+					 rspamd_inet_address_to_string_pretty(addr),
+					 worker->nconns, ctx->max_connections);
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
+	if (!rspamd_controller_source_conn_add(ctx, addr)) {
+		msg_info_ctx("deny connection from %s: this source already has %ud "
+					 "pending connections",
+					 rspamd_inet_address_to_string_pretty(addr),
+					 ctx->max_connections_per_source);
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
 	session = g_malloc0(sizeof(struct rspamd_controller_session));
 	session->pool = rspamd_mempool_new_short_lived("csession");
 	session->ctx = ctx;
@@ -3900,6 +4096,9 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 
 	session->from_addr = addr;
 	session->wrk = worker;
+	/* Decided once, from the transport, so that handlers in other modules
+	 * (e.g. fuzzy_check) can honour it without seeing our private context */
+	session->allow_file_shm_input = rspamd_controller_allow_file_shm(session);
 	worker->nconns++;
 
 	rspamd_http_router_handle_socket_ssl(ctx->http, nfd, session,
@@ -3991,6 +4190,10 @@ init_controller_worker(struct rspamd_config *cfg)
 	ctx->task_timeout = NAN;
 	ctx->max_auth_failures = DEFAULT_MAX_AUTH_FAILURES;
 	ctx->auth_failure_window = DEFAULT_AUTH_FAILURE_WINDOW;
+	/* Permissive for this release, see the option description below */
+	ctx->allow_file_and_shm_inputs = TRUE;
+	ctx->max_connections = DEFAULT_MAX_CONNECTIONS;
+	ctx->max_connections_per_source = DEFAULT_MAX_CONNECTIONS_PER_SOURCE;
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -4107,6 +4310,44 @@ init_controller_worker(struct rspamd_config *cfg)
 									  RSPAMD_CL_FLAG_TIME_FLOAT,
 									  "Time for a source to regain all of its authentication "
 									  "attempts, default: 60 seconds");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "allow_file_and_shm_inputs",
+									  rspamd_rcl_parse_struct_boolean,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  allow_file_and_shm_inputs),
+									  0,
+									  "Allow privileged File/Path/Shm message source inputs, which "
+									  "make rspamd read a local file or shared memory segment named "
+									  "by the client, for connections accepted over TCP; unix socket "
+									  "clients are always allowed to use them. Default: true, this "
+									  "will become false in the next major release");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_connections",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  max_connections),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Maximum number of connections served simultaneously by one "
+									  "controller worker, further connections are closed right after "
+									  "accept, 0 means unlimited, default: 0");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_connections_per_source",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  max_connections_per_source),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Maximum number of simultaneous connections from a single "
+									  "source address, unix socket clients are not affected, "
+									  "0 means unlimited, default: 0");
 
 	return ctx;
 }
@@ -4386,6 +4627,9 @@ start_controller_worker(struct rspamd_worker *worker)
 											"controller",
 											rspamd_controller_accept_socket);
 
+	rspamd_worker_warn_file_shm_inputs(worker, "controller",
+									   ctx->allow_file_and_shm_inputs);
+
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	CFG_REF_RETAIN(ctx->cfg);
@@ -4414,6 +4658,13 @@ start_controller_worker(struct rspamd_worker *worker)
 	}
 	else {
 		msg_info_ctx("authentication failure throttling is disabled");
+	}
+
+	if (ctx->max_connections_per_source > 0) {
+		ctx->conns_per_source = g_hash_table_new_full(rspamd_inet_address_hash,
+													  rspamd_inet_address_equal,
+													  (GDestroyNotify) rspamd_inet_address_free,
+													  g_free);
 	}
 
 	if (ctx->secure_ip != NULL) {

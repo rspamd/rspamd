@@ -75,15 +75,22 @@ struct rspamd_worker_session {
 	struct rspamd_worker_ctx *ctx;
 	struct rspamd_http_connection *http_conn;
 	struct rspamd_worker *worker;
+	/*
+	 * Whether this connection may use privileged File/Path/Shm message
+	 * source inputs. Decided at accept time from the transport only.
+	 */
+	gboolean allow_file_shm;
+	/* Whether the peer is strictly local (unix socket or loopback) */
+	gboolean is_local;
+	/* Whether this session is currently accounted in worker->nconns */
+	gboolean counted;
 };
 /*
  * Reduce number of tasks proceeded
  */
 static void
-reduce_tasks_count(gpointer arg)
+reduce_tasks_count(struct rspamd_worker *worker)
 {
-	struct rspamd_worker *worker = arg;
-
 	worker->nconns--;
 
 	if (worker->state == rspamd_worker_wait_connections && worker->nconns == 0) {
@@ -101,6 +108,34 @@ reduce_tasks_count(gpointer arg)
 	else if (worker->state != rspamd_worker_state_running) {
 		worker->state = rspamd_worker_wait_connections;
 	}
+}
+
+/*
+ * Idempotent release of the connection slot acquired in `accept_socket`.
+ * It is safe to call it multiple times for the same session, so every
+ * teardown path can call it unconditionally.
+ */
+static void
+rspamd_worker_session_uncount(struct rspamd_worker_session *session)
+{
+	if (session->counted) {
+		session->counted = FALSE;
+		reduce_tasks_count(session->worker);
+	}
+}
+
+/*
+ * Session destructor installed on the task pool once the task takes the
+ * session ownership. It both releases the connection slot and frees the
+ * session itself, so the ordering of the pool destructors is irrelevant.
+ */
+static void
+rspamd_worker_session_task_dtor(gpointer arg)
+{
+	struct rspamd_worker_session *session = arg;
+
+	rspamd_worker_session_uncount(session);
+	g_free(session);
 }
 
 static int
@@ -154,15 +189,29 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 
 	task->resolver = ctx->resolver;
 
-	session->worker->nconns++;
+	/*
+	 * Both the connection accounting and the session memory are now handled
+	 * by the task pool.
+	 */
 	rspamd_mempool_add_destructor(task->task_pool,
-								  (rspamd_mempool_destruct_t) reduce_tasks_count,
-								  session->worker);
-
-	/* Session memory is also now handled by task */
-	rspamd_mempool_add_destructor(task->task_pool,
-								  (rspamd_mempool_destruct_t) g_free,
+								  (rspamd_mempool_destruct_t) rspamd_worker_session_task_dtor,
 								  session);
+
+	/*
+	 * Privileged message source inputs and the local client status are
+	 * decided from the accepted transport only: never from the request
+	 * headers or any other client controlled data.
+	 */
+	if (!session->allow_file_shm) {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
+	}
+
+	if (session->is_local) {
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+	else {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
 
 	/* Set up async session */
 	task->s = rspamd_task_create_session(task, task->task_pool, rspamd_task_fin,
@@ -293,6 +342,7 @@ rspamd_worker_error_handler(struct rspamd_http_connection *conn, GError *err)
 		rspamd_http_connection_unref(session->http_conn);
 		rspamd_inet_address_free(session->addr);
 		close(session->fd);
+		rspamd_worker_session_uncount(session);
 		g_free(session);
 	}
 }
@@ -332,6 +382,7 @@ rspamd_worker_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_http_connection_reset(session->http_conn);
 		rspamd_http_connection_unref(session->http_conn);
 		close(session->fd);
+		rspamd_worker_session_uncount(session);
 		g_free(session);
 	}
 
@@ -348,16 +399,18 @@ accept_socket(EV_P_ ev_io *w, int revents)
 	struct rspamd_worker_ctx *ctx;
 	struct rspamd_worker_session *session;
 	rspamd_inet_addr_t *addr = NULL;
+	gboolean over_limit, is_unix;
 	int nfd, http_opts = 0;
 
 	ctx = worker->ctx;
 
-	if (ctx->max_tasks != 0 && worker->nconns > ctx->max_tasks) {
-		msg_info_ctx("current tasks is now: %uD while maximum is: %uD",
-					 worker->nconns,
-					 ctx->max_tasks);
-		return;
-	}
+	/*
+	 * Admission control must be evaluated before we accept anything and it
+	 * must not depend on the protocol/body timeouts: a connection is counted
+	 * from the accept and until the task pool (or the unmanaged session
+	 * teardown) releases it.
+	 */
+	over_limit = (ctx->max_tasks != 0 && worker->nconns >= ctx->max_tasks);
 
 	if ((nfd =
 			 rspamd_accept_from_socket(w->fd, &addr,
@@ -372,14 +425,56 @@ accept_socket(EV_P_ ev_io *w, int revents)
 		return;
 	}
 
+	if (over_limit) {
+		/*
+		 * We still have to accept and close the connection here: the listen
+		 * event is level triggered, so merely returning would spin the worker
+		 * on the listening socket.
+		 */
+		ev_tstamp now = ev_now(EV_A);
+
+		if (now - ctx->last_overload_log >= 1.0) {
+			ctx->last_overload_log = now;
+			msg_info_ctx("dropping connection from %s: current connections "
+						 "count is %ud while maximum is %uD",
+						 rspamd_inet_address_to_string_pretty(addr),
+						 worker->nconns,
+						 ctx->max_tasks);
+		}
+
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
+	/* From this point the connection is accounted, see reduce_tasks_count */
+	worker->nconns++;
+
 	session = g_malloc0(sizeof(*session));
 	session->magic = G_MAXINT64;
 	session->addr = addr;
 	session->fd = nfd;
 	session->ctx = ctx;
 	session->worker = worker;
+	session->counted = TRUE;
 
-	if (ctx->encrypted_only && !rspamd_inet_address_is_local(addr)) {
+	/*
+	 * Privileged inputs are allowed on unix sockets unconditionally (they are
+	 * protected by the filesystem permissions) and elsewhere only when the
+	 * administrator has explicitly opted in. Never trust anything that comes
+	 * from the client for this decision.
+	 */
+	is_unix = (rspamd_inet_address_get_af(addr) == AF_UNIX);
+	session->allow_file_shm = is_unix || ctx->allow_file_and_shm_inputs;
+	session->is_local = is_unix || rspamd_worker_addr_is_loopback(addr);
+
+	/*
+	 * Only a genuinely local peer is exempt from the encryption requirement.
+	 * rspamd_inet_address_is_local() also matches IPv6 link-local and site-local
+	 * addresses, which would let any host on the same segment skip encryption.
+	 */
+	if (ctx->encrypted_only && !session->is_local) {
 		http_opts = RSPAMD_HTTP_REQUIRE_ENCRYPTION;
 	}
 
@@ -427,6 +522,11 @@ init_worker(struct rspamd_config *cfg)
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 	ctx->cfg = cfg;
 	ctx->task_timeout = NAN;
+	/*
+	 * Permissive by default for this release; the default flips to FALSE in
+	 * the next major release.
+	 */
+	ctx->allow_file_and_shm_inputs = TRUE;
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -445,6 +545,17 @@ init_worker(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct rspamd_worker_ctx, encrypted_only),
 									  0,
 									  "Allow only encrypted connections");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "allow_file_and_shm_inputs",
+									  rspamd_rcl_parse_struct_boolean,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_worker_ctx, allow_file_and_shm_inputs),
+									  0,
+									  "Accept privileged File/Path/Shm message source inputs over TCP "
+									  "(default: true; will become false in the next major release). "
+									  "Unix sockets always allow these inputs");
 
 
 	rspamd_rcl_register_worker_option(cfg,
@@ -521,6 +632,8 @@ start_worker(struct rspamd_worker *worker)
 	ctx->cfg = worker->srv->cfg;
 	CFG_REF_RETAIN(ctx->cfg);
 	ctx->event_loop = rspamd_prepare_worker(worker, "normal", accept_socket);
+	rspamd_worker_warn_file_shm_inputs(worker, "normal",
+									   ctx->allow_file_and_shm_inputs);
 	rspamd_symcache_start_refresh(worker->srv->cfg->cache, ctx->event_loop,
 								  worker);
 

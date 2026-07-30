@@ -6211,6 +6211,17 @@ fuzzy_modify_handler(struct rspamd_http_connection_entry *conn_ent,
 	task = rspamd_task_new(session->wrk, session->cfg, NULL,
 						   session->lang_det, conn_ent->rt->event_loop, FALSE);
 	task->cfg = ctx->cfg;
+
+	/*
+	 * This task loads its message straight from the request below, so it has to
+	 * inherit the transport's privileged input capability just like the tasks
+	 * that controller.c creates itself. Otherwise /fuzzyadd and /fuzzydel would
+	 * keep honouring a client supplied File/Shm source on a connection where
+	 * every other endpoint refuses it.
+	 */
+	if (!session->allow_file_shm_input) {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
+	}
 	saved = rspamd_mempool_alloc0(session->pool, sizeof(int));
 	fuzzy_module_ctx = fuzzy_get_context(ctx->cfg);
 
