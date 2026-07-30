@@ -224,6 +224,23 @@ def HTTP_With_Headers(method, host, port, path, data=None, headers={}):
     return [s, t, h]
 
 
+def HTTP_Status_And_Reason(method, host, port, path, data=None, headers={}):
+    """HTTP request that returns [status, reason, body].
+
+    rspamd_proxy reports a refused request in the status line only -- that
+    path writes no body at all -- so the reason phrase is the only assertable
+    text.
+    """
+    c = http.client.HTTPConnection("%s:%s" % (host, port))
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    reason = r.reason
+    c.close()
+    return [s, reason, t]
+
+
 def HTTPS(method, host, port, path, data=None, headers={}):
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -336,6 +353,242 @@ def Scan_File(filename, **headers):
     c.close()
     BuiltIn().set_test_variable("${SCAN_RESULT}", d)
     return
+
+
+def Scan_File_Expect_Error(filename, expected_status, port=None, **headers):
+    """POST /checkv2 and require a specific HTTP status; return the body.
+
+    Scan_File asserts 200, so a request that must be refused needs its own
+    entry point. The body is returned so the caller can assert on the
+    protocol error text rather than on the status alone.
+
+    Example:
+    | ${body} = | Scan File Expect Error | /dev/null | 400 | File=/tmp/x |
+    """
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv2", open(filename, "rb"), headers)
+    r = c.getresponse()
+    status = r.status
+    body = r.read().decode('utf-8', errors='replace')
+    c.close()
+    assert status == int(expected_status), \
+        "Expected HTTP %s but got %d: %s" % (expected_status, status, body)
+    return body
+
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    """http.client speaking to an AF_UNIX listener.
+
+    http.client has no unix transport and every other test config binds
+    host:port, so this exists only for the file/shm suites: the whole point
+    of the hardening is that a unix socket peer keeps the privileged
+    File/Path/Shm inputs that a TCP peer is denied, and that cannot be
+    exercised over TCP by definition.
+    """
+
+    def __init__(self, socket_path, timeout=30):
+        super().__init__("localhost", timeout=timeout)
+        self.socket_path = socket_path
+
+    def connect(self):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(self.timeout)
+        s.connect(self.socket_path)
+        self.sock = s
+
+
+def unix_socket_connect(socket_path):
+    """Connect to a unix socket and close it again, raising if it is not there.
+
+    Readiness probe: Rspamd Startup Check only pings a TCP port, so a worker
+    that also binds a unix socket needs its own barrier.
+
+    Example:
+    | Wait Until Keyword Succeeds | 10x | 0.2s | Unix Socket Connect | /tmp/x.sock |
+    """
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(5)
+    try:
+        s.connect(socket_path)
+    finally:
+        s.close()
+
+
+def Scan_File_Over_Unix_Socket(socket_path, filename, **headers):
+    """Like Scan_File but over a unix socket; sets ${SCAN_RESULT}.
+
+    Example:
+    | Scan File Over Unix Socket | ${sock} | /dev/null | File=${msg} |
+    """
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    c = _UnixHTTPConnection(socket_path)
+    try:
+        c.request("POST", "/checkv2", open(filename, "rb"), headers)
+        r = c.getresponse()
+        status = r.status
+        body = r.read().decode('utf-8', errors='replace')
+    finally:
+        c.close()
+    assert status == 200, "Expected HTTP 200 but got %d: %s" % (status, body)
+    d = json.JSONDecoder(strict=True).decode(body)
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def _shm_object_dir():
+    """Directory backing POSIX shared memory names, or None.
+
+    rspamd resolves an `Shm` value with shm_open() only where cmake found
+    POSIX shared memory to be sane, which is Linux (see HAVE_SANE_SHMEM);
+    everywhere else the value is an ordinary path handed to open(2). glibc
+    maps a shm name onto /dev/shm/<name>, so the object can be created as a
+    plain file there without any third party module.
+    """
+    if sys.platform.startswith('linux'):
+        for d in ('/dev/shm', '/run/shm'):
+            if os.path.isdir(d):
+                return d
+    return None
+
+
+def create_shm_payload(content=None, size=None):
+    """Create an object that an `Shm` request header can name.
+
+    Returns [name, path]: `name` goes into the header, `path` is what
+    Remove Shm Payload has to unlink. Give either the exact `content` or a
+    `size` in bytes of filler text.
+
+    Example:
+    | ${name} | ${path} = | Create Shm Payload | size=200000 |
+    """
+    if content is None:
+        nbytes = int(size)
+        content = (("X" * 63 + "\n") * (nbytes // 64 + 1))[:nbytes]
+    data = content if isinstance(content, bytes) else content.encode('utf-8')
+    uniq = "rspamd-fshm-%016x" % random.getrandbits(64)
+    shmdir = _shm_object_dir()
+    if shmdir:
+        path = os.path.join(shmdir, uniq)
+        name = "/" + uniq
+    else:
+        path = os.path.join(tempfile.gettempdir(), uniq)
+        name = path
+    with open(path, "wb") as f:
+        f.write(data)
+    # The daemon may run as another user (nobody in CI)
+    os.chmod(path, 0o644)
+    return [name, path]
+
+
+def remove_shm_payload(path):
+    """Unlink an object made by Create Shm Payload; never fails."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def write_readable_file(path, content):
+    """Write `content` to `path` and make it world readable; return the path.
+
+    Robot's Create File obeys the umask and the daemon may run as another
+    user (nobody in CI), so the mode is set explicitly here.
+    """
+    with open(path, "w") as f:
+        f.write(content)
+    os.chmod(path, 0o644)
+    return path
+
+
+def write_filler_file(path, size):
+    """Write `size` bytes of printable filler to `path` and return the path.
+
+    Used where the content is irrelevant and only the size matters, e.g. for
+    the max_message limit on file inputs. Robot's Create File would need the
+    whole payload as a variable first.
+    """
+    nbytes = int(size)
+    with open(path, "wb") as f:
+        chunk = (b"X" * 63 + b"\n") * 1024
+        written = 0
+        while written < nbytes:
+            piece = chunk[:min(len(chunk), nbytes - written)]
+            f.write(piece)
+            written += len(piece)
+    os.chmod(path, 0o644)
+    return path
+
+
+_PENDING_SOCKETS = []
+
+
+def open_pending_connections(addr, port, count, path="/checkv2"):
+    """Open connections that are accepted but whose body never arrives.
+
+    A complete request head announcing a body is sent and the body is then
+    withheld, which is exactly the "accepted and body-pending" state the
+    admission limits are meant to count. The sockets are kept in a module
+    level list so Close Pending Connections can release them from a teardown
+    even after a failure.
+
+    Example:
+    | Open Pending Connections | 127.0.0.1 | ${port} | 2 |
+    """
+    head = ("POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: 4096\r\n"
+            "Connection: close\r\n\r\n" % (path, addr)).encode()
+    opened = 0
+    for _ in range(int(count)):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(10)
+        s.connect((addr, int(port)))
+        s.sendall(head)
+        _PENDING_SOCKETS.append(s)
+        opened += 1
+    return opened
+
+
+def close_pending_connections():
+    """Close every socket opened by Open Pending Connections."""
+    closed = 0
+    while _PENDING_SOCKETS:
+        s = _PENDING_SOCKETS.pop()
+        try:
+            s.close()
+            closed += 1
+        except OSError:
+            pass
+    return closed
+
+
+def connection_admitted(addr, port, timeout=5):
+    """True when addr:port serves a request, False when the limit refuses it.
+
+    Over its admission limit rspamd still accepts the connection -- the
+    listen watcher is level triggered, so merely leaving it in the backlog
+    would spin the worker -- and closes it at once. From the client side that
+    is a successful connect followed by an immediate EOF or reset.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(float(timeout))
+    req = ("GET /ping HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n"
+           % addr).encode()
+    try:
+        s.connect((addr, int(port)))
+        s.sendall(req)
+        data = s.recv(64)
+    except socket.timeout:
+        # Admitted but not answered in time: not a refusal, and the caller's
+        # own retry loop is the right place to deal with it.
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+    return data != b""
 
 
 def _build_multipart(boundary, metadata_json, message_bytes):

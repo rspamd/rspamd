@@ -50,6 +50,7 @@
 #include "rspamd_cxx_unit_compression.hxx"
 #include "rspamd_cxx_unit_tokenizer.hxx"
 #include "rspamd_cxx_unit_http_timeout.hxx"
+#include "rspamd_cxx_unit_task_input.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
