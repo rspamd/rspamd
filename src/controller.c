@@ -17,6 +17,7 @@
 #include "libserver/dynamic_cfg.h"
 #include "libserver/cfg_file_private.h"
 #include "libutil/rrd.h"
+#include "libutil/hash.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
 #include "libserver/maps/map_private.h"
@@ -40,6 +41,15 @@
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
+
+/*
+ * Authentication failures allowed from a single source before it is throttled,
+ * and the time it takes for a full bucket to drain again.
+ */
+#define DEFAULT_MAX_AUTH_FAILURES 10
+#define DEFAULT_AUTH_FAILURE_WINDOW 60.0
+/* Bounds the memory used by the throttling state */
+#define AUTH_FAILURES_CACHE_SIZE 1024
 
 /* HTTP paths */
 #define PATH_AUTH "/auth"
@@ -148,6 +158,14 @@ struct rspamd_controller_worker_ctx {
 	/* Cached versions of the passwords */
 	rspamd_ftok_t cached_password;
 	rspamd_ftok_t cached_enable_password;
+	/*
+	 * Leaky buckets of failed authentication attempts, keyed by source address.
+	 * Password verification runs a deliberately expensive KDF in this worker's
+	 * event loop, so unauthenticated attempts must be bounded per source.
+	 */
+	rspamd_lru_hash_t *auth_failures;
+	unsigned int max_auth_failures;
+	double auth_failure_window;
 	/* HTTP server */
 	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
@@ -519,6 +537,120 @@ rspamd_controller_check_forwarded(struct rspamd_controller_session *session,
 	return ret;
 }
 
+/*
+ * A leaky bucket of failed authentication attempts for a single source address.
+ * `penalty` is decayed lazily on access, so no timer is needed to drain it.
+ */
+struct rspamd_controller_auth_bucket {
+	double penalty;
+	ev_tstamp last_update;
+};
+
+/*
+ * Returns the bucket's penalty decayed to `now`. A full bucket drains in
+ * exactly `auth_failure_window` seconds.
+ */
+static double
+rspamd_controller_auth_decay(struct rspamd_controller_worker_ctx *ctx,
+							 struct rspamd_controller_auth_bucket *bucket,
+							 ev_tstamp now)
+{
+	double leaked, elapsed;
+
+	elapsed = now - bucket->last_update;
+
+	if (elapsed <= 0) {
+		/* Clock went backwards, do not gift the source any credit */
+		return bucket->penalty;
+	}
+
+	leaked = elapsed * ((double) ctx->max_auth_failures / ctx->auth_failure_window);
+
+	return MAX(0.0, bucket->penalty - leaked);
+}
+
+/*
+ * Checks whether a source address is still allowed to attempt authentication.
+ * This must be called *before* any KDF invocation: verifying a password is
+ * deliberately expensive (tens of milliseconds), and the controller runs a
+ * single event loop, so an unthrottled stream of wrong passwords from one
+ * source is enough to stall every other request the worker serves.
+ */
+static gboolean
+rspamd_controller_auth_is_allowed(struct rspamd_controller_worker_ctx *ctx,
+								  const rspamd_inet_addr_t *from_addr)
+{
+	struct rspamd_controller_auth_bucket *bucket;
+	ev_tstamp now;
+
+	if (ctx->auth_failures == NULL || ctx->max_auth_failures == 0) {
+		/* Throttling is disabled */
+		return TRUE;
+	}
+
+	now = ev_now(ctx->event_loop);
+	bucket = rspamd_lru_hash_lookup(ctx->auth_failures, from_addr, (time_t) now);
+
+	if (bucket == NULL) {
+		return TRUE;
+	}
+
+	return rspamd_controller_auth_decay(ctx, bucket, now) < (double) ctx->max_auth_failures;
+}
+
+/*
+ * Accounts a failed authentication attempt against its source address.
+ */
+static void
+rspamd_controller_auth_failure(struct rspamd_controller_worker_ctx *ctx,
+							   const rspamd_inet_addr_t *from_addr)
+{
+	struct rspamd_controller_auth_bucket *bucket;
+	ev_tstamp now;
+
+	if (ctx->auth_failures == NULL || ctx->max_auth_failures == 0) {
+		return;
+	}
+
+	now = ev_now(ctx->event_loop);
+	bucket = rspamd_lru_hash_lookup(ctx->auth_failures, from_addr, (time_t) now);
+
+	if (bucket != NULL) {
+		bucket->penalty = rspamd_controller_auth_decay(ctx, bucket, now) + 1.0;
+		bucket->last_update = now;
+	}
+	else {
+		bucket = g_malloc0(sizeof(*bucket));
+		bucket->penalty = 1.0;
+		bucket->last_update = now;
+		/*
+		 * The TTL only reclaims idle entries: a bucket always decays to zero
+		 * within `auth_failure_window` anyway, so expiry can never be laxer
+		 * than the decay itself.
+		 */
+		rspamd_lru_hash_insert(ctx->auth_failures,
+							   rspamd_inet_address_copy(from_addr, NULL),
+							   bucket,
+							   (time_t) now,
+							   (unsigned int) ctx->auth_failure_window);
+	}
+}
+
+/*
+ * Clears the penalty of a source that has just authenticated successfully, so
+ * that an operator who mistyped a password a few times is not left throttled.
+ */
+static void
+rspamd_controller_auth_success(struct rspamd_controller_worker_ctx *ctx,
+							   const rspamd_inet_addr_t *from_addr)
+{
+	if (ctx->auth_failures == NULL || ctx->max_auth_failures == 0) {
+		return;
+	}
+
+	rspamd_lru_hash_remove(ctx->auth_failures, from_addr);
+}
+
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
@@ -533,6 +665,13 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 	gboolean check_normal = FALSE, check_enable = FALSE, ret = TRUE,
 			 use_enable = FALSE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
+	/*
+	 * Both passwords configured to the very same hash: the enable check would
+	 * repeat the normal one verbatim, so its (expensive) KDF can be skipped and
+	 * its verdict reused.
+	 */
+	const gboolean same_pw = (ctx->password != NULL && ctx->enable_password != NULL &&
+							  strcmp(ctx->password, ctx->enable_password) == 0);
 
 	/* Fail-safety */
 	session->is_read_only = TRUE;
@@ -570,6 +709,18 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 
 			return TRUE;
 		}
+	}
+
+	/*
+	 * Everything below can reach the KDF, so throttle sources that keep
+	 * failing before spending any CPU on them.
+	 */
+	if (!rspamd_controller_auth_is_allowed(ctx, session->from_addr)) {
+		msg_info_session("throttling authentication: too many failures; source ip: %s",
+						 rspamd_inet_address_to_string_pretty(session->from_addr));
+		rspamd_controller_send_error(entry, 429, "Too many authentication failures");
+
+		return FALSE;
 	}
 
 	/* Password logic */
@@ -677,6 +828,10 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 						/* We have passed password check and no enable password is specified */
 						session->is_read_only = FALSE;
 					}
+					else if (same_pw) {
+						/* Identical to the check we have just passed */
+						check_enable = TRUE;
+					}
 					else {
 						/*
 						 * Even if we have passed normal password check, we don't really
@@ -703,7 +858,13 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 				}
 			}
 
-			if ((!check_normal && !check_enable) && ctx->enable_password != NULL) {
+			/*
+			 * `same_pw` implies the normal check above already ran against
+			 * this very hash and rejected the password, so repeating it here
+			 * would only burn another KDF for the same verdict.
+			 */
+			if ((!check_normal && !check_enable) && ctx->enable_password != NULL &&
+				!same_pw) {
 				check = ctx->enable_password;
 
 				if (!rspamd_is_encrypted_password(check, &pbkdf)) {
@@ -741,7 +902,11 @@ end:
 	}
 
 	if (!ret) {
+		rspamd_controller_auth_failure(ctx, session->from_addr);
 		rspamd_controller_send_error(entry, 401, "Unauthorized");
+	}
+	else {
+		rspamd_controller_auth_success(ctx, session->from_addr);
 	}
 
 	return ret;
@@ -3824,6 +3989,8 @@ init_controller_worker(struct rspamd_config *cfg)
 	ctx->magic = rspamd_controller_ctx_magic;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 	ctx->task_timeout = NAN;
+	ctx->max_auth_failures = DEFAULT_MAX_AUTH_FAILURES;
+	ctx->auth_failure_window = DEFAULT_AUTH_FAILURE_WINDOW;
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -3918,6 +4085,28 @@ init_controller_worker(struct rspamd_config *cfg)
 													  task_timeout),
 									  RSPAMD_CL_FLAG_TIME_FLOAT,
 									  "Maximum task processing time, default: 8.0 seconds");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_auth_failures",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  max_auth_failures),
+									  RSPAMD_CL_FLAG_INT_32 | RSPAMD_CL_FLAG_UINT,
+									  "Authentication failures allowed from one source before it is "
+									  "throttled, 0 disables throttling, default: 10");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "auth_failure_window",
+									  rspamd_rcl_parse_struct_time,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  auth_failure_window),
+									  RSPAMD_CL_FLAG_TIME_FLOAT,
+									  "Time for a source to regain all of its authentication "
+									  "attempts, default: 60 seconds");
 
 	return ctx;
 }
@@ -4209,6 +4398,24 @@ start_controller_worker(struct rspamd_worker *worker)
 
 	ctx->task_timeout = rspamd_worker_check_and_adjust_timeout(ctx->cfg, ctx->task_timeout);
 
+	if (ctx->max_auth_failures > 0) {
+		if (!(ctx->auth_failure_window > 0)) {
+			msg_warn_ctx("invalid auth_failure_window: %.1f, using the default %.1f "
+						 "seconds instead",
+						 ctx->auth_failure_window, (double) DEFAULT_AUTH_FAILURE_WINDOW);
+			ctx->auth_failure_window = DEFAULT_AUTH_FAILURE_WINDOW;
+		}
+
+		ctx->auth_failures = rspamd_lru_hash_new_full(AUTH_FAILURES_CACHE_SIZE,
+													  (GDestroyNotify) rspamd_inet_address_free,
+													  g_free,
+													  rspamd_inet_address_hash,
+													  rspamd_inet_address_equal);
+	}
+	else {
+		msg_info_ctx("authentication failure throttling is disabled");
+	}
+
 	if (ctx->secure_ip != NULL) {
 		rspamd_config_radix_from_ucl(ctx->cfg, ctx->secure_ip,
 									 "Allow unauthenticated requests from these addresses",
@@ -4425,6 +4632,10 @@ start_controller_worker(struct rspamd_worker *worker)
 	if (ctx->cached_enable_password.len > 0) {
 		m = (gpointer) ctx->cached_enable_password.begin;
 		munmap(m, ctx->cached_enable_password.len);
+	}
+
+	if (ctx->auth_failures != NULL) {
+		rspamd_lru_hash_destroy(ctx->auth_failures);
 	}
 
 	g_hash_table_unref(ctx->plugins);

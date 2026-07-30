@@ -822,6 +822,23 @@ def ping_rspamd(addr, port):
     return str(urlopen("http://%s:%s/ping" % (addr, port)).read())
 
 
+def controller_auth_status(addr, port, password):
+    """Sends a controller /auth request and returns its HTTP status code.
+
+    Unlike rspamc, this distinguishes a rejected password (401) from a
+    throttled source (429).
+
+    Example:
+    | ${code} = | Controller Auth Status | ${RSPAMD_LOCAL_ADDR} | ${RSPAMD_PORT_CONTROLLER} | q1 |
+    """
+    conn = http.client.HTTPConnection(addr, int(port), timeout=10)
+    try:
+        conn.request("GET", "/auth", headers={"Password": password})
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
 def redis_check(addr, port):
     """Attempts to open a TCP connection to specified address:port
 
