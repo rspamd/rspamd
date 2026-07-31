@@ -102,11 +102,28 @@ jobs:
         with:
           node-version: ${{ matrix.node-version || 'lts/*' }}
 
+      - name: Determine browser cache key
+        id: browsers-key
+        run: |
+          # 'latest' is a moving target: roll the key weekly (ISO year-week) so the
+          # newest Playwright/browser revisions are re-fetched regularly, while still
+          # benefiting from the cache within a week. 'legacy' is pinned => stable key.
+          if [ "${{ matrix.label }}" = "latest" ]; then
+            echo "key=browsers-latest-${{ runner.os }}-$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+          else
+            echo "key=browsers-legacy-${{ matrix.version }}-${{ runner.os }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Playwright browsers
+        id: playwright-cache
         uses: actions/cache@v4
         with:
           path: .cache/ms-playwright-${{ matrix.label }}
-          key: browsers-${{ matrix.label }}-${{ runner.os }}
+          key: ${{ steps.browsers-key.outputs.key }}
+          # Warm-restore the most recent matching cache when the key rolls (esp. 'latest'
+          # across weeks), so only changed browser revisions are re-downloaded.
+          restore-keys: |
+            browsers-${{ matrix.label }}-${{ runner.os }}-
 
       - id: run-playwright
         name: Run Playwright tests (${{ matrix.label }})
