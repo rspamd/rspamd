@@ -403,24 +403,7 @@ local function default_condition(task)
     end
   end
 
-  -- Get displayed text part with configurable min_words
-  local sel_part = lua_mime.get_displayed_text_part(task, settings.min_words)
-  if not sel_part then
-    return false, 'no text part found'
-  end
-
-  -- Unified LLM input building (subject/from/urls/body one-line)
-  local model_cfg = settings.model_parameters[settings.model] or {}
-  local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
-  local input_tbl = llm_common.build_llm_input(task, {
-    max_tokens = max_tokens,
-    reply_trim_mode = settings.reply_trim_mode,
-    min_words = settings.min_words,
-  })
-  if not input_tbl then
-    return false, 'no content to send'
-  end
-  return true, input_tbl, sel_part
+  return true, nil
 end
 
 local function maybe_extract_json(str)
@@ -1211,17 +1194,16 @@ local function ollama_check(task, content, sel_part, context_snippet)
 end
 
 local function gpt_check(task)
-  local ret, content, sel_part = settings.condition(task)
+  local ret, ret_msg = settings.condition(task)
+
+  -- Get displayed text part with configurable min_words
+  local sel_part = lua_mime.get_displayed_text_part(task, settings.min_words)
 
   -- Always update context if enabled, even when condition is not met
   local context_enabled = redis_params and settings.context and is_context_enabled_for_task(task)
   if context_enabled and not ret then
     -- Condition not met (e.g. BAYES_SPAM, passthrough, etc.)
     -- Update context without LLM call; infer result from task metrics
-    if not sel_part then
-      -- Try to get text part for context update
-      sel_part = lua_mime.get_displayed_text_part(task)
-    end
     if sel_part then
       local result = task:get_metric_result()
       local inferred_result = nil
@@ -1234,14 +1216,23 @@ local function gpt_check(task)
       end
       llm_context.update_after_classification(task, redis_params, settings.context, inferred_result, sel_part, N)
     end
-    lua_util.debugm(N, task, "skip checking gpt as the condition is not met: %s; context updated", content)
+    lua_util.debugm(N, task, "skip checking gpt as the condition is not met: %s; context updated", ret_msg)
     return
   end
 
   if not ret then
-    lua_util.debugm(N, task, "skip checking gpt as the condition is not met: %s", content)
+    lua_util.debugm(N, task, "skip checking gpt as the condition is not met: %s", ret_msg)
     return
   end
+
+  -- Unified LLM input building (subject/from/urls/body one-line)
+  local model_cfg = settings.model_parameters[settings.model] or {}
+  local max_tokens = model_cfg.max_completion_tokens or model_cfg.max_tokens or 1000
+  local content = llm_common.build_llm_input(task, {
+    max_tokens = max_tokens,
+    reply_trim_mode = settings.reply_trim_mode,
+    min_words = settings.min_words,
+  })
 
   if not content then
     lua_util.debugm(N, task, "no content to send to gpt classification")

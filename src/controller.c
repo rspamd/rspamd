@@ -17,6 +17,7 @@
 #include "libserver/dynamic_cfg.h"
 #include "libserver/cfg_file_private.h"
 #include "libutil/rrd.h"
+#include "libutil/hash.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
 #include "libserver/maps/map_private.h"
@@ -40,6 +41,22 @@
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
+
+/*
+ * Authentication failures allowed from a single source before it is throttled,
+ * and the time it takes for a full bucket to drain again.
+ */
+#define DEFAULT_MAX_AUTH_FAILURES 10
+#define DEFAULT_AUTH_FAILURE_WINDOW 60.0
+/* Bounds the memory used by the throttling state */
+#define AUTH_FAILURES_CACHE_SIZE 1024
+
+/*
+ * Admission control limits, both disabled by default so that this release
+ * behaves exactly as the previous ones unless an operator opts in.
+ */
+#define DEFAULT_MAX_CONNECTIONS 0
+#define DEFAULT_MAX_CONNECTIONS_PER_SOURCE 0
 
 /* HTTP paths */
 #define PATH_AUTH "/auth"
@@ -148,6 +165,27 @@ struct rspamd_controller_worker_ctx {
 	/* Cached versions of the passwords */
 	rspamd_ftok_t cached_password;
 	rspamd_ftok_t cached_enable_password;
+	/*
+	 * Leaky buckets of failed authentication attempts, keyed by source address.
+	 * Password verification runs a deliberately expensive KDF in this worker's
+	 * event loop, so unauthenticated attempts must be bounded per source.
+	 */
+	rspamd_lru_hash_t *auth_failures;
+	unsigned int max_auth_failures;
+	double auth_failure_window;
+	/*
+	 * Admission control. Both limits are disabled (0) by default to preserve
+	 * the historical behaviour; `conns_per_source` counts the connections that
+	 * are currently being served, keyed by peer address.
+	 */
+	unsigned int max_connections;
+	unsigned int max_connections_per_source;
+	GHashTable *conns_per_source;
+	/*
+	 * Whether TCP clients of this worker may use the privileged File/Path/Shm
+	 * message source inputs. Unix socket peers always may.
+	 */
+	gboolean allow_file_and_shm_inputs;
 	/* HTTP server */
 	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
@@ -244,11 +282,16 @@ rspamd_is_encrypted_password(const char *password,
 }
 
 static const char *
-rspamd_encrypted_password_get_str(const char *password, gsize skip,
+rspamd_encrypted_password_get_str(const char *password, gsize pwlen, gsize skip,
 								  gsize *length)
 {
 	const char *str, *start, *end;
 	gsize size;
+
+	if (skip >= pwlen) {
+		/* Malformed hash: this component is missing entirely */
+		return NULL;
+	}
 
 	start = password + skip;
 	end = start;
@@ -278,8 +321,12 @@ rspamd_check_encrypted_password(struct rspamd_controller_worker_ctx *ctx,
 {
 	const char *salt, *hash;
 	char *salt_decoded, *key_decoded;
-	gsize salt_len = 0, key_len = 0;
-	gboolean ret = TRUE;
+	gsize pwlen, salt_len = 0, key_len = 0;
+	/*
+	 * Authentication must fail closed: `ret` is only ever set to TRUE after a
+	 * complete KDF comparison has succeeded below.
+	 */
+	gboolean ret = FALSE;
 	unsigned char *local_key;
 	rspamd_ftok_t *cache;
 	gpointer m;
@@ -328,10 +375,11 @@ rspamd_check_encrypted_password(struct rspamd_controller_worker_ctx *ctx,
 
 check_uncached:
 	g_assert(pbkdf != NULL);
+	pwlen = strlen(check);
 	/* get salt */
-	salt = rspamd_encrypted_password_get_str(check, 3, &salt_len);
+	salt = rspamd_encrypted_password_get_str(check, pwlen, 3, &salt_len);
 	/* get hash */
-	hash = rspamd_encrypted_password_get_str(check, 3 + salt_len + 1,
+	hash = rspamd_encrypted_password_get_str(check, pwlen, 3 + salt_len + 1,
 											 &key_len);
 	if (salt != NULL && hash != NULL) {
 
@@ -365,13 +413,20 @@ check_uncached:
 							   local_key, pbkdf->key_len, pbkdf->complexity,
 							   pbkdf->type);
 
-		if (!rspamd_constant_memcmp(key_decoded, local_key, pbkdf->key_len)) {
+		if (rspamd_constant_memcmp(key_decoded, local_key, pbkdf->key_len)) {
+			ret = TRUE;
+		}
+		else {
 			msg_info_ctx("incorrect or absent password has been specified");
-			ret = FALSE;
 		}
 
 		g_free(salt_decoded);
 		g_free(key_decoded);
+	}
+	else {
+		msg_err_ctx("cannot check password: the configured hash is malformed, "
+					"it has a valid id but no salt and/or no key component; "
+					"denying authentication");
 	}
 
 	if (ret) {
@@ -502,6 +557,183 @@ rspamd_controller_check_forwarded(struct rspamd_controller_session *session,
 	return ret;
 }
 
+/*
+ * Whether this connection may use the privileged File/Path/Shm message source
+ * inputs, which make rspamd open an object named by the client in the server's
+ * own filesystem or shared memory.
+ *
+ * This is a property of the transport the connection was accepted on and of
+ * nothing else. Authentication and this capability are deliberately separate:
+ * a correct `enable_password` proves who the client is, it does not make the
+ * client local, so it must not unlock filesystem access. The password-less
+ * shortcuts of `rspamd_controller_check_password` must not leak in here either
+ * — the AF_UNIX one happens to coincide with the rule below, but a `secure_ip`
+ * peer is still an ordinary TCP client and stays gated.
+ *
+ * Nothing that the client controls (headers, `Forwarded`, `User-Agent`, query
+ * arguments, request metadata) may be consulted here.
+ */
+static gboolean
+rspamd_controller_allow_file_shm(struct rspamd_controller_session *session)
+{
+	if (session->from_addr != NULL &&
+		rspamd_inet_address_get_af(session->from_addr) == AF_UNIX) {
+		/*
+		 * A unix socket peer already needs filesystem access to reach us, so
+		 * naming a file adds no privileges it does not have.
+		 */
+		return TRUE;
+	}
+
+	return session->ctx->allow_file_and_shm_inputs;
+}
+
+/*
+ * Propagates the properties of the accepted transport onto a task created for
+ * this session. Must be called before anything can reach
+ * `rspamd_task_load_message` (or the v3 request parser), as those are the
+ * points where a privileged input would otherwise be opened.
+ */
+static void
+rspamd_controller_task_set_transport(struct rspamd_controller_session *session,
+									 struct rspamd_task *task)
+{
+	if (!rspamd_controller_allow_file_shm(session)) {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
+	}
+
+	/* Locality is derived from the peer address only, never from a header */
+	if (session->from_addr != NULL &&
+		rspamd_worker_addr_is_loopback(session->from_addr)) {
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+	else {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+
+	/*
+	 * The session owns its address and outlives the task only in the sense that
+	 * it frees it in the finish handler, so the task gets its own copy.
+	 */
+	if (task->client_addr == NULL && session->from_addr != NULL) {
+		task->client_addr = rspamd_inet_address_copy(session->from_addr, NULL);
+	}
+}
+
+/*
+ * A leaky bucket of failed authentication attempts for a single source address.
+ * `penalty` is decayed lazily on access, so no timer is needed to drain it.
+ */
+struct rspamd_controller_auth_bucket {
+	double penalty;
+	ev_tstamp last_update;
+};
+
+/*
+ * Returns the bucket's penalty decayed to `now`. A full bucket drains in
+ * exactly `auth_failure_window` seconds.
+ */
+static double
+rspamd_controller_auth_decay(struct rspamd_controller_worker_ctx *ctx,
+							 struct rspamd_controller_auth_bucket *bucket,
+							 ev_tstamp now)
+{
+	double leaked, elapsed;
+
+	elapsed = now - bucket->last_update;
+
+	if (elapsed <= 0) {
+		/* Clock went backwards, do not gift the source any credit */
+		return bucket->penalty;
+	}
+
+	leaked = elapsed * ((double) ctx->max_auth_failures / ctx->auth_failure_window);
+
+	return MAX(0.0, bucket->penalty - leaked);
+}
+
+/*
+ * Checks whether a source address is still allowed to attempt authentication.
+ * This must be called *before* any KDF invocation: verifying a password is
+ * deliberately expensive (tens of milliseconds), and the controller runs a
+ * single event loop, so an unthrottled stream of wrong passwords from one
+ * source is enough to stall every other request the worker serves.
+ */
+static gboolean
+rspamd_controller_auth_is_allowed(struct rspamd_controller_worker_ctx *ctx,
+								  const rspamd_inet_addr_t *from_addr)
+{
+	struct rspamd_controller_auth_bucket *bucket;
+	ev_tstamp now;
+
+	if (ctx->auth_failures == NULL || ctx->max_auth_failures == 0) {
+		/* Throttling is disabled */
+		return TRUE;
+	}
+
+	now = ev_now(ctx->event_loop);
+	bucket = rspamd_lru_hash_lookup(ctx->auth_failures, from_addr, (time_t) now);
+
+	if (bucket == NULL) {
+		return TRUE;
+	}
+
+	return rspamd_controller_auth_decay(ctx, bucket, now) < (double) ctx->max_auth_failures;
+}
+
+/*
+ * Accounts a failed authentication attempt against its source address.
+ */
+static void
+rspamd_controller_auth_failure(struct rspamd_controller_worker_ctx *ctx,
+							   const rspamd_inet_addr_t *from_addr)
+{
+	struct rspamd_controller_auth_bucket *bucket;
+	ev_tstamp now;
+
+	if (ctx->auth_failures == NULL || ctx->max_auth_failures == 0) {
+		return;
+	}
+
+	now = ev_now(ctx->event_loop);
+	bucket = rspamd_lru_hash_lookup(ctx->auth_failures, from_addr, (time_t) now);
+
+	if (bucket != NULL) {
+		bucket->penalty = rspamd_controller_auth_decay(ctx, bucket, now) + 1.0;
+		bucket->last_update = now;
+	}
+	else {
+		bucket = g_malloc0(sizeof(*bucket));
+		bucket->penalty = 1.0;
+		bucket->last_update = now;
+		/*
+		 * The TTL only reclaims idle entries: a bucket always decays to zero
+		 * within `auth_failure_window` anyway, so expiry can never be laxer
+		 * than the decay itself.
+		 */
+		rspamd_lru_hash_insert(ctx->auth_failures,
+							   rspamd_inet_address_copy(from_addr, NULL),
+							   bucket,
+							   (time_t) now,
+							   (unsigned int) ctx->auth_failure_window);
+	}
+}
+
+/*
+ * Clears the penalty of a source that has just authenticated successfully, so
+ * that an operator who mistyped a password a few times is not left throttled.
+ */
+static void
+rspamd_controller_auth_success(struct rspamd_controller_worker_ctx *ctx,
+							   const rspamd_inet_addr_t *from_addr)
+{
+	if (ctx->auth_failures == NULL || ctx->max_auth_failures == 0) {
+		return;
+	}
+
+	rspamd_lru_hash_remove(ctx->auth_failures, from_addr);
+}
+
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
@@ -516,6 +748,13 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 	gboolean check_normal = FALSE, check_enable = FALSE, ret = TRUE,
 			 use_enable = FALSE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
+	/*
+	 * Both passwords configured to the very same hash: the enable check would
+	 * repeat the normal one verbatim, so its (expensive) KDF can be skipped and
+	 * its verdict reused.
+	 */
+	const gboolean same_pw = (ctx->password != NULL && ctx->enable_password != NULL &&
+							  strcmp(ctx->password, ctx->enable_password) == 0);
 
 	/* Fail-safety */
 	session->is_read_only = TRUE;
@@ -553,6 +792,18 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 
 			return TRUE;
 		}
+	}
+
+	/*
+	 * Everything below can reach the KDF, so throttle sources that keep
+	 * failing before spending any CPU on them.
+	 */
+	if (!rspamd_controller_auth_is_allowed(ctx, session->from_addr)) {
+		msg_info_session("throttling authentication: too many failures; source ip: %s",
+						 rspamd_inet_address_to_string_pretty(session->from_addr));
+		rspamd_controller_send_error(entry, 429, "Too many authentication failures");
+
+		return FALSE;
 	}
 
 	/* Password logic */
@@ -660,6 +911,10 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 						/* We have passed password check and no enable password is specified */
 						session->is_read_only = FALSE;
 					}
+					else if (same_pw) {
+						/* Identical to the check we have just passed */
+						check_enable = TRUE;
+					}
 					else {
 						/*
 						 * Even if we have passed normal password check, we don't really
@@ -686,7 +941,13 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 				}
 			}
 
-			if ((!check_normal && !check_enable) && ctx->enable_password != NULL) {
+			/*
+			 * `same_pw` implies the normal check above already ran against
+			 * this very hash and rejected the password, so repeating it here
+			 * would only burn another KDF for the same verdict.
+			 */
+			if ((!check_normal && !check_enable) && ctx->enable_password != NULL &&
+				!same_pw) {
 				check = ctx->enable_password;
 
 				if (!rspamd_is_encrypted_password(check, &pbkdf)) {
@@ -724,7 +985,11 @@ end:
 	}
 
 	if (!ret) {
+		rspamd_controller_auth_failure(ctx, session->from_addr);
 		rspamd_controller_send_error(entry, 401, "Unauthorized");
+	}
+	else {
+		rspamd_controller_auth_success(ctx, session->from_addr);
 	}
 
 	return ret;
@@ -1608,6 +1873,7 @@ rspamd_controller_handle_lua_history(lua_State *L,
 													 NULL,
 													 (event_finalizer_t) rspamd_task_free);
 				task->fin_arg = conn_ent;
+				rspamd_controller_task_set_transport(session, task);
 
 				ptask = lua_newuserdata(L, sizeof(*ptask));
 				*ptask = task;
@@ -1767,7 +2033,7 @@ rspamd_controller_handle_errors(struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_controller_check_password(conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -1959,6 +2225,7 @@ rspamd_controller_handle_lua(struct rspamd_http_connection_entry *conn_ent,
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	if (msg->body_buf.len > 0) {
 		if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
@@ -2166,6 +2433,7 @@ rspamd_controller_handle_learn_common(
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
@@ -2281,6 +2549,7 @@ rspamd_controller_handle_learnclass(
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	cl_header = rspamd_http_message_find_header(msg, "classifier");
 	if (cl_header) {
@@ -2352,6 +2621,11 @@ rspamd_controller_handle_scan(struct rspamd_http_connection_entry *conn_ent,
 	task->sock = conn_ent->conn->fd;
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->resolver = ctx->resolver;
+	/*
+	 * Before the request is parsed: the v3 handler below can map a shm segment
+	 * on its own, without going through rspamd_task_load_message
+	 */
+	rspamd_controller_task_set_transport(session, task);
 
 	if (!rspamd_protocol_handle_request(task, msg)) {
 		task->flags |= RSPAMD_TASK_FLAG_SKIP;
@@ -2864,8 +3138,8 @@ rspamd_controller_handle_stat_common(
 									cbdata);
 	task->fin_arg = cbdata;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = conn_ent->conn->fd;
+	rspamd_controller_task_set_transport(session, task);
 
 	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
@@ -3165,6 +3439,7 @@ rspamd_controller_handle_metrics_common(
 	task->fin_arg = cbdata;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
 	task->sock = conn_ent->conn->fd;
+	rspamd_controller_task_set_transport(session, task);
 
 	if (stat_copy.messages_scanned > 0 && do_reset) {
 		for (int i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
@@ -3512,9 +3787,9 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 										 (event_finalizer_t) rspamd_task_free);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = -1;
 	session->task = task;
+	rspamd_controller_task_set_transport(session, task);
 
 	if (msg->body_buf.len > 0) {
 		if (!rspamd_task_load_message(task, msg, msg->body_buf.begin, msg->body_buf.len)) {
@@ -3606,14 +3881,14 @@ rspamd_controller_handle_bayes_classifiers(struct rspamd_http_connection_entry *
 
 		classifier_obj = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_insert_key(classifier_obj,
-				ucl_object_fromstring(clc->name),
-				"name", 0, false);
+							  ucl_object_fromstring(clc->name),
+							  "name", 0, false);
 		ucl_object_insert_key(classifier_obj,
-				ucl_object_fromstring(rspamd_classifier_type(clc)),
-				"type", 0, false);
+							  ucl_object_fromstring(rspamd_classifier_type(clc)),
+							  "type", 0, false);
 		ucl_object_insert_key(classifier_obj,
-				ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
-				"per_user", 0, false);
+							  ucl_object_frombool(rspamd_classifier_is_per_user(clc)),
+							  "per_user", 0, false);
 
 		/* Collect unique class names from statfiles.
 		 * Linear search is used since N < 10 in practice, avoiding hash table overhead. */
@@ -3663,6 +3938,78 @@ rspamd_controller_error_handler(struct rspamd_http_connection_entry *conn_ent,
 	msg_err_session("http error occurred: %s", err->message);
 }
 
+/*
+ * Pending connections accounting per source address. The global limit alone
+ * would let a single peer occupy the whole budget of the worker, so in-flight
+ * connections are also counted per source. Entries are dropped as soon as a
+ * source has no connection left, which bounds the table by the number of peers
+ * that are actually connected right now.
+ *
+ * Returns FALSE when the source is already at its limit; the caller must then
+ * not create a session (nothing has been accounted in that case).
+ */
+static gboolean
+rspamd_controller_source_conn_add(struct rspamd_controller_worker_ctx *ctx,
+								  const rspamd_inet_addr_t *addr)
+{
+	unsigned int *nconns;
+
+	if (ctx->conns_per_source == NULL || ctx->max_connections_per_source == 0 ||
+		addr == NULL || rspamd_inet_address_get_af(addr) == AF_UNIX) {
+		/* Disabled, or a local peer that is not subject to the limit */
+		return TRUE;
+	}
+
+	nconns = g_hash_table_lookup(ctx->conns_per_source, addr);
+
+	if (nconns != NULL) {
+		if (*nconns >= ctx->max_connections_per_source) {
+			return FALSE;
+		}
+
+		(*nconns)++;
+	}
+	else {
+		nconns = g_malloc(sizeof(*nconns));
+		*nconns = 1;
+		g_hash_table_insert(ctx->conns_per_source,
+							rspamd_inet_address_copy(addr, NULL),
+							nconns);
+	}
+
+	return TRUE;
+}
+
+/*
+ * Releases one pending connection of a source. Mirrors
+ * `rspamd_controller_source_conn_add` and must be called exactly once for every
+ * successful call of it.
+ */
+static void
+rspamd_controller_source_conn_remove(struct rspamd_controller_worker_ctx *ctx,
+									 const rspamd_inet_addr_t *addr)
+{
+	unsigned int *nconns;
+
+	if (ctx->conns_per_source == NULL || ctx->max_connections_per_source == 0 ||
+		addr == NULL || rspamd_inet_address_get_af(addr) == AF_UNIX) {
+		return;
+	}
+
+	nconns = g_hash_table_lookup(ctx->conns_per_source, addr);
+
+	if (nconns == NULL) {
+		return;
+	}
+
+	if (*nconns > 1) {
+		(*nconns)--;
+	}
+	else {
+		g_hash_table_remove(ctx->conns_per_source, addr);
+	}
+}
+
 static void
 rspamd_controller_finish_handler(struct rspamd_http_connection_entry *conn_ent)
 {
@@ -3675,6 +4022,7 @@ rspamd_controller_finish_handler(struct rspamd_http_connection_entry *conn_ent)
 	}
 
 	session->wrk->nconns--;
+	rspamd_controller_source_conn_remove(session->ctx, session->from_addr);
 	rspamd_inet_address_free(session->from_addr);
 	CFG_REF_RELEASE(session->cfg);
 
@@ -3709,6 +4057,36 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 		return;
 	}
 
+	/*
+	 * Admission control runs before anything is allocated for this connection:
+	 * a session pool, a TLS handshake or a password KDF are all far more
+	 * expensive than the accept itself, so the limits must be applied while the
+	 * connection is still just a file descriptor. The connection is accepted
+	 * and closed at once instead of being left in the listen queue, otherwise
+	 * the level triggered accept watcher would spin on a readable listener.
+	 */
+	if (ctx->max_connections > 0 && worker->nconns >= ctx->max_connections) {
+		msg_info_ctx("deny connection from %s: the worker already serves "
+					 "%ud connections, the limit is %ud",
+					 rspamd_inet_address_to_string_pretty(addr),
+					 worker->nconns, ctx->max_connections);
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
+	if (!rspamd_controller_source_conn_add(ctx, addr)) {
+		msg_info_ctx("deny connection from %s: this source already has %ud "
+					 "pending connections",
+					 rspamd_inet_address_to_string_pretty(addr),
+					 ctx->max_connections_per_source);
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
 	session = g_malloc0(sizeof(struct rspamd_controller_session));
 	session->pool = rspamd_mempool_new_short_lived("csession");
 	session->ctx = ctx;
@@ -3718,17 +4096,59 @@ rspamd_controller_accept_socket(EV_P_ ev_io *w, int revents)
 
 	session->from_addr = addr;
 	session->wrk = worker;
+	/* Decided once, from the transport, so that handlers in other modules
+	 * (e.g. fuzzy_check) can honour it without seeing our private context */
+	session->allow_file_shm_input = rspamd_controller_allow_file_shm(session);
 	worker->nconns++;
 
 	rspamd_http_router_handle_socket_ssl(ctx->http, nfd, session,
 										 rspamd_worker_is_ssl_socket(worker, w->fd));
 }
 
+/*
+ * Verifies that an encrypted password is complete, i.e. that it carries both a
+ * salt and a key of the length expected by its own pbkdf. A password that only
+ * has a valid `$id` prefix can never be verified at runtime.
+ */
+static gboolean
+rspamd_controller_encrypted_password_is_complete(const char *password,
+												 const struct rspamd_controller_pbkdf *pbkdf)
+{
+	const char *salt, *hash;
+	char *salt_decoded, *key_decoded;
+	gsize pwlen, salt_len = 0, key_len = 0;
+	gboolean ret = FALSE;
+
+	pwlen = strlen(password);
+	salt = rspamd_encrypted_password_get_str(password, pwlen, 3, &salt_len);
+	hash = rspamd_encrypted_password_get_str(password, pwlen,
+											 3 + salt_len + 1, &key_len);
+
+	if (salt == NULL || hash == NULL) {
+		return FALSE;
+	}
+
+	salt_decoded = rspamd_decode_base32(salt, salt_len, &salt_len,
+										RSPAMD_BASE32_DEFAULT);
+	key_decoded = rspamd_decode_base32(hash, key_len, &key_len,
+									   RSPAMD_BASE32_DEFAULT);
+
+	if (salt_decoded != NULL && key_decoded != NULL &&
+		salt_len == pbkdf->salt_len && key_len == pbkdf->key_len) {
+		ret = TRUE;
+	}
+
+	g_free(salt_decoded); /* valid even if NULL */
+	g_free(key_decoded);
+
+	return ret;
+}
+
 static void
 rspamd_controller_password_sane(struct rspamd_controller_worker_ctx *ctx,
 								const char *password, const char *type)
 {
-	const struct rspamd_controller_pbkdf *pbkdf = &pbkdf_list[0];
+	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 
 	if (password == NULL) {
 		msg_warn_ctx("%s is not set, so you should filter controller "
@@ -3738,14 +4158,19 @@ rspamd_controller_password_sane(struct rspamd_controller_worker_ctx *ctx,
 		return;
 	}
 
-	g_assert(pbkdf != NULL);
-
-	if (!rspamd_is_encrypted_password(password, NULL)) {
+	if (!rspamd_is_encrypted_password(password, &pbkdf)) {
 		/* Suggest encryption to a user */
 
 		msg_warn_ctx("your %s is not encrypted, we strongly "
 					 "recommend to replace it with the encrypted one",
 					 type);
+	}
+	else if (!rspamd_controller_encrypted_password_is_complete(password, pbkdf)) {
+		msg_err_ctx("your %s has a valid encryption id but is malformed: the "
+					"salt and/or the key is missing or has an unexpected "
+					"length; authentication will always be denied for it, "
+					"please regenerate it using `rspamadm pw`",
+					type);
 	}
 }
 
@@ -3763,6 +4188,12 @@ init_controller_worker(struct rspamd_config *cfg)
 	ctx->magic = rspamd_controller_ctx_magic;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 	ctx->task_timeout = NAN;
+	ctx->max_auth_failures = DEFAULT_MAX_AUTH_FAILURES;
+	ctx->auth_failure_window = DEFAULT_AUTH_FAILURE_WINDOW;
+	/* Permissive for this release, see the option description below */
+	ctx->allow_file_and_shm_inputs = TRUE;
+	ctx->max_connections = DEFAULT_MAX_CONNECTIONS;
+	ctx->max_connections_per_source = DEFAULT_MAX_CONNECTIONS_PER_SOURCE;
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -3857,6 +4288,66 @@ init_controller_worker(struct rspamd_config *cfg)
 													  task_timeout),
 									  RSPAMD_CL_FLAG_TIME_FLOAT,
 									  "Maximum task processing time, default: 8.0 seconds");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_auth_failures",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  max_auth_failures),
+									  RSPAMD_CL_FLAG_INT_32 | RSPAMD_CL_FLAG_UINT,
+									  "Authentication failures allowed from one source before it is "
+									  "throttled, 0 disables throttling, default: 10");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "auth_failure_window",
+									  rspamd_rcl_parse_struct_time,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  auth_failure_window),
+									  RSPAMD_CL_FLAG_TIME_FLOAT,
+									  "Time for a source to regain all of its authentication "
+									  "attempts, default: 60 seconds");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "allow_file_and_shm_inputs",
+									  rspamd_rcl_parse_struct_boolean,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  allow_file_and_shm_inputs),
+									  0,
+									  "Allow privileged File/Path/Shm message source inputs, which "
+									  "make rspamd read a local file or shared memory segment named "
+									  "by the client, for connections accepted over TCP; unix socket "
+									  "clients are always allowed to use them. Default: true, this "
+									  "will become false in the next major release");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_connections",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  max_connections),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Maximum number of connections served simultaneously by one "
+									  "controller worker, further connections are closed right after "
+									  "accept, 0 means unlimited, default: 0");
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_connections_per_source",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_controller_worker_ctx,
+													  max_connections_per_source),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Maximum number of simultaneous connections from a single "
+									  "source address, unix socket clients are not affected, "
+									  "0 means unlimited, default: 0");
 
 	return ctx;
 }
@@ -4136,6 +4627,9 @@ start_controller_worker(struct rspamd_worker *worker)
 											"controller",
 											rspamd_controller_accept_socket);
 
+	rspamd_worker_warn_file_shm_inputs(worker, "controller",
+									   ctx->allow_file_and_shm_inputs);
+
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	CFG_REF_RETAIN(ctx->cfg);
@@ -4147,6 +4641,31 @@ start_controller_worker(struct rspamd_worker *worker)
 										 rspamd_plugin_cbdata_dtor);
 
 	ctx->task_timeout = rspamd_worker_check_and_adjust_timeout(ctx->cfg, ctx->task_timeout);
+
+	if (ctx->max_auth_failures > 0) {
+		if (!(ctx->auth_failure_window > 0)) {
+			msg_warn_ctx("invalid auth_failure_window: %.1f, using the default %.1f "
+						 "seconds instead",
+						 ctx->auth_failure_window, (double) DEFAULT_AUTH_FAILURE_WINDOW);
+			ctx->auth_failure_window = DEFAULT_AUTH_FAILURE_WINDOW;
+		}
+
+		ctx->auth_failures = rspamd_lru_hash_new_full(AUTH_FAILURES_CACHE_SIZE,
+													  (GDestroyNotify) rspamd_inet_address_free,
+													  g_free,
+													  rspamd_inet_address_hash,
+													  rspamd_inet_address_equal);
+	}
+	else {
+		msg_info_ctx("authentication failure throttling is disabled");
+	}
+
+	if (ctx->max_connections_per_source > 0) {
+		ctx->conns_per_source = g_hash_table_new_full(rspamd_inet_address_hash,
+													  rspamd_inet_address_equal,
+													  (GDestroyNotify) rspamd_inet_address_free,
+													  g_free);
+	}
 
 	if (ctx->secure_ip != NULL) {
 		rspamd_config_radix_from_ucl(ctx->cfg, ctx->secure_ip,
@@ -4364,6 +4883,10 @@ start_controller_worker(struct rspamd_worker *worker)
 	if (ctx->cached_enable_password.len > 0) {
 		m = (gpointer) ctx->cached_enable_password.begin;
 		munmap(m, ctx->cached_enable_password.len);
+	}
+
+	if (ctx->auth_failures != NULL) {
+		rspamd_lru_hash_destroy(ctx->auth_failures);
 	}
 
 	g_hash_table_unref(ctx->plugins);

@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local ansicolors = require "ansicolors"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local lua_fuzzy = require "lua_fuzzy"
 
 local E = {}
 
@@ -190,11 +191,6 @@ local function handler(args)
 
   load_config(opts)
 
-  if opts.list then
-    print_storages(rspamd_plugins.fuzzy_check.list_storages(rspamd_config))
-    os.exit(0)
-  end
-
   -- Perform ping using a fake task from async stuff provided by rspamadm
   local rspamd_task = require "rspamd_task"
 
@@ -202,6 +198,16 @@ local function handler(args)
   local task = rspamd_task.create(rspamd_config, rspamadm_ev_base)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
+
+  if opts.list then
+    -- The task is only needed to drive the event loop while the upstreams
+    -- that are resolved asynchronously (e.g. SRV based) are filled in
+    lua_fuzzy.wait_for_storages(rspamd_config, task, nil, opts.timeout, function()
+      print_storages(rspamd_plugins.fuzzy_check.list_storages(rspamd_config))
+    end)
+
+    return
+  end
 
   local replied = 0
   local results = {}
@@ -247,17 +253,27 @@ local function handler(args)
         opts.rule, opts.timeout, opts.server)
 
     if not ret then
-      print(highlight_err('error from %s: %s', opts.server, err))
+      print(highlight_err('error from %s: %s', opts.server or opts.rule, err))
       opts.number = opts.number - 1 -- To avoid issues with waiting for other replies
     end
   end
 
-  if opts.flood then
-    for i = 1, opts.number do
-      ping_fuzzy(i)
+  local function start_pings()
+    if opts.flood then
+      for i = 1, opts.number do
+        ping_fuzzy(i)
+      end
+    else
+      ping_fuzzy(1)
     end
+  end
+
+  if opts.server then
+    -- Explicit override, the configured upstreams are not used at all
+    start_pings()
   else
-    ping_fuzzy(1)
+    lua_fuzzy.wait_for_storages(rspamd_config, task, { [opts.rule] = true },
+        opts.timeout, start_pings)
   end
 end
 

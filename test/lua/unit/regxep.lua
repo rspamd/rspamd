@@ -67,6 +67,28 @@ context("Regexp unit tests", function()
     end
   end)
 
+  test("Regexp matchn", function()
+    local cases = {
+      -- pattern, input, limit, expected
+      {'/a/', 'aaaa', -1, 4}, -- unlimited
+      {'/a/', 'aaaa', 2, 2},  -- limited
+      {'/a/', 'aaaa', 0, 1},  -- zero limit is a single match
+      -- Patterns that can match an empty string must not loop forever
+      -- when the limit is negative (i.e. unlimited)
+      {'/x*/', 'abc', -1, 1},
+      {'/(?=b)/', 'abcb', -1, 1},
+      {'/\\b/', 'ab cd', -1, 1},
+    }
+
+    for _,c in ipairs(cases) do
+      local r = re.create_cached(c[1])
+      assert_not_nil(r, "cannot parse " .. c[1])
+
+      assert_equal(r:matchn(c[2], c[3]), c[4],
+        string.format("'%s' matchn '%s' with limit %d", c[1], c[2], c[3]))
+    end
+  end)
+
   test("Regexp split", function()
     local cases = {
       {'\\s', 'one', {'one'}}, -- one arg

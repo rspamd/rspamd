@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 # Define version variables
 set(RSPAMD_VERSION_MAJOR 4)
 set(RSPAMD_VERSION_MINOR 1)
-set(RSPAMD_VERSION_PATCH 4)
+set(RSPAMD_VERSION_PATCH 5)
 
 # Keep two digits all the time
 set(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
@@ -219,11 +219,9 @@ else ()
 endif ()
 
 # Memory allocator
-if (ENABLE_JEMALLOC AND NOT SANITIZE)
-    ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc/jemalloc.h
-            ROOT ${JEMALLOC_ROOT_DIR})
-    set(WITH_JEMALLOC "1")
-endif ()
+# Deliberately kept out of RSPAMD_REQUIRED_LIBRARIES: jemalloc is attached to the
+# individual targets by RspamdLinkJemalloc() instead, see cmake/Jemalloc.cmake.
+include(Jemalloc)
 
 # Required libraries
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h

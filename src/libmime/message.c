@@ -147,6 +147,15 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 	}
 }
 
+/*
+ * Bound the words retained for the whole message: the per part decay merely
+ * samples words within a single part, so a message built of many small parts
+ * can still produce a huge amount of words, and each of them is normalized and
+ * stemmed with several allocations from the task pool afterwards
+ */
+static const uint64_t max_message_words = 100000;
+static const uint64_t max_message_words_bytes = 1024 * 1024;
+
 static void
 rspamd_mime_part_create_words(struct rspamd_task *task,
 							  struct rspamd_mime_text_part *part)
@@ -201,8 +210,21 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 		part->exceptions,
 		NULL,
 		&part->utf_words,
+		&MESSAGE_FIELD(task, words_budget),
 		task->task_pool);
 
+	if (MESSAGE_FIELD(task, words_budget).exceeded) {
+		part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED;
+
+		if (!MESSAGE_FIELD(task, text_words_limit_reached)) {
+			msg_warn_task("words limit reached: %uL words of %uL bytes are "
+						  "tokenized for the whole message, the remaining text "
+						  "is not tokenized",
+						  MESSAGE_FIELD(task, words_budget).words,
+						  MESSAGE_FIELD(task, words_budget).bytes);
+			MESSAGE_FIELD(task, text_words_limit_reached) = TRUE;
+		}
+	}
 
 	if (part->utf_words.a) {
 		part->normalized_hashes = g_array_sized_new(FALSE, FALSE,
@@ -1541,6 +1563,8 @@ rspamd_message_new(struct rspamd_task *task)
 	msg->parts = g_ptr_array_sized_new(4);
 	msg->text_parts = g_ptr_array_sized_new(2);
 	msg->task = task;
+	msg->words_budget.max_words = max_message_words;
+	msg->words_budget.max_bytes = max_message_words_bytes;
 
 	REF_INIT_RETAIN(msg, rspamd_message_dtor);
 

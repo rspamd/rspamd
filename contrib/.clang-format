@@ -1,0 +1,5 @@
+# Vendored third-party code: keep upstream formatting so that local patches stay
+# reviewable against upstream. Without this, the pre-commit hook reformats just
+# the lines a patch touches and leaves the file with mixed indentation.
+DisableFormat: true
+SortIncludes: false

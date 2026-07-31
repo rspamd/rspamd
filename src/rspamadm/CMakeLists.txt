@@ -11,6 +11,7 @@ SET(RSPAMADMSRC rspamadm.c
         lua_repl.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         #${CMAKE_BINARY_DIR}/src/modules.c - defined in rspamdserver
+        ${CMAKE_SOURCE_DIR}/src/sanitizer_conf.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
         ${CMAKE_SOURCE_DIR}/src/fuzzy_storage.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
@@ -20,7 +21,8 @@ IF (ENABLE_HYPERSCAN MATCHES "ON")
     LIST(APPEND RSPAMADMSRC "${CMAKE_SOURCE_DIR}/src/hs_helper.c")
 ENDIF()
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
-TARGET_LINK_LIBRARIES(rspamadm rspamd-server)
+TARGET_LINK_LIBRARIES(rspamadm PRIVATE rspamd-server)
+RspamdLinkJemalloc(rspamadm)
 
 IF (NOT NO_TARGET_VERSIONS)
     SET_TARGET_PROPERTIES(rspamadm PROPERTIES VERSION ${RSPAMD_VERSION})

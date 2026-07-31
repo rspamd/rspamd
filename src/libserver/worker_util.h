@@ -110,6 +110,15 @@ struct rspamd_controller_session {
 	struct rspamd_lang_detector *lang_det;
 	gboolean is_spam;
 	gboolean is_read_only;
+	/*
+	 * Whether this connection may use the privileged File/Path/Shm message
+	 * source inputs. Derived once, at accept time, from the transport the
+	 * connection arrived on and the worker's `allow_file_and_shm_inputs`
+	 * option; never from anything the client sends. Handlers outside
+	 * controller.c (which cannot see the private worker context) must consult
+	 * this before creating a task that can reach rspamd_task_load_message.
+	 */
+	gboolean allow_file_shm_input;
 };
 
 /**
@@ -397,6 +406,39 @@ gboolean rspamd_worker_is_ssl_socket(struct rspamd_worker *worker, int fd);
  * @return TRUE if any socket is SSL
  */
 gboolean rspamd_worker_has_ssl_socket(struct rspamd_worker *worker);
+
+/**
+ * Check if the given listen fd is a unix domain socket for this worker.
+ * The answer is derived from the worker listen sockets configuration and
+ * never from any client supplied data (e.g. headers), so it is safe to use
+ * it for privilege decisions.
+ * @param worker
+ * @param fd listen fd from accept event
+ * @return TRUE if the listening socket is AF_UNIX
+ */
+gboolean rspamd_worker_is_unix_socket(struct rspamd_worker *worker, int fd);
+
+/**
+ * Strict loopback test for an accepted peer address.
+ * Unlike `rspamd_inet_address_is_local` this function returns TRUE **only**
+ * for AF_UNIX, IPv4 127/8 and IPv6 ::1; link-local and site-local addresses
+ * are explicitly rejected as those are reachable from other hosts.
+ * @param addr peer address as returned by `rspamd_accept_from_socket`
+ * @return TRUE if the peer is strictly loopback
+ */
+gboolean rspamd_worker_addr_is_loopback(const rspamd_inet_addr_t *addr);
+
+/**
+ * Emit a startup warning for each TCP listener of `worker` when privileged
+ * File/Path/Shm message source inputs are enabled. The message is escalated
+ * to an error level for listeners that are not strictly loopback.
+ * @param worker worker being started
+ * @param worker_name name used in the log line ("normal", "controller", ...)
+ * @param enabled when FALSE the function is a no-op
+ */
+void rspamd_worker_warn_file_shm_inputs(struct rspamd_worker *worker,
+										const char *worker_name,
+										gboolean enabled);
 
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;

@@ -239,6 +239,12 @@ rspamd_re_cache_add_to_scope_list(struct rspamd_re_cache **cache_head, const cha
 
 	/* Add to linked list */
 	if (*cache_head) {
+		/*
+		 * Inherit the max data limit from the default scope (the list head),
+		 * otherwise scoped regexps would be matched against unbounded input
+		 * whilst the default scope honours `regexp.max_size`
+		 */
+		new_cache->max_re_data = (*cache_head)->max_re_data;
 		DL_APPEND(*cache_head, new_cache);
 	}
 	else {
@@ -2054,6 +2060,26 @@ unsigned int rspamd_re_cache_set_limit_scoped(struct rspamd_re_cache *cache_head
 	cache = rspamd_re_cache_find_by_scope(cache_head, scope);
 	if (cache) {
 		old = rspamd_re_cache_set_limit(cache, limit);
+	}
+
+	return old;
+}
+
+unsigned int rspamd_re_cache_set_limit_all_scopes(struct rspamd_re_cache *cache_head, unsigned int limit)
+{
+	struct rspamd_re_cache *cur;
+	unsigned int old = 0;
+
+	if (!cache_head) {
+		return old;
+	}
+
+	/* The list head is the default scope, report its previous limit */
+	old = cache_head->max_re_data;
+
+	DL_FOREACH(cache_head, cur)
+	{
+		cur->max_re_data = limit;
 	}
 
 	return old;

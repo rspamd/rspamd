@@ -1728,6 +1728,12 @@ lua_load_redis(lua_State *L)
 {
 	lua_newtable(L);
 	luaL_register(L, NULL, redislib_f);
+	/*
+	 * Expose the sentinel used for a nil reply: it is a truthy userdata, so
+	 * without it Lua has no way to tell a missing key from data
+	 */
+	lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
+	lua_setfield(L, -2, "null");
 
 	return 1;
 }

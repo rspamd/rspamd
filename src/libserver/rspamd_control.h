@@ -91,7 +91,12 @@ struct rspamd_control_command {
 			char name[64];
 		} mp_loaded;
 		struct {
-			char name[64]; /* Map name */
+			/*
+			 * Digest identifies the database in the cache, whilst the name is
+			 * merely for logging: a map name is an URL and has no sane bound
+			 */
+			unsigned char digest[64]; /* rspamd_cryptobox_HASHBYTES */
+			char name[128];
 		} re_map_loaded;
 		struct {
 			char tag[32];
@@ -265,7 +270,12 @@ struct rspamd_srv_command {
 		} mp_loaded;
 		/* Sent when a regexp map hyperscan db is compiled */
 		struct {
-			char name[64]; /* Map name */
+			/*
+			 * Digest identifies the database in the cache, whilst the name is
+			 * merely for logging: a map name is an URL and has no sane bound
+			 */
+			unsigned char digest[64]; /* rspamd_cryptobox_HASHBYTES */
+			char name[128];
 		} re_map_loaded;
 		struct {
 			gboolean is_busy;

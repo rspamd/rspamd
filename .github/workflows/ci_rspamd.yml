@@ -15,6 +15,15 @@ on:
       enable_luajit:
         type: string
         default: 'ON'
+      # rspamd ships jemalloc-enabled packages (debian/rules on everything but
+      # arm64, rpm/rspamd.spec everywhere), and jemalloc changes how the whole
+      # process allocates, so that configuration has to be built and tested and
+      # not just assumed to work. Opt-in rather than default-on because only the
+      # amd64 ubuntu images carry libjemalloc-dev; see the per-job comments in
+      # ci.yml for who is still missing it.
+      enable_jemalloc:
+        type: string
+        default: 'OFF'
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
@@ -57,7 +66,7 @@ jobs:
         run: |
           mkdir ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
-          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} -DENABLE_JEMALLOC=${{ inputs.enable_jemalloc }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
 
       - name: Build rspamd
         run: |
