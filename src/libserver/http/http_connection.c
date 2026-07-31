@@ -427,6 +427,18 @@ static void
 rspamd_http_switch_zc(struct _rspamd_http_privbuf *pbuf,
 					  struct rspamd_http_message *msg)
 {
+	if (msg->body_buf.begin == NULL ||
+		msg->body_buf.allocated_len <= msg->body_buf.len) {
+		/*
+		 * There is no mapping to write into (e.g. growing it has just failed),
+		 * so stay with the private buffer instead of pointing at nothing
+		 */
+		pbuf->zc_buf = NULL;
+		pbuf->zc_remain = 0;
+
+		return;
+	}
+
 	pbuf->zc_buf = msg->body_buf.begin + msg->body_buf.len;
 	pbuf->zc_remain = msg->body_buf.allocated_len - msg->body_buf.len;
 }
@@ -475,6 +487,17 @@ rspamd_http_on_body(http_parser *parser, const char *at, size_t length)
 		}
 	}
 	else {
+		if (msg->body_buf.begin == NULL ||
+			msg->body_buf.allocated_len < msg->body_buf.len ||
+			msg->body_buf.allocated_len - msg->body_buf.len < length) {
+			/*
+			 * The parser cannot have read more than the mapping we handed to
+			 * it, so this is not expected to happen; bail out rather than write
+			 * past the end of the body storage
+			 */
+			return -1;
+		}
+
 		if (msg->body_buf.begin + msg->body_buf.len != at) {
 			/* Likely chunked encoding */
 			memmove((char *) msg->body_buf.begin + msg->body_buf.len, at, length);
@@ -948,10 +971,26 @@ rspamd_http_try_read(int fd,
 		len = pbuf->zc_remain;
 
 		if (len == 0) {
-			rspamd_http_message_grow_body(priv->msg, priv->buf->data->allocated);
-			rspamd_http_switch_zc(pbuf, msg);
-			data = (char *) pbuf->zc_buf;
-			len = pbuf->zc_remain;
+			if (rspamd_http_message_grow_body(priv->msg,
+											  priv->buf->data->allocated)) {
+				rspamd_http_switch_zc(pbuf, msg);
+				data = (char *) pbuf->zc_buf;
+				len = pbuf->zc_remain;
+			}
+
+			if (pbuf->zc_buf == NULL || len == 0) {
+				/*
+				 * There is no room left in the body storage and no way to get
+				 * any (growing it has just failed). Read into the private
+				 * buffer instead: appending it to the body then fails in the
+				 * parser callback and the error is reported through the usual
+				 * path, whereas here we would have written past the mapping.
+				 */
+				pbuf->zc_buf = NULL;
+				pbuf->zc_remain = 0;
+				data = priv->buf->data->str;
+				len = priv->buf->data->allocated;
+			}
 		}
 	}
 
@@ -1554,6 +1593,14 @@ rspamd_http_connection_copy_msg(struct rspamd_http_message *msg, GError **err)
 				REF_RETAIN(storage->shared.name);
 			}
 
+			/*
+			 * The segment belongs to the original message and stays mutable:
+			 * it can be both resized and rewritten whilst this copy keeps it
+			 * mapped. `allocated_len` therefore records the length passed to
+			 * mmap below (the only length that may ever be unmapped) and
+			 * consumers of this body must snapshot the bytes they need rather
+			 * than parsing them in place.
+			 */
 			new_msg->body_buf.str = mmap(NULL, st.st_size,
 										 PROT_READ, MAP_SHARED,
 										 storage->shared.shm_fd, 0);
@@ -2336,6 +2383,18 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 		rspamd_http_detach_shared(msg);
 	}
 
+	/*
+	 * `Shm`, `Shm-Offset` and `Shm-Length` describe our own segment and are
+	 * generated internally, so they are a reserved triplet: any instance that
+	 * came from a peer is dropped here. Otherwise the internally generated
+	 * values would be appended behind the peer supplied ones and a receiver
+	 * reading the first instance of each header would open a segment and an
+	 * offset of somebody else's choice.
+	 */
+	rspamd_http_message_remove_header(msg, "Shm");
+	rspamd_http_message_remove_header(msg, "Shm-Offset");
+	rspamd_http_message_remove_header(msg, "Shm-Length");
+
 	if (allow_shared) {
 		char tmpbuf[64];
 
@@ -2351,7 +2410,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 				shm_offset = msg->body_buf.begin - msg->body_buf.str;
 			}
 
-			/* Insert new headers */
+			/* Insert exactly one internally generated triplet */
 			rspamd_http_message_add_header(msg, "Shm",
 										   msg->body_buf.c.shared.name->shm_name);
 			rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "%uz", shm_offset);

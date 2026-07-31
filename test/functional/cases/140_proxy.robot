@@ -25,6 +25,18 @@ RSPAMC Legacy Protocol
   ${result} =  Rspamc  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}  ${MESSAGE}
   Should Contain  ${result}  RSPAMD/1.3 0 EX_OK
 
+CLIENT SHM HEADERS CANNOT OVERRIDE THE PROXY ONES
+  [Documentation]  Shm/Shm-Offset/Shm-Length are reserved for the proxy's own
+  ...  shared body on the upstream leg. This proxy does forward through shared
+  ...  memory (loopback upstream, privileged inputs enabled), so the client's
+  ...  triplet must be dropped and exactly the proxy's own one regenerated. Had
+  ...  the client's values survived, the upstream would have read the segment
+  ...  named below -- which does not exist -- and the scan would have failed.
+  Set Test Variable  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_PROXY}
+  Scan File  ${MESSAGE}  From=shmsmuggle@example.net  Rcpt=shmsmuggle-rcpt@example.net
+  ...  Shm=/rspamd-proxy-140-never-opened  Shm-Offset=0  Shm-Length=16
+  Expect Symbol  SIMPLE_TEST
+
 CHECKV3 VIA PROXY
   [Documentation]  Send /checkv3 multipart request through proxy, verify result
   Set Test Variable  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_PROXY}

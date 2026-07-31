@@ -583,6 +583,66 @@ rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
 	g_hash_table_replace(rcpt_args, key_tok, val_tok);
 }
 
+/*
+ * TRUE if `hn_tok` names one of the privileged message source controls
+ * (File/Path/Shm/Shm-Offset/Shm-Length), which make rspamd read the message
+ * from a local object named by the client.
+ *
+ * `Filename` is intentionally not matched here: it is descriptive metadata and
+ * it never selects a message source.
+ */
+static gboolean
+rspamd_protocol_is_privileged_header(const rspamd_ftok_t *hn_tok)
+{
+	static const rspamd_ftok_t privileged_headers[] = {
+		{sizeof(FILE_HEADER) - 1, FILE_HEADER},
+		{sizeof(PATH_HEADER) - 1, PATH_HEADER},
+		{sizeof(SHM_HEADER) - 1, SHM_HEADER},
+		{sizeof(SHM_OFFSET_HEADER) - 1, SHM_OFFSET_HEADER},
+		{sizeof(SHM_LENGTH_HEADER) - 1, SHM_LENGTH_HEADER},
+	};
+	unsigned int i;
+
+	for (i = 0; i < G_N_ELEMENTS(privileged_headers); i++) {
+		if (rspamd_ftok_casecmp(hn_tok, &privileged_headers[i]) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+/*
+ * Vet a request header before it is recorded in task->request_headers.
+ *
+ * Returns TRUE when the header may be stored. Returns FALSE, with task->err set
+ * to a 400 protocol error, when it is a privileged message source control and
+ * this connection is not allowed to use one: such a header is never stored, so
+ * nothing downstream can act on it.
+ */
+static gboolean
+rspamd_protocol_check_privileged_header(struct rspamd_task *task,
+										const rspamd_ftok_t *hn_tok)
+{
+	if (!rspamd_protocol_is_privileged_header(hn_tok) ||
+		rspamd_task_allow_file_shm_input(task)) {
+		return TRUE;
+	}
+
+	msg_info_protocol("deny privileged message source header %T from %s: this "
+					  "connection is not permitted to use file/shm inputs; set "
+					  "`allow_file_and_shm_inputs = true` for this worker if all "
+					  "of its clients are trusted",
+					  hn_tok,
+					  rspamd_inet_address_to_string_pretty(task->client_addr));
+	g_set_error(&task->err, rspamd_protocol_quark(), 400,
+				"file and shm message sources are not allowed on this connection");
+	/* This is a client error, so report it as a genuine 400 */
+	task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+	return FALSE;
+}
+
 #define IF_HEADER(name)          \
 	srch.begin = (name);         \
 	srch.len = sizeof(name) - 1; \
@@ -791,10 +851,16 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 			{
 				msg_debug_protocol("read user-agent header, value: %T", hv_tok);
 
-				if (hv_tok->len == 6 &&
-					rspamd_lc_cmp(hv_tok->begin, "rspamc", 6) == 0) {
-					task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
-				}
+				/*
+				 * The value is recorded as a plain request header (below) and
+				 * nothing else is derived from it on purpose.
+				 *
+				 * In particular RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT is
+				 * transport derived: it is set by the accepting worker from the
+				 * actual socket and peer identity and it MUST NEVER be inferred
+				 * from `User-Agent` or from any other client controlled value,
+				 * otherwise any remote client can claim to be a local rspamc.
+				 */
 			}
 			break;
 		case 'l':
@@ -892,6 +958,15 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		default:
 			msg_debug_protocol("generic header: %T", hn_tok);
 			break;
+				}
+
+				/*
+				 * Defence in depth: File/Path/Shm/Shm-Offset/Shm-Length have no
+				 * case arm of their own, so this unconditional store is the only
+				 * way they reach rspamd_task_load_message
+				 */
+				if (!rspamd_protocol_check_privileged_header (task, hn_tok)) {
+		return FALSE;
 				}
 
 				rspamd_task_add_request_header (task, hn_tok, hv_tok);
@@ -2751,6 +2826,27 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 			struct rspamd_shmem_segment *seg;
 			GError *shm_err = NULL;
 
+			/*
+			 * The named shared memory object is chosen by the client, so this
+			 * transfer mode is only available on transports that the accepting
+			 * worker has marked as privileged. Checked before the name is even
+			 * looked at, so no shm_open/fstat/mmap happens otherwise.
+			 */
+			if (!rspamd_task_allow_file_shm_input(task)) {
+				msg_info_protocol("deny v3 shm request body from %s: this "
+								  "connection is not permitted to use file/shm "
+								  "inputs; set `allow_file_and_shm_inputs = true` "
+								  "for this worker if all of its clients are trusted",
+								  rspamd_inet_address_to_string_pretty(task->client_addr));
+				g_set_error(&task->err, rspamd_protocol_quark(), 400,
+							"file and shm message sources are not allowed "
+							"on this connection");
+				/* This is a client error, so report it as a genuine 400 */
+				task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+				return FALSE;
+			}
+
 			off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
 			len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
 
@@ -2897,6 +2993,32 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	/* Check for file/shm in metadata (zero-copy paths) */
 	const ucl_object_t *file_elt = ucl_object_lookup(metadata_obj, "file");
 	const ucl_object_t *shm_elt = ucl_object_lookup(metadata_obj, "shm");
+
+	/*
+	 * These are the metadata equivalents of the File/Shm request headers: they
+	 * make rspamd read the message from a local object named by the client, so
+	 * they are only honoured on privileged transports. rspamd_task_load_message
+	 * checks this again, but rejecting here guarantees that nothing is even
+	 * inspected (no fpath is recorded, no header is synthesized) and gives the
+	 * client a message that points at the actual metadata keys.
+	 */
+	if (!rspamd_task_allow_file_shm_input(task) &&
+		(file_elt != NULL || shm_elt != NULL ||
+		 ucl_object_lookup(metadata_obj, "shm_offset") != NULL ||
+		 ucl_object_lookup(metadata_obj, "shm_length") != NULL)) {
+		msg_info_protocol("deny v3 metadata file/shm message source from %s: this "
+						  "connection is not permitted to use file/shm inputs; set "
+						  "`allow_file_and_shm_inputs = true` for this worker if all "
+						  "of its clients are trusted",
+						  rspamd_inet_address_to_string_pretty(task->client_addr));
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"'file' and 'shm' metadata message sources are not allowed "
+					"on this connection");
+		/* This is a client error, so report it as a genuine 400 */
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+		return FALSE;
+	}
 
 	if (file_elt && ucl_object_type(file_elt) == UCL_STRING) {
 		/* Set file path and let rspamd_task_load_message handle it via task header */
@@ -3241,7 +3363,22 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 		ucl_object_t *top = NULL;
 
 		top = ucl_object_typed_new(UCL_OBJECT);
-		msg->code = 500 + task->err->code % 100;
+
+		/*
+		 * Historically every protocol error was folded into the 5xx range, and
+		 * clients (and tests) rely on that for the pre-existing error paths.
+		 * Sites that deliberately want to report a genuine client error set
+		 * RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE and their code is used
+		 * as is; everything else keeps the legacy mapping.
+		 */
+		if ((task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE) &&
+			task->err->code >= 100 && task->err->code < 600) {
+			msg->code = task->err->code;
+		}
+		else {
+			msg->code = 500 + task->err->code % 100;
+		}
+
 		msg->status = rspamd_fstring_new_init(task->err->message,
 											  strlen(task->err->message));
 		ucl_object_insert_key(top, ucl_object_fromstring(task->err->message),

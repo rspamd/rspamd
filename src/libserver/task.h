@@ -117,7 +117,17 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 24u)
 #define RSPAMD_TASK_FLAG_MAX_SHIFT (25u)
 
-/* Request has been done by a local client */
+/*
+ * Request has been done by a local client.
+ *
+ * This flag is purely informational and it MUST be derived from the actual
+ * accepted transport and the peer identity (e.g. an AF_UNIX socket or a
+ * loopback peer address), NEVER from `User-Agent` or any other value that the
+ * client itself controls: otherwise any remote client can simply claim to be
+ * local. Consequently it MUST NOT be used to grant file, shm, authentication
+ * or any write privileges; use
+ * RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT for privileged inputs.
+ */
 #define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 1u)
 /* Request has been sent via milter */
 #define RSPAMD_TASK_PROTOCOL_FLAG_MILTER (1u << 2u)
@@ -133,7 +143,24 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_MULTIPART_V3 (1u << 7u)
 /* v3 request metadata part was msgpack-serialized (mirror it in the reply) */
 #define RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK (1u << 8u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (8u)
+/*
+ * Set when the transport this task was accepted on is permitted to carry
+ * privileged message source controls (File/Path/Shm*). Derived solely from
+ * the accepted socket and the worker's allow_file_and_shm_inputs option;
+ * NEVER from client supplied headers or request metadata.
+ */
+#define RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT (1u << 9u)
+/*
+ * Emit `task->err->code` verbatim as the HTTP status of the error reply.
+ *
+ * By default rspamd_protocol_write_reply() folds an error code into the 5xx
+ * range (`500 + code % 100`), which turns a client error such as 400 into a
+ * misleading `500 Internal Server Error`. Rejections that are genuinely the
+ * client's fault set this flag so that the real status reaches the client.
+ * Only codes in the valid HTTP range are honoured.
+ */
+#define RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE (1u << 10u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (10u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_SPAMC(task) (G_UNLIKELY((task)->cmd == CMD_CHECK_SPAMC))
@@ -267,34 +294,62 @@ gboolean rspamd_task_load_message(struct rspamd_task *task,
 								  const char *start, gsize len);
 
 /**
+ * Returns TRUE if this task may use privileged message source controls
+ * (File/Path/Shm/Shm-Offset/Shm-Length and their V3 metadata equivalents).
+ *
+ * The answer depends only on RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT,
+ * which the accepting worker derives from the transport, never from anything
+ * that the client sends.
+ * @param task
+ * @return TRUE if privileged message sources are permitted for this task
+ */
+gboolean rspamd_task_allow_file_shm_input(struct rspamd_task *task);
+
+/**
+ * Returns TRUE if the task carries any privileged message source control
+ * in its request headers. Cheap header presence test, performs no I/O.
+ * @param task
+ * @return TRUE if any of `file`, `path`, `shm`, `shm-offset` or `shm-length`
+ * request headers is present
+ */
+gboolean rspamd_task_has_file_shm_input(struct rspamd_task *task);
+
+/**
  * A shared memory segment passed by a local client instead of the message body
+ *
+ * `data` always points to a private snapshot allocated from the pool, so it
+ * stays valid (and stable) even if the client mutates or truncates the backing
+ * object afterwards. The `map`, `map_len` and `fd` fields are kept for
+ * introspection only: the segment owns neither a mapping nor a descriptor once
+ * it has been returned, so they are always NULL, 0 and -1 respectively.
  */
 struct rspamd_shmem_segment {
 	const char *name; /**< decoded segment name (allocated from the pool)   */
-	const char *data; /**< payload start, that is `map` + `offset`          */
+	const char *data; /**< payload snapshot (allocated from the pool)       */
 	gsize data_len;   /**< payload length                                   */
-	gpointer map;     /**< start of the mapping                             */
-	gsize map_len;    /**< length of the whole mapping                      */
-	gsize offset;     /**< payload offset within the mapping                */
-	int fd;           /**< descriptor kept open while the mapping is alive  */
+	gpointer map;     /**< unused, always NULL                              */
+	gsize map_len;    /**< unused, always 0                                 */
+	gsize offset;     /**< payload offset within the backing object         */
+	int fd;           /**< unused, always -1                                */
 };
 
 /**
- * Open and map a shared memory segment described by the `Shm`, `Shm-Offset` and
+ * Open and read a shared memory segment described by the `Shm`, `Shm-Offset` and
  * `Shm-Length` values of a request.
  *
  * All inputs come from a (trusted, but not necessarily sane) client, so they are
  * fully validated here: the resulting payload is always guaranteed to lie within
- * the mapping. The mapping is unmapped and the descriptor is closed when `pool`
- * is destroyed.
+ * the backing object. Only the requested window is mapped (rounded down to a
+ * page boundary), it is copied into `pool` and unmapped straight away, so no
+ * mapping and no descriptor outlive this call.
  *
- * @param pool pool to allocate the result from and to attach the mapping to
+ * @param pool pool to allocate the result and the payload snapshot from
  * @param name_tok value of the `Shm` header (url encoded, optionally quoted)
  * @param offset_tok value of the `Shm-Offset` header or NULL
  * @param length_tok value of the `Shm-Length` header or NULL
  * @param max_size reject payloads larger than this value (0 disables the check)
  * @param err error to set on failure
- * @return mapped segment or NULL on any error
+ * @return segment holding a snapshot of the payload or NULL on any error
  */
 struct rspamd_shmem_segment *rspamd_shmem_segment_map(rspamd_mempool_t *pool,
 													  const rspamd_ftok_t *name_tok,
