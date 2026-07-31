@@ -31,6 +31,10 @@
  *   - the payload handed to the caller is a private snapshot, therefore the
  *     client can resize the backing object afterwards without the parser
  *     ever seeing memory that can fault;
+ *   - and, the sharp edge of that one, the snapshot is never *copied out of a
+ *     mapping*: a client that truncates the object in the window between the
+ *     validating fstat and the copy would otherwise raise SIGBUS inside the
+ *     worker;
  *   - the name is sanitised before any syscall touches it and an overlong
  *     name is refused rather than silently truncated;
  *   - `Filename` is *not* a privileged control, whereas `File`, `Path`,
@@ -59,10 +63,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <chrono>
 #include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace rspamd_task_input_test {
@@ -201,6 +208,20 @@ public:
 		return true;
 	}
 
+	/*
+	 * A second, writable descriptor for the very same object. A concurrent
+	 * resizer needs one of its own, so that it never touches this fixture's
+	 * bookkeeping from another thread.
+	 */
+	int open_writable() const
+	{
+#ifdef HAVE_SANE_SHMEM
+		return shm_open(obj_name.c_str(), O_RDWR, 0);
+#else
+		return open(obj_name.c_str(), O_RDWR);
+#endif
+	}
+
 	/* Rewrites the whole object with the canonical pattern */
 	bool fill_pattern()
 	{
@@ -258,6 +279,74 @@ private:
 	gsize cur_size = 0;
 	int fd = -1;
 	bool ok = false;
+};
+
+/*
+ * Resizes a backing object from a second thread for as long as it is alive,
+ * which is how a client that owns the object behaves while the worker is
+ * reading it.
+ *
+ * The thread is bounded twice over -- by the stop flag and by a wall clock
+ * deadline -- and it is always joined from the destructor, so a failing
+ * assertion in the test body can neither leave it running nor hang the suite.
+ */
+class background_truncator {
+public:
+	background_truncator(const backing_object &obj, gsize big, gsize small)
+	{
+		fd = obj.open_writable();
+
+		if (fd == -1) {
+			return;
+		}
+
+		thr = std::thread([this, big, small]() {
+			auto deadline = std::chrono::steady_clock::now() +
+							std::chrono::seconds(10);
+
+			while (!stop.load(std::memory_order_relaxed) &&
+				   std::chrono::steady_clock::now() < deadline) {
+				if (ftruncate(fd, (off_t) small) == -1 ||
+					ftruncate(fd, (off_t) big) == -1) {
+					break;
+				}
+
+				toggles.fetch_add(1, std::memory_order_relaxed);
+			}
+		});
+	}
+
+	background_truncator(const background_truncator &) = delete;
+	background_truncator &operator=(const background_truncator &) = delete;
+
+	~background_truncator()
+	{
+		stop.store(true, std::memory_order_relaxed);
+
+		if (thr.joinable()) {
+			thr.join();
+		}
+
+		if (fd != -1) {
+			close(fd);
+		}
+	}
+
+	bool valid() const
+	{
+		return fd != -1;
+	}
+
+	unsigned long toggle_count() const
+	{
+		return toggles.load(std::memory_order_relaxed);
+	}
+
+private:
+	std::thread thr;
+	std::atomic<bool> stop{false};
+	std::atomic<unsigned long> toggles{0};
+	int fd = -1;
 };
 
 /*
@@ -881,6 +970,128 @@ TEST_SUITE("task privileged input")
 		REQUIRE(fresh != nullptr);
 		CHECK(segment_payload(fresh) == std::string(win_len, 'Z'));
 		CHECK(segment_payload(seg) == expected);
+	}
+
+	TEST_CASE("a concurrently truncated object is survived rather than faulted on")
+	{
+		/*
+		 * The test above resizes the object only *after* the call has returned,
+		 * so it never touches the interval that actually hurts: the one between
+		 * the fstat that validates the request and the copy that fulfils it.
+		 * A client owns the object and may truncate it exactly there, and a
+		 * copy out of a mapping then reads pages that no longer exist, which is
+		 * SIGBUS and a dead worker rather than a failed request. Reading the
+		 * window instead cannot fault; it merely returns fewer bytes.
+		 *
+		 * Which of the two permitted outcomes a given iteration gets is up to
+		 * the scheduler, so only the outcomes themselves are asserted: either a
+		 * snapshot no longer than the window that was asked for, or a refusal
+		 * that says why. Completing the loop at all is the regression test.
+		 */
+		constexpr gsize big_size = 2 * 1024 * 1024;
+		constexpr gsize small_size = 4096;
+		constexpr gsize win_len = 512 * 1024;
+		/* At the very end, so that shrinking really does remove its pages */
+		constexpr gsize win_off = big_size - win_len;
+		constexpr int iterations = 600;
+
+		backing_object obj("truncate_race", big_size);
+		REQUIRE(obj.valid());
+
+		/*
+		 * Zero filled on purpose: ftruncate only ever zero fills, so whatever
+		 * the two threads do, every byte that is really read back is a zero.
+		 * A data_len that reported the requested length rather than the number
+		 * of bytes that were actually read would therefore hand out
+		 * uninitialised pool memory, and that is visible right here.
+		 */
+		REQUIRE(obj.fill_with('\0'));
+
+		background_truncator truncator(obj, big_size, small_size);
+		REQUIRE(truncator.valid());
+
+		const std::string zeros(win_len, '\0');
+		const auto off_str = std::to_string(win_off);
+		const auto len_str = std::to_string(win_len);
+
+		int completed = 0, snapshots = 0, refusals = 0;
+		int short_reads = 0, partial_reads = 0;
+		int oversized = 0, unexplained = 0, retained = 0, dirty = 0;
+		int null_data = 0;
+
+		for (int i = 0; i < iterations; i++) {
+			/* One pool per iteration, so that the snapshots cannot pile up */
+			segment_mapper mapper;
+			auto *seg = mapper.map(obj.name(), off_str.c_str(), len_str.c_str());
+
+			completed++;
+
+			if (seg == nullptr) {
+				/* Losing the race is fine as long as the refusal says why */
+				refusals++;
+
+				if (mapper.error() == nullptr) {
+					unexplained++;
+				}
+
+				continue;
+			}
+
+			snapshots++;
+
+			if (seg->data == nullptr) {
+				/* Even an empty snapshot is copied from by the callers */
+				null_data++;
+				continue;
+			}
+
+			if (seg->data_len > win_len) {
+				oversized++;
+				continue;
+			}
+
+			if (seg->data_len < win_len) {
+				short_reads++;
+
+				if (seg->data_len > 0) {
+					/* The object shrank in the middle of the read itself */
+					partial_reads++;
+				}
+			}
+
+			if (seg->map != nullptr || seg->map_len != 0 || seg->fd != -1) {
+				retained++;
+			}
+
+			/*
+			 * Reads every byte that was reported as present, so that a
+			 * data_len covering bytes that were never read shows up as the
+			 * fill pattern of a fresh allocation, and one running past the
+			 * allocation altogether is caught by the sanitiser
+			 */
+			if (memcmp(seg->data, zeros.data(), seg->data_len) != 0) {
+				dirty++;
+			}
+		}
+
+		INFO("snapshots: " << snapshots << ", refusals: " << refusals
+						   << ", short reads: " << short_reads
+						   << " (" << partial_reads << " partial)"
+						   << ", toggles: " << truncator.toggle_count());
+
+		/* Getting this far at all is the point: the old reader took SIGBUS */
+		CHECK(completed == iterations);
+		CHECK(snapshots + refusals == iterations);
+		/* Otherwise nothing was ever raced and the loop proves nothing */
+		CHECK(snapshots > 0);
+		CHECK(null_data == 0);
+		/* Never more than was asked for, whatever the object did meanwhile */
+		CHECK(oversized == 0);
+		CHECK(unexplained == 0);
+		/* The read path keeps neither a mapping nor a descriptor */
+		CHECK(retained == 0);
+		/* data_len bounds real content, not the tail of a fresh allocation */
+		CHECK(dirty == 0);
 	}
 
 	TEST_CASE("rspamd_task_allow_file_shm_input")

@@ -503,6 +503,62 @@ rspamd_task_read_snapshot(int fd, char *buf, gsize len, gsize *read_len)
 	return TRUE;
 }
 
+enum rspamd_snapshot_result {
+	RSPAMD_SNAPSHOT_OK = 0,
+	RSPAMD_SNAPSHOT_ERROR,
+	/* This descriptor does not support positional reads at all */
+	RSPAMD_SNAPSHOT_UNSUPPORTED,
+};
+
+/*
+ * Reads `len` bytes at `offset` into `buf`, coping with short reads and EINTR.
+ *
+ * Unlike a copy out of a mapping, a read can never fault: if the object is
+ * truncated while we are reading it we merely get fewer bytes than we asked
+ * for, which the caller reflects in the payload length.
+ */
+static enum rspamd_snapshot_result
+rspamd_task_pread_snapshot(int fd, char *buf, gsize len, off_t offset,
+						   gsize *read_len)
+{
+	gsize total = 0;
+
+	while (total < len) {
+		ssize_t r = pread(fd, buf + total, len - total,
+						  offset + (off_t) total);
+
+		if (r > 0) {
+			total += (gsize) r;
+		}
+		else if (r == 0) {
+			/* Truncated under us, whatever we have got is all there is */
+			break;
+		}
+		else if (errno == EINTR) {
+			continue;
+		}
+		else if (total == 0 && (errno == ESPIPE || errno == ENODEV ||
+								errno == EINVAL || errno == ENOTSUP ||
+								errno == EOPNOTSUPP)) {
+			/*
+			 * POSIX shared memory descriptors cannot be read on every platform
+			 * (macOS returns ESPIPE, some BSDs ENODEV), so the caller has to
+			 * fall back to mapping the window there.
+			 */
+			return RSPAMD_SNAPSHOT_UNSUPPORTED;
+		}
+		else {
+			*read_len = total;
+
+			return RSPAMD_SNAPSHOT_ERROR;
+		}
+	}
+
+	*read_len = total;
+
+	return RSPAMD_SNAPSHOT_OK;
+}
+
 struct rspamd_shmem_segment *
 rspamd_shmem_segment_map(rspamd_mempool_t *pool,
 						 const rspamd_ftok_t *name_tok,
@@ -514,11 +570,12 @@ rspamd_shmem_segment_map(rspamd_mempool_t *pool,
 	char namebuf[PATH_MAX];
 	const char *name = namebuf;
 	gulong offset = 0, length = 0;
-	gsize page_size, aligned_offset, delta, map_len;
+	gsize page_size, aligned_offset, delta, map_len, nread = 0;
 	struct stat st;
 	int fd;
 	gpointer map;
 	char *data;
+	enum rspamd_snapshot_result res;
 	struct rspamd_shmem_segment *seg;
 #ifdef HAVE_SANE_SHMEM
 	const char *ft = "shm";
@@ -654,9 +711,40 @@ rspamd_shmem_segment_map(rspamd_mempool_t *pool,
 	}
 
 	/*
-	 * Map merely the window that is really needed: the offset is rounded down
-	 * to a page boundary and the length is extended by the very same delta, so
-	 * that a small payload inside a huge object never maps that whole object.
+	 * The backing object belongs to the client and it can be truncated or
+	 * rewritten at any moment, so the parser must never be handed a live
+	 * mapping. Read the window straight into pool storage instead of copying it
+	 * out of one: a concurrent ftruncate between the fstat above and the copy
+	 * would raise SIGBUS on a mapping and take the whole worker down, whereas a
+	 * read merely returns fewer bytes.
+	 */
+	data = rspamd_mempool_alloc(pool, length);
+	res = rspamd_task_pread_snapshot(fd, data, length, (off_t) offset, &nread);
+
+	if (res == RSPAMD_SNAPSHOT_ERROR) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"cannot read %s segment (%s): %s", ft, name,
+					strerror(errno));
+		close(fd);
+
+		return NULL;
+	}
+
+	if (res == RSPAMD_SNAPSHOT_OK) {
+		close(fd);
+		/* The object may have shrunk under us, so trust what we really got */
+		seg->data_len = nread;
+		seg->data = data;
+
+		return seg;
+	}
+
+	/*
+	 * This descriptor cannot be read positionally, which happens for POSIX
+	 * shared memory on some platforms, so fall back to mapping. Map merely the
+	 * window that is really needed: the offset is rounded down to a page
+	 * boundary and the length is extended by the very same delta, so that a
+	 * small payload inside a huge object never maps that whole object.
 	 */
 	page_size = (gsize) sysconf(_SC_PAGESIZE);
 
@@ -679,13 +767,6 @@ rspamd_shmem_segment_map(rspamd_mempool_t *pool,
 		return NULL;
 	}
 
-	/*
-	 * The backing object belongs to the client and it can be truncated or
-	 * rewritten at any moment, so a live mapping handed over to the parser
-	 * could fault later on. Snapshot the window into the pool and drop both the
-	 * mapping and the descriptor right away.
-	 */
-	data = rspamd_mempool_alloc(pool, length);
 	memcpy(data, (const char *) map + delta, length);
 	munmap(map, map_len);
 	close(fd);

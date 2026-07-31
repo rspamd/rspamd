@@ -87,6 +87,29 @@ Client Shm query arguments never reach the upstream
   Expect Symbol  SIMPLE_TEST
   Expect Symbol With Exact Options  FILE_SHM_PROBE  none
 
+Ordinary query arguments survive the stripping of a privileged one
+  [Documentation]  Stripping Shm means rebuilding the URL around it, and every
+  ...              surviving argument becomes a request header at the upstream.
+  ...              An argument that shared the URL with a stripped one must
+  ...              therefore arrive under its own name: a rebuild that kept the
+  ...              original '?' as well as the appended one renames it to
+  ...              '?From', which silently drops the envelope sender instead.
+  ${data} =  Get Binary File  ${MESSAGE}
+  # From is deliberately *not* sent as a header: the query argument is the only
+  # source of it, so a mangled name cannot be masked by a surviving header
+  ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}
+  ...  Rcpt=qsurvive-rcpt@example.net
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?From=qsurvive@example.net&Shm=${SHM_NAME}  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  200
+  ${json} =  Evaluate  __import__('json').loads($result[2])
+  Set Test Variable  ${SCAN_RESULT}  ${json}
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol With Exact Options  REQUEST_ARG_PROBE  From=qsurvive@example.net
+  # And the privileged one really was stripped, so this is not a case of the
+  # whole query having been forwarded untouched
+  Expect Symbol With Exact Options  FILE_SHM_PROBE  none
+
 Client Shm headers cannot override a permissive proxy's own triplet
   [Documentation]  The other proxy worker does forward through shared memory,
   ...              so a triplet really is generated on the upstream leg. It

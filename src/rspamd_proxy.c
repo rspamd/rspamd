@@ -1960,8 +1960,20 @@ proxy_strip_query_args(struct rspamd_http_message *msg,
 		return;
 	}
 
+	if (u.field_data[UF_QUERY].off == 0) {
+		/* A query always follows a '?', so this cannot happen; be defensive */
+		g_hash_table_unref(query_args);
+
+		return;
+	}
+
+	/*
+	 * UF_QUERY.off addresses the first byte *after* the '?', so the prefix has
+	 * to stop one byte short of it: copying up to `off` would keep the original
+	 * delimiter and the one appended below would produce a second one.
+	 */
 	new_url = rspamd_fstring_new_init(RSPAMD_FSTRING_DATA(msg->url),
-									  u.field_data[UF_QUERY].off);
+									  u.field_data[UF_QUERY].off - 1);
 	new_url = rspamd_fstring_append(new_url, "?", 1);
 
 	g_hash_table_iter_init(&it, query_args);
