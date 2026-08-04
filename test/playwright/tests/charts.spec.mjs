@@ -1,0 +1,118 @@
+import {expect, test} from "@playwright/test";
+import {login} from "../helpers/auth.mjs";
+
+// Status / Throughput / History rendering. The existing scan.spec only reads the
+// numeric #rrd-total-value; the D3Pie/D3Evolution charts, graph controls, the
+// client-side history search and the column-options dropdown are untested.
+//
+// Shares one logged-in page across the serial tests (like scan.spec) to amortise
+// login. No test waits on the 60 s RRD row boundary — only rendering & controls.
+test.describe.serial("WebUI Status / Throughput / History rendering", () => {
+    let page = null;
+
+    test.beforeAll(async ({browser}, testInfo) => {
+        const context = await browser.newContext();
+        page = await context.newPage();
+        const {enablePassword} = testInfo.project.use.rspamdPasswords;
+        await login(page, enablePassword);
+        await expect(page.locator("#navBar")).not.toHaveClass(/d-none/, {timeout: 30000});
+    });
+
+    test.afterAll(async () => {
+        if (page) await page.close();
+    });
+
+    test("Status tab renders stat widgets and the pie chart", async () => {
+        await page.locator("#status_nav").click();
+        await page.waitForResponse((r) => r.url().includes("/stat") && r.ok());
+        await expect(page.locator("#statWidgets")).toBeVisible();
+        await expect(page.locator("#statWidgets .widget").first()).toBeVisible();
+        // D3Pie draws an <svg> inside #chart.
+        await expect.poll(async () => await page.locator("#chart svg").count()).toBeGreaterThan(0);
+    });
+
+    test("Throughput tab renders the graph and reloads on dataset change", async () => {
+        // Track every /graph response. The listener is attached before navigating
+        // so there is no race (localhost responses can beat a waitForResponse
+        // registered after the triggering click).
+        const graphUrls = [];
+        page.on("response", (r) => {
+            if (r.url().includes("/graph")) graphUrls.push(r.url());
+        });
+
+        await page.locator("#throughput_nav").click();
+        await expect.poll(() => graphUrls.length).toBeGreaterThan(0);
+        await expect.poll(async () => await page.locator("#graph svg").count()).toBeGreaterThan(0);
+        await expect(page.locator("#rrd-total-value")).toBeVisible();
+
+        // tabClick() disables navbar controls (incl. #throughput_nav) for 1s after
+        // activating the tab. The #selData change handler routes through tabClick,
+        // which short-circuits while a control is disabled — so wait for the
+        // controls to re-enable before changing the dataset.
+        await expect(page.locator("#throughput_nav")).not.toHaveClass(/\bdisabled\b/);
+
+        // Switching dataset fires a fresh /graph?type=week request and redraws.
+        const before = graphUrls.length;
+        await page.locator("#selData").selectOption("week");
+        await expect.poll(() => graphUrls.slice(before).some((u) => u.includes("type=week"))).toBe(true);
+    });
+
+    test("History global search filters rows client-side", async () => {
+        // Seed two messages with distinct subjects.
+        await page.locator("#scan_nav").click();
+        const scanBtn = page.locator('#scan button[data-upload="checkv2"]');
+        const subjects = [`charts-A-${Date.now()}`, `charts-B-${Date.now()}`];
+        for (const subject of subjects) {
+            await page.locator("#scanMsgSource").fill(
+                `Message-Id: <${subject}@e2e>\nFrom: test@example.com\nSubject: ${subject}\n\nbody`
+            );
+            await Promise.all([
+                page.waitForResponse((r) => r.url().includes("checkv2") && r.ok()),
+                scanBtn.click(),
+            ]);
+            await expect(page.locator(".alert-success, .alert-modal.alert-success").last())
+                .toContainText("Data successfully scanned", {timeout: 10000});
+        }
+
+        await page.locator("#history_nav").click();
+        await page.waitForResponse((r) => r.url().includes("/history") && r.ok());
+        await expect(page.locator("#historyTable_history .tabulator-row").first())
+            .toBeVisible({timeout: 10000});
+        const baseline = await page.locator("#historyTable_history .tabulator-row").count();
+
+        // The filter is debounced (250 ms) and applied client-side via Tabulator.
+        await page.locator("#filter_history").fill(subjects[0]);
+        await expect.poll(async () => await page.locator("#historyTable_history .tabulator-row").count())
+            .toBeLessThan(baseline);
+
+        // Clearing restores the rows.
+        await page.locator("#filter_history").fill("");
+        await expect.poll(async () => await page.locator("#historyTable_history .tabulator-row").count())
+            .toBe(baseline);
+    });
+
+    test("History column-options dropdown hides and resets a column", async () => {
+        // History table is already loaded from the preceding serial test.
+        const colBtn = page.locator("#history .tab-columns-btn");
+        await expect(colBtn).toBeEnabled();
+
+        await colBtn.click();
+        const dropdown = page.locator("#history .tab-columns-dropdown");
+        await expect(dropdown).toBeVisible();
+        await expect(dropdown.locator("button", {hasText: "Reset to default"})).toBeVisible();
+        await expect(dropdown.locator("input[data-option='visible']")).not.toHaveCount(0);
+
+        // Hide the Subject column and persist (dropdown stays open: auto-close=outside).
+        const subjectVisible = dropdown.locator("input[data-name='subject'][data-option='visible']");
+        test.skip((await subjectVisible.count()) === 0, "Subject column checkbox not present");
+        await subjectVisible.check();
+        await dropdown.locator("button", {hasText: "Save"}).click();
+        await expect.poll(() => page.evaluate(() => localStorage.getItem("columns") || ""))
+            .toContain("subject");
+
+        // Reset to default clears the customisation.
+        await dropdown.locator("button", {hasText: "Reset to default"}).click();
+        await expect.poll(() => page.evaluate(() => localStorage.getItem("columns") || ""))
+            .not.toContain("subject");
+    });
+});
