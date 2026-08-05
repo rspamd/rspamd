@@ -277,6 +277,29 @@ rspamd_dkim_key_t *rspamd_dkim_make_key(const char *keydata, unsigned int keylen
 const unsigned char *rspamd_dkim_key_id(rspamd_dkim_key_t *key);
 
 /**
+ * Returns the type of a public key
+ * @param key
+ * @return
+ */
+enum rspamd_dkim_key_type rspamd_dkim_key_get_type(rspamd_dkim_key_t *key);
+
+/**
+ * Returns the EVP_PKEY of an RSA/ECDSA public key (as void * to avoid
+ * including OpenSSL headers), NULL for eddsa keys
+ * @param key
+ * @return
+ */
+void *rspamd_dkim_key_evp(rspamd_dkim_key_t *key);
+
+/**
+ * Returns the raw eddsa public key and its length, NULL for other key types
+ * @param key
+ * @param len
+ * @return
+ */
+const unsigned char *rspamd_dkim_key_eddsa(rspamd_dkim_key_t *key, gsize *len);
+
+/**
  * Parse DKIM public key from a TXT record
  * @param txt
  * @param keylen
