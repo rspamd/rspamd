@@ -244,7 +244,9 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
 
         // Lowercased searchable text for a row. Numeric/formatted columns (time,
         // time_real, size, score) are excluded — their raw values are useless for
-        // free-text search, and the per-column header filters cover them. Memoized
+        // free-text search, and the per-column header filters cover them. Symbol
+        // names, descriptions and option values (e.g. asn:, country:, fuzzy hashes)
+        // are included so text rendered in the symbols cell stays searchable. Memoized
         // in a WeakMap keyed by the data object so it is built once per row, not
         // on every keystroke; entries are GC'd when the row data is replaced.
         function buildSearchHaystack(data) {
@@ -252,7 +254,9 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
             let s = SEARCH_FIELDS.map((f) => (typeof data[f] === "string" ? data[f] : "")).join(" ");
             if (data.symbols_obj) {
                 s += " " + Object.values(data.symbols_obj)
-                    .map((sym) => sym.name + " " + (sym.description || ""))
+                    .map((sym) => [sym.name, sym.description || ""]
+                        .concat(sym.options || [])
+                        .join(" "))
                     .join(" ");
             }
             s = decodeEntities(s).toLowerCase();
