@@ -666,20 +666,18 @@ rspamd_fuzzy_flag_is_forbidden(struct fuzzy_session *session,
 {
 	khiter_t k;
 
-	k = kh_get(fuzzy_key_ids_set, session->ctx->default_forbidden_ids, flag);
-	if (k != kh_end(session->ctx->default_forbidden_ids)) {
-		return true;
-	}
-
+	/* A key with its own forbidden_ids set REPLACES the default:
+	 * an empty per-key set means "nothing forbidden for this key";
+	 * default_forbidden_ids only covers keys with no ACL of their own.
+	 * Mirrors the v1 reply path (default_disabled fallback there). */
 	if ((reply_flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) &&
 		session->key && session->key->forbidden_ids) {
 		k = kh_get(fuzzy_key_ids_set, session->key->forbidden_ids, flag);
-		if (k != kh_end(session->key->forbidden_ids)) {
-			return true;
-		}
+		return k != kh_end(session->key->forbidden_ids);
 	}
 
-	return false;
+	k = kh_get(fuzzy_key_ids_set, session->ctx->default_forbidden_ids, flag);
+	return k != kh_end(session->ctx->default_forbidden_ids);
 }
 
 /*
