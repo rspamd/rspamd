@@ -859,7 +859,11 @@ rspamd_fuzzy_make_reply(struct rspamd_fuzzy_cmd *cmd,
 			}
 
 			if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
-				if (session->reply.v1.rep.v1.prob > 0 && session->key && session->key->forbidden_ids) {
+				/* No prob check here: a key with its own forbidden_ids
+				 * overrides the default regardless of the match result,
+				 * otherwise a delayed reply (prob is zeroed, flag is not)
+				 * would fall back to default_forbidden_ids. */
+				if (session->key && session->key->forbidden_ids) {
 					khiter_t k;
 					k = kh_get(fuzzy_key_ids_set, session->key->forbidden_ids, session->reply.v1.rep.v1.flag);
 					if (k != kh_end(session->key->forbidden_ids)) {
