@@ -262,6 +262,18 @@ TEST_SUITE("html")
 			 "</html>",
 			 {"https://www.example.com"},
 			 "hello"},
+			/*
+			 * NB: schemeless hrefs cannot be tested here - rspamd_url_init(NULL)
+			 * leaves the TLD list empty, and html_process_url() drops every url
+			 * that has both no scheme and no TLD. See the "schemeless href"
+			 * cases in test/lua/unit/get_html_urls.lua instead.
+			 */
+			{"<a href=\"http://user@host.com/\">userinfo</a>",
+			 {"http://user@host.com/"},
+			 "userinfo"},
+			{"<a href=\"mailto:x@y.com\">explicit</a>",
+			 {"mailto:x@y.com"},
+			 "explicit"},
 		};
 
 		rspamd_url_init(NULL);
@@ -286,11 +298,24 @@ TEST_SUITE("html")
 					CHECK(hc->parsed == expected_text.value());
 				}
 				const auto &expected_urls = std::get<1>(c);
-				CHECK(expected_urls.size() == purls->len);
-				for (auto j = 0; j < expected_urls.size(); ++j) {
+				/* Join so that doctest prints both sides on a mismatch */
+				auto join = [](const std::vector<std::string> &v) -> std::string {
+					std::string res;
+					for (const auto &e: v) {
+						if (!res.empty()) {
+							res += " | ";
+						}
+						res += e;
+					}
+					return res;
+				};
+				std::vector<std::string> actual_urls;
+				actual_urls.reserve(purls->len);
+				for (auto j = 0u; j < purls->len; ++j) {
 					auto *url = (rspamd_url *) g_ptr_array_index(purls, j);
-					CHECK(expected_urls[j] == std::string{url->string, url->urllen});
+					actual_urls.emplace_back(url->string, url->urllen);
 				}
+				CHECK(join(expected_urls) == join(actual_urls));
 				g_byte_array_free(tmp, TRUE);
 				g_ptr_array_free(purls, TRUE);
 			}

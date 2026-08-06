@@ -1,6 +1,10 @@
 context("HTML URL extraction", function()
   local rspamd_task = require("rspamd_task")
   local logger = require("rspamd_logger")
+  local test_helper = require("rspamd_test_helper")
+
+  -- Schemeless hrefs are dropped unless they resolve to a known TLD
+  test_helper.init_url_parser()
 
   test("Basic URL extraction from simple HTML", function()
     local msg = [[
@@ -425,6 +429,121 @@ Content-Type: text/html
 
     task:destroy()
   end)
+
+  -- A schemeless href is given a scheme by a heuristic in html_process_url().
+  -- It used to stop at the first non-alphanumeric character, so a dot in an
+  -- email local part (`user.name@...`) was decided before the `@` was ever
+  -- seen: the address became `http://user.name@example.com`, i.e. a http
+  -- url with userinfo, and tripped URL_USER_PASSWORD.
+  local schemeless_cases = {
+    -- href, expected url text
+    { 'user.name@example.com', 'mailto:user.name@example.com' },
+    { 'first.last+tag@example.com', 'mailto:first.last+tag@example.com' },
+    { 'user@example.com', 'mailto:user@example.com' },
+    { 'user-name@example.com', 'mailto:user-name@example.com' },
+    { 'user_name@example.com', 'mailto:user_name@example.com' },
+    -- bare hostnames must keep resolving to http://
+    { 'www.example.com', 'http://www.example.com' },
+    { 'www.example.com/path', 'http://www.example.com/path' },
+    { 'www.example.com?a=b', 'http://www.example.com?a=b' },
+    { '//example.com/x', 'http://example.com/x' },
+    -- explicit schemes are not touched by the heuristic at all
+    { 'http://user@host.com/', 'http://user@host.com/' },
+    { 'mailto:x@y.com', 'mailto:x@y.com' },
+  }
+
+  for _, case in ipairs(schemeless_cases) do
+    local href, expected = case[1], case[2]
+
+    test("schemeless href: " .. href, function()
+      local msg = string.format([[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body><a href="%s">text</a></body></html>
+]], href)
+      local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+      assert_true(res, "failed to load message")
+
+      task:process_message()
+
+      local found = {}
+      for _, u in ipairs(task:get_urls(true) or {}) do
+        table.insert(found, u:get_text())
+      end
+
+      assert_equal(expected, found[1],
+          string.format("href %s should be extracted as %s, got %s",
+              href, expected, table.concat(found, ', ')))
+
+      task:destroy()
+    end)
+  end
+
+  test("schemeless email href is not parsed as http userinfo", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body><a href="user.name@example.com">user.name@example.com</a></body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    -- Both gates that keep URL_USER_PASSWORD quiet (see
+    -- user_password_analysis in src/plugins/lua/url_suspect.lua): the url is
+    -- mailto, and it does not carry the has_user flag
+    local rspamd_url = require "rspamd_url"
+    local bit = require "bit"
+
+    for _, u in ipairs(task:get_urls(true) or {}) do
+      assert_equal("mailto", u:get_protocol(),
+          "an email href must be a mailto url, not http")
+      assert_equal(0, bit.band(u:get_flags_num(), rspamd_url.flags.has_user),
+          string.format("the local part must not end up as http userinfo "
+              .. "(URL_USER_PASSWORD): url=%s flags=%s has_user=%s",
+              u:get_text(), tostring(u:get_flags_num()),
+              tostring(rspamd_url.flags.has_user)))
+    end
+
+    task:destroy()
+  end)
+
+  -- Leading ambiguous characters are still rejected: `./page.html` and friends
+  -- are relative hrefs, not hostnames
+  for _, href in ipairs({ './page.html', '../page.html', '.hidden' }) do
+    test("relative href is still rejected: " .. href, function()
+      local msg = string.format([[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body><a href="%s">text</a></body></html>
+]], href)
+      local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+      assert_true(res, "failed to load message")
+
+      task:process_message()
+
+      local found = {}
+      for _, u in ipairs(task:get_urls(true) or {}) do
+        table.insert(found, u:get_text())
+      end
+
+      assert_equal(0, #found,
+          string.format("%s must not yield a url, got %s",
+              href, table.concat(found, ', ')))
+
+      task:destroy()
+    end)
+  end
 
   test("Nested query-embedded URLs stop at RSPAMD_URL_QUERY_MAX_NESTING", function()
     -- wrap?u=l1?v=l2?w=l3?x=l4?y=l5?z=l6, each level escaped one layer deeper.

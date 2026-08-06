@@ -427,8 +427,30 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 			/* Exclusion, has valid but 'strange' prefix */
 		}
 		else {
+			/*
+			 * Guess the missing scheme from the first *structural* character.
+			 * `.`, `-`, `_` and `+` are legal both in a hostname and in an
+			 * email local part, so they carry no information and must not
+			 * terminate the scan: otherwise `user.name@example.com` stops at
+			 * the dot, gets an `http://` prefix and the address ends up parsed
+			 * as userinfo of a http url (a URL_USER_PASSWORD false positive).
+			 * They are only skipped at i != 0, so a leading `.`/`-` (e.g. the
+			 * relative href `./page.html`) is still rejected as before.
+			 */
+			auto benign_seen = false;
+			auto structural_seen = false;
+
 			for (auto i = 0; i < sz; i++) {
 				if (!((s[i] & 0x80) || g_ascii_isalnum(s[i]))) {
+					if (i != 0 && (s[i] == '.' || s[i] == '-' ||
+								   s[i] == '_' || s[i] == '+')) {
+						/* Ambiguous character, keep looking for a structural one */
+						benign_seen = true;
+						continue;
+					}
+
+					structural_seen = true;
+
 					if (i == 0 && sz > 2 && s[i] == '/' && s[i + 1] == '/') {
 						prefix = "http:";
 						dlen += sizeof("http:") - 1;
@@ -462,6 +484,17 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 
 					break;
 				}
+			}
+
+			if (!structural_seen && benign_seen) {
+				/*
+				 * Nothing but alnum and ambiguous characters, e.g. the bare
+				 * hostname `www.example.com`. Before the skip above, the first
+				 * dot took the generic branch, so reproduce it here to keep
+				 * the `http://` prefix.
+				 */
+				no_prefix = TRUE;
+				dlen += strlen(prefix);
 			}
 		}
 	}

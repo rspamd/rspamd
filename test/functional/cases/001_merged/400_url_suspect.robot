@@ -34,6 +34,15 @@ URL Suspect - Email Addresses Are Not URL Users
   Do Not Expect Symbol  URL_USER_LONG
   Do Not Expect Symbol  URL_USER_VERY_LONG
 
+URL Suspect - Schemeless Email Href Is Not A URL User
+  # A schemeless href whose local part contains a dot used to be prefixed with
+  # http:// and parsed as userinfo instead of mailto
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_schemeless_email_href.eml
+  ...  Settings={symbols_enabled = [URL_SUSPECT_CHECK, URL_USER_LONG, URL_USER_VERY_LONG, URL_USER_PASSWORD]}
+  Do Not Expect Symbol  URL_USER_PASSWORD
+  Do Not Expect Symbol  URL_USER_LONG
+  Do Not Expect Symbol  URL_USER_VERY_LONG
+
 URL Suspect - Numeric IP
   # Test numeric IP detection
   Scan File  ${RSPAMD_TESTDIR}/messages/url_suspect_numeric_ip.eml
