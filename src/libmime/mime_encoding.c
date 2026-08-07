@@ -864,6 +864,19 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 	RSPAMD_FTOK_FROM_STR(&charset_tok, charset);
 
 	if (!valid_utf8) {
+		if (part->flags & RSPAMD_MIME_PART_COMPUTED) {
+			/*
+			 * Synthetically extracted text (e.g. from PDF) that is not valid
+			 * UTF-8 is undecodable glyph data, not a real legacy charset. Don't
+			 * guess one via CED and don't feed the noise into tokenization:
+			 * keep it raw.
+			 */
+			SET_PART_RAW(text_part);
+			text_part->utf_raw_content = part_content;
+
+			return;
+		}
+
 		if (rspamd_mime_charset_utf_check(&charset_tok, part_content->data,
 										  part_content->len, !checked)) {
 			SET_PART_UTF(text_part);
@@ -873,7 +886,15 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 			return;
 		}
 		else {
+			const char *canon_charset;
+
 			charset = charset_tok.begin;
+			/* CED may emit a non-IANA name; resolve aliases before conversion */
+			canon_charset = rspamd_mime_detect_charset(&charset_tok,
+													   task->task_pool);
+			if (canon_charset != NULL) {
+				charset = canon_charset;
+			}
 
 			if (g_ascii_strcasecmp(charset, RSPAMD_BINARYENC_CHARSET) == 0) {
 				set_part_binary(task, text_part, part_content, charset);
