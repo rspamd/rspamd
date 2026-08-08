@@ -138,6 +138,26 @@ context("PDF content extraction", function()
     assert_nil(text:find('\255', 1, true), 'raw glyph index leaked: ' .. text)
   end)
 
+  test("A TJ word gap does not shift multi byte code framing", function()
+    local cmap = table.concat({
+      'begincmap 1 begincodespacerange <0000> <FFFF> endcodespacerange',
+      '2 beginbfchar <0024> <0041> <0030> <0062> endbfchar endcmap',
+    }, '\n')
+
+    local extra = {
+      '<< /Type /Font /Subtype /Type0 /BaseFont /Arial /Encoding /Identity-H ' ..
+      '/DescendantFonts [] /ToUnicode 9 0 R >>',
+      string.format('<< /Length %d >>\nstream\n%s\nendstream', #cmap, cmap),
+    }
+
+    -- The -250 is a positioning adjustment: splicing a space byte between the
+    -- two codes would leave the second one misframed
+    local text = extract(prologue ..
+      'BT /F4 12 Tf [<0024> -250 <0030>] TJ ET\nQ\n', '/F4 8 0 R', extra)
+
+    assert_not_nil(text:find('A b', 1, true), 'TJ framing, got: ' .. text)
+  end)
+
   test("Plain ascii text is unaffected", function()
     local text = extract(prologue ..
       'BT /F1 12 Tf (Hello, world) Tj ET\nQ\n', '/F1 5 0 R')

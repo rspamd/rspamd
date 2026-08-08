@@ -378,27 +378,31 @@ local function gen_text_grammar()
     local op = args[#args]
     local t = args[#args - 1]
 
-    local res = t
+    -- The pieces of a TJ array stay apart: its numbers are positioning
+    -- adjustments, not character codes, so a word gap must not be spliced into
+    -- the code stream. A multi byte code would lose its framing from that
+    -- point on. `false` marks a gap for the replay to add structurally.
+    local pieces = {}
+
     if type(t) == 'table' then
-      local tres = {}
       for _, chunk in ipairs(t) do
-        if type(chunk) == 'string' then
-          table.insert(tres, chunk)
+        if type(chunk) == 'string' and #chunk > 0 then
+          pieces[#pieces + 1] = chunk
         elseif type(chunk) == 'number' and chunk < -200 then
-          -- A large negative offset in a TJ array is a word gap
-          table.insert(tres, ' ')
+          pieces[#pieces + 1] = false
         end
       end
-      res = table.concat(tres)
+    elseif type(t) == 'string' and #t > 0 then
+      pieces[1] = t
     end
 
-    if type(res) ~= 'string' or #res == 0 then
+    if #pieces == 0 then
       return ''
     end
 
     return {
       '%text%',
-      res,
+      pieces,
       op == "'" or op == '"',
     }
   end
@@ -1635,18 +1639,23 @@ local function search_text(task, pdf, mpart)
                 builder:add_char('\n')
               end
 
-              if use_cmap then
-                -- A composite font emits multi byte codes, which look like
-                -- UTF-16 to a byte level heuristic; the cmap is authoritative
-                builder:add_encoded(chunk[2])
-              else
-                local decoded, is_utf8 = sanitize_pdf_text(chunk[2])
+              for _, piece in ipairs(chunk[2]) do
+                if piece == false then
+                  -- A word gap from a TJ offset, not a character
+                  builder:add_char(' ')
+                elseif use_cmap then
+                  -- A composite font emits multi byte codes, which look like
+                  -- UTF-16 to a byte level heuristic; the cmap is authoritative
+                  builder:add_encoded(piece)
+                else
+                  local decoded, is_utf8 = sanitize_pdf_text(piece)
 
-                if decoded and #decoded > 0 then
-                  if is_utf8 then
-                    builder:add_utf8(decoded)
-                  else
-                    builder:add_encoded(decoded)
+                  if decoded and #decoded > 0 then
+                    if is_utf8 then
+                      builder:add_utf8(decoded)
+                    else
+                      builder:add_encoded(decoded)
+                    end
                   end
                 end
               end
