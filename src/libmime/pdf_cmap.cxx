@@ -272,24 +272,26 @@ auto cmap::note_code_width(std::size_t nbytes) noexcept -> void
 								 static_cast<std::uint8_t>(std::min<std::size_t>(nbytes, 4)));
 }
 
-auto cmap::add_single(std::uint32_t code, std::string &&utf8) -> bool
+auto cmap::add_single(std::uint32_t code, std::size_t nbytes, std::string &&utf8) -> bool
 {
 	if (utf8.empty() || singles.size() >= max_singles) {
 		return false;
 	}
 
-	singles[code] = std::move(utf8);
+	singles[make_key(code, nbytes)] = std::move(utf8);
 
 	return true;
 }
 
-auto cmap::add_range(std::uint32_t low, std::uint32_t high, char32_t first_uc) -> bool
+auto cmap::add_range(std::uint32_t low, std::uint32_t high, char32_t first_uc,
+					 std::size_t nbytes) -> bool
 {
 	if (low > high || ranges.size() >= max_ranges) {
 		return false;
 	}
 
-	ranges.push_back({low, high, first_uc});
+	ranges.push_back({low, high, first_uc,
+					  static_cast<std::uint8_t>(std::min<std::size_t>(nbytes, 4))});
 
 	return true;
 }
@@ -348,9 +350,10 @@ auto cmap::code_length(std::string_view input) const noexcept -> std::size_t
 	return std::min(static_cast<std::size_t>(default_nbytes), input.size());
 }
 
-auto cmap::lookup(std::uint32_t code, glyph_utf8 &scratch) const noexcept -> std::string_view
+auto cmap::lookup(std::uint32_t code, std::size_t nbytes, glyph_utf8 &scratch) const noexcept
+	-> std::string_view
 {
-	auto it = singles.find(code);
+	auto it = singles.find(make_key(code, nbytes));
 
 	if (it != singles.end()) {
 		return it->second;
@@ -360,13 +363,21 @@ auto cmap::lookup(std::uint32_t code, glyph_utf8 &scratch) const noexcept -> std
 	auto rit = std::upper_bound(ranges.begin(), ranges.end(), code,
 								[](std::uint32_t c, const range &r) { return c < r.low; });
 
-	if (rit == ranges.begin()) {
-		return {};
+	/* Several ranges may start at or below the code; the width picks one */
+	while (rit != ranges.begin()) {
+		--rit;
+
+		if (code <= rit->high && rit->nbytes == nbytes) {
+			break;
+		}
+
+		if (rit == ranges.begin()) {
+			return {};
+		}
 	}
 
-	--rit;
-
-	if (code > rit->high) {
+	if (rit == ranges.end() || code < rit->low || code > rit->high ||
+		rit->nbytes != nbytes) {
 		return {};
 	}
 
@@ -460,7 +471,8 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 
 				std::string utf8;
 				utf16be_to_utf8(dst.bytes, utf8, nullptr);
-				result.add_single(bytes_to_code(src.bytes), std::move(utf8));
+				result.add_single(bytes_to_code(src.bytes), src.bytes.size(),
+								  std::move(utf8));
 			}
 
 			continue;
@@ -493,7 +505,7 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 
 					if (nchars == 1) {
 						/* Consecutive destinations: keep the range as a range */
-						result.add_range(lo_code, hi_code, single);
+						result.add_range(lo_code, hi_code, single, low.bytes.size());
 					}
 					else if (nchars > 1) {
 						/*
@@ -521,7 +533,7 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 							U8_APPEND_UNSAFE(buf, off, uc);
 							dst_utf8.append(buf, off);
 							result.add_single(lo_code + static_cast<std::uint32_t>(i),
-											  std::move(dst_utf8));
+											  low.bytes.size(), std::move(dst_utf8));
 						}
 					}
 				}
@@ -539,7 +551,7 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 						if (code <= hi_code) {
 							std::string utf8;
 							utf16be_to_utf8(elt.bytes, utf8, nullptr);
-							result.add_single(code, std::move(utf8));
+							result.add_single(code, low.bytes.size(), std::move(utf8));
 							code++;
 						}
 					}
@@ -591,7 +603,7 @@ TEST_SUITE("pdf cmap")
 				code = (code << 8) | static_cast<unsigned char>(codes[i]);
 			}
 
-			out.append(cm.lookup(code, scratch));
+			out.append(cm.lookup(code, n, scratch));
 			codes.remove_prefix(n);
 		}
 
@@ -671,6 +683,42 @@ end)cmap");
 		REQUIRE(cm.has_value());
 		CHECK(decode(*cm, std::string_view{"\x00\x01", 2}) == "ffi ");
 		CHECK(decode(*cm, std::string_view{"\x00\x02", 2}) == "\xf0\x9f\x98\x80");
+	}
+
+	TEST_CASE("a code is its width as well as its value")
+	{
+		/*
+		 * Both codespaces are declared, and <41> and <0041> are distinct codes
+		 * even though their numeric values agree.
+		 */
+		auto cm = cmap::parse("begincmap\n2 begincodespacerange\n<00> <7f>\n"
+							  "<8000> <ffff>\nendcodespacerange\n"
+							  "2 beginbfchar\n<41> <0058>\n<8041> <0059>\n"
+							  "endbfchar\nendcmap\n");
+
+		REQUIRE(cm.has_value());
+
+		glyph_utf8 scratch{};
+		CHECK(cm->lookup(0x41, 1, scratch) == "X");
+		CHECK(cm->lookup(0x8041, 2, scratch) == "Y");
+		/* The same value at the wrong width is not a mapping */
+		CHECK(cm->lookup(0x41, 2, scratch).empty());
+		CHECK(cm->lookup(0x8041, 1, scratch).empty());
+	}
+
+	TEST_CASE("ranges of different widths do not shadow each other")
+	{
+		auto cm = cmap::parse("begincmap\n2 begincodespacerange\n<00> <7f>\n"
+							  "<8000> <ffff>\nendcodespacerange\n"
+							  "2 beginbfrange\n<41> <43> <0061>\n"
+							  "<8041> <8043> <0071>\nendbfrange\nendcmap\n");
+
+		REQUIRE(cm.has_value());
+
+		glyph_utf8 scratch{};
+		CHECK(cm->lookup(0x42, 1, scratch) == "b");
+		CHECK(cm->lookup(0x8042, 2, scratch) == "r");
+		CHECK(cm->lookup(0x42, 2, scratch).empty());
 	}
 
 	TEST_CASE("one byte codespaces")

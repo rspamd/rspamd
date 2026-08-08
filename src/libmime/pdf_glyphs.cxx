@@ -231,7 +231,7 @@ auto text_builder::add_cmapped(std::string_view codes) -> void
 			code = (code << 8) | static_cast<unsigned char>(codes[i]);
 		}
 
-		auto utf8 = cur_cmap->lookup(code, scratch);
+		auto utf8 = cur_cmap->lookup(code, nbytes, scratch);
 
 		/* An unmapped code is a glyph index with no character: drop it */
 		if (!utf8.empty()) {

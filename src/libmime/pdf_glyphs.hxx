@@ -149,12 +149,14 @@ public:
 	[[nodiscard]] auto code_length(std::string_view input) const noexcept -> std::size_t;
 
 	/**
-	 * UTF-8 for one code, empty when unmapped. A code covered by a range is
-	 * built into the caller's scratch, so the result is valid until that
-	 * scratch is reused.
+	 * UTF-8 for one code, empty when unmapped. The width matters: <41> and
+	 * <0041> are different codes even though their values agree, because the
+	 * byte count is what places a code in a codespace. A code covered by a
+	 * range is built into the caller's scratch, so the result is valid until
+	 * that scratch is reused.
 	 */
-	[[nodiscard]] auto lookup(std::uint32_t code, glyph_utf8 &scratch) const noexcept
-		-> std::string_view;
+	[[nodiscard]] auto lookup(std::uint32_t code, std::size_t nbytes,
+							  glyph_utf8 &scratch) const noexcept -> std::string_view;
 
 	[[nodiscard]] auto empty() const noexcept -> bool
 	{
@@ -176,15 +178,23 @@ private:
 		std::uint32_t low;
 		std::uint32_t high;
 		char32_t first_uc;
+		std::uint8_t nbytes;
 	};
 
+	/* Width and value together identify a code */
+	static auto make_key(std::uint32_t code, std::size_t nbytes) noexcept -> std::uint64_t
+	{
+		return (static_cast<std::uint64_t>(nbytes) << 32) | code;
+	}
+
 	auto note_code_width(std::size_t nbytes) noexcept -> void;
-	auto add_single(std::uint32_t code, std::string &&utf8) -> bool;
-	auto add_range(std::uint32_t low, std::uint32_t high, char32_t first_uc) -> bool;
+	auto add_single(std::uint32_t code, std::size_t nbytes, std::string &&utf8) -> bool;
+	auto add_range(std::uint32_t low, std::uint32_t high, char32_t first_uc,
+				   std::size_t nbytes) -> bool;
 	auto finalise() -> void;
 
 	std::vector<codespace> codespaces;
-	ankerl::unordered_dense::map<std::uint32_t, std::string> singles;
+	ankerl::unordered_dense::map<std::uint64_t, std::string> singles;
 	std::vector<range> ranges;
 	/* Used when a CMap declares no codespace at all */
 	std::uint8_t default_nbytes = 2;
