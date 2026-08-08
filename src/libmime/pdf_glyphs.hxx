@@ -52,6 +52,20 @@ enum class base_encoding : std::uint8_t {
 };
 
 /**
+ * One decoded glyph, stored as UTF-8 with an explicit length so that a lookup
+ * never has to measure a string. A zero length means .notdef.
+ */
+struct glyph_utf8 {
+	char bytes[4];
+	std::uint8_t len;
+
+	[[nodiscard]] auto view() const noexcept -> std::string_view
+	{
+		return {bytes, len};
+	}
+};
+
+/**
  * Maps a PDF encoding name (with or without the leading slash) to a base
  * encoding, e.g. "WinAnsiEncoding" or "/MacRomanEncoding".
  */
@@ -90,13 +104,8 @@ public:
 	}
 
 private:
-	struct glyph_slot {
-		char utf8[4];
-		std::uint8_t len;
-	};
-
-	const char *const *base_table;
-	std::unique_ptr<std::array<glyph_slot, 256>> overrides;
+	const glyph_utf8 *base_table;
+	std::unique_ptr<std::array<glyph_utf8, 256>> overrides;
 };
 
 /**
@@ -126,8 +135,13 @@ public:
 	/** A hex string as it appears between angle brackets, without them. */
 	auto add_pdf_hexstring(std::string_view raw) -> void;
 
-	/** Text that is already UTF-8, e.g. a UTF-16 string decoded by the caller. */
-	auto add_utf8(std::string_view utf8) -> void;
+	/**
+	 * Text that is already UTF-8, e.g. a UTF-16 string decoded by the caller.
+	 * Validated before it is appended, so that one bad run cannot make the
+	 * whole page buffer invalid; returns false and appends nothing if it is not
+	 * well formed.
+	 */
+	auto add_utf8(std::string_view utf8) -> bool;
 
 	/** A structural ASCII character produced by an operator, not by a glyph. */
 	auto add_char(char c) -> void;

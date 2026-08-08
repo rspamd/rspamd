@@ -17,17 +17,24 @@
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
 
+#include "config.h"
+
 #include "pdf_glyphs.hxx"
 #include "pdf_glyphs_defs.hxx"
 
+#include "libutil/str_util.h"
+#include "libutil/rspamd_simdutf.h"
+
+#include "unicode/uchar.h"
+#include "unicode/utf8.h"
+
 #include <algorithm>
-#include <cstring>
 
 namespace rspamd::mime::pdf {
 
 namespace {
 
-auto base_table_for(base_encoding base) noexcept -> const char *const *
+auto base_table_for(base_encoding base) noexcept -> const glyph_utf8 *
 {
 	switch (base) {
 	case base_encoding::win_ansi:
@@ -40,93 +47,21 @@ auto base_table_for(base_encoding base) noexcept -> const char *const *
 	}
 }
 
-auto ascii_lower(char c) noexcept -> char
-{
-	return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
-}
-
 auto iequals(std::string_view a, std::string_view b) noexcept -> bool
 {
-	if (a.size() != b.size()) {
-		return false;
-	}
-
-	for (std::size_t i = 0; i < a.size(); i++) {
-		if (ascii_lower(a[i]) != ascii_lower(b[i])) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
-auto hex_value(char c) noexcept -> int
-{
-	if (c >= '0' && c <= '9') {
-		return c - '0';
-	}
-	if (c >= 'a' && c <= 'f') {
-		return c - 'a' + 10;
-	}
-	if (c >= 'A' && c <= 'F') {
-		return c - 'A' + 10;
-	}
-
-	return -1;
+	return a.size() == b.size() && rspamd_lc_cmp(a.data(), b.data(), a.size()) == 0;
 }
 
 /* Parses exactly nhex hex digits, nothing more and nothing less */
 auto parse_hex_run(std::string_view s, std::size_t nhex) noexcept -> std::optional<char32_t>
 {
-	if (s.size() != nhex) {
+	gulong v;
+
+	if (s.size() != nhex || !rspamd_xstrtoul(s.data(), s.size(), &v)) {
 		return std::nullopt;
 	}
 
-	char32_t uc = 0;
-
-	for (auto c: s) {
-		auto v = hex_value(c);
-
-		if (v < 0) {
-			return std::nullopt;
-		}
-
-		uc = (uc << 4) | static_cast<char32_t>(v);
-	}
-
-	return uc;
-}
-
-auto is_valid_unicode(char32_t uc) noexcept -> bool
-{
-	/* Surrogates never appear as scalar values, and nothing above the plane 16 limit exists */
-	return uc != 0 && uc <= 0x10FFFF && !(uc >= 0xD800 && uc <= 0xDFFF);
-}
-
-auto encode_utf8(char32_t uc, char *out) noexcept -> std::size_t
-{
-	if (uc < 0x80) {
-		out[0] = static_cast<char>(uc);
-		return 1;
-	}
-	else if (uc < 0x800) {
-		out[0] = static_cast<char>(0xC0 | (uc >> 6));
-		out[1] = static_cast<char>(0x80 | (uc & 0x3F));
-		return 2;
-	}
-	else if (uc < 0x10000) {
-		out[0] = static_cast<char>(0xE0 | (uc >> 12));
-		out[1] = static_cast<char>(0x80 | ((uc >> 6) & 0x3F));
-		out[2] = static_cast<char>(0x80 | (uc & 0x3F));
-		return 3;
-	}
-
-	out[0] = static_cast<char>(0xF0 | (uc >> 18));
-	out[1] = static_cast<char>(0x80 | ((uc >> 12) & 0x3F));
-	out[2] = static_cast<char>(0x80 | ((uc >> 6) & 0x3F));
-	out[3] = static_cast<char>(0x80 | (uc & 0x3F));
-
-	return 4;
+	return static_cast<char32_t>(v);
 }
 
 }// namespace
@@ -191,7 +126,7 @@ auto glyph_name_to_unicode(std::string_view name) noexcept -> std::optional<char
 	if (name.size() == 7 && name.compare(0, 3, "uni") == 0) {
 		auto uc = parse_hex_run(name.substr(3), 4);
 
-		if (uc && is_valid_unicode(*uc)) {
+		if (uc && *uc != 0 && U_IS_UNICODE_CHAR(*uc)) {
 			return uc;
 		}
 
@@ -202,7 +137,7 @@ auto glyph_name_to_unicode(std::string_view name) noexcept -> std::optional<char
 	if (name.size() >= 5 && name.size() <= 7 && name.front() == 'u') {
 		auto uc = parse_hex_run(name.substr(1), name.size() - 1);
 
-		if (uc && is_valid_unicode(*uc)) {
+		if (uc && *uc != 0 && U_IS_UNICODE_CHAR(*uc)) {
 			return uc;
 		}
 
@@ -231,11 +166,13 @@ auto font_encoding::set_difference(unsigned char code, std::string_view glyph_na
 
 	if (!overrides) {
 		/* Value initialised, so every slot starts out empty */
-		overrides = std::make_unique<std::array<glyph_slot, 256>>();
+		overrides = std::make_unique<std::array<glyph_utf8, 256>>();
 	}
 
 	auto &slot = (*overrides)[code];
-	slot.len = static_cast<std::uint8_t>(encode_utf8(*uc, slot.utf8));
+	int32_t off = 0;
+	U8_APPEND_UNSAFE(slot.bytes, off, *uc);
+	slot.len = static_cast<std::uint8_t>(off);
 
 	return true;
 }
@@ -246,17 +183,11 @@ auto font_encoding::lookup(unsigned char code) const noexcept -> std::string_vie
 		const auto &slot = (*overrides)[code];
 
 		if (slot.len > 0) {
-			return {slot.utf8, slot.len};
+			return slot.view();
 		}
 	}
 
-	const auto *utf8 = base_table[code];
-
-	if (utf8 == nullptr) {
-		return {};
-	}
-
-	return {utf8};
+	return base_table[code].view();
 }
 
 text_builder::text_builder(std::size_t reserve)
@@ -292,9 +223,15 @@ auto text_builder::add_encoded(std::string_view codes) -> void
 	}
 }
 
-auto text_builder::add_utf8(std::string_view utf8) -> void
+auto text_builder::add_utf8(std::string_view utf8) -> bool
 {
+	if (rspamd_fast_utf8_validate((const unsigned char *) utf8.data(), utf8.size()) != 0) {
+		return false;
+	}
+
 	buf.append(utf8);
+
+	return true;
 }
 
 auto text_builder::add_char(char c) -> void
@@ -403,7 +340,7 @@ auto text_builder::add_pdf_hexstring(std::string_view raw) -> void
 	int hi = -1;
 
 	for (auto c: raw) {
-		auto v = hex_value(c);
+		auto v = g_ascii_xdigit_value(c);
 
 		if (v < 0) {
 			/* Whitespace is allowed inside a hex string; anything else is junk */
@@ -677,11 +614,22 @@ TEST_SUITE("pdf glyphs")
 		text_builder b{64};
 
 		CHECK(b.empty());
-		b.add_utf8("already utf8: \xc3\xa9");
+		CHECK(b.add_utf8("already utf8: \xc3\xa9"));
 		CHECK(b.size() == 16);
 
 		auto out = b.release();
 		CHECK(out == "already utf8: \xc3\xa9");
 		CHECK(b.empty());
+	}
+
+	TEST_CASE("ill formed utf8 never reaches the buffer")
+	{
+		text_builder b;
+
+		CHECK(b.add_utf8("fine"));
+		/* A lone continuation byte and a truncated sequence */
+		CHECK(!b.add_utf8("\xa9"));
+		CHECK(!b.add_utf8("\xc3"));
+		CHECK(b.data() == "fine");
 	}
 }
