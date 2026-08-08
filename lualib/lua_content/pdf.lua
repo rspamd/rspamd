@@ -1465,7 +1465,14 @@ local function font_decoder_of(font, pdf, task)
   if type(tounicode) == 'table' then
     maybe_extract_object_stream(tounicode, pdf, task)
 
-    if tounicode.uncompressed then
+    -- A CMap that inherits from another names it in the stream dictionary; the
+    -- base is a resource that is not in the file, so the local overrides on
+    -- their own would decode part of the text and silently lose the rest
+    local tu_dict = tounicode.dict or tounicode
+
+    if type(tu_dict) == 'table' and tu_dict.UseCMap then
+      lua_util.debugm(N, task, 'ignoring ToUnicode cmap that inherits via /UseCMap')
+    elseif tounicode.uncompressed then
       local err
       cmap, err = rspamd_pdf_text.cmap(tounicode.uncompressed)
 

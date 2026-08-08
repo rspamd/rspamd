@@ -410,6 +410,7 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 	lexer lex{program};
 	cmap result;
 	bool seen_cmap_marker = false;
+	bool inherits = false;
 
 	for (;;) {
 		auto tok = lex.next();
@@ -422,8 +423,20 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 			continue;
 		}
 
-		if (tok.text == "begincmap" || tok.text == "endcmap" || tok.text == "usecmap") {
+		if (tok.text == "begincmap" || tok.text == "endcmap") {
 			seen_cmap_marker = true;
+			continue;
+		}
+
+		if (tok.text == "usecmap") {
+			/*
+			 * The mappings of another CMap are inherited here, and that CMap is
+			 * a resource this code cannot reach. What is left in the program is
+			 * only the local overrides, so honouring it would produce text that
+			 * is confidently wrong wherever the base was meant to answer.
+			 */
+			seen_cmap_marker = true;
+			inherits = true;
 			continue;
 		}
 
@@ -565,11 +578,12 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 		}
 	}
 
-	if (!seen_cmap_marker && result.empty()) {
+	if (result.empty() || !seen_cmap_marker) {
 		return std::nullopt;
 	}
 
-	if (result.empty()) {
+	if (inherits) {
+		/* Partial text is worse than none: the caller should fall back */
 		return std::nullopt;
 	}
 
@@ -752,6 +766,20 @@ end)cmap");
 
 		REQUIRE(cm.has_value());
 		CHECK(decode(*cm, std::string_view{"\x00\x41", 2}) == "B");
+	}
+
+	TEST_CASE("a cmap that inherits from another is refused")
+	{
+		/*
+		 * Only the local overrides are in the program, so answering with them
+		 * alone would silently drop everything the base CMap mapped.
+		 */
+		auto cm = cmap::parse("begincmap\n/Adobe-Japan1-UCS2 usecmap\n"
+							  "1 begincodespacerange\n<0000> <ffff>\n"
+							  "endcodespacerange\n1 beginbfchar\n<0041> <0042>\n"
+							  "endbfchar\nendcmap\n");
+
+		CHECK(!cm.has_value());
 	}
 
 	TEST_CASE("input that is not a cmap is refused")
