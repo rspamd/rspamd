@@ -58,13 +58,15 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
     });
 
     test("History global search filters rows client-side", async () => {
-        // Seed two messages with distinct subjects.
+        // Seed two messages with distinct subjects. The body URL tends to produce
+        // option-bearing symbols, exercised in the option-search step below.
         await page.locator("#scan_nav").click();
         const scanBtn = page.locator('#scan button[data-upload="checkv2"]');
         const subjects = [`charts-A-${Date.now()}`, `charts-B-${Date.now()}`];
         for (const subject of subjects) {
             await page.locator("#scanMsgSource").fill(
-                `Message-Id: <${subject}@e2e>\nFrom: test@example.com\nSubject: ${subject}\n\nbody`
+                `Message-Id: <${subject}@e2e>\nFrom: test@example.com\nSubject: ${subject}\n` +
+                `Content-Type: text/plain; charset=utf-8\n\nhttp://${subject}.invalid/u`
             );
             await Promise.all([
                 page.waitForResponse((r) => r.url().includes("checkv2") && r.ok()),
@@ -89,6 +91,33 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
         await page.locator("#filter_history").fill("");
         await expect.poll(async () => await page.locator("#historyTable_history .tabulator-row").count())
             .toBe(baseline);
+
+        // Regression (#6168): a symbol option value (e.g. asn:205640) must match.
+        // The symbols column collapses into the responsive detail row, so expand
+        // the first (most recent) row and read a rendered "key:value" option token
+        // from the symbols cell, then search for it. Guarded so the test still
+        // passes (subject assertions above) when no option-bearing symbol fires.
+        const table = page.locator("#historyTable_history");
+        const firstRow = table.locator(".tabulator-row").first();
+        const detail = firstRow.locator(".tabulator-responsive-collapse");
+        if (!(await detail.isVisible())) await firstRow.click();
+        await expect(detail).toBeVisible();
+        const symbolsHtml = await detail.locator("tr:has(.sym-order-toggle) td").nth(1).innerHTML();
+        // innerHTML returns escaped text; pick a token with no HTML entities.
+        const optGroup = symbolsHtml.match(/\[([^\]]*)\]/);
+        const optionToken = optGroup && optGroup[1].split(",").map((s) => s.trim())
+            .find((s) => (/^\S+:\S+$/).test(s) && !s.includes("&"));
+
+        if (optionToken) {
+            await page.locator("#filter_history").fill(optionToken);
+            // Before the fix options were absent from the haystack, so this yielded
+            // zero rows. The row carrying the option must now remain visible.
+            await expect.poll(async () => await table.locator(".tabulator-row").count())
+                .toBeGreaterThan(0);
+            await page.locator("#filter_history").fill("");
+            await expect.poll(async () => await table.locator(".tabulator-row").count())
+                .toBe(baseline);
+        }
     });
 
     test("History column-options dropdown hides and resets a column", async () => {
