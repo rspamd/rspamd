@@ -470,6 +470,35 @@ local function close_boundaries_until(out, boundaries, target, newline_s)
   end
 end
 
+-- The same unwind for the two rewriters that keep a stack of plain boundary
+-- strings and emit {text, is_raw} pairs, rather than the {boundary = ...}
+-- records and plain strings used above. Sharing a single helper across both
+-- shapes would need an accessor and an emitter callback for no real gain.
+local function close_raw_boundaries_until(out, boundaries, target)
+  local found = false
+
+  for i = 1, #boundaries do
+    if boundaries[i] == target then
+      found = true
+      break
+    end
+  end
+
+  if not found then
+    if #boundaries > 0 then
+      out[#out + 1] = { string.format('--%s--', boundaries[#boundaries]), true }
+      table.remove(boundaries)
+    end
+
+    return
+  end
+
+  while #boundaries > 0 and boundaries[#boundaries] ~= target do
+    out[#out + 1] = { string.format('--%s--', boundaries[#boundaries]), true }
+    table.remove(boundaries)
+  end
+end
+
 --[[[
 -- @function lua_mime.add_text_footer(task, html_footer, text_footer)
 -- Adds a footer to all text parts in a message. It returns a table with the following
@@ -836,10 +865,8 @@ exports.multipattern_text_replace = function(task, mp, replacements)
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = { string.format('--%s--',
-              boundaries[#boundaries]), true }
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_raw_boundaries_until(out, boundaries, boundary)
           cur_boundary = nil
         end
         out[#out + 1] = { string.format('--%s',
@@ -865,10 +892,8 @@ exports.multipattern_text_replace = function(task, mp, replacements)
 
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = { string.format('--%s--',
-              boundaries[#boundaries]), true }
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_raw_boundaries_until(out, boundaries, boundary)
           cur_boundary = boundary
         end
         out[#out + 1] = { string.format('--%s',
@@ -1277,10 +1302,8 @@ exports.remove_attachments = function(task, settings)
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = { string.format('--%s--',
-              boundaries[#boundaries]), true }
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_raw_boundaries_until(out, boundaries, boundary)
           cur_boundary = nil
         end
         out[#out + 1] = { string.format('--%s',
@@ -1292,10 +1315,8 @@ exports.remove_attachments = function(task, settings)
       if parts_indexes_to_keep[i] then
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
-            -- Need to close previous boundary
-            out[#out + 1] = { string.format('--%s--',
-                boundaries[#boundaries]), true }
-            table.remove(boundaries)
+            -- Need to close every boundary we are leaving behind
+            close_raw_boundaries_until(out, boundaries, boundary)
             cur_boundary = boundary
           end
           out[#out + 1] = { string.format('--%s',
