@@ -71,6 +71,8 @@ const char *rspamd_shingle_classname = "rspamd{shingle}";
 const char *rspamd_fasttext_classname = "rspamd{fasttext}";
 const char *rspamd_caseless_table_classname = "rspamd{caseless_table}";
 const char *rspamd_static_embed_classname = "rspamd{static_embed}";
+const char *rspamd_pdf_encoding_classname = "rspamd{pdf_encoding}";
+const char *rspamd_pdf_text_builder_classname = "rspamd{pdf_text_builder}";
 
 KHASH_INIT(rspamd_lua_static_classes, const char *, const char *, 1, rspamd_str_hash, rspamd_str_equal);
 
@@ -141,6 +143,8 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 	CLASS_PUT_STR(fasttext);
 	CLASS_PUT_STR(caseless_table);
 	CLASS_PUT_STR(static_embed);
+	CLASS_PUT_STR(pdf_encoding);
+	CLASS_PUT_STR(pdf_text_builder);
 
 	/* Check consistency */
 	g_assert(kh_size(lua_static_classes) == RSPAMD_MAX_LUA_CLASSES);

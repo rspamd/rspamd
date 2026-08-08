@@ -490,6 +490,7 @@ void luaopen_shingle(lua_State *L);
 void luaopen_fasttext(lua_State *L);
 
 void luaopen_static_embed(lua_State *L);
+void luaopen_pdf_text(lua_State *L);
 
 /* libarchive-based archive module */
 void luaopen_libarchive(lua_State *L);

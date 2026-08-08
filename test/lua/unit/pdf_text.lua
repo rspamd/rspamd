@@ -1,75 +1,94 @@
--- Regression test for PDF text extraction line breaks.
--- The `Td`/`TD` text positioning operators must render a newline when they move
--- to a new text line (non-zero vertical displacement). Otherwise consecutive
--- lines get concatenated, e.g. "...June 1, 2026." + "You may obtain..." becomes
--- "2026.You", which the URL parser then mis-detects as the URL http://2026.you.
+-- Decoding of PDF simple font text (rspamd_pdf_text)
 
-context("PDF content text extraction", function()
-  local rspamd_task = require "rspamd_task"
-  local rspamd_util = require "rspamd_util"
-  local rspamd_test_helper = require "rspamd_test_helper"
+context("PDF text decoding", function()
+  local pdf_text = require "rspamd_pdf_text"
 
-  rspamd_test_helper.init_url_parser()
-  local cfg = rspamd_util.config_from_ucl(rspamd_test_helper.default_config(),
-      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
-
-  -- A minimal uncompressed PDF whose content stream separates two lines with
-  -- `0 -14 Td`. See test/lua/unit/pdf_text.lua header for the rationale.
-  local message = [[
-From: sender@example.com
-To: rcpt@example.com
-Subject: pdf td line breaks
-MIME-Version: 1.0
-Content-Type: application/pdf; name="test.pdf"
-Content-Transfer-Encoding: base64
-Content-Disposition: attachment; filename="test.pdf"
-
-JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMg
-MiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFsz
-IDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2Ug
-L1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMg
-NCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4K
-ZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCAxNjEgPj4Kc3RyZWFtCnEKQlQKL0Yx
-IDEwIFRmCjcyIDcyMCBUZApbKFJlcG9ydHMgb24gRm9ybSA4LUsgZmlsZWQgb24g
-TWF5IDEsIDIwMjYgYW5kIEp1bmUgMSwgMjAyNi4pXVRKCjAgLTE0IFRkClsoWW91
-IG1heSBvYnRhaW4gYSBjb3B5IG9mIHRoZXNlIGZpbGluZ3MgYXQgbm8gY29zdC4p
-XVRKCkVUClEKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250
-IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoK
-eHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4g
-CjAwMDAwMDAwNjQgMDAwMDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAowMDAwMDAw
-MjQ3IDAwMDAwIG4gCjAwMDAwMDA0NTggMDAwMDAgbiAKdHJhaWxlcgo8PCAvUm9v
-dCAxIDAgUiAvU2l6ZSA2ID4+CnN0YXJ0eHJlZgo1MjgKJSVFT0YK
-]]
-
-  local function injected_pdf_text(task)
-    for _, p in ipairs(task:get_parts(true) or {}) do
-      if p:is_injected() and p:is_text() then
-        local tp = p:get_text()
-        if tp then
-          return tostring(tp:get_content())
-        end
-      end
-    end
-    return nil
+  local function decode(enc, codes)
+    local b = pdf_text.builder()
+    b:set_encoding(enc)
+    b:add_encoded(codes)
+    return tostring(b:finish())
   end
 
-  test("Td line breaks produce newlines, not joined text", function()
-    local res, task = rspamd_task.load_from_string(message, cfg)
-    assert_true(res, "failed to load message")
-    task:process_message()
+  test("A code means a different character in each encoding", function()
+    local std = pdf_text.encoding('StandardEncoding')
+    local win = pdf_text.encoding('WinAnsiEncoding')
+    local mac = pdf_text.encoding('/MacRomanEncoding')
 
-    local text = injected_pdf_text(task)
-    -- Sanity: the PDF text must have been extracted at all
-    assert_not_nil(text, "no text was extracted from the PDF part")
-    assert_not_nil(text:find("You may obtain", 1, true),
-        "expected extracted PDF text to contain the second line")
+    -- 0xe9 is Oslash, eacute and Egrave respectively
+    assert_equal(decode(std, '\233'), 'Ø')
+    assert_equal(decode(win, '\233'), 'é')
+    assert_equal(decode(mac, '\233'), 'È')
+  end)
 
-    -- The two lines must not be concatenated across the `Td` line break.
-    -- Joining them yields "2026.You", which the URL parser mis-detects as the
-    -- URL http://2026.you -- the false positive that motivated this fix.
-    assert_nil(text:find("2026.You", 1, true),
-        "PDF Td line break was dropped: lines were joined ('2026.You')")
+  test("Ligature slots belong to their own encoding", function()
+    local std = pdf_text.encoding('StandardEncoding')
+    local win = pdf_text.encoding('WinAnsiEncoding')
+    local mac = pdf_text.encoding('MacRomanEncoding')
 
-    task:destroy()
+    assert_equal(decode(std, '\174\175'), 'ﬁﬂ')
+    assert_equal(decode(mac, '\222\223'), 'ﬁﬂ')
+    -- the very same codes are ordinary letters in WinAnsi
+    assert_equal(decode(win, '\174\223'), '®ß')
+  end)
+
+  test("Unsupported encoding names are rejected", function()
+    local enc, err = pdf_text.encoding('MacExpertEncoding')
+    assert_nil(enc)
+    assert_equal(err, 'unknown base encoding')
+  end)
+
+  test("Literal and hex strings decode in one pass", function()
+    local b = pdf_text.builder(256)
+    b:set_encoding(pdf_text.encoding('WinAnsiEncoding'))
+
+    b:add_string('caf\\351 \\(x\\)')
+    b:add_char(' ')
+    b:add_hexstring('636166 E9')
+
+    assert_equal(tostring(b:finish()), 'café (x) café')
+    assert_equal(b:len(), 0)
+  end)
+
+  test("Differences arrays follow the PDF convention", function()
+    local enc = pdf_text.encoding('WinAnsiEncoding')
+
+    -- a number sets the code, each name after it takes the next one
+    assert_equal(enc:apply_differences({ 65, 'eacute', 'germandbls', 90, 'space' }), 3)
+    assert_equal(decode(enc, 'A'), 'é')
+    assert_equal(decode(enc, 'B'), 'ß')
+    assert_equal(decode(enc, 'Z'), ' ')
+    assert_equal(decode(enc, 'C'), 'C')
+  end)
+
+  test("Glyph slot names carry no character", function()
+    local enc = pdf_text.encoding('WinAnsiEncoding')
+
+    assert_false(enc:set_difference(68, 'g42'))
+    assert_false(enc:set_difference(68, 'cid7'))
+    assert_equal(decode(enc, 'D'), 'D')
+
+    assert_true(enc:set_difference(69, 'uni20AC'))
+    assert_equal(decode(enc, 'E'), '€')
+  end)
+
+  test("Ill formed utf8 never reaches the buffer", function()
+    local b = pdf_text.builder()
+
+    assert_true(b:add_utf8('héllo'))
+    assert_false(b:add_utf8('\169'))
+    assert_equal(tostring(b:finish()), 'héllo')
+  end)
+
+  test("A builder keeps its encoding alive", function()
+    local b = pdf_text.builder()
+
+    b:set_encoding(pdf_text.encoding('WinAnsiEncoding'))
+    collectgarbage('collect')
+    collectgarbage('collect')
+
+    assert_equal(decode(pdf_text.encoding('WinAnsiEncoding'), '\233'), 'é')
+    b:add_encoded('\233')
+    assert_equal(tostring(b:finish()), 'é')
   end)
 end)
