@@ -1754,7 +1754,7 @@ for k, r in pairs(rules) do
   end
 
   if rule_elt.max_inputs and not has_blas then
-    rspamd_logger.errx(rspamd_config, 'cannot set max inputs to %s as BLAS is not compiled in',
+    rspamd_logger.errx(rspamd_config, 'rule %s: cannot set max inputs to %s as BLAS is not compiled in',
       rule_elt.name, rule_elt.max_inputs)
     rule_elt.max_inputs = nil
   end
