@@ -1025,7 +1025,8 @@ process_dict = function(task, pdf, obj, dict)
       elseif res_ref.dict then
         obj.resources = res_ref.dict
       else
-        obj.resources = {}
+        -- An inline dictionary is the resources themselves, not an object
+        obj.resources = res_ref
       end
     else
       -- Fucking pdf: we need to inherit from parent
