@@ -430,6 +430,46 @@ local function do_append_footer(task, part, footer, is_multipart, out, state)
 
 end
 
+-- Emit closing delimiters for every boundary we are leaving behind, stopping once
+-- the top of the stack is `target` -- the boundary that is about to be re-entered.
+--
+-- The number of levels to unwind is a property of the message structure, so it
+-- cannot be a fixed count. Popping one entry (or two, as the previous
+-- multipart/related special case did) desynchronises the stack as soon as the part
+-- walk returns from a nested part to a shallower one; `boundaries[#boundaries]`
+-- then names an unrelated boundary and a closing delimiter for it -- in practice
+-- the top-level one -- is emitted into the middle of the body.
+--
+-- When `target` is not on the stack at all, which happens when a nested
+-- message/rfc822 opens a boundary of its own, close exactly one level so the
+-- behaviour for that case is unchanged.
+local function close_boundaries_until(out, boundaries, target, newline_s)
+  local found = false
+
+  for i = 1, #boundaries do
+    if boundaries[i].boundary == target then
+      found = true
+      break
+    end
+  end
+
+  if not found then
+    if #boundaries > 0 then
+      out[#out + 1] = string.format('--%s--%s',
+          boundaries[#boundaries].boundary, newline_s)
+      table.remove(boundaries)
+    end
+
+    return
+  end
+
+  while #boundaries > 0 and boundaries[#boundaries].boundary ~= target do
+    out[#out + 1] = string.format('--%s--%s',
+        boundaries[#boundaries].boundary, newline_s)
+    table.remove(boundaries)
+  end
+end
+
 --[[[
 -- @function lua_mime.add_text_footer(task, html_footer, text_footer)
 -- Adds a footer to all text parts in a message. It returns a table with the following
@@ -523,10 +563,8 @@ exports.add_text_footer = function(task, html_footer, text_footer)
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries].boundary, newline_s)
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_boundaries_until(out, boundaries, boundary, newline_s)
           cur_boundary = nil
         end
         out[#out + 1] = string.format('--%s',
@@ -565,16 +603,10 @@ exports.add_text_footer = function(task, html_footer, text_footer)
 
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries].boundary, newline_s)
-          -- Need to close previous boundary, if ct_subtype is related
-          if #boundaries > 1 and boundaries[#boundaries].ct_type == "multipart" and boundaries[#boundaries].ct_subtype == "related" then
-            out[#out + 1] = string.format('--%s--%s',
-                boundaries[#boundaries - 1].boundary, newline_s)
-            table.remove(boundaries)
-          end
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind. This subsumes the
+          -- former multipart/related special case: that shape is simply one
+          -- instance of "more than one level to close".
+          close_boundaries_until(out, boundaries, boundary, newline_s)
           cur_boundary = boundary
         end
         out[#out + 1] = string.format('--%s',
