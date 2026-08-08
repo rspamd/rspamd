@@ -103,6 +103,11 @@ static const struct rspamd_charset_substitution sub[] = {
 		.flags = 0,
 	},
 	{
+		.input = "big5-cp950",
+		.canon = "big5",
+		.flags = 0,
+	},
+	{
 		.input = "hkscs-big5",
 		.canon = "big5-hkscs",
 		.flags = 0,
