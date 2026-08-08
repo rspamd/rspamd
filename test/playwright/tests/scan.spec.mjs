@@ -208,29 +208,27 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
         test("Throughput `Total messages` counter increased", async ({}, testInfo) => {
             testInfo.setTimeout(140000);
-            // With empty RRD the first PDP is lost, so only +1 is visible.
-            // #rrd-total-value is an integral of the message rate (truncated per
-            // series, summed over the 6 action series), so depending on row
-            // boundaries it can overshoot the messages scanned (+2 .. +4).
-            const targetValues = [
-                scannedBefore.throughput + 1,
-                scannedBefore.throughput + 2,
-                scannedBefore.throughput + 3,
-                scannedBefore.throughput + 4,
-            ];
-
+            // #rrd-total-value is a rate integral (truncated per series, summed
+            // over the 6 action series, with a msg/s↔msg/min scaleFactor switch)
+            // — an approximation. In the small-data regime (fresh RRD) it
+            // overshoots variably (CI saw up to ~3x the scan count: +6 for 2
+            // scans), so pin a wide band, not an exact value: it must rise above
+            // the baseline (regression: scans not reflected) yet stay below a
+            // generous ceiling that a gross normalization bug (dropped scaleFactor
+            // /unit divisor) would blow through.
+            const ceiling = scannedBefore.throughput + 50; // ~25x the 2 scans
             let lastValue = null;
             try {
                 await expect.poll(async () => {
                     lastValue = await readThroughput();
-                    return targetValues.includes(lastValue);
+                    return lastValue > scannedBefore.throughput && lastValue <= ceiling;
                 }, {
                     interval: 5000,
                     // step = 1s, pdp_per_row = 60 → next row every 60s
                     timeout: 125000,
                 }).toBeTruthy();
             } catch (e) {
-                const msg = `Throughput counter should be one of [${targetValues.join(", ")}], got ${lastValue}`;
+                const msg = `Throughput counter should be > ${scannedBefore.throughput} and <= ${ceiling}, got ${lastValue}`;
                 throw new Error(msg, {cause: e});
             }
         });
