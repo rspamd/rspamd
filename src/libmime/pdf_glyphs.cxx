@@ -214,13 +214,55 @@ auto text_builder::add_code(unsigned char code) -> void
 	}
 }
 
-auto text_builder::add_encoded(std::string_view codes) -> void
+auto text_builder::add_cmapped(std::string_view codes) -> void
 {
-	buf.reserve(buf.size() + codes.size());
+	glyph_utf8 scratch{};
+
+	while (!codes.empty()) {
+		auto nbytes = cur_cmap->code_length(codes);
+
+		if (nbytes == 0 || nbytes > codes.size()) {
+			break;
+		}
+
+		std::uint32_t code = 0;
+
+		for (std::size_t i = 0; i < nbytes; i++) {
+			code = (code << 8) | static_cast<unsigned char>(codes[i]);
+		}
+
+		auto utf8 = cur_cmap->lookup(code, scratch);
+
+		/* An unmapped code is a glyph index with no character: drop it */
+		if (!utf8.empty()) {
+			buf.append(utf8);
+		}
+
+		codes.remove_prefix(nbytes);
+	}
+}
+
+auto text_builder::decode_codes(std::string_view codes) -> void
+{
+	/*
+	 * A composite font is addressed through its CMap, whose codes may span
+	 * several bytes; a simple font is one code per byte.
+	 */
+	if (cur_cmap != nullptr) {
+		add_cmapped(codes);
+
+		return;
+	}
 
 	for (auto c: codes) {
 		add_code(static_cast<unsigned char>(c));
 	}
+}
+
+auto text_builder::add_encoded(std::string_view codes) -> void
+{
+	buf.reserve(buf.size() + codes.size());
+	decode_codes(codes);
 }
 
 auto text_builder::add_utf8(std::string_view utf8) -> bool
@@ -243,6 +285,24 @@ auto text_builder::add_pdf_string(std::string_view raw) -> void
 {
 	buf.reserve(buf.size() + raw.size());
 
+	/*
+	 * Codes accumulate until a structural character interrupts them, because a
+	 * CMap code cannot be decoded before all of its bytes are in hand.
+	 */
+	std::string codes;
+
+	auto flush = [&]() {
+		if (!codes.empty()) {
+			decode_codes(codes);
+			codes.clear();
+		}
+	};
+
+	auto structural = [&](char c) {
+		flush();
+		buf.push_back(c);
+	};
+
 	for (std::size_t i = 0; i < raw.size();) {
 		auto c = raw[i];
 
@@ -252,21 +312,19 @@ auto text_builder::add_pdf_string(std::string_view raw) -> void
 			 * of the three spellings was used.
 			 */
 			if (c == '\r') {
-				buf.push_back('\n');
+				structural('\n');
 				i++;
 
 				if (i < raw.size() && raw[i] == '\n') {
 					i++;
 				}
 			}
+			else if (c == '\n') {
+				structural('\n');
+				i++;
+			}
 			else {
-				if (c == '\n') {
-					buf.push_back('\n');
-				}
-				else {
-					add_code(static_cast<unsigned char>(c));
-				}
-
+				codes.push_back(c);
 				i++;
 			}
 
@@ -282,15 +340,15 @@ auto text_builder::add_pdf_string(std::string_view raw) -> void
 
 		switch (esc) {
 		case 'n':
-			buf.push_back('\n');
+			structural('\n');
 			i++;
 			break;
 		case 'r':
-			buf.push_back('\r');
+			structural('\r');
 			i++;
 			break;
 		case 't':
-			buf.push_back('\t');
+			structural('\t');
 			i++;
 			break;
 		case 'b':
@@ -321,21 +379,24 @@ auto text_builder::add_pdf_string(std::string_view raw) -> void
 					ndigits++;
 				}
 
-				add_code(static_cast<unsigned char>(code & 0xFF));
+				codes.push_back(static_cast<char>(code & 0xFF));
 			}
 			else {
 				/* \( \) \\ and any other escape stand for the character itself */
-				add_code(static_cast<unsigned char>(esc));
+				codes.push_back(esc);
 				i++;
 			}
 			break;
 		}
 	}
+
+	flush();
 }
 
 auto text_builder::add_pdf_hexstring(std::string_view raw) -> void
 {
-	buf.reserve(buf.size() + raw.size() / 2);
+	std::string codes;
+	codes.reserve(raw.size() / 2);
 
 	int hi = -1;
 
@@ -351,15 +412,18 @@ auto text_builder::add_pdf_hexstring(std::string_view raw) -> void
 			hi = v;
 		}
 		else {
-			add_code(static_cast<unsigned char>((hi << 4) | v));
+			codes.push_back(static_cast<char>((hi << 4) | v));
 			hi = -1;
 		}
 	}
 
 	/* An odd number of digits: the last one is padded with a zero */
 	if (hi >= 0) {
-		add_code(static_cast<unsigned char>(hi << 4));
+		codes.push_back(static_cast<char>(hi << 4));
 	}
+
+	buf.reserve(buf.size() + codes.size());
+	decode_codes(codes);
 }
 
 }// namespace rspamd::mime::pdf

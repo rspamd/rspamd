@@ -36,12 +36,15 @@
 #define RSPAMD_PDF_GLYPHS_HXX
 #pragma once
 
+#include "contrib/ankerl/unordered_dense.h"
+
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace rspamd::mime::pdf {
 
@@ -108,19 +111,115 @@ private:
 	std::unique_ptr<std::array<glyph_utf8, 256>> overrides;
 };
 
+
+/**
+ * A /ToUnicode CMap.
+ *
+ * A composite (Type0) font addresses glyphs by index, so its character codes
+ * carry no meaning of their own and only the /ToUnicode CMap the producer
+ * embedded can turn them back into text. A CMap is a small PostScript program
+ * of which three constructs matter:
+ *
+ *   1 begincodespacerange <0000> <ffff> endcodespacerange   -- code widths
+ *   2 beginbfchar <0003> <0020> ... endbfchar               -- single codes
+ *   1 beginbfrange <0025> <0027> <0042> endbfrange          -- runs of codes
+ *
+ * Destinations are UTF-16BE, so one code may expand to several characters (a
+ * ligature) or to a surrogate pair. The input is hostile, so the tables are
+ * capped; a CMap that exceeds a cap keeps the mappings that fitted.
+ */
+class cmap {
+public:
+	static constexpr std::size_t max_codespaces = 64;
+	static constexpr std::size_t max_singles = 65536;
+	static constexpr std::size_t max_ranges = 8192;
+	/* A range whose destination is more than one character is expanded */
+	static constexpr std::size_t max_range_expansion = 256;
+
+	/**
+	 * Parses an embedded CMap program. Returns nothing if the input is not a
+	 * CMap, or maps nothing usable.
+	 */
+	static auto parse(std::string_view program) -> std::optional<cmap>;
+
+	/**
+	 * Length in bytes of the code starting the input, from the codespace
+	 * ranges. Never 0 for a non-empty input, so a walk always progresses.
+	 */
+	[[nodiscard]] auto code_length(std::string_view input) const noexcept -> std::size_t;
+
+	/**
+	 * UTF-8 for one code, empty when unmapped. A code covered by a range is
+	 * built into the caller's scratch, so the result is valid until that
+	 * scratch is reused.
+	 */
+	[[nodiscard]] auto lookup(std::uint32_t code, glyph_utf8 &scratch) const noexcept
+		-> std::string_view;
+
+	[[nodiscard]] auto empty() const noexcept -> bool
+	{
+		return singles.empty() && ranges.empty();
+	}
+
+	/** How many codes are mapped, counting a range as its length. */
+	[[nodiscard]] auto size() const noexcept -> std::size_t;
+
+private:
+	struct codespace {
+		std::uint32_t low;
+		std::uint32_t high;
+		std::uint8_t nbytes;
+	};
+
+	/* A run of codes whose destinations are consecutive single characters */
+	struct range {
+		std::uint32_t low;
+		std::uint32_t high;
+		char32_t first_uc;
+	};
+
+	auto note_code_width(std::size_t nbytes) noexcept -> void;
+	auto add_single(std::uint32_t code, std::string &&utf8) -> bool;
+	auto add_range(std::uint32_t low, std::uint32_t high, char32_t first_uc) -> bool;
+	auto finalise() -> void;
+
+	std::vector<codespace> codespaces;
+	ankerl::unordered_dense::map<std::uint32_t, std::string> singles;
+	std::vector<range> ranges;
+	/* Used when a CMap declares no codespace at all */
+	std::uint8_t default_nbytes = 2;
+	/* Widest source code seen, in bytes, which is what sets the code width */
+	std::uint8_t widest_code_bytes = 0;
+};
+
 /**
  * Accumulates decoded text into a single buffer. The intended use is one
- * builder per page: set_encoding() on every Tf, add_*() on every text operator,
- * then hand the whole buffer over at the end.
+ * builder per page: set_encoding() or set_cmap() on every Tf, add_*() on every
+ * text operator, then hand the whole buffer over at the end.
  */
 class text_builder {
 public:
 	explicit text_builder(std::size_t reserve = 0);
 
-	/** The encoding used by subsequent add_encoded()/add_pdf_*() calls. */
+	/**
+	 * The simple font encoding used by subsequent add_encoded()/add_pdf_*()
+	 * calls. Clears any CMap: a font is decoded one way or the other.
+	 */
 	auto set_encoding(const font_encoding *enc) noexcept -> void
 	{
 		cur_encoding = enc;
+		cur_cmap = nullptr;
+	}
+
+	/**
+	 * The /ToUnicode CMap used by subsequent add_encoded()/add_pdf_*() calls,
+	 * for a composite font whose codes are glyph indices. Clears any simple
+	 * encoding.
+	 */
+	auto set_cmap(const cmap *cm) noexcept -> void
+	{
+		cur_cmap = cm;
+		cur_encoding = nullptr;
 	}
 
 	/** Raw character codes, mapped through the current encoding. */
@@ -174,9 +273,14 @@ public:
 
 private:
 	auto add_code(unsigned char code) -> void;
+	/* Decodes a run through the current CMap, whose codes may be multi byte */
+	auto add_cmapped(std::string_view codes) -> void;
+	/* Dispatches a run of codes to whichever decoder is current */
+	auto decode_codes(std::string_view codes) -> void;
 
 	std::string buf;
 	const font_encoding *cur_encoding = nullptr;
+	const cmap *cur_cmap = nullptr;
 };
 
 }// namespace rspamd::mime::pdf
