@@ -6,7 +6,7 @@ context("PDF content extraction", function()
 
   -- Builds a minimal one page PDF around a content stream, with a real xref so
   -- the parser sees a well formed file. Fonts is a raw dictionary body.
-  local function make_pdf(stream, fonts)
+  local function make_pdf(stream, fonts, extra)
     local objs = {
       '<< /Type /Catalog /Pages 2 0 R >>',
       '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -20,6 +20,10 @@ context("PDF content extraction", function()
     objs[#objs + 1] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times /Encoding /MacRomanEncoding >>'
     objs[#objs + 1] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding ' ..
         '<< /BaseEncoding /WinAnsiEncoding /Differences [65 /eacute /germandbls] >> >>'
+
+    for _, o in ipairs(extra or {}) do
+      objs[#objs + 1] = o
+    end
 
     local out = { '%PDF-1.4\n' }
     local pos = #out[1]
@@ -45,8 +49,8 @@ context("PDF content extraction", function()
     return rspamd_text.fromstring(table.concat(out))
   end
 
-  local function extract(stream, fonts)
-    local res = pdf.process(make_pdf(stream, fonts), nil, {})
+  local function extract(stream, fonts, extra)
+    local res = pdf.process(make_pdf(stream, fonts, extra), nil, {})
     local texts = {}
 
     if type(res) == 'table' and res.objects then
@@ -87,6 +91,51 @@ context("PDF content extraction", function()
     local text = extract(prologue .. 'BT /F3 12 Tf (ABC) Tj ET\nQ\n', '/F3 7 0 R')
 
     assert_not_nil(text:find('éßC', 1, true), 'differences, got: ' .. text)
+  end)
+
+  test("A composite font is decoded through its ToUnicode cmap", function()
+    -- Identity-H: the codes are glyph indices, meaningless without the cmap
+    local cmap = table.concat({
+      '/CIDInit /ProcSet findresource begin 12 dict begin begincmap',
+      '/CMapName /Adobe-Identity-UCS def /CMapType 2 def',
+      '1 begincodespacerange <0000> <FFFF> endcodespacerange',
+      '2 beginbfchar <0003> <0020> <0024> <0041> endbfchar',
+      '1 beginbfrange <0030> <0032> <0061> endbfrange',
+      'endcmap CMapName currentdict /CMap defineresource pop end end',
+    }, '\n')
+
+    local extra = {
+      -- 8: the Type0 font, 9: its ToUnicode stream
+      '<< /Type /Font /Subtype /Type0 /BaseFont /Arial /Encoding /Identity-H ' ..
+      '/DescendantFonts [] /ToUnicode 9 0 R >>',
+      string.format('<< /Length %d >>\nstream\n%s\nendstream', #cmap, cmap),
+    }
+
+    -- <0024> is A, <0003> a space, <0030 0031 0032> the range a b c
+    local text = extract(prologue ..
+      'BT /F4 12 Tf <00240003003000310032> Tj ET\nQ\n', '/F4 8 0 R', extra)
+
+    assert_not_nil(text:find('A abc', 1, true), 'cmap decoding, got: ' .. text)
+  end)
+
+  test("Codes a cmap does not map produce nothing", function()
+    local cmap = table.concat({
+      'begincmap 1 begincodespacerange <0000> <FFFF> endcodespacerange',
+      '1 beginbfchar <0024> <0041> endbfchar endcmap',
+    }, '\n')
+
+    local extra = {
+      '<< /Type /Font /Subtype /Type0 /BaseFont /Arial /Encoding /Identity-H ' ..
+      '/DescendantFonts [] /ToUnicode 9 0 R >>',
+      string.format('<< /Length %d >>\nstream\n%s\nendstream', #cmap, cmap),
+    }
+
+    -- Only the first code is mapped; the unmapped ones are glyph indices
+    local text = extract(prologue ..
+      'BT /F4 12 Tf <002400FF00FE> Tj ET\nQ\n', '/F4 8 0 R', extra)
+
+    assert_not_nil(text:find('A', 1, true), 'mapped code, got: ' .. text)
+    assert_nil(text:find('\255', 1, true), 'raw glyph index leaked: ' .. text)
   end)
 
   test("Plain ascii text is unaffected", function()

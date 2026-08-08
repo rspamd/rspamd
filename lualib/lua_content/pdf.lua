@@ -162,58 +162,6 @@ local function compile_tries()
   end
 end
 
--- Resolves the /Encoding of a simple font into a decoder. A font may name one
--- of the base encodings, or carry a dictionary with a /BaseEncoding and a
--- /Differences array; anything else falls back to the built-in encoding of the
--- font, which for the Latin text fonts is StandardEncoding.
-local function font_encoding_of(font, pdf, task, maybe_dereference)
-  if type(font) ~= 'table' then
-    return nil
-  end
-
-  if font.rspamd_encoding ~= nil then
-    -- false is cached as "resolved to the default"
-    return font.rspamd_encoding or nil
-  end
-
-  local dict = font.dict or font
-  local spec = maybe_dereference(dict.Encoding, pdf, task)
-  local base, diffs
-
-  if type(spec) == 'string' then
-    base = spec
-  elseif type(spec) == 'table' then
-    local enc_dict = spec.dict or spec
-    base = enc_dict.BaseEncoding
-    diffs = maybe_dereference(enc_dict.Differences, pdf, task)
-  end
-
-  local enc
-
-  if type(base) == 'string' then
-    enc = rspamd_pdf_text.encoding(base)
-
-    if not enc then
-      lua_util.debugm(N, task, 'unsupported font encoding: %s', base)
-    end
-  end
-
-  if type(diffs) == 'table' then
-    -- Differences alone still need a base to override
-    enc = enc or rspamd_pdf_text.encoding('StandardEncoding')
-
-    if enc then
-      local napplied = enc:apply_differences(diffs)
-      lua_util.debugm(N, task, 'applied %s differences to font encoding', napplied)
-    end
-  end
-
-  font.rspamd_encoding = enc or false
-
-  return enc
-end
-
--- Returns a table with generic grammar elements for PDF
 local function generic_grammar_elts()
   local P = lpeg.P
   local R = lpeg.R
@@ -421,96 +369,6 @@ local function gen_text_grammar()
   local C = lpeg.C
   local gen = generic_grammar_elts()
 
-  -- Returns the text and whether it is already UTF-8. A UTF-16 string is
-  -- decoded here; anything else is left as raw character codes for the font
-  -- encoding to interpret.
-  local function sanitize_pdf_text(s)
-    if not s or #s < 4 then return s, false end
-
-    local nulls_odd = 0
-    local nulls_even = 0
-    local len = #s
-
-    local limit = math.min(len, 16)
-    for i = 1, limit do
-      local b = string.byte(s, i)
-      if b == 0 then
-        if i % 2 == 1 then
-          nulls_odd = nulls_odd + 1
-        else
-          nulls_even = nulls_even + 1
-        end
-      end
-    end
-
-    if len > 32 then
-      for i = len - 15, len do
-        local b = string.byte(s, i)
-        if b == 0 then
-          if i % 2 == 1 then
-            nulls_odd = nulls_odd + 1
-          else
-            nulls_even = nulls_even + 1
-          end
-        end
-      end
-    elseif len > 16 then
-      for i = 17, len do
-        local b = string.byte(s, i)
-        if b == 0 then
-          if i % 2 == 1 then
-            nulls_odd = nulls_odd + 1
-          else
-            nulls_even = nulls_even + 1
-          end
-        end
-      end
-    end
-
-    local total_checked = (len > 32) and 32 or len
-    local total_odd = math.ceil(total_checked / 2)
-    local total_even = math.floor(total_checked / 2)
-
-    if len > 32 then
-        total_odd = 16
-        total_even = 16
-    end
-
-    local ratio_odd = nulls_odd / total_odd
-    local ratio_even = nulls_even / total_even
-    local charset
-
-    if ratio_odd > 0.8 and ratio_even < 0.2 then
-       charset = 'UTF-16BE'
-    elseif ratio_even > 0.8 and ratio_odd < 0.2 then
-       charset = 'UTF-16LE'
-    end
-
-    if charset and rspamd_util.to_utf8 then
-       local conv = rspamd_util.to_utf8(s, charset)
-       if conv then
-          local garbage_limit = 0
-          local clen = #conv
-          for i = 1, clen do
-            local b = conv:byte(i)
-            if b < 32 and b ~= 9 and b ~= 10 and b ~= 13 then
-              garbage_limit = garbage_limit + 1
-            end
-          end
-
-          if garbage_limit > 0 then
-             return '', false
-          end
-
-          return conv, true
-       end
-    end
-
-    -- Everything else is character codes: control codes are .notdef in every
-    -- simple font encoding, so the decoder drops them without a scan here.
-    return s, false
-  end
-
   -- Text operators cannot be decoded here: the meaning of a character code
   -- depends on the font that is current at this point in the stream, which only
   -- the replay in process_text_object knows. So emit an instruction and let the
@@ -534,20 +392,13 @@ local function gen_text_grammar()
       res = table.concat(tres)
     end
 
-    if type(res) ~= 'string' then
-      return ''
-    end
-
-    local text, is_utf8 = sanitize_pdf_text(res)
-
-    if not text or #text == 0 then
+    if type(res) ~= 'string' or #res == 0 then
       return ''
     end
 
     return {
       '%text%',
-      text,
-      is_utf8,
+      res,
       op == "'" or op == '"',
     }
   end
@@ -1488,6 +1339,180 @@ local function offsets_to_blocks(starts, ends, out)
   end
 end
 
+-- Returns the text and whether it is already UTF-8. A UTF-16 string is
+-- decoded here; anything else is left as raw character codes for the font
+-- encoding to interpret.
+local function sanitize_pdf_text(s)
+  if not s or #s < 4 then return s, false end
+
+  local nulls_odd = 0
+  local nulls_even = 0
+  local len = #s
+
+  local limit = math.min(len, 16)
+  for i = 1, limit do
+    local b = string.byte(s, i)
+    if b == 0 then
+      if i % 2 == 1 then
+        nulls_odd = nulls_odd + 1
+      else
+        nulls_even = nulls_even + 1
+      end
+    end
+  end
+
+  if len > 32 then
+    for i = len - 15, len do
+      local b = string.byte(s, i)
+      if b == 0 then
+        if i % 2 == 1 then
+          nulls_odd = nulls_odd + 1
+        else
+          nulls_even = nulls_even + 1
+        end
+      end
+    end
+  elseif len > 16 then
+    for i = 17, len do
+      local b = string.byte(s, i)
+      if b == 0 then
+        if i % 2 == 1 then
+          nulls_odd = nulls_odd + 1
+        else
+          nulls_even = nulls_even + 1
+        end
+      end
+    end
+  end
+
+  local total_checked = (len > 32) and 32 or len
+  local total_odd = math.ceil(total_checked / 2)
+  local total_even = math.floor(total_checked / 2)
+
+  if len > 32 then
+      total_odd = 16
+      total_even = 16
+  end
+
+  local ratio_odd = nulls_odd / total_odd
+  local ratio_even = nulls_even / total_even
+  local charset
+
+  if ratio_odd > 0.8 and ratio_even < 0.2 then
+     charset = 'UTF-16BE'
+  elseif ratio_even > 0.8 and ratio_odd < 0.2 then
+     charset = 'UTF-16LE'
+  end
+
+  if charset and rspamd_util.to_utf8 then
+     local conv = rspamd_util.to_utf8(s, charset)
+     if conv then
+        local garbage_limit = 0
+        local clen = #conv
+        for i = 1, clen do
+          local b = conv:byte(i)
+          if b < 32 and b ~= 9 and b ~= 10 and b ~= 13 then
+            garbage_limit = garbage_limit + 1
+          end
+        end
+
+        if garbage_limit > 0 then
+           return '', false
+        end
+
+        return conv, true
+     end
+  end
+
+  -- Everything else is character codes: control codes are .notdef in every
+  -- simple font encoding, so the decoder drops them without a scan here.
+  return s, false
+end
+
+-- Resolves a font into a decoder for its character codes.
+--
+-- A composite font addresses glyphs by index, so only its /ToUnicode CMap can
+-- recover text and it takes precedence. A simple font is decoded through its
+-- /Encoding: one of the base encoding names, or a dictionary with a
+-- /BaseEncoding and a /Differences array. Anything unresolved falls back to the
+-- built-in encoding of the font, which for Latin text fonts is
+-- StandardEncoding.
+--
+-- Returns an encoding or a cmap, never both, and caches the answer on the font.
+local function font_decoder_of(font, pdf, task)
+  if type(font) ~= 'table' then
+    return nil, nil
+  end
+
+  if font.rspamd_decoder ~= nil then
+    -- false stands for "resolved to nothing", so it is not retried
+    if font.rspamd_decoder == false then
+      return nil, nil
+    end
+
+    return font.rspamd_decoder.encoding, font.rspamd_decoder.cmap
+  end
+
+  local dict = font.dict or font
+  local enc, cmap
+
+  local tounicode = maybe_dereference_object(dict.ToUnicode, pdf, task)
+
+  if type(tounicode) == 'table' then
+    maybe_extract_object_stream(tounicode, pdf, task)
+
+    if tounicode.uncompressed then
+      local err
+      cmap, err = rspamd_pdf_text.cmap(tounicode.uncompressed)
+
+      if cmap then
+        lua_util.debugm(N, task, 'parsed ToUnicode cmap with %s codes', cmap:size())
+      else
+        lua_util.debugm(N, task, 'cannot use ToUnicode cmap: %s', err)
+      end
+    end
+  end
+
+  if not cmap then
+    local spec = maybe_dereference_object(dict.Encoding, pdf, task)
+    local base, diffs
+
+    if type(spec) == 'string' then
+      base = spec
+    elseif type(spec) == 'table' then
+      local enc_dict = spec.dict or spec
+      base = enc_dict.BaseEncoding
+      diffs = maybe_dereference_object(enc_dict.Differences, pdf, task)
+    end
+
+    if type(base) == 'string' then
+      enc = rspamd_pdf_text.encoding(base)
+
+      if not enc then
+        lua_util.debugm(N, task, 'unsupported font encoding: %s', base)
+      end
+    end
+
+    if type(diffs) == 'table' then
+      -- Differences still need a base encoding to override
+      enc = enc or rspamd_pdf_text.encoding('StandardEncoding')
+
+      if enc then
+        local napplied = enc:apply_differences(diffs)
+        lua_util.debugm(N, task, 'applied %s differences to font encoding', napplied)
+      end
+    end
+  end
+
+  if enc or cmap then
+    font.rspamd_decoder = { encoding = enc, cmap = cmap }
+  else
+    font.rspamd_decoder = false
+  end
+
+  return enc, cmap
+end
+
 local function search_text(task, pdf, mpart)
   for _, obj in ipairs(pdf.objects) do
     if obj.type == 'Page' and obj.contents then
@@ -1583,6 +1608,7 @@ local function search_text(task, pdf, mpart)
       -- encoding of the font that was current when it was drawn
       if #text > 0 then
         local builder = rspamd_pdf_text.builder(1024)
+        local use_cmap = false
 
         for _, chunk in ipairs(text) do
           local ctype = type(chunk)
@@ -1595,18 +1621,34 @@ local function search_text(task, pdf, mpart)
           elseif ctype == 'table' then
             if chunk[1] == '%font%' then
               local font = obj.fonts and obj.fonts[chunk[2]]
+              local enc, cmap = font_decoder_of(font, pdf, task)
 
-              builder:set_encoding(font_encoding_of(font, pdf, task,
-                  maybe_dereference_object))
+              if cmap then
+                builder:set_cmap(cmap)
+                use_cmap = true
+              else
+                builder:set_encoding(enc)
+                use_cmap = false
+              end
             elseif chunk[1] == '%text%' then
-              if chunk[4] then
+              if chunk[3] then
                 builder:add_char('\n')
               end
 
-              if chunk[3] then
-                builder:add_utf8(chunk[2])
-              else
+              if use_cmap then
+                -- A composite font emits multi byte codes, which look like
+                -- UTF-16 to a byte level heuristic; the cmap is authoritative
                 builder:add_encoded(chunk[2])
+              else
+                local decoded, is_utf8 = sanitize_pdf_text(chunk[2])
+
+                if decoded and #decoded > 0 then
+                  if is_utf8 then
+                    builder:add_utf8(decoded)
+                  else
+                    builder:add_encoded(decoded)
+                  end
+                end
               end
             end
           end
