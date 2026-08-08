@@ -23,6 +23,7 @@ local rspamd_trie = require "rspamd_trie"
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
 local rspamd_url = require "rspamd_url"
+local rspamd_pdf_text = require "rspamd_pdf_text"
 local bit = require "bit"
 local N = "lua_content"
 local lua_util = require "lua_util"
@@ -159,6 +160,57 @@ local function compile_tries()
   if not pdf_cmap_trie then
     pdf_cmap_trie = compile_pats(pdf_cmap_patterns, pdf_cmap_indexes)
   end
+end
+
+-- Resolves the /Encoding of a simple font into a decoder. A font may name one
+-- of the base encodings, or carry a dictionary with a /BaseEncoding and a
+-- /Differences array; anything else falls back to the built-in encoding of the
+-- font, which for the Latin text fonts is StandardEncoding.
+local function font_encoding_of(font, pdf, task, maybe_dereference)
+  if type(font) ~= 'table' then
+    return nil
+  end
+
+  if font.rspamd_encoding ~= nil then
+    -- false is cached as "resolved to the default"
+    return font.rspamd_encoding or nil
+  end
+
+  local dict = font.dict or font
+  local spec = maybe_dereference(dict.Encoding, pdf, task)
+  local base, diffs
+
+  if type(spec) == 'string' then
+    base = spec
+  elseif type(spec) == 'table' then
+    local enc_dict = spec.dict or spec
+    base = enc_dict.BaseEncoding
+    diffs = maybe_dereference(enc_dict.Differences, pdf, task)
+  end
+
+  local enc
+
+  if type(base) == 'string' then
+    enc = rspamd_pdf_text.encoding(base)
+
+    if not enc then
+      lua_util.debugm(N, task, 'unsupported font encoding: %s', base)
+    end
+  end
+
+  if type(diffs) == 'table' then
+    -- Differences alone still need a base to override
+    enc = enc or rspamd_pdf_text.encoding('StandardEncoding')
+
+    if enc then
+      local napplied = enc:apply_differences(diffs)
+      lua_util.debugm(N, task, 'applied %s differences to font encoding', napplied)
+    end
+  end
+
+  font.rspamd_encoding = enc or false
+
+  return enc
 end
 
 -- Returns a table with generic grammar elements for PDF
@@ -369,8 +421,11 @@ local function gen_text_grammar()
   local C = lpeg.C
   local gen = generic_grammar_elts()
 
+  -- Returns the text and whether it is already UTF-8. A UTF-16 string is
+  -- decoded here; anything else is left as raw character codes for the font
+  -- encoding to interpret.
   local function sanitize_pdf_text(s)
-    if not s or #s < 4 then return s end
+    if not s or #s < 4 then return s, false end
 
     local nulls_odd = 0
     local nulls_even = 0
@@ -444,37 +499,22 @@ local function gen_text_grammar()
           end
 
           if garbage_limit > 0 then
-             return ''
+             return '', false
           end
 
-          return conv
+          return conv, true
        end
     end
 
-    -- Strip null bytes and control characters from non-UTF-16 text.
-    -- PDF hex strings like <0041> produce raw bytes including \x00 which
-    -- are not meaningful in extracted text and cause false positives in
-    -- sa_raw_body rules matching \x00 patterns.
-    local has_control = false
-    for i = 1, len do
-      local b = s:byte(i)
-      if b == 0 or (b < 32 and b ~= 9 and b ~= 10 and b ~= 13) then
-        has_control = true
-        break
-      end
-    end
-
-    if has_control then
-      -- Remove null bytes and other control characters (keep tab, newline, carriage return)
-      s = s:gsub('[%z\1-\8\11\12\14-\31]', '')
-      if #s == 0 then
-        return ''
-      end
-    end
-
-    return s
+    -- Everything else is character codes: control codes are .notdef in every
+    -- simple font encoding, so the decoder drops them without a scan here.
+    return s, false
   end
 
+  -- Text operators cannot be decoded here: the meaning of a character code
+  -- depends on the font that is current at this point in the stream, which only
+  -- the replay in process_text_object knows. So emit an instruction and let the
+  -- decoder run once per page, over one buffer.
   local function text_op_handler(...)
     local args = { ... }
     local op = args[#args]
@@ -487,29 +527,29 @@ local function gen_text_grammar()
         if type(chunk) == 'string' then
           table.insert(tres, chunk)
         elseif type(chunk) == 'number' and chunk < -200 then
+          -- A large negative offset in a TJ array is a word gap
           table.insert(tres, ' ')
         end
       end
       res = table.concat(tres)
     end
 
-    res = sanitize_pdf_text(res)
-
-    -- Apply text quality filtering to reject garbage chunks
-    if config.text_quality_enabled and res and #res >= config.text_quality_min_length then
-      local confidence = calculate_text_confidence(res)
-      if confidence < config.text_quality_threshold then
-        lua_util.debugm(N, nil, 'rejected low confidence text chunk (%.2f): %s',
-            confidence, res:sub(1, 50))
-        return ''
-      end
+    if type(res) ~= 'string' then
+      return ''
     end
 
-    if op == "'" or op == '"' then
-      return '\n' .. res
+    local text, is_utf8 = sanitize_pdf_text(res)
+
+    if not text or #text == 0 then
+      return ''
     end
 
-    return res
+    return {
+      '%text%',
+      text,
+      is_utf8,
+      op == "'" or op == '"',
+    }
   end
 
   local function nary_op_handler(...)
@@ -573,7 +613,8 @@ local function gen_text_grammar()
     STRING = lpeg.P { gen.str + gen.hexstr },
     TEXT = ((V("TEXT_ARG") * gen.ws ^ 0 * text_binary_op) / text_op_handler) +
         ((V("ARG") / empty * gen.ws ^ 1 * V("ARG") / empty * gen.ws ^ 1 * V("TEXT_ARG") * gen.ws ^ 0 * text_quote_op) / text_op_handler),
-    FONT = (V("FONT_ARG") * gen.ws ^ 1 * (gen.number / empty) * gen.ws ^ 1 * font_op) / empty,
+    -- The font name is kept: it selects the encoding for the text that follows
+    FONT = V("FONT_ARG") * gen.ws ^ 1 * (gen.number / empty) * gen.ws ^ 1 * font_op,
     FONT_ARG = lpeg.Ct(lpeg.Cc("%font%") * gen.id),
     TEXT_ARG = lpeg.Ct(V("STRING")) + V("TEXT_ARRAY"),
     TEXT_ARRAY = "[" * gen.ws ^ 0 * lpeg.Ct((V("TEXT_ARRAY_ELT") * gen.ws ^ 0) ^ 0) * "]",
@@ -1028,25 +1069,27 @@ process_dict = function(task, pdf, obj, dict)
 
 
 
-    --[[Disabled fonts extraction
-         local fonts = obj.resources.Font
-         if fonts and type(fonts) == 'table' then
-          obj.fonts = {}
-          for k,v in pairs(fonts) do
-            obj.fonts[k] = maybe_dereference_object(v, pdf, task)
+    -- Fonts are needed to decode text: a character code means nothing without
+    -- the /Encoding of the font that drew it
+    if config.text_extraction and type(obj.resources) == 'table' then
+      local fonts = maybe_dereference_object(obj.resources.Font, pdf, task)
 
-            if obj.fonts[k] then
-              local font = obj.fonts[k]
+      if type(fonts) == 'table' then
+        local fonts_dict = fonts.dict or fonts
 
-              if config.text_extraction then
-                process_font(task, pdf, font, k)
-                lua_util.debugm(N, task, 'found font "%s" for object %s:%s -> %s',
-                    k, obj.major, obj.minor, font)
-              end
-            end
+        obj.fonts = {}
+
+        for k, v in pairs(fonts_dict) do
+          local font = maybe_dereference_object(v, pdf, task)
+
+          if type(font) == 'table' then
+            obj.fonts[k] = font
+            lua_util.debugm(N, task, 'found font "%s" for object %s:%s',
+                k, obj.major, obj.minor)
           end
         end
-    ]]
+      end
+    end
 
     lua_util.debugm(N, task, 'found resources for object %s:%s (%s): %s',
         obj.major, obj.minor, obj.type, obj.resources)
@@ -1536,43 +1579,40 @@ local function search_text(task, pdf, mpart)
         end
       end
 
-      -- Join all text data together
+      -- Replay the instructions into one buffer, decoding each run with the
+      -- encoding of the font that was current when it was drawn
       if #text > 0 then
-        for i, chunk in ipairs(text) do
-          if type(chunk) == 'userdata' then
-            text[i] = tostring(chunk)
-          elseif type(chunk) == 'table' then
-            local function flatten(t)
-              local res = {}
-              local stack = { { tbl = t, idx = 1 } }
-              local max_depth = 100
+        local builder = rspamd_pdf_text.builder(1024)
 
-              while #stack > 0 and #stack <= max_depth do
-                local frame = stack[#stack]
-                local tbl, idx = frame.tbl, frame.idx
+        for _, chunk in ipairs(text) do
+          local ctype = type(chunk)
 
-                if idx > #tbl then
-                  stack[#stack] = nil
-                else
-                  local v = tbl[idx]
-                  frame.idx = idx + 1
+          if ctype == 'string' then
+            -- Structural text produced by an operator, not by a glyph
+            builder:add_utf8(chunk)
+          elseif ctype == 'userdata' then
+            builder:add_utf8(tostring(chunk))
+          elseif ctype == 'table' then
+            if chunk[1] == '%font%' then
+              local font = obj.fonts and obj.fonts[chunk[2]]
 
-                  if type(v) == 'userdata' then
-                    res[#res + 1] = tostring(v)
-                  elseif type(v) == 'table' then
-                    stack[#stack + 1] = { tbl = v, idx = 1 }
-                  elseif v ~= nil then
-                    res[#res + 1] = tostring(v)
-                  end
-                end
+              builder:set_encoding(font_encoding_of(font, pdf, task,
+                  maybe_dereference_object))
+            elseif chunk[1] == '%text%' then
+              if chunk[4] then
+                builder:add_char('\n')
               end
 
-              return table.concat(res, '')
+              if chunk[3] then
+                builder:add_utf8(chunk[2])
+              else
+                builder:add_encoded(chunk[2])
+              end
             end
-            text[i] = flatten(chunk)
           end
         end
-        local res = table.concat(text, '')
+
+        local res = tostring(builder:finish())
 
         -- Page-level confidence check before storing text
         if config.text_quality_enabled and #res >= config.text_quality_min_length then
