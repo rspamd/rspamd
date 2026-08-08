@@ -122,20 +122,6 @@ static const struct rspamd_charset_substitution sub[] = {
 		.canon = "big5-hkscs",
 		.flags = 0,
 	},
-	/*
-	 * CED labels EUC-TW as "CNS" and "EUC" (its own tables call both
-	 * misnamed); ICU knows neither spelling.
-	 */
-	{
-		.input = "cns",
-		.canon = "euc-tw",
-		.flags = 0,
-	},
-	{
-		.input = "euc",
-		.canon = "euc-tw",
-		.flags = 0,
-	},
 	{
 		.input = "extended_unix_code_packed_format_for_japanese",
 		.canon = "euc-jp",

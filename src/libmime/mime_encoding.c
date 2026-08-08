@@ -607,6 +607,40 @@ void rspamd_mime_charset_utf_enforce(char *in, gsize len)
 	}
 }
 
+/*
+ * CED has its own names for a few encodings, and two of them are labels no
+ * message would ever declare: it calls EUC-TW either "CNS" or "EUC", and its
+ * own tables note both as misnamed. ICU knows neither spelling.
+ *
+ * These live here rather than in the global substitution table because that
+ * table also resolves the charset a message declares, where a bare "EUC" is
+ * ambiguous: it is far more likely to be a sloppy EUC-JP or EUC-KR than
+ * EUC-TW, and mapping it would turn data that is currently left raw into text
+ * that is confidently wrong. The IANA registry has no generic EUC charset to
+ * appeal to either way.
+ */
+static const struct rspamd_ced_substitution {
+	const char *ced_name;
+	const char *canon;
+} ced_substitutions[] = {
+	{"CNS", "euc-tw"},
+	{"EUC", "euc-tw"},
+};
+
+static const char *
+rspamd_ced_name_substitute(const char *ced_name)
+{
+	unsigned int i;
+
+	for (i = 0; i < G_N_ELEMENTS(ced_substitutions); i++) {
+		if (g_ascii_strcasecmp(ced_name, ced_substitutions[i].ced_name) == 0) {
+			return ced_substitutions[i].canon;
+		}
+	}
+
+	return ced_name;
+}
+
 const char *
 rspamd_mime_charset_find_by_content(const char *in, gsize inlen,
 									bool check_utf8)
@@ -628,7 +662,7 @@ rspamd_mime_charset_find_by_content(const char *in, gsize inlen,
 
 	if (ced_name) {
 
-		return ced_name;
+		return rspamd_ced_name_substitute(ced_name);
 	}
 
 	return NULL;

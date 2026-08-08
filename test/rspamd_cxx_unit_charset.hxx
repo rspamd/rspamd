@@ -176,33 +176,6 @@ TEST_SUITE("mime charset detection")
 
 		rspamd_mempool_delete(pool);
 	}
-
-	TEST_CASE("CED euc-tw misnomers resolve to euc-tw")
-	{
-		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-										"charset_alias_euctw", 0);
-
-		/*
-		 * EUC-TW lives in the optional ICU data, so resolve it first: with no
-		 * converter to fold onto there is nothing to assert.
-		 */
-		auto euctw_tok = rspamd_charset_test::ftok_of("euc-tw");
-		const auto *euctw_canon = rspamd_mime_detect_charset(&euctw_tok, pool);
-
-		if (euctw_canon == nullptr) {
-			MESSAGE("no EUC-TW converter in this ICU build, skipping");
-		}
-		else {
-			for (const char *label: {"cns", "CNS", "euc", "EUC"}) {
-				auto tok = rspamd_charset_test::ftok_of(label);
-				const auto *cs = rspamd_mime_detect_charset(&tok, pool);
-				REQUIRE(cs != nullptr);
-				CHECK(g_ascii_strcasecmp(cs, euctw_canon) == 0);
-			}
-		}
-
-		rspamd_mempool_delete(pool);
-	}
 }
 
 TEST_SUITE("mime computed text part conversion")
