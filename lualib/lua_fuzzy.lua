@@ -344,7 +344,8 @@ local function check_length(task, part, rule)
           bytes, adjusted_bytes, rule.min_bytes)
       length_ok = false
     else
-      lua_util.debugm(N, task, 'allow part of length %s (%s adjusted)',
+      lua_util.debugm(N, task, 'allow part of length %s (%s adjusted) ' ..
+          'as it has at least %s bytes',
           bytes, adjusted_bytes, rule.min_bytes)
     end
   else
