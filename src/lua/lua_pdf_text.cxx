@@ -49,17 +49,23 @@
 
 #define PDF_ENCODING_CLASS rspamd_pdf_encoding_classname
 #define PDF_TEXT_BUILDER_CLASS rspamd_pdf_text_builder_classname
+#define PDF_CMAP_CLASS rspamd_pdf_cmap_classname
 
 using namespace rspamd::mime;
 
 LUA_FUNCTION_DEF(pdf_text, encoding);
+LUA_FUNCTION_DEF(pdf_text, cmap);
 LUA_FUNCTION_DEF(pdf_text, builder);
+
+LUA_FUNCTION_DEF(pdf_cmap, size);
+LUA_FUNCTION_DEF(pdf_cmap, dtor);
 
 LUA_FUNCTION_DEF(pdf_encoding, set_difference);
 LUA_FUNCTION_DEF(pdf_encoding, apply_differences);
 LUA_FUNCTION_DEF(pdf_encoding, dtor);
 
 LUA_FUNCTION_DEF(pdf_text_builder, set_encoding);
+LUA_FUNCTION_DEF(pdf_text_builder, set_cmap);
 LUA_FUNCTION_DEF(pdf_text_builder, add_string);
 LUA_FUNCTION_DEF(pdf_text_builder, add_hexstring);
 LUA_FUNCTION_DEF(pdf_text_builder, add_encoded);
@@ -71,7 +77,15 @@ LUA_FUNCTION_DEF(pdf_text_builder, dtor);
 
 static const struct luaL_reg pdf_textlib_f[] = {
 	LUA_INTERFACE_DEF(pdf_text, encoding),
+	LUA_INTERFACE_DEF(pdf_text, cmap),
 	LUA_INTERFACE_DEF(pdf_text, builder),
+	{nullptr, nullptr},
+};
+
+static const struct luaL_reg pdf_cmaplib_m[] = {
+	LUA_INTERFACE_DEF(pdf_cmap, size),
+	{"__gc", lua_pdf_cmap_dtor},
+	{"__tostring", rspamd_lua_class_tostring},
 	{nullptr, nullptr},
 };
 
@@ -85,6 +99,7 @@ static const struct luaL_reg pdf_encodinglib_m[] = {
 
 static const struct luaL_reg pdf_text_builderlib_m[] = {
 	LUA_INTERFACE_DEF(pdf_text_builder, set_encoding),
+	LUA_INTERFACE_DEF(pdf_text_builder, set_cmap),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_string),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_hexstring),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_encoded),
@@ -105,7 +120,8 @@ namespace {
  */
 struct lua_pdf_builder {
 	pdf::text_builder builder;
-	int encoding_ref = LUA_NOREF;
+	/* Whichever decoder object the builder currently points at */
+	int decoder_ref = LUA_NOREF;
 
 	explicit lua_pdf_builder(std::size_t reserve)
 		: builder(reserve)
@@ -121,6 +137,16 @@ auto lua_check_pdf_encoding(lua_State *L, int pos) -> pdf::font_encoding *
 				  "'rspamd{pdf_encoding}' expected");
 
 	return *penc;
+}
+
+auto lua_check_pdf_cmap(lua_State *L, int pos) -> pdf::cmap *
+{
+	auto **pcm = static_cast<pdf::cmap **>(
+		rspamd_lua_check_udata(L, pos, PDF_CMAP_CLASS));
+	luaL_argcheck(L, pcm != nullptr && *pcm != nullptr, pos,
+				  "'rspamd{pdf_cmap}' expected");
+
+	return *pcm;
 }
 
 auto lua_check_pdf_builder(lua_State *L, int pos) -> lua_pdf_builder *
@@ -265,6 +291,63 @@ lua_pdf_encoding_dtor(lua_State *L)
 }
 
 /***
+ * @function rspamd_pdf_text.cmap(data)
+ * Parses an embedded /ToUnicode CMap, the only thing that can turn the glyph
+ * indices of a composite font back into text.
+ * @param {string|rspamd_text} data CMap program, as found in the stream
+ * @return {rspamd_pdf_cmap|nil} cmap, or nil and an error message
+ */
+static int
+lua_pdf_text_cmap(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	auto data = lua_check_bytes(L, 1);
+	auto parsed = pdf::cmap::parse(data);
+
+	if (!parsed) {
+		lua_pushnil(L);
+		lua_pushstring(L, "not a usable cmap");
+
+		return 2;
+	}
+
+	auto **pcm = static_cast<pdf::cmap **>(lua_newuserdata(L, sizeof(pdf::cmap *)));
+	*pcm = new pdf::cmap{std::move(*parsed)};
+	rspamd_lua_setclass(L, PDF_CMAP_CLASS, -1);
+
+	return 1;
+}
+
+/***
+ * @method cmap:size()
+ * @return {number} how many codes the cmap maps
+ */
+static int
+lua_pdf_cmap_size(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	auto *cm = lua_check_pdf_cmap(L, 1);
+
+	lua_pushinteger(L, (lua_Integer) cm->size());
+
+	return 1;
+}
+
+static int
+lua_pdf_cmap_dtor(lua_State *L)
+{
+	auto **pcm = static_cast<pdf::cmap **>(
+		rspamd_lua_check_udata(L, 1, PDF_CMAP_CLASS));
+
+	if (pcm != nullptr && *pcm != nullptr) {
+		delete *pcm;
+		*pcm = nullptr;
+	}
+
+	return 0;
+}
+
+/***
  * @function rspamd_pdf_text.builder([reserve])
  * Creates a text builder. One builder per page keeps the whole page in a single
  * buffer.
@@ -293,10 +376,28 @@ lua_pdf_text_builder(lua_State *L)
 	return 1;
 }
 
+/*
+ * Anchors the decoder the builder now points at, releasing the previous one, so
+ * that Lua cannot collect an object the C++ side still dereferences.
+ */
+static void
+lua_pdf_builder_anchor(lua_State *L, struct lua_pdf_builder *b, int pos)
+{
+	if (b->decoder_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, b->decoder_ref);
+		b->decoder_ref = LUA_NOREF;
+	}
+
+	if (pos != 0) {
+		lua_pushvalue(L, pos);
+		b->decoder_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	}
+}
+
 /***
  * @method builder:set_encoding(encoding)
- * Selects the encoding used by the following add_* calls, as the Tf operator
- * does in a content stream. Passing nil restores StandardEncoding.
+ * Selects the simple font encoding used by the following add_* calls, as the Tf
+ * operator does in a content stream. Passing nil restores StandardEncoding.
  * @param {rspamd_pdf_encoding|nil} encoding font encoding
  */
 static int
@@ -305,12 +406,8 @@ lua_pdf_text_builder_set_encoding(lua_State *L)
 	LUA_TRACE_POINT;
 	auto *b = lua_check_pdf_builder(L, 1);
 
-	if (b->encoding_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, b->encoding_ref);
-		b->encoding_ref = LUA_NOREF;
-	}
-
-	if (lua_type(L, 2) == LUA_TNIL || lua_gettop(L) < 2) {
+	if (lua_gettop(L) < 2 || lua_type(L, 2) == LUA_TNIL) {
+		lua_pdf_builder_anchor(L, b, 0);
 		b->builder.set_encoding(nullptr);
 
 		return 0;
@@ -318,10 +415,33 @@ lua_pdf_text_builder_set_encoding(lua_State *L)
 
 	auto *enc = lua_check_pdf_encoding(L, 2);
 	b->builder.set_encoding(enc);
+	lua_pdf_builder_anchor(L, b, 2);
 
-	/* Anchor the encoding for as long as the builder points at it */
-	lua_pushvalue(L, 2);
-	b->encoding_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	return 0;
+}
+
+/***
+ * @method builder:set_cmap(cmap)
+ * Selects a /ToUnicode CMap for the following add_* calls, for a composite font
+ * whose codes are glyph indices. Passing nil goes back to the simple font path.
+ * @param {rspamd_pdf_cmap|nil} cmap parsed cmap
+ */
+static int
+lua_pdf_text_builder_set_cmap(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	auto *b = lua_check_pdf_builder(L, 1);
+
+	if (lua_gettop(L) < 2 || lua_type(L, 2) == LUA_TNIL) {
+		lua_pdf_builder_anchor(L, b, 0);
+		b->builder.set_cmap(nullptr);
+
+		return 0;
+	}
+
+	auto *cm = lua_check_pdf_cmap(L, 2);
+	b->builder.set_cmap(cm);
+	lua_pdf_builder_anchor(L, b, 2);
 
 	return 0;
 }
@@ -460,8 +580,8 @@ lua_pdf_text_builder_dtor(lua_State *L)
 		rspamd_lua_check_udata(L, 1, PDF_TEXT_BUILDER_CLASS));
 
 	if (pb != nullptr && *pb != nullptr) {
-		if ((*pb)->encoding_ref != LUA_NOREF) {
-			luaL_unref(L, LUA_REGISTRYINDEX, (*pb)->encoding_ref);
+		if ((*pb)->decoder_ref != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, (*pb)->decoder_ref);
 		}
 
 		delete *pb;
@@ -474,6 +594,8 @@ lua_pdf_text_builder_dtor(lua_State *L)
 void luaopen_pdf_text(lua_State *L)
 {
 	rspamd_lua_new_class(L, PDF_ENCODING_CLASS, pdf_encodinglib_m);
+	lua_pop(L, 1);
+	rspamd_lua_new_class(L, PDF_CMAP_CLASS, pdf_cmaplib_m);
 	lua_pop(L, 1);
 	rspamd_lua_new_class(L, PDF_TEXT_BUILDER_CLASS, pdf_text_builderlib_m);
 	lua_pop(L, 1);

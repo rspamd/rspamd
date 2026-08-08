@@ -76,9 +76,10 @@ extern const char *rspamd_caseless_table_classname;
 extern const char *rspamd_static_embed_classname;
 extern const char *rspamd_pdf_encoding_classname;
 extern const char *rspamd_pdf_text_builder_classname;
+extern const char *rspamd_pdf_cmap_classname;
 
 /* Keep it consistent when adding new classes */
-#define RSPAMD_MAX_LUA_CLASSES 54
+#define RSPAMD_MAX_LUA_CLASSES 55
 
 /*
  * Return a static class name for a given name (only for known classes) or NULL
