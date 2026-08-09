@@ -3553,13 +3553,49 @@ fuzzy_rule_check_mimepart(struct rspamd_task *task,
 
 #define MAX_FUZZY_DOMAIN 64
 
+/*
+ * Extensions describe the sender: a third party that has chosen to send mail
+ * into the world. They must never describe the recipient, our own users or our
+ * own policy, hence they are omitted when:
+ *
+ * - the rule opts out of sharing;
+ * - the storage is talked to in plain text, as the extensions would then
+ *   travel in the clear (for sanity + privacy);
+ * - the message has been submitted by an authenticated user or comes from one
+ *   of our own networks. On outbound or submission traffic the source address
+ *   is our own user rather than a third party; such addresses are also noise
+ *   in an IP reputation model, so nothing of value is lost;
+ * - we have no source address at all, which makes the rest of the telemetry
+ *   useless anyway (e.g. a message scanned from a file).
+ */
+static gboolean
+fuzzy_rule_shares_extensions(struct rspamd_task *task,
+							 struct fuzzy_rule *rule)
+{
+	if (rule->no_share || !fuzzy_rule_has_encryption(rule)) {
+		return FALSE;
+	}
+
+	if (task->auth_user != NULL) {
+		return FALSE;
+	}
+
+	if (task->from_addr == NULL ||
+		rspamd_inet_address_get_af(task->from_addr) == AF_UNIX ||
+		rspamd_ip_is_local_cfg(task->cfg, task->from_addr)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static unsigned int
 fuzzy_cmd_extension_length(struct rspamd_task *task,
 						   struct fuzzy_rule *rule)
 {
 	unsigned int total = 0;
 
-	if (rule->no_share) {
+	if (!fuzzy_rule_shares_extensions(task, rule)) {
 		return 0;
 	}
 
@@ -3593,7 +3629,7 @@ fuzzy_cmd_write_extensions(struct rspamd_task *task,
 {
 	unsigned int written = 0;
 
-	if (rule->no_share) {
+	if (!fuzzy_rule_shares_extensions(task, rule)) {
 		return 0;
 	}
 
