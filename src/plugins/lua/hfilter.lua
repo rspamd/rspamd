@@ -445,6 +445,14 @@ local function hfilter_callback(task)
           weight_hostname = weight
         end
       end
+
+      -- Publish whether the PTR name follows a generic/dynamic naming pattern
+      -- so that other modules (e.g. fuzzy_check) can use this pattern set
+      -- without duplicating it. Only the `hard` and `very hard` tiers count:
+      -- those are the dynamic, dsl, pppoe and address-in-the-name families,
+      -- whereas the lower weights match ambiguous words such as `user`,
+      -- `peer` or `host`
+      task:get_mempool():set_variable('hostname_generic', weight_hostname >= 4)
     else
       task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
     end

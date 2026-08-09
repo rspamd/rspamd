@@ -38,6 +38,12 @@
  */
 #define RSPAMD_MEMPOOL_SPF_RESULT "spf_result"
 #define RSPAMD_MEMPOOL_DMARC_RESULT "dmarc_result"
+/*
+ * Set by the hfilter module to a gboolean telling whether the PTR name of the
+ * sender matches one of its generic/dynamic naming patterns. Absent when
+ * hfilter or its hostname checks are disabled, or when there is no PTR name.
+ */
+#define RSPAMD_MEMPOOL_HOSTNAME_GENERIC "hostname_generic"
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
 #define RSPAMD_MEMPOOL_PROFILE "profile"
 #define RSPAMD_MEMPOOL_MILTER_REPLY "milter_reply"
