@@ -120,14 +120,26 @@ local function spf_check_callback(task)
     ip = task:get_from_ip()
   end
 
+  -- Publish the policy result so that other modules (e.g. fuzzy_check) can use
+  -- it without matching our symbol names, which are configurable
+  local function publish_result(res)
+    if res then
+      task:get_mempool():set_variable('spf_result', res)
+    end
+  end
+
   local function flag_to_symbol(fl)
     if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then
+      publish_result('temperror')
       return local_config.symbols.dnsfail
     elseif bit.band(fl, rspamd_spf.flags.plusall) ~= 0 then
+      publish_result('pass')
       return local_config.symbols.plusall
     elseif bit.band(fl, rspamd_spf.flags.perm_fail) ~= 0 then
+      publish_result('permerror')
       return local_config.symbols.permfail
     elseif bit.band(fl, rspamd_spf.flags.na) ~= 0 then
+      publish_result('none')
       return local_config.symbols.na
     end
 
@@ -136,12 +148,16 @@ local function spf_check_callback(task)
 
   local function policy_decode(res)
     if res == rspamd_spf.policy.fail then
+      publish_result('fail')
       return local_config.symbols.fail, '-'
     elseif res == rspamd_spf.policy.pass then
+      publish_result('pass')
       return local_config.symbols.allow, '+'
     elseif res == rspamd_spf.policy.soft_fail then
+      publish_result('softfail')
       return local_config.symbols.softfail, '~'
     elseif res == rspamd_spf.policy.neutral then
+      publish_result('neutral')
       return local_config.symbols.neutral, '?'
     end
 

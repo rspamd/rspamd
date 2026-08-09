@@ -25,6 +25,19 @@
 #define RSPAMD_MEMPOOL_MTA_NAME "MTA-Name"
 #define RSPAMD_MEMPOOL_SPF_DOMAIN "spf_domain"
 #define RSPAMD_MEMPOOL_SPF_RECORD "spf_record"
+/*
+ * Policy results published by the spf and dmarc modules so that other modules
+ * do not have to reimplement them by matching the (configurable) symbol names.
+ *
+ * spf_result: none, pass, fail, softfail, neutral, permerror, temperror
+ * dmarc_result: no_record, pass, fail_none, fail_quarantine, fail_reject,
+ *               permerror, temperror
+ *
+ * Both are plain NUL terminated strings and are simply absent if the
+ * corresponding check has not been performed.
+ */
+#define RSPAMD_MEMPOOL_SPF_RESULT "spf_result"
+#define RSPAMD_MEMPOOL_DMARC_RESULT "dmarc_result"
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
 #define RSPAMD_MEMPOOL_PROFILE "profile"
 #define RSPAMD_MEMPOOL_MILTER_REPLY "milter_reply"

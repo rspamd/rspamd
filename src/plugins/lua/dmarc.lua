@@ -57,6 +57,17 @@ redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
 redis.call('EXPIRE', report_key, 172800)
 ]]
 
+-- Publish the policy evaluation result so that other modules (e.g. fuzzy_check)
+-- can use it without matching our symbol names, which are configurable.
+-- Note that we report the *published* policy rather than the disposition we
+-- ended up applying: sampling (pct=) and local overrides describe us, not the
+-- sender.
+local function publish_result(task, result)
+  if result then
+    task:get_mempool():set_variable('dmarc_result', result)
+  end
+end
+
 local function maybe_force_action(task, disposition)
   if disposition then
     local force_action = settings.actions[disposition]
@@ -235,6 +246,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     ]] --
     task:insert_result(settings.symbols['allow'], 1.0, policy.domain,
       policy.dmarc_policy)
+    publish_result(task, 'pass')
   else
     --[[
     https://tools.ietf.org/html/rfc7489#section-6.6.2
@@ -247,9 +259,16 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     if spf_tmpfail or dkim_tmpfail then
       task:insert_result(settings.symbols['dnsfail'], 1.0, policy.domain ..
         ' : ' .. 'SPF/DKIM temp error', policy.dmarc_policy)
+      publish_result(task, 'temperror')
     else
       -- We can now check the failed policy and maybe send report data elt
       local reason_str = table.concat(reason, ', ')
+
+      if policy.dmarc_policy == 'quarantine' or policy.dmarc_policy == 'reject' then
+        publish_result(task, 'fail_' .. policy.dmarc_policy)
+      else
+        publish_result(task, 'fail_none')
+      end
 
       if policy.dmarc_policy == 'quarantine' then
         handle_dmarc_failure('quarantine', reason_str)
@@ -479,12 +498,15 @@ local function dmarc_callback(task)
     dmarc_domain = rspamd_util.get_tld(hfromdom)
   elseif (from or E)[2] then
     task:insert_result(settings.symbols['na'], 1.0, 'Duplicate From header')
+    publish_result(task, 'no_record')
     return maybe_force_action(task, 'na')
   elseif (from or E)[1] then
     task:insert_result(settings.symbols['na'], 1.0, 'No domain in From header')
+    publish_result(task, 'no_record')
     return maybe_force_action(task, 'na')
   else
     task:insert_result(settings.symbols['na'], 1.0, 'No From header')
+    publish_result(task, 'no_record')
     return maybe_force_action(task, 'na')
   end
 
@@ -500,6 +522,7 @@ local function dmarc_callback(task)
       -- insert result
       if final or policy.fatal then
         task:insert_result(policy.symbol, 1.0, policy.err)
+        publish_result(task, policy.result)
         maybe_force_action(task, policy.disposition)
 
         return true
@@ -530,9 +553,11 @@ local function dmarc_callback(task)
                 err ~= 'no records with this name') then
             policy_target.err = lookup_domain .. ' : ' .. err
             policy_target.symbol = settings.symbols['dnsfail']
+            policy_target.result = 'temperror'
           else
             policy_target.err = lookup_domain
             policy_target.symbol = settings.symbols['na']
+            policy_target.result = 'no_record'
           end
         else
           local has_valid_policy = false
@@ -545,6 +570,7 @@ local function dmarc_callback(task)
                 -- We have a fatal parsing error, give up
                 policy_target.err = lookup_domain .. ' : ' .. results_or_err
                 policy_target.symbol = settings.symbols['badpolicy']
+                policy_target.result = 'permerror'
                 policy_target.fatal = true
                 seen_invalid = true
               end
@@ -553,6 +579,7 @@ local function dmarc_callback(task)
                 policy_target.err = lookup_domain .. ' : ' ..
                     'Multiple policies defined in DNS'
                 policy_target.symbol = settings.symbols['badpolicy']
+                policy_target.result = 'permerror'
                 policy_target.fatal = true
                 seen_invalid = true
               end
@@ -567,6 +594,7 @@ local function dmarc_callback(task)
           if not has_valid_policy and not seen_invalid then
             policy_target.err = lookup_domain .. ':' .. ' no valid DMARC record'
             policy_target.symbol = settings.symbols['na']
+            policy_target.result = 'no_record'
           end
         end
       end

@@ -39,6 +39,7 @@
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/dkim.h"
 #include "libserver/html/html_features.h"
 #include "khash.h"
 #include "fuzzy_wire.h"
@@ -3052,6 +3053,30 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		/* We want that to check bad mime attachments */
 		rspamd_symcache_add_delayed_dependency(cfg->cache,
 											   "FUZZY_CALLBACK", "MIME_TYPES_CALLBACK", FALSE);
+
+		/*
+		 * If at least one rule can share the extensions then we need the
+		 * results of the authentication checks to be there by the time the
+		 * commands are built, otherwise the sender facts would always be sent
+		 * as absent. These are ordering dependencies only (hard = FALSE): a
+		 * check that is disabled or that has not concluded merely means the
+		 * corresponding field is reported as absent.
+		 */
+		struct fuzzy_rule *rule;
+		unsigned int i;
+
+		PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+		{
+			if (!rule->no_share && fuzzy_rule_has_encryption(rule)) {
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "SPF_CHECK", FALSE);
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "DKIM_CHECK", FALSE);
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "DMARC_CHECK", FALSE);
+				break;
+			}
+		}
 	}
 
 	if (fuzzy_module_ctx->fuzzy_rules == NULL) {
@@ -3589,6 +3614,168 @@ fuzzy_rule_shares_extensions(struct rspamd_task *task,
 	return TRUE;
 }
 
+/*
+ * Map a policy result published by the spf/dmarc modules back to its wire
+ * value using the very same table the storage decodes it with
+ */
+static unsigned int
+fuzzy_sf_from_str(const char *str, const char *(*to_str)(unsigned int),
+				  unsigned int max)
+{
+	if (str != NULL) {
+		for (unsigned int i = 1; i <= max; i++) {
+			const char *known = to_str(i);
+
+			if (known != NULL && strcmp(str, known) == 0) {
+				return i;
+			}
+		}
+	}
+
+	/* Absent or something we do not know about */
+	return 0;
+}
+
+static unsigned int
+fuzzy_sf_dkim(struct rspamd_task *task)
+{
+	struct rspamd_dkim_check_result **pres, **cur;
+	gboolean has_fail = FALSE, has_permerror = FALSE, has_temperror = FALSE;
+
+	pres = rspamd_mempool_get_variable(task->task_pool,
+									   RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS);
+
+	if (pres == NULL) {
+		/*
+		 * Either there was nothing to check or the dkim module has not run
+		 * (or has not finished): only the former is a definite `none`
+		 */
+		if (rspamd_message_get_header_array(task, "DKIM-Signature",
+											FALSE) == NULL) {
+			return RSPAMD_FUZZY_SF_DKIM_NONE;
+		}
+
+		return RSPAMD_FUZZY_SF_DKIM_ABSENT;
+	}
+
+	for (cur = pres; *cur != NULL; cur++) {
+		switch ((*cur)->rcode) {
+		case DKIM_CONTINUE:
+			/* A single valid signature is enough */
+			return RSPAMD_FUZZY_SF_DKIM_PASS;
+		case DKIM_REJECT:
+			has_fail = TRUE;
+			break;
+		case DKIM_TRYAGAIN:
+			has_temperror = TRUE;
+			break;
+		default:
+			has_permerror = TRUE;
+			break;
+		}
+	}
+
+	/* A broken signature says more about the sender than a broken record */
+	if (has_fail) {
+		return RSPAMD_FUZZY_SF_DKIM_FAIL;
+	}
+	else if (has_permerror) {
+		return RSPAMD_FUZZY_SF_DKIM_PERMERROR;
+	}
+	else if (has_temperror) {
+		return RSPAMD_FUZZY_SF_DKIM_TEMPERROR;
+	}
+
+	return RSPAMD_FUZZY_SF_DKIM_NONE;
+}
+
+static unsigned int
+fuzzy_sf_ptr(struct rspamd_task *task)
+{
+	struct in6_addr addr_storage;
+	gsize len;
+
+	if (task->hostname == NULL || *task->hostname == '\0') {
+		/* The MTA has told us nothing about the PTR record */
+		return RSPAMD_FUZZY_SF_PTR_UNKNOWN;
+	}
+
+	len = strlen(task->hostname);
+
+	if (*task->hostname == '[' || strcmp(task->hostname, "unknown") == 0 ||
+		rspamd_parse_inet_address_ip4((const unsigned char *) task->hostname,
+									  len, &addr_storage) ||
+		rspamd_parse_inet_address_ip6((const unsigned char *) task->hostname,
+									  len, &addr_storage)) {
+		/* This is how MTAs spell out `there is no usable PTR record` */
+		return RSPAMD_FUZZY_SF_PTR_NONE;
+	}
+
+	/*
+	 * An MTA only hands us a name (Postfix client_name, Exim
+	 * sender_host_name, Sendmail connect hostname) once it has checked that
+	 * the name resolves back to the connecting address; if that check fails it
+	 * reports one of the forms handled above instead. So a plain name here
+	 * means forward confirmed.
+	 *
+	 * RSPAMD_FUZZY_SF_PTR_PRESENT is therefore not produced yet: it is for the
+	 * day rspamd resolves the PTR record on its own.
+	 */
+	return RSPAMD_FUZZY_SF_PTR_CONFIRMED;
+}
+
+static unsigned int
+fuzzy_sf_rcpts(struct rspamd_task *task)
+{
+	unsigned int nrcpt = 0;
+
+	if (task->rcpt_envelope != NULL) {
+		nrcpt = task->rcpt_envelope->len;
+	}
+
+	if (MESSAGE_FIELD_CHECK(task, rcpt_mime) != NULL &&
+		MESSAGE_FIELD(task, rcpt_mime)->len > nrcpt) {
+		nrcpt = MESSAGE_FIELD(task, rcpt_mime)->len;
+	}
+
+	/* Buckets only: an exact count would leak the size of the organisation */
+	if (nrcpt <= 1) {
+		return RSPAMD_FUZZY_SF_RCPTS_ONE;
+	}
+	else if (nrcpt <= 5) {
+		return RSPAMD_FUZZY_SF_RCPTS_FEW;
+	}
+	else if (nrcpt <= 20) {
+		return RSPAMD_FUZZY_SF_RCPTS_MANY;
+	}
+
+	return RSPAMD_FUZZY_SF_RCPTS_BULK;
+}
+
+static uint32_t
+fuzzy_cmd_sender_facts(struct rspamd_task *task)
+{
+	return rspamd_fuzzy_sf_pack(
+		fuzzy_sf_from_str(rspamd_mempool_get_variable(task->task_pool,
+													  RSPAMD_MEMPOOL_SPF_RESULT),
+						  rspamd_fuzzy_sf_spf_str,
+						  RSPAMD_FUZZY_SF_SPF_TEMPERROR),
+		fuzzy_sf_dkim(task),
+		fuzzy_sf_from_str(rspamd_mempool_get_variable(task->task_pool,
+													  RSPAMD_MEMPOOL_DMARC_RESULT),
+						  rspamd_fuzzy_sf_dmarc_str,
+						  RSPAMD_FUZZY_SF_DMARC_TEMPERROR),
+		fuzzy_sf_ptr(task),
+		/*
+		 * The generic/dynamic name heuristic needs the pattern set that
+		 * currently lives as an inline map inside hfilter.lua, so the bit is
+		 * written as zero until that set is shared
+		 */
+		FALSE,
+		fuzzy_sf_rcpts(task),
+		(task->flags & RSPAMD_TASK_FLAG_SSL) != 0);
+}
+
 static unsigned int
 fuzzy_cmd_extension_length(struct rspamd_task *task,
 						   struct fuzzy_rule *rule)
@@ -3617,6 +3804,9 @@ fuzzy_cmd_extension_length(struct rspamd_task *task,
 	else if (task->from_addr && rspamd_inet_address_get_af(task->from_addr) == AF_INET6) {
 		total += sizeof(struct in6_addr) + 1;
 	}
+
+	/* Sender facts: type + length + payload */
+	total += 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN;
 
 	return total;
 }
@@ -3691,6 +3881,18 @@ fuzzy_cmd_write_extensions(struct rspamd_task *task,
 			available -= klen + 1;
 			written += klen + 1;
 		}
+	}
+
+	if (available >= 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN) {
+		uint32_t facts = GUINT32_TO_BE(fuzzy_cmd_sender_facts(task));
+
+		*dest++ = RSPAMD_FUZZY_EXT_SENDER_FACTS;
+		*dest++ = RSPAMD_FUZZY_SENDER_FACTS_LEN;
+		memcpy(dest, &facts, sizeof(facts));
+		dest += sizeof(facts);
+
+		available -= 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN;
+		written += 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN;
 	}
 
 	return written;
