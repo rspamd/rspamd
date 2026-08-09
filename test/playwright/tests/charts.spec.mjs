@@ -58,6 +58,10 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
     });
 
     test("History global search filters rows client-side", async () => {
+        // Two network scans + a history fetch + several debounced client-side
+        // filter cycles exceed the global 30 s budget under webkit/CI load
+        // (cf. scan.spec throughput test, which overrides to 140 s).
+        test.setTimeout(60000);
         // Seed two messages with distinct subjects. The body URL tends to produce
         // option-bearing symbols, exercised in the option-search step below.
         await page.locator("#scan_nav").click();
