@@ -14,6 +14,18 @@ Sender Facts Are Sent For A Remote Sender
   Should Contain  ${extensions}  tls=false
   Should Contain  ${extensions}  ptr_generic=false
 
+Generic PTR Name Is Reported From The Hfilter Pattern Set
+  ${extensions} =  Scan And Read Fuzzy Extensions  IP=8.8.8.8  From=foo@example.com
+  ...  Hostname=dsl-pool-8-8-8-8.example.com
+  Should Contain  ${extensions}  ptr=confirmed
+  Should Contain  ${extensions}  ptr_generic=true
+
+Regular PTR Name Is Not Reported As Generic
+  ${extensions} =  Scan And Read Fuzzy Extensions  IP=8.8.8.8  From=foo@example.com
+  ...  Hostname=mail.example.com
+  Should Contain  ${extensions}  ptr=confirmed
+  Should Contain  ${extensions}  ptr_generic=false
+
 Extensions Are Suppressed For A Local Sender
   ${extensions} =  Scan And Read Fuzzy Extensions  IP=127.0.0.1  From=foo@example.com
   Should Contain  ${extensions}  extensions=none

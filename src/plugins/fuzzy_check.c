@@ -3074,6 +3074,8 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 													   "FUZZY_CALLBACK", "DKIM_CHECK", FALSE);
 				rspamd_symcache_add_delayed_dependency(cfg->cache,
 													   "FUZZY_CALLBACK", "DMARC_CHECK", FALSE);
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "HFILTER_CHECK", FALSE);
 				break;
 			}
 		}
@@ -3724,6 +3726,19 @@ fuzzy_sf_ptr(struct rspamd_task *task)
 	return RSPAMD_FUZZY_SF_PTR_CONFIRMED;
 }
 
+/*
+ * hfilter owns the generic/dynamic naming pattern set and publishes its
+ * verdict, so we do not have to carry a second copy of those patterns here
+ */
+static gboolean
+fuzzy_sf_ptr_generic(struct rspamd_task *task)
+{
+	gboolean *generic = rspamd_mempool_get_variable(task->task_pool,
+													RSPAMD_MEMPOOL_HOSTNAME_GENERIC);
+
+	return generic != NULL && *generic;
+}
+
 static unsigned int
 fuzzy_sf_rcpts(struct rspamd_task *task)
 {
@@ -3766,12 +3781,7 @@ fuzzy_cmd_sender_facts(struct rspamd_task *task)
 						  rspamd_fuzzy_sf_dmarc_str,
 						  RSPAMD_FUZZY_SF_DMARC_TEMPERROR),
 		fuzzy_sf_ptr(task),
-		/*
-		 * The generic/dynamic name heuristic needs the pattern set that
-		 * currently lives as an inline map inside hfilter.lua, so the bit is
-		 * written as zero until that set is shared
-		 */
-		FALSE,
+		fuzzy_sf_ptr_generic(task),
 		fuzzy_sf_rcpts(task),
 		(task->flags & RSPAMD_TASK_FLAG_SSL) != 0);
 }
