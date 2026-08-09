@@ -993,6 +993,76 @@ fuzzy_peer_send_io(EV_P_ ev_io *w, int revents)
 	fuzzy_peer_request_release(up_req);
 }
 
+/*
+ * Decodes the sender facts bit field and sets the `sender` field of the
+ * extensions table that must be on the top of the stack.
+ *
+ * Values are pushed as strings: a handler should not need to reimplement this
+ * table and the raw numbers mean nothing in a log line. Fields that the sender
+ * facts describe as absent or unknown are not set at all.
+ */
+static void
+rspamd_fuzzy_sender_facts_tolua(lua_State *L,
+								struct rspamd_fuzzy_cmd_extension *ext)
+{
+	uint32_t val;
+	unsigned int cls;
+	const char *str;
+
+	/* The parser rejects any other length, this is merely belt and braces */
+	if (ext->length < RSPAMD_FUZZY_SENDER_FACTS_LEN) {
+		return;
+	}
+
+	memcpy(&val, ext->payload, sizeof(val));
+	val = GUINT32_FROM_BE(val);
+	cls = (val >> RSPAMD_FUZZY_SENDER_FACTS_CLASS_SHIFT) &
+		  RSPAMD_FUZZY_SENDER_FACTS_CLASS_MASK;
+
+	if (cls != RSPAMD_FUZZY_SENDER_FACTS_CLASS_V0) {
+		/* Some future layout we know nothing about */
+		return;
+	}
+
+	lua_createtable(L, 0, 7);
+
+	if ((str = rspamd_fuzzy_sf_spf_str((val >> RSPAMD_FUZZY_SF_SPF_SHIFT) &
+									   RSPAMD_FUZZY_SF_SPF_MASK)) != NULL) {
+		lua_pushstring(L, str);
+		lua_setfield(L, -2, "spf");
+	}
+
+	if ((str = rspamd_fuzzy_sf_dkim_str((val >> RSPAMD_FUZZY_SF_DKIM_SHIFT) &
+										RSPAMD_FUZZY_SF_DKIM_MASK)) != NULL) {
+		lua_pushstring(L, str);
+		lua_setfield(L, -2, "dkim");
+	}
+
+	if ((str = rspamd_fuzzy_sf_dmarc_str((val >> RSPAMD_FUZZY_SF_DMARC_SHIFT) &
+										 RSPAMD_FUZZY_SF_DMARC_MASK)) != NULL) {
+		lua_pushstring(L, str);
+		lua_setfield(L, -2, "dmarc");
+	}
+
+	if ((str = rspamd_fuzzy_sf_ptr_str((val >> RSPAMD_FUZZY_SF_PTR_SHIFT) &
+									   RSPAMD_FUZZY_SF_PTR_MASK)) != NULL) {
+		lua_pushstring(L, str);
+		lua_setfield(L, -2, "ptr");
+	}
+
+	lua_pushboolean(L, (val >> RSPAMD_FUZZY_SF_PTR_GENERIC_SHIFT) & 1u);
+	lua_setfield(L, -2, "ptr_generic");
+
+	lua_pushstring(L, rspamd_fuzzy_sf_rcpts_str((val >> RSPAMD_FUZZY_SF_RCPTS_SHIFT) &
+												RSPAMD_FUZZY_SF_RCPTS_MASK));
+	lua_setfield(L, -2, "rcpts");
+
+	lua_pushboolean(L, (val >> RSPAMD_FUZZY_SF_TLS_SHIFT) & 1u);
+	lua_setfield(L, -2, "tls");
+
+	lua_setfield(L, -2, "sender");
+}
+
 static void
 rspamd_fuzzy_extensions_tolua(lua_State *L,
 							  struct fuzzy_session *session)
@@ -1020,6 +1090,9 @@ rspamd_fuzzy_extensions_tolua(lua_State *L,
 			rspamd_lua_ip_push(L, addr);
 			rspamd_inet_address_free(addr);
 			lua_setfield(L, -2, "ip");
+			break;
+		case RSPAMD_FUZZY_EXT_SENDER_FACTS:
+			rspamd_fuzzy_sender_facts_tolua(L, ext);
 			break;
 		}
 	}
@@ -1824,140 +1897,6 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 
 
 static gboolean
-rspamd_fuzzy_extensions_from_wire(struct fuzzy_session *s, unsigned char *buf, gsize buflen)
-{
-	struct rspamd_fuzzy_cmd_extension *ext, *prev_ext;
-	unsigned char *storage, *p = buf, *end = buf + buflen;
-	gsize st_len = 0, n_ext = 0;
-
-	/* Read number of extensions to allocate array */
-	while (p < end) {
-		unsigned char cmd = *p++;
-
-		if (p < end) {
-			if (cmd == RSPAMD_FUZZY_EXT_SOURCE_DOMAIN) {
-				/* Next byte is buf length */
-				unsigned char dom_len = *p++;
-
-				if (dom_len <= (end - p)) {
-					st_len += dom_len;
-					n_ext++;
-				}
-				else {
-					/* Truncation */
-					return FALSE;
-				}
-
-				p += dom_len;
-			}
-			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP4) {
-				if (end - p >= sizeof(in_addr_t)) {
-					n_ext++;
-					st_len += sizeof(in_addr_t);
-				}
-				else {
-					/* Truncation */
-					return FALSE;
-				}
-
-				p += sizeof(in_addr_t);
-			}
-			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP6) {
-				if (end - p >= sizeof(struct in6_addr)) {
-					n_ext++;
-					st_len += sizeof(struct in6_addr);
-				}
-				else {
-					/* Truncation */
-					return FALSE;
-				}
-
-				p += sizeof(struct in6_addr);
-			}
-			else {
-				/* Invalid command */
-				return FALSE;
-			}
-		}
-		else {
-			/* Truncated extension */
-			return FALSE;
-		}
-	}
-
-	if (n_ext > 0) {
-		p = buf;
-		/*
-		 * Memory layout: n_ext of struct rspamd_fuzzy_cmd_extension
-		 *                payload for each extension in a continuous data segment
-		 */
-		storage = g_malloc(n_ext * sizeof(struct rspamd_fuzzy_cmd_extension) +
-						   st_len);
-
-		unsigned char *data_buf = storage +
-								  n_ext * sizeof(struct rspamd_fuzzy_cmd_extension);
-		ext = (struct rspamd_fuzzy_cmd_extension *) storage;
-
-		/* All validation has been done, so we can just go further */
-		while (p < end) {
-			prev_ext = ext;
-			unsigned char cmd = *p++;
-
-			if (cmd == RSPAMD_FUZZY_EXT_SOURCE_DOMAIN) {
-				/* Next byte is buf length */
-				unsigned char dom_len = *p++;
-				unsigned char *dest = data_buf;
-
-				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_DOMAIN;
-				ext->next = ext + 1;
-				ext->length = dom_len;
-				ext->payload = dest;
-				memcpy(dest, p, dom_len);
-				p += dom_len;
-				data_buf += dom_len;
-				ext = ext->next;
-			}
-			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP4) {
-				unsigned char *dest = data_buf;
-
-				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_IP4;
-				ext->next = ext + 1;
-				ext->length = sizeof(in_addr_t);
-				ext->payload = dest;
-				memcpy(dest, p, sizeof(in_addr_t));
-				p += sizeof(in_addr_t);
-				data_buf += sizeof(in_addr_t);
-				ext = ext->next;
-			}
-			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP6) {
-				unsigned char *dest = data_buf;
-
-				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_IP6;
-				ext->next = ext + 1;
-				ext->length = sizeof(struct in6_addr);
-				ext->payload = dest;
-				memcpy(dest, p, sizeof(struct in6_addr));
-				p += sizeof(struct in6_addr);
-				data_buf += sizeof(struct in6_addr);
-				ext = ext->next;
-			}
-			else {
-				g_assert_not_reached();
-			}
-		}
-
-		/* Last next should be NULL */
-		prev_ext->next = NULL;
-
-		/* Rewind to the begin */
-		ext = (struct rspamd_fuzzy_cmd_extension *) storage;
-		s->extensions = ext;
-	}
-
-	return TRUE;
-}
-
-static gboolean
 rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy_session *s)
 {
 	enum rspamd_fuzzy_epoch epoch;
@@ -2044,8 +1983,9 @@ rspamd_fuzzy_cmd_from_wire(unsigned char *buf, unsigned int buflen, struct fuzzy
 
 	if (buflen > 0) {
 		/* Process possible extensions */
-		if (!rspamd_fuzzy_extensions_from_wire(s, buf, buflen)) {
-			msg_debug("truncated fuzzy shingles command of size %d received", buflen);
+		if (!rspamd_fuzzy_extensions_from_wire(buf, buflen, &s->extensions)) {
+			msg_debug("malformed extensions in a fuzzy command of size %d received",
+					  buflen);
 			return FALSE;
 		}
 	}
