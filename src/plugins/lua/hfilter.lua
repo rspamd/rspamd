@@ -225,6 +225,7 @@ end
 local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local failed_address = 0
   local completed_address = 0
+  local address_lookup_failed = false
   local resolved_address = {}
 
   local function check_host_cb_mx(_, to_resolve, results, err)
@@ -264,9 +265,15 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       end
     end
   end
-  local function check_host_cb_a(_, _, results)
+  local function check_host_cb_a(_, to_resolve, results, err)
     if not results then
-      failed_address = failed_address + 1
+      if err and (err ~= 'requested record is not found' and
+          err ~= 'no records with this name') then
+        lua_util.debugm(N, task, 'error looking up %s: %s', to_resolve, err)
+        address_lookup_failed = true
+      else
+        failed_address = failed_address + 1
+      end
     else
       for _, result in pairs(results) do
         table.insert(resolved_address, result:to_string())
@@ -283,7 +290,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       return
     end
 
-    if eq_ip and eq_ip ~= '' then
+    if not address_lookup_failed and eq_ip and eq_ip ~= '' then
       local matched = false
       for _, result in pairs(resolved_address) do
         if result == eq_ip then
@@ -298,7 +305,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       end
     end
 
-    if failed_address >= 2 then
+    if not address_lookup_failed and failed_address >= 2 then
       -- No A or AAAA records
       task:get_resolver():resolve_mx({
         task = task,

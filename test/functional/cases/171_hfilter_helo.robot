@@ -53,3 +53,9 @@ HELO with no address records keeps being flagged
   Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=noaddr.test  Settings=${SETTINGS}
   Expect Symbol With Score  HFILTER_HELO_IP_A  1.00
   Expect Symbol  HFILTER_HELO_NORES_A_OR_MX
+
+# A timeout is not an authoritative absence: the failed A lookup could contain
+# the connecting IP, so the nonmatching AAAA answer cannot prove a mismatch.
+HELO with one transiently failed family is not flagged
+  Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=partialfail.test  Settings=${SETTINGS}
+  Do Not Expect Symbol  HFILTER_HELO_IP_A
