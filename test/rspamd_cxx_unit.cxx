@@ -25,6 +25,7 @@
 #include "rspamd_cxx_unit_maps.hxx"
 #include "rspamd_cxx_local_ptr.hxx"
 #include "rspamd_cxx_unit_dkim.hxx"
+#include "rspamd_cxx_unit_fuzzy_wire.hxx"
 #include "rspamd_cxx_unit_cryptobox.hxx"
 #include "rspamd_cxx_unit_rfc2047.hxx"
 #include "rspamd_cxx_unit_html_url_rewrite.hxx"
