@@ -130,7 +130,7 @@ end
   ret, res = conn:exec()
 
   if not ret then
-    logger.errx('error converting metadata for symbol %s', symbol_ham, res)
+    logger.errx('error converting metadata for symbol %s: %s', symbol_ham, res)
     return false
   end
 

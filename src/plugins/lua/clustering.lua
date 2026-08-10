@@ -249,7 +249,7 @@ local function clusterting_idempotent_cb(task, rule)
           source_selector, err)
     else
       lua_util.debugm(N, task, 'set clustering key for %s: %s{%s} = %s',
-          source_selector, "unknown error")
+          rule.name, source_selector, cluster_selector, score)
     end
   end
 
