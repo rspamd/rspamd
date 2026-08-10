@@ -1221,7 +1221,13 @@ void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
 			if ((url->flags & cb->flags_exclude_mask) != 0) {
 				return;
 			}
-			if ((url->flags & cb->flags_mask) == 0) {
+			/*
+			 * `flags_mask` is set to ~0U when no include list has been given,
+			 * meaning "include everything". A plain bitwise test would still
+			 * drop urls that carry no flags at all (e.g. urls found in html
+			 * parts), so only apply the include filter when one was requested.
+			 */
+			if (cb->flags_mask != ~0U && (url->flags & cb->flags_mask) == 0) {
 				return;
 			}
 			break;
