@@ -141,10 +141,33 @@ local function graphite_push(kwargs)
   })
 end
 
+local function none_config()
+  load_defaults({
+    host = 'localhost',
+    port = 0,
+    metric_prefix = 'rspamd'
+  })
+  return validate_metrics(settings['metrics'])
+end
+
+local function none_push(kwargs)
+  local stamp
+  if kwargs['time'] then
+    stamp = math.floor(kwargs['time'])
+  else
+    stamp = math.floor(util.get_time())
+  end
+  pool:set_variable(VAR_NAME, stamp)
+end
+
 local backends = {
   graphite = {
     configure = graphite_config,
     push = graphite_push,
+  },
+  none = {
+    configure = none_config,
+    push = none_push,
   },
 }
 
