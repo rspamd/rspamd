@@ -978,9 +978,16 @@ local function collect_features_async(task, rule, profile_or_set, phase, cb)
   local function maybe_finish()
     remaining = remaining - 1
     if remaining == 0 then
-      -- Fuse
+      -- Fuse. `vectors` is sparse — a provider that failed (or was never
+      -- registered) leaves its slot nil — so iterate the slot RANGE, never
+      -- ipairs(): ipairs stops at the first hole and would silently drop
+      -- every later provider's block (observed live: an unregistered slot-1
+      -- text provider discarded the collected structured + metatokens
+      -- vectors and inference went dark with an empty fused vector).
       local fused = {}
-      for i, v in ipairs(vectors) do
+      local nslots = #providers_cfg + 1 -- + the trailing metatokens slot
+      for i = 1, nslots do
+        local v = vectors[i]
         if v then
           local w = (metas[i] and metas[i].weight) or 1.0
           local norm_mode = (rule.fusion and rule.fusion.normalization) or 'none'
