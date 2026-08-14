@@ -569,7 +569,18 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		msg_debug_cache_task("execute %s, %d; symbol type = %s", item->symbol.data(),
 							 item->id, item_type_to_str(item->type));
 
-		if (profile) {
+		/*
+		 * Stamp the start under the SAME condition finalize_item measures
+		 * with (profile || bit_slow). Stamping under `profile` alone left
+		 * start_msec at 0 on every non-profiled task once an item had been
+		 * flagged slow: finalize then computed diff from the TASK start, so
+		 * any DNS-bound or deadline-hitting scan was logged as a multi-second
+		 * "slow synchronous rule" against that item — phantom slowness that
+		 * also shifted pending items' start corrections by whole-scan
+		 * amounts. One genuinely slow profiled call was enough to make the
+		 * flagged rule blamed for every slow scan thereafter.
+		 */
+		if (profile || (item->flags & cache_item::bit_slow)) {
 			ev_now_update_if_cheap(task->event_loop);
 			dyn_item->start_msec = (ev_now(task->event_loop) -
 									profile_start) *
