@@ -75,9 +75,18 @@ exports.load_model = function(dir)
 end
 
 -- Extract words exactly like fasttext_embed does
-local function extract_words(task, opts)
-  local words = {}
+-- Append the message's words to `words`, up to opts.max_words TOTAL entries
+-- (0/absent = unbounded). The cap bounds the Lua-side materialisation and the
+-- embedding cost: without it a multi-megabyte text part turns into a
+-- million-entry Lua string table plus a mean-pool over every token — observed
+-- at hundreds of ms per extra megabyte inside a synchronous rule. A mean over
+-- the first few hundred words is statistically indistinguishable for
+-- classification, but pick the cap consciously: it changes the vectors of
+-- long texts, so train and inference must agree on it.
+local function extract_words(task, opts, words)
+  words = words or {}
   local how = opts.word_form or 'norm'
+  local cap = tonumber(opts.max_words) or 0
 
   local parts
   if opts.all_parts then
@@ -101,6 +110,9 @@ local function extract_words(task, opts)
       for _, w in ipairs(pw) do
         if type(w) == 'string' and #w > 0 then
           words[#words + 1] = w
+          if cap > 0 and #words >= cap then
+            return words
+          end
         end
       end
     end
@@ -140,21 +152,25 @@ if neural_ok then
         return
       end
 
-      local words = extract_words(task, {
-        word_form = pcfg.word_form or 'norm',
-        all_parts = pcfg.all_parts,
-      })
-
-      -- Optionally prepend subject words; case/punctuation are handled by
-      -- the model's own normalizer, so no extra preprocessing is needed
+      -- Subject words go FIRST (kept from the original prepend semantics),
+      -- so seed the table with them and let extract_words append the body
+      -- up to the cap. The old `table.insert(words, 1, w)` prepend was
+      -- O(#words) per subject word — a ten-word subject over a large
+      -- message's word table meant millions of element shifts.
+      local words = {}
       if pcfg.include_subject ~= false then
         local subj = task:get_subject()
         if subj and #subj > 0 then
           for w in subj:gmatch('%S+') do
-            table.insert(words, 1, w)
+            words[#words + 1] = w
           end
         end
       end
+      extract_words(task, {
+        word_form = pcfg.word_form or 'norm',
+        all_parts = pcfg.all_parts,
+        max_words = pcfg.max_words,
+      }, words)
 
       -- Empty input produces a zero vector: dimensionality stays stable
       local vec, ntokens = model:get_sentence_vector(words)
