@@ -2075,8 +2075,7 @@ rspamd_controller_handle_history_reset(struct rspamd_http_connection_entry *conn
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
-	struct roll_history_row *row;
-	unsigned int completed_rows, i, t;
+	unsigned int completed_rows;
 	lua_State *L;
 
 	ctx = session->ctx;
@@ -2087,22 +2086,21 @@ rspamd_controller_handle_history_reset(struct rspamd_http_connection_entry *conn
 	}
 
 	if (ctx->srv->history && !ctx->srv->history->disabled) {
-		/* Clean from start to the current row */
-		completed_rows = g_atomic_int_get(&ctx->srv->history->cur_row);
-
-		completed_rows = MIN(completed_rows, ctx->srv->history->nrows - 1);
-
-		for (i = 0; i <= completed_rows; i++) {
-			t = g_atomic_int_get(&ctx->srv->history->cur_row);
-
-			/* We somehow come to the race condition */
-			if (i > t) {
-				break;
-			}
-
-			row = &ctx->srv->history->rows[i];
-			memset(row, 0, sizeof(*row));
-		}
+		/*
+		 * Clear the whole ring buffer and reset the current row pointer.
+		 * History is lock-free by design: writers (rspamd_roll_history_update)
+		 * claim a slot via atomic cur_row and gate visibility with the
+		 * per-row `completed` flag, set last. This memset therefore races
+		 * with a concurrent writer, just like the unlocked memcpy in the
+		 * read path and the original "optimistic" reset. A row being updated
+		 * during the memset may briefly look torn, but every fully-stale row
+		 * stays hidden once its `completed` flag is zeroed. Reset is
+		 * inherently destructive, so this race is an accepted trade-off.
+		 */
+		memset(ctx->srv->history->rows, 0,
+			   sizeof(struct roll_history_row) * ctx->srv->history->nrows);
+		g_atomic_int_set(&ctx->srv->history->cur_row, 0);
+		completed_rows = ctx->srv->history->nrows;
 
 		msg_info_session("<%s> cleared %d entries from history",
 						 rspamd_inet_address_to_string(session->from_addr),
