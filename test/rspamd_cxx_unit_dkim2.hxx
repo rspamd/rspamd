@@ -131,6 +131,20 @@ TEST_SUITE("rspamd_dkim2")
 		CHECK(sig2->sigs.size() == 2);
 		CHECK(sig2->sigs[1].selector == "b");
 
+		std::string too_many_sets;
+		for (std::size_t i = 0; i <= DKIM2_MAX_SIG_SETS_PER_HOP; i++) {
+			if (!too_many_sets.empty()) {
+				too_many_sets.push_back(',');
+			}
+			too_many_sets.append("s");
+			too_many_sets.append(std::to_string(i));
+			too_many_sets.append(":rsa-sha256:" DKIM2_TEST_SIG);
+		}
+		auto sig_too_many = parse_sig("i=1; m=1; mf=" DKIM2_TEST_MF
+									  "; rt=" DKIM2_TEST_RT "; d=example.com; s=" +
+									  too_many_sets);
+		CHECK(!sig_too_many.has_value());
+
 		/* FWS inside base64 values is tolerated (folded header remnants) */
 		auto sig3 = parse_sig("i=1; m=1; mf=PGJvdW5jZUBleGFt cGxlLmNvbT4=; rt=" DKIM2_TEST_RT
 							  "; d=example.com; s=a:rsa-sha256:" DKIM2_TEST_SIG);

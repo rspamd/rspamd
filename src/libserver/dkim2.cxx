@@ -310,6 +310,11 @@ parse_sig_sets(std::string_view value) -> tl::expected<std::vector<sig_set_t>, s
 		if (!err.empty()) {
 			return;
 		}
+		if (res.size() >= DKIM2_MAX_SIG_SETS_PER_HOP) {
+			err = fmt::format("too many signature sets (max {})",
+							  DKIM2_MAX_SIG_SETS_PER_HOP);
+			return;
+		}
 
 		/* sig-set = selector ":" sig-name ":" message-sig */
 		std::vector<std::string_view> parts;
@@ -1117,9 +1122,17 @@ dkim2_validate_chain(rspamd_dkim2_chain_s *chain) -> tl::expected<void, std::str
 	}
 
 	unsigned int prev_m = 0;
+	std::size_t nsig_sets = 0;
 
 	for (std::size_t k = 0; k < chain->sigs.size(); k++) {
 		const auto &sig = chain->sigs[k].parsed;
+		nsig_sets += sig.sigs.size();
+
+		if (nsig_sets > DKIM2_MAX_SIG_SETS_TOTAL) {
+			return tl::make_unexpected(fmt::format(
+				"too many signature sets in DKIM2 chain (max {})",
+				DKIM2_MAX_SIG_SETS_TOTAL));
+		}
 
 		if (sig.i != k + 1) {
 			return tl::make_unexpected(fmt::format(
@@ -2101,11 +2114,11 @@ bool rspamd_dkim2_chain_verify(rspamd_dkim2_chain_t *chain,
 		cbd->chain = chain;
 		cbd->dns_name = rspamd_mempool_strdup(task->task_pool, kv.first.c_str());
 
-		if (rspamd_dns_resolver_request_task_forced(task,
-													dkim2_dns_key_cb,
-													cbd,
-													RDNS_REQUEST_TXT,
-													cbd->dns_name)) {
+		if (rspamd_dns_resolver_request_task(task,
+											 dkim2_dns_key_cb,
+											 cbd,
+											 RDNS_REQUEST_TXT,
+											 cbd->dns_name)) {
 			scheduled++;
 		}
 		else {

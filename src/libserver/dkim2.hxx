@@ -37,6 +37,9 @@
 
 namespace rspamd::dkim2 {
 
+constexpr std::size_t DKIM2_MAX_SIG_SETS_PER_HOP = 8;
+constexpr std::size_t DKIM2_MAX_SIG_SETS_TOTAL = 64;
+
 /* f= tag flags */
 constexpr unsigned int DKIM2_SIG_FLAG_DONOTMODIFY = (1u << 0u);
 constexpr unsigned int DKIM2_SIG_FLAG_DONOTEXPLODE = (1u << 1u);
