@@ -1,3 +1,43 @@
+4.1.5: 14 Aug 2026
+
+  ** Incompatible changes **
+  * [Rework] gpt: Return only a boolean from the condition callback (request content generation moved into gpt_check)
+  * [Conf] Ship explicit allow_file_and_shm_inputs = true defaults for the normal, controller and proxy workers (the default becomes false in the next major release)
+
+  ** Features **
+  * [Feature] fuzzy: Share sender facts (SPF, DKIM, DMARC, PTR state, recipient bucket, TLS) with storages over encrypted rules
+  * [Feature] mime: Decode PDF simple font text via the font's /Encoding (Annex D base encodings and /Differences overrides)
+  * [Feature] mime: Parse PDF /ToUnicode CMaps and decode composite (Type0) fonts
+  * [Feature] elastic: Structured fuzzy match results and message size in the schema
+
+  ** Bug fixes **
+  * [CritFix] protocol: Gate File/Path/Shm message sources behind allow_file_and_shm_inputs (any TCP client could have arbitrary files parsed)
+  * [Fix] controller: Rate limit authentication failures per source (max_auth_failures)
+  * [Fix] fuzzy: Per-key forbidden_ids replaces the default set instead of adding to it
+  * [Fix] fuzzy: Apply the per-key ACL to delayed v1 replies
+  * [Fix] fuzzy: Skip unknown wire extension types instead of rejecting the whole command
+  * [Fix] fuzzy: Do not share extensions for authenticated senders, own networks or plain text rules
+  * [Fix] neural: Bound static_embed word extraction with max_words and drop the quadratic subject prepend
+  * [Fix] neural: Fuse over the provider slot range, so one missing provider does not discard the rest
+  * [Fix] symcache: Stamp slow-rule start under the same condition it is measured (phantom slow-rule warnings)
+  * [Fix] hfilter: Compare HELO addresses against the connecting IP, ignoring transient lookup failures
+  * [Fix] html: Treat a schemeless email href as mailto, not http userinfo (spurious URL_USER_PASSWORD)
+  * [Fix] lua_url: Do not drop flagless URLs when all flags are included
+  * [Fix] lua_mime: Unwind every boundary level when returning from nested parts in all rewriters
+  * [Fix] lua_content/pdf: Keep TJ positioning gaps out of the character code stream
+  * [Fix] lua_content/pdf: Keep inline /Resources dictionaries, so page fonts are visible
+  * [Fix] lua_content/pdf: Drop the font-blind ligature substitution
+  * [Fix] mime: Store CMap codes with their byte width to avoid collisions
+  * [Fix] mime: Refuse a CMap that inherits from another instead of returning partial text
+  * [Fix] mime: Keep computed text parts raw and resolve CED charset names through the alias table
+  * [Fix] mime: Restrict the EUC-TW misnomer aliases to CED output
+  * [Fix] hyperscan: Make the cache usable with a Redis backend (replica reads, null replies, maps read after fork)
+  * [Fix] hyperscan: Do not fetch a database that is already installed
+  * [Fix] arc: Score ARC_ALLOW_TRUSTED at most once
+  * [Fix] history: Clear all rows on reset in both the legacy ring buffer and the Redis backend
+  * [Fix] WebUI: Search symbol option values
+  * [Fix] lua: Fix logger format string and argument mismatches
+
 4.1.4: 29 Jul 2026
 
   ** Incompatible changes **
