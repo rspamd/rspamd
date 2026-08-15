@@ -148,8 +148,9 @@ auto parse_recipe(std::string_view json, const recipe_limits_t &limits)
  * instances of one name, index 0 corresponding to element number 1) producing
  * the previous state. Output views point into `current` elements or into the
  * data strings of the owning recipe_t, which must outlive the result.
- * `budget` is the shared output allowance in bytes for the whole chain; it is
- * decremented by every emitted byte and the application fails when exhausted.
+ * `budget` is the shared work allowance in bytes for the whole chain. Recipe
+ * application charges every emitted byte; reconstructed-state hashing charges
+ * the same budget separately.
  */
 auto apply_recipe_steps(const std::vector<std::string_view> &current,
 						const std::vector<recipe_step_t> &steps,

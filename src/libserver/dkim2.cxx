@@ -1002,9 +1002,9 @@ struct dkim2_key_slot {
 constexpr unsigned int DKIM2_DEFAULT_MAX_AGE = 14 * 24 * 3600;
 
 /*
- * Shared output budget for recipe application across the whole chain:
- * proportional to the message size with a floor and a hard ceiling. This is
- * the main protection against copy-step amplification bombs.
+ * Shared work budget for recipe application and reconstructed-state hashing
+ * across the whole chain. It is proportional to the message size with a floor
+ * and a hard ceiling.
  */
 constexpr std::size_t DKIM2_RECIPE_MIN_BUDGET = 1024 * 1024;
 constexpr std::size_t DKIM2_RECIPE_MAX_BUDGET = 64 * 1024 * 1024;
@@ -1438,12 +1438,21 @@ dkim2_build_current_state(struct rspamd_task *task,
  * Compute the header and body hashes (Sections 5.1, 5.2) of a reconstructed
  * message state; both digests are SHA256 (32 bytes)
  */
-static void
+static bool
 dkim2_hash_state(const dkim2_msg_state &state,
 				 unsigned char *hdr_digest,
-				 unsigned char *body_digest)
+				 unsigned char *body_digest,
+				 std::size_t &work_budget)
 {
 	auto *md_ctx = EVP_MD_CTX_new();
+	auto consume_work = [&](std::size_t amount) -> bool {
+		if (amount > work_budget) {
+			return false;
+		}
+
+		work_budget -= amount;
+		return true;
+	};
 
 	/* Header hash: names alphabetically, instances bottom-up within a name */
 	using hdr_entry_t = std::pair<std::string, std::vector<std::string_view>>;
@@ -1466,6 +1475,12 @@ dkim2_hash_state(const dkim2_msg_state &state,
 	for (const auto *entry: entries) {
 		for (auto value: entry->second) {
 			auto line = canon_hash_line(entry->first, value);
+
+			if (!consume_work(line.size())) {
+				EVP_MD_CTX_free(md_ctx);
+				return false;
+			}
+
 			EVP_DigestUpdate(md_ctx, line.data(), line.size());
 		}
 	}
@@ -1482,11 +1497,20 @@ dkim2_hash_state(const dkim2_msg_state &state,
 	EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr);
 
 	if (nlines == 0) {
+		if (!consume_work(2)) {
+			EVP_MD_CTX_free(md_ctx);
+			return false;
+		}
+
 		EVP_DigestUpdate(md_ctx, "\r\n", 2);
 	}
 	else {
 		for (std::size_t k = 0; k < nlines; k++) {
 			const auto &line = state.body_lines[k];
+			if (!consume_work(line.size()) || !consume_work(2)) {
+				EVP_MD_CTX_free(md_ctx);
+				return false;
+			}
 
 			if (!line.empty()) {
 				EVP_DigestUpdate(md_ctx, line.data(), line.size());
@@ -1498,6 +1522,8 @@ dkim2_hash_state(const dkim2_msg_state &state,
 
 	EVP_DigestFinal_ex(md_ctx, body_digest, nullptr);
 	EVP_MD_CTX_free(md_ctx);
+
+	return true;
 }
 
 /*
@@ -1512,9 +1538,9 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 	recipe_limits_t limits;
 	auto nmis = chain->mis.size();
 
-	auto budget = std::clamp(task->msg.len * DKIM2_RECIPE_BUDGET_FACTOR,
-							 DKIM2_RECIPE_MIN_BUDGET,
-							 DKIM2_RECIPE_MAX_BUDGET);
+	auto work_budget = std::clamp(task->msg.len * DKIM2_RECIPE_BUDGET_FACTOR,
+								  DKIM2_RECIPE_MIN_BUDGET,
+								  DKIM2_RECIPE_MAX_BUDGET);
 
 	dkim2_msg_state state;
 
@@ -1583,7 +1609,7 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 
 				auto &vec = state.headers[name];
 				auto out = apply_recipe_steps(vec, part.steps,
-											  limits.max_header_instances, budget);
+											  limits.max_header_instances, work_budget);
 
 				if (!out) {
 					msg_info_dkim2("cannot apply header recipe of instance m=%z: %s",
@@ -1597,7 +1623,7 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 
 		if (r.has_body) {
 			auto out = apply_recipe_steps(state.body_lines, r.body.steps,
-										  limits.max_body_lines, budget);
+										  limits.max_body_lines, work_budget);
 
 			if (!out) {
 				msg_info_dkim2("cannot apply body recipe of instance m=%z: %s",
@@ -1618,7 +1644,12 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 		}
 
 		unsigned char hdr_digest[EVP_MAX_MD_SIZE], body_digest[EVP_MAX_MD_SIZE];
-		dkim2_hash_state(state, hdr_digest, body_digest);
+		if (!dkim2_hash_state(state, hdr_digest, body_digest, work_budget)) {
+			msg_info_dkim2("cannot hash reconstructed instance m=%z: "
+						   "recipe work budget exceeded",
+						   m - 1);
+			return;
+		}
 
 		if (memcmp(hs->header_hash.data(), hdr_digest, 32) != 0) {
 			msg_info_dkim2("header hash mismatch for reconstructed instance m=%z", m - 1);
@@ -1637,8 +1668,8 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 		}
 
 		chain->verified_instances++;
-		msg_debug_dkim2("verified reconstructed instance m=%z, budget left %z",
-						m - 1, budget);
+		msg_debug_dkim2("verified reconstructed instance m=%z, work budget left %z",
+						m - 1, work_budget);
 	}
 }
 
