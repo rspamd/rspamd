@@ -834,7 +834,7 @@ auto parse_recipe(std::string_view json, const recipe_limits_t &limits)
 											   json.size(), limits.max_recipe_len));
 	}
 
-	auto *parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS | UCL_PARSER_NO_TIME);
+	auto *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 
 	if (!ucl_parser_add_chunk(parser,
 							  reinterpret_cast<const unsigned char *>(json.data()),
