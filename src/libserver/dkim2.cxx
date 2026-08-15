@@ -1015,6 +1015,24 @@ constexpr std::size_t DKIM2_RECIPE_MIN_BUDGET = 1024 * 1024;
 constexpr std::size_t DKIM2_RECIPE_MAX_BUDGET = 64 * 1024 * 1024;
 constexpr std::size_t DKIM2_RECIPE_BUDGET_FACTOR = 8;
 
+/* Shared input-hashing budget for all hop signatures in a chain */
+constexpr std::size_t DKIM2_SIGNATURE_MIN_BUDGET = 1024 * 1024;
+constexpr std::size_t DKIM2_SIGNATURE_MAX_BUDGET = 64 * 1024 * 1024;
+constexpr std::size_t DKIM2_SIGNATURE_BUDGET_FACTOR = 16;
+
+static auto
+dkim2_bounded_budget(std::size_t message_len,
+					 std::size_t factor,
+					 std::size_t minimum,
+					 std::size_t maximum) -> std::size_t
+{
+	if (message_len > maximum / factor) {
+		return maximum;
+	}
+
+	return std::clamp(message_len * factor, minimum, maximum);
+}
+
 /*
  * A reconstructed message state: header field instances per name and body
  * lines. Views point into the original message, or into the data strings of
@@ -1070,6 +1088,7 @@ struct rspamd_dkim2_chain_s {
 	unsigned int pending = 0;
 	unsigned int ninstances = 0;
 	unsigned int verified_instances = 0;
+	std::size_t signature_work_budget = 0;
 	/* Results of the synchronous (hash, envelope, timestamp) checks */
 	enum rspamd_dkim2_result_code prelim_rcode = RSPAMD_DKIM2_PASS;
 	std::string prelim_reason;
@@ -1551,9 +1570,10 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 	recipe_limits_t limits;
 	auto nmis = chain->mis.size();
 
-	auto work_budget = std::clamp(task->msg.len * DKIM2_RECIPE_BUDGET_FACTOR,
-								  DKIM2_RECIPE_MIN_BUDGET,
-								  DKIM2_RECIPE_MAX_BUDGET);
+	auto work_budget = dkim2_bounded_budget(task->msg.len,
+											DKIM2_RECIPE_BUDGET_FACTOR,
+											DKIM2_RECIPE_MIN_BUDGET,
+											DKIM2_RECIPE_MAX_BUDGET);
 
 	dkim2_msg_state state;
 
@@ -1844,22 +1864,60 @@ dkim2_verify_one_hop(rspamd_dkim2_chain_t *chain,
 	hop->domain = rspamd_mempool_strdup(task->task_pool, sig.domain.c_str());
 	hop->selector = rspamd_mempool_strdup(task->task_pool, sig.sigs[0].selector.c_str());
 
-	/* Build the signature input: MI lines up to m=, previous sig lines, self */
-	std::vector<std::string> mi_lines, prev_lines;
-	mi_lines.reserve(sig.m);
-	prev_lines.reserve(hop_idx);
+	/* Stream the signature input and charge repeated input across all hops */
+	auto md_ctx = EVP_MD_CTX_new();
+	std::size_t input_size = 0;
+	bool budget_exceeded = false;
 
-	for (std::size_t k = 0; k < sig.m; k++) {
-		mi_lines.push_back(chain->mis[k].canon_line);
+	if (md_ctx == nullptr || EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr) != 1) {
+		EVP_MD_CTX_free(md_ctx);
+		merge_hop(RSPAMD_DKIM2_PERMERROR, "cannot initialize signature digest");
+		return;
 	}
-	for (std::size_t k = 0; k < hop_idx; k++) {
-		prev_lines.push_back(chain->sigs[k].canon_line);
+
+	auto update_digest = [&](std::string_view data) -> bool {
+		if (data.size() > chain->signature_work_budget) {
+			budget_exceeded = true;
+			return false;
+		}
+
+		chain->signature_work_budget -= data.size();
+		input_size += data.size();
+
+		return EVP_DigestUpdate(md_ctx, data.data(), data.size()) == 1;
+	};
+
+	bool digest_ok = true;
+
+	for (std::size_t k = 0; k < sig.m && digest_ok; k++) {
+		digest_ok = update_digest(chain->mis[k].canon_line);
+	}
+	for (std::size_t k = 0; k < hop_idx && digest_ok; k++) {
+		digest_ok = update_digest(chain->sigs[k].canon_line);
 	}
 
-	auto input = build_sig_input(mi_lines, prev_lines, entry.canon_line);
-	EVP_Digest(input.data(), input.size(), digest, nullptr, EVP_sha256(), nullptr);
+	auto blanked_line = blank_sig_values(entry.canon_line);
+	if (digest_ok) {
+		digest_ok = update_digest(blanked_line);
+	}
 
-	msg_debug_dkim2("hop i=%d: signature input is %z bytes", sig.i, input.size());
+	unsigned int digest_len = 0;
+	if (digest_ok) {
+		digest_ok = EVP_DigestFinal_ex(md_ctx, digest, &digest_len) == 1 &&
+					digest_len == 32;
+	}
+	EVP_MD_CTX_free(md_ctx);
+
+	if (!digest_ok) {
+		merge_hop(RSPAMD_DKIM2_PERMERROR,
+				  budget_exceeded
+					  ? "signature input work budget exceeded"
+					  : "cannot compute signature digest");
+		return;
+	}
+
+	msg_debug_dkim2("hop i=%d: signature input is %z bytes; work budget left %z",
+					sig.i, input_size, chain->signature_work_budget);
 
 	auto supported_algs = 0;
 
@@ -2071,6 +2129,10 @@ bool rspamd_dkim2_chain_verify(rspamd_dkim2_chain_t *chain,
 	chain->task = task;
 	chain->cb = cb;
 	chain->ud = ud;
+	chain->signature_work_budget = dkim2_bounded_budget(task->msg.len,
+														DKIM2_SIGNATURE_BUDGET_FACTOR,
+														DKIM2_SIGNATURE_MIN_BUDGET,
+														DKIM2_SIGNATURE_MAX_BUDGET);
 
 	if (params != nullptr) {
 		chain->params = *params;
