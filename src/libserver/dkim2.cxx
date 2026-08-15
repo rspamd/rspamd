@@ -424,6 +424,11 @@ auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string
 				if (!err.empty()) {
 					return;
 				}
+				if (res.rt.size() >= DKIM2_MAX_RT_ENTRIES) {
+					err = fmt::format("too many rt= entries (max {})",
+									  DKIM2_MAX_RT_ENTRIES);
+					return;
+				}
 				auto rcpt = b64_decode(rcpt_b64);
 				if (!rcpt) {
 					err = "invalid base64 in rt= tag";
@@ -673,26 +678,23 @@ auto smtp_addr_domain(std::string_view addr) -> std::string_view
 	return addr.substr(at_pos + 1);
 }
 
+static auto
+smtp_addr_key(std::string_view addr) -> std::string
+{
+	addr = strip_angle(addr);
+	std::string key{addr};
+	auto at_pos = key.rfind('@');
+
+	if (at_pos != std::string::npos) {
+		rspamd_str_lc(key.data() + at_pos + 1, key.size() - at_pos - 1);
+	}
+
+	return key;
+}
+
 auto smtp_addr_equal(std::string_view a, std::string_view b) -> bool
 {
-	a = strip_angle(a);
-	b = strip_angle(b);
-
-	auto at_a = a.rfind('@');
-	auto at_b = b.rfind('@');
-
-	if (at_a != at_b) {
-		return false;
-	}
-
-	if (at_a == std::string_view::npos) {
-		/* Both have no domain, e.g. null reverse-paths */
-		return a == b;
-	}
-
-	/* Local part is case-sensitive, domain is not */
-	return a.substr(0, at_a) == b.substr(0, at_b) &&
-		   eq_icase(a.substr(at_a + 1), b.substr(at_b + 1));
+	return smtp_addr_key(a) == smtp_addr_key(b);
 }
 
 auto split_body_lines(std::string_view body, std::size_t max_lines)
@@ -1766,6 +1768,13 @@ dkim2_check_envelope(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 		}
 
 		if (task->rcpt_envelope != nullptr) {
+			ankerl::unordered_dense::set<std::string> rt_index;
+			rt_index.reserve(last.rt.size());
+
+			for (const auto &rt: last.rt) {
+				rt_index.emplace(smtp_addr_key(rt));
+			}
+
 			unsigned int i;
 			struct rspamd_email_address *rcpt;
 
@@ -1776,10 +1785,7 @@ dkim2_check_envelope(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 				}
 
 				std::string_view rcpt_sv{rcpt->addr, rcpt->addr_len};
-				auto found = std::any_of(last.rt.begin(), last.rt.end(),
-										 [&](const std::string &rt) {
-											 return smtp_addr_equal(rt, rcpt_sv);
-										 });
+				auto found = rt_index.contains(smtp_addr_key(rcpt_sv));
 
 				if (!found) {
 					msg_info_dkim2("RCPT TO <%*s> not found in rt= of the last hop",
