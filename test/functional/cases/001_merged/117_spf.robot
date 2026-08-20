@@ -170,6 +170,28 @@ SPF PLUSALL
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_PLUSALL
 
+SPF PERMFAIL MULTIPLE RECORDS
+  [Documentation]  RFC 7208 4.5: more than one SPF record yields permerror. An
+  ...  RRset has no order, so evaluating either of them would tie the verdict to
+  ...  the order the resolver answered in, even though 8.8.8.8 is authorised by
+  ...  the first one
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@twospf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF ALLOW ONE RECORD AMONG OTHER TXT
+  [Documentation]  Only records starting with the v=spf1 version string count
+  ...  towards that limit, an unrelated TXT record alongside one SPF record is
+  ...  the common case and must still be evaluated
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@onespf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_PERMFAIL
+
 SPF ALLOW MX
   [Documentation]  A normal mx element is expanded to the addresses of its names
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml

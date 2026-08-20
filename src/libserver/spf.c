@@ -885,6 +885,7 @@ spf_process_txt_record(struct spf_record *rec, struct spf_resolved_element *reso
 {
 	struct rdns_reply_entry *elt, *selected = NULL;
 	gboolean ret = FALSE;
+	unsigned int nspf1 = 0;
 
 	/*
 	 * We prefer spf version 1 as other records are mostly likely garbage
@@ -894,15 +895,39 @@ spf_process_txt_record(struct spf_record *rec, struct spf_resolved_element *reso
 	{
 		if (elt->type == RDNS_REQUEST_TXT) {
 			if (strncmp(elt->content.txt.data, "v=spf1", sizeof("v=spf1") - 1) == 0) {
-				selected = elt;
+				nspf1++;
 
-				if (pselected != NULL) {
-					*pselected = selected;
+				if (selected == NULL) {
+					selected = elt;
+
+					if (pselected != NULL) {
+						*pselected = selected;
+					}
 				}
-
-				break;
 			}
 		}
+	}
+
+	/*
+	 * RFC 7208 4.5: if the DNS lookup returns more than one SPF record, then
+	 * check_host() produces the permerror result. An RRset carries no order,
+	 * so evaluating any single one of them would tie the verdict to the order
+	 * the resolver happened to answer in - the same message could pass here
+	 * and permerror at the next receiver.
+	 */
+	if (nspf1 > 1) {
+		msg_warn_spf("spf record is not unique: %ud records found, domain: %s",
+					 nspf1, resolved->cur_domain);
+		rec->permfail = true;
+
+		/*
+		 * Report the record as handled so that the caller does not fall back to
+		 * na: the resolved element is left without elements on purpose, which
+		 * together with the permfail flag is what the consumers read as
+		 * permerror. Signalling failure here instead would add an na element,
+		 * and na is checked first when the result is dispatched.
+		 */
+		return TRUE;
 	}
 
 	if (!selected) {
