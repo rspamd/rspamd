@@ -137,7 +137,6 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
   if opts then
     dkim_results.pass = {}
-    local dkim_violated
 
     for _, opt in ipairs(opts) do
       local check_res = string.sub(opt, -1)
@@ -145,37 +144,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
       if check_res == '+' then
         table.insert(dkim_results.pass, domain)
-
-        if policy.strict_dkim then
-          if rspamd_util.strequal_caseless(hdrfromdom, domain) then
-            dkim_ok = true
-          else
-            dkim_violated = "DKIM not aligned (strict)"
-          end
-        else
-          local dkim_tld = rspamd_util.get_tld(domain)
-
-          if rspamd_util.strequal_caseless(dkim_tld, dmarc_esld) then
-            dkim_ok = true
-          else
-            dkim_violated = "DKIM not aligned (relaxed)"
-          end
-        end
       elseif check_res == '?' then
-        -- Check for dkim tempfail
-        if not dkim_ok then
-          if policy.strict_dkim then
-            if rspamd_util.strequal_caseless(hdrfromdom, domain) then
-              dkim_tmpfail = true
-            end
-          else
-            local dkim_tld = rspamd_util.get_tld(domain)
-
-            if rspamd_util.strequal_caseless(dkim_tld, dmarc_esld) then
-              dkim_tmpfail = true
-            end
-          end
-        end
         table.insert(dkim_results.temperror, domain)
       elseif check_res == '-' then
         table.insert(dkim_results.fail, domain)
@@ -184,8 +153,30 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       end
     end
 
-    if not dkim_ok and dkim_violated then
-      table.insert(reason, dkim_violated)
+    -- The dkim module has already compared the signing domains against the
+    -- From domain; it knows which signatures verified, so it is the one place
+    -- where that comparison belongs. `relaxed` here means relaxed and not
+    -- strict, so a strict policy only accepts the strict verdict.
+    local mpool = task:get_mempool()
+    local function aligned(sense)
+      if not sense then
+        return false
+      end
+      if policy.strict_dkim then
+        return sense == 'strict'
+      end
+      return true
+    end
+
+    dkim_ok = aligned(mpool:get_variable('dkim_alignment', 'string'))
+
+    if not dkim_ok then
+      dkim_tmpfail = aligned(mpool:get_variable('dkim_alignment_tempfail', 'string'))
+
+      if next(dkim_results.pass) ~= nil then
+        table.insert(reason, policy.strict_dkim and "DKIM not aligned (strict)"
+            or "DKIM not aligned (relaxed)")
+      end
     end
   else
     table.insert(reason, "No valid DKIM")
