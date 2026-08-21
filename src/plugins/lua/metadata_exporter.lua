@@ -28,10 +28,12 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
 local lua_redis = require "lua_redis"
 local lua_mime = require "lua_mime"
+local lua_selectors = require "lua_selectors"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
 local HOSTNAME = rspamd_util.get_hostname()
+local selector_cache = {}
 
 local settings = {
   pusher_enabled = {},
@@ -69,6 +71,222 @@ Symbols: $symbols]],
   keepalive = false,
   no_ssl_verify = false,
 }
+
+local variables = {
+  content = function(task)
+    local content = task:get_content()
+    return content and content:str() or ''
+  end,
+  uid = function(task)
+    return string.sub(task:get_uid(), 1, 6)
+  end,
+  local_date = function(_)
+    return os.date("%c")
+  end,
+  our_boundary = function(_)
+    return "----=_MIME_BOUNDARY_" .. rspamd_util.random_hex(15)
+  end,
+}
+
+local function get_selector(log_obj, expr)
+  local selector = selector_cache[expr]
+  if selector == nil then
+    selector = lua_selectors.create_selector_closure(rspamd_config, expr, '', true) or false
+    selector_cache[expr] = selector
+    if not selector then
+      rspamd_logger.errx(log_obj, 'could not create selector [%s]', expr)
+    end
+  end
+  return selector or nil
+end
+
+local function expand_selectors(task, str, meta)
+  if not str or not string.find(str, '$', 1, true) then
+    return str
+  end
+
+  local function stringify(extracted)
+    local str_val
+    if type(extracted) == 'table' then
+      str_val = table.concat(extracted, ',')
+    else
+      str_val = tostring(extracted)
+    end
+    -- Expanded values reach mail headers, URLs and Redis keys, so they must never break framing
+    return (string.gsub(str_val, '[\r\n]+', ' '))
+  end
+
+  str = string.gsub(str, '%$([%w_]+)', function(name)
+    if meta and meta[name] ~= nil then
+      return '$' .. name
+    end
+    if variables[name] then
+      local extracted = variables[name](task)
+      if extracted ~= nil then
+        return stringify(extracted)
+      end
+      rspamd_logger.errx(task, 'custom variable [%s] returned no value', name)
+      return '((error extracting value))'
+    end
+    return '$' .. name
+  end)
+
+  local function process_placeholder(whole, expr)
+    if meta and meta[expr] ~= nil then
+      return whole
+    end
+
+    local extracted
+    if variables[expr] then
+      extracted = variables[expr](task)
+    else
+      local selector = get_selector(task, expr)
+      if not selector then
+        return '((could not create selector))'
+      end
+      extracted = selector(task)
+    end
+    if extracted then
+      extracted = stringify(extracted)
+    else
+      rspamd_logger.errx(task, 'could not extract value with selector [%s]', expr)
+      extracted = '((error extracting value))'
+    end
+    return extracted
+  end
+
+  return (string.gsub(str, '(%${(.-)})', process_placeholder))
+end
+
+local function expand_value(task, val)
+  if type(val) == 'string' then
+    return expand_selectors(task, val)
+  elseif type(val) == 'table' then
+    local expanded = {}
+    for k, elt in pairs(val) do
+      expanded[k] = expand_value(task, elt)
+    end
+    return expanded
+  end
+  return val
+end
+
+-- Only per-message routing values may come from selectors or custom variables;
+-- connection, credential and behaviour options stay literal by design
+local expandable_rule_fields = {
+  channel = true,
+  helo = true,
+  mail_from = true,
+  mail_to = true,
+  stream_key = true,
+}
+
+local settings_fallback_fields = {
+  'channel',
+  'connect_timeout',
+  'defer',
+  'gzip',
+  'helo',
+  'host',
+  'keepalive',
+  'mail_from',
+  'mail_to',
+  'max_len',
+  'mime_type',
+  'no_ssl_verify',
+  'port',
+  'read_timeout',
+  'smtp',
+  'smtp_port',
+  'ssl_timeout',
+  'stream_key',
+  'timeout',
+  'url',
+  'write_timeout',
+}
+
+local function resolve_rule(task, rule)
+  local resolved = {}
+  for name, val in pairs(rule) do
+    if expandable_rule_fields[name] then
+      resolved[name] = expand_value(task, val)
+    else
+      resolved[name] = val
+    end
+  end
+  for _, name in ipairs(settings_fallback_fields) do
+    if resolved[name] == nil and settings[name] ~= nil then
+      if expandable_rule_fields[name] then
+        resolved[name] = expand_value(task, settings[name])
+      else
+        resolved[name] = settings[name]
+      end
+    end
+  end
+  return resolved
+end
+
+local function add_template_variables(task, tmpl, meta)
+  local requested = {}
+  for name in string.gmatch(tmpl, '%$([%w_]+)') do
+    requested[name] = true
+  end
+  for name in string.gmatch(tmpl, '%${([%w_]+)}') do
+    requested[name] = true
+  end
+  for name in pairs(requested) do
+    if meta[name] == nil and variables[name] then
+      meta[name] = variables[name](task)
+    end
+  end
+end
+
+local function add_mail_targets(task, source, values, mail_targets, display_emails)
+  if type(values) == 'table' then
+    for _, value in ipairs(values) do
+      add_mail_targets(task, source, value, mail_targets, display_emails)
+    end
+    return
+  end
+
+  if type(values) ~= 'string' or values == '' then
+    rspamd_logger.errx(task, '%s returned no email address', source)
+    return
+  end
+
+  local parsed = rspamd_util.parse_mail_address(values, task:get_mempool())
+  if not parsed or #parsed == 0 then
+    rspamd_logger.errx(task, '%s returned an invalid email address: %s', source, values)
+    return
+  end
+
+  for _, address in ipairs(parsed) do
+    if address.flags and address.flags.valid and address.addr and address.addr ~= '' then
+      table.insert(mail_targets, address.addr)
+      table.insert(display_emails, string.format('<%s>', address.addr))
+    else
+      rspamd_logger.errx(task, '%s returned an invalid email address: %s', source,
+        address.raw or values)
+    end
+  end
+end
+
+local function normalize_mail_from(task, value)
+  if value == '' then
+    return value
+  end
+  if type(value) ~= 'string' then
+    rspamd_logger.errx(task, 'mail_from is not a string')
+    return nil
+  end
+
+  local parsed = rspamd_util.parse_mail_address(value, task:get_mempool())
+  if parsed and #parsed == 1 and parsed[1].flags and parsed[1].flags.valid then
+    return parsed[1].addr
+  end
+  rspamd_logger.errx(task, 'mail_from is not a valid single email address: %s', value)
+  return nil
+end
 
 local function get_general_metadata(task, flatten, no_content)
   local r = {}
@@ -127,9 +345,9 @@ local function get_general_metadata(task, flatten, no_content)
     r.from = 'unknown'
   end
   local syminf = task:get_symbols_all()
-  if flatten then
+  local function format_symlist(list)
     local l = {}
-    for _, sym in ipairs(syminf) do
+    for _, sym in ipairs(list) do
       local txt
       if sym.options then
         local topt = table.concat(sym.options, ', ')
@@ -139,7 +357,22 @@ local function get_general_metadata(task, flatten, no_content)
       end
       table.insert(l, txt)
     end
-    r.symbols = table.concat(l, '\n\t')
+    return table.concat(l, '\n\t')
+  end
+
+  if flatten then
+    local function copy_and_sort(list, cmp)
+      local out = {}
+      for i, v in ipairs(list) do
+        out[i] = v
+      end
+      table.sort(out, cmp)
+      return out
+    end
+
+    r.symbols = format_symlist(syminf)
+    r.symbols_sorted = format_symlist(copy_and_sort(syminf, function(a, b) return a.name < b.name end))
+    r.symbols_score = format_symlist(copy_and_sort(syminf, function(a, b) return a.score > b.score end))
   else
     r.symbols = syminf
   end
@@ -187,33 +420,36 @@ local formatters = {
   default = function(task)
     return task:get_content(), {}
   end,
-  email_alert = function(task, rule, extra)
+  email_alert = function(task, rule)
     local meta = get_general_metadata(task, true)
     local display_emails = {}
     local mail_targets = {}
-    meta.mail_from = rule.mail_from or settings.mail_from
-    local mail_rcpt = rule.mail_to or settings.mail_to
-    if type(mail_rcpt) ~= 'table' then
-      table.insert(display_emails, string.format('<%s>', mail_rcpt))
-      table.insert(mail_targets, mail_rcpt)
-    else
-      for _, e in ipairs(mail_rcpt) do
-        table.insert(display_emails, string.format('<%s>', e))
-        table.insert(mail_targets, e)
-      end
+    local tmpl = rule.email_template or settings.email_template
+    add_template_variables(task, tmpl, meta)
+    meta.mail_from = normalize_mail_from(task, rule.mail_from)
+    if not meta.mail_from then
+      return nil
     end
+    add_mail_targets(task, 'mail_to', rule.mail_to, mail_targets, display_emails)
     if rule.email_alert_sender then
       local x = task:get_from('smtp')
       if x and string.len(x[1].addr) > 0 then
-        table.insert(mail_targets, x)
-        table.insert(display_emails, string.format('<%s>', x[1].addr))
+        add_mail_targets(task, 'email_alert_sender', x[1].addr, mail_targets, display_emails)
+      end
+    end
+    if rule.email_alert_sender_variable then
+      if variables[rule.email_alert_sender_variable] then
+        local addr = variables[rule.email_alert_sender_variable](task)
+        lua_util.debugm(N, task, 'email_alert_sender_variable: %s: %s', rule.email_alert_sender_variable, addr)
+        add_mail_targets(task, 'email_alert_sender_variable', addr, mail_targets, display_emails)
+      else
+        rspamd_logger.errx(task, 'no such variable: %s', rule.email_alert_sender_variable)
       end
     end
     if rule.email_alert_user then
       local x = task:get_user()
       if x then
-        table.insert(mail_targets, x)
-        table.insert(display_emails, string.format('<%s>', x))
+        add_mail_targets(task, 'email_alert_user', x, mail_targets, display_emails)
       end
     end
     if rule.email_alert_recipients then
@@ -221,16 +457,20 @@ local formatters = {
       if x then
         for _, e in ipairs(x) do
           if string.len(e.addr) > 0 then
-            table.insert(mail_targets, e.addr)
-            table.insert(display_emails, string.format('<%s>', e.addr))
+            add_mail_targets(task, 'email_alert_recipients', e.addr, mail_targets, display_emails)
           end
         end
       end
     end
+    if #mail_targets == 0 then
+      rspamd_logger.errx(task, 'email alert has no valid recipients')
+      return nil
+    end
     meta.mail_to = table.concat(display_emails, ', ')
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return lua_util.template(rule.email_template or settings.email_template, meta), { mail_targets = mail_targets }
+    tmpl = expand_selectors(task, tmpl, meta)
+    return lua_util.template(tmpl, meta), { mail_targets = mail_targets }
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -450,7 +690,7 @@ local pushers = {
       return maybe_defer(task, rule)
     end
     local hdrs = {}
-    local mime_type = rule.mime_type or settings.mime_type
+    local mime_type = rule.mime_type
 
     if extra and extra.multipart_boundary then
       mime_type = string.format('multipart/form-data; boundary="%s"', extra.multipart_boundary)
@@ -477,15 +717,15 @@ local pushers = {
       callback = http_callback,
       mime_type = mime_type,
       headers = hdrs,
-      timeout = rule.timeout or settings.timeout,
-      gzip = rule.gzip or settings.gzip,
-      keepalive = rule.keepalive or settings.keepalive,
-      no_ssl_verify = rule.no_ssl_verify or settings.no_ssl_verify,
+      timeout = rule.timeout,
+      gzip = rule.gzip,
+      keepalive = rule.keepalive,
+      no_ssl_verify = rule.no_ssl_verify,
       -- staged timeouts
-      connect_timeout = rule.connect_timeout or settings.connect_timeout,
-      ssl_timeout = rule.ssl_timeout or settings.ssl_timeout,
-      write_timeout = rule.write_timeout or settings.write_timeout,
-      read_timeout = rule.read_timeout or settings.read_timeout,
+      connect_timeout = rule.connect_timeout,
+      ssl_timeout = rule.ssl_timeout,
+      write_timeout = rule.write_timeout,
+      read_timeout = rule.read_timeout,
     })
   end,
   send_mail = function(task, formatted, rule, extra)
@@ -497,14 +737,29 @@ local pushers = {
       end
     end
 
+    local mail_from = normalize_mail_from(task, rule.mail_from)
+    if not mail_from then
+      return maybe_defer(task, rule)
+    end
+
+    local recipients = extra and extra.mail_targets
+    if not recipients then
+      recipients = {}
+      add_mail_targets(task, 'mail_to', rule.mail_to, recipients, {})
+      if #recipients == 0 then
+        rspamd_logger.errx(task, 'SMTP export has no valid recipients')
+        return maybe_defer(task, rule)
+      end
+    end
+
     lua_smtp.sendmail({
       task = task,
       host = rule.smtp,
-      port = rule.smtp_port or settings.smtp_port or 25,
-      from = rule.mail_from or settings.mail_from,
-      recipients = extra.mail_targets or rule.mail_to or settings.mail_to,
-      helo = rule.helo or settings.helo,
-      timeout = rule.timeout or settings.timeout,
+      port = rule.smtp_port or 25,
+      from = mail_from,
+      recipients = recipients,
+      helo = rule.helo,
+      timeout = rule.timeout,
     }, formatted, sendmail_cb)
   end,
   json_raw_tcp = function(task, formatted, rule)
@@ -521,7 +776,7 @@ local pushers = {
       port = rule.port,
       data = formatted,
       callback = json_raw_tcp_callback,
-      timeout = rule.timeout or settings.timeout,
+      timeout = rule.timeout,
       read = false,
     })
   end,
@@ -614,7 +869,7 @@ local pushers = {
       if rule.max_len then
         table.insert(args, 'MAXLEN')
         table.insert(args, '~')
-        table.insert(args, tostring(rule.max_len))
+        table.insert(args, string.format('%d', math.floor(rule.max_len)))
       end
       table.insert(args, '*')
       table.insert(args, 'data')
@@ -634,14 +889,15 @@ local pushers = {
     end
     if rule.per_recipient then
       local rcpt = task:get_recipients('smtp')
+      local stream_key = rule.stream_key
       if rcpt then
         for _, a in ipairs(rcpt) do
           if a.addr and #a.addr > 0 then
-            do_xadd(rule.stream_key .. ':' .. a.addr)
+            do_xadd(stream_key .. ':' .. a.addr)
           end
         end
       else
-        do_xadd(rule.stream_key)
+        do_xadd(stream_key)
       end
     else
       do_xadd(rule.stream_key)
@@ -667,6 +923,13 @@ local process_settings = {
     if type(val) == 'table' then
       for k, v in pairs(val) do
         pushers[k] = assert(load(v))()
+      end
+    end
+  end,
+  custom_variables = function(val)
+    if type(val) == 'table' then
+      for k, v in pairs(val) do
+        variables[k] = assert(load(v))()
       end
     end
   end,
@@ -801,6 +1064,7 @@ if type(settings.rules) ~= 'table' then
       r.defer = settings.defer
       r.selector = settings.pusher_select.http
       r.formatter = settings.pusher_format.http
+      r.timeout = settings.timeout or 0.0
       settings.rules[r.backend:upper()] = r
     end
   end
@@ -820,6 +1084,7 @@ if type(settings.rules) ~= 'table' then
       r.defer = settings.defer
       r.selector = settings.pusher_select.send_mail
       r.formatter = settings.pusher_format.send_mail
+      r.timeout = settings.timeout or 0.0
       settings.rules[r.backend:upper()] = r
     end
   end
@@ -978,6 +1243,29 @@ for k, v in pairs(settings.rules) do
   end
 end
 
+-- Compile selectors used by rules at config time to validate them and to keep them off the hot path
+local function warm_selectors(val)
+  if type(val) == 'table' then
+    for _, elt in pairs(val) do
+      warm_selectors(elt)
+    end
+  elseif type(val) == 'string' then
+    for expr in string.gmatch(val, '%${(.-)}') do
+      if not variables[expr] then
+        get_selector(rspamd_config, expr)
+      end
+    end
+  end
+end
+
+for _, r in pairs(settings.rules) do
+  for name, val in pairs(r) do
+    if expandable_rule_fields[name] or name == 'email_template' then
+      warm_selectors(val)
+    end
+  end
+end
+
 local function gen_exporter(rule)
   return function(task)
     if task:has_flag('skip') then
@@ -988,9 +1276,10 @@ local function gen_exporter(rule)
     if selected then
       lua_util.debugm(N, task, 'Message selected for processing')
       local formatter = rule.formatter or 'default'
-      local formatted, extra = formatters[formatter](task, rule)
+      local resolved_rule = resolve_rule(task, rule)
+      local formatted, extra = formatters[formatter](task, resolved_rule)
       if formatted then
-        pushers[rule.backend](task, formatted, rule, extra)
+        pushers[rule.backend](task, formatted, resolved_rule, extra)
       else
         lua_util.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
       end
@@ -1005,11 +1294,12 @@ if not next(settings.rules) then
   lua_util.disable_module(N, "config")
 end
 for k, r in pairs(settings.rules) do
+  local registration_timeout = tonumber(r.timeout) or tonumber(settings.timeout) or 0.0
   rspamd_config:register_symbol({
     name = 'EXPORT_METADATA_' .. k,
     type = 'idempotent',
     callback = gen_exporter(r),
     flags = 'empty,explicit_disable,ignore_passthrough',
-    augmentations = { string.format("timeout=%f", r.timeout or settings.timeout or 0.0) }
+    augmentations = { string.format("timeout=%f", registration_timeout) }
   })
 end
