@@ -271,6 +271,22 @@ local function should_save_hop(hop_url)
   return cfg.non_redirectors and true or false
 end
 
+-- Whether we may issue an HTTP request for this URL under redirectors_only.
+-- Cached chains can end on hops that are not (or are no longer) redirectors,
+-- so the bridges out of the cache walk must re-check the map too, not just
+-- the live 30x path.
+local function may_fetch(task, hop_url)
+  if not settings.redirectors_only then
+    return true
+  end
+  local host = hop_url:get_host()
+  -- get_key() returns false (not nil) on a miss, so test truthiness.
+  local matched = host and settings.redirector_hosts_map:get_key(host)
+  lua_util.debugm(N, task, 'redirector map lookup for %s: %s',
+      host, matched)
+  return matched and true or false
+end
+
 -- Append hop to chain unless it equals the current tail. String
 -- comparison (not identity): on cache-hit walks the parsed URL is a
 -- fresh Lua object for the same string, and identity (==) would
@@ -475,6 +491,12 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
             -- URL whose own cache entry is gone (TTL expired or evicted).
             -- Resume live HTTP from this dead end so the chain rebuilds and
             -- gets re-cached, instead of giving up with a truncated chain.
+            if not may_fetch(task, last) then
+              lua_util.debugm(N, task,
+                  'cache miss for %s mid-walk, but it is not a redirector', last_str)
+              step_finish(task, chain, http_extended)
+              return
+            end
             lua_util.debugm(N, task,
                 'cache miss for %s mid-walk, extending with live HTTP', last_str)
             -- The prior ^hop iteration that appended `last` to the chain
@@ -531,8 +553,17 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
     -- nested_limit. If the extension finalizes successfully, the
     -- upstream ^nested marker is rewritten as ^hop and the chain
     -- grows in cache.
+    if not may_fetch(task, hop) then
+      lua_util.debugm(N, task,
+          'cached ^nested:%s is not a redirector, not extending', val)
+      step_finish(task, chain, http_extended)
+      return
+    end
     lua_util.debugm(N, task,
         'extending past cached ^nested:%s with live HTTP', val)
+    -- seen was keyed by the raw cached string above; http_walk keys by
+    -- tostring(), so clear that form or its cycle guard fires immediately.
+    seen[tostring(hop)] = nil
     http_walk(task, orig_url, hop, ntries + 1, chain, seen)
     return
   end
@@ -647,14 +678,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           return
         end
 
-        local should_follow
-        if settings.redirectors_only then
-          should_follow = settings.redirector_hosts_map:get_key(redir_url:get_host()) ~= nil
-        else
-          should_follow = true
-        end
-
-        if should_follow then
+        if may_fetch(task, redir_url) then
           -- Probe cache for redir_url before HEADing it. If a chain is
           -- already cached at hash(redir_url) (typical when many
           -- shortlinks share a redirector intermediate, or when a prior
@@ -750,6 +774,8 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     callback = http_callback,
   }
 
+  local identity
+
   if settings.user_agent then
     -- Operator override: a single User-Agent header, no fingerprint.
     local ua = settings.user_agent
@@ -757,8 +783,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
       ua = ua[math.random(#ua)]
     end
     http_params.headers = { ['User-Agent'] = ua }
-    lua_util.debugm(N, task, 'query %s %s with user agent %s',
-        method, url_str, ua)
+    identity = string.format('user agent %s', ua)
   else
     -- Stealth: one coherent browser fingerprint per task, reused by
     -- every hop of every chain so the identity stays consistent.
@@ -772,15 +797,17 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     end
     if profile then
       http_params.headers = profile.headers
-      lua_util.debugm(N, task, 'query %s %s with %s fingerprint',
-          method, url_str, profile.name)
+      identity = string.format('%s fingerprint', profile.name)
     else
-      lua_util.debugm(N, task, 'query %s %s (no fingerprint profile)',
-          method, url_str)
+      identity = 'no fingerprint profile'
     end
   end
 
   apply_http_timeout(http_params)
+  -- Single grep anchor for "did we actually go on the wire": every
+  -- rspamd_http.request in this module is preceded by exactly this line.
+  lua_util.debugm(N, task, 'http request %s %s (orig %s, hop %s/%s, %s)',
+      method, request_url, orig_url, ntries, settings.nested_limit, identity)
   if not rspamd_http.request(http_params) then
     -- Synchronous refusal (e.g. forbid_local blocked a numeric-IP URL):
     -- the callback will never fire, so terminate the walk here
