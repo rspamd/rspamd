@@ -107,6 +107,9 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/redirect4":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect3")
+        elif path == "/redir_to_unlisted":
+            port = self.request.host.rsplit(":", 1)[-1]
+            self.redirect(f"{self.request.protocol}://unlisted-redirector-target.example.net:{port}/hello")
         elif path == "/tel_redirect":
             # Send an HTTP redirect to a tel: URL (non-HTTP scheme)
             self.redirect("tel:88006007775")
