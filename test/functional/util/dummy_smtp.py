@@ -61,6 +61,42 @@ def _make_handler(args):
             if args.pre_wait > 0:
                 time.sleep(args.pre_wait)
 
+            if args.mode == "sink":
+                transcript = []
+                message = []
+                in_data = False
+                stream = self.request.makefile("rwb", buffering=0)
+                stream.write(b"220 dummy smtp\r\n")
+                while True:
+                    line = stream.readline()
+                    if not line:
+                        break
+                    text = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if in_data:
+                        if text == ".":
+                            in_data = False
+                            stream.write(b"250 queued\r\n")
+                        else:
+                            message.append(text)
+                        continue
+
+                    transcript.append(text)
+                    command = text.upper()
+                    if command.startswith(("HELO ", "EHLO ", "MAIL FROM:", "RCPT TO:")):
+                        stream.write(b"250 ok\r\n")
+                    elif command == "DATA":
+                        in_data = True
+                        stream.write(b"354 send data\r\n")
+                    elif command == "QUIT":
+                        stream.write(b"221 bye\r\n")
+                        break
+                    else:
+                        stream.write(b"500 unsupported\r\n")
+
+                _write_status(args.status_file,
+                              "\n".join(transcript + ["MESSAGE"] + message))
+                return
+
             if args.mode == "silent":
                 try:
                     time.sleep(30)
@@ -147,7 +183,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=11125)
     parser.add_argument("--mode",
-                        choices=["silent", "error", "messy",
+                        choices=["silent", "error", "messy", "sink",
                                  "greeting_single", "greeting_multi"],
                         default="silent")
     parser.add_argument("--host", default="127.0.0.1")
