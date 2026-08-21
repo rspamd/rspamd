@@ -89,6 +89,15 @@ enum rspamd_task_stage {
 								   RSPAMD_TASK_STAGE_LEARN |            \
 								   RSPAMD_TASK_STAGE_LEARN_POST |       \
 								   RSPAMD_TASK_STAGE_DONE)
+/*
+ * Learn with a full check pass: run the whole scan pipeline so symbol scores are
+ * available to symbol-dependent learners, but suppress side-effecting emission by
+ * dropping the IDEMPOTENT stage (ClickHouse, history, clusters, capture, learn
+ * queues all live there). Used for learn tasks when a learner needs symbol inputs
+ * (cfg->learn_needs_check); otherwise the lean RSPAMD_TASK_PROCESS_LEARN is used.
+ */
+#define RSPAMD_TASK_PROCESS_LEARN_CHECK \
+	(RSPAMD_TASK_PROCESS_ALL & ~RSPAMD_TASK_STAGE_IDEMPOTENT)
 
 #define RSPAMD_TASK_FLAG_MIME (1u << 0u)
 #define RSPAMD_TASK_FLAG_SKIP_PROCESS (1u << 1u)

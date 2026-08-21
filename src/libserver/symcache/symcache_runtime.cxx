@@ -375,6 +375,7 @@ auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+	case RSPAMD_TASK_STAGE_LEARN:
 		return process_pre_postfilters(task, cache,
 									   rspamd_session_events_pending(task->s), stage);
 		break;
@@ -404,6 +405,7 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 		 * those that are marked as ignore passthrough result
 		 */
 		if (stage != RSPAMD_TASK_STAGE_IDEMPOTENT &&
+			stage != RSPAMD_TASK_STAGE_LEARN &&
 			!(item->flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
 			if (check_process_status(task) == check_status::passthrough) {
 				msg_debug_cache_task_lambda("task has already the passthrough result being set, ignore further checks");
@@ -464,6 +466,10 @@ auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:
 		compare_functor = +[](int a, int b) { return a > b; };
 		all_done = cache.idempotent_foreach(proc_func);
+		break;
+	case RSPAMD_TASK_STAGE_LEARN:
+		compare_functor = +[](int a, int b) { return a > b; };
+		all_done = cache.learn_foreach(proc_func);
 		break;
 	default:
 		g_error("invalid invocation");

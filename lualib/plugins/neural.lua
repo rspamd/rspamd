@@ -68,6 +68,15 @@ local default_options = {
     -- means "default to disable_symbols_input" (resolved per-rule at init); set to
     -- false to opt out and keep running the full pipeline for forced learns.
     forced_learn_minimal_scan = nil,
+    -- learn_from_controller: opt-in (default false) to preserve the historical
+    -- split-learning behaviour -- by default a controller learn task (/learnspam,
+    -- /learnham) trains ONLY the classifiers, and neural keeps training from its
+    -- own scan-time paths (autotrain, ANN-Train, autolearn). Set it to true to
+    -- also train this rule from controller learn tasks, so one corpus push feeds
+    -- bayes and neural. A disable_symbols_input rule then trains from the lean
+    -- learn pipeline; a symbol-dependent rule makes its learn task run a full
+    -- check pass first (its vector reads symbol scores).
+    learn_from_controller = false,
   },
   watch_interval = 60.0,
   lock_expire = 600,
