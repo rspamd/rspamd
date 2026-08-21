@@ -17,6 +17,7 @@
  * rspamd module that checks dkim records of incoming email
  *
  * Allowed options:
+ * - symbol_aligned (string): symbol to insert when DKIM d= aligns with From (default: 'R_DKIM_ALIGNED')
  * - symbol_allow (string): symbol to insert in case of allow (default: 'R_DKIM_ALLOW')
  * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
  * - symbol_tempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
@@ -33,6 +34,7 @@
 #include "config.h"
 #include "libmime/message.h"
 #include "libserver/dkim.h"
+#include "libserver/url.h"
 #include "libutil/hash.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
@@ -42,6 +44,7 @@
 #include "lua/lua_common.h"
 #include "libserver/mempool_vars_internal.h"
 
+#define DEFAULT_SYMBOL_ALIGNED "R_DKIM_ALIGNED"
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"
 #define DEFAULT_SYMBOL_ALLOW "R_DKIM_ALLOW"
@@ -69,6 +72,7 @@ static const char default_arc_sign_headers[] = ""
 
 struct dkim_ctx {
 	struct module_ctx ctx;
+	const char *symbol_aligned;
 	const char *symbol_reject;
 	const char *symbol_tempfail;
 	const char *symbol_allow;
@@ -197,6 +201,15 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   NULL,
 							   0,
 							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "dkim",
+							   "Symbol that is added when DKIM d= aligns with the From header domain",
+							   "symbol_aligned",
+							   UCL_STRING,
+							   NULL,
+							   0,
+							   DEFAULT_SYMBOL_ALIGNED,
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
@@ -418,6 +431,13 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 		dkim_module_ctx->symbol_tempfail = DEFAULT_SYMBOL_TEMPFAIL;
 	}
 	if ((value =
+			 rspamd_config_get_module_opt(cfg, "dkim", "symbol_aligned")) != NULL) {
+		dkim_module_ctx->symbol_aligned = ucl_object_tostring(value);
+	}
+	else {
+		dkim_module_ctx->symbol_aligned = DEFAULT_SYMBOL_ALIGNED;
+	}
+	if ((value =
 			 rspamd_config_get_module_opt(cfg, "dkim", "symbol_allow")) != NULL) {
 		dkim_module_ctx->symbol_allow = ucl_object_tostring(value);
 	}
@@ -636,6 +656,12 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 								   cb_id);
 		rspamd_symcache_add_symbol(cfg->cache,
 								   dkim_module_ctx->symbol_tempfail,
+								   0,
+								   NULL, NULL,
+								   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+								   cb_id);
+		rspamd_symcache_add_symbol(cfg->cache,
+								   dkim_module_ctx->symbol_aligned,
 								   0,
 								   NULL, NULL,
 								   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
@@ -1216,6 +1242,22 @@ dkim_module_check(struct dkim_check_result *res)
 		/* Create zero terminated array of results */
 		struct rspamd_dkim_check_result **pres;
 		unsigned int nres = 0, i = 0;
+		/* 0 = none, 1 = relaxed, 2 = strict */
+		int best_align = 0, best_align_tempfail = 0;
+		const char *from_domain = NULL;
+		gsize from_domain_len = 0;
+		rspamd_ftok_t from_tld = {0};
+
+		if (MESSAGE_FIELD_CHECK(task, from_mime) &&
+			MESSAGE_FIELD(task, from_mime)->len > 0) {
+			struct rspamd_email_address *from_addr =
+				g_ptr_array_index(MESSAGE_FIELD(task, from_mime), 0);
+			if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
+				from_domain = from_addr->domain;
+				from_domain_len = from_addr->domain_len;
+				(void) rspamd_url_find_tld(from_domain, from_domain_len, &from_tld);
+			}
+		}
 
 		DL_FOREACH(first, cur)
 		{
@@ -1280,7 +1322,63 @@ dkim_module_check(struct dkim_check_result *res)
 										  symbol,
 										  symbol_weight,
 										  tracebuf);
+
+				/*
+				 * Alignment is tracked separately for the signatures that
+				 * verified and for those that could not be checked yet: a
+				 * consumer that must not report a definitive failure while an
+				 * aligned signature is still unresolved needs to tell the two
+				 * apart
+				 */
+				if (from_domain != NULL &&
+					(cur->res->rcode == DKIM_CONTINUE ||
+					 cur->res->rcode == DKIM_TRYAGAIN)) {
+					int *align = (cur->res->rcode == DKIM_CONTINUE) ? &best_align : &best_align_tempfail;
+
+					if (*align < 2) {
+						gsize domain_len = strlen(domain);
+
+						if (domain_len == from_domain_len &&
+							g_ascii_strncasecmp(domain, from_domain, domain_len) == 0) {
+							*align = 2;
+						}
+						else if (*align < 1 && from_tld.len > 0) {
+							rspamd_ftok_t sig_tld = {0};
+							if (rspamd_url_find_tld(domain, domain_len, &sig_tld) &&
+								sig_tld.len == from_tld.len &&
+								g_ascii_strncasecmp(sig_tld.begin, from_tld.begin,
+													sig_tld.len) == 0) {
+								*align = 1;
+							}
+						}
+					}
+				}
 			}
+		}
+
+		if (best_align > 0) {
+			rspamd_task_insert_result(task,
+									  dkim_module_ctx->symbol_aligned,
+									  1.0,
+									  best_align == 2 ? "strict" : "relaxed");
+		}
+
+		/*
+		 * Publish the verdict so that policy modules consume it instead of
+		 * repeating the comparison: this module is the one that knows both the
+		 * signing domain and whether the signature verified
+		 */
+		if (best_align > 0) {
+			rspamd_mempool_set_variable(task->task_pool,
+										RSPAMD_MEMPOOL_DKIM_ALIGNMENT,
+										(gpointer) (best_align == 2 ? "strict" : "relaxed"),
+										NULL);
+		}
+		if (best_align_tempfail > 0) {
+			rspamd_mempool_set_variable(task->task_pool,
+										RSPAMD_MEMPOOL_DKIM_ALIGNMENT_TEMPFAIL,
+										(gpointer) (best_align_tempfail == 2 ? "strict" : "relaxed"),
+										NULL);
 		}
 
 		rspamd_mempool_set_variable(task->task_pool,
