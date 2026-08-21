@@ -31,6 +31,20 @@ local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 local lua_selectors = require "lua_selectors"
 
+-- Composite symbols are only resolved after normal filters have run, so a
+-- 'normal' symbol cannot depend on them via register_dependency (the cache
+-- rejects such cross-stage deps). Any rule referencing a composite atom must
+-- therefore be registered as a postfilter instead.
+local function has_composite_atom(atoms)
+  for _, a in ipairs(atoms) do
+    local fl = rspamd_config:get_symbol_flags(a)
+    if fl and fl.composite then
+      return true
+    end
+  end
+  return false
+end
+
 -- Params table fields:
 -- expr, act, pool, message, subject, raction, honor, limit, flags
 local function gen_cb(params)
@@ -151,18 +165,30 @@ local function configure_module()
               local h = rspamd_cryptobox_hash.create()
               h:update(expr)
               local name = 'FORCE_ACTION_' .. string.upper(string.sub(h:hex(), 1, 12))
-              rspamd_config:register_symbol({
-                type = 'normal',
+              local composite_dep = has_composite_atom(atoms)
+              local t = {
                 name = name,
                 callback = cb,
                 flags = 'empty',
                 group = N,
-              })
-              for _, a in ipairs(atoms) do
-                rspamd_config:register_dependency(name, a)
+              }
+              if composite_dep then
+                t.type = 'postfilter'
+                t.priority = lua_util.symbols_priorities.high
+              else
+                t.type = 'normal'
               end
-              rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]',
-                  name, expr, table.concat(atoms, ','))
+              rspamd_config:register_symbol(t)
+              if t.type == 'normal' then
+                for _, a in ipairs(atoms) do
+                  rspamd_config:register_dependency(name, a)
+                end
+                rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]',
+                    name, expr, table.concat(atoms, ','))
+              else
+                rspamd_logger.infox(rspamd_config,
+                    'Registered symbol %1 <%2> as postfilter (expression uses composite symbol(s))', name, expr)
+              end
             end
           end
         end
@@ -193,8 +219,9 @@ local function configure_module()
                                    limit = sett.limit,
                                    flags = table.concat(flags, ',') }
         if cb and atoms then
+          local composite_dep = has_composite_atom(atoms)
           local t = {}
-          if (raction or honor) then
+          if (raction or honor or composite_dep) then
             t.type = 'postfilter'
             t.priority = lua_util.symbols_priorities.high
           else
@@ -214,6 +241,9 @@ local function configure_module()
             end
             rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]',
                 t.name, expr, table.concat(atoms, ','))
+          elseif composite_dep and not (raction or honor) then
+            rspamd_logger.infox(rspamd_config,
+                'Registered symbol %1 <%2> as postfilter (expression uses composite symbol(s))', t.name, expr)
           else
             rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> as postfilter', t.name, expr)
           end
