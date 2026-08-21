@@ -35,18 +35,89 @@ local lua_selectors = require "lua_selectors"
 -- 'normal' symbol cannot depend on them via register_dependency (the cache
 -- rejects such cross-stage deps). Any rule referencing a composite atom must
 -- therefore be registered as a postfilter instead.
+-- Such a rule is still starved if any earlier pre-result was set without
+-- `process_all`, since that suppresses composite evaluation entirely.
 local function has_composite_atom(atoms)
   for _, a in ipairs(atoms) do
-    local fl = rspamd_config:get_symbol_flags(a)
-    if fl and fl.composite then
-      return true
+    -- get_symbol_flags returns an array of flag names, not a keyed map
+    for _, fl in ipairs(rspamd_config:get_symbol_flags(a) or {}) do
+      if fl == 'composite' then
+        return true
+      end
     end
   end
   return false
 end
 
+-- Passthrough priority band from src/libmime/scan_result.h:
+-- 0 = low, 1 = normal (default), 2 = high, 3 = critical (used by the core for
+-- broken messages). The C side stores it as unsigned int, so a negative value
+-- would wrap around and outrank everything.
+local min_priority, max_priority = 0, 3
+local named_priorities = {
+  low = 0,
+  normal = 1,
+  high = 2,
+  critical = 3,
+}
+
+local function check_priority(name, priority)
+  if priority == nil then
+    return nil
+  end
+
+  if type(priority) == 'string' then
+    local named = named_priorities[string.lower(priority)]
+
+    if named then
+      return named
+    end
+
+    -- UCL may hand us a quoted number
+    local as_number = tonumber(priority)
+
+    if not as_number then
+      rspamd_logger.warnx(rspamd_config,
+          'force_actions rule %1: unknown priority name "%2", expected one of low/normal/high/critical; ignored',
+          name, priority)
+      return nil
+    end
+
+    priority = as_number
+  end
+
+  if type(priority) ~= 'number' then
+    rspamd_logger.warnx(rspamd_config, 'force_actions rule %1: priority must be a number or a name, got %2; ignored',
+        name, type(priority))
+    return nil
+  end
+
+  -- NaN is the only number that does not compare equal to itself
+  if priority ~= priority then
+    rspamd_logger.warnx(rspamd_config, 'force_actions rule %1: priority is NaN; ignored', name)
+    return nil
+  end
+
+  local adjusted = math.floor(priority)
+
+  if adjusted ~= priority then
+    rspamd_logger.warnx(rspamd_config, 'force_actions rule %1: priority %2 is not an integer, adjusted to %3',
+        name, priority, adjusted)
+  end
+
+  if adjusted < min_priority or adjusted > max_priority then
+    local clamped = math.max(min_priority, math.min(max_priority, adjusted))
+    rspamd_logger.warnx(rspamd_config,
+        'force_actions rule %1: priority %2 is out of the allowed range [%3..%4], adjusted to %5',
+        name, adjusted, min_priority, max_priority, clamped)
+    adjusted = clamped
+  end
+
+  return adjusted
+end
+
 -- Params table fields:
--- expr, act, pool, message, subject, raction, honor, limit, flags
+-- expr, act, pool, message, subject, raction, honor, limit, flags, priority
 local function gen_cb(params)
 
   local function parse_atom(str)
@@ -125,9 +196,10 @@ local function gen_cb(params)
       if type(params.message) == 'string' then
         -- process selector expressions in the message
         local message = string.gsub(params.message, '(${(.-)})', process_message_selectors)
-        task:set_pre_result { action = params.act, message = message, module = N, flags = flags }
+        task:set_pre_result { action = params.act, message = message, module = N, flags = flags,
+                              priority = params.priority }
       else
-        task:set_pre_result { action = params.act, module = N, flags = flags }
+        task:set_pre_result { action = params.act, module = N, flags = flags, priority = params.priority }
       end
       return true, params.act
     end
@@ -195,7 +267,16 @@ local function configure_module()
       end
     end
   elseif type(opts.rules) == 'table' then
-    for name, sett in pairs(opts.rules) do
+    -- Register in a stable order: pairs() over a UCL object is arbitrary, and
+    -- registration order leaks into the symcache ordering heuristics.
+    local rule_names = {}
+    for name in pairs(opts.rules) do
+      table.insert(rule_names, name)
+    end
+    table.sort(rule_names)
+
+    for _, name in ipairs(rule_names) do
+      local sett = opts.rules[name]
       local action = sett.action
       local expr = sett.expression
 
@@ -209,6 +290,13 @@ local function configure_module()
         end
         local raction = lua_util.list_to_hash(sett.require_action)
         local honor = lua_util.list_to_hash(sett.honor_action)
+        local priority = check_priority(name, sett.priority)
+        if priority and sett.least then
+          rspamd_logger.warnx(rspamd_config,
+              'force_actions rule %1: `least` is set, so `priority` cannot outrank a non-least rule ' ..
+              '(any non-least result always wins); it only orders this rule against other `least` rules',
+              name)
+        end
         local cb, atoms = gen_cb { expr = expr,
                                    act = action,
                                    pool = rspamd_config:get_mempool(),
@@ -217,6 +305,7 @@ local function configure_module()
                                    raction = raction,
                                    honor = honor,
                                    limit = sett.limit,
+                                   priority = priority,
                                    flags = table.concat(flags, ',') }
         if cb and atoms then
           local composite_dep = has_composite_atom(atoms)
@@ -239,13 +328,17 @@ local function configure_module()
             for _, a in ipairs(atoms) do
               rspamd_config:register_dependency(t.name, a)
             end
-            rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]',
-                t.name, expr, table.concat(atoms, ','))
+            rspamd_logger.infox(rspamd_config,
+                'Registered symbol %1 <%2> with dependencies [%3]; action %4, passthrough priority %5',
+                t.name, expr, table.concat(atoms, ','), action, priority or 1)
           elseif composite_dep and not (raction or honor) then
             rspamd_logger.infox(rspamd_config,
-                'Registered symbol %1 <%2> as postfilter (expression uses composite symbol(s))', t.name, expr)
+                'Registered symbol %1 <%2> as postfilter (expression uses composite symbol(s)); ' ..
+                'action %3, passthrough priority %4', t.name, expr, action, priority or 1)
           else
-            rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> as postfilter', t.name, expr)
+            rspamd_logger.infox(rspamd_config,
+                'Registered symbol %1 <%2> as postfilter; action %3, passthrough priority %4',
+                t.name, expr, action, priority or 1)
           end
         end
       end

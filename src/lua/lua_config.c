@@ -2147,6 +2147,13 @@ lua_config_get_symbol_flags(lua_State *L)
 		flags = rspamd_symcache_get_symbol_flags(cfg->cache,
 												 name);
 
+		/* Item type bits are stripped off the stored flags when a cache item is
+		 * created, so re-add the composite one that callers rely upon */
+		if (rspamd_symcache_get_symbol_stage(cfg->cache, name) ==
+			SYMBOL_TYPE_COMPOSITE) {
+			flags |= SYMBOL_TYPE_COMPOSITE;
+		}
+
 		if (flags != 0) {
 			lua_push_symbol_flags(L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
 		}
