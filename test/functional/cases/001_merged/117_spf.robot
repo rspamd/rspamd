@@ -192,6 +192,35 @@ SPF ALLOW ONE RECORD AMONG OTHER TXT
   Expect Symbol  R_SPF_ALLOW
   Do Not Expect Symbol  R_SPF_PERMFAIL
 
+SPF ALLOW MIXED CASE VERSION
+  [Documentation]  RFC 7208 4.5 matches the version section without regard to
+  ...  case, so a record announcing itself as V=SPF1 is an SPF record like any
+  ...  other
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@mixedcasespf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_NA
+
+SPF PERMFAIL MULTIPLE RECORDS MIXED CASE
+  [Documentation]  A caseless match is what makes the one-record limit hold: a
+  ...  duplicate spelled V=SPF1 must not escape permerror by its case
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@twomixedcasespf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF ALLOW ONE RECORD BESIDE A LATER VERSION
+  [Documentation]  RFC 7208 4.5 terminates the version section with SP or the
+  ...  end of the record and says v=spf10 is discarded, so it is not a second
+  ...  SPF1 record and must not cause permerror
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@spf10.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_PERMFAIL
+
 SPF ALLOW MX
   [Documentation]  A normal mx element is expanded to the addresses of its names
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml

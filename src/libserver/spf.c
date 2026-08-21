@@ -879,6 +879,25 @@ spf_record_addr_set(struct spf_addr *addr, gboolean allow_any)
 	}
 }
 
+/*
+ * RFC 7208 4.5: the version section is the literal `v=spf1` matched without
+ * regard to case and terminated by SP or the end of the record. `v=spf10` is
+ * explicitly not an SPF1 record, so it must neither be selected nor counted
+ * towards the one-record limit. g_ascii_strncasecmp stops at the terminator,
+ * which a TXT string as short as "" needs.
+ */
+static inline gboolean
+spf_is_spf1_record(const char *txt)
+{
+	if (g_ascii_strncasecmp(txt, SPF_VER1_STR, sizeof(SPF_VER1_STR) - 1) != 0) {
+		return FALSE;
+	}
+
+	const char terminator = txt[sizeof(SPF_VER1_STR) - 1];
+
+	return terminator == '\0' || terminator == ' ';
+}
+
 static gboolean
 spf_process_txt_record(struct spf_record *rec, struct spf_resolved_element *resolved,
 					   struct rdns_reply *reply, struct rdns_reply_entry **pselected)
@@ -894,7 +913,7 @@ spf_process_txt_record(struct spf_record *rec, struct spf_resolved_element *reso
 	LL_FOREACH(reply->entries, elt)
 	{
 		if (elt->type == RDNS_REQUEST_TXT) {
-			if (strncmp(elt->content.txt.data, "v=spf1", sizeof("v=spf1") - 1) == 0) {
+			if (spf_is_spf1_record(elt->content.txt.data)) {
 				nspf1++;
 
 				if (selected == NULL) {
