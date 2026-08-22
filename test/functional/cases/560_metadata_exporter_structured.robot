@@ -17,6 +17,8 @@ ${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${REDIS_SCOPE}         Suite
 ${SMTP_STATUS}         ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp.status
 ${SMTP_PID}            ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp.pid
+${SMTP_STATUS_2}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp2.status
+${SMTP_PID_2}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp2.pid
 
 *** Test Cases ***
 Structured export to Redis stream - UUID v7 and metadata
@@ -95,16 +97,43 @@ Email export expands and validates selector addresses
   Should Contain  ${rspamd_log}  METADATA_OPTIONS_EXPANDED
   Should Not Contain  ${rspamd_log}  METADATA_OPTIONS_FAILED
 
+Email export auto-encodes non-ASCII headers
+  [Documentation]  Non-ASCII address display names and Subject get RFC 2047-encoded
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com,second@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_2}
+  ${smtp2} =  Get File  ${SMTP_STATUS_2}
+  Should Contain  ${smtp2}  From: J=?UTF-8?Q?
+  Should Contain  ${smtp2}  To: =?UTF-8?Q?
+  Should Contain  ${smtp2}  Subject: Pr=?UTF-8?Q?
+  Should Contain  ${smtp2}  <sender@example.com>
+  Should Contain  ${smtp2}  <first@example.com>, <second@example.com>
+  Should Contain  ${smtp2}  Cc: Jörg <third@example.com> (Kommentar)
+  Should Contain  ${smtp2}  Metadata alert
+  Should Not Contain  ${smtp2}  Jörg Müller
+  Should Not Contain  ${smtp2}  Änne Beispiel
+  Should Not Contain  ${smtp2}  Prüfung möglich
+
 *** Keywords ***
 Metadata Exporter Structured Setup
   Run Redis
+  Remove Files  ${SMTP_STATUS}  ${SMTP_STATUS_2}
   ${smtp} =  Start Dummy Smtp  11126  sink  127.0.0.1  ${SMTP_PID}
   ...  --status-file  ${SMTP_STATUS}
   Set Test Variable  ${DUMMY_SMTP_PROC}  ${smtp}
+  ${smtp2} =  Start Dummy Smtp  11127  sink  127.0.0.1  ${SMTP_PID_2}
+  ...  --status-file  ${SMTP_STATUS_2}
+  Set Test Variable  ${DUMMY_SMTP_PROC_2}  ${smtp2}
   Rspamd Setup
 
 Metadata Exporter Structured Teardown
   Rspamd Teardown
   Terminate Process  ${DUMMY_SMTP_PROC}
   Wait For Process  ${DUMMY_SMTP_PROC}
+  Terminate Process  ${DUMMY_SMTP_PROC_2}
+  Wait For Process  ${DUMMY_SMTP_PROC_2}
   Redis Teardown
