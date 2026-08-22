@@ -23,6 +23,10 @@ ${SMTP_STATUS_3}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp3.status
 ${SMTP_PID_3}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp3.pid
 ${SMTP_STATUS_4}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp4.status
 ${SMTP_PID_4}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp4.pid
+${SMTP_STATUS_5}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp5.status
+${SMTP_PID_5}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp5.pid
+${SMTP_STATUS_6}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp6.status
+${SMTP_PID_6}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp6.pid
 
 *** Test Cases ***
 Structured export to Redis stream - UUID v7 and metadata
@@ -89,7 +93,7 @@ Email export expands and validates selector addresses
   Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS}
   ${smtp} =  Get File  ${SMTP_STATUS}
   Should Contain  ${smtp}  MAIL FROM: <sender@example.com>
-  Should Contain  ${smtp}  HELO selector-test@example.com
+  Should Contain  ${smtp}  EHLO selector-test@example.com
   Should Contain  ${smtp}  RCPT TO: <first@example.com>
   Should Contain  ${smtp}  RCPT TO: <second@example.com>
   Should Not Contain  ${smtp}  not-an-address
@@ -193,6 +197,7 @@ Email export preserves template body MIME headers
   ${smtp4} =  Get File  ${SMTP_STATUS_4}
   ${info} =  Validate Multipart Email  ${smtp4}
 
+  Should Not Contain  ${smtp4}  BODY=8BITMIME
   Should Be True  ${info}[is_multipart]
   Should Be Equal  ${info}[subtype]  mixed
   Should Be Equal  ${info}[mime_version]  1.0
@@ -211,10 +216,42 @@ Email export preserves template body MIME headers
   Should Be Equal  ${part2}[content_type]  text/plain
   Should Be Equal  ${part2}[decoded_text]  alpha\nbeta\ngamma
 
+Email export negotiates BODY=8BITMIME when advertised
+  [Documentation]  lua_smtp tries EHLO first; when the server advertises
+  ...  8BITMIME, MAIL FROM gets the BODY=8BITMIME parameter.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_5}
+  ${smtp5} =  Get File  ${SMTP_STATUS_5}
+  Should Contain  ${smtp5}  EHLO selector-test@example.com
+  Should Contain  ${smtp5}  MAIL FROM: <sender@example.com> BODY=8BITMIME
+  Should Not Contain  ${smtp5}  HELO selector-test@example.com
+
+Email export falls back to HELO when EHLO is rejected
+  [Documentation]  A server that rejects EHLO gets a plain HELO retry, and
+  ...  MAIL FROM is sent without a BODY= parameter.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_6}
+  ${smtp6} =  Get File  ${SMTP_STATUS_6}
+  Should Contain  ${smtp6}  EHLO selector-test@example.com
+  Should Contain  ${smtp6}  HELO selector-test@example.com
+  Should Contain  ${smtp6}  MAIL FROM: <sender@example.com>
+  Should Not Contain  ${smtp6}  BODY=8BITMIME
+
 *** Keywords ***
 Metadata Exporter Structured Setup
   Run Redis
   Remove Files  ${SMTP_STATUS}  ${SMTP_STATUS_2}  ${SMTP_STATUS_3}  ${SMTP_STATUS_4}
+  ...  ${SMTP_STATUS_5}  ${SMTP_STATUS_6}
   ${smtp} =  Start Dummy Smtp  11126  sink  127.0.0.1  ${SMTP_PID}
   ...  --status-file  ${SMTP_STATUS}
   Set Test Variable  ${DUMMY_SMTP_PROC}  ${smtp}
@@ -225,8 +262,14 @@ Metadata Exporter Structured Setup
   ...  --status-file  ${SMTP_STATUS_3}
   Set Test Variable  ${DUMMY_SMTP_PROC_3}  ${smtp3}
   ${smtp4} =  Start Dummy Smtp  11129  sink  127.0.0.1  ${SMTP_PID_4}
-  ...  --status-file  ${SMTP_STATUS_4}
+  ...  --status-file  ${SMTP_STATUS_4}  --ehlo-caps  X8BITMIME
   Set Test Variable  ${DUMMY_SMTP_PROC_4}  ${smtp4}
+  ${smtp5} =  Start Dummy Smtp  11130  sink  127.0.0.1  ${SMTP_PID_5}
+  ...  --status-file  ${SMTP_STATUS_5}  --ehlo-caps  8BITMIME
+  Set Test Variable  ${DUMMY_SMTP_PROC_5}  ${smtp5}
+  ${smtp6} =  Start Dummy Smtp  11131  sink  127.0.0.1  ${SMTP_PID_6}
+  ...  --status-file  ${SMTP_STATUS_6}  --reject-ehlo
+  Set Test Variable  ${DUMMY_SMTP_PROC_6}  ${smtp6}
   Rspamd Setup
 
 Metadata Exporter Structured Teardown
@@ -239,4 +282,8 @@ Metadata Exporter Structured Teardown
   Wait For Process  ${DUMMY_SMTP_PROC_3}
   Terminate Process  ${DUMMY_SMTP_PROC_4}
   Wait For Process  ${DUMMY_SMTP_PROC_4}
+  Terminate Process  ${DUMMY_SMTP_PROC_5}
+  Wait For Process  ${DUMMY_SMTP_PROC_5}
+  Terminate Process  ${DUMMY_SMTP_PROC_6}
+  Wait For Process  ${DUMMY_SMTP_PROC_6}
   Redis Teardown
