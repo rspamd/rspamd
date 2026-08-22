@@ -70,6 +70,7 @@ Symbols: $symbols]],
   gzip = false,
   keepalive = false,
   no_ssl_verify = false,
+  email_auto_encode_headers = true,
 }
 
 local variables = {
@@ -185,6 +186,7 @@ local settings_fallback_fields = {
   'channel',
   'connect_timeout',
   'defer',
+  'email_auto_encode_headers',
   'gzip',
   'helo',
   'host',
@@ -286,6 +288,125 @@ local function normalize_mail_from(task, value)
   end
   rspamd_logger.errx(task, 'mail_from is not a valid single email address: %s', value)
   return nil
+end
+
+local address_headers = {
+  from = true,
+  to = true,
+  cc = true,
+  bcc = true,
+  sender = true,
+  ['reply-to'] = true,
+  ['resent-from'] = true,
+  ['resent-to'] = true,
+  ['resent-cc'] = true,
+  ['resent-bcc'] = true,
+  ['resent-sender'] = true,
+}
+
+local structured_headers = {
+  ['authentication-results'] = true,
+  ['arc-authentication-results'] = true,
+  ['arc-message-signature'] = true,
+  ['arc-seal'] = true,
+  ['content-disposition'] = true,
+  ['content-transfer-encoding'] = true,
+  ['content-type'] = true,
+  date = true,
+  ['dkim-signature'] = true,
+  ['in-reply-to'] = true,
+  ['list-archive'] = true,
+  ['list-help'] = true,
+  ['list-id'] = true,
+  ['list-owner'] = true,
+  ['list-post'] = true,
+  ['list-subscribe'] = true,
+  ['list-unsubscribe'] = true,
+  ['message-id'] = true,
+  ['mime-version'] = true,
+  received = true,
+  references = true,
+  ['resent-date'] = true,
+  ['resent-message-id'] = true,
+  ['return-path'] = true,
+}
+
+local function is_ascii(str)
+  return not string.find(str, '[\128-\255]')
+end
+
+local function encode_address_header(task, value)
+  if string.find(value, '[():]') then
+    return value
+  end
+
+  local parsed = rspamd_util.parse_mail_address(value, task:get_mempool())
+  if not parsed or #parsed == 0 then
+    return value
+  end
+
+  local changed = false
+  local out = {}
+  for _, a in ipairs(parsed) do
+    if a.name and a.name ~= '' and not is_ascii(a.name) then
+      changed = true
+      local encoded_name = rspamd_util.mime_header_encode(a.name, true)
+      if a.addr and a.addr ~= '' then
+        table.insert(out, encoded_name .. ' <' .. a.addr .. '>')
+      else
+        table.insert(out, encoded_name)
+      end
+    else
+      table.insert(out, a.raw)
+    end
+  end
+
+  if not changed then
+    return value
+  end
+
+  return table.concat(out, ', ')
+end
+
+local function encode_email_headers(task, text)
+  local sep_start, sep_end = string.find(text, '\r?\n\r?\n')
+  if not sep_start then
+    return text
+  end
+  local header_block = string.sub(text, 1, sep_start - 1)
+  local separator = string.sub(text, sep_start, sep_end)
+  local body = string.sub(text, sep_end + 1)
+
+  local logical = {}
+  for line in (header_block .. '\n'):gmatch('(.-)\n') do
+    if #logical > 0 and string.match(line, '^[ \t]') then
+      logical[#logical] = logical[#logical] .. '\n' .. line
+    else
+      table.insert(logical, line)
+    end
+  end
+
+  local out = {}
+  for _, entry in ipairs(logical) do
+    local colon = string.find(entry, ':', 1, true)
+    if not colon then
+      table.insert(out, entry)
+    else
+      local name = string.sub(entry, 1, colon - 1)
+      local value = string.gsub(string.sub(entry, colon + 1), '\r?\n[ \t]+', ' ')
+      value = string.match(value, '^[ \t]*(.*)$')
+      local lname = string.lower(name)
+      if address_headers[lname] then
+        table.insert(out, name .. ': ' .. encode_address_header(task, value))
+      elseif structured_headers[lname] then
+        table.insert(out, name .. ': ' .. lua_util.fold_header_with_encoding(task, name, value, { encode = false }))
+      else
+        table.insert(out, name .. ': ' .. lua_util.fold_header_with_encoding(task, name, value, { encode = true }))
+      end
+    end
+  end
+
+  return table.concat(out, '\n') .. separator .. body
 end
 
 local function get_general_metadata(task, flatten, no_content)
@@ -470,7 +591,11 @@ local formatters = {
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
     tmpl = expand_selectors(task, tmpl, meta)
-    return lua_util.template(tmpl, meta), { mail_targets = mail_targets }
+    local rendered = lua_util.template(tmpl, meta)
+    if rule.email_auto_encode_headers then
+      rendered = encode_email_headers(task, rendered)
+    end
+    return rendered, { mail_targets = mail_targets }
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
