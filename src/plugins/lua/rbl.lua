@@ -254,45 +254,81 @@ matchers.glob = function(_, to_match, _, map)
 end
 
 local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
-  local function make_option(ip, label)
+  local function make_option(origin, ip, label)
     if ip then
       return string.format('%s:%s:%s',
-          resolve_table_elt.orig,
+          origin,
           label,
           ip)
     else
       return string.format('%s:%s',
-          resolve_table_elt.orig,
+          origin,
           label)
     end
   end
 
-  local function insert_result(s, ip, label)
-    if rbl.symbols_prefixes then
-      local prefix = rbl.symbols_prefixes[label]
-
-      if not prefix then
-        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
-        task:insert_result(s, 1.0, make_option(ip, label))
-      else
-        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip, label))
-      end
-    else
-      task:insert_result(s, 1.0, make_option(ip, label))
-    end
-  end
+  -- merge_checks false restores the pre-4.1.6 one-insertion-per-check behavior
+  local merge_checks = rbl.merge_checks ~= false
 
   local function insert_results(s, ip)
-    for label in pairs(resolve_table_elt.what) do
-      insert_result(s, ip, label)
+    -- Only the first insertion of a symbol carries score; later spellings just add options
+    local scored_symbols = {}
+
+    local function insert_origin_labels(sym_name, origin, labels)
+      table.sort(labels)
+
+      if merge_checks then
+        local weight = scored_symbols[sym_name] and 0.0 or 1.0
+        scored_symbols[sym_name] = true
+        task:insert_result(sym_name, weight,
+            make_option(origin, ip, table.concat(labels, ',')))
+      else
+        for _, label in ipairs(labels) do
+          task:insert_result(sym_name, 1.0, make_option(origin, ip, label))
+        end
+      end
+    end
+
+    for origin, origin_labels in pairs(resolve_table_elt.origins) do
+      if rbl.symbols_prefixes then
+        local by_prefix = {}
+        for label in pairs(origin_labels) do
+          local prefix = rbl.symbols_prefixes[label]
+          local sym_name
+          if not prefix then
+            rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
+            sym_name = s
+          else
+            sym_name = prefix .. '_' .. s
+          end
+          if not by_prefix[sym_name] then
+            by_prefix[sym_name] = {}
+          end
+          by_prefix[sym_name][#by_prefix[sym_name] + 1] = tostring(label)
+        end
+        for sym_name, labels in pairs(by_prefix) do
+          insert_origin_labels(sym_name, origin, labels)
+        end
+      else
+        local labels = {}
+        for label in pairs(origin_labels) do
+          labels[#labels + 1] = tostring(label)
+        end
+        insert_origin_labels(s, origin, labels)
+      end
     end
   end
 
   if err and (err ~= 'requested record is not found' and
       err ~= 'no records with this name') then
     rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
-    task:insert_result(rbl.symbol .. '_FAIL', 1, string.format('%s:%s',
-        resolve_table_elt.orig, err))
+    -- Report every merged origin, but only the first insertion carries weight
+    local failed_origins = lua_util.keys(resolve_table_elt.origins)
+    table.sort(failed_origins)
+    for i, origin in ipairs(failed_origins) do
+      task:insert_result(rbl.symbol .. '_FAIL', i == 1 and 1.0 or 0.0,
+          string.format('%s:%s', origin, err))
+    end
     return
   end
 
@@ -375,15 +411,17 @@ local function gen_rbl_callback(rule)
     if whitelist then
       local wl = whitelist[req_str]
       if wl then
-        lua_util.debugm(N, task,
-            'whitelisted request to %s by %s (%s) rbl rule (%s checked type, %s whitelist type)',
-            req_str, wl.type, wl.symbol, what, wl.type)
-        if wl.type == what then
-          -- This was decided to be a bad idea as in case of whitelisting a request to blacklist
-          -- is not even sent
-          --task:adjust_result(wl.symbol, 0.0 / 0.0, rule.symbol)
+        for _, wl_entry in ipairs(wl) do
+          lua_util.debugm(N, task,
+              'whitelisted request to %s by %s (%s) rbl rule (%s checked type, %s whitelist type)',
+              req_str, wl_entry.type, wl_entry.symbol, what, wl_entry.type)
+          if wl_entry.type == what then
+            -- This was decided to be a bad idea as in case of whitelisting a request to blacklist
+            -- is not even sent
+            --task:adjust_result(wl_entry.symbol, 0.0 / 0.0, rule.symbol)
 
-          return true
+            return true
+          end
         end
       end
     end
@@ -392,10 +430,14 @@ local function gen_rbl_callback(rule)
   end
 
   local function add_dns_request(task, req, forced, is_ip, requests_table, label, whitelist)
-    local req_str = req
-    if is_ip then
-      req_str = tostring(req)
+    -- Discard empty queries to avoid querying the RBL suffix itself
+    if not is_ip and (not req or req == '') then
+      lua_util.debugm(N, task, 'skip empty RBL request for %s (%s)',
+          rule.symbol, label)
+      return
     end
+
+    local req_str = tostring(req)
 
     if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
       return
@@ -413,7 +455,14 @@ local function gen_rbl_callback(rule)
       end
       if not nreq.what[label] then
         nreq.what[label] = true
+        lua_util.debugm(N, task, 'merging duplicate RBL request for %s: %s (%s added to %s)',
+            rule.symbol, req_str, label,
+            table.concat(lua_util.keys(nreq.what), ','))
       end
+      if not nreq.origins[req_str] then
+        nreq.origins[req_str] = {}
+      end
+      nreq.origins[req_str][label] = true
 
       return true, nreq -- Duplicate
     else
@@ -426,19 +475,21 @@ local function gen_rbl_callback(rule)
         if processed then
           nreq = {
             forced = forced,
-            n = processed,
+            n = tostring(processed):lower(),
             orig = req_str,
             resolve_ip = resolve_ip,
             what = { [label] = true },
+            origins = { [req_str] = { [label] = true } },
           }
           requests_table[req] = nreq
         end
       else
         local to_resolve
-        local origin = req
+        -- Strip trailing dots first so hashing treats "foo." and "foo" alike
+        local origin = tostring(req):gsub('%.+$', '')
 
         if not resolve_ip then
-          origin = maybe_make_hash(req, rule)
+          origin = maybe_make_hash(origin, rule)
           to_resolve = string.format('%s.%s',
               origin,
               rule.rbl)
@@ -446,6 +497,7 @@ local function gen_rbl_callback(rule)
           -- First, resolve origin stuff without hashing or anything
           to_resolve = origin
         end
+        to_resolve = to_resolve:lower()
 
         nreq = {
           forced = forced,
@@ -453,6 +505,7 @@ local function gen_rbl_callback(rule)
           orig = req_str,
           resolve_ip = resolve_ip,
           what = { [label] = true },
+          origins = { [req_str] = { [label] = true } },
         }
         requests_table[req] = nreq
       end
@@ -944,6 +997,36 @@ local function gen_rbl_callback(rule)
     end
 
     -- Now check all DNS requests pending and emit them
+    -- Deduplicate by actual DNS query name to merge equivalent queries from different checks
+    local deduped_req = {}
+    for _, req in pairs(dns_req) do
+      local dedupe_key = tostring(req.n):lower()
+      req.n = dedupe_key
+      local existing = deduped_req[dedupe_key]
+      if existing then
+        for label, _ in pairs(req.what) do
+          if not existing.what[label] then
+            existing.what[label] = true
+          end
+        end
+        for origin, labels in pairs(req.origins) do
+          if not existing.origins[origin] then
+            existing.origins[origin] = {}
+          end
+          for label in pairs(labels) do
+            existing.origins[origin][label] = true
+          end
+        end
+        if req.forced and not existing.forced then
+          existing.forced = true
+        end
+        lua_util.debugm(N, task, 'merging DNS request for %s: %s (same query %s)',
+            rule.symbol, req.orig, req.n)
+      else
+        deduped_req[dedupe_key] = req
+      end
+    end
+
     local r = task:get_resolver()
     -- Used for 2 passes ip resolution
     local resolved_req = {}
@@ -957,12 +1040,22 @@ local function gen_rbl_callback(rule)
             -- Check if we have rspamd{ip} userdata
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
-              local label = next(orig_resolve_table_elt.what)
-              local dup, nreq = add_dns_request(task, dns_res, false, true,
-                  resolved_req, label)
-              -- Add original name
-              if not dup then
-                nreq.orig = nreq.orig .. ':' .. orig_resolve_table_elt.n
+              local nreq
+              for label in pairs(orig_resolve_table_elt.what) do
+                _, nreq = add_dns_request(task, dns_res, false, true,
+                    resolved_req, label)
+              end
+
+              local ip_str = tostring(dns_res)
+              nreq.origins[ip_str] = nil
+              for origin, labels in pairs(orig_resolve_table_elt.origins) do
+                local resolved_origin = string.format('%s:%s', ip_str, origin)
+                if not nreq.origins[resolved_origin] then
+                  nreq.origins[resolved_origin] = {}
+                end
+                for label in pairs(labels) do
+                  nreq.origins[resolved_origin][label] = true
+                end
               end
             end
           end
@@ -992,7 +1085,7 @@ local function gen_rbl_callback(rule)
       end
     end
 
-    for name, req in pairs(dns_req) do
+    for name, req in pairs(deduped_req) do
       local val_res, val_error = validate_dns(req.n)
       if val_res then
         lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
@@ -1410,10 +1503,16 @@ local function rbl_callback_white(task)
         lua_util.debugm(N, task, 'found whitelist from %s: %s(%s)', w,
             elt, what)
         if elt and what then
-          whitelisted_elements[elt] = {
-            type = what,
-            symbol = w,
-          }
+          if not whitelisted_elements[elt] then
+            whitelisted_elements[elt] = {}
+          end
+          -- `what` might be a comma-joined list of labels (merged request)
+          for label in what:gmatch('[^,]+') do
+            table.insert(whitelisted_elements[elt], {
+              type = label,
+              symbol = w,
+            })
+          end
         end
       end
     end
