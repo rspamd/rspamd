@@ -122,13 +122,72 @@ local function sendmail(opts, message, callback)
           return msg
         end
 
+        -- RFC 5321 4.5.2 transparency: a line starting with '.' is transmitted
+        -- with an extra leading '.', which the receiver strips. Without this a
+        -- lone '.' line in the body would end the DATA phase early and
+        -- truncate the message. Runs after CRLF normalization, so every line
+        -- is known to end in CRLF.
+        -- `at_line_start` carries line state across chunks of a split message
+        -- so a '.' at the head of a chunk is only stuffed when the previous
+        -- chunk actually ended a line.
+        local function dot_stuff(msg, at_line_start)
+          local mtype = type(msg)
+          local len
+
+          if mtype == 'userdata' then
+            len = msg:len()
+          elseif mtype == 'string' then
+            len = #msg
+          else
+            return msg, at_line_start
+          end
+
+          if len == 0 then
+            return msg, at_line_start
+          end
+
+          -- Matching on LF alone also covers CRLF, so stuffing stays correct
+          -- even if the content reaches us with mixed line endings
+          local leading_dot, embedded_dot
+          if mtype == 'userdata' then
+            -- len/at/find inspect the text in place; only stuffing copies it
+            leading_dot = at_line_start and msg:at(1) == 46
+            embedded_dot = msg:find('\n.') ~= nil
+          else
+            leading_dot = at_line_start and string.sub(msg, 1, 1) == '.'
+            embedded_dot = string.find(msg, '\n.', 1, true) ~= nil
+          end
+
+          local ends_line
+          if mtype == 'userdata' then
+            ends_line = msg:at(len) == 10
+          else
+            ends_line = string.sub(msg, -1) == '\n'
+          end
+
+          if not leading_dot and not embedded_dot then
+            return msg, ends_line
+          end
+
+          local str = mtype == 'userdata' and msg:str() or msg
+          str = string.gsub(str, '\n%.', '\n..')
+          if leading_dot then
+            str = '.' .. str
+          end
+
+          return str, ends_line
+        end
+
         if type(message) == 'string' or type(message) == 'userdata' then
           message = normalize_to_crlf(message)
+          message = dot_stuff(message, true)
           conn:add_write(pre_quit_cb, { message, CRLF .. '.' .. CRLF })
         else
           -- Array of chunks
+          local at_line_start = true
           for i = 1, #message do
             message[i] = normalize_to_crlf(message[i])
+            message[i], at_line_start = dot_stuff(message[i], at_line_start)
           end
           table.insert(message, CRLF .. '.' .. CRLF)
           conn:add_write(pre_quit_cb, message)
