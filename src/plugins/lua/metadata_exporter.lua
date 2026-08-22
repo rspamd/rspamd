@@ -1195,6 +1195,9 @@ local pushers = {
       recipients = recipients,
       helo = rule.helo,
       timeout = rule.timeout,
+      connect_timeout = rule.connect_timeout,
+      read_timeout = rule.read_timeout,
+      write_timeout = rule.write_timeout,
     }, formatted, sendmail_cb)
   end,
   json_raw_tcp = function(task, formatted, rule)

@@ -240,23 +240,80 @@ local function sendmail(opts, message, callback)
         conn:add_read(from_done_cb, CRLF)
       end
     end
-    local function hello_done_cb(merr, mdata)
-      if no_error_read(merr, mdata) then
-        stage = 'from'
-        conn:add_write(from_cb, string.format(
-            'MAIL FROM: <%s>%s', opts.from, CRLF))
-      end
+    local supports_8bitmime = false
+
+    local function send_mail_from()
+      stage = 'from'
+      local mail_params = supports_8bitmime and ' BODY=8BITMIME' or ''
+      conn:add_write(from_cb, string.format(
+          'MAIL FROM: <%s>%s%s', opts.from, mail_params, CRLF))
     end
 
-    -- HELO stage
-    local function hello_cb(merr)
+    -- HELO stage (fallback used when EHLO is rejected or unsupported)
+    local function helo_done_cb(merr, mdata)
+      if no_error_read(merr, mdata) then
+        send_mail_from()
+      end
+    end
+    local function helo_cb(merr)
       if no_error_write(merr) then
-        conn:add_read(hello_done_cb, CRLF)
+        conn:add_read(helo_done_cb, CRLF)
+      end
+    end
+    local function send_helo()
+      stage = 'helo'
+      supports_8bitmime = false
+      conn:add_write(helo_cb, string.format('HELO %s%s',
+          opts.helo, CRLF))
+    end
+
+    -- EHLO stage
+    local ehlo_done_cb
+    local ehlo_ok = true
+    ehlo_done_cb = function(merr, mdata)
+      if merr then
+        callback(false, string.format('error on stage %s: %s',
+            stage, merr))
+        if conn then
+          conn:close()
+        end
+        return
+      end
+      if type(mdata) ~= 'string' then
+        mdata = tostring(mdata)
+      end
+      local code, sep = string.match(mdata, '^(%d%d%d)([ %-])')
+      if not code then
+        callback(false, string.format('bad smtp response on stage %s: "%s"',
+            stage, mdata))
+        if conn then
+          conn:close()
+        end
+        return
+      end
+      if string.sub(code, 1, 1) ~= '2' then
+        ehlo_ok = false
+      end
+      local capability = string.match(mdata, '^%d%d%d[ %-]%s*([%w][%w-]*)')
+      if capability and string.upper(capability) == '8BITMIME' then
+        supports_8bitmime = true
+      end
+      if sep == '-' then
+        conn:add_read(ehlo_done_cb, CRLF)
+      elseif ehlo_ok then
+        send_mail_from()
+      else
+        send_helo()
+      end
+    end
+    local function ehlo_cb(merr)
+      if no_error_write(merr) then
+        conn:add_read(ehlo_done_cb, CRLF)
       end
     end
     if no_error_read(err, data) then
-      stage = 'helo'
-      conn:add_write(hello_cb, string.format('HELO %s%s',
+      stage = 'ehlo'
+      conn:add_write(ehlo_cb, string.format('EHLO %s%s',
           opts.helo, CRLF))
     end
   end
@@ -268,6 +325,12 @@ local function sendmail(opts, message, callback)
   local tcp_opts = lua_util.shallowcopy(opts)
   tcp_opts.stop_pattern = CRLF
   tcp_opts.timeout = opts.timeout or default_timeout
+  -- Opt into per-phase timeouts so EHLO (and a HELO fallback retry) can't
+  -- eat into the budget later stages (RCPT/DATA/QUIT) need; otherwise a
+  -- single non-renewed budget is deducted across the whole transaction.
+  tcp_opts.connect_timeout = opts.connect_timeout or tcp_opts.timeout
+  tcp_opts.read_timeout = opts.read_timeout or tcp_opts.timeout
+  tcp_opts.write_timeout = opts.write_timeout or tcp_opts.timeout
   tcp_opts.callback = mail_cb
 
   if not rspamd_tcp.request(tcp_opts) then
