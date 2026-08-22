@@ -77,6 +77,10 @@ def _make_handler(args):
                             in_data = False
                             stream.write(b"250 queued\r\n")
                         else:
+                            # RFC 5321 4.5.2: the receiver strips the extra
+                            # leading '.' the sender added for transparency
+                            if text.startswith("."):
+                                text = text[1:]
                             message.append(text)
                         continue
 
