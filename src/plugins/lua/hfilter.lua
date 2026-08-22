@@ -290,6 +290,16 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       return
     end
 
+    -- Every check below is suppressed when a lookup failed transiently,
+    -- which is correct but indistinguishable from a clean pass. Publish the
+    -- failure so that a deployment enforcing these symbols can soft reject
+    -- what it could not verify instead of letting it through as verified.
+    -- NXDOMAIN does not count: that is an answer, already reported as
+    -- HFILTER_<suffix>_NORES_A_OR_MX.
+    if address_lookup_failed then
+      task:insert_result('HFILTER_' .. symbol_suffix .. '_DNSFAIL', 1.0, host)
+    end
+
     if not address_lookup_failed and eq_ip and eq_ip ~= '' then
       local matched = false
       for _, result in pairs(resolved_address) do
@@ -554,7 +564,8 @@ local symbols_helo = {
   "HFILTER_HELO_NORESOLVE_MX",
   "HFILTER_HELO_NORES_A_OR_MX",
   "HFILTER_HELO_IP_A",
-  "HFILTER_HELO_NOT_FQDN"
+  "HFILTER_HELO_NOT_FQDN",
+  "HFILTER_HELO_DNSFAIL"
 }
 local symbols_hostname = {
   "HFILTER_HOSTNAME_1",
@@ -570,7 +581,8 @@ local symbols_rcpt = {
 local symbols_mid = {
   "HFILTER_MID_NORESOLVE_MX",
   "HFILTER_MID_NORES_A_OR_MX",
-  "HFILTER_MID_NOT_FQDN"
+  "HFILTER_MID_NOT_FQDN",
+  "HFILTER_MID_DNSFAIL"
 }
 local symbols_url = {
   "HFILTER_URL_ONLY",
@@ -580,6 +592,7 @@ local symbols_from = {
   "HFILTER_FROMHOST_NORESOLVE_MX",
   "HFILTER_FROMHOST_NORES_A_OR_MX",
   "HFILTER_FROMHOST_NOT_FQDN",
+  "HFILTER_FROMHOST_DNSFAIL",
   "HFILTER_FROM_BOUNCE"
 }
 
