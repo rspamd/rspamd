@@ -27,6 +27,8 @@ ${SMTP_STATUS_5}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp5.status
 ${SMTP_PID_5}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp5.pid
 ${SMTP_STATUS_6}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp6.status
 ${SMTP_PID_6}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp6.pid
+${SMTP_STATUS_7}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp7.status
+${SMTP_PID_7}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp7.pid
 
 *** Test Cases ***
 Structured export to Redis stream - UUID v7 and metadata
@@ -247,11 +249,55 @@ Email export falls back to HELO when EHLO is rejected
   Should Contain  ${smtp6}  MAIL FROM: <sender@example.com>
   Should Not Contain  ${smtp6}  BODY=8BITMIME
 
+Email export renders a literal content part
+  [Documentation]  A `content` part (as opposed to content_from_variables) is
+  ...  expanded via variables/selectors and lua_util.template, exactly like
+  ...  the email template body.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_7}
+  ${smtp7} =  Get File  ${SMTP_STATUS_7}
+  ${info} =  Validate Multipart Email  ${smtp7}
+
+  Should Be True  ${info}[is_multipart]
+  Should Be Equal As Integers  ${info}[part_count]  1
+
+  ${part1} =  Set Variable  ${info}[parts][0]
+  Should Be Equal  ${part1}[content_type]  text/plain
+  Should Be Equal  ${part1}[cte]  7bit
+  Should Be Equal  ${part1}[filename]  selector-test@example.com-template-custom.txt
+  Should Be Equal  ${part1}[decoded_text]
+  ...  Static literal line one.\nHost is 127.0.0.1 and template value is template-custom.
+
+Invalid rule with unknown key fails configtest
+  [Documentation]  A rule with an unrecognized option is rejected by the
+  ...  schema, disabled at config load time, and reported by configtest.
+  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log
+  Should Contain  ${rspamd_log}  INVALID_RULE_BAD_KEY
+  Should Contain  ${rspamd_log}  invalid configuration
+  Should Contain  ${rspamd_log}  DISABLED
+  ${result} =  Run Process  ${RSPAMADM}
+  ...  configtest  -c  ${CONFIG}
+  ...  env:RSPAMD_LOCAL_CONFDIR=/non-existent
+  ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
+  Should Not Be Equal As Integers  ${result.rc}  0
+  Should Contain  ${result.stdout}${result.stderr}  configuration error: module metadata_exporter
+  Should Contain  ${result.stdout}${result.stderr}  INVALID_RULE_BAD_KEY
+  Should Contain  ${result.stdout}${result.stderr}  INVALID_PART_BOTH_SOURCES
+  Should Contain  ${result.stdout}${result.stderr}  INVALID_PART_NO_SOURCE
+  Should Contain  ${result.stdout}${result.stderr}  custom_variables[invalid_non_string]
+  Should Contain  ${result.stdout}${result.stderr}  custom_variables[invalid_no_callback]
+
 *** Keywords ***
 Metadata Exporter Structured Setup
   Run Redis
   Remove Files  ${SMTP_STATUS}  ${SMTP_STATUS_2}  ${SMTP_STATUS_3}  ${SMTP_STATUS_4}
-  ...  ${SMTP_STATUS_5}  ${SMTP_STATUS_6}
+  ...  ${SMTP_STATUS_5}  ${SMTP_STATUS_6}  ${SMTP_STATUS_7}
   ${smtp} =  Start Dummy Smtp  11126  sink  127.0.0.1  ${SMTP_PID}
   ...  --status-file  ${SMTP_STATUS}
   Set Test Variable  ${DUMMY_SMTP_PROC}  ${smtp}
@@ -270,6 +316,9 @@ Metadata Exporter Structured Setup
   ${smtp6} =  Start Dummy Smtp  11131  sink  127.0.0.1  ${SMTP_PID_6}
   ...  --status-file  ${SMTP_STATUS_6}  --reject-ehlo
   Set Test Variable  ${DUMMY_SMTP_PROC_6}  ${smtp6}
+  ${smtp7} =  Start Dummy Smtp  11132  sink  127.0.0.1  ${SMTP_PID_7}
+  ...  --status-file  ${SMTP_STATUS_7}
+  Set Test Variable  ${DUMMY_SMTP_PROC_7}  ${smtp7}
   Rspamd Setup
 
 Metadata Exporter Structured Teardown
@@ -286,4 +335,6 @@ Metadata Exporter Structured Teardown
   Wait For Process  ${DUMMY_SMTP_PROC_5}
   Terminate Process  ${DUMMY_SMTP_PROC_6}
   Wait For Process  ${DUMMY_SMTP_PROC_6}
+  Terminate Process  ${DUMMY_SMTP_PROC_7}
+  Wait For Process  ${DUMMY_SMTP_PROC_7}
   Redis Teardown
