@@ -128,6 +128,8 @@ local rule_schema = T.table({
       :doc({ summary = "multipart/<type> subtype for email_parts" }),
   email_parts = email_parts_schema
       :doc({ summary = "Extra MIME parts; use one array (email_parts = [ {...}, {...} ]), not repeated blocks" }),
+  auto_grouping = T.boolean():optional()
+      :doc({ summary = "Wrap a text/plain + text/html email_parts pair in multipart/alternative (default true)" }),
 
   -- redis_pubsub backend
   channel = T.string():optional()
@@ -165,6 +167,82 @@ local backend_required_elements = {
   redis_list = { 'list_key' },
 }
 
+-- Classifies a part for multipart/alternative auto-grouping: an inline
+-- text/plain or text/html part (no filename, not an explicit attachment) is
+-- a grouping candidate, everything else stays a sibling part
+local function classify_text_kind(content_type, filename, disposition)
+  if filename then
+    return 'other'
+  end
+  if string.lower(disposition or 'inline') ~= 'inline' then
+    return 'other'
+  end
+  -- %f[%W] is a frontier guard so the subtype must end here (at ';', at
+  -- whitespace or at end of string) rather than matching e.g. text/plaintext
+  local ctype = string.lower(content_type or '')
+  if string.find(ctype, '^text/plain%f[%W]') then
+    return 'plain'
+  elseif string.find(ctype, '^text/html%f[%W]') then
+    return 'html'
+  end
+  return 'other'
+end
+
+-- Decides the MIME layout for a set of classified parts. `descriptors` is an
+-- ordered array of { kind = 'plain'|'html'|'other', part = <opaque> } (`part`
+-- may be omitted by callers that only need the ambiguity check). Returns
+-- subtype, tree on success - tree entries are { part = <opaque> } or
+-- { alternative = { leaf, leaf } } - or nil, err if the grouping is ambiguous
+-- (more than one plain or html candidate, which multipart/alternative cannot
+-- represent without silently discarding one of them).
+local function plan_layout(descriptors, opts)
+  opts = opts or {}
+  local fallback_subtype = opts.email_parts_type or 'mixed'
+
+  local function flat()
+    local tree = {}
+    for _, d in ipairs(descriptors) do
+      tree[#tree + 1] = { part = d.part }
+    end
+    return fallback_subtype, tree
+  end
+
+  if opts.auto_grouping == false then
+    return flat()
+  end
+
+  local plain, html, other = {}, {}, {}
+  for _, d in ipairs(descriptors) do
+    if d.kind == 'plain' then
+      plain[#plain + 1] = d
+    elseif d.kind == 'html' then
+      html[#html + 1] = d
+    else
+      other[#other + 1] = d
+    end
+  end
+
+  if #plain == 0 or #html == 0 then
+    return flat()
+  end
+  if #plain > 1 or #html > 1 then
+    return nil, 'has multiple text/plain or text/html email_parts, which is ambiguous inside ' ..
+        'multipart/alternative - merge them into one part using an array content/content_from_variables ' ..
+        'value, or set auto_grouping = false'
+  end
+
+  local alternative = { { part = plain[1].part }, { part = html[1].part } }
+  if #other == 0 and not opts.email_parts_type then
+    return 'alternative', alternative
+  end
+
+  local tree = { { alternative = alternative } }
+  for _, d in ipairs(other) do
+    tree[#tree + 1] = { part = d.part }
+  end
+  return fallback_subtype, tree
+end
+
 PluginSchema.register("plugins.metadata_exporter.rule", rule_schema)
 PluginSchema.register("plugins.metadata_exporter.part", part_schema)
 
@@ -173,4 +251,6 @@ return {
   part_schema = part_schema,
   backend_required_elements = backend_required_elements,
   encodings = encodings,
+  classify_text_kind = classify_text_kind,
+  plan_layout = plan_layout,
 }
