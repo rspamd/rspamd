@@ -190,6 +190,7 @@ local expandable_rule_fields = {
 }
 
 local settings_fallback_fields = {
+  'auto_grouping',
   'channel',
   'connect_timeout',
   'defer',
@@ -393,6 +394,21 @@ local function logical_header_name(entry)
   return name and string.lower(name) or nil
 end
 
+local function logical_header_value(entry)
+  local colon = string.find(entry, ':', 1, true)
+  return colon and string.match(string.sub(entry, colon + 1), '^%s*(.-)%s*$') or ''
+end
+
+local function has_mime_parameter(value, name)
+  local unfolded = string.lower(string.gsub(value, '\r?\n[ \t]+', ' '))
+  for parameter in string.gmatch(unfolded, ';%s*([^=;%s]+)%s*=') do
+    if parameter == name or string.match(parameter, '^' .. name .. '%*%d*%*?$') then
+      return true
+    end
+  end
+  return false
+end
+
 local function encode_email_headers(task, text)
   local sep_start, sep_end = string.find(text, '\r?\n\r?\n')
   if not sep_start then
@@ -554,6 +570,19 @@ local function build_part_header_lines(content_type, filename, disposition, cte)
   return table.concat(lines, '\n')
 end
 
+-- Joins already-rendered MIME part blocks (header+blank+body each) behind one
+-- boundary, RFC 2046 style: a boundary line before every part, a closing one
+-- (with trailing "--") at the end.
+local function render_multipart(parts, boundary)
+  local body = {}
+  for _, p in ipairs(parts) do
+    table.insert(body, '--' .. boundary)
+    table.insert(body, p)
+  end
+  table.insert(body, '--' .. boundary .. '--')
+  return table.concat(body, '\n')
+end
+
 -- Flattens one custom variable result into part content. Arrays (a
 -- selector-backed list, for instance) are flattened depth-first into one line
 -- per element rather than stringified as a table address; anything that cannot
@@ -622,29 +651,49 @@ local function part_content_names(value)
   return { value }
 end
 
--- Builds the multipart/<rule.email_parts_type> body for email_alert: an
--- optional leading part from the template's own body (skipped only when
--- that body is truly empty - a whitespace-only body still becomes a part),
--- followed by one part per rule.email_parts entry. Returns nil on any
+-- Renders the template's own body into a part block, returning its
+-- classification kind alongside it for the layout planner
+local function build_template_part(task, template_body, template_part_headers)
+  local content_type = 'text/plain; charset=utf-8'
+  if template_part_headers.content_type then
+    for _, entry in ipairs(template_part_headers) do
+      if logical_header_name(entry) == 'content-type' then
+        content_type = logical_header_value(entry)
+      end
+    end
+  end
+
+  local headers = {}
+  for _, entry in ipairs(template_part_headers) do
+    table.insert(headers, entry)
+  end
+  if not template_part_headers.content_type then
+    table.insert(headers, 'Content-Type: ' .. content_type)
+  end
+  if not template_part_headers.cte then
+    local cte = guess_text_cte(template_body)
+    table.insert(headers, 'Content-Transfer-Encoding: ' .. cte)
+    template_body = encode_part_content(task, template_body, cte)
+  end
+  local part = table.concat(headers, '\n') .. '\n\n' .. template_body
+  local has_filename = template_part_headers.filename or has_mime_parameter(content_type, 'name')
+  return schema.classify_text_kind(content_type, has_filename, template_part_headers.disposition), part
+end
+
+-- Builds the multipart body for email_alert: an optional leading part from
+-- the template's own body (skipped only when that body is truly empty - a
+-- whitespace-only body still becomes a part), followed by one part per
+-- rule.email_parts entry. A text/plain + text/html pair is wrapped in a
+-- nested multipart/alternative unless rule.auto_grouping is false (see
+-- lualib/plugins/metadata_exporter.lua plan_layout). Returns nil on any
 -- unresolvable part so the caller aborts the whole message rather than
 -- sending a report with a silently missing/garbled part.
-local function assemble_email_parts(task, rule, template_body, template_part_headers, boundary, meta)
-  local parts = {}
+local function assemble_email_parts(task, rule, template_body, template_part_headers, meta)
+  local descriptors = {}
 
   if #template_body > 0 then
-    local headers = {}
-    for _, entry in ipairs(template_part_headers) do
-      table.insert(headers, entry)
-    end
-    if not template_part_headers.content_type then
-      table.insert(headers, 'Content-Type: text/plain; charset=utf-8')
-    end
-    if not template_part_headers.cte then
-      local cte = guess_text_cte(template_body)
-      table.insert(headers, 'Content-Transfer-Encoding: ' .. cte)
-      template_body = encode_part_content(task, template_body, cte)
-    end
-    table.insert(parts, table.concat(headers, '\n') .. '\n\n' .. template_body)
+    local kind, part = build_template_part(task, template_body, template_part_headers)
+    table.insert(descriptors, { kind = kind, part = part })
   end
 
   for i, entry in ipairs(rule.email_parts) do
@@ -691,28 +740,57 @@ local function assemble_email_parts(task, rule, template_body, template_part_hea
     end
     cte = sanitize_cte(task, string.format('email_parts[%s]', i), cte, value)
 
-    table.insert(parts, build_part_header_lines(content_type, filename, disposition, cte)
-      .. '\n\n' .. encode_part_content(task, value, cte))
+    local part = build_part_header_lines(content_type, filename, disposition, cte)
+      .. '\n\n' .. encode_part_content(task, value, cte)
+    table.insert(descriptors, { kind = schema.classify_text_kind(content_type, filename, disposition), part = part })
   end
 
-  if #parts == 0 then
+  if #descriptors == 0 then
     rspamd_logger.errx(task, 'email_alert with email_parts produced no parts to send')
     return nil
   end
 
-  local body = {}
-  for _, p in ipairs(parts) do
-    table.insert(body, '--' .. boundary)
-    table.insert(body, p)
+  -- plan_layout returns either (subtype, tree) or (nil, error string)
+  local subtype, tree_or_err = schema.plan_layout(descriptors, {
+    auto_grouping = rule.auto_grouping,
+    email_parts_type = rule.email_parts_type,
+  })
+  local tree = tree_or_err
+  if not subtype then
+    -- Only the template's body part can create this at runtime - a rule's own
+    -- email_parts were already rejected by validate_rule if ambiguous
+    rspamd_logger.warnx(task, 'email_alert: %s; using flat multipart/%s instead',
+      tree_or_err, rule.email_parts_type or 'mixed')
+    subtype = rule.email_parts_type or 'mixed'
+    tree = {}
+    for _, d in ipairs(descriptors) do
+      table.insert(tree, { part = d.part })
+    end
   end
-  table.insert(body, '--' .. boundary .. '--')
 
-  return table.concat(body, '\n'), boundary
+  local top_level_parts = {}
+  for _, node in ipairs(tree) do
+    if node.alternative then
+      local inner_boundary = rspamd_util.random_hex(16)
+      local inner_parts = {}
+      for _, leaf in ipairs(node.alternative) do
+        table.insert(inner_parts, leaf.part)
+      end
+      table.insert(top_level_parts,
+        string.format('Content-Type: multipart/alternative; boundary="%s"', inner_boundary)
+        .. '\n\n' .. render_multipart(inner_parts, inner_boundary))
+    else
+      table.insert(top_level_parts, node.part)
+    end
+  end
+
+  local boundary = rspamd_util.random_hex(16)
+  return render_multipart(top_level_parts, boundary), subtype, boundary
 end
 
 -- email_parts owns the top-level MIME framing. The template's content headers
 -- move to its body part so its media type and transfer encoding are preserved.
-local function build_multipart_header_block(header_block, subtype, boundary)
+local function split_template_content_headers(header_block)
   local out = {}
   local template_part_headers = {}
   local has_mime_version = false
@@ -725,6 +803,11 @@ local function build_multipart_header_block(header_block, subtype, boundary)
     elseif name == 'content-transfer-encoding' then
       template_part_headers.cte = true
       table.insert(template_part_headers, entry)
+    elseif name == 'content-disposition' then
+      local value = logical_header_value(entry)
+      template_part_headers.disposition = string.match(value, '^([^;%s]+)')
+      template_part_headers.filename = has_mime_parameter(value, 'filename')
+      table.insert(template_part_headers, entry)
     else
       if name == 'mime-version' then
         has_mime_version = true
@@ -733,12 +816,21 @@ local function build_multipart_header_block(header_block, subtype, boundary)
     end
   end
 
+  return out, template_part_headers, has_mime_version
+end
+
+-- Appends MIME-Version (if not already declared) and the top-level
+-- Content-Type once the final subtype/boundary are known from assemble_email_parts
+local function finalize_multipart_headers(other_headers, has_mime_version, subtype, boundary)
+  local out = {}
+  for _, entry in ipairs(other_headers) do
+    table.insert(out, entry)
+  end
   if not has_mime_version then
     table.insert(out, 'MIME-Version: 1.0')
   end
   table.insert(out, string.format('Content-Type: multipart/%s; boundary="%s"', subtype, boundary))
-
-  return table.concat(out, '\n'), template_part_headers
+  return table.concat(out, '\n')
 end
 
 local function get_general_metadata(task, flatten, no_content)
@@ -935,13 +1027,12 @@ local formatters = {
 
     if rule.email_parts and #rule.email_parts > 0 then
       local header_block, separator, body = split_headers_body(rendered)
-      local boundary = rspamd_util.random_hex(16)
-      local multipart_headers, template_part_headers = build_multipart_header_block(
-        header_block, rule.email_parts_type or 'mixed', boundary)
-      local mp_body = assemble_email_parts(task, rule, body, template_part_headers, boundary, meta)
+      local other_headers, template_part_headers, has_mime_version = split_template_content_headers(header_block)
+      local mp_body, subtype, boundary = assemble_email_parts(task, rule, body, template_part_headers, meta)
       if not mp_body then
         return nil
       end
+      local multipart_headers = finalize_multipart_headers(other_headers, has_mime_version, subtype, boundary)
       rendered = multipart_headers .. separator .. mp_body
     end
 
@@ -1707,6 +1798,23 @@ local function validate_rule(k, rule)
       if not validate_email_part(k, i, part) then
         return false
       end
+    end
+    local descriptors = {}
+    for _, part in ipairs(rule.email_parts) do
+      table.insert(descriptors,
+        { kind = schema.classify_text_kind(part.content_type, part.filename, part.disposition) })
+    end
+    -- Mirror the settings fallback resolve_rule applies at runtime, so a
+    -- plugin-wide auto_grouping is honoured by this check too
+    local auto_grouping = rule.auto_grouping
+    if auto_grouping == nil then
+      auto_grouping = settings.auto_grouping
+    end
+    local subtype, err = schema.plan_layout(descriptors,
+      { auto_grouping = auto_grouping, email_parts_type = rule.email_parts_type })
+    if not subtype then
+      rspamd_logger.errx(rspamd_config, 'rule %s: %s', k, err)
+      return false
     end
   end
   return true
