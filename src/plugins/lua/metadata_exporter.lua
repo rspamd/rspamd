@@ -30,10 +30,18 @@ local lua_redis = require "lua_redis"
 local lua_mime = require "lua_mime"
 local lua_selectors = require "lua_selectors"
 local ucl = require "ucl"
+local T = require "lua_shape.core"
+local schema = require "plugins/metadata_exporter"
 local E = {}
 local N = 'metadata_exporter'
 local HOSTNAME = rspamd_util.get_hostname()
 local selector_cache = {}
+
+-- Inlined values reach mail headers, URLs and Redis keys, so they must never
+-- break framing: collapse every CR/LF run to a single space
+local function sanitize_inline(str)
+  return (string.gsub(str, '[\r\n]+', ' '))
+end
 
 local settings = {
   pusher_enabled = {},
@@ -113,8 +121,7 @@ local function expand_selectors(task, str, meta)
     else
       str_val = tostring(extracted)
     end
-    -- Expanded values reach mail headers, URLs and Redis keys, so they must never break framing
-    return (string.gsub(str_val, '[\r\n]+', ' '))
+    return sanitize_inline(str_val)
   end
 
   str = string.gsub(str, '%$([%w_]+)', function(name)
@@ -606,13 +613,22 @@ local function stringify_part_value(value)
   return table.concat(out, '\n')
 end
 
+-- content/content_from_variables accept a single string or an array; the
+-- schema does not normalize this (see lualib/plugins/metadata_exporter.lua)
+local function part_content_names(value)
+  if type(value) == 'table' then
+    return value
+  end
+  return { value }
+end
+
 -- Builds the multipart/<rule.email_parts_type> body for email_alert: an
 -- optional leading part from the template's own body (skipped only when
 -- that body is truly empty - a whitespace-only body still becomes a part),
 -- followed by one part per rule.email_parts entry. Returns nil on any
 -- unresolvable part so the caller aborts the whole message rather than
 -- sending a report with a silently missing/garbled part.
-local function assemble_email_parts(task, rule, template_body, template_part_headers, boundary)
+local function assemble_email_parts(task, rule, template_body, template_part_headers, boundary, meta)
   local parts = {}
 
   if #template_body > 0 then
@@ -632,21 +648,40 @@ local function assemble_email_parts(task, rule, template_body, template_part_hea
   end
 
   for i, entry in ipairs(rule.email_parts) do
-    if not entry.variable or not variables[entry.variable] then
-      rspamd_logger.errx(task, 'email_parts[%s] references unknown variable [%s]', i, entry.variable)
-      return nil
-    end
-    local value = stringify_part_value(variables[entry.variable](task))
-    if value == nil then
-      rspamd_logger.errx(task, 'email_parts[%s] variable [%s] returned nil or unconvertible content',
-        i, entry.variable)
-      return nil
+    local value
+    if entry.content_from_variables ~= nil then
+      local resolved = {}
+      for _, name in ipairs(part_content_names(entry.content_from_variables)) do
+        if not variables[name] then
+          rspamd_logger.errx(task, 'email_parts[%s] references unknown variable [%s]', i, name)
+          return nil
+        end
+        local v = stringify_part_value(variables[name](task))
+        if v == nil then
+          rspamd_logger.errx(task, 'email_parts[%s] variable [%s] returned nil or unconvertible content',
+            i, name)
+          return nil
+        end
+        table.insert(resolved, v)
+      end
+      value = table.concat(resolved, '\n')
+    else
+      -- Literal/template content is expanded like the email template itself
+      local text = table.concat(part_content_names(entry.content), '\n')
+      text = expand_selectors(task, text, meta)
+      value = lua_util.template(text, meta)
     end
 
-    local filename = entry.filename and stringify_part_value(expand_selectors(task, entry.filename)) or nil
+    local filename
+    if entry.filename then
+      local expanded_filename = expand_selectors(task, entry.filename, meta)
+      filename = stringify_part_value(lua_util.template(expanded_filename, meta))
+    end
     if filename == '' then
       filename = nil
     end
+    -- Config-time validation always fills content_type in; the fallback only
+    -- guards against a part that somehow reached here unvalidated
     local content_type = entry.content_type or 'application/octet-stream'
     local disposition = entry.disposition or (filename and 'attachment' or 'inline')
     local cte = entry.encoding
@@ -804,7 +839,15 @@ local function get_general_metadata(task, flatten, no_content)
       if not flatten then
         return l
       else
-        return table.concat(l, '\n')
+        -- Fold duplicates the way format_symlist does: joining them with a bare
+        -- '\n' lets an empty duplicate insert a blank line, which moves the
+        -- header/body boundary that split_headers_body finds in the rendered
+        -- email_template
+        local folded = {}
+        for i, v in ipairs(l) do
+          folded[i] = sanitize_inline(v)
+        end
+        return table.concat(folded, '\n\t')
       end
     else
       return 'unknown'
@@ -895,7 +938,7 @@ local formatters = {
       local boundary = rspamd_util.random_hex(16)
       local multipart_headers, template_part_headers = build_multipart_header_block(
         header_block, rule.email_parts_type or 'mixed', boundary)
-      local mp_body = assemble_email_parts(task, rule, body, template_part_headers, boundary)
+      local mp_body = assemble_email_parts(task, rule, body, template_part_headers, boundary, meta)
       if not mp_body then
         return nil
       end
@@ -1347,41 +1390,81 @@ local opts = rspamd_config:get_all_opt(N)
 if not opts then
   return
 end
+
+-- Compiles a custom Lua snippet at config time, naming the chunk so a syntax
+-- error or a non-function result is caught and reported here instead of
+-- surfacing as a runtime crash on the first scanned message
+local function compile_custom(kind, name, code)
+  local chunkname = string.format('metadata_exporter %s[%s]', kind, name)
+  local ok, fn_or_err = lua_util.callback_from_string(code, chunkname, true)
+  if not ok then
+    local msg = string.format('%s: invalid Lua code: %s', chunkname, tostring(fn_or_err))
+    rspamd_logger.errx(rspamd_config, '%s', msg)
+    lua_util.config_utils.push_config_error(N, msg)
+    return nil
+  end
+  return fn_or_err
+end
+
 local process_settings = {
   select = function(val)
-    selectors.custom = assert(load(val))()
+    local fn = compile_custom('select', 'custom', val)
+    if fn then
+      selectors.custom = fn
+    end
   end,
   format = function(val)
-    formatters.custom = assert(load(val))()
+    local fn = compile_custom('format', 'custom', val)
+    if fn then
+      formatters.custom = fn
+    end
   end,
   push = function(val)
-    pushers.custom = assert(load(val))()
+    local fn = compile_custom('push', 'custom', val)
+    if fn then
+      pushers.custom = fn
+    end
   end,
   custom_push = function(val)
     if type(val) == 'table' then
       for k, v in pairs(val) do
-        pushers[k] = assert(load(v))()
+        local fn = compile_custom('custom_push', k, v)
+        if fn then
+          pushers[k] = fn
+        end
       end
     end
   end,
   custom_variables = function(val)
     if type(val) == 'table' then
       for k, v in pairs(val) do
-        variables[k] = assert(load(v))()
+        if variables[k] then
+          rspamd_logger.warnx(rspamd_config, 'custom_variables[%s] shadows a builtin variable', k)
+        end
+        local fn = compile_custom('custom_variables', k, v)
+        if fn then
+          variables[k] = fn
+        end
       end
     end
   end,
   custom_select = function(val)
     if type(val) == 'table' then
       for k, v in pairs(val) do
-        selectors[k] = assert(load(v))()
+        local fn = compile_custom('custom_select', k, v)
+        if fn then
+          selectors[k] = fn
+        end
       end
     end
   end,
   custom_format = function(val)
     if type(val) == 'table' then
       for k, v in pairs(val) do
-        formatters[k] = assert(load(v))()
+        local fn = compile_custom('custom_format', k, v)
+        if fn then
+          formatters[k] = fn
+        end
       end
     end
   end,
@@ -1553,204 +1636,133 @@ if not settings.rules or not next(settings.rules) then
   rspamd_logger.errx(rspamd_config, 'No rules enabled')
   return
 end
-local backend_required_elements = {
-  http = {
-    'url',
-  },
-  smtp = {
-    'mail_to',
-    'smtp',
-  },
-  redis_pubsub = {
-    'channel',
-  },
-  json_raw_tcp = {
-    'host',
-    'port',
-  },
-  redis_stream = {
-    'stream_key',
-  },
-  redis_list = {
-    'list_key',
-  },
-}
-local check_element = {
-  selector = function(k, v)
-    if not selectors[v] then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid selector %s', k, v)
-      return false
-    else
-      return true
-    end
-  end,
-  formatter = function(k, v)
-    if not formatters[v] then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid formatter %s', k, v)
-      return false
-    else
-      return true
-    end
-  end,
-  meta_headers = function(k, v)
-    if v then
-      rspamd_logger.warnx(rspamd_config,
-        'Rule %s uses deprecated meta_headers option; use format = "multipart" or format = "json" instead', k)
-    end
-    return true
-  end,
-  email_parts_type = function(k, v)
-    if type(v) ~= 'string' or not string.match(v, "^[%w!#$%%&'*+%-.%^_`|~]+$") then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid email_parts_type', k)
-      return false
-    end
-    return true
-  end,
-  email_parts = function(k, v)
-    if type(v) ~= 'table' then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid email_parts (must be an array)', k)
-      return false
-    end
-    if #v == 0 then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has empty email_parts', k)
-      return false
-    end
-    for i, part in ipairs(v) do
-      if type(part) ~= 'table' then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] must be a table', k, i)
-        return false
-      end
-      if not part.variable then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] misses variable', k, i)
-        return false
-      end
-      if not variables[part.variable] then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] references unknown variable %s', k, i, part.variable)
-        return false
-      end
-      if not part.content_type then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] misses content_type', k, i)
-        return false
-      end
-      for _, field in ipairs({ 'content_type', 'filename', 'disposition' }) do
-        if part[field] ~= nil and type(part[field]) ~= 'string' then
-          rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] has non-string %s', k, i, field)
-          return false
-        end
-      end
-      local parsed_content_type
-      if not string.find(part.content_type, '[\r\n]') then
-        parsed_content_type = rspamd_util.parse_content_type(
-          part.content_type, rspamd_config:get_mempool())
-      end
-      if not parsed_content_type or not parsed_content_type.type or not parsed_content_type.subtype then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] has invalid content_type', k, i)
-        return false
-      end
-      if part.disposition and (string.find(part.disposition, '[\r\n]') or
-          not string.match(part.disposition, "^[%w!#$%%&'*+%-.%^_`|~]+$")) then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] has invalid disposition', k, i)
-        return false
-      end
-      if part.encoding and not ({
-        auto = true,
-        base64 = true,
-        ['quoted-printable'] = true,
-        ['7bit'] = true,
-        ['8bit'] = true,
-      })[part.encoding] then
-        rspamd_logger.errx(rspamd_config, 'Rule %s email_parts[%s] has invalid encoding %s',
-          k, i, part.encoding)
-        return false
-      end
-    end
-    return true
-  end,
-}
-local backend_check = {
-  default = function(k, rule)
-    local reqset = backend_required_elements[rule.backend]
-    if reqset then
-      for _, e in ipairs(reqset) do
-        if not rule[e] then
-          rspamd_logger.errx(rspamd_config, 'Rule %s misses required setting %s', k, e)
-          settings.rules[k] = nil
-        end
-      end
-    end
-    for sett, v in pairs(rule) do
-      local f = check_element[sett]
-      if f then
-        if not f(sett, v) then
-          settings.rules[k] = nil
-        end
-      end
-    end
-  end,
-}
-backend_check.redis_pubsub = function(k, rule)
-  if not redis_params then
-    redis_params = rspamd_parse_redis_server(N)
+
+-- Validates one email_parts entry; mutates it in place to fill in the
+-- content_type default so runtime code never has to guess it again
+local function validate_email_part(k, i, part)
+  local has_content = part.content ~= nil
+  local has_vars = part.content_from_variables ~= nil
+  if has_content and has_vars then
+    rspamd_logger.errx(rspamd_config,
+      'rule %s: email_parts[%s] has both content and content_from_variables, use exactly one', k, i)
+    return false
   end
-  if not redis_params then
-    rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
-    settings.rules[k] = nil
-  else
-    backend_check.default(k, rule)
-    rule.timeout = redis_params.timeout
+  if not has_content and not has_vars then
+    rspamd_logger.errx(rspamd_config,
+      'rule %s: email_parts[%s] misses content or content_from_variables', k, i)
+    return false
   end
+  if has_vars then
+    for _, name in ipairs(part_content_names(part.content_from_variables)) do
+      if not variables[name] then
+        rspamd_logger.errx(rspamd_config,
+          'rule %s: email_parts[%s] references unknown variable %s', k, i, name)
+        return false
+      end
+    end
+  end
+  -- content_from_variables may carry a binary blob; content is always literal/template text
+  part.content_type = part.content_type or (has_content and 'text/plain; charset=utf-8' or 'application/octet-stream')
+  local parsed_content_type
+  if not string.find(part.content_type, '[\r\n]') then
+    parsed_content_type = rspamd_util.parse_content_type(part.content_type, rspamd_config:get_mempool())
+  end
+  if not parsed_content_type or not parsed_content_type.type or not parsed_content_type.subtype then
+    rspamd_logger.errx(rspamd_config, 'rule %s: email_parts[%s] has invalid content_type', k, i)
+    return false
+  end
+  if part.disposition and (string.find(part.disposition, '[\r\n]') or
+      not string.match(part.disposition, "^[%w!#$%%&'*+%-.%^_`|~]+$")) then
+    rspamd_logger.errx(rspamd_config, 'rule %s: email_parts[%s] has invalid disposition', k, i)
+    return false
+  end
+  return true
 end
-backend_check.redis_stream = function(k, rule)
-  if not redis_params then
-    redis_params = rspamd_parse_redis_server(N)
+
+-- Dynamic checks that the schema cannot express: selector/formatter/backend
+-- names are extensible at runtime via custom_select/custom_format/custom_push,
+-- and per-backend required settings may be satisfied by a plugin-wide default
+local function validate_rule(k, rule)
+  for _, e in ipairs(schema.backend_required_elements[rule.backend] or E) do
+    if rule[e] == nil and settings[e] == nil then
+      rspamd_logger.errx(rspamd_config,
+        'rule %s: misses required setting %s for backend %s', k, e, rule.backend)
+      return false
+    end
   end
-  if not redis_params then
-    rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
-    settings.rules[k] = nil
-  else
-    backend_check.default(k, rule)
-    rule.timeout = redis_params.timeout
+  if not selectors[rule.selector or 'default'] then
+    rspamd_logger.errx(rspamd_config, 'rule %s: has invalid selector %s', k, rule.selector)
+    return false
   end
+  if not formatters[rule.formatter or 'default'] then
+    rspamd_logger.errx(rspamd_config, 'rule %s: has invalid formatter %s', k, rule.formatter)
+    return false
+  end
+  if rule.meta_headers then
+    rspamd_logger.warnx(rspamd_config,
+      'rule %s: uses deprecated meta_headers option; use formatter = "multipart" or "json" instead', k)
+  end
+  if rule.email_parts then
+    for i, part in ipairs(rule.email_parts) do
+      if not validate_email_part(k, i, part) then
+        return false
+      end
+    end
+  end
+  return true
 end
-backend_check.redis_list = function(k, rule)
-  if not redis_params then
-    redis_params = rspamd_parse_redis_server(N)
-  end
-  if not redis_params then
-    rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
-    settings.rules[k] = nil
-  else
-    backend_check.default(k, rule)
-    rule.timeout = redis_params.timeout
-  end
-end
-setmetatable(backend_check, {
-  __index = function()
-    return backend_check.default
-  end,
-})
+
 for k, v in pairs(settings.rules) do
-  if type(v) == 'table' then
-    -- UCL writes a lone object without brackets, which would otherwise pass
-    -- the ipairs-based validation vacuously and then be skipped at runtime
-    if type(v.email_parts) == 'table' and #v.email_parts == 0 and v.email_parts.variable then
-      v.email_parts = { v.email_parts }
-    end
+  if type(v) ~= 'table' then
+    rspamd_logger.errx(rspamd_config, 'rule %s: has bad type: %s', k, type(v))
+    lua_util.config_utils.push_config_error(N, string.format('rule %s: has bad type: %s', k, type(v)))
+    settings.rules[k] = nil
+  else
     local backend = v.backend
     if not backend then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has no backend', k)
+      rspamd_logger.errx(rspamd_config, 'rule %s: has no backend', k)
+      lua_util.config_utils.push_config_error(N, string.format('rule %s: has no backend', k))
       settings.rules[k] = nil
     elseif not pushers[backend] then
-      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid backend %s', k, backend)
+      rspamd_logger.errx(rspamd_config, 'rule %s: has invalid backend %s', k, backend)
+      lua_util.config_utils.push_config_error(N, string.format('rule %s: has invalid backend %s', k, backend))
       settings.rules[k] = nil
     else
-      local f = backend_check[backend]
-      f(k, v)
+      local res, err = schema.rule_schema:transform(v)
+      if not res then
+        local msg = string.format('rule %s: invalid configuration -> rule DISABLED: %s', k, T.format_error(err))
+        rspamd_logger.errx(rspamd_config, '%s', msg)
+        lua_util.config_utils.push_config_error(N, msg)
+        settings.rules[k] = nil
+      else
+        settings.rules[k] = res
+        if (backend == 'redis_pubsub' or backend == 'redis_stream' or backend == 'redis_list') then
+          if not redis_params then
+            redis_params = rspamd_parse_redis_server(N)
+          end
+          if not redis_params then
+            rspamd_logger.errx(rspamd_config, 'rule %s: no redis servers are specified', k)
+            lua_util.config_utils.push_config_error(N, string.format('rule %s: no redis servers are specified', k))
+            settings.rules[k] = nil
+          else
+            res.timeout = redis_params.timeout
+          end
+        end
+        if settings.rules[k] and not validate_rule(k, res) then
+          lua_util.config_utils.push_config_error(N,
+            string.format('rule %s: invalid configuration -> rule DISABLED', k))
+          settings.rules[k] = nil
+        end
+      end
     end
-  else
-    rspamd_logger.errx(rspamd_config, 'Rule %s has bad type: %s', k, type(v))
-    settings.rules[k] = nil
   end
+end
+
+if not next(settings.rules) then
+  rspamd_logger.errx(rspamd_config, 'No rules enabled')
+  lua_util.config_utils.push_config_error(N, 'no valid rules remain after validation')
+  lua_util.disable_module(N, 'config')
+  return
 end
 
 -- Compile selectors used by rules at config time to validate them and to keep them off the hot path
@@ -1799,10 +1811,6 @@ local function gen_exporter(rule)
   end
 end
 
-if not next(settings.rules) then
-  rspamd_logger.errx(rspamd_config, 'No rules enabled')
-  lua_util.disable_module(N, "config")
-end
 for k, r in pairs(settings.rules) do
   local registration_timeout = tonumber(r.timeout) or tonumber(settings.timeout) or 0.0
   rspamd_config:register_symbol({
