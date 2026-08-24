@@ -1505,22 +1505,26 @@ exports.maybe_decrypt_header = function(encrypted_header, settings, prefix, nonc
 end
 
 ---[[[
--- @function lua_util.callback_from_string(str)
+-- @function lua_util.callback_from_string(str[, chunkname[, return_chunk]])
 -- Converts a string like `return function(...) end` to lua function and return true and this function
 -- or returns false + error message
+-- @param {string} chunkname optional name used to identify the chunk in syntax error messages
+-- @param {boolean} return_chunk evaluate the string as a chunk that must return a function
 -- @return status code and function object or an error message
 --]]]
-exports.callback_from_string = function(s)
+exports.callback_from_string = function(s, chunkname, return_chunk)
   local loadstring = loadstring or load
 
-  if not s or #s == 0 then
+  if type(s) ~= 'string' or #s == 0 then
     return false, 'invalid or empty string'
   end
 
   s = exports.rspamd_str_trim(s)
   local inp
 
-  if s:match('^return%s*function') then
+  if return_chunk then
+    inp = s
+  elseif s:match('^return%s*function') then
     -- 'return function', can be evaluated directly
     inp = s
   elseif s:match('^function%s*%(') then
@@ -1530,18 +1534,26 @@ exports.callback_from_string = function(s)
     inp = 'return function(...)\n' .. s .. '; end'
   end
 
-  local chunk, err = loadstring(inp)
+  -- '=' prefix makes Lua print chunkname verbatim instead of '[string "..."]'
+  local chunk, err = loadstring(inp, chunkname and ('=' .. chunkname) or nil)
   if not chunk then
     return false, err
   end
 
   local ret, res_or_err = pcall(chunk)
 
-  if not ret or type(res_or_err) ~= 'function' then
-    return false, res_or_err
+  if not ret then
+    -- Runtime error while evaluating the chunk, res_or_err carries its message
+    return false, tostring(res_or_err)
   end
 
-  return ret, res_or_err
+  if type(res_or_err) ~= 'function' then
+    -- The chunk itself is valid Lua but yields no callback; report that as an
+    -- error message rather than handing the bare value back as if it was one
+    return false, string.format('chunk did not return a function, got %s', type(res_or_err))
+  end
+
+  return true, res_or_err
 end
 
 ---[[[
