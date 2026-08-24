@@ -151,3 +151,132 @@ context("metadata_exporter email_parts schema", function()
     assert_not_nil(err)
   end)
 end)
+
+context("metadata_exporter multipart/alternative layout planner", function()
+  local schema = require "plugins/metadata_exporter"
+
+  test("classify_text_kind recognizes inline text/plain and text/html", function()
+    assert_equal(schema.classify_text_kind("text/plain; charset=utf-8", nil, nil), "plain")
+    assert_equal(schema.classify_text_kind("text/html", nil, nil), "html")
+    assert_equal(schema.classify_text_kind("TEXT/HTML", nil, nil), "html")
+    assert_equal(schema.classify_text_kind("text/html", nil, "Inline"), "html")
+  end)
+
+  test("classify_text_kind treats an attached or filenamed text part as other", function()
+    assert_equal(schema.classify_text_kind("text/plain", "report.txt", nil), "other")
+    assert_equal(schema.classify_text_kind("text/plain", nil, "attachment"), "other")
+    assert_equal(schema.classify_text_kind("text/html", nil, "ATTACHMENT"), "other")
+    assert_equal(schema.classify_text_kind("application/zip", nil, nil), "other")
+  end)
+
+  -- The subtype must end where it ends: a prefix match alone would pull
+  -- unrelated types such as text/plaintext into the alternative group
+  test("classify_text_kind does not match a longer subtype sharing the prefix", function()
+    assert_equal(schema.classify_text_kind("text/plaintext", nil, nil), "other")
+    assert_equal(schema.classify_text_kind("text/htmlish", nil, nil), "other")
+    assert_equal(schema.classify_text_kind("text/plain;charset=utf-8", nil, nil), "plain")
+    assert_equal(schema.classify_text_kind("text/html", nil, nil), "html")
+  end)
+
+  test("plain + html with no other parts groups under a top-level alternative", function()
+    local descriptors = {
+      { kind = "plain", part = "P" },
+      { kind = "html", part = "H" },
+    }
+    local subtype, tree = schema.plan_layout(descriptors, {})
+    assert_equal(subtype, "alternative")
+    assert_equal(#tree, 2)
+    assert_equal(tree[1].part, "P")
+    assert_equal(tree[2].part, "H")
+  end)
+
+  test("plain + html + attachment nests the alternative inside multipart/mixed", function()
+    local descriptors = {
+      { kind = "plain", part = "P" },
+      { kind = "html", part = "H" },
+      { kind = "other", part = "A" },
+    }
+    local subtype, tree = schema.plan_layout(descriptors, {})
+    assert_equal(subtype, "mixed")
+    assert_equal(#tree, 2)
+    assert_not_nil(tree[1].alternative)
+    assert_equal(tree[2].part, "A")
+  end)
+
+  test("html before plain is reordered so plain comes first inside the alternative", function()
+    local descriptors = {
+      { kind = "html", part = "H" },
+      { kind = "plain", part = "P" },
+    }
+    local _, tree = schema.plan_layout(descriptors, {})
+    assert_equal(tree[1].part, "P")
+    assert_equal(tree[2].part, "H")
+  end)
+
+  test("attachment-only parts stay a flat multipart/mixed", function()
+    local descriptors = {
+      { kind = "other", part = "A" },
+      { kind = "other", part = "B" },
+    }
+    local subtype, tree = schema.plan_layout(descriptors, {})
+    assert_equal(subtype, "mixed")
+    assert_equal(#tree, 2)
+    assert_equal(tree[1].part, "A")
+    assert_equal(tree[2].part, "B")
+  end)
+
+  test("auto_grouping = false keeps a flat layout even with plain + html", function()
+    local descriptors = {
+      { kind = "plain", part = "P" },
+      { kind = "html", part = "H" },
+    }
+    local subtype, tree = schema.plan_layout(descriptors, { auto_grouping = false })
+    assert_equal(subtype, "mixed")
+    assert_equal(#tree, 2)
+    assert_equal(tree[1].part, "P")
+    assert_equal(tree[2].part, "H")
+  end)
+
+  test("an explicit email_parts_type wraps the alternative instead of collapsing it", function()
+    local descriptors = {
+      { kind = "plain", part = "P" },
+      { kind = "html", part = "H" },
+    }
+    local subtype, tree = schema.plan_layout(descriptors, { email_parts_type = "related" })
+    assert_equal(subtype, "related")
+    assert_equal(#tree, 1)
+    assert_not_nil(tree[1].alternative)
+  end)
+
+  test("two text/plain parts alongside one html part is rejected as ambiguous", function()
+    local descriptors = {
+      { kind = "plain", part = "P1" },
+      { kind = "plain", part = "P2" },
+      { kind = "html", part = "H" },
+    }
+    local subtype, err = schema.plan_layout(descriptors, {})
+    assert_nil(subtype)
+    assert_not_nil(err)
+  end)
+
+  test("two text/html parts alongside one plain part is rejected as ambiguous", function()
+    local descriptors = {
+      { kind = "plain", part = "P" },
+      { kind = "html", part = "H1" },
+      { kind = "html", part = "H2" },
+    }
+    local subtype, err = schema.plan_layout(descriptors, {})
+    assert_nil(subtype)
+    assert_not_nil(err)
+  end)
+
+  test("multiple plain parts with no html at all is not ambiguous", function()
+    local descriptors = {
+      { kind = "plain", part = "P1" },
+      { kind = "plain", part = "P2" },
+    }
+    local subtype, tree = schema.plan_layout(descriptors, {})
+    assert_equal(subtype, "mixed")
+    assert_equal(#tree, 2)
+  end)
+end)

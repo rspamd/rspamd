@@ -29,6 +29,10 @@ ${SMTP_STATUS_6}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp6.status
 ${SMTP_PID_6}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp6.pid
 ${SMTP_STATUS_7}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp7.status
 ${SMTP_PID_7}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp7.pid
+${SMTP_STATUS_8}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp8.status
+${SMTP_PID_8}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp8.pid
+${SMTP_STATUS_9}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp9.status
+${SMTP_PID_9}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp9.pid
 
 *** Test Cases ***
 Structured export to Redis stream - UUID v7 and metadata
@@ -273,6 +277,63 @@ Email export renders a literal content part
   Should Be Equal  ${part1}[decoded_text]
   ...  Static literal line one.\nHost is 127.0.0.1 and template value is template-custom.
 
+Email export auto-groups plain and html into a nested alternative
+  [Documentation]  A text/plain + text/html pair auto-groups into a nested
+  ...  multipart/alternative; the attached template body and zip attachment
+  ...  stay siblings in the outer multipart/mixed.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_8}
+  ${smtp8} =  Get File  ${SMTP_STATUS_8}
+  ${info} =  Validate Multipart Email  ${smtp8}
+
+  Should Be True  ${info}[is_multipart]
+  Should Be Equal  ${info}[subtype]  mixed
+  Should Be Equal As Integers  ${info}[part_count]  3
+
+  ${alt} =  Set Variable  ${info}[parts][0]
+  Should Be Equal  ${alt}[subtype]  alternative
+  Should Be Equal As Integers  ${alt}[part_count]  2
+  Should Be Equal  ${alt}[subparts][0][content_type]  text/plain
+  Should Be Equal  ${alt}[subparts][0][decoded_text]  Plain alternative body.
+  Should Be Equal  ${alt}[subparts][1][content_type]  text/html
+  Should Be Equal  ${alt}[subparts][1][decoded_text]  <p>HTML alternative body.</p>
+
+  ${template_attachment} =  Set Variable  ${info}[parts][1]
+  Should Be Equal  ${template_attachment}[content_type]  text/html
+  Should Contain  ${template_attachment}[disposition]  ATTACHMENT
+  Should Be Equal  ${template_attachment}[filename]  template.html
+  Should Be Equal  ${template_attachment}[decoded_text]  <p>Attached template body.</p>
+
+  ${attachment} =  Set Variable  ${info}[parts][2]
+  Should Be Equal  ${attachment}[content_type]  application/zip
+  Should Be Equal  ${attachment}[filename]  attachment.zip
+
+Email export uses a top-level alternative when it is the only content
+  [Documentation]  A text/plain + text/html pair with no other parts sets the
+  ...  top-level subtype to alternative and emits both parts directly in it.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_9}
+  ${smtp9} =  Get File  ${SMTP_STATUS_9}
+  ${info} =  Validate Multipart Email  ${smtp9}
+
+  Should Be True  ${info}[is_multipart]
+  Should Be Equal  ${info}[subtype]  alternative
+  Should Be Equal As Integers  ${info}[part_count]  2
+  Should Be Equal  ${info}[parts][0][content_type]  text/plain
+  Should Be Equal  ${info}[parts][0][decoded_text]  Plain only body.
+  Should Be Equal  ${info}[parts][1][content_type]  text/html
+  Should Be Equal  ${info}[parts][1][decoded_text]  <p>HTML only body.</p>
+
 Invalid rule with unknown key fails configtest
   [Documentation]  A rule with an unrecognized option is rejected by the
   ...  schema, disabled at config load time, and reported by configtest.
@@ -297,7 +358,8 @@ Invalid rule with unknown key fails configtest
 Metadata Exporter Structured Setup
   Run Redis
   Remove Files  ${SMTP_STATUS}  ${SMTP_STATUS_2}  ${SMTP_STATUS_3}  ${SMTP_STATUS_4}
-  ...  ${SMTP_STATUS_5}  ${SMTP_STATUS_6}  ${SMTP_STATUS_7}
+  ...  ${SMTP_STATUS_5}  ${SMTP_STATUS_6}  ${SMTP_STATUS_7}  ${SMTP_STATUS_8}
+  ...  ${SMTP_STATUS_9}
   ${smtp} =  Start Dummy Smtp  11126  sink  127.0.0.1  ${SMTP_PID}
   ...  --status-file  ${SMTP_STATUS}
   Set Test Variable  ${DUMMY_SMTP_PROC}  ${smtp}
@@ -319,6 +381,12 @@ Metadata Exporter Structured Setup
   ${smtp7} =  Start Dummy Smtp  11132  sink  127.0.0.1  ${SMTP_PID_7}
   ...  --status-file  ${SMTP_STATUS_7}
   Set Test Variable  ${DUMMY_SMTP_PROC_7}  ${smtp7}
+  ${smtp8} =  Start Dummy Smtp  11134  sink  127.0.0.1  ${SMTP_PID_8}
+  ...  --status-file  ${SMTP_STATUS_8}
+  Set Test Variable  ${DUMMY_SMTP_PROC_8}  ${smtp8}
+  ${smtp9} =  Start Dummy Smtp  11135  sink  127.0.0.1  ${SMTP_PID_9}
+  ...  --status-file  ${SMTP_STATUS_9}
+  Set Test Variable  ${DUMMY_SMTP_PROC_9}  ${smtp9}
   Rspamd Setup
 
 Metadata Exporter Structured Teardown
@@ -337,4 +405,8 @@ Metadata Exporter Structured Teardown
   Wait For Process  ${DUMMY_SMTP_PROC_6}
   Terminate Process  ${DUMMY_SMTP_PROC_7}
   Wait For Process  ${DUMMY_SMTP_PROC_7}
+  Terminate Process  ${DUMMY_SMTP_PROC_8}
+  Wait For Process  ${DUMMY_SMTP_PROC_8}
+  Terminate Process  ${DUMMY_SMTP_PROC_9}
+  Wait For Process  ${DUMMY_SMTP_PROC_9}
   Redis Teardown

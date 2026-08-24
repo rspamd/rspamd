@@ -1425,6 +1425,9 @@ def validate_multipart_email(status_text):
     Returns a dict: is_multipart, content_type, subtype, part_count,
     mime_version, message_id, and parts (list of dicts with content_type,
     cte, disposition, filename - RFC 2231 parameters are decoded by email).
+    A nested multipart part (e.g. a multipart/alternative group inside a
+    multipart/mixed message) is summarized as {content_type, subtype,
+    subparts: [...]} instead of decoded_text/decoded_length/decoded_sha256.
 
     Example:
     | ${info} = | Validate Multipart Email | ${smtp_status} |
@@ -1432,6 +1435,29 @@ def validate_multipart_email(status_text):
     import email
     import email.policy
     import hashlib
+
+    def summarize_part(part):
+        if part.is_multipart():
+            subparts = [summarize_part(p) for p in part.get_payload()]
+            return {
+                'content_type': part.get_content_type(),
+                'subtype': part.get_content_subtype(),
+                'part_count': len(subparts),
+                'subparts': subparts,
+            }
+        decoded = part.get_payload(decode=True) or b''
+        decoded_text = ''
+        if part.get_content_maintype() == 'text':
+            decoded_text = decoded.decode(part.get_content_charset() or 'utf-8')
+        return {
+            'content_type': part.get_content_type(),
+            'cte': part.get('Content-Transfer-Encoding', ''),
+            'disposition': part.get('Content-Disposition', ''),
+            'filename': part.get_filename(),
+            'decoded_text': decoded_text,
+            'decoded_length': len(decoded),
+            'decoded_sha256': hashlib.sha256(decoded).hexdigest(),
+        }
 
     lines = status_text.splitlines()
     try:
@@ -1446,20 +1472,7 @@ def validate_multipart_email(status_text):
     parts = []
     if msg.is_multipart():
         for part in msg.get_payload():
-            decoded = part.get_payload(decode=True) or b''
-            decoded_text = ''
-            if part.get_content_maintype() == 'text':
-                decoded_text = decoded.decode(
-                    part.get_content_charset() or 'utf-8')
-            parts.append({
-                'content_type': part.get_content_type(),
-                'cte': part.get('Content-Transfer-Encoding', ''),
-                'disposition': part.get('Content-Disposition', ''),
-                'filename': part.get_filename(),
-                'decoded_text': decoded_text,
-                'decoded_length': len(decoded),
-                'decoded_sha256': hashlib.sha256(decoded).hexdigest(),
-            })
+            parts.append(summarize_part(part))
 
     return {
         'is_multipart': msg.is_multipart(),
