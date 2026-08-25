@@ -1896,7 +1896,7 @@ for _, r in pairs(settings.rules) do
   end
 end
 
-local function gen_exporter(rule)
+local function gen_exporter(rule, rule_name)
   return function(task)
     if task:has_flag('skip') then
       return
@@ -1904,17 +1904,17 @@ local function gen_exporter(rule)
     local selector = rule.selector or 'default'
     local selected = selectors[selector](task)
     if selected then
-      lua_util.debugm(N, task, 'Message selected for processing')
+      lua_util.debugm(N, task, 'rule %s: message selected for processing', rule_name)
       local formatter = rule.formatter or 'default'
       local resolved_rule = resolve_rule(task, rule)
       local formatted, extra = formatters[formatter](task, resolved_rule)
       if formatted then
         pushers[rule.backend](task, formatted, resolved_rule, extra)
       else
-        lua_util.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
+        lua_util.debugm(N, task, 'rule %s: formatter [%s] returned non-truthy value [%s]', rule_name, formatter, formatted)
       end
     else
-      lua_util.debugm(N, task, 'Selector [%s] returned non-truthy value [%s]', selector, selected)
+      lua_util.debugm(N, task, 'rule %s: selector [%s] returned non-truthy value [%s]', rule_name, selector, selected)
     end
   end
 end
@@ -1924,7 +1924,7 @@ for k, r in pairs(settings.rules) do
   rspamd_config:register_symbol({
     name = 'EXPORT_METADATA_' .. k,
     type = 'idempotent',
-    callback = gen_exporter(r),
+    callback = gen_exporter(r, k),
     flags = 'empty,explicit_disable,ignore_passthrough',
     augmentations = { string.format("timeout=%f", registration_timeout) }
   })
