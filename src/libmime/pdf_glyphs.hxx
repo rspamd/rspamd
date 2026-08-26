@@ -127,6 +127,12 @@ private:
  * Destinations are UTF-16BE, so one code may expand to several characters (a
  * ligature) or to a surrogate pair. The input is hostile, so the tables are
  * capped; a CMap that exceeds a cap keeps the mappings that fitted.
+ *
+ * The caps come in two kinds, and both are needed: counting entries bounds how
+ * many mappings a program may declare, while counting bytes bounds how much a
+ * program may store behind them. A CMap is a few hundred kilobytes at most, but
+ * nothing in its syntax stops one mapping from carrying a whole document, or a
+ * short range from being expanded into hundreds of copies of one.
  */
 class cmap {
 public:
@@ -135,6 +141,27 @@ public:
 	static constexpr std::size_t max_ranges = 8192;
 	/* A range whose destination is more than one character is expanded */
 	static constexpr std::size_t max_range_expansion = 256;
+	/*
+	 * A destination names a character or a ligature, so a handful of characters
+	 * is already far more than any producer emits; this leaves room for 32 of
+	 * the widest ones.
+	 */
+	static constexpr std::size_t max_mapping_bytes = 128;
+	/*
+	 * Even mappings that each stay under that cap must not add up without
+	 * bound. A CJK font maps the whole two byte space through destinations of
+	 * three UTF-8 bytes, which is a fifth of this, and the caller hands in at
+	 * most half a megabyte of program, so a CMap can never store much more than
+	 * it was parsed from.
+	 */
+	static constexpr std::size_t max_total_mapping_bytes = 1024 * 1024;
+	/*
+	 * Only ranges that overlap can make a lookup look past the nearest
+	 * candidate, and a CMap written by a producer has none: ranges partition
+	 * the codespace. A program that overlaps thousands of times gets an answer
+	 * from the first few rather than a walk over the whole table per character.
+	 */
+	static constexpr std::size_t max_range_backscan = 64;
 
 	/**
 	 * Parses an embedded CMap program. Returns nothing if the input is not a
@@ -166,6 +193,12 @@ public:
 	/** How many codes are mapped, counting a range as its length. */
 	[[nodiscard]] auto size() const noexcept -> std::size_t;
 
+	/** UTF-8 held by the mappings, which is what the byte budget caps. */
+	[[nodiscard]] auto stored_bytes() const noexcept -> std::size_t
+	{
+		return mapping_bytes;
+	}
+
 private:
 	struct codespace {
 		std::uint32_t low;
@@ -178,6 +211,12 @@ private:
 		std::uint32_t low;
 		std::uint32_t high;
 		char32_t first_uc;
+		/*
+		 * The widest high of this range and of every earlier one of the same
+		 * width. A search that has stepped back to here and still has not found
+		 * its code can stop as soon as this says nothing earlier reaches it.
+		 */
+		std::uint32_t max_high;
 		std::uint8_t nbytes;
 	};
 
@@ -196,6 +235,8 @@ private:
 	std::vector<codespace> codespaces;
 	ankerl::unordered_dense::map<std::uint64_t, std::string> singles;
 	std::vector<range> ranges;
+	/* Against max_total_mapping_bytes */
+	std::size_t mapping_bytes = 0;
 	/* Used when a CMap declares no codespace at all */
 	std::uint8_t default_nbytes = 2;
 	/* Widest source code seen, in bytes, which is what sets the code width */
@@ -206,10 +247,24 @@ private:
  * Accumulates decoded text into a single buffer. The intended use is one
  * builder per page: set_encoding() or set_cmap() on every Tf, add_*() on every
  * text operator, then hand the whole buffer over at the end.
+ *
+ * How much a page yields is not a function of how big the page is: one
+ * character code can resolve to a whole CMap mapping, so a content stream of a
+ * few hundred kilobytes can ask for gigabytes of text. The builder therefore
+ * carries a ceiling and stops adding once it is reached, rather than trusting
+ * that bounded input implies bounded output.
  */
 class text_builder {
 public:
-	explicit text_builder(std::size_t reserve = 0);
+	/*
+	 * The caller reads a content stream of at most half a megabyte, and the
+	 * widest a code can honestly decode to is four bytes, so no page that is
+	 * really text comes anywhere near this.
+	 */
+	static constexpr std::size_t max_output_bytes = 4 * 1024 * 1024;
+
+	explicit text_builder(std::size_t reserve = 0,
+						  std::size_t max_output = max_output_bytes);
 
 	/**
 	 * The simple font encoding used by subsequent add_encoded()/add_pdf_*()
@@ -248,7 +303,7 @@ public:
 	 * Text that is already UTF-8, e.g. a UTF-16 string decoded by the caller.
 	 * Validated before it is appended, so that one bad run cannot make the
 	 * whole page buffer invalid; returns false and appends nothing if it is not
-	 * well formed.
+	 * well formed, or if it no longer fits under the output ceiling.
 	 */
 	auto add_utf8(std::string_view utf8) -> bool;
 
@@ -270,14 +325,23 @@ public:
 		return buf.empty();
 	}
 
+	/** Whether the ceiling was reached, so that text was dropped. */
+	[[nodiscard]] auto truncated() const noexcept -> bool
+	{
+		return hit_ceiling;
+	}
+
 	auto clear() -> void
 	{
 		buf.clear();
+		hit_ceiling = false;
 	}
 
 	/** Moves the accumulated buffer out, leaving the builder empty. */
 	auto release() -> std::string
 	{
+		hit_ceiling = false;
+
 		return std::move(buf);
 	}
 
@@ -287,10 +351,20 @@ private:
 	auto add_cmapped(std::string_view codes) -> void;
 	/* Dispatches a run of codes to whichever decoder is current */
 	auto decode_codes(std::string_view codes) -> void;
+	/*
+	 * Appends a whole piece or none of it: every caller hands over complete
+	 * characters, and a prefix of one would leave the buffer invalid UTF-8.
+	 * Once this refuses, the builder is done for good.
+	 */
+	auto append_capped(std::string_view utf8) -> bool;
+	/* Reserves for what is about to be added, never past the ceiling */
+	auto reserve_for(std::size_t extra) -> void;
 
 	std::string buf;
 	const font_encoding *cur_encoding = nullptr;
 	const cmap *cur_cmap = nullptr;
+	std::size_t limit = max_output_bytes;
+	bool hit_ceiling = false;
 };
 
 }// namespace rspamd::mime::pdf

@@ -26,6 +26,7 @@
 #include "unicode/utf16.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace rspamd::mime::pdf {
 
@@ -264,6 +265,17 @@ auto utf16be_to_utf8(std::string_view bytes, std::string &out, char32_t *single)
 	return nchars;
 }
 
+/*
+ * Transcoding UTF-16BE never yields less than half as many bytes as it consumes,
+ * so a raw destination past twice the stored cap cannot end up under that cap
+ * and is not worth transcoding. Anything that big is a payload the program is
+ * trying to get the parser to copy, not a ligature.
+ */
+auto destination_too_long(std::string_view bytes) noexcept -> bool
+{
+	return bytes.size() > 2 * cmap::max_mapping_bytes;
+}
+
 }// namespace
 
 auto cmap::note_code_width(std::size_t nbytes) noexcept -> void
@@ -278,7 +290,23 @@ auto cmap::add_single(std::uint32_t code, std::size_t nbytes, std::string &&utf8
 		return false;
 	}
 
-	singles[make_key(code, nbytes)] = std::move(utf8);
+	/*
+	 * Both budgets have to hold: one destination may not be a document, and a
+	 * program may not stay under that limit and still make the table grow
+	 * without bound by repeating it. Refusing rather than truncating keeps the
+	 * table free of half characters.
+	 */
+	if (utf8.size() > max_mapping_bytes ||
+		utf8.size() > max_total_mapping_bytes - mapping_bytes) {
+		return false;
+	}
+
+	auto &slot = singles[make_key(code, nbytes)];
+
+	/* A code declared twice replaces what it spent the first time */
+	mapping_bytes -= slot.size();
+	mapping_bytes += utf8.size();
+	slot = std::move(utf8);
 
 	return true;
 }
@@ -290,7 +318,7 @@ auto cmap::add_range(std::uint32_t low, std::uint32_t high, char32_t first_uc,
 		return false;
 	}
 
-	ranges.push_back({low, high, first_uc,
+	ranges.push_back({low, high, first_uc, high,
 					  static_cast<std::uint8_t>(std::min<std::size_t>(nbytes, 4))});
 
 	return true;
@@ -300,8 +328,29 @@ auto cmap::finalise() -> void
 {
 	std::sort(codespaces.begin(), codespaces.end(),
 			  [](const codespace &a, const codespace &b) { return a.nbytes < b.nbytes; });
-	std::sort(ranges.begin(), ranges.end(),
-			  [](const range &a, const range &b) { return a.low < b.low; });
+
+	/*
+	 * Grouping the ranges by code width first means a lookup can binary search
+	 * straight into the group of the width it wants, and can stop the moment it
+	 * steps out of it: a range of another width is never an answer, however
+	 * close its values are.
+	 */
+	std::sort(ranges.begin(), ranges.end(), [](const range &a, const range &b) {
+		return a.nbytes != b.nbytes ? a.nbytes < b.nbytes : a.low < b.low;
+	});
+
+	std::uint32_t running_high = 0;
+	std::uint8_t group = 0;
+
+	for (auto &r: ranges) {
+		if (r.nbytes != group) {
+			group = r.nbytes;
+			running_high = 0;
+		}
+
+		running_high = std::max(running_high, r.high);
+		r.max_high = running_high;
+	}
 
 	if (codespaces.empty()) {
 		/*
@@ -359,29 +408,50 @@ auto cmap::lookup(std::uint32_t code, std::size_t nbytes, glyph_utf8 &scratch) c
 		return it->second;
 	}
 
-	/* Ranges are sorted, so the last one starting at or below the code is it */
-	auto rit = std::upper_bound(ranges.begin(), ranges.end(), code,
-								[](std::uint32_t c, const range &r) { return c < r.low; });
+	/*
+	 * Ranges are ordered by width and then by first code, so this lands just
+	 * past the last range of this width that starts at or below the code, which
+	 * is the only one that can hold it unless ranges overlap.
+	 */
+	auto key = std::make_pair(nbytes, code);
+	auto rit = std::upper_bound(
+		ranges.begin(), ranges.end(), key,
+		[](const std::pair<std::size_t, std::uint32_t> &k, const range &r) {
+			return k.first != r.nbytes ? k.first < r.nbytes : k.second < r.low;
+		});
 
-	/* Several ranges may start at or below the code; the width picks one */
+	const range *hit = nullptr;
+	std::size_t steps = 0;
+
 	while (rit != ranges.begin()) {
 		--rit;
 
-		if (code <= rit->high && rit->nbytes == nbytes) {
+		/* Out of the width group: no range of this width can start earlier */
+		if (rit->nbytes != nbytes) {
 			break;
 		}
 
-		if (rit == ranges.begin()) {
-			return {};
+		if (code <= rit->high) {
+			hit = &*rit;
+			break;
+		}
+
+		/*
+		 * Only an overlap can put the answer further back, and the running
+		 * maximum says at once whether one is even possible. The step budget is
+		 * what is left for a program built entirely out of overlaps, where the
+		 * walk would otherwise cost the whole table for every character.
+		 */
+		if (rit->max_high < code || ++steps >= max_range_backscan) {
+			break;
 		}
 	}
 
-	if (rit == ranges.end() || code < rit->low || code > rit->high ||
-		rit->nbytes != nbytes) {
+	if (hit == nullptr) {
 		return {};
 	}
 
-	auto uc = static_cast<char32_t>(rit->first_uc + (code - rit->low));
+	auto uc = static_cast<char32_t>(hit->first_uc + (code - hit->low));
 
 	if (!U_IS_UNICODE_CHAR(uc)) {
 		return {};
@@ -482,6 +552,10 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 
 				result.note_code_width(src.bytes.size());
 
+				if (destination_too_long(dst.bytes)) {
+					continue;
+				}
+
 				std::string utf8;
 				utf16be_to_utf8(dst.bytes, utf8, nullptr);
 				result.add_single(bytes_to_code(src.bytes), src.bytes.size(),
@@ -512,6 +586,10 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 				auto dst = lex.next();
 
 				if (dst.type == token_type::hex_string) {
+					if (destination_too_long(dst.bytes)) {
+						continue;
+					}
+
 					std::string utf8;
 					char32_t single = 0;
 					auto nchars = utf16be_to_utf8(dst.bytes, utf8, &single);
@@ -545,8 +623,17 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 							int32_t off = 0;
 							U8_APPEND_UNSAFE(buf, off, uc);
 							dst_utf8.append(buf, off);
-							result.add_single(lo_code + static_cast<std::uint32_t>(i),
-											  low.bytes.size(), std::move(dst_utf8));
+
+							/*
+							 * Every copy is the same size, so once one does not
+							 * fit a budget none of the rest will either, and
+							 * this is the loop that turns a short program into
+							 * a big table.
+							 */
+							if (!result.add_single(lo_code + static_cast<std::uint32_t>(i),
+												   low.bytes.size(), std::move(dst_utf8))) {
+								break;
+							}
 						}
 					}
 				}
@@ -562,9 +649,12 @@ auto cmap::parse(std::string_view program) -> std::optional<cmap>
 						}
 
 						if (code <= hi_code) {
-							std::string utf8;
-							utf16be_to_utf8(elt.bytes, utf8, nullptr);
-							result.add_single(code, low.bytes.size(), std::move(utf8));
+							if (!destination_too_long(elt.bytes)) {
+								std::string utf8;
+								utf16be_to_utf8(elt.bytes, utf8, nullptr);
+								result.add_single(code, low.bytes.size(), std::move(utf8));
+							}
+
 							code++;
 						}
 					}
@@ -806,5 +896,189 @@ end)cmap");
 
 		REQUIRE(cm.has_value());
 		CHECK(cm->size() <= cmap::max_range_expansion);
+	}
+
+	/* Four hex digits, the way a CMap writes a two byte code */
+	static auto hex4(unsigned v) -> std::string
+	{
+		static const char digits[] = "0123456789ABCDEF";
+		std::string out;
+
+		for (int shift = 12; shift >= 0; shift -= 4) {
+			out.push_back(digits[(v >> shift) & 0xF]);
+		}
+
+		return out;
+	}
+
+	/* A destination of n times the letter a, as UTF-16BE hex */
+	static auto long_destination(std::size_t nchars) -> std::string
+	{
+		std::string out;
+
+		for (std::size_t i = 0; i < nchars; i++) {
+			out += "0061";
+		}
+
+		return out;
+	}
+
+	TEST_CASE("a destination that is a payload rather than a character")
+	{
+		/*
+		 * Counting entries says nothing about how big one entry is: a single
+		 * bfchar can carry as many characters as the program has room for, and
+		 * the parser would keep every one of them.
+		 */
+		auto program = std::string{"begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+								   "endcodespacerange\n1 beginbfchar\n<0041> <"};
+		program += long_destination(20000);
+		program += ">\nendbfchar\nendcmap\n";
+
+		/* Refused outright, and it was the only mapping, so nothing is left */
+		CHECK(!cmap::parse(program).has_value());
+	}
+
+	TEST_CASE("the destination cap leaves room for any real ligature")
+	{
+		/*
+		 * A producer spells a ligature in two or three characters; a mapping
+		 * built right at the cap is already absurd, and it still has to work,
+		 * because the cost of a limit set too low is text silently gone
+		 * missing from mail nobody complains about.
+		 */
+		auto program = std::string{"begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+								   "endcodespacerange\n1 beginbfchar\n<0041> <"};
+		program += long_destination(cmap::max_mapping_bytes);
+		program += ">\nendbfchar\nendcmap\n";
+
+		auto cm = cmap::parse(program);
+
+		REQUIRE(cm.has_value());
+		CHECK(cm->stored_bytes() == cmap::max_mapping_bytes);
+		CHECK(decode(*cm, std::string_view{"\x00\x41", 2}).size() == cmap::max_mapping_bytes);
+	}
+
+	TEST_CASE("mappings that each fit are not allowed to add up")
+	{
+		/*
+		 * Every destination here is legal on its own, and the entry count stays
+		 * under the cap; what a few dozen kilobytes of program buys is the
+		 * expansion of each range into hundreds of copies of one.
+		 */
+		constexpr unsigned nranges = 96;
+		constexpr std::size_t dest_chars = 64;
+
+		std::string program = "begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+							  "endcodespacerange\n";
+
+		program += std::to_string(nranges) + " beginbfrange\n";
+
+		for (unsigned i = 0; i < nranges; i++) {
+			program += "<" + hex4(i * 256) + "> <" + hex4(i * 256 + 255) + "> <" +
+					   long_destination(dest_chars) + ">\n";
+		}
+
+		program += "endbfrange\nendcmap\n";
+
+		auto cm = cmap::parse(program);
+
+		REQUIRE(cm.has_value());
+		CHECK(cm->stored_bytes() <= cmap::max_total_mapping_bytes);
+		/* Whatever fitted is kept; what the program asked for is not */
+		CHECK(!cm->empty());
+		CHECK(cm->size() < nranges * cmap::max_range_expansion);
+	}
+
+	TEST_CASE("an unmapped code does not cost a walk over the ranges")
+	{
+		/*
+		 * A lookup happens once per character of the content stream, so a
+		 * search that fell back to the front of the table on every miss would
+		 * multiply a table this size by a stream of misses.
+		 */
+		constexpr unsigned nranges = 2048;
+
+		std::string program = "begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+							  "endcodespacerange\n";
+
+		program += std::to_string(nranges) + " beginbfrange\n";
+
+		for (unsigned i = 0; i < nranges; i++) {
+			/* Only even codes are mapped, so the odd ones are all misses */
+			program += "<" + hex4(i * 2) + "> <" + hex4(i * 2) + "> <0061>\n";
+		}
+
+		program += "endbfrange\nendcmap\n";
+
+		auto cm = cmap::parse(program);
+
+		REQUIRE(cm.has_value());
+
+		glyph_utf8 scratch{};
+		CHECK(cm->lookup(0x0F00, 2, scratch) == "a");
+		CHECK(cm->lookup(0x0F01, 2, scratch).empty());
+		/* Past everything the table covers */
+		CHECK(cm->lookup(0xF000, 2, scratch).empty());
+	}
+
+	TEST_CASE("an overlapped range is still the answer")
+	{
+		/*
+		 * Where ranges overlap, the one that answers is not the last one to
+		 * start at or below the code, so the search does have to look back.
+		 */
+		auto cm = cmap::parse("begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+							  "endcodespacerange\n3 beginbfrange\n"
+							  "<0000> <001F> <0061>\n"
+							  "<0002> <0003> <0041>\n"
+							  "<0004> <0005> <0058>\n"
+							  "endbfrange\nendcmap\n");
+
+		REQUIRE(cm.has_value());
+
+		glyph_utf8 scratch{};
+		/* The narrow ranges win where they reach */
+		CHECK(cm->lookup(0x0002, 2, scratch) == "A");
+		CHECK(cm->lookup(0x0004, 2, scratch) == "X");
+		/* And the wide one answers past them, two steps back */
+		CHECK(cm->lookup(0x0010, 2, scratch) == "q");
+		/* Past the wide range there is nothing to look back for */
+		CHECK(cm->lookup(0x0030, 2, scratch).empty());
+	}
+
+	TEST_CASE("a table built entirely out of overlaps gives up rather than walks")
+	{
+		/*
+		 * Overlapping every range with every other is the one shape where
+		 * looking back is unbounded work, and it is a shape no producer emits.
+		 * Answering the first few and then declining is the trade: a code this
+		 * deep under the pile loses its character, which beats spending the
+		 * whole table on every character of the stream.
+		 */
+		constexpr unsigned nnested = cmap::max_range_backscan * 2;
+
+		std::string program = "begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+							  "endcodespacerange\n";
+
+		program += std::to_string(nnested + 1) + " beginbfrange\n";
+		/* One range under everything, which only a full walk back would reach */
+		program += "<0000> <0FFF> <0061>\n";
+
+		for (unsigned i = 1; i <= nnested; i++) {
+			program += "<" + hex4(i) + "> <" + hex4(i) + "> <0041>\n";
+		}
+
+		program += "endbfrange\nendcmap\n";
+
+		auto cm = cmap::parse(program);
+
+		REQUIRE(cm.has_value());
+
+		glyph_utf8 scratch{};
+		/* What the nested ranges cover is found at once */
+		CHECK(cm->lookup(0x0001, 2, scratch) == "A");
+		/* What only the buried range covers is beyond the step budget */
+		CHECK(cm->lookup(0x0800, 2, scratch).empty());
 	}
 }
