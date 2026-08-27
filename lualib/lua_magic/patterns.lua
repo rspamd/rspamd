@@ -21,6 +21,38 @@ limitations under the License.
 
 local heuristics = require "lua_magic/heuristics"
 
+-- Building blocks for the MHTML header signature (see the `mht` entry below).
+--
+-- mht_fws: RFC 5322 folding whitespace. Horizontal space, optionally continued
+-- onto following lines. A continuation must begin with at least one space or
+-- tab, and that requirement is exactly what separates a fold from the empty
+-- line terminating the header block, so this can never run past the block.
+local mht_fws = [=[[ \t]*(?:\r?\n[ \t]+)*]=]
+
+-- mht_hdr_line: one non-blank line. The leading [^\r\n] rejects both "\r\n"
+-- and "\n", so a run of these stops at the empty line that ends the header
+-- block and cannot reach a nested part's headers. Folded continuation lines
+-- start with space or tab and are matched, as they should be.
+local mht_hdr_line = [=[(?:[^\r\n][^\n]*\n)*]=]
+
+-- Characters that may legitimately follow a MIME token. An RFC 2045 token is
+-- everything except SPACE, CTLs and tspecials, so any of these ends it, while
+-- a token character continuing it means we matched only a *prefix* of some
+-- other value - "multipart/relatedness" for the media type, "1.00" for the
+-- version. LF is handled separately by the two forms below.
+local mht_tok_end = [=[ \t;(\r]=]
+
+-- Remainder of a header line after a matched token, used when further header
+-- lines still have to be matched: either the line ends immediately, or what
+-- follows the token starts with a terminator.
+local mht_line_rest = [=[(?:[]=] .. mht_tok_end .. [=[][^\n]*)?\n]=]
+
+-- Token terminator for a match that ends here: end of line, or end of content.
+local mht_tok_boundary = [=[(?:[]=] .. mht_tok_end .. [=[\n]|$)]=]
+
+local mht_mime_version = [=[MIME-Version:]=] .. mht_fws .. [=[1\.0]=]
+local mht_related = [=[Content-Type:]=] .. mht_fws .. [=[multipart/related]=]
+
 local patterns = {
   pdf = {
     -- These are alternatives
@@ -65,6 +97,52 @@ local patterns = {
         relative_position = 0,
         weight = 60,
       }
+    }
+  },
+  -- MHTML/MHT web page archive (RFC 2557): saved as a raw RFC822-style
+  -- header block declaring a multipart/related structure. Browsers/MUAs
+  -- normally attach this as an opaque blob (e.g. application/octet-stream
+  -- or no useful Content-Type at all), so we cannot rely on MIME headers
+  -- alone and detect it from the content itself instead. Both markers are
+  -- required in a single pattern (rather than two independently-weighted
+  -- matches) so that a plain "MIME-Version: 1.0" header alone (present on
+  -- practically any forwarded message) can never trigger a false match.
+  --
+  -- Both markers must sit in the OUTER header block of the content.
+  --
+  -- "Somewhere in the first N bytes" is not good enough. A perfectly ordinary
+  -- forwarded .eml carries MIME-Version: 1.0 in its own headers and, a few
+  -- dozen bytes later, a nested part that opens with Content-Type:
+  -- multipart/related - so a flat proximity search labels it an MHT archive
+  -- and routes it down the MHTML path. Anchoring each marker to a line start
+  -- does not help either: both of those ARE real headers, just not of the
+  -- same entity.
+  --
+  -- So the header block is described explicitly: `^` pins the match to the
+  -- start of the content and mht_hdr_line walks only non-blank lines. See the
+  -- definitions above for why neither that walk nor the folding whitespace
+  -- inside a header value can cross the blank line ending the block.
+  --
+  -- Both header orders are accepted, since MIME entity headers are unordered
+  -- and only browsers reliably put MIME-Version first. Kept as one alternation
+  -- rather than two matches so a document cannot score the weight twice.
+  --
+  -- This also costs less than the bounded .{0,256} gap it replaces: a handful
+  -- of small NFA loops instead of two 256-wide bounded repeats, in a pattern
+  -- that lives in the shared database every attachment is scanned against.
+  mht = {
+    matches = {
+      {
+        string = [=[(?i)^]=] .. mht_hdr_line .. [=[(?:]=] ..
+            mht_mime_version .. mht_line_rest .. mht_hdr_line ..
+            mht_related .. mht_tok_boundary ..
+            [=[|]=] ..
+            mht_related .. mht_line_rest .. mht_hdr_line ..
+            mht_mime_version .. mht_tok_boundary ..
+            [=[)]=],
+        position = { '<=', 2048 },
+        weight = 60,
+      },
     }
   },
   djvu = {

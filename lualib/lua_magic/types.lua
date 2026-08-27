@@ -68,6 +68,10 @@ local types = {
     ct = 'application/x-chm',
     type = 'binary',
   },
+  mht = {
+    ct = 'application/x-mimearchive',
+    type = 'binary',
+  },
   djvu = {
     ct = 'application/x-djvu',
     type = 'binary',
