@@ -61,6 +61,9 @@
 __KHASH_IMPL(rdns_requests_hash, kh_inline, int, struct rdns_request *, true,
 			 kh_int_hash_func, kh_int_hash_equal);
 
+/* How many DNS packets we are ready to process in a single TCP read event */
+#define MAX_TCP_PACKETS_PER_EVENT 64
+
 static int
 rdns_send_request(struct rdns_request *req, int fd, bool new_req)
 {
@@ -203,6 +206,11 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 
 	int i, t;
 
+	if (r < (int) sizeof(struct dns_header)) {
+		rdns_info("truncated dns reply: %d bytes", r);
+		return false;
+	}
+
 	/* First check header fields */
 	if (header->qr == 0) {
 		rdns_info("got request while waiting for reply");
@@ -223,14 +231,12 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 	unsigned int saved_pos = req->pos;
 	req->pos = sizeof(struct dns_header);
 	pos = in + sizeof(struct dns_header);
-	t = r - sizeof(struct dns_header);
 	for (i = 0; i < (int) qdcount; i++) {
-		if ((npos = rdns_request_reply_cmp(req, pos, t)) == NULL) {
+		if ((npos = rdns_request_reply_cmp(req, in, r, pos, saved_pos)) == NULL) {
 			rdns_info("DNS request with id %d is for different query, ignoring", (int) req->id);
 			req->pos = saved_pos;
 			return false;
 		}
-		t -= npos - pos;
 		pos = npos;
 	}
 	req->pos = saved_pos;
@@ -238,6 +244,11 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 	 * Now pos is in answer section, so we should extract data and form reply
 	 */
 	rep = rdns_make_reply(req, header->rcode);
+
+	if (rep == NULL) {
+		rdns_warn("Cannot allocate memory for reply");
+		return false;
+	}
 
 	if (header->ad) {
 		rep->flags |= RDNS_AUTH;
@@ -247,18 +258,19 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 		rep->flags |= RDNS_TRUNCATED;
 	}
 
-	if (rep == NULL) {
-		rdns_warn("Cannot allocate memory for reply");
-		return false;
-	}
-
 	type = req->requested_names[0].type;
 
 	if (rep->code == RDNS_RC_NOERROR) {
 		r -= pos - in;
 		/* Extract RR records */
 		for (i = 0; i < ntohs(header->ancount); i++) {
-			elt = malloc(sizeof(struct rdns_reply_entry));
+			elt = calloc(1, sizeof(struct rdns_reply_entry));
+
+			if (elt == NULL) {
+				rdns_warn("Cannot allocate memory for reply entry");
+				break;
+			}
+
 			t = rdns_parse_rr(resolver, in, elt, &pos, rep, &r);
 			if (t == -1) {
 				free(elt);
@@ -329,18 +341,53 @@ rdns_process_tcp_read(int fd, struct rdns_io_channel *ioc)
 {
 	ssize_t r;
 	struct rdns_resolver *resolver = ioc->resolver;
+	/*
+	 * Drain the socket iteratively: a peer that keeps the channel readable must
+	 * not be able to grow our stack, so we bound the number of packets that are
+	 * processed in a single readiness event
+	 */
+	unsigned int packets = 0;
 
-	if (ioc->tcp->cur_read == 0) {
-		/* We have to read size first */
-		r = read(fd, &ioc->tcp->next_read_size, sizeof(ioc->tcp->next_read_size));
-
-		if (r == -1 || r == 0) {
-			goto err;
+	while (packets < MAX_TCP_PACKETS_PER_EVENT) {
+		if (!IS_CHANNEL_CONNECTED(ioc) || ioc->sock != fd) {
+			/* A reply callback has reset this channel, so we cannot use it */
+			return;
 		}
 
-		ioc->tcp->cur_read += r;
+		if (ioc->tcp->cur_read == 0) {
+			/* We have to read size first */
+			r = read(fd, &ioc->tcp->next_read_size, sizeof(ioc->tcp->next_read_size));
 
-		if (r == sizeof(ioc->tcp->next_read_size)) {
+			if (r == -1 || r == 0) {
+				goto err;
+			}
+
+			ioc->tcp->cur_read += r;
+
+			if (r == sizeof(ioc->tcp->next_read_size)) {
+				ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
+
+				/* We have read the size, so we can try read one more time */
+				if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
+					rdns_err("failed to allocate %d bytes: %s",
+							 (int) ioc->tcp->next_read_size, strerror(errno));
+					r = -1;
+					goto err;
+				}
+			}
+			else {
+				/* We have read one byte, need to retry... */
+				return;
+			}
+		}
+		else if (ioc->tcp->cur_read == 1) {
+			r = read(fd, ((unsigned char *) &ioc->tcp->next_read_size) + 1, 1);
+
+			if (r == -1 || r == 0) {
+				goto err;
+			}
+
+			ioc->tcp->cur_read += r;
 			ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
 
 			/* We have read the size, so we can try read one more time */
@@ -351,53 +398,44 @@ rdns_process_tcp_read(int fd, struct rdns_io_channel *ioc)
 				goto err;
 			}
 		}
-		else {
-			/* We have read one byte, need to retry... */
-			return;
+
+		if (ioc->tcp->next_read_size < sizeof(struct dns_header)) {
+			/* Truncated reply, reset channel */
+			rdns_err("got truncated size: %d on TCP read", ioc->tcp->next_read_size);
+			r = -1;
+			errno = EINVAL;
+			goto err;
 		}
-	}
-	else if (ioc->tcp->cur_read == 1) {
-		r = read(fd, ((unsigned char *) &ioc->tcp->next_read_size) + 1, 1);
+
+		/* Try to read the full packet if we can */
+		int to_read = ioc->tcp->next_read_size - (ioc->tcp->cur_read - 2);
+
+		if (to_read <= 0) {
+			/* Internal error */
+			rdns_err("internal buffer error on reading!");
+			r = -1;
+			errno = EINVAL;
+			goto err;
+		}
+
+		r = read(fd, ioc->tcp->cur_read_buf + (ioc->tcp->cur_read - 2), to_read);
 
 		if (r == -1 || r == 0) {
+			/*
+			 * Both EOF and a real error must be handled here, otherwise a peer
+			 * that stops sending data in the middle of a packet either spins us
+			 * in the event loop or corrupts the read state machine
+			 */
 			goto err;
 		}
 
 		ioc->tcp->cur_read += r;
-		ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
 
-		/* We have read the size, so we can try read one more time */
-		if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
-			rdns_err("failed to allocate %d bytes: %s",
-					 (int) ioc->tcp->next_read_size, strerror(errno));
-			r = -1;
-			goto err;
+		if ((ioc->tcp->cur_read - 2) != ioc->tcp->next_read_size) {
+			/* Incomplete packet, wait for the next readiness event */
+			return;
 		}
-	}
 
-	if (ioc->tcp->next_read_size < sizeof(struct dns_header)) {
-		/* Truncated reply, reset channel */
-		rdns_err("got truncated size: %d on TCP read", ioc->tcp->next_read_size);
-		r = -1;
-		errno = EINVAL;
-		goto err;
-	}
-
-	/* Try to read the full packet if we can */
-	int to_read = ioc->tcp->next_read_size - (ioc->tcp->cur_read - 2);
-
-	if (to_read <= 0) {
-		/* Internal error */
-		rdns_err("internal buffer error on reading!");
-		r = -1;
-		errno = EINVAL;
-		goto err;
-	}
-
-	r = read(fd, ioc->tcp->cur_read_buf + (ioc->tcp->cur_read - 2), to_read);
-	ioc->tcp->cur_read += r;
-
-	if ((ioc->tcp->cur_read - 2) == ioc->tcp->next_read_size) {
 		/* We have a full packet ready, process it */
 		struct rdns_request *req = rdns_find_dns_request(ioc->tcp->cur_read_buf, ioc);
 
@@ -423,9 +461,9 @@ rdns_process_tcp_read(int fd, struct rdns_io_channel *ioc)
 
 		ioc->tcp->next_read_size = 0;
 		ioc->tcp->cur_read = 0;
+		packets++;
 
 		/* Retry read the next packet to avoid unnecessary polling */
-		rdns_process_tcp_read(fd, ioc);
 	}
 
 	return;
