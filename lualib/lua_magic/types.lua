@@ -32,7 +32,7 @@ local types = {
     type = 'executable',
   },
   lnk = {
-    ct = 'application/x-ms-application',
+    ct = 'application/x-ms-shortcut', -- was x-ms-application (copy-paste bug); check detected_type consumers
     type = 'executable',
   },
   class = {
@@ -94,7 +94,7 @@ local types = {
     type = 'archive',
   },
   bz2 = {
-    ct = 'application/x-bzip',
+    ct = 'application/x-bzip2', -- was x-bzip; check detected_type consumers
     type = 'archive',
   },
   xz = {
@@ -114,7 +114,7 @@ local types = {
     type = 'archive',
   },
   iso = {
-    ct = 'application/x-iso',
+    ct = 'application/x-iso9660-image', -- was x-iso; check detected_type consumers
     type = 'archive',
   },
   zoo = {
