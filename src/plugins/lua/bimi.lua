@@ -152,7 +152,7 @@ local function insert_bimi_headers(task, domain, bimi_content)
 end
 
 local function process_bimi_json(task, domain, redis_data)
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local _, err = parser:parse_string(redis_data)
 
   if err then
@@ -187,7 +187,7 @@ local function make_helper_request(task, domain, record, redis_server)
       return
     end
     if is_sync then
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local _, err = parser:parse_string(body)
 
       if err then
