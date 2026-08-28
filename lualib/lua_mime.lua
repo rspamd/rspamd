@@ -1820,7 +1820,7 @@ Return ONLY the response in this format without any explanations, markdown forma
       logger.debugm('lua_mime', task, 'anonymize_message: LLM response received, size: %s bytes',
           data.content and #data.content or 0)
 
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local res, parse_err = parser:parse_string(data.content)
       if not res then
         logger.errx(task, 'anonymize_message: cannot parse LLM response: %s', parse_err)

@@ -85,7 +85,7 @@ function exports.parse_model(data)
   end
 
   -- Parse msgpack
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local ok, parse_err = parser:parse_text(decompressed, 'msgpack')
   if not ok then
     return nil, "failed to parse msgpack: " .. (parse_err or "unknown error")

@@ -522,7 +522,7 @@ local function openphish_json_cb(string)
 
   local function openphish_elt_parser(cap)
     if valid then
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local res, err = parser:parse_string(cap)
       if not res then
         valid = false

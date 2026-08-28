@@ -150,7 +150,8 @@ local function check_query_settings(task)
   local query_set = task:get_request_header('settings')
   if query_set then
 
-    local parser = ucl.parser()
+    -- Client supplied header, so bound what it may cost us to represent
+    local parser = ucl.untrusted_parser()
     local res, err = parser:parse_text(tostring(query_set))
     if res then
       if settings_id then
@@ -481,7 +482,7 @@ end
 local function gen_settings_external_cb(name)
   return function(result, err_or_data, code, task)
     if result then
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
 
       local res, ucl_err = parser:parse_text(err_or_data)
       if not res then

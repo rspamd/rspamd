@@ -150,7 +150,7 @@ local function metadefender_check(task, content, digest, rule, maybe_part)
           end
         else
           local ucl = require "ucl"
-          local parser = ucl.parser()
+          local parser = ucl.untrusted_parser()
           local res, json_err = parser:parse_string(body)
 
           lua_util.debugm(rule.name, task, '%s: got reply data: "%s"',

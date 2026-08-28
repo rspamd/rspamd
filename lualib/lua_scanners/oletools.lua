@@ -151,7 +151,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
           conn:add_read(oletools_callback)
 
         else
-          local ucl_parser = ucl.parser()
+          local ucl_parser = ucl.untrusted_parser()
           local ok, ucl_err = ucl_parser:parse_string(tostring(json_response))
           if not ok then
             rspamd_logger.errx(task, "%s: error parsing json response, retry: %s",
