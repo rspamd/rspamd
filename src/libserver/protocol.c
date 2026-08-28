@@ -63,6 +63,55 @@ rspamd_protocol_quark(void)
 }
 
 /*
+ * Budgets for UCL/JSON that arrived from the network.
+ *
+ * A tree element costs roughly 128 bytes (the object itself plus hash
+ * bookkeeping), while the densest legitimate JSON that can describe one is two
+ * bytes - "1," inside an array. Parsing therefore amplifies by up to ~64x, so
+ * the proportional budget sits above that and never rejects real input; it
+ * only stops a small request from claiming a large tree. The absolute cap is
+ * what matters for big bodies: without it, max_message worth of "[1,1,1,...]"
+ * turns into gigabytes of objects.
+ *
+ * Depth is kept far tighter than libucl's own default because every recursive
+ * walk over the result - emitting it, copying it, handing it to Lua - is
+ * proportional to it, and nothing legitimate comes close.
+ */
+#define RSPAMD_UNTRUSTED_UCL_MAX_DEPTH 64
+#define RSPAMD_UNTRUSTED_UCL_MAX_NODES 1000000
+#define RSPAMD_UNTRUSTED_UCL_MAX_KEY 1024
+#define RSPAMD_UNTRUSTED_UCL_MAX_STRING (16 * 1024 * 1024)
+#define RSPAMD_UNTRUSTED_UCL_ALLOC_FACTOR 96
+#define RSPAMD_UNTRUSTED_UCL_ALLOC_FLOOR (256 * 1024)
+#define RSPAMD_UNTRUSTED_UCL_MAX_ALLOC (64 * 1024 * 1024)
+
+struct ucl_parser *
+rspamd_ucl_parser_new_untrusted(gsize inlen)
+{
+	struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+	struct ucl_parser_limits limits;
+	uint64_t proportional;
+
+	if (parser == NULL) {
+		return NULL;
+	}
+
+	proportional = (uint64_t) inlen * RSPAMD_UNTRUSTED_UCL_ALLOC_FACTOR +
+				   RSPAMD_UNTRUSTED_UCL_ALLOC_FLOOR;
+
+	memset(&limits, 0, sizeof(limits));
+	limits.max_depth = RSPAMD_UNTRUSTED_UCL_MAX_DEPTH;
+	limits.max_nodes = RSPAMD_UNTRUSTED_UCL_MAX_NODES;
+	limits.max_key_length = RSPAMD_UNTRUSTED_UCL_MAX_KEY;
+	limits.max_string_length = RSPAMD_UNTRUSTED_UCL_MAX_STRING;
+	limits.max_alloc = MIN(proportional, RSPAMD_UNTRUSTED_UCL_MAX_ALLOC);
+
+	ucl_parser_set_limits(parser, &limits);
+
+	return parser;
+}
+
+/*
  * Remove <> from the fixed string and copy it to the pool
  */
 static char *
@@ -2948,7 +2997,7 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 										 sizeof("msgpack") - 1) != -1) {
 		/* Remember the input serialization so the reply can mirror it */
 		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK;
-		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		parser = rspamd_ucl_parser_new_untrusted(metadata_part->data_len);
 		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
 								  metadata_part->data_len,
 								  ucl_parser_get_default_priority(parser),
@@ -2957,7 +3006,7 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	}
 	else {
 		/* Strict mode: disable UCL macros/includes, treat as plain JSON */
-		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		parser = rspamd_ucl_parser_new_untrusted(metadata_part->data_len);
 		ucl_parser_add_chunk(parser, (const unsigned char *) metadata_part->data,
 							 metadata_part->data_len);
 	}
