@@ -387,6 +387,9 @@ exports.detect_mime_part = function(part, log_obj)
     if #lfn > 4 and lfn:sub(-4) == '.eml' then
       return 'eml', types['eml']
     end
+    if (#lfn > 5 and lfn:sub(-5) == '.html') or (#lfn > 4 and lfn:sub(-4) == '.htm') then
+      return 'html', types['html']
+    end
   end
 
   -- Text/html and other parts
