@@ -157,6 +157,7 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
         // ── Public functions ─────────────────────────────────────────────────
 
         ui.formatBytesIEC = function (bytes) {
+            if (bytes === 0) return "0 B";
             if (!Number.isInteger(Number(bytes)) || bytes < 0) return "NaN";
 
             const base = 1024;

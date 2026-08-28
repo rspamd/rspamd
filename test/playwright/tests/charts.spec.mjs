@@ -31,6 +31,63 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
         await expect.poll(async () => await page.locator("#chart svg").count()).toBeGreaterThan(0);
     });
 
+    test("Status cluster table: load/latency columns and expandable details", async () => {
+        // The Status tab is active from the previous test. The auto-refresh may
+        // rebuild the table under us, but the assertions re-resolve locators.
+        await page.waitForResponse((r) => r.url().includes("/stat") && r.ok());
+        await expect(page.locator("#clusterTable thead")).toContainText("Load");
+        await expect(page.locator("#clusterTable thead")).toContainText("Latency");
+        await expect(page.locator("#clusterTable tbody td[title='Messages scanned per minute']").first())
+            .toHaveText(/-|[\d.]+\/min/);
+
+        // Clicking anywhere on a server row (except the radio) expands its
+        // details row built from the already-fetched /stat snapshot (traffic
+        // and memory counters). The row also carries the Writable badge when
+        // the server is not in read-only mode.
+        const row = page.locator("#clusterTable tbody tr[data-server]")
+            .filter({has: page.locator("td.cluster-toggle")}).first();
+        await expect(row).toContainText("Writable");
+        const serverNameCell = row.locator("td").nth(2); // Server name
+        const details = page.locator("#clusterTable tr.cluster-details").first();
+        await serverNameCell.click();
+        await expect(details).toBeVisible();
+        await expect(details).toContainText("Memory");
+        await serverNameCell.click();
+        await expect(details).toBeHidden();
+
+        // The expansion state survives the table rebuild on refresh.
+        await serverNameCell.click();
+        await expect(details).toBeVisible();
+        await Promise.all([
+            page.waitForResponse((r) => r.url().includes("/stat") && r.ok()),
+            page.locator("#refresh").click(),
+        ]);
+        await expect(details).toBeVisible();
+
+        // Three-state health: simulate a /healthy failure (HTTP 500 with the
+        // reason in the JSON body) and check the degraded row state.
+        await page.route("**/healthy", (route) => route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({error: "2 workers are not responding"}),
+        }));
+        await Promise.all([
+            page.waitForResponse((r) => r.url().includes("/stat") && r.ok()),
+            page.locator("#refresh").click(),
+        ]);
+        await expect(row).toHaveClass(/\bwarning\b/);
+        await expect(row.locator("td").nth(4)).toHaveAttribute("title",
+            "Degraded: 2 workers are not responding");
+
+        // Back to the healthy state once /healthy answers again.
+        await page.unroute("**/healthy");
+        await Promise.all([
+            page.waitForResponse((r) => r.url().includes("/stat") && r.ok()),
+            page.locator("#refresh").click(),
+        ]);
+        await expect(row).toHaveClass(/\bsuccess\b/);
+    });
+
     test("Throughput tab renders the graph and reloads on dataset change", async () => {
         // Track every /graph response. The listener is attached before navigating
         // so there is no race (localhost responses can beat a waitForResponse

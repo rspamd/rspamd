@@ -8,6 +8,7 @@ bars
 chart-area
 chart-pie
 check
+chevron-down
 circle-plus
 cog
 columns
