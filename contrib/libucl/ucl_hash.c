@@ -165,7 +165,7 @@ ucl_hash_create(bool ignore_case)
 	return new;
 }
 
-void ucl_hash_destroy(ucl_hash_t *hashlin, ucl_hash_free_func func)
+void ucl_hash_destroy(ucl_hash_t *hashlin, ucl_hash_free_func func, void *ud)
 {
 
 	if (hashlin == NULL) {
@@ -184,7 +184,7 @@ void ucl_hash_destroy(ucl_hash_t *hashlin, ucl_hash_free_func func)
 				cur = (kh_value(h, k))->obj;
 				while (cur != NULL) {
 					tmp = cur->next;
-					func(__DECONST(ucl_object_t *, cur));
+					func(__DECONST(ucl_object_t *, cur), ud);
 					cur = tmp;
 				}
 			}
