@@ -141,6 +141,14 @@ typedef SSIZE_T ssize_t;
 
 #define UCL_MAX_RECURSION 16
 #define UCL_MAX_NESTING 1024
+
+/*
+ * Bookkeeping that a single tree element is assumed to cost on top of the
+ * object itself: a hash element, a khash slot and the usual allocator
+ * overhead. It is deliberately a rough estimate - it only has to make
+ * `max_alloc` track the real footprint closely enough to be a useful budget.
+ */
+#define UCL_NODE_OVERHEAD 64
 #define UCL_TRASH_KEY 0
 #define UCL_TRASH_VALUE 1
 
@@ -272,6 +280,10 @@ struct ucl_parser {
 	void *var_data;
 	ucl_object_t *comments;
 	ucl_object_t *last_comment;
+	struct ucl_parser_limits limits;
+	uint64_t cur_nodes;
+	uint64_t cur_alloc;
+	uint32_t cur_depth;
 	UT_string *err;
 };
 
@@ -293,6 +305,36 @@ size_t ucl_unescape_json_string (char *str, size_t len);
  * @param str
  */
 size_t ucl_unescape_squoted_string (char *str, size_t len);
+
+/**
+ * Pop the head frame off the parser stack, keeping the nesting depth counter
+ * in sync
+ * @param parser parser object
+ * @param st frame to pop, must be the current head of parser->stack
+ */
+void ucl_parser_pop_container (struct ucl_parser *parser, struct ucl_stack *st);
+
+/**
+ * Empty an array without releasing the objects it holds. Used to unwind a
+ * partially built array whose elements are still owned by somebody else.
+ * @param ar array object
+ */
+void ucl_array_detach_elements (ucl_object_t *ar);
+
+/**
+ * Account for one more element in the resulting tree
+ * @param parser parser object
+ * @return false if either the node or the allocation budget is exhausted
+ */
+bool ucl_parser_account_node (struct ucl_parser *parser);
+
+/**
+ * Charge `bytes` against the parser's allocation budget
+ * @param parser parser object
+ * @param bytes amount of memory the tree is about to grow by
+ * @return false if the budget is exhausted (parser error is set)
+ */
+bool ucl_parser_account_alloc (struct ucl_parser *parser, uint64_t bytes);
 
 /**
  * Handle include macro
@@ -486,7 +528,7 @@ ucl_hash_insert_object (ucl_hash_t *hashlin,
 	}
 	if (!ucl_hash_insert (nhp, obj, obj->key, obj->keylen)) {
 		if (nhp != hashlin) {
-			ucl_hash_destroy(nhp, NULL);
+			ucl_hash_destroy(nhp, NULL, NULL);
 		}
 		return NULL;
 	}

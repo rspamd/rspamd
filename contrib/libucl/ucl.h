@@ -138,7 +138,8 @@ typedef enum ucl_error {
 	UCL_EMACRO,    /**< Error processing a macro */
 	UCL_EINTERNAL, /**< Internal unclassified error */
 	UCL_ESSL,      /**< SSL error */
-	UCL_EMERGE     /**< A merge error occurred */
+	UCL_EMERGE,    /**< A merge error occurred */
+	UCL_ELIMIT     /**< Input exceeds one of the configured parser limits */
 } ucl_error_t;
 
 /**
@@ -1026,6 +1027,42 @@ UCL_EXTERN bool ucl_parser_set_default_priority(struct ucl_parser *parser,
  * @return true default priority (0 .. 16), -1 for failure
  */
 UCL_EXTERN int ucl_parser_get_default_priority(struct ucl_parser *parser);
+
+/**
+ * Structural and allocation budgets applied while parsing.
+ *
+ * The input size alone is a poor proxy for the cost of parsing it: a small
+ * document can describe a very deep or very fragmented tree, and every
+ * element of that tree costs an object, a copied key/value and hash
+ * bookkeeping. These limits bound that amplification and should be set
+ * whenever the input is untrusted.
+ *
+ * A zero value means "no limit" for that particular field. Exceeding a limit
+ * aborts the parse with #UCL_ELIMIT (or #UCL_ENESTED for the depth limit).
+ */
+struct ucl_parser_limits {
+	uint64_t max_depth;         /**< Maximum nesting depth of objects and arrays */
+	uint64_t max_nodes;         /**< Maximum number of elements in the parsed tree */
+	uint64_t max_alloc;         /**< Maximum aggregate bytes attributed to the parsed tree */
+	uint64_t max_key_length;    /**< Maximum length of a single key */
+	uint64_t max_string_length; /**< Maximum length of a single string value */
+};
+
+/**
+ * Sets the parser limits, replacing all of them at once
+ * @param parser parser object
+ * @param limits limits to apply, NULL restores the defaults
+ */
+UCL_EXTERN void ucl_parser_set_limits(struct ucl_parser *parser,
+									  const struct ucl_parser_limits *limits);
+
+/**
+ * Gets the limits currently in effect for a parser
+ * @param parser parser object
+ * @param limits output, filled with the current limits
+ */
+UCL_EXTERN void ucl_parser_get_limits(struct ucl_parser *parser,
+									  struct ucl_parser_limits *limits);
 
 /**
  * Register new handler for a macro
