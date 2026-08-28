@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+local lua_content = require "lua_content"
+
 local function process_pdf_specific(task, part, specific)
   local suspicious_factor = 0
   if specific.encrypted then
@@ -54,21 +56,29 @@ local function process_pdf_specific(task, part, specific)
   end
 end
 
+local function process_docx_specific(task, part, specific)
+  local filename = part:get_filename() or 'unknown'
+  task:insert_result('DOCX_CONTENT', 1.0, filename)
+  if specific.urls and #specific.urls > 0 then
+    task:insert_result('DOCX_EXTERNAL_LINKS', 1.0,
+        string.format('%s:%s', filename, #specific.urls))
+  end
+end
+
 local tags_processors = {
-  pdf = process_pdf_specific
+  pdf = process_pdf_specific,
+  docx = process_docx_specific,
 }
 
 local function process_specific_cb(task)
   local parts = task:get_parts() or {}
 
   for _, p in ipairs(parts) do
-    if p:is_specific() then
-      local data = p:get_specific()
+    local data = lua_content.get_specific(p, task)
 
-      if data and type(data) == 'table' and data.tag then
-        if tags_processors[data.tag] then
-          tags_processors[data.tag](task, p, data)
-        end
+    if data and type(data) == 'table' and data.tag then
+      if tags_processors[data.tag] then
+        tags_processors[data.tag](task, p, data)
       end
     end
   end
@@ -85,6 +95,20 @@ rspamd_config:register_symbol {
   name = 'PDF_ENCRYPTED',
   parent = id,
   groups = { "content", "pdf" },
+}
+
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'DOCX_CONTENT',
+  parent = id,
+  groups = { "content", "docx" },
+}
+
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'DOCX_EXTERNAL_LINKS',
+  parent = id,
+  groups = { "content", "docx" },
 }
 rspamd_config:register_symbol {
   type = 'virtual',

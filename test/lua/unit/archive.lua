@@ -150,6 +150,62 @@ context("Lua archive bindings", function()
     assert_equal(truncated, false)
   end)
 
+  test("files selects exact archive members", function()
+    local files = {
+      { name = "[Content_Types].xml", content = "types" },
+      { name = "_rels/.rels",         content = "relationships" },
+      { name = "word/document.xml",  content = "document" },
+      { name = "word/media/image.png", content = "image" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, {
+      files = {
+        "[Content_Types].xml",
+        "word/document.xml",
+      },
+    })
+
+    assert_equal(truncated, false)
+    assert_equal(#out, 2)
+    assert_equal(out[1].name, "[Content_Types].xml")
+    assert_equal(out[2].name, "word/document.xml")
+  end)
+
+  test("unselected members do not consume extraction limits", function()
+    local files = {
+      { name = "word/media/image.bin", content = string.rep("X", 256 * 1024) },
+      { name = "word/document.xml", content = "document" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, {
+      files = { "word/document.xml" },
+      max_output = 32,
+      max_file_size = 32,
+      max_files = 1,
+    })
+
+    assert_equal(truncated, false)
+    assert_equal(#out, 1)
+    assert_equal(out[1].name, "word/document.xml")
+    assert_rspamd_eq({ actual = out[1].content, expect = rspamd_text.fromstring("document") })
+  end)
+
+  test("max_entries caps archive header scanning", function()
+    local files = {
+      { name = "a.bin", content = "A" },
+      { name = "b.bin", content = "B" },
+      { name = "word/document.xml", content = "document" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, {
+      files = { "word/document.xml" },
+      max_entries = 2,
+    })
+
+    assert_equal(#out, 0)
+    assert_equal(truncated, true)
+  end)
+
   test("max_files caps the number of extracted members", function()
     local files = {
       { name = "a.txt", content = "AAA" },

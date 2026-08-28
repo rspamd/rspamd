@@ -687,7 +687,9 @@ struct rspamd_archive_limits {
 	guint64 max_output;    /* total uncompressed bytes across all members */
 	guint64 max_file_size; /* per-member uncompressed cap */
 	guint64 max_files;     /* member count cap */
+	guint64 max_entries;   /* archive headers inspected */
 	double max_ratio;      /* per-member uncompressed/compressed ratio cap */
+	GHashTable *files;     /* exact member names selected for extraction */
 };
 
 /*
@@ -727,12 +729,51 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
 	}
 	lua_pop(L, 1);
 
+	lua_getfield(L, opts_idx, "max_entries");
+	if (lua_isnumber(L, -1)) {
+		lua_Number v = lua_tonumber(L, -1);
+		lim->max_entries = v > 0 ? (guint64) v : 0;
+	}
+	lua_pop(L, 1);
+
 	lua_getfield(L, opts_idx, "max_ratio");
 	if (lua_isnumber(L, -1)) {
 		double v = (double) lua_tonumber(L, -1);
 		lim->max_ratio = v > 0 ? v : 0;
 	}
 	lua_pop(L, 1);
+
+	lua_getfield(L, opts_idx, "files");
+	if (lua_istable(L, -1)) {
+		lim->files = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+		lua_pushnil(L);
+		while (lua_next(L, -2) != 0) {
+			const char *name = NULL;
+
+			if (lua_isstring(L, -1)) {
+				name = lua_tostring(L, -1);
+			}
+			else if (lua_isstring(L, -2) && lua_toboolean(L, -1)) {
+				name = lua_tostring(L, -2);
+			}
+
+			if (name != NULL) {
+				g_hash_table_add(lim->files, g_strdup(name));
+			}
+
+			lua_pop(L, 1);
+		}
+	}
+	lua_pop(L, 1);
+}
+
+static void
+lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
+{
+	if (lim->files != NULL) {
+		g_hash_table_unref(lim->files);
+		lim->files = NULL;
+	}
 }
 
 /***
@@ -751,7 +792,9 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
  *  - max_output: total uncompressed bytes across all members
  *  - max_file_size: per-member uncompressed cap (members are truncated at this size)
  *  - max_files: maximum number of members to extract
+ *  - max_entries: maximum number of archive headers to inspect
  *  - max_ratio: per-member max uncompressed/compressed ratio (members exceeding it are dropped)
+ *  - files: array or set of exact member names to extract (unselected members are skipped)
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  * @return {boolean} truncated: true if any limit stopped, truncated, or dropped content
  */
@@ -790,6 +833,7 @@ lua_archive_unpack(lua_State *L)
 
 	a = archive_read_new();
 	if (a == NULL) {
+		lua_archive_limits_cleanup(&lim);
 		return luaL_error(L, "cannot create libarchive reader");
 	}
 
@@ -809,6 +853,7 @@ lua_archive_unpack(lua_State *L)
 			const char *aerr = archive_error_string(a);
 			lua_pushfstring(L, "cannot set passphrase: %s", aerr ? aerr : "unknown error");
 			archive_read_free(a);
+			lua_archive_limits_cleanup(&lim);
 			return lua_error(L);
 		}
 	}
@@ -818,6 +863,7 @@ lua_archive_unpack(lua_State *L)
 		const char *aerr = archive_error_string(a);
 		lua_pushfstring(L, "cannot open archive: %s", aerr ? aerr : "unknown error");
 		archive_read_free(a);
+		lua_archive_limits_cleanup(&lim);
 		return lua_error(L);
 	}
 
@@ -831,17 +877,29 @@ lua_archive_unpack(lua_State *L)
 	struct archive_entry *ae;
 	int n = 0;
 	guint64 total_output = 0;
+	guint64 entries_seen = 0;
 	gboolean truncated = FALSE;
 
 	while ((r = archive_read_next_header(a, &ae)) == ARCHIVE_OK) {
 		const char *name = archive_entry_pathname_utf8(ae);
 		mode_t ftype = archive_entry_filetype(ae);
 
+		entries_seen++;
+		if (lim.max_entries > 0 && entries_seen > lim.max_entries) {
+			truncated = TRUE;
+			break;
+		}
+
 		if (name == NULL) {
 			name = archive_entry_pathname(ae);
 		}
 
 		if (ftype != AE_IFREG || name == NULL) {
+			archive_read_data_skip(a);
+			continue;
+		}
+
+		if (lim.files != NULL && !g_hash_table_contains(lim.files, name)) {
 			archive_read_data_skip(a);
 			continue;
 		}
@@ -878,6 +936,7 @@ lua_archive_unpack(lua_State *L)
 				lua_pushfstring(L, "cannot read data: %s", aerr ? aerr : "unknown error");
 				g_byte_array_free(ba, TRUE);
 				archive_read_free(a);
+				lua_archive_limits_cleanup(&lim);
 				return lua_error(L);
 			}
 
@@ -955,6 +1014,7 @@ lua_archive_unpack(lua_State *L)
 	}
 
 	archive_read_free(a);
+	lua_archive_limits_cleanup(&lim);
 
 	lua_pushboolean(L, truncated);
 

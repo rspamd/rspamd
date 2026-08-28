@@ -43,10 +43,21 @@ local content_modules = {
     extensions = { 'pdf' },
     output = "table"
   },
+  docx = {
+    mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    module = require "lua_content/docx",
+    extensions = { 'docx' },
+    output = "table",
+    process_archive = true,
+  },
 }
 
 local modules_by_mime_type
 local modules_by_extension
+
+local function cache_key(part)
+  return string.format('lua_content:%s', part:get_id())
+end
 
 local function init()
   modules_by_mime_type = {}
@@ -89,6 +100,12 @@ exports.maybe_process_mime_part = function(part, task)
   end
 
   if pair then
+    if part:is_archive() and not pair[2].process_archive then
+      lua_util.debugm(N, task, "skip %s content processor for archive part",
+          pair[1])
+      return
+    end
+
     lua_util.debugm(N, task, "found known content of type %s: %s",
         mt, pair[1])
 
@@ -97,13 +114,25 @@ exports.maybe_process_mime_part = function(part, task)
     if data then
       lua_util.debugm(N, task, "extracted content from %s: %s type",
           pair[1], type(data))
-      part:set_specific(data)
+      if part:is_archive() then
+        task:cache_set(cache_key(part), data)
+      else
+        part:set_specific(data)
+      end
     else
       lua_util.debugm(N, task, "failed to extract anything from %s",
           pair[1])
     end
   end
 
+end
+
+exports.get_specific = function(part, task)
+  if part:is_specific() then
+    return part:get_specific()
+  end
+
+  return task:cache_get(cache_key(part))
 end
 
 return exports
