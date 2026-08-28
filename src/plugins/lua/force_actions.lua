@@ -201,6 +201,11 @@ local function gen_cb(params)
       else
         task:set_pre_result { action = params.act, module = N, flags = flags, priority = params.priority }
       end
+
+      if params.priority then
+        return true, params.act, string.format('priority:%s', params.priority)
+      end
+
       return true, params.act
     end
 
