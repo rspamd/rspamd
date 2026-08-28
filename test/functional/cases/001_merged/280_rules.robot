@@ -12,6 +12,7 @@ ${MESSAGE5}        ${RSPAMD_TESTDIR}/messages/badboundary.eml
 ${MESSAGE6}        ${RSPAMD_TESTDIR}/messages/pdf_encrypted.eml
 ${MESSAGE7}        ${RSPAMD_TESTDIR}/messages/pdf_js.eml
 ${MESSAGE8}        ${RSPAMD_TESTDIR}/messages/yand_forward.eml
+${MESSAGE9}        ${RSPAMD_TESTDIR}/messages/docx_content.eml
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/newlines.eml
 
 *** Test Cases ***
@@ -50,6 +51,16 @@ PDF javascript
   Scan File  ${MESSAGE7}
   ...  Settings={symbols_enabled = [PDF_JAVASCRIPT]}
   Expect Symbol  PDF_JAVASCRIPT
+
+DOCX content
+  Scan File  ${MESSAGE9}
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS]}
+  Expect Symbol With Exact Options  DOCX_CONTENT  phishing.docx
+  Expect Symbol With Exact Options  DOCX_EXTERNAL_LINKS  phishing.docx:2
+  Expect URL  visible.example.com
+  Expect URL  relationship.example.com
+  Expect URL  field.example.com
+  List Should Not Contain Value  ${SCAN_RESULT}[urls]  deleted.example.com
 
 BITCOIN ADDR
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
