@@ -28,3 +28,20 @@ for i = 2, 10 do
   rspamd_config:register_symbol('DEP' .. tostring(i), 1.0, cb_gen(i - 1))
   rspamd_config:register_dependency('DEP' .. tostring(i), 'DEP' .. tostring(i - 1))
 end
+
+-- High priority puts this ahead of the DEP1..DEP10 chain topologically, so it
+-- can only see TOP if the add_on_load dependency below was actually applied.
+rspamd_config:register_symbol({
+  name = 'POSTINIT_DEP',
+  weight = 1.0,
+  priority = 200,
+  callback = function(task)
+    if task:get_symbol('TOP') then
+      task:insert_result('POSTINIT_DEP', 1.0)
+    end
+  end
+})
+
+rspamd_config:add_on_load(function(cfg, _ev_base, _worker)
+  cfg:register_dependency('POSTINIT_DEP', 'TOP')
+end)

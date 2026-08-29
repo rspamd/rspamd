@@ -38,6 +38,14 @@ INIT_LOG_MODULE_PUBLIC(symcache)
 auto symcache::init() -> bool
 {
 	auto res = true;
+
+	if (cache_initialized) {
+		/* e.g. `init_subsystem('symcache')` called again from Lua; nothing left to do */
+		msg_debug_cache("symcache is already initialised, skip the second init");
+
+		return res;
+	}
+
 	reload_time = cfg->cache_reload_time;
 
 	if (cfg->cache_filename != nullptr) {
@@ -112,45 +120,17 @@ auto symcache::init() -> bool
 	/* Deal with the delayed dependencies */
 	msg_debug_cache("resolving delayed dependencies: %d in list", (int) delayed_deps->size());
 	for (const auto &delayed_dep: *delayed_deps) {
-		auto virt_source = get_item_by_name(delayed_dep.from, false);
 		auto real_source = get_item_by_name(delayed_dep.from, true);
 
-		auto real_destination = get_item_by_name(delayed_dep.to, true);
-
-		if (virt_source == nullptr || real_source == nullptr || real_destination == nullptr) {
-			if (real_destination != nullptr) {
-				msg_err_cache("cannot register delayed dependency %s -> %s: "
-							  "source %s is missing",
-							  delayed_dep.from.data(),
-							  delayed_dep.to.data(), delayed_dep.from.data());
-			}
-			else {
-				msg_err_cache("cannot register delayed dependency %s -> %s: "
-							  "destination %s is missing",
-							  delayed_dep.from.data(),
-							  delayed_dep.to.data(), delayed_dep.to.data());
-			}
+		if (real_source != nullptr && disabled_ids.contains(real_source->id)) {
+			msg_debug_cache("no delayed between %s -> %s; %s is disabled",
+							delayed_dep.from.data(),
+							delayed_dep.to.data(),
+							delayed_dep.from.data());
+			continue;
 		}
-		else {
 
-			if (!disabled_ids.contains(real_source->id)) {
-				msg_debug_cache("delayed %sbetween %s(%d:%d) -> %s",
-								delayed_dep.hard ? "weak " : "",
-								delayed_dep.from.data(),
-								real_source->id, virt_source->id,
-								delayed_dep.to.data());
-				add_dependency(real_source->id, delayed_dep.to, real_destination->id,
-							   virt_source != real_source ? virt_source->id : -1,
-							   delayed_dep.hard);
-			}
-			else {
-				msg_debug_cache("no delayed between %s(%d:%d) -> %s; %s is disabled",
-								delayed_dep.from.data(),
-								real_source->id, virt_source->id,
-								delayed_dep.to.data(),
-								delayed_dep.from.data());
-			}
-		}
+		resolve_delayed_dependency(delayed_dep);
 	}
 
 	/* Remove delayed dependencies, as they are no longer needed at this point */
@@ -242,7 +222,85 @@ auto symcache::init() -> bool
 							 (void *) this);
 	}
 
+	cache_initialized = true;
+
 	return res;
+}
+
+auto symcache::resolve_delayed_dependency(const delayed_cache_dependency &dep)
+	-> std::optional<std::pair<cache_item *, cache_item *>>
+{
+	auto *virt_source = get_item_by_name_mut(dep.from, false);
+	auto *real_source = get_item_by_name_mut(dep.from, true);
+	auto *real_destination = get_item_by_name_mut(dep.to, true);
+
+	if (virt_source == nullptr || real_source == nullptr || real_destination == nullptr) {
+		if (real_destination != nullptr) {
+			msg_err_cache("cannot register delayed dependency %s -> %s: "
+						  "source %s is missing",
+						  dep.from.data(),
+						  dep.to.data(), dep.from.data());
+		}
+		else {
+			msg_err_cache("cannot register delayed dependency %s -> %s: "
+						  "destination %s is missing",
+						  dep.from.data(),
+						  dep.to.data(), dep.to.data());
+		}
+
+		return std::nullopt;
+	}
+
+	msg_debug_cache("delayed %sbetween %s(%d:%d) -> %s",
+					dep.hard ? "hard " : "",
+					dep.from.data(),
+					real_source->id, virt_source->id,
+					dep.to.data());
+
+	if (!add_dependency(real_source->id, dep.to, real_destination->id,
+						virt_source != real_source ? virt_source->id : -1,
+						dep.hard)) {
+		/* Duplicate or bogus edge, nothing has been changed */
+		return std::nullopt;
+	}
+
+	return std::make_pair(real_source, virt_source);
+}
+
+auto symcache::add_delayed_dependency(std::string_view from, std::string_view to, bool hard) -> void
+{
+	if (cache_initialized) {
+		/* Cache is already loaded (e.g. from a Lua add_on_load callback): apply the edge now */
+		if (scans_started) {
+			msg_warn_cache("ignore dependency %s -> %s: registered after the first scan has started",
+						   from.data(), to.data());
+
+			return;
+		}
+
+		delayed_cache_dependency dep{from, to, hard};
+		auto maybe_sources = resolve_delayed_dependency(dep);
+
+		if (maybe_sources) {
+			auto [real_source, virt_source] = maybe_sources.value();
+
+			real_source->process_deps(*this);
+
+			if (virt_source != nullptr && virt_source != real_source) {
+				virt_source->process_deps(*this);
+			}
+
+			promote_resort();
+		}
+
+		return;
+	}
+
+	if (!delayed_deps) {
+		delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
+	}
+
+	delayed_deps->emplace_back(from, to, hard);
 }
 
 auto symcache::load_items() -> bool
@@ -462,12 +520,12 @@ auto symcache::metric_connect_cb(void *k, void *v, void *ud) -> void
 
 auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_item *
 {
-	if (id < 0 || id >= items_by_id.size()) {
-		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
-					  id, (int) items_by_id.size());
+	if (id < 0) {
+		msg_err_cache("internal error: requested item with an invalid id %d", id);
 		return nullptr;
 	}
 
+	/* Ids are not contiguous after `init` removed the statically disabled symbols */
 	const auto &maybe_item = rspamd::find_map(items_by_id, id);
 
 	if (!maybe_item.has_value()) {
@@ -487,12 +545,12 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 
 auto symcache::get_item_by_id_mut(int id, bool resolve_parent) const -> cache_item *
 {
-	if (id < 0 || id >= items_by_id.size()) {
-		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
-					  id, (int) items_by_id.size());
+	if (id < 0) {
+		msg_err_cache("internal error: requested item with an invalid id %d", id);
 		return nullptr;
 	}
 
+	/* Ids are not contiguous after `init` removed the statically disabled symbols */
 	const auto &maybe_item = rspamd::find_map(items_by_id, id);
 
 	if (!maybe_item.has_value()) {
@@ -541,14 +599,28 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 	return it->second;
 }
 
-auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard) -> void
+auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard) -> bool
 {
-	g_assert(id_from >= 0 && id_from < (int) items_by_id.size());
-	g_assert(id_to >= 0 && id_to < (int) items_by_id.size());
-	const auto &source = items_by_id[id_from];
-	const auto &dest = items_by_id[id_to];
-	g_assert(source.get() != nullptr);
-	g_assert(dest.get() != nullptr);
+	/* Ids are dense only at registration time, so `items_by_id` must be probed */
+	const auto &maybe_source = rspamd::find_map(items_by_id, id_from);
+	const auto &maybe_dest = rspamd::find_map(items_by_id, id_to);
+
+	if (!maybe_source.has_value() || !maybe_dest.has_value()) {
+		msg_err_cache("internal error: cannot add dependency %d -> %s(%d): item is missing",
+					  id_from, to.data(), id_to);
+
+		return false;
+	}
+
+	const auto &source = maybe_source.value().get();
+	const auto &dest = maybe_dest.value().get();
+
+	if (source.get() == nullptr || dest.get() == nullptr) {
+		msg_err_cache("internal error: cannot add dependency %d -> %s(%d): item is empty; qed",
+					  id_from, to.data(), id_to);
+
+		return false;
+	}
 
 	if (!source->deps.contains(id_to)) {
 		msg_debug_cache("add %sdependency %s(%d) -> %s(%d)",
@@ -561,15 +633,22 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 	else {
 		msg_debug_cache("duplicate dependency %s -> %s",
 						source->symbol.c_str(), to.data());
-		return;
+		return false;
 	}
 
 
 	if (virtual_id_from >= 0) {
-		g_assert(virtual_id_from < (int) items_by_id.size());
 		/* We need that for settings id propagation */
-		const auto &vsource = items_by_id[virtual_id_from];
-		g_assert(vsource.get() != nullptr);
+		const auto &maybe_vsource = rspamd::find_map(items_by_id, virtual_id_from);
+
+		if (!maybe_vsource.has_value() || maybe_vsource.value().get().get() == nullptr) {
+			msg_err_cache("internal error: cannot add virtual dependency %d -> %s(%d): item is missing",
+						  virtual_id_from, to.data(), id_to);
+
+			return true;
+		}
+
+		const auto &vsource = maybe_vsource.value().get();
 
 		if (!vsource->deps.contains(id_to)) {
 			msg_debug_cache("add virtual %sdependency %s -> %s",
@@ -584,6 +663,8 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 							vsource->symbol.c_str(), to.data());
 		}
 	}
+
+	return true;
 }
 
 auto symcache::resort() -> void
@@ -1162,6 +1243,9 @@ symcache::~symcache()
 
 auto symcache::maybe_resort() -> bool
 {
+	/* Called once per task, so this is the point where the graph stops being mutable */
+	scans_started = true;
+
 	if (items_by_order->generation_id != cur_order_gen) {
 		/*
 		 * Cache has been modified, need to resort it

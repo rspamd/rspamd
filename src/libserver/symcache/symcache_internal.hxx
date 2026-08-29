@@ -30,6 +30,7 @@
 #include <string>
 #include <string_view>
 #include <memory>
+#include <optional>
 #include <variant>
 
 #include "rspamd_symcache.h"
@@ -280,6 +281,10 @@ private:
 	/* These are stored within pointer to clean up after init */
 	std::unique_ptr<std::vector<delayed_cache_dependency>> delayed_deps;
 	std::unique_ptr<std::vector<delayed_cache_condition>> delayed_conditions;
+	/* True once init() has fully completed (graph processed, first order generated) */
+	bool cache_initialized = false;
+	/* True once the first task runtime has been created; the graph is frozen from then on */
+	bool scans_started = false;
 	/* Delayed statically enabled or disabled symbols */
 	using delayed_symbol_names = ankerl::unordered_dense::set<delayed_symbol_elt,
 															  delayed_symbol_elt_hash, delayed_symbol_elt_equal>;
@@ -317,6 +322,13 @@ private:
 	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec &;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
+	/*
+	 * Resolves a single (delayed or post-init) dependency.
+	 * Returns the resolved (real source, virtual source) pair if an edge has been added,
+	 * std::nullopt if the dependency cannot be resolved or the edge already exists
+	 */
+	auto resolve_delayed_dependency(const delayed_cache_dependency &dep)
+		-> std::optional<std::pair<cache_item *, cache_item *>>;
 
 public:
 	explicit symcache(struct rspamd_config *cfg)
@@ -371,23 +383,18 @@ public:
 	 * @param id_from
 	 * @param to
 	 * @param virtual_id_from
-	 * @return
+	 * @return true if a new edge has been added, false on a duplicate or on a missing item
 	 */
-	auto add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard = false) -> void;
+	auto add_dependency(int id_from, std::string_view to, int id_to, int virtual_id_from, bool hard = false) -> bool;
 
 	/**
-	 * Add a delayed dependency between symbols that will be resolved on the init stage
+	 * Add a delayed dependency between symbols that will be resolved on the init stage;
+	 * if the cache is already initialised (e.g. called from a Lua add_on_load callback),
+	 * resolves and applies the dependency immediately instead of queueing it
 	 * @param from
 	 * @param to
 	 */
-	auto add_delayed_dependency(std::string_view from, std::string_view to, bool hard = false) -> void
-	{
-		if (!delayed_deps) {
-			delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
-		}
-
-		delayed_deps->emplace_back(from, to, hard);
-	}
+	auto add_delayed_dependency(std::string_view from, std::string_view to, bool hard = false) -> void;
 
 	/**
 	 * Adds a symbol to the list of the disabled symbols
