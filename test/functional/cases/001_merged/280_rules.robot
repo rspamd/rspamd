@@ -13,6 +13,7 @@ ${MESSAGE6}        ${RSPAMD_TESTDIR}/messages/pdf_encrypted.eml
 ${MESSAGE7}        ${RSPAMD_TESTDIR}/messages/pdf_js.eml
 ${MESSAGE8}        ${RSPAMD_TESTDIR}/messages/yand_forward.eml
 ${MESSAGE9}        ${RSPAMD_TESTDIR}/messages/docx_content.eml
+${MESSAGE10}       ${RSPAMD_TESTDIR}/messages/docx_broken.eml
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/newlines.eml
 
 *** Test Cases ***
@@ -54,13 +55,18 @@ PDF javascript
 
 DOCX content
   Scan File  ${MESSAGE9}
-  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS]}
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS, DOCX_SUSPICIOUS]}
   Expect Symbol With Exact Options  DOCX_CONTENT  phishing.docx
   Expect Symbol With Exact Options  DOCX_EXTERNAL_LINKS  phishing.docx:2
+  Do Not Expect Symbol  DOCX_SUSPICIOUS
   Expect URL  visible.example.com
   Expect URL  relationship.example.com
   Expect URL  field.example.com
   List Should Not Contain Value  ${SCAN_RESULT}[urls]  deleted.example.com
+
+DOCX suspicious
+  Scan File  ${MESSAGE10}  Settings={symbols_enabled = [DOCX_SUSPICIOUS]}
+  Expect Symbol With Exact Options  DOCX_SUSPICIOUS  broken.docx:package
 
 BITCOIN ADDR
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml

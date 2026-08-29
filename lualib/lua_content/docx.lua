@@ -132,6 +132,14 @@ local function extract_text_data(specific)
   return specific.text
 end
 
+local function suspicious_result(reason)
+  return {
+    tag = 'docx',
+    suspicious = true,
+    reason = reason,
+  }
+end
+
 local function process_docx(input, mpart, task)
   if not config.enabled then return nil end
 
@@ -148,12 +156,12 @@ local function process_docx(input, mpart, task)
 
   if state.documents >= config.max_documents then
     lua_util.debugm(N, task, 'cannot process DOCX: document limit exceeded')
-    return nil
+    return suspicious_result('document_limit')
   end
   state.documents = state.documents + 1
   if deadline_expired(state) then
     lua_util.debugm(N, task, 'cannot process DOCX: processing timeout')
-    return nil
+    return suspicious_result('timeout')
   end
 
   local options = options_for_state(config, state)
@@ -161,25 +169,25 @@ local function process_docx(input, mpart, task)
   local package, err = ooxml.open(input, options, state)
   if not package then
     lua_util.debugm(N, task, 'cannot open DOCX package: %s', err)
-    return nil
+    return suspicious_result('package')
   end
 
   local extracted
   extracted, err = exports.extract(package, options, state)
   if not extracted then
     lua_util.debugm(N, task, 'cannot extract DOCX content: %s', err)
-    return nil
+    return suspicious_result('content')
   end
 
   local text_len = extracted.text:len()
   if text_len > 0 and task.inject_part then
     if deadline_expired(state) then
       lua_util.debugm(N, task, 'cannot inject DOCX text: processing timeout')
-      return nil
+      return suspicious_result('timeout')
     end
     if text_len > remaining(config.max_text, state.injected_text) then
       lua_util.debugm(N, task, 'cannot inject DOCX text: task text limit exceeded')
-      return nil
+      return suspicious_result('text_limit')
     end
     task:inject_part('text', extracted.text, mpart)
     state.injected_text = state.injected_text + text_len

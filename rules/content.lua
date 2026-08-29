@@ -58,6 +58,12 @@ end
 
 local function process_docx_specific(task, part, specific)
   local filename = part:get_filename() or 'unknown'
+  if specific.suspicious then
+    task:insert_result('DOCX_SUSPICIOUS', 1.0,
+        string.format('%s:%s', filename, specific.reason or 'unknown'))
+    return
+  end
+
   task:insert_result('DOCX_CONTENT', 1.0, filename)
   if specific.urls and #specific.urls > 0 then
     task:insert_result('DOCX_EXTERNAL_LINKS', 1.0,
@@ -107,6 +113,12 @@ rspamd_config:register_symbol {
 rspamd_config:register_symbol {
   type = 'virtual',
   name = 'DOCX_EXTERNAL_LINKS',
+  parent = id,
+  groups = { "content", "docx" },
+}
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'DOCX_SUSPICIOUS',
   parent = id,
   groups = { "content", "docx" },
 }

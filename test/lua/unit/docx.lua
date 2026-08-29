@@ -251,7 +251,53 @@ context("DOCX content extraction", function()
     for name, value in pairs(part) do second_part[name] = value end
     second_part.get_id = function() return 43 end
     lua_content.maybe_process_mime_part(second_part, task)
-    assert_equal(lua_content.get_specific(second_part, task), nil)
+    local second_specific = lua_content.get_specific(second_part, task)
+    assert_not_nil(second_specific)
+    assert_equal(second_specific.tag, 'docx')
+    assert_equal(second_specific.suspicious, true)
+    assert_equal(second_specific.reason, 'document_limit')
     docx.config.max_documents = saved_max_documents
+  end)
+
+  test("marks a malformed DOCX package as suspicious", function()
+    local lua_content = require "lua_content"
+    local package_data = archive.zip({
+      {
+        name = "[Content_Types].xml",
+        content = [[
+          <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+            &unsupported;
+          </Types>
+        ]],
+      },
+      {
+        name = "_rels/.rels",
+        content = [[
+          <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+        ]],
+      },
+    })
+    local part = {
+      get_type = function() return 'application',
+          'vnd.openxmlformats-officedocument.wordprocessingml.document' end,
+      get_detected_ext = function() return 'docx' end,
+      is_archive = function() return true end,
+      is_specific = function() return false end,
+      get_specific = function() return nil end,
+      get_content = function() return package_data end,
+      get_id = function() return 44 end,
+    }
+    local cache = {}
+    local task = {
+      cache_set = function(_, key, value) cache[key] = value end,
+      cache_get = function(_, key) return cache[key] end,
+    }
+
+    lua_content.maybe_process_mime_part(part, task)
+    local specific = lua_content.get_specific(part, task)
+    assert_not_nil(specific)
+    assert_equal(specific.tag, 'docx')
+    assert_equal(specific.suspicious, true)
+    assert_equal(specific.reason, 'package')
   end)
 end)
