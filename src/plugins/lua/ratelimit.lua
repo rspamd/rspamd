@@ -607,6 +607,9 @@ if opts then
     rspamd_logger.errx(rspamd_config, 'Legacy ratelimit config format no longer supported')
   end
 
+  -- Deps from all limits' symbol() selectors, registered once RATELIMIT_CHECK is known
+  local ratelimit_symbol_deps = {}
+
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
@@ -652,6 +655,9 @@ if opts then
           end
 
           settings.limits[t].selector = selector
+          for _, dep in ipairs(lua_selectors.get_selector_symbol_deps(selector)) do
+            table.insert(ratelimit_symbol_deps, dep)
+          end
         end
       else
         rspamd_logger.warnx(rspamd_config, 'old syntax for ratelimits: %s', lim)
@@ -749,6 +755,7 @@ if opts then
     }
 
     local id = rspamd_config:register_symbol(s)
+    lua_selectors.register_symbol_deps(rspamd_config, s.name, ratelimit_symbol_deps)
 
     -- Register per bucket symbols
     -- Display what's enabled

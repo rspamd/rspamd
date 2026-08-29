@@ -52,3 +52,19 @@ RATELIMIT CHECK MULTIPLE BUCKETS
   # restrictive one must fire. Before the fix only the last bucket (burst 20)
   # was tracked, so a soft reject would never happen at the third message.
   Basic Test  bar@example.net  multi@example.net  2
+
+RATELIMIT CHECK SELECTOR SYMBOL DEPENDENCY
+  # Bucket key comes from symbol('SELECTOR_RBL_DEP'), which only has a value
+  # if RATELIMIT_CHECK is guaranteed to run after it via the automatic
+  # symbol() dependency (it deliberately has a lower priority).
+  Scan File  ${MESSAGE}
+  ...  From=depselector@example.net
+  ...  Rcpt=depselector@example.net
+  ...  Settings={symbols_enabled = [RATELIMIT_CHECK, RATELIMIT_UPDATE, SELECTOR_RBL_DEP]}
+  Expect Symbol  SELECTOR_RBL_DEP
+  Expect Action  no action
+  Scan File  ${MESSAGE}
+  ...  From=depselector@example.net
+  ...  Rcpt=depselector@example.net
+  ...  Settings={symbols_enabled = [RATELIMIT_CHECK, RATELIMIT_UPDATE, SELECTOR_RBL_DEP]}
+  Expect Action  soft reject
