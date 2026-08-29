@@ -169,4 +169,21 @@ context("OOXML package reader", function()
     assert_equal(parsed, nil)
     assert_not_nil(err:find("control character", 1, true))
   end)
+
+  test("native metadata parsing rejects invalid XML entities and limits", function()
+    local template = [[
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">%s</Types>
+    ]]
+    for _, entity in ipairs({ "&copy;", "&#0;", "&#x110000;", "&#xZZ;" }) do
+      local parsed, err = rspamd_ooxml.parse_content_types(template:format(entity), {})
+      assert_equal(parsed, nil)
+      assert_not_nil(err, entity)
+    end
+
+    local parsed, err = rspamd_ooxml.parse_content_types(template:format(""), {
+      xml = { max_depth = "unbounded" },
+    })
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("bad type", 1, true))
+  end)
 end)
