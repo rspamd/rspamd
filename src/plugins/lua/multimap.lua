@@ -2014,7 +2014,7 @@ local function add_multimap_rule(key, newrule)
       if combinator then
         -- Use named combinator for structured output (array, object, string)
         selector = lua_selectors.create_selector_closure_with_combinator(
-          rspamd_config, newrule['selector'], newrule['delimiter'] or "", combinator)
+          rspamd_config, newrule['selector'], newrule['delimiter'] or "", combinator, newrule['symbol'])
 
         if not selector then
           rspamd_logger.errx(rspamd_config, 'selector map has invalid selector or combinator: "%s", combinator: %s, symbol: %s',
@@ -2027,7 +2027,7 @@ local function add_multimap_rule(key, newrule)
       else
         -- Default behavior: use combine_selectors (string output)
         selector = lua_selectors.create_selector_closure(
-          rspamd_config, newrule['selector'], newrule['delimiter'] or "")
+          rspamd_config, newrule['selector'], newrule['delimiter'] or "", false, newrule['symbol'])
 
         if not selector then
           rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
@@ -2066,7 +2066,7 @@ local function add_multimap_rule(key, newrule)
 
     if combinator then
       selector = lua_selectors.create_selector_closure_with_combinator(
-        rspamd_config, selector_str, newrule['delimiter'] or "", combinator)
+        rspamd_config, selector_str, newrule['delimiter'] or "", combinator, newrule['symbol'])
 
       if not selector then
         rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector or combinator: "%s", combinator: %s, symbol: %s',
@@ -2078,7 +2078,7 @@ local function add_multimap_rule(key, newrule)
         combinator, newrule['symbol'])
     else
       selector = lua_selectors.create_selector_closure(
-        rspamd_config, selector_str, newrule['delimiter'] or "")
+        rspamd_config, selector_str, newrule['delimiter'] or "", false, newrule['symbol'])
 
       if not selector then
         rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector: "%s", symbol: %s',

@@ -715,7 +715,7 @@ local function generic_reputation_init(rule)
   end
 
   local selector = lua_selectors.create_selector_closure(rspamd_config,
-      cfg.selector, cfg.delimiter)
+      cfg.selector, cfg.delimiter, false, rule.symbol)
 
   if not selector then
     rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: bad selector: %s',

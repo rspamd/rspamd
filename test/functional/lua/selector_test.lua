@@ -38,3 +38,12 @@ rspamd_config:register_symbol({
     return true, string.format('%s|%s', cur or 'nil', orig or 'nil')
   end
 })
+
+rspamd_config:register_symbol({
+  name = 'SELECTOR_RBL_DEP',
+  priority = -10,
+  score = 0.0,
+  callback = function()
+    return true, 'example.org'
+  end,
+})

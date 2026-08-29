@@ -70,6 +70,12 @@ SELECTORS
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.com:sel_from
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
 
+SELECTORS SYMBOL DEPENDENCIES
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_SYMBOL_FIRST, RBL_SELECTOR_SYMBOL_SECOND, SELECTOR_RBL_DEP]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_SYMBOL_FIRST  example.org:selector
+  Expect Symbol With Exact Options  RBL_SELECTOR_SYMBOL_SECOND  example.org:selector
+
 SELECTORS COMBINED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  From=user@example.org  Helo=example.org
   ...  Settings={symbols_enabled = [RBL_SELECTOR_MULTIPLE]}
