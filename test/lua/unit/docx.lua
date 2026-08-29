@@ -145,6 +145,17 @@ context("DOCX content extraction", function()
     assert_not_nil(err:find("text limit", 1, true))
   end)
 
+  test("shares text and XML budgets across documents", function()
+    local state = {}
+    local extracted, err = docx.extract(package, {}, state)
+    assert_not_nil(extracted, err)
+
+    extracted, err = docx.extract(package, { max_text = state.text }, state)
+    assert_equal(extracted, nil)
+    assert_not_nil(err:find("text limit", 1, true))
+    assert_not_nil(state.xml_tokens)
+  end)
+
   test("rejects non-DOCX office document content types", function()
     local other = {}
     for key, value in pairs(package) do other[key] = value end
@@ -158,6 +169,8 @@ context("DOCX content extraction", function()
   test("dispatches an archive DOCX without replacing archive metadata", function()
     local lua_content = require "lua_content"
     local rspamd_mempool = require "rspamd_mempool"
+    local saved_max_documents = docx.config.max_documents
+    docx.config.max_documents = 1
     local package_data = archive.zip({
       {
         name = "[Content_Types].xml",
@@ -233,5 +246,12 @@ context("DOCX content extraction", function()
     assert_equal(injected_urls["https://relationship.example.com/login"], true)
     assert_equal(injected_urls["https://field.example.com/pay"], true)
     assert_equal(injected_urls["https://complex.example.com/"], true)
+
+    local second_part = {}
+    for name, value in pairs(part) do second_part[name] = value end
+    second_part.get_id = function() return 43 end
+    lua_content.maybe_process_mime_part(second_part, task)
+    assert_equal(lua_content.get_specific(second_part, task), nil)
+    docx.config.max_documents = saved_max_documents
   end)
 end)

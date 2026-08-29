@@ -197,13 +197,14 @@ context("Lua archive bindings", function()
       { name = "word/document.xml", content = "document" },
     }
     local blob = archive.zip(files)
-    local out, truncated = archive.unzip(blob, {
+    local out, truncated, entries_seen = archive.unzip(blob, {
       files = { "word/document.xml" },
       max_entries = 2,
     })
 
     assert_equal(#out, 0)
     assert_equal(truncated, true)
+    assert_equal(entries_seen, 3)
   end)
 
   test("max_files caps the number of extracted members", function()

@@ -44,8 +44,11 @@ local default_options = {
   max_output = 16 * 1024 * 1024,
   max_ratio = 200,
   max_relationships = 4096,
+  max_content_types = 4096,
   max_target_length = 16 * 1024,
-  xml = {},
+  xml = {
+    max_tokens = 200000,
+  },
 }
 
 local function merge_options(options)
@@ -86,6 +89,57 @@ end
 
 local parse_relationships = rspamd_ooxml.parse_relationships
 
+local function ensure_state(state)
+  state = state or {}
+  for _, name in ipairs({
+    'entries', 'output', 'parts', 'relationships', 'content_types', 'xml_tokens',
+  }) do
+    state[name] = state[name] or 0
+  end
+  return state
+end
+
+local function remaining(limit, used)
+  return math.max(0, limit - used)
+end
+
+local function parser_options(options, state)
+  local xml = {}
+  for name, value in pairs(options.xml or {}) do
+    xml[name] = value
+  end
+  xml.max_tokens = remaining(xml.max_tokens or 200000, state.xml_tokens)
+
+  return {
+    max_relationships = remaining(options.max_relationships, state.relationships),
+    max_content_types = remaining(options.max_content_types, state.content_types),
+    max_target_length = options.max_target_length,
+    xml = xml,
+  }
+end
+
+local function parse_content_types_bounded(content, options, state)
+  local result, err, tokens = parse_content_types(content, parser_options(options, state))
+  state.xml_tokens = state.xml_tokens + (tokens or 0)
+  if not result then return nil, err end
+
+  local count = 0
+  for _ in pairs(result.defaults) do count = count + 1 end
+  for _ in pairs(result.overrides) do count = count + 1 end
+  state.content_types = state.content_types + count
+  return result
+end
+
+local function parse_relationships_bounded(content, source_part, options, state)
+  local result, err, tokens = parse_relationships(content, source_part,
+      parser_options(options, state))
+  state.xml_tokens = state.xml_tokens + (tokens or 0)
+  if not result then return nil, err end
+
+  state.relationships = state.relationships + #result.list
+  return result
+end
+
 local function content_length(content)
   if type(content) == 'string' then return #content end
   return content:len()
@@ -93,38 +147,46 @@ end
 
 local function extract_selected(data, names, options, state)
   if #names == 0 then return {} end
-  if state.parts + #names > options.max_parts then
+  local remaining_parts = remaining(options.max_parts, state.parts)
+  if #names > remaining_parts then
     return nil, "OOXML selected part limit exceeded"
   end
 
-  local remaining = options.max_output - state.output
-  if remaining <= 0 then
+  local remaining_output = remaining(options.max_output, state.output)
+  if remaining_output == 0 then
     return nil, "OOXML output limit exceeded"
   end
+  local remaining_entries = remaining(options.max_entries, state.entries)
+  if remaining_entries == 0 then
+    return nil, "OOXML archive entry limit exceeded"
+  end
 
-  local ok, files, truncated = pcall(archive.unpack, data, 'zip', nil, {
+  local ok, files, truncated, entries_seen = pcall(archive.unpack, data, 'zip', nil, {
     files = names,
-    max_entries = options.max_entries,
-    max_files = options.max_parts,
+    max_entries = remaining_entries,
+    max_files = remaining_parts,
     max_file_size = options.max_file_size,
-    max_output = remaining,
+    max_output = remaining_output,
     max_ratio = options.max_ratio,
+    end_timestamp = options.xml and options.xml.end_timestamp,
   })
   if not ok then
     return nil, string.format("cannot unpack OOXML package: %s", files)
   end
-  if truncated then
-    return nil, "OOXML archive extraction limit exceeded"
-  end
+  state.entries = state.entries + (entries_seen or 0)
 
   local result = {}
   for _, file in ipairs(files) do
+    state.output = state.output + content_length(file.content)
+    state.parts = state.parts + 1
     if result[file.name] then
       return nil, string.format("duplicate OOXML part: %s", file.name)
     end
     result[file.name] = file.content
-    state.output = state.output + content_length(file.content)
-    state.parts = state.parts + 1
+  end
+
+  if truncated then
+    return nil, "OOXML archive extraction limit exceeded"
   end
 
   return result
@@ -137,9 +199,17 @@ local function add_unique(array, seen, value)
   end
 end
 
-exports.open = function(data, requested_options)
+exports.open = function(data, requested_options, requested_state)
   local options = merge_options(requested_options)
-  local state = { output = 0, parts = 0 }
+  local state = ensure_state(requested_state)
+  local initial = {
+    entries = state.entries,
+    output = state.output,
+    parts = state.parts,
+    relationships = state.relationships,
+    content_types = state.content_types,
+    xml_tokens = state.xml_tokens,
+  }
 
   local bootstrap, err = extract_selected(data, {
     '[Content_Types].xml',
@@ -151,11 +221,13 @@ exports.open = function(data, requested_options)
   end
 
   local content_types
-  content_types, err = parse_content_types(bootstrap['[Content_Types].xml'], options)
+  content_types, err = parse_content_types_bounded(
+      bootstrap['[Content_Types].xml'], options, state)
   if not content_types then return nil, err end
 
   local package_relationships
-  package_relationships, err = parse_relationships(bootstrap['_rels/.rels'], '', options)
+  package_relationships, err = parse_relationships_bounded(
+      bootstrap['_rels/.rels'], '', options, state)
   if not package_relationships then return nil, err end
 
   local main_part
@@ -184,7 +256,8 @@ exports.open = function(data, requested_options)
 
   local relationships = {}
   if main_files[main_relationship_part] then
-    relationships, err = parse_relationships(main_files[main_relationship_part], main_part, options)
+    relationships, err = parse_relationships_bounded(
+        main_files[main_relationship_part], main_part, options, state)
     if not relationships then return nil, err end
   else
     relationships = { list = {}, by_id = {} }
@@ -218,7 +291,8 @@ exports.open = function(data, requested_options)
       local rels_name = relationship_part_name(story_name)
       if story_files[rels_name] then
         local parsed_story_relationships
-        parsed_story_relationships, err = parse_relationships(story_files[rels_name], story_name, options)
+        parsed_story_relationships, err = parse_relationships_bounded(
+            story_files[rels_name], story_name, options, state)
         if not parsed_story_relationships then return nil, err end
         part_relationships[story_name] = parsed_story_relationships
       else
@@ -234,8 +308,12 @@ exports.open = function(data, requested_options)
     relationships = part_relationships,
     content_types = content_types,
     main_content_type = content_type_for(content_types, main_part),
-    extracted_bytes = state.output,
-    extracted_parts = state.parts,
+    extracted_bytes = state.output - initial.output,
+    extracted_parts = state.parts - initial.parts,
+    archive_entries = state.entries - initial.entries,
+    relationship_count = state.relationships - initial.relationships,
+    content_type_count = state.content_types - initial.content_types,
+    xml_tokens = state.xml_tokens - initial.xml_tokens,
   }
 end
 

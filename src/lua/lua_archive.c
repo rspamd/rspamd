@@ -689,6 +689,7 @@ struct rspamd_archive_limits {
 	guint64 max_files;     /* member count cap */
 	guint64 max_entries;   /* archive headers inspected */
 	double max_ratio;      /* per-member uncompressed/compressed ratio cap */
+	double end_timestamp;  /* absolute processing deadline */
 	GHashTable *files;     /* exact member names selected for extraction */
 };
 
@@ -743,6 +744,13 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
 	}
 	lua_pop(L, 1);
 
+	lua_getfield(L, opts_idx, "end_timestamp");
+	if (lua_isnumber(L, -1)) {
+		double v = (double) lua_tonumber(L, -1);
+		lim->end_timestamp = v > 0 ? v : 0;
+	}
+	lua_pop(L, 1);
+
 	lua_getfield(L, opts_idx, "files");
 	if (lua_istable(L, -1)) {
 		lim->files = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
@@ -783,7 +791,9 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  * Extraction is bounded by the optional `opts` table to guard against
  * decompression bombs. Limits are enforced while reading, so memory stays
  * bounded; a second return value flags whether the result was truncated by a
- * limit (so a capped extraction is never mistaken for a complete one).
+ * limit (so a capped extraction is never mistaken for a complete one). The
+ * number of inspected archive headers is returned for callers that maintain a
+ * budget across multiple passes over the same archive.
  *
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
@@ -794,9 +804,11 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  *  - max_files: maximum number of members to extract
  *  - max_entries: maximum number of archive headers to inspect
  *  - max_ratio: per-member max uncompressed/compressed ratio (members exceeding it are dropped)
+ *  - end_timestamp: absolute rspamd_get_ticks() deadline
  *  - files: array or set of exact member names to extract (unselected members are skipped)
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  * @return {boolean} truncated: true if any limit stopped, truncated, or dropped content
+ * @return {number} entries_seen: number of archive headers inspected
  */
 static int
 lua_archive_unpack(lua_State *L)
@@ -885,6 +897,10 @@ lua_archive_unpack(lua_State *L)
 		mode_t ftype = archive_entry_filetype(ae);
 
 		entries_seen++;
+		if (lim.end_timestamp > 0 && rspamd_get_ticks(FALSE) >= lim.end_timestamp) {
+			truncated = TRUE;
+			break;
+		}
 		if (lim.max_entries > 0 && entries_seen > lim.max_entries) {
 			truncated = TRUE;
 			break;
@@ -1017,8 +1033,9 @@ lua_archive_unpack(lua_State *L)
 	lua_archive_limits_cleanup(&lim);
 
 	lua_pushboolean(L, truncated);
+	lua_pushinteger(L, entries_seen);
 
-	return 2;
+	return 3;
 }
 
 /***

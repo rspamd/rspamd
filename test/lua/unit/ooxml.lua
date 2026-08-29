@@ -103,6 +103,34 @@ context("OOXML package reader", function()
         "https://example.test/login")
     assert_equal(package.relationships["word/header1.xml"].by_id["header-link"].target,
         "https://header.example.test/")
+    assert_equal(package.archive_entries, 21)
+    assert_equal(package.relationship_count, 4)
+    assert_equal(package.content_type_count, 4)
+    assert_not_nil(package.xml_tokens)
+  end)
+
+  test("enforces package-wide metadata and archive budgets", function()
+    local package, err = ooxml.open(make_package(), { max_relationships = 3 })
+    assert_equal(package, nil)
+    assert_not_nil(err:find("relationship limit", 1, true))
+
+    package, err = ooxml.open(make_package(), { max_content_types = 3 })
+    assert_equal(package, nil)
+    assert_not_nil(err:find("content type limit", 1, true))
+
+    package, err = ooxml.open(make_package(), { max_entries = 20 })
+    assert_equal(package, nil)
+    assert_not_nil(err:find("archive extraction limit", 1, true))
+  end)
+
+  test("shares extraction budgets across packages", function()
+    local state = {}
+    local package, err = ooxml.open(make_package(), { max_entries = 41 }, state)
+    assert_not_nil(package, err)
+
+    package, err = ooxml.open(make_package(), { max_entries = 41 }, state)
+    assert_equal(package, nil)
+    assert_not_nil(err:find("archive extraction limit", 1, true))
   end)
 
   test("fails when selected XML exceeds extraction limits", function()
@@ -170,6 +198,36 @@ context("OOXML package reader", function()
         {})
     assert_equal(parsed, nil)
     assert_not_nil(err:find("control character", 1, true))
+
+    parsed, err = rspamd_ooxml.parse_content_types([[
+      <ct:Types xmlns:ct="http://schemas.openxmlformats.org/package/2006/content-types"
+        xmlns:a="urn:a" xmlns:b="urn:b"/>
+    ]], { xml = { max_namespace_declarations = 2 } })
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("namespace declaration limit", 1, true))
+
+    parsed, err = rspamd_ooxml.parse_content_types([[
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types" extra="x"/>
+    ]], { xml = { max_tokens = 1 } })
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("token limit", 1, true))
+
+    parsed, err = rspamd_ooxml.parse_content_types([[
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>
+    ]], { xml = { end_timestamp = 1 } })
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("timeout", 1, true))
+  end)
+
+  test("restores shadowed namespace bindings", function()
+    local parsed, err = rspamd_ooxml.parse_content_types([[
+      <ct:Types xmlns:ct="http://schemas.openxmlformats.org/package/2006/content-types">
+        <scope xmlns:ct="urn:shadow"><ct:ignored/></scope>
+        <ct:Default Extension="xml" ContentType="application/xml"/>
+      </ct:Types>
+    ]], {})
+    assert_not_nil(parsed, err)
+    assert_equal(parsed.defaults.xml, "application/xml")
   end)
 
   test("native metadata parsing rejects invalid XML entities and limits", function()
@@ -187,5 +245,20 @@ context("OOXML package reader", function()
     })
     assert_equal(parsed, nil)
     assert_not_nil(err:find("bad type", 1, true))
+  end)
+
+  test("reports consumed tokens when a later DOCX story is invalid", function()
+    local extracted, err, tokens = rspamd_ooxml.extract_docx({
+      {
+        content = [[
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>
+        ]],
+        relationships = {},
+      },
+      false,
+    }, {})
+    assert_equal(extracted, nil)
+    assert_not_nil(err:find("invalid DOCX story entry", 1, true))
+    assert_true(tokens > 0)
   end)
 end)
