@@ -18,11 +18,22 @@
 #define RSPAMD_HTML_ENTITIES_H
 #pragma once
 
-#include <utility>
+#include "contrib/expected/expected.hpp"
+
+#include <cstddef>
 #include <string>
 
 namespace rspamd::html {
 
+enum class entity_decode_mode {
+	html,
+	xml,
+};
+
+using entity_decode_result = tl::expected<std::size_t, std::string>;
+
+auto decode_entities_inplace(char *s, std::size_t len, entity_decode_mode mode,
+							 bool norm_spaces = false) -> entity_decode_result;
 auto decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces = false) -> std::size_t;
 auto decode_html_entitles_inplace(std::string &st) -> void;
 

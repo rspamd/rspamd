@@ -72,6 +72,8 @@ context("OOXML package reader", function()
       "../../outside.xml",
       "/word/document.xml",
       "https://example.test/document.xml",
+      "mailto:document.xml",
+      "custom+scheme:document.xml",
       "word\\document.xml",
       "word/%2e%2e/document.xml",
       "word/%2fdocument.xml",

@@ -20,7 +20,7 @@
 #include "contrib/expected/expected.hpp"
 #include "contrib/fmt/include/fmt/format.h"
 #include "libmime/mime_encoding.h"
-#include "libserver/html/html.h"
+#include "libserver/html/html_entities.hxx"
 #include "libserver/url.h"
 #include "libutil/mem_pool.h"
 #include "libutil/rspamd_simdutf.h"
@@ -106,60 +106,17 @@ auto is_name_char(unsigned char ch) -> bool
 		   (ch >= '0' && ch <= '9');
 }
 
-auto valid_xml_codepoint(gulong cp) -> bool
-{
-	return cp == 0x09 || cp == 0x0a || cp == 0x0d ||
-		   (cp >= 0x20 && cp <= 0xd7ff) ||
-		   (cp >= 0xe000 && cp <= 0xfffd) ||
-		   (cp >= 0x10000 && cp <= 0x10ffff);
-}
-
 auto decode_xml_entities(std::string_view input) -> ooxml_result<std::string>
 {
 	if (input.find('&') == std::string_view::npos) {
 		return std::string{input};
 	}
 
-	std::size_t pos = 0;
-	while (pos < input.size()) {
-		auto amp = input.find('&', pos);
-		if (amp == std::string_view::npos) {
-			break;
-		}
-		auto semi = input.find(';', amp + 1);
-		if (semi == std::string_view::npos || semi - amp > 16) {
-			return tl::make_unexpected("unterminated or oversized entity");
-		}
-		auto entity = input.substr(amp + 1, semi - amp - 1);
-		if (entity == "amp" || entity == "apos" || entity == "gt" ||
-			entity == "lt" || entity == "quot") {
-			pos = semi + 1;
-			continue;
-		}
-		if (!entity.empty() && entity.front() == '#') {
-			auto digits = entity.substr(1);
-			bool hex = false;
-			if (!digits.empty() && (digits.front() == 'x' || digits.front() == 'X')) {
-				hex = true;
-				digits.remove_prefix(1);
-			}
-			gulong codepoint = 0;
-			if (digits.empty() ||
-				!(hex ? rspamd_xstrtoul(digits.data(), digits.size(), &codepoint)
-					  : rspamd_strtoul(digits.data(), digits.size(), &codepoint)) ||
-				!valid_xml_codepoint(codepoint)) {
-				return tl::make_unexpected("invalid XML character reference");
-			}
-		}
-		else {
-			return tl::make_unexpected(fmt::format("unsupported XML entity &{};", entity));
-		}
-		pos = semi + 1;
-	}
-
 	std::string out{input};
-	auto decoded_len = rspamd_html_decode_entitles_inplace(out.data(), out.size());
-	out.resize(decoded_len);
+	auto decoded = rspamd::html::decode_entities_inplace(out.data(), out.size(),
+														 rspamd::html::entity_decode_mode::xml);
+	if (!decoded) return tl::make_unexpected(std::move(decoded.error()));
+	out.resize(*decoded);
 	return out;
 }
 
@@ -655,6 +612,29 @@ auto has_ascii_control(std::string_view value) -> bool
 	});
 }
 
+auto has_uri_scheme(std::string_view value) -> bool
+{
+	auto is_alpha = [](unsigned char ch) {
+		return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+	};
+	auto is_digit = [](unsigned char ch) {
+		return ch >= '0' && ch <= '9';
+	};
+
+	if (value.empty() || !is_alpha(static_cast<unsigned char>(value.front()))) {
+		return false;
+	}
+	for (std::size_t i = 1; i < value.size(); i++) {
+		auto ch = static_cast<unsigned char>(value[i]);
+		if (ch == ':') return true;
+		if (!is_alpha(ch) && !is_digit(ch) && ch != '+' && ch != '-' && ch != '.') {
+			return false;
+		}
+	}
+
+	return false;
+}
+
 auto validate_segment(std::string_view segment) -> bool
 {
 	if (segment.empty()) return false;
@@ -679,8 +659,7 @@ auto resolve_part_name(std::string_view source_part, std::string_view target)
 	-> ooxml_result<std::string>
 {
 	if (target.empty()) return tl::make_unexpected("empty relationship target");
-	auto target_string = std::string{target};
-	if (target.front() == '/' || g_uri_peek_scheme(target_string.c_str()) != nullptr ||
+	if (target.front() == '/' || has_uri_scheme(target) ||
 		std::any_of(target.begin(), target.end(), [](char ch) {
 			return g_ascii_iscntrl(static_cast<unsigned char>(ch)) || ch == '\\';
 		})) {
