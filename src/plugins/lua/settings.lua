@@ -294,8 +294,20 @@ local function check_ip_setting(expected, ip)
   return false
 end
 
-local function check_map_setting(map, input)
-  return map:get_key(input)
+-- A map cannot go through gen_check_closure: a map object is a table, and that closure reads a
+-- table as a list of expected values, so the check would be called on the map's own fields
+local function gen_map_check_closure(map)
+  return function(value)
+    if type(value) == 'function' then
+      value = value()
+    end
+
+    if not value then
+      return false
+    end
+
+    return map:get_key(value) and true or false
+  end
 end
 
 local function priority_to_string(pri)
@@ -733,7 +745,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
         lua_util.debugm(N, rspamd_config, 'added ip_map condition to "%s"',
             name)
         checks.ip_map = {
-          check = gen_check_closure(ips_map, check_map_setting),
+          check = gen_map_check_closure(ips_map),
           extract = function(task)
             local ip = task:get_from_ip()
             if ip and ip:is_valid() then
@@ -763,14 +775,14 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       }
     end
     if elt.client_ip_map then
-      local ips_map = lua_maps.map_add_from_ucl(elt.ip_map, 'radix',
+      local ips_map = lua_maps.map_add_from_ucl(elt.client_ip_map, 'radix',
           'settings client ip map for ' .. name)
 
       if ips_map then
         lua_util.debugm(N, rspamd_config, 'added client ip_map condition to "%s"',
             name)
         checks.client_ip_map = {
-          check = gen_check_closure(ips_map, check_map_setting),
+          check = gen_map_check_closure(ips_map),
           extract = function(task)
             local ip = task:get_client_ip()
             if ip and ip:is_valid() then
