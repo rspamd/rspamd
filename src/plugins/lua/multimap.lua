@@ -2097,7 +2097,7 @@ local function add_multimap_rule(key, newrule)
         expression = newrule.expression,
         description = newrule.description,
         on_load = newrule.dynamic_symbols and multimap_on_load_gen(newrule) or nil,
-      }, N, 'Combined map for ' .. newrule.symbol)
+      }, N, newrule.symbol)
     if not newrule.combined then
       rspamd_logger.errx(rspamd_config, 'cannot add combined map for %s', newrule.symbol)
     else

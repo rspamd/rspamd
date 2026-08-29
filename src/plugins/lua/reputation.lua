@@ -1315,10 +1315,34 @@ local function parse_rule(name, tbl)
   tbl.backend = nil
   rule.config = lua_util.override_defaults(rule.config, tbl)
 
+  local symbol = rule.selector.config.symbol or name
+  if tbl.symbol then
+    symbol = tbl.symbol
+  end
+  rule.symbol = symbol
+
+  -- Moved before whitelist: it can still bail out, and whitelist may register deps on symbol
+  if rule.config.exclusion_map then
+    local map_type = 'set' -- Default to set for string-based selectors (dkim, url, spf, generic)
+    if sel_type == 'ip' or sel_type == 'sender' then
+      map_type = 'radix' -- Use radix for IP-based selectors
+    end
+    local map = lua_maps.map_add_from_ucl(rule.config.exclusion_map,
+        map_type,
+        sel_type .. ' reputation exclusion map')
+    if not map then
+      rspamd_logger.errx(rspamd_config, "cannot parse exclusion map config for %s: (%s)",
+          sel_type,
+          rule.config.exclusion_map)
+      return false
+    end
+    rule.config.exclusion_map = map
+  end
+
   if rule.config.whitelist then
     if lua_maps_exprs.schema:check(rule.config.whitelist) then
       rule.config.whitelist_map = lua_maps_exprs.create(rspamd_config,
-          rule.config.whitelist, N)
+          rule.config.whitelist, N, symbol)
     elseif lua_maps.map_schema:check(rule.config.whitelist) then
       -- Determine map type and check method based on selector type
       local map_type = 'set' -- Default for string-based selectors
@@ -1421,30 +1445,6 @@ local function parse_rule(name, tbl)
     end
   end
 
-  -- Parse exclusion_map for reputation exclusion lists
-  if rule.config.exclusion_map then
-    local map_type = 'set' -- Default to set for string-based selectors (dkim, url, spf, generic)
-    if sel_type == 'ip' or sel_type == 'sender' then
-      map_type = 'radix' -- Use radix for IP-based selectors
-    end
-    local map = lua_maps.map_add_from_ucl(rule.config.exclusion_map,
-        map_type,
-        sel_type .. ' reputation exclusion map')
-    if not map then
-      rspamd_logger.errx(rspamd_config, "cannot parse exclusion map config for %s: (%s)",
-          sel_type,
-          rule.config.exclusion_map)
-      return false
-    end
-    rule.config.exclusion_map = map
-  end
-
-  local symbol = rule.selector.config.symbol or name
-  if tbl.symbol then
-    symbol = tbl.symbol
-  end
-
-  rule.symbol = symbol
   rule.enabled = true
   if rule.selector.init then
     rule.enabled = false
