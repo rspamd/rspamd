@@ -69,6 +69,7 @@ context("DOCX content extraction", function()
   test("extracts visible story text and explicit hyperlinks", function()
     local extracted, err = docx.extract(package)
     assert_not_nil(extracted, err)
+    assert_equal(type(extracted.text), "userdata")
     assert_not_nil(extracted.text:find("Invoice sign in", 1, true))
     assert_not_nil(extracted.text:find("Pay now", 1, true))
     assert_not_nil(extracted.text:find("Portal", 1, true))
@@ -83,6 +84,50 @@ context("DOCX content extraction", function()
     assert_equal(urls["https://field.example.com/pay"], true)
     assert_equal(urls["https://complex.example.com/"], true)
     assert_equal(urls["https://header.example.com/"], true)
+  end)
+
+  test("decodes entities directly into the native text buffer", function()
+    local entity_package = {
+      main_part = "word/document.xml",
+      main_content_type = package.main_content_type,
+      story_parts = {},
+      parts = {
+        ["word/document.xml"] = [[
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:body><w:p><w:t>One &amp; two &#x41;</w:t></w:p></w:body>
+          </w:document>
+        ]],
+      },
+      relationships = {},
+    }
+
+    local extracted, err = docx.extract(entity_package)
+    assert_not_nil(extracted, err)
+    assert_not_nil(tostring(extracted.text):find("One & two A", 1, true))
+  end)
+
+  test("native story parsing preserves XML safety limits", function()
+    local extracted, err = docx.extract(package, { xml = { max_depth = 2 } })
+    assert_equal(extracted, nil)
+    assert_not_nil(err:find("depth limit", 1, true))
+
+    local unsafe = {
+      main_part = "word/document.xml",
+      main_content_type = package.main_content_type,
+      story_parts = {},
+      parts = {
+        ["word/document.xml"] = [[
+          <!DOCTYPE document [<!ENTITY x "expanded">]>
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:p><w:t>&x;</w:t></w:p>
+          </w:document>
+        ]],
+      },
+      relationships = {},
+    }
+    extracted, err = docx.extract(unsafe)
+    assert_equal(extracted, nil)
+    assert_not_nil(err:find("DTD", 1, true))
   end)
 
   test("parses hyperlink field instructions conservatively", function()

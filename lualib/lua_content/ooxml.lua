@@ -18,19 +18,9 @@ limitations under the License.
 -- processors. Only XML parts named by package relationships are extracted.
 
 local archive = require "archive"
-local xml = require "lua_content/xml_tokenizer"
+local rspamd_ooxml = require "rspamd_ooxml"
 
 local exports = {}
-
-local content_types_namespaces = {
-  ["http://schemas.openxmlformats.org/package/2006/content-types"] = true,
-  ["http://purl.oclc.org/ooxml/package/content-types"] = true,
-}
-
-local relationships_namespaces = {
-  ["http://schemas.openxmlformats.org/package/2006/relationships"] = true,
-  ["http://purl.oclc.org/ooxml/package/relationships"] = true,
-}
 
 local office_document_relationships = {
   ["http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"] = true,
@@ -69,101 +59,9 @@ local function merge_options(options)
   return result
 end
 
-local function get_attr(attributes, name)
-  for _, attribute in ipairs(attributes) do
-    if not attribute.namespace and attribute.name == name then
-      return attribute.value
-    end
-  end
-  return nil
-end
-
-local function percent_decode(value)
-  local pos = 1
-  while true do
-    local percent = value:find('%', pos, true)
-    if not percent then break end
-    local hex = value:sub(percent + 1, percent + 2)
-    if #hex ~= 2 or not hex:match('^%x%x$') then
-      return nil
-    end
-    pos = percent + 3
-  end
-
-  return (value:gsub('%%(%x%x)', function(hex)
-    return string.char(tonumber(hex, 16))
-  end))
-end
-
-local function validate_segment(segment)
-  if segment == '' then
-    return nil, "empty path segment"
-  end
-
-  local decoded = percent_decode(segment)
-  if not decoded then
-    return nil, "invalid percent escape"
-  end
-  if decoded:find('[%z\1-\31\\/]') then
-    return nil, "encoded path separator or control character"
-  end
-  if decoded == '.' or decoded == '..' then
-    return nil, "encoded dot path segment"
-  end
-
-  return true
-end
-
-
 -- Resolve an internal relationship target against its source part. The result
 -- is the exact ZIP member spelling to request from libarchive.
-exports.resolve_part_name = function(source_part, target)
-  if type(target) ~= 'string' or target == '' then
-    return nil, "empty relationship target"
-  end
-  if target:find('[%z\1-\31\\]') then
-    return nil, "control character or backslash in relationship target"
-  end
-  if target:sub(1, 1) == '/' or target:sub(1, 2) == '//' or
-      target:match('^[%a][%w+.-]*:') then
-    return nil, "absolute internal relationship target"
-  end
-
-  local path = target:match('^([^#]*)')
-  if path == '' or path:find('?', 1, true) or path:find('//', 1, true) or
-      path:sub(-1) == '/' then
-    return nil, "invalid internal relationship target"
-  end
-
-  local components = {}
-  if source_part and source_part ~= '' then
-    for segment in source_part:gmatch('[^/]+') do
-      components[#components + 1] = segment
-    end
-    components[#components] = nil
-  end
-
-  for segment in path:gmatch('[^/]+') do
-    if segment == '..' then
-      if #components == 0 then
-        return nil, "relationship target escapes package root"
-      end
-      components[#components] = nil
-    elseif segment ~= '.' then
-      local ok, err = validate_segment(segment)
-      if not ok then
-        return nil, err
-      end
-      components[#components + 1] = segment
-    end
-  end
-
-  if #components == 0 then
-    return nil, "relationship target does not name a part"
-  end
-
-  return table.concat(components, '/')
-end
+exports.resolve_part_name = rspamd_ooxml.resolve_part_name
 
 local function relationship_part_name(source_part)
   if source_part == '' then
@@ -176,73 +74,7 @@ end
 
 exports.relationship_part_name = relationship_part_name
 
-local function parse_content_types(contents, options)
-  local result = {
-    defaults = {},
-    overrides = {},
-  }
-  local depth = 0
-  local parse_error
-  local root_seen = false
-
-  local ok, err = xml.parse(contents, {
-    start_element = function(namespace, name, attributes)
-      depth = depth + 1
-      if parse_error then return end
-
-      if depth == 1 then
-        if name ~= 'Types' or not content_types_namespaces[namespace] then
-          parse_error = "invalid OOXML content types root"
-        else
-          root_seen = true
-        end
-      elseif depth == 2 and content_types_namespaces[namespace] then
-        if name == 'Default' then
-          local extension = get_attr(attributes, 'Extension')
-          local content_type = get_attr(attributes, 'ContentType')
-          if not extension or extension == '' or not content_type or content_type == '' then
-            parse_error = "invalid OOXML default content type"
-          elseif result.defaults[extension:lower()] then
-            parse_error = "duplicate OOXML default content type"
-          else
-            result.defaults[extension:lower()] = content_type
-          end
-        elseif name == 'Override' then
-          local part_name = get_attr(attributes, 'PartName')
-          local content_type = get_attr(attributes, 'ContentType')
-          if not part_name or part_name:sub(1, 1) ~= '/' or
-              not content_type or content_type == '' then
-            parse_error = "invalid OOXML content type override"
-          else
-            local normalized, normalize_error = exports.resolve_part_name('', part_name:sub(2))
-            if not normalized then
-              parse_error = string.format("invalid OOXML part name: %s", normalize_error)
-            elseif result.overrides[normalized] then
-              parse_error = "duplicate OOXML content type override"
-            else
-              result.overrides[normalized] = content_type
-            end
-          end
-        end
-      end
-    end,
-    end_element = function()
-      depth = depth - 1
-    end,
-  }, options.xml)
-
-  if not ok then
-    return nil, err
-  end
-  if parse_error then
-    return nil, parse_error
-  end
-  if not root_seen then
-    return nil, "missing OOXML content types root"
-  end
-
-  return result
-end
+local parse_content_types = rspamd_ooxml.parse_content_types
 
 local function content_type_for(content_types, part_name)
   local override = content_types.overrides[part_name]
@@ -252,92 +84,7 @@ local function content_type_for(content_types, part_name)
   return extension and content_types.defaults[extension:lower()] or nil
 end
 
-local function parse_relationships(contents, source_part, options)
-  local result = {
-    list = {},
-    by_id = {},
-  }
-  local depth = 0
-  local parse_error
-  local root_seen = false
-
-  local ok, err = xml.parse(contents, {
-    start_element = function(namespace, name, attributes)
-      depth = depth + 1
-      if parse_error then return end
-
-      if depth == 1 then
-        if name ~= 'Relationships' or not relationships_namespaces[namespace] then
-          parse_error = "invalid OOXML relationships root"
-        else
-          root_seen = true
-        end
-      elseif depth == 2 and name == 'Relationship' and relationships_namespaces[namespace] then
-        local id = get_attr(attributes, 'Id')
-        local relation_type = get_attr(attributes, 'Type')
-        local target = get_attr(attributes, 'Target')
-        local target_mode = get_attr(attributes, 'TargetMode')
-
-        if not id or id == '' or not relation_type or relation_type == '' or
-            not target or target == '' then
-          parse_error = "invalid OOXML relationship"
-          return
-        end
-        if #target > options.max_target_length then
-          parse_error = "OOXML relationship target limit exceeded"
-          return
-        end
-        if target:find('[%z\1-\31]') then
-          parse_error = "control character in OOXML relationship target"
-          return
-        end
-        if result.by_id[id] then
-          parse_error = "duplicate OOXML relationship id"
-          return
-        end
-        if #result.list >= options.max_relationships then
-          parse_error = "OOXML relationship limit exceeded"
-          return
-        end
-
-        if target_mode and target_mode:lower() ~= 'external' and
-            target_mode:lower() ~= 'internal' then
-          parse_error = "invalid OOXML relationship target mode"
-          return
-        end
-
-        local relationship = {
-          id = id,
-          type = relation_type,
-          target = target,
-          external = target_mode and target_mode:lower() == 'external' or false,
-        }
-        if not relationship.external then
-          relationship.part_name, parse_error = exports.resolve_part_name(source_part, target)
-          if not relationship.part_name then return end
-        end
-
-        result.list[#result.list + 1] = relationship
-        result.by_id[id] = relationship
-      end
-    end,
-    end_element = function()
-      depth = depth - 1
-    end,
-  }, options.xml)
-
-  if not ok then
-    return nil, err
-  end
-  if parse_error then
-    return nil, parse_error
-  end
-  if not root_seen then
-    return nil, "missing OOXML relationships root"
-  end
-
-  return result
-end
+local parse_relationships = rspamd_ooxml.parse_relationships
 
 local function content_length(content)
   if type(content) == 'string' then return #content end

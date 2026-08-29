@@ -1,6 +1,7 @@
 context("OOXML package reader", function()
   local archive = require "archive"
   local ooxml = require "lua_content/ooxml"
+  local rspamd_ooxml = require "rspamd_ooxml"
 
   local content_types = [[
     <ct:Types xmlns:ct="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -114,5 +115,58 @@ context("OOXML package reader", function()
     }))
     assert_equal(package, nil)
     assert_not_nil(err:find("duplicate", 1, true))
+  end)
+
+  test("native metadata parsing rejects DTDs and enforces relationship limits", function()
+    local parsed, err = rspamd_ooxml.parse_content_types([[
+      <!DOCTYPE Types [<!ENTITY x "expanded">]>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>
+    ]], {})
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("DTD", 1, true))
+
+    parsed, err = rspamd_ooxml.parse_relationships(document_relationships,
+        "word/document.xml", { max_relationships = 1 })
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("relationship limit", 1, true))
+  end)
+
+  test("native metadata parsing accepts BOM marked UTF-16LE", function()
+    local ascii = [[
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="xml" ContentType="application/xml"/>
+      </Types>
+    ]]
+    local encoded = { "\255\254" }
+    for i = 1, #ascii do
+      encoded[#encoded + 1] = ascii:sub(i, i)
+      encoded[#encoded + 1] = "\0"
+    end
+
+    local parsed, err = rspamd_ooxml.parse_content_types(table.concat(encoded), {})
+    assert_not_nil(parsed, err)
+    assert_equal(parsed.defaults.xml, "application/xml")
+  end)
+
+  test("native metadata parsing enforces structural XML limits", function()
+    local parsed, err = rspamd_ooxml.parse_content_types([[
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="xml" ContentType="application/xml"/>
+      </Types>
+    ]], { xml = { max_attributes = 1 } })
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("attribute limit", 1, true))
+
+    parsed, err = rspamd_ooxml.parse_content_types([[
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    ]], {})
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("unclosed", 1, true))
+
+    parsed, err = rspamd_ooxml.parse_content_types(
+        "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">bad\1</Types>",
+        {})
+    assert_equal(parsed, nil)
+    assert_not_nil(err:find("control character", 1, true))
   end)
 end)
