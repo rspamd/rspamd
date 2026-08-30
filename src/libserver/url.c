@@ -20,6 +20,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "multipattern.h"
+#include "tld_lookup.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/http-parser/http_parser.h"
 #include "lua/lua_common.h"
@@ -265,6 +266,7 @@ struct url_match_scanner {
 	GArray *matchers_strict;
 	struct rspamd_multipattern *search_trie_full;
 	struct rspamd_multipattern *search_trie_strict;
+	struct rspamd_tld_lookup *tld_lookup;
 	bool has_tld_file;
 };
 
@@ -552,6 +554,7 @@ void rspamd_url_deinit(void)
 
 		rspamd_multipattern_destroy(url_scanner->search_trie_strict);
 		g_array_free(url_scanner->matchers_strict, TRUE);
+		rspamd_tld_lookup_destroy(url_scanner->tld_lookup);
 		g_free(url_scanner);
 
 		url_scanner = NULL;
@@ -592,10 +595,17 @@ void rspamd_url_init(const char *tld_file)
 		mp_compile_flags |= RSPAMD_MULTIPATTERN_COMPILE_NO_FS;
 	}
 
+	url_scanner->tld_lookup = NULL;
 	rspamd_url_add_static_matchers(url_scanner);
 
 	if (tld_file != NULL) {
 		ret = rspamd_url_parse_tld_file(tld_file, url_scanner);
+
+		url_scanner->tld_lookup = rspamd_tld_lookup_new(tld_file);
+		if (url_scanner->tld_lookup == NULL) {
+			msg_err("cannot load TLD suffixes from '%s'", tld_file);
+			ret = FALSE;
+		}
 
 		if (ret) {
 			url_scanner->has_tld_file = true;
@@ -1733,73 +1743,6 @@ out:
 
 #undef SET_U
 
-static int
-rspamd_tld_trie_callback(struct rspamd_multipattern *mp,
-						 unsigned int strnum,
-						 int match_start,
-						 int match_pos,
-						 const char *text,
-						 gsize len,
-						 void *context)
-{
-	struct url_matcher *matcher;
-	const char *start, *pos, *p;
-	struct rspamd_url *url = context;
-	int ndots;
-
-	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
-							 strnum);
-	ndots = 1;
-
-	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
-		/* Skip one more tld component */
-		ndots++;
-	}
-
-	pos = text + match_start;
-	p = pos - 1;
-	start = rspamd_url_host_unsafe(url);
-
-	if (*pos != '.' || match_pos != (int) url->hostlen) {
-		/* Something weird has been found */
-		if (match_pos == (int) url->hostlen - 1) {
-			pos = rspamd_url_host_unsafe(url) + match_pos;
-			if (*pos == '.') {
-				/* This is dot at the end of domain */
-				url->hostlen--;
-			}
-			else {
-				return 0;
-			}
-		}
-		else {
-			return 0;
-		}
-	}
-
-	/* Now we need to find top level domain */
-	pos = start;
-	while (p >= start && ndots > 0) {
-		if (*p == '.') {
-			ndots--;
-			pos = p + 1;
-		}
-		else {
-			pos = p;
-		}
-
-		p--;
-	}
-
-	if ((ndots == 0 || p == start - 1) &&
-		url->tldlen < rspamd_url_host_unsafe(url) + url->hostlen - pos) {
-		url->tldshift = (pos - url->string);
-		url->tldlen = rspamd_url_host_unsafe(url) + url->hostlen - pos;
-	}
-
-	return 0;
-}
-
 static void
 rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af,
 								rspamd_mempool_t *pool)
@@ -2673,10 +2616,20 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 	if (uri->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_MAILTO | PROTOCOL_FTP | PROTOCOL_FILE)) {
 		/* Find TLD part */
-		if (url_scanner->search_trie_full) {
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   rspamd_url_host_unsafe(uri), uri->hostlen,
-									   rspamd_tld_trie_callback, uri, NULL);
+		if (url_scanner->tld_lookup) {
+			rspamd_ftok_t tld_tok;
+
+			if (rspamd_tld_lookup_registrable(url_scanner->tld_lookup,
+											  rspamd_url_host_unsafe(uri), uri->hostlen,
+											  &tld_tok)) {
+				if (rspamd_url_host_unsafe(uri)[uri->hostlen - 1] == '.') {
+					/* The trailing dot is not part of the host */
+					uri->hostlen--;
+				}
+
+				uri->tldshift = tld_tok.begin - uri->string;
+				uri->tldlen = tld_tok.len;
+			}
 		}
 
 		if (uri->tldlen == 0) {
@@ -2806,95 +2759,14 @@ rspamd_url_parse(struct rspamd_url *uri,
 	return URI_ERRNO_OK;
 }
 
-struct tld_trie_cbdata {
-	const char *begin;
-	gsize len;
-	rspamd_ftok_t *out;
-};
-
-static int
-rspamd_tld_trie_find_callback(struct rspamd_multipattern *mp,
-							  unsigned int strnum,
-							  int match_start,
-							  int match_pos,
-							  const char *text,
-							  gsize len,
-							  void *context)
-{
-	struct url_matcher *matcher;
-	const char *start, *pos, *p;
-	struct tld_trie_cbdata *cbdata = context;
-	int ndots = 1;
-
-	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
-							 strnum);
-
-	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
-		/* Skip one more tld component */
-		ndots = 2;
-	}
-
-	pos = text + match_start;
-	p = pos - 1;
-	start = text;
-
-	if (*pos != '.' || match_pos != (int) cbdata->len) {
-		/* Something weird has been found */
-		if (match_pos != (int) cbdata->len - 1) {
-			/* Search more */
-			return 0;
-		}
-	}
-
-	/* Now we need to find top level domain */
-	pos = start;
-
-	while (p >= start && ndots > 0) {
-		if (*p == '.') {
-			ndots--;
-			pos = p + 1;
-		}
-		else {
-			pos = p;
-		}
-
-		p--;
-	}
-
-	if (ndots == 0 || p == start - 1) {
-		if (cbdata->begin + cbdata->len - pos > cbdata->out->len) {
-			cbdata->out->begin = pos;
-			cbdata->out->len = cbdata->begin + cbdata->len - pos;
-		}
-	}
-
-	return 0;
-}
-
 gboolean
 rspamd_url_find_tld(const char *in, gsize inlen, rspamd_ftok_t *out)
 {
-	struct tld_trie_cbdata cbdata;
-
 	g_assert(in != NULL);
 	g_assert(out != NULL);
 	g_assert(url_scanner != NULL);
 
-	cbdata.begin = in;
-	cbdata.len = inlen;
-	cbdata.out = out;
-	out->len = 0;
-
-	if (url_scanner->search_trie_full) {
-		rspamd_multipattern_lookup(url_scanner->search_trie_full, in, inlen,
-								   rspamd_tld_trie_find_callback, &cbdata, NULL);
-	}
-
-	if (out->len > 0) {
-		return TRUE;
-	}
-
-	return FALSE;
+	return rspamd_tld_lookup_registrable(url_scanner->tld_lookup, in, inlen, out);
 }
 
 static const char url_braces[] = {
