@@ -997,6 +997,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_fasttext(L);
 	luaopen_static_embed(L);
 	luaopen_pdf_text(L);
+	luaopen_ooxml(L);
 	luaopen_caseless_table(L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload(L, "bit", luaopen_bit);

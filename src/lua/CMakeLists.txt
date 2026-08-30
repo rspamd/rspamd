@@ -44,6 +44,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_fasttext.cxx
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_static_embed.cxx
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_pdf_text.cxx
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_ooxml.cxx
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_caseless_table.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)
