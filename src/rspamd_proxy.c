@@ -1387,7 +1387,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		}
 
 		/* Parse UCL from result part */
-		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		parser = rspamd_ucl_parser_new_untrusted(result_len);
 
 		if (result_part->content_type &&
 			rspamd_substring_search_caseless(result_part->content_type,
@@ -1467,7 +1467,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		RSPAMD_FTOK_ASSIGN(&json_ct, "application/json");
 
 		if (ct && rspamd_ftok_casecmp(ct, &json_ct) == 0) {
-			parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+			parser = rspamd_ucl_parser_new_untrusted(inlen);
 
 			if (!ucl_parser_add_chunk(parser, in, inlen)) {
 				char *encoded;

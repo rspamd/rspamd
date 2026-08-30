@@ -33,6 +33,7 @@ import os
 import os.path
 import psutil
 import pwd
+import select
 import shutil
 import signal
 import socket
@@ -535,6 +536,10 @@ def open_pending_connections(addr, port, count, path="/checkv2"):
     level list so Close Pending Connections can release them from a teardown
     even after a failure.
 
+    A worker that is already at its limit accepts and closes the connection at
+    once, so a socket opened here does not necessarily hold a slot: use Pending
+    Connections Alive to tell the two apart.
+
     Example:
     | Open Pending Connections | 127.0.0.1 | ${port} | 2 |
     """
@@ -549,6 +554,36 @@ def open_pending_connections(addr, port, count, path="/checkv2"):
         _PENDING_SOCKETS.append(s)
         opened += 1
     return opened
+
+
+def pending_connections_alive():
+    """How many pending connections the worker has not closed on us.
+
+    A connection that arrives when the worker is already at its limit is
+    accepted and closed at once, which the client sees as nothing more than a
+    socket that has become readable at EOF -- so opening a connection is not
+    proof that it occupies a slot. Call this once a probe connection sent after
+    the batch has been answered: the listen queue is FIFO, so by then the worker
+    has decided about every socket opened before that probe.
+    """
+    alive = 0
+    for s in _PENDING_SOCKETS:
+        readable, _, _ = select.select([s], [], [], 0)
+        if not readable:
+            alive += 1
+    return alive
+
+
+def close_one_pending_connection():
+    """Close a single socket opened by Open Pending Connections.
+
+    Frees exactly one admission slot, which is what the counting tests need:
+    the worker must admit again as soon as one client goes away.
+    """
+    if not _PENDING_SOCKETS:
+        raise AssertionError("no pending connection to close")
+    _PENDING_SOCKETS.pop().close()
+    return len(_PENDING_SOCKETS)
 
 
 def close_pending_connections():

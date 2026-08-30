@@ -28,11 +28,14 @@
 /**
  * Compare request and reply checking names
  * @param req request object
- * @param in incoming packet
+ * @param in start of the incoming packet
  * @param len length of the incoming packet
+ * @param pos start of the question to compare inside the incoming packet
+ * @param req_len used length of the request packet
  * @return new position in the incoming packet or NULL if request is not equal to reply
  */
-uint8_t * rdns_request_reply_cmp (struct rdns_request *req, uint8_t *in, int len);
+uint8_t *rdns_request_reply_cmp(struct rdns_request *req, uint8_t *in, int len,
+								uint8_t *pos, unsigned int req_len);
 
 /**
  * Parse labels in the packet
@@ -42,12 +45,14 @@ uint8_t * rdns_request_reply_cmp (struct rdns_request *req, uint8_t *in, int len
  * @param rep dns reply
  * @param remain remaining bytes (in/out)
  * @param make_name create name or just skip to the next label
+ * @param rdata_end absolute offset in `in` that bounds the physically encoded
+ *        name (its RDATA boundary); 0 means the name is bound only by the packet
  * @return true if a label has been successfully parsed
  */
 bool rdns_parse_labels (struct rdns_resolver *resolver,
 		uint8_t *in, char **target,
 		uint8_t **pos, struct rdns_reply *rep,
-		int *remain, bool make_name);
+		int *remain, bool make_name, size_t rdata_end);
 
 /**
  * Parse resource record

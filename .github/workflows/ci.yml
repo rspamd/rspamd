@@ -81,17 +81,20 @@ jobs:
       # arm64 image takes the vectorscan branch which skips libjemalloc-dev.
       enable_jemalloc: 'OFF'
 
-  ubuntu-focal:
+  ubuntu-noble:
     if: |
       github.event_name == 'pull_request' ||
       github.ref == 'refs/heads/master' ||
       github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
-      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-focal
-      name: ubuntu-focal
-      # amd64 runner, and the focal image carries libjemalloc-dev; this covers
-      # the jemalloc build on the gcc-10 floor.
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-noble
+      name: ubuntu-noble
+      # The .deb packaging image, not the CI one: it builds against a
+      # self-compiled static LuaJIT 2.1 (-DLUA_ROOT=/luajit-build) and drives
+      # the Makefile generator, so it covers a configuration ubuntu_amd64
+      # (system libluajit + Ninja) does not. amd64 runner, and the image
+      # carries libjemalloc-dev, so this also covers the jemalloc build.
       enable_jemalloc: 'ON'
 
   centos-8:

@@ -454,7 +454,7 @@ local function clean_gpt_response(text)
 end
 
 local function default_openai_json_conversion(task, input)
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local res, err = parser:parse_string(input)
   if not res then
     rspamd_logger.errx(task, 'cannot parse reply: %s', err)
@@ -481,7 +481,7 @@ local function default_openai_json_conversion(task, input)
   -- Apply heuristic to extract JSON
   first_message = maybe_extract_json(first_message) or first_message
 
-  parser = ucl.parser()
+  parser = ucl.untrusted_parser()
   res, err = parser:parse_string(first_message)
   if not res then
     rspamd_logger.errx(task, 'cannot parse JSON gpt reply: %s', err)
@@ -526,7 +526,7 @@ end
 
 -- Assume that we have 3 lines: probability, reason, additional categories
 local function default_openai_plain_conversion(task, input)
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local res, err = parser:parse_string(input)
   if not res then
     rspamd_logger.errx(task, 'cannot parse reply: %s', err)
@@ -602,7 +602,7 @@ local function ollama_extract_content(task, reply)
 end
 
 local function default_ollama_plain_conversion(task, input)
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local res, err = parser:parse_string(input)
   if not res then
     rspamd_logger.errx(task, 'cannot parse reply: %s', err)
@@ -638,7 +638,7 @@ local function default_ollama_plain_conversion(task, input)
 end
 
 local function default_ollama_json_conversion(task, input)
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local res, err = parser:parse_string(input)
   if not res then
     rspamd_logger.errx(task, 'cannot parse reply: %s', err)
@@ -659,7 +659,7 @@ local function default_ollama_json_conversion(task, input)
   -- Apply heuristic to extract JSON
   first_message = maybe_extract_json(first_message) or first_message
 
-  parser = ucl.parser()
+  parser = ucl.untrusted_parser()
   res, err = parser:parse_string(first_message)
   if not res then
     rspamd_logger.errx(task, 'cannot parse JSON gpt reply: %s', err)

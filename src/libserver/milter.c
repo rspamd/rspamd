@@ -411,7 +411,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 	rspamd_fstring_t *buf;
 	const unsigned char *pos, *end, *zero;
 	unsigned int cmdlen;
-	uint32_t version, actions, protocol;
+	uint32_t version, actions, protocol, protocol_offered;
 
 	buf = priv->parser.buf;
 	pos = buf->str + priv->parser.cmd_start;
@@ -688,6 +688,8 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 			if (end > zero && *(end - 1) == '\0') {
 				khiter_t k;
 				int res;
+				const char *hval;
+				int hval_len;
 
 				k = kh_get(milter_headers_hash_t, priv->headers, (char *) pos);
 
@@ -705,9 +707,33 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 									   priv->cur_hdr);
 				}
 
-				rspamd_printf_fstring(&session->message, "%*s: %*s\r\n",
-									  (int) (zero - pos), pos,
-									  (int) (end - zero - 2), zero + 1);
+				hval = zero + 1;
+				hval_len = (int) (end - zero - 2);
+
+				/*
+				 * With SMFIP_HDR_LEADSPC negotiated the MTA passes the value
+				 * verbatim, including the space that follows the colon, so we
+				 * must not add one on our own.
+				 *
+				 * Otherwise the MTA has eaten exactly one space after the
+				 * colon and we have to put it back. The only case we can still
+				 * tell apart is a header that was folded right after the
+				 * colon (e.g. `Message-ID:\r\n <id>`): there was no space to
+				 * eat, and adding one would break `simple` DKIM
+				 * canonicalisation.
+				 */
+				if (priv->hdr_leadspc ||
+					(hval_len > 0 && (*hval == '\r' || *hval == '\n'))) {
+					rspamd_printf_fstring(&session->message, "%*s:%*s\r\n",
+										  (int) (zero - pos), pos,
+										  hval_len, hval);
+				}
+				else {
+					rspamd_printf_fstring(&session->message, "%*s: %*s\r\n",
+										  (int) (zero - pos), pos,
+										  hval_len, hval);
+				}
+
 				priv->cur_hdr++;
 			}
 			else {
@@ -813,9 +839,25 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 			return FALSE;
 		}
 
+		protocol_offered = protocol;
 		version = RSPAMD_MILTER_PROTO_VER;
 		actions |= RSPAMD_MILTER_ACTIONS_MASK;
 		protocol = RSPAMD_MILTER_FLAG_NOREPLY_MASK;
+
+		/*
+		 * Ask the MTA to keep header values verbatim if it can: otherwise it
+		 * strips one space after the colon on the way in and adds one back on
+		 * the way out, which mangles headers that have no space there at all
+		 * (and thus breaks `simple` DKIM canonicalisation).
+		 */
+		if (protocol_offered & RSPAMD_MILTER_FLAG_HDR_LEADSPC) {
+			protocol |= RSPAMD_MILTER_FLAG_HDR_LEADSPC;
+			priv->hdr_leadspc = TRUE;
+			msg_debug_milter("use verbatim header values (SMFIP_HDR_LEADSPC)");
+		}
+		else {
+			priv->hdr_leadspc = FALSE;
+		}
 
 		return rspamd_milter_send_action(session, RSPAMD_MILTER_OPTNEG,
 										 version, actions, protocol);
@@ -1455,11 +1497,20 @@ rspamd_milter_set_reply(struct rspamd_milter_session *session,
 		(pos) = (unsigned char *) (reply)->str + sizeof(_len) + 1; \
 	} while (0)
 
+/*
+ * When SMFIP_HDR_LEADSPC has been negotiated the MTA no longer inserts the
+ * space that follows the colon, so we have to supply it ourselves. An empty
+ * value means header removal for SMFIR_CHGHEADER, hence it is never padded.
+ */
+#define MILTER_HDR_LEADSPC(priv, value) \
+	(((priv)->hdr_leadspc && (value)->len > 0) ? 1 : 0)
+
 gboolean
 rspamd_milter_send_action(struct rspamd_milter_session *session,
 						  enum rspamd_milter_reply act, ...)
 {
 	uint32_t ver, actions, protocol, idx;
+	unsigned int leadspc;
 	va_list ap;
 	unsigned char cmd, *pos;
 	rspamd_fstring_t *reply = NULL;
@@ -1504,12 +1555,18 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_ADDHEADER:
 		name = va_arg(ap, GString *);
 		value = va_arg(ap, GString *);
+		leadspc = MILTER_HDR_LEADSPC(priv, value);
 
 		/* Name and value must be zero terminated */
 		msg_debug_milter("add header command - \"%v\"=\"%v\"", name, value);
-		SET_COMMAND(cmd, name->len + value->len + 2, reply, pos);
+		SET_COMMAND(cmd, name->len + value->len + leadspc + 2, reply, pos);
 		memcpy(pos, name->str, name->len + 1);
 		pos += name->len + 1;
+
+		if (leadspc) {
+			*pos++ = ' ';
+		}
+
 		memcpy(pos, value->str, value->len + 1);
 		break;
 	case RSPAMD_MILTER_CHGHEADER:
@@ -1517,17 +1574,23 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 		idx = va_arg(ap, uint32_t);
 		name = va_arg(ap, GString *);
 		value = va_arg(ap, GString *);
+		leadspc = MILTER_HDR_LEADSPC(priv, value);
 
 		msg_debug_milter("change/insert header command pos = %d- \"%v\"=\"%v\"",
 						 idx, name, value);
 		/* Name and value must be zero terminated */
-		SET_COMMAND(cmd, name->len + value->len + 2 + sizeof(uint32_t),
+		SET_COMMAND(cmd, name->len + value->len + leadspc + 2 + sizeof(uint32_t),
 					reply, pos);
 		idx = htonl(idx);
 		memcpy(pos, &idx, sizeof(idx));
 		pos += sizeof(idx);
 		memcpy(pos, name->str, name->len + 1);
 		pos += name->len + 1;
+
+		if (leadspc) {
+			*pos++ = ' ';
+		}
+
 		memcpy(pos, value->str, value->len + 1);
 		break;
 	case RSPAMD_MILTER_REPLBODY:

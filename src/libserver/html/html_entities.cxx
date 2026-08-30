@@ -17,13 +17,17 @@
 #include "config.h"
 #include "html_entities.hxx"
 
+#include <cstdint>
+#include <cstring>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include "contrib/ankerl/unordered_dense.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 #include "libutil/cxx/util.hxx"
+#include "libutil/str_util.h"
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
@@ -2228,6 +2232,89 @@ public:
 
 static const html_entities_storage html_entities_defs;
 
+namespace {
+
+auto valid_xml_codepoint(gulong cp) -> bool
+{
+	return cp == 0x09 || cp == 0x0a || cp == 0x0d ||
+		   (cp >= 0x20 && cp <= 0xd7ff) ||
+		   (cp >= 0xe000 && cp <= 0xfffd) ||
+		   (cp >= 0x10000 && cp <= 0x10ffff);
+}
+
+auto decode_xml_entities_inplace(char *s, std::size_t len) -> entity_decode_result
+{
+	auto *h = s;
+	auto *t = s;
+	const auto *end = s + len;
+
+	while (h < end) {
+		auto *amp = static_cast<char *>(memchr(h, '&', end - h));
+		if (amp == nullptr) {
+			memmove(t, h, end - h);
+			t += end - h;
+			break;
+		}
+
+		memmove(t, h, amp - h);
+		t += amp - h;
+		auto *semi = static_cast<char *>(memchr(amp + 1, ';', end - amp - 1));
+		if (semi == nullptr || semi - amp > 16) {
+			return tl::make_unexpected("unterminated or oversized entity");
+		}
+
+		std::string_view entity{amp + 1, static_cast<std::size_t>(semi - amp - 1)};
+		if (entity == "amp") {
+			*t++ = '&';
+		}
+		else if (entity == "apos") {
+			*t++ = '\'';
+		}
+		else if (entity == "gt") {
+			*t++ = '>';
+		}
+		else if (entity == "lt") {
+			*t++ = '<';
+		}
+		else if (entity == "quot") {
+			*t++ = '"';
+		}
+		else if (!entity.empty() && entity.front() == '#') {
+			auto digits = entity.substr(1);
+			bool hex = false;
+			if (!digits.empty() && (digits.front() == 'x' || digits.front() == 'X')) {
+				hex = true;
+				digits.remove_prefix(1);
+			}
+			gulong codepoint = 0;
+			if (digits.empty() ||
+				!(hex ? rspamd_xstrtoul(digits.data(), digits.size(), &codepoint)
+					  : rspamd_strtoul(digits.data(), digits.size(), &codepoint)) ||
+				!valid_xml_codepoint(codepoint)) {
+				return tl::make_unexpected("invalid XML character reference");
+			}
+
+			goffset offset = t - s;
+			UBool is_error = false;
+			U8_APPEND(reinterpret_cast<std::uint8_t *>(s), offset, len, codepoint, is_error);
+			if (is_error) {
+				return tl::make_unexpected("invalid XML character reference");
+			}
+			t = s + offset;
+		}
+		else {
+			return tl::make_unexpected(
+				"unsupported XML entity &" + std::string{entity} + ";");
+		}
+
+		h = semi + 1;
+	}
+
+	return t - s;
+}
+
+}// namespace
+
 std::size_t
 decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 {
@@ -2255,7 +2342,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 
 	auto replace_named_entity = [&](const char *entity, std::size_t len) -> bool {
 		const auto *entity_def = html_entities_defs.by_name({entity,
-															 (std::size_t)(h - entity)},
+															 (std::size_t) (h - entity)},
 															false);
 
 		auto replace_entity = [&]() -> void {
@@ -2589,7 +2676,17 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		}
 	}
 
-	return (t - s);
+	return t - s;
+}
+
+auto decode_entities_inplace(char *s, std::size_t len, entity_decode_mode mode,
+							 bool norm_spaces) -> entity_decode_result
+{
+	if (mode == entity_decode_mode::xml) {
+		return decode_xml_entities_inplace(s, len);
+	}
+
+	return decode_html_entitles_inplace(s, len, norm_spaces);
 }
 
 auto decode_html_entitles_inplace(std::string &st) -> void
@@ -2645,6 +2742,46 @@ TEST_SUITE("html entities")
 				auto nlen = decode_html_entitles_inplace(cpy, c.first.size(), true);
 				CHECK(std::string{cpy, nlen} == c.second);
 				delete[] cpy;
+			}
+		}
+	}
+
+	TEST_CASE("strict XML entities decode")
+	{
+		std::vector<std::pair<std::string, std::string>> valid_cases{
+			{"plain text", "plain text"},
+			{"&amp;&apos;&gt;&lt;&quot;", "&'><\""},
+			{"decimal &#65; hex &#x1f642;", "decimal A hex 🙂"},
+		};
+
+		for (const auto &c: valid_cases) {
+			SUBCASE(("decode XML entities: " + c.first).c_str())
+			{
+				auto decoded = c.first;
+				auto result = decode_entities_inplace(
+					decoded.data(), decoded.size(), entity_decode_mode::xml);
+				REQUIRE(result);
+				decoded.resize(*result);
+				CHECK(decoded == c.second);
+			}
+		}
+
+		std::vector<std::string> invalid_cases{
+			"&copy;",
+			"&amp",
+			"&#0;",
+			"&#xD800;",
+			"&#x110000;",
+			"&#xZZ;",
+		};
+
+		for (const auto &input: invalid_cases) {
+			SUBCASE(("reject XML entity: " + input).c_str())
+			{
+				auto decoded = input;
+				auto result = decode_entities_inplace(
+					decoded.data(), decoded.size(), entity_decode_mode::xml);
+				CHECK_FALSE(result);
 			}
 		}
 	}

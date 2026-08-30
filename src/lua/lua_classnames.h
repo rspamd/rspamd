@@ -63,6 +63,7 @@ extern const char *rspamd_tcp_classname;
 extern const char *rspamd_tensor_classname;
 extern const char *rspamd_textpart_classname;
 extern const char *rspamd_text_classname;
+extern const char *rspamd_tld_lookup_classname;
 extern const char *rspamd_trie_classname;
 extern const char *rspamd_upstream_list_classname;
 extern const char *rspamd_upstream_classname;
@@ -79,7 +80,7 @@ extern const char *rspamd_pdf_text_builder_classname;
 extern const char *rspamd_pdf_cmap_classname;
 
 /* Keep it consistent when adding new classes */
-#define RSPAMD_MAX_LUA_CLASSES 55
+#define RSPAMD_MAX_LUA_CLASSES 56
 
 /*
  * Return a static class name for a given name (only for known classes) or NULL

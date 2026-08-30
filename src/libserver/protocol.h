@@ -54,6 +54,22 @@ struct rspamd_protocol_log_message_sum {
 struct rspamd_main;
 
 /**
+ * Create a UCL parser for input that arrived over the network.
+ *
+ * On top of UCL_PARSER_SAFE_FLAGS this bounds what a request may cost us to
+ * represent: nesting depth, element count, key and string lengths, and the
+ * total memory the resulting tree may occupy. Without those, a request that
+ * fits comfortably under max_message can still describe a tree orders of
+ * magnitude larger than its wire size, and one nested deeply enough to
+ * exhaust the stack in any recursive walk over it.
+ *
+ * @param inlen length of the input about to be parsed; the memory budget is
+ *   derived from it, so that a small request cannot claim a large tree
+ * @return a new parser, or NULL on allocation failure
+ */
+struct ucl_parser *rspamd_ucl_parser_new_untrusted(gsize inlen);
+
+/**
  * Process headers into HTTP message and set appropriate task fields
  * @param task
  * @param msg

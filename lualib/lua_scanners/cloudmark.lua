@@ -70,7 +70,7 @@ local function cloudmark_preload(rule, cfg, ev_base, _)
     if code ~= 200 then
       rspamd_logger.errx(ev_base, 'bad HTTP code when getting max message size: %s', code)
     end
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local ret, err = parser:parse_string(body)
     if not ret then
       rspamd_logger.errx(ev_base, 'could not parse response body [%s]: %s', body, err)
@@ -203,7 +203,7 @@ assert(get_specific_symbol({ [100] = 'CLOUDMARK_SPAM' }, 100) == 'CLOUDMARK_SPAM
 assert(get_specific_symbol({ [0] = 'CLOUDMARK_SPAM' }, 0) == 'CLOUDMARK_SPAM')
 
 local function parse_cloudmark_reply(task, rule, body)
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local ret, err = parser:parse_string(body)
   if not ret then
     rspamd_logger.errx(task, '%s: bad response body (raw): %s', N, body)

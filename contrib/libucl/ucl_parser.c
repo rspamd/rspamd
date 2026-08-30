@@ -96,6 +96,23 @@ ucl_set_err(struct ucl_parser *parser, int code, const char *str, UT_string **er
 	parser->state = UCL_STATE_ERROR;
 }
 
+/**
+ * Record a generic failure, but only if nothing more specific was recorded
+ * already. Used where a helper returning NULL means "syntax error" in the
+ * common case yet may also have failed for a reason of its own, such as a
+ * parser limit being hit.
+ */
+static void
+ucl_set_err_fallback(struct ucl_parser *parser, int code, const char *str)
+{
+	if (parser->err_code == UCL_EOK) {
+		ucl_set_err(parser, code, str, &parser->err);
+	}
+	else {
+		parser->state = UCL_STATE_ERROR;
+	}
+}
+
 static void
 ucl_save_comment(struct ucl_parser *parser, const char *begin, size_t len)
 {
@@ -579,6 +596,38 @@ ucl_expand_variable(struct ucl_parser *parser, unsigned char **dst,
 	return out_len;
 }
 
+bool ucl_parser_account_alloc(struct ucl_parser *parser, uint64_t bytes)
+{
+	parser->cur_alloc += bytes;
+
+	if (parser->limits.max_alloc > 0 &&
+		parser->cur_alloc > parser->limits.max_alloc) {
+		ucl_set_err(parser, UCL_ELIMIT,
+					"input requires too much memory to represent",
+					&parser->err);
+
+		return false;
+	}
+
+	return true;
+}
+
+bool ucl_parser_account_node(struct ucl_parser *parser)
+{
+	parser->cur_nodes++;
+
+	if (parser->limits.max_nodes > 0 &&
+		parser->cur_nodes > parser->limits.max_nodes) {
+		ucl_set_err(parser, UCL_ELIMIT, "input has too many elements",
+					&parser->err);
+
+		return false;
+	}
+
+	return ucl_parser_account_alloc(parser,
+									sizeof(ucl_object_t) + UCL_NODE_OVERHEAD);
+}
+
 /**
  * Store or copy pointer to the trash stack
  * @param parser parser object
@@ -586,6 +635,7 @@ ucl_expand_variable(struct ucl_parser *parser, unsigned char **dst,
  * @param dst destination buffer (trash stack pointer)
  * @param dst_const const destination pointer (e.g. value of object)
  * @param in_len input length
+ * @param max_len maximum accepted length, 0 for unlimited
  * @param need_unescape need to unescape source (and copy it)
  * @param need_lowercase need to lowercase value (and copy)
  * @param need_expand need to expand variables (and copy as well)
@@ -595,12 +645,23 @@ ucl_expand_variable(struct ucl_parser *parser, unsigned char **dst,
 static inline ssize_t
 ucl_copy_or_store_ptr(struct ucl_parser *parser,
 					  const unsigned char *src, unsigned char **dst,
-					  const char **dst_const, size_t in_len,
+					  const char **dst_const, size_t in_len, uint64_t max_len,
 					  bool need_unescape, bool need_lowercase, bool need_expand,
 					  bool unescape_squote)
 {
 	ssize_t ret = -1, tret;
 	unsigned char *tmp;
+
+	/*
+	 * Checked before allocating: `in_len` comes straight from the input and
+	 * is an upper bound on the result, as neither unescaping nor lowercasing
+	 * can make a string longer.
+	 */
+	if (max_len > 0 && (uint64_t) in_len > max_len) {
+		ucl_set_err(parser, UCL_ELIMIT, "string is too long", &parser->err);
+
+		return -1;
+	}
 
 	if (need_unescape || need_lowercase ||
 		(need_expand && parser->variables != NULL) ||
@@ -610,8 +671,19 @@ ucl_copy_or_store_ptr(struct ucl_parser *parser,
 		if (*dst == NULL) {
 			ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for a string",
 						&parser->err);
-			return false;
+			return -1;
 		}
+
+		/*
+		 * Charge what was actually allocated, not what the decoded string ends
+		 * up being: unescaping shrinks the contents but keeps the buffer, so
+		 * charging the decoded length would let escape-heavy input claim more
+		 * memory than the budget accounts for.
+		 */
+		if (!ucl_parser_account_alloc(parser, (uint64_t) in_len + 1)) {
+			return -1;
+		}
+
 		if (need_lowercase) {
 			ret = ucl_strlcpy_tolower(*dst, src, in_len + 1);
 		}
@@ -641,6 +713,22 @@ ucl_copy_or_store_ptr(struct ucl_parser *parser,
 				/* Free unexpanded value */
 				UCL_FREE(in_len + 1, tmp);
 			}
+
+			/* Expansion is the one transform that can grow a string */
+			if (max_len > 0 && ret > 0 && (uint64_t) ret > max_len) {
+				ucl_set_err(parser, UCL_ELIMIT,
+							"string is too long after variables expansion",
+							&parser->err);
+
+				return -1;
+			}
+
+			/* Charge whatever expansion added on top of the original buffer */
+			if (ret > 0 && (uint64_t) ret > (uint64_t) in_len &&
+				!ucl_parser_account_alloc(parser,
+										  (uint64_t) ret - (uint64_t) in_len)) {
+				return -1;
+			}
 		}
 		*dst_const = *dst;
 	}
@@ -666,10 +754,31 @@ ucl_parser_add_container(ucl_object_t *obj, struct ucl_parser *parser,
 	struct ucl_stack *st;
 	ucl_object_t *nobj;
 
+	/*
+	 * `level` below is the UCL dotted-key nesting level, which says nothing
+	 * about how deep the containers actually are; the stack depth does, and
+	 * that is what every recursive walk over the resulting tree (emitting,
+	 * copying, and destruction itself) is proportional to. Checked before
+	 * anything is allocated.
+	 */
+	if (parser->limits.max_depth > 0 &&
+		(uint64_t) parser->cur_depth >= parser->limits.max_depth) {
+		ucl_set_err(parser, UCL_ENESTED, "data is nested too deep",
+					&parser->err);
+
+		return NULL;
+	}
+
 	if (obj == NULL) {
 		nobj = ucl_object_new_full(is_array ? UCL_ARRAY : UCL_OBJECT, parser->chunks->priority);
 		if (nobj == NULL) {
 			goto enomem0;
+		}
+
+		if (!ucl_parser_account_node(parser)) {
+			ucl_object_unref(nobj);
+
+			return NULL;
 		}
 	}
 	else {
@@ -732,6 +841,7 @@ ucl_parser_add_container(ucl_object_t *obj, struct ucl_parser *parser,
 	}
 
 	LL_PREPEND(parser->stack, st);
+	parser->cur_depth++;
 	parser->cur_obj = nobj;
 
 	return nobj;
@@ -742,6 +852,22 @@ enomem0:
 	ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for an object",
 				&parser->err);
 	return NULL;
+}
+
+/**
+ * Pop the head frame off the parser stack, keeping the depth counter in sync
+ * @param parser parser object
+ * @param st frame to pop, must be the current head of parser->stack
+ */
+void ucl_parser_pop_container(struct ucl_parser *parser, struct ucl_stack *st)
+{
+	parser->stack = st->next;
+
+	if (parser->cur_depth > 0) {
+		parser->cur_depth--;
+	}
+
+	UCL_FREE(sizeof(struct ucl_stack), st);
 }
 
 int ucl_maybe_parse_number(ucl_object_t *obj,
@@ -1208,7 +1334,7 @@ ucl_lex_squoted_string(struct ucl_parser *parser,
 	return false;
 }
 
-static void
+static bool
 ucl_parser_append_elt(struct ucl_parser *parser, ucl_hash_t *cont,
 					  ucl_object_t *top,
 					  ucl_object_t *elt)
@@ -1224,19 +1350,58 @@ ucl_parser_append_elt(struct ucl_parser *parser, ucl_hash_t *cont,
 	else {
 		if ((top->flags & UCL_OBJECT_MULTIVALUE) != 0) {
 			/* Just add to the explicit array */
-			ucl_array_append(top, elt);
+			if (!ucl_array_append(top, elt)) {
+				ucl_set_err(parser, UCL_EINTERNAL,
+							"cannot allocate memory for an array",
+							&parser->err);
+
+				return false;
+			}
 		}
 		else {
-			/* Convert to an array */
+			/*
+			 * Converting to an explicit array costs one more element, so it has
+			 * to be charged as well: otherwise a run of duplicate keys grows the
+			 * tree without ever touching the budget.
+			 */
+			if (!ucl_parser_account_node(parser)) {
+				return false;
+			}
+
 			nobj = ucl_object_typed_new(UCL_ARRAY);
+
+			if (nobj == NULL) {
+				ucl_set_err(parser, UCL_EINTERNAL,
+							"cannot allocate memory for an object",
+							&parser->err);
+
+				return false;
+			}
+
 			nobj->key = top->key;
 			nobj->keylen = top->keylen;
 			nobj->flags |= UCL_OBJECT_MULTIVALUE;
-			ucl_array_append(nobj, top);
-			ucl_array_append(nobj, elt);
+
+			if (!ucl_array_append(nobj, top) ||
+				!ucl_array_append(nobj, elt)) {
+				/*
+				 * `top` is still owned by the container, so the half-built
+				 * array must be dropped without releasing what it holds.
+				 */
+				ucl_array_detach_elements(nobj);
+				ucl_object_unref(nobj);
+				ucl_set_err(parser, UCL_EINTERNAL,
+							"cannot allocate memory for an array",
+							&parser->err);
+
+				return false;
+			}
+
 			ucl_hash_replace(cont, top, nobj);
 		}
 	}
+
+	return true;
 }
 
 bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *nobj)
@@ -1298,7 +1463,9 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 			}
 
 			if (priold == prinew) {
-				ucl_parser_append_elt(parser, container, tobj, nobj);
+				if (!ucl_parser_append_elt(parser, container, tobj, nobj)) {
+					return false;
+				}
 			}
 			else if (priold > prinew) {
 				/*
@@ -1339,7 +1506,9 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 				nobj = tobj;
 			}
 			else if (priold == prinew) {
-				ucl_parser_append_elt(parser, container, tobj, nobj);
+				if (!ucl_parser_append_elt(parser, container, tobj, nobj)) {
+					return false;
+				}
 			}
 			else if (priold > prinew) {
 				/*
@@ -1564,8 +1733,15 @@ ucl_parse_key(struct ucl_parser *parser, struct ucl_chunk *chunk,
 	if (nobj == NULL) {
 		return false;
 	}
+
+	if (!ucl_parser_account_node(parser)) {
+		ucl_object_unref(nobj);
+		return false;
+	}
+
 	keylen = ucl_copy_or_store_ptr(parser, c, &nobj->trash_stack[UCL_TRASH_KEY],
-								   &key, end - c, need_unescape, parser->flags & UCL_PARSER_KEY_LOWERCASE,
+								   &key, end - c, parser->limits.max_key_length,
+								   need_unescape, parser->flags & UCL_PARSER_KEY_LOWERCASE,
 								   false, false);
 	if (keylen == -1) {
 		ucl_object_unref(nobj);
@@ -1734,6 +1910,11 @@ ucl_parser_get_container(struct ucl_parser *parser)
 		obj = ucl_object_new_full(UCL_NULL, parser->chunks->priority);
 		t = parser->stack->obj;
 
+		if (!ucl_parser_account_node(parser)) {
+			ucl_object_unref(obj);
+			return NULL;
+		}
+
 		if (!ucl_array_append(t, obj)) {
 			ucl_object_unref(obj);
 			return NULL;
@@ -1800,7 +1981,9 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 			obj->type = UCL_STRING;
 			if ((str_len = ucl_copy_or_store_ptr(parser, c + 1,
 												 &obj->trash_stack[UCL_TRASH_VALUE],
-												 &obj->value.sv, str_len, need_unescape, false,
+												 &obj->value.sv, str_len,
+												 parser->limits.max_string_length,
+												 need_unescape, false,
 												 var_expand, false)) == -1) {
 				return false;
 			}
@@ -1828,7 +2011,9 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 
 			if ((str_len = ucl_copy_or_store_ptr(parser, c + 1,
 												 &obj->trash_stack[UCL_TRASH_VALUE],
-												 &obj->value.sv, str_len, need_unescape, false,
+												 &obj->value.sv, str_len,
+												 parser->limits.max_string_length,
+												 need_unescape, false,
 												 var_expand, true)) == -1) {
 				return false;
 			}
@@ -1842,9 +2027,8 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 		case '{':
 			obj = ucl_parser_get_container(parser);
 			if (obj == NULL) {
-				parser->state = UCL_STATE_ERROR;
-				ucl_set_err(parser, UCL_ESYNTAX, "object value must be a part of an object",
-							&parser->err);
+				ucl_set_err_fallback(parser, UCL_ESYNTAX,
+									 "object value must be a part of an object");
 				return false;
 			}
 			/* We have a new object */
@@ -1866,9 +2050,8 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 		case '[':
 			obj = ucl_parser_get_container(parser);
 			if (obj == NULL) {
-				parser->state = UCL_STATE_ERROR;
-				ucl_set_err(parser, UCL_ESYNTAX, "array value must be a part of an object",
-							&parser->err);
+				ucl_set_err_fallback(parser, UCL_ESYNTAX,
+									 "array value must be a part of an object");
 				return false;
 			}
 			/* We have a new array */
@@ -1901,9 +2084,8 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 		case '<':
 			obj = ucl_parser_get_container(parser);
 			if (obj == NULL) {
-				parser->state = UCL_STATE_ERROR;
-				ucl_set_err(parser, UCL_ESYNTAX, "multiline value must be a part of an object",
-							&parser->err);
+				ucl_set_err_fallback(parser, UCL_ESYNTAX,
+									 "multiline value must be a part of an object");
 				return false;
 			}
 			/* We have something like multiline value, which must be <<[A-Z]+\n */
@@ -1937,7 +2119,9 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 						obj->flags |= UCL_OBJECT_MULTILINE;
 						if ((str_len = ucl_copy_or_store_ptr(parser, c,
 															 &obj->trash_stack[UCL_TRASH_VALUE],
-															 &obj->value.sv, str_len - 1, false,
+															 &obj->value.sv, str_len - 1,
+															 parser->limits.max_string_length,
+															 false,
 															 false, var_expand, false)) == -1) {
 							return false;
 						}
@@ -1958,9 +2142,8 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 			}
 
 			if (obj == NULL) {
-				parser->state = UCL_STATE_ERROR;
-				ucl_set_err(parser, UCL_ESYNTAX, "value must be a part of an object",
-							&parser->err);
+				ucl_set_err_fallback(parser, UCL_ESYNTAX,
+									 "value must be a part of an object");
 				return false;
 			}
 
@@ -2012,7 +2195,9 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 				obj->type = UCL_STRING;
 				if ((str_len = ucl_copy_or_store_ptr(parser, c,
 													 &obj->trash_stack[UCL_TRASH_VALUE],
-													 &obj->value.sv, str_len, need_unescape,
+													 &obj->value.sv, str_len,
+													 parser->limits.max_string_length,
+													 need_unescape,
 													 false, var_expand, false)) == -1) {
 					return false;
 				}
@@ -2086,8 +2271,7 @@ ucl_parse_after_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 						st->e.params.flags = 0;
 					}
 					else {
-						parser->stack = st->next;
-						UCL_FREE(sizeof(struct ucl_stack), st);
+						ucl_parser_pop_container(parser, st);
 					}
 
 					if (parser->cur_obj) {
@@ -2105,9 +2289,8 @@ ucl_parse_after_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 						}
 
 
-						parser->stack = st->next;
 						parser->cur_obj = st->obj;
-						UCL_FREE(sizeof(struct ucl_stack), st);
+						ucl_parser_pop_container(parser, st);
 					}
 				}
 				else {
@@ -2844,6 +3027,16 @@ ucl_parser_new(int flags)
 	parser->flags = flags;
 	parser->includepaths = NULL;
 
+	/*
+	 * Only the depth limit is on by default: it is the one that protects
+	 * against stack growth in the recursive walks over the resulting tree,
+	 * and 1024 levels is far beyond any legitimate configuration. The
+	 * remaining budgets would break large but perfectly valid inputs (maps,
+	 * language models, big JSON replies), so callers that deal with
+	 * untrusted data opt into them explicitly via ucl_parser_set_limits().
+	 */
+	parser->limits.max_depth = UCL_MAX_NESTING;
+
 	if (flags & UCL_PARSER_SAVE_COMMENTS) {
 		parser->comments = ucl_object_typed_new(UCL_OBJECT);
 	}
@@ -2877,6 +3070,32 @@ int ucl_parser_get_default_priority(struct ucl_parser *parser)
 	}
 
 	return parser->default_priority;
+}
+
+void ucl_parser_set_limits(struct ucl_parser *parser,
+						   const struct ucl_parser_limits *limits)
+{
+	if (parser == NULL) {
+		return;
+	}
+
+	if (limits == NULL) {
+		memset(&parser->limits, 0, sizeof(parser->limits));
+		parser->limits.max_depth = UCL_MAX_NESTING;
+	}
+	else {
+		memcpy(&parser->limits, limits, sizeof(parser->limits));
+	}
+}
+
+void ucl_parser_get_limits(struct ucl_parser *parser,
+						   struct ucl_parser_limits *limits)
+{
+	if (parser == NULL || limits == NULL) {
+		return;
+	}
+
+	memcpy(limits, &parser->limits, sizeof(*limits));
 }
 
 bool ucl_parser_register_macro(struct ucl_parser *parser, const char *macro,

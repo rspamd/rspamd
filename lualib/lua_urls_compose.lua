@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
+Copyright (c) 2026, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,208 +22,86 @@ limitations under the License.
 
 local N = "lua_urls_compose"
 local lua_util = require "lua_util"
-local rspamd_util = require "rspamd_util"
+local rspamd_tld_lookup = require "rspamd_tld_lookup"
 local bit = require "bit"
-local rspamd_trie = require "rspamd_trie"
-local fun = require "fun"
-local rspamd_regexp = require "rspamd_regexp"
 
 local maps_cache = {}
 
 local exports = {}
 
+-- Composition map rules use the public suffix list syntax with slightly
+-- different semantics:
+--  * `foo.bar` composes to the rule plus one preceding label (like a
+--    public suffix)
+--  * `*.foo.bar` composes to the whole host under the rule
+--  * `!baz.foo.bar` cancels composition, the default eSLD is used
 local function process_url(self, log_obj, url_tld, url_host)
-  local tld_elt = self.tlds[url_tld]
-
-  if tld_elt then
-    lua_util.debugm(N, log_obj, 'found compose tld for %s (host = %s)',
-        url_tld, url_host)
-
-    for _, excl in ipairs(tld_elt.except_rules) do
-      local matched, ret = excl[2](url_tld, url_host)
-      if matched then
-        lua_util.debugm(N, log_obj, 'found compose exclusion for %s (%s) -> %s',
-            url_host, excl[1], ret)
-
-        return ret
-      end
-    end
-
-    if tld_elt.multipattern_compose_rules then
-      local matches = tld_elt.multipattern_compose_rules:match(url_host)
-
-      if matches then
-        local lua_pat_idx = math.huge
-
-        for m, _ in pairs(matches) do
-          if m < lua_pat_idx then
-            lua_pat_idx = m
-          end
-        end
-
-        if #tld_elt.compose_rules >= lua_pat_idx then
-          local lua_pat = tld_elt.compose_rules[lua_pat_idx]
-          local matched, ret = lua_pat[2](url_tld, url_host)
-
-          if not matched then
-            lua_util.debugm(N, log_obj, 'NOT found compose inclusion for %s (%s) -> %s',
-                url_host, lua_pat[1], url_tld)
-
-            return url_tld
-          else
-            lua_util.debugm(N, log_obj, 'found compose inclusion for %s (%s) -> %s',
-                url_host, lua_pat[1], ret)
-
-            return ret
-          end
-        else
-          lua_util.debugm(N, log_obj, 'NOT found compose inclusion for %s (%s) -> %s',
-              url_host, lua_pat_idx, url_tld)
-
-          return url_tld
-        end
-      end
-    else
-      -- Match one by one
-      for _, lua_pat in ipairs(tld_elt.compose_rules) do
-        local matched, ret = lua_pat[2](url_tld, url_host)
-        if matched then
-          lua_util.debugm(N, log_obj, 'found compose inclusion for %s (%s) -> %s',
-              url_host, lua_pat[1], ret)
-
-          return ret
-        end
-      end
-    end
-
-    lua_util.debugm(N, log_obj, 'not found compose inclusion for %s in %s -> %s',
-        url_host, url_tld, url_tld)
-  else
-    lua_util.debugm(N, log_obj, 'not found compose tld for %s in %s -> %s',
-        url_host, url_tld, url_tld)
+  if not self.suffix_set then
+    -- Map is not loaded yet
+    return url_tld
   end
 
-  return url_tld
-end
+  local domain, flags = self.suffix_set:registrable(url_host)
 
-local function tld_pattern_transform(tld_pat)
-  -- Convert tld like pattern to a lua match pattern
-  -- blah -> %.blah
-  -- *.blah -> .*%.blah
-  local ret
-  if tld_pat:sub(1, 2) == '*.' then
-    ret = string.format('^((?:[^.]+\\.)*%s)$', tld_pat:sub(3))
-  else
-    ret = string.format('(?:^|\\.)((?:[^.]+\\.)?%s)$', tld_pat)
+  if not domain then
+    lua_util.debugm(N, log_obj, 'not found compose rule for %s -> %s',
+        url_host, url_tld)
+
+    return url_tld
   end
 
-  lua_util.debugm(N, nil, 'added pattern %s -> %s',
-      tld_pat, ret)
+  if bit.band(flags, rspamd_tld_lookup.flags.exception) ~= 0 then
+    lua_util.debugm(N, log_obj, 'found compose exclusion for %s -> %s',
+        url_host, url_tld)
 
-  return ret
-end
-
-local function include_elt_gen(pat)
-  pat = rspamd_regexp.create(tld_pattern_transform(pat), 'i')
-  return function(_, host)
-    local matches = pat:search(host, false, true)
-    if matches then
-      return true, matches[1][2]
-    end
-
-    return false
+    return url_tld
   end
-end
 
-local function exclude_elt_gen(pat)
-  pat = rspamd_regexp.create(tld_pattern_transform(pat))
-  return function(tld, host)
-    if pat:search(host) then
-      return true, tld
-    end
+  if bit.band(flags, rspamd_tld_lookup.flags.wildcard) ~= 0 then
+    -- Wildcard compose rules are greedy: keep the whole host
+    lua_util.debugm(N, log_obj, 'found compose wildcard for %s -> %s',
+        url_host, url_host)
 
-    return false
+    return url_host
   end
+
+  lua_util.debugm(N, log_obj, 'found compose inclusion for %s -> %s',
+      url_host, domain)
+
+  return domain
 end
 
 local function compose_map_cb(self, map_text)
-  local lpeg = require "lpeg"
-
-  local singleline_comment = lpeg.P '#' * (1 - lpeg.S '\r\n\f') ^ 0
-  local comments_strip_grammar = lpeg.C((1 - lpeg.P '#') ^ 1) * lpeg.S(' \t') ^ 0 * singleline_comment ^ 0
-
-  local function process_tld_rule(tld_elt, l)
-    if l:sub(1, 1) == '!' then
-      -- Exclusion elt
-      table.insert(tld_elt.except_rules, { l, exclude_elt_gen(l:sub(2)) })
-    else
-      table.insert(tld_elt.compose_rules, { l, include_elt_gen(l) })
-    end
-  end
+  local suffix_set = rspamd_tld_lookup.create()
+  local nrules = 0
 
   local function process_map_line(l)
-    -- Skip empty lines and comments
+    -- Strip comments and surrounding spaces
+    l = l:gsub('#.*$', '')
+    l = l:match('^%s*(.-)%s*$')
+
     if #l == 0 then
       return
     end
-    l = comments_strip_grammar:match(l)
-    if not l or #l == 0 then
-      return
-    end
 
-    -- Get TLD
-    local tld = rspamd_util.get_tld(l)
-
-    if tld then
-      local tld_elt = self.tlds[tld]
-
-      if not tld_elt then
-        tld_elt = {
-          compose_rules = {},
-          except_rules = {},
-          multipattern_compose_rules = nil
-        }
-
-        lua_util.debugm(N, rspamd_config, 'processed new tld rule for %s', tld)
-        self.tlds[tld] = tld_elt
-      end
-
-      process_tld_rule(tld_elt, l)
+    if l:sub(1, 2) == '*.' then
+      -- Compose wildcards match zero or more labels, whilst suffix
+      -- wildcards require exactly one, so add the bare parent as well
+      suffix_set:add_rule(l)
+      suffix_set:add_rule(l:sub(3))
     else
-      lua_util.debugm(N, rspamd_config, 'cannot read tld from compose map line: %s', l)
+      suffix_set:add_rule(l)
     end
+
+    nrules = nrules + 1
   end
 
-  for line in map_text:lines() do
+  for line in map_text:lines(true) do
     process_map_line(line)
   end
 
-  local multipattern_threshold = 1
-  for tld, tld_elt in pairs(self.tlds) do
-    -- Sort patterns to have longest labels before shortest ones,
-    -- so we can ensure that they match before
-    table.sort(tld_elt.compose_rules, function(e1, e2)
-      local _, ndots1 = string.gsub(e1[1], '(%.)', '')
-      local _, ndots2 = string.gsub(e2[1], '(%.)', '')
-
-      return ndots1 > ndots2
-    end)
-    if rspamd_trie.has_hyperscan() and #tld_elt.compose_rules >= multipattern_threshold then
-      lua_util.debugm(N, rspamd_config, 'tld %s has %s rules, apply multipattern',
-          tld, #tld_elt.compose_rules)
-      local flags = bit.bor(rspamd_trie.flags.re,
-          rspamd_trie.flags.dot_all,
-          rspamd_trie.flags.no_start,
-          rspamd_trie.flags.icase)
-
-
-      -- We now convert our internal patterns to multipattern patterns
-      local mp_table = fun.totable(fun.map(function(pat_elt)
-        return tld_pattern_transform(pat_elt[1])
-      end, tld_elt.compose_rules))
-      tld_elt.multipattern_compose_rules = rspamd_trie.create(mp_table, flags)
-    end
-  end
+  self.suffix_set = suffix_set
+  lua_util.debugm(N, rspamd_config, 'loaded %s compose rules', nrules)
 end
 
 exports.add_composition_map = function(cfg, map_obj)
@@ -238,7 +116,6 @@ exports.add_composition_map = function(cfg, map_obj)
     local ret = {
       process_url = process_url,
       hash = hash_key,
-      tlds = {},
     }
 
     map = cfg:add_map {
@@ -272,7 +149,6 @@ exports.inject_composition_rules = function(cfg, rules)
     local ret = {
       process_url = process_url,
       hash = hash_key,
-      tlds = {},
     }
 
     compose_map_cb(ret, rspamd_text.fromtable(rules, '\n'))

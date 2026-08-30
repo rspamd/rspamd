@@ -164,7 +164,12 @@ struct rdns_tcp_output_chain {
  */
 struct rdns_tcp_channel {
 	uint16_t next_read_size; /* Network byte order on read, then host byte order */
-	uint16_t cur_read; /* Cur bytes read including `next_read_size` */
+	/*
+	 * Bytes read so far, including the two octets that encode `next_read_size`.
+	 * A maximum sized DNS-over-TCP frame is 2 + 65535 bytes, which does not fit
+	 * into 16 bits, so this counter must be wider than `next_read_size`.
+	 */
+	uint32_t cur_read;
 	unsigned char *cur_read_buf;
 	unsigned read_buf_allocated;
 
