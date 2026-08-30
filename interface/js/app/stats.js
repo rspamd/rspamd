@@ -54,16 +54,23 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         // samples (growing to the refresh interval when it is slower), so a
         // short burst does not spike an extrapolated per-interval value.
         // Rate spans outside this range are discarded (too small = double
-        // fire, too large = stale)
+        // fire, too large = stale). The stale limit must exceed the largest
+        // auto-refresh preset (1 hour), otherwise the 30-minute and 1-hour
+        // presets discard every sample span
         const RATE_WINDOW_MS = 60 * 1000;
         const MAX_RATE_SAMPLES = 100;
         const MIN_RATE_WINDOW_MS = 1000;
-        const STALE_RATE_WINDOW_MS = 15 * 60 * 1000;
+        const STALE_RATE_WINDOW_MS = 2 * 60 * 60 * 1000;
 
         // Servers whose details row is expanded (module state: survives the
         // periodic tbody re-render, intentionally not a page reload)
         const expandedServers = new Set();
         let clusterToggleHandlerInitialized = false;
+
+        // Monotonic id of the latest stat refresh cycle: a delayed completion
+        // of an older cycle (slow health probes, legacy fallback) must not
+        // overwrite the state written by a newer one
+        let statCycleId = 0;
 
         // @ ms to latency string
         function formatLatency(ms) {
@@ -751,6 +758,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             statWidgets: function (graphs, checked_server) {
                 common.query("stat", {
                     success: function (neighbours_status) {
+                        const cycleId = ++statCycleId;
                         const statHistory = parseJsonOrEmpty(sessionStorage.getItem(STAT_HISTORY_KEY));
                         const neighbours_sum = {
                             version: neighbours_status[0].data.version,
@@ -885,16 +893,20 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         const settled = new Promise((resolve) => {
                             setTimeout(() => {
                                 Promise.all(promises).finally(() => {
-                                    neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
-                                    neighbours_sum.rate = updateStatHistory(neighbours_status, statHistory);
-                                    sessionStorage.setItem(STAT_HISTORY_KEY, JSON.stringify(statHistory));
-                                    to_Credentials["All SERVERS"].data = neighbours_sum;
-                                    // Cluster-wide load for the "All SERVERS" row,
-                                    // mirroring neighbour.rate of real servers
-                                    to_Credentials["All SERVERS"].rate = neighbours_sum.rate;
-                                    sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
-                                    displayStatWidgets(checked_server);
-                                    getChart(graphs, checked_server);
+                                    // A newer refresh cycle superseded this one:
+                                    // drop its (stale) state entirely
+                                    if (cycleId === statCycleId) {
+                                        neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
+                                        neighbours_sum.rate = updateStatHistory(neighbours_status, statHistory);
+                                        sessionStorage.setItem(STAT_HISTORY_KEY, JSON.stringify(statHistory));
+                                        to_Credentials["All SERVERS"].data = neighbours_sum;
+                                        // Cluster-wide load for the "All SERVERS" row,
+                                        // mirroring neighbour.rate of real servers
+                                        to_Credentials["All SERVERS"].rate = neighbours_sum.rate;
+                                        sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
+                                        displayStatWidgets(checked_server);
+                                        getChart(graphs, checked_server);
+                                    }
                                     resolve();
                                 });
                             }, promises.length ? 100 : 0);
@@ -906,8 +918,10 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                             // the probes answer later), so it overwrites the
                             // just-written Credentials instead of racing it.
                             // Skipped when the Status tab is no longer active —
-                            // the next cycle renders it anyway.
+                            // the next cycle renders it anyway — and when a newer
+                            // cycle has superseded this one.
                             Promise.all(healthPromises).then(() => settled).then(() => {
+                                if (cycleId !== statCycleId) return;
                                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                                 if (document.getElementById("status").classList.contains("active")) {
                                     displayStatWidgets(checked_server);
