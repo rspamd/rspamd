@@ -957,6 +957,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_mempool(L);
 	luaopen_config(L);
 	luaopen_map(L);
+	luaopen_tld_lookup(L);
 	luaopen_trie(L);
 	luaopen_task(L);
 	luaopen_textpart(L);

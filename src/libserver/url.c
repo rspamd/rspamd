@@ -2652,6 +2652,12 @@ rspamd_url_find_tld(const char *in, gsize inlen, rspamd_ftok_t *out)
 	return rspamd_tld_lookup_registrable(url_scanner->tld_lookup, in, inlen, out);
 }
 
+struct rspamd_tld_lookup *
+rspamd_url_get_tld_lookup(void)
+{
+	return url_scanner ? url_scanner->tld_lookup : NULL;
+}
+
 static const char url_braces[] = {
 	'(', ')',
 	'{', '}',

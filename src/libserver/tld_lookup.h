@@ -48,6 +48,19 @@ struct rspamd_tld_lookup;
  */
 struct rspamd_tld_lookup *rspamd_tld_lookup_new(const char *tld_file);
 
+/**
+ * Create an empty lookup to be filled with rspamd_tld_lookup_add_rule.
+ * Useful for custom suffix-like rule sets (e.g. URL composition maps).
+ */
+struct rspamd_tld_lookup *rspamd_tld_lookup_new_empty(void);
+
+/**
+ * Add a single rule in the public suffix list syntax: `foo.bar`,
+ * `*.foo.bar` or `!baz.foo.bar`. The rule is case-folded internally.
+ */
+void rspamd_tld_lookup_add_rule(struct rspamd_tld_lookup *lookup,
+								const char *rule, gsize len);
+
 void rspamd_tld_lookup_destroy(struct rspamd_tld_lookup *lookup);
 
 /**

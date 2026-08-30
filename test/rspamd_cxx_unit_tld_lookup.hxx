@@ -259,6 +259,42 @@ TEST_SUITE("tld_lookup")
 		rspamd_tld_lookup_destroy(l);
 	}
 
+	TEST_CASE("custom rule set builder")
+	{
+		auto *l = rspamd_tld_lookup_new_empty();
+		REQUIRE(l != nullptr);
+		CHECK(rspamd_tld_lookup_nrules(l) == 0);
+
+		auto add = [&](const char *r) {
+			rspamd_tld_lookup_add_rule(l, r, strlen(r));
+		};
+
+		/* A composition-map style rule set */
+		add("example.com");
+		add("*.foo.example.com");
+		add("!bar.example.com");
+		CHECK(rspamd_tld_lookup_nrules(l) == 3);
+
+		unsigned int flags = 0;
+
+		CHECK(registrable_of(l, "3.baz.example.com") == "baz.example.com");
+		CHECK(registrable_of(l, "example.com") == "example.com");
+
+		rspamd_ftok_t tok;
+		CHECK(rspamd_tld_lookup_registrable(l, "x.bar.example.com", 17, &tok));
+		CHECK(rspamd_tld_lookup_suffix(l, "x.bar.example.com", 17, &tok, &flags));
+		CHECK((flags & RSPAMD_TLD_SUFFIX_EXCEPTION) != 0);
+
+		CHECK(rspamd_tld_lookup_suffix(l, "a.b.foo.example.com", 19, &tok, &flags));
+		CHECK((flags & RSPAMD_TLD_SUFFIX_WILDCARD) != 0);
+
+		/* Rules are folded on insertion */
+		add("UPPER.zz");
+		CHECK(registrable_of(l, "sub.upper.zz") == "sub.upper.zz");
+
+		rspamd_tld_lookup_destroy(l);
+	}
+
 	TEST_CASE("nrules and missing file")
 	{
 		auto *l = make_lookup();

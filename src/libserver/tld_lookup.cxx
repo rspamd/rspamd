@@ -305,6 +305,24 @@ rspamd_tld_lookup_new(const char *tld_file)
 	return lookup;
 }
 
+struct rspamd_tld_lookup *
+rspamd_tld_lookup_new_empty(void)
+{
+	return new rspamd_tld_lookup;
+}
+
+void rspamd_tld_lookup_add_rule(struct rspamd_tld_lookup *lookup,
+								const char *rule, gsize len)
+{
+	if (lookup == nullptr || rule == nullptr || len == 0) {
+		return;
+	}
+
+	folded_host folded{std::string_view{rule, len}};
+
+	lookup->add_rule(folded.folded, false);
+}
+
 void rspamd_tld_lookup_destroy(struct rspamd_tld_lookup *lookup)
 {
 	delete lookup;

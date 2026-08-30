@@ -60,6 +60,7 @@ const char *rspamd_tcp_classname = "rspamd{tcp}";
 const char *rspamd_tensor_classname = "rspamd{tensor}";
 const char *rspamd_textpart_classname = "rspamd{textpart}";
 const char *rspamd_text_classname = "rspamd{text}";
+const char *rspamd_tld_lookup_classname = "rspamd{tld_lookup}";
 const char *rspamd_trie_classname = "rspamd{trie}";
 const char *rspamd_upstream_list_classname = "rspamd{upstream_list}";
 const char *rspamd_upstream_classname = "rspamd{upstream}";
@@ -133,6 +134,7 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 	CLASS_PUT_STR(tensor);
 	CLASS_PUT_STR(textpart);
 	CLASS_PUT_STR(text);
+	CLASS_PUT_STR(tld_lookup);
 	CLASS_PUT_STR(trie);
 	CLASS_PUT_STR(upstream_list);
 	CLASS_PUT_STR(upstream);
