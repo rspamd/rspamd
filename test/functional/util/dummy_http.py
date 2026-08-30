@@ -37,12 +37,12 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == '/map-query':
             # Parse the 'key' argument from the HTTP request
             key = self.get_query_argument("key", default=None)
-            if key == 'au':
-                # Return a string 'hit' if 'key' is equal to 'au'
+            if key == 'com.au':
+                # Return a string 'hit' if 'key' is equal to 'com.au'
                 self.set_header("Content-Type", "text/plain")
                 self.write("1.0")
             else:
-                # Return a 404 HTTP error if 'key' is not equal to 'au'
+                # Return a 404 HTTP error if 'key' is not equal to 'com.au'
                 raise tornado.web.HTTPError(404)
         elif path == '/settings':
             self.set_header("Content-Type", "application/json")
@@ -75,12 +75,12 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == '/map-query':
             # Parse the 'key' argument from the HTTP request
             key = self.get_query_argument("key", default="")
-            if key == 'au':
-                # Return a string 'hit' if 'key' is equal to 'au'
+            if key == 'com.au':
+                # Return a string 'hit' if 'key' is equal to 'com.au'
                 self.set_header("Content-Type", "text/plain")
                 self.write("hit")
             else:
-                # Return a 404 HTTP error if 'key' is not equal to 'au'
+                # Return a 404 HTTP error if 'key' is not equal to 'com.au'
                 raise tornado.web.HTTPError(404)
         elif path == '/settings':
             self.set_header("Content-Type", "application/json")
