@@ -18,9 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     # Only run on PR comments that contain "@review" from authorized users.
-    # The comment may optionally name a z.ai GLM model: "@review",
-    # "@review glm-4.7", "@review glm-5" or "@review z-ai/glm-5.1"
-    # (provider prefix is stripped). Default: glm-5.1.
+    # The model is configured through the OPENROUTER_MODEL repository secret.
     if: |
       github.repository == 'rspamd/rspamd' &&
       github.event.issue.pull_request &&
@@ -41,32 +39,6 @@ jobs:
             -f content='eyes'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Parse requested model
-        id: parse
-        env:
-          # Passed via env (never interpolated into the script) to avoid
-          # shell injection from arbitrary comment text.
-          COMMENT_BODY: ${{ github.event.comment.body }}
-        run: |
-          set -euo pipefail
-          # First whitespace-delimited token after "@review" (case-insensitive),
-          # normalised to lowercase. A provider prefix such as "z-ai/" is
-          # stripped, so a bare id ("glm-5.1") and an OpenRouter-style id
-          # ("z-ai/glm-5.1") both resolve to the z.ai model id.
-          # z.ai GLM models: glm-5.1 (flagship), glm-5-turbo (fast), glm-5,
-          # glm-4.7, glm-4.6.
-          MODEL=$(printf '%s' "$COMMENT_BODY" \
-            | grep -ioE '@review[[:space:]]+[A-Za-z0-9._/-]+' \
-            | head -n1 \
-            | awk '{print $2}' \
-            | tr '[:upper:]' '[:lower:]' || true)
-          MODEL="${MODEL##*/}"
-          if [ -z "$MODEL" ]; then
-            MODEL="glm-5.1"
-          fi
-          echo "Requested review model: $MODEL"
-          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -95,17 +67,20 @@ jobs:
 
       - name: Perform automated code review
         env:
-          # Claude Code talks to z.ai's Anthropic-compatible endpoint.
-          ANTHROPIC_BASE_URL: https://api.z.ai/api/anthropic
-          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ZAI_API_KEY }}
-          # Pin every model slot to a real z.ai GLM model so no "claude-*"
-          # alias can ever reach the endpoint. The reviewer runs on the
-          # requested model; background/fast tasks use glm-5-turbo.
-          ANTHROPIC_MODEL: ${{ steps.parse.outputs.model }}
-          ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ steps.parse.outputs.model }}
-          ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ steps.parse.outputs.model }}
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: glm-5-turbo
-          ANTHROPIC_SMALL_FAST_MODEL: glm-5-turbo
+          # Claude Code talks to OpenRouter's Anthropic-compatible endpoint.
+          ANTHROPIC_BASE_URL: https://openrouter.ai/api
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+          # Prevent Claude Code from falling back to direct Anthropic auth.
+          ANTHROPIC_API_KEY: ""
+          # Pin every model slot to the configured OpenRouter model so no
+          # default Claude model alias can reach the endpoint.
+          REVIEW_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          ANTHROPIC_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          ANTHROPIC_SMALL_FAST_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          CLAUDE_CODE_SUBAGENT_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           DISABLE_AUTOUPDATER: "1"
           DISABLE_TELEMETRY: "1"
           DISABLE_ERROR_REPORTING: "1"
@@ -114,11 +89,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          cat > prompt.txt << 'EOF'
+          cat > prompt.txt << EOF
           You are a conservative automated code reviewer for the Rspamd mail filtering project.
           Your goal is high-precision, low-noise feedback: report only defects you are certain about.
 
-          You are running as the model "${{ steps.parse.outputs.model }}" served by z.ai.
+          You are running as the model "$REVIEW_MODEL" served by OpenRouter.
 
           ## Step 1 — Gather full context before writing any comment
 
@@ -232,7 +207,7 @@ jobs:
             gh pr review ${{ github.event.issue.number }} --approve --body "No actionable defects found."
 
           End the review body with the line:
-          _Automated review by Claude Code (${{ steps.parse.outputs.model }} via z.ai)._
+          _Automated review by Claude Code ($REVIEW_MODEL via OpenRouter)._
 
           Limits:
           - Post at most 5 comments in total; choose the highest-severity findings.
@@ -243,9 +218,9 @@ jobs:
           - Never post test or exploratory API calls — every comment is immediately visible.
           EOF
 
-          echo "Running code review with model: ${{ steps.parse.outputs.model }}"
+          echo "Running code review with model: $REVIEW_MODEL"
           claude -p "$(cat prompt.txt)" \
-            --model "${{ steps.parse.outputs.model }}" \
+            --model "$REVIEW_MODEL" \
             --dangerously-skip-permissions \
             --max-turns 60 \
             2>&1 | tee review-output.log
