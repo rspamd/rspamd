@@ -73,7 +73,17 @@ struct folded_host {
 		}
 
 		memcpy(dst, host.data(), host.size());
-		auto len = rspamd_str_lc_utf8(dst, (unsigned int) host.size());
+
+		/* The ICU based folding costs a per-codepoint function call, so keep
+		 * the dominant all-ASCII case on the table based path */
+		unsigned int len;
+		if (!rspamd_str_has_8bit((const unsigned char *) dst, host.size())) {
+			len = rspamd_str_lc(dst, (unsigned int) host.size());
+		}
+		else {
+			len = rspamd_str_lc_utf8(dst, (unsigned int) host.size());
+		}
+
 		folded = std::string_view{dst, len};
 	}
 
@@ -368,9 +378,16 @@ rspamd_tld_lookup_is_final_label(const struct rspamd_tld_lookup *lookup,
 	}
 
 	char buf[64];
+	unsigned int flen;
 
 	memcpy(buf, label, len);
-	auto flen = rspamd_str_lc_utf8(buf, (unsigned int) len);
+
+	if (!rspamd_str_has_8bit((const unsigned char *) buf, len)) {
+		flen = rspamd_str_lc(buf, (unsigned int) len);
+	}
+	else {
+		flen = rspamd_str_lc_utf8(buf, (unsigned int) len);
+	}
 
 	return lookup->final_labels.contains(std::string_view{buf, flen}) ? TRUE : FALSE;
 }
