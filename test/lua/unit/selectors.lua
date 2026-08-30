@@ -251,6 +251,10 @@ context("Selectors test", function()
       selector = "urls:get_host.get_tld",
       expect = {{"example.net"}}},
 
+    ["get_public_suffix_transform"] = {
+      selector = "urls:get_host.get_public_suffix",
+      expect = {{"net"}}},
+
     ["transformation regexp"] = {
                 selector = "urls:get_tld.regexp('\\.([\\w]+)$')",
                 expect = {{{".net", "net"}}}},
