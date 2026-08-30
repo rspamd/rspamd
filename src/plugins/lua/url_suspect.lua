@@ -421,7 +421,9 @@ function checks.tld_analysis(task, url, cfg)
     return findings
   end
 
-  local tld = esld:match("^[^%.]+%.(.+)$") or esld
+  -- The proper public suffix; hosts that are themselves a public suffix
+  -- would be mangled by deriving it from the eSLD
+  local tld = url:get_public_suffix() or esld:match("^[^%.]+%.(.+)$") or esld
   lua_util.debugm(N, task, "URL eSLD: %s, TLD: %s", esld, tld)
 
   -- Check suspicious TLDs map
