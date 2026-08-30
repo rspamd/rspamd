@@ -43,6 +43,7 @@ TEST_SUITE("tld_lookup")
 		"*.ck\n"
 		"!www.ck\n"
 		"\xe4\xb8\xad\xe5\x9b\xbd\n" /* 中国 */
+		"\xd1\x80\xd1\x84\n"         /* рф */
 		"xn--fiqs8s\n"
 		"// ===END ICANN DOMAINS===\n"
 		"// ===BEGIN PRIVATE DOMAINS===\n"
@@ -159,6 +160,12 @@ TEST_SUITE("tld_lookup")
 			  "foo.\xe4\xb8\xad\xe5\x9b\xbd");
 		CHECK(registrable_of(l, "foo.xn--fiqs8s") == "foo.xn--fiqs8s");
 
+		/* Unicode case folding: РФ must match the lowercase рф rule, and the
+		 * output must point into the original, unfolded host */
+		CHECK(registrable_of(l, "президент.рф") == "президент.рф");
+		CHECK(registrable_of(l, "ПРЕЗИДЕНТ.РФ") == "ПРЕЗИДЕНТ.РФ");
+		CHECK(registrable_of(l, "mail.ПРЕЗИДЕНТ.РФ") == "ПРЕЗИДЕНТ.РФ");
+
 		rspamd_tld_lookup_destroy(l);
 	}
 
@@ -240,8 +247,10 @@ TEST_SUITE("tld_lookup")
 		CHECK(rspamd_tld_lookup_is_final_label(l, "ck", 2));
 		/* Private section */
 		CHECK(rspamd_tld_lookup_is_final_label(l, "io", 2));
-		/* Unicode */
+		/* Unicode, including non-ASCII case folding */
 		CHECK(rspamd_tld_lookup_is_final_label(l, "\xe4\xb8\xad\xe5\x9b\xbd", 6));
+		CHECK(rspamd_tld_lookup_is_final_label(l, "\xd1\x80\xd1\x84", 4));
+		CHECK(rspamd_tld_lookup_is_final_label(l, "\xd0\xa0\xd0\xa4", 4)); /* РФ */
 
 		CHECK_FALSE(rspamd_tld_lookup_is_final_label(l, "zz", 2));
 		CHECK_FALSE(rspamd_tld_lookup_is_final_label(l, "", 0));
@@ -254,7 +263,7 @@ TEST_SUITE("tld_lookup")
 	{
 		auto *l = make_lookup();
 
-		CHECK(rspamd_tld_lookup_nrules(l) == 13);
+		CHECK(rspamd_tld_lookup_nrules(l) == 14);
 		rspamd_tld_lookup_destroy(l);
 
 		CHECK(rspamd_tld_lookup_new("/nonexistent/tld/file") == nullptr);
