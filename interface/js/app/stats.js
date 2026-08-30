@@ -756,9 +756,14 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         // Public API
         const ui = {
             statWidgets: function (graphs, checked_server) {
+                // Assign the cycle id at initiation, not completion: a refresh
+                // started later must supersede an earlier one even if the
+                // earlier one completes last — otherwise the old cycle's
+                // captured parameters (e.g. the selected server) would
+                // re-render over the newer cycle's result
+                const cycleId = ++statCycleId;
                 common.query("stat", {
                     success: function (neighbours_status) {
-                        const cycleId = ++statCycleId;
                         const statHistory = parseJsonOrEmpty(sessionStorage.getItem(STAT_HISTORY_KEY));
                         const neighbours_sum = {
                             version: neighbours_status[0].data.version,
