@@ -191,7 +191,7 @@
 					</div>
 				</div>
 				<div class="row">
-					<div class="col-lg-6">
+					<div class="col-lg-12">
 						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-server"></i></span>
@@ -201,11 +201,14 @@
 									<table class="table status-table table-sm table-hover table-bordered text-nowrap mb-0" id="clusterTable">
 										<thead class="text-secondary">
 											<tr>
+												<th class="w-1"></th>
 												<th></th>
 												<th>Server name</th>
 												<th>Host</th>
 												<th class="w-1">Status</th>
 												<th class="w-1">Scan time</th>
+												<th class="w-1">Load</th>
+												<th class="w-1">Latency</th>
 												<th class="w-1">Uptime</th>
 												<th class="w-1">Version</th>
 												<th>Configuration ID</th>
@@ -216,6 +219,10 @@
 									</table>
 								</div>
 						</div>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col-lg-6">
 						<div class="card shadow my-3">
 							<div class="card-header text-secondary py-2 d-flex align-items-center">
 								<span class="icon me-3"><i class="fas fa-dice"></i></span>

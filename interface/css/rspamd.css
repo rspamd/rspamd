@@ -17,6 +17,7 @@
     --rspamd-bg-card-gradient-end: #ededed;
     --rspamd-text-primary: #000000;
     --rspamd-text-secondary: #666666;
+    --rspamd-text-warning: #D48806;
     --rspamd-nav-active-bg: #e7e7e7;
     --rspamd-sidebar-bg: #ffffee;
     --rspamd-symbol-description-color: #484848;
@@ -45,6 +46,7 @@
     --rspamd-bg-card-gradient-end: #252525;
     --rspamd-text-primary: #cccccc;
     --rspamd-text-secondary: #b0b0b0;
+    --rspamd-text-warning: #ffda6a;
     --rspamd-nav-active-bg: #404040;
     --rspamd-sidebar-bg: #444422;
     --rspamd-symbol-description-color: #848484;
@@ -94,6 +96,9 @@ small,
 }
 .success > td {
     background-color: var(--rspamd-table-success-bg);
+}
+.warning > td {
+    background-color: var(--rspamd-table-warning-bg);
 }
 td.warning {
     background-color: var(--rspamd-table-warning-bg);
@@ -597,6 +602,64 @@ input.action-scores {
     --bs-table-bg-state: var(--bs-table-hover-bg);
 }
 
+/* Cluster (servers) table: details toggle, last-seen line, details row */
+#clusterTable td.cluster-toggle {
+    width: 1%;
+}
+#clusterTable .cluster-toggle-icon {
+    color: var(--rspamd-text-secondary);
+    display: inline-block;
+    transition: transform 0.15s ease-in-out;
+}
+/* The global .svg-inline--fa font-size beats inheritance — size the glyph itself */
+#clusterTable .cluster-toggle-icon .svg-inline--fa { /* stylelint-disable-line selector-class-pattern */
+    font-size: 14px;
+}
+#clusterTable td.cluster-toggle[aria-expanded="false"] .cluster-toggle-icon {
+    transform: rotate(-90deg);
+}
+/* Cluster drift badge (version / configuration ID mismatch) */
+#clusterTable .cluster-drift {
+    color: var(--rspamd-text-warning);
+}
+/* "seen <time> ago": on narrow screens the note wraps under the status glyph
+   to save horizontal space; on large screens it stays on the glyph's line,
+   keeping server rows single-line (the table is otherwise text-nowrap) */
+#clusterTable td.cluster-status {
+    white-space: normal;
+}
+#clusterTable td.cluster-status .cluster-last-seen {
+    display: block;
+}
+@media (min-width: 992px) {
+    #clusterTable td.cluster-status {
+        white-space: nowrap;
+    }
+    #clusterTable td.cluster-status .cluster-last-seen {
+        display: inline;
+        margin-left: 0.25rem;
+    }
+}
+#clusterTable tr.cluster-details > td {
+    background-color: var(--bs-tertiary-bg);
+}
+dl.cluster-dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 0.75rem;
+    margin-bottom: 0;
+}
+dl.cluster-dl dt {
+    font-weight: normal;
+}
+/* The whole server row toggles the details row, except the radio cell */
+#clusterTable tbody tr:has(td.cluster-toggle) {
+    cursor: pointer;
+}
+#clusterTable tbody tr:has(td.cluster-toggle) td:has(input) {
+    cursor: default;
+}
+
 /* RRD summary */
 #summary-row {
     padding-left: 50px;
@@ -716,6 +779,9 @@ input.action-scores {
 }
 .success .icon {
     color: #468847;
+}
+.warning .icon {
+    color: var(--rspamd-text-warning);
 }
 
 #learnServers {
