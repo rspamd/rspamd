@@ -28,6 +28,9 @@ DEFER
 COMBINED TEST
   Milter Test  combined.lua
 
+FOLDED HEADER
+  Milter Test  hdr_fold.lua
+
 *** Keywords ***
 Milter Test
   [Arguments]  ${mtlua}

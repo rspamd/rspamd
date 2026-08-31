@@ -1949,7 +1949,8 @@ void rspamd_message_process(struct rspamd_task *task)
 
 		/* Now detect content */
 		if (content_func_pos != -1 && part->parsed_data.len > 0 &&
-			part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
+			(part->part_type == RSPAMD_MIME_PART_UNDEFINED ||
+			 part->part_type == RSPAMD_MIME_PART_ARCHIVE)) {
 			struct rspamd_mime_part **pmime;
 			struct rspamd_task **ptask;
 

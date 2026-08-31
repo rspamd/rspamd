@@ -219,7 +219,7 @@ neural_common.register_provider('llm', {
         return
       end
 
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local ok, perr = parser:parse_string(resp)
       if not ok then
         rspamd_logger.debugm(N, task, 'llm cannot parse reply: %s', perr)

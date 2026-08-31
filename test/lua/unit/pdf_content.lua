@@ -164,4 +164,23 @@ context("PDF content extraction", function()
 
     assert_not_nil(text:find('Hello, world', 1, true), 'ascii, got: ' .. text)
   end)
+
+  test("A processing timeout reaches the caller", function()
+    -- The output object is copied from the processing one before any work
+    -- starts, so a deadline tripping later has to be carried across by hand.
+    -- Nothing else notices when it is not: PDF_TIMEOUT scores zero, so the
+    -- symbol simply stops firing. A negative budget blows the deadline on the
+    -- first check rather than making the test wait for a real one.
+    local saved = pdf.config.pdf_process_timeout
+    pdf.config.pdf_process_timeout = -1
+
+    local ok, res = pcall(pdf.process,
+      make_pdf(prologue .. 'BT /F1 12 Tf (Hello) Tj ET\nQ\n', '/F1 5 0 R'), nil, {})
+
+    pdf.config.pdf_process_timeout = saved
+
+    assert_true(ok, 'pdf.process failed: ' .. tostring(res))
+    assert_not_nil(res.timeout_processing,
+      'the timeout stayed on the processing object and never reached the output')
+  end)
 end)

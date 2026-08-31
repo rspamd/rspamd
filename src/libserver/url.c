@@ -20,6 +20,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "multipattern.h"
+#include "tld_lookup.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/http-parser/http_parser.h"
 #include "lua/lua_common.h"
@@ -57,7 +58,6 @@ typedef struct url_match_s {
 
 #define URL_MATCHER_FLAG_NOHTML (1u << 0u)
 #define URL_MATCHER_FLAG_TLD_MATCH (1u << 1u)
-#define URL_MATCHER_FLAG_STAR_MATCH (1u << 2u)
 #define URL_MATCHER_FLAG_REGEXP (1u << 3u)
 
 struct url_callback_data;
@@ -261,10 +261,10 @@ struct url_callback_data {
 };
 
 struct url_match_scanner {
-	GArray *matchers_full;
 	GArray *matchers_strict;
-	struct rspamd_multipattern *search_trie_full;
+	GArray *matchers_tld;
 	struct rspamd_multipattern *search_trie_strict;
+	struct rspamd_tld_lookup *tld_lookup;
 	bool has_tld_file;
 };
 
@@ -436,73 +436,6 @@ rspamd_url_strerror(int err)
 	return NULL;
 }
 
-static gboolean
-rspamd_url_parse_tld_file(const char *fname,
-						  struct url_match_scanner *scanner)
-{
-	FILE *f;
-	struct url_matcher m;
-	char *linebuf = NULL, *p;
-	gsize buflen = 0;
-	gssize r;
-	int flags;
-
-	f = fopen(fname, "r");
-
-	if (f == NULL) {
-		msg_err("cannot open TLD file %s: %s", fname, strerror(errno));
-		return FALSE;
-	}
-
-	m.end = url_tld_end;
-	m.start = url_tld_start;
-	m.prefix = "http://";
-
-	while ((r = rspamd_getline(&linebuf, &buflen, f)) > 0) {
-		if (linebuf[0] == '/' || g_ascii_isspace(linebuf[0])) {
-			/* Skip comment or empty line */
-			continue;
-		}
-
-		g_strchomp(linebuf);
-
-		/* TODO: add support for ! patterns */
-		if (linebuf[0] == '!') {
-			msg_debug("skip '!' patterns from parsing for now: %s", linebuf);
-			continue;
-		}
-
-		flags = URL_MATCHER_FLAG_NOHTML | URL_MATCHER_FLAG_TLD_MATCH;
-
-		if (linebuf[0] == '*') {
-			flags |= URL_MATCHER_FLAG_STAR_MATCH;
-			p = strchr(linebuf, '.');
-
-			if (p == NULL) {
-				msg_err("got bad star line, skip it: %s", linebuf);
-				continue;
-			}
-			p++;
-		}
-		else {
-			p = linebuf;
-		}
-
-		m.flags = flags;
-		rspamd_multipattern_add_pattern(url_scanner->search_trie_full, p,
-										RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-		m.pattern = rspamd_multipattern_get_pattern(url_scanner->search_trie_full,
-													rspamd_multipattern_get_npatterns(url_scanner->search_trie_full) - 1);
-
-		g_array_append_val(url_scanner->matchers_full, m);
-	}
-
-	rspamd_getline_free(linebuf);
-	fclose(f);
-
-	return TRUE;
-}
-
 static void
 rspamd_url_add_static_matchers(struct url_match_scanner *sc)
 {
@@ -523,35 +456,15 @@ rspamd_url_add_static_matchers(struct url_match_scanner *sc)
 	}
 
 	g_array_append_vals(sc->matchers_strict, static_matchers, n);
-
-	if (sc->matchers_full) {
-		for (i = 0; i < n; i++) {
-			if (static_matchers[i].flags & URL_MATCHER_FLAG_REGEXP) {
-				rspamd_multipattern_add_pattern(url_scanner->search_trie_full,
-												static_matchers[i].pattern,
-												RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8 |
-													RSPAMD_MULTIPATTERN_RE);
-			}
-			else {
-				rspamd_multipattern_add_pattern(url_scanner->search_trie_full,
-												static_matchers[i].pattern,
-												RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-			}
-		}
-		g_array_append_vals(sc->matchers_full, static_matchers, n);
-	}
 }
 
 void rspamd_url_deinit(void)
 {
 	if (url_scanner != NULL) {
-		if (url_scanner->search_trie_full) {
-			rspamd_multipattern_destroy(url_scanner->search_trie_full);
-			g_array_free(url_scanner->matchers_full, TRUE);
-		}
-
 		rspamd_multipattern_destroy(url_scanner->search_trie_strict);
 		g_array_free(url_scanner->matchers_strict, TRUE);
+		g_array_free(url_scanner->matchers_tld, TRUE);
+		rspamd_tld_lookup_destroy(url_scanner->tld_lookup);
 		g_free(url_scanner);
 
 		url_scanner = NULL;
@@ -561,8 +474,6 @@ void rspamd_url_deinit(void)
 void rspamd_url_init(const char *tld_file)
 {
 	GError *err = NULL;
-	gboolean ret = TRUE;
-	int mp_compile_flags = 0;
 
 	if (url_scanner != NULL) {
 		rspamd_url_deinit();
@@ -575,65 +486,47 @@ void rspamd_url_init(const char *tld_file)
 	url_scanner->search_trie_strict = rspamd_multipattern_create_sized(
 		G_N_ELEMENTS(static_matchers),
 		RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+	url_scanner->has_tld_file = false;
+	url_scanner->tld_lookup = NULL;
 
-	if (tld_file) {
-		/* Reserve larger multipattern */
-		url_scanner->matchers_full = g_array_sized_new(FALSE, TRUE,
-													   sizeof(struct url_matcher), 13000);
-		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
-																		 RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-		/* Use FALLBACK mode: ACISM immediately, HS async */
-		rspamd_multipattern_set_mode(url_scanner->search_trie_full, RSPAMD_MP_MODE_FALLBACK);
-	}
-	else {
-		url_scanner->matchers_full = NULL;
-		url_scanner->search_trie_full = NULL;
-		url_scanner->has_tld_file = false;
-		mp_compile_flags |= RSPAMD_MULTIPATTERN_COMPILE_NO_FS;
+	/* Shared matcher template for TLD candidates anchored by the suffix probe */
+	url_scanner->matchers_tld = g_array_sized_new(FALSE, TRUE,
+												  sizeof(struct url_matcher), 1);
+	{
+		struct url_matcher tld_matcher = {
+			.pattern = "",
+			.prefix = "http://",
+			.start = url_tld_start,
+			.end = url_tld_end,
+			.flags = URL_MATCHER_FLAG_NOHTML | URL_MATCHER_FLAG_TLD_MATCH,
+		};
+		g_array_append_val(url_scanner->matchers_tld, tld_matcher);
 	}
 
 	rspamd_url_add_static_matchers(url_scanner);
 
 	if (tld_file != NULL) {
-		ret = rspamd_url_parse_tld_file(tld_file, url_scanner);
+		url_scanner->tld_lookup = rspamd_tld_lookup_new(tld_file);
 
-		if (ret) {
+		if (url_scanner->tld_lookup != NULL) {
 			url_scanner->has_tld_file = true;
-		}
-	}
-
-	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, mp_compile_flags, &err)) {
-		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
-		abort();
-	}
-
-	if (url_scanner->search_trie_full) {
-		if (!rspamd_multipattern_compile(url_scanner->search_trie_full, mp_compile_flags, &err)) {
-			msg_err("cannot compile tld patterns, url matching will be "
-					"incomplete: %e",
-					err);
-			g_error_free(err);
-			ret = FALSE;
-		}
-		else if (rspamd_multipattern_get_state(url_scanner->search_trie_full) ==
-				 RSPAMD_MP_STATE_COMPILING) {
-			/* Add to pending queue for hs_helper to compile */
-			rspamd_multipattern_add_pending(url_scanner->search_trie_full, "tld");
-		}
-	}
-
-	if (tld_file != NULL) {
-		if (ret) {
 			msg_info("loaded %ud TLD suffixes from '%s'",
-					 url_scanner->matchers_full->len - url_scanner->matchers_strict->len,
+					 rspamd_tld_lookup_nrules(url_scanner->tld_lookup),
 					 tld_file);
 		}
 		else {
-			msg_err("failed to initialize url tld suffixes from '%s', "
+			msg_err("failed to load TLD suffixes from '%s', "
 					"use %ud internal match suffixes",
 					tld_file,
 					url_scanner->matchers_strict->len);
 		}
+	}
+
+	/* The static matcher set is small, so it is compiled in memory and never
+	 * uses the file cache or async compilation */
+	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, 0, &err)) {
+		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
+		abort();
 	}
 
 	/* Generate hashes for flags */
@@ -1733,73 +1626,6 @@ out:
 
 #undef SET_U
 
-static int
-rspamd_tld_trie_callback(struct rspamd_multipattern *mp,
-						 unsigned int strnum,
-						 int match_start,
-						 int match_pos,
-						 const char *text,
-						 gsize len,
-						 void *context)
-{
-	struct url_matcher *matcher;
-	const char *start, *pos, *p;
-	struct rspamd_url *url = context;
-	int ndots;
-
-	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
-							 strnum);
-	ndots = 1;
-
-	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
-		/* Skip one more tld component */
-		ndots++;
-	}
-
-	pos = text + match_start;
-	p = pos - 1;
-	start = rspamd_url_host_unsafe(url);
-
-	if (*pos != '.' || match_pos != (int) url->hostlen) {
-		/* Something weird has been found */
-		if (match_pos == (int) url->hostlen - 1) {
-			pos = rspamd_url_host_unsafe(url) + match_pos;
-			if (*pos == '.') {
-				/* This is dot at the end of domain */
-				url->hostlen--;
-			}
-			else {
-				return 0;
-			}
-		}
-		else {
-			return 0;
-		}
-	}
-
-	/* Now we need to find top level domain */
-	pos = start;
-	while (p >= start && ndots > 0) {
-		if (*p == '.') {
-			ndots--;
-			pos = p + 1;
-		}
-		else {
-			pos = p;
-		}
-
-		p--;
-	}
-
-	if ((ndots == 0 || p == start - 1) &&
-		url->tldlen < rspamd_url_host_unsafe(url) + url->hostlen - pos) {
-		url->tldshift = (pos - url->string);
-		url->tldlen = rspamd_url_host_unsafe(url) + url->hostlen - pos;
-	}
-
-	return 0;
-}
-
 static void
 rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af,
 								rspamd_mempool_t *pool)
@@ -2673,10 +2499,20 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 	if (uri->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_MAILTO | PROTOCOL_FTP | PROTOCOL_FILE)) {
 		/* Find TLD part */
-		if (url_scanner->search_trie_full) {
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   rspamd_url_host_unsafe(uri), uri->hostlen,
-									   rspamd_tld_trie_callback, uri, NULL);
+		if (url_scanner->tld_lookup) {
+			rspamd_ftok_t tld_tok;
+
+			if (rspamd_tld_lookup_registrable(url_scanner->tld_lookup,
+											  rspamd_url_host_unsafe(uri), uri->hostlen,
+											  &tld_tok)) {
+				if (rspamd_url_host_unsafe(uri)[uri->hostlen - 1] == '.') {
+					/* The trailing dot is not part of the host */
+					uri->hostlen--;
+				}
+
+				uri->tldshift = tld_tok.begin - uri->string;
+				uri->tldlen = tld_tok.len;
+			}
 		}
 
 		if (uri->tldlen == 0) {
@@ -2806,95 +2642,20 @@ rspamd_url_parse(struct rspamd_url *uri,
 	return URI_ERRNO_OK;
 }
 
-struct tld_trie_cbdata {
-	const char *begin;
-	gsize len;
-	rspamd_ftok_t *out;
-};
-
-static int
-rspamd_tld_trie_find_callback(struct rspamd_multipattern *mp,
-							  unsigned int strnum,
-							  int match_start,
-							  int match_pos,
-							  const char *text,
-							  gsize len,
-							  void *context)
-{
-	struct url_matcher *matcher;
-	const char *start, *pos, *p;
-	struct tld_trie_cbdata *cbdata = context;
-	int ndots = 1;
-
-	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
-							 strnum);
-
-	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
-		/* Skip one more tld component */
-		ndots = 2;
-	}
-
-	pos = text + match_start;
-	p = pos - 1;
-	start = text;
-
-	if (*pos != '.' || match_pos != (int) cbdata->len) {
-		/* Something weird has been found */
-		if (match_pos != (int) cbdata->len - 1) {
-			/* Search more */
-			return 0;
-		}
-	}
-
-	/* Now we need to find top level domain */
-	pos = start;
-
-	while (p >= start && ndots > 0) {
-		if (*p == '.') {
-			ndots--;
-			pos = p + 1;
-		}
-		else {
-			pos = p;
-		}
-
-		p--;
-	}
-
-	if (ndots == 0 || p == start - 1) {
-		if (cbdata->begin + cbdata->len - pos > cbdata->out->len) {
-			cbdata->out->begin = pos;
-			cbdata->out->len = cbdata->begin + cbdata->len - pos;
-		}
-	}
-
-	return 0;
-}
-
 gboolean
 rspamd_url_find_tld(const char *in, gsize inlen, rspamd_ftok_t *out)
 {
-	struct tld_trie_cbdata cbdata;
-
 	g_assert(in != NULL);
 	g_assert(out != NULL);
 	g_assert(url_scanner != NULL);
 
-	cbdata.begin = in;
-	cbdata.len = inlen;
-	cbdata.out = out;
-	out->len = 0;
+	return rspamd_tld_lookup_registrable(url_scanner->tld_lookup, in, inlen, out);
+}
 
-	if (url_scanner->search_trie_full) {
-		rspamd_multipattern_lookup(url_scanner->search_trie_full, in, inlen,
-								   rspamd_tld_trie_find_callback, &cbdata, NULL);
-	}
-
-	if (out->len > 0) {
-		return TRUE;
-	}
-
-	return FALSE;
+struct rspamd_tld_lookup *
+rspamd_url_get_tld_lookup(void)
+{
+	return url_scanner ? url_scanner->tld_lookup : NULL;
 }
 
 static const char url_braces[] = {
@@ -3461,6 +3222,204 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 	return 0;
 }
 
+/*
+ * Two-pass full text scan: the small static-matcher multipattern provides
+ * scheme and known-prefix candidates, whilst TLD candidates are anchored on
+ * every '.<known final label>' occurrence found via the suffix lookup.
+ * Candidates must reach the processing callback in ascending match-end order,
+ * as both the cb->fin dedup and the newline cursor rely on it, so static
+ * matches are collected upfront and merged with the streamed TLD anchors.
+ */
+
+struct rspamd_url_static_match {
+	int start;
+	int end;
+	unsigned int strnum;
+};
+
+struct rspamd_url_static_matches {
+	struct rspamd_url_static_match fixed[64];
+	GArray *spill;
+	unsigned int n;
+};
+
+static int
+rspamd_url_static_collect_cb(struct rspamd_multipattern *mp,
+							 unsigned int strnum,
+							 int match_start,
+							 int match_pos,
+							 const char *text,
+							 gsize len,
+							 void *context)
+{
+	struct rspamd_url_static_matches *matches = context;
+	struct rspamd_url_static_match m = {match_start, match_pos, strnum};
+
+	if (matches->n < G_N_ELEMENTS(matches->fixed)) {
+		matches->fixed[matches->n] = m;
+	}
+	else {
+		if (matches->spill == NULL) {
+			matches->spill = g_array_new(FALSE, FALSE,
+										 sizeof(struct rspamd_url_static_match));
+		}
+		g_array_append_val(matches->spill, m);
+	}
+
+	matches->n++;
+
+	return 0;
+}
+
+static inline const struct rspamd_url_static_match *
+rspamd_url_static_match_at(const struct rspamd_url_static_matches *matches,
+						   unsigned int i)
+{
+	if (i < G_N_ELEMENTS(matches->fixed)) {
+		return &matches->fixed[i];
+	}
+
+	return &g_array_index(matches->spill, struct rspamd_url_static_match,
+						  i - G_N_ELEMENTS(matches->fixed));
+}
+
+struct rspamd_url_two_pass_state {
+	struct url_callback_data *cb;
+	rspamd_multipattern_cb_t func;
+	const char *in;
+	gsize inlen;
+	struct rspamd_url_static_matches matches;
+	unsigned int scur;
+	int ret;
+};
+
+/* Emit collected static matches with end offset up to the given bound */
+static gboolean
+rspamd_url_two_pass_flush_static(struct rspamd_url_two_pass_state *st, int bound)
+{
+	while (st->scur < st->matches.n) {
+		const struct rspamd_url_static_match *m =
+			rspamd_url_static_match_at(&st->matches, st->scur);
+
+		if (bound >= 0 && m->end > bound) {
+			break;
+		}
+
+		st->scur++;
+		st->cb->matchers = url_scanner->matchers_strict;
+		st->ret = st->func(NULL, m->strnum, m->start, m->end,
+						   st->in, st->inlen, st->cb);
+
+		if (st->ret != 0) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_url_two_pass_emit_tld(struct rspamd_url_two_pass_state *st,
+							 const char *lstart, gsize llen)
+{
+	if (!rspamd_tld_lookup_is_final_label(url_scanner->tld_lookup, lstart, llen)) {
+		return TRUE;
+	}
+
+	int match_pos = (lstart + llen) - st->in;
+
+	if (!rspamd_url_two_pass_flush_static(st, match_pos)) {
+		return FALSE;
+	}
+
+	st->cb->matchers = url_scanner->matchers_tld;
+	st->ret = st->func(NULL, 0, (lstart - 1) - st->in, match_pos,
+					   st->in, st->inlen, st->cb);
+
+	return st->ret == 0;
+}
+
+static int
+rspamd_url_scan_text_full(const char *in, gsize inlen,
+						  rspamd_multipattern_cb_t func,
+						  struct url_callback_data *cb)
+{
+	struct rspamd_url_two_pass_state st;
+
+	memset(&st, 0, sizeof(st));
+	st.cb = cb;
+	st.func = func;
+	st.in = in;
+	st.inlen = inlen;
+
+	/* First pass: collect the (few) static matcher candidates */
+	rspamd_multipattern_lookup(url_scanner->search_trie_strict, in, inlen,
+							   rspamd_url_static_collect_cb, &st.matches, NULL);
+
+	/* Second pass: stream TLD anchors, merging static candidates in */
+	if (url_scanner->tld_lookup != NULL) {
+		const char *p = in, *end = in + inlen;
+
+		while (p < end && (p = memchr(p, '.', end - p)) != NULL) {
+			const char *lstart = p + 1;
+			const char *q = lstart;
+			gboolean capped = FALSE;
+
+			while (q < end) {
+				unsigned char c = *q;
+
+				if (!(g_ascii_isalnum(c) || c == '-' || c >= 0x80)) {
+					break;
+				}
+
+				if (q > lstart && (c == '-' || c >= 0xC0)) {
+					/* A valid label may end here: this byte cannot continue
+					 * an alphanumeric TLD */
+					if (!rspamd_url_two_pass_emit_tld(&st, lstart, q - lstart)) {
+						goto out;
+					}
+				}
+
+				if (q - lstart >= 63) {
+					capped = TRUE;
+					break;
+				}
+
+				q++;
+			}
+
+			if (capped) {
+				/* An oversized run cannot end a valid label; skip it */
+				while (q < end) {
+					unsigned char c = *q;
+
+					if (!(g_ascii_isalnum(c) || c == '-' || c >= 0x80)) {
+						break;
+					}
+					q++;
+				}
+			}
+			else if (q > lstart) {
+				if (!rspamd_url_two_pass_emit_tld(&st, lstart, q - lstart)) {
+					goto out;
+				}
+			}
+
+			p = q > lstart ? q : lstart;
+		}
+	}
+
+	/* Flush the remaining static candidates */
+	rspamd_url_two_pass_flush_static(&st, -1);
+
+out:
+	if (st.matches.spill != NULL) {
+		g_array_free(st.matches.spill, TRUE);
+	}
+
+	return st.ret;
+}
+
 gboolean
 rspamd_url_find(rspamd_mempool_t *pool,
 				const char *begin, gsize len,
@@ -3479,18 +3438,7 @@ rspamd_url_find(rspamd_mempool_t *pool,
 	cb.pool = pool;
 
 	if (how == RSPAMD_URL_FIND_ALL) {
-		if (url_scanner->search_trie_full) {
-			cb.matchers = url_scanner->matchers_full;
-			ret = rspamd_multipattern_lookup(url_scanner->search_trie_full,
-											 begin, len,
-											 rspamd_url_trie_callback, &cb, NULL);
-		}
-		else {
-			cb.matchers = url_scanner->matchers_strict;
-			ret = rspamd_multipattern_lookup(url_scanner->search_trie_strict,
-											 begin, len,
-											 rspamd_url_trie_callback, &cb, NULL);
-		}
+		ret = rspamd_url_scan_text_full(begin, len, rspamd_url_trie_callback, &cb);
 	}
 	else {
 		cb.matchers = url_scanner->matchers_strict;
@@ -3874,18 +3822,8 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 	cb.newlines = nlines;
 
 	if (how == RSPAMD_URL_FIND_ALL) {
-		if (url_scanner->search_trie_full) {
-			cb.matchers = url_scanner->matchers_full;
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_multiple, &cb, NULL);
-		}
-		else {
-			cb.matchers = url_scanner->matchers_strict;
-			rspamd_multipattern_lookup(url_scanner->search_trie_strict,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_multiple, &cb, NULL);
-		}
+		rspamd_url_scan_text_full(in, inlen,
+								  rspamd_url_trie_generic_callback_multiple, &cb);
 	}
 	else {
 		cb.matchers = url_scanner->matchers_strict;
@@ -4088,18 +4026,8 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 	cb.func = func;
 
 	if (how == RSPAMD_URL_FIND_ALL) {
-		if (url_scanner->search_trie_full) {
-			cb.matchers = url_scanner->matchers_full;
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_single, &cb, NULL);
-		}
-		else {
-			cb.matchers = url_scanner->matchers_strict;
-			rspamd_multipattern_lookup(url_scanner->search_trie_strict,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_single, &cb, NULL);
-		}
+		rspamd_url_scan_text_full(in, inlen,
+								  rspamd_url_trie_generic_callback_single, &cb);
 	}
 	else {
 		cb.matchers = url_scanner->matchers_strict;

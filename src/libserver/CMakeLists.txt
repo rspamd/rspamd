@@ -35,6 +35,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/settings_merge.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/allocator_conf.c
         ${CMAKE_CURRENT_SOURCE_DIR}/task.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tld_lookup.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/url.c
         ${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c
         ${CMAKE_CURRENT_SOURCE_DIR}/http_content_negotiation.c

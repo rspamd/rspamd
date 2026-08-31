@@ -161,6 +161,19 @@ int lua_compress_zstd_decompress(lua_State *L)
 	if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
 		outlen = ZSTD_DStreamOutSize();
 	}
+	else {
+		/*
+		 * The content size stored in the frame header is attacker controlled:
+		 * a handful of bytes can claim gigabytes. Take it as an allocation hint
+		 * only, capped by a sane ratio over the input, since the loop below
+		 * grows the buffer anyway when the hint turns out to be too small.
+		 */
+		gsize hint_cap = MAX(zin.size * 32, ZSTD_DStreamOutSize());
+
+		if (outlen > hint_cap) {
+			outlen = hint_cap;
+		}
+	}
 
 	out = g_malloc(outlen);
 
@@ -210,6 +223,13 @@ int lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 	unsigned char *p;
 	gsize remain;
 	gssize size_limit = -1;
+	/*
+	 * Hard ceiling for the produced data. With no explicit limit it merely
+	 * keeps the buffer doubling below 32 bits, which is what the old
+	 * `res->len >= G_MAXUINT32 / 2` guard used to enforce.
+	 */
+	gsize max_out = G_MAXUINT32 / 2 - 1;
+	gsize max_alloc;
 
 	int windowBits = is_gzip ? (MAX_WBITS + 16) : (MAX_WBITS);
 
@@ -225,11 +245,18 @@ int lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 			return luaL_error(L, "invalid arguments (size_limit)");
 		}
 
-		sz = MIN(t->len * 2, size_limit);
+		if ((gsize) size_limit < max_out) {
+			max_out = size_limit;
+		}
 	}
-	else {
-		sz = t->len * 2;
-	}
+
+	/*
+	 * Inflate can only signal "there is more output" by filling the buffer, so
+	 * keep a single spare byte above the ceiling: reaching it proves the data
+	 * does not fit, whereas stopping at max_out means it just fits.
+	 */
+	max_alloc = max_out + 1;
+	sz = MIN(t->len * 2, max_alloc);
 
 	memset(&strm, 0, sizeof(strm));
 	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */
@@ -284,28 +311,39 @@ int lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 
 		res->len = strm.total_out;
 
-		if (strm.avail_out == 0 && strm.avail_in != 0) {
+		/* Resume where inflate stopped, not where the last chunk started */
+		p = strm.next_out;
+		remain = strm.avail_out;
 
-			if (size_limit > 0 || res->len >= G_MAXUINT32 / 2) {
-				if (res->len > size_limit || res->len >= G_MAXUINT32 / 2) {
-					lua_pop(L, 1); /* Text will be freed here */
-					lua_pushnil(L);
-					inflateEnd(&strm);
+		if (remain == 0 && strm.avail_in != 0) {
 
-					return 1;
-				}
+			if (sz >= max_alloc) {
+				/* The spare byte has been consumed: output is over the ceiling */
+				lua_pop(L, 1); /* Text will be freed here */
+				lua_pushnil(L);
+				inflateEnd(&strm);
+
+				return 1;
 			}
 
-			/* Need to allocate more */
-			remain = res->len;
-			res->start = g_realloc((gpointer) res->start, res->len * 2);
-			sz = res->len * 2;
-			p = (unsigned char *) res->start + remain;
-			remain = sz - remain;
+			/* Need to allocate more, but never beyond the ceiling */
+			sz = MIN(sz * 2, max_alloc);
+			res->start = g_realloc((gpointer) res->start, sz);
+			p = (unsigned char *) res->start + res->len;
+			remain = sz - res->len;
 		}
 	}
 
 	inflateEnd(&strm);
+
+	if (strm.total_out > max_out) {
+		/* A stream that ends inside the spare byte is still over the ceiling */
+		lua_pop(L, 1); /* Text will be freed here */
+		lua_pushnil(L);
+
+		return 1;
+	}
+
 	res->len = strm.total_out;
 
 	return 1;

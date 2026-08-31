@@ -239,6 +239,12 @@ const char *rspamd_url_strerror(int err);
  */
 gboolean rspamd_url_find_tld(const char *in, gsize inlen, rspamd_ftok_t *out);
 
+/**
+ * Get the public suffix lookup loaded by rspamd_url_init, or NULL if no
+ * TLD file has been loaded. The object is owned by the url scanner.
+ */
+struct rspamd_tld_lookup *rspamd_url_get_tld_lookup(void);
+
 typedef gboolean (*url_insert_function)(struct rspamd_url *url,
 										gsize start_offset, gsize end_offset, void *ud);
 

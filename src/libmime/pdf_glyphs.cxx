@@ -190,11 +190,30 @@ auto font_encoding::lookup(unsigned char code) const noexcept -> std::string_vie
 	return base_table[code].view();
 }
 
-text_builder::text_builder(std::size_t reserve)
+text_builder::text_builder(std::size_t reserve, std::size_t max_output)
+	: limit(max_output)
 {
 	if (reserve > 0) {
-		buf.reserve(reserve);
+		reserve_for(reserve);
 	}
+}
+
+auto text_builder::reserve_for(std::size_t extra) -> void
+{
+	buf.reserve(std::min(buf.size() + extra, limit));
+}
+
+auto text_builder::append_capped(std::string_view utf8) -> bool
+{
+	if (utf8.size() > limit - buf.size()) {
+		hit_ceiling = true;
+
+		return false;
+	}
+
+	buf.append(utf8);
+
+	return true;
 }
 
 auto text_builder::add_code(unsigned char code) -> void
@@ -210,7 +229,7 @@ auto text_builder::add_code(unsigned char code) -> void
 
 	/* .notdef produces nothing rather than a placeholder */
 	if (!utf8.empty()) {
-		buf.append(utf8);
+		append_capped(utf8);
 	}
 }
 
@@ -218,7 +237,12 @@ auto text_builder::add_cmapped(std::string_view codes) -> void
 {
 	glyph_utf8 scratch{};
 
-	while (!codes.empty()) {
+	/*
+	 * This is where a hostile PDF pays off best: every code here can resolve to
+	 * a mapping far longer than the code itself, so the run is abandoned as
+	 * soon as the ceiling is in the way rather than decoded to the end.
+	 */
+	while (!codes.empty() && !hit_ceiling) {
 		auto nbytes = cur_cmap->code_length(codes);
 
 		if (nbytes == 0 || nbytes > codes.size()) {
@@ -235,7 +259,7 @@ auto text_builder::add_cmapped(std::string_view codes) -> void
 
 		/* An unmapped code is a glyph index with no character: drop it */
 		if (!utf8.empty()) {
-			buf.append(utf8);
+			append_capped(utf8);
 		}
 
 		codes.remove_prefix(nbytes);
@@ -255,13 +279,17 @@ auto text_builder::decode_codes(std::string_view codes) -> void
 	}
 
 	for (auto c: codes) {
+		if (hit_ceiling) {
+			break;
+		}
+
 		add_code(static_cast<unsigned char>(c));
 	}
 }
 
 auto text_builder::add_encoded(std::string_view codes) -> void
 {
-	buf.reserve(buf.size() + codes.size());
+	reserve_for(codes.size());
 	decode_codes(codes);
 }
 
@@ -271,19 +299,17 @@ auto text_builder::add_utf8(std::string_view utf8) -> bool
 		return false;
 	}
 
-	buf.append(utf8);
-
-	return true;
+	return append_capped(utf8);
 }
 
 auto text_builder::add_char(char c) -> void
 {
-	buf.push_back(c);
+	append_capped({&c, 1});
 }
 
 auto text_builder::add_pdf_string(std::string_view raw) -> void
 {
-	buf.reserve(buf.size() + raw.size());
+	reserve_for(raw.size());
 
 	/*
 	 * Codes accumulate until a structural character interrupts them, because a
@@ -300,10 +326,10 @@ auto text_builder::add_pdf_string(std::string_view raw) -> void
 
 	auto structural = [&](char c) {
 		flush();
-		buf.push_back(c);
+		append_capped({&c, 1});
 	};
 
-	for (std::size_t i = 0; i < raw.size();) {
+	for (std::size_t i = 0; i < raw.size() && !hit_ceiling;) {
 		auto c = raw[i];
 
 		if (c != '\\') {
@@ -422,7 +448,7 @@ auto text_builder::add_pdf_hexstring(std::string_view raw) -> void
 		codes.push_back(static_cast<char>(hi << 4));
 	}
 
-	buf.reserve(buf.size() + codes.size());
+	reserve_for(codes.size());
 	decode_codes(codes);
 }
 
@@ -695,5 +721,102 @@ TEST_SUITE("pdf glyphs")
 		CHECK(!b.add_utf8("\xa9"));
 		CHECK(!b.add_utf8("\xc3"));
 		CHECK(b.data() == "fine");
+	}
+
+	TEST_CASE("the buffer stops at its ceiling instead of following the input")
+	{
+		/*
+		 * A ceiling small enough to reach in a test; what is being checked is
+		 * that the builder stops adding and says so, not the value it stops at.
+		 */
+		text_builder b{0, 8};
+
+		b.add_encoded("abcdefgh");
+		CHECK(b.data() == "abcdefgh");
+		CHECK(!b.truncated());
+
+		b.add_encoded("ijkl");
+		CHECK(b.data() == "abcdefgh");
+		CHECK(b.truncated());
+
+		/* Emptying the builder gives the next page a clean start */
+		b.clear();
+		CHECK(!b.truncated());
+		b.add_encoded("mn");
+		CHECK(b.data() == "mn");
+	}
+
+	TEST_CASE("no way into the buffer can push past the ceiling")
+	{
+		SUBCASE("text the caller decoded itself")
+		{
+			text_builder b{0, 4};
+
+			CHECK(b.add_utf8("abcd"));
+			/* Refused whole rather than in part: half a character is not text */
+			CHECK(!b.add_utf8("e"));
+			CHECK(b.data() == "abcd");
+		}
+
+		SUBCASE("a literal string")
+		{
+			text_builder b{0, 4};
+
+			b.add_pdf_string("abcdefgh");
+			CHECK(b.data() == "abcd");
+			CHECK(b.truncated());
+		}
+
+		SUBCASE("a hex string")
+		{
+			text_builder b{0, 4};
+
+			b.add_pdf_hexstring("6162636465");
+			CHECK(b.data() == "abcd");
+		}
+
+		SUBCASE("characters an operator produced")
+		{
+			text_builder b{0, 2};
+
+			b.add_char('a');
+			b.add_char('b');
+			b.add_char('c');
+			CHECK(b.data() == "ab");
+		}
+	}
+
+	TEST_CASE("a cmap cannot make the buffer grow without bound")
+	{
+		/*
+		 * This is the shape the ceiling exists for: every code in the run
+		 * resolves to a mapping many times longer than the code itself, so how
+		 * big the content stream is says nothing about how big the page is.
+		 */
+		std::string dest;
+
+		for (int i = 0; i < 32; i++) {
+			dest += "0061";
+		}
+
+		auto cm = cmap::parse("begincmap\n1 begincodespacerange\n<0000> <ffff>\n"
+							  "endcodespacerange\n1 beginbfchar\n<0041> <" +
+							  dest + ">\nendbfchar\nendcmap\n");
+
+		REQUIRE(cm.has_value());
+
+		text_builder b{0, 100};
+		b.set_cmap(&cm.value());
+
+		std::string codes;
+
+		for (int i = 0; i < 1000; i++) {
+			codes.append("\x00\x41", 2);
+		}
+
+		b.add_encoded(codes);
+
+		CHECK(b.size() <= 100);
+		CHECK(b.truncated());
 	}
 }

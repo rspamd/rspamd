@@ -1,10 +1,17 @@
-function setup(c_ip, helo, hn)
+-- `protoopts` pins the protocol options this fake MTA offers; when it is nil
+-- miltertest negotiates its own defaults on the first command. Pass it when a
+-- test depends on whether SMFIP_HDR_LEADSPC ends up negotiated, since that
+-- decides whether header values travel with the space after the colon.
+function setup(c_ip, helo, hn, protoopts)
   if not c_ip then c_ip = "127.0.0.1" end
   if not helo then helo = "it.is.i" end
   if not hn then hn = "localhost" end
   conn = mt.connect("inet:" .. port .. "@" .. host)
   if conn == nil then
     error "mt.connect() failed"
+  end
+  if protoopts then
+    mt.negotiate(conn, nil, protoopts, nil)
   end
   if mt.conninfo(conn, hn, c_ip) then
     error "mt.conninfo() failed"
@@ -96,6 +103,17 @@ function check_defer(code, ecode, msg)
   end
 end
 
+function check_smtp_reply(code, ecode, msg)
+  if not mt.eom_check(conn, MT_SMTPREPLY, code, ecode, msg) then
+    error (string.format("mt.eom_check() failed, expected %s %s %s",
+                         code, ecode, msg))
+  end
+  local rc = mt.getreply(conn)
+  if rc ~= SMFIR_REPLYCODE then
+    error (string.format("mt.eom() unexpected reply: %s", rc))
+  end
+end
+
 function check_subject_rw(subj, tmpl)
   if not subj then
     subj = default_hdrs['Subject']
@@ -104,7 +122,10 @@ function check_subject_rw(subj, tmpl)
     tmpl = "*** SPAM *** %s"
   end
   local new_subj = string.format(tmpl, subj)
-  if not mt.eom_check(conn, MT_HDRCHANGE, "Subject", new_subj) then
+  -- With SMFIP_HDR_LEADSPC negotiated we supply the space after the colon
+  -- ourselves, otherwise the MTA adds it
+  if not mt.eom_check(conn, MT_HDRCHANGE, "Subject", new_subj) and
+     not mt.eom_check(conn, MT_HDRCHANGE, "Subject", " " .. new_subj) then
     error "subject not rewritten"
   end
 end

@@ -32,7 +32,7 @@ struct ucl_hash_node_s;
 typedef struct ucl_hash_node_s ucl_hash_node_t;
 
 typedef int (*ucl_hash_cmp_func) (const void* void_a, const void* void_b);
-typedef void (*ucl_hash_free_func) (void *ptr);
+typedef void (*ucl_hash_free_func) (void *ptr, void *ud);
 typedef void* ucl_hash_iter_t;
 
 
@@ -50,8 +50,12 @@ ucl_hash_t* ucl_hash_create (bool ignore_case);
 
 /**
  * Deinitializes the hashtable.
+ * @param func called for every stored object (and every element of its
+ *   implicit-array chain) before the table itself is released; NULL leaves
+ *   the stored objects alone and only frees the table
+ * @param ud opaque context handed to `func`
  */
-void ucl_hash_destroy (ucl_hash_t* hashlin, ucl_hash_free_func func);
+void ucl_hash_destroy (ucl_hash_t* hashlin, ucl_hash_free_func func, void *ud);
 
 /**
  * Inserts an element in the the hashtable.

@@ -24,6 +24,7 @@ local rules = {}
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_tld_lookup = require "rspamd_tld_lookup"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
@@ -971,6 +972,12 @@ local function apply_hostname_filter(task, filter, hostname, r)
     local tld = rspamd_util.get_tld(hostname)
     return tld
   elseif filter == 'top' then
+    -- The full public suffix of the hostname (e.g. `com.au`)
+    local suffix = rspamd_tld_lookup.suffix(hostname)
+    if suffix then
+      return suffix
+    end
+    -- No suffix list loaded or nothing matched: use the last label of the eSLD
     local tld = rspamd_util.get_tld(hostname)
     return tld:match('[^.]*$') or tld
   else
@@ -1004,8 +1011,14 @@ local function apply_url_filter(task, filter, url, r)
   if filter == 'tld' then
     return url:get_tld()
   elseif filter == 'top' then
+    -- The full public suffix of the url host (e.g. `com.au`)
+    local suffix = url:get_public_suffix()
+    if suffix then
+      return suffix
+    end
+    -- No suffix list loaded or nothing matched: use the last label of the eSLD
     local tld = url:get_tld()
-    return tld:match('[^.]*$') or tld
+    return tld and (tld:match('[^.]*$') or tld)
   elseif filter == 'full' then
     return url:get_text()
   elseif filter == 'is_phished' then

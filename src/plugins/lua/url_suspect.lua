@@ -421,7 +421,9 @@ function checks.tld_analysis(task, url, cfg)
     return findings
   end
 
-  local tld = esld:match("^[^%.]+%.(.+)$") or esld
+  -- The proper public suffix; hosts that are themselves a public suffix
+  -- would be mangled by deriving it from the eSLD
+  local tld = url:get_public_suffix() or esld:match("^[^%.]+%.(.+)$") or esld
   lua_util.debugm(N, task, "URL eSLD: %s, TLD: %s", esld, tld)
 
   -- Check suspicious TLDs map
@@ -824,7 +826,15 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
   end
 
   if is_pattern_enabled('html_entities') then
-    table.insert(pattern_list, [=[&#\d{2,3};[^&]{0,20}&#\d{2,3};]=])
+    -- Only ASCII code points (< 128). Entity obfuscation spells out the
+    -- characters of a URL, which are ASCII ("&#104;&#116;&#116;&#112;" for
+    -- "http"). Ordinary prose in many languages entity-encodes accented
+    -- letters instead -- Danish/Norwegian ae-o-aa, German umlauts and
+    -- sharp s, French accents -- all of which live at 192-255 and cluster
+    -- naturally within a few characters of each other. Matching those made
+    -- URL_OBFUSCATED_TEXT fire on routine non-English newsletters.
+    table.insert(pattern_list,
+      [=[&#(?:\d{2}|1[01]\d|12[0-7]);[^&]{0,20}&#(?:\d{2}|1[01]\d|12[0-7]);]=])
     pattern_meta[#pattern_list] = { name = 'html_entity' }
   end
 

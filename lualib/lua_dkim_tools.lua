@@ -659,7 +659,7 @@ exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_
       err_func(task, string.format('cannot request data from the vault url: %s; %s (%s)',
         full_url, err, body))
     else
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local res, parser_err = parser:parse_string(body)
       if not res then
         err_func(task, string.format('vault reply for %s (data=%s) cannot be parsed: %s',
