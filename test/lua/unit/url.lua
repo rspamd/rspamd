@@ -263,6 +263,29 @@ context("URL check functions", function()
     end)
   end
 
+  test("URL public suffix", function()
+    local bit = require "bit"
+    local tld_lookup = require "rspamd_tld_lookup"
+
+    local u = url.create(pool, "http://mail.example.co.za/")
+    assert_not_nil(u, "we are able to parse url")
+    local suffix, flags = u:get_public_suffix()
+    assert_equal(suffix, "co.za")
+    assert_equal(flags, 0)
+
+    -- Private section of the suffix list
+    u = url.create(pool, "http://foo.bar.github.io/")
+    assert_not_nil(u, "we are able to parse url")
+    suffix, flags = u:get_public_suffix()
+    assert_equal(suffix, "github.io")
+    assert_true(bit.band(flags, tld_lookup.flags.private) ~= 0)
+
+    -- Numeric hosts have no suffix
+    u = url.create(pool, "http://127.0.0.1/")
+    assert_not_nil(u, "we are able to parse url")
+    assert_nil(u:get_public_suffix())
+  end)
+
   test("URL regexp issue", function()
     local rspamd_regexp = require "rspamd_regexp"
     local u = url.create(pool,

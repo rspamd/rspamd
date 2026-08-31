@@ -15,6 +15,7 @@
  */
 #include "lua_common.h"
 #include "lua_url.h"
+#include "libserver/tld_lookup.h"
 
 
 /***
@@ -54,6 +55,7 @@ LUA_FUNCTION_DEF(url, get_text);
 LUA_FUNCTION_DEF(url, tostring);
 LUA_FUNCTION_DEF(url, get_raw);
 LUA_FUNCTION_DEF(url, get_tld);
+LUA_FUNCTION_DEF(url, get_public_suffix);
 LUA_FUNCTION_DEF(url, get_flags);
 LUA_FUNCTION_DEF(url, get_flags_num);
 LUA_FUNCTION_DEF(url, get_protocol);
@@ -88,6 +90,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_fragment),
 	LUA_INTERFACE_DEF(url, get_text),
 	LUA_INTERFACE_DEF(url, get_tld),
+	LUA_INTERFACE_DEF(url, get_public_suffix),
 	LUA_INTERFACE_DEF(url, get_raw),
 	LUA_INTERFACE_DEF(url, get_protocol),
 	LUA_INTERFACE_DEF(url, to_table),
@@ -744,6 +747,38 @@ lua_url_get_tld(lua_State *L)
 	else {
 		lua_pushnil(L);
 	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_public_suffix()
+ * Get the public suffix of the URL host using the suffix list loaded by
+ * rspamd. Unlike `url:get_tld()`, which returns the registrable domain
+ * (eSLD), this returns the suffix itself (e.g. `co.uk`).
+ * @return {string} public suffix (or nil) and match flags (see the
+ * `flags` table of the `rspamd_tld_lookup` module)
+ */
+static int
+lua_url_get_public_suffix(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+	rspamd_ftok_t suffix;
+	unsigned int flags = 0;
+
+	if (url != NULL && url->url->hostlen > 0 &&
+		rspamd_tld_lookup_suffix(rspamd_url_get_tld_lookup(),
+								 rspamd_url_host_unsafe(url->url),
+								 url->url->hostlen,
+								 &suffix, &flags)) {
+		lua_pushlstring(L, suffix.begin, suffix.len);
+		lua_pushinteger(L, flags);
+
+		return 2;
+	}
+
+	lua_pushnil(L);
 
 	return 1;
 }
