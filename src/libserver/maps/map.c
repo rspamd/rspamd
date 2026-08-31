@@ -1395,6 +1395,11 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 		/* Need to notify the real data structure */
 		periodic->map->fin_callback(&periodic->cbdata, periodic->map->user_data);
 
+		if (periodic->need_modify && !periodic->cbdata.errored &&
+			periodic->cbdata.cur_data != NULL) {
+			map->has_data = true;
+		}
+
 		if (map->on_load_function) {
 			map->on_load_function(map, map->on_load_ud);
 		}
@@ -1531,6 +1536,16 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				timeout = map->poll_timeout * lock_mult;
 				reason = "locked scheduled check";
+			}
+			else if (!map->active_http && !map->file_only && !map->has_data) {
+				/*
+				 * A passive worker that has not read the map yet: the active
+				 * worker is expected to fetch it and announce via the shared
+				 * cache, so check that cache frequently instead of sleeping
+				 * through the whole poll interval while serving no data
+				 */
+				timeout = min_timer_interval;
+				reason = "cold passive HTTP map wait";
 			}
 			else {
 				reason = "normal scheduled check";
@@ -2318,7 +2333,8 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 	if (g_atomic_int_get(&data->cache->available) == 1) {
 		/* Read cached data */
 		if (check) {
-			if (data->last_modified < data->cache->last_modified) {
+			if (data->last_modified < data->cache->last_modified ||
+				!map->has_data) {
 				msg_info_map("need to reread cached map triggered by %s "
 							 "(%d our modify time, %d cached modify time)",
 							 bk->uri,
@@ -2358,6 +2374,33 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 		}
 	}
 	else if (!map->active_http) {
+		if (g_atomic_int_get(&map->shared->cached) == 1) {
+			/*
+			 * The shm cache is not available (e.g. the active worker is
+			 * re-downloading the map), but a cache file has already been
+			 * saved on disk; use that file instead of waiting for the next
+			 * shm cache announcement
+			 */
+			if (check && !map->has_data) {
+				msg_info_map("%s: has no data but the map is saved in the "
+							 "cache file; schedule loading from that file",
+							 bk->uri);
+				periodic->need_modify = TRUE;
+				periodic->cur_backend = 0;
+				rspamd_map_process_periodic(periodic);
+
+				return;
+			}
+			else if (!check && rspamd_map_read_http_cached_file(map, bk, data,
+																&periodic->cbdata)) {
+				/* Switch to the next backend */
+				periodic->cur_backend++;
+				rspamd_map_process_periodic(periodic);
+
+				return;
+			}
+		}
+
 		/* Switch to the next backend */
 		periodic->cur_backend++;
 		rspamd_map_process_periodic(periodic);
@@ -2890,6 +2933,7 @@ void rspamd_map_preload(struct rspamd_config *cfg)
 				}
 
 				map->seen = true;
+				map->has_data = true;
 			}
 			else {
 				msg_info_map("preload of %s failed", map->name);
