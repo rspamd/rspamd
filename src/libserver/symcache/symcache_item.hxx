@@ -47,6 +47,7 @@ enum class symcache_item_type {
 	FILTER,     /* Normal symbol with a callback */
 	POSTFILTER, /* Executed after all filters */
 	IDEMPOTENT, /* Executed after postfilters, cannot change results */
+	LEARN,      /* Executed at the LEARN stage of a learn task (latest real stage) */
 	CLASSIFIER, /* A virtual classifier symbol */
 	COMPOSITE,  /* A virtual composite symbol */
 	VIRTUAL,    /* A virtual symbol... */
@@ -71,6 +72,8 @@ constexpr static auto item_type_to_str(symcache_item_type t) -> const char *
 		return "postfilter";
 	case symcache_item_type::IDEMPOTENT:
 		return "idempotent";
+	case symcache_item_type::LEARN:
+		return "learn";
 	case symcache_item_type::CLASSIFIER:
 		return "classifier";
 	case symcache_item_type::COMPOSITE:
