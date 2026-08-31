@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     # Only run on PR comments that contain "@review" from authorized users.
-    # "@review" uses OPENROUTER_MODEL; "@review deep" uses
-    # OPENROUTER_DEEP_MODEL. Mechanical context gathering and Claude Code
-    # background work use OPENROUTER_FAST_MODEL.
+    # "@review" uses glm-5.3-flash; "@review deep" uses glm-5.3.
+    # Mechanical context gathering and Claude Code background work also use
+    # glm-5.3-flash.
     if: |
       github.repository == 'rspamd/rspamd' &&
       github.event.issue.pull_request &&
@@ -69,14 +69,12 @@ jobs:
 
       - name: Perform automated code review
         env:
-          # Claude Code talks to OpenRouter's Anthropic-compatible endpoint.
-          ANTHROPIC_BASE_URL: https://openrouter.ai/api
-          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+          # Claude Code talks to z.ai's Anthropic-compatible endpoint.
+          ANTHROPIC_BASE_URL: https://api.z.ai/api/anthropic
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ZAI_API_KEY }}
           # Prevent Claude Code from falling back to direct Anthropic auth.
           ANTHROPIC_API_KEY: ""
-          DEFAULT_REVIEW_MODEL: ${{ secrets.OPENROUTER_MODEL }}
-          DEEP_REVIEW_MODEL: ${{ secrets.OPENROUTER_DEEP_MODEL }}
-          FAST_REVIEW_MODEL: ${{ secrets.OPENROUTER_FAST_MODEL }}
+          API_TIMEOUT_MS: "3000000"
           REVIEW_REQUEST: ${{ github.event.comment.body }}
           REVIEW_CONTEXT_DIR: ${{ runner.temp }}/rspamd-code-review-context
           DISABLE_AUTOUPDATER: "1"
@@ -88,40 +86,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ -z "$DEFAULT_REVIEW_MODEL" ]]; then
-            echo "::error::OPENROUTER_MODEL is not configured"
-            exit 1
-          fi
-
           REVIEW_MODE="standard"
-          REVIEW_MODEL="$DEFAULT_REVIEW_MODEL"
-          REVIEW_MAX_TURNS=40
+          REVIEW_MODEL="glm-5.3-flash"
 
           if [[ "$REVIEW_REQUEST" =~ (^|[[:space:]])@review[[:space:]]+deep([[:space:]]|$) ]]; then
-            if [[ -z "$DEEP_REVIEW_MODEL" ]]; then
-              echo "::error::@review deep requires OPENROUTER_DEEP_MODEL"
-              exit 1
-            fi
-
             REVIEW_MODE="deep"
-            REVIEW_MODEL="$DEEP_REVIEW_MODEL"
-            REVIEW_MAX_TURNS=60
+            REVIEW_MODEL="glm-5.3"
           fi
 
-          if [[ -n "$FAST_REVIEW_MODEL" ]]; then
-            FAST_MODEL="$FAST_REVIEW_MODEL"
-          else
-            echo "::warning::OPENROUTER_FAST_MODEL is not configured; using OPENROUTER_MODEL for context and background work"
-            FAST_MODEL="$DEFAULT_REVIEW_MODEL"
-          fi
+          FAST_MODEL="glm-5.3-flash"
 
-          # Route Claude Code's main and alias slots explicitly so no Anthropic
-          # model name reaches OpenRouter. The inline agent selects `haiku`,
-          # which resolves through ANTHROPIC_DEFAULT_HAIKU_MODEL.
+          # Route Claude Code's main and alias slots explicitly so no Claude
+          # model name reaches z.ai. The inline agent selects `haiku`, which
+          # resolves through ANTHROPIC_DEFAULT_HAIKU_MODEL.
           export ANTHROPIC_MODEL="$REVIEW_MODEL"
-          export ANTHROPIC_DEFAULT_OPUS_MODEL="$REVIEW_MODEL"
-          export ANTHROPIC_DEFAULT_SONNET_MODEL="$DEFAULT_REVIEW_MODEL"
+          export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3"
+          export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3"
           export ANTHROPIC_DEFAULT_HAIKU_MODEL="$FAST_MODEL"
+          export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
 
           # Collect immutable review inputs without spending model turns. The
           # fast pr-context-gatherer subagent will summarize these artifacts.
@@ -169,14 +151,14 @@ jobs:
           AGENTS_JSON=$(jq -cn \
             --arg description "Gather PR context, inventory diffs and discussions, and summarize verbose test logs without making review decisions" \
             --arg prompt "$AGENT_PROMPT" \
-            '{"pr-context-gatherer": {description: $description, prompt: $prompt, tools: ["Read", "Grep", "Glob"], model: "haiku", effort: "low", maxTurns: 12}}')
+            '{"pr-context-gatherer": {description: $description, prompt: $prompt, tools: ["Read", "Grep", "Glob"], model: "haiku", effort: "low"}}')
 
           cat > prompt.txt << EOF
           You are a conservative automated code reviewer for the Rspamd mail filtering project.
           Your goal is high-precision, low-noise feedback: report only defects you are certain about.
 
           You are running in "$REVIEW_MODE" review mode as the model "$REVIEW_MODEL"
-          served by OpenRouter.
+          served by z.ai.
 
           ## Step 1 — Gather and triage context before writing any comment
 
@@ -298,7 +280,7 @@ jobs:
             gh pr review ${{ github.event.issue.number }} --approve --body "No actionable defects found."
 
           End the review body with the line:
-          _Automated review by Claude Code ($REVIEW_MODEL via OpenRouter)._
+          _Automated review by Claude Code ($REVIEW_MODEL via z.ai)._
 
           Limits:
           - Post at most 5 comments in total; choose the highest-severity findings.
@@ -309,12 +291,11 @@ jobs:
           - Never post test or exploratory API calls — every comment is immediately visible.
           EOF
 
-          echo "Running $REVIEW_MODE code review with model: $REVIEW_MODEL (max turns: $REVIEW_MAX_TURNS)"
+          echo "Running $REVIEW_MODE code review with model: $REVIEW_MODEL"
           claude -p "$(cat prompt.txt)" \
             --model "$REVIEW_MODEL" \
             --agents "$AGENTS_JSON" \
             --dangerously-skip-permissions \
-            --max-turns "$REVIEW_MAX_TURNS" \
             2>&1 | tee review-output.log
 
       - name: Post failure notice
