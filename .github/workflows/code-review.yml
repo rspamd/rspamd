@@ -95,7 +95,7 @@ jobs:
 
           REVIEW_MODE="standard"
           REVIEW_MODEL="$DEFAULT_REVIEW_MODEL"
-          REVIEW_MAX_TURNS=25
+          REVIEW_MAX_TURNS=40
 
           if [[ "$REVIEW_REQUEST" =~ (^|[[:space:]])@review[[:space:]]+deep([[:space:]]|$) ]]; then
             if [[ -z "$DEEP_REVIEW_MODEL" ]]; then
@@ -105,7 +105,7 @@ jobs:
 
             REVIEW_MODE="deep"
             REVIEW_MODEL="$DEEP_REVIEW_MODEL"
-            REVIEW_MAX_TURNS=40
+            REVIEW_MAX_TURNS=60
           fi
 
           if [[ -n "$FAST_REVIEW_MODEL" ]]; then
@@ -169,7 +169,7 @@ jobs:
           AGENTS_JSON=$(jq -cn \
             --arg description "Gather PR context, inventory diffs and discussions, and summarize verbose test logs without making review decisions" \
             --arg prompt "$AGENT_PROMPT" \
-            '{"pr-context-gatherer": {description: $description, prompt: $prompt, tools: ["Read", "Grep", "Glob"], model: "haiku", maxTurns: 12}}')
+            '{"pr-context-gatherer": {description: $description, prompt: $prompt, tools: ["Read", "Grep", "Glob"], model: "haiku", effort: "low", maxTurns: 12}}')
 
           cat > prompt.txt << EOF
           You are a conservative automated code reviewer for the Rspamd mail filtering project.
@@ -204,6 +204,11 @@ jobs:
           If a test produces verbose output, save it under $REVIEW_CONTEXT_DIR and
           ask pr-context-gatherer to summarize it. Personally inspect the exact
           failing excerpt before using it as evidence.
+
+          Conserve main-agent turns. Do not run broad builds or test suites unless
+          they are necessary to verify a concrete candidate defect. Once the
+          required verification is complete, submit the review immediately instead
+          of performing optional exploration or producing a separate local summary.
 
           Do NOT write any comment until this context pass is complete.
 
