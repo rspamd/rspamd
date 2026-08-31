@@ -209,6 +209,7 @@ struct rspamd_map {
 	bool static_only;          /* No need to check */
 	bool no_file_read;         /* Do not read files, pass filename to consumer */
 	bool seen;                 /* This map has already been watched or pre-loaded */
+	bool has_data;             /* Map data has been delivered to the consumer in this process */
 	gsize no_file_read_offset; /* Payload offset when consumer mmaps the file (0 for file, 4096 for HTTP cache) */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	struct rspamd_map_shared_data *shared;
