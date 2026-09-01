@@ -107,6 +107,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 row_class: "danger",
                 glyph_status: "fas fa-times",
                 version: "???",
+                git_id: "",
                 uptime: "???",
                 short_id: "???",
                 scan_times: {
@@ -146,6 +147,9 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             }
             if ("version" in val.data) {
                 state.version = val.data.version;
+            }
+            if ("git_id" in val.data) {
+                state.git_id = val.data.git_id;
             }
             if (key === "All SERVERS") {
                 state.short_id = "";
@@ -327,7 +331,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         // Details row revealed by clicking a server row: the /stat fields not
         // shown in the main row (traffic and memory counters) — no extra
         // requests.
-        function buildDetailsRow(data, expanded) {
+        function buildDetailsRow(data, expanded, cols) {
             function fmtInt(value) {
                 return Number.isFinite(value) ? d3.format(",")(value) : "-";
             }
@@ -340,7 +344,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             }
 
             return '<tr class="cluster-details' + (expanded ? "" : " d-none") + '">' +
-                '<td colspan="11">' +
+                '<td colspan="' + cols + '">' +
                 // mx-0 cancels .row negative gutters that would overflow the td
                 '<div class="row row-cols-1 row-cols-sm-2 g-3 mx-0 py-1 small text-secondary">' +
                 '<div class="col"><div class="fw-bold">Traffic</div>' +
@@ -507,7 +511,8 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             }
             common.show(statWidgets);
 
-            const clusterTbody = document.querySelector("#clusterTable tbody");
+            const clusterTable = document.querySelector("#clusterTable");
+            const clusterTbody = clusterTable.querySelector("tbody");
             const selSrv = document.getElementById("selSrv");
             clusterTbody.replaceChildren();
             selSrv.replaceChildren();
@@ -516,8 +521,15 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             const realServers = Object.entries(servers)
                 .filter(([key, val]) => key !== "All SERVERS" && val.status)
                 .map(([key, val]) => ({name: key, data: val.data || {}}));
+            // Hide the Git ID column unless some live server reports one
+            const anyGit = realServers.some((server) => "git_id" in server.data);
+            clusterTable.classList.toggle("cluster-hide-git", !anyGit);
+            // Details rows must span exactly the visible columns; the Git ID
+            // column is the only conditionally hidden one
+            const detailCols = clusterTable.querySelectorAll("thead th").length - (anyGit ? 0 : 1);
             const configDrift = findDeviants(realServers, "config_id");
             const versionDrift = findDeviants(realServers, "version");
+            const gitDrift = findDeviants(realServers, "git_id");
 
             // @ warning triangle marking a server deviating from the cluster majority
             function driftBadge(drift, what, value) {
@@ -579,13 +591,18 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                             ? driftBadge(versionDrift, "Version", "run " + versionDrift.majorityValue)
                             : "") +
                     "</td>" +
+                    '<td class="cluster-git">' + common.escapeHTML(rowState.git_id) +
+                        (gitDrift?.deviants.has(key)
+                            ? driftBadge(gitDrift, "Git ID", "run " + gitDrift.majorityValue)
+                            : "") +
+                    "</td>" +
                     "<td>" + common.escapeHTML(rowState.short_id) +
                         (configDrift?.deviants.has(key)
                             ? driftBadge(configDrift, "Configuration ID",
                                 "share " + String(configDrift.majorityValue).substring(0, 8))
                             : "") +
                     "</td></tr>" +
-                    (realUp ? buildDetailsRow(val.data, expanded) : "")
+                    (realUp ? buildDetailsRow(val.data, expanded, detailCols) : "")
                 );
 
                 selSrv.insertAdjacentHTML("beforeend",

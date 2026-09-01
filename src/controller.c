@@ -3140,6 +3140,10 @@ rspamd_controller_handle_stat_common(
 	rspamd_controller_task_set_transport(session, task);
 
 	ucl_object_insert_key(top, ucl_object_fromstring(RVERSION), "version", 0, false);
+	/* Build git id (RID, -DGIT_ID builds); release builds send no git_id */
+#if defined(GIT_VERSION) && GIT_VERSION == 1
+	ucl_object_insert_key(top, ucl_object_fromstring(RID), "git_id", 0, false);
+#endif
 	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
 	uptime = ev_time() - session->ctx->srv->start_time;
 	ucl_object_insert_key(top, ucl_object_fromint(uptime), "uptime", 0, false);
