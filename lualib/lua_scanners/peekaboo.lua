@@ -31,8 +31,6 @@ local common = require "lua_scanners/common"
 
 local N = 'peekaboo'
 
-local static_boundary = rspamd_util.random_hex(32)
-
 local function peekaboo_config(opts)
 
   local peekaboo_conf = {
@@ -144,6 +142,7 @@ local function peekaboo_check(task, content, digest, rule, maybe_part)
     local log_prefix = rule.log_prefix..'_check'
 
     local request_url = peekaboo_url(rule, addr, rule.url_check)
+    local static_boundary = rspamd_util.random_hex(32)
 
     local form_data = {}
     local request_headers = {
@@ -257,6 +256,13 @@ local function peekaboo_check(task, content, digest, rule, maybe_part)
         end
 
         local result = ucl_parser:get_object()
+
+        if result.job_id == nil then
+          rspamd_logger.errx(task, '%s: no job_id in response (code: %s): %s',
+            log_prefix, code, tostring(body))
+          common.yield_result(task, rule, 'no job_id in submit response', 0.0, 'fail', maybe_part)
+          return
+        end
 
         lua_util.debugm(N, task, '%s: Job ID: %s', log_prefix, result.job_id)
         peekaboo_jobs_table[digest] = result.job_id
@@ -385,7 +391,7 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
           lua_util.debugm(N, task, '%s: job-id %s - found failed/unchecked result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
           common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
-            1.0, 'fail', maybe_part)
+            0.0, 'fail', maybe_part)
         elseif tostring(result.result) == 'good' then
           lua_util.debugm(N, task, '%s: job-id %s - found good result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
