@@ -529,9 +529,11 @@ local function check_parts_match(task, rule)
       if p:is_archive() and rule.mime_parts_match_archive ~= false then
         local arch = p:get_archive()
         local filelist = arch:get_files_full(1000)
+        -- an archive as a whole can only be excluded if every single file in it is excluded
+        local archive_all_excluded = not table_is_empty(filelist)
+
         for _, f in ipairs(filelist) do
           ext, ext2 = gen_extension(f.name)
-          -- only include check here
           if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
               or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
             lua_util.debugm(rule.name, task, '%s: extension matched in archive: |%s|%s|', rule.log_prefix, ext, ext2)
@@ -541,6 +543,19 @@ local function check_parts_match(task, rule)
             lua_util.debugm(rule.name, task, '%s: filename regex matched in archive', rule.log_prefix)
             match = true
           end
+
+          if archive_all_excluded and not (
+              match_filter(task, rule, ext, rule.mime_parts_filter_ext_exclude, 'ext')
+              or match_filter(task, rule, ext2, rule.mime_parts_filter_ext_exclude, 'ext')
+              or match_filter(task, rule, f.name, rule.mime_parts_filter_regex_exclude, 'regex')) then
+            archive_all_excluded = false
+          end
+        end
+
+        if archive_all_excluded then
+          lua_util.debugm(rule.name, task, '%s: exclude - all files in archive matched exclude filters',
+            rule.log_prefix)
+          match_exclude = true
         end
       end
 

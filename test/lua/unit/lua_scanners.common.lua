@@ -555,5 +555,89 @@ context("lua_scanners common", function()
         expect = {},
       })
     end)
+
+    test("mime_parts_filter_ext_exclude on the archive's own extension suppresses the whole archive", function()
+      local task = fake_task_with_parts({
+        fake_part({
+          filename = 'archive.zip',
+          mtype = 'application',
+          msubtype = 'zip',
+          is_archive = true,
+          archive_files = { { name = 'secret.exe' } },
+        }),
+      })
+      local rule = {
+        name = 'archive_own_ext_excluded',
+        log_prefix = 'archive_own_ext_excluded',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = { exe = 'exe' },
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = { zip = 'zip' },
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      -- the archive itself is on the exclude list, so it must not be scanned
+      -- even though a file inside it matches the include filter
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = {},
+      })
+    end)
+
+    test("archive with a mix of excluded and non-excluded files is still scanned", function()
+      local task = fake_task_with_parts({
+        fake_part({
+          filename = 'archive.zip',
+          mtype = 'application',
+          msubtype = 'zip',
+          is_archive = true,
+          archive_files = { { name = 'readme.txt' }, { name = 'secret.exe' } },
+        }),
+      })
+      local rule = {
+        name = 'archive_mixed_contents',
+        log_prefix = 'archive_mixed_contents',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = { exe = 'exe' },
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = { txt = 'txt' },
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      -- not every file in the archive is excluded (secret.exe isn't), so the
+      -- archive as a whole must still be scanned
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = { 'archive.zip' },
+      })
+    end)
+
+    test("archive where every contained file is excluded suppresses the whole archive", function()
+      local task = fake_task_with_parts({
+        fake_part({
+          filename = 'archive.zip',
+          mtype = 'application',
+          msubtype = 'zip',
+          is_archive = true,
+          archive_files = { { name = 'readme.txt' }, { name = 'notes.txt' } },
+        }),
+      })
+      local rule = {
+        name = 'archive_all_excluded',
+        log_prefix = 'archive_all_excluded',
+        scan_all_mime_parts = false,
+        mime_parts_filter_ext = {},
+        mime_parts_filter_regex = {},
+        mime_parts_filter_ext_exclude = { txt = 'txt' },
+        mime_parts_filter_regex_exclude = {},
+      }
+
+      -- every file inside the archive matches the exclude filter, so
+      -- (blacklist mode) the whole archive is excluded from scanning
+      assert_rspamd_table_eq_sorted({
+        actual = matched_filenames(task, rule),
+        expect = {},
+      })
+    end)
   end)
 end)
