@@ -271,6 +271,49 @@ context("lua_scanners common", function()
       task:destroy()
     end)
 
+    test("defaults a missing dynamic weight to 0.0 for failures", function()
+      local result
+      local task = {
+        insert_result = function(_, symbol, score, reason)
+          result = { symbol = symbol, score = score, reason = reason }
+        end,
+      }
+      local rule = {
+        name = 'test_scanner',
+        log_prefix = 'test_scanner',
+        symbol = 'TEST_VIRUS',
+        symbol_fail = 'TEST_VIRUS_FAIL',
+        detection_category = 'virus',
+      }
+
+      common.yield_result(task, rule, 'failed to scan', nil, 'fail')
+
+      assert_equal(result.symbol, 'TEST_VIRUS_FAIL')
+      assert_equal(result.score, 0.0)
+      assert_equal(result.reason, 'failed to scan')
+    end)
+
+    test("preserves an explicit dynamic weight for arbitrary categories", function()
+      local result
+      local task = {
+        insert_result = function(_, symbol, score, reason)
+          result = { symbol = symbol, score = score, reason = reason }
+        end,
+      }
+      local rule = {
+        name = 'test_scanner',
+        log_prefix = 'test_scanner',
+        symbol = 'TEST_VIRUS',
+        detection_category = 'virus',
+      }
+
+      common.yield_result(task, rule, 'clean', -1.0, 'TEST_CLEAN')
+
+      assert_equal(result.symbol, 'TEST_CLEAN')
+      assert_equal(result.score, -1.0)
+      assert_equal(result.reason, 'clean')
+    end)
+
     context("scanner callbacks", function()
       test("failure stubs emit the configured fail symbol", function()
         local callback, report_callback, rule = common.configure_failed_stub('clamav', 'clam', {},

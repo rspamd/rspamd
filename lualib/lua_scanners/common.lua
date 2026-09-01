@@ -118,35 +118,31 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
     threat_table = vname
   end
 
+  -- fail is the only category with a default other than 1.0 (callers pass their own weight otherwise)
+  if not dyn_weight then
+    dyn_weight = (category == 'fail') and 0.0 or 1.0
+  end
 
-  -- This should be more generic
   if not category then
     patterns = rule.patterns
     symbol = rule.symbol
     threat_info = rule.detection_category .. 'found'
-    if not dyn_weight then
-      dyn_weight = 1.0
-    end
   elseif category == 'fail' then
     patterns = rule.patterns_fail
     symbol = rule.symbol_fail
     threat_info = "FAILED with error"
-    dyn_weight = 0.0
   elseif category == 'encrypted' then
     patterns = rule.patterns
     symbol = rule.symbol_encrypted
     threat_info = "Scan has returned that input was encrypted"
-    dyn_weight = 1.0
   elseif category == 'macro' then
     patterns = rule.patterns
     symbol = rule.symbol_macro
     threat_info = "Scan has returned that input contains macros"
-    dyn_weight = 1.0
   else
     patterns = rule.patterns
     symbol = category
     threat_info = string.format("special scan result set by %s: %s", rule.name, category)
-    dyn_weight = 1.0
   end
 
   for _, tm in ipairs(threat_table) do
