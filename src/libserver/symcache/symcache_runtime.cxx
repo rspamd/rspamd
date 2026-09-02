@@ -1094,6 +1094,14 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 				msg_debug_cache_task("check item %d(%s) rdep of %s ",
 									 rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
 
+				if (should_skip(rdep.item, check_process_status(task))) {
+					/* The same rule as in the stage loop: e.g. the score limit has been reached */
+					msg_debug_cache_task("skip %d(%s) rdep of %s: passthrough or limit",
+										 rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
+					set_status(dyn_item, cache_item_status::skipped);
+					continue;
+				}
+
 				if (!check_item_deps(task, *cache_ptr, rdep.item, dyn_item, false)) {
 					msg_debug_cache_task("blocked execution of %d(%s) rdep of %s "
 										 "unless deps are resolved",

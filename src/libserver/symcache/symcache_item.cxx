@@ -647,10 +647,12 @@ auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool
 		return true;
 	}
 
-	/* An earlier stage depending on a later one: merely prefilter -> filter hoisting */
-	constexpr const auto hoisting_enabled = false;
-
-	return hoisting_enabled && src == symcache_item_type::PREFILTER && dst == symcache_item_type::FILTER;
+	/*
+	 * An earlier stage depending on a later one: merely a prefilter may depend
+	 * on a filter, which hoists the filter (and its dependencies) to the
+	 * prefilter stage at the level of that prefilter
+	 */
+	return src == symcache_item_type::PREFILTER && dst == symcache_item_type::FILTER;
 }
 
 auto cache_item::get_exec_type(const symcache &cache) const -> symcache_item_type
