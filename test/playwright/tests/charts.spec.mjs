@@ -37,6 +37,9 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
         await page.waitForResponse((r) => r.url().includes("/stat") && r.ok());
         await expect(page.locator("#clusterTable thead")).toContainText("Load");
         await expect(page.locator("#clusterTable thead")).toContainText("Latency");
+        // CI builds pass no -DGIT_ID, so no server reports git_id and the
+        // Git ID column stays hidden
+        await expect(page.locator("#clusterTable thead th.cluster-git")).toBeHidden();
         await expect(page.locator("#clusterTable tbody td[title='Messages scanned per minute']").first())
             .toHaveText(/-|[\d.]+\/min/);
 

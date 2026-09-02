@@ -618,9 +618,14 @@ input.action-scores {
 #clusterTable td.cluster-toggle[aria-expanded="false"] .cluster-toggle-icon {
     transform: rotate(-90deg);
 }
-/* Cluster drift badge (version / configuration ID mismatch) */
+/* Cluster drift badge (version / git ID / configuration ID mismatch) */
 #clusterTable .cluster-drift {
     color: var(--rspamd-text-warning);
+}
+/* The Git ID column is hidden entirely unless some live server reports a
+   git_id (release builds and backends predating it send none) */
+#clusterTable.cluster-hide-git .cluster-git {
+    display: none;
 }
 /* "seen <time> ago": on narrow screens the note wraps under the status glyph
    to save horizontal space; on large screens it stays on the glyph's line,
