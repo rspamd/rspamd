@@ -545,12 +545,12 @@ local pushers = {
           -- recoverable, a duplicated export is not, so we log at error level
           -- and let the operator act.
           local trim_upstream
-          local function redis_ltrim_cb(err)
-            if err then
+          local function redis_ltrim_cb(trim_err)
+            if trim_err then
               rspamd_logger.errx(task, 'cannot trim list %s to %s entries on server %s: %s; '
                   .. 'max_len is NOT being enforced',
                 list_key, rule.max_len,
-                trim_upstream and trim_upstream:get_addr() or 'unknown', err)
+                trim_upstream and trim_upstream:get_addr() or 'unknown', trim_err)
             end
           end
           -- note: assigns (not redeclares) trim_upstream so the callback's
