@@ -525,6 +525,80 @@ local pushers = {
       read = false,
     })
   end,
+  redis_list = function(task, formatted, rule)
+    local function do_rpush(list_key)
+      local _, ret, upstream
+      local function redis_rpush_cb(err)
+        if err then
+          rspamd_logger.errx(task, 'got error %s when pushing to list on server %s',
+            err, upstream:get_addr())
+          return maybe_defer(task, rule)
+        end
+        if rule.max_len then
+          -- Trim failures must be loud: unlike XADD MAXLEN, RPUSH cannot cap
+          -- the list itself, so a persistently failing LTRIM silently defeats
+          -- max_len and the list grows without bound.
+          --
+          -- Deliberately NO defer here. The RPUSH above already succeeded, so
+          -- the message has been exported; deferring would re-run the whole
+          -- exporter on retry and push a duplicate. A breached memory cap is
+          -- recoverable, a duplicated export is not, so we log at error level
+          -- and let the operator act.
+          local trim_upstream
+          local function redis_ltrim_cb(trim_err)
+            if trim_err then
+              rspamd_logger.errx(task, 'cannot trim list %s to %s entries on server %s: %s; '
+                  .. 'max_len is NOT being enforced',
+                list_key, rule.max_len,
+                trim_upstream and trim_upstream:get_addr() or 'unknown', trim_err)
+            end
+          end
+          -- note: assigns (not redeclares) trim_upstream so the callback's
+          -- upvalue is the one that gets filled in
+          local trim_ret
+          trim_ret, _, trim_upstream = lua_redis.redis_make_request(task,
+            redis_params,
+            nil,
+            true, -- is write
+            redis_ltrim_cb,
+            'LTRIM',
+            { list_key, tostring(-rule.max_len), '-1' }
+          )
+          if not trim_ret then
+            rspamd_logger.errx(task, 'cannot schedule trim of list %s to %s entries: '
+                .. 'max_len is NOT being enforced', list_key, rule.max_len)
+          end
+        end
+        return true
+      end
+      ret, _, upstream = lua_redis.redis_make_request(task,
+        redis_params,
+        nil,
+        true, -- is write
+        redis_rpush_cb,
+        'RPUSH',
+        { list_key, formatted }
+      )
+      if not ret then
+        rspamd_logger.errx(task, 'error connecting to redis')
+        maybe_defer(task, rule)
+      end
+    end
+    if rule.per_recipient then
+      local rcpt = task:get_recipients('smtp')
+      if rcpt then
+        for _, a in ipairs(rcpt) do
+          if a.addr and #a.addr > 0 then
+            do_rpush(rule.list_key .. ':' .. a.addr)
+          end
+        end
+      else
+        do_rpush(rule.list_key)
+      end
+    else
+      do_rpush(rule.list_key)
+    end
+  end,
   redis_stream = function(task, formatted, rule)
     local function do_xadd(stream_key)
       local _, ret, upstream
@@ -794,6 +868,9 @@ local backend_required_elements = {
   redis_stream = {
     'stream_key',
   },
+  redis_list = {
+    'list_key',
+  },
 }
 local check_element = {
   selector = function(k, v)
@@ -854,6 +931,18 @@ backend_check.redis_pubsub = function(k, rule)
   end
 end
 backend_check.redis_stream = function(k, rule)
+  if not redis_params then
+    redis_params = rspamd_parse_redis_server(N)
+  end
+  if not redis_params then
+    rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
+    settings.rules[k] = nil
+  else
+    backend_check.default(k, rule)
+    rule.timeout = redis_params.timeout
+  end
+end
+backend_check.redis_list = function(k, rule)
   if not redis_params then
     redis_params = rspamd_parse_redis_server(N)
   end
