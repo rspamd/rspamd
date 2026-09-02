@@ -698,27 +698,9 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 
 auto symcache_runtime::check_process_status(struct rspamd_task *task) -> symcache_runtime::check_status
 {
-	if (task->result->passthrough_result != nullptr) {
-		/* We also need to check passthrough results */
-		auto *pr = task->result->passthrough_result;
-		DL_FOREACH(task->result->passthrough_result, pr)
-		{
-			struct rspamd_action_config *act_config =
-				rspamd_find_action_config_for_action(task->result, pr->action);
-
-			/* Skip least results and the results that explicitly allow further processing */
-			if (pr->flags & (RSPAMD_PASSTHROUGH_LEAST | RSPAMD_PASSTHROUGH_PROCESS_ALL)) {
-				continue;
-			}
-
-			/* Skip disabled actions */
-			if (act_config && (act_config->flags & RSPAMD_ACTION_RESULT_DISABLED)) {
-				continue;
-			}
-
-			/* Immediately stop on non least passthrough action */
-			return check_status::passthrough;
-		}
+	/* Stop on a passthrough result (least and process_all results do not count) */
+	if (rspamd_scan_result_has_passthrough(task->result)) {
+		return check_status::passthrough;
 	}
 
 	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {

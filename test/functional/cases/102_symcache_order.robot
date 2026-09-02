@@ -45,10 +45,10 @@ Passthrough Stops Filters But Not Hoisted Or Exempt Ones
   Expect Symbol  ORD_FILTER_DEP2
   Expect Symbol  ORD_PRE_MED_B
   Expect Symbol  ORD_PRE_LOW
-  # A pre-result from a prefilter skips the filters stage as a whole
+  # Everything else at the filter stage is stopped, except the exempt filter
   Do Not Expect Symbol  ORD_FILTER_PLAIN
   Do Not Expect Symbol  ORD_FILTER_AFTER
-  Do Not Expect Symbol  ORD_FILTER_IGNORE
+  Expect Symbol  ORD_FILTER_IGNORE
   Do Not Expect Symbol  ORD_POST_LOW
   Do Not Expect Symbol  ORD_POST_HIGH
 

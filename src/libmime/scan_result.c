@@ -872,6 +872,35 @@ rspamd_find_action_config_for_action(struct rspamd_scan_result *scan_result,
 	return NULL;
 }
 
+bool rspamd_scan_result_has_passthrough(const struct rspamd_scan_result *res)
+{
+	struct rspamd_passthrough_result *pr;
+
+	if (res == NULL || res->passthrough_result == NULL) {
+		return false;
+	}
+
+	DL_FOREACH(res->passthrough_result, pr)
+	{
+		struct rspamd_action_config *act_config =
+			rspamd_find_action_config_for_action((struct rspamd_scan_result *) res, pr->action);
+
+		/* Least results and the results that explicitly allow further processing */
+		if (pr->flags & (RSPAMD_PASSTHROUGH_LEAST | RSPAMD_PASSTHROUGH_PROCESS_ALL)) {
+			continue;
+		}
+
+		/* Disabled actions */
+		if (act_config && (act_config->flags & RSPAMD_ACTION_RESULT_DISABLED)) {
+			continue;
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
 struct rspamd_action *
 rspamd_check_action_metric(struct rspamd_task *task,
 						   struct rspamd_passthrough_result **ppr,
