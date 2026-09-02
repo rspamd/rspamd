@@ -422,7 +422,136 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 
 		ucl_object_insert_key(this_sym_ucl, flags_ucl,
 							  "flags", strlen("flags"), false);
+
+		/* Execution plan: virtual symbols report the values of their parents */
+		const auto *exec_sym = sym;
+
+		if (sym->is_virtual()) {
+			exec_sym = sym->get_parent(*real_cache);
+		}
+
+		if (exec_sym != nullptr && exec_sym->is_executable()) {
+			ucl_object_insert_key(this_sym_ucl,
+								  ucl_object_fromstring(rspamd::symcache::exec_stage_to_str(exec_sym->get_stage())),
+								  "stage", strlen("stage"), false);
+			ucl_object_insert_key(this_sym_ucl,
+								  ucl_object_fromint(exec_sym->get_level()),
+								  "level", strlen("level"), false);
+			ucl_object_insert_key(this_sym_ucl,
+								  ucl_object_fromint(exec_sym->priority),
+								  "priority", strlen("priority"), false);
+
+			if (exec_sym->is_hoisted()) {
+				ucl_object_insert_key(this_sym_ucl,
+									  ucl_object_fromstring(exec_sym->hoisted_by->get_name().c_str()),
+									  "hoisted_by", strlen("hoisted_by"), false);
+			}
+
+			if (!exec_sym->deps.empty()) {
+				auto *deps_ucl = ucl_object_typed_new(UCL_ARRAY);
+
+				for (const auto &[_id, dep]: exec_sym->deps) {
+					if (dep.item != nullptr) {
+						auto *dep_ucl = ucl_object_typed_new(UCL_OBJECT);
+						ucl_object_insert_key(dep_ucl,
+											  ucl_object_fromstring(dep.item->get_name().c_str()),
+											  "symbol", strlen("symbol"), false);
+						ucl_object_insert_key(dep_ucl,
+											  ucl_object_frombool(dep.hard),
+											  "hard", strlen("hard"), false);
+						ucl_array_append(deps_ucl, dep_ucl);
+					}
+				}
+
+				ucl_object_insert_key(this_sym_ucl, deps_ucl,
+									  "dependencies", strlen("dependencies"), false);
+			}
+		}
 	}
+}
+
+gboolean rspamd_symcache_get_symbol_exec_info(struct rspamd_symcache *cache,
+											  const char *symbol,
+											  struct rspamd_symcache_exec_info *info)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	const auto *sym = real_cache->get_item_by_name(symbol, true);
+
+	if (sym == nullptr || !sym->is_executable() || info == nullptr) {
+		return FALSE;
+	}
+
+	info->stage = rspamd::symcache::exec_stage_to_str(sym->get_stage());
+	info->level = sym->get_level();
+	info->hoisted_by = sym->is_hoisted() ? sym->hoisted_by->get_name().c_str() : nullptr;
+
+	return TRUE;
+}
+
+ucl_object_t *rspamd_symcache_dump_exec_plan(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->maybe_resort();
+	auto order = real_cache->get_cache_order();
+	auto *out = ucl_object_typed_new(UCL_ARRAY);
+
+	if (!order) {
+		return out;
+	}
+
+	for (const auto &bucket: order->buckets) {
+		auto *bucket_ucl = ucl_object_typed_new(UCL_OBJECT);
+
+		ucl_object_insert_key(bucket_ucl,
+							  ucl_object_fromstring(rspamd::symcache::exec_stage_to_str(bucket.stage)),
+							  "stage", strlen("stage"), false);
+		ucl_object_insert_key(bucket_ucl,
+							  ucl_object_fromint(bucket.level),
+							  "level", strlen("level"), false);
+
+		auto *symbols_ucl = ucl_object_typed_new(UCL_ARRAY);
+
+		for (auto i = bucket.first; i < bucket.first + bucket.count; i++) {
+			const auto &sym = order->d[i];
+			auto *sym_ucl = ucl_object_typed_new(UCL_OBJECT);
+
+			ucl_object_insert_key(sym_ucl,
+								  ucl_object_fromstring(sym->get_name().c_str()),
+								  "symbol", strlen("symbol"), false);
+			ucl_object_insert_key(sym_ucl,
+								  ucl_object_fromstring(sym->get_type_str()),
+								  "type", strlen("type"), false);
+
+			if (sym->is_hoisted()) {
+				ucl_object_insert_key(sym_ucl,
+									  ucl_object_fromstring(sym->hoisted_by->get_name().c_str()),
+									  "hoisted_by", strlen("hoisted_by"), false);
+			}
+
+			if (!sym->deps.empty()) {
+				auto *deps_ucl = ucl_object_typed_new(UCL_ARRAY);
+
+				for (const auto &[_id, dep]: sym->deps) {
+					if (dep.item != nullptr) {
+						ucl_array_append(deps_ucl, ucl_object_fromstring(dep.item->get_name().c_str()));
+					}
+				}
+
+				ucl_object_insert_key(sym_ucl, deps_ucl,
+									  "dependencies", strlen("dependencies"), false);
+			}
+
+			ucl_array_append(symbols_ucl, sym_ucl);
+		}
+
+		ucl_object_insert_key(bucket_ucl, symbols_ucl,
+							  "symbols", strlen("symbols"), false);
+		ucl_array_append(out, bucket_ucl);
+	}
+
+	return out;
 }
 
 void rspamd_symcache_foreach(struct rspamd_symcache *cache,
@@ -505,6 +634,11 @@ void rspamd_symcache_disable_all_symbols(struct rspamd_task *task,
 										 unsigned int skip_mask)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	if (cache_runtime == nullptr) {
+		/* E.g. a learn task that never runs the symbols */
+		return;
+	}
 
 	cache_runtime->disable_all_symbols(skip_mask);
 }
@@ -691,7 +825,7 @@ unsigned int rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
 	if (nevents > 1) {
 		/* Item is async */
 		static_item->internal_flags &= ~rspamd::symcache::cache_item::bit_sync;
-		real_dyn_item->status = rspamd::symcache::cache_item_status::pending;
+		cache_runtime->set_status(real_dyn_item, rspamd::symcache::cache_item_status::pending);
 	}
 
 	return nevents;
@@ -767,7 +901,7 @@ void rspamd_symcache_composites_foreach(struct rspamd_task *task,
 		if (dyn_item && dyn_item->status == rspamd::symcache::cache_item_status::not_started) {
 			auto *old_item = cache_runtime->set_cur_item(dyn_item);
 			func((void *) item->get_name().c_str(), item->get_cbdata(), fd);
-			dyn_item->status = rspamd::symcache::cache_item_status::finished;
+			cache_runtime->set_status(dyn_item, rspamd::symcache::cache_item_status::finished);
 			cache_runtime->set_cur_item(old_item);
 		}
 	});

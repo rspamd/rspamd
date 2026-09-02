@@ -52,12 +52,6 @@ enum class symcache_item_type {
 	VIRTUAL,    /* A virtual symbol... */
 };
 
-/*
- * Compare item types: earlier stages symbols are > than later stages symbols
- * Order for virtual stuff is not defined.
- */
-bool operator<(symcache_item_type lhs, symcache_item_type rhs);
-
 constexpr static auto item_type_to_str(symcache_item_type t) -> const char *
 {
 	switch (t) {
@@ -81,6 +75,39 @@ constexpr static auto item_type_to_str(symcache_item_type t) -> const char *
 
 	RSPAMD_UNREACHABLE;
 }
+
+/**
+ * Returns the execution stage implied by the declared item type
+ */
+constexpr static auto declared_exec_stage(symcache_item_type t) -> exec_stage
+{
+	switch (t) {
+	case symcache_item_type::CONNFILTER:
+		return exec_stage::connfilters;
+	case symcache_item_type::PREFILTER:
+		return exec_stage::prefilters;
+	case symcache_item_type::FILTER:
+		return exec_stage::filters;
+	case symcache_item_type::POSTFILTER:
+		return exec_stage::postfilters;
+	case symcache_item_type::IDEMPOTENT:
+		return exec_stage::idempotent;
+	case symcache_item_type::CLASSIFIER:
+	case symcache_item_type::COMPOSITE:
+	case symcache_item_type::VIRTUAL:
+		return exec_stage::none;
+	}
+
+	return exec_stage::none;
+}
+
+/**
+ * Returns true if a dependency edge from an item of type `src` on an item of
+ * type `dst` is accepted: same stage, a later stage depending on an earlier one,
+ * a prefilter depending on a filter (which hoists the filter to the prefilter
+ * stage), or a postfilter/idempotent depending on a composite or a classifier.
+ */
+auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool;
 
 /**
  * This is a public helper to convert a legacy C type to a more static type
@@ -236,6 +263,16 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	unsigned int order = 0;
 	int frequency_peaks = 0;
 
+	/*
+	 * Execution plan, computed by symcache::compute_exec_plan: the stage that
+	 * runs the item and its level within the stage (higher level runs earlier).
+	 * `hoisted_by` is set when a dependency moved the item from its declared
+	 * stage or level.
+	 */
+	exec_stage stage = exec_stage::none;
+	int level = 0;
+	cache_item *hoisted_by = nullptr;
+
 	/* Specific data for virtual and callback symbols */
 	std::variant<normal_item, virtual_item> specific;
 
@@ -327,6 +364,37 @@ public:
 	{
 		return std::holds_alternative<normal_item>(specific) &&
 			   (type == symcache_item_type::FILTER);
+	}
+
+	/**
+	 * Returns true if the item is scheduled by the symcache runtime (has a callback
+	 * and belongs to one of the execution stages)
+	 */
+	auto is_executable() const -> bool
+	{
+		return std::holds_alternative<normal_item>(specific) &&
+			   declared_exec_stage(type) != exec_stage::none;
+	}
+
+	/**
+	 * Declared type of the item that is executed for this symbol: the parent's
+	 * type for a virtual symbol
+	 */
+	auto get_exec_type(const symcache &cache) const -> symcache_item_type;
+
+	auto get_stage() const -> exec_stage
+	{
+		return stage;
+	}
+
+	auto get_level() const -> int
+	{
+		return level;
+	}
+
+	auto is_hoisted() const -> bool
+	{
+		return hoisted_by != nullptr;
 	}
 
 	/**

@@ -27,6 +27,8 @@
 #include <cstdint>
 #include <utility>
 #include <vector>
+#include <array>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <memory>
@@ -60,6 +62,10 @@
 														"symcache", log_tag(), \
 														RSPAMD_LOG_FUNC,       \
 														__VA_ARGS__)
+#define msg_info_cache_lambda(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,      \
+															   "symcache", log_tag(), \
+															   log_func,              \
+															   __VA_ARGS__)
 #define msg_debug_cache(...) rspamd_conditional_debug_fast(NULL, NULL,                                                        \
 														   ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
 														   RSPAMD_LOG_FUNC,                                                   \
@@ -96,6 +102,58 @@ struct symcache_header {
 struct cache_item;
 using cache_item_ptr = std::shared_ptr<cache_item>;
 
+/*
+ * Execution stage of an item: the task processing stage that runs it.
+ * The declared symbol type gives the default stage (see `declared_exec_stage`),
+ * a dependency from an earlier stage may hoist an item to that stage
+ * (see `symcache::compute_exec_plan`). Composites, classifiers and virtual
+ * symbols are not scheduled by the symcache and have no stage.
+ */
+enum class exec_stage : std::uint8_t {
+	connfilters = 0,
+	prefilters,
+	filters,
+	postfilters,
+	idempotent,
+	none,
+};
+
+constexpr static const auto exec_stages_count = static_cast<unsigned int>(exec_stage::none);
+
+constexpr static auto exec_stage_to_str(exec_stage st) -> const char *
+{
+	switch (st) {
+	case exec_stage::connfilters:
+		return "connfilters";
+	case exec_stage::prefilters:
+		return "prefilters";
+	case exec_stage::filters:
+		return "filters";
+	case exec_stage::postfilters:
+		return "postfilters";
+	case exec_stage::idempotent:
+		return "idempotent";
+	case exec_stage::none:
+		return "none";
+	}
+
+	return "unknown";
+}
+
+/*
+ * A bucket groups the items of one (stage, level) pair. Within a stage, buckets
+ * are ordered by level (higher level first) and an item may not start until all
+ * buckets before its own in the same stage are drained. Items inside a bucket
+ * run concurrently, subject to their explicit dependencies.
+ */
+struct exec_bucket {
+	exec_stage stage;
+	int level;
+	/* Range [first, first + count) in order_generation::d */
+	unsigned int first;
+	unsigned int count;
+};
+
 /**
  * This structure is intended to keep the current ordering for all symbols
  * It is designed to be shared among all tasks and keep references to the real
@@ -106,12 +164,20 @@ using cache_item_ptr = std::shared_ptr<cache_item>;
  * cache runtime.
  */
 struct order_generation {
-	/* All items ordered */
+	static constexpr const unsigned int no_bucket = std::numeric_limits<unsigned int>::max();
+
+	/* All items ordered: executable items first (grouped by stage and level), then the rest */
 	std::vector<cache_item_ptr> d;
 	/* Mapping from symbol name to the position in the order array */
 	ankerl::unordered_dense::map<std::string_view, unsigned int> by_symbol;
 	/* Mapping from symbol id to the position in the order array */
 	ankerl::unordered_dense::map<unsigned int, unsigned int> by_cache_id;
+	/* Execution buckets in the execution order */
+	std::vector<exec_bucket> buckets;
+	/* Bucket index for each position in `d` (no_bucket for non-executable items) */
+	std::vector<unsigned int> item_bucket;
+	/* Bucket ranges [first, last) for each stage */
+	std::array<std::pair<unsigned int, unsigned int>, exec_stages_count> stage_buckets{};
 	/* It matches cache->generation_id; if not, a fresh ordering is required */
 	unsigned int generation_id;
 
@@ -121,6 +187,7 @@ struct order_generation {
 		d.reserve(nelts);
 		by_symbol.reserve(nelts);
 		by_cache_id.reserve(nelts);
+		item_bucket.reserve(nelts);
 	}
 
 	auto size() const -> auto
@@ -265,7 +332,9 @@ private:
 
 	/* Items sorted into some order */
 	order_generation_ptr items_by_order;
-	unsigned int cur_order_gen;
+	unsigned int cur_order_gen = 0;
+	/* Set once `compute_exec_plan` has assigned stages and levels */
+	bool exec_plan_ready = false;
 
 	/* Specific vectors for execution/iteration */
 	items_ptr_vec connfilters;
@@ -314,6 +383,12 @@ private:
 	/* Internal methods */
 	auto load_items() -> bool;
 	auto resort() -> void;
+	/*
+	 * Assigns the execution stage and level to every item: the declared type and
+	 * priority give the defaults, then every dependency inherits the earliest
+	 * (stage, level) among the items that depend on it (hoisting)
+	 */
+	auto compute_exec_plan() -> void;
 	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec &;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
@@ -562,52 +637,6 @@ public:
 	}
 
 	/**
-	 * Iterate over all composites using a specific functor
-	 * @tparam Functor
-	 * @param f
-	 */
-	template<typename Functor>
-	auto connfilters_foreach(Functor f) -> bool
-	{
-		return std::all_of(std::begin(connfilters), std::end(connfilters),
-						   [&](const auto &sym_it) {
-							   return f(sym_it);
-						   });
-	}
-	template<typename Functor>
-	auto prefilters_foreach(Functor f) -> bool
-	{
-		return std::all_of(std::begin(prefilters), std::end(prefilters),
-						   [&](const auto &sym_it) {
-							   return f(sym_it);
-						   });
-	}
-	template<typename Functor>
-	auto postfilters_foreach(Functor f) -> bool
-	{
-		return std::all_of(std::begin(postfilters), std::end(postfilters),
-						   [&](const auto &sym_it) {
-							   return f(sym_it);
-						   });
-	}
-	template<typename Functor>
-	auto idempotent_foreach(Functor f) -> bool
-	{
-		return std::all_of(std::begin(idempotent), std::end(idempotent),
-						   [&](const auto &sym_it) {
-							   return f(sym_it);
-						   });
-	}
-	template<typename Functor>
-	auto filters_foreach(Functor f) -> bool
-	{
-		return std::all_of(std::begin(filters), std::end(filters),
-						   [&](const auto &sym_it) {
-							   return f(sym_it);
-						   });
-	}
-
-	/**
 	 * Resort cache if anything has been changed since last time
 	 * @return
 	 */
@@ -657,7 +686,7 @@ public:
 	 * Returns maximum timeout that is requested by all rules
 	 * @return
 	 */
-	auto get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double;
+	auto get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) -> double;
 
 	/**
 	 * Promote cache resort on next use (after dynamic symbol registration)

@@ -293,6 +293,19 @@ LUA_FUNCTION_DEF(config, register_dependency);
 LUA_FUNCTION_DEF(config, get_symbol_flags);
 
 /***
+ * @method rspamd_config:get_symbol_type(name)
+ * Returns the declared type of a symbol and its execution plan. The type is one
+ * of `connfilter`, `prefilter`, `filter`, `postfilter`, `idempotent`,
+ * `composite`, `classifier` or `virtual`. For the executed symbols (and for the
+ * virtual symbols of executed parents) the stage that runs the symbol
+ * (`connfilters`, `prefilters`, `filters`, `postfilters`, `idempotent`) and its
+ * level within the stage are also returned.
+ * @param {string} name symbol's name
+ * @return {string,string,number} type, stage, level (or nil if the symbol is unknown)
+ */
+LUA_FUNCTION_DEF(config, get_symbol_type);
+
+/***
  * @method rspamd_config:add_symbol_flags(name, flags)
  * Adds flags to a symbol
  * @param {string} name symbols's name
@@ -1047,6 +1060,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, promote_symbols_cache_resort),
 	LUA_INTERFACE_DEF(config, register_settings_id),
 	LUA_INTERFACE_DEF(config, get_symbol_flags),
+	LUA_INTERFACE_DEF(config, get_symbol_type),
 	LUA_INTERFACE_DEF(config, set_metric_symbol),
 	{"set_symbol", lua_config_set_metric_symbol},
 	LUA_INTERFACE_DEF(config, set_metric_action),
@@ -2159,6 +2173,71 @@ lua_config_get_symbol_flags(lua_State *L)
 	}
 
 	return 1;
+}
+
+static int
+lua_config_get_symbol_type(lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *name = luaL_checkstring(L, 2);
+
+	if (cfg && name) {
+		unsigned int stage = rspamd_symcache_get_symbol_stage(cfg->cache, name);
+		const char *type_str = NULL;
+
+		switch (stage) {
+		case SYMBOL_TYPE_CONNFILTER:
+			type_str = "connfilter";
+			break;
+		case SYMBOL_TYPE_PREFILTER:
+			type_str = "prefilter";
+			break;
+		case SYMBOL_TYPE_NORMAL:
+			type_str = "filter";
+			break;
+		case SYMBOL_TYPE_POSTFILTER:
+			type_str = "postfilter";
+			break;
+		case SYMBOL_TYPE_IDEMPOTENT:
+			type_str = "idempotent";
+			break;
+		case SYMBOL_TYPE_COMPOSITE:
+			type_str = "composite";
+			break;
+		case SYMBOL_TYPE_CLASSIFIER:
+			type_str = "classifier";
+			break;
+		case SYMBOL_TYPE_VIRTUAL:
+			type_str = "virtual";
+			break;
+		default:
+			break;
+		}
+
+		if (type_str == NULL) {
+			lua_pushnil(L);
+
+			return 1;
+		}
+
+		lua_pushstring(L, type_str);
+
+		struct rspamd_symcache_exec_info info;
+
+		if (rspamd_symcache_get_symbol_exec_info(cfg->cache, name, &info)) {
+			lua_pushstring(L, info.stage);
+			lua_pushinteger(L, info.level);
+		}
+		else {
+			lua_pushnil(L);
+			lua_pushnil(L);
+		}
+
+		return 3;
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
 }
 
 static bool

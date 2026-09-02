@@ -40,10 +40,20 @@ auto symcache_runtime::create(struct rspamd_task *task, symcache &cache) -> symc
 
 	auto cur_order = cache.get_cache_order();
 	auto allocated_size = sizeof(symcache_runtime) +
-						  sizeof(struct cache_dynamic_item) * cur_order->size();
+						  sizeof(struct cache_dynamic_item) * cur_order->size() +
+						  sizeof(std::uint32_t) * cur_order->buckets.size();
 	auto *checkpoint = (symcache_runtime *) rspamd_mempool_alloc0(task->task_pool,
 																  allocated_size);
-	msg_debug_cache_task("create symcache runtime for task: %d bytes, %d items", (int) allocated_size, (int) cur_order->size());
+	msg_debug_cache_task("create symcache runtime for task: %d bytes, %d items, %d buckets",
+						 (int) allocated_size, (int) cur_order->size(), (int) cur_order->buckets.size());
+	/* Buckets counters live right after the dynamic items */
+	checkpoint->bucket_pending = reinterpret_cast<std::uint32_t *>(checkpoint->dynamic_items + cur_order->size());
+
+	for (const auto [i, bucket]: rspamd::enumerate(cur_order->buckets)) {
+		checkpoint->bucket_pending[i] = bucket.count;
+	}
+
+	checkpoint->cur_stage = exec_stage::none;
 	checkpoint->order = std::move(cur_order);
 	checkpoint->slow_status = slow_status::none;
 	/* Calculate profile probability */
@@ -233,14 +243,28 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 	for (auto [i, item]: rspamd::enumerate(order->d)) {
 		auto *dyn_item = &dynamic_items[i];
 
-		if (!(item->get_flags() & skip_mask)) {
-			/*
-			 * Use `finished` not `disabled`: this implements the "disable all,
-			 * then enable some" pattern from symbols_enabled/groups_enabled.
-			 * Using `disabled` would cascade-disable hard dependents, which is
-			 * wrong when an enabled symbol depends on a non-enabled one.
-			 */
-			dyn_item->status = cache_item_status::finished;
+		/*
+		 * The mask is checked against the flags and the type: the type bit is
+		 * stripped from the flags at registration, so `SYMBOL_TYPE_IDEMPOTENT`
+		 * in the mask spares the idempotent symbols as intended
+		 */
+		if (item->get_flags() & skip_mask) {
+			continue;
+		}
+
+		if ((skip_mask & SYMBOL_TYPE_IDEMPOTENT) && item->get_type() == symcache_item_type::IDEMPOTENT) {
+			continue;
+		}
+
+		/*
+		 * Use `suppressed` not `disabled`: this implements the "disable all,
+		 * then enable some" pattern from symbols_enabled/groups_enabled.
+		 * Using `disabled` would cascade-disable hard dependents, which is
+		 * wrong when an enabled symbol depends on a non-enabled one.
+		 * Items that are already running are finalised as usual.
+		 */
+		if (dyn_item->status == cache_item_status::not_started) {
+			set_status(dyn_item, cache_item_status::suppressed);
 		}
 	}
 }
@@ -254,7 +278,15 @@ auto symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			dyn_item->status = cache_item_status::disabled;
+			if (dyn_item->status == cache_item_status::started ||
+				dyn_item->status == cache_item_status::pending) {
+				/* The item is running: it is finalised as usual */
+				msg_debug_cache_task("cannot disable %s: it is already running", name.data());
+
+				return false;
+			}
+
+			set_status(dyn_item, cache_item_status::disabled);
 			msg_debug_cache_task("disable execution of %s", name.data());
 
 			return true;
@@ -279,7 +311,25 @@ auto symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &c
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			dyn_item->status = cache_item_status::not_started;
+			switch (dyn_item->status) {
+			case cache_item_status::started:
+			case cache_item_status::pending:
+			case cache_item_status::finished:
+				/* Already executed (or being executed): never run an item twice */
+				msg_debug_cache_task("cannot enable %s: it is %s", name.data(),
+									 item_status_to_str(dyn_item->status));
+				return false;
+			default:
+				break;
+			}
+
+			if (cur_stage != exec_stage::none && item->get_stage() < cur_stage) {
+				msg_debug_cache_task("cannot enable %s: its stage (%s) has already passed", name.data(),
+									 exec_stage_to_str(item->get_stage()));
+				return false;
+			}
+
+			set_status(dyn_item, cache_item_status::not_started);
 
 			if (item->get_flags() & SYMBOL_TYPE_EXPLICIT_ENABLE) {
 				/* An explicit enable call unlocks `explicit_enable` symbols */
@@ -362,6 +412,24 @@ auto symcache_runtime::get_dynamic_item(int id) const -> cache_dynamic_item *
 	return nullptr;
 }
 
+static auto exec_stage_from_task_stage(unsigned int stage) -> exec_stage
+{
+	switch (stage) {
+	case RSPAMD_TASK_STAGE_CONNFILTERS:
+		return exec_stage::connfilters;
+	case RSPAMD_TASK_STAGE_PRE_FILTERS:
+		return exec_stage::prefilters;
+	case RSPAMD_TASK_STAGE_FILTERS:
+		return exec_stage::filters;
+	case RSPAMD_TASK_STAGE_POST_FILTERS:
+		return exec_stage::postfilters;
+	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		return exec_stage::idempotent;
+	default:
+		g_assert_not_reached();
+	}
+}
+
 auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache, unsigned int stage) -> bool
 {
 	msg_debug_cache_task("symbols processing stage at pass: %d", stage);
@@ -370,164 +438,143 @@ auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache
 		return true;
 	}
 
-	switch (stage) {
-	case RSPAMD_TASK_STAGE_CONNFILTERS:
-	case RSPAMD_TASK_STAGE_PRE_FILTERS:
-	case RSPAMD_TASK_STAGE_POST_FILTERS:
-	case RSPAMD_TASK_STAGE_IDEMPOTENT:
-		return process_pre_postfilters(task, cache,
-									   rspamd_session_events_pending(task->s), stage);
-		break;
+	auto st = exec_stage_from_task_stage(stage);
 
-	case RSPAMD_TASK_STAGE_FILTERS:
-		return process_filters(task, cache, rspamd_session_events_pending(task->s));
-		break;
-
-	default:
-		g_assert_not_reached();
-	}
-}
-
-auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
-											   symcache &cache,
-											   int start_events,
-											   unsigned int stage) -> bool
-{
-	auto saved_priority = std::numeric_limits<int>::min();
-	auto all_done = true;
-	auto log_func = RSPAMD_LOG_FUNC;
-	auto compare_functor = +[](int a, int b) { return a < b; };
-
-	auto proc_func = [&](cache_item *item) {
+	if (st != cur_stage) {
 		/*
-		 * We can safely ignore all pre/postfilters except idempotent ones and
-		 * those that are marked as ignore passthrough result
+		 * Entering a new stage: whatever has not been started at the previous
+		 * stages will never run (e.g. after a passthrough result or a timeout),
+		 * so mark it as skipped to let the dependents proceed
 		 */
-		if (stage != RSPAMD_TASK_STAGE_IDEMPOTENT &&
-			!(item->flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
-			if (check_process_status(task) == check_status::passthrough) {
-				msg_debug_cache_task_lambda("task has already the passthrough result being set, ignore further checks");
-
-				return true;
-			}
-		}
-
-		auto dyn_item = get_dynamic_item(item->id);
-
-		if (dyn_item->status == cache_item_status::not_started) {
-			if (slow_status == slow_status::enabled) {
-				return false;
-			}
-
-			if (saved_priority == std::numeric_limits<int>::min()) {
-				saved_priority = item->priority;
-			}
-			else {
-				if (compare_functor(item->priority, saved_priority) &&
-					rspamd_session_events_pending(task->s) > start_events) {
-					/*
-					 * Delay further checks as we have higher
-					 * priority filters to be processed
-					 */
-					return false;
-				}
-			}
-
-			/* Check dependencies for pre/postfilters */
-			if (!item->deps.empty()) {
-				if (!check_item_deps(task, cache, item, dyn_item, false)) {
-					msg_debug_cache_task_lambda("blocked execution of %d(%s) in "
-												"pre/postfilter stage unless deps are resolved",
-												item->id, item->symbol.c_str());
-					return false;
-				}
-			}
-
-			return process_symbol(task, cache, item, dyn_item);
-		}
-
-		/* Continue processing */
-		return true;
-	};
-
-	switch (stage) {
-	case RSPAMD_TASK_STAGE_CONNFILTERS:
-		all_done = cache.connfilters_foreach(proc_func);
-		break;
-	case RSPAMD_TASK_STAGE_PRE_FILTERS:
-		all_done = cache.prefilters_foreach(proc_func);
-		break;
-	case RSPAMD_TASK_STAGE_POST_FILTERS:
-		compare_functor = +[](int a, int b) { return a > b; };
-		all_done = cache.postfilters_foreach(proc_func);
-		break;
-	case RSPAMD_TASK_STAGE_IDEMPOTENT:
-		compare_functor = +[](int a, int b) { return a > b; };
-		all_done = cache.idempotent_foreach(proc_func);
-		break;
-	default:
-		g_error("invalid invocation");
-		break;
+		sweep_earlier_stages(task, st);
+		cur_stage = st;
 	}
 
-	return all_done;
+	return process_stage(task, cache, st);
 }
 
-auto symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool
+auto symcache_runtime::sweep_earlier_stages(struct rspamd_task *task, exec_stage stage) -> void
 {
-	auto all_done = true;
-	auto log_func = RSPAMD_LOG_FUNC;
-	auto has_passtrough = false;
-
-	for (const auto [idx, item]: rspamd::enumerate(order->d)) {
-		/* Exclude all non filters */
-		if (item->type != symcache_item_type::FILTER) {
-			/*
-			 * We use breaking the loop as we append non-filters to the end of the list
-			 * so, it is safe to stop processing immediately
-			 */
+	for (const auto [i, bucket]: rspamd::enumerate(order->buckets)) {
+		if (bucket.stage >= stage) {
 			break;
 		}
 
-		auto check_result = check_process_status(task);
-
-		if (!(item->flags & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH))) {
-			if (has_passtrough || check_result == check_status::passthrough) {
-				msg_debug_cache_task_lambda("task has already the passthrough result being set, ignore further checks");
-				has_passtrough = true;
-				/* Skip this item */
-				continue;
-			}
-			else if (check_result == check_status::limit_reached) {
-				msg_debug_cache_task_lambda("task has already the limit reached result being set, ignore further checks");
-				/* Skip this item */
-				continue;
-			}
+		if (bucket_pending[i] == 0) {
+			continue;
 		}
 
-		auto dyn_item = &dynamic_items[idx];
+		for (auto idx = bucket.first; idx < bucket.first + bucket.count; idx++) {
+			auto *dyn_item = &dynamic_items[idx];
 
-		if (dyn_item->status == cache_item_status::not_started) {
-			all_done = false;
-
-			if (!check_item_deps(task, cache, item.get(),
-								 dyn_item, false)) {
-				msg_debug_cache_task("blocked execution of %d(%s) unless deps are "
-									 "resolved",
-									 item->id, item->symbol.c_str());
-
-				continue;
-			}
-
-			process_symbol(task, cache, item.get(), dyn_item);
-
-			if (slow_status == slow_status::enabled) {
-				return false;
+			if (dyn_item->status == cache_item_status::not_started) {
+				msg_debug_cache_task("skip %s(%d) as its stage (%s) has passed",
+									 order->d[idx]->symbol.c_str(), order->d[idx]->id,
+									 exec_stage_to_str(bucket.stage));
+				set_status(dyn_item, cache_item_status::skipped);
 			}
 		}
 	}
+}
 
-	return all_done;
+auto symcache_runtime::should_skip(const cache_item *item, check_status status) -> bool
+{
+	if (status == check_status::allow) {
+		return false;
+	}
+
+	switch (item->get_type()) {
+	case symcache_item_type::IDEMPOTENT:
+		/* Idempotent symbols always run */
+		return false;
+	case symcache_item_type::FILTER:
+		/* Filters (hoisted ones included) are also stopped by the score limit */
+		if (item->get_flags() & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
+			return false;
+		}
+
+		return true;
+	default:
+		/* Connfilters, prefilters and postfilters are stopped by passthrough results only */
+		if (item->get_flags() & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
+			return false;
+		}
+
+		return status == check_status::passthrough;
+	}
+}
+
+auto symcache_runtime::may_start(const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool
+{
+	if (item->get_stage() != cur_stage) {
+		return false;
+	}
+
+	auto idx = dyn_item - dynamic_items;
+	auto bucket = order->item_bucket[idx];
+
+	return bucket != order_generation::no_bucket && is_bucket_open(bucket);
+}
+
+auto symcache_runtime::process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool
+{
+	auto log_func = RSPAMD_LOG_FUNC;
+	const auto [first_bucket, last_bucket] = order->stage_buckets[static_cast<unsigned int>(stage)];
+
+	for (auto b = first_bucket; b < last_bucket; b++) {
+		const auto &bucket = order->buckets[b];
+
+		msg_debug_cache_task_lambda("process bucket %d: stage %s, level %d, %d items, %d pending",
+									(int) b, exec_stage_to_str(bucket.stage), bucket.level,
+									(int) bucket.count, (int) bucket_pending[b]);
+
+		for (auto idx = bucket.first; idx < bucket.first + bucket.count; idx++) {
+			if (RSPAMD_TASK_IS_SKIPPED(task)) {
+				/* E.g. whitelisted by settings */
+				return true;
+			}
+
+			auto *item = order->d[idx].get();
+			auto *dyn_item = &dynamic_items[idx];
+
+			if (dyn_item->status != cache_item_status::not_started) {
+				continue;
+			}
+
+			auto check_result = check_process_status(task);
+
+			if (should_skip(item, check_result)) {
+				msg_debug_cache_task_lambda("skip %s(%d): task has %s",
+											item->symbol.c_str(), item->id,
+											check_result == check_status::passthrough ? "the passthrough result" : "reached the score limit");
+				set_status(dyn_item, cache_item_status::skipped);
+				continue;
+			}
+
+			if (slow_status == slow_status::enabled) {
+				/* Let the slow timer fire before starting anything else */
+				return false;
+			}
+
+			if (!check_item_deps(task, cache, item, dyn_item, false)) {
+				msg_debug_cache_task_lambda("blocked execution of %d(%s) unless deps are "
+											"resolved",
+											item->id, item->symbol.c_str());
+				continue;
+			}
+
+			process_symbol(task, cache, item, dyn_item);
+		}
+
+		if (bucket_pending[b] > 0) {
+			/* The next level may not start until this one is drained */
+			msg_debug_cache_task_lambda("bucket %d is not drained: %d items pending",
+										(int) b, (int) bucket_pending[b]);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
@@ -557,6 +604,19 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		return is_item_done(dyn_item->status);
 	}
 
+	if (!may_start(item, dyn_item)) {
+		/*
+		 * Reached from a reverse dependency or an eager dependency check:
+		 * the item belongs to another stage or its level is not open yet,
+		 * so the stage loop starts it when its turn comes
+		 */
+		msg_debug_cache_task("cannot start %s(%d) now: stage %s, level %d",
+							 item->symbol.c_str(), item->id,
+							 exec_stage_to_str(item->get_stage()), item->get_level());
+
+		return false;
+	}
+
 	/* Check has been started */
 	auto check = true;
 
@@ -565,9 +625,10 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	}
 
 	if (check) {
-		dyn_item->status = cache_item_status::started;
-		msg_debug_cache_task("execute %s, %d; symbol type = %s", item->symbol.data(),
-							 item->id, item_type_to_str(item->type));
+		set_status(dyn_item, cache_item_status::started);
+		msg_debug_cache_task("execute %s, %d; symbol type = %s, stage = %s, level = %d",
+							 item->symbol.data(), item->id, item_type_to_str(item->type),
+							 exec_stage_to_str(item->get_stage()), item->get_level());
 
 		/*
 		 * Stamp the start under the SAME condition finalize_item measures
@@ -587,31 +648,32 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 								   1e3;
 		}
 		dyn_item->async_events = 0;
+		/* Nested starts (from finalisation of another item) must not clobber the caller's item */
+		auto *saved_cur_item = cur_item;
 		cur_item = dyn_item;
 		items_inflight++;
 		/* Callback now must finalize itself */
 
 
 		if (item->call(task, dyn_item)) {
-			cur_item = nullptr;
+			cur_item = saved_cur_item;
 
-			if (items_inflight == 0) {
+			if (is_item_done(dyn_item->status)) {
+				/* Finalised synchronously */
 				msg_debug_cache_task("item %s, %d is now finished (no async events)", item->symbol.data(),
 									 item->id);
-				dyn_item->status = cache_item_status::finished;
 				return true;
 			}
 
-			if (dyn_item->async_events == 0 && dyn_item->status != cache_item_status::finished) {
+			if (dyn_item->async_events == 0) {
 				msg_err_cache_task("critical error: item %s has no async events pending, "
 								   "but it is not finalised",
 								   item->symbol.data());
 				g_assert_not_reached();
 			}
-			else if (dyn_item->async_events > 0) {
-				msg_debug_cache_task("item %s, %d is now pending with %d async events", item->symbol.data(),
-									 item->id, dyn_item->async_events);
-			}
+
+			msg_debug_cache_task("item %s, %d is now pending with %d async events", item->symbol.data(),
+								 item->id, dyn_item->async_events);
 
 			return false;
 		}
@@ -619,14 +681,16 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 			/* We were not able to call item, so we assume it is not callable */
 			msg_debug_cache_task("cannot call %s, %d; symbol type = %s", item->symbol.data(),
 								 item->id, item_type_to_str(item->type));
-			dyn_item->status = cache_item_status::finished;
+			cur_item = saved_cur_item;
+			items_inflight--;
+			set_status(dyn_item, cache_item_status::finished);
 			return true;
 		}
 	}
 	else {
 		msg_debug_cache_task("do not check %s, %d", item->symbol.data(),
 							 item->id);
-		dyn_item->status = cache_item_status::finished;
+		set_status(dyn_item, cache_item_status::finished);
 	}
 
 	return true;
@@ -642,8 +706,8 @@ auto symcache_runtime::check_process_status(struct rspamd_task *task) -> symcach
 			struct rspamd_action_config *act_config =
 				rspamd_find_action_config_for_action(task->result, pr->action);
 
-			/* Skip least results */
-			if (pr->flags & RSPAMD_PASSTHROUGH_LEAST) {
+			/* Skip least results and the results that explicitly allow further processing */
+			if (pr->flags & (RSPAMD_PASSTHROUGH_LEAST | RSPAMD_PASSTHROUGH_PROCESS_ALL)) {
 				continue;
 			}
 
@@ -701,25 +765,60 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 			auto *dep_dyn_item = get_dynamic_item(dep.item->id);
 
-			if (dep_dyn_item->status == cache_item_status::disabled) {
-				/* Dependency was disabled by settings */
-				if (dep.hard) {
-					/* Hard dependency disabled: cascade-disable this item */
-					dyn_item->status = cache_item_status::disabled;
-					msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
-												"%d(%s) is disabled",
-												item->id, item->symbol.c_str(),
-												dest_id, dep.sym.c_str());
-					return true; /* Item is "done" (disabled) */
-				}
-				/* Normal (weak) dependency disabled: proceed without it (backward compat) */
-				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
-											"disabled, proceeding (not a hard dep)",
-											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
+			if (dep_dyn_item == nullptr) {
+				/* Composites and classifiers of another order generation, or virtual */
+				msg_debug_cache_task_lambda("symbol %d(%s) has a dependency %d(%s) without a dynamic item",
+											item->id, item->symbol.c_str(), dest_id, dep.sym.c_str());
 				continue;
 			}
 
-			if (dep_dyn_item->status != cache_item_status::finished) {
+			if (dep_dyn_item->status == cache_item_status::not_started &&
+				dep.item->get_stage() < cur_stage) {
+				/*
+				 * The dependency stage has passed (e.g. it was enabled too late),
+				 * so it will never run
+				 */
+				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) belongs to the "
+											"passed stage %s: skip it",
+											dest_id, dep.sym.c_str(), item->id, item->symbol.c_str(),
+											exec_stage_to_str(dep.item->get_stage()));
+				set_status(dep_dyn_item, cache_item_status::skipped);
+			}
+
+			/*
+			 * Cascade `disabled` and `skipped` to the hard dependents: their
+			 * dependency will never produce a result. `suppressed` (not enabled by
+			 * settings) does not cascade, as an enabled symbol may legitimately
+			 * depend on a non-enabled one.
+			 */
+			const auto cascade = [&](cache_item_status dep_status) -> bool {
+				if (dep_status == cache_item_status::disabled || dep_status == cache_item_status::skipped) {
+					if (dep.hard) {
+						set_status(dyn_item, dep_status);
+						msg_debug_cache_task_lambda("cascade %s %d(%s) because hard dependency "
+													"%d(%s) is %s",
+													item_status_to_str(dep_status),
+													item->id, item->symbol.c_str(),
+													dest_id, dep.sym.c_str(),
+													item_status_to_str(dep_status));
+						return true;
+					}
+
+					/* Normal (weak) dependency: proceed without it (backward compat) */
+					msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
+												"%s, proceeding (not a hard dep)",
+												dest_id, dep.sym.c_str(), item->id, item->symbol.c_str(),
+												item_status_to_str(dep_status));
+				}
+
+				return false;
+			};
+
+			if (cascade(dep_dyn_item->status)) {
+				return true; /* Item is "done" */
+			}
+
+			if (!is_item_done(dep_dyn_item->status)) {
 				if (dep_dyn_item->status == cache_item_status::not_started) {
 					/* Not started */
 					if (!check_only) {
@@ -733,17 +832,15 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 														"symbol %d(%s)",
 														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
-						else if (dep_dyn_item->status == cache_item_status::disabled) {
-							/* Dep was cascade-disabled during recursive check */
-							if (dep.hard) {
-								dyn_item->status = cache_item_status::disabled;
-								msg_debug_cache_task_lambda("cascade disable %d(%s) because hard dependency "
-															"%d(%s) was cascade-disabled",
-															item->id, item->symbol.c_str(),
-															dest_id, dep.sym.c_str());
-								return true;
-							}
-							/* Weak dep: proceed */
+						else if (cascade(dep_dyn_item->status)) {
+							/* Dep was cascade-disabled or skipped during recursive check */
+							return true;
+						}
+						else if (is_item_done(dep_dyn_item->status)) {
+							msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
+														"%s",
+														dest_id, dep.sym.c_str(), item->id, item->symbol.c_str(),
+														item_status_to_str(dep_dyn_item->status));
 						}
 						else if (!process_symbol(task, cache, dep.item, dep_dyn_item)) {
 							/* Now started, but has events pending */
@@ -864,7 +961,7 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 	}
 
 	msg_debug_cache_task("process finalize for item %s(%d)", item->symbol.c_str(), item->id);
-	dyn_item->status = cache_item_status::finished;
+	set_status(dyn_item, cache_item_status::finished);
 	items_inflight--;
 	cur_item = nullptr;
 
@@ -987,8 +1084,13 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 
 	for (const auto &[id, rdep]: item->rdeps.values()) {
 		if (rdep.item) {
+			if (rdep.item->get_stage() != cur_stage) {
+				/* The stage loop deals with it when its stage comes */
+				continue;
+			}
+
 			auto *dyn_item = get_dynamic_item(rdep.item->id);
-			if (dyn_item->status == cache_item_status::not_started) {
+			if (dyn_item && dyn_item->status == cache_item_status::not_started) {
 				msg_debug_cache_task("check item %d(%s) rdep of %s ",
 									 rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
 
@@ -1033,7 +1135,8 @@ auto symcache_runtime::describe_inflight_symbols() const -> GString *
 	for (auto [i, item]: rspamd::enumerate(order->d)) {
 		auto *dyn_item = &dynamic_items[i];
 
-		if (dyn_item->status != cache_item_status::started) {
+		if (dyn_item->status != cache_item_status::started &&
+			dyn_item->status != cache_item_status::pending) {
 			continue;
 		}
 

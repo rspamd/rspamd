@@ -218,20 +218,12 @@ auto symcache::init() -> bool
 		it->process_deps(*this);
 	}
 
-	/* Sorting stuff */
-	constexpr auto postfilters_cmp = [](const auto &it1, const auto &it2) -> bool {
-		return it1->priority < it2->priority;
-	};
-	constexpr auto prefilters_cmp = [](const auto &it1, const auto &it2) -> bool {
-		return it1->priority > it2->priority;
-	};
-
-	msg_debug_cache("sorting stuff");
-	std::stable_sort(std::begin(connfilters), std::end(connfilters), prefilters_cmp);
-	std::stable_sort(std::begin(prefilters), std::end(prefilters), prefilters_cmp);
-	std::stable_sort(std::begin(postfilters), std::end(postfilters), postfilters_cmp);
-	std::stable_sort(std::begin(idempotent), std::end(idempotent), postfilters_cmp);
-
+	/*
+	 * Assign stages and levels once: as the pre/postfilter ordering did before,
+	 * this uses the priorities known at the init time; later adjustments
+	 * (e.g. by `validate`) merely affect the soft ordering of filters
+	 */
+	compute_exec_plan();
 	resort();
 
 	/* Connect metric symbols with symcache symbols */
@@ -586,24 +578,137 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 	}
 }
 
+auto symcache::compute_exec_plan() -> void
+{
+	auto log_func = RSPAMD_LOG_FUNC;
+
+	/* Seed from the declared types and priorities */
+	for (const auto &[_id, it]: items_by_id) {
+		it->stage = declared_exec_stage(it->type);
+		it->hoisted_by = nullptr;
+
+		switch (it->stage) {
+		case exec_stage::connfilters:
+		case exec_stage::prefilters:
+			it->level = it->priority;
+			break;
+		case exec_stage::postfilters:
+		case exec_stage::idempotent:
+			/* A higher priority runs later for these stages */
+			it->level = -it->priority;
+			break;
+		case exec_stage::filters:
+		default:
+			/* Priority of filters is merely a soft ordering key */
+			it->level = 0;
+			break;
+		}
+	}
+
+	/* True if (st1, l1) is executed before (st2, l2) */
+	constexpr auto is_earlier = [](exec_stage st1, int l1, exec_stage st2, int l2) {
+		return st1 < st2 || (st1 == st2 && l1 > l2);
+	};
+
+	/* Items on the current DFS path, to detect cycles */
+	ankerl::unordered_dense::set<int> path;
+
+	/*
+	 * Push the (stage, level) of an item down to its dependencies: a dependency
+	 * must run before the dependent, so it inherits the earliest position among
+	 * all dependents. Every push moves an item strictly earlier, so the walk
+	 * terminates.
+	 */
+	const auto propagate = [&](cache_item *it, auto &&rec) -> void {
+		path.insert(it->id);
+
+		for (auto &[_dep_id, dep]: it->deps) {
+			auto *dit = dep.item;
+
+			if (dit == nullptr || !dit->is_executable()) {
+				continue;
+			}
+
+			if (path.contains(dit->id)) {
+				msg_err_cache_lambda("cyclic dependency: %s depends on %s which (indirectly) depends on it",
+									 it->symbol.c_str(), dit->symbol.c_str());
+				continue;
+			}
+
+			if (is_earlier(it->stage, it->level, dit->stage, dit->level)) {
+				auto *cause = it->hoisted_by ? it->hoisted_by : it;
+
+				if (dit->stage != it->stage) {
+					msg_info_cache_lambda("symbol %s (%s) is hoisted to the %s stage, level %d, "
+										  "as %s depends on it",
+										  dit->symbol.c_str(), item_type_to_str(dit->type),
+										  exec_stage_to_str(it->stage), it->level,
+										  cause->symbol.c_str());
+				}
+				else {
+					msg_debug_cache_lambda("symbol %s is raised to level %d (from %d) at the %s stage, "
+										   "as %s depends on it",
+										   dit->symbol.c_str(), it->level, dit->level,
+										   exec_stage_to_str(it->stage),
+										   cause->symbol.c_str());
+				}
+
+				dit->stage = it->stage;
+				dit->level = it->level;
+				dit->hoisted_by = cause;
+				rec(dit, rec);
+			}
+		}
+
+		path.erase(it->id);
+	};
+
+	for (const auto &[_id, it]: items_by_id) {
+		if (it->is_executable()) {
+			propagate(it.get(), propagate);
+		}
+	}
+
+	/* Virtual symbols are produced by their parents */
+	for (const auto &[_id, it]: items_by_id) {
+		if (it->is_virtual()) {
+			const auto *parent = it->get_parent(*this);
+
+			if (parent != nullptr) {
+				it->stage = parent->stage;
+				it->level = parent->level;
+				it->hoisted_by = parent->hoisted_by;
+			}
+		}
+	}
+
+	exec_plan_ready = true;
+}
+
 auto symcache::resort() -> void
 {
 	auto log_func = RSPAMD_LOG_FUNC;
-	auto ord = std::make_shared<order_generation>(filters.size() +
-													  prefilters.size() +
-													  composites.size() +
-													  postfilters.size() +
-													  idempotent.size() +
-													  connfilters.size() +
-													  classifiers.size(),
-												  cur_order_gen);
 
-	for (auto &it: filters) {
-		if (it) {
-			total_hits += it->st->total_hits;
-			/* Unmask topological order */
-			it->order = 0;
-			ord->d.emplace_back(it->getptr());
+	if (!exec_plan_ready) {
+		compute_exec_plan();
+	}
+
+	auto ord = std::make_shared<order_generation>(items_by_id.size(), cur_order_gen);
+
+	/*
+	 * All executable items are ordered together: by stage, then by level, then
+	 * topologically (dependencies first), then by the soft ordering keys
+	 */
+	total_hits = 0;
+
+	for (const auto *vec: {&connfilters, &prefilters, &filters, &postfilters, &idempotent}) {
+		for (auto &it: *vec) {
+			if (it) {
+				total_hits += it->st->total_hits;
+				/* Unmask topological order */
+				it->order = 0;
+				ord->d.emplace_back(it->getptr());
+			}
 		}
 	}
 
@@ -669,9 +774,8 @@ auto symcache::resort() -> void
 	/*
 	 * Topological sort
 	 */
-	total_hits = 0;
 	auto used_items = ord->d.size();
-	msg_debug_cache("topologically sort %z filters", used_items);
+	msg_debug_cache("topologically sort %z executable items", used_items);
 
 	for (const auto &it: ord->d) {
 		if (it->order == 0) {
@@ -688,15 +792,34 @@ auto symcache::resort() -> void
 				(t > time_alpha ? t : time_alpha));
 	};
 
-	auto cache_order_cmp = [&](const auto &it1, const auto &it2) -> auto {
-		constexpr const auto topology_mult = 1e7,
-							 priority_mult = 1e6,
-							 augmentations1_mult = 1e5;
-		auto w1 = tsort_unmask(it1.get()) * topology_mult,
-			 w2 = tsort_unmask(it2.get()) * topology_mult;
+	auto cache_order_cmp = [&](const auto &it1, const auto &it2) -> bool {
+		/* Stage, then level: this is what the runtime relies on */
+		if (it1->stage != it2->stage) {
+			return it1->stage < it2->stage;
+		}
 
-		w1 += it1->priority * priority_mult;
-		w2 += it2->priority * priority_mult;
+		if (it1->level != it2->level) {
+			return it1->level > it2->level;
+		}
+
+		/* Inside a bucket: dependencies go first */
+		auto topo1 = tsort_unmask(it1.get()), topo2 = tsort_unmask(it2.get());
+
+		if (topo1 != topo2) {
+			return topo1 > topo2;
+		}
+
+		if (it1->stage != exec_stage::filters) {
+			/* Pre/postfilters keep the registration order, as they always did */
+			return it1->id < it2->id;
+		}
+
+		/* Filters: soft priority, augmentations and the runtime statistics */
+		constexpr const auto priority_mult = 1e6,
+							 augmentations1_mult = 1e5;
+		auto w1 = it1->priority * priority_mult,
+			 w2 = it2->priority * priority_mult;
+
 		w1 += it1->get_augmentation_weight() * augmentations1_mult;
 		w2 += it2->get_augmentation_weight() * augmentations1_mult;
 
@@ -715,34 +838,58 @@ auto symcache::resort() -> void
 	};
 
 	std::stable_sort(std::begin(ord->d), std::end(ord->d), cache_order_cmp);
-	/*
-	 * Here lives some ugly legacy!
-	 * We have several filters classes, connfilters, prefilters, filters... etc
-	 *
-	 * Our order is meaningful merely for filters, but we have to add other classes
-	 * to understand if those symbols are checked or disabled.
-	 * We can disable symbols for almost everything but not for virtual symbols.
-	 * The rule of thumb is that if a symbol has explicit parent, then it is a
-	 * virtual symbol that follows it's special rules
-	 */
+
+	/* Group the sorted executable items into (stage, level) buckets */
+	for (auto &range: ord->stage_buckets) {
+		range = {order_generation::no_bucket, order_generation::no_bucket};
+	}
+
+	for (const auto [i, it]: rspamd::enumerate(ord->d)) {
+		if (ord->buckets.empty() ||
+			ord->buckets.back().stage != it->stage ||
+			ord->buckets.back().level != it->level) {
+			ord->buckets.push_back(exec_bucket{it->stage, it->level, (unsigned int) i, 0});
+
+			auto &range = ord->stage_buckets[static_cast<unsigned int>(it->stage)];
+
+			if (range.first == order_generation::no_bucket) {
+				range.first = ord->buckets.size() - 1;
+			}
+
+			range.second = ord->buckets.size();
+		}
+
+		ord->buckets.back().count++;
+		ord->item_bucket.push_back(ord->buckets.size() - 1);
+	}
+
+	for (auto &range: ord->stage_buckets) {
+		if (range.first == order_generation::no_bucket) {
+			/* No items at this stage */
+			range = {0, 0};
+		}
+	}
+
+	for (const auto &bucket: ord->buckets) {
+		msg_debug_cache("bucket: stage %s, level %d, %d items starting from %s",
+						exec_stage_to_str(bucket.stage), bucket.level, (int) bucket.count,
+						ord->d[bucket.first]->symbol.c_str());
+	}
 
 	/*
-	 * We enrich ord with all other symbol types without any sorting,
-	 * as it is done in another place
+	 * Composites and classifiers are not executed by the runtime, but they need
+	 * dynamic items to track whether they have been checked or disabled
 	 */
 	const auto append_items_vec = [&](const auto &vec, auto &out, const char *what) {
 		msg_debug_cache_lambda("append %d items; type = %s", (int) vec.size(), what);
 		for (const auto &it: vec) {
 			if (it) {
 				out.emplace_back(it->getptr());
+				ord->item_bucket.push_back(order_generation::no_bucket);
 			}
 		}
 	};
 
-	append_items_vec(connfilters, ord->d, "connection filters");
-	append_items_vec(prefilters, ord->d, "prefilters");
-	append_items_vec(postfilters, ord->d, "postfilters");
-	append_items_vec(idempotent, ord->d, "idempotent filters");
 	append_items_vec(composites, ord->d, "composites");
 	append_items_vec(classifiers, ord->d, "classifiers");
 
@@ -1336,22 +1483,38 @@ auto symcache::apply_pending_settings(cache_item *item) -> void
 	pending_settings_ops.erase(it);
 }
 
-auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double
+auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) -> double
 {
 	auto accumulated_timeout = 0.0;
 	auto log_func = RSPAMD_LOG_FUNC;
 	ankerl::unordered_dense::set<const cache_item *> seen_items;
 
-	auto get_item_timeout = [](cache_item *it) {
+	if (!exec_plan_ready) {
+		/* E.g. called before init: then merely the declared types are used */
+		compute_exec_plan();
+	}
+
+	auto get_item_timeout = [](const cache_item *it) {
 		return it->get_numeric_augmentation("timeout").value_or(0.0);
 	};
 
-	/* This function returns the timeout for an item and all it's dependencies */
-	auto get_filter_timeout = [&](cache_item *it, auto self) -> double {
+	/*
+	 * Returns the timeout of an item plus the longest chain of its dependencies
+	 * that run in the same bucket (the same stage and level): those run
+	 * sequentially, while dependencies from the earlier buckets are accounted
+	 * in their own buckets.
+	 * This function might have O(N^2) complexity if all symbols are in a single
+	 * dependencies chain. But it is not the case in practice
+	 */
+	auto get_chain_timeout = [&](const cache_item *it, auto self) -> double {
 		auto own_timeout = get_item_timeout(it);
 		auto max_child_timeout = 0.0;
 
 		for (const auto &[id, dep]: it->deps) {
+			if (dep.item == nullptr || dep.item->stage != it->stage || dep.item->level != it->level) {
+				continue;
+			}
+
 			auto cld_timeout = self(dep.item, self);
 
 			if (cld_timeout > max_child_timeout) {
@@ -1362,77 +1525,60 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		return own_timeout + max_child_timeout;
 	};
 
-	/* For prefilters and postfilters, we just care about priorities */
-	auto pre_postfilter_iter = [&](const items_ptr_vec &vec) -> double {
-		auto saved_priority = vec.empty() ? -1 : vec.front()->priority;
-		auto max_timeout = 0.0, added_timeout = 0.0;
-		const cache_item *max_elt = nullptr;
-		for (const auto &it: vec) {
-			if (it->priority != saved_priority && max_elt != nullptr && max_timeout > 0) {
-				if (!seen_items.contains(max_elt)) {
-					accumulated_timeout += max_timeout;
-					added_timeout += max_timeout;
+	/* Buckets run sequentially, items inside a bucket run concurrently */
+	std::vector<const cache_item *> items;
+	items.reserve(items_by_id.size());
 
-					msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d); "
-										   "symbol: %s",
-										   max_timeout, accumulated_timeout, saved_priority, it->priority,
-										   max_elt->symbol.c_str());
-					elts.emplace_back(max_timeout, max_elt);
-					seen_items.insert(max_elt);
-				}
-				max_timeout = 0;
-				saved_priority = it->priority;
-				max_elt = nullptr;
-			}
-
-			auto timeout = get_item_timeout(it);
-
-			if (timeout > max_timeout) {
-				max_timeout = timeout;
-				max_elt = it;
-			}
-		}
-
-		if (max_elt != nullptr && max_timeout > 0) {
-			if (!seen_items.contains(max_elt)) {
-				accumulated_timeout += max_timeout;
-				added_timeout += max_timeout;
-
-				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) end of processing; "
-									   "symbol: %s",
-									   max_timeout, accumulated_timeout,
-									   max_elt->symbol.c_str());
-				elts.emplace_back(max_timeout, max_elt);
-				seen_items.insert(max_elt);
-			}
-		}
-
-		return added_timeout;
-	};
-
-	auto prefilters_timeout = pre_postfilter_iter(this->prefilters);
-
-	/* For normal filters, we check the maximum chain of the dependencies
-	 * This function might have O(N^2) complexity if all symbols are in a single
-	 * dependencies chain. But it is not the case in practice
-	 */
-	double max_filters_timeout = 0;
-	for (const auto &it: this->filters) {
-		auto timeout = get_filter_timeout(it, get_filter_timeout);
-
-		if (timeout > max_filters_timeout) {
-			max_filters_timeout = timeout;
-			if (!seen_items.contains(it)) {
-				elts.emplace_back(timeout, it);
-				seen_items.insert(it);
-			}
+	for (const auto &[_id, it]: items_by_id) {
+		if (it->is_executable()) {
+			items.push_back(it.get());
 		}
 	}
 
-	accumulated_timeout += max_filters_timeout;
+	std::sort(std::begin(items), std::end(items), [](const auto *it1, const auto *it2) {
+		if (it1->stage != it2->stage) {
+			return it1->stage < it2->stage;
+		}
 
-	auto postfilters_timeout = pre_postfilter_iter(this->postfilters);
-	auto idempotent_timeout = pre_postfilter_iter(this->idempotent);
+		if (it1->level != it2->level) {
+			return it1->level > it2->level;
+		}
+
+		return it1->id < it2->id;
+	});
+
+	std::array<double, exec_stages_count> stage_timeouts{};
+
+	for (auto i = 0ul; i < items.size();) {
+		const auto stage = items[i]->stage;
+		const auto level = items[i]->level;
+		auto max_timeout = 0.0;
+		const cache_item *max_elt = nullptr;
+
+		for (; i < items.size() && items[i]->stage == stage && items[i]->level == level; i++) {
+			auto timeout = get_chain_timeout(items[i], get_chain_timeout);
+
+			if (timeout > 0 && !seen_items.contains(items[i])) {
+				elts.emplace_back(timeout, items[i]);
+				seen_items.insert(items[i]);
+			}
+
+			if (timeout > max_timeout) {
+				max_timeout = timeout;
+				max_elt = items[i];
+			}
+		}
+
+		if (max_elt != nullptr) {
+			accumulated_timeout += max_timeout;
+			stage_timeouts[static_cast<unsigned int>(stage)] += max_timeout;
+
+			msg_debug_cache_lambda("added %.2f to the timeout (%.2f) for the stage %s, level %d; "
+								   "symbol: %s",
+								   max_timeout, accumulated_timeout, exec_stage_to_str(stage), level,
+								   max_elt->symbol.c_str());
+		}
+	}
 
 	/* Sort in decreasing order by timeout */
 	std::stable_sort(std::begin(elts), std::end(elts),
@@ -1440,11 +1586,15 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 						 return p1.first > p2.first;
 					 });
 
-	msg_debug_cache("overall cache timeout: %.2f, %.2f from prefilters,"
+	msg_debug_cache("overall cache timeout: %.2f, %.2f from connfilters, %.2f from prefilters,"
 					" %.2f from postfilters, %.2f from idempotent filters,"
 					" %.2f from normal filters",
-					accumulated_timeout, prefilters_timeout, postfilters_timeout,
-					idempotent_timeout, max_filters_timeout);
+					accumulated_timeout,
+					stage_timeouts[static_cast<unsigned int>(exec_stage::connfilters)],
+					stage_timeouts[static_cast<unsigned int>(exec_stage::prefilters)],
+					stage_timeouts[static_cast<unsigned int>(exec_stage::postfilters)],
+					stage_timeouts[static_cast<unsigned int>(exec_stage::idempotent)],
+					stage_timeouts[static_cast<unsigned int>(exec_stage::filters)]);
 
 	return accumulated_timeout;
 }
