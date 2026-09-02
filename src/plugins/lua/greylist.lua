@@ -237,15 +237,28 @@ local function greylist_message(task, end_time, why)
     return
   end
 
+  -- Use the lowest passthrough priority so any other pre-result (score-based
+  -- reject, force_actions, etc.) always wins the tie, regardless of whether
+  -- it was set before or after this postfilter runs (postfilters execute in
+  -- ascending priority order, so higher-priority overrides run *after* us).
   if settings.message_func then
-    task:set_pre_result(settings['action'],
-        settings.message_func(task, end_time), N)
+    task:set_pre_result {
+      action = settings['action'],
+      message = settings.message_func(task, end_time),
+      module = N,
+      priority = 0,
+    }
   else
     local message = settings['message']
     if settings.report_time then
       message = string.format("%s: %s", message, end_time)
     end
-    task:set_pre_result(settings['action'], message, N)
+    task:set_pre_result {
+      action = settings['action'],
+      message = message,
+      module = N,
+      priority = 0,
+    }
   end
 
   task:set_flag('greylisted')
