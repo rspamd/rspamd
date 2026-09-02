@@ -162,32 +162,23 @@ public:
 	}
 
 	/**
-	 * A bucket is open when all buckets before it at the same stage are drained
+	 * A bucket is open when all buckets before it at the same stage are drained,
+	 * or when nothing can drain them anymore (the session has no events left)
+	 * @param task
 	 * @param bucket
 	 * @return
 	 */
-	auto is_bucket_open(unsigned int bucket) const -> bool
-	{
-		const auto stage = order->buckets[bucket].stage;
-		const auto first = order->stage_buckets[static_cast<unsigned int>(stage)].first;
-
-		for (auto i = first; i < bucket; i++) {
-			if (bucket_pending[i] > 0) {
-				return false;
-			}
-		}
-
-		return true;
-	}
+	auto is_bucket_open(struct rspamd_task *task, unsigned int bucket) const -> bool;
 
 	/**
 	 * Checks if an item may be started now: its stage is the current one and its
 	 * level is open
+	 * @param task
 	 * @param item
 	 * @param dyn_item
 	 * @return
 	 */
-	auto may_start(const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool;
+	auto may_start(struct rspamd_task *task, const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool;
 
 public:
 	/* Dropper for a shared ownership */

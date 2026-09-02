@@ -417,6 +417,39 @@ TEST_SUITE("symcache_order")
 
 		CHECK(max_timeout() == doctest::Approx(4.0 + 3.0 + 1.5 + 2.5));
 	}
+
+	TEST_CASE_FIXTURE(symcache_order_fixture, "symbols registered after init are planned on resort")
+	{
+		add("PRE", 5, SYMBOL_TYPE_PREFILTER);
+		add("F", 0, SYMBOL_TYPE_NORMAL);
+		init();
+
+		/* E.g. regexp rules loaded from a map */
+		add("LATE_PRE", 9, SYMBOL_TYPE_PREFILTER);
+		add("LATE_F", 0, SYMBOL_TYPE_NORMAL);
+		add("LATE_POST", 1, SYMBOL_TYPE_POSTFILTER);
+		rspamd_symcache_promote_resort(cache);
+
+		/* The dump resorts the cache, which plans the new symbols */
+		auto p = plan();
+		CHECK(p.size() == 5);
+		CHECK(position(p, "LATE_PRE") < position(p, "PRE"));
+		CHECK(position(p, "PRE") < position(p, "F"));
+		CHECK(position(p, "F") < position(p, "LATE_POST"));
+
+		auto i = info("LATE_PRE");
+		CHECK(std::string(i.stage) == "prefilters");
+		CHECK(i.level == 9);
+		i = info("LATE_F");
+		CHECK(std::string(i.stage) == "filters");
+		i = info("LATE_POST");
+		CHECK(std::string(i.stage) == "postfilters");
+		CHECK(i.level == -1);
+
+		/* The old symbols keep their plan */
+		i = info("PRE");
+		CHECK(i.level == 5);
+	}
 }
 
 #endif

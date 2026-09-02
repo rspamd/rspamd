@@ -582,8 +582,18 @@ auto symcache::compute_exec_plan() -> void
 {
 	auto log_func = RSPAMD_LOG_FUNC;
 
-	/* Seed from the declared types and priorities */
+	/*
+	 * Seed from the declared types and priorities. Items that already have a
+	 * plan keep it: this function runs on every resort, so the symbols
+	 * registered after the init (e.g. from maps) get their plan too, while the
+	 * levels of the others stay as they were assigned at the init time
+	 */
 	for (const auto &[_id, it]: items_by_id) {
+		if (it->planned) {
+			continue;
+		}
+
+		it->planned = true;
 		it->stage = declared_exec_stage(it->type);
 		it->hoisted_by = nullptr;
 
@@ -681,17 +691,14 @@ auto symcache::compute_exec_plan() -> void
 			}
 		}
 	}
-
-	exec_plan_ready = true;
 }
 
 auto symcache::resort() -> void
 {
 	auto log_func = RSPAMD_LOG_FUNC;
 
-	if (!exec_plan_ready) {
-		compute_exec_plan();
-	}
+	/* Plan the symbols registered since the last resort (a no-op for the rest) */
+	compute_exec_plan();
 
 	auto ord = std::make_shared<order_generation>(items_by_id.size(), cur_order_gen);
 
@@ -704,6 +711,13 @@ auto symcache::resort() -> void
 	for (const auto *vec: {&connfilters, &prefilters, &filters, &postfilters, &idempotent}) {
 		for (auto &it: *vec) {
 			if (it) {
+				if (it->stage == exec_stage::none) {
+					/* Must not happen: every executable item is planned above */
+					msg_err_cache("internal error: symbol %s (%s) has no execution stage; use the declared one",
+								  it->symbol.c_str(), it->get_type_str());
+					it->stage = declared_exec_stage(it->type);
+				}
+
 				total_hits += it->st->total_hits;
 				/* Unmask topological order */
 				it->order = 0;
@@ -1489,10 +1503,8 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	auto log_func = RSPAMD_LOG_FUNC;
 	ankerl::unordered_dense::set<const cache_item *> seen_items;
 
-	if (!exec_plan_ready) {
-		/* E.g. called before init: then merely the declared types are used */
-		compute_exec_plan();
-	}
+	/* E.g. called before init: then merely the declared types are used */
+	compute_exec_plan();
 
 	auto get_item_timeout = [](const cache_item *it) {
 		return it->get_numeric_augmentation("timeout").value_or(0.0);

@@ -504,7 +504,31 @@ auto symcache_runtime::should_skip(const cache_item *item, check_status status) 
 	}
 }
 
-auto symcache_runtime::may_start(const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool
+static inline auto session_has_events(struct rspamd_task *task) -> bool
+{
+	return task->s != nullptr && rspamd_session_events_pending(task->s) > 0;
+}
+
+auto symcache_runtime::is_bucket_open(struct rspamd_task *task, unsigned int bucket) const -> bool
+{
+	const auto stage = order->buckets[bucket].stage;
+	const auto first = order->stage_buckets[static_cast<unsigned int>(stage)].first;
+
+	for (auto i = first; i < bucket; i++) {
+		if (bucket_pending[i] > 0) {
+			/*
+			 * Items are pending, but when the session has no events nothing is
+			 * going to finish them (a leaked async counter): proceed, as the
+			 * priority based scheduler used to do
+			 */
+			return !session_has_events(task);
+		}
+	}
+
+	return true;
+}
+
+auto symcache_runtime::may_start(struct rspamd_task *task, const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool
 {
 	if (item->get_stage() != cur_stage) {
 		return false;
@@ -513,13 +537,18 @@ auto symcache_runtime::may_start(const cache_item *item, const cache_dynamic_ite
 	auto idx = dyn_item - dynamic_items;
 	auto bucket = order->item_bucket[idx];
 
-	return bucket != order_generation::no_bucket && is_bucket_open(bucket);
+	return bucket != order_generation::no_bucket && is_bucket_open(task, bucket);
 }
 
 auto symcache_runtime::process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool
 {
 	auto log_func = RSPAMD_LOG_FUNC;
 	const auto [first_bucket, last_bucket] = order->stage_buckets[static_cast<unsigned int>(stage)];
+	/*
+	 * True when nothing is left to start at this stage; the items in flight are
+	 * awaited by the task processing via the session events
+	 */
+	auto all_done = true;
 
 	for (auto b = first_bucket; b < last_bucket; b++) {
 		const auto &bucket = order->buckets[b];
@@ -527,6 +556,12 @@ auto symcache_runtime::process_stage(struct rspamd_task *task, symcache &cache, 
 		msg_debug_cache_task_lambda("process bucket %d: stage %s, level %d, %d items, %d pending",
 									(int) b, exec_stage_to_str(bucket.stage), bucket.level,
 									(int) bucket.count, (int) bucket_pending[b]);
+
+		if (b > first_bucket && !is_bucket_open(task, b)) {
+			/* The previous level is being drained: wait for its events */
+			msg_debug_cache_task_lambda("bucket %d is not open yet: wait for the previous levels", (int) b);
+			return false;
+		}
 
 		for (auto idx = bucket.first; idx < bucket.first + bucket.count; idx++) {
 			if (RSPAMD_TASK_IS_SKIPPED(task)) {
@@ -560,6 +595,7 @@ auto symcache_runtime::process_stage(struct rspamd_task *task, symcache &cache, 
 				msg_debug_cache_task_lambda("blocked execution of %d(%s) unless deps are "
 											"resolved",
 											item->id, item->symbol.c_str());
+				all_done = false;
 				continue;
 			}
 
@@ -567,14 +603,63 @@ auto symcache_runtime::process_stage(struct rspamd_task *task, symcache &cache, 
 		}
 
 		if (bucket_pending[b] > 0) {
-			/* The next level may not start until this one is drained */
-			msg_debug_cache_task_lambda("bucket %d is not drained: %d items pending",
-										(int) b, (int) bucket_pending[b]);
-			return false;
+			if (session_has_events(task)) {
+				/* The next level may not start until this one is drained */
+				msg_debug_cache_task_lambda("bucket %d is not drained: %d items pending",
+											(int) b, (int) bucket_pending[b]);
+				return false;
+			}
+
+			auto *inflight = describe_inflight_symbols();
+
+			if (inflight != nullptr) {
+				msg_warn_task("symbols are pending without any async events at the %s stage (level %d), "
+							  "probably a leaked async counter: %v; proceed with the next level",
+							  exec_stage_to_str(bucket.stage), bucket.level, inflight);
+				g_string_free(inflight, TRUE);
+			}
 		}
 	}
 
-	return true;
+	if (!all_done && !session_has_events(task)) {
+		/*
+		 * The remaining items wait for dependencies that nothing is going to
+		 * finish: skip them instead of spinning in the task processing loop
+		 */
+		auto nskipped = 0;
+
+		for (auto b = first_bucket; b < last_bucket; b++) {
+			const auto &bucket = order->buckets[b];
+
+			for (auto idx = bucket.first; idx < bucket.first + bucket.count; idx++) {
+				auto *dyn_item = &dynamic_items[idx];
+
+				if (dyn_item->status == cache_item_status::not_started) {
+					msg_debug_cache_task_lambda("skip %s(%d): its dependencies cannot be finished",
+												order->d[idx]->symbol.c_str(), order->d[idx]->id);
+					set_status(dyn_item, cache_item_status::skipped);
+					nskipped++;
+				}
+			}
+		}
+
+		auto *inflight = describe_inflight_symbols();
+
+		if (inflight != nullptr) {
+			msg_warn_task("skipped %d symbols at the %s stage as their dependencies are pending "
+						  "without any async events, probably a leaked async counter: %v",
+						  nskipped, exec_stage_to_str(stage), inflight);
+			g_string_free(inflight, TRUE);
+		}
+		else {
+			msg_warn_task("skipped %d symbols at the %s stage as their dependencies cannot be started",
+						  nskipped, exec_stage_to_str(stage));
+		}
+
+		all_done = true;
+	}
+
+	return all_done;
 }
 
 auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
@@ -604,7 +689,7 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		return is_item_done(dyn_item->status);
 	}
 
-	if (!may_start(item, dyn_item)) {
+	if (!may_start(task, item, dyn_item)) {
 		/*
 		 * Reached from a reverse dependency or an eager dependency check:
 		 * the item belongs to another stage or its level is not open yet,

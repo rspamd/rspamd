@@ -333,8 +333,6 @@ private:
 	/* Items sorted into some order */
 	order_generation_ptr items_by_order;
 	unsigned int cur_order_gen = 0;
-	/* Set once `compute_exec_plan` has assigned stages and levels */
-	bool exec_plan_ready = false;
 
 	/* Specific vectors for execution/iteration */
 	items_ptr_vec connfilters;

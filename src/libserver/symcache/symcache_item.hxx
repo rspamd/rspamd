@@ -272,6 +272,8 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	exec_stage stage = exec_stage::none;
 	int level = 0;
 	cache_item *hoisted_by = nullptr;
+	/* Set once the plan has been computed for the item (symbols may be registered after init) */
+	bool planned = false;
 
 	/* Specific data for virtual and callback symbols */
 	std::variant<normal_item, virtual_item> specific;
