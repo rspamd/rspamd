@@ -1061,6 +1061,7 @@ local function add_rbl(key, rbl, global_opts)
   if rbl.selector then
 
     rbl.selectors = {}
+    rbl.selector_symbol_deps = {}
     if type(rbl.selector) ~= 'table' then
       rbl.selector = { ['selector'] = rbl.selector }
     end
@@ -1070,13 +1071,16 @@ local function add_rbl(key, rbl, global_opts)
         lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
             known_selectors[selector].id)
         rbl.selectors[selector_label] = known_selectors[selector].selector
+        for _, dep in ipairs(known_selectors[selector].deps or {}) do
+          rbl.selector_symbol_deps[#rbl.selector_symbol_deps + 1] = dep
+        end
       else
 
         if type(rbl.selector_flatten) ~= 'boolean' then
           -- Fail-safety
           rbl.selector_flatten = true
         end
-        local sel = selectors.create_selector_closure(rspamd_config, selector, '',
+        local sel, deps = selectors.create_selector_closure(rspamd_config, selector, '',
             rbl.selector_flatten)
 
         if not sel then
@@ -1088,8 +1092,12 @@ local function add_rbl(key, rbl, global_opts)
         known_selectors[selector] = {
           selector = sel,
           id = #lua_util.keys(known_selectors) + 1,
+          deps = deps,
         }
         rbl.selectors[selector_label] = known_selectors[selector].selector
+        for _, dep in ipairs(deps or {}) do
+          rbl.selector_symbol_deps[#rbl.selector_symbol_deps + 1] = dep
+        end
       end
     end
 
@@ -1220,6 +1228,8 @@ local function add_rbl(key, rbl, global_opts)
         rspamd_config:register_dependency(check_sym, dep)
       end
     end
+
+    selectors.register_symbol_deps(rspamd_config, check_sym, rbl.selector_symbol_deps)
 
     -- Failure symbol
     rspamd_config:register_symbol {

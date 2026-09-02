@@ -309,12 +309,20 @@ if opts['rules'] then
         rule.prefix = k .. "_"
       end
 
-      rule.source_selector = lua_selectors.create_selector_closure(rspamd_config,
+      local source_deps, cluster_deps
+      rule.source_selector, source_deps = lua_selectors.create_selector_closure(rspamd_config,
           rule.source_selector, '')
-      rule.cluster_selector = lua_selectors.create_selector_closure(rspamd_config,
+      rule.cluster_selector, cluster_deps = lua_selectors.create_selector_closure(rspamd_config,
           rule.cluster_selector, '')
       if rule.source_selector and rule.cluster_selector then
         rule.name = k
+        -- Deps are registered merely for the rules we keep, as a dropped rule
+        -- never registers its symbol
+        local all_deps = lua_util.shallowcopy(source_deps)
+        for _, dep in ipairs(cluster_deps) do
+          all_deps[#all_deps + 1] = dep
+        end
+        lua_selectors.register_symbol_deps(rspamd_config, rule.symbol, all_deps)
         table.insert(rules, rule)
       end
     end

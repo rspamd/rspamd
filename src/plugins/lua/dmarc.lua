@@ -814,7 +814,7 @@ if settings.munging then
 
   if munging_opts.munge_map_condition then
     munging_opts.munge_map_condition = lua_maps_expressions.create(rspamd_config,
-      munging_opts.munge_map_condition, N)
+      munging_opts.munge_map_condition, N, 'DMARC_MUNGED')
   end
 
   rspamd_config:register_symbol({

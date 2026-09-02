@@ -48,6 +48,35 @@ context("Selectors test", function()
     return elts
   end
 
+  test("symbol selector dependencies", function()
+    local registered = {}
+    local test_cfg = {
+      register_dependency = function(_, source, destination)
+        table.insert(registered, { source, destination })
+      end,
+    }
+    local parsed = lua_selectors.parse_selector(test_cfg,
+        "symbol('SELECTOR_DEP_ONE');symbol('SELECTOR_DEP_TWO');symbol('SELECTOR_DEP_ONE')")
+    local selector, deps = lua_selectors.create_selector_closure(test_cfg,
+        "symbol('SELECTOR_DEP_ONE');symbol('SELECTOR_DEP_TWO');symbol('SELECTOR_DEP_ONE')", '', false,
+        'SELECTOR_CONSUMER')
+
+    assert_not_nil(selector)
+    assert_rspamd_table_eq_sorted({
+      actual = lua_selectors.get_selector_symbol_deps(parsed),
+      expect = { 'SELECTOR_DEP_ONE', 'SELECTOR_DEP_TWO' },
+    })
+    assert_rspamd_table_eq_sorted({
+      actual = deps,
+      expect = { 'SELECTOR_DEP_ONE', 'SELECTOR_DEP_TWO' },
+    })
+    assert_equal(#registered, 2)
+    assert_equal(registered[1][1], 'SELECTOR_CONSUMER')
+    assert_equal(registered[1][2], 'SELECTOR_DEP_ONE')
+    assert_equal(registered[2][1], 'SELECTOR_CONSUMER')
+    assert_equal(registered[2][2], 'SELECTOR_DEP_TWO')
+  end)
+
   local cases_plain = {
     ["ip"] = {
                 selector = "ip",

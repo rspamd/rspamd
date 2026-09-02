@@ -95,6 +95,11 @@ MAP - COMBINED MISS
   Do Not Expect Symbol  COMBINED_MAP_AND
   Do Not Expect Symbol  COMBINED_MAP_OR
 
+MAP - COMBINED SYMBOL DEPENDENCY
+  Scan File  ${MESSAGE}
+  ...   Settings={symbols_enabled = [COMBINED_MAP_SELECTOR_DEP, SELECTOR_RBL_DEP]}
+  Expect Symbol  COMBINED_MAP_SELECTOR_DEP
+
 MAP - FROM MISS
   Scan File  ${MESSAGE}  From=user@other.com
   ...   Settings={symbols_enabled = [FROM_MAP]}

@@ -102,7 +102,7 @@ exports.schema = T.table({
 })
 
 --[[[
--- @function lua_maps_expression.create(config, object, module_name)
+-- @function lua_maps_expression.create(cfg, obj, module_name, own_symbol)
 -- Creates a new maps combination from `object` for `module_name`.
 -- The input should be table with the following fields:
 --
@@ -120,9 +120,11 @@ exports.schema = T.table({
 -- In case if `expression` is false a `nil` value is returned.
 -- @param {rspamd_config} cfg rspamd config
 -- @param {table} obj configuration table
+-- @param {string} module_name optional module name for logging, defaults to `lua_maps_expressions`
+-- @param {string} own_symbol optional symbol name; registers a dependency on any symbol() referenced by a rule's selector
 --
 --]]
-local function create(cfg, obj, module_name)
+local function create(cfg, obj, module_name, own_symbol)
   if not module_name then
     module_name = 'lua_maps_expressions'
   end
@@ -139,8 +141,15 @@ local function create(cfg, obj, module_name)
     module_name = module_name
   }
 
+  -- Registered only after a successful build, so a bailout below leaves no dangling dependency
+  local selector_symbol_deps = {}
+
   for name, rule in pairs(obj.rules) do
-    local sel = lua_selectors.create_selector_closure(cfg, rule.selector)
+    local sel, sel_deps = lua_selectors.create_selector_closure(cfg, rule.selector)
+
+    for _, dep in ipairs(sel_deps or {}) do
+      selector_symbol_deps[#selector_symbol_deps + 1] = dep
+    end
 
     if not sel then
       rspamd_logger.errx(cfg, 'cannot add selector for element %s in module %s',
@@ -215,6 +224,8 @@ local function create(cfg, obj, module_name)
   end
 
   ret.symbol = obj.symbol
+  ret.selector_symbol_deps = selector_symbol_deps
+  lua_selectors.register_symbol_deps(cfg, own_symbol, selector_symbol_deps)
 
   return ret
 end

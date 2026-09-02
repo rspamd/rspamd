@@ -21,6 +21,7 @@ Dependencies
   [Setup]  Lua Setup  ${RSPAMD_TESTDIR}/lua/deps.lua
   Scan File  ${MESSAGE}
   Expect Symbol  DEP10
+  Expect Symbol  POSTINIT_DEP
 
 Pre and Post Filters
   [Setup]  Lua Setup  ${RSPAMD_TESTDIR}/lua/prepostfilters.lua

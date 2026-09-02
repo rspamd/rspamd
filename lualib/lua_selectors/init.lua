@@ -634,15 +634,70 @@ end
 
 
 --[[[
--- @function lua_selectors.create_closure(log_obj, cfg, selector_str, delimiter, fn)
--- Creates a closure from a string selector, using the specific combinator function
+-- @function lua_selectors.get_selector_symbol_deps(parsed)
+-- Walks an already parsed selector pipe (as returned by `parse_selector`) and
+-- returns an array of unique symbol names referenced via the `symbol()`
+-- extractor, so that callers can wire up an automatic
+-- `rspamd_config:register_dependency` on them.
 --]]
-exports.create_selector_closure_fn = function(log_obj, cfg, selector_str, delimiter, fn)
+exports.get_selector_symbol_deps = function(parsed)
+  local seen = {}
+  local res = {}
+
+  for _, sel in ipairs(parsed or E) do
+    if sel.selector and sel.selector.name == 'symbol' and sel.selector.args then
+      local dep = sel.selector.args[1]
+      if dep and not seen[dep] then
+        seen[dep] = true
+        table.insert(res, dep)
+      end
+    end
+  end
+
+  return res
+end
+
+--[[[
+-- @function lua_selectors.register_symbol_deps(cfg, own_symbol, deps)
+-- Registers a dependency from `own_symbol` on every symbol in `deps` (as returned
+-- by `get_selector_symbol_deps`), skipping self references and duplicates.
+--]]
+exports.register_symbol_deps = function(cfg, own_symbol, deps)
+  if not (cfg and own_symbol and deps) then
+    return
+  end
+
+  local seen = {}
+
+  for _, dep in ipairs(deps) do
+    if dep ~= own_symbol and not seen[dep] then
+      seen[dep] = true
+      cfg:register_dependency(own_symbol, dep)
+      lua_util.debugm(M, cfg, 'registered automatic dependency %s -> %s from symbol() selector',
+          own_symbol, dep)
+    end
+  end
+end
+
+--[[[
+-- @function lua_selectors.create_closure(log_obj, cfg, selector_str, delimiter, fn, own_symbol)
+-- Creates a closure from a string selector, using the specific combinator function.
+-- If `own_symbol` is given, automatically registers a dependency from `own_symbol`
+-- on every symbol name referenced via `symbol()` in the selector, so that the
+-- consuming rule is not evaluated before its `symbol()` dependencies are ready.
+-- @return {function,table} closure that processes selector on task, and the list of
+-- symbol() names the selector depends on (nil, nil on parse failure)
+--]]
+exports.create_selector_closure_fn = function(log_obj, cfg, selector_str, delimiter, fn, own_symbol)
   local selector = exports.parse_selector(cfg, selector_str)
 
   if not selector then
     return nil
   end
+
+  local selector_symbol_deps = exports.get_selector_symbol_deps(selector)
+
+  exports.register_symbol_deps(cfg, own_symbol, selector_symbol_deps)
 
   return function(task)
     local res = exports.process_selectors(task, selector)
@@ -652,17 +707,21 @@ exports.create_selector_closure_fn = function(log_obj, cfg, selector_str, delimi
     end
 
     return nil
-  end
+  end, selector_symbol_deps
 end
 
 --[[[
--- @function lua_selectors.create_closure(cfg, selector_str, delimiter='', flatten=false)
+-- @function lua_selectors.create_closure(cfg, selector_str, delimiter='', flatten=false, own_symbol=nil)
 -- Creates a closure from a string selector
+-- @param {string} own_symbol optional symbol name; if given, a dependency is
+-- automatically registered on any symbol referenced via `symbol()`
+-- @return {function,table} closure that processes selector on task, and the list of
+-- symbol() names the selector depends on (nil on error)
 --]]
-exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten)
+exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten, own_symbol)
   local combinator_fn = flatten and exports.flatten_selectors or exports.combine_selectors
 
-  return exports.create_selector_closure_fn(nil, cfg, selector_str, delimiter, combinator_fn)
+  return exports.create_selector_closure_fn(nil, cfg, selector_str, delimiter, combinator_fn, own_symbol)
 end
 
 local function display_selectors(tbl)
@@ -724,15 +783,18 @@ exports.list_combinators = function()
 end
 
 --[[[
--- @function lua_selectors.create_selector_closure_with_combinator(cfg, selector_str, delimiter, combinator_name)
+-- @function lua_selectors.create_selector_closure_with_combinator(cfg, selector_str, delimiter, combinator_name, own_symbol)
 -- Creates a closure from a string selector using named combinator
 -- @param {rspamd_config} cfg rspamd config object
 -- @param {string} selector_str selector string to parse
 -- @param {string} delimiter delimiter for combining results (used by some combinators)
 -- @param {string} combinator_name name of combinator: 'string', 'array', or 'object'
--- @return {function} closure that processes selector on task, or nil on error
+-- @param {string} own_symbol optional symbol name; if given, a dependency is
+-- automatically registered on any symbol referenced via `symbol()`
+-- @return {function,table} closure that processes selector on task, and the list of
+-- symbol() names the selector depends on (nil on error)
 --]]
-exports.create_selector_closure_with_combinator = function(cfg, selector_str, delimiter, combinator_name)
+exports.create_selector_closure_with_combinator = function(cfg, selector_str, delimiter, combinator_name, own_symbol)
   local combinator_fn = combinators[combinator_name or 'string']
 
   if not combinator_fn then
@@ -741,7 +803,7 @@ exports.create_selector_closure_with_combinator = function(cfg, selector_str, de
     return nil
   end
 
-  return exports.create_selector_closure_fn(cfg, cfg, selector_str, delimiter, combinator_fn)
+  return exports.create_selector_closure_fn(cfg, cfg, selector_str, delimiter, combinator_fn, own_symbol)
 end
 
 -- Publish log target

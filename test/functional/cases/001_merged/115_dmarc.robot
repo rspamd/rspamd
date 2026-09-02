@@ -20,6 +20,11 @@ DMARC NONE PASS SPF
   ...  Settings=${DMARC_SETTINGS}
   Expect Symbol  DMARC_POLICY_ALLOW
 
+DMARC MUNGING MAP EXPRESSION SYMBOL DEPENDENCY
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/pass_none.eml
+  ...  Settings={symbols_enabled = [DMARC_CHECK, DKIM_CHECK, SPF_CHECK, DMARC_MUNGED, SELECTOR_RBL_DEP]}
+  Expect Symbol  DMARC_MUNGED
+
 DMARC NONE FAIL
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
   ...  Settings=${DMARC_SETTINGS}
