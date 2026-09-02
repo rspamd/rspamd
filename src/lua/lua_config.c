@@ -209,7 +209,9 @@ LUA_FUNCTION_DEF(config, get_classifier);
  * - `name`: name of symbol (can be missing for callback symbols)
  * - `callback`: function to be called for symbol's check (can be absent for virtual symbols)
  * - `weight`: weight of symbol (should normally be 1 or missing)
- * - `priority`: priority of symbol (normally 0 or missing)
+ * - `priority`: priority of symbol (normally 0 or missing); for prefilters, connfilters,
+ *   postfilters and idempotent symbols it defines the execution level within the stage
+ *   (see below), for normal symbols it is merely a soft ordering hint
  * - `type`: type of symbol:
  *   + `normal`: executed after prefilters, according to dependency graph or in undefined order
  *   + `callback`: a check that merely inserts virtual symbols
@@ -218,6 +220,14 @@ LUA_FUNCTION_DEF(config, get_classifier);
  *   + `postfilter`: executed after most other checks
  *   + `prefilter`: executed before most other checks
  *   + `virtual`: a symbol inserted by its parent check
+ *
+ *   All types share one dependency graph. Prefilters (and connfilters) with a higher
+ *   priority run before the ones with a lower priority, and a prefilter may not start
+ *   until every prefilter with a higher priority has finished; prefilters of the same
+ *   priority run concurrently. Postfilters and idempotent symbols are ordered the other
+ *   way round: a higher priority runs later. A prefilter may depend on a normal symbol
+ *   (see `register_dependency`): that symbol, with its own dependencies, is then executed
+ *   at the prefilter stage at the level of the depending prefilter.
  * - `flags`: various flags split by commas or spaces:
  *   + `nice` if symbol can produce negative score;
  *   + `empty` if symbol can be called for empty messages
@@ -266,11 +276,21 @@ LUA_FUNCTION_DEF(config, register_callback_symbol);
 LUA_FUNCTION_DEF(config, register_callback_symbol_priority);
 
 /***
- * @method rspamd_config:register_dependency(id|name, depname)
+ * @method rspamd_config:register_dependency(id|name, depname[, hard])
  * Create a dependency on symbol identified by name for symbol identified by ID or name.
- * This affects order of checks only (a symbol is still checked if its dependencies are disabled).
+ * This affects order of checks only (a symbol is still checked if its dependencies are
+ * disabled), unless `hard` is set: then the dependent symbol is not executed when its
+ * dependency has been disabled or skipped.
+ *
+ * A dependency may point to the same stage or to an earlier one (e.g. a normal symbol
+ * depending on a prefilter, a postfilter depending on a normal symbol). A prefilter
+ * may also depend on a normal symbol: that symbol is then hoisted to the prefilter
+ * stage together with its own dependencies, so the cost of the dependency is paid
+ * before the prefilter decision. Other edges to a later stage are rejected at the
+ * configuration time; `rspamadm configdump -e` shows the resulting execution plan.
  * @param {number|string} id id or name of source (numeric id is returned by all register_*_symbol)
  * @param {string} depname dependency name
+ * @param {boolean} hard if true, the source is skipped when the dependency is disabled or skipped
  * @example
 local function cb(task)
 ...
