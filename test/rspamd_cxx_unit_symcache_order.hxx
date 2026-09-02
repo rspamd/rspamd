@@ -372,15 +372,26 @@ TEST_SUITE("symcache_order")
 		CHECK(std::string(info("CONN").stage) == "connfilters");
 	}
 
-	TEST_CASE_FIXTURE(symcache_order_fixture, "cycles do not break the plan")
+	TEST_CASE_FIXTURE(symcache_order_fixture, "cycles are broken at init")
 	{
-		add("A", 0, SYMBOL_TYPE_NORMAL);
-		add("B", 0, SYMBOL_TYPE_NORMAL);
+		add("A", 0, SYMBOL_TYPE_NORMAL, 1.0);
+		add("B", 0, SYMBOL_TYPE_NORMAL, 2.0);
 		depends("A", "B");
 		depends("B", "A");
-		add("PRE", 5, SYMBOL_TYPE_PREFILTER);
+		add("PRE", 5, SYMBOL_TYPE_PREFILTER, 0.5);
 		depends("PRE", "A");
+		/* A longer cycle through a filter chain */
+		add("C", 0, SYMBOL_TYPE_NORMAL, 1.0);
+		add("D", 0, SYMBOL_TYPE_NORMAL, 1.0);
+		add("E", 0, SYMBOL_TYPE_NORMAL, 1.0);
+		depends("C", "D");
+		depends("D", "E");
+		depends("E", "C");
 		init();
+
+		/* One edge of each cycle has been dropped */
+		CHECK(deps_of("A").size() + deps_of("B").size() == 1);
+		CHECK(deps_of("C").size() + deps_of("D").size() + deps_of("E").size() == 2);
 
 		CHECK(std::string(info("A").stage) == "prefilters");
 		CHECK(std::string(info("B").stage) == "prefilters");
@@ -388,8 +399,16 @@ TEST_SUITE("symcache_order")
 		CHECK(info("B").level == 5);
 
 		auto p = plan();
-		CHECK(p.size() == 3);
+		CHECK(p.size() == 6);
 		CHECK(position(p, "PRE") > position(p, "A"));
+
+		/*
+		 * The timeouts traversal terminates: the prefilter bucket is either
+		 * PRE -> A -> B (3.5) or max(PRE -> A, B) (2.0), the filters chain is 3.0
+		 */
+		auto t = max_timeout();
+		CHECK(t >= 2.0 + 3.0);
+		CHECK(t <= 3.5 + 3.0);
 	}
 
 	TEST_CASE_FIXTURE(symcache_order_fixture, "hoisted chains are accounted in the prefilter stage timeout")

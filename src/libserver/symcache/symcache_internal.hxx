@@ -387,6 +387,11 @@ private:
 	 * (stage, level) among the items that depend on it (hoisting)
 	 */
 	auto compute_exec_plan() -> void;
+	/*
+	 * Drops the back edges of the dependency cycles (with an error), so the
+	 * graph walked by the planner, the runtime and the timeouts is acyclic
+	 */
+	auto break_dependency_cycles() -> void;
 	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec &;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;

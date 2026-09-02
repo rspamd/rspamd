@@ -218,6 +218,9 @@ auto symcache::init() -> bool
 		it->process_deps(*this);
 	}
 
+	/* The runtime, the planner and the timeouts all walk the graph: it must be acyclic */
+	break_dependency_cycles();
+
 	/*
 	 * Assign stages and levels once: as the pre/postfilter ordering did before,
 	 * this uses the priorities known at the init time; later adjustments
@@ -574,6 +577,64 @@ auto symcache::add_dependency(int id_from, std::string_view to, int id_to, int v
 		else {
 			msg_debug_cache("duplicate virtual dependency %s -> %s",
 							vsource->symbol.c_str(), to.data());
+		}
+	}
+}
+
+auto symcache::break_dependency_cycles() -> void
+{
+	auto log_func = RSPAMD_LOG_FUNC;
+
+	enum class color : std::uint8_t {
+		grey,
+		black,
+	};
+	/* Items not in the map are white (not visited yet) */
+	ankerl::unordered_dense::map<int, color> colors;
+	std::vector<std::pair<cache_item *, int>> back_edges;
+
+	const auto visit = [&](cache_item *it, auto &&rec) -> void {
+		colors[it->id] = color::grey;
+
+		for (auto &[dep_id, dep]: it->deps) {
+			auto *dit = dep.item;
+
+			if (dit == nullptr) {
+				continue;
+			}
+
+			auto found = colors.find(dit->id);
+
+			if (found == colors.end()) {
+				rec(dit, rec);
+			}
+			else if (found->second == color::grey) {
+				msg_err_cache_lambda("cyclic dependency: %s depends on %s which (indirectly) depends on it; "
+									 "the dependency %s -> %s is dropped",
+									 it->symbol.c_str(), dit->symbol.c_str(),
+									 it->symbol.c_str(), dit->symbol.c_str());
+				back_edges.emplace_back(it, dep_id);
+			}
+		}
+
+		colors[it->id] = color::black;
+	};
+
+	for (const auto &[_id, it]: items_by_id) {
+		if (it->is_executable() && !colors.contains(it->id)) {
+			visit(it.get(), visit);
+		}
+	}
+
+	for (auto &[it, dep_id]: back_edges) {
+		auto found = it->deps.find(dep_id);
+
+		if (found != it->deps.end()) {
+			if (found->second.item != nullptr) {
+				found->second.item->rdeps.erase(it->id);
+			}
+
+			it->deps.erase(found);
 		}
 	}
 }
@@ -1518,12 +1579,23 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	 * This function might have O(N^2) complexity if all symbols are in a single
 	 * dependencies chain. But it is not the case in practice
 	 */
+	/* Items on the current traversal path: cycles are broken at init, this is a safety net */
+	ankerl::unordered_dense::set<int> path;
+
 	auto get_chain_timeout = [&](const cache_item *it, auto self) -> double {
 		auto own_timeout = get_item_timeout(it);
 		auto max_child_timeout = 0.0;
 
+		path.insert(it->id);
+
 		for (const auto &[id, dep]: it->deps) {
 			if (dep.item == nullptr || dep.item->stage != it->stage || dep.item->level != it->level) {
+				continue;
+			}
+
+			if (path.contains(dep.item->id)) {
+				msg_err_cache_lambda("cyclic dependency %s -> %s when computing timeouts; ignore it",
+									 it->symbol.c_str(), dep.item->symbol.c_str());
 				continue;
 			}
 
@@ -1533,6 +1605,8 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 				max_child_timeout = cld_timeout;
 			}
 		}
+
+		path.erase(it->id);
 
 		return own_timeout + max_child_timeout;
 	};
