@@ -466,6 +466,84 @@ exports.parse_selector = function(cfg, str)
 end
 
 --[[[
+-- @function lua_selectors.get_dependencies(cfg, str)
+-- Returns the list of symbols that must be executed before the selector can
+-- produce a value (e.g. `ASN_CHECK` for `asn`, the symbol itself for
+-- `symbol(NAME)`), or nil if the selector cannot be parsed
+--]]
+exports.get_dependencies = function(cfg, str)
+  local parsed = exports.parse_selector(cfg, str)
+
+  if not parsed then
+    return nil
+  end
+
+  local seen = {}
+  local deps = {}
+
+  for _, sel in ipairs(parsed) do
+    local extractor_deps = sel.selector.dependencies
+
+    if type(extractor_deps) == 'function' then
+      extractor_deps = extractor_deps(sel.selector.args)
+    end
+
+    for _, dep in ipairs(extractor_deps or E) do
+      if not seen[dep] then
+        seen[dep] = true
+        deps[#deps + 1] = dep
+      end
+    end
+  end
+
+  return deps
+end
+
+--[[[
+-- @function lua_selectors.register_dependencies(cfg, symbol, str)
+-- Registers the dependencies of a selector (see `get_dependencies`) for the
+-- symbol that evaluates it, so the symbols cache executes them first: a
+-- prefilter that uses `symbol(DKIM_CHECK)` gets DKIM_CHECK hoisted to the
+-- prefilter stage. Composites and classifiers are produced by the task stages
+-- rather than by symbols, and a dependency on a symbol of a later stage cannot
+-- be satisfied: those are skipped with a warning
+--]]
+exports.register_dependencies = function(cfg, symbol, str)
+  local deps = exports.get_dependencies(cfg, str)
+
+  if not deps or #deps == 0 then
+    return
+  end
+
+  local stage_rank = {
+    connfilter = 1,
+    prefilter = 2,
+    filter = 3,
+    postfilter = 4,
+    idempotent = 5,
+  }
+  local sym_type = cfg:get_symbol_type(symbol)
+
+  for _, dep in ipairs(deps) do
+    local dep_type = cfg:get_symbol_type(dep)
+
+    if dep_type and not stage_rank[dep_type] then
+      lua_util.debugm(M, cfg, 'selector "%s" needs %s (%s) which is not executed by the symbols cache; ' ..
+          'no dependency registered for %s', str, dep, dep_type, symbol)
+    elseif dep_type and sym_type and stage_rank[sym_type] and
+        stage_rank[dep_type] > stage_rank[sym_type] and
+        not (sym_type == 'prefilter' and dep_type == 'filter') then
+      logger.warnx(cfg, 'selector "%s" of %s (%s) needs %s (%s) which is executed later; ' ..
+          'the selector will have no value', str, symbol, sym_type, dep, dep_type)
+    else
+      -- Unknown symbols are resolved (or reported) when the cache is initialised
+      lua_util.debugm(M, cfg, 'register dependency %s -> %s for selector "%s"', symbol, dep, str)
+      cfg:register_dependency(symbol, dep)
+    end
+  end
+end
+
+--[[[
 -- @function lua_selectors.register_extractor(cfg, name, selector)
 --]]
 exports.register_extractor = function(cfg, name, selector)
