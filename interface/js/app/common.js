@@ -398,6 +398,7 @@ define(["nprogress"],
             neighbours_status[ind].checked = false;
             neighbours_status[ind].data = {};
             neighbours_status[ind].status = false;
+            neighbours_status[ind].latency = null;
 
             const params = o.params || {};
             const isGlobal = params.global !== false;
@@ -421,6 +422,7 @@ define(["nprogress"],
             }
 
             const xhr = new XMLHttpRequest();
+            const started = performance.now();
             xhr.open(method, requestUrl, true);
 
             Object.keys(headers).forEach((name) => xhr.setRequestHeader(name, headers[name]));
@@ -467,6 +469,7 @@ define(["nprogress"],
             }
 
             function finish() {
+                neighbours_status[ind].latency = performance.now() - started;
                 runStatusCode();
                 if (neighbours_status.every((elt) => elt.checked)) {
                     if (neighbours_status.some((elt) => elt.status)) {
@@ -613,6 +616,7 @@ define(["nprogress"],
          *          checked: boolean,      // whether this server was attempted
          *          status: boolean,       // HTTP success (<400)
          *          data: any,             // parsed JSON or raw text
+         *          latency: number|null,  // request round-trip time, ms
          *          percentComplete: number
          *        }
          *     2. xhr: XMLHttpRequest (jqXHR-compatible: status, statusText,

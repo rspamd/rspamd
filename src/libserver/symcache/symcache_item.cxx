@@ -143,8 +143,11 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				}
 
 				if (!ok_dep) {
-					msg_err_cache("cannot add dependency from %s on %s: invalid symbol types",
-								  dep.sym.c_str(), symbol.c_str());
+					msg_err_cache("cannot add dependency from %s (%s) on %s (%s): invalid symbol types",
+								  symbol.c_str(), item_type_to_str(type),
+								  dit->symbol.c_str(), item_type_to_str(dit->get_type()));
+					/* Drop the edge, so it is removed below and never reaches the runtime */
+					dep.item = nullptr;
 
 					continue;
 				}
@@ -161,10 +164,39 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				}
 			}
 			else {
+				/*
+				 * A filter can be a dependency merely for another filter or for a later
+				 * stage: otherwise the runtime would pull the filter (and its own
+				 * dependencies) into the earlier stage. Virtual symbols are executed
+				 * at their parent's stage.
+				 */
+				auto src_type = type;
+
+				if (is_virtual()) {
+					const auto *parent = get_parent(cache);
+
+					if (parent != nullptr) {
+						src_type = parent->get_type();
+					}
+				}
+
+				if (src_type == symcache_item_type::CONNFILTER ||
+					src_type == symcache_item_type::PREFILTER) {
+					msg_err_cache("cannot add dependency from %s (%s) on %s (filter): "
+								  "a %s cannot depend on a symbol from a later stage",
+								  symbol.c_str(), item_type_to_str(src_type),
+								  dit->symbol.c_str(), item_type_to_str(src_type));
+					/* Drop the edge, so it is removed below and never reaches the runtime */
+					dep.item = nullptr;
+
+					continue;
+				}
+
 				if (dit->id == id) {
 					msg_err_cache("cannot add dependency on self: %s -> %s "
 								  "(resolved to %s)",
 								  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+					dep.item = nullptr;
 				}
 				else {
 					/* Create a reverse dep */
