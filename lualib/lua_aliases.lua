@@ -607,6 +607,119 @@ local function apply_service_rules(email_addr)
 end
 exports.apply_service_rules = apply_service_rules
 
+--[[ Equivalent domains and mailbox identity ]]--
+
+-- Domains that deliver to the same mailbox namespace as another domain:
+-- user@<alias> and user@<canonical> reach one and the same account. They are
+-- used only to compare mailbox identities (see mailbox_identity); the rewrite
+-- path (apply_service_rules) keeps the transmitted domain on purpose, since
+-- the domains stay distinct for SPF, DKIM and DMARC.
+-- The builtin table is the fallback when no source is configured; the normal
+-- source is rspamd/equivalent_domains.inc registered via init_equivalent_domains
+local builtin_equivalent_domains = {
+  ['googlemail.com'] = 'gmail.com',
+}
+-- lua_maps kv maps (alias domain -> canonical domain), consulted in order
+local equivalent_domains_maps = {}
+-- alias -> canonical pairs given inline in the configuration
+local equivalent_domains_inline = {}
+
+--- Register a source of equivalent domains
+-- Several modules may call this: identical map definitions are shared by
+-- lua_maps, different ones are all consulted
+-- @param rspamd_config config object
+-- @param def map definition (url, list of urls or map object) or an inline
+--   table { ["alias.domain"] = "canonical.domain" }
+-- @return {boolean} true if the source was accepted
+local function init_equivalent_domains(rspamd_config, def)
+  if not def then
+    return false
+  end
+
+  if type(def) == 'table' and not def[1] and not def.url and not def.urls
+      and not def.external then
+    for alias, canonical in pairs(def) do
+      if type(alias) == 'string' and type(canonical) == 'string' then
+        equivalent_domains_inline[alias:lower()] = canonical:lower()
+      end
+    end
+
+    return true
+  end
+
+  local map = lua_maps.map_add_from_ucl(def, 'map', 'Equivalent mailbox domains')
+  if not map then
+    rspamd_logger.errx(rspamd_config, 'cannot add equivalent domains map: %s', def)
+    return false
+  end
+
+  for _, existing in ipairs(equivalent_domains_maps) do
+    if existing == map then
+      return true
+    end
+  end
+  table.insert(equivalent_domains_maps, map)
+
+  return true
+end
+exports.init_equivalent_domains = init_equivalent_domains
+
+--- Fold a domain to the canonical domain of its mailbox namespace
+-- @param domain domain string
+-- @return {string} lowercased canonical domain (the domain itself when it has no alias)
+local function canonical_domain(domain)
+  if not domain or domain == '' then
+    return domain
+  end
+
+  local d = domain:lower()
+
+  for _, map in ipairs(equivalent_domains_maps) do
+    local canonical = map:get_key(d)
+    if type(canonical) == 'string' and canonical ~= '' then
+      return canonical:lower()
+    end
+  end
+
+  return equivalent_domains_inline[d] or builtin_equivalent_domains[d] or d
+end
+exports.canonical_domain = canonical_domain
+
+--- Identity of a mailbox for comparison purposes
+-- Lowercases the address, folds the domain through canonical_domain and
+-- canonicalizes the user part with apply_service_rules (gmail dots and tags,
+-- plus tags elsewhere). The result is a comparison key: it must never be
+-- written back to a task as an address.
+-- @param addr email address table (user/domain fields) or a 'user@domain' string
+-- @return {string} identity and its canonical domain, or nil without a user part
+local function mailbox_identity(addr)
+  local user, domain
+
+  if type(addr) == 'string' then
+    user, domain = addr:match('^(.*)@([^@]*)$')
+    if not user then
+      user, domain = addr, ''
+    end
+  elseif type(addr) == 'table' then
+    user, domain = addr.user, addr.domain
+  end
+
+  if not user or user == '' then
+    return nil
+  end
+
+  user = user:lower()
+  domain = canonical_domain(domain or '')
+
+  local nu = apply_service_rules({ user = user, domain = domain })
+  if nu and nu ~= '' then
+    user = nu
+  end
+
+  return user .. '@' .. domain, domain
+end
+exports.mailbox_identity = mailbox_identity
+
 --- Resolve one step of aliasing
 -- @param email_str normalized email string
 -- @return result (string, array of strings, or nil), rule_type
