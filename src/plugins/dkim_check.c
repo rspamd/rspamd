@@ -1248,10 +1248,36 @@ dkim_module_check(struct dkim_check_result *res)
 		gsize from_domain_len = 0;
 		rspamd_ftok_t from_tld = {0};
 
+		/*
+		 * Alignment needs an unambiguous author, the same precondition DMARC
+		 * applies when it refuses a message carrying more than one From. A
+		 * rewrite appends its address and flags the ones already there, so it
+		 * is the originals that are counted where any exist.
+		 */
 		if (MESSAGE_FIELD_CHECK(task, from_mime) &&
 			MESSAGE_FIELD(task, from_mime)->len > 0) {
-			struct rspamd_email_address *from_addr =
-				g_ptr_array_index(MESSAGE_FIELD(task, from_mime), 0);
+			GPtrArray *from_mime = MESSAGE_FIELD(task, from_mime);
+			struct rspamd_email_address *from_addr = NULL, *addr;
+			unsigned int noriginal = 0, j;
+
+			PTR_ARRAY_FOREACH(from_mime, j, addr)
+			{
+				if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+					noriginal++;
+
+					if (from_addr == NULL) {
+						from_addr = addr;
+					}
+				}
+			}
+
+			if (noriginal == 0 && from_mime->len == 1) {
+				from_addr = g_ptr_array_index(from_mime, 0);
+			}
+			else if (noriginal != 1) {
+				from_addr = NULL;
+			}
+
 			if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
 				from_domain = from_addr->domain;
 				from_domain_len = from_addr->domain_len;
