@@ -391,6 +391,29 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       return ret
     end
   elseif type(opt) == 'table' then
+    -- Strip type prefixes (e.g. `glob;`) before hashing, so the cache key
+    -- reflects the effective map type rather than the one the caller asked for
+    if opt[1] then
+      local adjusted
+      for i, source in ipairs(opt) do
+        local nsrc, ntype = maybe_adjust_type(source, mtype)
+
+        if mtype ~= ntype then
+          if not adjusted then
+            mtype = ntype
+          end
+          adjusted = true
+        end
+        opt[i] = nsrc
+      end
+    elseif not opt.external and type(opt.url) == 'string' then
+      local nsrc, ntype = maybe_adjust_type(opt.url, mtype)
+      if nsrc and ntype then
+        opt.url = nsrc
+        mtype = ntype
+      end
+    end
+
     -- Type is a part of the key: the same urls can back maps of different types
     local cache_key = map_hash_key(lua_util.unordered_table_digest(opt), mtype)
     if not callback and maps_cache[cache_key] then
@@ -419,20 +442,6 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             or lua_util.str_startswith(line, 'file:')
             or lua_util.str_startswith(line, '/')
       end
-      -- Adjust each element if needed
-      local adjusted
-      for i, source in ipairs(opt) do
-        local nsrc, ntype = maybe_adjust_type(source, mtype)
-
-        if mtype ~= ntype then
-          if not adjusted then
-            mtype = ntype
-          end
-          adjusted = true
-        end
-        opt[i] = nsrc
-      end
-
       if mtype == 'radix' then
 
         if string.find(opt[1], '^%d') then
@@ -619,14 +628,6 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
               parse_err)
         end
       else
-        -- Adjust lua specific augmentations in a trivial case
-        if type(opt.url) == 'string' then
-          local nsrc, ntype = maybe_adjust_type(opt.url, mtype)
-          if nsrc and ntype then
-            opt.url = nsrc
-            mtype = ntype
-          end
-        end
         -- We have some non-trivial object so let C code to deal with it somehow...
         local map = rspamd_config:add_map {
           type = mtype,
