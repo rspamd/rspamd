@@ -152,6 +152,14 @@ bool rspamd_add_passthrough_result(struct rspamd_task *task,
 								   const char *module, unsigned int flags,
 								   struct rspamd_scan_result *scan_result);
 
+/**
+ * Checks if a scan result has a passthrough result that stops further checks:
+ * `least` and `process_all` results and disabled actions do not count
+ * @param res scan result (NULL is allowed)
+ * @return true if further checks and classification should be skipped
+ */
+bool rspamd_scan_result_has_passthrough(const struct rspamd_scan_result *res);
+
 enum rspamd_symbol_insert_flags {
 	RSPAMD_SYMBOL_INSERT_DEFAULT = 0,
 	RSPAMD_SYMBOL_INSERT_SINGLE = (1 << 0),

@@ -123,116 +123,61 @@ auto cache_item::process_deps(const symcache &cache) -> void
 		}
 
 		if (dit != nullptr) {
-			if (!dit->is_filter()) {
-				/*
-				 * Check sanity:
-				 * - same stage deps are OK (prefilter -> prefilter, etc.)
-				 * - natural order deps are OK (postfilter -> filter, filter -> prefilter)
-				 *
-				 * Otherwise, emit error
-				 */
-				auto ok_dep = false;
-				auto same_stage = false;
+			/*
+			 * The dependency is attached to the executed item: the parent for a
+			 * virtual symbol. `dit` is already resolved to the parent.
+			 */
+			auto *real_source = this;
 
-				if (dit->get_type() == type) {
-					ok_dep = true;
-					same_stage = true;
-				}
-				else if (type < dit->get_type()) {
-					ok_dep = true;
-				}
+			if (is_virtual()) {
+				real_source = get_parent_mut(cache);
 
-				if (!ok_dep) {
-					msg_err_cache("cannot add dependency from %s (%s) on %s (%s): invalid symbol types",
-								  symbol.c_str(), item_type_to_str(type),
-								  dit->symbol.c_str(), item_type_to_str(dit->get_type()));
-					/* Drop the edge, so it is removed below and never reaches the runtime */
+				if (real_source == nullptr) {
+					msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
+								  symbol.c_str(), dep.sym.c_str());
 					dep.item = nullptr;
-
 					continue;
-				}
-
-				dep.item = dit;
-
-				/* Create reverse deps for same-stage deps to enable eager processing */
-				if (same_stage) {
-					if (!dit->rdeps.contains(id)) {
-						dit->rdeps.emplace(id, cache_dependency{this, symbol, -1, dep.hard});
-						msg_debug_cache("added reverse dependency from %d on %d (same stage)",
-										id, dit->id);
-					}
 				}
 			}
+
+			const auto src_type = real_source->get_type();
+			const auto dst_type = dit->get_type();
+
+			if (dit->id == real_source->id) {
+				msg_err_cache("cannot add dependency on self: %s -> %s "
+							  "(resolved to %s)",
+							  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+				dep.item = nullptr;
+				continue;
+			}
+
+			if (!edge_allowed(src_type, dst_type)) {
+				msg_err_cache("cannot add dependency from %s (%s) on %s (%s): "
+							  "a %s cannot depend on a symbol from a later stage",
+							  symbol.c_str(), item_type_to_str(src_type),
+							  dit->symbol.c_str(), item_type_to_str(dst_type),
+							  item_type_to_str(src_type));
+				/* Drop the edge, so it is removed below and never reaches the runtime */
+				dep.item = nullptr;
+				continue;
+			}
+
+			dep.item = dit;
+
+			/*
+			 * The reverse dependency lets the runtime start the dependent as soon as
+			 * the dependency is finished; the runtime itself checks that the
+			 * dependent may run at that moment (its stage and level)
+			 */
+			if (!dit->rdeps.contains(real_source->id)) {
+				dit->rdeps.emplace(real_source->id,
+								   cache_dependency{real_source, real_source->symbol, -1, dep.hard});
+				msg_debug_cache("added reverse dependency from %d on %d", real_source->id,
+								dit->id);
+			}
 			else {
-				/*
-				 * A filter can be a dependency merely for another filter or for a later
-				 * stage: otherwise the runtime would pull the filter (and its own
-				 * dependencies) into the earlier stage. Virtual symbols are executed
-				 * at their parent's stage.
-				 */
-				auto src_type = type;
-
-				if (is_virtual()) {
-					const auto *parent = get_parent(cache);
-
-					if (parent != nullptr) {
-						src_type = parent->get_type();
-					}
-				}
-
-				if (src_type == symcache_item_type::CONNFILTER ||
-					src_type == symcache_item_type::PREFILTER) {
-					msg_err_cache("cannot add dependency from %s (%s) on %s (filter): "
-								  "a %s cannot depend on a symbol from a later stage",
-								  symbol.c_str(), item_type_to_str(src_type),
-								  dit->symbol.c_str(), item_type_to_str(src_type));
-					/* Drop the edge, so it is removed below and never reaches the runtime */
-					dep.item = nullptr;
-
-					continue;
-				}
-
-				if (dit->id == id) {
-					msg_err_cache("cannot add dependency on self: %s -> %s "
-								  "(resolved to %s)",
-								  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
-					dep.item = nullptr;
-				}
-				else {
-					/* Create a reverse dep */
-					if (is_virtual()) {
-						auto *parent = get_parent_mut(cache);
-
-						if (parent) {
-							if (!dit->rdeps.contains(parent->id)) {
-								dit->rdeps.emplace(parent->id, cache_dependency{parent, parent->symbol, -1});
-								msg_debug_cache("added reverse dependency from %d on %d", parent->id,
-												dit->id);
-							}
-							else {
-								msg_debug_cache("reverse dependency from %d on %d already exists",
-												parent->id, dit->id);
-							}
-							dep.item = dit;
-						}
-						else {
-							msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
-										  symbol.c_str(), dep.sym.c_str());
-						}
-					}
-					else {
-						dep.item = dit;
-						if (!dit->rdeps.contains(id)) {
-							dit->rdeps.emplace(id, cache_dependency{this, symbol, -1});
-							msg_debug_cache("added reverse dependency from %d on %d", id,
-											dit->id);
-						}
-						else {
-							msg_debug_cache("reverse dependency from %d on %d already exists",
-											id, dit->id);
-						}
-					}
-				}
+				msg_debug_cache("reverse dependency from %d on %d already exists",
+								real_source->id, dit->id);
 			}
 		}
 		else {
@@ -670,33 +615,57 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 	return std::make_pair(symcache_item_type::FILTER, type);
 }
 
-bool operator<(symcache_item_type lhs, symcache_item_type rhs)
+auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool
 {
-	auto ret = false;
-	switch (lhs) {
-	case symcache_item_type::CONNFILTER:
-		break;
-	case symcache_item_type::PREFILTER:
-		if (rhs == symcache_item_type::CONNFILTER) {
-			ret = true;
-		}
-		break;
-	case symcache_item_type::FILTER:
-		if (rhs == symcache_item_type::CONNFILTER || rhs == symcache_item_type::PREFILTER) {
-			ret = true;
-		}
-		break;
-	case symcache_item_type::POSTFILTER:
-		if (rhs != symcache_item_type::IDEMPOTENT) {
-			ret = true;
-		}
-		break;
-	case symcache_item_type::IDEMPOTENT:
-	default:
-		break;
+	if (dst == symcache_item_type::COMPOSITE || dst == symcache_item_type::CLASSIFIER) {
+		/*
+		 * Composites and classifiers are resolved by the task stages between
+		 * filters and postfilters, so only later stages (and other composites)
+		 * can wait for them
+		 */
+		return src == symcache_item_type::POSTFILTER || src == symcache_item_type::IDEMPOTENT ||
+			   src == dst;
 	}
 
-	return ret;
+	if (src == symcache_item_type::COMPOSITE || src == symcache_item_type::CLASSIFIER) {
+		/*
+		 * Composites and classifiers are not scheduled by the symcache, so such
+		 * an edge is merely descriptive (e.g. a composite on its atoms)
+		 */
+		return true;
+	}
+
+	const auto src_stage = declared_exec_stage(src);
+	const auto dst_stage = declared_exec_stage(dst);
+
+	if (src_stage == exec_stage::none || dst_stage == exec_stage::none) {
+		return false;
+	}
+
+	if (src_stage >= dst_stage) {
+		/* Same stage, or a later stage depending on an earlier one */
+		return true;
+	}
+
+	/*
+	 * An earlier stage depending on a later one: merely a prefilter may depend
+	 * on a filter, which hoists the filter (and its dependencies) to the
+	 * prefilter stage at the level of that prefilter
+	 */
+	return src == symcache_item_type::PREFILTER && dst == symcache_item_type::FILTER;
+}
+
+auto cache_item::get_exec_type(const symcache &cache) const -> symcache_item_type
+{
+	if (is_virtual()) {
+		const auto *parent = get_parent(cache);
+
+		if (parent != nullptr) {
+			return parent->get_type();
+		}
+	}
+
+	return type;
 }
 
 item_condition::~item_condition()

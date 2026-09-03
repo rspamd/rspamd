@@ -709,15 +709,16 @@ lua_http_dns_handler(struct rdns_reply *reply, gpointer ud)
 		else {
 			REF_RETAIN(cbd);
 			if (!lua_http_make_connection(cbd)) {
+				/*
+				 * E.g. the resolved address is denied by `forbid_local`; the
+				 * symbol's async counter taken for the DNS request is released
+				 * below as in the other error paths
+				 */
 				lua_http_push_error(cbd, "unable to make connection to the host");
 
 				if (cbd->ref.refcount > 1) {
 					REF_RELEASE(cbd);
 				}
-
-				REF_RELEASE(cbd);
-
-				return;
 			}
 			REF_RELEASE(cbd);
 		}

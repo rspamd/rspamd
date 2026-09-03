@@ -292,6 +292,35 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,
 										ucl_object_t *this_sym_ucl);
 
+/**
+ * Execution plan of a symbol: the stage that runs it, its level within the
+ * stage (a higher level runs earlier) and the symbol that hoisted it, if any
+ */
+struct rspamd_symcache_exec_info {
+	const char *stage;
+	int level;
+	const char *hoisted_by;
+};
+
+/**
+ * Fills the execution plan of a symbol (virtual symbols are resolved to their parents)
+ * @param cache
+ * @param symbol
+ * @param info
+ * @return FALSE if the symbol is unknown or is not executed by the cache
+ */
+gboolean rspamd_symcache_get_symbol_exec_info(struct rspamd_symcache *cache,
+											  const char *symbol,
+											  struct rspamd_symcache_exec_info *info);
+
+/**
+ * Dumps the execution plan: an array of buckets (stage, level, symbols with
+ * their dependencies) in the execution order
+ * @param cache
+ * @return newly allocated ucl object
+ */
+ucl_object_t *rspamd_symcache_dump_exec_plan(struct rspamd_symcache *cache);
+
 
 /**
  * Process settings for task

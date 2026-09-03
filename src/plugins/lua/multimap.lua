@@ -2036,6 +2036,8 @@ local function add_multimap_rule(key, newrule)
         end
       end
 
+      -- Keep the selector string: symbols it needs are registered as dependencies
+      newrule.selector_str = newrule.selector
       newrule.selector = selector
     end
   end
@@ -2088,6 +2090,7 @@ local function add_multimap_rule(key, newrule)
     end
 
     newrule['redis_key'] = selector
+    newrule.redis_selector_str = selector_str
     ret = true
   elseif newrule.type == 'combined' then
     local lua_maps_expressions = require "lua_maps_expressions"
@@ -2410,6 +2413,11 @@ if opts and type(opts) == 'table' then
     })
 
     rule.callback_id = id
+
+    -- Symbols used by the selectors of the rule must be checked before it
+    for _, selector_str in pairs({ rule.selector_str, rule.redis_selector_str }) do
+      lua_selectors.register_dependencies(rspamd_config, rule['symbol'], selector_str)
+    end
 
     if rule['symbols'] then
       -- Find allowed symbols by this map
