@@ -125,6 +125,7 @@ addresses as they were seen in the message, before any rewrite (e.g. by the alia
       end
     end,
     ['description'] = [[Get country (ASN module must be executed first)]],
+    ['dependencies'] = { 'ASN_CHECK' },
   },
   -- Get ASN number
   ['asn'] = {
@@ -138,6 +139,7 @@ addresses as they were seen in the message, before any rewrite (e.g. by the alia
       end
     end,
     ['description'] = [[Get AS number (ASN module must be executed first)]],
+    ['dependencies'] = { 'ASN_CHECK' },
   },
   -- Get authenticated username
   ['user'] = {
@@ -561,7 +563,10 @@ The first argument must be header name.]],
     ['description'] = 'Get specific symbol. The first argument must be the symbol name. ' ..
         'The second argument is an optional shadow result name. ' ..
         'Returns the symbol table. See task:get_symbol()',
-    ['args_schema'] = { T.string(), T.string():optional() }
+    ['args_schema'] = { T.string(), T.string():optional() },
+    ['dependencies'] = function(args)
+      return { args[1] }
+    end,
   },
   -- Get full scan result
   ['scan_result'] = {

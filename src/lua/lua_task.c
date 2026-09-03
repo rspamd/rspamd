@@ -2638,12 +2638,13 @@ lua_task_set_pre_result(lua_State *L)
 									  flags,
 									  rspamd_find_metric_result(task, res_name));
 
-		/* Don't classify or filter message if pre-filter sets results */
+		/*
+		 * Do not run further checks if a pre-filter sets the result: the symbols
+		 * that ignore passthrough results and the idempotent ones still run, and
+		 * the classification is skipped by the task processing itself
+		 */
 
 		if (res_name == NULL && !(flags & (RSPAMD_PASSTHROUGH_LEAST | RSPAMD_PASSTHROUGH_PROCESS_ALL))) {
-			task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
-									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
-									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
 			rspamd_symcache_disable_all_symbols(task, task->cfg->cache,
 												SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_IGNORE_PASSTHROUGH);
 		}

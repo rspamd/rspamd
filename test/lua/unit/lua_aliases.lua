@@ -58,3 +58,65 @@ context("Lua aliases - apply_service_rules", function()
     assert_nil(nu)
   end)
 end)
+
+context("Lua aliases - mailbox_identity", function()
+  local lua_aliases = require 'lua_aliases'
+
+  local function mk_addr(user, domain)
+    return {
+      user = user,
+      domain = domain,
+      addr = string.format('%s@%s', user, domain),
+    }
+  end
+
+  test('canonical_domain folds the builtin google class', function()
+    assert_equal(lua_aliases.canonical_domain('googlemail.com'), 'gmail.com')
+    assert_equal(lua_aliases.canonical_domain('GoogleMail.COM'), 'gmail.com')
+    assert_equal(lua_aliases.canonical_domain('gmail.com'), 'gmail.com')
+    assert_equal(lua_aliases.canonical_domain('example.com'), 'example.com')
+    assert_equal(lua_aliases.canonical_domain(''), '')
+    assert_nil(lua_aliases.canonical_domain(nil))
+  end)
+
+  test('google: one identity for both domains and dotted/tagged forms', function()
+    local ref = lua_aliases.mailbox_identity(mk_addr('johndoe', 'gmail.com'))
+    assert_equal(ref, 'johndoe@gmail.com')
+    assert_equal(lua_aliases.mailbox_identity(mk_addr('johndoe', 'googlemail.com')), ref)
+    assert_equal(lua_aliases.mailbox_identity(mk_addr('j.o.h.n.doe', 'googlemail.com')), ref)
+    assert_equal(lua_aliases.mailbox_identity(mk_addr('John.Doe+news', 'GMAIL.com')), ref)
+    assert_not_equal(lua_aliases.mailbox_identity(mk_addr('janedoe', 'googlemail.com')), ref)
+  end)
+
+  test('returns the canonical domain as the second value', function()
+    local id, dom = lua_aliases.mailbox_identity(mk_addr('user', 'googlemail.com'))
+    assert_equal(id, 'user@gmail.com')
+    assert_equal(dom, 'gmail.com')
+  end)
+
+  test('generic domain: plus tag and case folded, dots kept', function()
+    local ref = lua_aliases.mailbox_identity(mk_addr('first.last', 'example.com'))
+    assert_equal(ref, 'first.last@example.com')
+    assert_equal(lua_aliases.mailbox_identity(mk_addr('First.Last+tag', 'Example.COM')), ref)
+    assert_not_equal(lua_aliases.mailbox_identity(mk_addr('firstlast', 'example.com')), ref)
+  end)
+
+  test('accepts a bare address string', function()
+    assert_equal(lua_aliases.mailbox_identity('J.Doe+x@googlemail.com'), 'jdoe@gmail.com')
+    assert_equal(lua_aliases.mailbox_identity('nodomain'), 'nodomain@')
+  end)
+
+  test('no user part yields nil', function()
+    assert_nil(lua_aliases.mailbox_identity(mk_addr('', 'example.com')))
+    assert_nil(lua_aliases.mailbox_identity(nil))
+    assert_nil(lua_aliases.mailbox_identity(''))
+  end)
+
+  test('inline equivalent domains extend the builtin classes', function()
+    assert_true(lua_aliases.init_equivalent_domains(nil, { ['Alias.Test'] = 'Primary.test' }))
+    assert_equal(lua_aliases.canonical_domain('alias.test'), 'primary.test')
+    assert_equal(lua_aliases.mailbox_identity(mk_addr('user+tag', 'alias.test')), 'user@primary.test')
+    assert_equal(lua_aliases.canonical_domain('googlemail.com'), 'gmail.com')
+    assert_false(lua_aliases.init_equivalent_domains(nil, nil))
+  end)
+end)

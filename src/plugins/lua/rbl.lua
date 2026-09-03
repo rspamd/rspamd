@@ -1061,11 +1061,14 @@ local function add_rbl(key, rbl, global_opts)
   if rbl.selector then
 
     rbl.selectors = {}
+    -- Selector strings: the symbols they need are registered as dependencies
+    rbl.selector_strings = {}
     if type(rbl.selector) ~= 'table' then
       rbl.selector = { ['selector'] = rbl.selector }
     end
 
     for selector_label, selector in pairs(rbl.selector) do
+      table.insert(rbl.selector_strings, selector)
       if known_selectors[selector] then
         lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
             known_selectors[selector].id)
@@ -1209,6 +1212,11 @@ local function add_rbl(key, rbl, global_opts)
         rbl.symbol, rbl)
 
     local check_sym = rbl.symbols_prefixes and rbl.symbol .. '_CHECK' or rbl.symbol
+
+    for _, selector_str in ipairs(rbl.selector_strings or {}) do
+      -- Symbols used by the selector must be checked before the rule
+      selectors.register_dependencies(rspamd_config, check_sym, selector_str)
+    end
 
     if rbl.dkim then
       -- Weak: RBL has other query sources; DKIM-domain queries just won't happen

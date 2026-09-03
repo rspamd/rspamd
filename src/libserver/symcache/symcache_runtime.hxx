@@ -35,13 +35,40 @@ enum class cache_item_status : std::uint16_t {
 	started = 1,
 	pending = 2,
 	finished = 3,
-	disabled = 4, /* Disabled by settings; triggers cascade-disable for hard deps */
+	disabled = 4,   /* Disabled by settings; triggers cascade-disable for hard deps */
+	suppressed = 5, /* Not enabled (symbols_enabled, disable_all_symbols, pre-result): no cascade, can be re-enabled */
+	skipped = 6,    /* Skipped by the scheduler (passthrough, score limit, stage passed): cascades to hard deps */
 };
 
-/* Check if an item status means "done" (finished or disabled) */
+/* Check if an item status means "done": it will not run (anymore) */
 static inline auto is_item_done(cache_item_status status) -> bool
 {
-	return status == cache_item_status::finished || status == cache_item_status::disabled;
+	return status == cache_item_status::finished ||
+		   status == cache_item_status::disabled ||
+		   status == cache_item_status::suppressed ||
+		   status == cache_item_status::skipped;
+}
+
+static inline auto item_status_to_str(cache_item_status status) -> const char *
+{
+	switch (status) {
+	case cache_item_status::not_started:
+		return "not started";
+	case cache_item_status::started:
+		return "started";
+	case cache_item_status::pending:
+		return "pending";
+	case cache_item_status::finished:
+		return "finished";
+	case cache_item_status::disabled:
+		return "disabled";
+	case cache_item_status::suppressed:
+		return "suppressed";
+	case cache_item_status::skipped:
+		return "skipped";
+	}
+
+	return "unknown";
 }
 /**
  * These items are saved within task structure and are used to track
@@ -81,6 +108,13 @@ class symcache_runtime {
 	order_generation_ptr order;
 	/* Symbol IDs force-enabled by merged settings (overrides settings_elt forbidden_ids) */
 	id_list *force_enabled_ids;
+	/* The stage being processed (exec_stage::none before the first stage) */
+	exec_stage cur_stage;
+	/*
+	 * Number of items that are not done yet for each bucket of the order;
+	 * allocated right after `dynamic_items` in the same memory block
+	 */
+	std::uint32_t *bucket_pending;
 	/* Dynamically expanded as needed */
 	mutable struct cache_dynamic_item dynamic_items[];
 	/* We allocate this structure merely in memory pool, so destructor is absent */
@@ -88,12 +122,63 @@ class symcache_runtime {
 
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
 						cache_dynamic_item *dyn_item) -> bool;
-	/* Specific stages of the processing */
-	auto process_pre_postfilters(struct rspamd_task *task, symcache &cache, int start_events, unsigned int stage) -> bool;
-	auto process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool;
+	/* Processes all buckets of a stage in their order */
+	auto process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool;
 	auto check_process_status(struct rspamd_task *task) -> check_status;
 	auto check_item_deps(struct rspamd_task *task, symcache &cache, cache_item *item,
 						 cache_dynamic_item *dyn_item, bool check_only) -> bool;
+	/* True if the item is subject to skipping for the current passthrough/limit status */
+	static auto should_skip(const cache_item *item, check_status status) -> bool;
+	/* Marks every not started item of the stages before `stage` as skipped */
+	auto sweep_earlier_stages(struct rspamd_task *task, exec_stage stage) -> void;
+
+public:
+	/**
+	 * The only way to change an item status: keeps the buckets accounting consistent
+	 * @param dyn_item
+	 * @param status
+	 */
+	auto set_status(cache_dynamic_item *dyn_item, cache_item_status status) -> void
+	{
+		auto was_done = is_item_done(dyn_item->status);
+		auto now_done = is_item_done(status);
+
+		if (was_done != now_done) {
+			auto idx = dyn_item - dynamic_items;
+			auto bucket = order->item_bucket[idx];
+
+			if (bucket != order_generation::no_bucket) {
+				if (now_done) {
+					g_assert(bucket_pending[bucket] > 0);
+					bucket_pending[bucket]--;
+				}
+				else {
+					bucket_pending[bucket]++;
+				}
+			}
+		}
+
+		dyn_item->status = status;
+	}
+
+	/**
+	 * A bucket is open when all buckets before it at the same stage are drained,
+	 * or when nothing can drain them anymore (the session has no events left)
+	 * @param task
+	 * @param bucket
+	 * @return
+	 */
+	auto is_bucket_open(struct rspamd_task *task, unsigned int bucket) const -> bool;
+
+	/**
+	 * Checks if an item may be started now: its stage is the current one and its
+	 * level is open
+	 * @param task
+	 * @param item
+	 * @param dyn_item
+	 * @return
+	 */
+	auto may_start(struct rspamd_task *task, const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool;
 
 public:
 	/* Dropper for a shared ownership */

@@ -1,0 +1,2 @@
+# Test-only equivalent domain class for the forged_recipients suite
+equiv-alias.test equiv-primary.test

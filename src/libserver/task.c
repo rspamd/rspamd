@@ -1179,12 +1179,16 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
 	case RSPAMD_TASK_STAGE_CLASSIFIERS_PRE:
 	case RSPAMD_TASK_STAGE_CLASSIFIERS_POST:
-		if (!RSPAMD_TASK_IS_EMPTY(task)) {
+		/* A passthrough result (e.g. a pre-result from a prefilter) makes classification pointless */
+		if (!RSPAMD_TASK_IS_EMPTY(task) && !rspamd_scan_result_has_passthrough(task->result)) {
 			if (rspamd_stat_classify(task, task->cfg->lua_state, st, &stat_error) ==
 				RSPAMD_STAT_PROCESS_ERROR) {
 				msg_err_task("classify error: %e", stat_error);
 				g_error_free(stat_error);
 			}
+		}
+		else if (!RSPAMD_TASK_IS_EMPTY(task)) {
+			msg_debug_task("skip classification: the task has a passthrough result");
 		}
 		break;
 
