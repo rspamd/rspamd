@@ -6530,6 +6530,141 @@ lua_task_learn(lua_State *L)
 	return ret;
 }
 
+/*
+ * Apply an `actions` object from a settings block to the task scan result.
+ *
+ * Shared by lua_task_set_settings() (single settings layer) and
+ * lua_task_merge_and_apply_settings() (merged multi-layer result) so that the
+ * two paths cannot drift apart: a merged result must mean exactly what the
+ * same object would have meant as a single layer.
+ */
+static void
+lua_task_settings_apply_actions(struct rspamd_task *task, const ucl_object_t *act)
+{
+	struct rspamd_scan_result *mres = task->result;
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+	unsigned int i;
+
+	if (act == NULL || ucl_object_type(act) != UCL_OBJECT || mres == NULL) {
+		return;
+	}
+
+	while ((cur = ucl_object_iterate(act, &it, true)) != NULL) {
+		const char *act_name = ucl_object_key(cur);
+		struct rspamd_action_config *action_config = NULL;
+		double act_score;
+		enum rspamd_action_type act_type;
+
+		if (!rspamd_action_from_str(act_name, &act_type)) {
+			act_type = -1;
+		}
+
+		for (i = 0; i < mres->nactions; i++) {
+			struct rspamd_action_config *cur_act = &mres->actions_config[i];
+
+			if (cur_act->action->action_type == METRIC_ACTION_CUSTOM &&
+				act_type == -1) {
+				/* Compare by name */
+				if (g_ascii_strcasecmp(act_name, cur_act->action->name) == 0) {
+					action_config = cur_act;
+					break;
+				}
+			}
+			else {
+				if (cur_act->action->action_type == act_type) {
+					action_config = cur_act;
+					break;
+				}
+			}
+		}
+
+		if (!action_config) {
+			if (ucl_object_type(cur) == UCL_NULL) {
+				/*
+				 * Disabling an action that this task does not have is a no-op,
+				 * not a request to create it (ucl_object_todouble() of a null
+				 * yields 0.0, which would otherwise add the action with a zero
+				 * threshold and make it fire on everything).
+				 */
+				continue;
+			}
+
+			act_score = ucl_object_todouble(cur);
+			if (!isnan(act_score)) {
+				struct rspamd_action *new_act;
+
+				new_act = rspamd_config_get_action(task->cfg, act_name);
+
+				if (new_act == NULL) {
+					/* New action! */
+					msg_info_task("added new action %s with threshold %.2f "
+								  "due to settings",
+								  act_name,
+								  act_score);
+					new_act = rspamd_mempool_alloc0(task->task_pool,
+													sizeof(*new_act));
+					new_act->name = rspamd_mempool_strdup(task->task_pool, act_name);
+					new_act->action_type = METRIC_ACTION_CUSTOM;
+					new_act->threshold = act_score;
+				}
+				else {
+					/* A disabled action that is enabled */
+					msg_info_task("enabled disabled action %s with threshold %.2f "
+								  "due to settings",
+								  act_name,
+								  act_score);
+				}
+
+				/* Insert it to the mres structure */
+				gsize new_actions_cnt = mres->nactions + 1;
+				struct rspamd_action_config *old_actions = mres->actions_config;
+
+				mres->actions_config = rspamd_mempool_alloc(task->task_pool,
+															sizeof(struct rspamd_action_config) * new_actions_cnt);
+				memcpy(mres->actions_config, old_actions,
+					   sizeof(struct rspamd_action_config) * mres->nactions);
+				mres->actions_config[mres->nactions].action = new_act;
+				mres->actions_config[mres->nactions].cur_limit = act_score;
+				/*
+				 * The array comes from rspamd_mempool_alloc(), so the new slot
+				 * is uninitialised: flags must be set explicitly or the action
+				 * is skipped by rspamd_check_action_metric() whenever the
+				 * garbage happens to carry DISABLED/NO_THRESHOLD.
+				 */
+				mres->actions_config[mres->nactions].flags = RSPAMD_ACTION_RESULT_DEFAULT;
+				mres->nactions++;
+			}
+			/* Disabled/missing action is disabled one more time, not an error */
+		}
+		else {
+			/* Found the existing configured action */
+			if (ucl_object_type(cur) == UCL_NULL) {
+				/* Disable action completely */
+				action_config->flags |= RSPAMD_ACTION_RESULT_DISABLED;
+				msg_info_task("disabled action %s due to settings",
+							  action_config->action->name);
+			}
+			else {
+				act_score = ucl_object_todouble(cur);
+				if (isnan(act_score)) {
+					msg_info_task("disabled action %s threshold (was %.2f) due to settings",
+								  action_config->action->name,
+								  action_config->cur_limit);
+					action_config->flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
+				}
+				else {
+					msg_debug_task("adjusted action %s: %.2f -> %.2f",
+								   act_name,
+								   action_config->cur_limit,
+								   act_score);
+					action_config->cur_limit = act_score;
+				}
+			}
+		}
+	}
+}
+
 static int
 lua_task_set_settings(lua_State *L)
 {
@@ -6538,8 +6673,6 @@ lua_task_set_settings(lua_State *L)
 	ucl_object_t *settings;
 	const ucl_object_t *act, *metric_elt, *vars, *cur;
 	ucl_object_iter_t it = NULL;
-	struct rspamd_scan_result *mres;
-	unsigned int i;
 
 	settings = ucl_object_lua_import(L, 2);
 
@@ -6563,110 +6696,7 @@ lua_task_set_settings(lua_State *L)
 		}
 
 		act = ucl_object_lookup(task->settings, "actions");
-
-		if (act && ucl_object_type(act) == UCL_OBJECT) {
-			/* Adjust desired actions */
-			mres = task->result;
-
-			it = NULL;
-
-			while ((cur = ucl_object_iterate(act, &it, true)) != NULL) {
-				const char *act_name = ucl_object_key(cur);
-				struct rspamd_action_config *action_config = NULL;
-				double act_score;
-				enum rspamd_action_type act_type;
-
-				if (!rspamd_action_from_str(act_name, &act_type)) {
-					act_type = -1;
-				}
-
-				for (i = 0; i < mres->nactions; i++) {
-					struct rspamd_action_config *cur_act = &mres->actions_config[i];
-
-					if (cur_act->action->action_type == METRIC_ACTION_CUSTOM &&
-						act_type == -1) {
-						/* Compare by name */
-						if (g_ascii_strcasecmp(act_name, cur_act->action->name) == 0) {
-							action_config = cur_act;
-							break;
-						}
-					}
-					else {
-						if (cur_act->action->action_type == act_type) {
-							action_config = cur_act;
-							break;
-						}
-					}
-				}
-
-				if (!action_config) {
-					act_score = ucl_object_todouble(cur);
-					if (!isnan(act_score)) {
-						struct rspamd_action *new_act;
-
-						new_act = rspamd_config_get_action(task->cfg, act_name);
-
-						if (new_act == NULL) {
-							/* New action! */
-							msg_info_task("added new action %s with threshold %.2f "
-										  "due to settings",
-										  act_name,
-										  act_score);
-							new_act = rspamd_mempool_alloc0(task->task_pool,
-															sizeof(*new_act));
-							new_act->name = rspamd_mempool_strdup(task->task_pool, act_name);
-							new_act->action_type = METRIC_ACTION_CUSTOM;
-							new_act->threshold = act_score;
-						}
-						else {
-							/* A disabled action that is enabled */
-							msg_info_task("enabled disabled action %s with threshold %.2f "
-										  "due to settings",
-										  act_name,
-										  act_score);
-						}
-
-						/* Insert it to the mres structure */
-						gsize new_actions_cnt = mres->nactions + 1;
-						struct rspamd_action_config *old_actions = mres->actions_config;
-
-						mres->actions_config = rspamd_mempool_alloc(task->task_pool,
-																	sizeof(struct rspamd_action_config) * new_actions_cnt);
-						memcpy(mres->actions_config, old_actions,
-							   sizeof(struct rspamd_action_config) * mres->nactions);
-						mres->actions_config[mres->nactions].action = new_act;
-						mres->actions_config[mres->nactions].cur_limit = act_score;
-						mres->nactions++;
-					}
-					/* Disabled/missing action is disabled one more time, not an error */
-				}
-				else {
-					/* Found the existing configured action */
-					if (ucl_object_type(cur) == UCL_NULL) {
-						/* Disable action completely */
-						action_config->flags |= RSPAMD_ACTION_RESULT_DISABLED;
-						msg_info_task("disabled action %s due to settings",
-									  action_config->action->name);
-					}
-					else {
-						act_score = ucl_object_todouble(cur);
-						if (isnan(act_score)) {
-							msg_info_task("disabled action %s threshold (was %.2f) due to settings",
-										  action_config->action->name,
-										  action_config->cur_limit);
-							action_config->flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
-						}
-						else {
-							action_config->cur_limit = act_score;
-							msg_debug_task("adjusted action %s: %.2f -> %.2f",
-										   act_name,
-										   action_config->cur_limit,
-										   act_score);
-						}
-					}
-				}
-			}
-		}
+		lua_task_settings_apply_actions(task, act);
 
 		vars = ucl_object_lookup(task->settings, "variables");
 		if (vars && ucl_object_type(vars) == UCL_OBJECT) {
@@ -6745,50 +6775,9 @@ lua_task_merge_and_apply_settings(lua_State *L)
 		}
 		task->settings = merged;
 
-		/* Apply actions overrides */
-		const ucl_object_t *act = ucl_object_lookup(task->settings, "actions");
-		if (act && ucl_object_type(act) == UCL_OBJECT) {
-			struct rspamd_scan_result *mres = task->result;
-			ucl_object_iter_t it = NULL;
-			const ucl_object_t *cur;
-
-			while ((cur = ucl_object_iterate(act, &it, true)) != NULL) {
-				const char *act_name = ucl_object_key(cur);
-				enum rspamd_action_type act_type;
-
-				if (!rspamd_action_from_str(act_name, &act_type)) {
-					act_type = -1;
-				}
-
-				for (unsigned int i = 0; i < mres->nactions; i++) {
-					struct rspamd_action_config *cur_act = &mres->actions_config[i];
-					gboolean matched = FALSE;
-
-					if (cur_act->action->action_type == METRIC_ACTION_CUSTOM && act_type == -1) {
-						matched = g_ascii_strcasecmp(act_name, cur_act->action->name) == 0;
-					}
-					else {
-						matched = cur_act->action->action_type == act_type;
-					}
-
-					if (matched) {
-						if (ucl_object_type(cur) == UCL_NULL) {
-							cur_act->flags |= RSPAMD_ACTION_RESULT_DISABLED;
-						}
-						else {
-							double act_score = ucl_object_todouble(cur);
-							if (isnan(act_score)) {
-								cur_act->flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
-							}
-							else {
-								cur_act->cur_limit = act_score;
-							}
-						}
-						break;
-					}
-				}
-			}
-		}
+		/* Apply actions overrides, exactly as the single layer path does */
+		lua_task_settings_apply_actions(task,
+										ucl_object_lookup(task->settings, "actions"));
 
 		/* Apply variables */
 		const ucl_object_t *vars = ucl_object_lookup(task->settings, "variables");

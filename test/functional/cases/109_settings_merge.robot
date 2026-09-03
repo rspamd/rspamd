@@ -1,6 +1,6 @@
 *** Settings ***
-Suite Setup     Rspamd Setup
-Suite Teardown  Rspamd Teardown
+Suite Setup     Rspamd Redis Setup
+Suite Teardown  Rspamd Redis Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
@@ -9,6 +9,7 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 ${CONFIG}               ${RSPAMD_TESTDIR}/configs/settings_merge.conf
 ${MESSAGE}              ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_LUA_SCRIPT}    ${RSPAMD_TESTDIR}/lua/settings_merge.lua
+${REDIS_SCOPE}          Suite
 ${RSPAMD_SCOPE}         Suite
 ${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
@@ -78,3 +79,45 @@ COEXISTENCE - GROUP SYMBOLS WITH INLINE
   Expect Symbol  MERGE_GROUP_SYM
   Expect Symbol  MERGE_GROUP_SYM2
   Expect Required Score  500
+
+# Two layers: static rule (RULE) + redis handler (PER_USER). Custom apply keys
+# are an extension point read back through task:get_settings(), so the merge
+# must not drop them.
+MULTI LAYER - CUSTOM KEYS SURVIVE MERGE
+  Redis SET  merge_user_settings  {"mode":"outbound","shared":"from_redis"}
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Symbol With Option  MERGE_CUSTOM_KEYS  tenant=acme
+  Expect Symbol With Option  MERGE_CUSTOM_KEYS  mode=outbound
+
+# Same key in both layers: the higher layer (PER_USER) wins
+MULTI LAYER - HIGHER LAYER WINS ON CONFLICT
+  Redis SET  merge_user_settings  {"mode":"outbound","shared":"from_redis"}
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Symbol With Option  MERGE_CUSTOM_KEYS  shared=from_redis
+  Do Not Expect Symbol With Option  MERGE_CUSTOM_KEYS  shared=from_rule
+
+# `actions { greylist = null }` disables the action after a merge, exactly as
+# it does on the single-layer path
+MULTI LAYER - NULL ACTION STILL DISABLES GREYLIST
+  Redis SET  merge_user_settings  {"mode":"outbound","shared":"from_redis"}
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Action  no action
+
+# Single-layer baseline for the same disable
+SINGLE LAYER - NULL ACTION DISABLES GREYLIST
+  Scan File  ${MESSAGE}  IP=8.8.8.9
+  Expect Symbol With Option  MERGE_CUSTOM_KEYS  tenant=solo
+  Expect Action  no action
+
+# Without any settings the greylist threshold is in force
+NO SETTINGS - GREYLIST ACTION FIRES
+  Scan File  ${MESSAGE}
+  Expect Action  greylist
+
+# A brand new custom action declared in one layer must be created after the
+# merge, exactly as it is on the single-layer path
+MULTI LAYER - CUSTOM ACTION IS CREATED
+  Redis SET  merge_user_settings  {"mode":"outbound","shared":"from_redis"}
+  Scan File  ${MESSAGE}  IP=8.8.8.10
+  Expect Symbol With Option  MERGE_CUSTOM_KEYS  tenant=custom
+  Expect Action  my_custom_action
