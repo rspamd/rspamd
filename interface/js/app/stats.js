@@ -62,6 +62,16 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         const MIN_RATE_WINDOW_MS = 1000;
         const STALE_RATE_WINDOW_MS = 2 * 60 * 60 * 1000;
 
+        // /stat counters summed across up servers for the "All SERVERS" row:
+        // traffic and memory totals of the whole cluster (per-server detail
+        // stays available in each server's own details row)
+        const CLUSTER_SUM_FIELDS = [
+            "scanned", "learned", "spam_count", "ham_count", "connections",
+            "control_connections", "bytes_allocated", "fragmented", "pools_allocated",
+            "pools_freed", "chunks_allocated", "chunks_freed", "shared_chunks_allocated",
+            "chunks_oversized"
+        ];
+
         // Servers whose details row is expanded (module state: survives the
         // periodic tbody re-render, intentionally not a page reload)
         const expandedServers = new Set();
@@ -100,9 +110,61 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             return seconds + "\u00a0s ago";
         }
 
+        // "All SERVERS" row cells: the aggregates computed in statWidgets and
+        // stored on the synthetic Credentials entry
+        function aggregateRowState(state, val, cluster) {
+            if (!common.isNil(val.data.config_id)) {
+                state.short_id = val.data.config_id.substring(0, 8);
+            }
+            if (val.data.scan_times) {
+                const {min, avg, max} = val.data.scan_times;
+                if (max) {
+                    const f = d3.format(".3f");
+                    state.scan_times = {
+                        data: "<small>" + f(min) + "/</small>" + f(avg) +
+                            "<small>/" + f(max) + "</small>",
+                        title: ' title="min/avg/max across servers"'
+                    };
+                } else {
+                    state.scan_times = {
+                        data: "-",
+                        title: ' title="No messages scanned yet"'
+                    };
+                }
+            }
+            if (cluster) {
+                const allUp = cluster.upCount === cluster.total;
+                const healthy = allUp && !cluster.degraded.length;
+                state.row_class = healthy ? "success" : "warning";
+                state.glyph_status = healthy
+                    ? "fas fa-check"
+                    : "fas fa-exclamation-triangle";
+                // A single-server install gains no counter noise
+                if (cluster.total > 1) {
+                    state.status_extra = '<span class="small text-secondary cluster-count" title="' +
+                        common.escapeHTML(cluster.upCount + " of " + cluster.total + " servers up") +
+                        '">' + cluster.upCount + "/" + cluster.total + "</span>";
+                }
+                const notes = [];
+                if (!allUp) {
+                    notes.push((cluster.total - cluster.upCount) + " of " +
+                        cluster.total + " servers down");
+                }
+                if (cluster.degraded.length) {
+                    notes.push("degraded: " + cluster.degraded.join(", "));
+                }
+                if (notes.length) {
+                    state.status_title = ' title="' +
+                        common.escapeHTML(notes.join("; ")) + '"';
+                }
+            }
+        }
+
         // Derive the display state (row class, status glyph, cell values) of
-        // one cluster-table row from its Credentials snapshot entry.
-        function serverRowState(key, val, statHistory) {
+        // one cluster-table row from its Credentials snapshot entry. `cluster`
+        // (the up/degraded counter for the aggregate row, see
+        // displayStatWidgets) is used only for the "All SERVERS" row.
+        function serverRowState(key, val, statHistory, cluster) {
             const state = {
                 row_class: "danger",
                 glyph_status: "fas fa-times",
@@ -145,17 +207,16 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             if (Number.isFinite(val.data.uptime)) {
                 state.uptime = msToTime(val.data.uptime);
             }
-            if ("version" in val.data) {
+            if (!common.isNil(val.data.version)) {
                 state.version = val.data.version;
             }
-            if ("git_id" in val.data) {
+            if (!common.isNil(val.data.git_id)) {
                 state.git_id = val.data.git_id;
             }
             if (key === "All SERVERS") {
-                state.short_id = "";
-                state.scan_times.data = "";
+                aggregateRowState(state, val, cluster);
             } else {
-                if ("config_id" in val.data) {
+                if (!common.isNil(val.data.config_id)) {
                     state.short_id = val.data.config_id.substring(0, 8);
                 }
                 if ("scan_times" in val.data) {
@@ -209,37 +270,60 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             });
         }
 
+        // Tally distinct values of `key` among the servers reporting one
+        // (down servers carry data:{}, a legacy /auth patch may leave the
+        // value nil)
+        function tallyValues(servers, key) {
+            const present = servers.filter(({data}) => !common.isNil(data[key]));
+            const counts = new Map();
+            present.forEach(({data}) => counts.set(data[key], (counts.get(data[key]) || 0) + 1));
+            return {counts, present};
+        }
+
+        // Largest group of the tally: its value is null on a tie or when
+        // nobody reports the key
+        function largestGroup(counts) {
+            let size = 0;
+            counts.forEach((count) => {
+                if (count > size) size = count;
+            });
+            let value = null;
+            let winners = 0;
+            counts.forEach((count, candidate) => {
+                if (count === size) {
+                    value = candidate;
+                    winners++;
+                }
+            });
+            if (winners !== 1) value = null;
+            return {value, size, winners};
+        }
+
+        // The value the largest group of servers reports: a unanimous or
+        // plurality winner; null on a tie or when nobody reports it
+        function majorityValue(servers, key) {
+            const {counts} = tallyValues(servers, key);
+            return largestGroup(counts).value;
+        }
+
         // Majority-based cluster drift detection: flag servers whose value
         // differs from the largest group, but only when 2+ servers share a
         // value (a real cluster). All-unique values (centrally managed
         // standalone servers) and majority ties are not flagged. Returns
         // {majorityValue, majorityCount, total, deviants} or null.
         function findDeviants(servers, key) {
-            const present = servers.filter(({data}) => key in data);
-            const counts = new Map();
-            present.forEach(({data}) => counts.set(data[key], (counts.get(data[key]) || 0) + 1));
+            const {counts, present} = tallyValues(servers, key);
             if (counts.size < 2) return null;
 
-            let maxCount = 0;
-            counts.forEach((count) => {
-                if (count > maxCount) maxCount = count;
-            });
+            const largest = largestGroup(counts);
             // No group of 2+, or a split with no identifiable majority
-            if (maxCount < 2 ||
-                Array.from(counts.values()).filter((count) => count === maxCount).length > 1) {
-                return null;
-            }
-
-            let majorityValue = null;
-            counts.forEach((count, value) => {
-                if (count === maxCount) majorityValue = value;
-            });
+            if (largest.size < 2 || largest.winners > 1) return null;
 
             return {
-                majorityValue,
-                majorityCount: maxCount,
+                majorityValue: largest.value,
+                majorityCount: largest.size,
                 total: present.length,
-                deviants: new Set(present.filter(({data}) => data[key] !== majorityValue)
+                deviants: new Set(present.filter(({data}) => data[key] !== largest.value)
                     .map(({name}) => name))
             };
         }
@@ -478,7 +562,9 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         d3.format(".3~s")(v) + "</strong>" + k + "</div></div>";
                 }
 
-                if (i === "auth" || i === "error") return; // Skip to the next iteration
+                // Skip to the next iteration; scan_times is an aggregate
+                // object (or a per-server array) shown in the table instead
+                if (i === "auth" || i === "error" || i === "scan_times") return;
                 if (i === "uptime" || i === "version") {
                     let cls = "border-end ";
                     let val = item;
@@ -486,8 +572,16 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         cls = "";
                         val = msToTime(item);
                     }
+                    // Aggregate semantics of the "All SERVERS" selection:
+                    // minimum uptime and majority version
+                    const title = (checked_server === "All SERVERS")
+                        ? ' title="' + (i === "uptime"
+                            ? "Minimum uptime across servers"
+                            : "Most common version across servers") + '"'
+                        : "";
                     statWidgets.insertAdjacentHTML("beforeend",
-                        '<div class="' + cls + 'float-start px-3"><strong class="d-block mt-2 mb-1 fw-bold">' +
+                        '<div class="' + cls + 'float-start px-3"' + title + ">" +
+                        '<strong class="d-block mt-2 mb-1 fw-bold">' +
                         val + "</strong>" + i + "</div>");
                 } else if (i === "actions") {
                     Object.entries(item).forEach(([action, count]) => {
@@ -531,6 +625,20 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             const versionDrift = findDeviants(realServers, "version");
             const gitDrift = findDeviants(realServers, "git_id");
 
+            // "All SERVERS" status cell: up-counter over all real servers plus
+            // the aggregated degraded state. Health lands after the first
+            // render (probe pass), so this reads the Credentials snapshot and
+            // settles on the second pass
+            const clusterEntries = Object.entries(servers)
+                .filter(([name]) => name !== "All SERVERS");
+            const cluster = {
+                degraded: clusterEntries
+                    .filter(([, val]) => val.health?.state === "degraded")
+                    .map(([name]) => name),
+                total: clusterEntries.length,
+                upCount: clusterEntries.filter(([, val]) => val.status).length
+            };
+
             // @ warning triangle marking a server deviating from the cluster majority
             function driftBadge(drift, what, value) {
                 return ' <span class="icon cluster-drift" title="' +
@@ -539,8 +647,32 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     '"><i class="fas fa-exclamation-triangle"></i></span>';
             }
 
+            // The badge marks deviating servers and the aggregate row alike:
+            // the majority value the latter shows is not cluster-wide
+            function hasDriftBadge(drift, key) {
+                return Boolean(drift) && (drift.deviants.has(key) || key === "All SERVERS");
+            }
+
+            // Uptime cell state: the recent-restart warning, or the aggregate
+            // semantics on the "All SERVERS" row
+            function uptimeCellState(key, uptime) {
+                const young = Number.isFinite(uptime) && uptime < 3600;
+                if (key !== "All SERVERS") {
+                    return {
+                        title: young ? "Has been restarted within the last hour" : "",
+                        young
+                    };
+                }
+                return {
+                    title: young
+                        ? "Youngest server has been restarted within the last hour"
+                        : "Minimum uptime across servers",
+                    young
+                };
+            }
+
             Object.entries(servers).forEach(([key, val]) => {
-                const rowState = serverRowState(key, val, statHistory);
+                const rowState = serverRowState(key, val, statHistory, cluster);
 
                 const checked = checked_server === key;
                 const disabled = !checked && !val.status;
@@ -549,17 +681,20 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 const radioAttrs = 'value="' + escKey + '"' +
                     (checked ? " checked" : "") + (disabled ? " disabled" : "");
 
-                const realUp = val.status && key !== "All SERVERS";
+                // The aggregate row expands into cluster totals as well
+                const hasDetails = Boolean(val.status);
                 const expanded = expandedServers.has(key);
-                const toggle = realUp
+                const toggle = hasDetails
                     ? '<td class="cluster-toggle" role="button" aria-expanded="' + expanded +
                         '" title="Show/hide details"><span class="cluster-toggle-icon">' +
                             '<i class="fas fa-chevron-down"></i></span></td>'
                     : "<td></td>";
-                let latency = "";
-                if (key !== "All SERVERS") {
-                    latency = val.status ? formatLatency(val.latency) : "-";
-                }
+                // Aggregated as the slowest responding up server
+                const latency = val.status ? formatLatency(val.latency) : "-";
+                const latencyTitle = (key === "All SERVERS")
+                    ? ' title="Slowest server response"'
+                    : "";
+                const uptimeCell = uptimeCellState(key, val.data.uptime);
                 // Same badge as the Configuration tab: shown when writable,
                 // nothing in read-only mode; right-aligned within the cell
                 const writable_badge = (val.data.read_only === false)
@@ -578,31 +713,31 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         rowState.status_extra + "</td>" +
                     '<td class="text-center"' + rowState.scan_times.title + ">" +
                         rowState.scan_times.data + "</td>" +
-                    '<td class="text-end" title="Messages scanned per minute">' +
+                    '<td class="text-end" title="' + (key === "All SERVERS"
+                        ? "Sum of messages scanned per minute across servers"
+                        : "Messages scanned per minute") + '">' +
                         formatRate(val.rate) + "</td>" +
-                    '<td class="text-end">' + latency + "</td>" +
-                    '<td class="text-end' +
-                      ((Number.isFinite(val.data.uptime) && val.data.uptime < 3600)
-                          ? ' warning" title="Has been restarted within the last hour"'
-                          : "") +
-                      '">' + rowState.uptime + "</td>" +
+                    '<td class="text-end"' + latencyTitle + ">" + latency + "</td>" +
+                    '<td class="text-end' + (uptimeCell.young ? " warning" : "") + '"' +
+                      (uptimeCell.title ? ' title="' + uptimeCell.title + '"' : "") + ">" +
+                      rowState.uptime + "</td>" +
                     "<td>" + common.escapeHTML(rowState.version) +
-                        (versionDrift?.deviants.has(key)
+                        (hasDriftBadge(versionDrift, key)
                             ? driftBadge(versionDrift, "Version", "run " + versionDrift.majorityValue)
                             : "") +
                     "</td>" +
                     '<td class="cluster-git">' + common.escapeHTML(rowState.git_id) +
-                        (gitDrift?.deviants.has(key)
+                        (hasDriftBadge(gitDrift, key)
                             ? driftBadge(gitDrift, "Git ID", "run " + gitDrift.majorityValue)
                             : "") +
                     "</td>" +
                     "<td>" + common.escapeHTML(rowState.short_id) +
-                        (configDrift?.deviants.has(key)
+                        (hasDriftBadge(configDrift, key)
                             ? driftBadge(configDrift, "Configuration ID",
                                 "share " + String(configDrift.majorityValue).substring(0, 8))
                             : "") +
                     "</td></tr>" +
-                    (realUp ? buildDetailsRow(val.data, expanded, detailCols) : "")
+                    (hasDetails ? buildDetailsRow(val.data, expanded, detailCols) : "")
                 );
 
                 selSrv.insertAdjacentHTML("beforeend",
@@ -782,11 +917,11 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 common.query("stat", {
                     success: function (neighbours_status) {
                         const statHistory = parseJsonOrEmpty(sessionStorage.getItem(STAT_HISTORY_KEY));
+                        // Youngest up server defines the cluster uptime:
+                        // Infinity until a finite value is seen (deleted
+                        // before serialization if never replaced)
                         const neighbours_sum = {
-                            version: neighbours_status[0].data.version,
-                            uptime: 0,
-                            scanned: 0,
-                            learned: 0,
+                            uptime: Infinity,
                             actions: {
                                 "no action": 0,
                                 "add header": 0,
@@ -796,7 +931,9 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                                 "soft reject": 0,
                             }
                         };
-                        let status_count = 0;
+                        CLUSTER_SUM_FIELDS.forEach((p) => {
+                            neighbours_sum[p] = 0;
+                        });
                         const promises = [];
                         const healthPromises = [];
                         const to_Credentials = {
@@ -812,17 +949,65 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         function process_node_stat(e) {
                             const {data} = neighbours_status[e];
                             // Controller doesn't return the 'actions' object until at least one message is scanned
-                            if (data.scanned) {
+                            if (data.scanned && data.actions) {
                                 for (const action in neighbours_sum.actions) {
                                     if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
-                                        neighbours_sum.actions[action] += data.actions[action];
+                                        neighbours_sum.actions[action] += data.actions[action] || 0;
                                     }
                                 }
                             }
-                            ["learned", "scanned", "uptime"].forEach((p) => {
-                                neighbours_sum[p] += data[p];
+                            CLUSTER_SUM_FIELDS.forEach((p) => {
+                                if (Number.isFinite(data[p])) neighbours_sum[p] += data[p];
                             });
-                            status_count++;
+                            if (Number.isFinite(data.uptime)) {
+                                neighbours_sum.uptime = Math.min(neighbours_sum.uptime, data.uptime);
+                            }
+                        }
+
+                        // Identity and envelope aggregates of the "All SERVERS"
+                        // row. Runs once all legacy /auth patches have settled,
+                        // so majority values see the patched fields
+                        function finalizeClusterAggregates() {
+                            const upServers = neighbours_status.filter((n) => n.status === true);
+                            // Cluster identity: the value the largest group of
+                            // up servers runs (null on ties or when nobody
+                            // reports it — then nothing is shown)
+                            ["config_id", "git_id", "version"].forEach((p) => {
+                                const value = majorityValue(upServers, p);
+                                if (!common.isNil(value)) neighbours_sum[p] = value;
+                            });
+                            // Scan-time envelope: min of mins, max of maxes,
+                            // average of per-server averages (all servers report
+                            // an equal-length slot array, so this equals the
+                            // pooled mean and stays server-equal-weighted)
+                            const scanTimes = upServers
+                                .map((n) => n.data.scan_times)
+                                .filter(Array.isArray);
+                            if (scanTimes.length) {
+                                const [min, max] = d3.extent(scanTimes.flat());
+                                neighbours_sum.scan_times = {
+                                    avg: d3.mean(scanTimes.map((slots) => d3.mean(slots))),
+                                    max,
+                                    min
+                                };
+                            }
+                            if (Number.isFinite(neighbours_sum.uptime)) {
+                                neighbours_sum.uptime = Math.floor(neighbours_sum.uptime);
+                            } else {
+                                // Never serialize Infinity (JSON.stringify turns it into null)
+                                delete neighbours_sum.uptime;
+                            }
+                            // Slowest responding up server (an up server always
+                            // carries a finite latency; with none up the
+                            // success callback never fires, so this row — and
+                            // its latency cell — never renders. formatLatency
+                            // would still degrade an absent value to "-")
+                            const latencies = upServers
+                                .map((n) => n.latency)
+                                .filter(Number.isFinite);
+                            if (latencies.length) {
+                                to_Credentials["All SERVERS"].latency = Math.max(...latencies);
+                            }
                         }
 
                         // Get config_id, version and uptime using /auth query for Rspamd 2.5 and earlier
@@ -918,7 +1103,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                                     // A newer refresh cycle superseded this one:
                                     // drop its (stale) state entirely
                                     if (cycleId === statCycleId) {
-                                        neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
+                                        finalizeClusterAggregates();
                                         neighbours_sum.rate = updateStatHistory(neighbours_status, statHistory);
                                         sessionStorage.setItem(STAT_HISTORY_KEY, JSON.stringify(statHistory));
                                         to_Credentials["All SERVERS"].data = neighbours_sum;

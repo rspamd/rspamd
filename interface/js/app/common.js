@@ -86,6 +86,8 @@ define(["nprogress"],
             return value === null || typeof value === "undefined";
         }
 
+        ui.isNil = isNil;
+
         // Resolve a string selector, Element, NodeList, Array, or jQuery wrapper
         // into a plain Array of Element. Accepts jQuery objects during the staged
         // removal so callers still passing $(...) keep working.

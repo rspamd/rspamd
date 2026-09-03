@@ -40,18 +40,19 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
         // CI builds pass no -DGIT_ID, so no server reports git_id and the
         // Git ID column stays hidden
         await expect(page.locator("#clusterTable thead th.cluster-git")).toBeHidden();
-        await expect(page.locator("#clusterTable tbody td[title='Messages scanned per minute']").first())
+        await expect(page.locator(
+            "#clusterTable tbody tr:not([data-server='All SERVERS']) td[title='Messages scanned per minute']"))
             .toHaveText(/-|[\d.]+\/min/);
 
         // Clicking anywhere on a server row (except the radio) expands its
         // details row built from the already-fetched /stat snapshot (traffic
         // and memory counters). The row also carries the Writable badge when
         // the server is not in read-only mode.
-        const row = page.locator("#clusterTable tbody tr[data-server]")
+        const row = page.locator("#clusterTable tbody tr[data-server]:not([data-server='All SERVERS'])")
             .filter({has: page.locator("td.cluster-toggle")}).first();
         await expect(row).toContainText("Writable");
         const serverNameCell = row.locator("td").nth(2); // Server name
-        const details = page.locator("#clusterTable tr.cluster-details").first();
+        const details = row.locator("xpath=following-sibling::tr[contains(@class, 'cluster-details')][1]");
         await serverNameCell.click();
         await expect(details).toBeVisible();
         await expect(details).toContainText("Memory");
@@ -67,6 +68,17 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
         ]);
         await expect(details).toBeVisible();
 
+        // The aggregate row is expandable too (cluster totals; on a
+        // single-server install they equal the local server's own) and
+        // carries the aggregate-semantics tooltips instead of the badge.
+        const allRow = page.locator("#clusterTable tbody tr[data-server='All SERVERS']");
+        const allNameCell = allRow.locator("td").nth(2); // Server name
+        const allDetails = allRow.locator("xpath=following-sibling::tr[contains(@class, 'cluster-details')][1]");
+        await allNameCell.click();
+        await expect(allDetails).toBeVisible();
+        await expect(allDetails).toContainText("Memory");
+        await expect(allRow).not.toContainText("Writable");
+
         // Three-state health: simulate a /healthy failure (HTTP 500 with the
         // reason in the JSON body) and check the degraded row state.
         await page.route("**/healthy", (route) => route.fulfill({
@@ -81,6 +93,10 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
         await expect(row).toHaveClass(/\bwarning\b/);
         await expect(row.locator("td").nth(4)).toHaveAttribute("title",
             "Degraded: 2 workers are not responding");
+        // The aggregate row aggregates the degraded state (no up/total
+        // counter noise on a single-server install)
+        await expect(allRow).toHaveClass(/\bwarning\b/);
+        await expect(allRow.locator("td").nth(4)).toHaveAttribute("title", "degraded: local");
 
         // Back to the healthy state once /healthy answers again.
         await page.unroute("**/healthy");
@@ -89,6 +105,7 @@ test.describe.serial("WebUI Status / Throughput / History rendering", () => {
             page.locator("#refresh").click(),
         ]);
         await expect(row).toHaveClass(/\bsuccess\b/);
+        await expect(allRow).toHaveClass(/\bsuccess\b/);
     });
 
     test("Throughput tab renders the graph and reloads on dataset change", async () => {
