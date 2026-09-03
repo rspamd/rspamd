@@ -627,20 +627,23 @@ input.action-scores {
 #clusterTable.cluster-hide-git .cluster-git {
     display: none;
 }
-/* "seen <time> ago": on narrow screens the note wraps under the status glyph
-   to save horizontal space; on large screens it stays on the glyph's line,
-   keeping server rows single-line (the table is otherwise text-nowrap) */
+/* "seen <time> ago" and the "up/total" counter: on narrow screens the note
+   wraps under the status glyph to save horizontal space; on large screens it
+   stays on the glyph's line, keeping server rows single-line (the table is
+   otherwise text-nowrap) */
 #clusterTable td.cluster-status {
     white-space: normal;
 }
-#clusterTable td.cluster-status .cluster-last-seen {
+#clusterTable td.cluster-status .cluster-last-seen,
+#clusterTable td.cluster-status .cluster-count {
     display: block;
 }
 @media (min-width: 992px) {
     #clusterTable td.cluster-status {
         white-space: nowrap;
     }
-    #clusterTable td.cluster-status .cluster-last-seen {
+    #clusterTable td.cluster-status .cluster-last-seen,
+    #clusterTable td.cluster-status .cluster-count {
         display: inline;
         margin-left: 0.25rem;
     }
