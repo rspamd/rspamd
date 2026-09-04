@@ -1,0 +1,16 @@
+From: sender@example.com
+To: recipient@example.com
+Subject: English text with unexpected marks
+Date: Fri, 4 Sep 2026 12:00:00 +0000
+Message-ID: <chartable-english@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is an English message about the work that people do after they arrive.
+You can see where they are and how they should help each other during the day.
+There are many ordinary words between these sentences because the language
+detector needs a clear and reliable sample of normal written English.
+
+éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé
+éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé éé
