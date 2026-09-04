@@ -13,7 +13,7 @@ ${SETTINGS_CHARTABLE}   {symbols_enabled = [R_MIXED_CHARSET,TEST_LANGUAGE]}
 
 *** Test Cases ***
 Language data marks diacritic languages
-  FOR  ${language}  IN  hr  sr  sq  is  ga  cy  eu  sk
+  FOR  ${language}  IN  hr  sr  sq  is  ga  cy  eu  sk  hi  mr  ne  bn  pa  ur  ar  fa
     ${content} =  Get File  ${RSPAMD_INSTALLROOT}/share/rspamd/languages/${language}.json
     ${data} =  Evaluate  json.loads($content)  modules=json
     List Should Contain Value  ${data}[flags]  diacritics
@@ -23,6 +23,14 @@ Slovak diacritics are ignored
   Scan File  ${RSPAMD_TESTDIR}/messages/chartable_slovak.eml
   ...  Settings=${SETTINGS_CHARTABLE}
   Expect Symbol With Option  TEST_LANGUAGE  sk
+  Do Not Expect Symbol  R_MIXED_CHARSET
+
+Hindi vowel signs are ignored
+  Scan File  ${RSPAMD_TESTDIR}/messages/chartable_hindi.eml
+  ...  Settings=${SETTINGS_CHARTABLE}
+  Expect Symbol  TEST_LANGUAGE
+  ${languages} =  Convert To List  ${SCAN_RESULT}[symbols][TEST_LANGUAGE][options]
+  Should Be True  'hi' in $languages or 'ne' in $languages
   Do Not Expect Symbol  R_MIXED_CHARSET
 
 English diacritics are significant

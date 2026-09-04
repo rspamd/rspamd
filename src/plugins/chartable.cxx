@@ -1736,18 +1736,17 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 									   cat == U_COMBINING_SPACING_MARK ||
 									   cat == U_ENCLOSING_MARK;
 
-		/*
-		 * Combining marks are not letters on their own.  Letting an ignored
-		 * mark fall through would reset the script state and count towards the
-		 * word length, so it must be skipped completely.
-		 */
-		if (ignore_diacritics && is_combining_mark) {
+		/* Combining marks must not reset script tracking or extend word length. */
+		if (is_combining_mark) {
+			if (!ignore_diacritics) {
+				nspecial++;
+			}
+
 			continue;
 		}
 
 		if (!ignore_diacritics) {
-			if (is_combining_mark ||
-				(sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
+			if ((sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
 				(sc == UBLOCK_LATIN_EXTENDED_A) ||
 				(sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) ||
 				(sc == UBLOCK_LATIN_EXTENDED_B) ||
