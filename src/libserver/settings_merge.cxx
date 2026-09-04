@@ -20,7 +20,9 @@
 #include "contrib/ankerl/unordered_dense.h"
 
 #include <algorithm>
+#include <array>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #define msg_debug_settings(...) rspamd_conditional_debug_fast(NULL, NULL,                                           \
@@ -411,6 +413,77 @@ merge_array_union(ucl_object_t *result, const char *key,
 	}
 }
 
+/**
+ * Top level keys that this file merges explicitly. Everything else in a layer
+ * is an opaque operator defined extension (settings `apply` blocks are a
+ * documented extension point: consumers read them back via task:get_settings()),
+ * so it must be passed through instead of being dropped.
+ */
+static constexpr std::array<std::string_view, 15> settings_known_keys = {
+	std::string_view{"actions"},
+	std::string_view{"add_headers"},
+	std::string_view{"flags"},
+	std::string_view{"groups_disabled"},
+	std::string_view{"groups_enabled"},
+	std::string_view{"messages"},
+	std::string_view{"remove_headers"},
+	std::string_view{"scores"},
+	std::string_view{"subject"},
+	std::string_view{"symbols"},
+	std::string_view{"symbols_disabled"},
+	std::string_view{"symbols_enabled"},
+	std::string_view{"variables"},
+	std::string_view{"whitelist"},
+	/* Produced by this function, never taken from a layer */
+	std::string_view{"_merge_info"},
+};
+
+static bool
+settings_is_known_key(std::string_view key)
+{
+	return std::find(settings_known_keys.begin(), settings_known_keys.end(), key) !=
+		   settings_known_keys.end();
+}
+
+/**
+ * Copy over every top-level key that is not handled by the explicit mergers.
+ * Semantics match merge_override_object: per-key, the higher layer wins; the
+ * value itself is taken as a whole (an unknown key is opaque to us, so we
+ * cannot meaningfully merge its insides).
+ */
+static void
+merge_unknown_keys(ucl_object_t *result, const std::vector<layer_entry> &layers)
+{
+	for (const auto &layer: layers) {
+		if (ucl_object_type(layer.settings) != UCL_OBJECT) {
+			continue;
+		}
+
+		ucl_object_iter_t it = nullptr;
+		const ucl_object_t *cur;
+
+		while ((cur = ucl_object_iterate(layer.settings, &it, true)) != nullptr) {
+			const char *key = ucl_object_key(cur);
+
+			if (key == nullptr) {
+				continue;
+			}
+
+			const auto klen = strlen(key);
+
+			if (settings_is_known_key(std::string_view{key, klen})) {
+				continue;
+			}
+
+			/* Replace existing key or insert a new one */
+			ucl_object_replace_key(result, ucl_object_ref(cur), key, klen, true);
+
+			msg_debug_settings("passed through custom settings key %s from layer %s",
+							   key, layer.name.c_str());
+		}
+	}
+}
+
 extern "C" ucl_object_t *
 rspamd_settings_merge_finalize(struct rspamd_settings_merge_ctx *ctx)
 {
@@ -457,6 +530,9 @@ rspamd_settings_merge_finalize(struct rspamd_settings_merge_ctx *ctx)
 
 	/* Symbols to inject: union */
 	merge_override_object(result, "symbols", ctx->layers);
+
+	/* Anything else the operator put in the apply block: per-key, higher layer wins */
+	merge_unknown_keys(result, ctx->layers);
 
 	/* Build merge metadata */
 	auto *meta = ucl_object_typed_new(UCL_ARRAY);

@@ -345,6 +345,176 @@ TEST_SUITE("settings_merge")
 		rspamd_config_free(cfg);
 	}
 
+	TEST_CASE("unknown keys survive multi layer merge")
+	{
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		auto *pool = cfg->cfg_pool;
+
+		auto *ctx = rspamd_settings_merge_ctx_create(pool, cfg);
+
+		/* Custom (non-builtin) apply keys used by third party Lua consumers */
+		auto *low = ucl_parse_string(R"({"actions":{"reject":15.0},"tenant":"acme","policy":{"quarantine":true}})");
+		auto *high = ucl_parse_string(R"({"mode":"outbound"})");
+
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_RULE, "rule", 0, low);
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_HTTP, "http", 0, high);
+		ucl_object_unref(low);
+		ucl_object_unref(high);
+
+		auto *result = rspamd_settings_merge_finalize(ctx);
+		REQUIRE(result != nullptr);
+
+		SUBCASE("scalar from the lower layer is preserved")
+		{
+			auto *tenant = ucl_object_lookup(result, "tenant");
+			REQUIRE(tenant != nullptr);
+			CHECK(std::string(ucl_object_tostring(tenant)) == "acme");
+		}
+
+		SUBCASE("scalar from the higher layer is preserved")
+		{
+			auto *mode = ucl_object_lookup(result, "mode");
+			REQUIRE(mode != nullptr);
+			CHECK(std::string(ucl_object_tostring(mode)) == "outbound");
+		}
+
+		SUBCASE("object valued unknown key is preserved")
+		{
+			auto *policy = ucl_object_lookup(result, "policy");
+			REQUIRE(policy != nullptr);
+			REQUIRE(ucl_object_type(policy) == UCL_OBJECT);
+			CHECK(ucl_object_toboolean(ucl_object_lookup(policy, "quarantine")));
+		}
+
+		SUBCASE("known keys keep their semantics")
+		{
+			auto *actions = ucl_object_lookup(result, "actions");
+			REQUIRE(actions != nullptr);
+			CHECK(ucl_object_todouble(ucl_object_lookup(actions, "reject")) == doctest::Approx(15.0));
+		}
+
+		ucl_object_unref(result);
+		rspamd_config_free(cfg);
+	}
+
+	TEST_CASE("unknown key conflict higher layer wins")
+	{
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		auto *pool = cfg->cfg_pool;
+
+		auto *ctx = rspamd_settings_merge_ctx_create(pool, cfg);
+
+		auto *low = ucl_parse_string(R"({"tenant":"low","only_low":1})");
+		auto *high = ucl_parse_string(R"({"tenant":"high"})");
+
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_PROFILE, "profile", 0, low);
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_PER_USER, "user", 0, high);
+		ucl_object_unref(low);
+		ucl_object_unref(high);
+
+		auto *result = rspamd_settings_merge_finalize(ctx);
+		REQUIRE(result != nullptr);
+
+		auto *tenant = ucl_object_lookup(result, "tenant");
+		REQUIRE(tenant != nullptr);
+		CHECK(std::string(ucl_object_tostring(tenant)) == "high");
+
+		auto *only_low = ucl_object_lookup(result, "only_low");
+		REQUIRE(only_low != nullptr);
+		CHECK(ucl_object_toint(only_low) == 1);
+
+		ucl_object_unref(result);
+		rspamd_config_free(cfg);
+	}
+
+	TEST_CASE("layer supplied merge info does not clobber metadata")
+	{
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		auto *pool = cfg->cfg_pool;
+
+		auto *ctx = rspamd_settings_merge_ctx_create(pool, cfg);
+
+		/* A layer that is itself a previously merged object must not win over ours */
+		auto *low = ucl_parse_string(R"({"_merge_info":"bogus","tenant":"acme"})");
+		auto *high = ucl_parse_string(R"({"mode":"outbound"})");
+
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_RULE, "rule", 0, low);
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_HTTP, "http", 0, high);
+		ucl_object_unref(low);
+		ucl_object_unref(high);
+
+		auto *result = rspamd_settings_merge_finalize(ctx);
+		REQUIRE(result != nullptr);
+
+		auto *meta = ucl_object_lookup(result, "_merge_info");
+		REQUIRE(meta != nullptr);
+		CHECK(ucl_object_type(meta) == UCL_ARRAY);
+
+		ucl_object_unref(result);
+		rspamd_config_free(cfg);
+	}
+
+	TEST_CASE("null valued action survives the merge")
+	{
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		auto *pool = cfg->cfg_pool;
+
+		auto *ctx = rspamd_settings_merge_ctx_create(pool, cfg);
+
+		/* `actions { greylist = null }` is the documented way to disable an action */
+		auto *low = ucl_parse_string(R"({"actions":{"greylist":null,"reject":15.0}})");
+		auto *high = ucl_parse_string(R"({"actions":{"reject":20.0}})");
+
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_RULE, "rule", 0, low);
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_HTTP, "http", 0, high);
+		ucl_object_unref(low);
+		ucl_object_unref(high);
+
+		auto *result = rspamd_settings_merge_finalize(ctx);
+		REQUIRE(result != nullptr);
+
+		auto *actions = ucl_object_lookup(result, "actions");
+		REQUIRE(actions != nullptr);
+
+		auto *greylist = ucl_object_lookup(actions, "greylist");
+		REQUIRE(greylist != nullptr);
+		CHECK(ucl_object_type(greylist) == UCL_NULL);
+
+		CHECK(ucl_object_todouble(ucl_object_lookup(actions, "reject")) == doctest::Approx(20.0));
+
+		ucl_object_unref(result);
+		rspamd_config_free(cfg);
+	}
+
+	TEST_CASE("null valued action from the higher layer survives the merge")
+	{
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		auto *pool = cfg->cfg_pool;
+
+		auto *ctx = rspamd_settings_merge_ctx_create(pool, cfg);
+
+		auto *low = ucl_parse_string(R"({"actions":{"greylist":4.0}})");
+		auto *high = ucl_parse_string(R"({"actions":{"greylist":null}})");
+
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_RULE, "rule", 0, low);
+		rspamd_settings_merge_add_layer(ctx, RSPAMD_SETTINGS_LAYER_HTTP, "http", 0, high);
+		ucl_object_unref(low);
+		ucl_object_unref(high);
+
+		auto *result = rspamd_settings_merge_finalize(ctx);
+		REQUIRE(result != nullptr);
+
+		auto *actions = ucl_object_lookup(result, "actions");
+		REQUIRE(actions != nullptr);
+
+		auto *greylist = ucl_object_lookup(actions, "greylist");
+		REQUIRE(greylist != nullptr);
+		CHECK(ucl_object_type(greylist) == UCL_NULL);
+
+		ucl_object_unref(result);
+		rspamd_config_free(cfg);
+	}
+
 	TEST_CASE("subject highest layer wins")
 	{
 		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);

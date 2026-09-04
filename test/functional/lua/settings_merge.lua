@@ -64,3 +64,31 @@ rspamd_config:register_symbol({
     return true, 'pre'
   end
 })
+
+-- Reports the custom (non-builtin) keys of the effective settings object so
+-- that the functional tests can assert they survived a multi-layer merge.
+rspamd_config:register_symbol({
+  name = 'MERGE_CUSTOM_KEYS',
+  score = 0.0,
+  type = 'postfilter',
+  flags = 'nostat',
+  callback = function(task)
+    local s = task:get_settings()
+
+    if not s then
+      return
+    end
+
+    local opts = {}
+
+    for _, k in ipairs({ 'tenant', 'mode', 'shared' }) do
+      if s[k] then
+        opts[#opts + 1] = string.format('%s=%s', k, tostring(s[k]))
+      end
+    end
+
+    if #opts > 0 then
+      task:insert_result('MERGE_CUSTOM_KEYS', 1.0, opts)
+    end
+  end
+})
