@@ -103,6 +103,12 @@ MULTI LAYER - NULL ACTION STILL DISABLES GREYLIST
   Scan File  ${MESSAGE}  IP=8.8.8.8
   Expect Action  no action
 
+# A numeric threshold in the higher layer re-enables an action disabled below
+MULTI LAYER - HIGHER THRESHOLD REENABLES GREYLIST
+  Redis SET  merge_user_settings  {"actions":{"greylist":2.0}}
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Action  greylist
+
 # Single-layer baseline for the same disable
 SINGLE LAYER - NULL ACTION DISABLES GREYLIST
   Scan File  ${MESSAGE}  IP=8.8.8.9

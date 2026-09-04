@@ -6658,6 +6658,8 @@ lua_task_settings_apply_actions(struct rspamd_task *task, const ucl_object_t *ac
 								   act_name,
 								   action_config->cur_limit,
 								   act_score);
+					action_config->flags &= ~(RSPAMD_ACTION_RESULT_DISABLED |
+											  RSPAMD_ACTION_RESULT_NO_THRESHOLD);
 					action_config->cur_limit = act_score;
 				}
 			}
