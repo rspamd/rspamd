@@ -1,0 +1,17 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=cacophony.za.org;
+	s=dkim; t=1788395355;
+	h=from:from:reply-to:subject:subject:date:date:message-id:message-id:
+	 to:to:cc:mime-version:mime-version:content-type:content-type;
+	bh=W0lCZnRiNjS32GY1jw1Wv77NG5S7SrUA+pTRLXMjDDI=;
+	b=JXOY7ToqqG7kC15ZcYM+GAqcJgSr0fNiu9aA5mUjUK+ZJfD0zJR+4VseqeSXyPWqk5zsmd
+	pTtGT7JfBwNeldn1JcKSm+CPZGOR+g2VXjc4g1DcccwApG5v76dUk+q+ga2OrqZha9q2SX
+	Fv1b5BmJTaC5nDhUHqMoG6PMlrbQs5M=
+From: Author <author@cacophony.za.org>, Impostor <evil@evil.example.com>
+MIME-Version: 1.0
+Date: Mon, 02 Mar 2026 10:00:00 +0000
+Message-ID: <alignment-fixture@cacophony.za.org>
+Subject: alignment fixture
+To: Recipient <rcpt@example.com>
+Content-Type: text/plain; charset=us-ascii
+
+A signed message used to check DKIM alignment reporting.

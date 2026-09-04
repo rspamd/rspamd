@@ -1,0 +1,16 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=cacophony.za.org;
+	s=tempfail; t=1788394890;
+	h=from:subject:date:message-id:to:mime-version:content-type;
+	bh=W0lCZnRiNjS32GY1jw1Wv77NG5S7SrUA+pTRLXMjDDI=;
+	b=kTIV4jcgv9sWFh2JFrS/+PcNxiloituqjmHHqeJOTfa+/9C+Er8BjnMysTJyYVq36Gnv0OZDgLr3
+	Yy4YP5Lzbt1M9ZdN5cJqO7yn1N7wyaGfkt++b09rIYBy5Dkk7OWyP3cDThqDzv8C9heSvqBSEsir
+	Fsbt3Wx2g/hWiJlnjew=
+From: Author <author@cacophony.za.org>
+To: Recipient <rcpt@example.com>
+Subject: alignment fixture
+Date: Mon, 02 Mar 2026 10:00:00 +0000
+Message-ID: <aligned-tempfail@cacophony.za.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+
+A signature aligned with the author whose key cannot be resolved.
