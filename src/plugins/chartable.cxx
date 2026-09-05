@@ -1732,9 +1732,21 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 		sc = ublock_getCode(uc);
 		cat = u_charType(uc);
 
+		const auto is_combining_mark = cat == U_NON_SPACING_MARK ||
+									   cat == U_COMBINING_SPACING_MARK ||
+									   cat == U_ENCLOSING_MARK;
+
+		/* Combining marks must not reset script tracking or extend word length. */
+		if (is_combining_mark) {
+			if (!ignore_diacritics) {
+				nspecial++;
+			}
+
+			continue;
+		}
+
 		if (!ignore_diacritics) {
-			if (cat == U_NON_SPACING_MARK ||
-				(sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
+			if ((sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
 				(sc == UBLOCK_LATIN_EXTENDED_A) ||
 				(sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) ||
 				(sc == UBLOCK_LATIN_EXTENDED_B) ||
@@ -1813,15 +1825,8 @@ rspamd_chartable_process_word_utf(struct rspamd_task *task,
 		nsym++;
 	}
 
-	if (nspecial > 0) {
-		if (!ignore_diacritics) {
-			/* Count diacritics  */
-			badness += nspecial;
-		}
-		else if (nspecial > 1) {
-			badness += (nspecial - 1.0) / 2.0;
-		}
-	}
+	/* nspecial is collected only when diacritics are significant. */
+	badness += nspecial;
 
 	/* Try to avoid FP for long words */
 	if (nsym > chartable_module_ctx->max_word_len) {
@@ -1986,11 +1991,13 @@ chartable_symbol_callback(struct rspamd_task *task,
 	unsigned int i;
 	struct rspamd_mime_text_part *part;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context(task->cfg);
-	gboolean ignore_diacritics = TRUE, seen_violated_part = FALSE;
+	gboolean ignore_meta_diacritics = FALSE, seen_violated_part = FALSE;
 
 	/* Check if we have parts with diacritic symbols language */
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
+		gboolean ignore_part_diacritics = TRUE;
+
 		if (part->languages && part->languages->len > 0) {
 			auto *lang = (struct rspamd_lang_detector_res *) g_ptr_array_index(part->languages, 0);
 			int flags;
@@ -1998,21 +2005,27 @@ chartable_symbol_callback(struct rspamd_task *task,
 			flags = rspamd_language_detector_elt_flags(lang->elt);
 
 			if ((flags & RS_LANGUAGE_DIACRITICS)) {
-				ignore_diacritics = TRUE;
+				ignore_part_diacritics = TRUE;
 			}
-			else if (lang->prob > 0.75) {
-				ignore_diacritics = FALSE;
+			else if (lang->elt != nullptr && lang->prob > 0.75) {
+				ignore_part_diacritics = FALSE;
 			}
 		}
 
-		if (rspamd_chartable_process_part(task, part, chartable_module_ctx, ignore_diacritics)) {
+		/*
+		 * Metatokens have no independent language result.  Check their
+		 * diacritics only when every body part confidently requires it.
+		 */
+		ignore_meta_diacritics |= ignore_part_diacritics;
+
+		if (rspamd_chartable_process_part(task, part, chartable_module_ctx, ignore_part_diacritics)) {
 			seen_violated_part = TRUE;
 		}
 	}
 
 	if (MESSAGE_FIELD(task, text_parts)->len == 0) {
 		/* No text parts, assume that we should ignore diacritics checks for metatokens */
-		ignore_diacritics = TRUE;
+		ignore_meta_diacritics = TRUE;
 	}
 
 	if (task->meta_words.a && kv_size(task->meta_words) > 0) {
@@ -2023,7 +2036,7 @@ chartable_symbol_callback(struct rspamd_task *task,
 		for (i = 0; i < arlen; i++) {
 			w = &kv_A(task->meta_words, i);
 			cur_score += rspamd_chartable_process_word_utf(task, w, FALSE,
-														   nullptr, chartable_module_ctx, ignore_diacritics);
+														   nullptr, chartable_module_ctx, ignore_meta_diacritics);
 		}
 
 		cur_score /= (double) (arlen + 1);
