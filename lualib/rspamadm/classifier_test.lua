@@ -3,6 +3,7 @@ local lua_util = require "lua_util"
 local argparse = require "argparse"
 local ucl = require "ucl"
 local rspamd_logger = require "rspamd_logger"
+local rspamd_http = require "rspamd_http"
 
 local parser = argparse()
     :name "rspamadm classifier_test"
@@ -57,6 +58,18 @@ parser:option "--train-wait"
       :argname("<sec>")
       :convert(tonumber)
       :default(90)
+parser:flag "--force-train"
+      :description("Trigger neural training via the controller from stored vectors, then poll until served (neural only, default on)")
+parser:flag "--no-force-train"
+      :description("Disable the forced-train trigger; fall back to waiting --train-wait seconds (neural only)")
+parser:option "--rule"
+      :description("Neural rule name to force-train (neural only)")
+      :argname("<name>")
+      :default('default')
+parser:option "--password"
+      :description("Controller password for the force-train endpoint (if required)")
+      :argname("<pass>")
+      :default('')
 
 local opts
 
@@ -179,6 +192,80 @@ local function classify_files(files, known_spam_files, known_ham_files)
   os.remove(fname)
 
   return results
+end
+
+-- POST /plugins/neural/train to force a training run from the vectors already
+-- stored in Redis (decouples the corpus feed from the train). Returns
+-- true, <reply-table> on success or false, <err-string> otherwise.
+local function neural_force_train()
+  local url = string.format('http://%s/plugins/neural/train?rule=%s&settings_id=default&timeout=%d',
+      opts.connect, opts.rule, math.floor(opts.train_wait))
+  local headers = {}
+  if opts.password and opts.password ~= '' then
+    headers['Password'] = opts.password
+  end
+
+  local err, response = rspamd_http.request {
+    config = rspamd_config,
+    ev_base = rspamadm_ev_base,
+    session = rspamadm_session,
+    resolver = rspamadm_dns_resolver,
+    log_obj = rspamd_config,
+    url = url,
+    method = 'POST',
+    headers = headers,
+    timeout = opts.train_wait + 10,
+  }
+
+  if err then
+    return false, err
+  end
+  if not response or response.code ~= 200 then
+    return false, string.format('HTTP code %s: %s',
+        response and response.code or '?', response and response.content or '')
+  end
+
+  local rep_parser = ucl.parser()
+  local ok, perr = rep_parser:parse_string(response.content)
+  if not ok then
+    return false, string.format('cannot parse reply: %s', perr)
+  end
+  local obj = rep_parser:get_object()
+  if not obj.trained then
+    return false, obj.error or 'training did not run'
+  end
+
+  return true, obj
+end
+
+-- Probe scan of a single message; returns true once the scanner emits a neural
+-- verdict symbol (i.e. the freshly trained model is being served).
+local function neural_serves(probe_file)
+  if not probe_file then
+    return false
+  end
+  local rspamc_command = string.format(
+      '%s --connect %s -j --compact -n 1 -t %.3f ' ..
+      '--header Settings="{symbols_enabled=[%s, %s]}" %s',
+      opts.rspamc, opts.connect, opts.timeout,
+      opts.spam_symbol, opts.ham_symbol, probe_file)
+  local handle = io.popen(rspamc_command)
+  if not handle then
+    return false
+  end
+  local output = handle:read("*all")
+  handle:close()
+
+  for line in output:gmatch("[^\n]+") do
+    local pr = ucl.parser()
+    if pr:parse_string(line) then
+      local symbols = (pr:get_object() or {}).symbols or {}
+      if symbols[opts.spam_symbol] or symbols[opts.ham_symbol] then
+        return true
+      end
+    end
+  end
+  return false
 end
 
 -- Function to evaluate classifier performance
@@ -336,10 +423,47 @@ local function handler(args)
       print(string.format("  Submitted %d spam + %d ham samples in %.2f seconds",
         spam_trained, ham_trained, train_spam_time))
 
-      -- Wait for neural network to train using ev_base sleep
-      print(string.format("\nWaiting %d seconds for neural network training...", opts.train_wait))
-      rspamadm_ev_base:sleep(opts.train_wait)
-      print("Training wait complete.")
+      -- Forced training is on by default for neural; --no-force-train opts out.
+      local force_train = not opts.no_force_train
+
+      if force_train then
+        -- Deterministic path: trigger one training run from the stored vectors
+        -- and poll until the scanner serves it, instead of sleeping and hoping
+        -- the periodic max_trains trigger fired.
+        print(string.format("\nForcing neural training from stored vectors (rule=%s)...", opts.rule))
+        local ok, res = neural_force_train()
+        if ok then
+          print(string.format("  Trained ANN version %s from %s spam + %s ham vectors (%s bytes)",
+            res.version, res.spam, res.ham, res.bytes))
+
+          print("Polling until the trained model is served...")
+          local probe = train_spam[1] or train_ham[1]
+          local deadline = rspamd_util.get_time() + opts.train_wait
+          local serving = false
+          while rspamd_util.get_time() < deadline do
+            if neural_serves(probe) then
+              serving = true
+              break
+            end
+            rspamadm_ev_base:sleep(0.5)
+          end
+          if serving then
+            print("Model is being served.")
+          else
+            print(string.format("WARNING: model not served within %d seconds; proceeding anyway.",
+              opts.train_wait))
+          end
+        else
+          print(string.format("Forced training failed (%s); falling back to waiting %d seconds...",
+            res, opts.train_wait))
+          rspamadm_ev_base:sleep(opts.train_wait)
+        end
+      else
+        -- Wait for neural network to train using ev_base sleep
+        print(string.format("\nWaiting %d seconds for neural network training...", opts.train_wait))
+        rspamadm_ev_base:sleep(opts.train_wait)
+        print("Training wait complete.")
+      end
     else
       -- Bayes training using learn_spam/learn_ham
       print(string.format("Start learn spam, %d messages, %d connections", #train_spam, opts.nconns))
