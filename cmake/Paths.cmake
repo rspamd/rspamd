@@ -19,7 +19,7 @@ IF(NOT MANDIR)
 ENDIF(NOT MANDIR)
 
 IF(NOT RUNDIR)
-    SET(RUNDIR "/var/run/rspamd")
+    SET(RUNDIR "/run/rspamd")
 ENDIF(NOT RUNDIR)
 
 IF(NOT DBDIR)
