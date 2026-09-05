@@ -25,6 +25,8 @@ local T = require "lua_shape.core"
 local maps = require "lua_selectors/maps"
 local E = {}
 local M = "selectors"
+-- Required on first use by the `crypto_addresses` extractor below
+local lua_crypto_addresses
 
 local HOSTNAME = rspamd_util.get_hostname()
 
@@ -567,6 +569,33 @@ The first argument must be header name.]],
     ['dependencies'] = function(args)
       return { args[1] }
     end,
+  },
+  -- Get cryptocurrency wallet addresses
+  ['crypto_addresses'] = {
+    ['get_value'] = function(task, args)
+      -- Required lazily and memoised: this pulls in a compiled regexp that is
+      -- pointless to build in a process that never asks for crypto addresses
+      if not lua_crypto_addresses then
+        lua_crypto_addresses = require "lua_crypto_addresses"
+      end
+
+      local a = args or E
+      local res = lua_crypto_addresses.get_addresses_flat(task, a[1], a[2] == 'typed')
+
+      if #res == 0 then
+        return nil
+      end
+
+      return res, 'string_list'
+    end,
+    ['description'] = 'Get cryptocurrency wallet addresses found in the message. ' ..
+        'Returns the bare addresses, ready to be matched against a map or looked up ' ..
+        'in DNS. The first argument optionally restricts the result to one currency ' ..
+        '(bitcoin, litecoin, dogecoin, tron, xrp, zcash, cardano, cosmos, stellar, ' ..
+        'ton, ethereum, monero); pass "typed" as the second argument to get ' ..
+        '"currency:address" strings instead. Computes the addresses itself, so no ' ..
+        'dependency on CRYPTO_ADDR_CHECK is needed',
+    ['args_schema'] = { T.string():optional(), T.string():optional() }
   },
   -- Get full scan result
   ['scan_result'] = {
