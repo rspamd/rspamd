@@ -39,6 +39,7 @@
 #include "libmime/lang_detection.h"
 #include "libmime/content_type.h"
 #include "libserver/multipart_form.h"
+#include "libserver/mta_hooks.h"
 
 #include <math.h>
 #include <string.h>
@@ -165,6 +166,8 @@ struct rspamd_proxy_ctx {
 	gboolean has_self_scan;
 	/* It is not HTTP but milter proxy */
 	gboolean milter;
+	/* Dedicated experimental HTTP frontend; mutually exclusive with milter. */
+	struct rspamd_mta_hooks_config *mta_hooks;
 	/* Discard messages instead of rejecting them */
 	gboolean discard_on_reject;
 	/* Quarantine messages instead of rejecting them */
@@ -241,6 +244,9 @@ struct rspamd_proxy_session {
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	struct rspamd_milter_session *client_milter_conn;
+	struct rspamd_mta_hooks_request *hooks_request;
+	gboolean hooks_tls;
+	gboolean hooks_disconnected;
 	struct rspamd_http_upstream *backend;
 	gpointer map;
 	char *fname;
@@ -300,7 +306,7 @@ proxy_add_client_ip_header(struct rspamd_http_message *msg,
 		rspamd_http_message_add_header_len(msg, IP_ADDR_HEADER,
 										   existing_ip_hdr->begin, existing_ip_hdr->len);
 	}
-	else if (session->client_addr) {
+	else if (session->client_addr && !session->hooks_request) {
 		/* For direct HTTP connections, use the client address */
 		if (rspamd_inet_address_get_af(session->client_addr) != AF_UNIX) {
 			rspamd_http_message_add_header(msg, IP_ADDR_HEADER,
@@ -1036,6 +1042,27 @@ rspamd_proxy_parse_log_tag_worker_option(rspamd_mempool_t *pool,
 	return TRUE;
 }
 
+static gboolean
+rspamd_proxy_parse_mta_hooks(rspamd_mempool_t *pool,
+							 const ucl_object_t *obj, gpointer ud,
+							 struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	struct rspamd_proxy_ctx *ctx = pd->user_struct;
+	struct rspamd_mta_hooks_config *hooks;
+
+	hooks = rspamd_mta_hooks_config_new(obj, ctx->cfg, err);
+	if (err && *err) {
+		return FALSE;
+	}
+	ctx->mta_hooks = hooks;
+	if (hooks) {
+		rspamd_mempool_add_destructor(pool,
+									  (rspamd_mempool_destruct_t) rspamd_mta_hooks_config_free, hooks);
+	}
+	return TRUE;
+}
+
 gpointer
 init_rspamd_proxy(struct rspamd_config *cfg)
 {
@@ -1069,6 +1096,9 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 	ctx->allow_file_and_shm_inputs = TRUE;
 	ctx->max_connections = 0;            /* Unlimited by default */
 	ctx->max_connections_per_source = 0; /* Unlimited by default */
+	rspamd_rcl_register_worker_option(cfg, type, "mta_hooks",
+									  rspamd_proxy_parse_mta_hooks, ctx, 0, 0,
+									  "Experimental draft-01 DATA/add-only HTTP frontend (requires Redis)");
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -1678,6 +1708,7 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 	g_ptr_array_free(session->mirror_conns, TRUE);
 	rspamd_http_message_shmem_unref(session->shmem_ref);
 	rspamd_http_message_unref(session->client_message);
+	rspamd_mta_hooks_request_free(session->hooks_request);
 
 	if (session->client_addr) {
 		rspamd_inet_address_free(session->client_addr);
@@ -2710,11 +2741,49 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 	}
 }
 
+/* A Redis operation owns an additional session reference, including after the
+ * HTTP peer disconnects. Neither the request nor its callback data can dangle. */
+static void
+proxy_hooks_ready(struct rspamd_http_message *msg, gboolean scan, gpointer ud)
+{
+	struct rspamd_proxy_session *session = ud;
+
+	if (session->hooks_disconnected) {
+		rspamd_http_message_unref(msg);
+	}
+	else if (scan) {
+		session->client_message = msg;
+		session->allow_file_shm = FALSE;
+		/* The authenticated frontend does not confer local scan privileges. */
+		session->local_client = FALSE;
+		proxy_send_master_message(session);
+	}
+	else {
+		rspamd_http_connection_reset(session->client_conn);
+		rspamd_http_connection_write_message(session->client_conn, msg, NULL,
+											 "application/json", session, 2.0);
+	}
+	REF_RELEASE(session);
+}
+
+static void
+proxy_hooks_finish(struct rspamd_proxy_session *session,
+				   const ucl_object_t *results, gboolean rewritten)
+{
+	REF_RETAIN(session);
+	rspamd_mta_hooks_finish(session->hooks_request, results, rewritten,
+							proxy_hooks_ready, session);
+}
+
 static void
 proxy_client_write_error(struct rspamd_proxy_session *session, int code,
 						 const char *status)
 {
 	struct rspamd_http_message *reply;
+	if (session->hooks_request) {
+		proxy_hooks_finish(session, NULL, FALSE);
+		return;
+	}
 
 	if (session->client_milter_conn) {
 		rspamd_milter_send_action(session->client_milter_conn,
@@ -2803,6 +2872,13 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 
 	rspamd_upstream_fail(bk_conn->up, FALSE, err ? err->message : "unknown");
 	proxy_backend_close_connection(session->master_conn);
+
+	/* Retrying a possibly processed scan could duplicate learning or other
+	 * backend side effects. Hooks retries are handled by the shared ledger. */
+	if (session->hooks_request) {
+		proxy_client_write_error(session, 503, "Backend failed");
+		return;
+	}
 
 	if (session->ctx->max_retries > 0 &&
 		session->retries >= session->ctx->max_retries) {
@@ -2929,6 +3005,13 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 		}
 	}
 
+	if (session->hooks_request) {
+		proxy_hooks_finish(session, msg->code == 200 ? bk_conn->results : NULL,
+						   bk_conn->body_data != NULL || body_offset > 0);
+		rspamd_http_message_unref(msg);
+		return 0;
+	}
+
 	if (session->client_milter_conn) {
 		nsession = proxy_session_refresh(session);
 
@@ -3029,6 +3112,20 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	msg = rspamd_http_new_message(HTTP_RESPONSE);
 	msg->date = time(NULL);
 	msg->code = 200;
+	if (session->hooks_request) {
+		if (!task->err) {
+			rspamd_protocol_http_reply(msg, task, &rep, out_type);
+			rspamd_protocol_write_log_pipe(task);
+		}
+		if (rep) {
+			session->master_conn->results = ucl_object_ref(rep);
+		}
+		session->master_conn->flags |= RSPAMD_BACKEND_CLOSED;
+		proxy_hooks_finish(session, rep,
+						   (task->flags & RSPAMD_TASK_FLAG_MESSAGE_REWRITE) != 0);
+		rspamd_http_message_unref(msg);
+		return;
+	}
 
 	switch (task->cmd) {
 	case CMD_CHECK:
@@ -3155,6 +3252,24 @@ rspamd_proxy_task_fin(void *ud)
 	return FALSE;
 }
 
+static void
+proxy_hooks_task_timeout(EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_task *task = w->data;
+	/* Unlike the native soft timeout, the negotiated hook budget must not
+	 * restart for postfilters. Cancel remaining work and return an HTTP error. */
+	ev_timer_stop(EV_A_ w);
+	msg_info_task("MTA Hooks scan deadline exceeded");
+	if (task->err == NULL) {
+		g_set_error_literal(&task->err, rspamd_proxy_quark(), ETIMEDOUT,
+							"MTA Hooks scan deadline exceeded");
+	}
+	task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+	task->flags |= RSPAMD_TASK_FLAG_SKIP;
+	rspamd_session_cleanup(task->s, true);
+	rspamd_session_pending(task->s);
+}
+
 static gboolean
 rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 {
@@ -3251,11 +3366,16 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 	 * cfg->task_timeout) rather than default_upstream->timeout, which is the
 	 * milter/HTTP wire timeout and can be much larger (e.g. 120s) than the
 	 * intended task processing limit. */
-	if (!isnan(session->ctx->task_timeout) && session->ctx->task_timeout > 0.0) {
+	double task_timeout = session->ctx->task_timeout;
+	if (session->hooks_request) {
+		double remaining = rspamd_mta_hooks_remaining(session->hooks_request);
+		task_timeout = isnan(task_timeout) || task_timeout <= 0 ? remaining : MIN(task_timeout, remaining);
+	}
+	if (!isnan(task_timeout) && task_timeout > 0.0) {
 		task->timeout_ev.data = task;
-		ev_timer_init(&task->timeout_ev, rspamd_task_timeout,
-					  session->ctx->task_timeout,
-					  session->ctx->task_timeout);
+		ev_timer_init(&task->timeout_ev,
+					  session->hooks_request ? proxy_hooks_task_timeout : rspamd_task_timeout,
+					  task_timeout, task_timeout);
 		ev_timer_start(task->event_loop, &task->timeout_ev);
 	}
 
@@ -3368,6 +3488,10 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		}
 
 		session->master_conn->timeout = backend->timeout;
+		if (session->hooks_request) {
+			session->master_conn->timeout = MIN(backend->timeout,
+												rspamd_mta_hooks_remaining(session->hooks_request));
+		}
 
 		if (session->master_conn->up == NULL) {
 			msg_err_session("cannot select upstream for %s",
@@ -3555,6 +3679,7 @@ static void
 proxy_client_error_handler(struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_proxy_session *session = conn->ud;
+	session->hooks_disconnected = TRUE;
 
 	msg_info_session("abnormally closing connection from: %s, error: %s",
 					 rspamd_inet_address_to_string(session->client_addr), err->message);
@@ -3576,6 +3701,16 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 													 sizeof(*session->master_conn));
 		session->master_conn->s = session;
 		session->master_conn->name = "master";
+		if (session->ctx->mta_hooks) {
+			session->hooks_request = rspamd_mta_hooks_request_new(
+				session->ctx->mta_hooks, msg, session->hooks_tls, session->local_client);
+			rspamd_http_connection_steal_msg(conn);
+			rspamd_http_message_unref(msg);
+			rspamd_http_connection_reset(conn);
+			REF_RETAIN(session);
+			rspamd_mta_hooks_begin(session->hooks_request, proxy_hooks_ready, session);
+			return 0;
+		}
 
 		/* Reset spamc legacy */
 		if (msg->method >= HTTP_SYMBOLS) {
@@ -3856,7 +3991,7 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 			http_opts);
 
 		rspamd_http_connection_set_max_size(session->client_conn,
-											ctx->cfg->max_message);
+											ctx->mta_hooks ? rspamd_mta_hooks_max_request(ctx->mta_hooks) : ctx->cfg->max_message);
 
 		if (ctx->key) {
 			rspamd_http_connection_set_key(session->client_conn, ctx->key);
@@ -3867,6 +4002,7 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 						 rspamd_inet_address_get_port(addr));
 
 		if (ctx->server_ssl_ctx && rspamd_worker_is_ssl_socket(worker, w->fd)) {
+			session->hooks_tls = TRUE;
 			rspamd_http_connection_accept_ssl_shared(session->client_conn,
 													 ctx->server_ssl_ctx,
 													 session,
@@ -3951,6 +4087,15 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	ctx->cfg = worker->srv->cfg;
 	CFG_REF_RETAIN(ctx->cfg);
 	ctx->srv = worker->srv;
+	if (ctx->mta_hooks) {
+		if (ctx->milter || ctx->mirrors->len != 0 || ctx->discard_on_reject || ctx->quarantine_on_reject) {
+			msg_err("mta_hooks requires a dedicated HTTP proxy without mirrors or milter action overrides");
+			exit(EXIT_FAILURE);
+		}
+		if (ctx->max_connections == 0) ctx->max_connections = 256;
+		ctx->timeout = MIN(ctx->timeout, 20.0);
+		ctx->allow_file_and_shm_inputs = FALSE;
+	}
 	ctx->event_loop = rspamd_prepare_worker(worker, "rspamd_proxy",
 											proxy_accept_socket);
 	rspamd_worker_warn_file_shm_inputs(worker, "rspamd_proxy",
