@@ -15,17 +15,9 @@
  */
 
 #include "lua_common.h"
+#include "lua_xml_scanner.hxx"
 
-#include "contrib/ankerl/unordered_dense.h"
-#include "contrib/expected/expected.hpp"
-#include "contrib/fmt/include/fmt/format.h"
-#include "libmime/mime_encoding.h"
-#include "libserver/html/html_entities.hxx"
 #include "libserver/url.h"
-#include "libutil/mem_pool.h"
-#include "libutil/rspamd_simdutf.h"
-#include "libutil/str_util.h"
-#include "libutil/util.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -43,8 +35,6 @@
 
 namespace {
 
-constexpr std::string_view xml_namespace = "http://www.w3.org/XML/1998/namespace";
-constexpr std::string_view xmlns_namespace = "http://www.w3.org/2000/xmlns/";
 constexpr std::string_view content_types_namespace =
 	"http://schemas.openxmlformats.org/package/2006/content-types";
 constexpr std::string_view strict_content_types_namespace =
@@ -70,17 +60,7 @@ constexpr std::string_view hyperlink_relationship =
 constexpr std::string_view strict_hyperlink_relationship =
 	"http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink";
 
-struct xml_limits {
-	std::size_t max_input = 8U * 1024U * 1024U;
-	std::size_t max_depth = 64;
-	std::size_t max_tokens = 200000;
-	std::size_t max_attributes = 256;
-	std::size_t max_attribute_length = 64U * 1024U;
-	std::size_t max_namespace_declarations = 1024;
-	std::size_t max_text = 2U * 1024U * 1024U;
-	double end_timestamp = 0;
-	double timeout = 0;
-};
+using xml_limits = rspamd::xml::limits;
 
 struct ooxml_limits {
 	xml_limits xml;
@@ -92,589 +72,50 @@ struct ooxml_limits {
 };
 
 template<typename T>
-using ooxml_result = tl::expected<T, std::string>;
+using ooxml_result = rspamd::xml::result<T>;
 
-using ooxml_status = ooxml_result<void>;
+using ooxml_status = rspamd::xml::status;
 
-auto is_name_start(unsigned char ch) -> bool
-{
-	return ch == ':' || ch == '_' || (ch >= 'A' && ch <= 'Z') ||
-		   (ch >= 'a' && ch <= 'z');
-}
-
-auto is_name_char(unsigned char ch) -> bool
-{
-	return is_name_start(ch) || ch == '-' || ch == '.' ||
-		   (ch >= '0' && ch <= '9');
-}
-
-auto decode_xml_entities(std::string_view input) -> ooxml_result<std::string>
-{
-	if (input.find('&') == std::string_view::npos) {
-		return std::string{input};
-	}
-
-	std::string out{input};
-	auto decoded = rspamd::html::decode_entities_inplace(out.data(), out.size(),
-														 rspamd::html::entity_decode_mode::xml);
-	if (!decoded) return tl::make_unexpected(std::move(decoded.error()));
-	out.resize(*decoded);
-	return out;
-}
-
-auto convert_utf16(std::string_view input, const char *encoding, std::size_t max_input)
-	-> ooxml_result<std::string>
-{
-	if (input.size() > G_MAXINT32) {
-		return tl::make_unexpected("cannot convert UTF-16 XML");
-	}
-	auto pool = std::unique_ptr<rspamd_mempool_t, decltype(&rspamd_mempool_delete)>{
-		rspamd_mempool_new_short_lived("ooxml"), rspamd_mempool_delete};
-	GError *error = nullptr;
-	gsize output_len = 0;
-	auto *converted = rspamd_mime_text_to_utf8(pool.get(),
-											   const_cast<char *>(input.data()), input.size(), encoding, &output_len, &error);
-	if (converted == nullptr) {
-		if (error != nullptr) g_error_free(error);
-		return tl::make_unexpected("cannot convert UTF-16 XML");
-	}
-	if (output_len > max_input) {
-		return tl::make_unexpected("XML input limit exceeded at byte 1");
-	}
-	return std::string{converted, output_len};
-}
-
-enum class namespace_id : std::uint8_t {
-	unbound,
-	none,
-	xml,
-	xmlns,
-	content_types,
-	relationships,
-	word,
-	drawing,
-	document_relationships,
-	other,
-};
-
-auto classify_namespace(std::string_view uri) -> namespace_id
-{
-	if (uri.empty()) return namespace_id::unbound;
-	if (uri == xml_namespace) return namespace_id::xml;
-	if (uri == xmlns_namespace) return namespace_id::xmlns;
-	if (uri == content_types_namespace || uri == strict_content_types_namespace) {
-		return namespace_id::content_types;
-	}
-	if (uri == relationships_namespace || uri == strict_relationships_namespace) {
-		return namespace_id::relationships;
-	}
-	if (uri == word_namespace || uri == strict_word_namespace) return namespace_id::word;
-	if (uri == drawing_namespace || uri == strict_drawing_namespace) return namespace_id::drawing;
-	if (uri == document_relationship_namespace || uri == strict_document_relationship_namespace) {
-		return namespace_id::document_relationships;
-	}
-	return namespace_id::other;
-}
-
-struct xml_attribute {
-	namespace_id namespace_value;
-	std::string_view name;
-	std::string value;
-};
-
-struct namespace_change {
-	std::string_view prefix;
-	namespace_id previous;
-};
-
-struct element_state {
-	std::string_view qname;
-	namespace_id namespace_value;
-	std::string_view name;
-	std::size_t namespace_base;
-};
-
-template<typename Handler>
-class xml_scanner {
-public:
-	xml_scanner(std::string_view raw_input, const xml_limits &limits, Handler &handler)
-		: raw_input_{raw_input}, limits_{limits}, handler_{handler}
-	{
-		namespaces_.emplace("xml", namespace_id::xml);
-		namespaces_.emplace("xmlns", namespace_id::xmlns);
-	}
-
-	auto parse() -> ooxml_status
-	{
-		if (auto ret = check_deadline(0); !ret) return ret;
-		if (auto ret = prepare_input(); !ret) return ret;
-		if (auto ret = check_deadline(0); !ret) return ret;
-
-		while (pos_ < input_.size()) {
-			if (input_[pos_] != '<') {
-				auto next = input_.find('<', pos_);
-				if (next == std::string_view::npos) {
-					next = input_.size();
-				}
-				if (auto ret = emit_text(input_.substr(pos_, next - pos_), pos_, true); !ret) {
-					return ret;
-				}
-				pos_ = next;
-			}
-			else if (starts_with(pos_, "<!--")) {
-				auto close = input_.find("-->", pos_ + 4);
-				if (close == std::string_view::npos) {
-					return fail("unterminated XML comment", pos_);
-				}
-				if (auto ret = add_token(pos_); !ret) return ret;
-				pos_ = close + 3;
-			}
-			else if (starts_with(pos_, "<![CDATA[")) {
-				auto close = input_.find("]]>", pos_ + 9);
-				if (close == std::string_view::npos) {
-					return fail("unterminated CDATA section", pos_);
-				}
-				if (auto ret = emit_text(input_.substr(pos_ + 9, close - pos_ - 9), pos_, false);
-					!ret) {
-					return ret;
-				}
-				pos_ = close + 3;
-			}
-			else if (starts_with(pos_, "<?")) {
-				auto close = input_.find("?>", pos_ + 2);
-				if (close == std::string_view::npos) {
-					return fail("unterminated processing instruction", pos_);
-				}
-				if (auto ret = add_token(pos_); !ret) return ret;
-				pos_ = close + 2;
-			}
-			else if (pos_ + 9 <= input_.size() &&
-					 rspamd_lc_cmp(input_.data() + pos_, "<!doctype", 9) == 0) {
-				return fail("XML DTD declarations are not supported", pos_);
-			}
-			else if (starts_with(pos_, "<!")) {
-				return fail("unsupported XML declaration", pos_);
-			}
-			else if (starts_with(pos_, "</")) {
-				if (auto ret = parse_end_element(); !ret) return ret;
-			}
-			else {
-				if (auto ret = parse_start_element(); !ret) return ret;
-			}
-		}
-		if (!stack_.empty()) {
-			return fail("unclosed XML element", input_.size());
-		}
-		return {};
-	}
-
-	auto tokens() const -> std::size_t
-	{
-		return tokens_;
-	}
-
-private:
-	auto prepare_input() -> ooxml_status
-	{
-		auto raw = raw_input_;
-		if (raw.size() >= 2 && static_cast<unsigned char>(raw[0]) == 0xff &&
-			static_cast<unsigned char>(raw[1]) == 0xfe) {
-			auto converted = convert_utf16(raw.substr(2), "UTF-16LE", limits_.max_input);
-			if (!converted) return tl::make_unexpected(std::move(converted.error()));
-			owned_input_ = std::move(*converted);
-			input_ = owned_input_;
-		}
-		else if (raw.size() >= 2 && static_cast<unsigned char>(raw[0]) == 0xfe &&
-				 static_cast<unsigned char>(raw[1]) == 0xff) {
-			auto converted = convert_utf16(raw.substr(2), "UTF-16BE", limits_.max_input);
-			if (!converted) return tl::make_unexpected(std::move(converted.error()));
-			owned_input_ = std::move(*converted);
-			input_ = owned_input_;
-		}
-		else {
-			input_ = raw;
-			if (input_.size() >= 3 && static_cast<unsigned char>(input_[0]) == 0xef &&
-				static_cast<unsigned char>(input_[1]) == 0xbb &&
-				static_cast<unsigned char>(input_[2]) == 0xbf) {
-				input_.remove_prefix(3);
-			}
-		}
-
-		if (input_.size() > limits_.max_input) {
-			return fail("XML input limit exceeded", 0);
-		}
-		if (rspamd_fast_utf8_validate(
-				reinterpret_cast<const unsigned char *>(input_.data()), input_.size()) != 0) {
-			return tl::make_unexpected("XML input is not valid UTF-8");
-		}
-		for (auto ch: input_) {
-			if (g_ascii_iscntrl(ch) && ch != '\t' && ch != '\n' && ch != '\r') {
-				return tl::make_unexpected("XML input contains an invalid control character");
-			}
-		}
-		return {};
-	}
-
-	auto fail(std::string_view message, std::size_t pos) const -> tl::unexpected<std::string>
-	{
-		return tl::make_unexpected(fmt::format("{} at byte {}", message, pos + 1));
-	}
-
-	auto starts_with(std::size_t pos, std::string_view needle) const -> bool
-	{
-		return pos <= input_.size() && needle.size() <= input_.size() - pos &&
-			   input_.compare(pos, needle.size(), needle) == 0;
-	}
-
-	auto parse_name(std::size_t &cursor) const -> std::string_view
-	{
-		auto start = cursor;
-		if (cursor >= input_.size() ||
-			!is_name_start(static_cast<unsigned char>(input_[cursor]))) {
-			return {};
-		}
-		cursor++;
-		while (cursor < input_.size() &&
-			   is_name_char(static_cast<unsigned char>(input_[cursor]))) {
-			cursor++;
-		}
-		return input_.substr(start, cursor - start);
-	}
-
-	static auto split_qname(std::string_view qname)
-		-> std::optional<std::pair<std::string_view, std::string_view>>
-	{
-		auto colon = qname.find(':');
-		if (colon == std::string_view::npos) {
-			return std::pair<std::string_view, std::string_view>{{}, qname};
-		}
-		if (colon == 0 || colon + 1 == qname.size() ||
-			qname.find(':', colon + 1) != std::string_view::npos) {
-			return std::nullopt;
-		}
-		return std::pair<std::string_view, std::string_view>{
-			qname.substr(0, colon), qname.substr(colon + 1)};
-	}
-
-	auto lookup_namespace(std::string_view prefix) const -> namespace_id
-	{
-		auto found = namespaces_.find(prefix);
-		return found == namespaces_.end() ? namespace_id::unbound : found->second;
-	}
-
-	void restore_namespaces(std::size_t base)
-	{
-		while (namespace_changes_.size() > base) {
-			auto change = namespace_changes_.back();
-			namespace_changes_.pop_back();
-			if (change.previous == namespace_id::unbound) {
-				namespaces_.erase(change.prefix);
-			}
-			else {
-				namespaces_.find(change.prefix)->second = change.previous;
-			}
-		}
-	}
-
-	auto check_deadline(std::size_t at) const -> ooxml_status
-	{
-		if (limits_.end_timestamp > 0 &&
-			rspamd_get_ticks(FALSE) >= limits_.end_timestamp) {
-			return fail("XML processing timeout", at);
-		}
-		return {};
-	}
-
-	auto add_token(std::size_t at) -> ooxml_status
-	{
-		tokens_++;
-		if (tokens_ > limits_.max_tokens) {
-			return fail("XML token limit exceeded", at);
-		}
-		if ((tokens_ % 256U) == 0) return check_deadline(at);
-		return {};
-	}
-
-	auto emit_text(std::string_view raw, std::size_t at, bool decode) -> ooxml_status
-	{
-		if (raw.empty()) {
-			return {};
-		}
-		std::string decoded;
-		std::string_view value = raw;
-		if (decode && raw.find('&') != std::string_view::npos) {
-			auto decoded_result = decode_xml_entities(raw);
-			if (!decoded_result) {
-				return tl::make_unexpected(std::move(decoded_result.error()));
-			}
-			decoded = std::move(*decoded_result);
-			value = decoded;
-		}
-		text_bytes_ += value.size();
-		if (text_bytes_ > limits_.max_text) {
-			return fail("XML text limit exceeded", at);
-		}
-		if (auto ret = add_token(at); !ret) return ret;
-		return handler_.text(value);
-	}
-
-	auto parse_end_element() -> ooxml_status
-	{
-		auto at = pos_;
-		auto cursor = pos_ + 2;
-		auto qname = parse_name(cursor);
-		if (qname.empty()) {
-			return fail("invalid XML end element", at);
-		}
-		while (cursor < input_.size() && g_ascii_isspace(input_[cursor])) {
-			cursor++;
-		}
-		if (cursor >= input_.size() || input_[cursor] != '>') {
-			return fail("invalid XML end element", cursor);
-		}
-		if (stack_.empty() || stack_.back().qname != qname) {
-			return fail("mismatched XML end element", at);
-		}
-		if (auto ret = add_token(at); !ret) return ret;
-		auto element = std::move(stack_.back());
-		stack_.pop_back();
-		auto handler_result = handler_.end_element(element.namespace_value, element.name);
-		if (!handler_result) return handler_result;
-		restore_namespaces(element.namespace_base);
-		pos_ = cursor + 1;
-		return {};
-	}
-
-	auto parse_start_element() -> ooxml_status
-	{
-		auto at = pos_;
-		auto cursor = pos_ + 1;
-		auto qname = parse_name(cursor);
-		if (qname.empty()) {
-			return fail("invalid XML start element", at);
-		}
-
-		struct raw_attribute {
-			std::string_view qname;
-			std::string value;
-		};
-		std::vector<raw_attribute> raw_attributes;
-		ankerl::unordered_dense::set<std::string_view> attribute_names;
-		bool self_closing = false;
-		bool closed = false;
-
-		while (cursor < input_.size()) {
-			while (cursor < input_.size() && g_ascii_isspace(input_[cursor])) {
-				cursor++;
-			}
-			if (cursor < input_.size() && input_[cursor] == '>') {
-				cursor++;
-				closed = true;
-				break;
-			}
-			if (cursor + 1 < input_.size() && input_[cursor] == '/' &&
-				input_[cursor + 1] == '>') {
-				cursor += 2;
-				self_closing = true;
-				closed = true;
-				break;
-			}
-			if ((raw_attributes.size() % 16U) == 0) {
-				if (auto ret = check_deadline(cursor); !ret) return ret;
-			}
-			if (auto ret = add_token(cursor); !ret) return ret;
-
-			auto attribute_qname = parse_name(cursor);
-			if (attribute_qname.empty()) {
-				return fail("invalid XML attribute name", cursor);
-			}
-			if (!attribute_names.emplace(attribute_qname).second) {
-				return fail("duplicate XML attribute", cursor);
-			}
-			while (cursor < input_.size() && g_ascii_isspace(input_[cursor])) {
-				cursor++;
-			}
-			if (cursor >= input_.size() || input_[cursor] != '=') {
-				return fail("missing XML attribute value", cursor);
-			}
-			cursor++;
-			while (cursor < input_.size() && g_ascii_isspace(input_[cursor])) {
-				cursor++;
-			}
-			if (cursor >= input_.size() || (input_[cursor] != '"' && input_[cursor] != '\'')) {
-				return fail("unquoted XML attribute value", cursor);
-			}
-			auto quote = input_[cursor];
-			auto value_start = ++cursor;
-			auto value_end = input_.find(quote, value_start);
-			if (value_end == std::string_view::npos) {
-				return fail("unterminated XML attribute value", cursor - 1);
-			}
-			if (value_end - value_start > limits_.max_attribute_length) {
-				return fail("XML attribute length limit exceeded", cursor - 1);
-			}
-			auto raw_value = input_.substr(value_start, value_end - value_start);
-			if (raw_value.find('<') != std::string_view::npos) {
-				return fail("unescaped less-than sign in XML attribute", value_start);
-			}
-			auto decoded = decode_xml_entities(raw_value);
-			if (!decoded) return tl::make_unexpected(std::move(decoded.error()));
-			raw_attributes.push_back({attribute_qname, std::move(*decoded)});
-			if (raw_attributes.size() > limits_.max_attributes) {
-				return fail("XML attribute limit exceeded", cursor);
-			}
-			cursor = value_end + 1;
-		}
-		if (!closed) {
-			return fail("unterminated XML start element", at);
-		}
-
-		if (auto ret = check_deadline(at); !ret) return ret;
-		auto namespace_base = namespace_changes_.size();
-		for (const auto &attribute: raw_attributes) {
-			std::optional<std::string_view> prefix;
-			if (attribute.qname == "xmlns") {
-				prefix = std::string_view{};
-			}
-			else if (attribute.qname.starts_with("xmlns:")) {
-				prefix = attribute.qname.substr(6);
-			}
-			if (prefix) {
-				if (*prefix == "xmlns" ||
-					(*prefix == "xml" && attribute.value != xml_namespace) ||
-					(*prefix != "xml" && attribute.value == xml_namespace) ||
-					attribute.value == xmlns_namespace) {
-					restore_namespaces(namespace_base);
-					return fail("invalid XML namespace declaration", at);
-				}
-				namespace_declarations_++;
-				if (namespace_declarations_ > limits_.max_namespace_declarations) {
-					restore_namespaces(namespace_base);
-					return fail("XML namespace declaration limit exceeded", at);
-				}
-				auto value = classify_namespace(attribute.value);
-				auto previous = lookup_namespace(*prefix);
-				namespace_changes_.push_back({*prefix, previous});
-				auto [it, inserted] = namespaces_.try_emplace(*prefix, value);
-				if (!inserted) it->second = value;
-			}
-		}
-
-		auto element_name = split_qname(qname);
-		if (!element_name) {
-			restore_namespaces(namespace_base);
-			return fail("invalid qualified XML element name", at);
-		}
-		auto element_namespace = lookup_namespace(element_name->first);
-		if (!element_name->first.empty() && element_namespace == namespace_id::unbound) {
-			restore_namespaces(namespace_base);
-			return fail("unbound XML element prefix", at);
-		}
-		if (element_name->first.empty() && element_namespace == namespace_id::unbound) {
-			element_namespace = namespace_id::none;
-		}
-
-		std::vector<xml_attribute> attributes;
-		attributes.reserve(raw_attributes.size());
-		for (auto &attribute: raw_attributes) {
-			if (attribute.qname == "xmlns" || attribute.qname.starts_with("xmlns:")) {
-				continue;
-			}
-			auto name = split_qname(attribute.qname);
-			if (!name) {
-				restore_namespaces(namespace_base);
-				return fail("invalid qualified XML attribute name", at);
-			}
-			auto attribute_namespace = namespace_id::none;
-			if (!name->first.empty()) {
-				attribute_namespace = lookup_namespace(name->first);
-				if (attribute_namespace == namespace_id::unbound) {
-					restore_namespaces(namespace_base);
-					return fail("unbound XML attribute prefix", at);
-				}
-			}
-			attributes.push_back({attribute_namespace, name->second, std::move(attribute.value)});
-		}
-
-		if (stack_.size() + 1 > limits_.max_depth) {
-			restore_namespaces(namespace_base);
-			return fail("XML depth limit exceeded", at);
-		}
-		if (auto ret = add_token(at); !ret) return ret;
-		if (auto ret = handler_.start_element(element_namespace, element_name->second, attributes);
-			!ret) {
-			return ret;
-		}
-
-		if (self_closing) {
-			if (auto ret = add_token(at); !ret) return ret;
-			if (auto ret = handler_.end_element(element_namespace, element_name->second); !ret) {
-				return ret;
-			}
-			restore_namespaces(namespace_base);
-		}
-		else {
-			stack_.push_back({qname, element_namespace, element_name->second, namespace_base});
-		}
-		pos_ = cursor;
-		return {};
-	}
-
-	std::string_view raw_input_;
-	xml_limits limits_;
-	Handler &handler_;
-	std::string owned_input_;
-	std::string_view input_;
-	ankerl::unordered_dense::map<std::string_view, namespace_id> namespaces_;
-	std::vector<namespace_change> namespace_changes_;
-	std::vector<element_state> stack_;
-	std::size_t pos_ = 0;
-	std::size_t tokens_ = 0;
-	std::size_t namespace_declarations_ = 0;
-	std::size_t text_bytes_ = 0;
-};
-
-auto get_attribute(const std::vector<xml_attribute> &attributes,
-				   std::string_view name, namespace_id namespace_value = namespace_id::none)
-	-> const std::string *
-{
-	for (const auto &attribute: attributes) {
-		if (attribute.name == name && attribute.namespace_value == namespace_value) {
-			return &attribute.value;
-		}
-	}
-	return nullptr;
-}
-
-auto has_ascii_control(std::string_view value) -> bool
-{
-	return std::any_of(value.begin(), value.end(), [](char ch) {
-		return g_ascii_iscntrl(static_cast<unsigned char>(ch));
-	});
-}
-
-auto has_uri_scheme(std::string_view value) -> bool
-{
-	auto is_alpha = [](unsigned char ch) {
-		return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
-	};
-	auto is_digit = [](unsigned char ch) {
-		return ch >= '0' && ch <= '9';
+struct ooxml_namespaces {
+	enum class id : std::uint8_t {
+		unbound,
+		none,
+		xml,
+		xmlns,
+		content_types,
+		relationships,
+		word,
+		drawing,
+		document_relationships,
+		other,
 	};
 
-	if (value.empty() || !is_alpha(static_cast<unsigned char>(value.front()))) {
-		return false;
-	}
-	for (std::size_t i = 1; i < value.size(); i++) {
-		auto ch = static_cast<unsigned char>(value[i]);
-		if (ch == ':') return true;
-		if (!is_alpha(ch) && !is_digit(ch) && ch != '+' && ch != '-' && ch != '.') {
-			return false;
+	static auto classify(std::string_view uri) -> id
+	{
+		if (uri.empty()) return id::unbound;
+		if (uri == rspamd::xml::xml_namespace) return id::xml;
+		if (uri == rspamd::xml::xmlns_namespace) return id::xmlns;
+		if (uri == content_types_namespace || uri == strict_content_types_namespace) {
+			return id::content_types;
 		}
+		if (uri == relationships_namespace || uri == strict_relationships_namespace) {
+			return id::relationships;
+		}
+		if (uri == word_namespace || uri == strict_word_namespace) return id::word;
+		if (uri == drawing_namespace || uri == strict_drawing_namespace) return id::drawing;
+		if (uri == document_relationship_namespace ||
+			uri == strict_document_relationship_namespace) {
+			return id::document_relationships;
+		}
+		return id::other;
 	}
+};
 
-	return false;
-}
+using namespace_id = ooxml_namespaces::id;
+using xml_attribute = rspamd::xml::attribute<ooxml_namespaces>;
+using rspamd::xml::get_attribute;
+using rspamd::xml::has_ascii_control;
+using rspamd::xml::has_uri_scheme;
 
 auto validate_segment(std::string_view segment) -> bool
 {
@@ -771,6 +212,8 @@ struct content_types_result {
 
 class content_types_handler {
 public:
+	using namespaces = ooxml_namespaces;
+
 	explicit content_types_handler(const ooxml_limits &limits)
 		: limits_{limits}
 	{
@@ -854,6 +297,8 @@ struct relationship {
 
 class relationships_handler {
 public:
+	using namespaces = ooxml_namespaces;
+
 	relationships_handler(std::string_view source_part, const ooxml_limits &limits)
 		: source_part_{source_part}, limits_{limits}
 	{
@@ -1029,6 +474,8 @@ using hyperlink_map = ankerl::unordered_dense::map<std::string, std::string>;
 
 class word_story_handler {
 public:
+	using namespaces = ooxml_namespaces;
+
 	word_story_handler(const hyperlink_map &relationships, docx_result &result)
 		: relationships_{relationships}, result_{result}
 	{
@@ -1185,44 +632,9 @@ auto read_limits(lua_State *L, int table_index) -> ooxml_result<ooxml_limits>
 	if (max_text >= 0) result.max_text = max_text;
 	if (max_urls >= 0) result.max_urls = max_urls;
 
-	lua_getfield(L, table_index, "xml");
-	if (lua_istable(L, -1)) {
-		auto xml_index = lua_absindex(L, -1);
-		int64_t max_input = result.xml.max_input;
-		int64_t max_depth = result.xml.max_depth;
-		int64_t max_tokens = result.xml.max_tokens;
-		int64_t max_attributes = result.xml.max_attributes;
-		int64_t max_attribute_length = result.xml.max_attribute_length;
-		int64_t max_namespace_declarations = result.xml.max_namespace_declarations;
-		int64_t xml_max_text = result.xml.max_text;
-		double end_timestamp = result.xml.end_timestamp;
-		double timeout = result.xml.timeout;
-		error = nullptr;
-		if (!rspamd_lua_parse_table_arguments(L, xml_index, &error,
-											  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
-											  "max_input=I;max_depth=I;max_tokens=I;max_attributes=I;"
-											  "max_attribute_length=I;max_namespace_declarations=I;"
-											  "max_text=I;end_timestamp=N;timeout=N",
-											  &max_input, &max_depth, &max_tokens, &max_attributes,
-											  &max_attribute_length, &max_namespace_declarations,
-											  &xml_max_text, &end_timestamp, &timeout)) {
-			auto message = error != nullptr ? std::string{error->message} : "invalid XML limits";
-			if (error != nullptr) g_error_free(error);
-			lua_pop(L, 1);
-			return tl::make_unexpected(std::move(message));
-		}
-		if (max_input >= 0) result.xml.max_input = max_input;
-		if (max_depth >= 0) result.xml.max_depth = max_depth;
-		if (max_tokens >= 0) result.xml.max_tokens = max_tokens;
-		if (max_attributes >= 0) result.xml.max_attributes = max_attributes;
-		if (max_attribute_length >= 0) result.xml.max_attribute_length = max_attribute_length;
-		if (max_namespace_declarations >= 0) {
-			result.xml.max_namespace_declarations = max_namespace_declarations;
-		}
-		if (xml_max_text >= 0) result.xml.max_text = xml_max_text;
-		result.xml.end_timestamp = end_timestamp;
-		result.xml.timeout = timeout;
-	}
+	auto xml = rspamd::xml::read_limits(L, table_index, result.xml);
+	if (!xml) return tl::make_unexpected(std::move(xml.error()));
+	result.xml = *xml;
 	lua_pop(L, 1);
 	return result;
 }
@@ -1233,15 +645,6 @@ auto check_string(lua_State *L, int pos) -> std::optional<std::string_view>
 	size_t len;
 	auto *value = lua_tolstring(L, pos, &len);
 	return std::string_view{value, len};
-}
-
-auto scanner_limits(const xml_limits &configured) -> xml_limits
-{
-	auto result = configured;
-	if (result.end_timestamp <= 0 && result.timeout > 0) {
-		result.end_timestamp = rspamd_get_ticks(FALSE) + result.timeout;
-	}
-	return result;
 }
 
 auto push_error(lua_State *L, std::string_view error) -> int
@@ -1366,8 +769,8 @@ static int lua_ooxml_parse_content_types(lua_State *L)
 	auto limits = read_limits(L, 2);
 	if (!limits) return push_error(L, limits.error());
 	content_types_handler handler{*limits};
-	xml_scanner scanner{std::string_view{input->start, input->len},
-						scanner_limits(limits->xml), handler};
+	rspamd::xml::scanner scanner{std::string_view{input->start, input->len},
+								 rspamd::xml::effective_limits(limits->xml), handler};
 	if (auto parsed = scanner.parse(); !parsed) {
 		return push_error_with_tokens(L, parsed.error(), scanner.tokens());
 	}
@@ -1400,8 +803,8 @@ static int lua_ooxml_parse_relationships(lua_State *L)
 	auto limits = read_limits(L, 3);
 	if (!limits) return push_error(L, limits.error());
 	relationships_handler handler{*source, *limits};
-	xml_scanner scanner{std::string_view{input->start, input->len},
-						scanner_limits(limits->xml), handler};
+	rspamd::xml::scanner scanner{std::string_view{input->start, input->len},
+								 rspamd::xml::effective_limits(limits->xml), handler};
 	if (auto parsed = scanner.parse(); !parsed) {
 		return push_error_with_tokens(L, parsed.error(), scanner.tokens());
 	}
@@ -1455,8 +858,8 @@ static int lua_ooxml_extract_docx(lua_State *L)
 		lua_pop(L, 1);
 
 		word_story_handler handler{hyperlinks, result};
-		xml_scanner scanner{std::string_view{input->start, input->len},
-							scanner_limits(limits->xml), handler};
+		rspamd::xml::scanner scanner{std::string_view{input->start, input->len},
+									 rspamd::xml::effective_limits(limits->xml), handler};
 		auto parsed = scanner.parse();
 		total_tokens += scanner.tokens();
 		if (!parsed) {
