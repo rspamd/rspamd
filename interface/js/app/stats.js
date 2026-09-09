@@ -769,6 +769,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             function addStatfiles(server, statfiles) {
                 const safeStatfiles = Array.isArray(statfiles) ? statfiles : [];
                 const classToSymbolClass = {spam: "symbol-positive", ham: "symbol-negative"};
+                const classToBalanceClass = {spam: "balance-positive", ham: "balance-negative"};
                 const rowsCount = safeStatfiles.length;
                 const bayesTbody = document.querySelector("#bayesTable tbody");
 
@@ -784,7 +785,76 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     return "-";
                 }
 
-                function formatClassifierLabel(statfile) {
+                function statfileClass(statfile) {
+                    return statfile.class ?? guessClassFromSymbol(statfile.symbol ?? "-");
+                }
+
+                /*
+                 * Pre-pass: split statfiles into consecutive runs of the same
+                 * classifier name and sum learns per class, so the classifier
+                 * cell can render the balance bar when the first row of the
+                 * group is emitted. Revisions of the redis backend are
+                 * refreshed asynchronously (roughly every 30 seconds), so the
+                 * sums may slightly lag behind the actual learns.
+                 */
+                function statfileGroups() {
+                    const groupEnd = [];
+                    const groupSums = [];
+                    let start = 0;
+
+                    function groupName(idx) {
+                        return safeStatfiles[idx].classifier?.name ?? "-";
+                    }
+
+                    while (start < safeStatfiles.length) {
+                        let end = start + 1;
+                        const sums = new Map();
+
+                        while (end < safeStatfiles.length && groupName(end) === groupName(start)) {
+                            end++;
+                        }
+                        for (let k = start; k < end; k++) {
+                            const cls = statfileClass(safeStatfiles[k]);
+                            const revision = coerceNumber(safeStatfiles[k].revision);
+
+                            sums.set(cls, (sums.get(cls) ?? 0) + revision);
+                            groupEnd[k] = end;
+                            groupSums[k] = sums;
+                        }
+                        start = end;
+                    }
+
+                    return {groupEnd, groupSums};
+                }
+
+                /*
+                 * Stacked bar of the learns share between the classes of one
+                 * classifier. The table rows of the group carry the class
+                 * names and counts, and tooltips spell every segment out, so
+                 * segment colors are never the only encoding.
+                 */
+                function renderBalanceBar(classSums) {
+                    const entries = Array.from(classSums).filter(([, count]) => count > 0);
+                    const total = entries.reduce((sum, [, count]) => sum + count, 0);
+
+                    if (total <= 0) return "";
+
+                    const parts = entries.map(([cls, count]) => `${cls}: ${count} (${Math.round(count * 100 / total)}%)`);
+                    const segments = [];
+
+                    for (let idx = 0; idx < entries.length; idx++) {
+                        const [cls, count] = entries[idx];
+
+                        segments.push(`<span class="bayes-balance-segment ${classToBalanceClass[cls] ?? "balance-special"}"` +
+                            ` style="flex-grow:${count}" title="${common.escapeHTML(parts[idx])}"></span>`);
+                    }
+                    const label = `Learns balance: ${parts.join("; ")}`;
+
+                    return `<div class="bayes-balance" role="img" title="${common.escapeHTML(label)}"` +
+                        ` aria-label="${common.escapeHTML(label)}">${segments.join("")}</div>`;
+                }
+
+                function formatClassifierLabel(statfile, classSums) {
                     const classifier = statfile.classifier ?? {};
                     const badges = [];
                     function badge(cls, text) { return ` <span class="badge ${cls} ms-1">${text}</span>`; }
@@ -792,7 +862,8 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     if (classifier.type === "multi-class") badges.push(badge("bg-secondary", "multi-class"));
                     if (classifier.per_user) badges.push(badge("bg-info", "per-user"));
 
-                    return common.escapeHTML(classifier.name ?? "-") + badges.join("");
+                    return common.escapeHTML(classifier.name ?? "-") + badges.join("") +
+                        renderBalanceBar(classSums);
                 }
 
                 function renderCell(value, className) {
@@ -800,9 +871,11 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     return cls ? `<td class="${cls}">${value}</td>` : `<td>${value}</td>`;
                 }
 
+                const {groupEnd, groupSums} = statfileGroups();
+
                 safeStatfiles.forEach((statfile, i) => {
                     const symbol = statfile.symbol ?? "-";
-                    const classValue = statfile.class ?? guessClassFromSymbol(symbol);
+                    const classValue = statfileClass(statfile);
                     const cls = classToSymbolClass[classValue] || "";
                     const clName = statfile.classifier?.name ?? "-";
                     const prevClName = i > 0 ? (safeStatfiles[i - 1].classifier?.name ?? "-") : null;
@@ -811,13 +884,8 @@ define(["app/common", "app/libft", "d3pie", "d3"],
 
                     let classifierCell = "";
                     if (clName !== prevClName) {
-                        let groupSize = 1;
-                        for (let k = i + 1; k < safeStatfiles.length; k++) {
-                            if ((safeStatfiles[k].classifier?.name ?? "-") === clName) {
-                                groupSize++;
-                            } else break;
-                        }
-                        classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile)}</td>`;
+                        const groupSize = groupEnd[i] - i;
+                        classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile, groupSums[i])}</td>`;
                     }
 
                     bayesTbody.insertAdjacentHTML("beforeend", `<tr>${serverCell}${classifierCell}${[
