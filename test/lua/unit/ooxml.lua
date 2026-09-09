@@ -258,7 +258,7 @@ context("OOXML package reader", function()
       false,
     }, {})
     assert_equal(extracted, nil)
-    assert_not_nil(err:find("invalid DOCX story entry", 1, true))
+    assert_not_nil(err:find("invalid OOXML story entry", 1, true))
     assert_true(tokens > 0)
   end)
 end)
