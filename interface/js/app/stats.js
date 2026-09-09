@@ -816,7 +816,6 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         for (let k = start; k < end; k++) {
                             const cls = statfileClass(safeStatfiles[k]);
                             const revision = coerceNumber(safeStatfiles[k].revision);
-
                             sums.set(cls, (sums.get(cls) ?? 0) + revision);
                             groupEnd[k] = end;
                             groupSums[k] = sums;
@@ -841,10 +840,8 @@ define(["app/common", "app/libft", "d3pie", "d3"],
 
                     const parts = entries.map(([cls, count]) => `${cls}: ${count} (${Math.round(count * 100 / total)}%)`);
                     const segments = [];
-
                     for (let idx = 0; idx < entries.length; idx++) {
                         const [cls, count] = entries[idx];
-
                         segments.push(`<span class="bayes-balance-segment ${classToBalanceClass[cls] ?? "balance-special"}"` +
                             ` style="flex-grow:${count}" title="${common.escapeHTML(parts[idx])}"></span>`);
                     }
@@ -854,13 +851,70 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         ` aria-label="${common.escapeHTML(label)}">${segments.join("")}</div>`;
                 }
 
+                function badge(cls, text, title) {
+                    const titleAttr = title ? ` title="${common.escapeHTML(title)}"` : "";
+                    return ` <span class="badge ${cls} ms-1"${titleAttr}>${text}</span>`;
+                }
+
+                function normalizeMinLearns(value) {
+                    return (Number.isFinite(value) && value > 0) ? value : 0;
+                }
+
+                /*
+                 * min_learns gate badge. A binary classifier classifies nothing
+                 * when any class is below the threshold; a multi-class one
+                 * drops the classes below it and stops classifying only when
+                 * all of them are below. Servers that predate the field in
+                 * /stat render no badge.
+                 */
+                function renderMinLearnsBadge(classifier, classSums) {
+                    const minLearns = normalizeMinLearns(classifier.min_learns);
+
+                    if (minLearns <= 0) return "";
+
+                    const below = Array.from(classSums).filter(([, count]) => count < minLearns);
+
+                    if (!below.length) return "";
+
+                    const parts = [];
+                    for (let idx = 0; idx < below.length; idx++) {
+                        const [cls, count] = below[idx];
+                        parts.push(`class ${cls} has ${count} learns, min_learns ${minLearns}`);
+                    }
+                    const details = parts.join("; ");
+
+                    if (classifier.type !== "multi-class" || below.length === classSums.size) {
+                        return badge("text-bg-warning", "not classifying", `Not classifying: ${details}`);
+                    }
+
+                    return badge("text-bg-secondary", "classes excluded", `Excluded from classification: ${details}`);
+                }
+
+                /*
+                 * Row-level marker of a class that has not reached min_learns
+                 * yet, pointing at the exact class that holds the classifier
+                 * back (binary) or is excluded from classification (multi-class).
+                 */
+                function belowMinLearnsMark(statfile, classValue, classSums) {
+                    const minLearns = normalizeMinLearns(statfile.classifier?.min_learns);
+                    const count = classSums.get(classValue) ?? 0;
+
+                    if (minLearns <= 0 || count >= minLearns) return "";
+
+                    const text = `${count} learns < min_learns ${minLearns}`;
+                    const escaped = common.escapeHTML(text);
+
+                    return ` <span class="bayes-below-min" title="${escaped}">` +
+                        '<i class="fas fa-exclamation-triangle"></i></span>';
+                }
+
                 function formatClassifierLabel(statfile, classSums) {
                     const classifier = statfile.classifier ?? {};
                     const badges = [];
-                    function badge(cls, text) { return ` <span class="badge ${cls} ms-1">${text}</span>`; }
 
                     if (classifier.type === "multi-class") badges.push(badge("bg-secondary", "multi-class"));
                     if (classifier.per_user) badges.push(badge("bg-info", "per-user"));
+                    badges.push(renderMinLearnsBadge(classifier, classSums));
 
                     return common.escapeHTML(classifier.name ?? "-") + badges.join("") +
                         renderBalanceBar(classSums);
@@ -879,6 +933,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     const cls = classToSymbolClass[classValue] || "";
                     const clName = statfile.classifier?.name ?? "-";
                     const prevClName = i > 0 ? (safeStatfiles[i - 1].classifier?.name ?? "-") : null;
+                    const belowMark = belowMinLearnsMark(statfile, classValue, groupSums[i]);
 
                     const serverCell = i === 0 ? `<td rowspan="${rowsCount}">${common.escapeHTML(server)}</td>` : "";
 
@@ -889,7 +944,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     }
 
                     bayesTbody.insertAdjacentHTML("beforeend", `<tr>${serverCell}${classifierCell}${[
-                        renderCell(common.escapeHTML(classValue), cls),
+                        renderCell(common.escapeHTML(classValue) + belowMark, cls),
                         renderCell(common.escapeHTML(symbol), cls),
                         renderCell(common.escapeHTML(statfile.type ?? "-"), cls),
                         renderCell(coerceNumber(statfile.revision), `text-end ${cls}`),

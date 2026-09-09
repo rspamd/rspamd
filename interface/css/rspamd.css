@@ -641,6 +641,12 @@ input.action-scores {
     background-color: var(--rspamd-balance-special);
 }
 
+/* Class row marker: the class has not reached the classifier min_learns yet;
+   same warning tint as the cluster drift badge */
+#bayesTable .bayes-below-min {
+    color: var(--rspamd-text-warning);
+}
+
 /* Cluster (servers) table: details toggle, last-seen line, details row */
 #clusterTable td.cluster-toggle {
     width: 1%;
