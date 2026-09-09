@@ -20,7 +20,9 @@ limitations under the License.
 -- extractor pulls out visible text, hyperlinks and remote resources, and
 -- counts the scripting / embedding constructs a legitimate picture never
 -- needs. Decoded data: payloads (HTML, nested SVG) are fed back into the
--- task so the regular HTML and URL rules see them.
+-- task so the regular HTML and URL rules see them, and are kept in the part
+-- specific (`payloads`: type, content, truncated) so other scanners can treat
+-- them as derived targets without going through the task.
 
 local lua_util = require "lua_util"
 local rspamd_svg = require "rspamd_svg"
@@ -144,7 +146,7 @@ local function copy_extracted(extracted)
     resources = extracted.resources,
     data_uri_types = extracted.data_uri_types,
     script_indicators = extracted.script_indicators,
-    payload_types = {},
+    payloads = extracted.payloads or {},
     doctype = extracted.doctype,
     width = extracted.width,
     height = extracted.height,
@@ -153,9 +155,6 @@ local function copy_extracted(extracted)
   }
   for _, name in ipairs(counters) do
     result[name] = extracted[name] or 0
-  end
-  for _, payload in ipairs(extracted.payloads or {}) do
-    result.payload_types[#result.payload_types + 1] = payload.type
   end
   return result
 end
@@ -179,6 +178,9 @@ local function merge_nested(result, nested)
   end
   for _, url in ipairs(nested.urls or {}) do
     result.urls[#result.urls + 1] = url
+  end
+  for _, payload in ipairs(nested.payloads or {}) do
+    result.payloads[#result.payloads + 1] = payload
   end
 end
 
