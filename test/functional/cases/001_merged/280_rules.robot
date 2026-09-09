@@ -14,6 +14,8 @@ ${MESSAGE7}        ${RSPAMD_TESTDIR}/messages/pdf_js.eml
 ${MESSAGE8}        ${RSPAMD_TESTDIR}/messages/yand_forward.eml
 ${MESSAGE9}        ${RSPAMD_TESTDIR}/messages/docx_content.eml
 ${MESSAGE10}       ${RSPAMD_TESTDIR}/messages/docx_broken.eml
+${MESSAGE11}       ${RSPAMD_TESTDIR}/messages/svg_smuggling.eml
+${MESSAGE12}       ${RSPAMD_TESTDIR}/messages/svg_logo.eml
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/newlines.eml
 
 *** Test Cases ***
@@ -67,6 +69,30 @@ DOCX content
 DOCX suspicious
   Scan File  ${MESSAGE10}  Settings={symbols_enabled = [DOCX_SUSPICIOUS]}
   Expect Symbol With Exact Options  DOCX_SUSPICIOUS  broken.docx:package
+
+SVG smuggling
+  Scan File  ${MESSAGE11}
+  ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
+  Expect Symbol With Exact Options  SVG_CONTENT  invoice.svg
+  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2,handlers=1,javascript=2,external=1,atob,Blob,createObjectURL,location
+  Expect Symbol With Exact Options  SVG_FOREIGN_OBJECT  invoice.svg:1
+  Expect Symbol With Exact Options  SVG_DATA_URI  invoice.svg:text/html
+  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1,passwords=1
+  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh,embedded_documents,location
+  Expect Symbol  SVG_EXTERNAL_RESOURCES
+  Do Not Expect Symbol  SVG_SUSPICIOUS
+  Expect URL  phish.example.com
+  Expect URL  redirect.example.com
+  Expect URL  cdn.example.com
+  Expect URL  payload.example.com
+
+SVG logo
+  Scan File  ${MESSAGE12}
+  ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
+  Expect Symbol With Exact Options  SVG_CONTENT  logo.svg
+  Expect Symbol With Exact Options  SVG_EXTERNAL_LINKS  logo.svg:1
+  Do Not Expect Symbols  SVG_SUSPICIOUS  SVG_SCRIPT  SVG_FOREIGN_OBJECT  SVG_DATA_URI  SVG_EXTERNAL_RESOURCES  SVG_FORM  SVG_REDIRECT
+  Expect URL  www.example.com
 
 BITCOIN ADDR
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
