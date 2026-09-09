@@ -61,6 +61,10 @@ constexpr std::string_view drawing_namespace =
 	"http://schemas.openxmlformats.org/drawingml/2006/main";
 constexpr std::string_view strict_drawing_namespace =
 	"http://purl.oclc.org/ooxml/drawingml/main";
+constexpr std::string_view spreadsheet_namespace =
+	"http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+constexpr std::string_view strict_spreadsheet_namespace =
+	"http://purl.oclc.org/ooxml/spreadsheetml/main";
 constexpr std::string_view document_relationship_namespace =
 	"http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 constexpr std::string_view strict_document_relationship_namespace =
@@ -153,6 +157,7 @@ enum class namespace_id : std::uint8_t {
 	relationships,
 	word,
 	drawing,
+	spreadsheet,
 	document_relationships,
 	other,
 };
@@ -170,6 +175,9 @@ auto classify_namespace(std::string_view uri) -> namespace_id
 	}
 	if (uri == word_namespace || uri == strict_word_namespace) return namespace_id::word;
 	if (uri == drawing_namespace || uri == strict_drawing_namespace) return namespace_id::drawing;
+	if (uri == spreadsheet_namespace || uri == strict_spreadsheet_namespace) {
+		return namespace_id::spreadsheet;
+	}
 	if (uri == document_relationship_namespace || uri == strict_document_relationship_namespace) {
 		return namespace_id::document_relationships;
 	}
@@ -944,15 +952,21 @@ struct gstring_deleter {
 	}
 };
 
-struct docx_result {
+constexpr std::size_t max_auto_exec_names = 16;
+
+struct extraction_result {
 	std::unique_ptr<GString, gstring_deleter> text{g_string_sized_new(1024)};
 	std::vector<std::string> urls;
 	ankerl::unordered_dense::set<std::string> url_seen;
+	std::vector<std::string> auto_exec_names;
 	std::size_t max_text;
 	std::size_t max_urls;
+	std::size_t sheets = 0;
+	std::size_t hidden_sheets = 0;
+	std::size_t very_hidden_sheets = 0;
 	bool last_chunk_is_newline = false;
 
-	docx_result(std::size_t max_text, std::size_t max_urls)
+	extraction_result(std::size_t max_text, std::size_t max_urls)
 		: max_text{max_text}, max_urls{max_urls}
 	{
 	}
@@ -960,7 +974,7 @@ struct docx_result {
 	auto add_text(std::string_view value) -> ooxml_status
 	{
 		if (text->len + value.size() > max_text) {
-			return tl::make_unexpected("DOCX text limit exceeded");
+			return tl::make_unexpected("OOXML text limit exceeded");
 		}
 		g_string_append_len(text.get(), value.data(), value.size());
 		last_chunk_is_newline = value == "\n";
@@ -971,7 +985,7 @@ struct docx_result {
 	{
 		if (value.empty() || url_seen.contains(value)) return {};
 		if (urls.size() >= max_urls) {
-			return tl::make_unexpected("DOCX URL limit exceeded");
+			return tl::make_unexpected("OOXML URL limit exceeded");
 		}
 		url_seen.emplace(value);
 		urls.push_back(std::move(value));
@@ -1027,9 +1041,29 @@ auto hyperlink_from_instruction(std::string_view instruction) -> std::optional<s
 
 using hyperlink_map = ankerl::unordered_dense::map<std::string, std::string>;
 
+auto relationship_id(const std::vector<xml_attribute> &attributes) -> const std::string *
+{
+	for (const auto &attribute: attributes) {
+		if (attribute.name == "id" &&
+			attribute.namespace_value == namespace_id::document_relationships) {
+			return &attribute.value;
+		}
+	}
+	return nullptr;
+}
+
+auto add_relationship_url(const hyperlink_map &relationships, const std::string *id,
+						  extraction_result &result) -> ooxml_status
+{
+	if (id == nullptr) return {};
+	auto found = relationships.find(*id);
+	if (found == relationships.end()) return {};
+	return result.add_url(found->second);
+}
+
 class word_story_handler {
 public:
-	word_story_handler(const hyperlink_map &relationships, docx_result &result)
+	word_story_handler(const hyperlink_map &relationships, extraction_result &result)
 		: relationships_{relationships}, result_{result}
 	{
 	}
@@ -1052,19 +1086,10 @@ public:
 				if (auto ret = result_.add_text("\n"); !ret) return ret;
 			}
 			else if (name == "hyperlink") {
-				const std::string *id = nullptr;
-				for (const auto &attribute: attributes) {
-					if (attribute.name == "id" &&
-						attribute.namespace_value == namespace_id::document_relationships) {
-						id = &attribute.value;
-						break;
-					}
-				}
-				if (id != nullptr) {
-					auto found = relationships_.find(*id);
-					if (found != relationships_.end()) {
-						if (auto ret = result_.add_url(found->second); !ret) return ret;
-					}
+				if (auto ret = add_relationship_url(relationships_, relationship_id(attributes),
+													result_);
+					!ret) {
+					return ret;
 				}
 			}
 			else if (name == "fldSimple") {
@@ -1102,8 +1127,13 @@ public:
 				instruction_depth_ = depth_;
 			}
 		}
-		else if (ns == namespace_id::drawing && name == "t" && !excluded_depth_) {
-			text_depth_ = depth_;
+		else if (ns == namespace_id::drawing) {
+			if (name == "t" && !excluded_depth_) {
+				text_depth_ = depth_;
+			}
+			else if (name == "hlinkClick" || name == "hlinkHover") {
+				return add_relationship_url(relationships_, relationship_id(attributes), result_);
+			}
 		}
 		return {};
 	}
@@ -1150,13 +1180,375 @@ private:
 	}
 
 	const hyperlink_map &relationships_;
-	docx_result &result_;
+	extraction_result &result_;
 	std::vector<field_state> fields_;
 	std::size_t depth_ = 0;
 	std::optional<std::size_t> excluded_depth_;
 	std::optional<std::size_t> text_depth_;
 	std::optional<std::size_t> instruction_depth_;
 };
+
+/* DrawingML text bodies: standalone drawings, slides and notes slides */
+class drawing_handler {
+public:
+	drawing_handler(const hyperlink_map &relationships, extraction_result &result)
+		: relationships_{relationships}, result_{result}
+	{
+	}
+
+	auto start_element(namespace_id ns, std::string_view name,
+					   const std::vector<xml_attribute> &attributes) -> ooxml_status
+	{
+		depth_++;
+		if (ns != namespace_id::drawing) return {};
+		if (name == "t") {
+			text_depth_ = depth_;
+		}
+		else if (name == "br") {
+			return result_.add_text("\n");
+		}
+		else if (name == "tab") {
+			return result_.add_text("\t");
+		}
+		else if (name == "hlinkClick" || name == "hlinkHover") {
+			return add_relationship_url(relationships_, relationship_id(attributes), result_);
+		}
+		return {};
+	}
+
+	auto end_element(namespace_id ns, std::string_view name) -> ooxml_status
+	{
+		if (ns == namespace_id::drawing && name == "p") {
+			if (auto ret = result_.add_text("\n"); !ret) return ret;
+		}
+		if (text_depth_ == depth_) text_depth_.reset();
+		depth_--;
+		return {};
+	}
+
+	auto text(std::string_view value) -> ooxml_status
+	{
+		if (text_depth_) return result_.add_text(value);
+		return {};
+	}
+
+private:
+	const hyperlink_map &relationships_;
+	extraction_result &result_;
+	std::size_t depth_ = 0;
+	std::optional<std::size_t> text_depth_;
+};
+
+/* xl/sharedStrings.xml: every string item becomes one text line */
+class shared_strings_handler {
+public:
+	explicit shared_strings_handler(extraction_result &result)
+		: result_{result}
+	{
+	}
+
+	auto start_element(namespace_id ns, std::string_view name,
+					   const std::vector<xml_attribute> &) -> ooxml_status
+	{
+		depth_++;
+		if (ns != namespace_id::spreadsheet) return {};
+		if (name == "si") {
+			item_depth_ = depth_;
+			item_has_text_ = false;
+		}
+		else if (name == "rPh" && !excluded_depth_) {
+			excluded_depth_ = depth_;
+		}
+		else if (name == "t" && item_depth_ && !excluded_depth_) {
+			text_depth_ = depth_;
+		}
+		return {};
+	}
+
+	auto end_element(namespace_id ns, std::string_view name) -> ooxml_status
+	{
+		if (ns == namespace_id::spreadsheet && name == "si" && item_depth_ == depth_) {
+			item_depth_.reset();
+			if (item_has_text_) {
+				if (auto ret = result_.add_text("\n"); !ret) return ret;
+			}
+		}
+		if (text_depth_ == depth_) text_depth_.reset();
+		if (excluded_depth_ == depth_) excluded_depth_.reset();
+		depth_--;
+		return {};
+	}
+
+	auto text(std::string_view value) -> ooxml_status
+	{
+		if (text_depth_ && !excluded_depth_) {
+			item_has_text_ = true;
+			return result_.add_text(value);
+		}
+		return {};
+	}
+
+private:
+	extraction_result &result_;
+	std::size_t depth_ = 0;
+	bool item_has_text_ = false;
+	std::optional<std::size_t> item_depth_;
+	std::optional<std::size_t> excluded_depth_;
+	std::optional<std::size_t> text_depth_;
+};
+
+auto looks_like_url(std::string_view value) -> bool
+{
+	if (value.size() >= 4 && rspamd_lc_cmp(value.data(), "www.", 4) == 0) return true;
+	if (value.size() >= 7 && rspamd_lc_cmp(value.data(), "mailto:", 7) == 0) return true;
+	if (!has_uri_scheme(value)) return false;
+	return value.find("://") != std::string_view::npos;
+}
+
+/*
+ * Collect URL-like string literals from a cell formula. The first literal
+ * argument of HYPERLINK() is always taken, other literals only when they look
+ * like URLs on their own (WEBSERVICE, concatenations and so on).
+ */
+auto formula_urls(std::string_view formula, extraction_result &result) -> ooxml_status
+{
+	std::size_t i = 0;
+	bool hyperlink_target = false;
+	while (i < formula.size()) {
+		auto ch = formula[i];
+		if (ch == '"') {
+			std::string literal;
+			i++;
+			while (i < formula.size()) {
+				if (formula[i] == '"') {
+					if (i + 1 < formula.size() && formula[i + 1] == '"') {
+						literal.push_back('"');
+						i += 2;
+						continue;
+					}
+					i++;
+					break;
+				}
+				literal.push_back(formula[i++]);
+			}
+			if (!literal.empty() && (hyperlink_target || looks_like_url(literal))) {
+				if (auto ret = result.add_url(std::move(literal)); !ret) return ret;
+			}
+			hyperlink_target = false;
+		}
+		else if (g_ascii_isalpha(ch) || ch == '_') {
+			auto start = i;
+			while (i < formula.size() &&
+				   (g_ascii_isalnum(formula[i]) || formula[i] == '_' || formula[i] == '.')) {
+				i++;
+			}
+			auto word = formula.substr(start, i - start);
+			if (word.size() > 6 && rspamd_lc_cmp(word.data(), "_xlfn.", 6) == 0) {
+				word.remove_prefix(6);
+			}
+			auto next = i;
+			while (next < formula.size() && g_ascii_isspace(formula[next])) next++;
+			if (next < formula.size() && formula[next] == '(' && word.size() == 9 &&
+				rspamd_lc_cmp(word.data(), "hyperlink", 9) == 0) {
+				next++;
+				while (next < formula.size() && g_ascii_isspace(formula[next])) next++;
+				hyperlink_target = next < formula.size() && formula[next] == '"';
+				i = next;
+			}
+		}
+		else {
+			i++;
+		}
+	}
+	return {};
+}
+
+/* xl/worksheets/sheetN.xml and xl/macrosheets/sheetN.xml */
+class worksheet_handler {
+public:
+	worksheet_handler(const hyperlink_map &relationships, extraction_result &result)
+		: relationships_{relationships}, result_{result}
+	{
+	}
+
+	auto start_element(namespace_id ns, std::string_view name,
+					   const std::vector<xml_attribute> &attributes) -> ooxml_status
+	{
+		depth_++;
+		if (ns != namespace_id::spreadsheet) return {};
+		if (name == "row") {
+			row_has_text_ = false;
+		}
+		else if (name == "c") {
+			cell_has_text_ = false;
+			formula_string_cell_ = false;
+			auto *type = get_attribute(attributes, "t");
+			if (type != nullptr && *type == "str") formula_string_cell_ = true;
+		}
+		else if (name == "v" && formula_string_cell_) {
+			text_depth_ = depth_;
+		}
+		else if (name == "is") {
+			inline_depth_ = depth_;
+		}
+		else if (name == "t" && inline_depth_ && !excluded_depth_) {
+			text_depth_ = depth_;
+		}
+		else if (name == "rPh" && !excluded_depth_) {
+			excluded_depth_ = depth_;
+		}
+		else if (name == "f") {
+			formula_depth_ = depth_;
+			formula_.clear();
+		}
+		else if (name == "hyperlink") {
+			return add_relationship_url(relationships_, relationship_id(attributes), result_);
+		}
+		return {};
+	}
+
+	auto end_element(namespace_id ns, std::string_view name) -> ooxml_status
+	{
+		if (ns == namespace_id::spreadsheet) {
+			if (name == "row" && row_has_text_) {
+				row_has_text_ = false;
+				if (auto ret = result_.add_text("\n"); !ret) return ret;
+			}
+			else if (name == "f" && formula_depth_ == depth_) {
+				formula_depth_.reset();
+				auto ret = formula_urls(formula_, result_);
+				formula_.clear();
+				if (!ret) return ret;
+			}
+		}
+		if (text_depth_ == depth_) text_depth_.reset();
+		if (inline_depth_ == depth_) inline_depth_.reset();
+		if (excluded_depth_ == depth_) excluded_depth_.reset();
+		depth_--;
+		return {};
+	}
+
+	auto text(std::string_view value) -> ooxml_status
+	{
+		if (formula_depth_) {
+			formula_.append(value);
+		}
+		else if (text_depth_ && !excluded_depth_) {
+			if (!cell_has_text_ && row_has_text_) {
+				if (auto ret = result_.add_text("\t"); !ret) return ret;
+			}
+			cell_has_text_ = true;
+			row_has_text_ = true;
+			return result_.add_text(value);
+		}
+		return {};
+	}
+
+private:
+	const hyperlink_map &relationships_;
+	extraction_result &result_;
+	std::string formula_;
+	std::size_t depth_ = 0;
+	bool row_has_text_ = false;
+	bool cell_has_text_ = false;
+	bool formula_string_cell_ = false;
+	std::optional<std::size_t> text_depth_;
+	std::optional<std::size_t> inline_depth_;
+	std::optional<std::size_t> excluded_depth_;
+	std::optional<std::size_t> formula_depth_;
+};
+
+auto is_auto_exec_name(std::string_view name) -> bool
+{
+	constexpr std::string_view prefix = "_xlnm.";
+	if (name.size() > prefix.size() &&
+		rspamd_lc_cmp(name.data(), prefix.data(), prefix.size()) == 0) {
+		name.remove_prefix(prefix.size());
+	}
+	for (std::string_view candidate: {"auto_open", "auto_close", "auto_activate", "auto_deactivate"}) {
+		if (name.size() == candidate.size() &&
+			rspamd_lc_cmp(name.data(), candidate.data(), candidate.size()) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/* xl/workbook.xml: sheet visibility and auto-executing defined names */
+class workbook_handler {
+public:
+	explicit workbook_handler(extraction_result &result)
+		: result_{result}
+	{
+	}
+
+	auto start_element(namespace_id ns, std::string_view name,
+					   const std::vector<xml_attribute> &attributes) -> ooxml_status
+	{
+		if (ns != namespace_id::spreadsheet) return {};
+		if (name == "sheet") {
+			result_.sheets++;
+			auto *state = get_attribute(attributes, "state");
+			if (state != nullptr) {
+				if (*state == "hidden") {
+					result_.hidden_sheets++;
+				}
+				else if (*state == "veryHidden") {
+					result_.very_hidden_sheets++;
+				}
+			}
+		}
+		else if (name == "definedName") {
+			auto *defined_name = get_attribute(attributes, "name");
+			if (defined_name != nullptr && is_auto_exec_name(*defined_name) &&
+				result_.auto_exec_names.size() < max_auto_exec_names) {
+				result_.auto_exec_names.push_back(*defined_name);
+			}
+		}
+		return {};
+	}
+
+	auto end_element(namespace_id, std::string_view) -> ooxml_status
+	{
+		return {};
+	}
+
+	auto text(std::string_view) -> ooxml_status
+	{
+		return {};
+	}
+
+private:
+	extraction_result &result_;
+};
+
+enum class story_kind : std::uint8_t {
+	word,
+	drawing,
+	shared_strings,
+	worksheet,
+	workbook,
+};
+
+auto parse_story_kind(std::string_view kind) -> std::optional<story_kind>
+{
+	if (kind == "word") return story_kind::word;
+	if (kind == "drawing" || kind == "slide") return story_kind::drawing;
+	if (kind == "shared_strings") return story_kind::shared_strings;
+	if (kind == "worksheet") return story_kind::worksheet;
+	if (kind == "workbook") return story_kind::workbook;
+	return std::nullopt;
+}
+
+template<typename Handler>
+auto run_story(std::string_view input, const xml_limits &limits, Handler &handler,
+			   std::size_t &total_tokens) -> ooxml_status
+{
+	xml_scanner scanner{input, limits, handler};
+	auto parsed = scanner.parse();
+	total_tokens += scanner.tokens();
+	return parsed;
+}
 
 auto read_limits(lua_State *L, int table_index) -> ooxml_result<ooxml_limits>
 {
@@ -1428,12 +1820,12 @@ static int lua_ooxml_parse_relationships(lua_State *L)
 	return 3;
 }
 
-static int lua_ooxml_extract_docx(lua_State *L)
+static int lua_ooxml_extract(lua_State *L)
 {
 	if (!lua_istable(L, 1)) return push_error(L, "stories table expected");
 	auto limits = read_limits(L, 2);
 	if (!limits) return push_error(L, limits.error());
-	docx_result result{limits->max_text, limits->max_urls};
+	extraction_result result{limits->max_text, limits->max_urls};
 	std::size_t total_tokens = 0;
 	auto stories_index = lua_absindex(L, 1);
 	auto count = rspamd_lua_table_size(L, stories_index);
@@ -1441,24 +1833,56 @@ static int lua_ooxml_extract_docx(lua_State *L)
 		lua_rawgeti(L, stories_index, i);
 		if (!lua_istable(L, -1)) {
 			lua_pop(L, 1);
-			return push_error_with_tokens(L, "invalid DOCX story entry", total_tokens);
+			return push_error_with_tokens(L, "invalid OOXML story entry", total_tokens);
 		}
 		auto story_index = lua_absindex(L, -1);
 		lua_getfield(L, story_index, "content");
 		auto *input = lua_check_text_or_string(L, -1);
 		if (input == nullptr) {
 			lua_pop(L, 2);
-			return push_error_with_tokens(L, "invalid DOCX story content", total_tokens);
+			return push_error_with_tokens(L, "invalid OOXML story content", total_tokens);
+		}
+		lua_getfield(L, story_index, "kind");
+		auto kind = parse_story_kind(check_string(L, -1).value_or("word"));
+		lua_pop(L, 1);
+		if (!kind) {
+			lua_pop(L, 2);
+			return push_error_with_tokens(L, "invalid OOXML story kind", total_tokens);
 		}
 		lua_getfield(L, story_index, "relationships");
 		auto hyperlinks = read_hyperlinks(L, -1);
 		lua_pop(L, 1);
 
-		word_story_handler handler{hyperlinks, result};
-		xml_scanner scanner{std::string_view{input->start, input->len},
-							scanner_limits(limits->xml), handler};
-		auto parsed = scanner.parse();
-		total_tokens += scanner.tokens();
+		std::string_view content{input->start, input->len};
+		auto xml_limits_value = scanner_limits(limits->xml);
+		ooxml_status parsed;
+		switch (*kind) {
+		case story_kind::word: {
+			word_story_handler handler{hyperlinks, result};
+			parsed = run_story(content, xml_limits_value, handler, total_tokens);
+			break;
+		}
+		case story_kind::drawing: {
+			drawing_handler handler{hyperlinks, result};
+			parsed = run_story(content, xml_limits_value, handler, total_tokens);
+			break;
+		}
+		case story_kind::shared_strings: {
+			shared_strings_handler handler{result};
+			parsed = run_story(content, xml_limits_value, handler, total_tokens);
+			break;
+		}
+		case story_kind::worksheet: {
+			worksheet_handler handler{hyperlinks, result};
+			parsed = run_story(content, xml_limits_value, handler, total_tokens);
+			break;
+		}
+		case story_kind::workbook: {
+			workbook_handler handler{result};
+			parsed = run_story(content, xml_limits_value, handler, total_tokens);
+			break;
+		}
+		}
 		if (!parsed) {
 			lua_pop(L, 2);
 			return push_error_with_tokens(L, parsed.error(), total_tokens);
@@ -1474,7 +1898,7 @@ static int lua_ooxml_extract_docx(lua_State *L)
 	}
 
 	collapse_newlines(result.text.get());
-	lua_createtable(L, 0, 2);
+	lua_createtable(L, 0, 6);
 	lua_pushstring(L, "text");
 	auto text_len = result.text->len;
 	auto *text_data = g_string_free(result.text.release(), FALSE);
@@ -1487,6 +1911,18 @@ static int lua_ooxml_extract_docx(lua_State *L)
 		lua_rawseti(L, -2, i + 1);
 	}
 	lua_setfield(L, -2, "urls");
+	lua_pushinteger(L, result.sheets);
+	lua_setfield(L, -2, "sheets");
+	lua_pushinteger(L, result.hidden_sheets);
+	lua_setfield(L, -2, "hidden_sheets");
+	lua_pushinteger(L, result.very_hidden_sheets);
+	lua_setfield(L, -2, "very_hidden_sheets");
+	lua_createtable(L, result.auto_exec_names.size(), 0);
+	for (std::size_t i = 0; i < result.auto_exec_names.size(); i++) {
+		lua_pushlstring(L, result.auto_exec_names[i].data(), result.auto_exec_names[i].size());
+		lua_rawseti(L, -2, i + 1);
+	}
+	lua_setfield(L, -2, "auto_exec_names");
 	lua_pushnil(L);
 	lua_pushinteger(L, total_tokens);
 	return 3;
@@ -1497,7 +1933,8 @@ static const struct luaL_reg ooxml_lib[] = {
 	{"hyperlink_from_instruction", lua_ooxml_hyperlink_from_instruction},
 	{"parse_content_types", lua_ooxml_parse_content_types},
 	{"parse_relationships", lua_ooxml_parse_relationships},
-	{"extract_docx", lua_ooxml_extract_docx},
+	{"extract", lua_ooxml_extract},
+	{"extract_docx", lua_ooxml_extract},
 	{nullptr, nullptr},
 };
 
