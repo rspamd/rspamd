@@ -1324,13 +1324,23 @@ void rspamd_message_process_injected_text_part(struct rspamd_task *task,
 											   struct rspamd_mime_text_part *text_part,
 											   uint16_t *cur_url_order)
 {
-	if (!rspamd_message_process_plain_text_part(task, text_part)) {
-		return;
-	}
+	if (IS_TEXT_PART_HTML(text_part)) {
+		/* URLs come from the HTML parser, as for real HTML parts */
+		if (!rspamd_message_process_html_text_part(task, text_part, cur_url_order)) {
+			return;
+		}
 
-	rspamd_normalize_text_part(task, text_part);
-	rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
-							RSPAMD_URL_FIND_ALL);
+		rspamd_normalize_text_part(task, text_part);
+	}
+	else {
+		if (!rspamd_message_process_plain_text_part(task, text_part)) {
+			return;
+		}
+
+		rspamd_normalize_text_part(task, text_part);
+		rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
+								RSPAMD_URL_FIND_ALL);
+	}
 
 	if (text_part->exceptions) {
 		text_part->exceptions = g_list_sort(text_part->exceptions,
