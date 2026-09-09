@@ -107,7 +107,9 @@ local formats = {
     }),
   },
 }
-formats.xlsx.stories[microsoft_relationship_base .. 'xlMacrosheet'] = { kind = 'worksheet' }
+for _, name in ipairs({ 'xlMacrosheet', 'xlIntlMacrosheet' }) do
+  formats.xlsx.stories[microsoft_relationship_base .. name] = { kind = 'worksheet' }
+end
 
 local formats_by_content_type = {}
 for _, format in pairs(formats) do
@@ -387,25 +389,31 @@ exports.open = function(data, requested_options, requested_state)
 
   -- Pick the parts a relationship list points at, within the part budget.
   -- Every story costs its relationships part plus, when parsed, the part itself.
+  -- Relationship-only entries (external links, attached templates) go first:
+  -- they are cheap and carry the risk indicators, so a package that front-loads
+  -- many content stories cannot push them past the truncation point.
   local function select_stories(parent_relationships, selectors, selection)
-    for _, relationship in ipairs(parent_relationships.list) do
-      if not relationship.external then
-        local story = selectors[relationship.type]
-        if story and not seen[relationship.part_name] then
-          local needed = story.kind and 2 or 1
-          if #selection.names + needed > remaining(options.max_parts, state.parts) then
-            truncated = true
-            break
-          end
-          seen[relationship.part_name] = true
-          local entry = { name = relationship.part_name, story = story, children = {} }
-          selection.entries[#selection.entries + 1] = entry
-          if story.kind then
-            selection.names[#selection.names + 1] = relationship.part_name
-          end
-          selection.names[#selection.names + 1] = relationship_part_name(relationship.part_name)
-          if selection.parent then
-            selection.parent.children[#selection.parent.children + 1] = entry
+    for _, want_content in ipairs({ false, true }) do
+      for _, relationship in ipairs(parent_relationships.list) do
+        if not relationship.external then
+          local story = selectors[relationship.type]
+          if story and (story.kind ~= nil) == want_content
+              and not seen[relationship.part_name] then
+            local needed = story.kind and 2 or 1
+            if #selection.names + needed > remaining(options.max_parts, state.parts) then
+              truncated = true
+              break
+            end
+            seen[relationship.part_name] = true
+            local entry = { name = relationship.part_name, story = story, children = {} }
+            selection.entries[#selection.entries + 1] = entry
+            if story.kind then
+              selection.names[#selection.names + 1] = relationship.part_name
+            end
+            selection.names[#selection.names + 1] = relationship_part_name(relationship.part_name)
+            if selection.parent then
+              selection.parent.children[#selection.parent.children + 1] = entry
+            end
           end
         end
       end

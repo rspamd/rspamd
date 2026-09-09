@@ -93,21 +93,25 @@ context("XLSX content extraction", function()
     </xm:macrosheet>
   ]]
 
-  local function make_package()
-    return archive.zip({
+  local default_workbook_rels = {
+    { "rId1", document_rel .. "worksheet", "worksheets/sheet1.xml" },
+    { "rId2", microsoft_rel .. "xlMacrosheet", "macrosheets/sheet1.xml" },
+    { "rId3", document_rel .. "sharedStrings", "sharedStrings.xml" },
+    { "rId4", document_rel .. "externalLink", "externalLinks/externalLink1.xml" },
+    { "rId5", document_rel .. "vbaProject", "vbaProject.bin" },
+    { "rId6", document_rel .. "worksheet", "worksheets/sheet2.xml" },
+  }
+
+  local function make_package(overrides)
+    overrides = overrides or {}
+    local files = {
       { name = "[Content_Types].xml", content = content_types },
       { name = "_rels/.rels", content = rels({
         { "rId1", document_rel .. "officeDocument", "xl/workbook.xml" },
       }) },
       { name = "xl/workbook.xml", content = workbook },
-      { name = "xl/_rels/workbook.xml.rels", content = rels({
-        { "rId1", document_rel .. "worksheet", "worksheets/sheet1.xml" },
-        { "rId2", microsoft_rel .. "xlMacrosheet", "macrosheets/sheet1.xml" },
-        { "rId3", document_rel .. "sharedStrings", "sharedStrings.xml" },
-        { "rId4", document_rel .. "externalLink", "externalLinks/externalLink1.xml" },
-        { "rId5", document_rel .. "vbaProject", "vbaProject.bin" },
-        { "rId6", document_rel .. "worksheet", "worksheets/sheet2.xml" },
-      }) },
+      { name = "xl/_rels/workbook.xml.rels",
+        content = rels(overrides.workbook_rels or default_workbook_rels) },
       { name = "xl/sharedStrings.xml", content = shared_strings },
       { name = "xl/worksheets/sheet1.xml", content = sheet },
       { name = "xl/worksheets/_rels/sheet1.xml.rels", content = rels({
@@ -125,7 +129,11 @@ context("XLSX content extraction", function()
       }) },
       { name = "xl/vbaProject.bin", content = "not really a VBA project" },
       { name = "xl/media/image1.png", content = string.rep("P", 64 * 1024) },
-    })
+    }
+    for _, file in ipairs(overrides.files or {}) do
+      files[#files + 1] = file
+    end
+    return archive.zip(files)
   end
 
   local function url_set(urls)
@@ -219,6 +227,64 @@ context("XLSX content extraction", function()
     extracted, err = xlsx.extract(package)
     assert_not_nil(extracted, err)
     assert_not_nil(tostring(extracted.text):find("Inline cell", 1, true))
+  end)
+
+  test("keeps relationship-only indicator parts ahead of truncation", function()
+    -- Three worksheets are listed before the external link; the budget only
+    -- fits one content story, yet the external link relationships must load.
+    local package, err = ooxml.open(make_package({
+      workbook_rels = {
+        { "rId1", document_rel .. "worksheet", "worksheets/sheet1.xml" },
+        { "rId2", document_rel .. "worksheet", "worksheets/sheet2.xml" },
+        { "rId3", document_rel .. "worksheet", "worksheets/sheet3.xml" },
+        { "rId4", document_rel .. "externalLink", "externalLinks/externalLink1.xml" },
+      },
+      files = {
+        { name = "xl/worksheets/sheet2.xml", content = sheet },
+        { name = "xl/worksheets/sheet3.xml", content = sheet },
+      },
+    }), { max_parts = 8 })
+    assert_not_nil(package, err)
+    assert_equal(package.truncated, true)
+    assert_not_nil(package.parts["xl/worksheets/sheet1.xml"])
+    assert_equal(package.parts["xl/worksheets/sheet2.xml"], nil)
+    assert_equal(package.parts["xl/worksheets/sheet3.xml"], nil)
+    assert_not_nil(package.relationships["xl/externalLinks/externalLink1.xml"])
+
+    local summary = ooxml.summarize_relationships(package)
+    assert_equal(#summary.external_targets, 1)
+    assert_equal(summary.external_targets[1].type, "externalLinkPath")
+  end)
+
+  test("parses international XLM macrosheets", function()
+    local package, err = ooxml.open(make_package({
+      workbook_rels = {
+        { "rId1", document_rel .. "worksheet", "worksheets/sheet1.xml" },
+        { "rId2", microsoft_rel .. "xlIntlMacrosheet", "macrosheets/intl1.xml" },
+      },
+      files = {
+        { name = "xl/macrosheets/intl1.xml", content = [[
+          <xm:macrosheet xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"
+            xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+            <sheetData><row r="1"><c r="A1" t="str">
+              <f>HYPERLINK("https://intl.example.com/payload")</f><v>intl macro</v>
+            </c></row></sheetData>
+          </xm:macrosheet>
+        ]] },
+      },
+    }))
+    assert_not_nil(package, err)
+    assert_equal(package.kinds["xl/macrosheets/intl1.xml"], 'worksheet')
+    assert_not_nil(package.parts["xl/macrosheets/intl1.xml"])
+
+    local extracted
+    extracted, err = xlsx.extract(package)
+    assert_not_nil(extracted, err)
+    assert_not_nil(tostring(extracted.text):find("intl macro", 1, true))
+    assert_equal(url_set(extracted.urls)["https://intl.example.com/payload"], true)
+
+    local summary = ooxml.summarize_relationships(package)
+    assert_equal(summary.macros[1], 'xlm')
   end)
 
   test("refuses packages of another format", function()
