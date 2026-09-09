@@ -47,7 +47,7 @@ parser:option "-s --server"
       :description "Override server to ping"
       :argname("<name>")
 parser:option "-n --number"
-      :description "Timeout for requests"
+      :description "Number of requests"
       :argname("<number>")
       :convert(tonumber)
       :default(5)
