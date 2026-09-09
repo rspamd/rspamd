@@ -50,6 +50,14 @@ local content_modules = {
     output = "table",
     process_archive = true,
   },
+  svg = {
+    mime_type = { "image/svg+xml", "image/svg" },
+    module = require "lua_content/svg",
+    extensions = { 'svg', 'svgz' },
+    output = "table",
+    -- gzip-compressed SVGZ parts are detected as archives
+    process_archive = true,
+  },
 }
 
 local modules_by_mime_type
