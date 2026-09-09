@@ -67,7 +67,7 @@ end
 
 local function ensure_state(state)
   state = state or {}
-  for _, name in ipairs({ 'documents', 'injected_text', 'injected_urls', 'injected_payloads' }) do
+  for _, name in ipairs({ 'documents', 'injected_text', 'injected_urls', 'payloads' }) do
     state[name] = state[name] or 0
   end
   return state
@@ -146,7 +146,7 @@ local function copy_extracted(extracted)
     resources = extracted.resources,
     data_uri_types = extracted.data_uri_types,
     script_indicators = extracted.script_indicators,
-    payloads = extracted.payloads or {},
+    payloads = {},
     doctype = extracted.doctype,
     width = extracted.width,
     height = extracted.height,
@@ -179,8 +179,12 @@ local function merge_nested(result, nested)
   for _, url in ipairs(nested.urls or {}) do
     result.urls[#result.urls + 1] = url
   end
+  -- nested payloads were already charged to the task budget
   for _, payload in ipairs(nested.payloads or {}) do
     result.payloads[#result.payloads + 1] = payload
+  end
+  if nested.payloads_truncated then
+    result.payloads_truncated = true
   end
 end
 
@@ -226,6 +230,7 @@ local function process_svg(input, mpart, task, nesting)
   local options = options_for_state(config, state)
   options.max_text = remaining(config.max_text, state.injected_text)
   options.max_urls = remaining(config.max_urls, state.injected_urls)
+  options.max_payloads = remaining(config.max_payloads, state.payloads)
   local extracted, err = rspamd_svg.extract(content, options)
   if not extracted then
     lua_util.debugm(N, task, 'cannot extract SVG content: %s', err)
@@ -257,11 +262,15 @@ local function process_svg(input, mpart, task, nesting)
     end
   end
 
+  -- max_payloads is a per-task budget shared by the outer document and every
+  -- nested one: a payload is only kept (and injected) while budget remains
   for _, payload in ipairs(extracted.payloads or {}) do
-    if state.injected_payloads >= config.max_payloads or deadline_expired(state) then
+    if state.payloads >= config.max_payloads or deadline_expired(state) then
+      result.payloads_truncated = true
       break
     end
-    state.injected_payloads = state.injected_payloads + 1
+    state.payloads = state.payloads + 1
+    result.payloads[#result.payloads + 1] = payload
     if payload.type == 'image/svg+xml' then
       if nesting < max_nesting then
         merge_nested(result, process_svg(payload.content, mpart, task, nesting + 1))

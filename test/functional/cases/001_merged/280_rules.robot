@@ -85,6 +85,7 @@ SVG smuggling
   Expect URL  redirect.example.com
   Expect URL  cdn.example.com
   Expect URL  payload.example.com
+  Expect URL  visible.example.com
 
 SVG logo
   Scan File  ${MESSAGE12}

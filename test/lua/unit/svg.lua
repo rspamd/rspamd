@@ -251,6 +251,39 @@ context("SVG content extraction", function()
     assert_equal(specific.payloads[1].content, inner)
   end)
 
+  test("charges nested payloads to the shared budget", function()
+    local lua_content = require "lua_content"
+    local function html_uri(marker)
+      return 'data:text/html;base64,' .. tostring(rspamd_util.encode_base64(
+          '<html><body><a href="https://' .. marker .. '.example.com/">x</a></body></html>'))
+    end
+    local inner = string.format('<svg xmlns="http://www.w3.org/2000/svg">' ..
+        '<a href="%s">one</a><a href="%s">two</a></svg>', html_uri('one'), html_uri('two'))
+    local outer = string.format('<svg xmlns="http://www.w3.org/2000/svg">' ..
+        '<use href="data:image/svg+xml;base64,%s"/><a href="%s">three</a></svg>',
+        tostring(rspamd_util.encode_base64(inner)), html_uri('three'))
+
+    local saved = svg.config.max_payloads
+    svg.config.max_payloads = 2
+    local part = make_part(outer, 75)
+    local task = make_task(part)
+    lua_content.maybe_process_mime_part(part, task)
+    svg.config.max_payloads = saved
+
+    local specific = part.specific
+    assert_not_nil(specific)
+    assert_equal(specific.nested_documents, 1)
+    assert_equal(#specific.payloads, 2)
+    assert_equal(specific.payloads[1].type, 'image/svg+xml')
+    assert_equal(specific.payloads[2].type, 'text/html')
+    assert_equal(specific.payloads_truncated, true)
+    local html_injections = 0
+    for _, injected in ipairs(task.injected) do
+      if injected.kind == 'html' then html_injections = html_injections + 1 end
+    end
+    assert_equal(html_injections, 1)
+  end)
+
   test("marks unparseable SVG as suspicious with a reason", function()
     local lua_content = require "lua_content"
     local part = make_part('<svg xmlns="http://www.w3.org/2000/svg"><text>broken', 73)
