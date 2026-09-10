@@ -324,7 +324,7 @@ LUA_FUNCTION_DEF(task, get_emails);
 /***
  * @method task:inject_part(type, content[, original_part])
  * Injects a virtual mime part into the task structure
- * @param {string} type part type (currently only "text" is supported)
+ * @param {string} type part type: "text" for plain text, "html" for HTML that goes through the HTML parser
  * @param {string/text/table} content part content (accepts string, rspamd_text, or table of rspamd_text chunks - will be efficiently concatenated in C)
  * @param {rspamd_mimepart} original_part optional original mime part that this injected part is derived from (sets parent relationship)
  * @return {boolean} true if part was injected
@@ -2974,10 +2974,14 @@ lua_task_inject_part(lua_State *L)
 	}
 
 	if (task && task->message) {
-		if (g_ascii_strcasecmp(type, "text") == 0) {
+		gboolean is_html = g_ascii_strcasecmp(type, "html") == 0;
+
+		if (is_html || g_ascii_strcasecmp(type, "text") == 0) {
 			part = rspamd_mempool_alloc0(task->task_pool, sizeof(*part));
 			part->part_type = RSPAMD_MIME_PART_TEXT;
 			part->flags |= RSPAMD_MIME_PART_COMPUTED;
+			/* Freed with the other parts when the message is destroyed */
+			part->urls = g_ptr_array_new();
 
 			if (original_part) {
 				part->parent_part = original_part;
@@ -2987,8 +2991,14 @@ lua_task_inject_part(lua_State *L)
 
 			part->ct->type.begin = "text";
 			part->ct->type.len = 4;
-			part->ct->subtype.begin = "plain";
-			part->ct->subtype.len = 5;
+			if (is_html) {
+				part->ct->subtype.begin = "html";
+				part->ct->subtype.len = 4;
+			}
+			else {
+				part->ct->subtype.begin = "plain";
+				part->ct->subtype.len = 5;
+			}
 			part->ct->flags = RSPAMD_CONTENT_TYPE_TEXT;
 			part->ct->charset.begin = "utf-8";
 			part->ct->charset.len = 5;
@@ -3024,6 +3034,9 @@ lua_task_inject_part(lua_State *L)
 			txt_part->utf_content = txt_part->raw;
 			txt_part->utf_stripped_text = (UText) UTEXT_INITIALIZER;
 			txt_part->real_charset = "utf-8";
+			if (is_html) {
+				txt_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
+			}
 
 			part->specific.txt = txt_part;
 			g_ptr_array_add(task->message->parts, part);

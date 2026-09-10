@@ -1,0 +1,33 @@
+From: sender@example.org
+To: recipient@example.org
+Date: Wed, 9 Sep 2026 15:00:00 +0000
+Message-ID: <svg-logo@example.org>
+Subject: New logo
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="svg-logo-boundary"
+
+--svg-logo-boundary
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Here is the new logo.
+
+--svg-logo-boundary
+Content-Type: image/svg+xml;
+ name="logo.svg"
+Content-Disposition: attachment; filename="logo.svg"
+Content-Transfer-Encoding: base64
+
+PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+Cjwh
+RE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cu
+dzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+CjxzdmcgeG1sbnM9Imh0dHA6
+Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5
+OS94bGluayIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIxMDAiIHZpZXdCb3g9IjAgMCAyMDAgMTAwIj4K
+ICA8dGl0bGU+Q29tcGFueSBsb2dvPC90aXRsZT4KICA8ZGVzYz5WZWN0b3IgbG9nbyAmYW1wOyB0
+YWdsaW5lPC9kZXNjPgogIDxhIHhsaW5rOmhyZWY9Imh0dHBzOi8vd3d3LmV4YW1wbGUuY29tLyI+
+CiAgICA8dGV4dCB4PSIxMCIgeT0iMjAiPkV4YW1wbGUgPHRzcGFuIGZvbnQtd2VpZ2h0PSJib2xk
+Ij5Db3JwPC90c3Bhbj48L3RleHQ+CiAgPC9hPgogIDxpbWFnZSBocmVmPSJkYXRhOmltYWdlL3Bu
+ZztiYXNlNjQsaVZCT1J3MEtHZ289IiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiLz4KICA8dGV4dCB4
+PSIxMCIgeT0iNTAiPlNpbmNlJm5ic3A7MTk5OTwvdGV4dD4KPC9zdmc+Cg==
+
+--svg-logo-boundary--

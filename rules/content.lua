@@ -124,11 +124,92 @@ local function process_ooxml_specific(task, part, specific)
   end
 end
 
+local max_svg_resource_options = 8
+
+local function process_svg_specific(task, part, specific)
+  local filename = part:get_filename() or 'unknown'
+
+  if specific.suspicious then
+    task:insert_result('SVG_SUSPICIOUS', 1.0,
+        string.format('%s:%s', filename, specific.reason or 'unknown'))
+    return
+  end
+
+  task:insert_result('SVG_CONTENT', 1.0, filename)
+
+  local scripts = specific.scripts or 0
+  local handlers = specific.event_handlers or 0
+  local javascript_urls = specific.javascript_urls or 0
+  local external_scripts = specific.external_scripts or 0
+  if scripts + handlers + javascript_urls + external_scripts > 0 then
+    local option = string.format('%s:scripts=%d,handlers=%d,javascript=%d,external=%d',
+        filename, scripts, handlers, javascript_urls, external_scripts)
+    if specific.script_indicators and #specific.script_indicators > 0 then
+      option = option .. ',' .. table.concat(specific.script_indicators, ',')
+    end
+    task:insert_result('SVG_SCRIPT', 1.0, option)
+  end
+
+  if (specific.foreign_objects or 0) > 0 then
+    task:insert_result('SVG_FOREIGN_OBJECT', 1.0,
+        string.format('%s:%d', filename, specific.foreign_objects))
+  end
+
+  -- Embedded raster images are the normal use of data: URIs; anything else
+  -- (HTML, scripts, nested SVG, octet streams) is smuggled content
+  local smuggled_types = {}
+  for _, uri_type in ipairs(specific.data_uri_types or {}) do
+    if not uri_type:find('^image/') or uri_type == 'image/svg+xml' then
+      smuggled_types[#smuggled_types + 1] = uri_type
+    end
+  end
+  if #smuggled_types > 0 then
+    task:insert_result('SVG_DATA_URI', 1.0,
+        string.format('%s:%s', filename, table.concat(smuggled_types, ',')))
+  end
+
+  if (specific.hyperlinks or 0) > 0 then
+    task:insert_result('SVG_EXTERNAL_LINKS', 1.0,
+        string.format('%s:%d', filename, specific.hyperlinks))
+  end
+
+  for i, resource in ipairs(specific.resources or {}) do
+    if i > max_svg_resource_options then break end
+    task:insert_result('SVG_EXTERNAL_RESOURCES', 1.0,
+        string.format('%s:%s=%s', filename, resource.kind, trim_target(resource.url)))
+  end
+
+  local forms = specific.forms or 0
+  local passwords = specific.password_inputs or 0
+  if forms + passwords > 0 then
+    task:insert_result('SVG_FORM', 1.0,
+        string.format('%s:forms=%d,passwords=%d', filename, forms, passwords))
+  end
+
+  local redirects = {}
+  if (specific.meta_refresh or 0) > 0 then
+    redirects[#redirects + 1] = 'meta_refresh'
+  end
+  if (specific.embedded_documents or 0) > 0 then
+    redirects[#redirects + 1] = 'embedded_documents'
+  end
+  for _, indicator in ipairs(specific.script_indicators or {}) do
+    if indicator == 'location' then
+      redirects[#redirects + 1] = 'location'
+    end
+  end
+  if #redirects > 0 then
+    task:insert_result('SVG_REDIRECT', 1.0,
+        string.format('%s:%s', filename, table.concat(redirects, ',')))
+  end
+end
+
 local tags_processors = {
   pdf = process_pdf_specific,
   docx = process_ooxml_specific,
   xlsx = process_ooxml_specific,
   pptx = process_ooxml_specific,
+  svg = process_svg_specific,
 }
 
 local function process_specific_cb(task)
@@ -177,6 +258,18 @@ for _, name in ipairs({
     name = name,
     parent = id,
     groups = { "content", "ooxml" },
+  }
+end
+
+for _, name in ipairs({
+  'SVG_CONTENT', 'SVG_SUSPICIOUS', 'SVG_SCRIPT', 'SVG_FOREIGN_OBJECT', 'SVG_DATA_URI',
+  'SVG_EXTERNAL_LINKS', 'SVG_EXTERNAL_RESOURCES', 'SVG_FORM', 'SVG_REDIRECT',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "svg" },
   }
 end
 rspamd_config:register_symbol {
