@@ -233,13 +233,13 @@
 									<table class="table status-table table-sm table-bordered text-nowrap mb-0" id="bayesTable">
 										<thead class="text-secondary">
 											<tr>
-												<th>Server name</th>
-												<th>Classifier name</th>
-												<th>Class</th>
-												<th>Symbol</th>
-												<th>Type</th>
-												<th>Learns</th>
-												<th>Users</th>
+												<th title="rspamd instance that reported this row">Server name</th>
+												<th title="Bayes classifier; rows are grouped per classifier">Classifier name</th>
+												<th title="Learn class of the statfile (e.g. spam or ham)">Class</th>
+												<th title="Symbol inserted when this class wins classification">Symbol</th>
+												<th title="Statfile backend (e.g. redis, sqlite, mmap)">Type</th>
+												<th title="Messages learned for this class, summed across per-user tracks">Learns</th>
+												<th title="Per-user tracks that have learns for this class">Users</th>
 											</tr>
 										</thead>
 										<tbody>

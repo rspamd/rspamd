@@ -56,30 +56,75 @@ local function process_pdf_specific(task, part, specific)
   end
 end
 
-local function process_docx_specific(task, part, specific)
+local ooxml_prefixes = {
+  docx = 'DOCX',
+  xlsx = 'XLSX',
+  pptx = 'PPTX',
+}
+local max_external_data_options = 8
+local max_target_option_length = 128
+
+local function trim_target(target)
+  if #target > max_target_option_length then
+    return target:sub(1, max_target_option_length) .. '...'
+  end
+  return target
+end
+
+local function process_ooxml_relationships(task, filename, specific)
+  local relationships = specific.relationships
+  if not relationships then return end
+
+  local macros = {}
+  for _, kind in ipairs(relationships.macros or {}) do
+    macros[#macros + 1] = kind
+  end
+  for _, name in ipairs(specific.auto_exec_names or {}) do
+    macros[#macros + 1] = name
+  end
+  if #macros > 0 then
+    task:insert_result('OOXML_MACROS', 1.0,
+        string.format('%s:%s', filename, table.concat(macros, ',')))
+  end
+
+  if (relationships.ole_objects or 0) > 0 then
+    task:insert_result('OOXML_OLE_OBJECT', 1.0,
+        string.format('%s:%d', filename, relationships.ole_objects))
+  end
+
+  if relationships.remote_template then
+    task:insert_result('OOXML_REMOTE_TEMPLATE', 1.0,
+        string.format('%s:%s', filename, trim_target(relationships.remote_template)))
+  end
+
+  local external_targets = relationships.external_targets or {}
+  for i, target in ipairs(external_targets) do
+    if i > max_external_data_options then break end
+    task:insert_result('OOXML_EXTERNAL_DATA', 1.0,
+        string.format('%s:%s=%s', filename, target.type, trim_target(target.target)))
+  end
+end
+
+local function process_ooxml_specific(task, part, specific)
   local filename = part:get_filename() or 'unknown'
+  local prefix = ooxml_prefixes[specific.tag]
+
+  process_ooxml_relationships(task, filename, specific)
+
   if specific.suspicious then
-    task:insert_result('DOCX_SUSPICIOUS', 1.0,
+    task:insert_result(prefix .. '_SUSPICIOUS', 1.0,
         string.format('%s:%s', filename, specific.reason or 'unknown'))
     return
   end
 
-  task:insert_result('DOCX_CONTENT', 1.0, filename)
+  task:insert_result(prefix .. '_CONTENT', 1.0, filename)
   if specific.urls and #specific.urls > 0 then
-    task:insert_result('DOCX_EXTERNAL_LINKS', 1.0,
+    task:insert_result(prefix .. '_EXTERNAL_LINKS', 1.0,
         string.format('%s:%s', filename, #specific.urls))
   end
 end
 
 local max_svg_resource_options = 8
-local max_svg_option_length = 128
-
-local function trim_option(value)
-  if #value > max_svg_option_length then
-    return value:sub(1, max_svg_option_length) .. '...'
-  end
-  return value
-end
 
 local function process_svg_specific(task, part, specific)
   local filename = part:get_filename() or 'unknown'
@@ -131,7 +176,7 @@ local function process_svg_specific(task, part, specific)
   for i, resource in ipairs(specific.resources or {}) do
     if i > max_svg_resource_options then break end
     task:insert_result('SVG_EXTERNAL_RESOURCES', 1.0,
-        string.format('%s:%s=%s', filename, resource.kind, trim_option(resource.url)))
+        string.format('%s:%s=%s', filename, resource.kind, trim_target(resource.url)))
   end
 
   local forms = specific.forms or 0
@@ -161,7 +206,9 @@ end
 
 local tags_processors = {
   pdf = process_pdf_specific,
-  docx = process_docx_specific,
+  docx = process_ooxml_specific,
+  xlsx = process_ooxml_specific,
+  pptx = process_ooxml_specific,
   svg = process_svg_specific,
 }
 
@@ -192,25 +239,27 @@ rspamd_config:register_symbol {
   groups = { "content", "pdf" },
 }
 
-rspamd_config:register_symbol {
-  type = 'virtual',
-  name = 'DOCX_CONTENT',
-  parent = id,
-  groups = { "content", "docx" },
-}
+for tag, prefix in pairs(ooxml_prefixes) do
+  for _, suffix in ipairs({ 'CONTENT', 'EXTERNAL_LINKS', 'SUSPICIOUS' }) do
+    rspamd_config:register_symbol {
+      type = 'virtual',
+      name = prefix .. '_' .. suffix,
+      parent = id,
+      groups = { "content", tag },
+    }
+  end
+end
 
-rspamd_config:register_symbol {
-  type = 'virtual',
-  name = 'DOCX_EXTERNAL_LINKS',
-  parent = id,
-  groups = { "content", "docx" },
-}
-rspamd_config:register_symbol {
-  type = 'virtual',
-  name = 'DOCX_SUSPICIOUS',
-  parent = id,
-  groups = { "content", "docx" },
-}
+for _, name in ipairs({
+  'OOXML_MACROS', 'OOXML_OLE_OBJECT', 'OOXML_REMOTE_TEMPLATE', 'OOXML_EXTERNAL_DATA',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "ooxml" },
+  }
+end
 
 for _, name in ipairs({
   'SVG_CONTENT', 'SVG_SUSPICIOUS', 'SVG_SCRIPT', 'SVG_FOREIGN_OBJECT', 'SVG_DATA_URI',

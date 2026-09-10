@@ -14,21 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
--- DOCX content processor: a thin format binding over the shared OOXML
+-- XLSX content processor: a thin format binding over the shared OOXML
 -- pipeline in lua_content/ooxml.
 
 local ooxml = require "lua_content/ooxml"
-local rspamd_ooxml = require "rspamd_ooxml"
+
 
 local exports = {}
 
-exports.hyperlink_from_instruction = rspamd_ooxml.hyperlink_from_instruction
 exports.extract = function(package, options, state)
-  return ooxml.extract(package, options, state, 'docx')
+  return ooxml.extract(package, options, state, 'xlsx')
 end
 
 exports.process = function(input, mpart, task)
-  return ooxml.process_document(input, mpart, task, 'docx')
+  return ooxml.process_document(input, mpart, task, 'xlsx')
 end
 
 exports.config = ooxml.config

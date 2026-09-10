@@ -14,8 +14,11 @@ ${MESSAGE7}        ${RSPAMD_TESTDIR}/messages/pdf_js.eml
 ${MESSAGE8}        ${RSPAMD_TESTDIR}/messages/yand_forward.eml
 ${MESSAGE9}        ${RSPAMD_TESTDIR}/messages/docx_content.eml
 ${MESSAGE10}       ${RSPAMD_TESTDIR}/messages/docx_broken.eml
-${MESSAGE11}       ${RSPAMD_TESTDIR}/messages/svg_smuggling.eml
-${MESSAGE12}       ${RSPAMD_TESTDIR}/messages/svg_logo.eml
+${MESSAGE11}       ${RSPAMD_TESTDIR}/messages/xlsx_content.eml
+${MESSAGE12}       ${RSPAMD_TESTDIR}/messages/pptx_content.eml
+${MESSAGE13}       ${RSPAMD_TESTDIR}/messages/docx_template.eml
+${MESSAGE14}       ${RSPAMD_TESTDIR}/messages/svg_smuggling.eml
+${MESSAGE15}       ${RSPAMD_TESTDIR}/messages/svg_logo.eml
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/newlines.eml
 
 *** Test Cases ***
@@ -70,8 +73,44 @@ DOCX suspicious
   Scan File  ${MESSAGE10}  Settings={symbols_enabled = [DOCX_SUSPICIOUS]}
   Expect Symbol With Exact Options  DOCX_SUSPICIOUS  broken.docx:package
 
-SVG smuggling
+DOCX remote template
+  Scan File  ${MESSAGE13}
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_SUSPICIOUS, OOXML_REMOTE_TEMPLATE, OOXML_EXTERNAL_DATA, OOXML_MACROS]}
+  Expect Symbol With Exact Options  DOCX_CONTENT  template.docx
+  Expect Symbol With Exact Options  OOXML_REMOTE_TEMPLATE  template.docx:https://template.example.com/Normal.dotm
+  Do Not Expect Symbol  DOCX_SUSPICIOUS
+  Do Not Expect Symbol  OOXML_EXTERNAL_DATA
+  Do Not Expect Symbol  OOXML_MACROS
+
+XLSX content
   Scan File  ${MESSAGE11}
+  ...  Settings={symbols_enabled = [XLSX_CONTENT, XLSX_EXTERNAL_LINKS, XLSX_SUSPICIOUS, OOXML_MACROS, OOXML_EXTERNAL_DATA, OOXML_OLE_OBJECT, OOXML_REMOTE_TEMPLATE]}
+  Expect Symbol With Exact Options  XLSX_CONTENT  invoice.xlsm
+  Expect Symbol With Exact Options  XLSX_EXTERNAL_LINKS  invoice.xlsm:3
+  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm,vba,_xlnm.Auto_Open
+  Expect Symbol With Exact Options  OOXML_EXTERNAL_DATA  invoice.xlsm:externalLinkPath=https://external.example.com/data.xlsx
+  Do Not Expect Symbol  XLSX_SUSPICIOUS
+  Do Not Expect Symbol  OOXML_OLE_OBJECT
+  Do Not Expect Symbol  OOXML_REMOTE_TEMPLATE
+  Expect URL  formula.example.com
+  Expect URL  sheet.example.com
+  Expect URL  drawing.example.com
+  Expect URL  shared.example.com
+
+PPTX content
+  Scan File  ${MESSAGE12}
+  ...  Settings={symbols_enabled = [PPTX_CONTENT, PPTX_EXTERNAL_LINKS, PPTX_SUSPICIOUS, OOXML_MACROS, OOXML_OLE_OBJECT, OOXML_EXTERNAL_DATA]}
+  Expect Symbol With Exact Options  PPTX_CONTENT  deck.pptx
+  Expect Symbol With Exact Options  PPTX_EXTERNAL_LINKS  deck.pptx:2
+  Expect Symbol With Exact Options  OOXML_OLE_OBJECT  deck.pptx:1
+  Do Not Expect Symbol  PPTX_SUSPICIOUS
+  Do Not Expect Symbol  OOXML_MACROS
+  Do Not Expect Symbol  OOXML_EXTERNAL_DATA
+  Expect URL  shape.example.com
+  Expect URL  run.example.com
+
+SVG smuggling
+  Scan File  ${MESSAGE14}
   ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
   Expect Symbol With Exact Options  SVG_CONTENT  invoice.svg
   Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2,handlers=1,javascript=2,external=1,atob,Blob,createObjectURL,location
@@ -88,7 +127,7 @@ SVG smuggling
   Expect URL  visible.example.com
 
 SVG logo
-  Scan File  ${MESSAGE12}
+  Scan File  ${MESSAGE15}
   ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
   Expect Symbol With Exact Options  SVG_CONTENT  logo.svg
   Expect Symbol With Exact Options  SVG_EXTERNAL_LINKS  logo.svg:1

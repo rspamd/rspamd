@@ -259,6 +259,91 @@ context("DOCX content extraction", function()
     docx.config.max_documents = saved_max_documents
   end)
 
+  test("reports remote templates and drawing hyperlinks", function()
+    local ooxml = require "lua_content/ooxml"
+    local relationships_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    local document_rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    local package_data = archive.zip({
+      {
+        name = "[Content_Types].xml",
+        content = [[
+          <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+            <Default Extension="rels"
+              ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+            <Override PartName="/word/document.xml"
+              ContentType="application/vnd.ms-word.document.macroEnabled.main+xml"/>
+          </Types>
+        ]],
+      },
+      {
+        name = "_rels/.rels",
+        content = string.format([[
+          <Relationships xmlns="%s">
+            <Relationship Id="main" Type="%sofficeDocument" Target="word/document.xml"/>
+          </Relationships>
+        ]], relationships_ns, document_rel),
+      },
+      {
+        name = "word/document.xml",
+        content = [[
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+            <w:body><w:p><w:r><w:drawing><a:graphic><a:graphicData>
+              <a:hlinkClick r:id="picture"/>
+            </a:graphicData></a:graphic></w:drawing></w:r>
+            <w:r><w:t>Body text</w:t></w:r></w:p></w:body>
+          </w:document>
+        ]],
+      },
+      {
+        name = "word/_rels/document.xml.rels",
+        content = string.format([[
+          <Relationships xmlns="%s">
+            <Relationship Id="picture" Type="%shyperlink"
+              Target="https://picture.example.com/" TargetMode="External"/>
+            <Relationship Id="settings" Type="%ssettings" Target="settings.xml"/>
+            <Relationship Id="vba" Type="%svbaProject" Target="vbaProject.bin"/>
+            <Relationship Id="ole" Type="%soleObject" Target="embeddings/oleObject1.bin"/>
+            <Relationship Id="remote-image" Type="%simage"
+              Target="https://beacon.example.com/track.png" TargetMode="External"/>
+          </Relationships>
+        ]], relationships_ns, document_rel, document_rel, document_rel, document_rel,
+            document_rel),
+      },
+      {
+        name = "word/_rels/settings.xml.rels",
+        content = string.format([[
+          <Relationships xmlns="%s">
+            <Relationship Id="template" Type="%sattachedTemplate"
+              Target="https://template.example.com/Normal.dotm" TargetMode="External"/>
+          </Relationships>
+        ]], relationships_ns, document_rel),
+      },
+      { name = "word/settings.xml", content = "<w:settings/>" },
+    })
+
+    local opened, err = ooxml.open(package_data)
+    assert_not_nil(opened, err)
+    assert_equal(opened.format, 'docx')
+    assert_equal(opened.parts["word/settings.xml"], nil)
+    assert_not_nil(opened.relationships["word/settings.xml"])
+
+    local extracted
+    extracted, err = docx.extract(opened)
+    assert_not_nil(extracted, err)
+    assert_not_nil(tostring(extracted.text):find("Body text", 1, true))
+    assert_equal(extracted.urls[1], "https://picture.example.com/")
+
+    local summary = ooxml.summarize_relationships(opened)
+    assert_equal(summary.remote_template, "https://template.example.com/Normal.dotm")
+    assert_equal(summary.macros[1], 'vba')
+    assert_equal(summary.ole_objects, 1)
+    assert_equal(#summary.external_targets, 1)
+    assert_equal(summary.external_targets[1].type, 'image')
+    assert_equal(summary.external_targets[1].target, "https://beacon.example.com/track.png")
+  end)
+
   test("marks a malformed DOCX package as suspicious", function()
     local lua_content = require "lua_content"
     local package_data = archive.zip({
