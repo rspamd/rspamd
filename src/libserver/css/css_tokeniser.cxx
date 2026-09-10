@@ -132,8 +132,9 @@ constexpr frozen::unordered_map<frozen::string, css_dimension_data, max_dims> di
 		 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
 		 */
 	{"ex", {css_parser_token::dim_type::dim_ex, 8.0}},
-	{"wv", {css_parser_token::dim_type::dim_wv, 8.0}},
-	{"wh", {css_parser_token::dim_type::dim_wh, 6.0}},
+	/* 1% of a viewport that a mail client is likely to use */
+	{"vw", {css_parser_token::dim_type::dim_vw, 8.0}},
+	{"vh", {css_parser_token::dim_type::dim_vh, 6.0}},
 	{"vmax", {css_parser_token::dim_type::dim_vmax, 8.0}},
 	{"vmin", {css_parser_token::dim_type::dim_vmin, 6.0}},
 	/* One point. 1pt = 1/72nd of 1in */

@@ -95,6 +95,8 @@ HTML VISIBILITY - No significant hidden content
   below_threshold
   padding
   visible
+  font_shorthand
+  relative_font
 
 HTML ONLY - TRUE POSITIVE
   Scan File  ${RSPAMD_TESTDIR}/messages/zerofont.eml
