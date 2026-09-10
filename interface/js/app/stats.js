@@ -987,7 +987,15 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             function addFuzzyStorage(server, storages, up) {
                 const fuzzyTbody = document.querySelector("#fuzzyTable tbody");
                 const entries = Object.entries(storages || {});
-                if (!entries.length) {
+                // Rules configured but absent from fuzzy_hashes: the storage
+                // selected for the statistics query did not answer in time —
+                // down, rate-limited or denied. Detectable only when the
+                // storages config is known; otherwise the row stays hidden.
+                const ruleInfo = fuzzyStorages.get(server);
+                const missing = ruleInfo
+                    ? Object.keys(ruleInfo).filter((rule) => !{}.hasOwnProperty.call(storages || {}, rule))
+                    : [];
+                if (!entries.length && !missing.length) {
                     // An up server without fuzzy storages stays visible in
                     // the group; a down one renders nothing, as in the bayes
                     // table
@@ -996,22 +1004,35 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         '</td><td colspan="2" class="text-secondary">No fuzzy storages</td></tr>');
                     return;
                 }
+                const rowsCount = entries.length + missing.length;
+
+                function serverCellAt(i) {
+                    if (i !== 0) return "";
+                    return '<td rowspan="' + rowsCount + '">' + common.escapeHTML(server) + "</td>";
+                }
                 // Per-server join: fuzzy_hashes keys (rule names) are the
                 // storages keys
-                const ruleInfo = fuzzyStorages.get(server);
                 entries.forEach(([storage, hashes], i) => {
-                    const serverCell = (i === 0)
-                        ? '<td rowspan="' + entries.length + '">' + common.escapeHTML(server) + "</td>"
-                        : "";
                     const info = ruleInfo?.[storage];
                     const title = info ? fuzzyStorageTitle(info) : "";
                     const titleAttr = title ? ' title="' + common.escapeHTML(title) + '"' : "";
                     const roBadge = (info && info.read_only)
                         ? badge("text-bg-secondary", "read-only", "Storage is read-only: it cannot be learned to")
                         : "";
-                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCell +
+                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCellAt(i) +
                         "<td" + titleAttr + ">" + common.escapeHTML(storage) + roBadge + "</td>" +
                         '<td class="text-end">' + hashes + "</td></tr>");
+                });
+                missing.forEach((storage, i) => {
+                    const info = ruleInfo?.[storage];
+                    const title = info ? fuzzyStorageTitle(info) : "";
+                    const titleAttr = title ? ' title="' + common.escapeHTML(title) + '"' : "";
+                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCellAt(entries.length + i) +
+                        "<td" + titleAttr + ">" + common.escapeHTML(storage) +
+                        badge("text-bg-danger", "unavailable",
+                            "No reply to the statistics query; the storage may be down, rate-limited or access denied") +
+                        "</td>" +
+                        '<td class="text-end">-</td></tr>');
                 });
             }
 
