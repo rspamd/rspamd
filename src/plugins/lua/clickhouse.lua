@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     INDEX idx_ip IP TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_urls_tld `Urls.Tld` TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_attachments_digest `Attachments.Digest` TYPE bloom_filter(0.01) GRANULARITY 4,
-    INDEX idx_subject Subject TYPE tokenbf_v1(8192, 3, 0) GRANULARITY 4
+    INDEX idx_subject Subject TYPE bloom_filter(0.01) GRANULARITY 4
 ) ENGINE = MergeTree()
 PARTITION BY toMonday(Date)
 ORDER BY TS
@@ -333,7 +333,7 @@ local migrations = {
   [11] = {
     -- Data-skipping indexes for point lookups: the table is ordered by TS
     -- only, so a lookup by Message-ID, sender domain, client IP, URL eSLD,
-    -- attachment digest or subject word reads every row in the time window
+    -- attachment digest or exact subject reads every row in the time window
     -- (measured: 303M rows / 15.5 GB / 1.6 s for one Message-ID on a 20M
     -- messages/day install). Bloom filters over 4 granules cut that to a
     -- few granules. ADD INDEX is a metadata-only change: parts written from
@@ -348,7 +348,7 @@ local migrations = {
       ADD INDEX IF NOT EXISTS idx_ip IP TYPE bloom_filter(0.01) GRANULARITY 4,
       ADD INDEX IF NOT EXISTS idx_urls_tld `Urls.Tld` TYPE bloom_filter(0.01) GRANULARITY 4,
       ADD INDEX IF NOT EXISTS idx_attachments_digest `Attachments.Digest` TYPE bloom_filter(0.01) GRANULARITY 4,
-      ADD INDEX IF NOT EXISTS idx_subject Subject TYPE tokenbf_v1(8192, 3, 0) GRANULARITY 4
+      ADD INDEX IF NOT EXISTS idx_subject Subject TYPE bloom_filter(0.01) GRANULARITY 4
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (12)]],
