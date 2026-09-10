@@ -1928,6 +1928,7 @@ rspamd_stat_statistics(struct rspamd_task *task,
 	const char *classifier_name;
 	const char *classifier_type;
 	gboolean classifier_per_user;
+	unsigned int classifier_min_learns;
 	unsigned int i, j;
 	int id;
 
@@ -1946,6 +1947,7 @@ rspamd_stat_statistics(struct rspamd_task *task,
 		classifier_name = cl->cfg->name;
 		classifier_type = rspamd_classifier_type(cl->cfg);
 		classifier_per_user = rspamd_classifier_is_per_user(cl->cfg);
+		classifier_min_learns = cl->cfg->min_learns;
 
 		for (j = 0; j < cl->statfiles_ids->len; j++) {
 			id = g_array_index(cl->statfiles_ids, int, j);
@@ -1987,6 +1989,9 @@ rspamd_stat_statistics(struct rspamd_task *task,
 				ucl_object_insert_key(classifier_obj,
 						ucl_object_frombool(classifier_per_user),
 						"per_user", 0, false);
+				ucl_object_insert_key(classifier_obj,
+						ucl_object_fromint(classifier_min_learns),
+						"min_learns", 0, false);
 
 				ucl_object_insert_key(elt, classifier_obj, "classifier", 0, false);
 

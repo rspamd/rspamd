@@ -35,6 +35,12 @@
     --rspamd-symbol-positive-hover-bg: #fbd6d1;
     --rspamd-symbol-special-hover-bg: #cddbff;
 
+    /* Bayes balance bar segment fills (stronger than the row tints to keep
+       the thin stacked segments distinguishable) */
+    --rspamd-balance-positive: rgb(var(--bs-danger-rgb));
+    --rspamd-balance-negative: rgb(var(--bs-success-rgb));
+    --rspamd-balance-special: #3a6fe8;
+
     /* Light mode logo display rules */
     --rspamd-display-logo-light: inline;
     --rspamd-display-logo-dark: none;
@@ -63,6 +69,11 @@
     --rspamd-symbol-negative-hover-bg: #274f27;
     --rspamd-symbol-positive-hover-bg: #4b2b2b;
     --rspamd-symbol-special-hover-bg: #41426a;
+
+    /* Bayes balance bar segment fills (dark theme) */
+    --rspamd-balance-positive: #c93737;
+    --rspamd-balance-negative: #35a862;
+    --rspamd-balance-special: #5a7bd6;
 
     /* Dark mode logo display rules */
     --rspamd-display-logo-light: none;
@@ -600,6 +611,40 @@ input.action-scores {
 .status-table tbody td.table-hover-cell {
     --bs-table-color-state: var(--bs-table-hover-color);
     --bs-table-bg-state: var(--bs-table-hover-bg);
+}
+
+/* Bayes learns balance bar in the classifier cell of #bayesTable: stacked
+   segments sized by flex-grow, 2px gaps between fills, rounded outer ends */
+#bayesTable .bayes-balance {
+    border-radius: 4px;
+    display: flex;
+    gap: 2px;
+    height: 6px;
+    margin-top: 0.25rem;
+    min-width: 8em;
+    overflow: hidden;
+}
+
+#bayesTable .bayes-balance-segment {
+    flex-basis: 0;
+}
+
+#bayesTable .bayes-balance-segment.balance-positive {
+    background-color: var(--rspamd-balance-positive);
+}
+
+#bayesTable .bayes-balance-segment.balance-negative {
+    background-color: var(--rspamd-balance-negative);
+}
+
+#bayesTable .bayes-balance-segment.balance-special {
+    background-color: var(--rspamd-balance-special);
+}
+
+/* Class row marker: the class has not reached the classifier min_learns yet;
+   same warning tint as the cluster drift badge */
+#bayesTable .bayes-below-min {
+    color: var(--rspamd-text-warning);
 }
 
 /* Cluster (servers) table: details toggle, last-seen line, details row */

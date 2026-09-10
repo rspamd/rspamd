@@ -769,6 +769,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             function addStatfiles(server, statfiles) {
                 const safeStatfiles = Array.isArray(statfiles) ? statfiles : [];
                 const classToSymbolClass = {spam: "symbol-positive", ham: "symbol-negative"};
+                const classToBalanceClass = {spam: "balance-positive", ham: "balance-negative"};
                 const rowsCount = safeStatfiles.length;
                 const bayesTbody = document.querySelector("#bayesTable tbody");
 
@@ -784,15 +785,139 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     return "-";
                 }
 
-                function formatClassifierLabel(statfile) {
+                function statfileClass(statfile) {
+                    return statfile.class ?? guessClassFromSymbol(statfile.symbol ?? "-");
+                }
+
+                /*
+                 * Pre-pass: split statfiles into consecutive runs of the same
+                 * classifier name and sum learns per class, so the classifier
+                 * cell can render the balance bar when the first row of the
+                 * group is emitted. Revisions of the redis backend are
+                 * refreshed asynchronously (roughly every 30 seconds), so the
+                 * sums may slightly lag behind the actual learns.
+                 */
+                function statfileGroups() {
+                    const groupEnd = [];
+                    const groupSums = [];
+                    let start = 0;
+
+                    function groupName(idx) {
+                        return safeStatfiles[idx].classifier?.name ?? "-";
+                    }
+
+                    while (start < safeStatfiles.length) {
+                        let end = start + 1;
+                        const sums = new Map();
+
+                        while (end < safeStatfiles.length && groupName(end) === groupName(start)) {
+                            end++;
+                        }
+                        for (let k = start; k < end; k++) {
+                            const cls = statfileClass(safeStatfiles[k]);
+                            const revision = coerceNumber(safeStatfiles[k].revision);
+                            sums.set(cls, (sums.get(cls) ?? 0) + revision);
+                            groupEnd[k] = end;
+                            groupSums[k] = sums;
+                        }
+                        start = end;
+                    }
+
+                    return {groupEnd, groupSums};
+                }
+
+                /*
+                 * Stacked bar of the learns share between the classes of one
+                 * classifier. The table rows of the group carry the class
+                 * names and counts, and tooltips spell every segment out, so
+                 * segment colors are never the only encoding.
+                 */
+                function renderBalanceBar(classSums) {
+                    const entries = Array.from(classSums).filter(([, count]) => count > 0);
+                    const total = entries.reduce((sum, [, count]) => sum + count, 0);
+
+                    if (total <= 0) return "";
+
+                    const parts = entries.map(([cls, count]) => `${cls}: ${count} (${Math.round(count * 100 / total)}%)`);
+                    const segments = [];
+                    for (let idx = 0; idx < entries.length; idx++) {
+                        const [cls, count] = entries[idx];
+                        segments.push(`<span class="bayes-balance-segment ${classToBalanceClass[cls] ?? "balance-special"}"` +
+                            ` style="flex-grow:${count}" title="${common.escapeHTML(parts[idx])}"></span>`);
+                    }
+                    const label = `Learns balance: ${parts.join("; ")}`;
+
+                    return `<div class="bayes-balance" role="img" title="${common.escapeHTML(label)}"` +
+                        ` aria-label="${common.escapeHTML(label)}">${segments.join("")}</div>`;
+                }
+
+                function badge(cls, text, title) {
+                    const titleAttr = title ? ` title="${common.escapeHTML(title)}"` : "";
+                    return ` <span class="badge ${cls} ms-1"${titleAttr}>${text}</span>`;
+                }
+
+                function normalizeMinLearns(value) {
+                    return (Number.isFinite(value) && value > 0) ? value : 0;
+                }
+
+                /*
+                 * min_learns gate badge. A binary classifier classifies nothing
+                 * when any class is below the threshold; a multi-class one
+                 * drops the classes below it and stops classifying only when
+                 * all of them are below. Servers that predate the field in
+                 * /stat render no badge.
+                 */
+                function renderMinLearnsBadge(classifier, classSums) {
+                    const minLearns = normalizeMinLearns(classifier.min_learns);
+
+                    if (minLearns <= 0) return "";
+
+                    const below = Array.from(classSums).filter(([, count]) => count < minLearns);
+
+                    if (!below.length) return "";
+
+                    const parts = [];
+                    for (let idx = 0; idx < below.length; idx++) {
+                        const [cls, count] = below[idx];
+                        parts.push(`class ${cls} has ${count} learns, min_learns ${minLearns}`);
+                    }
+                    const details = parts.join("; ");
+
+                    if (classifier.type !== "multi-class" || below.length === classSums.size) {
+                        return badge("text-bg-warning", "not classifying", `Not classifying: ${details}`);
+                    }
+
+                    return badge("text-bg-secondary", "classes excluded", `Excluded from classification: ${details}`);
+                }
+
+                /*
+                 * Row-level marker of a class that has not reached min_learns
+                 * yet, pointing at the exact class that holds the classifier
+                 * back (binary) or is excluded from classification (multi-class).
+                 */
+                function belowMinLearnsMark(statfile, classValue, classSums) {
+                    const minLearns = normalizeMinLearns(statfile.classifier?.min_learns);
+                    const count = classSums.get(classValue) ?? 0;
+
+                    if (minLearns <= 0 || count >= minLearns) return "";
+
+                    const text = `${count} learns < min_learns ${minLearns}`;
+                    const escaped = common.escapeHTML(text);
+
+                    return ` <span class="bayes-below-min" title="${escaped}">` +
+                        '<i class="fas fa-exclamation-triangle"></i></span>';
+                }
+
+                function formatClassifierLabel(statfile, classSums) {
                     const classifier = statfile.classifier ?? {};
                     const badges = [];
-                    function badge(cls, text) { return ` <span class="badge ${cls} ms-1">${text}</span>`; }
 
                     if (classifier.type === "multi-class") badges.push(badge("bg-secondary", "multi-class"));
                     if (classifier.per_user) badges.push(badge("bg-info", "per-user"));
+                    badges.push(renderMinLearnsBadge(classifier, classSums));
 
-                    return common.escapeHTML(classifier.name ?? "-") + badges.join("");
+                    return common.escapeHTML(classifier.name ?? "-") + badges.join("") +
+                        renderBalanceBar(classSums);
                 }
 
                 function renderCell(value, className) {
@@ -800,28 +925,26 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     return cls ? `<td class="${cls}">${value}</td>` : `<td>${value}</td>`;
                 }
 
+                const {groupEnd, groupSums} = statfileGroups();
+
                 safeStatfiles.forEach((statfile, i) => {
                     const symbol = statfile.symbol ?? "-";
-                    const classValue = statfile.class ?? guessClassFromSymbol(symbol);
+                    const classValue = statfileClass(statfile);
                     const cls = classToSymbolClass[classValue] || "";
                     const clName = statfile.classifier?.name ?? "-";
                     const prevClName = i > 0 ? (safeStatfiles[i - 1].classifier?.name ?? "-") : null;
+                    const belowMark = belowMinLearnsMark(statfile, classValue, groupSums[i]);
 
                     const serverCell = i === 0 ? `<td rowspan="${rowsCount}">${common.escapeHTML(server)}</td>` : "";
 
                     let classifierCell = "";
                     if (clName !== prevClName) {
-                        let groupSize = 1;
-                        for (let k = i + 1; k < safeStatfiles.length; k++) {
-                            if ((safeStatfiles[k].classifier?.name ?? "-") === clName) {
-                                groupSize++;
-                            } else break;
-                        }
-                        classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile)}</td>`;
+                        const groupSize = groupEnd[i] - i;
+                        classifierCell = `<td rowspan="${groupSize}">${formatClassifierLabel(statfile, groupSums[i])}</td>`;
                     }
 
                     bayesTbody.insertAdjacentHTML("beforeend", `<tr>${serverCell}${classifierCell}${[
-                        renderCell(common.escapeHTML(classValue), cls),
+                        renderCell(common.escapeHTML(classValue) + belowMark, cls),
                         renderCell(common.escapeHTML(symbol), cls),
                         renderCell(common.escapeHTML(statfile.type ?? "-"), cls),
                         renderCell(coerceNumber(statfile.revision), `text-end ${cls}`),
