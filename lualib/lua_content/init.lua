@@ -44,9 +44,41 @@ local content_modules = {
     output = "table"
   },
   docx = {
-    mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    mime_type = {
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+      "application/vnd.ms-word.document.macroenabled.12",
+      "application/vnd.ms-word.template.macroenabled.12",
+    },
     module = require "lua_content/docx",
-    extensions = { 'docx' },
+    extensions = { 'docx', 'docm', 'dotx', 'dotm' },
+    output = "table",
+    process_archive = true,
+  },
+  xlsx = {
+    mime_type = {
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+      "application/vnd.ms-excel.sheet.macroenabled.12",
+      "application/vnd.ms-excel.template.macroenabled.12",
+      "application/vnd.ms-excel.addin.macroenabled.12",
+    },
+    module = require "lua_content/xlsx",
+    extensions = { 'xlsx', 'xlsm', 'xltx', 'xltm', 'xlam' },
+    output = "table",
+    process_archive = true,
+  },
+  pptx = {
+    mime_type = {
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+      "application/vnd.openxmlformats-officedocument.presentationml.template",
+      "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+      "application/vnd.ms-powerpoint.slideshow.macroenabled.12",
+      "application/vnd.ms-powerpoint.template.macroenabled.12",
+    },
+    module = require "lua_content/pptx",
+    extensions = { 'pptx', 'pptm', 'ppsx', 'ppsm', 'potx', 'potm' },
     output = "table",
     process_archive = true,
   },
