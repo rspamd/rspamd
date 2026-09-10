@@ -15,10 +15,11 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
     // n1: a unified servers list and a read-only rule; "local<b>" is absent
     // from the storages reply — escaping canary and missing-rule fallback in
     // one; "down.example" is configured but absent from fuzzy_hashes — the
-    // unavailable row. n2: the same rule name with different addresses and
-    // flags — the join must not mix the two servers' configs.
+    // unavailable row; "empty.example" reports a zero count — must render as
+    // a plain 0, not unavailable. n2: the same rule name with different
+    // addresses and flags — the join must not mix the two servers' configs.
     const fuzzyHashes = {
-        n1: {"rspamd.com": 1234567, "local<b>": 7},
+        n1: {"rspamd.com": 1234567, "local<b>": 7, "empty.example": 0},
         n2: {"rspamd.com": 42},
     };
     const storages = {
@@ -27,6 +28,11 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
                 flags: {RW_BL_2: 2},
                 read_only: false,
                 servers: ["fuzzy9.example.com:11335"]
+            },
+            "empty.example": {
+                flags: {RW_WL_1: 3},
+                read_only: false,
+                servers: ["fuzzy2.example.com:11335"]
             },
             "rspamd.com": {
                 flags: {FUZZY_DENIED: 1, FUZZY_PROB: 2},
@@ -88,16 +94,22 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
     ]);
 
     const rows = page.locator("#fuzzyTable tbody tr");
-    await expect(rows).toHaveCount(4);
+    await expect(rows).toHaveCount(5);
 
     // Rowspan server cell on the first row of each group only; the rule
     // missing from the storages reply renders as text (escaping) and keeps
     // its raw count without a tooltip
     await expect(rows.nth(0).locator("td").nth(0)).toHaveText("srv1");
-    await expect(rows.nth(0).locator("td").nth(0)).toHaveAttribute("rowspan", "3");
+    await expect(rows.nth(0).locator("td").nth(0)).toHaveAttribute("rowspan", "4");
     await expect(rows.nth(1).locator("td").nth(0)).toHaveText("local<b>");
     await expect(rows.nth(1).locator("td").nth(0)).not.toHaveAttribute("title");
-    await expect(rows.nth(3).locator("td").nth(0)).toHaveText("srv2");
+    await expect(rows.nth(4).locator("td").nth(0)).toHaveText("srv2");
+
+    // A healthy storage with zero hashes renders a plain raw 0 — not an
+    // unavailable row
+    await expect(rows.nth(2).locator("td").nth(0)).toHaveText("empty.example");
+    await expect(rows.nth(2).locator("td").nth(1)).toHaveText("0");
+    await expect(rows.nth(2).locator(".badge")).toHaveCount(0);
 
     // One read-only badge (n1's rspamd.com) and one unavailable badge
     // (n1's down.example) — no badges for n2
@@ -105,28 +117,28 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
     await expect(rows.nth(0).locator(".badge")).toHaveText("read-only");
     await expect(rows.nth(0).locator(".badge"))
         .toHaveAttribute("title", "Storage is read-only: it cannot be learned to");
-    await expect(rows.nth(2).locator(".badge")).toHaveText("unavailable");
-    await expect(rows.nth(2).locator(".badge")).toHaveAttribute("title",
+    await expect(rows.nth(3).locator(".badge")).toHaveText("unavailable");
+    await expect(rows.nth(3).locator(".badge")).toHaveAttribute("title",
         "No reply to the statistics query; the storage may be down, rate-limited or access denied");
 
     // The configured-but-unreported rule keeps its config tooltip and
     // renders "-" instead of a count
-    await expect(rows.nth(2).locator("td").nth(0)).toHaveAttribute("title",
+    await expect(rows.nth(3).locator("td").nth(0)).toHaveAttribute("title",
         "Servers: fuzzy9.example.com:11335\nSymbols:\nRW_BL_2 (2)");
-    await expect(rows.nth(2).locator("td").nth(1)).toHaveText("-");
+    await expect(rows.nth(3).locator("td").nth(1)).toHaveText("-");
 
     // n1: unified servers list plus the symbol/flag mapping in the tooltip
     await expect(rows.nth(0).locator("td").nth(1)).toHaveAttribute("title",
         "Servers: fuzzy1.rspamd.com:11335\nSymbols:\nFUZZY_DENIED (1)\nFUZZY_PROB (2)");
 
     // n2: its own split read/write lists and flags — no cross-server mixing
-    await expect(rows.nth(3).locator("td").nth(1)).toHaveAttribute("title",
+    await expect(rows.nth(4).locator("td").nth(1)).toHaveAttribute("title",
         "Read: 127.0.0.1:11335\nWrite: 10.0.0.1:11335\nSymbols:\nFUZZY_DENIED (5)");
 
     // Raw, copyable counts — no locale formatting
     await expect(rows.nth(0).locator("td").nth(2)).toHaveText("1234567");
     await expect(rows.nth(1).locator("td").nth(1)).toHaveText("7");
-    await expect(rows.nth(3).locator("td").nth(2)).toHaveText("42");
+    await expect(rows.nth(4).locator("td").nth(2)).toHaveText("42");
 
     // Header tooltips, as in the bayes table
     const headers = page.locator("#fuzzyTable thead th");

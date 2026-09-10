@@ -1673,8 +1673,11 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		}
 
 		if (cmd->cmd == FUZZY_STAT) {
-			/* Store approximation (if needed) */
-			result.v1.prob = session->ctx->stat.fuzzy_hashes;
+			/* prob merely signals success: the count is carried by value and
+			 * flag below. Encoding the count in prob made an empty storage
+			 * (count 0) indistinguishable from an error reply for
+			 * clients guarding on prob > 0.5 */
+			result.v1.prob = 1.0f;
 			/* Store high qword in value and low qword in flag */
 			result.v1.value = (int32_t) ((uint64_t) session->ctx->stat.fuzzy_hashes >> 32);
 			result.v1.flag = (uint32_t) (session->ctx->stat.fuzzy_hashes & G_MAXUINT32);
