@@ -86,11 +86,13 @@ TEST_SUITE("lru_hash")
 		}
 
 		/*
-		 * The cap is soft: eviction is probabilistic and the candidate pool
-		 * is rebuilt after every rehash, so the table can sit a few entries
-		 * above maxsize. It must stay in that neighbourhood though
+		 * The cap is soft in both directions: eviction fires as soon as an
+		 * insertion reaches maxsize, so the steady state is maxsize - 1, and
+		 * it is probabilistic with the candidate pool rebuilt after every
+		 * rehash, so the table can also sit a few entries above maxsize. It
+		 * must stay in that neighbourhood though
 		 */
-		CHECK(rspamd_lru_hash_size(h) >= 32);
+		CHECK(rspamd_lru_hash_size(h) >= 32 - 1);
 		CHECK(rspamd_lru_hash_size(h) < 32 + 16);
 		CHECK(destroyed_values == 200 - (int) rspamd_lru_hash_size(h));
 
@@ -113,7 +115,7 @@ TEST_SUITE("lru_hash")
 			rspamd_lru_hash_insert(h, (gpointer) keys[i].c_str(), (gpointer) keys[i].c_str(), -1, 0);
 		}
 		/* Same soft cap semantics as the sized constructor */
-		CHECK(rspamd_lru_hash_size(h) >= 64);
+		CHECK(rspamd_lru_hash_size(h) >= 64 - 1);
 		CHECK(rspamd_lru_hash_size(h) < 64 + 16);
 		rspamd_lru_hash_destroy(h);
 	}
