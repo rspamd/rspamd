@@ -1416,3 +1416,79 @@ def validate_attachments_have_content_type(data):
         if 'content_type' in att and att['content_type']:
             count += 1
     return count
+
+
+def validate_multipart_email(status_text):
+    """Parse the DATA portion of a dummy_smtp 'sink' status file as a MIME
+    message and summarize its top-level multipart structure for assertions.
+
+    Returns a dict: is_multipart, content_type, subtype, part_count,
+    mime_version, message_id, and parts (list of dicts with content_type,
+    cte, disposition, filename - RFC 2231 parameters are decoded by email).
+    A nested multipart part (e.g. a multipart/alternative group inside a
+    multipart/mixed message) is summarized as {content_type, subtype,
+    subparts: [...]} instead of decoded_text/decoded_length/decoded_sha256.
+
+    Example:
+    | ${info} = | Validate Multipart Email | ${smtp_status} |
+    """
+    import email
+    import email.policy
+    import hashlib
+
+    def summarize_part(part):
+        if part.is_multipart():
+            subparts = [summarize_part(p) for p in part.get_payload()]
+            return {
+                'content_type': part.get_content_type(),
+                'subtype': part.get_content_subtype(),
+                'part_count': len(subparts),
+                'subparts': subparts,
+            }
+        decoded = part.get_payload(decode=True) or b''
+        decoded_text = ''
+        if part.get_content_maintype() == 'text':
+            decoded_text = decoded.decode(part.get_content_charset() or 'utf-8')
+        return {
+            'content_type': part.get_content_type(),
+            'cte': part.get('Content-Transfer-Encoding', ''),
+            'disposition': part.get('Content-Disposition', ''),
+            'filename': part.get_filename(),
+            'decoded_text': decoded_text,
+            'decoded_length': len(decoded),
+            'decoded_sha256': hashlib.sha256(decoded).hexdigest(),
+        }
+
+    lines = status_text.splitlines()
+    try:
+        idx = lines.index('MESSAGE')
+    except ValueError:
+        raise Exception('No MESSAGE marker found in SMTP status file')
+
+    raw_message = '\n'.join(lines[idx + 1:])
+    msg = email.message_from_bytes(
+        raw_message.encode('utf-8'), policy=email.policy.compat32)
+
+    parts = []
+    if msg.is_multipart():
+        for part in msg.get_payload():
+            parts.append(summarize_part(part))
+
+    return {
+        'is_multipart': msg.is_multipart(),
+        'content_type': msg.get_content_type(),
+        'subtype': msg.get_content_subtype(),
+        'part_count': len(parts),
+        'parts': parts,
+        'mime_version': msg.get('MIME-Version'),
+        'message_id': msg.get('Message-Id'),
+        # Only the wrapper's own Content-Type belongs at top level; the
+        # template's Content-Type, if any, moves onto its own part instead
+        'content_type_header_count': len(msg.get_all('Content-Type') or []),
+        'cte_header_count': len(
+            msg.get_all('Content-Transfer-Encoding') or []),
+        # RFC 5322 caps a line at 998 octets; long parameters must be folded
+        'max_line_length': max(
+            (len(line.encode('utf-8')) for line in raw_message.splitlines()),
+            default=0),
+    }

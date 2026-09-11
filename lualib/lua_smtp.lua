@@ -122,13 +122,72 @@ local function sendmail(opts, message, callback)
           return msg
         end
 
+        -- RFC 5321 4.5.2 transparency: a line starting with '.' is transmitted
+        -- with an extra leading '.', which the receiver strips. Without this a
+        -- lone '.' line in the body would end the DATA phase early and
+        -- truncate the message. Runs after CRLF normalization, so every line
+        -- is known to end in CRLF.
+        -- `at_line_start` carries line state across chunks of a split message
+        -- so a '.' at the head of a chunk is only stuffed when the previous
+        -- chunk actually ended a line.
+        local function dot_stuff(msg, at_line_start)
+          local mtype = type(msg)
+          local len
+
+          if mtype == 'userdata' then
+            len = msg:len()
+          elseif mtype == 'string' then
+            len = #msg
+          else
+            return msg, at_line_start
+          end
+
+          if len == 0 then
+            return msg, at_line_start
+          end
+
+          -- Matching on LF alone also covers CRLF, so stuffing stays correct
+          -- even if the content reaches us with mixed line endings
+          local leading_dot, embedded_dot
+          if mtype == 'userdata' then
+            -- len/at/find inspect the text in place; only stuffing copies it
+            leading_dot = at_line_start and msg:at(1) == 46
+            embedded_dot = msg:find('\n.') ~= nil
+          else
+            leading_dot = at_line_start and string.sub(msg, 1, 1) == '.'
+            embedded_dot = string.find(msg, '\n.', 1, true) ~= nil
+          end
+
+          local ends_line
+          if mtype == 'userdata' then
+            ends_line = msg:at(len) == 10
+          else
+            ends_line = string.sub(msg, -1) == '\n'
+          end
+
+          if not leading_dot and not embedded_dot then
+            return msg, ends_line
+          end
+
+          local str = mtype == 'userdata' and msg:str() or msg
+          str = string.gsub(str, '\n%.', '\n..')
+          if leading_dot then
+            str = '.' .. str
+          end
+
+          return str, ends_line
+        end
+
         if type(message) == 'string' or type(message) == 'userdata' then
           message = normalize_to_crlf(message)
+          message = dot_stuff(message, true)
           conn:add_write(pre_quit_cb, { message, CRLF .. '.' .. CRLF })
         else
           -- Array of chunks
+          local at_line_start = true
           for i = 1, #message do
             message[i] = normalize_to_crlf(message[i])
+            message[i], at_line_start = dot_stuff(message[i], at_line_start)
           end
           table.insert(message, CRLF .. '.' .. CRLF)
           conn:add_write(pre_quit_cb, message)
@@ -181,23 +240,80 @@ local function sendmail(opts, message, callback)
         conn:add_read(from_done_cb, CRLF)
       end
     end
-    local function hello_done_cb(merr, mdata)
-      if no_error_read(merr, mdata) then
-        stage = 'from'
-        conn:add_write(from_cb, string.format(
-            'MAIL FROM: <%s>%s', opts.from, CRLF))
-      end
+    local supports_8bitmime = false
+
+    local function send_mail_from()
+      stage = 'from'
+      local mail_params = supports_8bitmime and ' BODY=8BITMIME' or ''
+      conn:add_write(from_cb, string.format(
+          'MAIL FROM: <%s>%s%s', opts.from, mail_params, CRLF))
     end
 
-    -- HELO stage
-    local function hello_cb(merr)
+    -- HELO stage (fallback used when EHLO is rejected or unsupported)
+    local function helo_done_cb(merr, mdata)
+      if no_error_read(merr, mdata) then
+        send_mail_from()
+      end
+    end
+    local function helo_cb(merr)
       if no_error_write(merr) then
-        conn:add_read(hello_done_cb, CRLF)
+        conn:add_read(helo_done_cb, CRLF)
+      end
+    end
+    local function send_helo()
+      stage = 'helo'
+      supports_8bitmime = false
+      conn:add_write(helo_cb, string.format('HELO %s%s',
+          opts.helo, CRLF))
+    end
+
+    -- EHLO stage
+    local ehlo_done_cb
+    local ehlo_ok = true
+    ehlo_done_cb = function(merr, mdata)
+      if merr then
+        callback(false, string.format('error on stage %s: %s',
+            stage, merr))
+        if conn then
+          conn:close()
+        end
+        return
+      end
+      if type(mdata) ~= 'string' then
+        mdata = tostring(mdata)
+      end
+      local code, sep = string.match(mdata, '^(%d%d%d)([ %-])')
+      if not code then
+        callback(false, string.format('bad smtp response on stage %s: "%s"',
+            stage, mdata))
+        if conn then
+          conn:close()
+        end
+        return
+      end
+      if string.sub(code, 1, 1) ~= '2' then
+        ehlo_ok = false
+      end
+      local capability = string.match(mdata, '^%d%d%d[ %-]%s*([%w][%w-]*)')
+      if capability and string.upper(capability) == '8BITMIME' then
+        supports_8bitmime = true
+      end
+      if sep == '-' then
+        conn:add_read(ehlo_done_cb, CRLF)
+      elseif ehlo_ok then
+        send_mail_from()
+      else
+        send_helo()
+      end
+    end
+    local function ehlo_cb(merr)
+      if no_error_write(merr) then
+        conn:add_read(ehlo_done_cb, CRLF)
       end
     end
     if no_error_read(err, data) then
-      stage = 'helo'
-      conn:add_write(hello_cb, string.format('HELO %s%s',
+      stage = 'ehlo'
+      conn:add_write(ehlo_cb, string.format('EHLO %s%s',
           opts.helo, CRLF))
     end
   end
@@ -209,6 +325,12 @@ local function sendmail(opts, message, callback)
   local tcp_opts = lua_util.shallowcopy(opts)
   tcp_opts.stop_pattern = CRLF
   tcp_opts.timeout = opts.timeout or default_timeout
+  -- Opt into per-phase timeouts so EHLO (and a HELO fallback retry) can't
+  -- eat into the budget later stages (RCPT/DATA/QUIT) need; otherwise a
+  -- single non-renewed budget is deducted across the whole transaction.
+  tcp_opts.connect_timeout = opts.connect_timeout or tcp_opts.timeout
+  tcp_opts.read_timeout = opts.read_timeout or tcp_opts.timeout
+  tcp_opts.write_timeout = opts.write_timeout or tcp_opts.timeout
   tcp_opts.callback = mail_cb
 
   if not rspamd_tcp.request(tcp_opts) then

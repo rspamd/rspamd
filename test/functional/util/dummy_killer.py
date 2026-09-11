@@ -11,7 +11,14 @@ def setup_killer(server, method = None):
         method = default_method
 
     def alarm_handler(signum, frame):
-        method()
+        try:
+            method()
+        finally:
+            # Closing the socket here can race with an in-flight
+            # serve_forever() select/epoll loop on the same fd, which then
+            # busy-spins instead of exiting (the closed fd keeps reporting
+            # ready). Force an immediate exit so we never spin.
+            os._exit(0)
 
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.signal(signal.SIGTERM, alarm_handler)
