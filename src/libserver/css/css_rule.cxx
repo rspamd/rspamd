@@ -240,9 +240,16 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 								   css_parser_token::number_percent))) {
 					/*
 					 * In the `font` shorthand a unitless number is the weight
-					 * or the line-height, never the size
+					 * or the line-height, never the size. Zero is the
+					 * exception: it is a valid length in every mode, cannot
+					 * be a weight, and `font: 0 ...` renders text invisible
 					 */
-					return std::nullopt;
+					auto is_zero = std::holds_alternative<float>(tok.value) &&
+								   std::get<float>(tok.value) == 0.0f;
+
+					if (!is_zero) {
+						return std::nullopt;
+					}
 				}
 
 				return css_value::maybe_dimension_from_number(tok);
@@ -767,6 +774,9 @@ TEST_SUITE("css")
 			"clip-path:circle(0)",
 			/* visibility:collapse */
 			"visibility:collapse",
+			/* unitless zero size in the font shorthand */
+			"font:0 Arial",
+			"font:400 0/1.5 Arial",
 			/* Tiny font */
 			"font-size:1px",
 			"font-size:2px",
@@ -839,6 +849,11 @@ TEST_SUITE("css")
 			{"font:italic 400 12pt/2 Arial", 16},
 			{"font:1px/1.5 Arial", 1},
 			{"font:400 0px/1.5 Arial", 0},
+			/* A unitless zero is the one unitless size the shorthand allows */
+			{"font:0 Arial", 0},
+			{"font:400 0/1.5 Arial", 0},
+			{"font:bold 0/16px Arial", 0},
+			{"font:16px/0 Arial", 16},
 		};
 
 		for (const auto &c: cases) {
