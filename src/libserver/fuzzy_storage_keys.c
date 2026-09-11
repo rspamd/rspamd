@@ -166,6 +166,86 @@ void ucl_keymap_dtor_cb(struct map_cb_data *data)
 	}
 }
 
+unsigned int
+fuzzy_key_max_ips(const struct rspamd_fuzzy_storage_ctx *ctx,
+				  const struct fuzzy_key *key)
+{
+	if (key->max_ips >= 0) {
+		return (unsigned int) key->max_ips;
+	}
+
+	if (key == ctx->default_key) {
+		return 0;
+	}
+
+	return ctx->max_ips_per_key;
+}
+
+struct fuzzy_key_stat *
+fuzzy_key_stat_get_ip(struct fuzzy_key_stat *st,
+					  unsigned int max_ips,
+					  const rspamd_inet_addr_t *addr,
+					  double now)
+{
+	struct fuzzy_key_stat *ip_stat;
+
+	if (st->last_ips == NULL) {
+		if (max_ips == 0 || st->ips_overflow) {
+			/* Per-source stats are disabled for this key */
+			return NULL;
+		}
+
+		st->last_ips = rspamd_lru_hash_new_sized(max_ips,
+												 FUZZY_KEY_IPS_INITIAL_SIZE,
+												 (GDestroyNotify) rspamd_inet_address_free,
+												 fuzzy_key_stat_unref,
+												 rspamd_inet_address_hash,
+												 rspamd_inet_address_equal);
+	}
+
+	ip_stat = rspamd_lru_hash_lookup(st->last_ips, addr, -1);
+
+	if (ip_stat != NULL) {
+		return ip_stat;
+	}
+
+	/*
+	 * New source. The LRU evicts as soon as an insertion reaches its cap, so
+	 * a table holding cap - 1 entries is effectively full and this insertion
+	 * will push another source out; count those per window and give up on
+	 * the table when the churn shows it cannot hold the key's population
+	 */
+	if (rspamd_lru_hash_size(st->last_ips) + 1 >= rspamd_lru_hash_capacity(st->last_ips)) {
+		if (st->ips_window_start == 0.0 ||
+			now > st->ips_window_start + FUZZY_KEY_IPS_OVERFLOW_WINDOW) {
+			st->ips_window_start = now;
+			st->ips_inserted_window = 0;
+		}
+
+		st->ips_inserted_window++;
+
+		if (st->ips_inserted_window >
+			(uint64_t) FUZZY_KEY_IPS_OVERFLOW_FACTOR * rspamd_lru_hash_capacity(st->last_ips)) {
+			/* Sessions in flight hold their own references to the values */
+			rspamd_lru_hash_destroy(st->last_ips);
+			st->last_ips = NULL;
+			st->ips_overflow = true;
+			st->ips_inserted++;
+
+			return NULL;
+		}
+	}
+
+	rspamd_inet_addr_t *naddr = rspamd_inet_address_copy(addr, NULL);
+
+	ip_stat = g_malloc0(sizeof(*ip_stat));
+	REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
+	rspamd_lru_hash_insert(st->last_ips, naddr, ip_stat, -1, 0);
+	st->ips_inserted++;
+
+	return ip_stat;
+}
+
 void fuzzy_key_stat_dtor(gpointer p)
 {
 	struct fuzzy_key_stat *st = p;
@@ -296,17 +376,15 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 	key->key = kp;
 	struct fuzzy_key_stat *keystat = g_malloc0(sizeof(*keystat));
 	REF_INIT_RETAIN(keystat, fuzzy_key_stat_dtor);
-	/* Hash of ip -> fuzzy_key_stat */
-	keystat->last_ips = rspamd_lru_hash_new_full(1024,
-												 (GDestroyNotify) rspamd_inet_address_free,
-												 fuzzy_key_stat_unref,
-												 rspamd_inet_address_hash, rspamd_inet_address_equal);
+	/* ip -> fuzzy_key_stat table is created lazily by fuzzy_key_stat_get_ip */
+	keystat->last_ips = NULL;
 	key->stat = keystat;
 	key->flags_stat = kh_init(fuzzy_key_flag_stat);
 	key->burst = NAN;
 	key->rate = NAN;
 	key->expire = NAN;
 	key->rl_bucket = NULL;
+	key->max_ips = -1;
 	/* Allow read by default */
 	key->flags = FUZZY_KEY_READ;
 	/* Preallocate some space for flags */
@@ -417,6 +495,18 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 		const ucl_object_t *name = ucl_object_lookup(extensions, "name");
 		if (name && ucl_object_type(name) == UCL_STRING) {
 			key->name = g_strdup(ucl_object_tostring(name));
+		}
+
+		const ucl_object_t *max_ips = ucl_object_lookup(extensions, "max_ips");
+		if (max_ips) {
+			if ((ucl_object_type(max_ips) == UCL_INT || ucl_object_type(max_ips) == UCL_FLOAT) &&
+				ucl_object_toint(max_ips) >= 0) {
+				key->max_ips = ucl_object_toint(max_ips);
+			}
+			else {
+				msg_warn_config("invalid max_ips for keypair %*bs: must be a non-negative integer",
+								(int) crypto_box_publickeybytes(), pk);
+			}
 		}
 
 		/* Check permissions */

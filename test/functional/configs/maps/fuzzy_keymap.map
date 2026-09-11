@@ -13,4 +13,7 @@
     type = "kex";
     algorithm = "curve25519";
     encoding = "base32";
+    extensions = {
+        max_ips = 0;
+    }
 }]

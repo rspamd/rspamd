@@ -56,6 +56,16 @@ rspamd_fuzzy_storage_stat_key(const struct fuzzy_key_stat *key_stat)
 	ucl_object_insert_key(res, ucl_object_fromint(key_stat->errors),
 						  "errors", 0, false);
 
+	if (key_stat->ips_inserted > 0) {
+		ucl_object_insert_key(res, ucl_object_fromint(key_stat->ips_inserted),
+							  "ips_inserted", 0, false);
+	}
+
+	if (key_stat->ips_overflow) {
+		ucl_object_insert_key(res, ucl_object_frombool(true),
+							  "ips_overflow", 0, false);
+	}
+
 	return res;
 }
 

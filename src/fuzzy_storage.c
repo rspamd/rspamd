@@ -1324,7 +1324,6 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	struct fuzzy_peer_request *up_req;
 	struct fuzzy_key_stat *ip_stat = NULL;
 	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
-	rspamd_inet_addr_t *naddr;
 	gpointer ptr;
 	gsize up_len = 0;
 	int send_flags = 0;
@@ -1469,19 +1468,14 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	}
 
 	if (session->key && session->addr) {
-		ip_stat = rspamd_lru_hash_lookup(session->key->stat->last_ips,
-										 session->addr, -1);
+		ip_stat = fuzzy_key_stat_get_ip(session->key->stat,
+										fuzzy_key_max_ips(session->ctx, session->key),
+										session->addr, session->timestamp);
 
-		if (ip_stat == NULL) {
-			naddr = rspamd_inet_address_copy(session->addr, NULL);
-			ip_stat = g_malloc0(sizeof(*ip_stat));
-			REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
-			rspamd_lru_hash_insert(session->key->stat->last_ips,
-								   naddr, ip_stat, -1, 0);
+		if (ip_stat) {
+			REF_RETAIN(ip_stat);
+			session->ip_stat = ip_stat;
 		}
-
-		REF_RETAIN(ip_stat);
-		session->ip_stat = ip_stat;
 	}
 	else if (session->addr) {
 		/*
@@ -1492,27 +1486,17 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			struct fuzzy_key_stat *unkeyed = g_malloc0(sizeof(*unkeyed));
 
 			REF_INIT_RETAIN(unkeyed, fuzzy_key_stat_dtor);
-			unkeyed->last_ips = rspamd_lru_hash_new_full(1024,
-														 (GDestroyNotify) rspamd_inet_address_free,
-														 fuzzy_key_stat_unref,
-														 rspamd_inet_address_hash,
-														 rspamd_inet_address_equal);
 			session->ctx->unkeyed_stat = unkeyed;
 		}
 
-		ip_stat = rspamd_lru_hash_lookup(session->ctx->unkeyed_stat->last_ips,
-										 session->addr, -1);
+		ip_stat = fuzzy_key_stat_get_ip(session->ctx->unkeyed_stat,
+										session->ctx->max_ips_per_key, session->addr,
+										session->timestamp);
 
-		if (ip_stat == NULL) {
-			naddr = rspamd_inet_address_copy(session->addr, NULL);
-			ip_stat = g_malloc0(sizeof(*ip_stat));
-			REF_INIT_RETAIN(ip_stat, fuzzy_key_stat_dtor);
-			rspamd_lru_hash_insert(session->ctx->unkeyed_stat->last_ips,
-								   naddr, ip_stat, -1, 0);
+		if (ip_stat) {
+			REF_RETAIN(ip_stat);
+			session->ip_stat = ip_stat;
 		}
-
-		REF_RETAIN(ip_stat);
-		session->ip_stat = ip_stat;
 	}
 
 	/*
@@ -3010,6 +2994,7 @@ init_fuzzy(struct rspamd_config *cfg)
 	ctx->magic = rspamd_fuzzy_storage_magic;
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
+	ctx->max_ips_per_key = FUZZY_KEY_DEFAULT_MAX_IPS;
 	ctx->keys = kh_init(rspamd_fuzzy_keys_hash);
 	rspamd_mempool_add_destructor(cfg->cfg_pool,
 								  (rspamd_mempool_destruct_t) fuzzy_hash_table_dtor, ctx->keys);
@@ -3148,6 +3133,16 @@ init_fuzzy(struct rspamd_config *cfg)
 													  keypair_cache_size),
 									  RSPAMD_CL_FLAG_UINT,
 									  "Size of keypairs cache, default: " G_STRINGIFY(DEFAULT_KEYPAIR_CACHE_SIZE));
+
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_ips_per_key",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_fuzzy_storage_ctx,
+													  max_ips_per_key),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Per-source stats kept for each key except the default one, which tracks none unless its max_ips extension says otherwise (0 disables), default: " G_STRINGIFY(FUZZY_KEY_DEFAULT_MAX_IPS));
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,

@@ -32,6 +32,9 @@ local function add_data(target, src)
       else
         target[k] = v
       end
+    elseif k == 'ips_overflow' then
+      -- Sticky across workers: one worker giving up is enough to report it
+      target.ips_overflow = target.ips_overflow or v
     elseif k == 'ips' then
       if not target['ips'] then
         target['ips'] = {}
@@ -335,6 +338,11 @@ return function(args, res)
         end
 
         print_stat(key_stat, '\t')
+
+        if key_stat.ips_overflow then
+          print('')
+          print('\tIPs stat: disabled, too many distinct sources for the per-key table')
+        end
 
         if key_stat['ips'] and not opts['no_ips'] then
           print('')
