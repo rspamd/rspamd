@@ -3192,13 +3192,19 @@ auto html_process_input(struct rspamd_task *task,
 
 			for (const auto *cld_tag: tag->children) {
 
-				if (cld_tag->block) {
-					cld_tag->block->propagate_block(*tag->block);
-				}
-				else {
+				if (!cld_tag->block) {
+					/*
+					 * Tags normally get a block while parsing (from the style
+					 * attribute or an empty one). Should one arrive here
+					 * without it, inherit through propagation rather than a
+					 * copy: a copy would carry the parent's `set` masks, and a
+					 * stylesheet rule merged into the child later could not
+					 * override what the parent set inline
+					 */
 					cld_tag->block = rspamd_mempool_alloc0_type(pool, html_block);
-					*cld_tag->block = *tag->block;
 				}
+
+				cld_tag->block->propagate_block(*tag->block);
 			}
 		}
 		return true;
