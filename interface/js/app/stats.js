@@ -36,6 +36,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         }
 
         let rowspanHoverHandlersInitialized = false;
+        let checkFuzzyHandlerInitialized = false;
 
         // Parse JSON, returning {} for an empty body or a non-JSON response
         // (jQuery without dataType hands non-JSON bodies to success as raw text;
@@ -92,6 +93,13 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         const fuzzyStorages = new Map();
         let fuzzyStoragesSig = null;
         let fuzzyStoragesFetching = false;
+
+        // Per-neighbour fuzzy storages liveness from plugins/fuzzy/status
+        // (rule name -> [{name, ok, latency, error}]), probed at the same
+        // rare cadence as the storages config; absent when the endpoint is
+        // unavailable (older rspamd)
+        const fuzzyStatus = new Map(); // neighbour -> {checked, storages}
+        let fuzzyStatusProbing = false;
 
         // @ ms to latency string
         function formatLatency(ms) {
@@ -966,22 +974,61 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 });
             }
 
+            // One address per line with its liveness mark when the status
+            // probe has answered, the compact single-line join otherwise
+            // (older rspamd, probe in flight or failed)
+            function serverListLines(label, addrs, byName) {
+                if (!byName) return [label + " " + addrs.join(", ")];
+                const lines = [label];
+                addrs.forEach((addr) => {
+                    const st = byName.get(addr);
+                    if (!st) {
+                        lines.push(addr);
+                    } else if (st.ok) {
+                        lines.push(addr + " - ok (" + formatLatency(st.latency) + ")");
+                    } else {
+                        lines.push(addr + " - fail (" + (st.error || "unknown error") + ")");
+                    }
+                });
+                return lines;
+            }
+
             // Combined tooltip for a fuzzy storage cell: server addresses
-            // and the symbol/flag mapping, one item per line. Empty sections
-            // are omitted (an SRV-configured rule may report no addresses
-            // yet right after a configuration load).
-            function fuzzyStorageTitle(info) {
+            // (with per-server liveness marks when known) and the symbol/flag
+            // mapping, one item per line. Empty sections are omitted (an
+            // SRV-configured rule may report no addresses yet right after a
+            // configuration load).
+            function fuzzyStorageTitle(info, statusInfo, ruleName) {
                 const lines = [];
                 const read = info.servers || info.read_servers;
                 const write = info.write_servers;
+                const rule = statusInfo?.storages?.[ruleName];
+                // An empty result set is no status (e.g. no pingable servers
+                // at probe time): keep the compact format without marks
+                const byName = (rule && rule.servers && rule.servers.length)
+                    ? new Map(rule.servers.map((server) => [server.name, server]))
+                    : null;
                 if (Array.isArray(read) && read.length) {
-                    lines.push((Array.isArray(write) ? "Read: " : "Servers: ") + read.join(", "));
+                    lines.push(...serverListLines(Array.isArray(write) ? "Read:" : "Servers:", read, byName));
                 }
-                if (Array.isArray(write) && write.length) lines.push("Write: " + write.join(", "));
+                if (Array.isArray(write) && write.length) lines.push(...serverListLines("Write:", write, byName));
+                if (byName) lines.push("Checked: " + (relativeTime(statusInfo.checked) || "unknown"));
                 const flags = Object.entries(info.flags || {})
                     .map(([symbol, flag]) => `${symbol} (${flag})`);
                 if (flags.length) lines.push("Symbols:\n" + flags.join("\n"));
                 return lines.join("\n");
+            }
+
+            // Danger badge summarizing how many of the probed servers did
+            // not answer the ping; shown only when the liveness is known and
+            // some server failed (details in the tooltip)
+            function downBadge(statusInfo, ruleName) {
+                const probed = statusInfo?.storages?.[ruleName]?.servers;
+                if (!probed || !probed.length) return "";
+                const down = probed.filter((server) => !server.ok).length;
+                if (!down) return "";
+                return badge("text-bg-danger", down + "/" + probed.length + " down",
+                    down + " of " + probed.length + " servers did not answer the ping");
             }
 
             function addFuzzyStorage(server, storages, up) {
@@ -1005,6 +1052,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     return;
                 }
                 const rowsCount = entries.length + missing.length;
+                const statusInfo = fuzzyStatus.get(server);
 
                 function serverCellAt(i) {
                     if (i !== 0) return "";
@@ -1014,24 +1062,25 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 // storages keys
                 entries.forEach(([storage, hashes], i) => {
                     const info = ruleInfo?.[storage];
-                    const title = info ? fuzzyStorageTitle(info) : "";
+                    const title = info ? fuzzyStorageTitle(info, statusInfo, storage) : "";
                     const titleAttr = title ? ' title="' + common.escapeHTML(title) + '"' : "";
                     const roBadge = (info && info.read_only)
                         ? badge("text-bg-secondary", "read-only", "Storage is read-only: it cannot be learned to")
                         : "";
                     fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCellAt(i) +
-                        "<td" + titleAttr + ">" + common.escapeHTML(storage) + roBadge + "</td>" +
+                        "<td" + titleAttr + ">" + common.escapeHTML(storage) + roBadge +
+                        downBadge(statusInfo, storage) + "</td>" +
                         '<td class="text-end">' + hashes + "</td></tr>");
                 });
                 missing.forEach((storage, i) => {
                     const info = ruleInfo?.[storage];
-                    const title = info ? fuzzyStorageTitle(info) : "";
+                    const title = info ? fuzzyStorageTitle(info, statusInfo, storage) : "";
                     const titleAttr = title ? ' title="' + common.escapeHTML(title) + '"' : "";
                     fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCellAt(entries.length + i) +
                         "<td" + titleAttr + ">" + common.escapeHTML(storage) +
                         badge("text-bg-danger", "unavailable",
                             "No reply to the statistics query; the storage may be down, rate-limited or access denied") +
-                        "</td>" +
+                        downBadge(statusInfo, storage) + "</td>" +
                         '<td class="text-end">-</td></tr>');
                 });
             }
@@ -1055,10 +1104,67 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 attachRowspanHoverHandlers("#fuzzyTable");
                 rowspanHoverHandlersInitialized = true;
             }
+
+            if (!checkFuzzyHandlerInitialized) {
+                const checkBtn = document.getElementById("checkFuzzy");
+                // The probe re-renders through displayStatWidgets, so the
+                // two functions reference each other; the handler runs long
+                // after both declarations are hoisted
+                // eslint-disable-next-line no-use-before-define
+                if (checkBtn) checkBtn.addEventListener("click", probeFuzzyStatus);
+                checkFuzzyHandlerInitialized = true;
+            }
+        }
+
+        // Silent raw-XHR GET with the Password header, probeHealth-style:
+        // a failure is data, not an error. onload receives the xhr, or null
+        // on a network error or timeout
+        function probeNeighbour(neighbour, endpoint, onload) {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", neighbour.url + endpoint, true);
+            xhr.setRequestHeader("Password", common.getPassword());
+            const timeout = Math.min(common.getAjaxTimeout() || Infinity, 10000);
+            if (timeout > 0) xhr.timeout = timeout;
+            xhr.onload = () => onload(xhr);
+            xhr.onerror = () => onload(null);
+            xhr.ontimeout = () => onload(null);
+            xhr.send();
+        }
+
+        // On-demand liveness re-probe (the Check button in the fuzzy card):
+        // refetches the status of every up neighbour and re-renders
+        function probeFuzzyStatus() {
+            if (fuzzyStatusProbing) return;
+            const servers = JSON.parse(sessionStorage.getItem("Credentials") || "{}");
+            const up = Object.entries(servers)
+                .filter(([name, val]) => name !== "All SERVERS" && val.status)
+                .map(([name, val]) => ({name: name, url: val.url}));
+            if (!up.length) return;
+            fuzzyStatusProbing = true;
+            const btn = document.getElementById("checkFuzzy");
+            if (btn) btn.disabled = true;
+            let pending = up.length;
+            up.forEach((neighbour) => {
+                probeNeighbour(neighbour, "plugins/fuzzy/status", (xhr) => {
+                    if (xhr && xhr.status >= 200 && xhr.status < 300) {
+                        fuzzyStatus.set(neighbour.name, {
+                            checked: Date.now(),
+                            storages: parseJsonOrEmpty(xhr.responseText).storages || {}
+                        });
+                    } else {
+                        fuzzyStatus.delete(neighbour.name);
+                    }
+                    if (--pending) return;
+                    fuzzyStatusProbing = false;
+                    if (btn) btn.disabled = false;
+                    displayStatWidgets(common.getSelector("selSrv"));
+                });
+            });
         }
 
         // Fetch the per-neighbour fuzzy storages config (read_only, server
-        // addresses, symbol/flag mapping) for the fuzzy table. A silent raw
+        // addresses, symbol/flag mapping) and the per-server liveness
+        // (plugins/fuzzy/status) for the fuzzy table. A silent raw
         // probe per up neighbour, probeHealth-style: a failure is data, not
         // an error — older rspamd or fuzzy_check disabled just leaves the
         // table plain. Cached by a name:config_id:up signature over all
@@ -1077,35 +1183,55 @@ define(["app/common", "app/libft", "d3pie", "d3"],
             fuzzyStoragesSig = sig;
 
             const up = neighbours_status.filter((neighbour) => neighbour.status);
-            let pending = up.length;
-            if (!pending) {
+            if (!up.length) {
                 fuzzyStoragesFetching = false;
                 return;
             }
-            function settled() {
-                if (--pending) return;
-                fuzzyStoragesFetching = false;
+            // Independent settle counters per endpoint: the storages config
+            // renders as soon as it arrives, while the (up to a ping timeout
+            // slower) liveness marks re-render in a later pass
+            let pendingStorages = up.length;
+            let pendingStatus = up.length;
+
+            function renderAgain() {
                 if (cycleId !== statCycleId) return;
                 if (document.getElementById("status").classList.contains("active")) {
                     displayStatWidgets(checked_server);
                 }
             }
+
+            function storagesSettled() {
+                if (--pendingStorages) return;
+                if (!pendingStatus) fuzzyStoragesFetching = false;
+                renderAgain();
+            }
+
+            function statusSettled() {
+                if (--pendingStatus) return;
+                if (!pendingStorages) fuzzyStoragesFetching = false;
+                renderAgain();
+            }
+
             up.forEach((neighbour) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open("GET", neighbour.url + "plugins/fuzzy/storages", true);
-                xhr.setRequestHeader("Password", common.getPassword());
-                const timeout = Math.min(common.getAjaxTimeout() || Infinity, 10000);
-                if (timeout > 0) xhr.timeout = timeout;
-                xhr.onload = () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
+                probeNeighbour(neighbour, "plugins/fuzzy/storages", (xhr) => {
+                    if (xhr && xhr.status >= 200 && xhr.status < 300) {
                         fuzzyStorages.set(neighbour.name,
                             parseJsonOrEmpty(xhr.responseText).storages || {});
                     }
-                    settled();
-                };
-                xhr.onerror = settled;
-                xhr.ontimeout = settled;
-                xhr.send();
+                    storagesSettled();
+                });
+                probeNeighbour(neighbour, "plugins/fuzzy/status", (xhr) => {
+                    if (xhr && xhr.status >= 200 && xhr.status < 300) {
+                        fuzzyStatus.set(neighbour.name, {
+                            checked: Date.now(),
+                            storages: parseJsonOrEmpty(xhr.responseText).storages || {}
+                        });
+                    } else {
+                        // Stale marks must not survive a configuration change
+                        fuzzyStatus.delete(neighbour.name);
+                    }
+                    statusSettled();
+                });
             });
         }
 

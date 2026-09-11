@@ -328,6 +328,7 @@ static int fuzzy_lua_gen_hashes_handler(lua_State *L);
 static int fuzzy_lua_hex_hashes_handler(lua_State *L);
 static int fuzzy_lua_list_storages(lua_State *L);
 static int fuzzy_lua_ping_storage(lua_State *L);
+static int fuzzy_lua_ping_storage_all(lua_State *L);
 static int fuzzy_lua_check_storage(lua_State *L);
 
 module_t fuzzy_check_module = {
@@ -3115,6 +3116,9 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		lua_settable(L, -3);
 		lua_pushstring(L, "ping_storage");
 		lua_pushcfunction(L, fuzzy_lua_ping_storage);
+		lua_settable(L, -3);
+		lua_pushstring(L, "ping_storage_all");
+		lua_pushcfunction(L, fuzzy_lua_ping_storage_all);
 		lua_settable(L, -3);
 		lua_pushstring(L, "check");
 		lua_pushcfunction(L, fuzzy_lua_check_storage);
@@ -7438,6 +7442,8 @@ struct fuzzy_lua_session {
 	enum fuzzy_lua_session_mode mode;
 	int cbref;
 	int fd;
+	/* Borrowed from the upstream; NULL unless set by ping_storage_all */
+	const char *server_name;
 };
 
 static void
@@ -7450,6 +7456,9 @@ fuzzy_lua_session_fin(void *ud)
 	}
 
 	rspamd_ev_watcher_stop(session->task->event_loop, &session->ev);
+	if (session->fd != -1) {
+		close(session->fd);
+	}
 	luaL_unref(session->L, LUA_REGISTRYINDEX, session->cbref);
 }
 
@@ -7481,13 +7490,23 @@ fuzzy_lua_session_is_completed(struct fuzzy_lua_session *session)
 static void
 fuzzy_lua_push_result(struct fuzzy_lua_session *session, double latency)
 {
+	int nargs = 3;
+
 	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
 	lua_pushboolean(session->L, TRUE);
 	rspamd_lua_ip_push(session->L, session->addr);
 	lua_pushnumber(session->L, latency);
 
+	if (session->server_name != NULL) {
+		lua_pushstring(session->L, session->server_name);
+		nargs = 4;
+	}
+
 	/* TODO: check results maybe? */
-	lua_pcall(session->L, 3, 0, 0);
+	if (lua_pcall(session->L, nargs, 0, 0) != 0) {
+		msg_info("fuzzy lua result callback error: %s", lua_tostring(session->L, -1));
+		lua_pop(session->L, 1);
+	}
 }
 
 #ifdef __GNUC__
@@ -7499,6 +7518,7 @@ static void
 fuzzy_lua_push_error(struct fuzzy_lua_session *session, const char *err_fmt, ...)
 {
 	va_list v;
+	int nargs = 3;
 
 	va_start(v, err_fmt);
 	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
@@ -7507,8 +7527,16 @@ fuzzy_lua_push_error(struct fuzzy_lua_session *session, const char *err_fmt, ...
 	lua_pushvfstring(session->L, err_fmt, v);
 	va_end(v);
 
+	if (session->server_name != NULL) {
+		lua_pushstring(session->L, session->server_name);
+		nargs = 4;
+	}
+
 	/* TODO: check results maybe? */
-	lua_pcall(session->L, 3, 0, 0);
+	if (lua_pcall(session->L, nargs, 0, 0) != 0) {
+		msg_info("fuzzy lua error callback error: %s", lua_tostring(session->L, -1));
+		lua_pop(session->L, 1);
+	}
 }
 
 static void
@@ -7692,6 +7720,22 @@ fuzzy_lua_io_callback(int fd, short what, void *arg)
 	}
 }
 
+static struct fuzzy_rule *
+fuzzy_lua_find_rule(struct fuzzy_ctx *fuzzy_module_ctx, const char *rule_name)
+{
+	struct fuzzy_rule *rule;
+	int i;
+
+	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+	{
+		if (strcmp(rule->name, rule_name) == 0) {
+			return rule;
+		}
+	}
+
+	return NULL;
+}
+
 /***
  * @function fuzzy_check.ping_storage(task, callback, rule, timeout[, server_override])
  * @return
@@ -7710,18 +7754,8 @@ fuzzy_lua_ping_storage(lua_State *L)
 		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
 	}
 
-	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context(task->cfg);
-	struct fuzzy_rule *rule, *rule_found = NULL;
-	int i;
-	const char *rule_name = lua_tostring(L, 3);
-
-	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
-	{
-		if (strcmp(rule->name, rule_name) == 0) {
-			rule_found = rule;
-			break;
-		}
-	}
+	struct fuzzy_rule *rule_found =
+		fuzzy_lua_find_rule(fuzzy_get_context(task->cfg), lua_tostring(L, 3));
 
 	if (rule_found == NULL) {
 		return luaL_error(L, "invalid arguments: no such rule defined");
@@ -7784,7 +7818,7 @@ fuzzy_lua_ping_storage(lua_State *L)
 									  sizeof(struct fuzzy_lua_session));
 			session->task = task;
 			session->fd = sock;
-			session->addr = addr;
+			session->addr = rspamd_inet_address_copy(addr, task->task_pool);
 			session->commands = commands;
 			session->L = L;
 			session->rule = rule_found;
@@ -7806,6 +7840,157 @@ fuzzy_lua_ping_storage(lua_State *L)
 
 	lua_pushboolean(L, TRUE);
 	return 1;
+}
+
+struct fuzzy_lua_pingall_ctx {
+	struct rspamd_task *task;
+	lua_State *L;
+	struct fuzzy_rule *rule;
+	double timeout;
+	GPtrArray *seen;
+	unsigned int nresults;
+	gboolean kicked_resolve;
+};
+
+static void
+fuzzy_lua_pingall_upstream(struct upstream *up, unsigned int idx, void *ud)
+{
+	struct fuzzy_lua_pingall_ctx *ctx = ud;
+	const char *name = rspamd_upstream_name(up);
+	rspamd_inet_addr_t *addr;
+	GPtrArray *commands;
+	struct fuzzy_lua_session *session;
+	unsigned int i;
+	int sock;
+
+	(void) idx;
+
+	for (i = 0; i < ctx->seen->len; i++) {
+		if (strcmp(g_ptr_array_index(ctx->seen, i), name) == 0) {
+			/* Already pinged via the other servers list */
+			return;
+		}
+	}
+
+	g_ptr_array_add(ctx->seen, name);
+	/* The current address: no DNS and no rotation side effects; dead
+	 * upstreams are probed as well, showing them failing is the point */
+	addr = rspamd_upstream_addr_cur(up);
+
+	if (addr == NULL) {
+		/* e.g. a DNS name or an SRV member not resolved yet: kick the
+		 * asynchronous resolution once so the next probe can succeed */
+		if (!ctx->kicked_resolve) {
+			rspamd_upstream_reresolve(ctx->task->cfg->ups_ctx);
+			ctx->kicked_resolve = TRUE;
+		}
+		lua_pushvalue(ctx->L, 2);
+		lua_pushboolean(ctx->L, FALSE);
+		rspamd_lua_ip_push(ctx->L, NULL);
+		lua_pushfstring(ctx->L, "address not resolved for %s", name);
+		lua_pushstring(ctx->L, name);
+		if (lua_pcall(ctx->L, 4, 0, 0) != 0) {
+			msg_info("fuzzy lua unresolved callback error: %s", lua_tostring(ctx->L, -1));
+			lua_pop(ctx->L, 1);
+		}
+		ctx->nresults++;
+
+		return;
+	}
+
+	commands = fuzzy_generate_commands(ctx->task, ctx->rule, FUZZY_PING, 0, 0, 0);
+
+	if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
+		lua_pushvalue(ctx->L, 2);
+		lua_pushboolean(ctx->L, FALSE);
+		rspamd_lua_ip_push(ctx->L, addr);
+		lua_pushfstring(ctx->L, "cannot connect to %s, %s",
+						rspamd_inet_address_to_string_pretty(addr), strerror(errno));
+		lua_pushstring(ctx->L, name);
+		if (lua_pcall(ctx->L, 4, 0, 0) != 0) {
+			msg_info("fuzzy lua connect callback error: %s", lua_tostring(ctx->L, -1));
+			lua_pop(ctx->L, 1);
+		}
+		g_ptr_array_free(commands, TRUE);
+		ctx->nresults++;
+
+		return;
+	}
+
+	/* A dedicated ping session per server, as in fuzzy_lua_ping_storage.
+	 * Like there, the session tracks the address directly and not the
+	 * upstream, so the aliveness bookkeeping stays untouched */
+	session = rspamd_mempool_alloc0(ctx->task->task_pool, sizeof(struct fuzzy_lua_session));
+	session->task = ctx->task;
+	session->fd = sock;
+	/* Own copy: an upstream TTL refresh may replace the borrowed address */
+	session->addr = rspamd_inet_address_copy(addr, ctx->task->task_pool);
+	session->commands = commands;
+	session->L = ctx->L;
+	session->rule = ctx->rule;
+	session->server_name = name;
+	/* The absolute index 2 (the callback) stays valid while the stack grows */
+	lua_pushvalue(ctx->L, 2);
+	session->cbref = luaL_ref(ctx->L, LUA_REGISTRYINDEX);
+
+	rspamd_session_add_event_full(ctx->task->s, fuzzy_lua_session_fin, session, M,
+								  ctx->rule->name);
+	rspamd_ev_watcher_init(&session->ev, sock, EV_WRITE, fuzzy_lua_io_callback, session);
+	rspamd_ev_watcher_start(session->task->event_loop, &session->ev, ctx->timeout);
+	ctx->nresults++;
+}
+
+/***
+ * @function fuzzy_check.ping_storage_all(task, callback, rule, timeout)
+ * Pings every configured server of the rule (the deduplicated union of the
+ * read and write lists) using each upstream's current address. The callback
+ * is invoked exactly once per server as (success, server_ip,
+ * latency_or_error, server_name); server_ip is nil when no address is
+ * resolved. Returns (true, n) where n is the number of results to expect.
+ */
+static int
+fuzzy_lua_ping_storage_all(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments: task");
+	}
+
+	if (lua_type(L, 2) != LUA_TFUNCTION || lua_type(L, 3) != LUA_TSTRING || lua_type(L, 4) != LUA_TNUMBER) {
+		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
+	}
+
+	struct fuzzy_rule *rule_found =
+		fuzzy_lua_find_rule(fuzzy_get_context(task->cfg), lua_tostring(L, 3));
+
+	if (rule_found == NULL) {
+		return luaL_error(L, "invalid arguments: no such rule defined");
+	}
+
+	struct fuzzy_lua_pingall_ctx ctx;
+
+	ctx.task = task;
+	ctx.L = L;
+	ctx.rule = rule_found;
+	ctx.timeout = lua_tonumber(L, 4);
+	ctx.seen = g_ptr_array_new();
+	ctx.nresults = 0;
+	ctx.kicked_resolve = FALSE;
+
+	rspamd_upstreams_foreach(rule_found->read_servers, fuzzy_lua_pingall_upstream, &ctx);
+
+	if (rule_found->write_servers != rule_found->read_servers) {
+		rspamd_upstreams_foreach(rule_found->write_servers, fuzzy_lua_pingall_upstream, &ctx);
+	}
+
+	/* Borrows const char * only: without a free function installed the
+	 * pointees are not touched */
+	g_ptr_array_free(ctx.seen, TRUE);
+	lua_pushboolean(L, TRUE);
+	lua_pushinteger(L, ctx.nresults);
+
+	return 2;
 }
 
 /***
@@ -7830,18 +8015,8 @@ fuzzy_lua_check_storage(lua_State *L)
 		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
 	}
 
-	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context(task->cfg);
-	struct fuzzy_rule *rule, *rule_found = NULL;
-	int i;
-	const char *rule_name = lua_tostring(L, 3);
-
-	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
-	{
-		if (strcmp(rule->name, rule_name) == 0) {
-			rule_found = rule;
-			break;
-		}
-	}
+	struct fuzzy_rule *rule_found =
+		fuzzy_lua_find_rule(fuzzy_get_context(task->cfg), lua_tostring(L, 3));
 
 	if (rule_found == NULL) {
 		return luaL_error(L, "invalid arguments: no such rule defined");
@@ -7942,7 +8117,7 @@ fuzzy_lua_check_storage(lua_State *L)
 								  sizeof(struct fuzzy_lua_session));
 		session->task = task;
 		session->fd = sock;
-		session->addr = addr;
+		session->addr = rspamd_inet_address_copy(addr, task->task_pool);
 		session->commands = commands;
 		session->L = L;
 		session->rule = rule_found;
