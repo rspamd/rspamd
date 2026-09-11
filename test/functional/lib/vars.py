@@ -28,10 +28,15 @@ def _worker_index():
        xargs / GNU parallel invocations or CI shards.
     2. PABOTEXECUTIONPOOLID env var -- future pabot versions may export it
        (5.2.2 does not, but we cheaply opt in if it ever shows up).
-    3. File-based slot claim. Each process atomically grabs the first free
-       /tmp/rspamd-functional.slot-<N> with O_CREAT|O_EXCL and unlinks on
-       exit. This is the path pabot 5.2.2 takes -- workers get unique
-       stable indices for their lifetime without any pabot cooperation.
+    3. File-based slot claim. Each process grabs the first free
+       /tmp/rspamd-functional.slot-<N> and unlinks it on exit. This is the
+       path pabot 5.2.2 takes -- workers get unique stable indices for
+       their lifetime without any pabot cooperation. A slot is claimed by
+       hard-linking a file that already holds our PID into place, which
+       is atomic and never leaves an empty slot behind: with create-then-
+       write, a second claimer could read the slot in the empty window,
+       take it for a dead owner, and end up with the same index (seen in
+       CI as EADDRINUSE on the neighbouring suite's ports).
 
     Plain `robot` runs single-process -> slot 0 -> the historical ports.
     """
@@ -43,37 +48,59 @@ def _worker_index():
     pid = os.getpid()
     for i in range(64):
         slot = '/tmp/rspamd-functional.slot-{}'.format(i)
+        if _claim_slot(slot, pid):
+            atexit.register(_release_slot, slot, pid)
+            return i
+        # Slot is taken; reclaim it only from an owner that is provably dead.
         try:
-            fd = os.open(slot, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        except FileExistsError:
-            # Slot is taken; check if the owner is still alive.
-            try:
-                with open(slot) as f:
-                    other = int((f.read().strip() or '0'))
-            except (OSError, ValueError):
-                continue
-            if other > 0:
-                try:
-                    os.kill(other, 0)
-                    continue  # owner alive, move on
-                except OSError:
-                    pass  # owner dead, fall through to reclaim
-            try:
-                os.unlink(slot)  # racy with another reclaimer, that's fine
-            except OSError:
-                pass
-            try:
-                fd = os.open(slot, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-            except FileExistsError:
-                continue  # someone else won the reclaim race
+            with open(slot) as f:
+                other = int((f.read().strip() or '0'))
+        except (OSError, ValueError):
+            continue
+        if other <= 0:
+            continue  # not one of ours, leave it alone
         try:
-            os.write(fd, str(pid).encode())
-        finally:
-            os.close(fd)
-        atexit.register(_release_slot, slot, pid)
-        return i
+            os.kill(other, 0)
+            continue  # owner alive, move on
+        except ProcessLookupError:
+            pass  # owner dead, fall through to reclaim
+        except OSError:
+            continue  # cannot tell (EPERM and friends): assume alive
+        try:
+            os.unlink(slot)  # racy with another reclaimer, that's fine
+        except OSError:
+            pass
+        if _claim_slot(slot, pid):
+            atexit.register(_release_slot, slot, pid)
+            return i
+        # someone else won the reclaim race, move on
     # All slots full; bail to 0 -- collisions will be loud and obvious.
     return 0
+
+
+def _claim_slot(slot, pid):
+    """Atomically create `slot` owned by `pid`.
+
+    The PID is written to a private file first and hard-linked into place:
+    link(2) fails with EEXIST if the slot exists and a successful link is
+    complete from the first byte, so no other process can ever observe an
+    empty slot and mistake it for a dead owner.
+    """
+    tmp = '{}.{}.tmp'.format(slot, pid)
+    try:
+        with open(tmp, 'w') as f:
+            f.write(str(pid))
+        os.link(tmp, slot)
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 def _release_slot(slot, owner_pid):
