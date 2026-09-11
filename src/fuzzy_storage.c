@@ -600,8 +600,12 @@ rspamd_fuzzy_update_stats(struct rspamd_fuzzy_storage_ctx *ctx,
 		ctx->stat.delayed_hashes++;
 	}
 
-	if (key == NULL && ip_stat != NULL && ctx->unkeyed_stat != NULL) {
-		/* Unkeyed client: update the aggregate bucket */
+	if (key == NULL && ctx->unkeyed_stat != NULL) {
+		/*
+		 * Unkeyed client: update the aggregate bucket. This must not depend
+		 * on ip_stat, which is NULL whenever per-source tracking is off for
+		 * the bucket (max_ips_per_key = 0 or after an overflow)
+		 */
 		rspamd_fuzzy_update_key_stat(matched, ctx->unkeyed_stat, cmd, res, timestamp);
 	}
 
