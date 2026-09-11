@@ -113,30 +113,40 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 				}
 			}
 			else if (state == selector_process_state::selector_ident_consumed) {
-				if (parser_tok.type == css_parser_token::token_type::comma_token && cur_selector) {
+				if (parser_tok.type == css_parser_token::token_type::comma_token) {
 					/* Got full selector, attach it to the vector and go further */
-					msg_debug_css("attached selector: %s", cur_selector->debug_str().c_str());
-					ret.push_back(std::move(cur_selector));
+					if (cur_selector) {
+						msg_debug_css("attached selector: %s", cur_selector->debug_str().c_str());
+						ret.push_back(std::move(cur_selector));
+					}
 					state = selector_process_state::selector_parse_start;
 				}
 				else if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
 					/* TODO: implement adjustments */
 					state = selector_process_state::selector_ignore_function;
+					cur_selector.reset();
 				}
 				else if (parser_tok.type == css_parser_token::token_type::osqbrace_token) {
 					/* TODO: implement attributes checks */
 					state = selector_process_state::selector_ignore_attribute;
+					cur_selector.reset();
 				}
 				else {
 					/* TODO: implement selectors combinations */
 					state = selector_process_state::selector_ignore_combination;
+					/*
+					 * What follows narrows the selector down and we cannot
+					 * evaluate it, so the simple selector parsed so far no
+					 * longer describes the rule. Drop it: attaching it would
+					 * apply the declarations to every element of that name
+					 */
+					cur_selector.reset();
 				}
 			}
 			else {
 				/* Ignore state; ignore all till ',' token or eof token */
-				if (parser_tok.type == css_parser_token::token_type::comma_token && cur_selector) {
-					/* Got full selector, attach it to the vector and go further */
-					ret.push_back(std::move(cur_selector));
+				if (parser_tok.type == css_parser_token::token_type::comma_token) {
+					/* The ignored selector ends here, start the next one */
 					state = selector_process_state::selector_parse_start;
 				}
 				else {
@@ -217,6 +227,43 @@ TEST_SUITE("css")
 			for (auto i = 0; i < c.second.size(); i++) {
 				CHECK(res[i]->type == c.second[i]);
 			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("a narrowed selector is not registered by its first part")
+	{
+		/*
+		 * Compounds and combinators are not evaluated. A selector that uses
+		 * them must be dropped whole: keeping its first simple selector would
+		 * apply the declarations to every element of that name.
+		 * Attribute selectors are not covered: the tokeniser folds them into
+		 * a block, so `a[href]` still reaches us as a bare `a`
+		 */
+		const std::vector<std::pair<const char *, std::size_t>> cases{
+			/* Nothing of these can be evaluated */
+			{"div.mainbox ul li.spacer", 0},
+			{"div.mainbox ul li.spacer, div.mainbox ol li.spacer", 0},
+			{"p.intro span.note, td.cell span.note", 0},
+			{"div.a, div.b", 0},
+			{"div > p, div > span", 0},
+			/* Plain selector lists keep working */
+			{"p, span", 2},
+			{"em,.class,#id", 3},
+			{"*", 1},
+			/* A list that mixes both keeps only what it can evaluate */
+			{"div.mainbox li.spacer, p", 1},
+			{"p, div.mainbox li.spacer", 1},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		for (const auto &c: cases) {
+			auto res = process_selector_tokens(pool,
+											   get_selectors_parser_functor(pool, c.first));
+			CHECK_MESSAGE(res.size() == c.second, c.first);
 		}
 
 		rspamd_mempool_delete(pool);

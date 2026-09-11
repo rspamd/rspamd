@@ -229,6 +229,24 @@ context("HTML processing", function()
     assert_equal(checked, 3)
   end)
 
+  -- A grouped selector list used to be truncated to the first simple selector
+  -- of its first part, so a rule meant for a spacer blanked every such element
+  test("A grouped selector that cannot be evaluated is not applied", function()
+    local html = parse_html_message(
+        '<html><head><style>div.mainbox ul li.spacer, div.mainbox ol li.spacer ' ..
+        '{ font-size: 0; color: transparent; opacity: 0 }</style></head>' ..
+        '<body><div class="mainbox"><div>kept visible</div></div></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+    assert_equal('', tostring(html:get_invisible()))
+
+    -- The same declarations on a selector we can evaluate still hide
+    local hidden = parse_html_message(
+        '<html><head><style>.spacer { font-size: 0 }</style></head>' ..
+        '<body><div class="spacer">gone</div></body></html>')
+    assert_not_nil(hidden, 'html part not parsed')
+    assert_equal('gone', tostring(hidden:get_invisible()))
+  end)
+
   test("HTML tag get_all_attributes basic test", function()
     local rspamd_mempool = require("rspamd_mempool")
     local pool = rspamd_mempool.create()
