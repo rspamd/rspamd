@@ -32,7 +32,7 @@ local types = {
     type = 'executable',
   },
   lnk = {
-    ct = 'application/x-ms-application',
+    ct = 'application/x-ms-shortcut', -- was x-ms-application (copy-paste bug); check detected_type consumers
     type = 'executable',
   },
   class = {
@@ -68,6 +68,10 @@ local types = {
     ct = 'application/x-chm',
     type = 'binary',
   },
+  mht = {
+    ct = 'application/x-mimearchive',
+    type = 'binary',
+  },
   djvu = {
     ct = 'application/x-djvu',
     type = 'binary',
@@ -90,7 +94,7 @@ local types = {
     type = 'archive',
   },
   bz2 = {
-    ct = 'application/x-bzip',
+    ct = 'application/x-bzip2', -- was x-bzip; check detected_type consumers
     type = 'archive',
   },
   xz = {
@@ -110,7 +114,7 @@ local types = {
     type = 'archive',
   },
   iso = {
-    ct = 'application/x-iso',
+    ct = 'application/x-iso9660-image', -- was x-iso; check detected_type consumers
     type = 'archive',
   },
   zoo = {
@@ -135,6 +139,18 @@ local types = {
   },
   szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
     ct = 'application/x-compressed',
+    type = 'archive',
+  },
+  one = {
+    ct = 'application/onenote',
+    type = 'office',
+  },
+  vhd = {
+    ct = 'application/x-virtualbox-vhd',
+    type = 'archive',
+  },
+  vhdx = {
+    ct = 'application/x-vhdx',
     type = 'archive',
   },
   -- images
@@ -172,6 +188,10 @@ local types = {
     ct = 'application/octet-stream',
     type = 'office'
   },
+  oleenc = {
+    ct = 'application/x-ole-encrypted-package',
+    type = 'encrypted'
+  },
   doc = {
     ct = 'application/msword',
     type = 'office'
@@ -191,6 +211,10 @@ local types = {
   msi = {
     ct = 'application/x-msi',
     type = 'executable'
+  },
+  pub = {
+    ct = 'application/vnd.ms-office',
+    type = 'office'
   },
   msg = {
     ct = 'application/vnd.ms-outlook',
@@ -236,6 +260,10 @@ local types = {
     ct = 'application/encrypted',
     type = 'encrypted'
   },
+  p7s = {
+    ct = 'application/pkcs7-signature',
+    type = 'binary',
+  },
   uue = {
     ct = 'application/x-uuencoded',
     type = 'binary',
@@ -256,6 +284,18 @@ local types = {
   },
   gz = {
     ct = 'application/gzip',
+    type = 'archive',
+  },
+  z = {
+    ct = 'application/x-compress',
+    type = 'archive',
+  },
+  lha = {
+    ct = 'application/x-lzh-compressed',
+    type = 'archive',
+  },
+  lz = {
+    ct = 'application/x-lzip',
     type = 'archive',
   },
   -- Images
@@ -299,9 +339,120 @@ local types = {
     type = 'image',
     ct = 'image/vnd.dwg',
   },
+  wmf = {
+    type = 'image',
+    ct = 'image/wmf',
+    av_check = false,
+  },
+  emf = {
+    type = 'image',
+    ct = 'image/x-emf',
+    av_check = false,
+  },
+  -- Audio/Video
+  flac = {
+    ct = 'audio/flac',
+    type = 'media',
+    av_check = false,
+  },
+  mp3 = {
+    ct = 'audio/mpeg',
+    type = 'media',
+    av_check = false,
+  },
+  ogg = {
+    ct = 'audio/ogg',
+    type = 'media',
+    av_check = false,
+  },
+  ogv = {
+    ct = 'video/ogg',
+    type = 'media',
+    av_check = false,
+  },
+  avi = {
+    ct = 'video/x-msvideo',
+    type = 'media',
+    av_check = false,
+  },
+  wav = {
+    ct = 'audio/x-wav',
+    type = 'media',
+    av_check = false,
+  },
+  aiff = {
+    ct = 'audio/x-aiff',
+    type = 'media',
+    av_check = false,
+  },
+  flv = {
+    ct = 'video/x-flv',
+    type = 'media',
+    av_check = false,
+  },
+  asf = {
+    ct = 'video/x-ms-asf',
+    type = 'media',
+    av_check = false,
+  },
+  wma = {
+    ct = 'audio/x-ms-wma',
+    type = 'media',
+    av_check = false,
+  },
+  mkv = {
+    ct = 'video/x-matroska',
+    type = 'media',
+    av_check = false,
+  },
+  mka = {
+    ct = 'audio/x-matroska',
+    type = 'media',
+    av_check = false,
+  },
+  webm = {
+    ct = 'video/webm',
+    type = 'media',
+    av_check = false,
+  },
+  weba = {
+    ct = 'audio/webm',
+    type = 'media',
+    av_check = false,
+  },
+  mp4 = {
+    ct = 'video/mp4',
+    type = 'media',
+    av_check = false,
+  },
+  m4a = {
+    ct = 'audio/x-m4a',
+    type = 'media',
+    av_check = false,
+  },
+  mov = {
+    ct = 'video/quicktime',
+    type = 'media',
+    av_check = false,
+  },
+  ['3gp'] = {
+    ct = 'video/3gpp',
+    type = 'media',
+    av_check = false,
+  },
+  ['3g2'] = {
+    ct = 'video/3gpp2',
+    type = 'media',
+    av_check = false,
+  },
   -- Text
   xml = {
     ct = 'application/xml',
+    type = 'text',
+    no_text = true,
+  },
+  xslt = {
+    ct = 'application/xslt+xml',
     type = 'text',
     no_text = true,
   },
@@ -330,6 +481,24 @@ local types = {
   vcf = {
     type = 'text',
     ct = 'text/vcard',
+    av_check = false,
+    no_text = true,
+  },
+  asc = {
+    type = 'text',
+    ct = 'application/pgp-keys',
+    av_check = false,
+    no_text = true,
+  },
+  url = {
+    type = 'text',
+    ct = 'application/x-mswinurl',
+    av_check = false,
+    no_text = true,
+  },
+  sig = {
+    type = 'signature',
+    ct = 'application/pgp-signature',
     av_check = false,
     no_text = true,
   },

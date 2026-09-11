@@ -32,6 +32,11 @@ local msoffice_patterns = {
   xls = { [[Workbook]], [[Book]] },
   ppt = { [[PowerPoint Document]], [[Current User]] },
   vsd = { [[VisioDocument]] },
+  -- Password-protected OOXML (MS-OFFCRYPTO): docx/xlsx/pptx wrapped in a CFB
+  -- container carrying the encrypted payload as an opaque stream. A common
+  -- phishing evasion technique ("password in the email body"), so flag it
+  -- as its own type rather than falling through to generic ole/octet-stream.
+  oleenc = { [[EncryptedPackage]], [[EncryptionInfo]] },
 }
 local msoffice_trie_clsid
 local msoffice_clsids = {
@@ -40,6 +45,7 @@ local msoffice_clsids = {
   ppt = { [[108d81649b4fcf1186ea00aa00b929e8]] },
   msg = { [[46f0060000000000c000000000000046]], [[0b0d020000000000c000000000000046]] },
   msi = { [[84100c0000000000c000000000000046]] },
+  pub = { [[011202000000000000c0000000000046]] },
 }
 local zip_trie
 local zip_patterns = {
@@ -63,10 +69,10 @@ local zip_patterns = {
 local txt_trie
 local txt_patterns = {
   html = {
-    { [=[(?i)<html[\s>]]=],                   32 },
+    { [=[(?i)<html[\s>]]=],                   40 },
     { [[(?i)<script\b]],                      20 }, -- Commonly used by spammers
     { [[<script\s+type="text\/javascript">]], 31 }, -- Another spammy pattern
-    { [[(?i)<\!DOCTYPE HTML\b]],              33 },
+    { [[(?i)<\!DOCTYPE HTML\b]],              40 },
     { [[(?i)<body\b]],                        20 },
     { [[(?i)<table\b]],                       20 },
     { [[(?i)<a\s]],                           10 },
@@ -85,7 +91,14 @@ local txt_patterns = {
   },
   xml = {
     { [[<\?xml\b.+\?>]], 40 },
-  }
+  },
+  xslt = {
+    -- XSLT namespace declaration (most reliable indicator)
+    { [=[(?i)xmlns:xsl\s*=\s*["']http://www\.w3\.org/\d{4}/XSL/Transform["']]=], 50 },
+    -- Top-level XSLT elements (fallback when namespace is on same element)
+    { [[(?i)<xsl:stylesheet\b]], 50 },
+    { [[(?i)<xsl:transform\b]],  50 },
+  },
 }
 
 -- Used to match pattern index and extension
@@ -647,6 +660,154 @@ exports.svg_format_heuristic = function(input, log_obj, pos, part)
   end
 
   return 'svg', 40
+end
+
+-- MPEG audio frame sync heuristic: verifies the second header byte encodes
+-- a valid MPEG version/layer combination (sync bits set, version and layer
+-- not reserved), the same check puremagic used to catch raw audio streams
+-- (voicemail/IVR dumps) and ID3v1-only files that carry no ID3v2 tag
+exports.mp3_frame_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return
+  end
+
+  local b2 = input:byte(2)
+  if not b2 then
+    return
+  end
+
+  if bit.band(b2, 0xF6) == 0xF2 then
+    return 'mp3', 40
+  end
+end
+
+-- Ogg codec heuristic: Theora's identification header ("\x80theora") in the
+-- first page means the stream is video, everything else defaults to audio
+exports.ogg_format_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return 'ogg', 60
+  end
+
+  local head = tostring(input:span(1, math.min(#input, 64)))
+
+  if head:find('\128theora', 1, true) then
+    return 'ogv', 60
+  end
+
+  return 'ogg', 60
+end
+
+-- ASF Stream Properties Object type GUIDs (mixed-endian, as stored on disk)
+local asf_video_guid = '\192\239\25\188\77\91\207\17\168\253\0\128\95\92\68\43'
+local asf_audio_guid = '\64\158\105\248\77\91\207\17\168\253\0\128\95\92\68\43'
+
+-- ASF stream type heuristic: scans for the Stream Properties Object GUID to
+-- tell audio-only WMA apart from WMV/generic ASF (both share the same
+-- top-level header object GUID that the base pattern matches on)
+exports.asf_format_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return 'asf', 60
+  end
+
+  local head = tostring(input:span(1, math.min(#input, 8192)))
+
+  if head:find(asf_video_guid, 1, true) then
+    return 'asf', 60
+  end
+
+  if head:find(asf_audio_guid, 1, true) then
+    return 'wma', 60
+  end
+
+  return 'asf', 60
+end
+
+local mkv_video_codecs = {
+  'V_MPEG', 'V_THEORA', 'V_VP8', 'V_VP9', 'V_AV1',
+  'V_UNCOMPRESSED', 'V_QUICKTIME', 'V_MS/VFW',
+}
+local mkv_audio_codecs = {
+  'A_VORBIS', 'A_OPUS', 'A_AC3', 'A_EAC3', 'A_AAC', 'A_DTS',
+  'A_FLAC', 'A_MPEG', 'A_PCM', 'A_TTA1', 'A_WAVPACK4', 'A_MS/ACM',
+}
+local function mkv_find_any(head, markers)
+  for _, marker in ipairs(markers) do
+    if head:find(marker, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+-- Matroska/WebM heuristic: the EBML DocType element (0x42 0x82 + size +
+-- "webm") tells webm from generic mkv, and a scan for known Tracks CodecID
+-- strings tells audio-only mka/weba from video. This is a cheap
+-- approximation of a real EBML track parser: CodecIDs live in the Tracks
+-- element, which for well-formed files appears well within the first 64KiB
+exports.mkv_format_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return 'mkv', 60
+  end
+
+  local head = tostring(input:span(1, math.min(#input, 65536)))
+
+  local is_webm = head:sub(1, 64):find('\66\130.webm') ~= nil
+  local video_ext = is_webm and 'webm' or 'mkv'
+  local audio_ext = is_webm and 'weba' or 'mka'
+  local weight = is_webm and 61 or 60
+
+  if mkv_find_any(head, mkv_video_codecs) then
+    return video_ext, weight
+  end
+
+  if mkv_find_any(head, mkv_audio_codecs) then
+    return audio_ext, weight
+  end
+
+  return video_ext, weight
+end
+
+-- ISO-BMFF ftyp brand dispatch table/heuristic: new major brands (iso6,
+-- dash, ...) show up far faster than a hand-maintained regex list can be
+-- kept in sync, so unrecognised-but-valid brands fall back to mp4 instead
+-- of going undetected entirely
+local ftyp_m4a_brands = {
+  msnv = true, ndas = true,
+  ['f4a '] = true, ['f4b '] = true,
+  ['m4a '] = true, ['m4b '] = true, ['m4p '] = true,
+}
+exports.ftyp_format_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return 'mp4', 60
+  end
+
+  local brand = tostring(input:span(pos + 1, 4)):lower()
+
+  -- Defer to the dedicated (more specific) heic patterns instead of also
+  -- adding a competing mp4 result at the same weight
+  if brand == 'mif1' or brand:match('^he[im][cs]$') then
+    return nil
+  end
+
+  if brand:match('^3g2[abc]$') or brand == 'kddi' then
+    return '3g2', 60
+  end
+
+  if brand:match('^3g[egps]%d$') then
+    return '3gp', 60
+  end
+
+  if brand == 'mqt ' or brand == 'qt  ' then
+    return 'mov', 60
+  end
+
+  if ftyp_m4a_brands[brand] then
+    return 'm4a', 60
+  end
+
+  -- isom, iso2..isoN, avc1, mp41/42, mmp4, dash, m4v , f4v , nds[chmps],
+  -- and any brand not specifically catalogued above
+  return 'mp4', 60
 end
 
 return exports
