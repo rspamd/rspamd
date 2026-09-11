@@ -503,11 +503,12 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 }
 
 rspamd_lru_hash_t *
-rspamd_lru_hash_new_full(int maxsize,
-						 GDestroyNotify key_destroy,
-						 GDestroyNotify value_destroy,
-						 GHashFunc hf,
-						 GEqualFunc cmpf)
+rspamd_lru_hash_new_sized(int maxsize,
+						  int initial_size,
+						  GDestroyNotify key_destroy,
+						  GDestroyNotify value_destroy,
+						  GHashFunc hf,
+						  GEqualFunc cmpf)
 {
 	rspamd_lru_hash_t *h;
 
@@ -525,10 +526,28 @@ rspamd_lru_hash_new_full(int maxsize,
 	h->key_destroy = key_destroy;
 	h->eviction_min_prio = G_MAXUINT;
 
-	/* Preallocate some elements */
-	rspamd_lru_hash_resize(h, MIN(h->maxsize, 128));
+	/*
+	 * Preallocate buckets only when asked to: an empty table grows on the
+	 * first insertion, so tables that will mostly stay tiny cost nothing
+	 * beyond the header until they are actually used
+	 */
+	if (initial_size > 0) {
+		rspamd_lru_hash_resize(h, MIN((khint_t) initial_size, h->maxsize));
+	}
 
 	return h;
+}
+
+rspamd_lru_hash_t *
+rspamd_lru_hash_new_full(int maxsize,
+						 GDestroyNotify key_destroy,
+						 GDestroyNotify value_destroy,
+						 GHashFunc hf,
+						 GEqualFunc cmpf)
+{
+	return rspamd_lru_hash_new_sized(maxsize, 128,
+									 key_destroy, value_destroy,
+									 hf, cmpf);
 }
 
 rspamd_lru_hash_t *
