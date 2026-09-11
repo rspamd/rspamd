@@ -56,6 +56,7 @@
 #include "rspamd_cxx_unit_task_input.hxx"
 #include "rspamd_cxx_unit_ucl_limits.hxx"
 #include "rspamd_cxx_unit_tld_lookup.hxx"
+#include "rspamd_cxx_unit_lru_hash.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
