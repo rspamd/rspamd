@@ -89,6 +89,7 @@ HTML VISIBILITY - Significant hidden content
   boundary  2  200
   intermediate  3  300
   multipart  2  200
+  stylesheet_over_inline  5  500
 
 HTML VISIBILITY - No significant hidden content
   [Template]  Check No Significant Hidden Content
