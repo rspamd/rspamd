@@ -82,6 +82,17 @@ define(["app/common", "app/libft", "d3pie", "d3"],
         // overwrite the state written by a newer one
         let statCycleId = 0;
 
+        // Per-server fuzzy storages config from plugins/fuzzy/storages
+        // (rule name -> {read_only, servers|read_servers+write_servers,
+        // flags}). Fetched rarely — once per page load, refetched only on a
+        // configuration/neighbours or up-set change, never in the /stat
+        // cycle — since it changes only with the configuration. A failed
+        // probe is not an error: older rspamd or fuzzy_check disabled
+        // leaves the table plain.
+        const fuzzyStorages = new Map();
+        let fuzzyStoragesSig = null;
+        let fuzzyStoragesFetching = false;
+
         // @ ms to latency string
         function formatLatency(ms) {
             if (!Number.isFinite(ms)) return "-";
@@ -647,6 +658,13 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                     '"><i class="fas fa-exclamation-triangle"></i></span>';
             }
 
+            // @ small inline text badge with an optional tooltip (fuzzy
+            // read-only mark, bayes classifier flags)
+            function badge(cls, text, title) {
+                const titleAttr = title ? ` title="${common.escapeHTML(title)}"` : "";
+                return ` <span class="badge ${cls} ms-1"${titleAttr}>${text}</span>`;
+            }
+
             // The badge marks deviating servers and the aggregate row alike:
             // the majority value the latter shows is not cluster-wide
             function hasDriftBadge(drift, key) {
@@ -851,11 +869,6 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                         ` aria-label="${common.escapeHTML(label)}">${segments.join("")}</div>`;
                 }
 
-                function badge(cls, text, title) {
-                    const titleAttr = title ? ` title="${common.escapeHTML(title)}"` : "";
-                    return ` <span class="badge ${cls} ms-1"${titleAttr}>${text}</span>`;
-                }
-
                 function normalizeMinLearns(value) {
                     return (Number.isFinite(value) && value > 0) ? value : 0;
                 }
@@ -953,17 +966,73 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 });
             }
 
-            function addFuzzyStorage(server, storages) {
-                let i = 0;
+            // Combined tooltip for a fuzzy storage cell: server addresses
+            // and the symbol/flag mapping, one item per line. Empty sections
+            // are omitted (an SRV-configured rule may report no addresses
+            // yet right after a configuration load).
+            function fuzzyStorageTitle(info) {
+                const lines = [];
+                const read = info.servers || info.read_servers;
+                const write = info.write_servers;
+                if (Array.isArray(read) && read.length) {
+                    lines.push((Array.isArray(write) ? "Read: " : "Servers: ") + read.join(", "));
+                }
+                if (Array.isArray(write) && write.length) lines.push("Write: " + write.join(", "));
+                const flags = Object.entries(info.flags || {})
+                    .map(([symbol, flag]) => `${symbol} (${flag})`);
+                if (flags.length) lines.push("Symbols:\n" + flags.join("\n"));
+                return lines.join("\n");
+            }
+
+            function addFuzzyStorage(server, storages, up) {
                 const fuzzyTbody = document.querySelector("#fuzzyTable tbody");
-                Object.entries(storages || {}).forEach(([storage, hashes]) => {
-                    const serverCell = (i === 0)
-                        ? '<td rowspan="' + Object.keys(storages || {}).length + '">' + common.escapeHTML(server) + "</td>"
+                const entries = Object.entries(storages || {});
+                // Rules configured but absent from fuzzy_hashes: the storage
+                // selected for the statistics query did not answer in time —
+                // down, rate-limited or denied. Detectable only when the
+                // storages config is known; otherwise the row stays hidden.
+                const ruleInfo = fuzzyStorages.get(server);
+                const missing = ruleInfo
+                    ? Object.keys(ruleInfo).filter((rule) => !{}.hasOwnProperty.call(storages || {}, rule))
+                    : [];
+                if (!entries.length && !missing.length) {
+                    // An up server without fuzzy storages stays visible in
+                    // the group; a down one renders nothing, as in the bayes
+                    // table
+                    if (!up) return;
+                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr><td>" + common.escapeHTML(server) +
+                        '</td><td colspan="2" class="text-secondary">No fuzzy storages</td></tr>');
+                    return;
+                }
+                const rowsCount = entries.length + missing.length;
+
+                function serverCellAt(i) {
+                    if (i !== 0) return "";
+                    return '<td rowspan="' + rowsCount + '">' + common.escapeHTML(server) + "</td>";
+                }
+                // Per-server join: fuzzy_hashes keys (rule names) are the
+                // storages keys
+                entries.forEach(([storage, hashes], i) => {
+                    const info = ruleInfo?.[storage];
+                    const title = info ? fuzzyStorageTitle(info) : "";
+                    const titleAttr = title ? ' title="' + common.escapeHTML(title) + '"' : "";
+                    const roBadge = (info && info.read_only)
+                        ? badge("text-bg-secondary", "read-only", "Storage is read-only: it cannot be learned to")
                         : "";
-                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCell +
-                      "<td>" + common.escapeHTML(storage) + "</td>" +
-                      '<td class="text-end">' + hashes + "</td></tr>");
-                    i++;
+                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCellAt(i) +
+                        "<td" + titleAttr + ">" + common.escapeHTML(storage) + roBadge + "</td>" +
+                        '<td class="text-end">' + hashes + "</td></tr>");
+                });
+                missing.forEach((storage, i) => {
+                    const info = ruleInfo?.[storage];
+                    const title = info ? fuzzyStorageTitle(info) : "";
+                    const titleAttr = title ? ' title="' + common.escapeHTML(title) + '"' : "";
+                    fuzzyTbody.insertAdjacentHTML("beforeend", "<tr>" + serverCellAt(entries.length + i) +
+                        "<td" + titleAttr + ">" + common.escapeHTML(storage) +
+                        badge("text-bg-danger", "unavailable",
+                            "No reply to the statistics query; the storage may be down, rate-limited or access denied") +
+                        "</td>" +
+                        '<td class="text-end">-</td></tr>');
                 });
             }
 
@@ -973,12 +1042,12 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 Object.entries(servers).forEach(([server, val]) => {
                     if (server !== "All SERVERS") {
                         addStatfiles(server, val.data.statfiles);
-                        addFuzzyStorage(server, val.data.fuzzy_hashes);
+                        addFuzzyStorage(server, val.data.fuzzy_hashes, val.status);
                     }
                 });
             } else {
                 addStatfiles(checked_server, data.statfiles);
-                addFuzzyStorage(checked_server, data.fuzzy_hashes);
+                addFuzzyStorage(checked_server, data.fuzzy_hashes, servers[checked_server]?.status);
             }
 
             if (!rowspanHoverHandlersInitialized) {
@@ -986,6 +1055,58 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                 attachRowspanHoverHandlers("#fuzzyTable");
                 rowspanHoverHandlersInitialized = true;
             }
+        }
+
+        // Fetch the per-neighbour fuzzy storages config (read_only, server
+        // addresses, symbol/flag mapping) for the fuzzy table. A silent raw
+        // probe per up neighbour, probeHealth-style: a failure is data, not
+        // an error — older rspamd or fuzzy_check disabled just leaves the
+        // table plain. Cached by a name:config_id:up signature over all
+        // neighbours, so it is fetched once per page load and refetched only
+        // when the configuration or the set of up servers changes (a
+        // neighbour recovering after a page-load-time outage must not stay
+        // without its metadata), never in the /stat refresh cycle.
+        function fetchFuzzyStorages(neighbours_status, cycleId, checked_server) {
+            const sig = neighbours_status
+                .map((n) => `${n.name}:${n.data.config_id ?? ""}:${n.status ? 1 : 0}`)
+                .sort().join("|");
+            if (fuzzyStoragesFetching || sig === fuzzyStoragesSig) return;
+            // Commit the signature up front: an unavailable endpoint must
+            // not be retried on every refresh cycle
+            fuzzyStoragesFetching = true;
+            fuzzyStoragesSig = sig;
+
+            const up = neighbours_status.filter((neighbour) => neighbour.status);
+            let pending = up.length;
+            if (!pending) {
+                fuzzyStoragesFetching = false;
+                return;
+            }
+            function settled() {
+                if (--pending) return;
+                fuzzyStoragesFetching = false;
+                if (cycleId !== statCycleId) return;
+                if (document.getElementById("status").classList.contains("active")) {
+                    displayStatWidgets(checked_server);
+                }
+            }
+            up.forEach((neighbour) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open("GET", neighbour.url + "plugins/fuzzy/storages", true);
+                xhr.setRequestHeader("Password", common.getPassword());
+                const timeout = Math.min(common.getAjaxTimeout() || Infinity, 10000);
+                if (timeout > 0) xhr.timeout = timeout;
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        fuzzyStorages.set(neighbour.name,
+                            parseJsonOrEmpty(xhr.responseText).storages || {});
+                    }
+                    settled();
+                };
+                xhr.onerror = settled;
+                xhr.ontimeout = settled;
+                xhr.send();
+            });
         }
 
         function getChart(graphs, checked_server) {
@@ -1236,6 +1357,7 @@ define(["app/common", "app/libft", "d3pie", "d3"],
                                         sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                                         displayStatWidgets(checked_server);
                                         getChart(graphs, checked_server);
+                                        fetchFuzzyStorages(neighbours_status, cycleId, checked_server);
                                     }
                                     resolve();
                                 });

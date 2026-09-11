@@ -1527,7 +1527,10 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	struct rspamd_task *task = pending->task;
 
 	/* Process the reply - similar to UDP code in fuzzy_check_try_read */
-	if (rep->v1.prob > 0.5) {
+	/* See the UDP reply handler: a legacy empty-storage STAT reply comes
+	 * with prob = 0 and zero value/flag */
+	if (rep->v1.prob > 0.5 ||
+		(pending->io->cmd.cmd == FUZZY_STAT && rep->v1.value == 0 && rep->v1.flag == 0)) {
 		if (pending->io->cmd.cmd == FUZZY_CHECK) {
 			/* Insert result for primary flag */
 			fuzzy_insert_result(pending->session, rep, &pending->io->cmd,
@@ -5060,7 +5063,11 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 			if (rep_v2) {
 				session->rule->server_supports_v2 = TRUE;
 			}
-			if (rep->v1.prob > 0.5) {
+			/* A legacy storage encodes an empty fuzzy storage (count 0) as
+			 * prob = 0 with both count qwords zero; error replies carry a
+			 * nonzero code in value, so accept that shape for STAT too */
+			if (rep->v1.prob > 0.5 ||
+				(cmd->cmd == FUZZY_STAT && rep->v1.value == 0 && rep->v1.flag == 0)) {
 				if (cmd->cmd == FUZZY_CHECK) {
 					fuzzy_insert_result(session, rep, cmd, io, rep->v1.flag);
 
