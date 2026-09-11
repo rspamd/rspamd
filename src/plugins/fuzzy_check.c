@@ -8004,8 +8004,12 @@ fuzzy_lua_ping_storage_all(lua_State *L)
 	ctx.rule = rule_found;
 	ctx.timeout = lua_tonumber(L, 4);
 	/* A write-only rule aliases read_servers to write_servers during
-	 * configuration parsing, so its shared list must use the write keypair */
-	ctx.is_write_server = rule_found->mode == fuzzy_rule_write_only;
+	 * configuration parsing, so its shared list must use the write
+	 * keypair; with both lists configured separately the read list keeps
+	 * the read keypair */
+	ctx.is_write_server =
+		rule_found->mode == fuzzy_rule_write_only &&
+		rule_found->read_servers == rule_found->write_servers;
 	ctx.seen = g_ptr_array_new();
 	ctx.nresults = 0;
 	ctx.kicked_resolve = FALSE;
