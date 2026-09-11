@@ -3365,7 +3365,7 @@ fuzzy_milliseconds_since_midnight(void)
 
 static struct fuzzy_cmd_io *
 fuzzy_cmd_ping(struct fuzzy_rule *rule,
-			   rspamd_mempool_t *pool)
+			   rspamd_mempool_t *pool, gboolean is_write)
 {
 	struct rspamd_fuzzy_cmd *cmd;
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
@@ -3397,7 +3397,11 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 		struct rspamd_cryptobox_keypair *local_key;
 		struct rspamd_cryptobox_pubkey *peer_key;
 
-		fuzzy_select_encryption_keys(rule, cmd->cmd, &local_key, &peer_key);
+		/* A write server is pinged with the write keypair: that is the
+		 * key its storage is configured with */
+		fuzzy_select_encryption_keys(rule,
+									 is_write ? FUZZY_WRITE : cmd->cmd,
+									 &local_key, &peer_key);
 		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd),
 						  local_key, peer_key);
 		io->io.iov_base = enccmd;
@@ -5927,7 +5931,7 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 	else if (c == FUZZY_PING) {
 		res = g_ptr_array_sized_new(1);
 
-		io = fuzzy_cmd_ping(rule, task->task_pool);
+		io = fuzzy_cmd_ping(rule, task->task_pool, FALSE);
 		if (io) {
 			g_ptr_array_add(res, io);
 		}
@@ -7842,11 +7846,33 @@ fuzzy_lua_ping_storage(lua_State *L)
 	return 1;
 }
 
+/*
+ * PING commands for the liveness probe of a server list. The wire command
+ * stays FUZZY_PING, but a write server must be pinged with the write
+ * keypair: that is the key its storage is configured with
+ */
+static GPtrArray *
+fuzzy_generate_ping_commands(struct rspamd_task *task,
+							 struct fuzzy_rule *rule,
+							 gboolean is_write_server)
+{
+	GPtrArray *res = g_ptr_array_sized_new(1);
+	struct fuzzy_cmd_io *io = fuzzy_cmd_ping(rule,
+											 task->task_pool, is_write_server);
+
+	if (io) {
+		g_ptr_array_add(res, io);
+	}
+
+	return res;
+}
+
 struct fuzzy_lua_pingall_ctx {
 	struct rspamd_task *task;
 	lua_State *L;
 	struct fuzzy_rule *rule;
 	double timeout;
+	gboolean is_write_server;
 	GPtrArray *seen;
 	unsigned int nresults;
 	gboolean kicked_resolve;
@@ -7898,7 +7924,8 @@ fuzzy_lua_pingall_upstream(struct upstream *up, unsigned int idx, void *ud)
 		return;
 	}
 
-	commands = fuzzy_generate_commands(ctx->task, ctx->rule, FUZZY_PING, 0, 0, 0);
+	commands = fuzzy_generate_ping_commands(ctx->task, ctx->rule,
+											ctx->is_write_server);
 
 	if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
 		lua_pushvalue(ctx->L, 2);
@@ -7943,7 +7970,9 @@ fuzzy_lua_pingall_upstream(struct upstream *up, unsigned int idx, void *ud)
 /***
  * @function fuzzy_check.ping_storage_all(task, callback, rule, timeout)
  * Pings every configured server of the rule (the deduplicated union of the
- * read and write lists) using each upstream's current address. The callback
+ * read and write lists; a write-only rule's shared list is the write one)
+ * using each upstream's current address; write servers are pinged with the
+ * write keypair. The callback
  * is invoked exactly once per server as (success, server_ip,
  * latency_or_error, server_name); server_ip is nil when no address is
  * resolved. Returns (true, n) where n is the number of results to expect.
@@ -7974,6 +8003,9 @@ fuzzy_lua_ping_storage_all(lua_State *L)
 	ctx.L = L;
 	ctx.rule = rule_found;
 	ctx.timeout = lua_tonumber(L, 4);
+	/* A write-only rule aliases read_servers to write_servers during
+	 * configuration parsing, so its shared list must use the write keypair */
+	ctx.is_write_server = rule_found->mode == fuzzy_rule_write_only;
 	ctx.seen = g_ptr_array_new();
 	ctx.nresults = 0;
 	ctx.kicked_resolve = FALSE;
@@ -7981,6 +8013,7 @@ fuzzy_lua_ping_storage_all(lua_State *L)
 	rspamd_upstreams_foreach(rule_found->read_servers, fuzzy_lua_pingall_upstream, &ctx);
 
 	if (rule_found->write_servers != rule_found->read_servers) {
+		ctx.is_write_server = TRUE;
 		rspamd_upstreams_foreach(rule_found->write_servers, fuzzy_lua_pingall_upstream, &ctx);
 	}
 

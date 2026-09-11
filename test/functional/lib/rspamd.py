@@ -1127,6 +1127,29 @@ def controller_auth_status(addr, port, password):
         conn.close()
 
 
+def controller_fuzzy_status(addr, port):
+    """Sends a GET /plugins/fuzzy/status request and returns the parsed JSON.
+
+    The probe pings every configured storage server, so it may take up to
+    the fuzzy ping timeout to answer.
+
+    Example:
+    | ${json} = | Controller Fuzzy Status | ${RSPAMD_LOCAL_ADDR} | ${RSPAMD_PORT_CONTROLLER} |
+    """
+    conn = http.client.HTTPConnection(addr, int(port), timeout=30)
+    try:
+        conn.request("GET", "/plugins/fuzzy/status")
+        resp = conn.getresponse()
+        body = resp.read()
+
+        if resp.status != 200:
+            raise AssertionError("fuzzy status request failed: HTTP {}, {}"
+                                 .format(resp.status, body))
+        return json.loads(body)
+    finally:
+        conn.close()
+
+
 def redis_check(addr, port):
     """Attempts to open a TCP connection to specified address:port
 

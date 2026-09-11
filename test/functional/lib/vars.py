@@ -142,6 +142,10 @@ HAVE_MILTERTEST = shutil.which('miltertest') and True or False
 RSPAMD_EXTERNAL_RELAY_ENABLED = False
 RSPAMD_KEY_PVT1 = 'ekd3x36tfa5gd76t6pa8hqif3ott7n1siuux68exbkk7ukscte9y'
 RSPAMD_KEY_PUB1 = 'm8kneubpcjsb8sbsoj7jy7azj9fdd3xmj63txni86a8ye9ncomny'
+# Second storage keypair for the split read/write encryption keys test
+# (generated with: rspamadm keypair)
+RSPAMD_KEY_PVT4 = 'osrc6boki98scuj33zew3baqo875gp4r1k8jbk5j4ji6yctrs54y'
+RSPAMD_KEY_PUB4 = 'ysqupi4f8f3j1ux55c5xiumxfygocbug3weuyq1zyf1zqd8kh1ry'
 RSPAMD_KEY_PUB2 = 'mbggdnw3tdx7r3ruakjecpf5hcqr4cb4nmdp1fxynx3drbyujb3y'
 RSPAMD_KEY_PUB3 = 'zhypei8sartqrtow84dddgp5exh3gsr65kbw88wj7ppot1bwmuiy'
 RSPAMD_LOCAL_ADDR = '127.0.0.1'
