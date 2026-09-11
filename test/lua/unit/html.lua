@@ -154,6 +154,81 @@ context("HTML processing", function()
     pool:destroy()
   end)
 
+  -- The standalone parser never applies stylesheets, so cases that need a
+  -- <style> block go through a real task, where the CSS parser is enabled
+  local function parse_html_message(body)
+    local rspamd_task = require("rspamd_task")
+    local msg = "From: test@example.com\r\nTo: nobody@example.com\r\nSubject: test\r\n" ..
+        "Content-Type: text/html\r\n\r\n" .. body
+    -- no assertions here: telescope only exposes them inside test bodies
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    if not res then return nil end
+    task:process_message()
+    local html = task:get_text_parts()[1]:get_html()
+    if not html then return nil end
+    local tags = {}
+    html:foreach_tag("any", function(tag)
+      table.insert(tags, tag)
+      return false
+    end)
+    return html, tags, task
+  end
+
+  -- Block-level tags get their own block while parsing; inline tags without
+  -- a style attribute only receive the parent's block on propagation, which
+  -- is the path where a copied `set` mask used to shadow stylesheet rules
+  test("A stylesheet rule overrides a size the parent set inline", function()
+    local html, tags = parse_html_message(
+        '<html><head><style>.fine { font-size: 0 }</style></head>' ..
+        '<body style="font-size:12px"><p><span class="fine">hidden</span>' ..
+        '<span>shown</span></p></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+
+    assert_equal('hidden', tostring(html:get_invisible()))
+    local checked = 0
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'span' then
+        local style = tag:get_style()
+        if tag:get_attribute('class') == 'fine' then
+          assert_false(style.visible)
+        else
+          assert_true(style.visible)
+          assert_equal(style.font_size, 12)
+        end
+        checked = checked + 1
+      end
+    end
+    assert_equal(checked, 2)
+  end)
+
+  test("Inherited values keep their inherited mask on children", function()
+    local html, tags = parse_html_message(
+        '<html><head><style>.tiny { font-size: 1px } .big { font-size: 200% }</style></head>' ..
+        '<body style="font-size:12px"><p><span class="tiny">hidden</span>' ..
+        '<span class="big">large</span><span>plain</span></p></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+
+    assert_equal('hidden', tostring(html:get_invisible()))
+    local checked = 0
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'span' then
+        local class = tag:get_attribute('class')
+        local style = tag:get_style()
+        if class == 'tiny' then
+          assert_false(style.visible)
+        elseif class == 'big' then
+          assert_true(style.visible)
+          assert_equal(style.font_size, 24)
+        else
+          assert_true(style.visible)
+          assert_equal(style.font_size, 12)
+        end
+        checked = checked + 1
+      end
+    end
+    assert_equal(checked, 3)
+  end)
+
   test("HTML tag get_all_attributes basic test", function()
     local rspamd_mempool = require("rspamd_mempool")
     local pool = rspamd_mempool.create()
