@@ -226,6 +226,25 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			const auto &tok = parser_block.get_token_or_empty();
 
 			if (tok.type == css_parser_token::token_type::number_token) {
+				if (tok.flags & css_parser_token::flag_bad_dimension) {
+					/*
+					 * The unit is not one we know: the tokeniser leaves the
+					 * bare number behind, and reading it as pixels turns a
+					 * responsive size into a hidden one
+					 */
+					return std::nullopt;
+				}
+
+				if (prop.type == css_property_type::PROPERTY_FONT &&
+					!(tok.flags & (css_parser_token::number_dimension |
+								   css_parser_token::number_percent))) {
+					/*
+					 * In the `font` shorthand a unitless number is the weight
+					 * or the line-height, never the size
+					 */
+					return std::nullopt;
+				}
+
 				return css_value::maybe_dimension_from_number(tok);
 			}
 		}
@@ -667,7 +686,9 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 			auto maybe_dim = val.to_dimension();
 
 			if (maybe_dim) {
+				/* The size is the first length of the shorthand */
 				block->set_font_size(maybe_dim.value().dim, maybe_dim.value().is_percent);
+				break;
 			}
 		}
 	}
@@ -797,6 +818,112 @@ TEST_SUITE("css")
 			CHECK(block != nullptr);
 			block->compute_visibility();
 			CHECK_MESSAGE(block->is_visible(), css_text);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("font shorthand takes the size and not the weight or line-height")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		/* Unitless numbers of the shorthand are the weight and the
+		 * line-height, only the length in between is the size */
+		const std::vector<std::pair<const char *, int>> cases{
+			{"font:16px Arial", 16},
+			{"font:400 1rem Arial", 16},
+			{"font:400 1rem/1.5 Arial", 16},
+			{"font:400 1rem / 1.5 Arial", 16},
+			{"font:16px/24px Arial", 16},
+			{"font:italic 400 12pt/2 Arial", 16},
+			{"font:1px/1.5 Arial", 1},
+			{"font:400 0px/1.5 Arial", 0},
+		};
+
+		for (const auto &c: cases) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, c.first));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			CHECK_MESSAGE(static_cast<int>(block->font_mask) != 0, c.first);
+			CHECK_MESSAGE(block->font_size == c.second, c.first);
+		}
+
+		/* A shorthand without a length leaves the size unset */
+		for (const auto *css_text: {"font:400 Arial", "font:bold Arial"}) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, css_text));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			CHECK_MESSAGE(static_cast<int>(block->font_mask) == 0, css_text);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("an unknown unit does not become a bare pixel size")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		/* The tokeniser leaves the number behind when it cannot place the
+		 * unit; taking it as pixels turns a responsive size into a hidden one */
+		for (const auto *css_text: {"font-size:2ch", "font-size:2lh", "font-size:2q",
+									"height:0nonsense", "width:0nonsense"}) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, css_text));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			block->compute_visibility();
+			CHECK_MESSAGE(block->is_visible(), css_text);
+		}
+
+		/* Viewport units are known and keep working */
+		const std::vector<std::pair<const char *, int>> known{
+			{"font-size:2vw", 16},
+			{"font-size:2vh", 12},
+			{"font-size:2vmin", 12},
+			{"font-size:2vmax", 16},
+		};
+
+		for (const auto &c: known) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, c.first));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			CHECK_MESSAGE(static_cast<int>(block->font_mask) != 0, c.first);
+			CHECK_MESSAGE(block->font_size == c.second, c.first);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("percent font sizes survive above 100 percent")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		/* Percent sizes are stored negated, so the field has to be wide
+		 * enough to hold them before they are resolved against a parent */
+		const std::vector<std::pair<const char *, int>> cases{
+			{"font-size:50%", -50},
+			{"font-size:100%", -100},
+			{"font-size:200%", -200},
+			{"font-size:1000%", -1000},
+		};
+
+		for (const auto &c: cases) {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, c.first));
+			CHECK(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			CHECK(block != nullptr);
+			CHECK_MESSAGE(block->font_size == c.second, c.first);
 		}
 
 		rspamd_mempool_delete(pool);

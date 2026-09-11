@@ -31,7 +31,7 @@ struct html_block {
 	std::int16_t height;
 	std::int16_t width;
 	rspamd::css::css_display_value display;
-	std::int8_t font_size;
+	std::int16_t font_size;
 	bool overflow_hidden;
 	bool offscreen; /* hidden via off-screen positioning / clipping */
 
@@ -118,12 +118,13 @@ struct html_block {
 
 	auto set_font_size(float fs, bool is_percent = false, int how = html_block::set) -> void
 	{
+		/* A percent size is stored negated and resolved on propagation */
 		fs = is_percent ? (-fs) : fs;
-		if (fs < INT8_MIN) {
-			font_size = -100;
+		if (fs < INT16_MIN) {
+			font_size = INT16_MIN;
 		}
-		else if (fs > INT8_MAX) {
-			font_size = INT8_MAX;
+		else if (fs > INT16_MAX) {
+			font_size = INT16_MAX;
 		}
 		else {
 			font_size = fs;
@@ -216,12 +217,23 @@ public:
 												   display, other.display);
 		}
 
+		resolve_sizes(other);
+	}
+
+	/*
+	 * Turn sizes that are still relative into absolute ones against an
+	 * already computed parent. Called on propagation, and again once a
+	 * stylesheet block has been merged, since that happens after the parent
+	 * has propagated and can introduce a fresh relative value
+	 */
+	auto resolve_sizes(const html_block &other) -> void
+	{
 		height_mask = html_block::size_prop(height_mask, other.height_mask,
 											height, other.height, static_cast<std::int16_t>(800));
 		width_mask = html_block::size_prop(width_mask, other.width_mask,
 										   width, other.width, static_cast<std::int16_t>(1024));
 		font_mask = html_block::size_prop(font_mask, other.font_mask,
-										  font_size, other.font_size, static_cast<std::int8_t>(10));
+										  font_size, other.font_size, static_cast<std::int16_t>(16));
 	}
 
 	/*

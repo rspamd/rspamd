@@ -3149,6 +3149,19 @@ auto html_process_input(struct rspamd_task *task,
 				else {
 					tag->block = css_block;
 				}
+
+				/*
+				 * The parent has already propagated into this block, so a
+				 * relative size coming from the stylesheet is still relative
+				 * and would never be compared against the visibility limits
+				 */
+				if (tag->parent && tag->parent->block) {
+					tag->block->resolve_sizes(*tag->parent->block);
+				}
+				else {
+					static const html_block undefined_parent{};
+					tag->block->resolve_sizes(undefined_parent);
+				}
 			}
 		}
 		if (tag->block) {
