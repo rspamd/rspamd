@@ -512,6 +512,15 @@ auto css_declarations_block::merge_block(const css_declarations_block &other, me
 auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *
 {
 	auto *block = rspamd_mempool_alloc0_type(pool, rspamd::html::html_block);
+
+	compile_into(*block);
+
+	return block;
+}
+
+auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -> void
+{
+	auto *block = &out;
 	auto opacity = -1.0f;
 	std::optional<css_dimension> height, width, max_height, max_width;
 	std::optional<css_dimension> left, top, text_indent;
@@ -711,8 +720,6 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 			}
 		}
 	}
-
-	return block;
 }
 
 void css_rule::add_value(const css_value &value)

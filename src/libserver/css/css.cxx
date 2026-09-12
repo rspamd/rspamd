@@ -54,6 +54,14 @@ public:
 	unsigned next_order = 0;
 	/* Scratch space for the lookup, kept to avoid an allocation per tag */
 	std::vector<const selector_entry *> matched;
+
+	/*
+	 * Every matching selector is evaluated for every element, so the
+	 * number of rules is capped: legitimate mail styles are far below
+	 * this and a crafted one must not turn the lookup into a quadratic
+	 * scan
+	 */
+	static constexpr unsigned max_selectors = 4096;
 };
 
 css_style_sheet::css_style_sheet(rspamd_mempool_t *pool)
@@ -85,21 +93,19 @@ auto css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector
 		break;
 	}
 
-	for (auto &entry: *bucket) {
-		if (*entry.selector == *selector) {
-			/*
-			 * The same selector again: merge the declarations, later ones
-			 * override, and the rule moves to the end of the cascade
-			 */
-			msg_debug_css("found duplicate selector: %s, merging rules",
-						  selector->debug_str().c_str());
-			entry.decls->merge_block(*decls);
-			entry.order = pimpl->next_order++;
+	if (pimpl->next_order >= impl::max_selectors) {
+		msg_debug_css("too many selectors (%d), ignore selector %s",
+					  (int) pimpl->next_order, selector->debug_str().c_str());
 
-			return;
-		}
+		return;
 	}
 
+	/*
+	 * A repeated selector is not merged with the earlier one: it is a new
+	 * rule in the cascade, so only its own declarations move forward.
+	 * Merging would also drag the earlier declarations past rules that
+	 * were written in between
+	 */
 	msg_debug_css("added selector: %s", selector->debug_str().c_str());
 	bucket->push_back(impl::selector_entry{std::move(selector), std::move(decls),
 										   pimpl->next_order++});
@@ -181,8 +187,10 @@ auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspa
 
 	/*
 	 * Cascade: the most specific selector wins, source order breaks ties.
-	 * The winner is compiled first and the others only fill in what it
-	 * leaves undefined
+	 * The winner is compiled into the block returned to the caller; the
+	 * others are compiled into a temporary and only fill in what the
+	 * block leaves undefined, so a tag costs one pool allocation however
+	 * many rules match it
 	 */
 	std::stable_sort(matched.begin(), matched.end(),
 					 [](const impl::selector_entry *a, const impl::selector_entry *b) {
@@ -195,17 +203,13 @@ auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspa
 						 return a->order > b->order;
 					 });
 
-	rspamd::html::html_block *res = nullptr;
+	auto *res = matched.front()->decls->compile_to_block(pool);
 
-	for (const auto *entry: matched) {
-		auto *tmp = entry->decls->compile_to_block(pool);
+	for (auto it = matched.begin() + 1; it != matched.end(); ++it) {
+		rspamd::html::html_block tmp{};
 
-		if (res == nullptr) {
-			res = tmp;
-		}
-		else {
-			res->propagate_block(*tmp);
-		}
+		(*it)->decls->compile_into(tmp);
+		res->set_block(tmp);
 	}
 
 	return res;

@@ -138,6 +138,13 @@ public:
 	 */
 	auto compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *;
 
+	/**
+	 * Compile CSS declaration into an existing zero initialised html block,
+	 * for callers that do not need the block to outlive them
+	 * @param block block to fill
+	 */
+	auto compile_into(rspamd::html::html_block &block) const -> void;
+
 private:
 	ankerl::unordered_dense::set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
 };

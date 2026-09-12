@@ -307,14 +307,24 @@ auto css_compound_selector::matches(const html::html_tag *tag) const -> bool
 
 /*
  * Match the chain from the link `idx` on, starting from `elt` (the element
- * matched by the previous link or the subject). Descendant and subsequent
- * sibling combinators backtrack over all candidates, so `a b c` still
- * matches when the nearest `b` ancestor has no `a` above it but a farther
- * one has.
+ * matched by the previous link or the subject).
+ *
+ * Descendant and subsequent sibling combinators backtrack over all
+ * candidates, so `a > b c` still matches when the nearest `b` ancestor has
+ * no `a` parent but a farther one has. Backtracking is only needed while
+ * a child or next sibling link is still ahead: when the rest of the chain
+ * is descendant links only, the nearest matching ancestor is always a
+ * valid choice (any farther one is also above it), so the walk is greedy
+ * and linear. The same holds for a rest made of subsequent sibling links.
+ *
+ * `budget` bounds the compound evaluations of a single match: the
+ * backtracking cases revisit elements and a crafted document with a deep
+ * nesting and a long chain would otherwise take seconds
  */
 static auto match_chain(const std::vector<css_selector::link> &chain,
 						std::size_t idx,
-						const html::html_tag *elt) -> bool
+						const html::html_tag *elt,
+						unsigned &budget) -> bool
 {
 	if (idx == chain.size()) {
 		return true;
@@ -322,18 +332,44 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 
 	const auto &lnk = chain[idx];
 
+	auto rest_is_only = [&](css_selector::combinator_type comb) -> bool {
+		for (auto i = idx + 1; i < chain.size(); i++) {
+			if (chain[i].combinator != comb) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	auto try_target = [&](const html::html_tag *cand) -> bool {
+		if (budget == 0) {
+			return false;
+		}
+		budget--;
+
+		return lnk.target.matches(cand);
+	};
+
 	switch (lnk.combinator) {
 	case css_selector::combinator_type::child: {
 		const auto *p = elt->parent;
-		return p && lnk.target.matches(p) && match_chain(chain, idx + 1, p);
+		return p && try_target(p) && match_chain(chain, idx + 1, p, budget);
 	}
-	case css_selector::combinator_type::descendant:
-		for (const auto *p = elt->parent; p != nullptr; p = p->parent) {
-			if (lnk.target.matches(p) && match_chain(chain, idx + 1, p)) {
-				return true;
+	case css_selector::combinator_type::descendant: {
+		auto greedy = rest_is_only(css_selector::combinator_type::descendant);
+
+		for (const auto *p = elt->parent; p != nullptr && budget > 0; p = p->parent) {
+			if (try_target(p)) {
+				if (greedy) {
+					return match_chain(chain, idx + 1, p, budget);
+				}
+				if (match_chain(chain, idx + 1, p, budget)) {
+					return true;
+				}
 			}
 		}
 		return false;
+	}
 	case css_selector::combinator_type::next_sibling: {
 		const auto *p = elt->parent;
 
@@ -352,7 +388,7 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 			prev = s;
 		}
 
-		return found && prev && lnk.target.matches(prev) && match_chain(chain, idx + 1, prev);
+		return found && prev && try_target(prev) && match_chain(chain, idx + 1, prev, budget);
 	}
 	case css_selector::combinator_type::subsequent_sibling: {
 		const auto *p = elt->parent;
@@ -361,12 +397,22 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 			return false;
 		}
 
-		for (const auto *s: p->children) {
-			if (s == elt) {
-				break;
-			}
-			if (lnk.target.matches(s) && match_chain(chain, idx + 1, s)) {
-				return true;
+		auto greedy = rest_is_only(css_selector::combinator_type::subsequent_sibling);
+		/* Walk the preceding siblings from the nearest one */
+		auto self = std::find(p->children.begin(), p->children.end(), elt);
+
+		if (self == p->children.end()) {
+			return false;
+		}
+
+		for (auto it = std::make_reverse_iterator(self); it != p->children.rend() && budget > 0; ++it) {
+			if (try_target(*it)) {
+				if (greedy) {
+					return match_chain(chain, idx + 1, *it, budget);
+				}
+				if (match_chain(chain, idx + 1, *it, budget)) {
+					return true;
+				}
 			}
 		}
 
@@ -383,7 +429,9 @@ auto css_selector::matches(const html::html_tag *tag) const -> bool
 		return false;
 	}
 
-	return match_chain(chain, 0, tag);
+	auto budget = max_match_steps;
+
+	return match_chain(chain, 0, tag, budget);
 }
 
 /*

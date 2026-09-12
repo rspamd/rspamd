@@ -181,6 +181,13 @@ struct css_selector {
 	 * chain and nothing sane needs more levels than this
 	 */
 	static constexpr std::size_t max_chain_length = 16;
+	/*
+	 * Descendant and subsequent sibling links backtrack over their
+	 * candidates, so a chain of them can revisit the same elements many
+	 * times. The number of compound evaluations per match is bounded and
+	 * a match that exhausts the budget fails
+	 */
+	static constexpr unsigned max_match_steps = 1024;
 
 	css_compound_selector subject;
 	std::vector<link> chain;

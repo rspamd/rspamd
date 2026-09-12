@@ -321,6 +321,34 @@ context("HTML processing", function()
     assert_equal('', invisible_of(
         '.b { font-size: 0 } .a { font-size: 14px }',
         '<span class="a b">kept</span>'))
+    -- A less specific display:none does not leak through a more specific display:block
+    assert_equal('', invisible_of(
+        'p { display: none } .show { display: block }',
+        '<p class="show">kept</p>'))
+  end)
+
+  -- A repeated selector is a new rule in the cascade: only the declarations
+  -- of the later rule move past the rules written in between
+  test("A repeated selector does not carry its earlier declarations forward", function()
+    assert_equal('', invisible_of(
+        '.a { font-size: 0 } .b { font-size: 14px } .a { color: red }',
+        '<span class="b a">kept</span>'))
+    assert_equal('gone', invisible_of(
+        '.a { color: red } .b { font-size: 14px } .a { font-size: 0 }',
+        '<span class="b a">gone</span>'))
+  end)
+
+  test("Deep nesting with long chains is matched in bounded time", function()
+    local nested = string.rep('<div class="a">', 28) .. '<span class="b">text</span>' ..
+        string.rep('</div>', 28)
+    -- Descendant-only chains are matched greedily, no backtracking
+    local chain = string.rep('.a ', 16) .. '.b'
+    assert_equal('text', invisible_of(chain .. ' { display: none }', nested))
+    -- A mismatch at the far end of the chain fails fast as well
+    assert_equal('', invisible_of('.z ' .. chain .. ' { display: none }', nested))
+    -- Alternating child/descendant links need backtracking; the budget bounds it
+    local mixed = '#nope > ' .. string.rep('.a > .a ', 7) .. '.a .b'
+    assert_equal('', invisible_of(mixed .. ' { display: none }', nested))
   end)
 
   test("HTML tag get_all_attributes basic test", function()
