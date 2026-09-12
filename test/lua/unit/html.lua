@@ -231,7 +231,7 @@ context("HTML processing", function()
 
   -- A grouped selector list used to be truncated to the first simple selector
   -- of its first part, so a rule meant for a spacer blanked every such element
-  test("A grouped selector that cannot be evaluated is not applied", function()
+  test("A grouped descendant selector is not applied by its first part", function()
     local html = parse_html_message(
         '<html><head><style>div.mainbox ul li.spacer, div.mainbox ol li.spacer ' ..
         '{ font-size: 0; color: transparent; opacity: 0 }</style></head>' ..
@@ -245,6 +245,82 @@ context("HTML processing", function()
         '<body><div class="spacer">gone</div></body></html>')
     assert_not_nil(hidden, 'html part not parsed')
     assert_equal('gone', tostring(hidden:get_invisible()))
+  end)
+
+  local function invisible_of(css, body)
+    local html = parse_html_message(
+        '<html><head><style>' .. css .. '</style></head><body>' .. body .. '</body></html>')
+    if not html then
+      return nil
+    end
+    return tostring(html:get_invisible())
+  end
+
+  test("Compound selectors match all parts on the same element", function()
+    local css = 'p.x { display: none }'
+    assert_equal('gone', invisible_of(css,
+        '<p class="x">gone</p><p class="y">kept</p><div class="x">kept</div>'))
+    assert_equal('gone', invisible_of('.a.b { display: none }',
+        '<p class="b a">gone</p><p class="a">kept</p><p class="b">kept</p>'))
+    assert_equal('gone', invisible_of('div#top.x { display: none }',
+        '<div id="top" class="x">gone</div><div id="top">kept</div><div class="x">kept</div>'))
+  end)
+
+  test("Descendant combinator matches any ancestor", function()
+    local css = 'div.mainbox li.spacer { font-size: 0 }'
+    assert_equal('gone', invisible_of(css,
+        '<div class="mainbox"><ul><li class="spacer">gone</li><li>kept</li></ul></div>' ..
+        '<div class="other"><ul><li class="spacer">kept</li></ul></div>' ..
+        '<ul><li class="spacer">kept</li></ul>'))
+    -- The nearest matching ancestor is not the only candidate
+    assert_equal('gone', invisible_of('.a .b .c { display: none }',
+        '<div class="a"><div class="b"><div class="b"><span class="c">gone</span></div></div></div>' ..
+        '<div class="b"><div class="a"><span class="c">kept</span></div></div>'))
+  end)
+
+  test("Child combinator matches the parent only", function()
+    local css = 'div > p { display: none }'
+    assert_equal('gone', invisible_of(css,
+        '<div><p>gone</p><span><p>kept</p></span></div><p>kept</p>'))
+  end)
+
+  test("Sibling combinators match preceding siblings", function()
+    assert_equal('gone', invisible_of('h1 + p { display: none }',
+        '<div><h1>title</h1><p>gone</p><p>kept</p></div><div><p>kept</p><h1>title</h1></div>'))
+    assert_equal('gonegone', invisible_of('h1 ~ p { display: none }',
+        '<div><p>kept</p><h1>title</h1><p>gone</p><span>x</span><p>gone</p></div>' ..
+        '<div><p>kept</p></div>'))
+  end)
+
+  test("Grouped complex selectors are applied to every member", function()
+    local css = 'div.mainbox ul li.spacer, div.mainbox ol li.spacer { font-size: 0 }'
+    assert_equal('gonegone', invisible_of(css,
+        '<div class="mainbox"><ul><li class="spacer">gone</li></ul>' ..
+        '<ol><li class="spacer">gone</li></ol><p>Visible content.</p></div>'))
+  end)
+
+  test("Selectors that cannot be evaluated do not hide anything", function()
+    assert_equal('', invisible_of('a:hover { display: none }', '<a href="http://example.com/">kept</a>'))
+    assert_equal('', invisible_of('a[href] { display: none }', '<a href="http://example.com/">kept</a>'))
+    -- But the members of the list that can be evaluated still apply
+    assert_equal('gone', invisible_of('a:hover, p.x { display: none }',
+        '<a href="http://example.com/">kept</a><p class="x">gone</p>'))
+  end)
+
+  test("A more specific selector wins regardless of the order", function()
+    assert_equal('gone', invisible_of(
+        'div.mainbox .spacer { font-size: 0 } .spacer { font-size: 14px }',
+        '<div class="mainbox"><span class="spacer">gone</span></div><span class="spacer">kept</span>'))
+    assert_equal('gone', invisible_of(
+        '.spacer { font-size: 14px } div.mainbox .spacer { font-size: 0 }',
+        '<div class="mainbox"><span class="spacer">gone</span></div><span class="spacer">kept</span>'))
+    -- At equal specificity the later rule wins
+    assert_equal('gone', invisible_of(
+        '.a { font-size: 14px } .b { font-size: 0 }',
+        '<span class="a b">gone</span>'))
+    assert_equal('', invisible_of(
+        '.b { font-size: 0 } .a { font-size: 14px }',
+        '<span class="a b">kept</span>'))
   end)
 
   test("HTML tag get_all_attributes basic test", function()
