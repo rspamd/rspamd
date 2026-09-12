@@ -49,6 +49,25 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
             }
         }
     };
+    // Per-server liveness; the fail entry carries a "<" escaping canary;
+    // empty.example's empty result set exercises the no-status fallback
+    const status = {
+        n1: {
+            "down.example": {servers: [
+                {error: "timeout waiting the reply <x>", name: "fuzzy9.example.com:11335", ok: false}
+            ]},
+            "empty.example": {servers: []},
+            "rspamd.com": {servers: [
+                {latency: 12.3, name: "fuzzy1.rspamd.com:11335", ok: true}
+            ]}
+        },
+        n2: {
+            "rspamd.com": {servers: [
+                {error: "timeout", name: "10.0.0.1:11335", ok: false},
+                {latency: 3.4, name: "127.0.0.1:11335", ok: true}
+            ]}
+        }
+    };
 
     await page.route("**/neighbours", (route) => route.fulfill({
         status: 200,
@@ -79,17 +98,25 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
             contentType: "application/json",
             body: JSON.stringify({storages: storages[n], success: true}),
         }));
+        await page.route(`**/${n}/plugins/fuzzy/status`, (route) => route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({storages: status[n], success: true}),
+        }));
     }
 
     // The login-time sticky-tabs activation of the status tab already runs
     // the first /stat cycle, so the storages probe may answer before this
     // test could observe the navBar — arm the listener before logging in
     const n1Storages = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/storages"));
+    const n1Status = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/status"));
     await login(page, enablePassword);
     await expect(page.locator("#navBar")).not.toHaveClass(/d-none/, {timeout: 30000});
-    // The storages config lands after the /stat render (second pass)
+    // The storages config and the liveness marks land after the /stat
+    // render (second pass)
     await Promise.all([
         n1Storages,
+        n1Status,
         page.locator("#status_nav").click(),
     ]);
 
@@ -110,30 +137,48 @@ test("fuzzy table: per-server join, tooltips, read-only badge, raw numbers", asy
     await expect(rows.nth(2).locator("td").nth(0)).toHaveText("empty.example");
     await expect(rows.nth(2).locator("td").nth(1)).toHaveText("0");
     await expect(rows.nth(2).locator(".badge")).toHaveCount(0);
+    // An empty liveness result set is no status at all: compact tooltip,
+    // no marks and no "Checked" line
+    await expect(rows.nth(2).locator("td").nth(0)).toHaveAttribute("title",
+        "Servers: fuzzy2.example.com:11335\nSymbols:\nRW_WL_1 (3)");
 
-    // One read-only badge (n1's rspamd.com) and one unavailable badge
-    // (n1's down.example) — no badges for n2
-    await expect(page.locator("#fuzzyTable .badge")).toHaveCount(2);
+    // One read-only badge (n1's rspamd.com), the unavailable and "1/1 down"
+    // badges (n1's down.example) and the "1/2 down" badge (n2's rspamd.com);
+    // local<b> and empty.example render no badges
+    await expect(page.locator("#fuzzyTable .badge")).toHaveCount(4);
     await expect(rows.nth(0).locator(".badge")).toHaveText("read-only");
     await expect(rows.nth(0).locator(".badge"))
         .toHaveAttribute("title", "Storage is read-only: it cannot be learned to");
-    await expect(rows.nth(3).locator(".badge")).toHaveText("unavailable");
-    await expect(rows.nth(3).locator(".badge")).toHaveAttribute("title",
+    await expect(rows.nth(3).locator(".badge").nth(0)).toHaveText("unavailable");
+    await expect(rows.nth(3).locator(".badge").nth(0)).toHaveAttribute("title",
         "No reply to the statistics query; the storage may be down, rate-limited or access denied");
+    await expect(rows.nth(3).locator(".badge").nth(1)).toHaveText("1/1 down");
+    await expect(rows.nth(3).locator(".badge").nth(1))
+        .toHaveAttribute("title", "1 of 1 servers did not answer the ping");
+    await expect(rows.nth(4).locator(".badge")).toHaveText("1/2 down");
+    await expect(rows.nth(4).locator(".badge"))
+        .toHaveAttribute("title", "1 of 2 servers did not answer the ping");
 
-    // The configured-but-unreported rule keeps its config tooltip and
-    // renders "-" instead of a count
+    // The configured-but-unreported rule keeps its config tooltip (with the
+    // failing liveness mark and the escaped error canary) and renders "-"
+    // instead of a count
     await expect(rows.nth(3).locator("td").nth(0)).toHaveAttribute("title",
-        "Servers: fuzzy9.example.com:11335\nSymbols:\nRW_BL_2 (2)");
+        /^Servers:\nfuzzy9\.example\.com:11335 - fail \(timeout waiting the reply <x>\)\nChecked: .+ ago\n/);
+    await expect(rows.nth(3).locator("td").nth(0)).toHaveAttribute("title", /Symbols:\nRW_BL_2 \(2\)$/);
     await expect(rows.nth(3).locator("td").nth(1)).toHaveText("-");
 
-    // n1: unified servers list plus the symbol/flag mapping in the tooltip
+    // n1: unified servers list with the ok mark and the check time
     await expect(rows.nth(0).locator("td").nth(1)).toHaveAttribute("title",
-        "Servers: fuzzy1.rspamd.com:11335\nSymbols:\nFUZZY_DENIED (1)\nFUZZY_PROB (2)");
+        /^Servers:\nfuzzy1\.rspamd\.com:11335 - ok \(12 ms\)\nChecked: .+ ago\n/);
+    await expect(rows.nth(0).locator("td").nth(1))
+        .toHaveAttribute("title", /Symbols:\nFUZZY_DENIED \(1\)\nFUZZY_PROB \(2\)$/);
 
-    // n2: its own split read/write lists and flags — no cross-server mixing
+    // n2: its own split read/write lists with per-server marks — no
+    // cross-server mixing
     await expect(rows.nth(4).locator("td").nth(1)).toHaveAttribute("title",
-        "Read: 127.0.0.1:11335\nWrite: 10.0.0.1:11335\nSymbols:\nFUZZY_DENIED (5)");
+        /^Read:\n127\.0\.0\.1:11335 - ok \(3 ms\)\nWrite:\n10\.0\.0\.1:11335 - fail \(timeout\)\n/);
+    await expect(rows.nth(4).locator("td").nth(1))
+        .toHaveAttribute("title", /Checked: .+ ago\nSymbols:\nFUZZY_DENIED \(5\)$/);
 
     // Raw, copyable counts — no locale formatting
     await expect(rows.nth(0).locator("td").nth(2)).toHaveText("1234567");
@@ -187,6 +232,11 @@ test("fuzzy table: empty state and storages endpoint degradation", async ({page,
             }));
         }
         await page.route(`**/${n}/plugins/fuzzy/storages`, (route) => route.fulfill({
+            status: 404,
+            contentType: "application/json",
+            body: JSON.stringify({error: "fuzzy_check is not enabled"}),
+        }));
+        await page.route(`**/${n}/plugins/fuzzy/status`, (route) => route.fulfill({
             status: 404,
             contentType: "application/json",
             body: JSON.stringify({error: "fuzzy_check is not enabled"}),
@@ -287,33 +337,232 @@ test("fuzzy table: a recovered neighbour gets its storages", async ({page, reque
             success: true
         }),
     }));
+    await page.route("**/n1/plugins/fuzzy/status", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+            storages: {"rspamd.com": {servers: [{latency: 12.3, name: "fuzzy1.rspamd.com:11335", ok: true}]}},
+            success: true
+        }),
+    }));
+    await page.route("**/n2/plugins/fuzzy/status", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+            storages: {"rspamd.com": {servers: [
+                {error: "timeout", name: "10.0.0.1:11335", ok: false},
+                {latency: 3.4, name: "127.0.0.1:11335", ok: true}
+            ]}},
+            success: true
+        }),
+    }));
 
     const n1Storages = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/storages"));
+    const n1Status = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/status"));
     await login(page, enablePassword);
     await expect(page.locator("#navBar")).not.toHaveClass(/d-none/, {timeout: 30000});
     await Promise.all([
         n1Storages,
+        n1Status,
         page.locator("#status_nav").click(),
     ]);
 
     // While n2 is down only n1 renders, with its storages metadata
     const rows = page.locator("#fuzzyTable tbody tr");
     await expect(rows).toHaveCount(1);
-    await expect(rows.nth(0).locator("td").nth(1))
-        .toHaveAttribute("title", "Servers: fuzzy1.rspamd.com:11335\nSymbols:\nFUZZY_DENIED (1)");
+    await expect(rows.nth(0).locator("td").nth(1)).toHaveAttribute("title",
+        /^Servers:\nfuzzy1\.rspamd\.com:11335 - ok \(12 ms\)\nChecked: .+ ago\nSymbols:\nFUZZY_DENIED \(1\)$/);
     await expect(page.locator("#fuzzyTable .badge")).toHaveCount(1);
 
     // n2 recovers with the same config_id; the manual refresh runs a new
     // cycle whose changed up-set must refetch the storages config. Arm the
     // listener before flipping the state so no fetch can slip past it
     const n2Storages = page.waitForResponse((r) => r.url().includes("/n2/plugins/fuzzy/storages"));
+    const n2Status = page.waitForResponse((r) => r.url().includes("/n2/plugins/fuzzy/status"));
     n2Up = true;
     await Promise.all([
         n2Storages,
+        n2Status,
         page.locator("#refresh").click(),
     ]);
     await expect(rows).toHaveCount(2);
     await expect(rows.nth(1).locator("td").nth(1)).toHaveAttribute("title",
-        "Read: 127.0.0.1:11335\nWrite: 10.0.0.1:11335\nSymbols:\nFUZZY_DENIED (5)");
-    await expect(page.locator("#fuzzyTable .badge")).toHaveCount(2);
+        /^Read:\n127\.0\.0\.1:11335 - ok \(3 ms\)\nWrite:\n10\.0\.0\.1:11335 - fail \(timeout\)\n/);
+    await expect(rows.nth(1).locator("td").nth(1))
+        .toHaveAttribute("title", /Checked: .+ ago\nSymbols:\nFUZZY_DENIED \(5\)$/);
+    // Both read-only badges plus the "1/2 down" liveness badge of n2
+    await expect(page.locator("#fuzzyTable .badge")).toHaveCount(3);
+});
+
+// The liveness join is per neighbour: a neighbour whose status endpoint is
+// unavailable keeps the compact tooltip while the other one shows marks.
+test("fuzzy table: status marks are per neighbour", async ({page, request}, testInfo) => {
+    const {enablePassword, readOnlyPassword} = testInfo.project.use.rspamdPasswords;
+    const baseStat = await (await request.get("/stat", {headers: {Password: readOnlyPassword}})).json();
+
+    await page.route("**/neighbours", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+            srv1: {host: "127.0.0.1", url: "http://localhost:11334/n1/"},
+            srv2: {host: "127.0.0.1", url: "http://localhost:11334/n2/"},
+        }),
+    }));
+    for (const n of ["n1", "n2"]) {
+        await page.route(`**/${n}/stat`, (route) => route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({...baseStat, fuzzy_hashes: {"rspamd.com": n === "n1" ? 100 : 42}}),
+        }));
+        for (const ep of ["auth", "healthy", "ready"]) {
+            await page.route(`**/${n}/${ep}`, (route) => route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify(ep === "auth"
+                    ? {auth: "ok", version: baseStat.version}
+                    : {}),
+            }));
+        }
+        await page.route(`**/${n}/plugins/fuzzy/storages`, (route) => route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                storages: {
+                    "rspamd.com": {flags: {FUZZY_DENIED: 1}, read_only: false, servers: ["fuzzy1.rspamd.com:11335"]}
+                },
+                success: true
+            }),
+        }));
+    }
+    await page.route("**/n1/plugins/fuzzy/status", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+            storages: {"rspamd.com": {servers: [{latency: 12.3, name: "fuzzy1.rspamd.com:11335", ok: true}]}},
+            success: true
+        }),
+    }));
+    // n2 predates the endpoint (or the ping failed): compact tooltip only
+    await page.route("**/n2/plugins/fuzzy/status", (route) => route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({error: "not found"}),
+    }));
+
+    const n1Status = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/status"));
+    await login(page, enablePassword);
+    await expect(page.locator("#navBar")).not.toHaveClass(/d-none/, {timeout: 30000});
+    await Promise.all([
+        n1Status,
+        page.locator("#status_nav").click(),
+    ]);
+
+    const rows = page.locator("#fuzzyTable tbody tr");
+    await expect(rows).toHaveCount(2);
+    // n1: per-server mark plus the check time
+    await expect(rows.nth(0).locator("td").nth(1)).toHaveAttribute("title",
+        /^Servers:\nfuzzy1\.rspamd\.com:11335 - ok \(12 ms\)\nChecked: .+ ago\nSymbols:\nFUZZY_DENIED \(1\)$/);
+    // n2: the legacy compact format, no marks and no error-log badge
+    await expect(rows.nth(1).locator("td").nth(1)).toHaveAttribute("title",
+        "Servers: fuzzy1.rspamd.com:11335\nSymbols:\nFUZZY_DENIED (1)");
+    await expect(page.locator("#error-log-badge")).toHaveClass(/\bd-none\b/);
+});
+
+// The Check button in the fuzzy card header re-probes the liveness on
+// demand: the down badge and the "Checked" time do not wait for the next
+// refresh cycle (which may never come with auto-refresh off).
+test("fuzzy table: Check button re-probes the storages liveness", async ({page, request}, testInfo) => {
+    const {enablePassword, readOnlyPassword} = testInfo.project.use.rspamdPasswords;
+    const baseStat = await (await request.get("/stat", {headers: {Password: readOnlyPassword}})).json();
+
+    await page.route("**/neighbours", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+            srv1: {host: "127.0.0.1", url: "http://localhost:11334/n1/"},
+            srv2: {host: "127.0.0.1", url: "http://localhost:11334/n2/"},
+        }),
+    }));
+    await page.route("**/n1/stat", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({...baseStat, fuzzy_hashes: {"rspamd.com": 100}}),
+    }));
+    // No fuzzy storages on n2: it renders the placeholder row and must not
+    // disturb the re-probe
+    await page.route("**/n2/stat", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(baseStat),
+    }));
+    for (const n of ["n1", "n2"]) {
+        for (const ep of ["auth", "healthy", "ready"]) {
+            await page.route(`**/${n}/${ep}`, (route) => route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify(ep === "auth"
+                    ? {auth: "ok", version: baseStat.version}
+                    : {}),
+            }));
+        }
+    }
+    await page.route("**/n1/plugins/fuzzy/storages", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+            storages: {
+                "rspamd.com": {flags: {FUZZY_DENIED: 1}, read_only: false, servers: ["fuzzy1.rspamd.com:11335"]}
+            },
+            success: true
+        }),
+    }));
+    await page.route("**/n2/plugins/fuzzy/storages", (route) => route.fulfill({status: 404}));
+    // The first probe (page load) reports the server down, the re-probe
+    // (the Check button) reports it back up
+    let statusFetches = 0;
+    await page.route("**/n1/plugins/fuzzy/status", (route) => {
+        statusFetches++;
+        route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                storages: {"rspamd.com": {servers: [
+                    statusFetches === 1
+                        ? {error: "timeout", name: "fuzzy1.rspamd.com:11335", ok: false}
+                        : {latency: 20.1, name: "fuzzy1.rspamd.com:11335", ok: true}
+                ]}},
+                success: true
+            }),
+        });
+    });
+    await page.route("**/n2/plugins/fuzzy/status", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({storages: {}, success: true}),
+    }));
+
+    const n1Status = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/status"));
+    await login(page, enablePassword);
+    await expect(page.locator("#navBar")).not.toHaveClass(/d-none/, {timeout: 30000});
+    await Promise.all([
+        n1Status,
+        page.locator("#status_nav").click(),
+    ]);
+
+    const rows = page.locator("#fuzzyTable tbody tr");
+    await expect(rows).toHaveCount(2);
+    // The failure is visible without hovering: the down badge on the cell
+    await expect(rows.nth(0).locator(".badge")).toHaveText("1/1 down");
+    await expect(rows.nth(0).locator("td").nth(1)).toHaveAttribute("title",
+        /^Servers:\nfuzzy1\.rspamd\.com:11335 - fail \(timeout\)\nChecked: .+ ago\n/);
+
+    // On-demand re-probe: every up neighbour's status endpoint is refetched
+    const n1Reprobe = page.waitForResponse((r) => r.url().includes("/n1/plugins/fuzzy/status"));
+    const n2Reprobe = page.waitForResponse((r) => r.url().includes("/n2/plugins/fuzzy/status"));
+    await page.locator("#checkFuzzy").click();
+    await Promise.all([n1Reprobe, n2Reprobe]);
+
+    await expect(rows.nth(0).locator(".badge")).toHaveCount(0);
+    await expect(rows.nth(0).locator("td").nth(1)).toHaveAttribute("title",
+        /^Servers:\nfuzzy1\.rspamd\.com:11335 - ok \(20 ms\)\nChecked: .+ ago\n/);
 });

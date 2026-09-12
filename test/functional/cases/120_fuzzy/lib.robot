@@ -278,6 +278,14 @@ Fuzzy Multimessage Write Only No Check Test
     Fuzzy Write Only No Check Test  ${i}
   END
 
+Fuzzy Setup Split Keys
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
+  Rspamd Redis Setup
+
+Fuzzy Setup Write Only Keys
+  Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
+  Rspamd Redis Setup
+
 Fuzzy Setup Split Servers
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  siphash
   Set Suite Variable  ${RSPAMD_FUZZY_SERVER_MODE}  split
