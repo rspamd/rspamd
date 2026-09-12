@@ -13,7 +13,7 @@ struct rspamd_config;
 struct rspamd_mta_hooks_config;
 struct rspamd_mta_hooks_request;
 
-/* Experimental draft-01 DATA/add-only frontend. All callbacks may run inline.
+/* Experimental draft-01 DATA frontend. All callbacks may run inline.
  * A callback receives ownership of exactly one message: native scan input or
  * HTTP response. The caller keeps the request and its callback data alive until
  * the callback has completed, including when the peer disconnects. */
@@ -22,6 +22,8 @@ typedef void (*rspamd_mta_hooks_callback)(struct rspamd_http_message *message,
 struct rspamd_mta_hooks_config *rspamd_mta_hooks_config_new(
 	const ucl_object_t *obj, struct rspamd_config *cfg, GError **err);
 void rspamd_mta_hooks_config_free(struct rspamd_mta_hooks_config *cfg);
+/* Set the worker's spam header before accepting requests. */
+gboolean rspamd_mta_hooks_set_spam_header(struct rspamd_mta_hooks_config *cfg, const char *name);
 gsize rspamd_mta_hooks_max_request(struct rspamd_mta_hooks_config *cfg);
 struct rspamd_mta_hooks_request *rspamd_mta_hooks_request_new(
 	struct rspamd_mta_hooks_config *cfg, struct rspamd_http_message *msg,
@@ -30,7 +32,7 @@ void rspamd_mta_hooks_request_free(struct rspamd_mta_hooks_request *request);
 void rspamd_mta_hooks_begin(struct rspamd_mta_hooks_request *request,
 							rspamd_mta_hooks_callback callback, gpointer ud);
 void rspamd_mta_hooks_finish(struct rspamd_mta_hooks_request *request,
-							 const ucl_object_t *results, gboolean rewritten,
+							 const ucl_object_t *results, const char *body, gsize body_len,
 							 rspamd_mta_hooks_callback callback, gpointer ud);
 double rspamd_mta_hooks_remaining(struct rspamd_mta_hooks_request *request);
 struct rspamd_http_message *rspamd_mta_hooks_error(int status,
@@ -39,7 +41,8 @@ struct rspamd_http_message *rspamd_mta_hooks_error(int status,
 struct rspamd_http_message *rspamd_mta_hooks_decode(const char *data, gsize len,
 													gsize max_message, GError **err);
 struct rspamd_http_message *rspamd_mta_hooks_encode(const ucl_object_t *results,
-													gboolean rewritten);
+													const char *original, gsize original_len, const char *body, gsize body_len,
+													const char *spam_header, gsize max_message);
 #ifdef __cplusplus
 }
 #endif

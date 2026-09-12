@@ -1098,7 +1098,7 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 	ctx->max_connections_per_source = 0; /* Unlimited by default */
 	rspamd_rcl_register_worker_option(cfg, type, "mta_hooks",
 									  rspamd_proxy_parse_mta_hooks, ctx, 0, 0,
-									  "Experimental draft-01 DATA/add-only HTTP frontend (requires Redis)");
+									  "Experimental draft-01 DATA HTTP frontend (requires Redis)");
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -1328,7 +1328,8 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 	if (offset_hdr) {
 		gulong val;
 
-		if (rspamd_strtoul(offset_hdr->begin, offset_hdr->len, &val) && val < inlen) {
+		/* An offset at the end explicitly replaces the body with zero bytes. */
+		if (rspamd_strtoul(offset_hdr->begin, offset_hdr->len, &val) && val > 0 && val <= inlen) {
 
 			if (body_offset) {
 				*body_offset = val;
@@ -2768,10 +2769,10 @@ proxy_hooks_ready(struct rspamd_http_message *msg, gboolean scan, gpointer ud)
 
 static void
 proxy_hooks_finish(struct rspamd_proxy_session *session,
-				   const ucl_object_t *results, gboolean rewritten)
+				   const ucl_object_t *results, const char *body, gsize body_len)
 {
 	REF_RETAIN(session);
-	rspamd_mta_hooks_finish(session->hooks_request, results, rewritten,
+	rspamd_mta_hooks_finish(session->hooks_request, results, body, body_len,
 							proxy_hooks_ready, session);
 }
 
@@ -2781,7 +2782,7 @@ proxy_client_write_error(struct rspamd_proxy_session *session, int code,
 {
 	struct rspamd_http_message *reply;
 	if (session->hooks_request) {
-		proxy_hooks_finish(session, NULL, FALSE);
+		proxy_hooks_finish(session, NULL, NULL, 0);
 		return;
 	}
 
@@ -3006,8 +3007,16 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 	}
 
 	if (session->hooks_request) {
+		gsize len;
+		const char *data = rspamd_http_message_get_body(msg, &len);
+		const char *body = bk_conn->body_data;
+		gsize body_len = bk_conn->body_len;
+		if (!body && body_offset > 0 && (gsize) body_offset <= len) {
+			body = data + body_offset;
+			body_len = len - body_offset;
+		}
 		proxy_hooks_finish(session, msg->code == 200 ? bk_conn->results : NULL,
-						   bk_conn->body_data != NULL || body_offset > 0);
+						   body, body_len);
 		rspamd_http_message_unref(msg);
 		return 0;
 	}
@@ -3121,8 +3130,12 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 			session->master_conn->results = ucl_object_ref(rep);
 		}
 		session->master_conn->flags |= RSPAMD_BACKEND_CLOSED;
-		proxy_hooks_finish(session, rep,
-						   (task->flags & RSPAMD_TASK_FLAG_MESSAGE_REWRITE) != 0);
+		const char *body = NULL;
+		gsize body_len = 0;
+		if (task->flags & RSPAMD_TASK_FLAG_MESSAGE_REWRITE) {
+			rspamd_protocol_get_rewritten_body(task, &body, &body_len);
+		}
+		proxy_hooks_finish(session, rep, body, body_len);
 		rspamd_http_message_unref(msg);
 		return;
 	}
@@ -4088,6 +4101,10 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	CFG_REF_RETAIN(ctx->cfg);
 	ctx->srv = worker->srv;
 	if (ctx->mta_hooks) {
+		if (!rspamd_mta_hooks_set_spam_header(ctx->mta_hooks, ctx->spam_header)) {
+			msg_err("invalid spam_header for MTA Hooks");
+			exit(EXIT_FAILURE);
+		}
 		if (ctx->milter || ctx->mirrors->len != 0 || ctx->discard_on_reject || ctx->quarantine_on_reject) {
 			msg_err("mta_hooks requires a dedicated HTTP proxy without mirrors or milter action overrides");
 			exit(EXIT_FAILURE);

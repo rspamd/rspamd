@@ -21,13 +21,16 @@ static msg_ptr decode(const std::string &s, size_t limit = 1024)
 	if (err) g_error_free(err);
 	return m;
 }
-static msg_ptr encode(const char *s, bool rewritten = false)
+static msg_ptr encode(const char *s, bool rewritten = false,
+					  const std::string &original = "Subject: test\r\nX-Old: one\r\nX-Old: two\r\n\r\nhello\r\n")
 {
 	auto *p = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
 	REQUIRE(ucl_parser_add_chunk(p, reinterpret_cast<const unsigned char *>(s), strlen(s)));
 	auto *o = ucl_parser_get_object(p);
 	ucl_parser_free(p);
-	msg_ptr m{rspamd_mta_hooks_encode(o, rewritten), rspamd_http_message_unref};
+	msg_ptr m{rspamd_mta_hooks_encode(o, original.data(), original.size(), rewritten ? "new body\r\n" : nullptr,
+									  rewritten ? 10 : 0, "X-Spam", 1024 * 1024),
+			  rspamd_http_message_unref};
 	ucl_object_unref(o);
 	return m;
 }
@@ -150,7 +153,9 @@ TEST_SUITE("mta_hooks")
 	}
 	TEST_CASE("fast UTF-8 validation and UTC timestamps")
 	{
-		for (auto date: {"2026-02-30T12:00:00Z", "xxxx-09-05T12:00:00Z", "2026-09-05T24:00:00Z",
+		for (auto date: {"2026-02-30T12:00:00Z", "1900-02-29T12:00:00Z", "2026-00-05T12:00:00Z",
+						 "2026-13-05T12:00:00Z", "2026-09-00T12:00:00Z", "0000-09-05T12:00:00Z",
+						 "xxxx-09-05T12:00:00Z", "2026-09-05T24:00:00Z",
 						 "2026-09-05T12:60:00Z", "2026-09-05T12:00:00.Z", "2026-09-05T12:00:00+01:00"}) {
 			auto s = hooks_test::request();
 			s.replace(s.find("2026-09-05T12:00:00Z"), 20, date);
@@ -158,6 +163,9 @@ TEST_SUITE("mta_hooks")
 		}
 		auto s = hooks_test::request();
 		s.replace(s.find("2026-09-05T12:00:00Z"), 20, "2024-02-29T12:00:00.123Z");
+		CHECK(hooks_test::decode(s));
+		s = hooks_test::request();
+		s.replace(s.find("2026-09-05T12:00:00Z"), 20, "2000-02-29T12:00:00Z");
 		CHECK(hooks_test::decode(s));
 		s = hooks_test::request();
 		s.replace(s.find("mx.example.com"), 14, "m\xc3\xa9.example.com");
@@ -197,15 +205,28 @@ TEST_SUITE("mta_hooks")
 	}
 	TEST_CASE("unsupported changes fail atomically")
 	{
-		for (auto s: {R"({"action":"rewrite subject","subject":"spam"})",
-					  R"({"action":"add header"})", R"({"action":"no action","dkim-signature":"sig"})",
-					  R"({"action":"no action","milter":{"add_headers":{"X-Test":"yes"},"remove_headers":{"X-Test":0}}})",
+		for (auto s: {R"({"action":"rewrite subject","subject":"spam\r\nEvil: yes"})",
+					  R"({"action":"no action","dkim-signature":42})",
+					  R"({"action":"no action","milter":{"add_headers":{"X-Test":"yes"},"remove_headers":{"X-Test":-1}}})",
 					  R"({"action":"no action","milter":{"add_headers":{"X-Test":"a\r\nb"}}})"}) {
 			auto m = hooks_test::encode(s);
 			CHECK(m->code == 503);
 			CHECK(hooks_test::body(m.get()).find("\"add\"") == std::string::npos);
 		}
-		CHECK(hooks_test::encode(R"({"action":"no action"})", true)->code == 503);
+		CHECK(hooks_test::encode(R"({"action":"no action"})", true)->code == 200);
+	}
+	TEST_CASE("header actions and folded signatures")
+	{
+		for (auto s: {R"({"action":"rewrite subject","subject":"spam"})",
+					  R"({"action":"add header"})",
+					  R"({"action":"no action","dkim-signature":["v=1;\r\n\tb=one", "v=1; b=two"]})",
+					  R"({"action":"no action","milter":{"remove_headers":{"x-old":[1,2]},"add_headers":{"X-Old":"new"}}})"}) {
+			CHECK(hooks_test::encode(s)->code == 200);
+		}
+		auto m = hooks_test::encode(R"({"action":"no action","milter":{"remove_headers":{"x-old":2},"add_headers":{"X-New":{"value":"new","order":0}}}})");
+		CHECK(hooks_test::body(m.get()).find("/message/headers/3") != std::string::npos);
+		m = hooks_test::encode(R"({"action":"rewrite subject","subject":"spam"})");
+		CHECK(hooks_test::body(m.get()).find("/message/headers/0/value") != std::string::npos);
 	}
 	TEST_CASE("dedicated frontend requires TLS and bearer authentication")
 	{

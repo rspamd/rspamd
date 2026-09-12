@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
-#include <chrono>
 #include <ctime>
 #include <functional>
 #include <memory>
@@ -172,11 +171,14 @@ bool valid_timestamp(sv s)
 		std::from_chars(part.data(), part.data() + part.size(), value);
 		return value;
 	};
-	using namespace std::chrono;
 	int year_value = number(0, 4);
-	auto date = year_month_day{year{year_value}, month{unsigned(number(5, 2))}, day{unsigned(number(8, 2))}};
+	int month_value = number(5, 2), day_value = number(8, 2);
 	int hour = number(11, 2), minute = number(14, 2), second = number(17, 2);
-	if (year_value < 1 || !date.ok() || hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 60) {
+	/* GLib's calendar validation also works with older C++20 libraries that
+	 * do not yet provide std::chrono calendar types. */
+	if (year_value < 1 || month_value < 1 || month_value > 12 || day_value < 1 || day_value > 31 ||
+		!g_date_valid_dmy(day_value, static_cast<GDateMonth>(month_value), year_value) ||
+		hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 60) {
 		return false;
 	}
 	if (s.size() == 20) {
@@ -263,21 +265,28 @@ result<void> validate_subscription(const ucl_object_t *o)
 	if (!props || ucl_object_type(props) == UCL_NULL) {
 		return {};
 	}
-	if (ucl_object_type(props) != UCL_ARRAY || props->len != properties.size()) {
+	if (ucl_object_type(props) != UCL_ARRAY || props->len < properties.size() || props->len > 64) {
 		return tl::make_unexpected("DATA profile requires all eight properties");
 	}
 	std::array<bool, properties.size()> seen{};
+	std::vector<sv> offered;
+	offered.reserve(props->len);
 	ucl_object_iter_t it = nullptr;
 	while (auto *v = ucl_object_iterate(props, &it, true)) {
 		auto p = str(v);
-		if (!p) {
-			return tl::make_unexpected(p.error());
+		if (!p || p->empty() || p->front() != '/' || !clean(*p, 256) ||
+			std::find(offered.begin(), offered.end(), *p) != offered.end()) {
+			return tl::make_unexpected("invalid or duplicate property");
 		}
+		offered.push_back(*p);
 		auto found = std::find(properties.begin(), properties.end(), *p);
-		if (found == properties.end() || seen[found - properties.begin()]) {
-			return tl::make_unexpected("unsupported or duplicate property");
+		/* Confirm only our DATA profile, allowing MTAs to offer more fields. */
+		if (found != properties.end()) {
+			seen[found - properties.begin()] = true;
 		}
-		seen[found - properties.begin()] = true;
+	}
+	if (!std::all_of(seen.begin(), seen.end(), [](bool present) { return present; })) {
+		return tl::make_unexpected("DATA profile requires all eight properties");
 	}
 	return {};
 }
@@ -505,12 +514,36 @@ void set_operation(ucl_object_t *sets, const char *path, ucl_object_t *value)
 	ucl_array_append(sets, op.release());
 }
 
+bool header_name(sv name)
+{
+	return !name.empty() && name.size() <= 998 &&
+		   std::all_of(name.begin(), name.end(), [](unsigned char c) { return c > 32 && c < 127 && c != ':'; });
+}
+
+bool header_value(sv value)
+{
+	if (value.size() > 64 * 1024 || !valid_utf8(value)) return false;
+	for (size_t i = 0; i < value.size(); ++i) {
+		auto c = static_cast<unsigned char>(value[i]);
+		if (c == '\r') {
+			if (++i == value.size() || value[i] != '\n') return false;
+			c = '\n';
+		}
+		if (c == '\n') {
+			if (i + 1 == value.size() || (value[i + 1] != ' ' && value[i + 1] != '\t')) return false;
+		}
+		else if ((c < 32 && c != '\t') || c == 127)
+			return false;
+	}
+	return true;
+}
+
 result<void> add_output_header(ucl_object_t *adds, sv name, const ucl_object_t *value)
 {
 	int order = -1;
 	if (ucl_object_type(value) == UCL_OBJECT) {
 		if (auto *o = ucl_object_lookup_any(value, "order", "index", nullptr)) {
-			if (ucl_object_type(o) != UCL_INT || ucl_object_toint(o) < -1 || ucl_object_toint(o) > 100000) {
+			if (ucl_object_type(o) != UCL_INT || ucl_object_toint(o) < -100000 || ucl_object_toint(o) > 100000) {
 				return tl::make_unexpected("invalid header order");
 			}
 			order = ucl_object_toint(o);
@@ -522,11 +555,10 @@ result<void> add_output_header(ucl_object_t *adds, sv name, const ucl_object_t *
 		value = get(value, "value");
 	}
 	auto text = str(value);
-	if (!text || !clean(*text, 64 * 1024) || !valid_utf8(*text)) {
+	if (!text || !header_value(*text)) {
 		return tl::make_unexpected("invalid output header value");
 	}
-	if (name.empty() || name.size() > 998 ||
-		!std::all_of(name.begin(), name.end(), [](unsigned char c) { return c > 32 && c < 127 && c != ':'; })) {
+	if (!header_name(name)) {
 		return tl::make_unexpected("invalid output header name");
 	}
 	if (adds->len >= 256) {
@@ -537,7 +569,7 @@ result<void> add_output_header(ucl_object_t *adds, sv name, const ucl_object_t *
 	put(h.get(), "value", *text);
 	put(op.get(), "path", "/message/headers");
 	put(op.get(), "value", h.release());
-	if (order >= 0) {
+	if (order != -1) {
 		put(op.get(), "index", ucl_object_fromint(order));
 	}
 	ucl_array_append(adds, op.release());
@@ -555,7 +587,7 @@ result<void> encode_headers(ucl_object_t *adds, const ucl_object_t *milter)
 	ucl_object_iter_t it = nullptr;
 	while (auto *v = ucl_object_iterate(milter, &it, true)) {
 		auto key = key_view(v);
-		if (key == "remove_headers" && ucl_object_type(v) == UCL_OBJECT && v->len == 0) {
+		if (key == "remove_headers" || key == "spam_header") {
 			continue;
 		}
 		if (key != "add_headers" || ucl_object_type(v) != UCL_OBJECT) {
@@ -613,28 +645,219 @@ result<void> encode_action(ucl_object_t *sets, const ucl_object_t *results)
 	else if (*action == "discard" || *action == "quarantine") {
 		set_operation(sets, "/action", ucl_object_fromlstring(action->data(), action->size()));
 	}
-	else if (*action != "no action" && *action != "greylist") {
+	else if (*action != "no action" && *action != "greylist" && *action != "add header" && *action != "rewrite subject") {
 		return tl::make_unexpected("unsupported delivery action");
 	}
 	return {};
 }
 
-result<message> encode_result(const ucl_object_t *results, bool rewritten)
+struct output_header {
+	sv name, value, raw;
+	size_t original;
+	bool changed = false;
+};
+constexpr size_t added_header = SIZE_MAX;
+
+/* Preserve the original field bytes, including folding, for raw replacements.
+ * This only identifies field boundaries; it does not decode MIME values. */
+result<std::vector<output_header>> original_headers(sv raw)
+{
+	std::vector<output_header> headers;
+	size_t offset = 0;
+	while (offset < raw.size()) {
+		auto end = raw.find('\n', offset);
+		if (end == sv::npos) return tl::make_unexpected("unterminated message headers");
+		auto line = raw.substr(offset, end - offset);
+		if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+		if (line.empty()) return headers;
+		if (line.front() == ' ' || line.front() == '\t') {
+			if (headers.empty()) return tl::make_unexpected("orphan header continuation");
+			auto &h = headers.back();
+			h.raw = sv{h.raw.data(), static_cast<size_t>(raw.data() + end + 1 - h.raw.data())};
+		}
+		else {
+			auto colon = line.find(':');
+			if (colon == sv::npos || !header_name(line.substr(0, colon)) || headers.size() >= 10000)
+				return tl::make_unexpected("invalid original header");
+			headers.push_back({line.substr(0, colon), {}, raw.substr(offset, end + 1 - offset), headers.size()});
+		}
+		offset = end + 1;
+	}
+	return tl::make_unexpected("missing header separator");
+}
+
+bool same_header(sv a, sv b)
+{
+	return a.size() == b.size() && g_ascii_strncasecmp(a.data(), b.data(), a.size()) == 0;
+}
+
+result<void> encode_message_edits(ucl_object_t *sets, ucl_object_t *adds, ucl_object_t *deletes,
+								  const ucl_object_t *results, sv original, const char *body, size_t body_len, sv spam_header, size_t max_message)
+{
+	auto parsed = original_headers(original);
+	if (!parsed) return tl::make_unexpected(parsed.error());
+	auto headers = *parsed;
+	auto *milter = get(results, "milter");
+	if (auto *remove = get(milter, "remove_headers")) {
+		if (ucl_object_type(remove) != UCL_OBJECT) return tl::make_unexpected("invalid header removals");
+		std::vector<bool> removed(headers.size());
+		ucl_object_iter_t it = nullptr;
+		while (auto *h = ucl_object_iterate(remove, &it, true)) {
+			auto mark = [&](const ucl_object_t *n) -> result<void> {
+				if (ucl_object_type(n) != UCL_INT || ucl_object_toint(n) < 0)
+					return tl::make_unexpected("invalid header occurrence");
+				size_t occurrence = 0;
+				for (size_t i = 0; i < headers.size(); ++i) {
+					if (same_header(headers[i].name, key_view(h)) &&
+						(++occurrence == static_cast<uint64_t>(ucl_object_toint(n)) || ucl_object_toint(n) == 0)) removed[i] = true;
+				}
+				return {};
+			};
+			if (ucl_object_type(h) == UCL_ARRAY) {
+				ucl_object_iter_t values = nullptr;
+				while (auto *n = ucl_object_iterate(h, &values, true)) {
+					auto ok = mark(n);
+					if (!ok) return ok;
+				}
+			}
+			else {
+				auto ok = mark(h);
+				if (!ok) return ok;
+			}
+		}
+		headers.erase(std::remove_if(headers.begin(), headers.end(), [&](const auto &h) { return removed[h.original]; }), headers.end());
+	}
+	auto collected = obj(UCL_ARRAY);
+	auto ok = encode_headers(collected.get(), milter);
+	if (!ok) return ok;
+	ucl_object_iter_t it = nullptr;
+	while (auto *op = ucl_object_iterate(collected.get(), &it, true)) {
+		auto *h = get(op, "value");
+		auto *index = get(op, "index");
+		auto requested = index ? ucl_object_toint(index) : static_cast<int64_t>(headers.size());
+		if (requested < 0) requested += static_cast<int64_t>(headers.size()) + 2;
+		auto position = static_cast<size_t>(std::clamp<int64_t>(requested, 0, headers.size()));
+		headers.insert(headers.begin() + position, {*str(get(h, "name")), *str(get(h, "value")), {}, added_header, true});
+	}
+	auto replace = [&](sv name, const ucl_object_t *value, bool all) -> result<void> {
+		auto text = str(value);
+		if (!header_name(name) || !text || !header_value(*text)) return tl::make_unexpected("invalid replacement header");
+		auto found = std::find_if(headers.begin(), headers.end(), [&](const auto &h) { return same_header(h.name, name); });
+		if (all) {
+			headers.erase(std::remove_if(headers.begin(), headers.end(), [&](const auto &h) { return same_header(h.name, name); }), headers.end());
+			found = headers.end();
+		}
+		if (found == headers.end()) headers.push_back({name, *text, {}, added_header, true});
+		else {
+			found->value = *text;
+			found->changed = true;
+		}
+		return {};
+	};
+	auto default_spam = object{ucl_object_fromstring("Yes"), ucl_object_unref};
+	if (string_is(get(results, "action"), "add header")) {
+		auto *spam = get(milter, "spam_header");
+		if (spam && ucl_object_type(spam) == UCL_OBJECT) {
+			ucl_object_iter_t fields = nullptr;
+			while (auto *h = ucl_object_iterate(spam, &fields, true)) {
+				auto r = replace(key_view(h), h, true);
+				if (!r) return r;
+			}
+		}
+		else {
+			auto r = replace(spam_header, spam ? spam : default_spam.get(), true);
+			if (!r) return r;
+		}
+	}
+	if (string_is(get(results, "action"), "rewrite subject")) {
+		auto r = replace("Subject", get(results, "subject"), false);
+		if (!r) return r;
+	}
+	if (auto *dkim = get(results, "dkim-signature")) {
+		size_t position = std::min<size_t>(1, headers.size());
+		auto insert = [&](const ucl_object_t *signature) -> result<void> {
+			auto value = str(signature);
+			if (!value || !header_value(*value)) return tl::make_unexpected("invalid DKIM signature");
+			headers.insert(headers.begin() + position++, {"DKIM-Signature", *value, {}, added_header, true});
+			return {};
+		};
+		if (ucl_object_type(dkim) == UCL_ARRAY) {
+			ucl_object_iter_t signatures = nullptr;
+			while (auto *signature = ucl_object_iterate(dkim, &signatures, true)) {
+				auto r = insert(signature);
+				if (!r) return r;
+			}
+		}
+		else {
+			auto r = insert(dkim);
+			if (!r) return r;
+		}
+	}
+	if (body) {
+		if (body_len > max_message) return tl::make_unexpected("replacement body too large");
+		std::string raw;
+		for (const auto &h: headers) {
+			if (!h.changed) raw.append(h.raw);
+			else
+				raw.append(h.name).append(": ").append(h.value).append("\r\n");
+			if (raw.size() > max_message) return tl::make_unexpected("replacement message too large");
+		}
+		if (raw.size() + 2 + body_len > max_message) return tl::make_unexpected("replacement message too large");
+		raw.append("\r\n").append(body, body_len);
+		gsize len;
+		std::unique_ptr<char, decltype(&g_free)> encoded{rspamd_encode_base64(reinterpret_cast<const unsigned char *>(raw.data()), raw.size(), 0, &len), g_free};
+		set_operation(sets, "/rawMessage", ucl_object_fromlstring(encoded.get(), len));
+		return {};
+	}
+	/* Hooks applies set, then add, then delete. Keep removed originals as
+	 * placeholders until the final descending deletions so indexes stay valid. */
+	std::vector<size_t> wire;
+	for (size_t i = 0; i < parsed->size(); ++i) wire.push_back(i);
+	std::vector<bool> retained(parsed->size());
+	for (size_t i = 0; i < headers.size(); ++i) {
+		const auto &h = headers[i];
+		if (h.original != added_header) {
+			retained[h.original] = true;
+			if (h.changed) {
+				auto path = "/message/headers/" + std::to_string(h.original) + "/value";
+				set_operation(sets, path.c_str(), ucl_object_fromlstring(h.value.data(), h.value.size()));
+			}
+		}
+		else {
+			auto next = std::find_if(headers.begin() + i + 1, headers.end(), [](const auto &v) { return v.original != added_header; });
+			auto pos = next == headers.end() ? wire.end() : std::find(wire.begin(), wire.end(), next->original);
+			auto index = pos - wire.begin();
+			wire.insert(pos, added_header);
+			auto value = obj();
+			put(value.get(), "value", h.value);
+			put(value.get(), "order", ucl_object_fromint(index));
+			auto r = add_output_header(adds, h.name, value.get());
+			if (!r) return r;
+		}
+	}
+	for (size_t i = wire.size(); i-- > 0;) {
+		if (wire[i] != added_header && !retained[wire[i]]) {
+			auto op = obj();
+			put(op.get(), "path", "/message/headers/" + std::to_string(i));
+			ucl_array_append(deletes, op.release());
+		}
+	}
+	return {};
+}
+
+result<message> encode_result(const ucl_object_t *results, sv original, const char *body, size_t body_len, sv spam_header, size_t max_message)
 {
 	if (!results || ucl_object_type(results) != UCL_OBJECT || get(results, "error")) {
 		return tl::make_unexpected("scan failed");
 	}
-	if (rewritten || get(results, "dkim-signature")) {
-		return tl::make_unexpected("body rewriting and DKIM signing are outside the add-only profile");
-	}
-	auto root = obj(), sets = obj(UCL_ARRAY), adds = obj(UCL_ARRAY);
-	auto encoded = encode_headers(adds.get(), get(results, "milter"))
+	auto root = obj(), sets = obj(UCL_ARRAY), adds = obj(UCL_ARRAY), deletes = obj(UCL_ARRAY);
+	auto encoded = encode_message_edits(sets.get(), adds.get(), deletes.get(), results, original, body, body_len, spam_header, max_message)
 					   .and_then([&] { return encode_action(sets.get(), results); });
 	if (!encoded) {
 		return tl::make_unexpected(encoded.error());
 	}
 	/* No-action preserves the MTA's incoming action (including earlier policy). */
-	if (sets->len == 0 && adds->len == 0) {
+	if (sets->len == 0 && adds->len == 0 && deletes->len == 0) {
 		return reply(204, {});
 	}
 	if (sets->len) {
@@ -643,10 +866,11 @@ result<message> encode_result(const ucl_object_t *results, bool rewritten)
 	if (adds->len) {
 		put(root.get(), "add", adds.release());
 	}
+	if (deletes->len) put(root.get(), "delete", deletes.release());
 	auto m = json_reply(200, root.get());
 	gsize len;
 	rspamd_http_message_get_body(m.get(), &len);
-	if (len > 64 * 1024) {
+	if (len > (body ? max_message * 4 / 3 + 128 * 1024 : 1024 * 1024)) {
 		return tl::make_unexpected("response too large");
 	}
 	return m;
@@ -679,9 +903,10 @@ extern "C" rspamd_http_message *rspamd_mta_hooks_decode(const char *data, gsize 
 	return decoded->release();
 }
 
-extern "C" rspamd_http_message *rspamd_mta_hooks_encode(const ucl_object_t *results, gboolean rewritten)
+extern "C" rspamd_http_message *rspamd_mta_hooks_encode(const ucl_object_t *results,
+														const char *original, gsize original_len, const char *body, gsize body_len, const char *spam_header, gsize max_message)
 {
-	auto encoded = encode_result(results, rewritten);
+	auto encoded = encode_result(results, {original, original_len}, body, body_len, spam_header, max_message);
 	if (!encoded) {
 		return rspamd_mta_hooks_error(503, "SCANNER_UNAVAILABLE", encoded.error());
 	}
@@ -691,6 +916,8 @@ extern "C" rspamd_http_message *rspamd_mta_hooks_encode(const ucl_object_t *resu
 struct rspamd_mta_hooks_config {
 	rspamd_config *cfg;
 	std::string token, owner, redis_host, redis_password, redis_db, prefix, settings_id;
+	std::string spam_header = "X-Spam";
+	std::string prefix_base;
 	int redis_port = 6379;
 	bool insecure_loopback = false;
 	size_t max_message;
@@ -699,6 +926,7 @@ struct rspamd_mta_hooks_config {
 struct rspamd_mta_hooks_request {
 	rspamd_mta_hooks_config *config;
 	message input{nullptr, rspamd_http_message_unref}, output{nullptr, rspamd_http_message_unref};
+	message original{nullptr, rspamd_http_message_unref};
 	/* These values survive the input HTTP message and asynchronous callbacks. */
 	std::string id, fingerprint;
 	fstring registration{nullptr, rspamd_fstring_free};
@@ -886,7 +1114,8 @@ result<std::unique_ptr<rspamd_mta_hooks_config>> parse_config(const ucl_object_t
 		c->insecure_loopback = ucl_object_toboolean(v);
 	}
 	/* Profile changes must not reuse state from another scanning policy. */
-	c->prefix += digest(c->settings_id + ":add-only-v1:") + ":";
+	c->prefix_base = c->prefix;
+	c->prefix += digest(c->settings_id + ":data-edits-v2:" + c->spam_header) + ":";
 	return c;
 }
 
@@ -907,7 +1136,7 @@ message discovery(const rspamd_mta_hooks_config *c)
 	for (auto a: {"accept", "reject", "discard", "quarantine"}) {
 		ucl_array_append(actions.get(), ucl_object_fromstring(a));
 	}
-	for (auto p: {"/action", "/response", "/message/headers"}) {
+	for (auto p: {"/action", "/response", "/message/headers", "/rawMessage"}) {
 		ucl_array_append(updates.get(), ucl_object_fromstring(p));
 	}
 	put(inbound.get(), "actions", actions.release());
@@ -1034,6 +1263,7 @@ result<void> prepare_invocation(rspamd_mta_hooks_request *r, rspamd_http_message
 	r->invocation_key = r->config->prefix + "request:" + r->config->owner + ":";
 	r->invocation_key.append(*request_id);
 	r->input = std::move(*input);
+	r->original.reset(rspamd_http_message_ref(r->input.get()));
 	return {};
 }
 
@@ -1121,6 +1351,14 @@ extern "C" rspamd_mta_hooks_config *rspamd_mta_hooks_config_new(const ucl_object
 extern "C" void rspamd_mta_hooks_config_free(rspamd_mta_hooks_config *c)
 {
 	delete c;
+}
+
+extern "C" gboolean rspamd_mta_hooks_set_spam_header(rspamd_mta_hooks_config *c, const char *name)
+{
+	if (!name || !header_name(name)) return FALSE;
+	c->spam_header = name;
+	c->prefix = c->prefix_base + digest(c->settings_id + ":data-edits-v2:" + c->spam_header) + ":";
+	return TRUE;
 }
 
 extern "C" gsize rspamd_mta_hooks_max_request(rspamd_mta_hooks_config *c)
@@ -1228,9 +1466,11 @@ extern "C" void rspamd_mta_hooks_begin(rspamd_mta_hooks_request *r, rspamd_mta_h
 }
 
 extern "C" void rspamd_mta_hooks_finish(rspamd_mta_hooks_request *r, const ucl_object_t *results,
-										gboolean rewritten, rspamd_mta_hooks_callback cb, gpointer ud)
+										const char *body, gsize body_len, rspamd_mta_hooks_callback cb, gpointer ud)
 {
-	r->output.reset(rspamd_mta_hooks_encode(results, rewritten));
+	gsize original_len = 0;
+	const char *original = r->original ? rspamd_http_message_get_body(r->original.get(), &original_len) : "";
+	r->output.reset(rspamd_mta_hooks_encode(results, original, original_len, body, body_len, r->config->spam_header.c_str(), r->config->max_message));
 	if (rspamd_mta_hooks_remaining(r) <= 0.001) {
 		r->output.reset(state_error(503));
 	}
@@ -1239,8 +1479,8 @@ extern "C" void rspamd_mta_hooks_finish(rspamd_mta_hooks_request *r, const ucl_o
 		return;
 	}
 	gsize len;
-	auto *body = rspamd_http_message_get_body(r->output.get(), &len);
-	command(r->config, {"EVAL", complete_script, "1", r->invocation_key, r->fingerprint, std::to_string(r->output->code), sv{body, len}}, [=](const redisReply *rep) {
+	auto *reply_body = rspamd_http_message_get_body(r->output.get(), &len);
+	command(r->config, {"EVAL", complete_script, "1", r->invocation_key, r->fingerprint, std::to_string(r->output->code), sv{reply_body, len}}, [=](const redisReply *rep) {
 		if (!rep || rep->type != REDIS_REPLY_INTEGER || rep->integer != 1) {
 			r->output.reset(state_error(503));
 		}
