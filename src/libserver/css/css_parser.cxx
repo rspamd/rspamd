@@ -381,7 +381,17 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 			want_more = false;
 			break;
 		case css_parser_token::token_type::whitespace_token:
-			/* Ignore whitespaces */
+			/*
+			 * Whitespace between the components of a prelude is significant:
+			 * it is the descendant combinator in a selector, so `div .x` and
+			 * `div.x` must reach the selectors parser as different streams.
+			 * Leading whitespace carries no information and is dropped
+			 */
+			if (block->size() > 0) {
+				block->attach_block(std::make_unique<css_consumed_block>(
+					css_consumed_block::parser_tag_type::css_component,
+					std::move(next_token)));
+			}
 			break;
 		default:
 			tokeniser->pushback_token(next_token);
@@ -635,10 +645,20 @@ css_parser::consume_input(const std::string_view &sv)
 
 		if (children.size() > 1 &&
 			children[0]->tag == css_consumed_block::parser_tag_type::css_component) {
-			auto simple_block = std::find_if(children.begin(), children.end(),
-											 [](auto &bl) {
-												 return bl->tag == css_consumed_block::parser_tag_type::css_simple_block;
-											 });
+			/*
+			 * The declarations live in the last nested block: the prelude
+			 * may contain nested blocks of its own, e.g. attribute selectors
+			 * like `a[href]`, which the selectors parser has to see
+			 */
+			auto simple_block = children.end();
+			auto simple_block_rit = std::find_if(children.rbegin(), children.rend(),
+												 [](auto &bl) {
+													 return bl->tag == css_consumed_block::parser_tag_type::css_simple_block;
+												 });
+
+			if (simple_block_rit != children.rend()) {
+				simple_block = std::prev(simple_block_rit.base());
+			}
 
 			if (simple_block != children.end()) {
 				/*
@@ -716,6 +736,13 @@ auto get_selectors_parser_functor(rspamd_mempool_t *pool,
 
 	auto &&consumed_blocks = parser.consume_css_blocks(st);
 	const auto &rules = consumed_blocks->get_blocks_or_empty();
+
+	if (rules.empty()) {
+		/* Nothing to consume, e.g. an empty input */
+		return [](void) -> const css_consumed_block & {
+			return css_parser_eof_block;
+		};
+	}
 
 	auto rules_it = rules.begin();
 	auto &&children = (*rules_it)->get_blocks_or_empty();

@@ -229,6 +229,152 @@ context("HTML processing", function()
     assert_equal(checked, 3)
   end)
 
+  -- A grouped selector list used to be truncated to the first simple selector
+  -- of its first part, so a rule meant for a spacer blanked every such element
+  test("A grouped descendant selector is not applied by its first part", function()
+    local html = parse_html_message(
+        '<html><head><style>div.mainbox ul li.spacer, div.mainbox ol li.spacer ' ..
+        '{ font-size: 0; color: transparent; opacity: 0 }</style></head>' ..
+        '<body><div class="mainbox"><div>kept visible</div></div></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+    assert_equal('', tostring(html:get_invisible()))
+
+    -- The same declarations on a selector we can evaluate still hide
+    local hidden = parse_html_message(
+        '<html><head><style>.spacer { font-size: 0 }</style></head>' ..
+        '<body><div class="spacer">gone</div></body></html>')
+    assert_not_nil(hidden, 'html part not parsed')
+    assert_equal('gone', tostring(hidden:get_invisible()))
+  end)
+
+  local function invisible_of(css, body)
+    local html = parse_html_message(
+        '<html><head><style>' .. css .. '</style></head><body>' .. body .. '</body></html>')
+    if not html then
+      return nil
+    end
+    return tostring(html:get_invisible())
+  end
+
+  test("Compound selectors match all parts on the same element", function()
+    local css = 'p.x { display: none }'
+    assert_equal('gone', invisible_of(css,
+        '<p class="x">gone</p><p class="y">kept</p><div class="x">kept</div>'))
+    assert_equal('gone', invisible_of('.a.b { display: none }',
+        '<p class="b a">gone</p><p class="a">kept</p><p class="b">kept</p>'))
+    assert_equal('gone', invisible_of('div#top.x { display: none }',
+        '<div id="top" class="x">gone</div><div id="top">kept</div><div class="x">kept</div>'))
+  end)
+
+  test("Descendant combinator matches any ancestor", function()
+    local css = 'div.mainbox li.spacer { font-size: 0 }'
+    assert_equal('gone', invisible_of(css,
+        '<div class="mainbox"><ul><li class="spacer">gone</li><li>kept</li></ul></div>' ..
+        '<div class="other"><ul><li class="spacer">kept</li></ul></div>' ..
+        '<ul><li class="spacer">kept</li></ul>'))
+    -- The nearest matching ancestor is not the only candidate
+    assert_equal('gone', invisible_of('.a .b .c { display: none }',
+        '<div class="a"><div class="b"><div class="b"><span class="c">gone</span></div></div></div>' ..
+        '<div class="b"><div class="a"><span class="c">kept</span></div></div>'))
+  end)
+
+  test("Child combinator matches the parent only", function()
+    local css = 'div > p { display: none }'
+    assert_equal('gone', invisible_of(css,
+        '<div><p>gone</p><span><p>kept</p></span></div><p>kept</p>'))
+  end)
+
+  test("Sibling combinators match preceding siblings", function()
+    assert_equal('gone', invisible_of('h1 + p { display: none }',
+        '<div><h1>title</h1><p>gone</p><p>kept</p></div><div><p>kept</p><h1>title</h1></div>'))
+    assert_equal('gonegone', invisible_of('h1 ~ p { display: none }',
+        '<div><p>kept</p><h1>title</h1><p>gone</p><span>x</span><p>gone</p></div>' ..
+        '<div><p>kept</p></div>'))
+  end)
+
+  test("Grouped complex selectors are applied to every member", function()
+    local css = 'div.mainbox ul li.spacer, div.mainbox ol li.spacer { font-size: 0 }'
+    assert_equal('gonegone', invisible_of(css,
+        '<div class="mainbox"><ul><li class="spacer">gone</li></ul>' ..
+        '<ol><li class="spacer">gone</li></ol><p>Visible content.</p></div>'))
+  end)
+
+  test("Selectors that cannot be evaluated do not hide anything", function()
+    assert_equal('', invisible_of('a:hover { display: none }', '<a href="http://example.com/">kept</a>'))
+    assert_equal('', invisible_of('a[href] { display: none }', '<a href="http://example.com/">kept</a>'))
+    -- But the members of the list that can be evaluated still apply
+    assert_equal('gone', invisible_of('a:hover, p.x { display: none }',
+        '<a href="http://example.com/">kept</a><p class="x">gone</p>'))
+  end)
+
+  test("A more specific selector wins regardless of the order", function()
+    assert_equal('gone', invisible_of(
+        'div.mainbox .spacer { font-size: 0 } .spacer { font-size: 14px }',
+        '<div class="mainbox"><span class="spacer">gone</span></div><span class="spacer">kept</span>'))
+    assert_equal('gone', invisible_of(
+        '.spacer { font-size: 14px } div.mainbox .spacer { font-size: 0 }',
+        '<div class="mainbox"><span class="spacer">gone</span></div><span class="spacer">kept</span>'))
+    -- At equal specificity the later rule wins
+    assert_equal('gone', invisible_of(
+        '.a { font-size: 14px } .b { font-size: 0 }',
+        '<span class="a b">gone</span>'))
+    assert_equal('', invisible_of(
+        '.b { font-size: 0 } .a { font-size: 14px }',
+        '<span class="a b">kept</span>'))
+    -- A less specific display:none does not leak through a more specific display:block
+    assert_equal('', invisible_of(
+        'p { display: none } .show { display: block }',
+        '<p class="show">kept</p>'))
+  end)
+
+  -- A repeated selector is a new rule in the cascade: only the declarations
+  -- of the later rule move past the rules written in between
+  test("A repeated selector does not carry its earlier declarations forward", function()
+    assert_equal('', invisible_of(
+        '.a { font-size: 0 } .b { font-size: 14px } .a { color: red }',
+        '<span class="b a">kept</span>'))
+    assert_equal('gone', invisible_of(
+        '.a { color: red } .b { font-size: 14px } .a { font-size: 0 }',
+        '<span class="b a">gone</span>'))
+  end)
+
+  test("Deep nesting with long chains is matched in bounded time", function()
+    local nested = string.rep('<div class="a">', 28) .. '<span class="b">text</span>' ..
+        string.rep('</div>', 28)
+    -- Descendant-only chains are matched greedily, no backtracking
+    local chain = string.rep('.a ', 16) .. '.b'
+    assert_equal('text', invisible_of(chain .. ' { display: none }', nested))
+    -- A mismatch at the far end of the chain fails fast as well
+    assert_equal('', invisible_of('.z ' .. string.rep('.a ', 15) .. '.b { display: none }', nested))
+    -- Alternating child/descendant links need backtracking; the budget bounds it
+    local mixed = '#nope > ' .. string.rep('.a > .a ', 7) .. '.a .b'
+    assert_equal('', invisible_of(mixed .. ' { display: none }', nested))
+  end)
+
+  test("Repeated class names do not multiply the cascade", function()
+    local css = string.rep('.x { font-size: 0 }', 512)
+    assert_equal('gone', invisible_of(css,
+        '<span class="' .. string.rep('x ', 1024) .. '">gone</span>'))
+    assert_equal('gone', invisible_of(css, '<span class="x">gone</span>'))
+  end)
+
+  test("Oversized compounds are dropped whole", function()
+    local compound = string.rep('.x', 65)
+    assert_equal('', invisible_of(compound .. ' { display: none }',
+        '<span class="x">kept</span>'))
+    assert_equal('gone', invisible_of(compound .. ', .y { display: none }',
+        '<span class="x">kept</span><span class="y">gone</span>'))
+  end)
+
+  test("Matching work is bounded across rules and elements", function()
+    local rule = '#missing > ' .. string.rep('div ', 8) .. 'span { color: red }'
+    local body = string.rep('<div>', 28) .. string.rep('<span>kept</span>', 256) ..
+        string.rep('</div>', 28) .. '<p class="end">tail</p>'
+    -- Once exhausted, later elements must not receive stylesheet declarations.
+    assert_equal('', invisible_of(string.rep(rule, 128) .. '.end { display: none }', body))
+    assert_equal('tail', invisible_of(rule .. '.end { display: none }', body))
+  end)
+
   test("HTML tag get_all_attributes basic test", function()
     local rspamd_mempool = require("rspamd_mempool")
     local pool = rspamd_mempool.create()
