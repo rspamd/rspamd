@@ -1,3 +1,124 @@
+## Non-Negotiable Rules
+
+Breaking one of these causes an incident. Each has already cost us something —
+the "Why this exists" lines are real events, not illustrations.
+
+1. **Security first, always**
+   Before any change, perform a full threat model: what new attack surface is
+   introduced, what data flows in and out, what privileges are required, and
+   what happens if this code is compromised or fed malicious input. If the
+   change touches auth, crypto, network, file system, or user-controlled data,
+   the threat model is written first. Specifically, and without exception:
+   - **Never introduce or move secrets.** No hardcoded credentials, API keys,
+     tokens or private keys. Never commit `.env` files, config carrying
+     secrets, or debug logs that could contain them. A secret comes from the
+     environment or a secret manager, and the code fails closed without it.
+   - **All external input is hostile until proven otherwise.** Anything
+     crossing a trust boundary — user input, API responses, file contents,
+     query params, headers, rows from an untrusted source — is validated or
+     typed before use. Prefer allow-lists over deny-lists. Never concatenate
+     untrusted data into queries, commands, paths or HTML.
+   - **Least privilege and explicit authorization.** Any new capability runs
+     with the minimum privilege required. Authorization is checked explicitly
+     and fails closed. Never assume the caller is authorized because they
+     reached this code path.
+   - **Prove the security properties still hold.** Confirm no new injection
+     point, no secret in logs or errors, and no weakening of an existing
+     control. If you cannot prove it is safe, do not ship it.
+
+   > **Why this exists.** A `grep -rn` on a `.env` printed a live database
+   > password into a transcript that cannot be un-leaked. Production database
+   > dumps sat unencrypted in a home directory for two weeks. Deployed images
+   > shipped the production IP and the full security architecture.
+
+2. **Understand the full impact before changing anything**
+   Map every place the change will touch or be affected by: callers, callees,
+   data flows, tests, configs, deployments, docs, monitoring, and existing
+   invariants. If you cannot clearly state what else is affected, do not
+   proceed. A change is not done until it is verified running on the target —
+   editing a file in a repository changes nothing on a server.
+
+   > **Why this exists.** Twice a safeguard was recorded as installed on both
+   > servers and existed on neither. Removing six variables from one `.env`
+   > would have broken disaster recovery, because the init script asserts them
+   > with `${VAR:?}` and aborts — discoverable only during a rebuild.
+
+3. **Prove it works — and make sure the check could have failed**
+   After the change, verify correctness and security with tests, manual checks,
+   or both. Never mark a task done without evidence it behaves correctly under
+   both normal and adversarial conditions. **A check that cannot report failure
+   is worse than no check**, because it converts ignorance into confidence:
+   prove it by making it fail once, or by including a known-positive control.
+   When a measurement and your expectation disagree, suspect the instrument
+   first.
+
+   > **Why this exists.** A restore test "succeeded" having restored 0 files.
+   > A capability check passed by parsing an empty list. A script rehearsal
+   > passed because the corruption it should have caught cancelled itself out
+   > in the test harness, and the same script then deleted 14 vault entries.
+
+4. **Errors and warnings must reach someone who reads them**
+   Every error path is deliberate. Never swallow an error silently. Prefer
+   explicit error types or results over generic exceptions. Failures are
+   logged with enough context to diagnose and without leaking sensitive data.
+   Detection is not delivery: a warning that is generated and then dropped on
+   the floor is indistinguishable from a check that never ran, so confirm it
+   arrives on a channel someone actually reads.
+
+   > **Why this exists.** The missing-database guard fired correctly on ~36
+   > consecutive backup runs over 12 days and every one of them was delivered
+   > as a green "Backup OK", because the warning reached only a channel that
+   > was skipped whenever the other succeeded.
+
+5. **Make the smallest change that leaves no rule half-applied**
+   Prefer the minimal, reversible, simplest change that achieves the goal.
+   Avoid drive-by refactors, speculative improvements, or expanding scope.
+   Leave the codebase cleaner than you found it. But a rule stated in one
+   place and not in its twin is not a smaller change — it is a broken one.
+
+   > **Why this exists.** `.gitignore` was widened to `.env.*` and
+   > `.dockerignore` was not; a later build copied two secrets backups into an
+   > image. `.dockerignore` excluded `docs/` and never gained `*.md`, so the
+   > two largest documents shipped from the repository root.
+
+---
+
+## Standards
+
+Expected on every change and reviewable, but not tripwires.
+
+6. **Plan first, then execute**
+   For any non-trivial change, write a short plan covering the goal, the
+   approach, the affected areas, and how you will verify it. Get agreement on
+   the plan before writing code. Non-trivial means: more than one repository,
+   anything on a production host, or anything a cheap rollback cannot undo.
+
+7. **Match existing patterns and conventions**
+   Follow the established style, architecture, naming, error-handling and
+   testing patterns already present in the codebase. Do not invent new
+   approaches unless the existing ones are clearly inadequate and you have
+   justified the deviation.
+
+8. **Handle errors explicitly and fail safely**
+   Every error path is deliberate and every failure mode is chosen. Prefer
+   failing closed to continuing in an unknown state.
+
+9. **Keep the change readable and self-documenting**
+   Code must be understandable by a future reader, including future you,
+   without tribal knowledge. Prefer clear names, small functions and obvious
+   control flow over cleverness. Comment the **why**, not the what, and only
+   where it is non-obvious.
+
+10. **Preserve testability, observability, and backwards compatibility**
+    New code is easy to test in isolation; add or update tests for the change.
+    Important behaviours produce useful logs or metrics so production problems
+    can be diagnosed without guessing. Do not break existing callers, public
+    APIs, data formats or configuration without an explicit migration plan —
+    prefer additive, reversible changes, and document the migration path when
+    a breaking change is unavoidable.
+
+---
+
 # Rspamd - Development Guide
 
 ## Build & Test
