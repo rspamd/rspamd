@@ -39,6 +39,26 @@ struct html_tag;
 namespace rspamd::css {
 
 /*
+ * Shared by every selector and element of an HTML document. Work counts
+ * selector/DOM steps and bytes scanned in attributes; exhaustion disables
+ * further stylesheet matching, not HTML parsing or inline styles.
+ */
+struct css_match_budget {
+	static constexpr std::size_t max_work = 4 * 1024 * 1024;
+	std::size_t remaining = max_work;
+
+	auto consume(std::size_t work = 1) -> bool
+	{
+		if (work > remaining) {
+			remaining = 0;
+			return false;
+		}
+		remaining -= work;
+		return true;
+	}
+};
+
+/*
  * A simple selector: a single tag name, class, id or the universal selector
  */
 struct css_simple_selector {
@@ -109,7 +129,7 @@ struct css_simple_selector {
 	}
 
 	/* Check whether this simple selector matches the element itself */
-	auto matches(const rspamd::html::html_tag *tag) const -> bool;
+	auto matches(const rspamd::html::html_tag *tag, css_match_budget &budget) const -> bool;
 
 	auto debug_str() const -> std::string;
 };
@@ -119,6 +139,7 @@ struct css_simple_selector {
  * element, e.g. `div.mainbox` or `*.spacer#top`
  */
 struct css_compound_selector {
+	static constexpr std::size_t max_parts = 64;
 	std::vector<css_simple_selector> parts;
 
 	auto specificity() const -> unsigned
@@ -143,7 +164,7 @@ struct css_compound_selector {
 		return parts == other.parts;
 	}
 
-	auto matches(const rspamd::html::html_tag *tag) const -> bool;
+	auto matches(const rspamd::html::html_tag *tag, css_match_budget &budget) const -> bool;
 	auto debug_str() const -> std::string;
 };
 
@@ -237,7 +258,7 @@ struct css_selector {
 	}
 
 	/* Check whether the selector matches the element (walks the tag tree) */
-	auto matches(const rspamd::html::html_tag *tag) const -> bool;
+	auto matches(const rspamd::html::html_tag *tag, css_match_budget &budget) const -> bool;
 
 	auto debug_str() const -> std::string;
 };

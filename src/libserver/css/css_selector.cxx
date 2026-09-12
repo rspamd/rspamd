@@ -70,6 +70,10 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 
 	auto add_part = [&](css_simple_selector &&part) {
 		if (ws_pending && !cur.parts.empty()) {
+			if (combinators.size() >= css_selector::max_chain_length) {
+				broken = true;
+				return;
+			}
 			/* Whitespace between two compounds */
 			compounds.push_back(std::move(cur));
 			cur.parts.clear();
@@ -77,10 +81,18 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 		}
 
 		ws_pending = false;
+		if (cur.parts.size() >= css_compound_selector::max_parts) {
+			broken = true;
+			return;
+		}
 		cur.parts.push_back(std::move(part));
 	};
 
 	auto add_combinator = [&](css_selector::combinator_type comb) {
+		if (combinators.size() >= css_selector::max_chain_length) {
+			broken = true;
+			return;
+		}
 		if (cur.parts.empty()) {
 			/* Leading or doubled combinator */
 			msg_debug_css("combinator without a preceding compound, drop selector");
@@ -243,7 +255,8 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
  * Matching
  */
 
-static auto tag_has_class(const html::html_tag *tag, std::string_view cls) -> bool
+static auto tag_has_class(const html::html_tag *tag, std::string_view cls,
+						  css_match_budget &budget) -> bool
 {
 	auto class_comp = tag->find_class();
 
@@ -252,6 +265,10 @@ static auto tag_has_class(const html::html_tag *tag, std::string_view cls) -> bo
 	}
 
 	auto strv = class_comp.value();
+	/* Charge the entire scan before touching an arbitrarily long attribute. */
+	if (!budget.consume(strv.size())) {
+		return false;
+	}
 	std::size_t start = 0;
 
 	while (start < strv.size()) {
@@ -272,8 +289,15 @@ static auto tag_has_class(const html::html_tag *tag, std::string_view cls) -> bo
 	return false;
 }
 
-auto css_simple_selector::matches(const html::html_tag *tag) const -> bool
+auto css_simple_selector::matches(const html::html_tag *tag, css_match_budget &budget) const -> bool
 {
+	if (!budget.consume()) {
+		return false;
+	}
+	if ((type == selector_type::SELECTOR_ID || type == selector_type::SELECTOR_CLASS) &&
+		!budget.consume(tag->components.size())) {
+		return false;
+	}
 	switch (type) {
 	case selector_type::SELECTOR_ALL:
 		return true;
@@ -281,10 +305,11 @@ auto css_simple_selector::matches(const html::html_tag *tag) const -> bool
 		return static_cast<tag_id_t>(tag->id) == std::get<tag_id_t>(value);
 	case selector_type::SELECTOR_ID: {
 		auto id_comp = tag->find_id();
-		return id_comp && id_comp.value() == std::get<std::string_view>(value);
+		return id_comp && budget.consume(id_comp->size()) &&
+			   id_comp.value() == std::get<std::string_view>(value);
 	}
 	case selector_type::SELECTOR_CLASS:
-		return tag_has_class(tag, std::get<std::string_view>(value));
+		return tag_has_class(tag, std::get<std::string_view>(value), budget);
 	}
 
 	return false;
@@ -299,10 +324,10 @@ auto css_compound_selector::key() const -> const css_simple_selector &
 							 });
 }
 
-auto css_compound_selector::matches(const html::html_tag *tag) const -> bool
+auto css_compound_selector::matches(const html::html_tag *tag, css_match_budget &budget) const -> bool
 {
 	return std::all_of(parts.begin(), parts.end(),
-					   [tag](const auto &p) { return p.matches(tag); });
+					   [tag, &budget](const auto &p) { return p.matches(tag, budget); });
 }
 
 /*
@@ -320,12 +345,17 @@ auto css_compound_selector::matches(const html::html_tag *tag) const -> bool
  * `budget` bounds the compound evaluations of a single match: the
  * backtracking cases revisit elements and a crafted document with a deep
  * nesting and a long chain would otherwise take seconds
+ * `work` additionally charges attribute scans and sibling traversal to the
+ * document-wide allowance, including the subject evaluated by the caller.
  */
 static auto match_chain(const std::vector<css_selector::link> &chain,
 						std::size_t idx,
 						const html::html_tag *elt,
-						unsigned &budget) -> bool
+						unsigned &budget, css_match_budget &work) -> bool
 {
+	if (!work.consume()) {
+		return false;
+	}
 	if (idx == chain.size()) {
 		return true;
 	}
@@ -347,23 +377,23 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 		}
 		budget--;
 
-		return lnk.target.matches(cand);
+		return lnk.target.matches(cand, work);
 	};
 
 	switch (lnk.combinator) {
 	case css_selector::combinator_type::child: {
 		const auto *p = elt->parent;
-		return p && try_target(p) && match_chain(chain, idx + 1, p, budget);
+		return p && try_target(p) && match_chain(chain, idx + 1, p, budget, work);
 	}
 	case css_selector::combinator_type::descendant: {
 		auto greedy = rest_is_only(css_selector::combinator_type::descendant);
 
-		for (const auto *p = elt->parent; p != nullptr && budget > 0; p = p->parent) {
+		for (const auto *p = elt->parent; p != nullptr && budget > 0 && work.remaining > 0; p = p->parent) {
 			if (try_target(p)) {
 				if (greedy) {
-					return match_chain(chain, idx + 1, p, budget);
+					return match_chain(chain, idx + 1, p, budget, work);
 				}
-				if (match_chain(chain, idx + 1, p, budget)) {
+				if (match_chain(chain, idx + 1, p, budget, work)) {
 					return true;
 				}
 			}
@@ -381,6 +411,9 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 		bool found = false;
 
 		for (const auto *s: p->children) {
+			if (!work.consume()) {
+				return false;
+			}
 			if (s == elt) {
 				found = true;
 				break;
@@ -388,7 +421,7 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 			prev = s;
 		}
 
-		return found && prev && try_target(prev) && match_chain(chain, idx + 1, prev, budget);
+		return found && prev && try_target(prev) && match_chain(chain, idx + 1, prev, budget, work);
 	}
 	case css_selector::combinator_type::subsequent_sibling: {
 		const auto *p = elt->parent;
@@ -399,18 +432,26 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 
 		auto greedy = rest_is_only(css_selector::combinator_type::subsequent_sibling);
 		/* Walk the preceding siblings from the nearest one */
-		auto self = std::find(p->children.begin(), p->children.end(), elt);
+		auto self = p->children.begin();
+		for (; self != p->children.end(); ++self) {
+			if (!work.consume()) {
+				return false;
+			}
+			if (*self == elt) {
+				break;
+			}
+		}
 
 		if (self == p->children.end()) {
 			return false;
 		}
 
-		for (auto it = std::make_reverse_iterator(self); it != p->children.rend() && budget > 0; ++it) {
+		for (auto it = std::make_reverse_iterator(self); it != p->children.rend() && budget > 0 && work.remaining > 0; ++it) {
 			if (try_target(*it)) {
 				if (greedy) {
-					return match_chain(chain, idx + 1, *it, budget);
+					return match_chain(chain, idx + 1, *it, budget, work);
 				}
-				if (match_chain(chain, idx + 1, *it, budget)) {
+				if (match_chain(chain, idx + 1, *it, budget, work)) {
 					return true;
 				}
 			}
@@ -423,15 +464,15 @@ static auto match_chain(const std::vector<css_selector::link> &chain,
 	return false;
 }
 
-auto css_selector::matches(const html::html_tag *tag) const -> bool
+auto css_selector::matches(const html::html_tag *tag, css_match_budget &work) const -> bool
 {
-	if (!tag || !subject.matches(tag)) {
+	if (!tag || !subject.matches(tag, work)) {
 		return false;
 	}
 
 	auto budget = max_match_steps;
 
-	return match_chain(chain, 0, tag, budget);
+	return match_chain(chain, 0, tag, budget, work);
 }
 
 /*
@@ -511,6 +552,85 @@ auto css_selector::debug_str() const -> std::string
 
 TEST_SUITE("css")
 {
+	TEST_CASE("selector work budget includes subjects and attribute scans")
+	{
+		css_match_budget exhausted{2};
+		CHECK(exhausted.consume(2));
+		CHECK_FALSE(exhausted.consume());
+		CHECK(exhausted.remaining == 0);
+
+		html::html_tag tag;
+		tag.id = Tag_SPAN;
+		std::string classes(128, ' ');
+		classes += "x";
+		tag.components.emplace_back(html::html_component_class{classes});
+		css_selector sel{"x", css_selector::selector_type::SELECTOR_CLASS};
+		css_match_budget small{64};
+		CHECK_FALSE(sel.matches(&tag, small));
+		CHECK(small.remaining == 0);
+		css_match_budget enough{512};
+		CHECK(sel.matches(&tag, enough));
+		CHECK(enough.remaining < 512 - classes.size());
+
+		/* The same scan is charged for every part of a compound. */
+		sel.subject.parts.push_back(sel.subject.parts.front());
+		css_match_budget compound{200};
+		CHECK_FALSE(sel.matches(&tag, compound));
+		CHECK(compound.remaining == 0);
+
+		tag.components.clear();
+		tag.components.emplace_back(html::html_component_id{classes});
+		css_selector id{classes};
+		css_match_budget id_budget{64};
+		CHECK_FALSE(id.matches(&tag, id_budget));
+		CHECK(id_budget.remaining == 0);
+	}
+
+	TEST_CASE("sibling searches charge forward traversal to the shared budget")
+	{
+		html::html_tag parent;
+		std::vector<html::html_tag> siblings(32);
+		for (auto &sibling: siblings) {
+			sibling.id = Tag_DIV;
+			sibling.parent = &parent;
+			parent.children.push_back(&sibling);
+		}
+		siblings.back().id = Tag_SPAN;
+		for (auto comb: {css_selector::combinator_type::next_sibling,
+						 css_selector::combinator_type::subsequent_sibling}) {
+			css_selector sel{Tag_SPAN};
+			sel.chain.push_back({comb, {{css_simple_selector{Tag_DIV}}}});
+			css_match_budget small{16};
+			CHECK_FALSE(sel.matches(&siblings.back(), small));
+			CHECK(small.remaining == 0);
+			css_match_budget enough{128};
+			CHECK(sel.matches(&siblings.back(), enough));
+			CHECK(enough.remaining < 128 - siblings.size());
+		}
+	}
+
+	TEST_CASE("compound length is bounded and parsing resumes at the next selector")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		std::string compound;
+		for (auto i = 0; i < css_compound_selector::max_parts; i++) {
+			compound += ".x";
+		}
+		auto res = process_selector_tokens(pool, get_selectors_parser_functor(pool, compound));
+		REQUIRE(res.size() == 1);
+		CHECK(res[0]->subject.parts.size() == css_compound_selector::max_parts);
+		compound += ".x";
+		for (const auto &input: {compound, compound + " > span", "div > " + compound}) {
+			res = process_selector_tokens(pool, get_selectors_parser_functor(pool, input));
+			CHECK(res.empty());
+			auto with_valid = input + ", p";
+			res = process_selector_tokens(pool, get_selectors_parser_functor(pool, with_valid));
+			REQUIRE(res.size() == 1);
+			CHECK(res[0]->key().to_tag() == Tag_P);
+		}
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("simple css selectors")
 	{
 		using st = css_simple_selector::selector_type;

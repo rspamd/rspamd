@@ -345,10 +345,34 @@ context("HTML processing", function()
     local chain = string.rep('.a ', 16) .. '.b'
     assert_equal('text', invisible_of(chain .. ' { display: none }', nested))
     -- A mismatch at the far end of the chain fails fast as well
-    assert_equal('', invisible_of('.z ' .. chain .. ' { display: none }', nested))
+    assert_equal('', invisible_of('.z ' .. string.rep('.a ', 15) .. '.b { display: none }', nested))
     -- Alternating child/descendant links need backtracking; the budget bounds it
     local mixed = '#nope > ' .. string.rep('.a > .a ', 7) .. '.a .b'
     assert_equal('', invisible_of(mixed .. ' { display: none }', nested))
+  end)
+
+  test("Repeated class names do not multiply the cascade", function()
+    local css = string.rep('.x { font-size: 0 }', 512)
+    assert_equal('gone', invisible_of(css,
+        '<span class="' .. string.rep('x ', 1024) .. '">gone</span>'))
+    assert_equal('gone', invisible_of(css, '<span class="x">gone</span>'))
+  end)
+
+  test("Oversized compounds are dropped whole", function()
+    local compound = string.rep('.x', 65)
+    assert_equal('', invisible_of(compound .. ' { display: none }',
+        '<span class="x">kept</span>'))
+    assert_equal('gone', invisible_of(compound .. ', .y { display: none }',
+        '<span class="x">kept</span><span class="y">gone</span>'))
+  end)
+
+  test("Matching work is bounded across rules and elements", function()
+    local rule = '#missing > ' .. string.rep('div ', 8) .. 'span { color: red }'
+    local body = string.rep('<div>', 28) .. string.rep('<span>kept</span>', 256) ..
+        string.rep('</div>', 28) .. '<p class="end">tail</p>'
+    -- Once exhausted, later elements must not receive stylesheet declarations.
+    assert_equal('', invisible_of(string.rep(rule, 128) .. '.end { display: none }', body))
+    assert_equal('tail', invisible_of(rule .. '.end { display: none }', body))
   end)
 
   test("HTML tag get_all_attributes basic test", function()
