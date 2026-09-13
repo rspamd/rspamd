@@ -699,6 +699,7 @@ auto symcache::compute_exec_plan() -> void
 
 			if (item->input_dependency_invalid ||
 				(item->type != symcache_item_type::FILTER && item->type != symcache_item_type::CONNFILTER &&
+				 !(item->type == symcache_item_type::PREFILTER && item->replay_version != 0) &&
 				 !item->terminal_observer) ||
 				std::get<normal_item>(item->specific).has_conditions() ||
 				(item->execution_parent &&

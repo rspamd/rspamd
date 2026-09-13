@@ -457,7 +457,7 @@ local function matcher_digests(rule)
   local digests = {}
 
   for symbol, map in pairs(rule.returncodes_maps or {}) do
-    digests[symbol] = map.__data and map.__data:get_data_digest() or false
+    digests[symbol] = map:get_data_digest() or false
   end
 
   return digests

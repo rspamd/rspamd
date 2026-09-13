@@ -18,6 +18,7 @@ struct multistage_fixture : checkpoint_fixture {
 
 	multistage_fixture()
 	{
+		rspamd_lua_set_path(RSPAMD_LUA_CFG_STATE(cfg), nullptr, nullptr);
 		cfg->cfg_ucl_obj = ucl_object_typed_new(UCL_OBJECT);
 		auto *opts = ucl_object_typed_new(UCL_OBJECT);
 		replay_replace(opts, "key", ucl_object_fromstring("test-only-multistage-shared-key-01"));
@@ -108,7 +109,14 @@ TEST_SUITE("multistage")
 
 	TEST_CASE_FIXTURE(multistage_fixture, "portable DATA excludes unaudited dependency closure and replays once at EOM")
 	{
-		add("EARLY", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		int type = SYMBOL_TYPE_NORMAL;
+
+		SUBCASE("audited prefilter")
+		{
+			type = SYMBOL_TYPE_PREFILTER;
+		}
+
+		add("EARLY", envelope, type, false, 0, 1);
 		callbacks.back().run = [](auto *t) {
 			rspamd_task_insert_result(t, "EARLY", 100.0, "data");
 		};
@@ -166,6 +174,8 @@ TEST_SUITE("multistage")
 		CHECK(std::string(ucl_object_tostring(ucl_object_lookup(payload.get(), "decision"))) == action);
 		CHECK(ucl_object_lookup(payload.get(), "record") == nullptr);
 		CHECK(ucl_object_lookup(payload.get(), "terminal") != nullptr);
+		CHECK(std::string(ucl_object_tostring(ucl_object_lookup(
+				  ucl_object_lookup(payload.get(), "terminal"), "policy_recipient"))) == "recipient@example.org");
 		CHECK((task->processed_stages & RSPAMD_TASK_STAGE_DONE) != 0);
 	}
 
@@ -197,6 +207,11 @@ TEST_SUITE("multistage")
 		CHECK_FALSE(rspamd_multistage_validate(cfg));
 		policy("reject");
 		CHECK(rspamd_multistage_validate(cfg));
+		auto *policy = ucl_array_find_index(replay_field(replay_field(cfg->cfg_ucl_obj, "multistage"), "policies"), 0);
+		auto *scope = ucl_object_typed_new(UCL_OBJECT);
+		replay_replace(scope, "header", ucl_object_fromstring("Subject"));
+		replay_replace(const_cast<ucl_object_t *>(policy), "match", scope);
+		CHECK_FALSE(rspamd_multistage_validate(cfg));
 		replay_replace(replay_field(cfg->cfg_ucl_obj, "multistage"), "key", ucl_object_fromstring("short"));
 		CHECK_FALSE(rspamd_multistage_enabled(cfg));
 		CHECK_FALSE(rspamd_multistage_validate(cfg));

@@ -26,6 +26,10 @@ gboolean rspamd_task_finalize_scan(struct rspamd_task *task);
 gboolean rspamd_task_begin_early_result(struct rspamd_task *task,
 										const char *action, const char *policy, const char *reason, const char *event_id);
 
+/* Include the recipient whose policy caused the transaction-wide decision. */
+gboolean rspamd_task_begin_early_result_full(struct rspamd_task *task,
+											 const char *action, const char *policy, const char *reason, const char *event_id, const char *recipient);
+
 /* Run only audited, input-ready terminal observers. The owner supplies the
  * session and deadline, drives events, and calls again when they drain.
  * On deadline expiry pass TRUE to cancel remaining observer work. Observers

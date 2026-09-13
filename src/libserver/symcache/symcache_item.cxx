@@ -352,8 +352,9 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 		return execution_parent->is_allowed(task, exec_only);
 	}
 
-	/* Settings checks */
-	if (task->settings_elt != nullptr) {
+	/* DATA has its own policy selection. Named EOM settings still govern
+	 * execution and result insertion when the portable record is replayed. */
+	if (task->settings_elt != nullptr && !task->multistage) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {
 			/* Check if force-enabled by merged settings */
 			auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);

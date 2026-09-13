@@ -166,6 +166,12 @@ gboolean rspamd_task_finalize_scan(struct rspamd_task *task)
 gboolean rspamd_task_begin_early_result(struct rspamd_task *task, const char *action_name, const char *policy,
 										const char *reason, const char *event_id)
 {
+	return rspamd_task_begin_early_result_full(task, action_name, policy, reason, event_id, nullptr);
+}
+
+gboolean rspamd_task_begin_early_result_full(struct rspamd_task *task, const char *action_name, const char *policy,
+											 const char *reason, const char *event_id, const char *recipient)
+{
 	if (!task || task->early_result || !task->s || task->err || task->message || task->msg.len != 0 ||
 		task->processed_stages != 0 || !task->symcache_runtime || rspamd_session_blocked(task->s) ||
 		rspamd_session_events_pending(task->s) != 0 || !action_name || !policy || !*policy || strlen(policy) > 128 ||
@@ -193,6 +199,11 @@ gboolean rspamd_task_begin_early_result(struct rspamd_task *task, const char *ac
 	ucl_object_insert_key(event, ucl_object_fromstring(completion), "completion_kind", 0, true);
 	ucl_object_insert_key(event, ucl_object_fromstring(action->name), "action", 0, true);
 	ucl_object_insert_key(event, ucl_object_fromstring(policy), "policy", 0, true);
+
+	if (recipient) {
+		ucl_object_insert_key(event, ucl_object_fromstring(recipient), "policy_recipient", 0, true);
+	}
+
 	ucl_object_insert_key(event, ucl_object_fromstring(reason), "reason", 0, true);
 	ucl_object_insert_key(event, number(task->task_timestamp), "timestamp", 0, true);
 	ucl_object_insert_key(event, number(ev_time() - task->task_timestamp), "early_time", 0, true);

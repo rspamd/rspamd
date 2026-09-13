@@ -192,6 +192,7 @@ gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
 
 	if (!item || item->is_virtual() || item->planned || version == 0 ||
 		(item->type != rspamd::symcache::symcache_item_type::FILTER &&
+		 item->type != rspamd::symcache::symcache_item_type::PREFILTER &&
 		 item->type != rspamd::symcache::symcache_item_type::CONNFILTER)) {
 		return FALSE;
 	}

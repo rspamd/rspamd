@@ -1125,6 +1125,13 @@ LUA_FUNCTION_DEF(task, get_metadata_field);
 LUA_FUNCTION_DEF(task, set_check_fact);
 
 /***
+ * @method task:is_checkpoint()
+ * Return true while executing a DATA checkpoint or its terminal observers.
+ * @return {boolean} whether this task is executing without a complete message
+ */
+LUA_FUNCTION_DEF(task, is_checkpoint);
+
+/***
  * @method task:get_check_fact(producer, key)
  * Read a fact after its producer ran or was replayed. Declare a dependency on
  * that producer when consuming its facts. Returns nil before it has run.
@@ -1562,6 +1569,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_metadata),
 	LUA_INTERFACE_DEF(task, get_metadata_field),
 	LUA_INTERFACE_DEF(task, set_check_fact),
+	LUA_INTERFACE_DEF(task, is_checkpoint),
 	LUA_INTERFACE_DEF(task, get_check_fact),
 	LUA_INTERFACE_DEF(task, get_terminal_event),
 	LUA_INTERFACE_DEF(task, get_settings_id),
@@ -7115,6 +7123,15 @@ lua_task_set_check_fact(lua_State *L)
 	value = ucl_object_lua_import(L, 3);
 	lua_pushboolean(L, rspamd_symcache_set_check_fact(task, key, value));
 	ucl_object_unref(value);
+	return 1;
+}
+
+static int
+lua_task_is_checkpoint(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	lua_pushboolean(L, rspamd_symcache_is_checkpoint(task));
 	return 1;
 }
 

@@ -25,10 +25,10 @@ end
 local rspamd_logger = require "rspamd_logger"
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
-local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_selectors = require "lua_selectors"
 local lua_settings = require "lua_settings"
+local settings_match = require "lua_settings_match"
 local ucl = require "ucl"
 local fun = require "fun"
 local rspamd_mempool = require "rspamd_mempool"
@@ -232,67 +232,11 @@ local function check_query_settings(task)
   return false
 end
 
-local function check_addr_setting(expected, addr)
-  local function check_specific_addr(elt)
-    if expected.name then
-      if lua_maps.rspamd_maybe_check_map(expected.name, elt.addr) then
-        return true
-      end
-    end
-    if expected.user then
-      if lua_maps.rspamd_maybe_check_map(expected.user, elt.user) then
-        return true
-      end
-    end
-    if expected.domain and elt.domain then
-      if lua_maps.rspamd_maybe_check_map(expected.domain, elt.domain) then
-        return true
-      end
-    end
-    if expected.regexp then
-      if expected.regexp:match(elt.addr) then
-        return true
-      end
-    end
-    return false
-  end
+local check_addr_setting = settings_match.check_addr_setting
 
-  for _, e in ipairs(addr) do
-    if check_specific_addr(e) then
-      return true
-    end
-  end
+local check_string_setting = settings_match.check_string_setting
 
-  return false
-end
-
-local function check_string_setting(expected, str)
-  if expected.regexp then
-    if expected.regexp:match(str) then
-      return true
-    end
-  elseif expected.check then
-    if lua_maps.rspamd_maybe_check_map(expected.check, str) then
-      return true
-    end
-  end
-  return false
-end
-
-local function check_ip_setting(expected, ip)
-  if type(expected) == "string" then
-    if lua_maps.rspamd_maybe_check_map(expected, ip:to_string()) then
-      return true
-    end
-  else
-    local nip = ip:apply_mask(expected[2])
-    if nip and nip:to_string() == expected[1] then
-      return true
-    end
-  end
-
-  return false
-end
+local check_ip_setting = settings_match.check_ip_setting
 
 -- A map cannot go through gen_check_closure: a map object is a table, and that closure reads a
 -- table as a list of expected values, so the check would be called on the map's own fields
@@ -518,138 +462,16 @@ local function gen_settings_external_cb(name)
   end
 end
 
--- Process IP address: converted to a table {ip, mask}
-local function process_ip_condition(ip, out)
-  if type(ip) == "table" then
-    for _, v in ipairs(ip) do
-      process_ip_condition(v, out)
-    end
-    return
-  end
-
-  if type(ip) == "string" then
-    if string.sub(ip, 1, 4) == "map:" then
-      -- It is a map, don't apply any extra logic
-      table.insert(out, ip)
-      return
-    end
-
-    local mask
-    local slash = string.find(ip, '/')
-    if slash then
-      mask = string.sub(ip, slash + 1)
-      ip = string.sub(ip, 1, slash - 1)
-    end
-
-    local res = rspamd_ip.from_string(ip)
-    if res:is_valid() then
-      if mask then
-        local mask_num = tonumber(mask)
-        if mask_num then
-          -- normalize IP
-          res = res:apply_mask(mask_num)
-          if res:is_valid() then
-            table.insert(out, { res:to_string(), mask_num })
-            return
-          end
-        end
-
-        rspamd_logger.errx(rspamd_config, "bad IP mask: %s/%s", ip, mask)
-        return
-      end
-
-      -- Just a plain IP address
-      table.insert(out, res:to_string())
-      return
-    end
-  end
-
-  rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
+local function process_ip_condition(value, out)
+  return settings_match.process_ip_condition(rspamd_config, value, out)
 end
 
--- Process email like condition, converted to a table with fields:
--- name - full email (surprise!)
--- user - user part
--- domain - domain part
--- regexp - full email regexp (yes, it sucks)
-local function process_email_condition(addr)
-  local out = {}
-  if type(addr) == "table" then
-    for _, v in ipairs(addr) do
-      table.insert(out, process_email_condition(v))
-    end
-  elseif type(addr) == "string" then
-    if string.sub(addr, 1, 4) == "map:" then
-      -- It is map, don't apply any extra logic
-      out['name'] = addr
-    else
-      local start = string.sub(addr, 1, 1)
-      if start == '/' then
-        -- It is a regexp
-        local re = rspamd_regexp.create(addr)
-        if re then
-          out['regexp'] = re
-        else
-          rspamd_logger.errx(rspamd_config, "bad regexp: " .. addr)
-          return nil
-        end
-
-      elseif start == '@' then
-        -- It is a domain if form @domain
-        out['domain'] = string.sub(addr, 2)
-      else
-        -- Check user@domain parts
-        local at = string.find(addr, '@')
-        if at then
-          -- It is full address
-          out['name'] = addr
-        else
-          -- It is a user
-          out['user'] = addr
-        end
-      end
-    end
-  else
-    return nil
-  end
-
-  return out
+local function process_email_condition(value)
+  return settings_match.process_email_condition(rspamd_config, value)
 end
 
--- Convert a plain string condition to a table:
--- check - string to match
--- regexp - regexp to match
-local function process_string_condition(addr)
-  local out = {}
-  if type(addr) == "table" then
-    for _, v in ipairs(addr) do
-      table.insert(out, process_string_condition(v))
-    end
-  elseif type(addr) == "string" then
-    if string.sub(addr, 1, 4) == "map:" then
-      -- It is map, don't apply any extra logic
-      out['check'] = addr
-    else
-      local start = string.sub(addr, 1, 1)
-      if start == '/' then
-        -- It is a regexp
-        local re = rspamd_regexp.create(addr)
-        if re then
-          out['regexp'] = re
-        else
-          rspamd_logger.errx(rspamd_config, "bad regexp: " .. addr)
-          return nil
-        end
-
-      else
-        out['check'] = addr
-      end
-    end
-  else
-    return nil
-  end
-
-  return out
+local function process_string_condition(value)
+  return settings_match.process_string_condition(rspamd_config, value)
 end
 
 local function get_priority (elt)

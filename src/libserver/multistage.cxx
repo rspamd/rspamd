@@ -13,6 +13,7 @@
 #include "cryptobox.h"
 #include "scan_finalization.h"
 #include "symcache/symcache_checkpoint.h"
+#include "lua/lua_common.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -220,6 +221,34 @@ gboolean rspamd_multistage_validate(struct rspamd_config *cfg)
 		}
 	}
 
+	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
+	auto top = lua_gettop(L);
+
+	if (cfg->multistage_policy_ref > 0) {
+		luaL_unref(L, LUA_REGISTRYINDEX, cfg->multistage_policy_ref);
+		cfg->multistage_policy_ref = 0;
+	}
+
+	if (!rspamd_lua_require_function(L, "lua_multistage_policy", "compile")) {
+		msg_err_config("cannot load DATA policy compiler");
+		lua_settop(L, top);
+		return FALSE;
+	}
+
+	auto **pcfg = static_cast<struct rspamd_config **>(lua_newuserdata(L, sizeof(cfg)));
+	*pcfg = cfg;
+	rspamd_lua_setclass(L, rspamd_config_classname, -1);
+	ucl_object_push_lua(L, opts, true);
+
+	if (lua_pcall(L, 2, 2, 0) != 0 || !lua_isfunction(L, -2)) {
+		msg_err_config("cannot compile DATA policies: %s", lua_tostring(L, -1));
+		lua_settop(L, top);
+		return FALSE;
+	}
+
+	lua_pop(L, 1);
+	cfg->multistage_policy_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_settop(L, top);
 	return TRUE;
 }
 
@@ -467,29 +496,44 @@ void apply_policy(struct rspamd_task *task, data_scan *scan)
 {
 	auto *policies = ucl_object_lookup(multistage_options(task->cfg), "policies");
 
-	if (!policies || ucl_object_type(policies) != UCL_ARRAY) {
+	if (!policies || ucl_object_type(policies) != UCL_ARRAY || task->cfg->multistage_policy_ref <= 0) {
 		return;
 	}
 
+	auto *L = RSPAMD_LUA_CFG_STATE(task->cfg);
+	auto top = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, task->cfg->multistage_policy_ref);
+	rspamd_lua_task_push(L, task);
+	lua_createtable(L, policies->len, 0);
 	ucl_object_iter_t it = nullptr;
+	unsigned int index = 0;
 
 	while (auto *policy = ucl_object_iterate(policies, &it, true)) {
-		auto *name = string_field(policy, "name");
 		auto *symbol = string_field(policy, "symbol");
-		auto *action = string_field(policy, "action");
-		auto *reason = string_field(policy, "reason");
+		auto *result = symbol ? rspamd_task_find_symbol_result(task, symbol, nullptr) : nullptr;
+		lua_pushboolean(L, result && !(result->flags & RSPAMD_SYMBOL_RESULT_IGNORED) &&
+							   recorded_symbol(scan->record.get(), symbol));
+		lua_rawseti(L, -2, ++index);
+	}
 
-		if (!name || !symbol || !action || !reason || !recorded_symbol(scan->record.get(), symbol)) {
-			continue;
-		}
+	if (lua_pcall(L, 2, 2, 0) != 0) {
+		msg_err_task("cannot select DATA policy: %s", lua_tostring(L, -1));
+		lua_settop(L, top);
+		return;
+	}
 
-		auto *result = rspamd_task_find_symbol_result(task, symbol, nullptr);
+	if (lua_type(L, -2) == LUA_TNUMBER) {
+		auto selected = lua_tointeger(L, -2);
+		auto *policy = selected > 0 && selected <= policies->len ? ucl_array_find_index(policies, selected - 1) : nullptr;
 
-		if (result && !(result->flags & RSPAMD_SYMBOL_RESULT_IGNORED) &&
-			rspamd_task_begin_early_result(task, action, name, reason, string_field(scan->request.get(), "id"))) {
-			return;
+		if (policy) {
+			rspamd_task_begin_early_result_full(task, string_field(policy, "action"), string_field(policy, "name"),
+												string_field(policy, "reason"), string_field(scan->request.get(), "id"),
+												lua_tostring(L, -1));
 		}
 	}
+
+	lua_settop(L, top);
 }
 
 auto process_data_scan(struct rspamd_task *task, data_scan *scan) -> rspamd_symcache_checkpoint_result

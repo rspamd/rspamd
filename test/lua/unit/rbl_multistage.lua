@@ -94,9 +94,9 @@ context('RBL multistage helpers', function()
     local task, facts, requests = dns_task(true)
     local dns = rbl.dns_session(task, 'rule', true)
     local digest = 'first'
-    local rule = { returncodes_maps = { HIT = { __data = {
+    local rule = { returncodes_maps = { HIT = {
       get_data_digest = function() return digest end,
-    } } } }
+    } } }
     local saved = rbl.matcher_digests(rule)
     local called = false
     dns.query('test.example', true, function()
