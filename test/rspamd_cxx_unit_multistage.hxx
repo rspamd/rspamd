@@ -3,6 +3,7 @@
 #define RSPAMD_CXX_UNIT_MULTISTAGE_HXX
 
 #include "rspamd_cxx_unit_symcache_replay.hxx"
+#include "rspamd_test_fake_time.hxx"
 #include "libserver/multistage.h"
 #include "libserver/http/http_message.h"
 #include "libserver/http/http_private.h"
@@ -170,13 +171,18 @@ TEST_SUITE("multistage")
 
 	TEST_CASE_FIXTURE(multistage_fixture, "deadline cancels unfinished checks and continues without a record")
 	{
+		rspamd_test::fake_clock clk(1000.0, loop);
 		policy("reject");
-		replay_replace(replay_field(cfg->cfg_ucl_obj, "multistage"), "timeout", ucl_object_fromdouble(0.001));
+		replay_replace(replay_field(cfg->cfg_ucl_obj, "multistage"), "timeout", ucl_object_fromdouble(1.0));
 		add("EARLY", envelope, SYMBOL_TYPE_NORMAL, true, 0, 1);
 		init();
 		start();
 		CHECK(replies == 0);
-		ev_run(loop, EVRUN_ONCE);
+		clk.advance(0.5);
+		ev_run(loop, EVRUN_NOWAIT);
+		CHECK(replies == 0);
+		clk.advance(1.0);
+		ev_run(loop, EVRUN_NOWAIT);
 		REQUIRE(replies == 1);
 		auto payload = response();
 		REQUIRE(payload != nullptr);
