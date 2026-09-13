@@ -200,6 +200,26 @@ gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
 	return TRUE;
 }
 
+gboolean rspamd_symcache_set_execution_parent(struct rspamd_symcache *cache,
+											  int id, int parent_id)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto *item = real_cache->get_item_by_id_mut(id, false);
+	auto *parent = real_cache->get_item_by_id_mut(parent_id, false);
+
+	if (!item || !parent || item == parent || item->planned || parent->planned ||
+		!item->is_filter() || !parent->is_filter() || item->execution_parent ||
+		parent->execution_parent || !item->execution_children.empty()) {
+		return FALSE;
+	}
+
+	item->execution_parent = parent;
+	parent->execution_children.push_back(item);
+	real_cache->add_dependency(parent_id, item->symbol, id, -1, false);
+
+	return TRUE;
+}
+
 gboolean rspamd_symcache_set_symbol_replay_callback(struct rspamd_symcache *cache,
 													int id, lua_State *L, int cbref)
 {
@@ -492,6 +512,12 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 								  "required_inputs", 0, false);
 			ucl_object_insert_key(this_sym_ucl, rspamd_symcache_inputs_to_ucl(producer->effective_inputs),
 								  "effective_inputs", 0, false);
+
+			if (producer->execution_parent) {
+				ucl_object_insert_key(this_sym_ucl,
+									  ucl_object_fromstring(producer->execution_parent->symbol.c_str()),
+									  "execution_parent", 0, false);
+			}
 		}
 
 		/* Modifier flags; structural types are already covered by `type` */

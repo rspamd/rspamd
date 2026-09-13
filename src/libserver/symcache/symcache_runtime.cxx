@@ -224,6 +224,8 @@ auto symcache_runtime::savepoint_dtor(struct rspamd_task *task) -> void
 	order.reset();
 	delete force_enabled_ids;
 	force_enabled_ids = nullptr;
+	delete execution_conditions;
+	execution_conditions = nullptr;
 }
 
 auto symcache_runtime::add_force_enabled(int id) -> void
@@ -249,7 +251,7 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 		 * stripped from the flags at registration, so `SYMBOL_TYPE_IDEMPOTENT`
 		 * in the mask spares the idempotent symbols as intended
 		 */
-		if (item->get_flags() & skip_mask) {
+		if (item->get_execution_flags() & skip_mask) {
 			continue;
 		}
 
@@ -290,6 +292,10 @@ auto symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &
 
 			set_status(dyn_item, cache_item_status::disabled);
 			msg_debug_cache_task("disable execution of %s", name.data());
+
+			for (const auto *child: item->execution_children) {
+				disable_symbol(task, cache, child->symbol);
+			}
 
 			return true;
 		}
@@ -341,6 +347,10 @@ auto symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &c
 			}
 
 			msg_debug_cache_task("enable execution of %s", name.data());
+
+			for (const auto *child: item->execution_children) {
+				enable_symbol(task, cache, child->symbol);
+			}
 
 			return true;
 		}
@@ -395,7 +405,8 @@ auto symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcach
 				}
 
 				if (!item->is_virtual()) {
-					return std::get<normal_item>(item->specific).check_conditions(item->symbol, task);
+					return (!item->execution_parent || item->execution_parent->check_conditions(task)) &&
+						   item->check_conditions(task);
 				}
 			}
 			else {
@@ -518,14 +529,14 @@ auto symcache_runtime::should_skip(const cache_item *item, check_status status) 
 		return false;
 	case symcache_item_type::FILTER:
 		/* Filters (hoisted ones included) are also stopped by the score limit */
-		if (item->get_flags() & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
+		if (item->get_execution_flags() & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
 			return false;
 		}
 
 		return true;
 	default:
 		/* Connfilters, prefilters and postfilters are stopped by passthrough results only */
-		if (item->get_flags() & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
+		if (item->get_execution_flags() & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
 			return false;
 		}
 
@@ -536,6 +547,31 @@ auto symcache_runtime::should_skip(const cache_item *item, check_status status) 
 static inline auto session_has_events(struct rspamd_task *task) -> bool
 {
 	return task->s != nullptr && rspamd_session_events_pending(task->s) > 0;
+}
+
+auto symcache_runtime::check_item_conditions(struct rspamd_task *task, const cache_item *item) -> bool
+{
+	const auto *parent = item->execution_parent ? item->execution_parent : item;
+
+	if (!parent->execution_children.empty() && std::get<normal_item>(parent->specific).has_conditions()) {
+		if (!execution_conditions) {
+			execution_conditions = new ankerl::unordered_dense::map<int, bool>();
+		}
+
+		auto [it, inserted] = execution_conditions->try_emplace(parent->id, false);
+		auto allowed = it->second;
+
+		if (inserted) {
+			allowed = parent->check_conditions(task);
+			(*execution_conditions)[parent->id] = allowed;
+		}
+
+		if (!allowed || parent == item) {
+			return allowed;
+		}
+	}
+
+	return item->check_conditions(task);
 }
 
 auto symcache_runtime::input_ready(const cache_item *item) const -> bool
@@ -845,9 +881,13 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	/* Check has been started */
 	auto check = true;
 
-	if (!item->is_allowed(task, true) || !item->check_conditions(task)) {
-		check = false;
+	if (item->execution_parent) {
+		const auto *parent = get_dynamic_item(item->execution_parent->id);
+		check = parent && parent->status != cache_item_status::disabled &&
+				parent->status != cache_item_status::suppressed;
 	}
+
+	check = check && item->is_allowed(task, true) && check_item_conditions(task, item);
 
 	if (check) {
 		/* Replay at the producer's ordinary slot, after settings, conditions,
@@ -1005,7 +1045,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 				continue;
 			}
 
-			if (dep_dyn_item->status == cache_item_status::not_started &&
+			if (!checkpoint_mode && dep_dyn_item->status == cache_item_status::not_started &&
 				dep.item->get_stage() < cur_stage) {
 				/*
 				 * The dependency stage has passed (e.g. it was enabled too late),

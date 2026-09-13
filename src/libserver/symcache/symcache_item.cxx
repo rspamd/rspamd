@@ -348,6 +348,10 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 		}
 	}
 
+	if (execution_parent) {
+		return execution_parent->is_allowed(task, exec_only);
+	}
+
 	/* Settings checks */
 	if (task->settings_elt != nullptr) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {

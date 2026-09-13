@@ -158,6 +158,118 @@ struct checkpoint_fixture {
 
 TEST_SUITE("symcache_checkpoint")
 {
+	TEST_CASE_FIXTURE(checkpoint_fixture, "owned parts preserve public selection and completion")
+	{
+		add("PUBLIC");
+		add("EARLY", envelope);
+		add("LATE", RSPAMD_SYMCACHE_INPUT_BODY);
+		add("CONSUMER");
+		REQUIRE(rspamd_symcache_set_execution_parent(cfg->cache, 1, 0));
+		REQUIRE(rspamd_symcache_set_execution_parent(cfg->cache, 2, 0));
+		REQUIRE(rspamd_symcache_add_symbol(cfg->cache, "OUTPUT", 0, nullptr, nullptr,
+										   SYMBOL_TYPE_VIRTUAL, 0) >= 0);
+		depends("CONSUMER", "OUTPUT");
+		init();
+
+		for (const auto *selected: {"PUBLIC", "OUTPUT"}) {
+			new_task();
+			calls.clear();
+			REQUIRE(checkpoint(0) == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+			rspamd_symcache_disable_all_symbols(task, cfg->cache, 0);
+			REQUIRE(rspamd_symcache_enable_symbol(task, cfg->cache, selected));
+			REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+			CHECK(calls == std::vector<std::string>{"EARLY"});
+			full_scan();
+			CHECK(calls == std::vector<std::string>{"EARLY", "LATE", "PUBLIC"});
+		}
+
+		new_task();
+		calls.clear();
+		full_scan();
+		CHECK(calls.size() == 4);
+		CHECK(calls[2] == "PUBLIC");
+		CHECK(calls[3] == "CONSUMER");
+	}
+
+	TEST_CASE_FIXTURE(checkpoint_fixture, "owned parts inherit external prerequisites and conditions")
+	{
+		run_lua(R"lua(
+local cfg = checkpoint_config
+local parent = cfg:register_symbol { name = 'PUBLIC',
+  condition = function(task)
+    assert(task:get_check_fact('HEADER', 'ready'))
+    owned_condition_calls = (owned_condition_calls or 0) + 1
+    return false
+  end,
+  callback = function() error('parent condition was ignored') end,
+}
+cfg:register_symbol { name = 'PART', execution_parent = parent,
+  required_inputs = {'connection'},
+  callback = function() error('inherited condition was ignored') end,
+}
+cfg:register_symbol { name = 'HEADER', required_inputs = {'headers'},
+  replay_version = 1,
+  callback = function(task) task:set_check_fact('ready', true) end,
+}
+cfg:register_dependency('PUBLIC', 'HEADER')
+)lua");
+		init();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		CHECK_FALSE(rspamd_symcache_is_checked(task, cfg->cache, "PART"));
+		full_scan();
+		CHECK(rspamd_symcache_is_checked(task, cfg->cache, "PART"));
+		run_lua("assert(owned_condition_calls == 1)");
+	}
+
+	TEST_CASE_FIXTURE(checkpoint_fixture, "disabling a public check disables all its parts")
+	{
+		add("PUBLIC");
+		add("EARLY", envelope);
+		add("LATE");
+		REQUIRE(rspamd_symcache_set_execution_parent(cfg->cache, 1, 0));
+		REQUIRE(rspamd_symcache_set_execution_parent(cfg->cache, 2, 0));
+		CHECK_FALSE(rspamd_symcache_set_execution_parent(cfg->cache, 0, 1));
+		CHECK_FALSE(rspamd_symcache_set_execution_parent(cfg->cache, 2, 1));
+		init();
+		REQUIRE(checkpoint(0) == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		REQUIRE(rspamd_symcache_disable_symbol(task, cfg->cache, "PUBLIC"));
+		REQUIRE(rspamd_symcache_enable_symbol(task, cfg->cache, "EARLY"));
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		full_scan();
+		CHECK(calls.empty());
+	}
+
+	TEST_CASE_FIXTURE(checkpoint_fixture, "checkpoint waits for transitive asynchronous prerequisites")
+	{
+		add("DNS", envelope, SYMBOL_TYPE_NORMAL, true);
+		add("WHITELIST", envelope);
+		add("BLACKLIST", envelope);
+		depends("WHITELIST", "DNS");
+		depends("BLACKLIST", "WHITELIST");
+		init();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_PENDING);
+		CHECK(calls == std::vector<std::string>{"DNS"});
+		finish_async();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		CHECK(calls == std::vector<std::string>{"DNS", "WHITELIST", "BLACKLIST"});
+	}
+
+	TEST_CASE_FIXTURE(checkpoint_fixture, "owned parts inherit explicit-disable admission")
+	{
+		add("PUBLIC", RSPAMD_SYMCACHE_INPUT_EOM, SYMBOL_TYPE_NORMAL | SYMBOL_TYPE_EXPLICIT_DISABLE);
+		add("EARLY", envelope);
+		add("LATE");
+		REQUIRE(rspamd_symcache_set_execution_parent(cfg->cache, 1, 0));
+		REQUIRE(rspamd_symcache_set_execution_parent(cfg->cache, 2, 0));
+		init();
+		REQUIRE(checkpoint(0) == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		rspamd_symcache_disable_all_symbols(task, cfg->cache, SYMBOL_TYPE_EXPLICIT_DISABLE);
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		CHECK(calls == std::vector<std::string>{"EARLY"});
+		full_scan();
+		CHECK(calls == std::vector<std::string>{"EARLY", "LATE", "PUBLIC"});
+	}
+
 	TEST_CASE_FIXTURE(checkpoint_fixture, "Lua declarations are validated and conditions remain EOM-only")
 	{
 		run_lua(R"lua(

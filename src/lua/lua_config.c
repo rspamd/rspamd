@@ -238,6 +238,8 @@ LUA_FUNCTION_DEF(config, get_classifier);
  *   + `explicit_disable` requires explicit disabling (e.g. via settings)
  *   + `ignore_passthrough` executed even if passthrough result has been set
  * - `parent`: id of parent symbol (useful for virtual symbols)
+ * - `execution_parent`: public callback id owning this independently scheduled
+ *   part; inherits admission and external dependencies, and waits for all parts
  * - `score`: default score of the symbol
  * - `description`: description of the symbol
  * - `group`: group of the symbol (ungrouped if missing)
@@ -2514,6 +2516,16 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	}
 
 	if (id != -1) {
+		lua_getfield(L, -1, "execution_parent");
+
+		if (!lua_isnil(L, -1) &&
+			(lua_type(L, -1) != LUA_TNUMBER || lua_tonumber(L, -1) != lua_tointeger(L, -1) ||
+			 !rspamd_symcache_set_execution_parent(cfg->cache, id, lua_tointeger(L, -1)))) {
+			return luaL_error(L, "cannot set execution parent for symbol %s", name);
+		}
+
+		lua_pop(L, 1);
+
 		if (has_required_inputs && !rspamd_symcache_set_symbol_inputs(cfg->cache, id, required_inputs)) {
 			return luaL_error(L, "cannot declare inputs for symbol %s", name);
 		}

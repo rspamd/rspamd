@@ -111,6 +111,8 @@ class symcache_runtime {
 	order_generation_ptr order;
 	/* Symbol IDs force-enabled by merged settings (overrides settings_elt forbidden_ids) */
 	id_list *force_enabled_ids;
+	/* Evaluate a public check's condition once, before its first owned part. */
+	ankerl::unordered_dense::map<int, bool> *execution_conditions;
 	/* The stage being processed (exec_stage::none before the first stage) */
 	exec_stage cur_stage;
 	bool checkpoint_mode;
@@ -131,6 +133,7 @@ class symcache_runtime {
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
 						cache_dynamic_item *dyn_item) -> bool;
 	auto input_ready(const cache_item *item) const -> bool;
+	auto check_item_conditions(struct rspamd_task *task, const cache_item *item) -> bool;
 	/* Processes all buckets of a stage in their order */
 	auto process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool;
 	auto check_process_status(struct rspamd_task *task) -> check_status;

@@ -344,6 +344,8 @@ local sym_id = rspamd_config:register_symbol {
   augmentations = { string.format("timeout=%f", rspamd_config:get_dns_timeout() * 4 or 0.0) },
 }
 
+require('lua_multistage').register_connection_consumer(rspamd_config, 'SPF_CHECK')
+
 if local_config.whitelist then
   local lua_maps = require "lua_maps"
 
@@ -366,4 +368,3 @@ for _, sym in pairs(local_config.symbols) do
     groups = { 'policies', 'spf' },
   }
 end
-

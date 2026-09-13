@@ -298,6 +298,10 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	bool input_dependency_invalid = false;
 	unsigned int replay_version = 0;
 	bool terminal_observer = false;
+	/* Independently scheduled parts of one public check. Ownership controls
+	 * admission; dependencies still control execution and input readiness. */
+	cache_item *execution_parent = nullptr;
+	std::vector<cache_item *> execution_children;
 
 	/* Specific data for virtual and callback symbols */
 	std::variant<normal_item, virtual_item> specific;
@@ -463,6 +467,11 @@ public:
 		return flags;
 	};
 
+	auto get_execution_flags() const -> int
+	{
+		return flags | (execution_parent ? execution_parent->flags : 0);
+	}
+
 	auto add_condition(lua_State *L, int cbref) -> bool
 	{
 		if (!is_virtual()) {
@@ -513,7 +522,7 @@ public:
 	 * @param task
 	 * @return
 	 */
-	auto check_conditions(struct rspamd_task *task) const -> auto
+	auto check_conditions(struct rspamd_task *task) const -> bool
 	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);

@@ -109,6 +109,13 @@ auto symcache::init() -> bool
 		}
 	}
 
+	/* Statically disabling a public check also removes its owned parts. */
+	for (const auto &[id, item]: items_by_id) {
+		if (item->execution_parent && disabled_ids.contains(item->execution_parent->id)) {
+			disabled_ids.insert(id);
+		}
+	}
+
 	/* Deal with the delayed dependencies */
 	msg_debug_cache("resolving delayed dependencies: %d in list", (int) delayed_deps->size());
 	for (const auto &delayed_dep: *delayed_deps) {
@@ -159,6 +166,25 @@ auto symcache::init() -> bool
 
 	/* Remove delayed dependencies, as they are no longer needed at this point */
 	delayed_deps.reset();
+
+	/* Inherit external dependencies before disabled items are removed, while
+	 * all dependency pointers and ownership links are still valid. The parent's
+	 * structural edges to its own parts must not be inherited. */
+	for (const auto &[id, item]: items_by_id) {
+		if (auto *parent = item->execution_parent; parent && !disabled_ids.contains(id)) {
+			item->input_dependency_invalid |= parent->input_dependency_invalid;
+
+			for (const auto &[dep_id, dep]: parent->deps) {
+				if (dep.item->execution_parent != parent) {
+					item->deps.try_emplace(dep_id, dep);
+				}
+			}
+		}
+
+		std::erase_if(item->execution_children, [&](const auto *child) {
+			return disabled_ids.contains(child->id);
+		});
+	}
 
 	/* Physically remove ids that are disabled statically */
 	for (auto id_to_disable: disabled_ids) {
@@ -667,14 +693,17 @@ auto symcache::compute_exec_plan() -> void
 			inputs = parent ? self(parent, self) : RSPAMD_SYMCACHE_INPUT_EOM;
 		}
 		else {
-			if (item->flags & SYMBOL_TYPE_MIME_ONLY) {
+			if (item->get_execution_flags() & SYMBOL_TYPE_MIME_ONLY) {
 				inputs |= RSPAMD_SYMCACHE_INPUT_MIME;
 			}
 
 			if (item->input_dependency_invalid ||
 				(item->type != symcache_item_type::FILTER && item->type != symcache_item_type::CONNFILTER &&
 				 !item->terminal_observer) ||
-				std::get<normal_item>(item->specific).has_conditions()) {
+				std::get<normal_item>(item->specific).has_conditions() ||
+				(item->execution_parent &&
+				 (item->execution_parent->input_dependency_invalid ||
+				  std::get<normal_item>(item->execution_parent->specific).has_conditions()))) {
 				inputs |= RSPAMD_SYMCACHE_INPUT_EOM;
 			}
 

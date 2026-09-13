@@ -89,11 +89,18 @@ enum rspamd_symcache_checkpoint_result rspamd_symcache_process_checkpoint(
  * version promises that the callback reads only declared immutable inputs and
  * explicit facts from replayable prerequisites, and writes only raw result
  * insertions/options and check facts (or state covered by a replay callback).
- * It must not inspect scores, inserted
- * symbols, settings or arbitrary task/Lua state. Bump the version whenever
- * that contract changes. */
+ * Mutable admission inputs must be exported and synchronously revalidated by
+ * a replay callback (for example, an audited whitelist gate's visible options
+ * from declared prerequisites). Scores and arbitrary task/Lua state are not
+ * replayable inputs. Bump the version whenever that contract changes. */
 gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
 										   int id, unsigned int version);
+
+/* Attach an independently scheduled check to a public callback. The parent
+ * waits for all parts; parts inherit its settings, conditions and external
+ * dependencies. Ownership is one level deep and must be declared before init. */
+gboolean rspamd_symcache_set_execution_parent(struct rspamd_symcache *cache,
+											  int id, int parent_id);
 
 /* Optional Lua replay_callback(task, facts), called at the producer's EOM
  * slot before results/facts are published. Validate all facts and mutable
