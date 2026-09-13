@@ -2286,6 +2286,8 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	 * "priority" - optional priority
 	 * "type" - optional type (normal, virtual, callback)
 	 * "flags" - optional flags
+	 * "replay_version" - version of explicitly exported producer results/state
+	 * "replay_callback" - synchronous function(task, facts), see rspamd_symcache.h
 	 * -- Metric options
 	 * "score" - optional default score (overridden by metric)
 	 * "group" - optional default group
@@ -2321,6 +2323,13 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 
 	lua_pop(L, 1);
 
+	lua_getfield(L, -1, "replay_callback");
+
+	if (!lua_isnil(L, -1) && (!lua_isfunction(L, -1) || replay_version == 0)) {
+		return luaL_error(L, "replay_callback must be a function with a replay_version");
+	}
+
+	lua_pop(L, 1);
 	lua_getfield(L, -1, "required_inputs");
 
 	if (!lua_isnil(L, -1)) {
@@ -2511,6 +2520,20 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 
 		if (replay_version && !rspamd_symcache_set_symbol_replay(cfg->cache, id, replay_version)) {
 			return luaL_error(L, "cannot declare replay for symbol %s", name);
+		}
+
+		lua_getfield(L, -1, "replay_callback");
+
+		if (lua_isfunction(L, -1)) {
+			int replay_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+			if (!rspamd_symcache_set_symbol_replay_callback(cfg->cache, id, L, replay_ref)) {
+				luaL_unref(L, LUA_REGISTRYINDEX, replay_ref);
+				return luaL_error(L, "cannot register replay callback for symbol %s", name);
+			}
+		}
+		else {
+			lua_pop(L, 1);
 		}
 
 		if (terminal_observer && !rspamd_symcache_set_terminal_observer(cfg->cache, id)) {

@@ -308,6 +308,11 @@ if opts then
         group = N,
         callback = cb,
       })
+
+      -- SPF must wait for the effective IP/HELO from Received headers.
+      -- The prefilter's input requirements also keep SPF and its dependents
+      -- out of connection checkpoints. A disabled rule must not disable SPF.
+      rspamd_config:register_dependency('SPF_CHECK', rule.symbol)
     end
   end
 end

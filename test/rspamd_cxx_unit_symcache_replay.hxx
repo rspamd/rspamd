@@ -306,6 +306,118 @@ checkpoint_config:register_dependency('LUA_FACT_CONSUMER', 'LUA_REPLAY')
 		CHECK(replay_options(s) == std::vector<std::string>{"first", "second", "third"});
 	}
 
+	TEST_CASE_FIXTURE(checkpoint_fixture, "synchronous replay restores state before dependent callbacks")
+	{
+		run_lua(R"lua(
+producer_calls, restore_calls, consumed = 0, 0, false
+checkpoint_config:register_symbol {
+  name = 'RESTORED', required_inputs = {'sender'}, replay_version = 1,
+  callback = function(task)
+    producer_calls = producer_calls + 1
+    task:insert_result('RESTORED', 1, 'original')
+    task:set_check_fact('state', {result = 'pass'})
+    task:get_mempool():set_variable('restored', 'pass')
+  end,
+  replay_callback = function(task, facts)
+    restore_calls = restore_calls + 1
+    assert(not task:has_symbol('RESTORED'))
+    assert(not task:get_check_fact('RESTORED', 'state'))
+    assert(facts.state.result == 'pass')
+    task:get_mempool():set_variable('restored', facts.state.result)
+    facts.state.result = 'changed copy'
+    return true
+  end,
+}
+checkpoint_config:register_symbol {
+  name = 'RESTORED_CONSUMER', callback = function(task)
+    consumed = task:get_mempool():get_variable('restored') == 'pass' and
+        task:get_check_fact('RESTORED', 'state').result == 'pass' and
+        task:has_symbol('RESTORED')
+  end,
+}
+checkpoint_config:register_dependency('RESTORED_CONSUMER', 'RESTORED')
+)lua");
+		init();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		run_lua("assert(producer_calls == 1 and restore_calls == 0 and not consumed)");
+		replay_record record{rspamd_symcache_export_checkpoint(task, "txn"), &ucl_object_unref};
+		REQUIRE(record != nullptr);
+		new_task();
+		REQUIRE(rspamd_symcache_import_checkpoint(task, record.get(), "txn"));
+		full_scan();
+		run_lua("assert(producer_calls == 1 and restore_calls == 1 and consumed)");
+		new_task();
+		REQUIRE(rspamd_symcache_import_checkpoint(task, record.get(), "txn"));
+		REQUIRE(rspamd_symcache_disable_symbol(task, cfg->cache, "RESTORED"));
+		full_scan();
+		run_lua("assert(producer_calls == 1 and restore_calls == 1)");
+		new_task();
+		full_scan();
+		run_lua("assert(producer_calls == 2 and restore_calls == 1 and consumed)");
+	}
+
+	TEST_CASE_FIXTURE(checkpoint_fixture, "rejected replay runs the producer and dependent without stale evidence")
+	{
+		run_lua(R"lua(
+producer_calls, dependent_calls, restore_calls = 0, 0, 0
+checkpoint_config:register_symbol {
+  name = 'VALIDATED', required_inputs = {'sender'}, replay_version = 1,
+  callback = function(task)
+    producer_calls = producer_calls + 1
+    assert(not task:has_symbol('STALE'))
+    assert(not task:get_check_fact('VALIDATED', 'state'))
+    task:insert_result(producer_calls == 1 and 'STALE' or 'FRESH', 1)
+    task:set_check_fact('state', 'complete')
+  end,
+  replay_callback = function()
+    restore_calls = restore_calls + 1
+
+    if restore_calls == 1 then
+      return false
+    elseif restore_calls == 2 then
+      error('deliberate restoration failure')
+    end
+
+    return 'truthy is not true'
+  end,
+}
+checkpoint_config:register_symbol {
+  name = 'VALIDATED_DEPENDENT', required_inputs = {'sender'}, replay_version = 1,
+  callback = function() dependent_calls = dependent_calls + 1 end,
+}
+checkpoint_config:register_dependency('VALIDATED_DEPENDENT', 'VALIDATED')
+)lua");
+		init();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		replay_record record{rspamd_symcache_export_checkpoint(task, "txn"), &ucl_object_unref};
+		REQUIRE(record != nullptr);
+
+		for (int i = 0; i < 3; i++) {
+			new_task();
+			REQUIRE(rspamd_symcache_import_checkpoint(task, record.get(), "txn"));
+			full_scan();
+			CHECK(rspamd_task_find_symbol_result(task, "STALE", nullptr) == nullptr);
+			CHECK(rspamd_task_find_symbol_result(task, "FRESH", nullptr) != nullptr);
+		}
+
+		run_lua("assert(producer_calls == 4 and dependent_calls == 4 and restore_calls == 3)");
+	}
+
+	TEST_CASE_FIXTURE(checkpoint_fixture, "replay callbacks require a version and a function")
+	{
+		run_lua(R"lua(
+for _, options in ipairs({
+    {replay_callback = function() end},
+    {replay_callback = true, replay_version = 1},
+    {replay_callback = 'invalid', replay_version = 1},
+}) do
+  options.name = 'INVALID_RESTORATION'
+  options.callback = function() end
+  assert(not pcall(checkpoint_config.register_symbol, checkpoint_config, options))
+end
+)lua");
+	}
+
 	TEST_CASE_FIXTURE(checkpoint_fixture, "Lua failure cannot be exported as a successful empty check")
 	{
 		run_lua(R"lua(

@@ -19,15 +19,16 @@ def _seal(kind, payload, key=KEY):
 
 
 class Milter:
-    def __init__(self, host, port):
+    def __init__(self, host, port, ip='192.0.2.1', helo='mail.example.com'):
         self.sock = socket.create_connection((host, int(port)), timeout=5)
         self.send(b'O', struct.pack('!III', 6, 0x1ff, 0x1fffff))
         command, data = self.read()
         assert command == b'O'
         _, _, protocol = struct.unpack('!III', data)
         assert not protocol & 0x10000, 'NR_DATA must be disabled'
-        self.send(b'C', b'mail.example.com\0' + b'4' + struct.pack('!H', 25) + b'192.0.2.1\0')
-        self.send(b'H', b'mail.example.com\0')
+        family = b'6' if ':' in ip else b'4'
+        self.send(b'C', b'mail.example.com\0' + family + struct.pack('!H', 25) + ip.encode() + b'\0')
+        self.send(b'H', helo.encode() + b'\0')
 
     def send(self, command, data=b''):
         self.sock.sendall(struct.pack('!I', 1 + len(data)) + command + data)
@@ -55,21 +56,25 @@ class Milter:
         return self.read()[0]
 
     def eom(self, expected):
-        self.send(b'L', b'From\0sender@example.com\0')
-        self.send(b'L', b'To\0recipient@example.org\0')
+        command, headers = self.finish_message()
+        assert command in (b'a', b'c'), command
+        assert headers.get('X-Multistage-Test') == expected, headers
+
+    def finish_message(self, headers=None, body=b'A real message body.\r\n'):
+        for name, value in (headers or [('From', 'sender@example.com'),
+                                       ('To', 'recipient@example.org')]):
+            self.send(b'L', name.encode() + b'\0' + value.encode() + b'\0')
         self.send(b'N')
-        self.send(b'B', b'A real message body.\r\n')
+        self.send(b'B', body)
         self.send(b'E')
-        headers = []
+        added = {}
         for _ in range(32):
             command, data = self.read()
             if command == b'h':
-                headers.append(data)
+                name, value = data.split(b'\0')[:2]
+                added[name.decode()] = value.decode().strip()
             if command in (b'a', b'c', b'r', b't', b'y', b'd'):
-                assert command in (b'a', b'c'), (command, data)
-                assert any(h.split(b'\0')[:2] == [b'X-Multistage-Test', b' ' + expected.encode()]
-                           for h in headers), headers
-                return
+                return command, added
         raise AssertionError('no final EOM response')
 
     def close(self):

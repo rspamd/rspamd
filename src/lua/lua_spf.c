@@ -20,6 +20,7 @@
 
 #include "lua_common.h"
 #include "libserver/spf.h"
+#include "libserver/symcache/symcache_checkpoint.h"
 #include "libutil/ref.h"
 
 #define SPF_RECORD_CLASS rspamd_spf_record_classname
@@ -143,6 +144,7 @@ lua_spf_push_result(struct rspamd_lua_spf_cbdata *cbd, int code_flags,
 	if (lua_pcall(cbd->L, 3, 0, err_idx) != 0) {
 		struct rspamd_task *task = cbd->task;
 
+		rspamd_symcache_checkpoint_invalidate(task);
 		msg_err_task("cannot call callback function for spf: %s",
 					 lua_tostring(cbd->L, -1));
 	}

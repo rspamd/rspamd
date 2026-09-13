@@ -521,6 +521,14 @@ auto checkpoint_store::replay(struct rspamd_task *task, const cache_item &item) 
 		return false;
 	}
 
+	auto *saved_facts = ucl_object_lookup(c.data.get(), "facts");
+
+	/* Validate and restore explicitly exported state before inserting any
+	 * results. Rejection consumes the record and runs the producer normally. */
+	if (!item.restore_replay(task, saved_facts)) {
+		return false;
+	}
+
 	auto *ops = ucl_object_lookup(c.data.get(), "ops");
 	std::vector<rspamd_symbol_result *> inserted(ops->len, nullptr);
 
@@ -542,7 +550,7 @@ auto checkpoint_store::replay(struct rspamd_task *task, const cache_item &item) 
 		}
 	}
 
-	facts[item.symbol].reset(copy_value(ucl_object_lookup(c.data.get(), "facts")));
+	facts[item.symbol].reset(copy_value(saved_facts));
 	replayed.insert(item.symbol);
 	return true;
 }

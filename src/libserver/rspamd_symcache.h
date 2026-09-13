@@ -88,11 +88,22 @@ enum rspamd_symcache_checkpoint_result rspamd_symcache_process_checkpoint(
 /* Opt in to portable replay before the execution plan is built. A nonzero
  * version promises that the callback reads only declared immutable inputs and
  * explicit facts from replayable prerequisites, and writes only raw result
- * insertions/options and check facts. It must not inspect scores, inserted
+ * insertions/options and check facts (or state covered by a replay callback).
+ * It must not inspect scores, inserted
  * symbols, settings or arbitrary task/Lua state. Bump the version whenever
  * that contract changes. */
 gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
 										   int id, unsigned int version);
+
+/* Optional Lua replay_callback(task, facts), called at the producer's EOM
+ * slot before results/facts are published. Validate all facts and mutable
+ * admission inputs first; return false on incompatibility to run normally.
+ * After validation, restore only explicitly exported state and return true.
+ * The callback must be synchronous: no async work, result insertion or other
+ * side effects. Errors/non-boolean returns also fall back; mutations cannot
+ * be rolled back, so validation must precede restoration. Owns cbref on success. */
+gboolean rspamd_symcache_set_symbol_replay_callback(struct rspamd_symcache *cache,
+													int id, lua_State *L, int cbref);
 
 /* Explicitly audit an idempotent callback for terminal execution without a
  * message. It must declare its inputs/dependencies and use cancellable async

@@ -116,31 +116,33 @@ auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool;
  */
 auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>;
 
-struct item_condition {
+struct item_lua_callback {
 private:
 	lua_State *L = nullptr;
 	int cb = -1;
 
 public:
-	explicit item_condition(lua_State *L_, int cb_) noexcept
+	explicit item_lua_callback(lua_State *L_, int cb_) noexcept
 		: L(L_), cb(cb_)
 	{
 	}
-	item_condition(item_condition &&other) noexcept
+	item_lua_callback(item_lua_callback &&other) noexcept
 	{
 		*this = std::move(other);
 	}
 	/* Make it move only */
-	item_condition(const item_condition &) = delete;
-	item_condition &operator=(item_condition &&other) noexcept
+	item_lua_callback(const item_lua_callback &) = delete;
+	item_lua_callback &operator=(item_lua_callback &&other) noexcept
 	{
 		std::swap(other.L, L);
 		std::swap(other.cb, cb);
 		return *this;
 	}
-	~item_condition();
+	~item_lua_callback();
 
-	auto check(std::string_view sym_name, struct rspamd_task *task) const -> bool;
+	/* Supplying facts selects the synchronous replay callback contract. */
+	auto check(std::string_view sym_name, struct rspamd_task *task,
+			   const ucl_object_t *facts = nullptr) const -> bool;
 };
 
 class normal_item {
@@ -148,7 +150,8 @@ private:
 	symbol_func_t func = nullptr;
 	void *user_data = nullptr;
 	std::vector<cache_item *> virtual_children;
-	std::vector<item_condition> conditions;
+	std::vector<item_lua_callback> conditions;
+	std::optional<item_lua_callback> replay_callback;
 
 public:
 	explicit normal_item(symbol_func_t _func, void *_user_data)
@@ -164,6 +167,17 @@ public:
 	auto has_conditions() const -> bool
 	{
 		return !conditions.empty();
+	}
+
+	auto set_replay_callback(lua_State *L, int cbref) -> void
+	{
+		replay_callback.emplace(L, cbref);
+	}
+
+	auto restore_replay(std::string_view sym_name, struct rspamd_task *task,
+						const ucl_object_t *facts) const -> bool
+	{
+		return !replay_callback || replay_callback->check(sym_name, task, facts);
 	}
 
 	auto call(struct rspamd_task *task, struct rspamd_symcache_dynamic_item *item) const -> void
@@ -505,6 +519,15 @@ public:
 			const auto &filter_data = std::get<normal_item>(specific);
 
 			return filter_data.check_conditions(symbol, task);
+		}
+
+		return false;
+	}
+
+	auto restore_replay(struct rspamd_task *task, const ucl_object_t *facts) const -> bool
+	{
+		if (std::holds_alternative<normal_item>(specific)) {
+			return std::get<normal_item>(specific).restore_replay(symbol, task, facts);
 		}
 
 		return false;

@@ -200,6 +200,20 @@ gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
 	return TRUE;
 }
 
+gboolean rspamd_symcache_set_symbol_replay_callback(struct rspamd_symcache *cache,
+													int id, lua_State *L, int cbref)
+{
+	auto *item = C_API_SYMCACHE(cache)->get_item_by_id_mut(id, false);
+
+	if (!item || item->planned || item->replay_version == 0 ||
+		!std::holds_alternative<rspamd::symcache::normal_item>(item->specific)) {
+		return FALSE;
+	}
+
+	std::get<rspamd::symcache::normal_item>(item->specific).set_replay_callback(L, cbref);
+	return TRUE;
+}
+
 gboolean rspamd_symcache_set_terminal_observer(struct rspamd_symcache *cache, int id)
 {
 	auto *item = C_API_SYMCACHE(cache)->get_item_by_id_mut(id, false);
