@@ -20,6 +20,7 @@
 #include "unix-std.h"
 #include "cfg_file_private.h"
 #include "scan_finalization.h"
+#include <math.h>
 
 static const char rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
 
