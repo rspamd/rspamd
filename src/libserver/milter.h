@@ -63,6 +63,7 @@ struct rspamd_milter_context {
 	struct rspamd_config *cfg;
 	gboolean discard_on_reject;
 	gboolean quarantine_on_reject;
+	gboolean data_checkpoint;
 };
 
 struct rspamd_milter_session {
@@ -75,12 +76,26 @@ struct rspamd_milter_session {
 	rspamd_fstring_t *message;
 	GHashTable *mail_esmtp_args; /* ESMTP arguments from MAIL FROM command */
 	GPtrArray *rcpt_esmtp_args;  /* Array of GHashTable, one per recipient with ESMTP arguments */
+	uint64_t transaction;
 	void *priv;
 	ref_entry_t ref;
 };
 
+enum rspamd_milter_event {
+	RSPAMD_MILTER_EVENT_DATA,
+	RSPAMD_MILTER_EVENT_EOM,
+	RSPAMD_MILTER_EVENT_ABORT,
+	RSPAMD_MILTER_EVENT_RESET,
+	RSPAMD_MILTER_EVENT_CLOSE,
+};
+
 typedef void (*rspamd_milter_finish)(int fd,
-									 struct rspamd_milter_session *session, void *ud);
+									 struct rspamd_milter_session *session, enum rspamd_milter_event event, void *ud);
+
+/* Reply to the current DATA callback once. A stale transaction cannot reply.
+ * Only CONTINUE, REJECT and TEMPFAIL are legal at this boundary. */
+gboolean rspamd_milter_reply_data(struct rspamd_milter_session *session,
+								  uint64_t transaction, enum rspamd_milter_reply action);
 
 typedef void (*rspamd_milter_error)(int fd,
 									struct rspamd_milter_session *session,
@@ -162,6 +177,12 @@ struct rspamd_milter_session *rspamd_milter_session_ref(
  */
 struct rspamd_http_message *rspamd_milter_to_http(
 	struct rspamd_milter_session *session);
+/* Envelope and macros only; does not consume the buffered message. */
+struct rspamd_http_message *rspamd_milter_to_http_metadata(struct rspamd_milter_session *session);
+
+/* Owned protocol v3 metadata; leaves the envelope and buffered message intact. */
+ucl_object_t *rspamd_milter_to_ucl_metadata(struct rspamd_milter_session *session,
+											const char *settings_id);
 
 /**
  * Convert milter session to HTTP message and store ESMTP args in task

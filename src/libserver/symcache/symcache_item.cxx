@@ -147,6 +147,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				msg_err_cache("cannot add dependency on self: %s -> %s "
 							  "(resolved to %s)",
 							  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+				real_source->input_dependency_invalid = true;
 				dep.item = nullptr;
 				continue;
 			}
@@ -158,6 +159,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 							  dit->symbol.c_str(), item_type_to_str(dst_type),
 							  item_type_to_str(src_type));
 				/* Drop the edge, so it is removed below and never reaches the runtime */
+				real_source->input_dependency_invalid = true;
 				dep.item = nullptr;
 				continue;
 			}
@@ -183,6 +185,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 		else {
 			msg_err_cache("cannot find dependency named %s for symbol %s",
 						  dep.sym.c_str(), symbol.c_str());
+			input_dependency_invalid = true;
 		}
 	}
 

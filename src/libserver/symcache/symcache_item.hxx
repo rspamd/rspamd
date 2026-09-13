@@ -161,6 +161,11 @@ public:
 		conditions.emplace_back(L, cbref);
 	}
 
+	auto has_conditions() const -> bool
+	{
+		return !conditions.empty();
+	}
+
 	auto call(struct rspamd_task *task, struct rspamd_symcache_dynamic_item *item) const -> void
 	{
 		func(task, item, user_data);
@@ -274,6 +279,11 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	cache_item *hoisted_by = nullptr;
 	/* Set once the plan has been computed for the item (symbols may be registered after init) */
 	bool planned = false;
+	unsigned int required_inputs = RSPAMD_SYMCACHE_INPUT_EOM;
+	unsigned int effective_inputs = RSPAMD_SYMCACHE_INPUT_EOM;
+	bool input_dependency_invalid = false;
+	unsigned int replay_version = 0;
+	bool terminal_observer = false;
 
 	/* Specific data for virtual and callback symbols */
 	std::variant<normal_item, virtual_item> specific;

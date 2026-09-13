@@ -47,6 +47,10 @@ struct roll_history_row {
 	double score;
 	double required_score;
 	int action;
+	gboolean partial;
+	char event_id[129];
+	char early_policy[129];
+	char early_reason[513];
 	unsigned int completed;
 };
 
@@ -72,6 +76,9 @@ struct roll_history *rspamd_roll_history_new(rspamd_mempool_t *pool,
  */
 void rspamd_roll_history_update(struct roll_history *history,
 								struct rspamd_task *task);
+
+/* Add explicit availability/decision metadata for a partial history row. */
+void rspamd_roll_history_add_completion(const struct roll_history_row *row, ucl_object_t *object);
 
 /**
  * Load previously saved history from file
