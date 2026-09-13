@@ -104,6 +104,11 @@ def multistage_transaction(host, port, scenario):
         assert client.data() == expected
         if expected == b'c':
             client.eom('full' if scenario == 'timeout' else 'replayed')
+        else:
+            # Postfix sends ABORT before EHLO after a rejected transaction.
+            client.send(b'A')
+            client.send(b'H', b'new.example.com\0')
+
         # Reuse the same SMTP connection after both early terminals and EOM.
         client.envelope()
         assert client.data() == b'c'

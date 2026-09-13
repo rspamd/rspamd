@@ -446,6 +446,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_ABORT);
 		session->transaction++;
 		rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
+		priv->data_terminal = FALSE;
 		break;
 	case RSPAMD_MILTER_CMD_BODY:
 		if (!session->message) {
