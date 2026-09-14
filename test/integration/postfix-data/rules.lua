@@ -1,5 +1,6 @@
 local spf = require 'rspamd_spf'
 local ucl = require 'ucl'
+local rspamd_util = require 'rspamd_util'
 require('global_functions')()
 
 -- Count entry into the real resolver separately from DNS caching.
@@ -14,6 +15,15 @@ for _, plugin in ipairs({ 'spf', 'rbl', 'multimap' }) do
 end
 
 local envelope = { 'connection', 'helo', 'sender', 'recipients' }
+
+rspamd_config:register_symbol {
+  name = 'INTEGRATION_IDENTITY',
+  required_inputs = envelope,
+  replay_version = 1,
+  callback = function(task)
+    task:set_check_fact('scanner_pid', rspamd_util.get_pid())
+  end,
+}
 
 rspamd_config:register_symbol {
   name = 'INTEGRATION_SLOW',
@@ -49,6 +59,8 @@ rspamd_config:register_symbol {
     local terminal = task:get_terminal_event()
     local state = {
       from = task:get_from('smtp')[1].addr,
+      pid = rspamd_util.get_pid(),
+      data_pid = task:get_check_fact('INTEGRATION_IDENTITY', 'scanner_pid'),
       terminal = terminal or false,
       dns = task:get_dns_req(),
       spf_calls = task:get_mempool():get_variable('integration_spf_calls', 'double') or 0,
@@ -63,6 +75,12 @@ rspamd_config:register_symbol {
     if terminal then
       assert(terminal.decision_stage == 'data' and not terminal.has_body)
       assert(not state.symbols.INTEGRATION_BODY)
+
+      if state.from:match('^observer%-slow') then
+        task:add_timer(2, function() end)
+      elseif state.from:match('^observer%-error') then
+        task:set_terminal_observer_error()
+      end
     else
       assert(task:get_content():len() > 0 and state.symbols.INTEGRATION_BODY)
       task:set_milter_reply {

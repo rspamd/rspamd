@@ -222,6 +222,9 @@ def multistage_accounting(host, port, controller_port, sender):
         client.envelope(sender)
         decision = client.data()
         after_data = stats()
+        assert after_data['multistage']['data_started'] == before['multistage']['data_started'] + 1
+        outcome = {'continue': 'data_continued', 'reject': 'data_rejected', 'defer': 'data_tempfailed'}[sender]
+        assert after_data['multistage'][outcome] == before['multistage'][outcome] + 1
         if sender == 'continue':
             assert decision == b'c'
             assert after_data['scanned'] == before['scanned']
@@ -233,5 +236,8 @@ def multistage_accounting(host, port, controller_port, sender):
         after = stats()
         assert after['scanned'] == before['scanned'] + 1
         assert stats()['scanned'] == after['scanned']
+        if sender == 'continue':
+            assert after['multistage']['record_imported'] == before['multistage']['record_imported'] + 1
+            assert after['multistage']['producer_replayed'] > before['multistage']['producer_replayed']
     finally:
         client.close()

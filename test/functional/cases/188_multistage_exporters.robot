@@ -22,6 +22,9 @@ Terminal Exports And EOM Are Counted Once
 Exporter Failure Preserves The Frozen Decision
   Multistage Export Failure  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}
 
+Slow Exporter Is Cancelled At The DATA Deadline
+  Multistage Export Failure  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}  2
+
 *** Keywords ***
 Exporters Setup
   Run Redis

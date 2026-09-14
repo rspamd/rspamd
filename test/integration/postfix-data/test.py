@@ -183,6 +183,8 @@ def mode_cases(mode, port):
         submit(smtp, mode + '-after-reject')
         submit(smtp, mode + '-temporary', domain='error.example.test', early=451, policy='spf-temporary')
         submit(smtp, mode + '-after-tempfail')
+        submit(smtp, 'observer-slow-' + mode, domain='fail.example.test', early=554, policy='spf')
+        submit(smtp, 'observer-error-' + mode, domain='fail.example.test', early=554, policy='spf')
         submit(smtp, mode + '-softfail', domain='soft.example.test', symbols=('R_SPF_SOFTFAIL',))
         submit(smtp, mode + '-spf-exempt', domain='fail.example.test',
                recipients=('exempt@localhost',), symbols=('R_SPF_FAIL',))

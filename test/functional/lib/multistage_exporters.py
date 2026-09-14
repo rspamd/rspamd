@@ -13,6 +13,7 @@ from multistage import Milter, _http, _seal
 _collector = None
 _thread = None
 _rows = []
+_failure_delay = 0
 
 
 def start_export_collector(host, port):
@@ -28,6 +29,7 @@ def start_export_collector(host, port):
             code, reply = 200, b'{}'
 
             if self.path == '/failure':
+                time.sleep(_failure_delay)
                 code = 503
             elif query.startswith('INSERT INTO rspamd ('):
                 fields = query.partition('(')[2].partition(')')[0].replace('`', '').split(',')
@@ -42,7 +44,11 @@ def start_export_collector(host, port):
             self.send_response(code)
             self.send_header('Content-Length', str(len(reply)))
             self.end_headers()
-            self.wfile.write(reply)
+            try:
+                self.wfile.write(reply)
+            except (BrokenPipeError, ConnectionResetError):
+                # The DATA deadline cancels the deliberately slow export.
+                pass
 
     _collector = http.server.ThreadingHTTPServer((host, int(port)), Handler)
     _thread = threading.Thread(target=_collector.serve_forever, daemon=True)
@@ -125,12 +131,21 @@ def multistage_exports(host, port, redis_host, redis_port):
         client.close()
 
 
-def multistage_export_failure(host, port):
+def multistage_export_failure(host, port, delay=0):
+    global _failure_delay
+    delay = float(delay)
+    _failure_delay = delay
     request = dict(version=1, issued=time.time(), id='f' * 32,
                    metadata=dict(ip='192.0.2.1', helo='mail.example.com',
                                  **{'from': '<reject@example.com>', 'rcpt': ['<rcpt@example.org>']}))
-    status, body, _ = _http(host, port, '/checkdata', _seal('data-request', request))
+    started = time.monotonic()
+    try:
+        status, body, _ = _http(host, port, '/checkdata', _seal('data-request', request))
+    finally:
+        _failure_delay = 0
     assert status == 200, (status, body)
     response = json.loads(body[129:])
     assert response['decision'] == 'reject', response
-    assert response['terminal']['observer_status'] == 'error', response
+    assert response['terminal']['observer_status'] == ('timeout' if delay else 'error'), response
+    if delay:
+        assert time.monotonic() - started < float(delay), 'exporter delayed the frozen DATA reply'
