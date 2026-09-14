@@ -1,7 +1,6 @@
 """Exercise real exporter plugins with Redis and an HTTP capture endpoint."""
 import http.server
 import json
-import re
 import threading
 import time
 import urllib.parse
@@ -31,7 +30,7 @@ def start_export_collector(host, port):
             if self.path == '/failure':
                 code = 503
             elif query.startswith('INSERT INTO rspamd ('):
-                fields = re.search(r'\((.*?)\)', query)[1].replace('`', '').split(',')
+                fields = query.partition('(')[2].partition(')')[0].replace('`', '').split(',')
 
                 for line in body.decode().splitlines():
                     values = line.split('\t')
