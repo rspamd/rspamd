@@ -494,6 +494,55 @@ rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task)
 	return cache_runtime->describe_inflight_symbols();
 }
 
+/* Static admission only: task settings and producer readiness still apply. */
+static void
+rspamd_symcache_add_input_details(const rspamd::symcache::cache_item &item,
+								  const rspamd::symcache::symcache &cache, ucl_object_t *out)
+{
+	ucl_object_insert_key(out, rspamd_symcache_inputs_to_ucl(item.required_inputs), "required_inputs", 0, false);
+	ucl_object_insert_key(out, rspamd_symcache_inputs_to_ucl(item.effective_inputs), "effective_inputs", 0, false);
+	ucl_object_insert_key(out, ucl_object_fromint(item.replay_version), "replay_version", 0, false);
+	ucl_object_insert_key(out, ucl_object_frombool(item.terminal_observer), "terminal_observer", 0, false);
+	ankerl::unordered_dense::map<int, bool> candidates;
+	const auto candidate = [&](const rspamd::symcache::cache_item *check, auto &&self) -> bool {
+		if (!check) {
+			return false;
+		}
+
+		check = cache.get_item_by_id(check->id, true);
+
+		if (!check || !check->input_ready(RSPAMD_SYMCACHE_INPUT_ENVELOPE, false, true)) {
+			return false;
+		}
+
+		if (auto found = candidates.find(check->id); found != candidates.end()) {
+			return found->second;
+		}
+
+		candidates[check->id] = false;
+
+		for (const auto &[id, dep]: check->deps) {
+			if (!self(dep.item, self)) {
+				return false;
+			}
+		}
+
+		candidates[check->id] = true;
+		return true;
+	};
+	auto ready = candidate(&item, candidate);
+	auto *blocked = ucl_object_typed_new(UCL_ARRAY);
+
+	for (const auto &[id, dep]: item.deps) {
+		if (dep.item && !candidate(dep.item, candidate)) {
+			ucl_array_append(blocked, ucl_object_fromstring(dep.item->symbol.c_str()));
+		}
+	}
+
+	ucl_object_insert_key(out, ucl_object_frombool(ready), "data_candidate", 0, false);
+	ucl_object_insert_key(out, blocked, "data_blocking_dependencies", 0, false);
+}
+
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,
 										ucl_object_t *this_sym_ucl)
@@ -509,10 +558,7 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 		const auto *producer = sym->is_virtual() ? sym->get_parent(*real_cache) : sym;
 
 		if (producer != nullptr) {
-			ucl_object_insert_key(this_sym_ucl, rspamd_symcache_inputs_to_ucl(producer->required_inputs),
-								  "required_inputs", 0, false);
-			ucl_object_insert_key(this_sym_ucl, rspamd_symcache_inputs_to_ucl(producer->effective_inputs),
-								  "effective_inputs", 0, false);
+			rspamd_symcache_add_input_details(*producer, *real_cache, this_sym_ucl);
 
 			if (producer->execution_parent) {
 				ucl_object_insert_key(this_sym_ucl,
@@ -651,10 +697,7 @@ ucl_object_t *rspamd_symcache_dump_exec_plan(struct rspamd_symcache *cache)
 			ucl_object_insert_key(sym_ucl,
 								  ucl_object_fromstring(sym->get_type_str()),
 								  "type", strlen("type"), false);
-			ucl_object_insert_key(sym_ucl, rspamd_symcache_inputs_to_ucl(sym->required_inputs),
-								  "required_inputs", 0, false);
-			ucl_object_insert_key(sym_ucl, rspamd_symcache_inputs_to_ucl(sym->effective_inputs),
-								  "effective_inputs", 0, false);
+			rspamd_symcache_add_input_details(*sym, *real_cache, sym_ucl);
 
 			if (sym->is_hoisted()) {
 				ucl_object_insert_key(sym_ucl,

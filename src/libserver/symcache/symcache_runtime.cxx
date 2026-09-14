@@ -576,9 +576,7 @@ auto symcache_runtime::check_item_conditions(struct rspamd_task *task, const cac
 
 auto symcache_runtime::input_ready(const cache_item *item) const -> bool
 {
-	return (item->effective_inputs & ~available_inputs) == 0 &&
-		   item->terminal_observer == terminal_mode &&
-		   (!portable_checkpoint || terminal_mode || item->replay_version != 0);
+	return item->input_ready(available_inputs, terminal_mode, portable_checkpoint);
 }
 
 auto symcache_runtime::is_bucket_open(struct rspamd_task *task, unsigned int bucket) const -> bool

@@ -9,6 +9,7 @@
 #include "symcache_item.hxx"
 #include "libserver/task.h"
 #include "libserver/scan_finalization.h"
+#include "libserver/multistage.h"
 #include "libmime/scan_result.h"
 #include <functional>
 
@@ -518,6 +519,7 @@ auto checkpoint_store::replay(struct rspamd_task *task, const cache_item &item) 
 	if (!prerequisites(item, *reinterpret_cast<symcache *>(task->cfg->cache), [&](const cache_item &dep) {
 			return replayed.contains(dep.symbol);
 		})) {
+		rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_PRODUCER_FALLBACK);
 		return false;
 	}
 
@@ -526,6 +528,7 @@ auto checkpoint_store::replay(struct rspamd_task *task, const cache_item &item) 
 	/* Validate and restore explicitly exported state before inserting any
 	 * results. Rejection consumes the record and runs the producer normally. */
 	if (!item.restore_replay(task, saved_facts)) {
+		rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_PRODUCER_FALLBACK);
 		return false;
 	}
 
@@ -552,6 +555,7 @@ auto checkpoint_store::replay(struct rspamd_task *task, const cache_item &item) 
 
 	facts[item.symbol].reset(copy_value(saved_facts));
 	replayed.insert(item.symbol);
+	rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_PRODUCER_REPLAYED);
 	return true;
 }
 }// namespace rspamd::symcache

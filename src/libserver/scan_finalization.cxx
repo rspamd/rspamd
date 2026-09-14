@@ -300,9 +300,11 @@ enum rspamd_symcache_checkpoint_result rspamd_task_process_early_result(struct r
 
 		if (early->timed_out) {
 			observer_status = "timeout";
+			rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_OBSERVER_TIMEOUT);
 		}
 		else if (early->observer_error) {
 			observer_status = "error";
+			rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_OBSERVER_ERROR);
 		}
 
 		early->finished = true;

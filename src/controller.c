@@ -3157,6 +3157,7 @@ rspamd_controller_handle_stat_common(
 						  "read_only", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_scanned), "scanned", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_learned), "learned", 0, false);
+	ucl_object_insert_key(top, rspamd_multistage_stats(&ctx->srv->stat->multistage, do_reset), "multistage", 0, false);
 
 	sub = ucl_object_typed_new(UCL_OBJECT);
 	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
@@ -3426,6 +3427,7 @@ rspamd_controller_handle_metrics_common(
 	memcpy(&stat_copy, session->ctx->worker->srv->stat, sizeof(stat_copy));
 
 	top = rspamd_worker_metrics_object(session->ctx->cfg, &stat_copy, uptime);
+	ucl_object_replace_key(top, rspamd_multistage_stats(&ctx->srv->stat->multistage, do_reset), "multistage", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(session->ctx->srv->start_time), "start_time", 0, false);
 	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
 						  "read_only", 0, false);

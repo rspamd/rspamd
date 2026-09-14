@@ -298,6 +298,13 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	bool input_dependency_invalid = false;
 	unsigned int replay_version = 0;
 	bool terminal_observer = false;
+
+	auto input_ready(unsigned int available, bool terminal, bool portable) const -> bool
+	{
+		return (effective_inputs & ~available) == 0 && terminal_observer == terminal &&
+			   (!portable || terminal || replay_version != 0);
+	}
+
 	/* Independently scheduled parts of one public check. Ownership controls
 	 * admission; dependencies still control execution and input readiness. */
 	cache_item *execution_parent = nullptr;

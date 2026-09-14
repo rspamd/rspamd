@@ -1,0 +1,43 @@
+# Copy to local.d/multistage.conf on the proxy AND every scanner.
+# Generate one shared key with: openssl rand -hex 24
+# Keep the same key and rule configuration on all participating instances.
+enabled = true;
+key = "REPLACE_WITH_YOUR_GENERATED_SHARED_KEY";
+timeout = 2s;
+
+# Only these explicit policies may reject before the body arrives.
+# Ordinary score thresholds and EOM settings do not override DATA decisions.
+policies = [
+  { name = "blocked-helo"; symbol = "DATA_HELO_BLOCK";
+    action = "reject"; reason = "HELO is blocked"; },
+  { name = "blocked-asn"; symbol = "DATA_ASN_BLOCK";
+    action = "reject"; reason = "Client network is blocked"; },
+  { name = "spf-fail"; symbol = "R_SPF_FAIL";
+    action = "reject"; reason = "SPF validation failed"; }
+];
+
+# Scope exemptions explicitly: a rejection for ANY other recipient still
+# rejects the entire transaction. Priority orders these DATA settings only.
+settings {
+  postmaster {
+    match { rcpt = "postmaster@example.org"; }
+    apply { policies_disabled = ["blocked-helo", "blocked-asn", "spf-fail"]; }
+  }
+}
+
+# Define these symbols separately in local.d/multimap.conf:
+# DATA_HELO_BLOCK {
+#   type = "helo";
+#   regexp = true;
+#   map = "$LOCAL_CONFDIR/local.d/blocked-helo.map";
+# }
+# DATA_ASN_BLOCK {
+#   type = "asn";
+#   map = "$LOCAL_CONFDIR/local.d/blocked-asn.map";
+# }
+# Example HELO map line: /^unwanted[.]example$/i
+# Example ASN map line: 64496
+# Enable/configure the ASN plugin's lookup backend for the ASN rule.
+# For an IP RBL, add a policy referring to its returncodes symbol, e.g.
+# { name = "ip-rbl"; symbol = "MY_IP_RBL"; action = "reject";
+#   reason = "Client IP is listed"; }

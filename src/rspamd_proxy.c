@@ -269,6 +269,7 @@ struct rspamd_proxy_session {
 	GHashTable *mail_esmtp_args;
 	GPtrArray *rcpt_esmtp_args;
 	rspamd_fstring_t *early_record;
+	double early_started;
 	rspamd_fstring_t *early_binding;
 	char early_id[RSPAMD_MULTISTAGE_ID_LEN + 1];
 	uint64_t early_transaction;
@@ -3759,6 +3760,9 @@ proxy_multistage_cancel(struct rspamd_proxy_session *session)
 	proxy_multistage_free_task(session);
 
 	if (session->early_pending) {
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_CANCELLED);
+		rspamd_multistage_observe(session->worker, ev_now(session->ctx->event_loop) - session->early_started);
+
 		if (session->master_conn && session->master_conn->up &&
 			!(session->master_conn->flags & RSPAMD_BACKEND_CLOSED)) {
 			rspamd_upstream_release(session->master_conn->up);
@@ -3800,15 +3804,19 @@ proxy_multistage_complete(struct rspamd_proxy_session *session, const char *wire
 
 	switch (decision) {
 	case RSPAMD_MULTISTAGE_REJECT:
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_REJECTED);
 		action = RSPAMD_MILTER_REJECT;
 		break;
 	case RSPAMD_MULTISTAGE_TEMPFAIL:
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_TEMPFAILED);
 		action = RSPAMD_MILTER_TEMPFAIL;
 		break;
 	case RSPAMD_MULTISTAGE_CONTINUE:
+		rspamd_multistage_count(session->worker, session->early_record ? RSPAMD_MULTISTAGE_DATA_CONTINUED : RSPAMD_MULTISTAGE_DATA_FALLBACK);
 		break;
 	}
 
+	rspamd_multistage_observe(session->worker, ev_now(session->ctx->event_loop) - session->early_started);
 	session->early_pending = FALSE;
 	session->retries = 0;
 	rspamd_http_message_unref(session->client_message);
@@ -3867,6 +3875,7 @@ proxy_multistage_start(struct rspamd_proxy_session *session, struct rspamd_milte
 	if (!session->backend || session->backend->extra_headers || session->backend->parser_from_ref != -1 ||
 		session->backend->parser_to_ref != -1 || session->ctx->discard_on_reject ||
 		session->ctx->quarantine_on_reject) {
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_BYPASSED);
 		rspamd_milter_reply_data(rms, rms->transaction, RSPAMD_MILTER_CONTINUE, NULL);
 		return;
 	}
@@ -3887,6 +3896,8 @@ proxy_multistage_start(struct rspamd_proxy_session *session, struct rspamd_milte
 
 	session->early_transaction = rms->transaction;
 	session->early_pending = TRUE;
+	session->early_started = ev_now(session->ctx->event_loop);
+	rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_STARTED);
 
 	if (!session->master_conn) {
 		session->master_conn = rspamd_mempool_alloc0(session->pool, sizeof(*session->master_conn));

@@ -86,6 +86,84 @@ struct multistage_fixture : checkpoint_fixture {
 
 TEST_SUITE("multistage")
 {
+	TEST_CASE_FIXTURE(multistage_fixture, "explicit disable stops both sides of the transport")
+	{
+		auto *msg = rspamd_multistage_data_request(cfg, metadata.get(), id);
+		gsize len;
+		auto *wire = rspamd_http_message_get_body(msg, &len);
+		auto *opts = replay_field(cfg->cfg_ucl_obj, "multistage");
+		policy("reject");
+		REQUIRE(rspamd_multistage_validate(cfg));
+		REQUIRE(cfg->multistage_policy_ref > 0);
+		replay_replace(opts, "enabled", ucl_object_frombool(false));
+		CHECK(rspamd_multistage_validate(cfg));
+		CHECK(cfg->multistage_policy_ref == 0);
+		CHECK_FALSE(rspamd_multistage_enabled(cfg));
+		CHECK(rspamd_multistage_open(cfg, "data-request", wire, len) == nullptr);
+		CHECK(rspamd_multistage_seal(cfg, "data-request", metadata.get()) == nullptr);
+		replay_replace(opts, "key", ucl_object_fromstring(""));
+		CHECK(rspamd_multistage_validate(cfg));
+		replay_replace(opts, "enabled", ucl_object_frombool(true));
+		CHECK_FALSE(rspamd_multistage_validate(cfg));
+		replay_replace(opts, "enabled", ucl_object_fromint(1));
+		CHECK_FALSE(rspamd_multistage_validate(cfg));
+		CHECK_FALSE(rspamd_multistage_enabled(cfg));
+		rspamd_http_message_unref(msg);
+	}
+
+	TEST_CASE_FIXTURE(multistage_fixture, "execution diagnostics explain DATA admission")
+	{
+		add("EARLY", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		add("UNAUDITED", envelope);
+		add("DEPENDENT", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		depends("DEPENDENT", "UNAUDITED");
+		add("TRANSITIVE", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		depends("TRANSITIVE", "DEPENDENT");
+		add("BODY");
+		init();
+
+		for (auto *name: {"EARLY", "UNAUDITED", "DEPENDENT", "TRANSITIVE", "BODY"}) {
+			replay_record details{ucl_object_typed_new(UCL_OBJECT), &ucl_object_unref};
+			rspamd_symcache_get_symbol_details(cfg->cache, name, details.get());
+			CHECK(ucl_object_toboolean(ucl_object_lookup(details.get(), "data_candidate")) == (std::string_view{name} == "EARLY"));
+
+			if (std::string_view{name} == "DEPENDENT") {
+				auto *blocked = ucl_object_lookup(details.get(), "data_blocking_dependencies");
+				REQUIRE(blocked->len == 1);
+				CHECK(std::string_view{ucl_object_tostring(ucl_array_find_index(blocked, 0))} == "UNAUDITED");
+			}
+		}
+	}
+
+	TEST_CASE("statistics snapshot, histogram boundaries and reset")
+	{
+		rspamd_stat stat{};
+		rspamd_main srv{};
+		rspamd_worker worker{};
+		srv.stat = &stat;
+		worker.srv = &srv;
+		rspamd_multistage_count(&worker, RSPAMD_MULTISTAGE_DATA_STARTED);
+		rspamd_multistage_observe(&worker, 0.005);
+		rspamd_multistage_observe(&worker, 0.3);
+		rspamd_multistage_observe(&worker, 2.0);
+		replay_record snapshot{rspamd_multistage_stats(&stat.multistage, TRUE), &ucl_object_unref};
+		CHECK(ucl_object_toint(ucl_object_lookup(snapshot.get(), "data_started")) == 1);
+		CHECK(ucl_object_toint(ucl_object_lookup(snapshot.get(), "data_duration_count")) == 3);
+		CHECK(ucl_object_todouble(ucl_object_lookup(snapshot.get(), "data_duration_sum")) == doctest::Approx(2.305));
+		auto *buckets = ucl_object_lookup(snapshot.get(), "data_duration_buckets");
+		CHECK(ucl_object_toint(ucl_object_lookup(ucl_array_find_index(buckets, 0), "count")) == 1);
+		CHECK(ucl_object_toint(ucl_object_lookup(ucl_array_find_index(buckets, 6), "count")) == 2);
+		rspamd_fstring_t *metrics = rspamd_fstring_new();
+		rspamd_multistage_metrics(snapshot.get(), &metrics);
+		std::string_view text{metrics->str, metrics->len};
+		CHECK(text.find("rspamd_multistage_data_duration_seconds_bucket{le=\"+Inf\"} 3") != std::string_view::npos);
+		CHECK(text.find("rspamd_multistage_data_started_total 1") != std::string_view::npos);
+		rspamd_fstring_free(metrics);
+		snapshot.reset(rspamd_multistage_stats(&stat.multistage, FALSE));
+		CHECK(ucl_object_toint(ucl_object_lookup(snapshot.get(), "data_started")) == 0);
+		CHECK(ucl_object_toint(ucl_object_lookup(snapshot.get(), "data_duration_count")) == 0);
+	}
+
 	TEST_CASE_FIXTURE(multistage_fixture, "authentication binds domain, bytes, key and expiry")
 	{
 		auto *msg = rspamd_multistage_data_request(cfg, metadata.get(), id);

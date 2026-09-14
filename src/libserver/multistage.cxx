@@ -14,6 +14,7 @@
 #include "scan_finalization.h"
 #include "symcache/symcache_checkpoint.h"
 #include "lua/lua_common.h"
+#include "rspamd.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -35,6 +36,50 @@ constexpr size_t wire_prefix_length = signature_length + 1; /* Hex MAC and '.' *
 constexpr unsigned int max_nodes = 16384;
 constexpr unsigned int max_depth = 24;
 constexpr size_t max_key_length = 256;
+
+constexpr const char *counter_names[] = {
+	"data_started",
+	"data_continued",
+	"data_rejected",
+	"data_tempfailed",
+	"data_fallback",
+	"data_cancelled",
+	"data_bypassed",
+	"scanner_timeout",
+	"record_imported",
+	"record_rejected",
+	"producer_replayed",
+	"producer_fallback",
+	"observer_error",
+	"observer_timeout",
+};
+static_assert(std::size(counter_names) == RSPAMD_MULTISTAGE_COUNTER_MAX);
+constexpr double latency_bounds[] = {0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0};
+static_assert(std::size(latency_bounds) + 1 == RSPAMD_MULTISTAGE_LATENCY_BUCKETS);
+
+void add_stat(uint64_t &value, uint64_t amount = 1)
+{
+#ifdef HAVE_ATOMIC_BUILTINS
+	__atomic_fetch_add(&value, amount, __ATOMIC_RELAXED);
+#else
+	value += amount;
+#endif
+}
+
+auto read_stat(uint64_t &value, bool reset) -> uint64_t
+{
+#ifdef HAVE_ATOMIC_BUILTINS
+	return reset ? __atomic_exchange_n(&value, 0, __ATOMIC_RELAXED) : __atomic_load_n(&value, __ATOMIC_RELAXED);
+#else
+	auto result = value;
+
+	if (reset) {
+		value = 0;
+	}
+
+	return result;
+#endif
+}
 
 auto multistage_options(struct rspamd_config *cfg) -> const ucl_object_t *
 {
@@ -191,8 +236,88 @@ auto is_fresh(const ucl_object_t *obj) -> bool
 }
 }// namespace
 
+void rspamd_multistage_count(struct rspamd_worker *worker, enum rspamd_multistage_counter counter)
+{
+	if (worker && worker->srv && worker->srv->stat && counter >= 0 && counter < RSPAMD_MULTISTAGE_COUNTER_MAX) {
+		add_stat(worker->srv->stat->multistage.counters[counter]);
+	}
+}
+
+void rspamd_multistage_observe(struct rspamd_worker *worker, double seconds)
+{
+	if (!worker || !worker->srv || !worker->srv->stat || !std::isfinite(seconds) || seconds < 0) {
+		return;
+	}
+
+	auto &stat = worker->srv->stat->multistage;
+	auto bucket = std::lower_bound(std::begin(latency_bounds), std::end(latency_bounds), seconds) - std::begin(latency_bounds);
+	add_stat(stat.latency[bucket]);
+	/* Bound conversion even if a caller supplies an invalidly large duration. */
+	add_stat(stat.duration_us, static_cast<uint64_t>(std::min(seconds, 3600.0) * 1000000));
+}
+
+ucl_object_t *rspamd_multistage_stats(struct rspamd_multistage_stat *stat, gboolean reset)
+{
+	auto *out = ucl_object_typed_new(UCL_OBJECT);
+
+	for (unsigned int i = 0; i < RSPAMD_MULTISTAGE_COUNTER_MAX; i++) {
+		ucl_object_insert_key(out, ucl_object_fromint(read_stat(stat->counters[i], reset)), counter_names[i], 0, false);
+	}
+
+	auto *buckets = ucl_object_typed_new(UCL_ARRAY);
+	uint64_t count = 0;
+
+	for (unsigned int i = 0; i < RSPAMD_MULTISTAGE_LATENCY_BUCKETS; i++) {
+		count += read_stat(stat->latency[i], reset);
+		auto *bucket = ucl_object_typed_new(UCL_OBJECT);
+		auto *bound = i < std::size(latency_bounds) ? ucl_object_fromdouble(latency_bounds[i]) : ucl_object_fromstring("+Inf");
+		ucl_object_insert_key(bucket, bound, "le", 0, false);
+		ucl_object_insert_key(bucket, ucl_object_fromint(count), "count", 0, false);
+		ucl_array_append(buckets, bucket);
+	}
+
+	ucl_object_insert_key(out, buckets, "data_duration_buckets", 0, false);
+	ucl_object_insert_key(out, ucl_object_fromint(count), "data_duration_count", 0, false);
+	auto duration = read_stat(stat->duration_us, reset) / 1000000.0;
+	ucl_object_insert_key(out, ucl_object_fromdouble(duration), "data_duration_sum", 0, false);
+	return out;
+}
+
+void rspamd_multistage_metrics(const ucl_object_t *stats, rspamd_fstring_t **output)
+{
+	if (!stats) {
+		return;
+	}
+
+	for (auto *name: counter_names) {
+		rspamd_printf_fstring(output, "# HELP rspamd_multistage_%s_total Multistage %s events.\n"
+									  "# TYPE rspamd_multistage_%s_total counter\n"
+									  "rspamd_multistage_%s_total %L\n",
+							  name, name, name, name, ucl_object_toint(ucl_object_lookup(stats, name)));
+	}
+
+	rspamd_printf_fstring(output, "# HELP rspamd_multistage_data_duration_seconds Proxy DATA wait including terminal observers.\n"
+								  "# TYPE rspamd_multistage_data_duration_seconds histogram\n");
+	ucl_object_iter_t it = nullptr;
+
+	while (auto *bucket = ucl_object_iterate(ucl_object_lookup(stats, "data_duration_buckets"), &it, true)) {
+		rspamd_printf_fstring(output, "rspamd_multistage_data_duration_seconds_bucket{le=\"%s\"} %L\n",
+							  ucl_object_tostring_forced(ucl_object_lookup(bucket, "le")), ucl_object_toint(ucl_object_lookup(bucket, "count")));
+	}
+
+	rspamd_printf_fstring(output, "rspamd_multistage_data_duration_seconds_count %L\n"
+								  "rspamd_multistage_data_duration_seconds_sum %.6f\n",
+						  ucl_object_toint(ucl_object_lookup(stats, "data_duration_count")), ucl_object_todouble(ucl_object_lookup(stats, "data_duration_sum")));
+}
+
 gboolean rspamd_multistage_enabled(struct rspamd_config *cfg)
 {
+	auto *enabled = ucl_object_lookup(multistage_options(cfg), "enabled");
+
+	if (enabled && (ucl_object_type(enabled) != UCL_BOOLEAN || !ucl_object_toboolean(enabled))) {
+		return FALSE;
+	}
+
 	return shared_key(cfg) != nullptr;
 }
 
@@ -204,7 +329,27 @@ gboolean rspamd_multistage_validate(struct rspamd_config *cfg)
 		return TRUE;
 	}
 
-	if (ucl_object_type(opts) != UCL_OBJECT || !shared_key(cfg)) {
+	if (ucl_object_type(opts) != UCL_OBJECT) {
+		return FALSE;
+	}
+
+	if (auto *enabled = ucl_object_lookup(opts, "enabled")) {
+		if (ucl_object_type(enabled) != UCL_BOOLEAN) {
+			return FALSE;
+		}
+
+		if (!ucl_object_toboolean(enabled)) {
+			if (cfg->multistage_policy_ref > 0) {
+				luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, cfg->multistage_policy_ref);
+				cfg->multistage_policy_ref = 0;
+			}
+
+			return TRUE;
+		}
+	}
+
+	if (!shared_key(cfg)) {
+		msg_err_config("multistage requires a shared key of 32 to 64 bytes");
 		return FALSE;
 	}
 
@@ -278,7 +423,7 @@ double rspamd_multistage_timeout(struct rspamd_config *cfg)
 
 rspamd_fstring_t *rspamd_multistage_seal(struct rspamd_config *cfg, const char *kind, const ucl_object_t *payload)
 {
-	if (!shared_key(cfg)) {
+	if (!rspamd_multistage_enabled(cfg)) {
 		return nullptr;
 	}
 
@@ -300,7 +445,7 @@ rspamd_fstring_t *rspamd_multistage_seal(struct rspamd_config *cfg, const char *
 
 ucl_object_t *rspamd_multistage_open(struct rspamd_config *cfg, const char *kind, const char *wire, gsize len)
 {
-	if (!shared_key(cfg) || !wire || len <= wire_prefix_length || len > RSPAMD_MULTISTAGE_MAX_WIRE ||
+	if (!rspamd_multistage_enabled(cfg) || !wire || len <= wire_prefix_length || len > RSPAMD_MULTISTAGE_MAX_WIRE ||
 		wire[signature_length] != '.') {
 		return nullptr;
 	}
@@ -456,14 +601,23 @@ gboolean rspamd_multistage_import(struct rspamd_task *task)
 {
 	auto *wire = ucl_object_lookup(task->meta, "early_record");
 
-	if (!wire || ucl_object_type(wire) != UCL_STRING) {
+	if (!wire) {
 		return FALSE;
+	}
+
+	auto rejected = [&]() {
+		rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_RECORD_REJECTED);
+		return FALSE;
+	};
+
+	if (ucl_object_type(wire) != UCL_STRING) {
+		return rejected();
 	}
 
 	owning_object payload{rspamd_multistage_open(task->cfg, "data-response", ucl_object_tostring(wire), wire->len)};
 
 	if (!payload) {
-		return FALSE;
+		return rejected();
 	}
 
 	auto *id = string_field(payload.get(), "id");
@@ -471,16 +625,21 @@ gboolean rspamd_multistage_import(struct rspamd_task *task)
 	auto *binding = string_field(payload.get(), "binding");
 
 	if (!id || strlen(id) != RSPAMD_MULTISTAGE_ID_LEN || !decision || strcmp(decision, "continue") != 0 || !binding) {
-		return FALSE;
+		return rejected();
 	}
 
 	string_ptr expected{rspamd_multistage_binding(task->meta, id), &rspamd_fstring_free};
 
 	if (!expected || !string_field_equals(payload.get(), "binding", {expected->str, expected->len})) {
-		return FALSE;
+		return rejected();
 	}
 
-	return rspamd_symcache_import_checkpoint(task, ucl_object_lookup(payload.get(), "record"), binding);
+	if (!rspamd_symcache_import_checkpoint(task, ucl_object_lookup(payload.get(), "record"), binding)) {
+		return rejected();
+	}
+
+	rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_RECORD_IMPORTED);
+	return TRUE;
 }
 
 namespace {
@@ -651,6 +810,7 @@ gboolean data_scan_finish(void *ud)
 void data_scan_timeout(EV_P_ ev_timer *timer, int revents)
 {
 	auto *task = static_cast<rspamd_task *>(timer->data);
+	rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_SCANNER_TIMEOUT);
 	static_cast<data_scan *>(task->multistage)->timed_out = true;
 	data_scan_finish(task);
 }

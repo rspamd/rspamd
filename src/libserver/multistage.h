@@ -14,6 +14,38 @@ extern "C" {
 struct rspamd_config;
 struct rspamd_task;
 struct rspamd_http_message;
+struct rspamd_worker;
+
+/* Proxy outcomes count transactions; replay outcomes count producers. */
+enum rspamd_multistage_counter {
+	RSPAMD_MULTISTAGE_DATA_STARTED,
+	RSPAMD_MULTISTAGE_DATA_CONTINUED,
+	RSPAMD_MULTISTAGE_DATA_REJECTED,
+	RSPAMD_MULTISTAGE_DATA_TEMPFAILED,
+	RSPAMD_MULTISTAGE_DATA_FALLBACK,
+	RSPAMD_MULTISTAGE_DATA_CANCELLED,
+	RSPAMD_MULTISTAGE_DATA_BYPASSED,
+	RSPAMD_MULTISTAGE_SCANNER_TIMEOUT,
+	RSPAMD_MULTISTAGE_RECORD_IMPORTED,
+	RSPAMD_MULTISTAGE_RECORD_REJECTED,
+	RSPAMD_MULTISTAGE_PRODUCER_REPLAYED,
+	RSPAMD_MULTISTAGE_PRODUCER_FALLBACK,
+	RSPAMD_MULTISTAGE_OBSERVER_ERROR,
+	RSPAMD_MULTISTAGE_OBSERVER_TIMEOUT,
+	RSPAMD_MULTISTAGE_COUNTER_MAX,
+};
+
+#define RSPAMD_MULTISTAGE_LATENCY_BUCKETS 9
+struct rspamd_multistage_stat {
+	uint64_t counters[RSPAMD_MULTISTAGE_COUNTER_MAX];
+	uint64_t latency[RSPAMD_MULTISTAGE_LATENCY_BUCKETS];
+	uint64_t duration_us;
+};
+
+void rspamd_multistage_count(struct rspamd_worker *worker, enum rspamd_multistage_counter counter);
+void rspamd_multistage_observe(struct rspamd_worker *worker, double seconds);
+ucl_object_t *rspamd_multistage_stats(struct rspamd_multistage_stat *stat, gboolean reset);
+void rspamd_multistage_metrics(const ucl_object_t *stats, rspamd_fstring_t **output);
 
 #define RSPAMD_MULTISTAGE_MAX_WIRE (256 * 1024)
 #define RSPAMD_MULTISTAGE_ID_LEN 32
