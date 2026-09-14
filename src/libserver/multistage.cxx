@@ -70,6 +70,24 @@ bool string_field_equals(const ucl_object_t *obj, const char *name, std::string_
 		   std::string_view{ucl_object_tostring(value), value->len} == expected;
 }
 
+auto smtp_reason(const ucl_object_t *obj) -> const char *
+{
+	auto *reason = string_field(obj, "reason");
+
+	/* Leave room for "554 5.7.1 " and CRLF in a 512-byte SMTP reply. */
+	if (!reason || !*reason || strlen(reason) > 500) {
+		return nullptr;
+	}
+
+	for (auto *p = reason; *p; p++) {
+		if (g_ascii_iscntrl(*p)) {
+			return nullptr;
+		}
+	}
+
+	return reason;
+}
+
 auto hex_digest(const unsigned char *data, size_t len) -> std::string
 {
 	std::string out(len * 2, '0');
@@ -211,11 +229,10 @@ gboolean rspamd_multistage_validate(struct rspamd_config *cfg)
 			auto *name = string_field(policy, "name");
 			auto *symbol = string_field(policy, "symbol");
 			auto *action = string_field(policy, "action");
-			auto *reason = string_field(policy, "reason");
+			auto *reason = smtp_reason(policy);
 
 			if (!name || !*name || strlen(name) > 128 || !symbol || !*symbol || strlen(symbol) > 256 || !action ||
-				(strcmp(action, "reject") != 0 && strcmp(action, "soft reject") != 0) || !reason ||
-				strlen(reason) > 512) {
+				(strcmp(action, "reject") != 0 && strcmp(action, "soft reject") != 0) || !reason) {
 				return FALSE;
 			}
 		}
@@ -323,9 +340,10 @@ ucl_object_t *rspamd_multistage_open(struct rspamd_config *cfg, const char *kind
 
 enum rspamd_multistage_decision rspamd_multistage_check_reply(struct rspamd_config *cfg, const char *wire, gsize len,
 															  const char *id, const rspamd_fstring_t *binding,
-															  rspamd_fstring_t **record)
+															  rspamd_fstring_t **record, rspamd_fstring_t **reason)
 {
 	*record = nullptr;
+	*reason = nullptr;
 	owning_object reply{rspamd_multistage_open(cfg, "data-response", wire, len)};
 
 	if (!reply || !binding || !string_field_equals(reply.get(), "id", id) ||
@@ -333,12 +351,19 @@ enum rspamd_multistage_decision rspamd_multistage_check_reply(struct rspamd_conf
 		return RSPAMD_MULTISTAGE_CONTINUE;
 	}
 
-	if (string_field_equals(reply.get(), "decision", "reject")) {
-		return RSPAMD_MULTISTAGE_REJECT;
-	}
+	auto reject = string_field_equals(reply.get(), "decision", "reject");
+	auto tempfail = string_field_equals(reply.get(), "decision", "soft reject");
 
-	if (string_field_equals(reply.get(), "decision", "soft reject")) {
-		return RSPAMD_MULTISTAGE_TEMPFAIL;
+	if (reject || tempfail) {
+		auto *terminal = ucl_object_lookup(reply.get(), "terminal");
+
+		if (string_field_equals(terminal, "action", reject ? "reject" : "soft reject")) {
+			if (auto *text = smtp_reason(terminal)) {
+				*reason = rspamd_fstring_new_init(text, strlen(text));
+			}
+		}
+
+		return reject ? RSPAMD_MULTISTAGE_REJECT : RSPAMD_MULTISTAGE_TEMPFAIL;
 	}
 
 	if (string_field_equals(reply.get(), "decision", "continue") && ucl_object_lookup(reply.get(), "record")) {
@@ -579,7 +604,7 @@ auto make_data_reply(struct rspamd_task *task, const data_scan *scan, rspamd_sym
 						  true);
 
 	if (auto *terminal = rspamd_task_get_terminal_event(task)) {
-		ucl_object_insert_key(payload.get(), ucl_object_ref(ucl_object_lookup(terminal, "action")), "decision", 0,
+		ucl_object_insert_key(payload.get(), ucl_object_copy(ucl_object_lookup(terminal, "action")), "decision", 0,
 							  true);
 		ucl_object_insert_key(payload.get(), ucl_object_ref(terminal), "terminal", 0, true);
 	}

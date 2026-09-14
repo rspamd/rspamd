@@ -1517,7 +1517,7 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 }
 
 gboolean rspamd_milter_reply_data(struct rspamd_milter_session *session,
-								  uint64_t transaction, enum rspamd_milter_reply action)
+								  uint64_t transaction, enum rspamd_milter_reply action, rspamd_fstring_t *reason)
 {
 	struct rspamd_milter_private *priv = session->priv;
 
@@ -1531,6 +1531,19 @@ gboolean rspamd_milter_reply_data(struct rspamd_milter_session *session,
 	if (action != RSPAMD_MILTER_CONTINUE) {
 		rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
 		priv->data_terminal = TRUE;
+
+		if (reason) {
+			const char *code = action == RSPAMD_MILTER_REJECT ? RSPAMD_MILTER_RCODE_REJECT : RSPAMD_MILTER_RCODE_TEMPFAIL;
+			const char *enhanced = action == RSPAMD_MILTER_REJECT ? RSPAMD_MILTER_XCODE_REJECT : RSPAMD_MILTER_XCODE_TEMPFAIL;
+			rspamd_fstring_t *rcode = rspamd_fstring_new_init(code, strlen(code));
+			rspamd_fstring_t *xcode = rspamd_fstring_new_init(enhanced, strlen(enhanced));
+			gboolean ret = rspamd_milter_set_reply(session, rcode, xcode, reason);
+
+			rspamd_fstring_free(rcode);
+			rspamd_fstring_free(xcode);
+
+			return ret;
+		}
 	}
 
 	return rspamd_milter_send_action(session, action);

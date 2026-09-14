@@ -1148,6 +1148,13 @@ LUA_FUNCTION_DEF(task, get_check_fact);
 LUA_FUNCTION_DEF(task, get_terminal_event);
 
 /***
+ * @method task:set_terminal_observer_error()
+ * Mark a terminal export as failed without changing the frozen DATA decision.
+ * Has no effect on ordinary EOM tasks.
+ */
+LUA_FUNCTION_DEF(task, set_terminal_observer_error);
+
+/***
  * @method task:get_settings_id()
  * Get numeric hash of settings id if specified for this task. 0 is returned otherwise.
  * @return {number} settings-id hash
@@ -1572,6 +1579,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, is_checkpoint),
 	LUA_INTERFACE_DEF(task, get_check_fact),
 	LUA_INTERFACE_DEF(task, get_terminal_event),
+	LUA_INTERFACE_DEF(task, set_terminal_observer_error),
 	LUA_INTERFACE_DEF(task, get_settings_id),
 	LUA_INTERFACE_DEF(task, set_settings_id),
 	LUA_INTERFACE_DEF(task, merge_and_apply_settings),
@@ -7169,6 +7177,15 @@ lua_task_get_terminal_event(lua_State *L)
 
 	lua_pushnil(L);
 	return 1;
+}
+
+static int
+lua_task_set_terminal_observer_error(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+	rspamd_task_terminal_observer_error(task);
+
+	return 0;
 }
 
 static int

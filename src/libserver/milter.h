@@ -93,9 +93,10 @@ typedef void (*rspamd_milter_finish)(int fd,
 									 struct rspamd_milter_session *session, enum rspamd_milter_event event, void *ud);
 
 /* Reply to the current DATA callback once. A stale transaction cannot reply.
- * Only CONTINUE, REJECT and TEMPFAIL are legal at this boundary. */
+ * Only CONTINUE, REJECT and TEMPFAIL are legal at this boundary. A validated
+ * single-line reason uses the standard reject/temporary SMTP reply codes. */
 gboolean rspamd_milter_reply_data(struct rspamd_milter_session *session,
-								  uint64_t transaction, enum rspamd_milter_reply action);
+								  uint64_t transaction, enum rspamd_milter_reply action, rspamd_fstring_t *reason);
 
 typedef void (*rspamd_milter_error)(int fd,
 									struct rspamd_milter_session *session,

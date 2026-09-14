@@ -3787,6 +3787,7 @@ static void
 proxy_multistage_complete(struct rspamd_proxy_session *session, const char *wire, gsize len)
 {
 	enum rspamd_multistage_decision decision;
+	rspamd_fstring_t *reason = NULL;
 	char action = RSPAMD_MILTER_CONTINUE;
 
 	if (!session->early_pending) {
@@ -3795,7 +3796,7 @@ proxy_multistage_complete(struct rspamd_proxy_session *session, const char *wire
 
 	decision = rspamd_multistage_check_reply(session->ctx->cfg, wire, len,
 											 session->early_id, session->early_binding,
-											 &session->early_record);
+											 &session->early_record, &reason);
 
 	switch (decision) {
 	case RSPAMD_MULTISTAGE_REJECT:
@@ -3814,12 +3815,16 @@ proxy_multistage_complete(struct rspamd_proxy_session *session, const char *wire
 	session->client_message = NULL;
 
 	if (session->client_milter_conn) {
-		gboolean queued = rspamd_milter_reply_data(session->client_milter_conn, session->early_transaction, action);
+		gboolean queued = rspamd_milter_reply_data(session->client_milter_conn, session->early_transaction, action, reason);
 
 		if (action != RSPAMD_MILTER_CONTINUE) {
 			msg_info_session("DATA decision %c; event %s; reply queued: %s", action,
 							 session->early_id, queued ? "yes" : "no");
 		}
+	}
+
+	if (reason) {
+		rspamd_fstring_free(reason);
 	}
 }
 
@@ -3862,7 +3867,7 @@ proxy_multistage_start(struct rspamd_proxy_session *session, struct rspamd_milte
 	if (!session->backend || session->backend->extra_headers || session->backend->parser_from_ref != -1 ||
 		session->backend->parser_to_ref != -1 || session->ctx->discard_on_reject ||
 		session->ctx->quarantine_on_reject) {
-		rspamd_milter_reply_data(rms, rms->transaction, RSPAMD_MILTER_CONTINUE);
+		rspamd_milter_reply_data(rms, rms->transaction, RSPAMD_MILTER_CONTINUE, NULL);
 		return;
 	}
 

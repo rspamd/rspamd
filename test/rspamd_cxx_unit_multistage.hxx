@@ -174,6 +174,9 @@ TEST_SUITE("multistage")
 		CHECK(std::string(ucl_object_tostring(ucl_object_lookup(payload.get(), "decision"))) == action);
 		CHECK(ucl_object_lookup(payload.get(), "record") == nullptr);
 		CHECK(ucl_object_lookup(payload.get(), "terminal") != nullptr);
+		auto *terminal_action = ucl_object_lookup(ucl_object_lookup(payload.get(), "terminal"), "action");
+		REQUIRE(terminal_action != nullptr);
+		CHECK(std::string(ucl_object_tostring(terminal_action)) == action);
 		CHECK(std::string(ucl_object_tostring(ucl_object_lookup(
 				  ucl_object_lookup(payload.get(), "terminal"), "policy_recipient"))) == "recipient@example.org");
 		CHECK((task->processed_stages & RSPAMD_TASK_STAGE_DONE) != 0);
@@ -233,15 +236,26 @@ TEST_SUITE("multistage")
 												{"soft reject", RSPAMD_MULTISTAGE_TEMPFAIL},
 												{"accept", RSPAMD_MULTISTAGE_CONTINUE}}) {
 			replay_replace(payload.get(), "decision", ucl_object_fromstring(decision));
+			auto *terminal = ucl_object_typed_new(UCL_OBJECT);
+			replay_replace(terminal, "action", ucl_object_fromstring(decision));
+			replay_replace(terminal, "reason", ucl_object_fromstring("policy response"));
+			replay_replace(payload.get(), "terminal", terminal);
 			transport_string wire{rspamd_multistage_seal(cfg, "data-response", payload.get()), &rspamd_fstring_free};
 			REQUIRE(wire != nullptr);
 
 			auto check_reply = [&](const char *expected_id, const rspamd_fstring_t *expected_binding, bool has_record) {
 				rspamd_fstring_t *record = nullptr;
+				rspamd_fstring_t *reason = nullptr;
 				auto result =
-					rspamd_multistage_check_reply(cfg, wire->str, wire->len, expected_id, expected_binding, &record);
+					rspamd_multistage_check_reply(cfg, wire->str, wire->len, expected_id, expected_binding, &record, &reason);
 				transport_string owned_record{record, &rspamd_fstring_free};
+				transport_string owned_reason{reason, &rspamd_fstring_free};
 				CHECK(bool(owned_record) == has_record);
+				CHECK(bool(owned_reason) == (result != RSPAMD_MULTISTAGE_CONTINUE));
+
+				if (reason) {
+					CHECK(std::string(reason->str, reason->len) == "policy response");
+				}
 
 				if (record) {
 					CHECK(std::string(record->str, record->len) == std::string(wire->str, wire->len));
@@ -259,6 +273,37 @@ TEST_SUITE("multistage")
 			binding->str[0] ^= 1;
 			wire->str[0] ^= 1;
 			CHECK(check_reply(id, binding.get(), false) == RSPAMD_MULTISTAGE_CONTINUE);
+		}
+	}
+
+	TEST_CASE_FIXTURE(multistage_fixture, "SMTP reasons are bounded single-line text")
+	{
+		policy("reject");
+		auto *item = const_cast<ucl_object_t *>(ucl_array_find_index(
+			replay_field(replay_field(cfg->cfg_ucl_obj, "multistage"), "policies"), 0));
+		transport_string binding{rspamd_multistage_binding(metadata.get(), id), &rspamd_fstring_free};
+		replay_record payload{ucl_object_typed_new(UCL_OBJECT), &ucl_object_unref};
+		replay_replace(payload.get(), "version", ucl_object_fromint(1));
+		replay_replace(payload.get(), "issued", ucl_object_fromdouble(ev_time()));
+		replay_replace(payload.get(), "id", ucl_object_fromstring(id));
+		replay_replace(payload.get(), "binding", ucl_object_fromlstring(binding->str, binding->len));
+		replay_replace(payload.get(), "decision", ucl_object_fromstring("reject"));
+
+		for (const auto &[text, valid]: {std::pair{std::string(500, 'x'), true},
+										 {std::string(501, 'x'), false},
+										 {std::string{}, false},
+										 {std::string{"bad\r\n250 injected"}, false},
+										 {std::string{"bad\0hidden", 10}, false},
+										 {std::string{"bad\ttext"}, false}}) {
+			replay_replace(item, "reason", ucl_object_fromlstring(text.data(), text.size()));
+			CHECK(bool(rspamd_multistage_validate(cfg)) == valid);
+			replay_replace(payload.get(), "terminal", ucl_object_ref(item));
+			transport_string wire{rspamd_multistage_seal(cfg, "data-response", payload.get()), &rspamd_fstring_free};
+			rspamd_fstring_t *record = nullptr, *reason = nullptr;
+			CHECK(rspamd_multistage_check_reply(cfg, wire->str, wire->len, id, binding.get(), &record, &reason) == RSPAMD_MULTISTAGE_REJECT);
+			transport_string owned_reason{reason, &rspamd_fstring_free};
+			CHECK(record == nullptr);
+			CHECK(bool(owned_reason) == valid);
 		}
 	}
 

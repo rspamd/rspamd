@@ -31,10 +31,11 @@ rspamd_fstring_t *rspamd_multistage_seal(struct rspamd_config *cfg, const char *
 ucl_object_t *rspamd_multistage_open(struct rspamd_config *cfg, const char *kind, const char *wire, gsize len);
 
 /* Authenticate and bind a DATA reply to this transaction. Failures continue at
- * EOM without a record. An authenticated continue may return an owned record. */
+ * EOM without a record. An authenticated continue may return an owned record;
+ * a rejection may return an owned, validated SMTP reason. Free both outputs. */
 enum rspamd_multistage_decision rspamd_multistage_check_reply(struct rspamd_config *cfg,
 															  const char *wire, gsize len, const char *id, const rspamd_fstring_t *binding,
-															  rspamd_fstring_t **record);
+															  rspamd_fstring_t **record, rspamd_fstring_t **reason);
 
 rspamd_fstring_t *rspamd_multistage_binding(const ucl_object_t *metadata, const char *id);
 struct rspamd_http_message *rspamd_multistage_data_request(struct rspamd_config *cfg,

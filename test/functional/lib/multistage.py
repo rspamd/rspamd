@@ -53,7 +53,17 @@ class Milter:
 
     def data(self):
         self.send(b'T')
-        return self.read()[0]
+        command, data = self.read()
+        self.data_reply = data
+
+        if command == b'y':
+            assert data.endswith(b'\0') and len(data) <= 511, data
+            assert b'\r' not in data and b'\n' not in data, data
+            code, enhanced, _ = data[:-1].split(b' ', 2)
+            assert (code, enhanced) in ((b'554', b'5.7.1'), (b'451', b'4.7.1')), data
+            return b'r' if code == b'554' else b't'
+
+        return command
 
     def eom(self, expected):
         command, headers = self.finish_message()
@@ -102,6 +112,12 @@ def multistage_transaction(host, port, scenario):
             return
         expected = {'reject': b'r', 'defer': b't'}.get(scenario, b'c')
         assert client.data() == expected
+
+        if expected != b'c':
+            reply = {'reject': b'554 5.7.1 test sender policy\0',
+                     'defer': b'451 4.7.1 test temporary policy\0'}[scenario]
+            assert client.data_reply == reply, client.data_reply
+
         if expected == b'c':
             client.eom('full' if scenario == 'timeout' else 'replayed')
         else:

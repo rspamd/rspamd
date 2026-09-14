@@ -134,6 +134,8 @@ def submit(smtp, label, domain='pass.example.test', recipients=('bob@localhost',
         assert len(rows) == 1, (label, rows)
         terminal = rows[0]['terminal']
         assert terminal['policy'] == policy and terminal['has_body'] is False, (label, rows)
+        enhanced = b'5.7.1' if early == 554 else b'4.7.1'
+        assert response == enhanced + b' ' + terminal['reason'].encode(), (label, response)
         assert 'INTEGRATION_BODY' not in rows[0]['symbols'], rows
         assert smtp.rset()[0] == 250, label
         RESULTS.append(label)
@@ -160,7 +162,8 @@ def chunked(smtp, label, reject=False):
     smtp.send(f'BDAT {len(first)}\r\n'.encode() + first)
     code, response = smtp.getreply()
     if reject:
-        assert code == 550, (label, code, response)
+        assert code == 554, (label, code, response)
+        assert response == b'5.7.1 Blocked HELO', response
         rows = events_for(sender)
         assert len(rows) == 1 and rows[0]['terminal']['policy'] == 'helo', rows
         assert smtp.rset()[0] == 250
@@ -176,7 +179,7 @@ def chunked(smtp, label, reject=False):
 def mode_cases(mode, port):
     with connect(port) as smtp:
         submit(smtp, mode + '-clean')
-        submit(smtp, mode + '-spf', domain='fail.example.test', early=550, policy='spf')
+        submit(smtp, mode + '-spf', domain='fail.example.test', early=554, policy='spf')
         submit(smtp, mode + '-after-reject')
         submit(smtp, mode + '-temporary', domain='error.example.test', early=451, policy='spf-temporary')
         submit(smtp, mode + '-after-tempfail')
@@ -186,7 +189,7 @@ def mode_cases(mode, port):
         for n, recipients in enumerate((('exempt@localhost', 'bob@localhost'),
                                          ('bob@localhost', 'exempt@localhost'))):
             submit(smtp, f'{mode}-mixed-{n}', domain='fail.example.test',
-                   recipients=recipients, early=550, policy='spf')
+                   recipients=recipients, early=554, policy='spf')
         assert smtp.mail('abort@pass.example.test')[0] == 250
         assert smtp.rcpt('bob@localhost')[0] == 250
         assert smtp.rset()[0] == 250
@@ -196,14 +199,14 @@ def mode_cases(mode, port):
         pipelined(smtp, mode + '-pipeline')
         chunked(smtp, mode + '-chunks')
     with connect(port, helo='blocked.example.test') as smtp:
-        submit(smtp, mode + '-helo', early=550, policy='helo')
+        submit(smtp, mode + '-helo', early=554, policy='helo')
         submit(smtp, mode + '-helo-exempt', recipients=('exempt@localhost',),
                symbols=('R_SPF_ALLOW', 'INTEGRATION_HELO'))
         chunked(smtp, mode + '-chunk-reject', reject=True)
         assert smtp.ehlo('pass.example.test')[0] == 250
         submit(smtp, mode + '-after-helo')
     with connect(port, ip='127.0.0.2') as smtp:
-        submit(smtp, mode + '-rbl', early=550, policy='rbl')
+        submit(smtp, mode + '-rbl', early=554, policy='rbl')
         submit(smtp, mode + '-rbl-exempt', recipients=('exempt@localhost',),
                symbols=('R_SPF_ALLOW', 'INTEGRATION_RBL'))
     def concurrent_case(n):
