@@ -2510,7 +2510,7 @@ lua_util_crc32(lua_State *L)
 		remain -= chunk;
 	}
 
-	lua_pushinteger(L, (lua_Integer) (uint32_t) crc);
+	lua_pushnumber(L, (lua_Number) (uint32_t) crc);
 
 	return 1;
 }
