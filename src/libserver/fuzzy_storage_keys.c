@@ -485,12 +485,15 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 
 		const ucl_object_t *expire = ucl_object_lookup(extensions, "expire");
 		if (expire && ucl_object_type(expire) == UCL_STRING) {
-			struct tm tm;
+			/* strptime only sets the date fields: expire at local midnight,
+			 * with libc determining whether daylight saving time applies. */
+			struct tm tm = {0};
+			tm.tm_isdst = -1;
 
 			/* DD-MM-YYYY */
 			char *end = strptime(ucl_object_tostring(expire), "%d-%m-%Y", &tm);
 
-			if (end != NULL && *end != '\0') {
+			if (end == NULL || *end != '\0') {
 				msg_err_config("cannot parse expire date: %s", ucl_object_tostring(expire));
 			}
 			else {
