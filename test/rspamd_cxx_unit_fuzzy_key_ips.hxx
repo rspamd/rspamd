@@ -164,6 +164,56 @@ TEST_SUITE("fuzzy_key_ips")
 		CHECK(h.st->ips_inserted == n);
 	}
 
+	TEST_CASE("key expiry is local midnight with initialized time fields")
+	{
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		auto *obj = ucl_object_typed_new(UCL_OBJECT);
+		/* Public test fixture from functional/configs/maps/fuzzy_keymap.map. */
+		ucl_object_insert_key(obj, ucl_object_fromstring("achyfduzs74yc1p95bk9apoknhtzn596pzeai5ybi5tftencoray"),
+							  "privkey", 0, false);
+		ucl_object_insert_key(obj, ucl_object_fromstring("mbggdnw3tdx7r3ruakjecpf5hcqr4cb4nmdp1fxynx3drbyujb3y"),
+							  "pubkey", 0, false);
+		auto *extensions = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(extensions, ucl_object_fromstring("01-01-2000"),
+							  "expire", 0, false);
+		ucl_object_insert_key(obj, extensions, "extensions", 0, false);
+		auto *keys = kh_init(rspamd_fuzzy_keys_hash);
+		auto *key = fuzzy_add_keypair_from_ucl(cfg, obj, keys);
+		REQUIRE(key != nullptr);
+
+		struct tm expected{};
+		expected.tm_year = 100;
+		expected.tm_mon = 0;
+		expected.tm_mday = 1;
+		expected.tm_isdst = -1;
+		CHECK(key->expire == static_cast<double>(mktime(&expected)));
+
+		fuzzy_hash_table_dtor(keys);
+		ucl_object_unref(obj);
+		rspamd_config_free(cfg);
+	}
+
+	TEST_CASE("customer keys override IP policy while the shared key does not")
+	{
+		struct rspamd_fuzzy_storage_ctx ctx{};
+		struct fuzzy_key shared{}, customer{};
+		ctx.default_key = &shared;
+		shared.skip_ip_checks = customer.skip_ip_checks = -1;
+
+		CHECK_FALSE(fuzzy_key_is_ip_exempt(&ctx, nullptr));
+		CHECK_FALSE(fuzzy_key_is_ip_exempt(&ctx, &shared));
+		CHECK(fuzzy_key_is_ip_exempt(&ctx, &customer));
+
+		customer.skip_ip_checks = 0;
+		CHECK_FALSE(fuzzy_key_is_ip_exempt(&ctx, &customer));
+		shared.skip_ip_checks = 1;
+		CHECK(fuzzy_key_is_ip_exempt(&ctx, &shared));
+
+		ctx.default_key = nullptr;
+		customer.skip_ip_checks = -1;
+		CHECK(fuzzy_key_is_ip_exempt(&ctx, &customer));
+	}
+
 	TEST_CASE("effective cap: explicit extension, default key, worker default")
 	{
 		struct rspamd_fuzzy_storage_ctx ctx;

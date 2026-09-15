@@ -20,3 +20,11 @@ backend = "redis";
 
 expire = 90d;
 allow_update = ["localhost"];
+
+# Customer keys (dynamic keys and non-default static keys) bypass source-IP
+# bans and source/network rate limits after successful decryption. Their own
+# limits, expiry and operation permissions still apply. The default keypair
+# (the last static keypair, if several are configured) retains IP-based policy.
+# Override this per key with extensions { skip_ip_checks = true/false; }.
+# Banned requests are parsed for telemetry and then silently dropped: pre-handler
+# extensions, aggregate counters and enabled per-key/IP error counters are kept.

@@ -1364,6 +1364,43 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	result.v1.flag = cmd->flag;
 	result.v1.tag = cmd->tag;
 
+	if (session->key && session->addr) {
+		ip_stat = fuzzy_key_stat_get_ip(session->key->stat,
+										fuzzy_key_max_ips(session->ctx, session->key),
+										session->addr, session->timestamp);
+
+		if (ip_stat) {
+			REF_RETAIN(ip_stat);
+			session->ip_stat = ip_stat;
+		}
+	}
+	else if (session->addr) {
+		/*
+		 * Unkeyed client (e.g. allowed by IP): track its traffic under the
+		 * dedicated bucket, otherwise such writers are invisible in the stats
+		 */
+		if (session->ctx->unkeyed_stat == NULL) {
+			struct fuzzy_key_stat *unkeyed = g_malloc0(sizeof(*unkeyed));
+
+			REF_INIT_RETAIN(unkeyed, fuzzy_key_stat_dtor);
+			session->ctx->unkeyed_stat = unkeyed;
+		}
+
+		ip_stat = fuzzy_key_stat_get_ip(session->ctx->unkeyed_stat,
+										session->ctx->max_ips_per_key, session->addr,
+										session->timestamp);
+
+		if (ip_stat) {
+			REF_RETAIN(ip_stat);
+			session->ip_stat = ip_stat;
+		}
+	}
+
+	/* Authentication has completed. Customer keys own their policy; the
+	 * shared/default key and plaintext traffic retain source-based policy. */
+	bool ip_exempt = fuzzy_key_is_ip_exempt(session->ctx, session->key);
+	int block_code = (ip_exempt || !session->addr) ? 0 : rspamd_fuzzy_check_client(session->ctx, session->addr);
+
 	if (session->ctx->lua_pre_handlers != NULL) {
 		struct rspamd_lua_fuzzy_script *cur;
 
@@ -1416,7 +1453,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 				 */
 				ret = lua_toboolean(L, err_idx + 1);
 
-				if (ret) {
+				if (ret && block_code == 0) {
 					/* Artificial reply */
 					result.v1.value = lua_tointeger(L, err_idx + 2);
 
@@ -1438,6 +1475,18 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		}
 	}
 
+	if (block_code > 0) {
+		/* Keep decrypted extensions visible to pre-handlers and account for
+		 * every denied command, without spending bandwidth on replies. */
+		session->ctx->stat.blocked_requests++;
+		result.v1.value = block_code;
+		result.v1.prob = 0.0f;
+		rspamd_fuzzy_update_stats(session->ctx, session->epoch, FALSE,
+								  is_shingle, FALSE, session->key, session->ip_stat,
+								  cmd->cmd, &result, session->timestamp);
+		return;
+	}
+
 
 	if (G_UNLIKELY(cmd == NULL || up_len == 0)) {
 		result.v1.value = 500;
@@ -1455,55 +1504,6 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	}
 
 	/*
-	 * UDP sessions were already screened before parsing, so re-checking here
-	 * would just repeat the radix lookups on every accepted datagram. TCP
-	 * command sessions still need it: the connection is only screened at
-	 * accept time, and a dynamic block can land while it is open.
-	 */
-	if (!session->client_checked) {
-		int block_code = rspamd_fuzzy_check_client(session->ctx, session->addr);
-		if (block_code > 0) {
-			session->ctx->stat.blocked_requests++;
-			result.v1.value = block_code;
-			result.v1.prob = 0.0f;
-			rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
-			return;
-		}
-	}
-
-	if (session->key && session->addr) {
-		ip_stat = fuzzy_key_stat_get_ip(session->key->stat,
-										fuzzy_key_max_ips(session->ctx, session->key),
-										session->addr, session->timestamp);
-
-		if (ip_stat) {
-			REF_RETAIN(ip_stat);
-			session->ip_stat = ip_stat;
-		}
-	}
-	else if (session->addr) {
-		/*
-		 * Unkeyed client (e.g. allowed by IP): track its traffic under the
-		 * dedicated bucket, otherwise such writers are invisible in the stats
-		 */
-		if (session->ctx->unkeyed_stat == NULL) {
-			struct fuzzy_key_stat *unkeyed = g_malloc0(sizeof(*unkeyed));
-
-			REF_INIT_RETAIN(unkeyed, fuzzy_key_stat_dtor);
-			session->ctx->unkeyed_stat = unkeyed;
-		}
-
-		ip_stat = fuzzy_key_stat_get_ip(session->ctx->unkeyed_stat,
-										session->ctx->max_ips_per_key, session->addr,
-										session->timestamp);
-
-		if (ip_stat) {
-			REF_RETAIN(ip_stat);
-			session->ip_stat = ip_stat;
-		}
-	}
-
-	/*
 	 * The per-source bucket covers every command that produces a reply
 	 * without needing write authorisation: CHECK, PING and STAT. PING and
 	 * STAT are answered unauthenticated, so leaving them unmetered let a
@@ -1516,7 +1516,7 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	 */
 	bool is_rate_allowed = true;
 
-	if (session->ctx->ratelimit_buckets &&
+	if (!ip_exempt && session->ctx->ratelimit_buckets &&
 		(cmd->cmd == FUZZY_CHECK || cmd->cmd == FUZZY_PING ||
 		 cmd->cmd == FUZZY_STAT)) {
 		if (session->ctx->ratelimit_log_only) {
@@ -1544,25 +1544,27 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 						 session->key->name ? session->key->name : "unknown",
 						 session->key->burst);
 
-				struct rspamd_srv_command srv_cmd;
+				if (!ip_exempt) {
+					struct rspamd_srv_command srv_cmd;
 
-				srv_cmd.type = RSPAMD_SRV_FUZZY_BLOCKED;
-				srv_cmd.cmd.fuzzy_blocked.af = rspamd_inet_address_get_af(session->addr);
+					srv_cmd.type = RSPAMD_SRV_FUZZY_BLOCKED;
+					srv_cmd.cmd.fuzzy_blocked.af = rspamd_inet_address_get_af(session->addr);
 
-				if (srv_cmd.cmd.fuzzy_blocked.af == AF_INET || srv_cmd.cmd.fuzzy_blocked.af == AF_INET6) {
-					socklen_t slen;
-					struct sockaddr *sa = rspamd_inet_address_get_sa(session->addr, &slen);
+					if (srv_cmd.cmd.fuzzy_blocked.af == AF_INET || srv_cmd.cmd.fuzzy_blocked.af == AF_INET6) {
+						socklen_t slen;
+						struct sockaddr *sa = rspamd_inet_address_get_sa(session->addr, &slen);
 
-					if (slen <= sizeof(srv_cmd.cmd.fuzzy_blocked.addr)) {
-						memcpy(&srv_cmd.cmd.fuzzy_blocked.addr, sa, slen);
-						msg_debug("propagating blocked address to other workers");
-						rspamd_srv_send_command(session->worker,
-												session->ctx->event_loop,
-												&srv_cmd, -1, NULL, NULL);
-					}
-					else {
-						msg_err("bad address length: %d, expected to be %d",
-								(int) slen, (int) sizeof(srv_cmd.cmd.fuzzy_blocked.addr));
+						if (slen <= sizeof(srv_cmd.cmd.fuzzy_blocked.addr)) {
+							memcpy(&srv_cmd.cmd.fuzzy_blocked.addr, sa, slen);
+							msg_debug("propagating blocked address to other workers");
+							rspamd_srv_send_command(session->worker,
+													session->ctx->event_loop,
+													&srv_cmd, -1, NULL, NULL);
+						}
+						else {
+							msg_err("bad address length: %d, expected to be %d",
+									(int) slen, (int) sizeof(srv_cmd.cmd.fuzzy_blocked.addr));
+						}
 					}
 				}
 
@@ -2165,26 +2167,8 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 					client_addr = NULL;
 				}
 
-				/*
-				 * Drop blocklisted sources before doing any work on the
-				 * datagram. This only needs the source address, so a blocked
-				 * peer costs one radix lookup instead of a session
-				 * allocation, command parsing, an ECDH plus MAC verification
-				 * for encrypted commands, and the Lua pre-handlers.
-				 *
-				 * Nothing is sent back: building a reply would require
-				 * parsing the command first, which is exactly the work being
-				 * avoided. The TCP path already drops blocked peers without
-				 * a reply (see accept_tcp_socket), so this makes the two
-				 * transports behave alike.
-				 */
-				if (client_addr && rspamd_fuzzy_check_client(ctx, client_addr) > 0) {
-					ctx->stat.blocked_requests++;
-					msg_debug("dropping fuzzy command from blocked address %s",
-							  rspamd_inet_address_to_string(client_addr));
-					rspamd_inet_address_free(client_addr);
-					continue;
-				}
+				/* Parse and authenticate before applying source policy, so
+				 * customer keys can override bans and denied traffic is observed. */
 
 				session = g_malloc0(sizeof(*session));
 				REF_INIT_RETAIN(session, fuzzy_session_destroy);
@@ -2193,7 +2177,6 @@ accept_fuzzy_socket(EV_P_ ev_io *w, int revents)
 				session->ctx = ctx;
 				session->timestamp = ev_now(ctx->event_loop);
 				session->addr = client_addr;
-				session->client_checked = true;
 				worker->nconns++;
 
 				/* Each message can have its length in case of recvmmsg */
@@ -2568,24 +2551,9 @@ accept_tcp_socket(EV_P_ ev_io *w, int revents)
 
 	ev_now_update_if_cheap(ctx->event_loop);
 
-	/* Check ratelimit */
-	if (!rspamd_fuzzy_check_ratelimit(ctx, addr, worker, ev_now(ctx->event_loop))) {
-		msg_info("ratelimiting TCP connection from %s",
-				 rspamd_inet_address_to_string(addr));
-		rspamd_inet_address_free(addr);
-		close(nfd);
-		return;
-	}
-
-	/* Check if client is allowed */
-	int block_code = rspamd_fuzzy_check_client(ctx, addr);
-	if (block_code > 0) {
-		msg_info("refusing TCP connection from %s (blacklisted)",
-				 rspamd_inet_address_to_string(addr));
-		rspamd_inet_address_free(addr);
-		close(nfd);
-		return;
-	}
+	/* Source policy belongs to each authenticated command, not the
+	 * connection: a banned source may present a customer key, and commands
+	 * denied later must still reach telemetry. The session timeout remains. */
 
 	/* Set TCP_NODELAY */
 #ifdef TCP_NODELAY
