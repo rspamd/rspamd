@@ -308,6 +308,9 @@ if opts then
         group = N,
         callback = cb,
       })
+
+      -- Consumers must wait for the effective IP/HELO from Received headers.
+      require('lua_multistage').register_connection_rewriter(rspamd_config, rule.symbol)
     end
   end
 end

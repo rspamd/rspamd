@@ -38,6 +38,7 @@ enum class cache_item_status : std::uint16_t {
 	disabled = 4,   /* Disabled by settings; triggers cascade-disable for hard deps */
 	suppressed = 5, /* Not enabled (symbols_enabled, disable_all_symbols, pre-result): no cascade, can be re-enabled */
 	skipped = 6,    /* Skipped by the scheduler (passthrough, score limit, stage passed): cascades to hard deps */
+	deferred = 7,   /* Waiting for input; not completed and does not cascade */
 };
 
 /* Check if an item status means "done": it will not run (anymore) */
@@ -66,6 +67,8 @@ static inline auto item_status_to_str(cache_item_status status) -> const char *
 		return "suppressed";
 	case cache_item_status::skipped:
 		return "skipped";
+	case cache_item_status::deferred:
+		return "deferred";
 	}
 
 	return "unknown";
@@ -108,8 +111,15 @@ class symcache_runtime {
 	order_generation_ptr order;
 	/* Symbol IDs force-enabled by merged settings (overrides settings_elt forbidden_ids) */
 	id_list *force_enabled_ids;
+	/* Evaluate a public check's condition once, before its first owned part. */
+	ankerl::unordered_dense::map<int, bool> *execution_conditions;
 	/* The stage being processed (exec_stage::none before the first stage) */
 	exec_stage cur_stage;
+	bool checkpoint_mode;
+	bool terminal_mode;
+	bool portable_checkpoint;
+	bool checkpoint_running;
+	unsigned int available_inputs;
 	/*
 	 * Number of items that are not done yet for each bucket of the order;
 	 * allocated right after `dynamic_items` in the same memory block
@@ -122,6 +132,8 @@ class symcache_runtime {
 
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
 						cache_dynamic_item *dyn_item) -> bool;
+	auto input_ready(const cache_item *item) const -> bool;
+	auto check_item_conditions(struct rspamd_task *task, const cache_item *item) -> bool;
 	/* Processes all buckets of a stage in their order */
 	auto process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool;
 	auto check_process_status(struct rspamd_task *task) -> check_status;
@@ -182,6 +194,18 @@ public:
 
 public:
 	/* Dropper for a shared ownership */
+	auto is_checkpoint() const -> bool
+	{
+		return checkpoint_mode;
+	}
+
+	auto can_export_checkpoint() const -> bool;
+	auto can_import_checkpoint() const -> bool;
+	auto checkpoint_inputs() const -> unsigned int
+	{
+		return available_inputs;
+	}
+
 	auto savepoint_dtor(struct rspamd_task *task) -> void;
 	/**
 	 * Creates a cache runtime using task mempool
@@ -299,6 +323,8 @@ public:
 	 * @return
 	 */
 	auto process_symbols(struct rspamd_task *task, symcache &cache, unsigned int stage) -> bool;
+	auto process_checkpoint(struct rspamd_task *task, symcache &cache, unsigned int inputs, bool terminal = false)
+		-> rspamd_symcache_checkpoint_result;
 
 	/**
 	 * Finalize execution of some item in the cache

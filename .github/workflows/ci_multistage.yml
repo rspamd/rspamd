@@ -1,0 +1,91 @@
+name: multistage integration
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'lualib/**'
+      - 'conf/**'
+      - 'test/integration/postfix-data/**'
+      - 'test/functional/lib/multistage.py'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - '.github/workflows/ci_multistage.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'lualib/**'
+      - 'conf/**'
+      - 'test/integration/postfix-data/**'
+      - 'test/functional/lib/multistage.py'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - '.github/workflows/ci_multistage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multistage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postfix-clickhouse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build isolated fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/multistage/source" "$RUNNER_TEMP/multistage/fixture" logs
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/multistage/source"
+          cp -a test/integration/postfix-data/. "$RUNNER_TEMP/multistage/fixture/"
+          docker build -f test/integration/postfix-data/Dockerfile \
+            -t rspamd-multistage:test "$RUNNER_TEMP/multistage" 2>&1 | tee logs/build.log
+      - name: Shipped configuration and real Postfix TCP and Unix sockets
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint python3 rspamd-multistage:test \
+            -u /opt/postfix-data/configuration.py 2>&1 | tee logs/configuration.log
+          for transport in tcp unix; do
+            docker run --rm --network none -e MILTER_TRANSPORT="$transport" \
+              rspamd-multistage:test 2>&1 | tee "logs/postfix-$transport.log"
+          done
+      - name: Failure recovery and accepted-traffic measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint python3 rspamd-multistage:test \
+            -u /opt/postfix-data/failure.py 2>&1 | tee logs/failure-load.log
+      - name: Real ClickHouse creation and populated schema migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pin the tested 25.8 LTS image, including its multi-architecture manifest.
+          image=clickhouse/clickhouse-server:25.8@sha256:0152dd511befe6a2c2ef53e930726179669b08116da78500b37c51c96ff5ee77
+          docker pull "$image"
+          trap 'docker logs multistage-clickhouse > logs/clickhouse-server.log 2>&1; docker rm -f multistage-clickhouse' EXIT
+          docker run -d --network none --name multistage-clickhouse \
+            --ulimit nofile=262144:262144 "$image"
+          for attempt in $(seq 1 60); do
+            if docker exec multistage-clickhouse clickhouse-client --query 'SELECT 1'; then
+              break
+            fi
+            sleep 1
+          done
+          docker run --rm --network container:multistage-clickhouse --entrypoint python3 \
+            rspamd-multistage:test -u /opt/postfix-data/clickhouse.py 2>&1 | tee logs/clickhouse.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: multistage-integration-logs
+          path: logs/
+          retention-days: 14

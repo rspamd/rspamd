@@ -2754,8 +2754,6 @@ spf_dns_callback(struct rdns_reply *reply, gpointer arg)
 	struct spf_resolved_element *resolved = NULL;
 	struct spf_addr *addr;
 
-	rec->requests_inflight--;
-
 	if (reply->flags & RDNS_TRUNCATED) {
 		msg_warn_spf("got a truncated record when trying to resolve TXT record for %s",
 					 rec->sender_domain);
@@ -2764,6 +2762,7 @@ spf_dns_callback(struct rdns_reply *reply, gpointer arg)
 		addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		g_ptr_array_insert(resolved->elts, 0, addr);
 
+		rec->requests_inflight--;
 		rspamd_spf_maybe_return(rec);
 
 		return;
@@ -2793,6 +2792,9 @@ spf_dns_callback(struct rdns_reply *reply, gpointer arg)
 	if (resolved) {
 		struct rdns_reply_entry *selected = NULL;
 
+		/* Parsing can complete synchronously. Keep this request in flight
+		 * until top_record is published, before flattening/caching the result
+		 * or notifying consumers (including checkpoint fact capture). */
 		if (!spf_process_txt_record(rec, resolved, reply, &selected)) {
 			resolved = g_ptr_array_index(rec->resolved, 0);
 
@@ -2826,6 +2828,7 @@ spf_dns_callback(struct rdns_reply *reply, gpointer arg)
 		}
 	}
 
+	rec->requests_inflight--;
 	rspamd_spf_maybe_return(rec);
 }
 
