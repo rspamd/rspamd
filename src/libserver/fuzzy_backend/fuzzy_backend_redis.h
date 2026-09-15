@@ -60,6 +60,9 @@ const char *rspamd_fuzzy_backend_id_redis(struct rspamd_fuzzy_backend *bk,
 void rspamd_fuzzy_backend_expire_redis(struct rspamd_fuzzy_backend *bk,
 									   void *subr_ud);
 
+void rspamd_fuzzy_backend_start_count_scan_redis(struct rspamd_fuzzy_backend *bk,
+												 void *subr_ud);
+
 void rspamd_fuzzy_backend_close_redis(struct rspamd_fuzzy_backend *bk,
 									  void *subr_ud);
 

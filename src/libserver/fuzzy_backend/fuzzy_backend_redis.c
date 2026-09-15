@@ -59,7 +59,9 @@ struct rspamd_fuzzy_backend_redis {
 	struct rspamd_redis_pool *pool;
 	double timeout;
 	int conf_ref;
-	int cbref_update; /* Lua functor ref for updates */
+	int cbref_update;                    /* Lua functor ref for updates */
+	const ucl_object_t *count_scan_opts; /* worker `count_scan` section, cfg lifetime */
+	bool count_scan_started;
 	bool terminated;
 	ref_entry_t ref;
 };
@@ -237,6 +239,7 @@ rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 		backend->redis_object = ucl_object_tostring(elt);
 	}
 
+	backend->count_scan_opts = ucl_object_lookup(obj, "count_scan");
 	backend->conf_ref = conf_ref;
 
 	/* Check some common table values */
@@ -812,7 +815,7 @@ rspamd_fuzzy_redis_count_callback(redisAsyncContext *c, gpointer r,
 {
 	struct rspamd_fuzzy_redis_session *session = priv;
 	redisReply *reply = r;
-	gulong nelts;
+	long long nelts;
 
 	ev_timer_stop(session->event_loop, &session->timeout);
 
@@ -821,14 +824,18 @@ rspamd_fuzzy_redis_count_callback(redisAsyncContext *c, gpointer r,
 
 		if (reply->type == REDIS_REPLY_INTEGER) {
 			if (session->callback.cb_count) {
-				session->callback.cb_count(reply->integer, session->cbdata);
+				session->callback.cb_count(MAX(reply->integer, 0), session->cbdata);
 			}
 		}
 		else if (reply->type == REDIS_REPLY_STRING) {
-			nelts = strtoul(reply->str, NULL, 10);
+			/*
+			 * Counters maintained by older versions on updates could go
+			 * negative; do not turn them into huge unsigned numbers
+			 */
+			nelts = strtoll(reply->str, NULL, 10);
 
 			if (session->callback.cb_count) {
-				session->callback.cb_count(nelts, session->cbdata);
+				session->callback.cb_count(MAX(nelts, 0), session->cbdata);
 			}
 		}
 		else {
@@ -1307,6 +1314,58 @@ void rspamd_fuzzy_backend_expire_redis(struct rspamd_fuzzy_backend *bk,
 	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
 
 	g_assert(backend != NULL);
+}
+
+void rspamd_fuzzy_backend_start_count_scan_redis(struct rspamd_fuzzy_backend *bk,
+												 void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
+	lua_State *L;
+	struct ev_loop **pev;
+	int err_idx;
+
+	g_assert(backend != NULL);
+
+	if (backend->count_scan_started) {
+		return;
+	}
+
+	backend->count_scan_started = true;
+	L = backend->L;
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	if (!rspamd_lua_require_function(L, "lua_fuzzy_redis",
+									 "lua_fuzzy_redis_start_count_scan")) {
+		msg_err("cannot require lua_fuzzy_redis.lua_fuzzy_redis_start_count_scan");
+		lua_settop(L, err_idx - 1);
+
+		return;
+	}
+
+	/* Arg 1: redis params */
+	lua_rawgeti(L, LUA_REGISTRYINDEX, backend->conf_ref);
+	/* Arg 2: ev_base */
+	pev = lua_newuserdata(L, sizeof(struct ev_loop *));
+	*pev = rspamd_fuzzy_backend_event_base(bk);
+	rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
+	/* Arg 3: prefix */
+	lua_pushstring(L, backend->redis_object);
+	/* Arg 4: options */
+	if (backend->count_scan_opts) {
+		ucl_object_push_lua(L, backend->count_scan_opts, true);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	if (lua_pcall(L, 4, 1, err_idx) != 0) {
+		msg_err("call to lua_fuzzy_redis_start_count_scan failed: %s",
+				lua_tostring(L, -1));
+	}
+
+	lua_settop(L, err_idx - 1);
 }
 
 /*

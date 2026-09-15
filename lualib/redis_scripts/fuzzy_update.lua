@@ -15,9 +15,12 @@
 -- Fuzzy hash update script (per-hash, atomic)
 -- Handles ADD, DEL, and REFRESH operations including multi-flag merge and shingles
 --
+-- The number of stored hashes is not maintained here: add/del/expire cannot
+-- keep an exact counter, so it is computed by a periodic keyspace scan
+-- (see lua_fuzzy_redis.lua)
+--
 -- KEYS[1] = hash_key (prefix + digest)
--- KEYS[2] = count_key (prefix .. "_count")
--- KEYS[3..] = shingle keys (0 or 32 of them)
+-- KEYS[2..] = shingle keys (0 or 32 of them)
 -- ARGV[1] = operation: "add", "del", "refresh"
 -- ARGV[2] = flag (string number)
 -- ARGV[3] = value (string number)
@@ -27,7 +30,6 @@
 -- ARGV[7] = digest (raw bytes, used as value for shingle SETEX)
 
 local key = KEYS[1]
-local count_key = KEYS[2]
 local op = ARGV[1]
 local new_flag = tonumber(ARGV[2])
 local new_value = tonumber(ARGV[3])
@@ -142,16 +144,15 @@ if op == "add" then
 
   redis.call('HSETNX', key, 'C', timestamp)
   redis.call('EXPIRE', key, expire)
-  redis.call('INCR', count_key)
 
   -- Handle shingles: SETEX each shingle key with expire and digest as value.
   -- Also persist the shingle set in the 'S' field of the digest hash
   -- ("idx_value" suffixes, comma separated), so digest-only deletes and
   -- refreshes can locate the slots without knowing the source message.
-  if #KEYS > 2 then
+  if #KEYS > 1 then
     local suffixes = {}
 
-    for i = 3, #KEYS do
+    for i = 2, #KEYS do
       local suf = string.match(KEYS[i], '(%d+_%d+)$')
       if suf then
         suffixes[#suffixes + 1] = suf
@@ -180,9 +181,8 @@ elseif op == "del" then
   end
 
   redis.call('DEL', key)
-  redis.call('DECR', count_key)
 
-  for i = 3, #KEYS do
+  for i = 2, #KEYS do
     redis.call('DEL', KEYS[i])
   end
 
@@ -205,7 +205,7 @@ elseif op == "refresh" then
       end
     end
   else
-    for i = 3, #KEYS do
+    for i = 2, #KEYS do
       redis.call('EXPIRE', KEYS[i], expire)
     end
   end
