@@ -28,3 +28,13 @@ allow_update = ["localhost"];
 # Override this per key with extensions { skip_ip_checks = true/false; }.
 # Banned requests are parsed for telemetry and then silently dropped: pre-handler
 # extensions, aggregate counters and enabled per-key/IP error counters are kept.
+
+# Redis backend: the number of stored hashes is recomputed by a slow, resumable
+# keyspace scan run by the first fuzzy worker (the result is shared by all
+# storages using the same Redis and prefix)
+#count_scan {
+#  enabled = true;
+#  interval = 4h; # minimum time between completed passes
+#  batch = 1000; # SCAN COUNT hint
+#  duty_cycle = 0.1; # maximum share of time a SCAN request is outstanding
+#}

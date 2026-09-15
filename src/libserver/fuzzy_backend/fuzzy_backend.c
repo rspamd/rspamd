@@ -83,6 +83,7 @@ struct rspamd_fuzzy_backend_subr {
 					void *subr_ud);
 	const char *(*id)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
 	void (*periodic)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
+	void (*start_count_scan)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
 	void (*close)(struct rspamd_fuzzy_backend *bk, void *subr_ud);
 };
 
@@ -107,6 +108,7 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.version = rspamd_fuzzy_backend_version_redis,
 		.id = rspamd_fuzzy_backend_id_redis,
 		.periodic = rspamd_fuzzy_backend_expire_redis,
+		.start_count_scan = rspamd_fuzzy_backend_start_count_scan_redis,
 		.close = rspamd_fuzzy_backend_close_redis,
 	},
 	[RSPAMD_FUZZY_BACKEND_NOOP] = {
@@ -583,6 +585,15 @@ void rspamd_fuzzy_backend_start_update(struct rspamd_fuzzy_backend *bk,
 		ev_timer_init(&bk->periodic_event, rspamd_fuzzy_backend_periodic_cb,
 					  jittered, 0.0);
 		ev_timer_start(bk->event_loop, &bk->periodic_event);
+	}
+}
+
+void rspamd_fuzzy_backend_start_count_scan(struct rspamd_fuzzy_backend *bk)
+{
+	g_assert(bk != NULL);
+
+	if (bk->subr->start_count_scan) {
+		bk->subr->start_count_scan(bk, bk->subr_ud);
 	}
 }
 

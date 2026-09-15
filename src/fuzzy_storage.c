@@ -2777,6 +2777,8 @@ rspamd_fuzzy_storage_reload(struct rspamd_main *rspamd_main,
 	if (ctx->backend && worker->index == 0) {
 		rspamd_fuzzy_backend_start_update(ctx->backend, ctx->sync_timeout,
 										  rspamd_fuzzy_storage_periodic_callback, ctx);
+		/* A no-op if the scan survived the backend reopen */
+		rspamd_fuzzy_backend_start_count_scan(ctx->backend);
 	}
 
 	if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
@@ -3382,6 +3384,8 @@ start_fuzzy(struct rspamd_worker *worker)
 												 sizeof(struct fuzzy_peer_cmd), 1024);
 		rspamd_fuzzy_backend_start_update(ctx->backend, ctx->sync_timeout,
 										  rspamd_fuzzy_storage_periodic_callback, ctx);
+		/* Stored hashes count is recomputed by the update worker only */
+		rspamd_fuzzy_backend_start_count_scan(ctx->backend);
 
 		if (ctx->dedicated_update_worker && worker->cf->count > 1) {
 			msg_info_config("stop serving clients request in dedicated update mode");

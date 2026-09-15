@@ -133,6 +133,14 @@ void rspamd_fuzzy_backend_start_update(struct rspamd_fuzzy_backend *backend,
 									   rspamd_fuzzy_periodic_cb cb,
 									   void *ud);
 
+/**
+ * Starts the periodic recount of stored hashes for backends that cannot keep
+ * the count on updates (redis); must be called from a single worker, repeated
+ * calls are ignored
+ * @param backend
+ */
+void rspamd_fuzzy_backend_start_count_scan(struct rspamd_fuzzy_backend *backend);
+
 struct ev_loop *rspamd_fuzzy_backend_event_base(struct rspamd_fuzzy_backend *backend);
 
 double rspamd_fuzzy_backend_get_expire(struct rspamd_fuzzy_backend *backend);
