@@ -1928,7 +1928,9 @@ exports.redis_connect_sync = redis_connect_sync
 -- Sends a request to Redis synchronously with coroutines or asynchronously using
 -- a callback (modern API)
 -- @param redis_params a table of redis server parameters
--- @param attrs a table of redis request attributes (e.g. task, or ev_base + cfg + session)
+-- @param attrs a table of redis request attributes (e.g. task, or ev_base + cfg + session);
+-- `attrs.upstream` pins the request to a specific upstream instead of selecting one
+-- (and `attrs.host` to a specific address of that upstream)
 -- @param req a table of request: a command + command options
 -- @return {result,data/connection,address} boolean result, connection object in case of async request and results if using coroutines, redis server address
 --]]
@@ -1969,7 +1971,13 @@ exports.request = function(redis_params, attrs, req)
   local rspamd_redis = require "rspamd_redis"
   local is_write = opts.is_write
 
-  if opts.key then
+  local pinned = opts.upstream ~= nil
+
+  if pinned then
+    -- Caller pinned a specific server (e.g. to continue a SCAN cursor)
+    addr = opts.upstream
+    opts.upstream = nil
+  elseif opts.key then
     if is_write then
       addr = redis_params['write_servers']:get_upstream_by_hash(attrs.key)
     else
@@ -1989,8 +1997,15 @@ exports.request = function(redis_params, attrs, req)
     return false, nil, nil
   end
 
-  opts.host = addr:get_addr()
+  -- A pinned upstream may also pin one of its addresses: get_addr() rotates
+  -- between the addresses of a multi-address upstream
+  opts.host = (pinned and attrs.host) or addr:get_addr()
   opts.timeout = redis_params.timeout
+
+  if pinned and not opts.host then
+    logger.errx(log_obj, 'redis server %s has no resolved address', addr:get_name())
+    return false, nil, addr
+  end
 
   if type(req) == 'string' then
     opts.cmd = req
