@@ -249,11 +249,24 @@ fuzzy_stat_count_callback(uint64_t count, void *ud)
 }
 
 static void
+fuzzy_storage_stats_callback(ucl_object_t *stats, void *ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+
+	if (ctx->storage_stats) {
+		ucl_object_unref(ctx->storage_stats);
+	}
+
+	ctx->storage_stats = stats;
+}
+
+static void
 rspamd_fuzzy_stat_callback(EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_fuzzy_storage_ctx *ctx =
 		(struct rspamd_fuzzy_storage_ctx *) w->data;
 	rspamd_fuzzy_backend_count(ctx->backend, fuzzy_stat_count_callback, ctx);
+	rspamd_fuzzy_backend_storage_stats(ctx->backend, fuzzy_storage_stats_callback, ctx);
 }
 
 
@@ -3377,7 +3390,7 @@ start_fuzzy(struct rspamd_worker *worker)
 	}
 
 	rspamd_fuzzy_backend_count(ctx->backend, fuzzy_count_callback, ctx);
-
+	rspamd_fuzzy_backend_storage_stats(ctx->backend, fuzzy_storage_stats_callback, ctx);
 
 	if (worker->index == 0) {
 		ctx->updates_pending = g_array_sized_new(FALSE, FALSE,
@@ -3612,6 +3625,11 @@ start_fuzzy(struct rspamd_worker *worker)
 	}
 
 	rspamd_fuzzy_backend_close(ctx->backend);
+
+	if (ctx->storage_stats) {
+		ucl_object_unref(ctx->storage_stats);
+		ctx->storage_stats = NULL;
+	}
 
 	if (worker->index == 0) {
 		g_array_free(ctx->updates_pending, TRUE);

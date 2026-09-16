@@ -193,6 +193,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
 	struct fuzzy_global_stat stat;
+	/* Sampled storage-wide statistics published by the count scan, may be NULL */
+	ucl_object_t *storage_stats;
 	double expire;
 	double sync_timeout;
 	double delay;
