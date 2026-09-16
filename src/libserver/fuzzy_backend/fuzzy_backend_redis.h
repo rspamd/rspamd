@@ -49,6 +49,10 @@ void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
 									  rspamd_fuzzy_count_cb cb, void *ud,
 									  void *subr_ud);
 
+void rspamd_fuzzy_backend_storage_stats_redis(struct rspamd_fuzzy_backend *bk,
+											  rspamd_fuzzy_stats_cb cb, void *ud,
+											  void *subr_ud);
+
 void rspamd_fuzzy_backend_version_redis(struct rspamd_fuzzy_backend *bk,
 										const char *src,
 										rspamd_fuzzy_version_cb cb, void *ud,

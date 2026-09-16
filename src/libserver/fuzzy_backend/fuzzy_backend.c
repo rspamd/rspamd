@@ -77,6 +77,9 @@ struct rspamd_fuzzy_backend_subr {
 					const unsigned char *digest,
 					rspamd_fuzzy_inspect_cb cb, void *ud,
 					void *subr_ud);
+	void (*storage_stats)(struct rspamd_fuzzy_backend *bk,
+						  rspamd_fuzzy_stats_cb cb, void *ud,
+						  void *subr_ud);
 	void (*version)(struct rspamd_fuzzy_backend *bk,
 					const char *src,
 					rspamd_fuzzy_version_cb cb, void *ud,
@@ -105,6 +108,7 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.update = rspamd_fuzzy_backend_update_redis,
 		.count = rspamd_fuzzy_backend_count_redis,
 		.inspect = rspamd_fuzzy_backend_inspect_redis,
+		.storage_stats = rspamd_fuzzy_backend_storage_stats_redis,
 		.version = rspamd_fuzzy_backend_version_redis,
 		.id = rspamd_fuzzy_backend_id_redis,
 		.periodic = rspamd_fuzzy_backend_expire_redis,
@@ -488,6 +492,19 @@ void rspamd_fuzzy_backend_inspect(struct rspamd_fuzzy_backend *bk,
 
 	if (bk->subr->inspect) {
 		bk->subr->inspect(bk, digest, cb, ud, bk->subr_ud);
+	}
+	else if (cb) {
+		cb(NULL, ud);
+	}
+}
+
+void rspamd_fuzzy_backend_storage_stats(struct rspamd_fuzzy_backend *bk,
+										rspamd_fuzzy_stats_cb cb, void *ud)
+{
+	g_assert(bk != NULL);
+
+	if (bk->subr->storage_stats) {
+		bk->subr->storage_stats(bk, cb, ud, bk->subr_ud);
 	}
 	else if (cb) {
 		cb(NULL, ud);

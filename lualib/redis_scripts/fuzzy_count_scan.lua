@@ -19,6 +19,7 @@
 -- KEYS[1] = lock key (prefix .. "_count_scan_lock")
 -- KEYS[2] = state hash (prefix .. "_count_scan")
 -- KEYS[3] = count key (prefix .. "_count")
+-- KEYS[4] = published statistics key (prefix .. "_stats")
 -- ARGV[1] = operation: "start", "checkpoint", "finish", "release"
 -- ARGV[2] = owner token
 -- ARGV[3] = lock ttl (seconds)
@@ -26,19 +27,23 @@
 --
 -- start:      ARGV[5] = interval between passes, ARGV[6] = progress stale age
 -- checkpoint: ARGV[5] = upstream, ARGV[6] = server, ARGV[7] = cursor,
---             ARGV[8] = found, ARGV[9] = batches, ARGV[10] = started
+--             ARGV[8] = found, ARGV[9] = batches, ARGV[10] = started,
+--             ARGV[11] = accumulated statistics (json, may be empty)
 -- finish:     ARGV[5] = upstream, ARGV[6] = server, ARGV[7] = found,
---             ARGV[8] = batches, ARGV[9] = duration
+--             ARGV[8] = batches, ARGV[9] = duration,
+--             ARGV[10] = statistics to publish (json, empty = none)
 
 local lock_key = KEYS[1]
 local state_key = KEYS[2]
 local count_key = KEYS[3]
+local stats_key = KEYS[4]
 local op = ARGV[1]
 local token = ARGV[2]
 local lock_ttl = tonumber(ARGV[3])
 local now = tonumber(ARGV[4])
 
-local progress_fields = { 'upstream', 'server', 'cursor', 'found', 'batches', 'started', 'updated' }
+local progress_fields = { 'upstream', 'server', 'cursor', 'found', 'batches', 'started', 'updated',
+                          'stats' }
 
 local function owns_lock()
   return redis.call('GET', lock_key) == token
@@ -74,7 +79,8 @@ if op == 'start' then
 
   if in_progress then
     return { 'resume', st['upstream'] or '', st['server'] or '', st['cursor'],
-             st['found'] or '0', st['batches'] or '0', st['started'] or tostring(now) }
+             st['found'] or '0', st['batches'] or '0', st['started'] or tostring(now),
+             st['stats'] or '' }
   end
 
   redis.call('HDEL', state_key, unpack(progress_fields))
@@ -93,7 +99,8 @@ elseif op == 'checkpoint' then
       'found', ARGV[8],
       'batches', ARGV[9],
       'started', ARGV[10],
-      'updated', ARGV[4])
+      'updated', ARGV[4],
+      'stats', ARGV[11] or '')
 
   return 1
 elseif op == 'finish' then
@@ -102,6 +109,11 @@ elseif op == 'finish' then
   end
 
   redis.call('SET', count_key, ARGV[7])
+  if ARGV[10] and ARGV[10] ~= '' then
+    redis.call('SET', stats_key, ARGV[10])
+  else
+    redis.call('DEL', stats_key)
+  end
   redis.call('HDEL', state_key, unpack(progress_fields))
   redis.call('HSET', state_key,
       'last_done', ARGV[4],

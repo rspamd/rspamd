@@ -37,4 +37,5 @@ allow_update = ["localhost"];
 #  interval = 4h; # minimum time between completed passes
 #  batch = 1000; # SCAN COUNT hint
 #  duty_cycle = 0.1; # maximum share of time a SCAN request is outstanding
+#  stats_sample = 10; # read 1 in N digests for per-flag/shingles/age statistics, 0 disables
 #}

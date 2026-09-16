@@ -22,6 +22,7 @@ local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local ucl = require "ucl"
 
 local N = "fuzzy_redis"
 
@@ -153,6 +154,12 @@ result is published into `prefix .. "_count"`, which workers read as before.
 * progress, the lock and the published count live on the write servers, so a
   restarted worker resumes the pass and several storages sharing a Redis
   scan it once
+* with `stats_sample` > 0 the SCAN runs inside a read-only script that also
+  reads every N-th digest found (chosen by the digest bytes, so the sample is
+  stable across resumes) and returns aggregates: per flag count and weight,
+  multi-flag and shingled hashes, age buckets. The pass publishes them scaled
+  to the full count into `prefix .. "_stats"` for the storage worker; the
+  wire protocol never exposes them
 ]]
 
 local count_scan_defaults = {
@@ -167,6 +174,7 @@ local count_scan_defaults = {
   initial_delay = 30.0, -- first attempt after start, jittered
   error_backoff = 60.0,
   max_errors = 5, -- consecutive SCAN failures before the pass is suspended
+  stats_sample = 10, -- read every N-th digest for content statistics, 0 disables them
 }
 
 local count_scanners = {}
@@ -207,8 +215,128 @@ local function normalize_count_scan_settings(opts)
   settings.batch = math.floor(settings.batch)
   settings.lock_ttl = math.ceil(settings.lock_ttl)
   settings.max_delay = math.max(settings.max_delay, settings.min_delay)
+  -- The sample is selected by two digest bytes
+  settings.stats_sample = math.min(math.floor(settings.stats_sample), 65536)
 
   return settings
+end
+
+-- Reads a script that is sent with EVAL/EVALSHA to a pinned server, bypassing
+-- the lua_redis script registry that routes by key
+local function read_script_body(filename)
+  local path = lua_util.join_path(rspamd_paths.LUALIBDIR, 'redis_scripts', filename)
+  local f = io.open(path, 'r')
+
+  if not f then
+    return nil, string.format('cannot open %s', path)
+  end
+
+  local body = f:read('*all')
+  f:close()
+
+  if not body then
+    return nil, string.format('cannot read %s', path)
+  end
+
+  body = lua_util.strip_lua_comments(body)
+  local h = require("rspamd_cryptobox_hash").create_specific('sha1')
+  h:update(body)
+
+  return { body = body, sha = h:hex() }
+end
+
+local function new_stats()
+  return {
+    sampled = 0,
+    multi_flag = 0,
+    shingled = 0,
+    shingle_slots = 0,
+    ages = { 0, 0, 0, 0 },
+    flags = {},
+  }
+end
+
+-- Adds one reply of fuzzy_stats_scan.lua (see its header for the layout)
+local function merge_stats_reply(stats, data)
+  stats.sampled = stats.sampled + (tonumber(data[3]) or 0)
+  stats.multi_flag = stats.multi_flag + (tonumber(data[4]) or 0)
+  stats.shingled = stats.shingled + (tonumber(data[5]) or 0)
+  stats.shingle_slots = stats.shingle_slots + (tonumber(data[6]) or 0)
+
+  for i = 1, 4 do
+    stats.ages[i] = (stats.ages[i] or 0) + (tonumber(data[6 + i]) or 0)
+  end
+
+  for i = 11, #data - 3, 4 do
+    local flag = tostring(data[i])
+    local count, sum, max = tonumber(data[i + 1]) or 0, tonumber(data[i + 2]) or 0,
+    tonumber(data[i + 3]) or 0
+    local fl = stats.flags[flag]
+
+    if fl then
+      fl.count, fl.sum, fl.max = fl.count + count, fl.sum + sum, math.max(fl.max, max)
+    else
+      stats.flags[flag] = { count = count, sum = sum, max = max }
+    end
+  end
+end
+
+local function decode_stats(str)
+  if type(str) ~= 'string' or str == '' then
+    return nil
+  end
+
+  local parser = ucl.parser()
+
+  if not parser:parse_string(str) then
+    return nil
+  end
+
+  local stats = parser:get_object()
+
+  if type(stats) ~= 'table' or type(stats.flags) ~= 'table' or type(stats.ages) ~= 'table' then
+    return nil
+  end
+
+  return stats
+end
+
+-- Scales the sampled aggregates to the whole storage
+local function published_stats(stats, found, sample, extra)
+  local scale = stats.sampled > 0 and (found / stats.sampled) or 0
+  local function scaled(n)
+    return math.floor(n * scale + 0.5)
+  end
+
+  local out = {
+    sample = sample,
+    sampled = stats.sampled,
+    found = found,
+    multi_flag = scaled(stats.multi_flag),
+    shingled = scaled(stats.shingled),
+    shingle_slots = scaled(stats.shingle_slots),
+    age = {
+      ['1d'] = scaled(stats.ages[1] or 0),
+      ['7d'] = scaled(stats.ages[2] or 0),
+      ['30d'] = scaled(stats.ages[3] or 0),
+      older = scaled(stats.ages[4] or 0),
+    },
+    flags = {},
+  }
+
+  for flag, fl in pairs(stats.flags) do
+    out.flags[flag] = {
+      count = scaled(fl.count),
+      avg_weight = fl.count > 0 and (fl.sum / fl.count) or 0,
+      max_weight = fl.max,
+    }
+  end
+
+  for k, v in pairs(extra) do
+    out[k] = v
+  end
+
+  return ucl.to_format(out, 'json-compact')
 end
 
 -- Starts the count scan for a storage, must be called from one worker only
@@ -246,10 +374,23 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
     return false
   end
 
+  local stats_script
+
+  if settings.stats_sample > 0 then
+    stats_script, err = read_script_body('fuzzy_stats_scan.lua')
+
+    if not stats_script then
+      logger.errx(rspamd_config, '%s: cannot load fuzzy_stats_scan.lua: %s; ' ..
+          'storage statistics disabled', N, err)
+      settings.stats_sample = 0
+    end
+  end
+
   local keys = {
     prefix .. '_count_scan_lock',
     prefix .. '_count_scan',
     prefix .. '_count',
+    prefix .. '_stats',
   }
   local pattern = glob_escape(prefix) .. string.rep('?', 64)
   -- Stable per host, so a restarted worker takes its own lock over
@@ -263,6 +404,8 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
     gen = 0, -- identifies the outstanding request, late replies are dropped
     busy_since = nil,
     wake_at = 0,
+    stats = new_stats(),
+    script_known = false, -- whether the stats script is known to be cached by the server
   }
   count_scanners[scan_id] = st
 
@@ -328,7 +471,8 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
     st.last_checkpoint = rspamd_util.get_ticks()
 
     exec_script(script_args('checkpoint', st.upstream:get_name(), st.server,
-        st.cursor, tostring(st.found), tostring(st.batches), st.started),
+        st.cursor, tostring(st.found), tostring(st.batches), st.started,
+        stats_script and ucl.to_format(st.stats, 'json-compact') or ''),
         function(req_err, data)
           if req_err then
             -- Not fatal: the lock is renewed by the next checkpoint
@@ -345,9 +489,18 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
 
   local function finish()
     local duration = rspamd_util.get_time() - (tonumber(st.started) or rspamd_util.get_time())
+    local stats = ''
+
+    if stats_script then
+      stats = published_stats(st.stats, st.found, settings.stats_sample, {
+        started = tonumber(st.started) or 0,
+        duration = math.floor(duration),
+        server = st.server,
+      })
+    end
 
     exec_script(script_args('finish', st.upstream:get_name(), st.server,
-        tostring(st.found), tostring(st.batches), string.format('%.0f', duration)),
+        tostring(st.found), tostring(st.batches), string.format('%.0f', duration), stats),
         function(req_err, data)
           st.phase = 'idle'
 
@@ -362,8 +515,9 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
             wait(settings.lock_ttl)
           else
             logger.infox(rspamd_config, '%s: counted %s fuzzy hashes for prefix %s on %s ' ..
-                'in %s batches, %s seconds', N, st.found, prefix, st.server, st.batches,
-                string.format('%.0f', duration))
+                'in %s batches, %s seconds%s', N, st.found, prefix, st.server, st.batches,
+                string.format('%.0f', duration),
+                stats_script and string.format(', %s sampled for statistics', st.stats.sampled) or '')
             wait(settings.interval)
           end
         end)
@@ -375,7 +529,17 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
     local cb = new_request(function(req_err, data)
       local now = rspamd_util.get_ticks()
 
-      if req_err or type(data) ~= 'table' or type(data[2]) ~= 'table' then
+      if stats_script and req_err and string.find(req_err, 'NOSCRIPT', 1, true) then
+        -- The pinned server has lost the script: resend it with EVAL
+        st.script_known = false
+        wait(0)
+        return
+      end
+
+      local nfound = type(data) == 'table' and
+          (stats_script and tonumber(data[2]) or (type(data[2]) == 'table' and #data[2]))
+
+      if req_err or not nfound then
         st.errors = st.errors + 1
         logger.warnx(rspamd_config, '%s: SCAN on %s failed (%s of %s): %s', N, st.server,
             st.errors, settings.max_errors, req_err or 'invalid reply')
@@ -391,8 +555,13 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
 
       st.errors = 0
       st.cursor = tostring(data[1])
-      st.found = st.found + #data[2]
+      st.found = st.found + nfound
       st.batches = st.batches + 1
+
+      if stats_script then
+        st.script_known = true
+        merge_stats_reply(st.stats, data)
+      end
 
       local rtt = now - sent_at
       local delay = rtt * (1.0 - settings.duty_cycle) / settings.duty_cycle
@@ -409,13 +578,26 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
       end
     end)
 
+    local req
+
+    if stats_script then
+      req = {
+        st.script_known and 'EVALSHA' or 'EVAL',
+        st.script_known and stats_script.sha or stats_script.body,
+        '0', st.cursor, pattern, tostring(settings.batch),
+        tostring(settings.stats_sample), calendar_now(),
+      }
+    else
+      req = { 'SCAN', st.cursor, 'MATCH', pattern, 'COUNT', tostring(settings.batch) }
+    end
+
     if not lua_redis.request(redis_params, {
       ev_base = ev_base,
       config = rspamd_config,
       callback = cb,
       upstream = st.upstream,
       host = st.server,
-    }, { 'SCAN', st.cursor, 'MATCH', pattern, 'COUNT', tostring(settings.batch) }) then
+    }, req) then
       cb('cannot send SCAN request', nil)
     end
   end
@@ -440,6 +622,7 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
     if up then
       st.cursor, st.found, st.batches, st.started = data[4],
       tonumber(data[5]) or 0, tonumber(data[6]) or 0, data[7]
+      st.stats = decode_stats(data[8]) or new_stats()
     else
       up = redis_params.read_servers:get_upstream_round_robin()
       local addr = up and up:get_addr()
@@ -452,7 +635,10 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
 
       server = addr:to_string(true)
       st.cursor, st.found, st.batches, st.started = '0', 0, 0, calendar_now()
+      st.stats = new_stats()
     end
+
+    st.script_known = false
 
     st.upstream, st.server, st.errors = up, server, 0
     st.phase = 'scanning'
