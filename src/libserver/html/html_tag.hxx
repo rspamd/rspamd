@@ -1280,6 +1280,8 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 #define FL_HREF (1 << (CM_USER_SHIFT + 5))
 #define FL_COMMENT (1 << (CM_USER_SHIFT + 6))
 #define FL_VIRTUAL (1 << (CM_USER_SHIFT + 7))
+/* Content offsets refer to html_content::invisible rather than ::parsed */
+#define FL_CONTENT_INVISIBLE (1 << (CM_USER_SHIFT + 8))
 
 using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
 
@@ -1485,7 +1487,7 @@ struct html_tag {
 	auto get_content(const struct html_content *hc) const -> std::string_view;
 };
 
-static_assert(CM_USER_SHIFT + 7 < sizeof(html_tag::flags) * NBBY);
+static_assert(CM_USER_SHIFT + 8 < sizeof(html_tag::flags) * NBBY);
 
 }// namespace rspamd::html
 

@@ -154,6 +154,109 @@ context("HTML processing", function()
     pool:destroy()
   end)
 
+  -- Transparent text is written to the visible buffer as spaces and a block
+  -- margin may trim those spaces away afterwards, so the length reported for
+  -- a transparent tag must come from the recorded offsets, not from whatever
+  -- part of the content survived in the buffer
+  local function transparent_tag_lengths(html, pool)
+    local rspamd_parsers = require("rspamd_parsers")
+    local parsed = rspamd_parsers.parse_html_content(html, pool)
+    local lengths = {}
+
+    parsed:foreach_tag({ 'p', 'span', 'div' }, function(tag, clen, is_leaf)
+      local bl = tag:get_style()
+      local content = tag:get_content()
+      table.insert(lengths, {
+        type = tag:get_type(),
+        clen = clen,
+        len = tag:get_content_length(),
+        transparent = bl and bl.transparent or false,
+        content = content and tostring(content) or nil,
+      })
+      return false
+    end)
+
+    return parsed, lengths
+  end
+
+  local white = 'color:#ffffff;background-color:#ffffff'
+
+  test("Transparent block at the end of the body keeps its length", function()
+    local pool = require("rspamd_mempool").create()
+    local _, lengths = transparent_tag_lengths(
+        '<html><body><p>Claim your discount.</p>' ..
+            '<p style="' .. white .. '">white on white text</p></body></html>', pool)
+
+    assert_equal(2, #lengths)
+    assert_true(lengths[2].transparent)
+    assert_equal(19, lengths[2].clen)
+    assert_equal(19, lengths[2].len)
+    pool:destroy()
+  end)
+
+  test("Transparent tag never reads the hidden buffer", function()
+    local pool = require("rspamd_mempool").create()
+    local hidden = 'Hidden preheader text that is never displayed to anyone'
+    local parsed, lengths = transparent_tag_lengths(
+        '<html><body><div style="display:none">' .. hidden .. '</div>' ..
+            '<p>Claim your discount.</p>' ..
+            '<p style="' .. white .. '">white on white text</p></body></html>', pool)
+
+    assert_equal(hidden, tostring(parsed:get_invisible()))
+    assert_equal(3, #lengths)
+    assert_equal('div', lengths[1].type)
+    assert_equal(hidden, lengths[1].content)
+    assert_true(lengths[3].transparent)
+    assert_equal(19, lengths[3].clen)
+    -- Either nothing or spaces, but never a slice of the hidden div
+    if lengths[3].content then
+      assert_nil(lengths[3].content:find('%S'))
+    end
+    pool:destroy()
+  end)
+
+  test("Transparent inline text followed by visible text is spaces", function()
+    local pool = require("rspamd_mempool").create()
+    local _, lengths = transparent_tag_lengths(
+        '<html><body><p>Claim <span style="' .. white .. '">white span text</span> discount.</p></body></html>',
+        pool)
+
+    assert_equal(2, #lengths)
+    assert_equal('span', lengths[2].type)
+    assert_true(lengths[2].transparent)
+    assert_equal(15, lengths[2].clen)
+    assert_equal(string.rep(' ', 15), lengths[2].content)
+    pool:destroy()
+  end)
+
+  test("Transparent inline text at the end of a paragraph keeps its length", function()
+    local pool = require("rspamd_mempool").create()
+    local _, lengths = transparent_tag_lengths(
+        '<html><body><p>Claim discount. <span style="' .. white .. '">white span text</span></p></body></html>',
+        pool)
+
+    assert_equal(2, #lengths)
+    assert_equal('span', lengths[2].type)
+    assert_true(lengths[2].transparent)
+    assert_equal(15, lengths[2].clen)
+    pool:destroy()
+  end)
+
+  test("Hidden text inside a transparent block goes to the hidden buffer", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed, lengths = transparent_tag_lengths(
+        '<html><body><p style="' .. white .. '">white outer <span style="display:none">hidden inner</span> end</p>' ..
+            '<p>Visible.</p></body></html>', pool)
+
+    assert_equal('hidden inner', tostring(parsed:get_invisible()))
+    assert_equal(3, #lengths)
+    assert_true(lengths[1].transparent)
+    assert_equal(string.rep(' ', 15), lengths[1].content)
+    assert_equal('span', lengths[2].type)
+    assert_equal('hidden inner', lengths[2].content)
+    pool:destroy()
+  end)
+
   -- The standalone parser never applies stylesheets, so cases that need a
   -- <style> block go through a real task, where the CSS parser is enabled
   local function parse_html_message(body)

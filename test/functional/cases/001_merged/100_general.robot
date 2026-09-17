@@ -81,6 +81,7 @@ HTML VISIBILITY - Transparent text
   Scan File  ${RSPAMD_TESTDIR}/messages/html_visibility_transparent.eml
   ...  Settings={symbols_enabled = [MANY_INVISIBLE_PARTS, R_WHITE_ON_WHITE]}
   Expect Symbol With Score And Exact Options  MANY_INVISIBLE_PARTS  0.05  1
+  Expect Symbol With Exact Options  R_WHITE_ON_WHITE  span color #ffffff bgcolor #ffffff
 
 HTML VISIBILITY - Significant hidden content
   [Template]  Check Hidden Content Amount
