@@ -1358,15 +1358,33 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 
 auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *item) -> void
 {
-	if (checkpoint_mode) {
-		/* The checkpoint pump owns ordering and ignores the ordinary score limit. */
-		return;
-	}
-
 	auto *cache_ptr = reinterpret_cast<symcache *>(task->cfg->cache);
 
 	// Avoid race condition with the runtime destruction and the delay timer
 	if (!order) {
+		return;
+	}
+
+	if (checkpoint_mode) {
+		/* Start input-ready dependents as soon as their prerequisite finishes
+		 * instead of waiting for every in-flight event to drain. The score
+		 * limit does not apply: a checkpoint never stops on a partial score. */
+		for (const auto &[id, rdep]: item->rdeps.values()) {
+			if (!rdep.item || slow_status == slow_status::enabled) {
+				continue;
+			}
+
+			auto *dyn_item = get_dynamic_item(rdep.item->id);
+
+			if (dyn_item && dyn_item->status == cache_item_status::not_started &&
+				may_start(task, rdep.item, dyn_item) &&
+				check_item_deps(task, *cache_ptr, rdep.item, dyn_item, false)) {
+				msg_debug_cache_task("start %d(%s) rdep of %s at the checkpoint",
+									 rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
+				process_symbol(task, *cache_ptr, rdep.item, dyn_item);
+			}
+		}
+
 		return;
 	}
 

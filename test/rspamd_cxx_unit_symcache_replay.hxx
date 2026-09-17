@@ -260,6 +260,34 @@ TEST_SUITE("symcache_replay")
 		CHECK(rspamd_symcache_export_checkpoint(task, "txn") == nullptr);
 	}
 
+	TEST_CASE_FIXTURE(checkpoint_fixture, "a non-portable write excludes only its own check and dependents")
+	{
+		add("UNSAFE", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		callbacks.back().run = [](auto *t) {
+			rspamd_task_insert_result(t, "SCORE", 1, nullptr);
+			rspamd_task_remove_symbol_result(t, "SCORE", nullptr);
+		};
+		add("PORTABLE", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		callbacks.back().run = [](auto *t) {
+			rspamd_task_insert_result(t, "EVIDENCE", 1, nullptr);
+		};
+		add("DEPENDENT", envelope, SYMBOL_TYPE_NORMAL, false, 0, 1);
+		depends("DEPENDENT", "UNSAFE");
+		init();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		replay_record record{rspamd_symcache_export_checkpoint(task, "txn"), &ucl_object_unref};
+		REQUIRE(record != nullptr);
+		auto *entries = replay_field(record.get(), "checks");
+		CHECK(entries->len == 1);
+		CHECK(ucl_object_lookup(entries, "PORTABLE") != nullptr);
+		new_task();
+		calls.clear();
+		REQUIRE(rspamd_symcache_import_checkpoint(task, record.get(), "txn"));
+		full_scan();
+		CHECK(calls == std::vector<std::string>{"UNSAFE", "DEPENDENT"});
+		CHECK(rspamd_task_find_symbol_result(task, "EVIDENCE", nullptr) != nullptr);
+	}
+
 	TEST_CASE_FIXTURE(checkpoint_fixture, "Lua producers capture options and require an explicit version")
 	{
 		run_lua(R"lua(

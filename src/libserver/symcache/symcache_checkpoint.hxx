@@ -51,10 +51,9 @@ public:
 
 	auto start(const cache_item &item) -> void;
 	auto finish(const cache_item &item) -> void;
-	auto invalidate() -> void
-	{
-		valid = false;
-	}
+	/* A non-portable write poisons the currently executing check only; a write
+	 * that cannot be attributed to a check discards the whole journal. */
+	auto invalidate(struct rspamd_task *task) -> void;
 
 	auto discard(const cache_item &item) -> void;
 	auto insert_begin(struct rspamd_task *task, const char *symbol, double weight,

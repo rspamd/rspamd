@@ -383,8 +383,14 @@ auto checkpoint_store::set_fact(struct rspamd_task *task, const char *key, const
 	std::size_t size = 0;
 	unsigned int nodes = 0;
 
-	if (!measure(value, size, nodes) || !reserve(size + strlen(key))) {
-		valid = false;
+	if (!measure(value, size, nodes)) {
+		/* An unportable value makes this producer run again at EOM; the other
+		 * checks keep their records. */
+		invalidate(task);
+		return false;
+	}
+
+	if (!reserve(size + strlen(key))) {
 		return false;
 	}
 
@@ -395,6 +401,27 @@ auto checkpoint_store::set_fact(struct rspamd_task *task, const char *key, const
 	}
 
 	return true;
+}
+
+auto checkpoint_store::invalidate(struct rspamd_task *task) -> void
+{
+	if (!valid || imported) {
+		return;
+	}
+
+	auto *name = current_name(task);
+
+	if (!name) {
+		/* An unowned write cannot be attributed to a check: nothing is portable */
+		valid = false;
+		return;
+	}
+
+	if (auto it = checks.find(name); it != checks.end()) {
+		it->second.valid = false;
+	}
+	/* A producer without a journal entry was never portable, so there is
+	 * nothing to poison: its EOM run repeats the write. */
 }
 
 auto checkpoint_store::get_fact(const char *producer, const char *key) const -> const ucl_object_t *
@@ -440,6 +467,11 @@ auto checkpoint_store::export_record(struct rspamd_task *task, const char *bindi
 		if (item && visit(*item)) {
 			ucl_object_insert_key(out, copy_value(c.data.get()), name.c_str(), 0, true);
 		}
+	}
+
+	if (out->len == 0) {
+		/* Nothing portable survived: an empty record would only cost a replay */
+		return nullptr;
 	}
 
 	std::size_t size = 0;
@@ -652,6 +684,6 @@ void rspamd_symcache_checkpoint_invalidate(struct rspamd_task *task)
 	}
 
 	if (auto *store = checkpoint_store::get(task); store && rspamd_symcache_is_checkpoint(task)) {
-		store->invalidate();
+		store->invalidate(task);
 	}
 }

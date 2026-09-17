@@ -353,6 +353,26 @@ cfg:register_symbol({name = 'LUA_CONDITION', required_inputs = {'sender'},
 		CHECK(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_ERROR);
 	}
 
+	TEST_CASE_FIXTURE(checkpoint_fixture, "a finished prerequisite starts its dependent while other events are in flight")
+	{
+		add("DNS", envelope, SYMBOL_TYPE_NORMAL, true);
+		add("SLOW", envelope, SYMBOL_TYPE_NORMAL, true);
+		add("CONSUMER", envelope);
+		depends("CONSUMER", "DNS");
+		init();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_PENDING);
+		CHECK(calls == std::vector<std::string>{"DNS", "SLOW"});
+		auto &dns = callbacks.front();
+		rspamd_session_remove_event(task->s, event_done, &dns);
+		dns.item = nullptr;
+		/* SLOW is still pending, yet CONSUMER must not wait for it */
+		CHECK(calls == std::vector<std::string>{"DNS", "SLOW", "CONSUMER"});
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_PENDING);
+		finish_async();
+		REQUIRE(checkpoint() == RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE);
+		CHECK(calls.size() == 3);
+	}
+
 	TEST_CASE_FIXTURE(checkpoint_fixture, "async prerequisite drains before its dependent without completing the task")
 	{
 		add("DNS", envelope, SYMBOL_TYPE_NORMAL, true);

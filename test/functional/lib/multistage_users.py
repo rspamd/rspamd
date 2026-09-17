@@ -172,7 +172,8 @@ def multistage_users_relay(host, port, scanner_port):
     metadata = _metadata(ip='192.0.2.10', recipients=['<blocked@protected.test>'])
     _, response = _checkpoint(host, scanner_port, metadata)
     assert response['decision'] == 'continue', response
-    assert 'ASN_CHECK' not in response['record']['checks'], response
+    # Nothing portable ran, so the scanner continues without a record at all
+    assert 'ASN_CHECK' not in response.get('record', {}).get('checks', {}), response
     for checkpoint in (False, True):
         decision, state = _milter(host, port, checkpoint=checkpoint, ip='192.0.2.10',
                                   recipients=['blocked@protected.test'])
