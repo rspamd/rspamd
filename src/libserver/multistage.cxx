@@ -605,19 +605,22 @@ gboolean rspamd_multistage_import(struct rspamd_task *task)
 		return FALSE;
 	}
 
-	auto rejected = [&]() {
+	/* Name the reason: the counter alone cannot tell a stale record from a
+	 * scanner whose configuration differs from the DATA scanner's. */
+	auto rejected = [&](const char *why) {
 		rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_RECORD_REJECTED);
+		msg_info_task("ignore DATA record and scan the message fully: %s", why);
 		return FALSE;
 	};
 
 	if (ucl_object_type(wire) != UCL_STRING) {
-		return rejected();
+		return rejected("record is not a string");
 	}
 
 	owning_object payload{rspamd_multistage_open(task->cfg, "data-response", ucl_object_tostring(wire), wire->len)};
 
 	if (!payload) {
-		return rejected();
+		return rejected("record is unauthenticated, malformed or older than 5 minutes");
 	}
 
 	auto *id = string_field(payload.get(), "id");
@@ -625,17 +628,17 @@ gboolean rspamd_multistage_import(struct rspamd_task *task)
 	auto *binding = string_field(payload.get(), "binding");
 
 	if (!id || strlen(id) != RSPAMD_MULTISTAGE_ID_LEN || !decision || strcmp(decision, "continue") != 0 || !binding) {
-		return rejected();
+		return rejected("record is not a continue decision");
 	}
 
 	string_ptr expected{rspamd_multistage_binding(task->meta, id), &rspamd_fstring_free};
 
 	if (!expected || !string_field_equals(payload.get(), "binding", {expected->str, expected->len})) {
-		return rejected();
+		return rejected("envelope differs from the DATA envelope");
 	}
 
 	if (!rspamd_symcache_import_checkpoint(task, ucl_object_lookup(payload.get(), "record"), binding)) {
-		return rejected();
+		return rejected("record is incompatible with this scanner (configuration checksum, symbol set or format)");
 	}
 
 	rspamd_multistage_count(task->worker, RSPAMD_MULTISTAGE_RECORD_IMPORTED);

@@ -361,10 +361,8 @@ auto checkpoint_store::add_option(struct rspamd_task *task, struct rspamd_symbol
 auto checkpoint_store::set_fact(struct rspamd_task *task, const char *key, const ucl_object_t *value) -> bool
 {
 	auto *name = current_name(task);
-	std::size_t size = 0;
-	unsigned int nodes = 0;
 
-	if (!name || !key || !*key || strlen(key) > 256 || !measure(value, size, nodes) || !reserve(size + strlen(key))) {
+	if (!name || !key || !*key || strlen(key) > 256 || !value) {
 		valid = false;
 		return false;
 	}
@@ -375,12 +373,25 @@ auto checkpoint_store::set_fact(struct rspamd_task *task, const char *key, const
 		live.reset(ucl_object_typed_new(UCL_OBJECT));
 	}
 
+	if (!rspamd_symcache_is_checkpoint(task)) {
+		/* An ordinary scan only lends the value to dependents: nothing measures,
+		 * journals or exports it, so a reference replaces the deep copies. */
+		ucl_object_replace_key(live.get(), ucl_object_ref(const_cast<ucl_object_t *>(value)), key, 0, true);
+		return true;
+	}
+
+	std::size_t size = 0;
+	unsigned int nodes = 0;
+
+	if (!measure(value, size, nodes) || !reserve(size + strlen(key))) {
+		valid = false;
+		return false;
+	}
+
 	ucl_object_replace_key(live.get(), copy_value(value), key, 0, true);
 
-	if (rspamd_symcache_is_checkpoint(task)) {
-		if (auto *c = current(task)) {
-			ucl_object_replace_key(mutable_field(c->data.get(), "facts"), copy_value(value), key, 0, true);
-		}
+	if (auto *c = current(task)) {
+		ucl_object_replace_key(mutable_field(c->data.get(), "facts"), copy_value(value), key, 0, true);
 	}
 
 	return true;

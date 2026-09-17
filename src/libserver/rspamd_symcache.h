@@ -56,9 +56,9 @@ enum rspamd_symcache_input {
 	RSPAMD_SYMCACHE_INPUT_CONTENT = (1u << 7u),
 	RSPAMD_SYMCACHE_INPUT_EOM = (1u << 8u), /* Legacy callbacks require EOM */
 	RSPAMD_SYMCACHE_INPUT_ENVELOPE = RSPAMD_SYMCACHE_INPUT_CONNECTION |
-									 RSPAMD_SYMCACHE_INPUT_HELO |
-									 RSPAMD_SYMCACHE_INPUT_SENDER |
-									 RSPAMD_SYMCACHE_INPUT_RECIPIENTS,
+		RSPAMD_SYMCACHE_INPUT_HELO |
+		RSPAMD_SYMCACHE_INPUT_SENDER |
+		RSPAMD_SYMCACHE_INPUT_RECIPIENTS,
 	RSPAMD_SYMCACHE_INPUT_ALL = (1u << 9u) - 1u,
 };
 
@@ -131,7 +131,9 @@ gboolean rspamd_symcache_import_checkpoint(struct rspamd_task *task,
 
 /* Facts are copied, bounded JSON-compatible values scoped to the currently
  * executing producer. Consumers get a borrowed value after the producer ran
- * or was replayed. These APIs do not serialize arbitrary Lua/mempool state. */
+ * or was replayed. These APIs do not serialize arbitrary Lua/mempool state.
+ * Only a DATA checkpoint validates and journals a fact; an ordinary scan
+ * keeps a reference for its dependents without measuring or copying it. */
 gboolean rspamd_symcache_set_check_fact(struct rspamd_task *task,
 										const char *key, const ucl_object_t *value);
 const ucl_object_t *rspamd_symcache_get_check_fact(struct rspamd_task *task,

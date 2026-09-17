@@ -3401,8 +3401,7 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 			const rspamd_fstring_t *wire = rspamd_multistage_reply(task);
 			rspamd_http_message_set_body_from_fstring_copy(msg, wire);
 		}
-		else
-
+		else {
 			switch (task->cmd) {
 			case CMD_CHECK:
 			case CMD_CHECK_RSPAMC:
@@ -3437,6 +3436,7 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 				msg_err_protocol("BROKEN");
 				break;
 			}
+		}
 	}
 
 	ev_now_update(task->event_loop);
