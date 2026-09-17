@@ -171,6 +171,8 @@ struct fuzzy_key {
 	int flags; /* enum fuzzy_key_op */
 	/* Cap on per-source stats for this key; -1 = worker default, 0 = off */
 	int max_ips;
+	/* -1: exempt non-default keys; 0: apply IP policy; 1: bypass IP policy */
+	int skip_ip_checks;
 	ref_entry_t ref;
 };
 
@@ -191,6 +193,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
 	struct fuzzy_global_stat stat;
+	/* Sampled storage-wide statistics published by the count scan, may be NULL */
+	ucl_object_t *storage_stats;
 	double expire;
 	double sync_timeout;
 	double delay;
@@ -285,15 +289,6 @@ struct fuzzy_session {
 	struct rspamd_fuzzy_cmd_extension *extensions;
 	unsigned char nm[rspamd_cryptobox_MAX_NMBYTES];
 
-	/*
-	 * Set when the source address was already run through
-	 * rspamd_fuzzy_check_client before the session was created (the UDP
-	 * path checks it up front, prior to parsing). Lets the per-command
-	 * check be skipped for that path without losing it for TCP, where a
-	 * dynamic block can land after the connection was accepted.
-	 */
-	bool client_checked;
-
 	/* If this is a TCP session, this pointer will be set */
 	struct fuzzy_tcp_session *tcp_session;
 };
@@ -364,6 +359,8 @@ gboolean fuzzy_parse_ids(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						 gpointer ud, struct rspamd_rcl_section *section, GError **err);
 struct fuzzy_key *fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 											 khash_t(rspamd_fuzzy_keys_hash) * target);
+bool fuzzy_key_is_ip_exempt(const struct rspamd_fuzzy_storage_ctx *ctx,
+							const struct fuzzy_key *key);
 gboolean fuzzy_parse_keypair(rspamd_mempool_t *pool, const ucl_object_t *obj,
 							 gpointer ud, struct rspamd_rcl_section *section, GError **err);
 

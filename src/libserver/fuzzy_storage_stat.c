@@ -207,6 +207,12 @@ rspamd_fuzzy_stat_to_ucl(struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 						  0,
 						  false);
 
+	if (ctx->storage_stats) {
+		/* Sampled per flag/shingles/age breakdown from the last count scan */
+		ucl_object_insert_key(obj, ucl_object_ref(ctx->storage_stats),
+							  "storage", 0, false);
+	}
+
 	if (ctx->errors_ips && ip_stat) {
 		gpointer k, v;
 		int i = 0;

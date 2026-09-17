@@ -505,9 +505,13 @@ lua_html_foreach_tag(lua_State *L)
 				auto *ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(lua_html_tag)));
 				ltag->tag = tag;
 				ltag->html = hc;
-				auto ct = ltag->tag->get_content(hc);
 				rspamd_lua_setclass(L, rspamd_html_tag_classname, -1);
-				lua_pushinteger(L, ct.size());
+				/*
+				 * Offsets based length: transparent text is written as spaces
+				 * and may be trimmed away from the visible buffer afterwards,
+				 * which would make the content view shorter than the text
+				 */
+				lua_pushinteger(L, tag->get_content_length());
 
 				/* Leaf flag */
 				if (tag->children.empty()) {
@@ -811,13 +815,7 @@ lua_html_tag_get_content_length(lua_State *L)
 	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
 
 	if (ltag) {
-		if (ltag->html) {
-			auto ct = ltag->tag->get_content(ltag->html);
-			lua_pushinteger(L, ct.size());
-		}
-		else {
-			lua_pushinteger(L, ltag->tag->get_content_length());
-		}
+		lua_pushinteger(L, ltag->tag->get_content_length());
 	}
 	else {
 		return luaL_error(L, "invalid arguments");

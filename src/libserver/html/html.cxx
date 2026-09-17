@@ -1966,13 +1966,20 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	};
 
 	auto calculate_final_tag_offsets = [hc](append_frame &frame) -> void {
+		/*
+		 * Record which buffer the offsets refer to: html_tag::get_content must
+		 * read the same one, and the visibility of the block alone cannot tell,
+		 * as transparent text is written to the visible buffer as spaces
+		 */
 		if (frame.is_visible) {
 			frame.tag->content_offset = frame.initial_parsed_offset;
 			frame.tag->closing.start = hc->parsed.size();
+			frame.tag->flags &= ~FL_CONTENT_INVISIBLE;
 		}
 		else {
 			frame.tag->content_offset = frame.initial_invisible_offset;
 			frame.tag->closing.start = hc->invisible.size();
+			frame.tag->flags |= FL_CONTENT_INVISIBLE;
 		}
 	};
 
@@ -3363,11 +3370,7 @@ auto html_tag_by_name(const std::string_view &name)
 
 auto html_tag::get_content(const struct html_content *hc) const -> std::string_view
 {
-	const std::string *dest = &hc->parsed;
-
-	if (block && !block->is_visible()) {
-		dest = &hc->invisible;
-	}
+	const std::string *dest = (flags & FL_CONTENT_INVISIBLE) ? &hc->invisible : &hc->parsed;
 	const auto clen = get_content_length();
 	if (content_offset < dest->size()) {
 		if (dest->size() - content_offset >= clen) {

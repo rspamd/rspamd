@@ -387,6 +387,7 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 	key->max_ips = -1;
 	/* Allow read by default */
 	key->flags = FUZZY_KEY_READ;
+	key->skip_ip_checks = -1;
 	/* Preallocate some space for flags */
 	kh_resize(fuzzy_key_flag_stat, key->flags_stat, 8);
 	const unsigned char *pk = rspamd_keypair_component(kp, RSPAMD_KEYPAIR_COMPONENT_PK,
@@ -437,6 +438,11 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 			}
 		}
 
+		const ucl_object_t *skip_ip_checks = ucl_object_lookup(extensions, "skip_ip_checks");
+		if (skip_ip_checks && ucl_object_type(skip_ip_checks) == UCL_BOOLEAN) {
+			key->skip_ip_checks = ucl_object_toboolean(skip_ip_checks);
+		}
+
 		const ucl_object_t *ratelimit = ucl_object_lookup(extensions, "ratelimit");
 
 		static int ratelimit_lua_id = -1;
@@ -479,12 +485,15 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 
 		const ucl_object_t *expire = ucl_object_lookup(extensions, "expire");
 		if (expire && ucl_object_type(expire) == UCL_STRING) {
-			struct tm tm;
+			/* strptime only sets the date fields: expire at local midnight,
+			 * with libc determining whether daylight saving time applies. */
+			struct tm tm = {0};
+			tm.tm_isdst = -1;
 
 			/* DD-MM-YYYY */
 			char *end = strptime(ucl_object_tostring(expire), "%d-%m-%Y", &tm);
 
-			if (end != NULL && *end != '\0') {
+			if (end == NULL || *end != '\0') {
 				msg_err_config("cannot parse expire date: %s", ucl_object_tostring(expire));
 			}
 			else {
@@ -553,6 +562,14 @@ fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg,
 			  key->expire, key->rate, key->burst, key->name);
 
 	return key;
+}
+
+bool fuzzy_key_is_ip_exempt(const struct rspamd_fuzzy_storage_ctx *ctx,
+							const struct fuzzy_key *key)
+{
+	/* A session only acquires a key after successful MAC verification. */
+	return key && (key->skip_ip_checks == 1 ||
+				   (key->skip_ip_checks == -1 && key != ctx->default_key));
 }
 
 gboolean

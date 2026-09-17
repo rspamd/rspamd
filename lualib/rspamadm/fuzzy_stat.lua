@@ -214,6 +214,36 @@ local function add_result(dst, src, k)
   return dst
 end
 
+-- Storage-wide statistics sampled by the count scan (redis backend)
+local function print_storage_stats(st)
+  local started = tonumber(st.started)
+
+  print(string.format('Storage statistics (1 in %s digests sampled, %s of %s, scanned %s on %s in %s seconds):',
+      st.sample or '?', print_num(st.sampled), print_num(st.found),
+      started and os.date('%Y-%m-%d %H:%M:%S', math.floor(started)) or 'unknown',
+      st.server or 'unknown', st.duration or '?'))
+
+  local flags = lua_util.keys(st.flags or {})
+  table.sort(flags, function(a, b)
+    return (tonumber(a) or 0) < (tonumber(b) or 0)
+  end)
+
+  for _, flag in ipairs(flags) do
+    local fl = st.flags[flag]
+    print(string.format('\tFlag %s: %s hashes, weight avg %.1f, max %s', flag,
+        print_num(fl.count), fl.avg_weight or 0, print_num(fl.max_weight)))
+  end
+
+  print(string.format('\tMulti-flag hashes: %s', print_num(st.multi_flag)))
+  print(string.format('\tShingled hashes: %s (%s shingle slots)', print_num(st.shingled),
+      print_num(st.shingle_slots)))
+
+  if type(st.age) == 'table' then
+    print(string.format('\tAge: <1d %s, <7d %s, <30d %s, older %s', print_num(st.age['1d']),
+        print_num(st.age['7d']), print_num(st.age['30d']), print_num(st.age.older)))
+  end
+end
+
 local function print_result(r)
   local function num_to_epoch(num)
     if num == 1 then
@@ -264,7 +294,10 @@ return function(args, res)
 
           -- General stats
           for k, v in pairs(pr['data']) do
-            if k ~= 'keys' and k ~= 'errors_ips' then
+            if k == 'storage' then
+              -- Every worker of a storage reads the same published document
+              res_db.storage = res_db.storage or v
+            elseif k ~= 'keys' and k ~= 'errors_ips' then
               res_db[k] = add_result(res_db[k], v, k)
             elseif k == 'errors_ips' then
               -- Errors ips
@@ -316,11 +349,16 @@ return function(args, res)
     print(string.format('Statistics for storage %s', db))
 
     for k, v in pairs(st) do
-      if k ~= 'keys' and k ~= 'errors_ips' then
+      if k ~= 'keys' and k ~= 'errors_ips' and k ~= 'storage' then
         print(string.format('%s: %s', k, print_result(v)))
       end
     end
     print('')
+
+    if type(st.storage) == 'table' and not opts['short'] then
+      print_storage_stats(st.storage)
+      print('')
+    end
 
     local res_keys = st['keys']
     if res_keys and not opts['no_keys'] and not opts['short'] then
