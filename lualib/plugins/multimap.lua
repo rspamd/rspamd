@@ -32,6 +32,32 @@ local function addresses(task, kind)
   return out
 end
 
+-- Selectors may return strings, arrays or iterators. Facts must be plain
+-- bounded arrays of strings, so anything else makes the rule non-portable.
+local max_selector_values = 256
+
+local function selector_values(value)
+  if type(value) == 'string' then
+    return { value }
+  end
+
+  if type(value) ~= 'table' or getmetatable(value) then
+    return nil
+  end
+
+  local out = {}
+
+  for i, elt in ipairs(value) do
+    if type(elt) ~= 'string' or i > max_selector_values then
+      return nil
+    end
+
+    out[i] = elt
+  end
+
+  return out
+end
+
 -- These rules only read envelope values and a synchronous native map. A
 -- selector's prerequisites still control whether the scheduler can run it.
 local function early_plan(cfg, rule)
@@ -68,7 +94,17 @@ local function early_plan(cfg, rule)
   elseif rule.type == 'selector' then
     inputs = lua_selectors.get_required_inputs(cfg, rule.selector_str)
     dependencies = lua_selectors.get_dependencies(cfg, rule.selector_str)
-    extract = function(task) return rule.selector(task) or false end
+    extract = function(task)
+      local values = rule.selector(task)
+
+      if values == nil then
+        return false
+      end
+
+      -- nil (not false) marks a value we cannot export; the callback below
+      -- refuses to record a fact for it
+      return selector_values(values)
+    end
   else
     return nil
   end
@@ -104,7 +140,7 @@ local function wrap_callback(cfg, rule, callback)
     local before = plan(task)
     callback(task)
 
-    if before.digest and lua_util.table_cmp(before, plan(task)) then
+    if before.digest and before.value ~= nil and lua_util.table_cmp(before, plan(task)) then
       task:set_check_fact('map', before)
     end
   end

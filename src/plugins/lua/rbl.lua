@@ -1204,202 +1204,198 @@ local function add_rbl(key, rbl, global_opts)
   local callback = function() end
   local description = {}
 
-  if callback then
-    local id
+  local id
 
-    if rbl.symbols_prefixes then
-      id = rspamd_config:register_symbol {
-        type = 'callback',
-        callback = callback,
-        groups = { 'rbl' },
-        name = rbl.symbol .. '_CHECK',
-        flags = table.concat(flags_tbl, ',') .. ',empty'
+  if rbl.symbols_prefixes then
+    id = rspamd_config:register_symbol {
+      type = 'callback',
+      callback = callback,
+      groups = { 'rbl' },
+      name = rbl.symbol .. '_CHECK',
+      flags = table.concat(flags_tbl, ',')
+    }
+
+    for _, prefix in pairs(rbl.symbols_prefixes) do
+      -- For unknown results...
+      rspamd_config:register_symbol {
+        type = 'virtual',
+        parent = id,
+        group = 'rbl',
+        score = 0,
+        name = prefix .. '_' .. rbl.symbol,
       }
+    end
+    if not (rbl.is_whitelist or rbl.ignore_whitelist) then
+      table.insert(black_symbols, rbl.symbol .. '_CHECK')
+    else
+      lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
+          'rbl.ignore_whitelist = %s',
+          rbl.symbol, rbl.is_whitelist, rbl.ignore_whitelist)
+    end
+  else
+    id = rspamd_config:register_symbol {
+      type = 'callback',
+      callback = callback,
+      name = rbl.symbol,
+      groups = { 'rbl' },
+      group = 'rbl',
+      score = 0,
+      flags = table.concat(flags_tbl, ',')
+    }
+    if not (rbl.is_whitelist or rbl.ignore_whitelist) then
+      table.insert(black_symbols, rbl.symbol)
+    else
+      lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
+          'rbl.ignore_whitelist = %s',
+          rbl.symbol, rbl.is_whitelist, rbl.ignore_whitelist)
+    end
+  end
 
-      for _, prefix in pairs(rbl.symbols_prefixes) do
-        -- For unknown results...
+  local check_sym = rbl.symbols_prefixes and rbl.symbol .. '_CHECK' or rbl.symbol
+  local envelope_sym = check_sym .. '_ENVELOPE'
+  local message_sym = check_sym .. '_MESSAGE'
+
+  local function register_part(name, phase, early)
+    local cb, replay, desc = gen_rbl_callback(rbl, phase, early)
+
+    rspamd_config:register_symbol {
+      name = name,
+      type = 'callback',
+      execution_parent = id,
+      callback = cb,
+      group = 'rbl',
+      flags = table.concat(flags_tbl, ','),
+      required_inputs = early and { 'connection', 'helo' } or { 'eom' },
+      replay_version = early and 1 or nil,
+      replay_callback = early and replay or nil,
+    }
+
+    description[#description + 1] = phase .. ': ' .. desc
+  end
+
+  if has_envelope then
+    register_part(envelope_sym, 'envelope', replayable)
+    lua_multistage.register_connection_consumer(rspamd_config, envelope_sym)
+
+    if rbl.is_whitelist then
+      envelope_whites[#envelope_whites + 1] = envelope_sym
+    elseif not rbl.ignore_whitelist then
+      envelope_blacks[#envelope_blacks + 1] = envelope_sym
+    end
+  end
+
+  if has_message then
+    register_part(message_sym, 'message', false)
+
+    if has_envelope then
+      -- Reuse answers for a query shared by the two source sets. Each part
+      -- inserts only its own labels, with ordinary settings and shot limits.
+      rspamd_config:register_dependency(message_sym, envelope_sym)
+    end
+
+    if rbl.is_whitelist and rbl.selector then
+      -- Selector labels are arbitrary and can whitelist envelope sources.
+      envelope_whites[#envelope_whites + 1] = message_sym
+    elseif not (rbl.is_whitelist or rbl.ignore_whitelist) then
+      message_blacks[#message_blacks + 1] = message_sym
+    end
+  end
+
+  rspamd_logger.infox(rspamd_config, 'added rbl rule %s: %s',
+      rbl.symbol, table.concat(description, '; '))
+  lua_util.debugm(N, rspamd_config, 'rule dump for %s: %s', rbl.symbol, rbl)
+
+  for _, selector_str in ipairs(rbl.selector_strings or {}) do
+    -- Symbols used by the selector must be checked before the rule
+    selectors.register_dependencies(rspamd_config, message_sym, selector_str)
+  end
+
+  if rbl.dkim then
+    -- Weak: RBL has other query sources; DKIM-domain queries just won't happen
+    rspamd_config:register_dependency(message_sym, 'DKIM_CHECK')
+  end
+
+  if rbl.require_symbols then
+    for _, dep in ipairs(rbl.require_symbols) do
+      rspamd_config:register_dependency(check_sym, dep)
+    end
+  end
+
+  -- Failure symbol
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    flags = 'nostat',
+    name = rbl.symbol .. '_FAIL',
+    parent = id,
+    score = 0.0,
+  }
+
+  local function process_return_code(suffix)
+    local function process_specific_suffix(s)
+      if s ~= rbl.symbol then
+        -- hack
+
         rspamd_config:register_symbol {
           type = 'virtual',
           parent = id,
+          name = s,
           group = 'rbl',
           score = 0,
-          name = prefix .. '_' .. rbl.symbol,
         }
       end
-      if not (rbl.is_whitelist or rbl.ignore_whitelist) then
-        table.insert(black_symbols, rbl.symbol .. '_CHECK')
-      else
-        lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
-            'rbl.ignore_whitelist = %s',
-            rbl.symbol, rbl.is_whitelist, rbl.ignore_whitelist)
-      end
-    else
-      id = rspamd_config:register_symbol {
-        type = 'callback',
-        callback = callback,
-        name = rbl.symbol,
-        groups = { 'rbl' },
-        group = 'rbl',
-        score = 0,
-        flags = table.concat(flags_tbl, ',') .. ',empty'
-      }
-      if not (rbl.is_whitelist or rbl.ignore_whitelist) then
-        table.insert(black_symbols, rbl.symbol)
-      else
-        lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
-            'rbl.ignore_whitelist = %s',
-            rbl.symbol, rbl.is_whitelist, rbl.ignore_whitelist)
-      end
-    end
-
-    local check_sym = rbl.symbols_prefixes and rbl.symbol .. '_CHECK' or rbl.symbol
-    local envelope_sym = check_sym .. '_ENVELOPE'
-    local message_sym = check_sym .. '_MESSAGE'
-
-    local function register_part(name, phase, early)
-      local cb, replay, desc = gen_rbl_callback(rbl, phase, early)
-
-      rspamd_config:register_symbol {
-        name = name,
-        type = 'callback',
-        execution_parent = id,
-        callback = cb,
-        group = 'rbl',
-        flags = table.concat(flags_tbl, ',') .. (phase == 'envelope' and ',empty' or ''),
-        required_inputs = early and { 'connection', 'helo' } or { 'eom' },
-        replay_version = early and 1 or nil,
-        replay_callback = early and replay or nil,
-      }
-
-      description[#description + 1] = phase .. ': ' .. desc
-    end
-
-    if has_envelope then
-      register_part(envelope_sym, 'envelope', replayable)
-      lua_multistage.register_connection_consumer(rspamd_config, envelope_sym)
-
       if rbl.is_whitelist then
-        envelope_whites[#envelope_whites + 1] = envelope_sym
-      elseif not rbl.ignore_whitelist then
-        envelope_blacks[#envelope_blacks + 1] = envelope_sym
-      end
-    end
-
-    if has_message then
-      register_part(message_sym, 'message', false)
-
-      if has_envelope then
-        -- Reuse answers for a query shared by the two source sets. Each part
-        -- inserts only its own labels, with ordinary settings and shot limits.
-        rspamd_config:register_dependency(message_sym, envelope_sym)
-      end
-
-      if rbl.is_whitelist and rbl.selector then
-        -- Selector labels are arbitrary and can whitelist envelope sources.
-        envelope_whites[#envelope_whites + 1] = message_sym
-      elseif not (rbl.is_whitelist or rbl.ignore_whitelist) then
-        message_blacks[#message_blacks + 1] = message_sym
-      end
-    end
-
-    rspamd_logger.infox(rspamd_config, 'added rbl rule %s: %s',
-        rbl.symbol, table.concat(description, '; '))
-    lua_util.debugm(N, rspamd_config, 'rule dump for %s: %s', rbl.symbol, rbl)
-
-    for _, selector_str in ipairs(rbl.selector_strings or {}) do
-      -- Symbols used by the selector must be checked before the rule
-      selectors.register_dependencies(rspamd_config, message_sym, selector_str)
-    end
-
-    if rbl.dkim then
-      -- Weak: RBL has other query sources; DKIM-domain queries just won't happen
-      rspamd_config:register_dependency(message_sym, 'DKIM_CHECK')
-    end
-
-    if rbl.require_symbols then
-      for _, dep in ipairs(rbl.require_symbols) do
-        rspamd_config:register_dependency(check_sym, dep)
-      end
-    end
-
-    -- Failure symbol
-    rspamd_config:register_symbol {
-      type = 'virtual',
-      flags = 'nostat',
-      name = rbl.symbol .. '_FAIL',
-      parent = id,
-      score = 0.0,
-    }
-
-    local function process_return_code(suffix)
-      local function process_specific_suffix(s)
-        if s ~= rbl.symbol then
-          -- hack
-
-          rspamd_config:register_symbol {
-            type = 'virtual',
-            parent = id,
-            name = s,
-            group = 'rbl',
-            score = 0,
-          }
-        end
-        if rbl.is_whitelist then
-          if rbl.whitelist_exception then
-            local found_exception = false
-            for _, e in ipairs(rbl.whitelist_exception) do
-              if e == s then
-                found_exception = true
-                break
-              end
+        if rbl.whitelist_exception then
+          local found_exception = false
+          for _, e in ipairs(rbl.whitelist_exception) do
+            if e == s then
+              found_exception = true
+              break
             end
-            if not found_exception then
-              table.insert(white_symbols, s)
-            end
-          else
+          end
+          if not found_exception then
             table.insert(white_symbols, s)
           end
         else
-          if not rbl.ignore_whitelist then
-            table.insert(black_symbols, s)
-          end
-        end
-      end
-
-      if rbl.symbols_prefixes then
-        for _, prefix in pairs(rbl.symbols_prefixes) do
-          process_specific_suffix(prefix .. '_' .. suffix)
+          table.insert(white_symbols, s)
         end
       else
-        process_specific_suffix(suffix)
-      end
-
-    end
-
-    if rbl.returncodes then
-      for s, _ in pairs(rbl.returncodes) do
-        process_return_code(s)
+        if not rbl.ignore_whitelist then
+          table.insert(black_symbols, s)
+        end
       end
     end
 
-    if rbl.returnbits then
-      for s, _ in pairs(rbl.returnbits) do
-        process_return_code(s)
+    if rbl.symbols_prefixes then
+      for _, prefix in pairs(rbl.symbols_prefixes) do
+        process_specific_suffix(prefix .. '_' .. suffix)
       end
+    else
+      process_specific_suffix(suffix)
     end
 
-    -- Process monitored
-    if not rbl.disable_monitoring then
-      if not monitored_addresses[rbl.rbl] then
-        monitored_addresses[rbl.rbl] = true
-        rbl.monitored = rspamd_config:register_monitored(rbl.rbl, 'dns',
-            get_monitored(rbl))
-      end
-    end
-    return true
   end
 
-  return false
+  if rbl.returncodes then
+    for s, _ in pairs(rbl.returncodes) do
+      process_return_code(s)
+    end
+  end
+
+  if rbl.returnbits then
+    for s, _ in pairs(rbl.returnbits) do
+      process_return_code(s)
+    end
+  end
+
+  -- Process monitored
+  if not rbl.disable_monitoring then
+    if not monitored_addresses[rbl.rbl] then
+      monitored_addresses[rbl.rbl] = true
+      rbl.monitored = rspamd_config:register_monitored(rbl.rbl, 'dns',
+          get_monitored(rbl))
+    end
+  end
+  return true
 end
 
 -- Configuration
@@ -1536,6 +1532,7 @@ rspamd_config:register_symbol {
   group = 'rbl',
   required_inputs = { 'connection', 'helo' },
   replay_version = 1,
+  augmentations = { string.format("timeout=%f", rspamd_config:get_dns_timeout() or 0.0) },
   callback = function(task)
     local whitelist = collect_whitelist(task, true)
     task:cache_set('rbl_envelope_whitelisted', whitelist)

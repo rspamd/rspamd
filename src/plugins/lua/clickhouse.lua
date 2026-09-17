@@ -1051,9 +1051,9 @@ local function clickhouse_collect(task)
     terminal and terminal.policy or '',
     terminal and terminal.policy_recipient or '',
     terminal and terminal.reason or '',
-    terminal and 0 or 1,
-    terminal and 0 or 1,
-    terminal and 0 or 1,
+    (not terminal or terminal.has_headers) and 1 or 0,
+    (not terminal or terminal.has_body) and 1 or 0,
+    (not terminal or terminal.has_mime) and 1 or 0,
   }
 
   -- Attachments step
