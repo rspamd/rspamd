@@ -44,6 +44,101 @@ struct rspamd_symcache_dynamic_item;
 struct rspamd_symcache_item;
 struct rspamd_config_settings_elt;
 
+/* Input availability is independent of the symbol's pipeline stage. */
+enum rspamd_symcache_input {
+	RSPAMD_SYMCACHE_INPUT_CONNECTION = (1u << 0u),
+	RSPAMD_SYMCACHE_INPUT_HELO = (1u << 1u),
+	RSPAMD_SYMCACHE_INPUT_SENDER = (1u << 2u),
+	RSPAMD_SYMCACHE_INPUT_RECIPIENTS = (1u << 3u), /* Complete envelope recipient set */
+	RSPAMD_SYMCACHE_INPUT_HEADERS = (1u << 4u),
+	RSPAMD_SYMCACHE_INPUT_BODY = (1u << 5u),
+	RSPAMD_SYMCACHE_INPUT_MIME = (1u << 6u),
+	RSPAMD_SYMCACHE_INPUT_CONTENT = (1u << 7u),
+	RSPAMD_SYMCACHE_INPUT_EOM = (1u << 8u), /* Legacy callbacks require EOM */
+	RSPAMD_SYMCACHE_INPUT_ENVELOPE = RSPAMD_SYMCACHE_INPUT_CONNECTION |
+		RSPAMD_SYMCACHE_INPUT_HELO |
+		RSPAMD_SYMCACHE_INPUT_SENDER |
+		RSPAMD_SYMCACHE_INPUT_RECIPIENTS,
+	RSPAMD_SYMCACHE_INPUT_ALL = (1u << 9u) - 1u,
+};
+
+/* Returns zero for an unknown input name. */
+unsigned int rspamd_symcache_input_from_string(const char *name);
+ucl_object_t *rspamd_symcache_inputs_to_ucl(unsigned int inputs);
+
+/* Declare callback requirements before its execution plan is built.
+ * Virtual symbols inherit their producer's requirements. Unknown callbacks
+ * remain EOM-only; declaring inputs does not authorize early rejection. */
+gboolean rspamd_symcache_set_symbol_inputs(struct rspamd_symcache *cache,
+										   int id, unsigned int inputs);
+
+enum rspamd_symcache_checkpoint_result {
+	RSPAMD_SYMCACHE_CHECKPOINT_ERROR = -1,
+	RSPAMD_SYMCACHE_CHECKPOINT_PENDING = 0,
+	RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE = 1,
+};
+
+/* Evaluate input-ready filters before the normal task pipeline starts.
+ * The caller supplies an async session, drives pending events, and owns the
+ * deadline. COMPLETE drains this checkpoint without finalizing the task.
+ * Inputs may only grow; EOM is reserved for normal process_symbols calls. */
+enum rspamd_symcache_checkpoint_result rspamd_symcache_process_checkpoint(
+	struct rspamd_task *task, struct rspamd_symcache *cache, unsigned int inputs);
+
+/* Opt in to portable replay before the execution plan is built. A nonzero
+ * version promises that the callback reads only declared immutable inputs and
+ * explicit facts from replayable prerequisites, and writes only raw result
+ * insertions/options and check facts (or state covered by a replay callback).
+ * Mutable admission inputs must be exported and synchronously revalidated by
+ * a replay callback (for example, an audited whitelist gate's visible options
+ * from declared prerequisites). Scores and arbitrary task/Lua state are not
+ * replayable inputs. Bump the version whenever that contract changes. */
+gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
+										   int id, unsigned int version);
+
+/* Attach an independently scheduled check to a public callback. The parent
+ * waits for all parts; parts inherit its settings, conditions and external
+ * dependencies. Ownership is one level deep and must be declared before init. */
+gboolean rspamd_symcache_set_execution_parent(struct rspamd_symcache *cache,
+											  int id, int parent_id);
+
+/* Optional Lua replay_callback(task, facts), called at the producer's EOM
+ * slot before results/facts are published. Validate all facts and mutable
+ * admission inputs first; return false on incompatibility to run normally.
+ * After validation, restore only explicitly exported state and return true.
+ * The callback must be synchronous: no async work, result insertion or other
+ * side effects. Errors/non-boolean returns also fall back; mutations cannot
+ * be rolled back, so validation must precede restoration. Owns cbref on success. */
+gboolean rspamd_symcache_set_symbol_replay_callback(struct rspamd_symcache *cache,
+													int id, lua_State *L, int cbref);
+
+/* Explicitly audit an idempotent callback for terminal execution without a
+ * message. It must declare its inputs/dependencies and use cancellable async
+ * events. It runs at EOM normally, and only after an early terminal decision. */
+gboolean rspamd_symcache_set_terminal_observer(struct rspamd_symcache *cache, int id);
+
+/* Internal, trusted transfer API; not an authentication boundary. The caller
+ * must bind `binding` to the envelope, transaction, policy and configuration,
+ * authenticate remote records and enforce their lifetime before importing.
+ * Export returns an owned object only after a drained checkpoint. Import is
+ * atomic, before any pipeline/checkpoint execution, and changes no results.
+ * Incompatible/malformed records return FALSE so the caller can scan normally.
+ * No public protocol or Lua interface accepts these records. */
+ucl_object_t *rspamd_symcache_export_checkpoint(struct rspamd_task *task,
+												const char *binding);
+gboolean rspamd_symcache_import_checkpoint(struct rspamd_task *task,
+										   const ucl_object_t *record, const char *binding);
+
+/* Facts are copied, bounded JSON-compatible values scoped to the currently
+ * executing producer. Consumers get a borrowed value after the producer ran
+ * or was replayed. These APIs do not serialize arbitrary Lua/mempool state.
+ * Only a DATA checkpoint validates and journals a fact; an ordinary scan
+ * keeps a reference for its dependents without measuring or copying it. */
+gboolean rspamd_symcache_set_check_fact(struct rspamd_task *task,
+										const char *key, const ucl_object_t *value);
+const ucl_object_t *rspamd_symcache_get_check_fact(struct rspamd_task *task,
+												   const char *producer, const char *key);
+
 typedef void (*symbol_func_t)(struct rspamd_task *task,
 							  struct rspamd_symcache_dynamic_item *item,
 							  gpointer user_data);
@@ -300,6 +395,8 @@ struct rspamd_symcache_exec_info {
 	const char *stage;
 	int level;
 	const char *hoisted_by;
+	unsigned int required_inputs;
+	unsigned int effective_inputs; /* Includes prerequisites and safety restrictions */
 };
 
 /**

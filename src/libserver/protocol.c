@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 #include "config.h"
+#include "scan_finalization.h"
+#include "multistage.h"
+#include "symcache/symcache_checkpoint.h"
 #include "rspamd.h"
 #include "message.h"
 #include "utlist.h"
@@ -1813,7 +1816,13 @@ rspamd_protocol_write_ucl(struct rspamd_task *task,
 	GList *dkim_sigs;
 	const ucl_object_t *milter_reply;
 
-	rspamd_task_set_finish_time(task);
+	if (task->early_result) {
+		top = ucl_object_ref(rspamd_task_get_terminal_event(task));
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) ucl_object_unref, top);
+		return top;
+	}
+
 	top = ucl_object_typed_new(UCL_OBJECT);
 
 	rspamd_mempool_add_destructor(task->task_pool,
@@ -1867,7 +1876,7 @@ rspamd_protocol_write_ucl(struct rspamd_task *task,
 							  ucl_object_fromstring(MESSAGE_FIELD_CHECK(task, message_id)),
 							  "message-id", 0, false);
 		ucl_object_insert_key(top,
-							  ucl_object_fromdouble(task->time_real_finish - task->task_timestamp),
+							  ucl_object_fromdouble((isnan(task->time_real_finish) ? ev_time() : task->time_real_finish) - task->task_timestamp),
 							  "time_real", 0, false);
 	}
 
@@ -1960,79 +1969,6 @@ rspamd_protocol_write_ucl(struct rspamd_task *task,
 }
 
 /*
- * Helper: update rolling history and write task log.
- * Shared between v2 and v3 reply handlers.
- */
-static void
-rspamd_protocol_update_history_and_log(struct rspamd_task *task)
-{
-	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		if (task->worker->srv->history) {
-			rspamd_roll_history_update(task->worker->srv->history, task);
-		}
-	}
-	else {
-		msg_debug_protocol("skip history update due to no log flag");
-	}
-
-	rspamd_task_write_log(task);
-}
-
-/*
- * Helper: update action stats, messages_scanned counter, and avg processing time.
- * Shared between v2 and v3 reply handlers.
- */
-static void
-rspamd_protocol_update_stats(struct rspamd_task *task)
-{
-	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
-		struct rspamd_scan_result *metric_res = task->result;
-
-		if (metric_res != NULL) {
-			struct rspamd_action *action = rspamd_check_action_metric(task, NULL, NULL);
-
-			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
-				(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
-#ifndef HAVE_ATOMIC_BUILTINS
-				task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST]++;
-#else
-				__atomic_add_fetch(&task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST],
-								   1, __ATOMIC_RELEASE);
-#endif
-			}
-			else if (action->action_type < METRIC_ACTION_MAX) {
-#ifndef HAVE_ATOMIC_BUILTINS
-				task->worker->srv->stat->actions_stat[action->action_type]++;
-#else
-				__atomic_add_fetch(&task->worker->srv->stat->actions_stat[action->action_type],
-								   1, __ATOMIC_RELEASE);
-#endif
-			}
-		}
-
-#ifndef HAVE_ATOMIC_BUILTINS
-		task->worker->srv->stat->messages_scanned++;
-#else
-		__atomic_add_fetch(&task->worker->srv->stat->messages_scanned,
-						   1, __ATOMIC_RELEASE);
-#endif
-
-		/* Set average processing time */
-		uint32_t slot;
-		float processing_time = task->time_real_finish - task->task_timestamp;
-
-#ifndef HAVE_ATOMIC_BUILTINS
-		slot = task->worker->srv->stat->avg_time.cur_slot++;
-#else
-		slot = __atomic_fetch_add(&task->worker->srv->stat->avg_time.cur_slot,
-								  1, __ATOMIC_RELEASE);
-#endif
-		slot = slot % MAX_AVG_TIME_SLOTS;
-		task->worker->srv->stat->avg_time.avg_time[slot] = processing_time;
-	}
-}
-
-/*
  * Helper: compute the rewritten message body start and length.
  * For milter protocol, skip past the raw headers to return only the body.
  * Shared between v2 and v3 reply handlers.
@@ -2095,9 +2031,7 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 		*pobj = top;
 	}
 
-	rspamd_protocol_update_history_and_log(task);
-
-	if (task->cfg->log_flags & RSPAMD_LOG_FLAG_RE_CACHE) {
+	if (!task->early_result && (task->cfg->log_flags & RSPAMD_LOG_FLAG_RE_CACHE)) {
 		restat = rspamd_re_cache_get_stat(task->re_rt);
 		g_assert(restat != NULL);
 		msg_notice_task(
@@ -2229,11 +2163,17 @@ void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
 	}
 
 end:
-	rspamd_protocol_update_stats(task);
+	return;
 }
 
 void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 {
+	if (task->early_result || rspamd_symcache_is_checkpoint(task) ||
+		(task->finalization_flags & RSPAMD_TASK_LOG_PIPE_WRITTEN)) {
+		return;
+	}
+
+	task->finalization_flags |= RSPAMD_TASK_LOG_PIPE_WRITTEN;
 	struct rspamd_worker_log_pipe *lp;
 	struct rspamd_protocol_log_message_sum *ls;
 	lua_State *L = task->cfg->lua_state;
@@ -2481,7 +2421,7 @@ rspamd_protocol_metadata_add_header(struct rspamd_task *task,
  * Handle metadata from a parsed UCL object for v3 protocol.
  * Maps structured metadata fields to task fields.
  */
-static gboolean
+gboolean
 rspamd_protocol_handle_metadata(struct rspamd_task *task,
 								const ucl_object_t *metadata)
 {
@@ -3039,6 +2979,8 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 		return FALSE;
 	}
 
+	rspamd_multistage_import(task);
+
 	/* Check for file/shm in metadata (zero-copy paths) */
 	const ucl_object_t *file_elt = ucl_object_lookup(metadata_obj, "file");
 	const ucl_object_t *shm_elt = ucl_object_lookup(metadata_obj, "shm");
@@ -3295,8 +3237,6 @@ rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 	int flags = RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS;
 	ucl_object_t *top = rspamd_protocol_write_ucl(task, flags);
 
-	rspamd_protocol_update_history_and_log(task);
-
 	/* Inner result serialization mirrors the input metadata serialization */
 	int out_type = UCL_EMIT_JSON_COMPACT;
 	const char *result_ctype = "application/json";
@@ -3368,8 +3308,6 @@ rspamd_protocol_http_reply_v3(struct rspamd_http_message *msg,
 								  (rspamd_mempool_destruct_t) rspamd_multipart_response_free, resp);
 	rspamd_mempool_add_destructor(task->task_pool,
 								  (rspamd_mempool_destruct_t) rspamd_fstring_free, result_data);
-
-	rspamd_protocol_update_stats(task);
 
 	return pool_ctype;
 }
@@ -3459,37 +3397,45 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 		struct rspamd_stat stat_copy;
 		msg->status = rspamd_fstring_new_init("OK", 2);
 
-		switch (task->cmd) {
-		case CMD_CHECK:
-		case CMD_CHECK_RSPAMC:
-		case CMD_CHECK_SPAMC:
-		case CMD_SKIP:
-		case CMD_CHECK_V2:
-			rspamd_protocol_http_reply(msg, task, NULL, out_type);
-			rspamd_protocol_write_log_pipe(task);
-			break;
-		case CMD_CHECK_V3:
-			ctype = rspamd_protocol_http_reply_v3(msg, task);
-			rspamd_protocol_write_log_pipe(task);
-			break;
-		case CMD_PING:
-			msg_debug_protocol("writing pong to client");
-			rspamd_http_message_set_body(msg, "pong" CRLF, 6);
-			ctype = "text/plain";
-			break;
-		case CMD_METRICS:
-			msg_debug_protocol("writing metrics to client");
+		if (task->multistage) {
+			const rspamd_fstring_t *wire = rspamd_multistage_reply(task);
+			rspamd_http_message_set_body_from_fstring_copy(msg, wire);
+		}
+		else {
+			switch (task->cmd) {
+			case CMD_CHECK:
+			case CMD_CHECK_RSPAMC:
+			case CMD_CHECK_SPAMC:
+			case CMD_SKIP:
+			case CMD_CHECK_V2:
+				rspamd_task_finalize_scan(task);
+				rspamd_protocol_http_reply(msg, task, NULL, out_type);
+				rspamd_protocol_write_log_pipe(task);
+				break;
+			case CMD_CHECK_V3:
+				rspamd_task_finalize_scan(task);
+				ctype = rspamd_protocol_http_reply_v3(msg, task);
+				rspamd_protocol_write_log_pipe(task);
+				break;
+			case CMD_PING:
+				msg_debug_protocol("writing pong to client");
+				rspamd_http_message_set_body(msg, "pong" CRLF, 6);
+				ctype = "text/plain";
+				break;
+			case CMD_METRICS:
+				msg_debug_protocol("writing metrics to client");
 
-			memcpy(&stat_copy, srv->stat, sizeof(stat_copy));
-			output = rspamd_metrics_to_prometheus_string(
-				rspamd_worker_metrics_object(srv->cfg, &stat_copy, now - srv->start_time));
-			rspamd_printf_fstring(&output, "# EOF\n");
-			rspamd_http_message_set_body_from_fstring_steal(msg, output);
-			ctype = "application/openmetrics-text; version=1.0.0; charset=utf-8";
-			break;
-		default:
-			msg_err_protocol("BROKEN");
-			break;
+				memcpy(&stat_copy, srv->stat, sizeof(stat_copy));
+				output = rspamd_metrics_to_prometheus_string(
+					rspamd_worker_metrics_object(srv->cfg, &stat_copy, now - srv->start_time));
+				rspamd_printf_fstring(&output, "# EOF\n");
+				rspamd_http_message_set_body_from_fstring_steal(msg, output);
+				ctype = "application/openmetrics-text; version=1.0.0; charset=utf-8";
+				break;
+			default:
+				msg_err_protocol("BROKEN");
+				break;
+			}
 		}
 	}
 

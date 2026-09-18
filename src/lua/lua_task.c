@@ -27,6 +27,8 @@
 #include "libserver/task.h"
 #include "libserver/cfg_file_private.h"
 #include "libserver/settings_merge.h"
+#include "libserver/symcache/symcache_checkpoint.h"
+#include "libserver/scan_finalization.h"
 #include "libmime/scan_result_private.h"
 #include "libstat/stat_api.h"
 #include "libserver/maps/map_helpers.h"
@@ -1114,6 +1116,45 @@ LUA_FUNCTION_DEF(task, get_metadata);
 LUA_FUNCTION_DEF(task, get_metadata_field);
 
 /***
+ * @method task:set_check_fact(key, value)
+ * Store a bounded value owned by the currently executing check. Portable
+ * checks use facts for state needed by dependents; arbitrary Lua task state
+ * is not replayed. Values can be scalars, dense arrays or string-keyed tables.
+ * @return {boolean} whether the value was stored
+ */
+LUA_FUNCTION_DEF(task, set_check_fact);
+
+/***
+ * @method task:is_checkpoint()
+ * Return true while executing a DATA checkpoint or its terminal observers.
+ * @return {boolean} whether this task is executing without a complete message
+ */
+LUA_FUNCTION_DEF(task, is_checkpoint);
+
+/***
+ * @method task:get_check_fact(producer, key)
+ * Read a fact after its producer ran or was replayed. Declare a dependency on
+ * that producer when consuming its facts. Returns nil before it has run.
+ * @return {any|nil} a copy of the stored value
+ */
+LUA_FUNCTION_DEF(task, get_check_fact);
+
+/***
+ * @method task:get_terminal_event()
+ * Read the DATA decision snapshot in an audited terminal observer, including
+ * input availability and explicit policy. Returns nil for ordinary EOM tasks.
+ * @return {table|nil} a copy of the terminal event
+ */
+LUA_FUNCTION_DEF(task, get_terminal_event);
+
+/***
+ * @method task:set_terminal_observer_error()
+ * Mark a terminal export as failed without changing the frozen DATA decision.
+ * Has no effect on ordinary EOM tasks.
+ */
+LUA_FUNCTION_DEF(task, set_terminal_observer_error);
+
+/***
  * @method task:get_settings_id()
  * Get numeric hash of settings id if specified for this task. 0 is returned otherwise.
  * @return {number} settings-id hash
@@ -1534,6 +1575,11 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, lookup_settings),
 	LUA_INTERFACE_DEF(task, get_metadata),
 	LUA_INTERFACE_DEF(task, get_metadata_field),
+	LUA_INTERFACE_DEF(task, set_check_fact),
+	LUA_INTERFACE_DEF(task, is_checkpoint),
+	LUA_INTERFACE_DEF(task, get_check_fact),
+	LUA_INTERFACE_DEF(task, get_terminal_event),
+	LUA_INTERFACE_DEF(task, set_terminal_observer_error),
 	LUA_INTERFACE_DEF(task, get_settings_id),
 	LUA_INTERFACE_DEF(task, set_settings_id),
 	LUA_INTERFACE_DEF(task, merge_and_apply_settings),
@@ -2423,7 +2469,12 @@ lua_task_adjust_result(lua_State *L)
 	double weight;
 	int i, top;
 
+	if (task && task->early_result) {
+		return luaL_error(L, "cannot adjust a frozen terminal result");
+	}
+
 	if (task != NULL) {
+		rspamd_symcache_checkpoint_invalidate(task);
 
 		symbol_name = luaL_checkstring(L, 2);
 		weight = luaL_checknumber(L, 3);
@@ -6987,6 +7038,154 @@ lua_task_lookup_settings(lua_State *L)
 	}
 
 	return 1;
+}
+
+/* Validate before the general UCL importer recurses or allocates. Raw tables
+ * only: no cycles, metatables, sparse/mixed arrays or userdata/functions. */
+static bool
+lua_check_fact_value(lua_State *L, int idx, unsigned int depth,
+					 unsigned int *nodes, size_t *bytes)
+{
+	if (depth > 8 || ++*nodes > 1024 || *bytes > 32768) {
+		return false;
+	}
+
+	switch (lua_type(L, idx)) {
+	case LUA_TNIL:
+	case LUA_TBOOLEAN:
+		return true;
+	case LUA_TNUMBER:
+		return isfinite(lua_tonumber(L, idx));
+	case LUA_TSTRING: {
+		size_t len;
+		lua_tolstring(L, idx, &len);
+		*bytes += len;
+		return *bytes <= 32768;
+	}
+
+	case LUA_TTABLE: {
+		unsigned int numeric = 0, strings = 0, max_index = 0;
+
+		if (lua_getmetatable(L, idx)) {
+			lua_pop(L, 1);
+			return false;
+		}
+
+		idx = lua_absindex(L, idx);
+		lua_pushnil(L);
+
+		while (lua_next(L, idx)) {
+			bool valid_key = false;
+
+			if (lua_type(L, -2) == LUA_TSTRING) {
+				size_t len;
+				const char *key = lua_tolstring(L, -2, &len);
+
+				valid_key = len > 0 && len <= 256 && strlen(key) == len;
+				*bytes += len;
+				strings++;
+			}
+			else if (lua_type(L, -2) == LUA_TNUMBER) {
+				lua_Number n = lua_tonumber(L, -2);
+
+				valid_key = n >= 1 && n <= 1024 && n == floor(n);
+
+				if (valid_key) {
+					max_index = MAX(max_index, (unsigned int) n);
+					numeric++;
+				}
+			}
+
+			if (!valid_key || !lua_check_fact_value(L, -1, depth + 1, nodes, bytes)) {
+				lua_pop(L, 2);
+				return false;
+			}
+
+			lua_pop(L, 1);
+		}
+
+		return numeric == 0 || (strings == 0 && max_index == numeric);
+	}
+
+	default:
+		return false;
+	}
+}
+
+static int
+lua_task_set_check_fact(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	size_t keylen;
+	const char *key = luaL_checklstring(L, 2, &keylen);
+	unsigned int nodes = 0;
+	size_t bytes = 0;
+	ucl_object_t *value;
+
+	if (keylen == 0 || keylen > 256 || strlen(key) != keylen ||
+		!lua_check_fact_value(L, 3, 0, &nodes, &bytes)) {
+		return luaL_error(L, "check facts require a bounded scalar, array or string-keyed table");
+	}
+
+	value = ucl_object_lua_import(L, 3);
+	lua_pushboolean(L, rspamd_symcache_set_check_fact(task, key, value));
+	ucl_object_unref(value);
+	return 1;
+}
+
+static int
+lua_task_is_checkpoint(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	lua_pushboolean(L, rspamd_symcache_is_checkpoint(task));
+	return 1;
+}
+
+static int
+lua_task_get_check_fact(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	size_t producer_len, keylen;
+	const char *producer = luaL_checklstring(L, 2, &producer_len);
+	const char *key = luaL_checklstring(L, 3, &keylen);
+	const ucl_object_t *value = NULL;
+
+	if (strlen(producer) == producer_len && strlen(key) == keylen) {
+		value = rspamd_symcache_get_check_fact(task, producer, key);
+	}
+
+	if (value) {
+		return ucl_object_push_lua(L, value, true);
+	}
+
+	lua_pushnil(L);
+	return 1;
+}
+
+static int
+lua_task_get_terminal_event(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const ucl_object_t *event = rspamd_task_get_terminal_event(task);
+
+	if (event) {
+		return ucl_object_push_lua(L, event, true);
+	}
+
+	lua_pushnil(L);
+	return 1;
+}
+
+static int
+lua_task_set_terminal_observer_error(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+	rspamd_task_terminal_observer_error(task);
+
+	return 0;
 }
 
 static int

@@ -22,6 +22,7 @@
 #include "libserver/maps/map.h"
 #include "libutil/upstream.h"
 #include "libserver/protocol.h"
+#include "libserver/multistage.h"
 #include "libserver/cfg_file.h"
 #include "libserver/url.h"
 #include "libserver/dns.h"
@@ -84,6 +85,7 @@ struct rspamd_worker_session {
 	gboolean is_local;
 	/* Whether this session is currently accounted in worker->nconns */
 	gboolean counted;
+	gboolean data_request;
 };
 /*
  * Reduce number of tasks proceeded
@@ -138,6 +140,16 @@ rspamd_worker_session_task_dtor(gpointer arg)
 	g_free(session);
 }
 
+static void
+rspamd_worker_data_reply(struct rspamd_task *task, const rspamd_fstring_t *reply, void *ud)
+{
+	if (!reply && !task->err) {
+		g_set_error(&task->err, g_quark_from_static_string("multistage"), 503, "DATA response unavailable");
+	}
+
+	rspamd_protocol_write_reply(task, 5.0, task->worker->srv);
+}
+
 static int
 rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 						   struct rspamd_http_message *msg,
@@ -150,6 +162,13 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 	gboolean debug_mempool = FALSE;
 
 	ctx = session->ctx;
+	/* DATA may finish synchronously. Start it from the HTTP read completion,
+	 * so that completion cannot mistake a queued reply for a completed write. */
+	if (!session->data_request && msg->url && msg->url->len == 10 &&
+		memcmp(msg->url->str, "/checkdata", 10) == 0) {
+		session->data_request = TRUE;
+		return 0;
+	}
 
 	/* Check debug */
 	if ((hv_tok = rspamd_http_message_find_header(msg, "Memory")) != NULL) {
@@ -214,6 +233,19 @@ rspamd_worker_body_handler(struct rspamd_http_connection *conn,
 	}
 
 	/* Set up async session */
+	if (msg->url && msg->url->len == 10 && memcmp(msg->url->str, "/checkdata", 10) == 0) {
+		task->guard_ev.data = task;
+		ev_io_init(&task->guard_ev, rspamd_worker_guard_handler, task->sock, EV_READ);
+		ev_io_start(task->event_loop, &task->guard_ev);
+
+		if (!rspamd_multistage_start(task, msg, rspamd_worker_data_reply, NULL)) {
+			task->s = rspamd_task_create_session(task, task->task_pool, NULL, NULL, (event_finalizer_t) rspamd_task_free);
+			rspamd_worker_data_reply(task, NULL, NULL);
+		}
+
+		return 0;
+	}
+
 	task->s = rspamd_task_create_session(task, task->task_pool, rspamd_task_fin,
 										 NULL, (event_finalizer_t) rspamd_task_free);
 
@@ -357,6 +389,12 @@ rspamd_worker_finish_handler(struct rspamd_http_connection *conn,
 	/* Read the comment to rspamd_worker_error_handler */
 
 	if (session->magic == G_MAXINT64) {
+		if (session->data_request && !session->task) {
+			gsize len;
+			const char *body = rspamd_http_message_get_body(msg, &len);
+			return rspamd_worker_body_handler(conn, msg, body, len);
+		}
+
 		task = session->task;
 	}
 	else {

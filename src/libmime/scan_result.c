@@ -21,6 +21,8 @@
 #include "lua/lua_common.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/scan_result_private.h"
+#include "libserver/symcache/symcache_checkpoint.h"
+#include "libserver/scan_finalization.h"
 #include "rspamd_simdutf.h"
 #include <math.h>
 #include "contrib/uthash/utlist.h"
@@ -187,6 +189,12 @@ bool rspamd_add_passthrough_result(struct rspamd_task *task,
 								   struct rspamd_scan_result *scan_result)
 {
 	struct rspamd_passthrough_result *pr;
+
+	if (task->early_result) {
+		return false;
+	}
+
+	rspamd_symcache_checkpoint_invalidate(task);
 
 	if (scan_result == NULL) {
 		scan_result = task->result;
@@ -574,6 +582,11 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 {
 	struct rspamd_symbol_result *symbol_result = NULL, *ret = NULL;
 	struct rspamd_scan_result *mres;
+	gboolean provisional = rspamd_symcache_is_checkpoint(task);
+
+	if (task->early_result) {
+		return NULL;
+	}
 
 	/*
 	 * We allow symbols to be inserted for skipped tasks, as it might be a
@@ -584,6 +597,10 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 					 symbol);
 
 		return NULL;
+	}
+
+	if (task->symcache_checkpoint) {
+		rspamd_symcache_checkpoint_insert_begin(task, symbol, weight, opt, flags, result);
 	}
 
 	if (result == NULL) {
@@ -633,7 +650,7 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 				ret = symbol_result;
 
 				/* Process cache item */
-				if (symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
+				if (!provisional && symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
 					rspamd_symcache_inc_frequency(task->cfg->cache,
 												  symbol_result->sym->cache_item,
 												  symbol_result->sym->name);
@@ -658,7 +675,7 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 
 		if (result->name == NULL) {
 			/* Process cache item */
-			if (symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
+			if (!provisional && symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
 				rspamd_symcache_inc_frequency(task->cfg->cache,
 											  symbol_result->sym->cache_item,
 											  symbol_result->sym->name);
@@ -666,7 +683,24 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 		}
 	}
 
+	if (task->symcache_checkpoint) {
+		rspamd_symcache_checkpoint_insert_end(task, ret);
+	}
+
 	return ret;
+}
+
+/* Direct same-task completion also publishes each provisional symbol once.
+ * Fresh-task replay uses ordinary insertion instead. Terminal early rejects
+ * invoke this from their separate accounting path. */
+void rspamd_symcache_checkpoint_flush_frequencies(struct rspamd_task *task)
+{
+	struct rspamd_symbol_result *s;
+	kh_foreach_value(task->result->symbols, s, {
+		if (task->cfg->cache && s->sym) {
+			rspamd_symcache_inc_frequency(task->cfg->cache, s->sym->cache_item, s->sym->name);
+		}
+	});
 }
 
 static char *
@@ -778,6 +812,14 @@ rspamd_task_add_result_option(struct rspamd_task *task,
 	khiter_t k;
 	int r;
 	struct rspamd_symbol_result *cur;
+
+	if (task->early_result) {
+		return FALSE;
+	}
+
+	if (task->symcache_checkpoint) {
+		rspamd_symcache_checkpoint_option(task, s, val, vlen);
+	}
 
 	if (s && val) {
 		/*
@@ -912,6 +954,14 @@ rspamd_check_action_metric(struct rspamd_task *task,
 	struct rspamd_passthrough_result *pr, *sel_pr = NULL;
 	double max_score = -(G_MAXDOUBLE), sc;
 	gboolean seen_least = FALSE;
+
+	if (task->early_result) {
+		if (ppr) {
+			*ppr = NULL;
+		}
+
+		return rspamd_task_get_early_action(task);
+	}
 
 	if (scan_result == NULL) {
 		scan_result = task->result;
@@ -1083,6 +1133,12 @@ struct rspamd_symbol_result *rspamd_task_remove_symbol_result(
 {
 	struct rspamd_symbol_result *res = NULL;
 	khiter_t k;
+
+	if (task->early_result) {
+		return NULL;
+	}
+
+	rspamd_symcache_checkpoint_invalidate(task);
 
 	if (result == NULL) {
 		/* Use default result */
