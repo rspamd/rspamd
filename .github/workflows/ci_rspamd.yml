@@ -192,11 +192,3 @@ jobs:
           name: rspamdlog-${{ inputs.name }}
           path: ${{ env.CONTAINER_WORKSPACE }}/build/robot-save
           retention-days: 1
-
-      - name: Upload built rspamd
-        if: inputs.name == 'ubuntu-ci-amd64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: rspamd-binary-${{ inputs.name }}
-          path: ${{ github.workspace }}/install
-          retention-days: 1

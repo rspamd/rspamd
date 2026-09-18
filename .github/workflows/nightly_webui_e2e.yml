@@ -1,0 +1,76 @@
+name: Nightly WebUI E2E
+
+# The Playwright WebUI suite used to run on every push and pull request as part
+# of `ci`. It exercises a live rspamd + a real browser, so it is both slow and
+# the flakiest thing in the tree, and it fails for reasons unrelated to the
+# change under review on the overwhelming majority of PRs (which touch neither
+# the controller nor `interface/`). It runs nightly against master instead, and
+# on demand via workflow_dispatch when a change does touch the WebUI.
+#
+# Unlike the old in-`ci` job it cannot reuse the install tree uploaded by the
+# `ubuntu_amd64` build, so it builds rspamd itself first -- a plain build with
+# no unit/functional tests, since master CI has already run those.
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    # Daily at 03:00 UTC (integration-test.yml already occupies 02:00).
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-webui-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build rspamd (ubuntu-ci-amd64)
+    # Don't burn scheduled runner time in forks; workflow_dispatch still works.
+    if: github.event_name != 'schedule' || github.repository == 'rspamd/rspamd'
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
+      options: --user root
+    steps:
+      - name: Create directories
+        run: |
+          sudo mkdir -p ${GITHUB_WORKSPACE}
+          sudo chown -R build:build ${GITHUB_WORKSPACE}
+
+      - name: Check out source code
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Run cmake
+        run: |
+          mkdir ${GITHUB_WORKSPACE}/build
+          cd ${GITHUB_WORKSPACE}/build
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install \
+            -DCMAKE_RULE_MESSAGES=OFF \
+            -DENABLE_LIBUNWIND=ON \
+            -DENABLE_HYPERSCAN=ON \
+            -DENABLE_LUAJIT=ON \
+            -DENABLE_JEMALLOC=ON \
+            -GNinja ${GITHUB_WORKSPACE}/src
+
+      - name: Build rspamd
+        run: |
+          cd ${GITHUB_WORKSPACE}/build
+          ninja -j $(getconf _NPROCESSORS_ONLN) install
+
+      - name: Upload built rspamd
+        uses: actions/upload-artifact@v4
+        with:
+          name: rspamd-binary-ubuntu-ci-amd64
+          path: ${{ github.workspace }}/install
+          retention-days: 1
+
+  webui-e2e-playwright:
+    needs: build
+    uses: ./.github/workflows/ci_webui_e2e_playwright.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
+      name: ubuntu-ci-amd64
