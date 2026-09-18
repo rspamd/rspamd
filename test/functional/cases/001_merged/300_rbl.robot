@@ -63,18 +63,70 @@ CONTENT URLS
   Expect Symbol With Option  URIBL_WITHCONTENT  8.8.8.8:url
   Expect Symbol With Exact Options  URIBL_CONTENTONLY  example.com:url
 
-SELECTORS
+SELECTORS SEPARATE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  From=user@example.com  Helo=example.org
   ...  Settings={symbols_enabled = [RBL_SELECTOR_SINGLE, RBL_SELECTOR_MULTIPLE]}
   Expect Symbol With Exact Options  RBL_SELECTOR_SINGLE  example.org:selector
-  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.com:sel_from
-  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
+  # Different domains -> different DNS queries -> not merged, one option each
+  Expect Symbol With Exact Options  RBL_SELECTOR_MULTIPLE  example.com:sel_from  example.org:sel_helo
 
 SELECTORS COMBINED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  From=user@example.org  Helo=example.org
   ...  Settings={symbols_enabled = [RBL_SELECTOR_MULTIPLE]}
-  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_from
-  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
+  # Same domain -> same DNS query -> merged into a single, comma-joined option
+  Expect Symbol With Exact Options  RBL_SELECTOR_MULTIPLE  example.org:sel_from,sel_helo
+
+SELECTORS MERGED FAIL
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_MERGED_ERR]}
+  # A failing merged query reports every origin, not an arbitrary one
+  Expect Symbol With Exact Options  RBL_MERGED_ERR_FAIL
+  ...  FAILTEST.EXAMPLE:server fail  failtest.example:server fail
+  Expect Symbol With Score  RBL_MERGED_ERR_FAIL  1.0
+
+SELECTORS HASHED TRAILING DOT
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_HASH]}
+  # The trailing dot is stripped before hashing, so both spellings hash alike
+  Expect Symbol With Exact Options  RBL_SELECTOR_HASH  example.org:plain  example.org.:dotted
+
+SELECTORS COMBINED DISABLED
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_NOMERGE]}
+  # merge_checks = false -> one option (and one score shot) per check
+  Expect Symbol With Exact Options  RBL_SELECTOR_NOMERGE  example.org:sel_from  example.org:sel_helo
+  Expect Symbol With Score  RBL_SELECTOR_NOMERGE  4.0
+
+SELECTORS COMBINED SYMBOL PREFIXES
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_PREFIXES_CHECK]}
+  Expect Symbol With Exact Options  RBL_CODE_2  example.org:from
+  Expect Symbol With Exact Options  RECEIVED_CODE_2  example.org:received
+  # Merging the query does not merge the symbols: each prefix scores in full
+  Expect Symbol With Score  RBL_CODE_2  2.0
+  Expect Symbol With Score  RECEIVED_CODE_2  3.0
+
+SELECTORS CASE INSENSITIVE
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_CASE]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_CASE  example.org:lower  EXAMPLE.ORG:upper
+  # Both origins are the same listing, so the score is only counted once
+  Expect Symbol With Score  RBL_SELECTOR_CASE  2.0
+
+SELECTOR IP USERDATA
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  IP=1.2.3.4
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_IP]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_IP  1.2.3.4:selector
+
+SELECTORS RESOLVE IP COMBINED
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_RESOLVE]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_RESOLVE_HIT  8.8.8.9:example.ru:first,second
+
+SELECTORS MERGED WHITELIST
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_WL]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_WL_HIT  example.org:plain  example.org.:dotted
 
 NUMERIC URLS
   Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
