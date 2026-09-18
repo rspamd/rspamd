@@ -314,6 +314,13 @@ void rspamd_regexp_map_clear_pending(void);
 void rspamd_regexp_map_remove_pending(const char *name);
 
 /**
+ * Drop every queue entry that refers to this helper. Called when a helper is
+ * destroyed so that the queue never outlives the map version it points to.
+ * @param re_map helper being destroyed
+ */
+void rspamd_regexp_map_forget_pending(struct rspamd_regexp_map_helper *re_map);
+
+/**
  * Compile all queued regexp maps to the hyperscan cache and notify the workers
  * so that they hot-swap the databases, clearing the queue afterwards. Nothing
  * happens if a compilation is already in progress or the queue is empty.
