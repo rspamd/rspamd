@@ -58,6 +58,8 @@ enum rspamd_map_periodic_opts {
 	RSPAMD_MAP_SCHEDULE_ERROR = (1u << 0u),
 	RSPAMD_MAP_SCHEDULE_LOCKED = (1u << 1u),
 	RSPAMD_MAP_SCHEDULE_INIT = (1u << 2u),
+	/* The map file has just been truncated: an editor is likely rewriting it */
+	RSPAMD_MAP_SCHEDULE_TRUNCATED = (1u << 3u),
 };
 
 static void free_http_cbdata_common(struct http_callback_data *cbd,
@@ -1518,15 +1520,25 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 		timeout = map->poll_timeout;
 
 		if (how & RSPAMD_MAP_SCHEDULE_INIT) {
-			if (map->non_trivial && map->active_http) {
+			if (how & RSPAMD_MAP_SCHEDULE_TRUNCATED) {
+				/*
+				 * Editors that save in place truncate the file and write it
+				 * afterwards; give the write a chance to finish instead of
+				 * swapping an empty map in for that window. A further stat
+				 * event reschedules the check at once when the size changes.
+				 */
+				timeout = min_timer_interval;
+				reason = "map file truncated, waiting for the write to finish";
+			}
+			else if (map->non_trivial && map->active_http) {
 				/* Spill maps load to get better chances to hit ssl cache */
 				timeout = rspamd_time_jitter(0.0, 2.0);
+				reason = "init scheduled check";
 			}
 			else {
 				timeout = 0.0;
+				reason = "init scheduled check";
 			}
-
-			reason = "init scheduled check";
 		}
 		else {
 			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
@@ -2709,6 +2721,7 @@ static void
 rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 {
 	struct rspamd_map *map = (struct rspamd_map *) w->data;
+	int how = RSPAMD_MAP_SCHEDULE_INIT;
 
 	if (w->attr.st_nlink > 0) {
 		msg_info_map("old mtime is %t (size = %Hz), "
@@ -2716,6 +2729,12 @@ rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 					 w->prev.st_mtime, (gsize) w->prev.st_size,
 					 w->attr.st_mtime, (gsize) w->attr.st_size,
 					 w->path);
+
+		if (w->attr.st_size == 0 && w->prev.st_size > 0) {
+			msg_info_map("map file %s has been truncated, deferring the reread",
+						 w->path);
+			how |= RSPAMD_MAP_SCHEDULE_TRUNCATED;
+		}
 
 		/* Fire need modify flag */
 		struct rspamd_map_backend *bk;
@@ -2736,7 +2755,7 @@ rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 			map->scheduled_check = NULL;
 		}
 
-		rspamd_map_schedule_periodic(map, RSPAMD_MAP_SCHEDULE_INIT);
+		rspamd_map_schedule_periodic(map, how);
 	}
 }
 
