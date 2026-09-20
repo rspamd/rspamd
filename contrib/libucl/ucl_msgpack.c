@@ -1386,9 +1386,18 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 		CONSUME_RET;
 
 
-		/* Insert value to the container and check if we have finished array */
+		/*
+		 * Insert value to the container and check if we have finished array.
+		 * A zero length value has no payload of its own, so reading its type
+		 * consumes the last byte of the chunk and the loop ends before the
+		 * value state runs; the pair is completed here instead. An array does
+		 * not care about the key, but a map does, and the key read just
+		 * before is still the one this value belongs to.
+		 */
 		if (parser->cur_obj) {
-			if (!ucl_msgpack_insert_object(parser, NULL, 0,
+			if (!ucl_msgpack_insert_object(parser,
+				state == read_assoc_value ? key : NULL,
+				state == read_assoc_value ? (size_t) keylen : 0,
 				parser->cur_obj)) {
 				return false;
 			}

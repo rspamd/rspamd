@@ -591,24 +591,17 @@ TEST_SUITE("ucl limits")
 		return top;
 	}
 
-	/*
-	 * fixmap{"b": bin8 holding `payload`, "c": 1}. The trailing pair is there
-	 * because a zero length value in the last position of a map does not
-	 * currently parse at all, which would hide the empty case below.
-	 */
+	/* fixmap{"b": bin8 holding `payload`} */
 	static std::string msgpack_binary(const std::string &payload)
 	{
 		std::string res;
 
-		res += '\x82';
+		res += '\x81';
 		res += '\xa1';
 		res += 'b';
 		res += '\xc4';
 		res += (char) payload.size();
 		res += payload;
-		res += '\xa1';
-		res += 'c';
-		res += '\x01';
 
 		return res;
 	}
@@ -649,6 +642,68 @@ TEST_SUITE("ucl limits")
 		CHECK(len == 0);
 
 		ucl_object_unref(top);
+	}
+
+	/*
+	 * A zero length value carries no payload, so reading its type consumes the
+	 * last byte of the document and the state machine finishes the value after
+	 * its loop rather than inside it. That tail used to insert without a key,
+	 * which an array does not mind and a map cannot accept.
+	 */
+	TEST_CASE("a map ending in an empty value parses")
+	{
+		SUBCASE("empty string")
+		{
+			/* fixmap{"b": fixstr of 0} */
+			std::string doc;
+			doc += '\x81';
+			doc += '\xa1';
+			doc += 'b';
+			doc += '\xa0';
+
+			ucl_object_t *top = parse_msgpack_from_heap(doc);
+			REQUIRE(top != nullptr);
+
+			const ucl_object_t *b = ucl_object_lookup(top, "b");
+			REQUIRE(b != nullptr);
+			CHECK(ucl_object_type(b) == UCL_STRING);
+			CHECK(b->len == 0);
+
+			ucl_object_unref(top);
+		}
+
+		SUBCASE("empty binary string")
+		{
+			ucl_object_t *top = parse_msgpack_from_heap(msgpack_binary(""));
+			REQUIRE(top != nullptr);
+
+			const ucl_object_t *b = ucl_object_lookup(top, "b");
+			REQUIRE(b != nullptr);
+			CHECK(b->len == 0);
+
+			ucl_object_unref(top);
+		}
+
+		SUBCASE("nested array ending in an empty string keeps its own key")
+		{
+			/* fixmap{"b": [""]} - the array must not inherit the map's key */
+			std::string doc;
+			doc += '\x81';
+			doc += '\xa1';
+			doc += 'b';
+			doc += '\x91';
+			doc += '\xa0';
+
+			ucl_object_t *top = parse_msgpack_from_heap(doc);
+			REQUIRE(top != nullptr);
+
+			const ucl_object_t *arr = ucl_object_lookup(top, "b");
+			REQUIRE(arr != nullptr);
+			REQUIRE(ucl_object_type(arr) == UCL_ARRAY);
+			CHECK(ucl_array_size(arr) == 1);
+
+			ucl_object_unref(top);
+		}
 	}
 
 	TEST_CASE("implicit array chains are fully released")
