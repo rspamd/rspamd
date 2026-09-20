@@ -33,11 +33,22 @@ RBL RECEIVED HIT
   ...  Settings={symbols_enabled = [FAKE_RECEIVED_RBL_FAKE_RBL_UNKNOWN]}
   Expect Symbol  FAKE_RECEIVED_RBL_CODE_3
 
+# RBL_CALLBACK_WHITE has to be enabled explicitly: it is what turns the hits of
+# the whitelist rules into the exclusion list the blacklist rules consult, so
+# without it the `Do Not Expect` below would hold for the wrong reason. Same for
+# FAKE_RBL_UNKNOWN_CHECK rather than FAKE_RBL_UNKNOWN: the rule has
+# symbols_prefixes, so _CHECK is the name of its callback.
 RBL FROM HIT WL
   Scan File  ${MESSAGE}  IP=4.3.2.4
-  ...  Settings={symbols_enabled = [FAKE_RBL_UNKNOWN, FAKE_WL_RBL_UNKNOWN]}
+  ...  Settings={symbols_enabled = [RBL_CALLBACK_WHITE, FAKE_RBL_UNKNOWN_CHECK, FAKE_WL_RBL_UNKNOWN]}
   Do Not Expect Symbol  FAKE_RBL_CODE_2
   Expect Symbol With Exact Options  FAKE_WL_RBL_CODE_2  4.3.2.4:from
+
+RBL FROM HIT WL IPV6
+  Scan File  ${MESSAGE}  IP=2001:db8::1
+  ...  Settings={symbols_enabled = [RBL_CALLBACK_WHITE, FAKE_RBL_UNKNOWN_CHECK, FAKE_WL_RBL_UNKNOWN]}
+  Do Not Expect Symbol  FAKE_RBL_CODE_2
+  Expect Symbol With Exact Options  FAKE_WL_RBL_CODE_2  2001:db8::1:from
 
 EMAILBL Compose Map 1
   Scan File  ${RSPAMD_TESTDIR}/messages/url14.eml

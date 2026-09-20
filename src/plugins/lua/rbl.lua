@@ -1401,6 +1401,31 @@ for key, rbl in pairs(opts.rbls) do
   end -- rbl.enabled
 end
 
+-- Split an option produced by `make_option` back into the checked element and
+-- the check label. The option is either `<elt>:<label>` or, when the rule
+-- reports the DNS reply, `<elt>:<label>:<reply ip>`. `<elt>` is whatever was
+-- looked up and may itself contain colons -- an IPv6 address most notably --
+-- so the fields have to be taken from the right, not from the left.
+local function rbl_split_option(opt)
+  local elt, what = opt:match('^(.*):([^:]+)$')
+
+  if not elt then
+    return nil
+  end
+
+  -- The trailing field is the DNS reply address rather than the label: the
+  -- reply is always a dotted quad and a label never is, so this is unambiguous.
+  if what:match('^%d+%.%d+%.%d+%.%d+$') then
+    elt, what = elt:match('^(.*):([^:]+)$')
+
+    if not elt then
+      return nil
+    end
+  end
+
+  return elt, what
+end
+
 -- We now create two symbols:
 -- * RBL_CALLBACK_WHITE that depends on all symbols white
 -- * RBL_CALLBACK that depends on all symbols black to participate in depends chains
@@ -1414,7 +1439,7 @@ local function rbl_callback_white(task)
         ws.options = {}
       end
       for _, opt in ipairs(ws.options) do
-        local elt, what = opt:match('^([^:]+):([^:]+)')
+        local elt, what = rbl_split_option(opt)
         lua_util.debugm(N, task, 'found whitelist from %s: %s(%s)', w,
             elt, what)
         if elt and what then
