@@ -990,6 +990,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 	return 0;
 
 err:
+	if (in != NULL) {
+		/* Failed after the shmem segment has been mapped */
+		munmap(in, dlen);
+	}
+
 	cbd->periodic->errored = 1;
 	rspamd_map_process_periodic(cbd->periodic);
 	MAP_RELEASE(cbd, "http_callback_data");
