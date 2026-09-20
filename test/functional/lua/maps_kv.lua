@@ -108,3 +108,36 @@ rspamd_config:register_symbol({
     }, cb, task)
   end,
 })
+
+-- A map served with Transfer-Encoding: chunked. Rspamd grows a shared memory
+-- buffer for such a reply, so the segment is larger than the body itself; the
+-- map consumer used to be handed the whole segment, i.e. the body followed by
+-- the raw tail of the last socket read and zero padding (#6261).
+local chunked_map_status
+rspamd_config:add_map({
+  url = string.format("http://127.0.0.1:%d/map-chunked", dummy_http_port),
+  description = 'chunked http map',
+  type = 'callback',
+  callback = function(data)
+    local marker = 'CHUNKED_MAP_END\n'
+    if string.sub(data, -#marker) == marker then
+      chunked_map_status = 'no worry'
+    else
+      chunked_map_status = string.format(
+        'map data does not end with the marker: %s bytes', #data)
+      -- Only the process that actually performs the HTTP fetch sees the
+      -- corruption (the others read the correct length from the shared
+      -- memory cache), and it is not necessarily a scanning worker, so
+      -- report it via the log as well
+      rspamd_logger.errx('CHUNKED_MAP_BAD: %s', chunked_map_status)
+    end
+  end,
+})
+
+rspamd_config:register_symbol({
+  name = 'CHUNKED_HTTP_MAP',
+  score = 1.0,
+  callback = function()
+    return true, chunked_map_status or 'map is not loaded'
+  end,
+})

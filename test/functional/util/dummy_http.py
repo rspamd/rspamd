@@ -34,6 +34,20 @@ class MainHandler(tornado.web.RequestHandler):
             # Return a string 'hello map'
             self.set_header("Content-Type", "text/plain")
             self.write("hello map")
+        elif path == '/map-chunked':
+            # Return a sizeable map body with Transfer-Encoding: chunked:
+            # flushing before the reply is finished makes Tornado omit
+            # Content-Length and use chunked encoding. Rspamd has to grow its
+            # receive buffer for such a reply, and used to hand the whole
+            # buffer (body plus the raw tail of the last socket read plus zero
+            # padding) to the map consumer, see #6261.
+            self.set_header("Content-Type", "text/plain")
+            yield self.flush()
+            for i in range(16384):
+                self.write("chunked map line %d\n" % i)
+                if i % 1024 == 0:
+                    yield self.flush()
+            self.write("CHUNKED_MAP_END\n")
         elif path == '/map-query':
             # Parse the 'key' argument from the HTTP request
             key = self.get_query_argument("key", default=None)
@@ -95,7 +109,11 @@ class MainHandler(tornado.web.RequestHandler):
         hdrs = ", ".join(f"{k}={v}" for k, v in self.request.headers.get_all())
         print(f"dummy_http.py: HEAD {path} headers: {hdrs}", file=sys.stderr)
         self.set_header("Content-Type", "text/plain")
-        if path == "/redirect1":
+        if path == "/map-chunked":
+            # Rspamd checks a map with HEAD before fetching it with GET, so
+            # this has to be a plain 200 (the catch-all below is not).
+            self.set_status(200)
+        elif path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
         elif path == "/redirect2":

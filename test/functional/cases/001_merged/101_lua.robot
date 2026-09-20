@@ -50,6 +50,11 @@ External Maps Simple
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [EXTERNAL_MAP]}
   Expect Symbol With Exact Options  EXTERNAL_MAP  +hello map
 
+Chunked Http Map
+  Wait Until Keyword Succeeds  10x  0.5s  Check Chunked Http Map
+  ${bad} =  Grep File  ${RSPAMD_TMPDIR}/rspamd.log  CHUNKED_MAP_BAD
+  Should Be Empty  ${bad}  chunked map was corrupted in the fetching worker
+
 Task Inject Url
   Scan File  ${URL_ICS}  Settings={symbols_enabled = [TEST_INJECT_URL]}
   Expect Symbol  TEST_INJECT_URL
@@ -97,3 +102,8 @@ Group Score Mix 4
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [GR_POSITIVE16, GR_NEGATIVE16]}
   Expect Symbol With Score  GR_POSITIVE16  10
   Expect Symbol With Score  GR_NEGATIVE16  -16
+
+*** Keywords ***
+Check Chunked Http Map
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [CHUNKED_HTTP_MAP]}
+  Expect Symbol With Exact Options  CHUNKED_HTTP_MAP  no worry
