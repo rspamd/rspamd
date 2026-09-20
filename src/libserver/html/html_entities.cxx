@@ -2550,7 +2550,12 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		return false;
 	};
 
-	if (norm_spaces && g_ascii_isspace(*h)) {
+	/*
+	 * Peek at the first byte to start inside a run of spaces rather than
+	 * emitting one for it. There is no such byte for an empty input, and
+	 * the caller is not required to keep one readable past the end.
+	 */
+	if (len > 0 && norm_spaces && g_ascii_isspace(*h)) {
 		state = parser_state::skip_start_spaces;
 	}
 
