@@ -903,6 +903,13 @@ void rspamd_map_helper_destroy_regexp(struct rspamd_regexp_map_helper *re_map)
 		return;
 	}
 
+	/*
+	 * The compilation queue keeps raw pointers to the helpers: a reload that
+	 * does not queue its new version (an empty or a small map, a read error)
+	 * would otherwise leave a dangling entry behind, see #6263
+	 */
+	rspamd_regexp_map_forget_pending(re_map);
+
 #ifdef WITH_HYPERSCAN
 	if (re_map->hs_scratch) {
 		hs_free_scratch(re_map->hs_scratch);
@@ -2013,6 +2020,32 @@ void rspamd_regexp_map_remove_pending(const char *name)
 			g_array_remove_index(pending_regexp_maps, i);
 
 			return;
+		}
+	}
+}
+
+void rspamd_regexp_map_forget_pending(struct rspamd_regexp_map_helper *re_map)
+{
+	if (pending_regexp_maps == NULL || re_map == NULL) {
+		return;
+	}
+
+	struct rspamd_map *map = re_map->map;
+
+	for (unsigned int i = 0; i < pending_regexp_maps->len;) {
+		struct rspamd_regexp_map_pending *entry;
+
+		entry = &g_array_index(pending_regexp_maps,
+							   struct rspamd_regexp_map_pending, i);
+
+		if (entry->re_map == re_map) {
+			msg_debug_map("regexp map '%s' is destroyed, dropping it from the compilation queue",
+						  entry->name);
+			g_free(entry->name);
+			g_array_remove_index(pending_regexp_maps, i);
+		}
+		else {
+			i++;
 		}
 	}
 }

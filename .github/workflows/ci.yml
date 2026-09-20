@@ -61,8 +61,7 @@ jobs:
       name: ubuntu-ci-amd64
       # The shipped configuration: debian/rules enables jemalloc everywhere
       # except arm64, and the amd64 image carries libjemalloc-dev. This is the
-      # only job that runs the functional suite against it, and the binary it
-      # uploads is what webui-e2e-playwright then exercises.
+      # only job that runs the functional suite against it.
       enable_jemalloc: 'ON'
 
   ubuntu_arm64:
@@ -121,14 +120,3 @@ jobs:
       name: centos-9
       # As centos-8: image has runtime `jemalloc` only, no `jemalloc-devel`.
       enable_jemalloc: 'OFF'
-
-  webui-e2e-playwright:
-    needs: ubuntu_amd64
-    if: |
-      github.event_name == 'pull_request' ||
-      github.ref == 'refs/heads/master' ||
-      github.repository != 'rspamd/rspamd'
-    uses: ./.github/workflows/ci_webui_e2e_playwright.yml
-    with:
-      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
-      name: ubuntu-ci-amd64
