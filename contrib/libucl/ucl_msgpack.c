@@ -804,24 +804,32 @@ ucl_msgpack_get_container (struct ucl_parser *parser,
 			return NULL;
 		}
 
+		/*
+		 * These frames are popped by ucl_parser_pop_container and by
+		 * ucl_parser_free, both of which release them with UCL_FREE, so they
+		 * have to come from UCL_ALLOC. UCL_ALLOC has no zeroing counterpart,
+		 * hence the explicit memset that calloc used to cover.
+		 */
 		if (parser->stack == NULL) {
-			parser->stack = calloc (1, sizeof (struct ucl_stack));
+			parser->stack = UCL_ALLOC (sizeof (struct ucl_stack));
 
 			if (parser->stack == NULL) {
 				ucl_create_err (&parser->err, "no memory");
 				return NULL;
 			}
 
+			memset (parser->stack, 0, sizeof (struct ucl_stack));
 			parser->stack->chunk = parser->chunks;
 		}
 		else {
-			stack = calloc (1, sizeof (struct ucl_stack));
+			stack = UCL_ALLOC (sizeof (struct ucl_stack));
 
 			if (stack == NULL) {
 				ucl_create_err (&parser->err, "no memory");
 				return NULL;
 			}
 
+			memset (stack, 0, sizeof (struct ucl_stack));
 			stack->chunk = parser->chunks;
 			stack->next = parser->stack;
 			parser->stack = stack;
@@ -1512,7 +1520,8 @@ ucl_msgpack_parse_string (struct ucl_parser *parser,
 		}
 
 		if (obj->flags & UCL_OBJECT_BINARY) {
-			obj->trash_stack[UCL_TRASH_VALUE] = malloc (len);
+			/* Released by ucl_object_dtor_free through UCL_FREE */
+			obj->trash_stack[UCL_TRASH_VALUE] = UCL_ALLOC (len);
 
 			if (obj->trash_stack[UCL_TRASH_VALUE] != NULL) {
 				memcpy (obj->trash_stack[UCL_TRASH_VALUE], pos, len);
