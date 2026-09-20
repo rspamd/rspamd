@@ -22,6 +22,7 @@
 
 #include "ucl.h"
 
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -563,6 +564,91 @@ TEST_SUITE("ucl limits")
 
 		CHECK(parse(p.get(), input) == false);
 		CHECK(ucl_parser_get_error_code(p.get()) == UCL_ELIMIT);
+	}
+
+	/*
+	 * Without UCL_PARSER_ZEROCOPY the parser owns a copy of every string, so
+	 * the objects have to outlive the buffer they were parsed from. Binary
+	 * strings are not NUL terminated and take their own copying path, which
+	 * used to leave the value pointing into that buffer.
+	 */
+	static ucl_object_t *parse_msgpack_from_heap(const std::string &doc)
+	{
+		auto p = make_parser();
+		auto *buf = new unsigned char[doc.size()];
+
+		memcpy(buf, doc.data(), doc.size());
+
+		bool ok = ucl_parser_add_chunk_full(p.get(), buf, doc.size(),
+											ucl_parser_get_default_priority(p.get()),
+											UCL_DUPLICATE_APPEND, UCL_PARSE_MSGPACK);
+
+		ucl_object_t *top = ok ? ucl_parser_get_object(p.get()) : nullptr;
+
+		/* Everything the value may legitimately point at is now gone */
+		delete[] buf;
+
+		return top;
+	}
+
+	/*
+	 * fixmap{"b": bin8 holding `payload`, "c": 1}. The trailing pair is there
+	 * because a zero length value in the last position of a map does not
+	 * currently parse at all, which would hide the empty case below.
+	 */
+	static std::string msgpack_binary(const std::string &payload)
+	{
+		std::string res;
+
+		res += '\x82';
+		res += '\xa1';
+		res += 'b';
+		res += '\xc4';
+		res += (char) payload.size();
+		res += payload;
+		res += '\xa1';
+		res += 'c';
+		res += '\x01';
+
+		return res;
+	}
+
+	TEST_CASE("binary msgpack strings own their value")
+	{
+		const std::string payload{"\x01\x02\x03\x04", 4};
+
+		ucl_object_t *top = parse_msgpack_from_heap(msgpack_binary(payload));
+		REQUIRE(top != nullptr);
+
+		const ucl_object_t *bin = ucl_object_lookup(top, "b");
+		REQUIRE(bin != nullptr);
+		CHECK((bin->flags & UCL_OBJECT_BINARY) != 0);
+
+		std::size_t len = 0;
+		const char *val = ucl_object_tolstring(bin, &len);
+
+		REQUIRE(val != nullptr);
+		REQUIRE(len == payload.size());
+		CHECK(std::string(val, len) == payload);
+
+		ucl_object_unref(top);
+	}
+
+	TEST_CASE("an empty binary msgpack string owns nothing")
+	{
+		ucl_object_t *top = parse_msgpack_from_heap(msgpack_binary(""));
+		REQUIRE(top != nullptr);
+
+		const ucl_object_t *bin = ucl_object_lookup(top, "b");
+		REQUIRE(bin != nullptr);
+
+		std::size_t len = 1;
+		const char *val = ucl_object_tolstring(bin, &len);
+
+		CHECK(val != nullptr);
+		CHECK(len == 0);
+
+		ucl_object_unref(top);
 	}
 
 	TEST_CASE("implicit array chains are fully released")

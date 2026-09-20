@@ -1520,11 +1520,34 @@ ucl_msgpack_parse_string (struct ucl_parser *parser,
 		}
 
 		if (obj->flags & UCL_OBJECT_BINARY) {
-			/* Released by ucl_object_dtor_free through UCL_FREE */
-			obj->trash_stack[UCL_TRASH_VALUE] = UCL_ALLOC (len);
+			/*
+			 * Binary strings are not NUL terminated, so they cannot go
+			 * through ucl_copy_value_trash; copy them the way its own binary
+			 * branch does. The value has to be moved onto the copy: without
+			 * that the object keeps pointing into the input buffer, which the
+			 * caller is free to release once parsing returns, and the trash
+			 * slot being taken stops ucl_copy_value_trash from ever repairing
+			 * it. An empty string owns nothing and gets a literal, so that it
+			 * does not reference the input either.
+			 */
+			if (len > 0) {
+				/* Released by ucl_object_dtor_free through UCL_FREE */
+				obj->trash_stack[UCL_TRASH_VALUE] = UCL_ALLOC (len);
 
-			if (obj->trash_stack[UCL_TRASH_VALUE] != NULL) {
+				if (obj->trash_stack[UCL_TRASH_VALUE] == NULL) {
+					ucl_create_err (&parser->err, "no memory");
+					parser->err_code = UCL_EINTERNAL;
+					ucl_object_unref (obj);
+
+					return -1;
+				}
+
 				memcpy (obj->trash_stack[UCL_TRASH_VALUE], pos, len);
+				obj->value.sv = obj->trash_stack[UCL_TRASH_VALUE];
+				obj->flags |= UCL_OBJECT_ALLOCATED_VALUE;
+			}
+			else {
+				obj->value.sv = "";
 			}
 		}
 		else {
