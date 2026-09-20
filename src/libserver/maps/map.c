@@ -690,6 +690,21 @@ http_map_finish(struct rspamd_http_connection *conn,
 			goto err;
 		}
 
+		/*
+		 * `dlen` is the size of the shared memory segment that is used as a
+		 * growing buffer for the HTTP input, so it can be (and for chunked
+		 * replies usually is) larger than the body itself. Everything past
+		 * `cbd->data_len` is garbage: the raw tail of the last socket read plus
+		 * zero padding. Hence, `dlen` is only valid for `munmap`, whilst all
+		 * payload processing must use `cbd->data_len`.
+		 */
+		if (dlen < cbd->data_len) {
+			msg_err_map("cannot read tempfile %s: truncated length %z, %z expected",
+						cbd->shmem_data->shm_name,
+						dlen, cbd->data_len);
+			goto err;
+		}
+
 		/* Check for expires + etag */
 		double cached_timeout = map->poll_timeout * 2;
 
@@ -782,7 +797,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		gsize payload_len = 0;
 
 		if (cbd->bk->is_encrypted) {
-			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, dlen, &payload, &payload_len)) {
+			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, cbd->data_len, &payload, &payload_len)) {
 				msg_err_map("%s(%s): cannot decrypt data", cbd->bk->uri_log,
 							rspamd_inet_address_to_string_pretty(cbd->addr));
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
@@ -790,9 +805,9 @@ http_map_finish(struct rspamd_http_connection *conn,
 			}
 		}
 		else {
-			/* Use mapped buffer directly */
+			/* Use mapped buffer directly, limited to the real body length */
 			payload = (unsigned char *) in;
-			payload_len = dlen;
+			payload_len = cbd->data_len;
 		}
 
 		/* If compressed flag is set OR payload looks like zstd, decompress */
