@@ -40,6 +40,7 @@ local settings = {
   subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
   subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
   subject_privacy_length = 16, -- cut the length of the hash
+  include_urls = false, -- do not include URLs by default
 }
 
 local settings_schema = lua_redis.enrich_schema({
@@ -54,6 +55,7 @@ local settings_schema = lua_redis.enrich_schema({
   subject_privacy_alg = T.string():optional():doc({ summary = "Hash algorithm for subject obfuscation" }),
   subject_privacy_prefix = T.string():optional():doc({ summary = "Prefix for obfuscated subjects" }),
   subject_privacy_length = T.number():optional():doc({ summary = "Hash length for obfuscated subjects" }),
+  include_urls = T.boolean():optional():doc({ summary = "Include URLs in history" }),
 })
 
 PluginSchema.register("plugins.history_redis", settings_schema)
@@ -122,7 +124,11 @@ local function normalise_results(tbl, task)
   tbl.user = task:get_user() or 'unknown'
   tbl.rmilter = nil
   tbl.messages = nil
-  tbl.urls = nil
+  if settings.include_urls then
+    tbl.urls = fun.totable(fun.map(tostring, task:get_urls()))
+  else
+    tbl.urls = nil
+  end
   tbl.action = task:get_metric_action()
 
   local seconds = task:get_timeval()['tv_sec']
