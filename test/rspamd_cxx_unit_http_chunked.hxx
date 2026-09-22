@@ -57,6 +57,8 @@ struct handler_state {
 	bool trailer_seen = false;
 	/* Release the message from the finish handler, as keepalive does */
 	bool reset_on_finish = false;
+	/* Replace the body from the finish handler, as the proxy does */
+	bool replace_body_on_finish = false;
 };
 
 static void
@@ -85,6 +87,14 @@ record_finish(struct rspamd_http_connection *conn, struct rspamd_http_message *m
 	if (tok != nullptr) {
 		st->trailer_seen = true;
 		st->trailer.assign(tok->begin, tok->len);
+	}
+
+	if (st->replace_body_on_finish) {
+		/*
+		 * What proxy_backend_master_finish_handler does through
+		 * proxy_request_decompress: the previous body storage is freed here
+		 */
+		rspamd_http_message_set_body(msg, "x", 1);
 	}
 
 	if (st->reset_on_finish) {
@@ -307,6 +317,66 @@ TEST_SUITE("http_chunked")
 			   "10\r\n");
 		/* A read that is nothing but body: this is what turns zero-copy on */
 		t.push("0123456789abcdef");
+		/* End of chunk, terminating chunk, then a pipelined request */
+		t.push("\r\n0\r\n\r\n"
+			   "GET /next HTTP/1.1\r\nHost: x\r\n\r\n");
+
+		CHECK(t.state.finishes == 1);
+	}
+
+	/*
+	 * Transfer-Encoding wins over Content-Length for framing, and the parser
+	 * duly ignores the length -- but it has already parsed it, and it is still
+	 * sitting in `content_length` when the headers-complete callback runs. Body
+	 * storage sized from it there escapes the bound that the body callback
+	 * applies, so the announced length must be bounded wherever it is used, and
+	 * a message carrying both framings is not one to make room for at all.
+	 */
+	TEST_CASE("chunked framing with a conflicting Content-Length is refused")
+	{
+		chunked_fixture t;
+
+		t.feed("POST /check HTTP/1.1\r\n"
+			   "Transfer-Encoding: chunked\r\n"
+			   "Content-Length: 9000000000000000\r\n"
+			   "\r\n"
+			   "4\r\nbody\r\n"
+			   "0\r\n\r\n");
+
+		CHECK(t.state.finishes == 0);
+		CHECK(t.state.errors == 1);
+	}
+
+	/*
+	 * A zero-copy read goes straight into the body storage, so the parser is
+	 * handed memory the message owns. Holding the message is not enough: a
+	 * completion callback may keep the message and replace its body, which frees
+	 * exactly that memory -- the proxy does this when it decompresses a reply.
+	 * If the zero-copy window reached past the end of the body, the bytes that
+	 * followed the message are in there too, and the parser walks into them
+	 * after the callback has freed them.
+	 *
+	 * The writes below are shaped to arm zero-copy with room to spare: a chunk
+	 * larger than its first fragment sizes the storage, the fragment that fills
+	 * it turns zero-copy on, and the read after that grows the storage by a
+	 * whole buffer -- leaving a window far past the end of the chunk for the
+	 * terminating chunk and a pipelined request to land in.
+	 */
+	TEST_CASE("zero copy reads never reach past the end of the body")
+	{
+		chunked_fixture t;
+
+		t.state.replace_body_on_finish = true;
+		rspamd_http_connection_read_message(t.conn, &t.state, 1000.0);
+
+		t.push("POST /check HTTP/1.1\r\n"
+			   "Transfer-Encoding: chunked\r\n"
+			   "\r\n"
+			   "1000\r\n");
+		/* First fragment: sizes the storage from the rest of the chunk */
+		t.push(std::string(100, 'a'));
+		/* Fills the storage exactly, so the next read has to grow it */
+		t.push(std::string(4096 - 100, 'b'));
 		/* End of chunk, terminating chunk, then a pipelined request */
 		t.push("\r\n0\r\n\r\n"
 			   "GET /next HTTP/1.1\r\nHost: x\r\n\r\n");
