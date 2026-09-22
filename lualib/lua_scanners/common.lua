@@ -583,9 +583,12 @@ local function check_parts_match(task, rule)
     end
 
     -- check text_part has more words than text_part_min_words_check
-    if rule.scan_text_mime and rule.text_part_min_words and p:is_text() and
-        p:get_text():get_words_count() >= tonumber(rule.text_part_min_words) then
-      return true
+    -- (unset text_part_min_words means "no minimum" - do not silently skip scan_text_mime)
+    if rule.scan_text_mime and p:is_text() then
+      local min_words = rule.text_part_min_words and tonumber(rule.text_part_min_words)
+      if not min_words or p:get_text():get_words_count() >= min_words then
+        return true
+      end
     end
 
     if rule.scan_image_mime and p:is_image() then
