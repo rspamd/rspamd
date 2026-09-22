@@ -135,11 +135,23 @@ end
 
 
 local function peekaboo_check(task, content, digest, rule, maybe_part)
+  local log_prefix = rule.log_prefix..'_check'
+
+  -- the job id is stored per digest, so without one the report stage could never find it
+  if not digest then
+    rspamd_logger.errx(task, '%s: no digest for content, skipping scan', log_prefix)
+    common.yield_result(task, rule, 'no digest for content', 0.0, 'fail', maybe_part)
+    return
+  end
+
   local function peekaboo_check_uncached ()
-    local upstream = rule.upstreams:get_upstream_round_robin()
+    local upstream = rule.upstreams:get_upstream_by_hash(digest)
+    if not upstream then
+      common.yield_result(task, rule, 'no upstream available', 0.0, 'fail', maybe_part)
+      return
+    end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local log_prefix = rule.log_prefix..'_check'
 
     local request_url = peekaboo_url(rule, addr, rule.url_check)
     local static_boundary = rspamd_util.random_hex(32)
@@ -235,8 +247,8 @@ local function peekaboo_check(task, content, digest, rule, maybe_part)
 
       if err_message or (code and tonumber(code) >= 500) then
 
-        if not code then code = 'error' end
-        peekaboo_requery(code..' - '..err_message)
+        peekaboo_requery(string.format('%s - %s', code or 'error',
+            err_message or 'server error'))
 
       else
         -- Parse the response
@@ -264,8 +276,19 @@ local function peekaboo_check(task, content, digest, rule, maybe_part)
           return
         end
 
-        lua_util.debugm(N, task, '%s: Job ID: %s', log_prefix, result.job_id)
-        peekaboo_jobs_table[digest] = result.job_id
+        local job_id = tostring(result.job_id)
+
+        -- the id is appended to the report url path, so reject anything that could alter it
+        if not job_id:match('^[%w._-]+$') or job_id:find('..', 1, true) then
+          rspamd_logger.errx(task, '%s: invalid job_id in response: %s',
+            log_prefix, job_id)
+          common.yield_result(task, rule, 'invalid job_id in submit response',
+            0.0, 'fail', maybe_part)
+          return
+        end
+
+        lua_util.debugm(N, task, '%s: Job ID: %s', log_prefix, job_id)
+        peekaboo_jobs_table[digest] = job_id
         task:cache_set(rule.peekaboo_cache_name, peekaboo_jobs_table)
 
       end
@@ -296,18 +319,29 @@ end
 
 local function peekaboo_report(task, content, digest, rule, maybe_part)
 
-  local upstream = rule.upstreams:get_upstream_round_robin()
-  local addr = upstream:get_addr()
-  local retransmits = rule.retransmits
   local log_prefix = rule.log_prefix..'_report'
-
-  local request_url = peekaboo_url(rule, addr, rule.url_report)
 
   local peekaboo_jobs_table = task:cache_get(rule.peekaboo_cache_name)
 
   if not peekaboo_jobs_table then return end
 
   local job_id = peekaboo_jobs_table[digest]
+
+  if not job_id or tostring(job_id) == "" then
+    rspamd_logger.infox(task, "%s: JOB-ID for part not in cache", log_prefix)
+    return
+  end
+
+  -- select the upstream only once a request is certain to avoid an unused inflight reference
+  local upstream = rule.upstreams:get_upstream_by_hash(digest)
+  if not upstream then
+    common.yield_result(task, rule, 'no upstream available', 0.0, 'fail', maybe_part)
+    return
+  end
+  local addr = upstream:get_addr()
+  local retransmits = rule.retransmits
+
+  local request_url = peekaboo_url(rule, addr, rule.url_report)
 
   local function peekaboo_callback(err_message, code, body, headers)
 
@@ -354,8 +388,8 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
 
     if err_message or (code and tonumber(code) >= 500) then
 
-      if not code then code = 'error' end
-      peekaboo_requery(code..' - '..err_message)
+      peekaboo_requery(string.format('%s - %s', code or 'error',
+          err_message or 'server error'))
 
     elseif tonumber(code) == 404 then
 
@@ -415,21 +449,16 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
     end
   end
 
-  if job_id and tostring(job_id) ~= "" then
-    lua_util.debugm(N, task, '%s: Calling Job-ID : %s', log_prefix, job_id)
-    rspamd_http.request({
-      task=task,
-      url=request_url..'/'..job_id,
-      callback=peekaboo_callback,
-      timeout = rule.timeout,
-      mime_type='text/plain',
-      no_ssl_verify=rule.no_ssl_verify,
-      keepalive=rule.keepalive,
-    })
-  else
-    rspamd_logger.infox(task, "%s: JOB-ID for part not in cache",
-      log_prefix)
-  end
+  lua_util.debugm(N, task, '%s: Calling Job-ID : %s', log_prefix, job_id)
+  rspamd_http.request({
+    task=task,
+    url=request_url..'/'..job_id,
+    callback=peekaboo_callback,
+    timeout = rule.timeout,
+    mime_type='text/plain',
+    no_ssl_verify=rule.no_ssl_verify,
+    keepalive=rule.keepalive,
+  })
 end
 
 return {
