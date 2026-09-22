@@ -218,7 +218,18 @@ local function message_not_too_small(task, content, rule)
   return true
 end
 
-local function message_min_words(task, rule)
+local function message_min_words(task, rule, maybe_part)
+  -- This gate only concerns whether the message's *body text* is worth
+  -- scanning; when scan_mime_parts dispatches an actual mime part (e.g. an
+  -- attachment) for scanning, maybe_part is that part. Applying the
+  -- whole-task text word count against an attachment scan would silently
+  -- skip attachment/AV scanning on any message with a short/empty body,
+  -- which is exactly the shape of most malspam (empty body, malicious
+  -- attachment) - so only gate here for whole-message or text-part scans.
+  if maybe_part and not maybe_part:is_text() then
+    return true
+  end
+
   if rule.text_part_min_words and tonumber(rule.text_part_min_words) > 0 then
     local text_part_above_limit = false
     local text_parts = task:get_text_parts()
@@ -319,7 +330,7 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
 
     local f_message_not_too_large = message_not_too_large(task, content, rule)
     local f_message_not_too_small = message_not_too_small(task, content, rule)
-    local f_message_min_words = message_min_words(task, rule)
+    local f_message_min_words = message_min_words(task, rule, maybe_part)
     local f_dynamic_scan = dynamic_scan(task, rule)
 
     if uncached and
