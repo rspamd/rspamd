@@ -54,6 +54,7 @@ enum rspamd_http_priv_flags {
 	RSPAMD_HTTP_CONN_FLAG_PROXY_REQUEST = 1u << 6u,
 	RSPAMD_HTTP_CONN_OWN_SOCKET = 1u << 7u,
 	RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE = 1u << 8u, /* Server sent early response during write */
+	RSPAMD_HTTP_CONN_FLAG_INNER_COMPLETE = 1u << 9u, /* Decrypted inner message was completed */
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
@@ -232,6 +233,17 @@ rspamd_http_on_url(http_parser *parser, const char *at, size_t length)
 
 	priv = conn->priv;
 
+	if (priv->msg == NULL) {
+		/*
+		 * A callback can arrive after the message it belongs to is gone:
+		 * completing a message runs application code, and with keepalive the
+		 * connection is reset right there, so whatever the peer sent after that
+		 * message still reaches the parser. Those bytes belong to no message
+		 * and must not be parsed into one that is no longer there.
+		 */
+		return 0;
+	}
+
 	priv->msg->url = rspamd_fstring_append(priv->msg->url, at, length);
 
 	return 0;
@@ -245,6 +257,11 @@ rspamd_http_on_status(http_parser *parser, const char *at, size_t length)
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
+
+	if (priv->msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
 
 	if (parser->status_code != 200) {
 		if (priv->msg->status == NULL) {
@@ -307,6 +324,11 @@ rspamd_http_on_header_field(http_parser *parser,
 
 	priv = conn->priv;
 
+	if (priv->msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
+
 	if (priv->header == NULL) {
 		rspamd_http_init_header(priv);
 	}
@@ -333,6 +355,11 @@ rspamd_http_on_header_value(http_parser *parser,
 
 	priv = conn->priv;
 
+	if (priv->msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
+
 	if (priv->header == NULL) {
 		/* Should not happen */
 		return -1;
@@ -351,6 +378,22 @@ rspamd_http_on_header_value(http_parser *parser,
 	return 0;
 }
 
+/*
+ * Releases a header that is still being parsed. Ownership of a header moves to
+ * the message only in `rspamd_http_finish_header`, so one that never got there
+ * -- an unterminated trailer, a connection torn down mid-header -- is ours to
+ * free and would otherwise be leaked per message.
+ */
+static void
+rspamd_http_drop_header(struct rspamd_http_connection_private *priv)
+{
+	if (priv->header != NULL) {
+		rspamd_fstring_free(priv->header->combined);
+		g_free(priv->header);
+		priv->header = NULL;
+	}
+}
+
 static int
 rspamd_http_on_headers_complete(http_parser *parser)
 {
@@ -362,6 +405,11 @@ rspamd_http_on_headers_complete(http_parser *parser)
 
 	priv = conn->priv;
 	msg = priv->msg;
+
+	if (msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
 
 	if (priv->header != NULL) {
 		rspamd_http_finish_header(conn, priv);
@@ -443,6 +491,89 @@ rspamd_http_switch_zc(struct _rspamd_http_privbuf *pbuf,
 	pbuf->zc_remain = msg->body_buf.allocated_len - msg->body_buf.len;
 }
 
+/*
+ * Cap on the body storage that a peer's own declaration may pre-allocate when
+ * no message limit is configured to bound it. The declared length is only ever
+ * a hint for the initial size and the storage grows geometrically afterwards,
+ * so a low cap costs at most a few reallocations on a genuinely large body.
+ */
+#define RSPAMD_HTTP_BODY_PREALLOC_MAX ((uint64_t) 1024 * 1024)
+
+/*
+ * How much body the peer has announced but not sent yet: what is left of
+ * `Content-Length` for identity encoding, and what is left of the *current
+ * chunk* for chunked encoding. Nothing has been received to back it up, so it
+ * may only be used as a hint. ULLONG_MAX is the parser's "not announced" value.
+ */
+static inline uint64_t
+rspamd_http_body_announced(http_parser *parser)
+{
+	if (parser->content_length == ULLONG_MAX) {
+		return 0;
+	}
+
+	return parser->content_length;
+}
+
+/*
+ * Enforces `max_size` over what has been received plus what is still announced.
+ * Counting the announcement refuses an oversized body as early as its first
+ * fragment, before anything has been read or allocated for it, which is what
+ * `on_headers_complete` already does when the length is known up front.
+ */
+static gboolean
+rspamd_http_body_within_limit(struct rspamd_http_connection *conn,
+							  struct rspamd_http_message *msg,
+							  http_parser *parser,
+							  size_t length)
+{
+	uint64_t received;
+
+	if (conn->max_size == 0) {
+		return TRUE;
+	}
+
+	received = (uint64_t) msg->body_buf.len + length;
+
+	if (received > conn->max_size) {
+		return FALSE;
+	}
+
+	if (rspamd_http_body_announced(parser) > conn->max_size - received) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Initial size for the body storage. Deliberately not the announced length on
+ * its own: with chunked encoding that is a chunk size the peer picked, so using
+ * it unbounded lets a peer of its choosing size an allocation here.
+ */
+static gsize
+rspamd_http_body_prealloc(struct rspamd_http_connection *conn,
+						  http_parser *parser,
+						  size_t length)
+{
+	uint64_t hint = rspamd_http_body_announced(parser);
+
+	if (conn->max_size > 0 && hint > conn->max_size) {
+		hint = conn->max_size;
+	}
+
+	if (hint > RSPAMD_HTTP_BODY_PREALLOC_MAX) {
+		hint = RSPAMD_HTTP_BODY_PREALLOC_MAX;
+	}
+
+	/* Whatever is already in hand has to fit regardless of the cap */
+	if (hint < length) {
+		hint = length;
+	}
+
+	return (gsize) hint;
+}
+
 static int
 rspamd_http_on_body(http_parser *parser, const char *at, size_t length)
 {
@@ -458,21 +589,27 @@ rspamd_http_on_body(http_parser *parser, const char *at, size_t length)
 	pbuf = priv->buf;
 	p = at;
 
-	if (!(msg->flags & RSPAMD_HTTP_FLAG_HAS_BODY)) {
-		if (!rspamd_http_message_set_body(msg, NULL, parser->content_length)) {
-			return -1;
-		}
+	if (msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
 	}
 
 	if (conn->finished) {
 		return 0;
 	}
 
-	if (conn->max_size > 0 &&
-		msg->body_buf.len + length > conn->max_size) {
+	if (!rspamd_http_body_within_limit(conn, msg, parser, length)) {
 		/* Body length overflow */
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_TOO_LARGE;
 		return -1;
+	}
+
+	if (!(msg->flags & RSPAMD_HTTP_FLAG_HAS_BODY)) {
+		if (!rspamd_http_message_set_body(msg, NULL,
+										  rspamd_http_body_prealloc(conn, parser,
+																	length))) {
+			return -1;
+		}
 	}
 
 	if (!pbuf->zc_buf) {
@@ -547,8 +684,48 @@ rspamd_http_on_body_decrypted(http_parser *parser, const char *at, size_t length
 		priv->msg->method = parser->method;
 		priv->msg->code = parser->status_code;
 	}
+	else if (priv->msg->body_buf.begin + priv->msg->body_buf.len != at) {
+		/*
+		 * Chunked encoding inside the encrypted message: the fragments are
+		 * separated by the chunk framing, so the body is not contiguous as it
+		 * lies. Only `begin` and `len` are reported to the caller, hence the
+		 * fragments are packed together here, exactly as the plaintext path
+		 * does. The plaintext buffer is ours and the destination is always
+		 * behind the fragment being moved.
+		 */
+		memmove((char *) priv->msg->body_buf.begin + priv->msg->body_buf.len,
+				at, length);
+	}
 
 	priv->msg->body_buf.len += length;
+
+	return 0;
+}
+
+/*
+ * The inner message needs an explicit completion callback: without one, an
+ * inner body that stops in the middle of its framing consumes every byte of
+ * the plaintext without the parser ever reporting an error, and would pass
+ * for a complete message.
+ */
+static int
+rspamd_http_on_message_complete_decrypted(http_parser *parser)
+{
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *) parser->data;
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (priv->msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
+
+	if (priv->header != NULL) {
+		rspamd_http_finish_header(conn, priv);
+		priv->header = NULL;
+	}
+
+	priv->flags |= RSPAMD_HTTP_CONN_FLAG_INNER_COMPLETE;
 
 	return 0;
 }
@@ -564,6 +741,11 @@ rspamd_http_on_headers_complete_decrypted(http_parser *parser)
 
 	priv = conn->priv;
 	msg = priv->msg;
+
+	if (msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
 
 	if (priv->header != NULL) {
 		rspamd_http_finish_header(conn, priv);
@@ -660,13 +842,21 @@ decrypted_cb.on_header_field = rspamd_http_on_header_field;
 decrypted_cb.on_header_value = rspamd_http_on_header_value;
 decrypted_cb.on_headers_complete = rspamd_http_on_headers_complete_decrypted;
 decrypted_cb.on_body = rspamd_http_on_body_decrypted;
+decrypted_cb.on_message_complete = rspamd_http_on_message_complete_decrypted;
 decrypted_parser.data = conn;
 decrypted_parser.content_length = dec_len;
+priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_INNER_COMPLETE;
 
 if (http_parser_execute(&decrypted_parser, &decrypted_cb, m,
 						dec_len) != (size_t) dec_len) {
 	msg_err("HTTP parser error: %s when parsing encrypted request",
 			http_errno_description(decrypted_parser.http_errno));
+	return -1;
+}
+
+if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_INNER_COMPLETE)) {
+	msg_err("incomplete encrypted request: the inner message ends in the "
+			"middle of its framing");
 	return -1;
 }
 
@@ -686,6 +876,21 @@ rspamd_http_on_message_complete(http_parser *parser)
 	}
 
 	priv = conn->priv;
+
+	if (priv->msg == NULL) {
+		/* Arrived after the message was released, see rspamd_http_on_url */
+		return 0;
+	}
+
+	/*
+	 * Trailers use the ordinary header callbacks, but the end of the trailer
+	 * section arrives here instead of at `on_headers_complete`: the last
+	 * trailer has to be finished explicitly or it is both lost and leaked.
+	 */
+	if (priv->header != NULL) {
+		rspamd_http_finish_header(conn, priv);
+		priv->header = NULL;
+	}
 
 	if ((conn->opts & RSPAMD_HTTP_REQUIRE_ENCRYPTION) && !IS_CONN_ENCRYPTED(priv)) {
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED;
@@ -1021,6 +1226,36 @@ rspamd_http_try_read(int fd,
 	return r;
 }
 
+/*
+ * Runs the parser over a buffer that has just been read.
+ *
+ * In zero-copy mode that buffer is inside the message's own body storage rather
+ * than in the private buffer, i.e. the parser is handed memory it does not own.
+ * Retaining the private buffer does not cover it -- `zc_buf` only borrows that
+ * memory -- so the message is held for the duration of the parse, because a
+ * callback can release it: `on_message_complete` resets the connection when
+ * keepalive is on, and application code runs from there too.
+ */
+static size_t
+rspamd_http_parse_buf(struct rspamd_http_connection_private *priv,
+					  const char *d, gsize len)
+{
+	struct rspamd_http_message *msg = priv->msg;
+	size_t ret;
+
+	if (msg != NULL) {
+		rspamd_http_message_ref(msg);
+	}
+
+	ret = http_parser_execute(&priv->parser, &priv->parser_cb, d, len);
+
+	if (msg != NULL) {
+		rspamd_http_message_unref(msg);
+	}
+
+	return ret;
+}
+
 static void
 rspamd_http_ssl_err_handler(gpointer ud, GError *err)
 {
@@ -1090,8 +1325,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
 		if (r > 0) {
-			if (http_parser_execute(&priv->parser, &priv->parser_cb,
-									d, r) != (size_t) r ||
+			if (rspamd_http_parse_buf(priv, d, r) != (size_t) r ||
 				priv->parser.http_errno != 0) {
 				if (priv->flags & RSPAMD_HTTP_CONN_FLAG_TOO_LARGE) {
 					err = g_error_new(HTTP_ERROR, 413,
@@ -1141,7 +1375,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		}
 		else if (r == 0) {
 			/* We can still call http parser */
-			http_parser_execute(&priv->parser, &priv->parser_cb, d, r);
+			rspamd_http_parse_buf(priv, d, r);
 
 			if (!conn->finished) {
 				err = g_error_new(HTTP_ERROR,
@@ -1179,8 +1413,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
 			if (r > 0) {
-				if (http_parser_execute(&priv->parser, &priv->parser_cb,
-										d, r) != (size_t) r ||
+				if (rspamd_http_parse_buf(priv, d, r) != (size_t) r ||
 					priv->parser.http_errno != 0) {
 					err = g_error_new(HTTP_ERROR, 400,
 									  "HTTP parser error: %s",
@@ -1484,6 +1717,7 @@ void rspamd_http_connection_reset(struct rspamd_http_connection *conn)
 
 	conn->finished = FALSE;
 	/* Clear priv */
+	rspamd_http_drop_header(priv);
 	rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 
 	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)) {
@@ -1745,7 +1979,7 @@ rspamd_http_connection_read_message_common(struct rspamd_http_connection *conn,
 
 	/* Use read-stage timeout override if set; else fallback */
 	priv->timeout = (priv->read_timeout > 0 ? priv->read_timeout : timeout);
-	priv->header = NULL;
+	rspamd_http_drop_header(priv);
 	priv->buf = g_malloc0(sizeof(*priv->buf));
 	REF_INIT_RETAIN(priv->buf, rspamd_http_privbuf_dtor);
 	priv->buf->data = rspamd_fstring_sized_new(8192);
@@ -2340,7 +2574,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	/* Use write-stage timeout override if set */
 	priv->timeout = (priv->write_timeout > 0 ? priv->write_timeout : timeout);
 
-	priv->header = NULL;
+	rspamd_http_drop_header(priv);
 	priv->buf = g_malloc0(sizeof(*priv->buf));
 	REF_INIT_RETAIN(priv->buf, rspamd_http_privbuf_dtor);
 	priv->buf->data = rspamd_fstring_sized_new(512);
