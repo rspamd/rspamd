@@ -35,6 +35,26 @@ static const gsize default_initial_size = 16;
 
 #define fstravail(s) ((s)->allocated - (s)->len)
 
+/*
+ * The largest payload length whose allocation still fits into gsize once the
+ * header is added. Anything above it would wrap `len + sizeof(rspamd_fstring_t)`
+ * and hand back a small buffer that claims to have `len` bytes available.
+ */
+#define fstrmaxlen (G_MAXSIZE - sizeof(rspamd_fstring_t))
+
+/*
+ * Such a length can never be satisfied, so it is refused the same way as any
+ * other allocation failure here rather than silently under-allocated.
+ */
+#define fstrcheck(sz)                                                     \
+	do {                                                                  \
+		if (G_UNLIKELY((sz) > fstrmaxlen)) {                              \
+			g_error("%s: refusing to allocate %" G_GSIZE_FORMAT " bytes", \
+					G_STRLOC, (gsize) (sz));                              \
+			abort();                                                      \
+		}                                                                 \
+	} while (0)
+
 rspamd_fstring_t *
 rspamd_fstring_new(void)
 {
@@ -59,6 +79,8 @@ rspamd_fstring_sized_new(gsize initial_size)
 	rspamd_fstring_t *s;
 	gsize real_size = MAX(default_initial_size, initial_size);
 
+	fstrcheck(real_size);
+
 	if ((s = malloc(real_size + sizeof(*s))) == NULL) {
 		g_error("%s: failed to allocate %" G_GSIZE_FORMAT " bytes",
 				G_STRLOC, real_size + sizeof(*s));
@@ -76,6 +98,8 @@ rspamd_fstring_new_init(const char *init, gsize len)
 {
 	rspamd_fstring_t *s;
 	gsize real_size = MAX(default_initial_size, len);
+
+	fstrcheck(real_size);
 
 	if ((s = malloc(real_size + sizeof(*s))) == NULL) {
 		g_error("%s: failed to allocate %" G_GSIZE_FORMAT " bytes",
@@ -123,17 +147,34 @@ void rspamd_fstring_free(rspamd_fstring_t *str)
 inline gsize
 rspamd_fstring_suggest_size(gsize len, gsize allocated, gsize needed_len)
 {
-	gsize newlen, optlen = 0;
+	gsize newlen, grown, optlen = 0;
+
+	/*
+	 * Every intermediate below is clamped to `fstrmaxlen`: a wrapped size would
+	 * be accepted by the allocator and then describe a buffer that is not there.
+	 * Returning the clamp for a request that cannot be met leaves it to the
+	 * caller to fail on it, which is what the allocators do.
+	 */
+	if (len > fstrmaxlen || needed_len > fstrmaxlen - len) {
+		return fstrmaxlen;
+	}
+
+	newlen = len + needed_len;
 
 	if (allocated < 4096) {
-		newlen = MAX(len + needed_len, allocated * 2);
+		grown = allocated * 2;
+	}
+	else if (allocated > G_MAXSIZE / 3) {
+		grown = fstrmaxlen;
 	}
 	else {
-		newlen = MAX(len + needed_len, 1 + allocated * 3 / 2);
+		grown = 1 + allocated * 3 / 2;
 	}
 
+	newlen = MAX(newlen, MIN(grown, fstrmaxlen));
+
 #ifdef HAVE_MALLOC_SIZE
-	optlen = sys_alloc_size(newlen + sizeof(rspamd_fstring_t));
+	optlen = MIN(sys_alloc_size(newlen + sizeof(rspamd_fstring_t)), fstrmaxlen);
 #endif
 
 	return MAX(newlen, optlen);
@@ -146,6 +187,20 @@ rspamd_fstring_grow(rspamd_fstring_t *str, gsize needed_len)
 	gpointer nptr;
 
 	newlen = rspamd_fstring_suggest_size(str->len, str->allocated, needed_len);
+
+	if (G_UNLIKELY(newlen > fstrmaxlen || newlen - str->len < needed_len)) {
+		/*
+		 * The request does not fit into gsize together with the header, so
+		 * there is no allocation that could satisfy it
+		 */
+		gsize curlen = str->len;
+
+		free(str);
+		g_error("%s: refusing to grow a string of %" G_GSIZE_FORMAT
+				" bytes by %" G_GSIZE_FORMAT " bytes",
+				G_STRLOC, curlen, needed_len);
+		abort();
+	}
 
 	nptr = realloc(str, newlen + sizeof(*str));
 
