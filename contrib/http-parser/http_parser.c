@@ -1480,6 +1480,12 @@ size_t http_parser_execute (http_parser *parser,
               goto error;
             }
 
+            if (parser->flags & F_CHUNKED) {
+              /* Both framings given, see h_transfer_encoding_chunked */
+              SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+              goto error;
+            }
+
             parser->content_length = ch - '0';
             break;
 
@@ -1620,6 +1626,15 @@ size_t http_parser_execute (http_parser *parser,
             /* XXX: not needed for rspamd parser->flags |= F_CONNECTION_CLOSE; */
             break;
           case h_transfer_encoding_chunked:
+            if (parser->content_length != ULLONG_MAX) {
+              /* Both framings given: the length is ignored for framing but it
+               * has still been parsed, and a message framed two ways is a
+               * request smuggling vector. Refuse it.
+               */
+              SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+              goto error;
+            }
+
             parser->flags |= F_CHUNKED;
             break;
           default:
