@@ -887,6 +887,18 @@ rspamd_re_cache_check_lua_condition(struct rspamd_task *task,
 	return res;
 }
 
+/*
+ * Hits are counted in a byte per regexp: saturate rather than wrap, a regexp
+ * with more matches than that would otherwise look like it had none
+ */
+static inline void
+rspamd_re_cache_add_hits(struct rspamd_re_runtime *rt, uint64_t id, unsigned int n)
+{
+	unsigned int total = rt->results[id] + n;
+
+	rt->results[id] = MIN(total, G_MAXUINT8);
+}
+
 static unsigned int
 rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 							 rspamd_regexp_t *re, struct rspamd_task *task,
@@ -913,9 +925,10 @@ rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 		len = rt->cache->max_re_data;
 	}
 
-	r = rt->results[id];
+	/* Hits found before, e.g. in the previous inputs */
+	unsigned int prev = rt->results[id];
 
-	if (max_hits == 0 || r < max_hits) {
+	if (max_hits == 0 || prev < max_hits) {
 		pr = rspamd_random_double_fast();
 
 		if (pr > 0.9) {
@@ -936,7 +949,7 @@ rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 								  rspamd_regexp_get_pattern(re), r);
 			}
 
-			if (max_hits > 0 && r >= max_hits) {
+			if (max_hits > 0 && prev + r >= max_hits) {
 				break;
 			}
 
@@ -946,7 +959,7 @@ rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 			}
 		}
 
-		rt->results[id] += r;
+		rspamd_re_cache_add_hits(rt, id, r);
 		rt->stat.regexp_checked++;
 		rt->stat.bytes_scanned_pcre += len;
 		rt->stat.bytes_scanned += len;
@@ -966,7 +979,8 @@ rspamd_re_cache_process_pcre(struct rspamd_re_runtime *rt,
 		}
 	}
 
-	return r;
+	/* The total, as the callers store it */
+	return rt->results[id];
 }
 
 #ifdef WITH_HYPERSCAN
@@ -978,6 +992,12 @@ struct rspamd_re_hyperscan_cbdata {
 	rspamd_regexp_t *re;
 	struct rspamd_task *task;
 	struct rspamd_re_class *re_class;
+	/*
+	 * Prefiltered regexps already verified by PCRE in this scan, created on
+	 * the first one. Per scan: every input needs its own verification, a
+	 * prefilter hit in one input says nothing about the next
+	 */
+	GHashTable *pcre_verified;
 };
 
 static int
@@ -1008,7 +1028,7 @@ rspamd_re_cache_hyperscan_cb(unsigned int id,
 			setbit(rt->checked, global_id);
 
 			if (maxhits == 0 || rt->results[global_id] < maxhits) {
-				rt->results[global_id] += ret;
+				rspamd_re_cache_add_hits(rt, global_id, ret);
 				rt->stat.regexp_matched++;
 			}
 			msg_debug_re_task("found regexp /%s/ using hyperscan, class %ud:%ud, total hits: %d",
@@ -1017,7 +1037,12 @@ rspamd_re_cache_hyperscan_cb(unsigned int id,
 		}
 	}
 	else {
-		if (!isset(rt->checked, global_id)) {
+		if (cbdata->pcre_verified == NULL) {
+			cbdata->pcre_verified = g_hash_table_new(g_direct_hash, g_direct_equal);
+		}
+
+		if (!g_hash_table_contains(cbdata->pcre_verified, GUINT_TO_POINTER(global_id + 1))) {
+			g_hash_table_add(cbdata->pcre_verified, GUINT_TO_POINTER(global_id + 1));
 			processed = 0;
 
 			for (i = 0; i < cbdata->count; i++) {
@@ -1124,6 +1149,7 @@ rspamd_re_cache_process_regexp_data(struct rspamd_re_runtime *rt,
 			cbdata.count = 1;
 			cbdata.task = task;
 			cbdata.re_class = re_class;
+			cbdata.pcre_verified = NULL;
 
 			if ((hs_scan(rspamd_hyperscan_get_database(re_class->hs_db),
 						 in[i], lens[i], 0,
@@ -1134,6 +1160,10 @@ rspamd_re_cache_process_regexp_data(struct rspamd_re_runtime *rt,
 			else {
 				ret = rt->results[re_id];
 				*processed_hyperscan = TRUE;
+			}
+
+			if (cbdata.pcre_verified) {
+				g_hash_table_unref(cbdata.pcre_verified);
 			}
 		}
 	}

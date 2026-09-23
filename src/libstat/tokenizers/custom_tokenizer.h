@@ -160,13 +160,18 @@ struct rspamd_custom_tokenizer *rspamd_tokenizer_manager_detect(
 	const char *lang_hint,
 	const char **detected_lang_hint);
 
-/* Helper function to tokenize with exceptions handling */
+/*
+ * Helper function to tokenize with exceptions handling. At most max_words
+ * tokens of max_bytes in total are returned (0 means no limit)
+ */
 rspamd_tokenizer_result_t *rspamd_custom_tokenizer_tokenize_with_exceptions(
 	struct rspamd_custom_tokenizer *tokenizer,
 	const char *text,
 	gsize len,
 	GList *exceptions,
-	rspamd_mempool_t *pool);
+	rspamd_mempool_t *pool,
+	gsize max_words,
+	gsize max_bytes);
 
 #endif /* RSPAMD_TOKENIZER_INTERNAL */
 

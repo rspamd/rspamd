@@ -414,9 +414,21 @@ rspamd_tokenize_text(const char *text, gsize len,
 			&detected_lang);
 
 		if (custom_tok && custom_confidence >= custom_tok->min_confidence) {
+			/* Collect no more than what is left of the budget */
+			gsize words_left = 0, bytes_left = 0;
+
+			if (budget != NULL) {
+				if (budget->max_words > 0) {
+					words_left = budget->max_words > budget->words ? budget->max_words - budget->words : 1;
+				}
+				if (budget->max_bytes > 0) {
+					bytes_left = budget->max_bytes > budget->bytes ? budget->max_bytes - budget->bytes : 1;
+				}
+			}
+
 			/* Use custom tokenizer with exception handling */
 			rspamd_tokenizer_result_t *custom_res = rspamd_custom_tokenizer_tokenize_with_exceptions(
-				custom_tok, text, len, exceptions, pool);
+				custom_tok, text, len, exceptions, pool, words_left, bytes_left);
 
 			if (custom_res) {
 				msg_debug_pool("using custom tokenizer %s (confidence: %.2f) for text tokenization",

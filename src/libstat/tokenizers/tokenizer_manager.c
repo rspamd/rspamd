@@ -410,6 +410,34 @@ rspamd_custom_tokens_to_mempool(rspamd_words_t *words,
 	}
 }
 
+/*
+ * What is left of the caller's tokenization budget: tokens beyond it would
+ * only be copied to the pool and dropped by the caller
+ */
+struct rspamd_custom_tokens_limit {
+	gsize max_words;
+	gsize max_bytes;
+	gsize words;
+	gsize bytes;
+	gboolean full;
+};
+
+static inline gboolean
+rspamd_custom_token_fits(struct rspamd_custom_tokens_limit *lim, gsize len)
+{
+	if ((lim->max_words > 0 && lim->words >= lim->max_words) ||
+		(lim->max_bytes > 0 && lim->bytes + len > lim->max_bytes)) {
+		lim->full = TRUE;
+
+		return FALSE;
+	}
+
+	lim->words++;
+	lim->bytes += len;
+
+	return TRUE;
+}
+
 /* Helper function to tokenize with a custom tokenizer handling exceptions */
 rspamd_tokenizer_result_t *
 rspamd_custom_tokenizer_tokenize_with_exceptions(
@@ -417,8 +445,14 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 	const char *text,
 	gsize len,
 	GList *exceptions,
-	rspamd_mempool_t *pool)
+	rspamd_mempool_t *pool,
+	gsize max_words,
+	gsize max_bytes)
 {
+	struct rspamd_custom_tokens_limit lim = {
+		.max_words = max_words,
+		.max_bytes = max_bytes,
+	};
 	rspamd_tokenizer_result_t *words;
 	rspamd_tokenizer_result_t result;
 	struct rspamd_process_exception *ex;
@@ -442,6 +476,11 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 			/* Copy tokens from result to output */
 			for (i = 0; i < kv_size(result); i++) {
 				rspamd_word_t tok = kv_A(result, i);
+
+				if (!rspamd_custom_token_fits(&lim, tok.original.len)) {
+					break;
+				}
+
 				kv_push(rspamd_word_t, *words, tok);
 			}
 
@@ -458,7 +497,7 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 	}
 
 	/* Process text with exceptions */
-	while (pos < len && cur_ex) {
+	while (pos < len && cur_ex && !lim.full) {
 		ex = (struct rspamd_process_exception *) cur_ex->data;
 
 		/* Tokenize text before exception */
@@ -480,6 +519,10 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 						tok.original.begin = text + pos + offset_in_segment;
 						/* Ensure we don't go past the exception boundary */
 						if (tok.original.begin + tok.original.len <= text + ex->pos) {
+							if (!rspamd_custom_token_fits(&lim, tok.original.len)) {
+								break;
+							}
+
 							kv_push(rspamd_word_t, *words, tok);
 						}
 					}
@@ -508,6 +551,11 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 			ex_tok.original.len = ex->len;
 		}
 		ex_tok.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+
+		if (!rspamd_custom_token_fits(&lim, ex_tok.original.len)) {
+			break;
+		}
+
 		kv_push(rspamd_word_t, *words, ex_tok);
 
 		/* Move past exception */
@@ -516,7 +564,7 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 	}
 
 	/* Process remaining text after last exception */
-	if (pos < len) {
+	if (pos < len && !lim.full) {
 		kv_init(result);
 
 		ret = tokenizer->api->tokenize(text + pos, len - pos, &result);
@@ -531,6 +579,11 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 				gsize offset_in_segment = tok.original.begin - (text + pos);
 				if (offset_in_segment < (len - pos)) {
 					tok.original.begin = text + pos + offset_in_segment;
+
+					if (!rspamd_custom_token_fits(&lim, tok.original.len)) {
+						break;
+					}
+
 					kv_push(rspamd_word_t, *words, tok);
 				}
 			}
