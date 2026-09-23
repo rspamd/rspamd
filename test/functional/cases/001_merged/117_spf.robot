@@ -32,6 +32,38 @@ SPF ALLOW FAILED INCLUDE
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_ALLOW
 
+SPF A IPV4 PREFIX KEEPS IPV6 EXACT
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8:ffff::1  From=x@amask4.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF A IPV4 PREFIX MATCHES THE NETWORK
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.200  From=x@amask4.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF A WITHOUT PREFIX IS EXACT FOR IPV6
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8::11  From=x@amask0.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF A WITHOUT PREFIX MATCHES THE ADDRESS
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8::10  From=x@amask0.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF MACRO KEEPS RIGHT HAND PARTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@a.b.macro.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
 SPF NA NA
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@za

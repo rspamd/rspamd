@@ -1373,6 +1373,13 @@ parse_spf_domain_mask(struct spf_record *rec, struct spf_addr *addr,
 	host = resolved->cur_domain;
 	c = p;
 
+	/*
+	 * An omitted prefix length means the address itself (RFC 7208, 5),
+	 * for each family separately: `a/24` leaves IPv6 exact
+	 */
+	addr->m.dual.mask_v4 = 32;
+	addr->m.dual.mask_v6 = 128;
+
 	while (*p) {
 		t = *p;
 
@@ -1472,11 +1479,6 @@ parse_spf_domain_mask(struct spf_record *rec, struct spf_addr *addr,
 		hostbuf = rspamd_mempool_alloc(task->task_pool, p - c + 1);
 		rspamd_strlcpy(hostbuf, c, p - c + 1);
 		host = hostbuf;
-	}
-
-	if (cur_mask == 0) {
-		addr->m.dual.mask_v4 = 32;
-		addr->m.dual.mask_v6 = 64;
 	}
 
 	return host;
@@ -2062,35 +2064,24 @@ rspamd_spf_process_substitution(const char *macro_value,
 								pos, G_N_ELEMENTS(pos), delim);
 
 	if (vlen > 0) {
-		if (reversed) {
-			for (i = vlen - 1;; i--) {
-				tlen = pos[i * 2 + 1] - pos[i * 2];
+		/*
+		 * RFC 7208, 7.3: split, reverse if asked, then keep the ndelim
+		 * right-hand parts (0 means all of them), and join with dots
+		 */
+		unsigned int first = 0, k;
 
-				if (i != 0) {
-					memcpy(d, &macro_value[pos[i * 2]], tlen);
-					d += tlen;
-					*d++ = canon_delim;
-				}
-				else {
-					memcpy(d, &macro_value[pos[i * 2]], tlen);
-					d += tlen;
-					break;
-				}
-			}
+		if (ndelim > 0 && ndelim < vlen) {
+			first = vlen - ndelim;
 		}
-		else {
-			for (i = 0; i < vlen; i++) {
-				tlen = pos[i * 2 + 1] - pos[i * 2];
 
-				if (i != vlen - 1) {
-					memcpy(d, &macro_value[pos[i * 2]], tlen);
-					d += tlen;
-					*d++ = canon_delim;
-				}
-				else {
-					memcpy(d, &macro_value[pos[i * 2]], tlen);
-					d += tlen;
-				}
+		for (k = first; k < vlen; k++) {
+			i = reversed ? vlen - 1 - k : k;
+			tlen = pos[i * 2 + 1] - pos[i * 2];
+			memcpy(d, &macro_value[pos[i * 2]], tlen);
+			d += tlen;
+
+			if (k != vlen - 1) {
+				*d++ = canon_delim;
 			}
 		}
 	}

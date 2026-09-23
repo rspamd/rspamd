@@ -519,6 +519,13 @@ rspamd_dkim_parse_hdrlist_common(struct rspamd_dkim_common_ctx *ctx,
 	c = param;
 	p = param;
 	ctx->htable = g_hash_table_new(rspamd_strcase_hash, rspamd_strcase_equal);
+	/* Owned by the pool from now on, whichever way the parsing ends */
+	rspamd_mempool_add_destructor(ctx->pool,
+								  (rspamd_mempool_destruct_t) rspamd_dkim_hlist_free,
+								  ctx->hlist);
+	rspamd_mempool_add_destructor(ctx->pool,
+								  (rspamd_mempool_destruct_t) g_hash_table_unref,
+								  ctx->htable);
 
 	while (p <= end) {
 		if ((p == end || *p == ':') && p - c > 0) {
@@ -600,22 +607,12 @@ rspamd_dkim_parse_hdrlist_common(struct rspamd_dkim_common_ctx *ctx,
 					"invalid dkim header list");
 		return false;
 	}
-	else {
-		if (!from_found) {
-			g_ptr_array_free(ctx->hlist, true);
-			g_set_error(err,
-						DKIM_ERROR,
-						DKIM_SIGERROR_INVALID_H,
-						"invalid dkim header list, from header is missing");
-			return false;
-		}
-
-		rspamd_mempool_add_destructor(ctx->pool,
-									  (rspamd_mempool_destruct_t) rspamd_dkim_hlist_free,
-									  ctx->hlist);
-		rspamd_mempool_add_destructor(ctx->pool,
-									  (rspamd_mempool_destruct_t) g_hash_table_unref,
-									  ctx->htable);
+	else if (!from_found) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_INVALID_H,
+					"invalid dkim header list, from header is missing");
+		return false;
 	}
 
 	return true;
@@ -2376,14 +2373,19 @@ rspamd_dkim_canonize_body(struct rspamd_task *task,
 				}
 			}
 			else {
-				ssize_t orig_len = remain;
+				ssize_t body_len = end - start;
 
 				while (rspamd_dkim_relaxed_body_step(ctx, ctx->body_hash,
 													 &start, end - start, &remain));
 
-				if (ctx->len > 0 && remain > (double) orig_len * 0.1) {
-					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size)",
-								  (int) ctx->len, (int) (end - start));
+				/*
+				 * l= counts canonical octets, which relaxed canonicalisation
+				 * shrinks, so compare the input left unhashed instead: it is
+				 * what could be appended after signing
+				 */
+				if (ctx->len > 0 && (double) (end - start) > (double) body_len * 0.1) {
+					msg_info_task("DKIM l tag does not cover enough of the body: %d (%d actual size, %d unsigned)",
+								  (int) ctx->len, (int) body_len, (int) (end - start));
 					return false;
 				}
 
