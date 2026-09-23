@@ -174,7 +174,7 @@ local function peekaboo_check(task, content, digest, rule, maybe_part)
     if mime_attr['name'] then
       table.insert(form_data,
           string.format('Content-Disposition: form-data; name="file"; filename="%s"\r\n',
-              mime_attr['name']))
+              common.sanitize_header_filename(mime_attr['name'])))
     elseif detected_extension then
       table.insert(form_data,
           string.format('Content-Disposition: form-data; name="file"; filename="file.%s"\r\n',

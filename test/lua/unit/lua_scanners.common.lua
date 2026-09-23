@@ -62,6 +62,21 @@ context("lua_scanners common", function()
     end)
   end)
 
+  context("sanitize_header_filename", function()
+    test("passes through a plain filename unchanged", function()
+      assert_equal(common.sanitize_header_filename('report.pdf'), 'report.pdf')
+    end)
+
+    test("returns nil/false unchanged", function()
+      assert_equal(common.sanitize_header_filename(nil), nil)
+    end)
+
+    test("replaces quotes, backslashes and control characters", function()
+      assert_equal(common.sanitize_header_filename('foo\\"bar.pdf'), 'foo__bar.pdf')
+      assert_equal(common.sanitize_header_filename('foo\r\nbar.pdf'), 'foo__bar.pdf')
+    end)
+  end)
+
   context("yield_result / av_result_cache", function()
     local function load_task_with_attachment()
       local msg = table.concat({

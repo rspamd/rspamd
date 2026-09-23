@@ -65,6 +65,16 @@ local function match_patterns(default_sym, found, patterns, dyn_weight)
   end
 end
 
+-- strip quotes, backslashes and control characters so a mime part filename
+-- can't break out of a generated `Content-Disposition: ...; filename="..."` header
+local function sanitize_header_filename(name)
+  if not name then
+    return name
+  end
+
+  return (name:gsub('[%c"\\]', '_'))
+end
+
 local av_result_cache_key = 'av_result_cache'
 
 --[[
@@ -963,6 +973,7 @@ end
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
+exports.sanitize_header_filename = sanitize_header_filename
 exports.condition_check_and_continue = need_check
 exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
