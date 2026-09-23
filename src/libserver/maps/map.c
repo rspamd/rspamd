@@ -1246,7 +1246,8 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 
 	if (len > 0) {
 		if (map->no_file_read) {
-			/* We just call read callback with backend name */
+			/* We just call read callback with backend name, a plain file */
+			map->no_file_read_offset = 0;
 			map->read_callback(data->filename, strlen(data->filename),
 							   &periodic->cbdata, TRUE);
 		}

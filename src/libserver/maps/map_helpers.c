@@ -1832,7 +1832,8 @@ rspamd_cdb_list_read(char *chunk,
 
 		cdb = g_malloc0(sizeof(struct cdb));
 
-		if (cdb_init(cdb, fd) == -1) {
+		/* A cached HTTP map has its data behind a header */
+		if (cdb_init_offset(cdb, fd, rspamd_map_get_no_file_read_offset(data->map)) == -1) {
 			g_free(cdb);
 			msg_err_map("cannot init cdb map from %s: %s", chunk, strerror(errno));
 

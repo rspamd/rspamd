@@ -20,6 +20,11 @@ cdb_hash(const void *buf, unsigned len)
 
 int cdb_init(struct cdb *cdbp, int fd)
 {
+	return cdb_init_offset(cdbp, fd, 0);
+}
+
+int cdb_init_offset(struct cdb *cdbp, int fd, unsigned offset)
+{
 	struct stat st;
 	unsigned char *mem;
 	unsigned fsize, dend;
@@ -31,7 +36,7 @@ int cdb_init(struct cdb *cdbp, int fd)
 	if (fstat(fd, &st) < 0)
 		return -1;
 	/* trivial sanity check: at least toc should be here */
-	if (st.st_size < 2048)
+	if (st.st_size < 2048 || (st.st_size - 2048) < (off_t) offset)
 		return errno = EPROTO, -1;
 	fsize = (unsigned) (st.st_size & 0xffffffffu);
 	/* memory-map file */
@@ -52,14 +57,17 @@ int cdb_init(struct cdb *cdbp, int fd)
 		return -1;
 #endif /* _WIN32 */
 
+	/* The whole file is mapped, the database is the part after offset */
 	cdbp->cdb_fd = fd;
-	cdbp->cdb_fsize = fsize;
-	cdbp->cdb_mem = mem;
+	cdbp->cdb_moff = offset;
+	cdbp->cdb_fsize = fsize - offset;
+	cdbp->cdb_mem = mem + offset;
 	cdbp->mtime = st.st_mtime;
+	fsize -= offset;
 
 	cdbp->cdb_vpos = cdbp->cdb_vlen = 0;
 	cdbp->cdb_kpos = cdbp->cdb_klen = 0;
-	dend = cdb_unpack(mem);
+	dend = cdb_unpack(cdbp->cdb_mem);
 	if (dend < 2048)
 		dend = 2048;
 	else if (dend >= fsize)
@@ -73,9 +81,9 @@ void cdb_free(struct cdb *cdbp)
 {
 	if (cdbp->cdb_mem) {
 #ifdef _WIN32
-		UnmapViewOfFile((void *) cdbp->cdb_mem);
+		UnmapViewOfFile((void *) (cdbp->cdb_mem - cdbp->cdb_moff));
 #else
-		munmap((void *) cdbp->cdb_mem, cdbp->cdb_fsize);
+		munmap((void *) (cdbp->cdb_mem - cdbp->cdb_moff), cdbp->cdb_fsize + cdbp->cdb_moff);
 #endif /* _WIN32 */
 		cdbp->cdb_mem = NULL;
 	}
@@ -115,15 +123,15 @@ cdb_timer_callback(EV_P_ ev_stat *w, int revents)
 	if ((nfd = open(cdbp->filename, O_RDONLY)) != -1) {
 		if (cdbp->cdb_mem) {
 #ifdef _WIN32
-			UnmapViewOfFile((void *) cdbp->cdb_mem);
+			UnmapViewOfFile((void *) (cdbp->cdb_mem - cdbp->cdb_moff));
 #else
-			munmap((void *) cdbp->cdb_mem, cdbp->cdb_fsize);
+			munmap((void *) (cdbp->cdb_mem - cdbp->cdb_moff), cdbp->cdb_fsize + cdbp->cdb_moff);
 #endif /* _WIN32 */
 			cdbp->cdb_mem = NULL;
 		}
 		(void) close(cdbp->cdb_fd);
 		cdbp->cdb_fsize = 0;
-		(void) cdb_init(cdbp, nfd);
+		(void) cdb_init_offset(cdbp, nfd, cdbp->cdb_moff);
 	}
 }
 
