@@ -481,6 +481,9 @@ rdns_request_free (struct rdns_request *req)
 	unsigned int i;
 
 	if (req != NULL) {
+		/* Whatever the state, a queued packet must not outlive its request */
+		rdns_request_drop_tcp_output (req);
+
 		if (req->packet != NULL) {
 			free (req->packet);
 		}
@@ -641,6 +644,25 @@ rdns_request_retain (struct rdns_request *req)
 }
 
 void
+rdns_request_drop_tcp_output (struct rdns_request *req)
+{
+	struct rdns_tcp_output_chain *oc = req->tcp_oc;
+
+	if (oc == NULL) {
+		return;
+	}
+
+	req->tcp_oc = NULL;
+	oc->req = NULL;
+
+	if (oc->cur_write == 0 && req->io != NULL && req->io->tcp != NULL) {
+		DL_DELETE (req->io->tcp->output_chain, oc);
+		req->io->tcp->cur_output_chains --;
+		free (oc);
+	}
+}
+
+void
 rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 {
 	struct rdns_resolver *resolver = req->resolver;
@@ -670,6 +692,8 @@ rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 		}
 		break;
 	case RDNS_REQUEST_TCP:
+		/* The packet is not needed anymore */
+		rdns_request_drop_tcp_output (req);
 		/* We also have a timer */
 		if (req->async_event) {
 			if (remove_from_hash) {
@@ -725,6 +749,11 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 		struct rdns_tcp_output_chain *oc, *tmp;
 		DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {
 			DL_DELETE (ioc->tcp->output_chain, oc);
+
+			if (oc->req) {
+				oc->req->tcp_oc = NULL;
+			}
+
 			free (oc);
 		}
 

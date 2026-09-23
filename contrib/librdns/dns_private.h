@@ -129,6 +129,8 @@ struct rdns_request {
 	void *arg;
 
 	void *async_event;
+	/* The packet queued on a TCP channel while it is not written yet */
+	struct rdns_tcp_output_chain *tcp_oc;
 
 #if defined(TWEETNACL) || defined(USE_RSPAMD_CRYPTOBOX)
 	void *curve_plugin_data;
@@ -156,8 +158,15 @@ struct rdns_tcp_output_chain {
 	uint16_t next_write_size; /* Network byte order! */
 	uint16_t cur_write; /* Cur bytes written including `next_write_size` */
 	unsigned char *write_buf;
+	struct rdns_request *req; /* NULL once the request is gone */
 	struct rdns_tcp_output_chain *prev, *next;
 };
+
+/*
+ * Packets queued on one TCP channel: past it requests are not rescheduled
+ * over TCP, so a stalled upstream cannot accumulate them
+ */
+#define RDNS_MAX_TCP_OUTPUT_CHAINS 1024
 
 /**
  * Specific stuff for a TCP IO chain

@@ -96,4 +96,10 @@ void rdns_reply_free (struct rdns_reply *rep);
 
 void rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash);
 
+/**
+ * Drops the TCP packet of a request that is gone: an unwritten one is
+ * removed from the queue, a partially written one is kept for framing
+ */
+void rdns_request_drop_tcp_output (struct rdns_request *req);
+
 #endif /* UTIL_H_ */

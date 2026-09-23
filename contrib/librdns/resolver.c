@@ -202,7 +202,7 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 	struct rdns_resolver *resolver = req->resolver;
 	uint16_t qdcount;
 	int type;
-	bool found = false;
+	bool found = false, malformed = false;
 
 	int i, t;
 
@@ -275,6 +275,15 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 			if (t == -1) {
 				free(elt);
 				rdns_debug("incomplete reply");
+
+				if (!header->tc) {
+					/*
+					 * A reply that is not truncated must parse in full:
+					 * neither the records before the broken one nor their
+					 * absence can be trusted
+					 */
+					malformed = true;
+				}
 				break;
 			}
 			else if (t == 1) {
@@ -291,7 +300,10 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 		}
 	}
 
-	if (!found && type != RDNS_REQUEST_ANY) {
+	if (malformed) {
+		rep->code = RDNS_RC_SERVFAIL;
+	}
+	else if (!found && type != RDNS_REQUEST_ANY) {
 		/* We have not found the requested RR type */
 		if (rep->code == RDNS_RC_NOERROR) {
 			rep->code = RDNS_RC_NOREC;
@@ -514,6 +526,30 @@ rdns_reschedule_req_over_tcp(struct rdns_request *req, struct rdns_server *serv)
 
 		struct rdns_tcp_output_chain *oc;
 
+		if (ioc->tcp->cur_output_chains >= RDNS_MAX_TCP_OUTPUT_CHAINS) {
+			rdns_info("too many requests queued on TCP channel to %s",
+					  ioc->srv->name);
+			return false;
+		}
+
+		/* Find an ID that is free on the new channel, with bounded tries */
+		int new_id = req->id, tries;
+
+		for (tries = 0; tries < 64; tries++) {
+			if (kh_get(rdns_requests_hash, ioc->requests, new_id) ==
+				kh_end(ioc->requests)) {
+				break;
+			}
+
+			new_id = rdns_permutor_generate_id();
+		}
+
+		if (tries == 64) {
+			rdns_info("cannot find a free request id on TCP channel to %s",
+					  ioc->srv->name);
+			return false;
+		}
+
 		oc = calloc(1, sizeof(*oc) + req->pos);
 
 		if (oc == NULL) {
@@ -522,32 +558,29 @@ rdns_reschedule_req_over_tcp(struct rdns_request *req, struct rdns_server *serv)
 			return false;
 		}
 
-		/* Switch IO channel from UDP to TCP */
+		/* Switch IO channel from UDP to TCP, the old id is in the old hash */
 		rdns_request_remove_from_hash(req);
 		req->io = ioc;
 
-		khiter_t k;
-		for (;;) {
-			int pr;
-			k = kh_put(rdns_requests_hash, ioc->requests, req->id, &pr);
-
-			if (pr == 0) {
-				/* We have already a request with this id, so we have to regenerate ID */
-				req->id = rdns_permutor_generate_id();
-				/* Update packet as well */
-				uint16_t raw_id = req->id;
-				memcpy(req->packet, &raw_id, sizeof(raw_id));
-			}
-			else {
-				break;
-			}
+		if (new_id != req->id) {
+			req->id = new_id;
+			/* Update packet as well */
+			uint16_t raw_id = req->id;
+			memcpy(req->packet, &raw_id, sizeof(raw_id));
 		}
+
+		khiter_t k;
+		int pr;
+		k = kh_put(rdns_requests_hash, ioc->requests, req->id, &pr);
 
 		oc->write_buf = ((unsigned char *) oc) + sizeof(*oc);
 		memcpy(oc->write_buf, req->packet, req->pos);
 		oc->next_write_size = htons(req->pos);
+		oc->req = req;
+		req->tcp_oc = oc;
 
 		DL_APPEND(ioc->tcp->output_chain, oc);
+		ioc->tcp->cur_output_chains++;
 
 		if (ioc->tcp->async_write == NULL) {
 			ioc->tcp->async_write = resolver->async->add_write(
@@ -726,7 +759,12 @@ void rdns_process_timer(void *arg)
 			/* Do not reschedule IO requests on inactive sockets */
 			rdns_debug("reschedule request with id: %d", (int) req->id);
 			rdns_request_unschedule(req, true);
-			REF_RELEASE(req->io);
+			/*
+			 * Keep the old channel until the new one is retained: it may
+			 * be freed with its last reference, and a request that fails
+			 * below still releases req->io when freed
+			 */
+			struct rdns_io_channel *prev_io = req->io;
 
 			if (resolver->ups) {
 				struct rdns_upstream_elt *elt;
@@ -734,7 +772,7 @@ void rdns_process_timer(void *arg)
 				elt = resolver->ups->select_retransmit(
 					req->requested_names[0].name,
 					req->requested_names[0].len,
-					req->io->srv->ups_elt,
+					prev_io->srv->ups_elt,
 					resolver->ups->data);
 
 				if (elt) {
@@ -763,6 +801,7 @@ void rdns_process_timer(void *arg)
 			req->io = serv->io_channels[ottery_rand_uint32() % serv->io_cnt];
 			req->io->uses++;
 			REF_RETAIN(req->io);
+			REF_RELEASE(prev_io);
 			renew = true;
 		}
 	}
@@ -988,9 +1027,14 @@ rdns_process_tcp_write(int fd, struct rdns_io_channel *ioc)
 				return;
 			}
 		}
-		else if (ntohs(oc->next_write_size) < oc->cur_write) {
-			/* Packet has been fully written, remove it */
+		else if (oc->cur_write >= ntohs(oc->next_write_size) + sizeof(oc->next_write_size)) {
+			/* Packet has been fully written, including its length prefix */
 			DL_DELETE(ioc->tcp->output_chain, oc);
+
+			if (oc->req) {
+				oc->req->tcp_oc = NULL;
+			}
+
 			free(oc); /* It also frees write buf */
 			ioc->tcp->cur_output_chains--;
 		}
@@ -1130,6 +1174,7 @@ rdns_make_request_full(
 	req->packet = NULL;
 	req->requested_names = calloc(queries, sizeof(struct rdns_request_name));
 	req->async_event = NULL;
+	req->tcp_oc = NULL;
 
 	if (req->requested_names == NULL) {
 		free(req);

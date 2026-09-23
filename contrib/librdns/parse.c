@@ -324,7 +324,8 @@ rdns_parse_rr(struct rdns_resolver *resolver,
 		rdns_info("bad RR name");
 		return -1;
 	}
-	if (*remain < (int) sizeof(uint16_t) * 6) {
+	/* Type, class, TTL and data length */
+	if (*remain < (int) (sizeof(uint16_t) * 3 + sizeof(uint32_t))) {
 		rdns_info("stripped dns reply: %d bytes remain; domain %s", *remain,
 				  rep->requested_name);
 		return -1;
