@@ -1876,8 +1876,16 @@ rspamd_fuzzy_decrypt_command(struct fuzzy_session *s, unsigned char *buf, gsize 
 		return FALSE;
 	}
 
-	/* Try to get the cached NM */
-	rspamd_keypair_cache_process(s->ctx->keypair_cache, key->key, rk);
+	/* Try to get the cached NM, the cache may be disabled */
+	if (!rspamd_keypair_cache_process(s->ctx->keypair_cache, key->key, rk)) {
+		/* Low order key, no shared secret: debug level as above */
+		s->ctx->stat.decrypt_errors++;
+		msg_debug("bad key: no shared secret; ip=%s",
+				  rspamd_inet_address_to_string(s->addr));
+		rspamd_pubkey_unref(rk);
+
+		return FALSE;
+	}
 
 	/* Now decrypt request */
 	if (!rspamd_cryptobox_decrypt_nm_inplace(buf, buflen, hdr.nonce,

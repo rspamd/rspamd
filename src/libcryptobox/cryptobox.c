@@ -459,22 +459,36 @@ void rspamd_cryptobox_keypair_sig(rspamd_sig_pk_t pk, rspamd_sig_sk_t sk)
 	crypto_sign_keypair(pk, sk);
 }
 
-void rspamd_cryptobox_nm(rspamd_nm_t nm,
+bool rspamd_cryptobox_nm(rspamd_nm_t nm,
 						 const rspamd_pk_t pk, const rspamd_sk_t sk)
 {
 	unsigned char s[32];
 	unsigned char e[32];
+	bool ret = true;
 
 	memcpy(e, sk, 32);
 	e[0] &= 248;
 	e[31] &= 127;
 	e[31] |= 64;
 
-	if (crypto_scalarmult(s, e, pk) != -1) {
+	if (crypto_scalarmult(s, e, pk) == 0) {
 		hchacha(s, n0, nm, 20);
 	}
+	else {
+		/*
+		 * A low order public key gives no shared secret. Callers that ignore
+		 * the result must still not end up with a predictable (or
+		 * uninitialised) key, so use one nobody knows: nothing encrypted
+		 * with it can be read, nothing can be authenticated with it.
+		 */
+		ottery_rand_bytes(nm, sizeof(rspamd_nm_t));
+		ret = false;
+	}
 
-	rspamd_explicit_memzero(e, 32);
+	rspamd_explicit_memzero(s, sizeof(s));
+	rspamd_explicit_memzero(e, sizeof(e));
+
+	return ret;
 }
 
 void rspamd_cryptobox_sign(unsigned char *sig, unsigned long long *siglen_p,

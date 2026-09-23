@@ -36,11 +36,13 @@ struct rspamd_keypair_cache *rspamd_keypair_cache_new(unsigned int max_items);
 
 /**
  * Process local and remote keypair setting beforenm value as appropriate
- * @param c cache of keypairs
+ * @param c cache of keypairs, NULL to calculate without caching
  * @param lk local key
  * @param rk remote key
+ * @return false if there is no shared secret for these keys: `rk` then gets
+ * a random one, which is not cached
  */
-void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
+bool rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 								  struct rspamd_cryptobox_keypair *lk,
 								  struct rspamd_cryptobox_pubkey *rk);
 

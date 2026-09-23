@@ -19,6 +19,8 @@
 #ifndef RSPAMD_RSPAMD_CXX_UNIT_CRYPTOBOX_HXX
 #define RSPAMD_RSPAMD_CXX_UNIT_CRYPTOBOX_HXX
 #include "libcryptobox/cryptobox.h"
+#include "libcryptobox/keypair.h"
+#include "libcryptobox/keypairs_cache.h"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -48,6 +50,64 @@ TEST_SUITE("rspamd_cryptobox")
 		rspamd_pk_t pk;
 
 		rspamd_cryptobox_keypair(pk, sk);
+	}
+
+	TEST_CASE("rspamd_cryptobox_nm fails closed on low order keys")
+	{
+		rspamd_sk_t sk, peer_sk;
+		rspamd_pk_t pk, peer_pk;
+		rspamd_nm_t nm1, nm2, peer_nm;
+
+		rspamd_cryptobox_keypair(pk, sk);
+		rspamd_cryptobox_keypair(peer_pk, peer_sk);
+
+		/* A proper key agrees on the same secret from both sides */
+		CHECK(rspamd_cryptobox_nm(nm1, peer_pk, sk));
+		CHECK(rspamd_cryptobox_nm(peer_nm, pk, peer_sk));
+		CHECK(memcmp(nm1, peer_nm, sizeof(nm1)) == 0);
+
+		/* Zero and one are small order points: no secret, a random one */
+		for (unsigned char point: {0, 1}) {
+			rspamd_pk_t bad_pk{};
+			bad_pk[0] = point;
+
+			memset(nm1, 0, sizeof(nm1));
+			memset(nm2, 0, sizeof(nm2));
+			CHECK_FALSE(rspamd_cryptobox_nm(nm1, bad_pk, sk));
+			CHECK_FALSE(rspamd_cryptobox_nm(nm2, bad_pk, sk));
+			CHECK(memcmp(nm1, nm2, sizeof(nm1)) != 0);
+		}
+	}
+
+	TEST_CASE("rspamd_keypair_cache_process rejects low order keys")
+	{
+		auto *kp = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+		auto *peer = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+		unsigned int pklen;
+		const auto *peer_pk = rspamd_keypair_component(peer, RSPAMD_KEYPAIR_COMPONENT_PK,
+													   &pklen);
+		auto *good = rspamd_pubkey_from_bin(peer_pk, pklen, RSPAMD_KEYPAIR_KEX);
+		rspamd_pk_t zero_pk{};
+		auto *bad = rspamd_pubkey_from_bin(zero_pk, sizeof(zero_pk), RSPAMD_KEYPAIR_KEX);
+		auto *cache = rspamd_keypair_cache_new(8);
+
+		REQUIRE(good != nullptr);
+		REQUIRE(bad != nullptr);
+
+		/* With and without a cache, and a failure is never cached */
+		for (auto *c: {cache, cache, (struct rspamd_keypair_cache *) nullptr}) {
+			CHECK(rspamd_keypair_cache_process(c, kp, good));
+			CHECK(rspamd_pubkey_get_nm(good, kp) != nullptr);
+			CHECK_FALSE(rspamd_keypair_cache_process(c, kp, bad));
+			/* Callers ignoring the result still get a (random) secret */
+			CHECK(rspamd_pubkey_get_nm(bad, kp) != nullptr);
+		}
+
+		rspamd_keypair_cache_destroy(cache);
+		rspamd_pubkey_unref(good);
+		rspamd_pubkey_unref(bad);
+		rspamd_keypair_unref(kp);
+		rspamd_keypair_unref(peer);
 	}
 
 	TEST_CASE("rspamd_cryptobox_keypair_sig")

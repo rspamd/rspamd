@@ -182,8 +182,10 @@ gboolean rspamd_cryptobox_decrypt_nm_inplace(unsigned char *data, gsize len,
 * @param nm shared secret
 * @param pk remote pubkey
 * @param sk local privkey
+* @return false if there is no shared secret for these keys (low order `pk`),
+* `nm` is then filled with random bytes
 */
-void rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk);
+bool rspamd_cryptobox_nm(rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk);
 
 /**
 * Create digital signature for the specified message and place result in `sig`

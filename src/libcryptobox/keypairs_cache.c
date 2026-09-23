@@ -69,16 +69,53 @@ rspamd_keypair_cache_new(unsigned int max_items)
 	return c;
 }
 
-void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
+static struct rspamd_cryptobox_nm *
+rspamd_keypair_cache_calculate_nm(struct rspamd_cryptobox_keypair *lk,
+								  struct rspamd_cryptobox_pubkey *rk,
+								  bool *ok)
+{
+	struct rspamd_cryptobox_nm *nm;
+
+	if (posix_memalign((void **) &nm, 32, sizeof(*nm)) != 0) {
+		abort();
+	}
+
+	REF_INIT_RETAIN(nm, rspamd_cryptobox_nm_dtor);
+	memcpy(&nm->sk_id, lk->id, sizeof(uint64_t));
+
+	struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
+		RSPAMD_CRYPTOBOX_PUBKEY_25519(rk);
+	struct rspamd_cryptobox_keypair_25519 *sk_25519 =
+		RSPAMD_CRYPTOBOX_KEYPAIR_25519(lk);
+
+	*ok = rspamd_cryptobox_nm(nm->nm, rk_25519->pk, sk_25519->sk);
+
+	return nm;
+}
+
+bool rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 								  struct rspamd_cryptobox_keypair *lk,
 								  struct rspamd_cryptobox_pubkey *rk)
 {
 	struct rspamd_keypair_elt search, *new;
+	bool ok = true;
 
 	g_assert(lk != NULL);
 	g_assert(rk != NULL);
 	g_assert(rk->type == lk->type);
 	g_assert(rk->type == RSPAMD_KEYPAIR_KEX);
+
+	if (rk->nm) {
+		REF_RELEASE(rk->nm);
+		rk->nm = NULL;
+	}
+
+	if (c == NULL) {
+		/* Caching is disabled */
+		rk->nm = rspamd_keypair_cache_calculate_nm(lk, rk, &ok);
+
+		return ok;
+	}
 
 	memset(&search, 0, sizeof(search));
 	memcpy(search.pair, rk->id, rspamd_cryptobox_HASHBYTES);
@@ -86,39 +123,29 @@ void rspamd_keypair_cache_process(struct rspamd_keypair_cache *c,
 		   rspamd_cryptobox_HASHBYTES);
 	new = rspamd_lru_hash_lookup(c->hash, &search, time(NULL));
 
-	if (rk->nm) {
-		REF_RELEASE(rk->nm);
-		rk->nm = NULL;
-	}
-
 	if (new == NULL) {
-		new = g_malloc0(sizeof(*new));
+		struct rspamd_cryptobox_nm *nm = rspamd_keypair_cache_calculate_nm(lk, rk, &ok);
 
-		if (posix_memalign((void **) &new->nm, 32, sizeof(*new->nm)) != 0) {
-			abort();
+		if (!ok) {
+			/* Never cache a failed calculation, the key keeps the dummy one */
+			rk->nm = nm;
+
+			return false;
 		}
 
-		REF_INIT_RETAIN(new->nm, rspamd_cryptobox_nm_dtor);
-
+		new = g_malloc0(sizeof(*new));
+		new->nm = nm;
 		memcpy(new->pair, rk->id, rspamd_cryptobox_HASHBYTES);
 		memcpy(&new->pair[rspamd_cryptobox_HASHBYTES], lk->id,
 			   rspamd_cryptobox_HASHBYTES);
-		memcpy(&new->nm->sk_id, lk->id, sizeof(uint64_t));
-
-		struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
-			RSPAMD_CRYPTOBOX_PUBKEY_25519(rk);
-		struct rspamd_cryptobox_keypair_25519 *sk_25519 =
-			RSPAMD_CRYPTOBOX_KEYPAIR_25519(lk);
-
-		rspamd_cryptobox_nm(new->nm->nm, rk_25519->pk, sk_25519->sk);
 
 		rspamd_lru_hash_insert(c->hash, new, new, time(NULL), -1);
 	}
 
-	g_assert(new != NULL);
-
 	rk->nm = new->nm;
 	REF_RETAIN(rk->nm);
+
+	return true;
 }
 
 void rspamd_keypair_cache_destroy(struct rspamd_keypair_cache *c)
