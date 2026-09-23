@@ -1550,16 +1550,17 @@ html_process_data_image(rspamd_mempool_t *pool,
 				const char *data_pos = semicolon_pos + sizeof("base64,");
 				char *decoded;
 				gsize encoded_len = end - data_pos, decoded_len;
-				rspamd_ftok_t inp;
+				/* The parsed image keeps a pointer to it */
+				auto *inp = rspamd_mempool_alloc_type(pool, rspamd_ftok_t);
 
 				decoded_len = (encoded_len / 4 * 3) + 12;
 				decoded = rspamd_mempool_alloc_buffer(pool, decoded_len);
 				rspamd_cryptobox_base64_decode(data_pos, encoded_len,
 											   reinterpret_cast<unsigned char *>(decoded), &decoded_len);
-				inp.begin = decoded;
-				inp.len = decoded_len;
+				inp->begin = decoded;
+				inp->len = decoded_len;
 
-				parsed_image = rspamd_maybe_process_image(pool, &inp);
+				parsed_image = rspamd_maybe_process_image(pool, inp);
 
 				if (parsed_image) {
 					msg_debug_html("detected %s image of size %ud x %ud in data url",

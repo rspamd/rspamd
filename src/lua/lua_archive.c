@@ -892,7 +892,8 @@ lua_archive_unpack(lua_State *L)
 	guint64 entries_seen = 0;
 	gboolean truncated = FALSE;
 
-	while ((r = archive_read_next_header(a, &ae)) == ARCHIVE_OK) {
+	/* A warning still returns a usable entry */
+	while ((r = archive_read_next_header(a, &ae)) == ARCHIVE_OK || r == ARCHIVE_WARN) {
 		const char *name = archive_entry_pathname_utf8(ae);
 		mode_t ftype = archive_entry_filetype(ae);
 
@@ -938,6 +939,7 @@ lua_archive_unpack(lua_State *L)
 		gboolean member_truncated = FALSE; /* size cap clipped this member */
 		gboolean drop_member = FALSE;      /* ratio cap rejected this member */
 		gboolean output_full = FALSE;      /* total cap reached, stop after this */
+		gboolean deadline_hit = FALSE;     /* out of time, stop after this */
 		/* Raw (compressed) input consumed so far, for the per-member ratio */
 		la_int64_t comp_before = archive_filter_bytes(a, -1);
 
@@ -995,6 +997,13 @@ lua_archive_unpack(lua_State *L)
 			if (member_truncated || output_full) {
 				break;
 			}
+
+			/* A single member can take long, so check the deadline here too */
+			if (lim.end_timestamp > 0 && rspamd_get_ticks(FALSE) >= lim.end_timestamp) {
+				member_truncated = TRUE;
+				deadline_hit = TRUE;
+				break;
+			}
 		}
 
 		if (member_truncated || drop_member || output_full) {
@@ -1024,9 +1033,14 @@ lua_archive_unpack(lua_State *L)
 
 		lua_rawseti(L, -2, ++n);
 
-		if (output_full) {
+		if (output_full || deadline_hit) {
 			break;
 		}
+	}
+
+	if (r != ARCHIVE_EOF && r != ARCHIVE_OK && r != ARCHIVE_WARN) {
+		/* Headers could not be read to the end: the result is partial */
+		truncated = TRUE;
 	}
 
 	archive_read_free(a);

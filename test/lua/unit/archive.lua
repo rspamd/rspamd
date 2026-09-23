@@ -139,6 +139,22 @@ context("Lua archive bindings", function()
     assert_rspamd_eq({ actual = out[1].content, expect = rspamd_text.fromstring("Z") })
   end)
 
+  test("a damaged header reports truncation", function()
+    local files = {
+      { name = "x.txt", content = "X" },
+      { name = "y.txt", content = "YY" },
+    }
+    local blob = tostring(archive.tar(files))
+    -- Break the checksum of the second header: one header and one data block
+    -- of 512 bytes each precede it
+    local pos = 1024 + 1
+    local damaged = blob:sub(1, pos - 1) .. "\255" .. blob:sub(pos + 1)
+    local out, truncated = archive.unpack(damaged, "tar")
+    assert_equal(#out, 1)
+    assert_equal(out[1].name, "x.txt")
+    assert_equal(truncated, true)
+  end)
+
   test("unpack without opts reports no truncation", function()
     local files = {
       { name = "a.txt", content = "Hello" },

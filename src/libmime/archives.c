@@ -549,6 +549,12 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 		/* Crc16 */
 		start_section = p;
 		RAR_SKIP_BYTES(sizeof(uint16_t));
+
+		if (p >= end) {
+			msg_debug_archive("rar archive is invalid (truncated block header)");
+			return;
+		}
+
 		type = *p;
 		p++;
 		RAR_READ_UINT16(flags);
@@ -1559,11 +1565,27 @@ rspamd_7zip_read_main_streams_info(struct rspamd_task *task,
 {
 	unsigned char t;
 	unsigned int num_folders = 0, unknown_digests = 0;
+	/*
+	 * Each of the sections below allocates per folder, and a repeated one
+	 * would allocate again for the same folders: allow each only once
+	 */
+	unsigned int seen_sections = 0;
 
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
 		msg_debug_archive("7zip: read main streams info %xd", t);
+
+		if (t == kPackInfo || t == kUnPackInfo || t == kSubStreamsInfo) {
+			if (seen_sections & (1u << t)) {
+				msg_debug_archive("7zip: duplicate streams info section %xd; %s",
+								  t, G_STRLOC);
+				p = NULL;
+				goto end;
+			}
+
+			seen_sections |= 1u << t;
+		}
 
 		/*
 		 *
@@ -1729,27 +1751,33 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 				SZ_SKIP_BYTES(sz);
 			}
 			break;
-		case kName:
+		case kName: {
 			/* The most useful part in this whole bloody format */
-			b = *p; /* External flag */
-			SZ_SKIP_BYTES(1);
+			const unsigned char *names_end;
 
-			if (b) {
-				/* TODO: for the god sake, do something about external
-				 * filenames...
-				 */
-				uint64_t tmp;
-
-				SZ_READ_VINT(tmp);
+			/* The external flag and the names must fit the property */
+			if (sz == 0 || sz > (uint64_t) (end - p)) {
+				msg_debug_archive("bad 7zip names size; %s", G_STRLOC);
+				p = NULL;
+				goto end;
 			}
-			else {
+
+			names_end = p + sz;
+			b = *p; /* External flag */
+			p++;
+
+			if (!b) {
+				/*
+				 * External names (b != 0) are stored in a separate stream
+				 * and are not parsed here
+				 */
 				for (i = 0; i < nfiles; i++) {
 					/* Zero terminated wchar_t: happy converting... */
 					/* First, find terminator */
 					const unsigned char *fend = NULL, *tp = p;
 					GString *res;
 
-					while (tp < end - 1) {
+					while (tp + 1 < names_end) {
 						if (*tp == 0 && *(tp + 1) == 0) {
 							fend = tp;
 							break;
@@ -1782,7 +1810,10 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 					p = fend + 2;
 				}
 			}
+
+			p = names_end;
 			break;
+		}
 		case kDummy:
 		case kWinAttributes:
 			if (sz > 0) {
