@@ -222,7 +222,14 @@ int redisSetTcpNoDelay(redisContext *c) {
     int yes = 1;
     if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes)) == -1) {
         __redisSetErrorFromErrno(c,REDIS_ERR_IO,"setsockopt(TCP_NODELAY)");
-        redisNetClose(c);
+        /*
+         * Do not close the socket here, freeing the context does: an async
+         * context still has event watchers on it, which its disconnect path
+         * stops before freeing. Closing first left them on a closed (and
+         * possibly reused) descriptor, which libev asserts on in debug
+         * builds. It happens when an async connect to a dead server looks
+         * complete, then setsockopt fails, as it does on macOS.
+         */
         return REDIS_ERR;
     }
     return REDIS_OK;
