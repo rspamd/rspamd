@@ -2198,6 +2198,14 @@ auto html_process_input(struct rspamd_task *task,
 	auto overflow_input = false;
 	struct html_tag *cur_tag = nullptr, *parent_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
+	/*
+	 * Result of the last quote lookahead for `>` inside a quoted attribute:
+	 * the position of the next such quote or `end` if there is none. It stays
+	 * valid until the parser passes it, so repeated `>` characters do not
+	 * rescan the rest of the input each time
+	 */
+	const char *next_quote = nullptr;
+	char next_quote_char = 0;
 	auto process_size = in->len;
 
 
@@ -2964,7 +2972,17 @@ auto html_process_input(struct rspamd_task *task,
 					 * don't know any better options...
 					 */
 					auto end_quote = content_parser_env.cur_state == parse_sqvalue ? '\'' : '"';
-					if (memchr(p, end_quote, end - p) != nullptr) {
+
+					if (next_quote == nullptr || next_quote_char != end_quote || next_quote < p) {
+						next_quote = (const char *) memchr(p, end_quote, end - p);
+						next_quote_char = end_quote;
+
+						if (next_quote == nullptr) {
+							next_quote = end;
+						}
+					}
+
+					if (next_quote != end) {
 						/* Unencoded `>` */
 						p++;
 						continue;

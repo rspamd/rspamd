@@ -2340,28 +2340,46 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 
 	end = s + len;
 
+	/*
+	 * The decoder works in place, so a replacement must not grow past the
+	 * input the entity has consumed: the terminating `;` is consumed with it,
+	 * a space or any other terminator is not. Some short entity names expand
+	 * to longer multi-codepoint replacements, e.g. `&nGt;`, which would
+	 * otherwise overwrite the unread input.
+	 */
+	auto entity_limit = [&]() -> const char * {
+		return (h < end && *h == ';') ? h + 1 : h;
+	};
+
 	auto replace_named_entity = [&](const char *entity, std::size_t len) -> bool {
 		const auto *entity_def = html_entities_defs.by_name({entity,
 															 (std::size_t) (h - entity)},
 															false);
 
-		auto replace_entity = [&]() -> void {
+		auto replace_entity = [&](const char *limit) -> bool {
 			auto l = strlen(entity_def->replacement);
-			/*
-			 * The decoder works in place, so the replacement may only be
-			 * written while it fits the remaining buffer. Some short entity
-			 * names expand to longer multi-codepoint replacements, which
-			 * would otherwise overflow when the entity sits at the very end
-			 * of the buffer. Drop such a truncated entity instead.
-			 */
-			if (end - t >= (decltype(end - t)) l) {
+
+			if (limit - t >= (decltype(limit - t)) l) {
 				memcpy(t, entity_def->replacement, l);
 				t += l;
+
+				return true;
 			}
+
+			return false;
 		};
 
 		if (entity_def) {
-			replace_entity();
+			auto limit = entity_limit();
+
+			if (replace_entity(limit)) {
+				return true;
+			}
+
+			/* Does not fit, leave undecoded, `;` included */
+			memmove(t, e, limit - e);
+			t += limit - e;
+
 			return true;
 		}
 		else {
@@ -2370,8 +2388,8 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				if (!entity_def && h - e > lookup_len) {
 					entity_def = html_entities_defs.by_name({entity, lookup_len}, true);
 
-					if (entity_def) {
-						replace_entity();
+					/* Decoding resumes right after the matched name */
+					if (entity_def && replace_entity(e + lookup_len + 1)) {
 						/* Adjust h back */
 						h = e + lookup_len;
 
@@ -2402,60 +2420,42 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		return false;
 	};
 
-	/* Strtoul works merely for 0 terminated strings, so leave it alone... */
-	auto dec_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
+	/*
+	 * Strtoul works merely for 0 terminated strings, so leave it alone...
+	 * Values are saturated just above the last Unicode code point, anything
+	 * larger is invalid anyway and must not overflow
+	 */
+	static constexpr int max_code_point = 0x10FFFF;
+	auto digits_to_int = [](const char *str, std::size_t len, int base) -> std::optional<int> {
 		int n = 0;
 
-		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (len > 0 && g_ascii_isdigit(*str)) {
-			n = 10 * n - (*str++ - '0');
-			len--;
-		}
+		while (len > 0) {
+			int digit;
 
-		if (len == 0) {
-			return -(n);
-		}
-		else {
-			return std::nullopt;
-		}
-	};
-	auto hex_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
-		int n = 0;
-
-		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (len > 0 && g_ascii_isxdigit(*str)) {
-			if (*str <= 0x39) {
-				n = 16 * n - (*str++ - '0');
+			if (g_ascii_isdigit(*str)) {
+				digit = *str - '0';
+			}
+			else if (g_ascii_isxdigit(*str)) {
+				digit = g_ascii_xdigit_value(*str);
 			}
 			else {
-				n = 16 * n - (((*str++) | ' ') - 'a' + 10);
-			}
-			len--;
-		}
-
-		if (len == 0) {
-			return -(n);
-		}
-		else {
-			return std::nullopt;
-		}
-	};
-	auto oct_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
-		int n = 0;
-
-		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (len > 0 && g_ascii_isdigit(*str)) {
-			if (*str > '7') {
 				break;
 			}
-			else {
-				n = 8 * n - (*str++ - '0');
+
+			if (digit >= base) {
+				break;
 			}
+
+			if (n <= max_code_point) {
+				n = base * n + digit;
+			}
+
+			str++;
 			len--;
 		}
 
 		if (len == 0) {
-			return -(n);
+			return n;
 		}
 		else {
 			return std::nullopt;
@@ -2466,14 +2466,16 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		UChar32 uc;
 		std::optional<int> maybe_num;
 
+		auto limit = entity_limit();
+
 		if (*entity == 'x' || *entity == 'X') {
-			maybe_num = hex_to_int(entity + 1, h - (entity + 1));
+			maybe_num = digits_to_int(entity + 1, h - (entity + 1), 16);
 		}
 		else if (*entity == 'o' || *entity == 'O') {
-			maybe_num = oct_to_int(entity + 1, h - (entity + 1));
+			maybe_num = digits_to_int(entity + 1, h - (entity + 1), 8);
 		}
 		else {
-			maybe_num = dec_to_int(entity, h - entity);
+			maybe_num = digits_to_int(entity, h - entity, 10);
 		}
 
 		if (!maybe_num) {
@@ -2493,7 +2495,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			if (entity_def) {
 				auto rep_len = strlen(entity_def->replacement);
 
-				if (end - t >= rep_len) {
+				if (limit - t >= rep_len) {
 					memcpy(t, entity_def->replacement,
 						   rep_len);
 					t += rep_len;
@@ -2507,12 +2509,12 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				UBool is_error = 0;
 
 				if (uc > 0) {
-					U8_APPEND((std::uint8_t *) s, off, len, uc, is_error);
+					U8_APPEND((std::uint8_t *) s, off, limit - s, uc, is_error);
 
 					if (!is_error) {
 						t = s + off;
 					}
-					else if (end - t > 3) {
+					else if (limit - t >= 3) {
 						/* Not printable code point replace with 0xFFFD */
 						*t++ = '\357';
 						*t++ = '\277';
@@ -2521,7 +2523,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 						return true;
 					}
 				}
-				else if (end - t > 3) {
+				else if (limit - t >= 3) {
 					/* Not printable code point replace with 0xFFFD */
 					*t++ = '\357';
 					*t++ = '\277';

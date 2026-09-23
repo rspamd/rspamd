@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "html.hxx"
+#include "html_entities.hxx"
 #include "libserver/task.h"
 
 #include <vector>
@@ -368,6 +369,36 @@ TEST_SUITE("html")
 
 		g_byte_array_free(tmp, TRUE);
 		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("html entities decoding in place")
+	{
+		const std::vector<std::pair<std::string, std::string>> cases{
+			{"a &amp; b", "a & b"},
+			{"&#x41;&#65;&#o101;", "AAA"},
+			/* Values past the last code point must not overflow */
+			{"&#99999999999999999999;x", "\uFFFD"
+										 "x"},
+			{"&#xFFFFFFFFFFFFFFFF;x", "\uFFFD"
+									  "x"},
+			{"&#2147483648;x", "\uFFFD"
+							   "x"},
+			/*
+			 * `&nGt;` expands to 6 bytes, more than the entity itself: it is
+			 * left as is unless there is room from the earlier entities,
+			 * and never overwrites the text that follows
+			 */
+			{"&nGt;tail", "&nGt;tail"},
+			{"a &nGt; tail", "a &nGt; tail"},
+			{"&amp;&amp;&nGt;tail", "&&\u226B\u20D2tail"},
+			{"&acE;tail", "\u223E\u0333tail"},
+		};
+
+		for (const auto &c: cases) {
+			std::string s{c.first};
+			decode_html_entitles_inplace(s);
+			CHECK_MESSAGE(s == c.second, c.first);
+		}
 	}
 
 	TEST_CASE("html attributes limits")

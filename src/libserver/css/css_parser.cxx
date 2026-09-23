@@ -198,7 +198,16 @@ private:
 
 	int rec_level = 0;
 	const int max_rec = 20;
+	/*
+	 * Every consumed token becomes a node of the block tree, which is built
+	 * completely before any rule is processed, so bound it here: the limits
+	 * applied later (e.g. the number of selectors) come too late for that
+	 */
+	std::size_t ntokens = 0;
+	static constexpr std::size_t max_tokens = 1u << 17;
 	bool eof = false;
+
+	auto next_token() -> css_parser_token;
 
 	/* Consumers */
 	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
@@ -209,6 +218,23 @@ private:
 	auto qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
 	auto at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
 };
+
+auto css_parser::next_token() -> css_parser_token
+{
+	if (++ntokens > max_tokens) {
+		if (ntokens == max_tokens + 1) {
+			msg_debug_css("too many css tokens, ignore the rest of the style");
+			error = css_parse_error(css_parse_error_type::PARSE_ERROR_TOO_LARGE,
+									"too many tokens");
+		}
+
+		/* Pretend the input ends here, so all consumers unwind */
+		return css_parser_token{css_parser_token::token_type::eof_token,
+								css_parser_token_placeholder()};
+	}
+
+	return tokeniser->next_token();
+}
 
 /*
  * Find if we need to unescape css
@@ -256,7 +282,7 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 	}
 
 	while (ret && want_more && !eof) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 
 		switch (next_token.type) {
 		case css_parser_token::token_type::eof_token:
@@ -311,7 +337,7 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 
 
 	while (ret && !eof) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 
 		if (next_token.type == expected_end) {
 			break;
@@ -361,7 +387,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 		css_consumed_block::parser_tag_type::css_qualified_rule);
 
 	while (ret && want_more && !eof) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 		switch (next_token.type) {
 		case css_parser_token::token_type::eof_token:
 			eof = true;
@@ -430,7 +456,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 		css_consumed_block::parser_tag_type::css_at_rule);
 
 	while (ret && want_more && !eof) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 		switch (next_token.type) {
 		case css_parser_token::token_type::eof_token:
 			eof = true;
@@ -490,7 +516,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	}
 
 	while (ret && need_more && !eof) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 
 		switch (next_token.type) {
 		case css_parser_token::token_type::eof_token:
@@ -562,7 +588,7 @@ auto css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_p
 		std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_top_block);
 
 	while (!eof && ret) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 
 		switch (next_token.type) {
 		case css_parser_token::token_type::whitespace_token:
@@ -596,7 +622,7 @@ auto css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr
 		std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_simple_block);
 
 	while (!eof && ret) {
-		auto next_token = tokeniser->next_token();
+		auto next_token = this->next_token();
 
 		switch (next_token.type) {
 		case css_parser_token::token_type::eof_token:
@@ -760,7 +786,7 @@ auto get_selectors_parser_functor(rspamd_mempool_t *pool,
 	 * mutable.
 	 */
 	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
-		   -> const css_consumed_block & {
+			   -> const css_consumed_block & {
 		if (cur != last) {
 			const auto &ret = (*cur);
 
@@ -785,7 +811,7 @@ auto get_rules_parser_functor(rspamd_mempool_t *pool,
 	auto last = rules.end();
 
 	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
-		   -> const css_consumed_block & {
+			   -> const css_consumed_block & {
 		if (cur != last) {
 			const auto &ret = (*cur);
 

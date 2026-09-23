@@ -553,6 +553,33 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 	}
 }
 
+/*
+ * Decodes the buffered encoded words, which all share `charset`, to `out`
+ */
+static void
+rspamd_mime_header_flush_token(rspamd_mempool_t *pool,
+							   GString *out,
+							   GByteArray *token,
+							   GByteArray *decoded_token,
+							   rspamd_ftok_t *charset)
+{
+	if (token->len > 0 && charset->len > 0) {
+		if (rspamd_mime_to_utf8_byte_array(token, decoded_token, pool,
+										   rspamd_mime_detect_charset(charset, pool))) {
+			g_string_append_len(out, decoded_token->data, decoded_token->len);
+		}
+	}
+
+	g_byte_array_set_size(token, 0);
+	charset->len = 0;
+}
+
+/*
+ * Called before the next encoded word in `new_charset` is appended to the
+ * buffered ones in `old_charset`. Adjacent words in the same charset are
+ * concatenated, as a multibyte character can be split between them;
+ * otherwise the buffered words are decoded with their own charset first.
+ */
 static void
 rspamd_mime_header_maybe_save_token(rspamd_mempool_t *pool,
 									GString *out,
@@ -561,44 +588,23 @@ rspamd_mime_header_maybe_save_token(rspamd_mempool_t *pool,
 									rspamd_ftok_t *old_charset,
 									rspamd_ftok_t *new_charset)
 {
-	if (new_charset->len == 0) {
-		g_assert_not_reached();
-	}
+	if (token->len > 0 && old_charset->len > 0 &&
+		rspamd_ftok_casecmp(new_charset, old_charset) == 0) {
+		rspamd_ftok_t srch;
 
-	if (old_charset->len > 0) {
-		if (rspamd_ftok_casecmp(new_charset, old_charset) == 0) {
-			rspamd_ftok_t srch;
+		/*
+		 * Special case for iso-2022-jp:
+		 * https://github.com/vstakhov/rspamd/issues/1669
+		 */
+		RSPAMD_FTOK_ASSIGN(&srch, "iso-2022-jp");
 
-			/*
-			 * Special case for iso-2022-jp:
-			 * https://github.com/vstakhov/rspamd/issues/1669
-			 */
-			RSPAMD_FTOK_ASSIGN(&srch, "iso-2022-jp");
-
-			if (rspamd_ftok_casecmp(new_charset, &srch) != 0) {
-				/* We can concatenate buffers, just return */
-				return;
-			}
+		if (rspamd_ftok_casecmp(new_charset, &srch) != 0) {
+			/* We can concatenate buffers, just return */
+			return;
 		}
 	}
 
-	/* We need to flush and decode old token to out string */
-	if (rspamd_mime_to_utf8_byte_array(token, decoded_token, pool,
-									   rspamd_mime_detect_charset(new_charset, pool))) {
-		g_string_append_len(out, decoded_token->data, decoded_token->len);
-	}
-
-	/* We also reset buffer */
-	g_byte_array_set_size(token, 0);
-	/*
-	 * Propagate charset
-	 *
-	 * Here are dragons: we save the original charset to allow buffers concat
-	 * in the condition at the beginning of the function.
-	 * However, it will likely cause unnecessary calls for
-	 * `rspamd_mime_detect_charset` which could be relatively expensive.
-	 * But we ignore that for now...
-	 */
+	rspamd_mime_header_flush_token(pool, out, token, decoded_token, old_charset);
 	memcpy(old_charset, new_charset, sizeof(*old_charset));
 }
 
@@ -732,16 +738,9 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 											  &cur_charset.begin, &cur_charset.len,
 											  &tok_start, &tok_len)) {
 						/* We have a token, so we can decode it from `encoding` */
-						if (token->len > 0) {
-							if (old_charset.len == 0) {
-								memcpy(&old_charset, &cur_charset,
-									   sizeof(old_charset));
-							}
-
-							rspamd_mime_header_maybe_save_token(pool, out,
-																token, decoded,
-																&old_charset, &cur_charset);
-						}
+						rspamd_mime_header_maybe_save_token(pool, out,
+															token, decoded,
+															&old_charset, &cur_charset);
 
 						qmarks = 0;
 						pos = token->len;
@@ -783,13 +782,8 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 					}
 					else {
 						/* Not encoded-word */
-						old_charset.len = 0;
-
-						if (token->len > 0) {
-							rspamd_mime_header_maybe_save_token(pool, out,
-																token, decoded,
-																&old_charset, &cur_charset);
-						}
+						rspamd_mime_header_flush_token(pool, out, token, decoded,
+													   &old_charset);
 
 						g_string_append_len(out, c, p - c);
 						c = p;
@@ -814,12 +808,8 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 			}
 			else {
 				/* Need to save spaces and decoded token */
-				if (token->len > 0) {
-					old_charset.len = 0;
-					rspamd_mime_header_maybe_save_token(pool, out,
-														token, decoded,
-														&old_charset, &cur_charset);
-				}
+				rspamd_mime_header_flush_token(pool, out, token, decoded,
+											   &old_charset);
 
 				g_string_append_len(out, c, p - c);
 				c = p;
@@ -832,12 +822,8 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 	/* Leftover */
 	switch (state) {
 	case skip_spaces:
-		if (token->len > 0 && cur_charset.len > 0) {
-			old_charset.len = 0;
-			rspamd_mime_header_maybe_save_token(pool, out,
-												token, decoded,
-												&old_charset, &cur_charset);
-		}
+		rspamd_mime_header_flush_token(pool, out, token, decoded,
+									   &old_charset);
 		break;
 	default:
 		/* Just copy leftover */

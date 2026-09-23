@@ -32,6 +32,7 @@ enum class css_parse_error_type {
 	PARSE_ERROR_INVALID_SYNTAX,
 	PARSE_ERROR_BAD_NESTING,
 	PARSE_ERROR_NYI,
+	PARSE_ERROR_TOO_LARGE,
 	PARSE_ERROR_UNKNOWN_ERROR,
 	/* All above is treated as fatal error in parsing */
 	PARSE_ERROR_NO_ERROR,

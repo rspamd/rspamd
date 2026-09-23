@@ -49,6 +49,11 @@ context("RFC2047 decoding", function()
       {"=?windows-1251?B?xO7q8+zl7fIuc2NyLnV1ZQ==?=", "Документ.scr.uue"},
       {"=?UTF-8?Q?=20wie=20ist=20es=20Ihnen=20ergangen?.pdf?=", " wie ist es Ihnen ergangen?.pdf"}, -- ? inside
       {"=?UTF-8?Q?=20wie=20ist=20es=20Ihnen=20ergangen??=", " wie ist es Ihnen ergangen?"}, -- ending ? inside
+      -- adjacent words in different charsets are decoded each with its own
+      {"=?koi8-r?Q?=F4=C5=D3=D4?= =?utf-8?Q?_ok?=", "Тест ok"},
+      {"=?utf-8?Q?ok_?= =?koi8-r?Q?=F4=C5=D3=D4?=", "ok Тест"},
+      -- while a character split between words in one charset is glued
+      {"=?utf-8?Q?=D0?= =?utf-8?Q?=A2?=", "Т"},
     }
 
     local pool = ffi.C.rspamd_mempool_new_(4096, "lua", 0, "rfc2047.lua:49")

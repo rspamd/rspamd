@@ -232,8 +232,11 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token 
 						}
 					}
 					else if (nhex > 0 && c == ' ') {
-						/* \[hex]{1,6} */
-						i++; /* Skip one space */
+						/*
+						 * \[hex]{1,6} followed by a single space, which
+						 * belongs to the escape: the increment after this
+						 * loop steps over it
+						 */
 						break;
 					}
 					else {
@@ -881,6 +884,30 @@ TEST_SUITE("css")
 				auto t = tok.next_token();
 				CHECK_MESSAGE(t.type == expected, std::string{c.first});
 			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("hex escape consumes exactly one trailing space")
+	{
+		using tt = css_parser_token::token_type;
+		/* The escaped ident is followed by `{`, which is not part of it */
+		const std::string_view full{"a\\41 {"};
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (auto input: {full, full.substr(0, full.size() - 1)}) {
+			css_tokeniser tok{pool, input};
+
+			auto t = tok.next_token();
+			REQUIRE(t.type == tt::ident_token);
+			CHECK(std::get<std::string_view>(t.value) == "aa");
+
+			if (input.size() == full.size()) {
+				CHECK(tok.next_token().type == tt::ocurlbrace_token);
+			}
+
+			CHECK(tok.next_token().type == tt::eof_token);
 		}
 
 		rspamd_mempool_delete(pool);
