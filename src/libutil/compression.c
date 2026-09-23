@@ -22,10 +22,10 @@ rspamd_decompress_quark(void)
 	return g_quark_from_static_string("rspamd-decompress");
 }
 
-rspamd_fstring_t *
-rspamd_zstd_decompress_bounded(ZSTD_DStream *zstream,
-							   const void *in, gsize inlen,
-							   gsize max_out, GError **err)
+static rspamd_fstring_t *
+rspamd_zstd_decompress_impl(ZSTD_DStream *zstream,
+							const void *in, gsize inlen,
+							gsize max_out, gboolean complete, GError **err)
 {
 	ZSTD_DStream *own_stream = NULL;
 	ZSTD_inBuffer zin;
@@ -132,8 +132,20 @@ rspamd_zstd_decompress_bounded(ZSTD_DStream *zstream,
 			/*
 			 * Input is exhausted mid-frame and the decoder has nothing more
 			 * to flush: truncated input; keep the partial output as the
-			 * legacy per-caller loops did
+			 * legacy per-caller loops did, unless a complete frame is required
 			 */
+			if (complete) {
+				g_set_error(err, rspamd_decompress_quark(),
+							RSPAMD_DECOMPRESS_ERROR_TRUNCATED,
+							"truncated zstd input: the frame is incomplete");
+				rspamd_fstring_free(body);
+				if (own_stream != NULL) {
+					ZSTD_freeDStream(own_stream);
+				}
+
+				return NULL;
+			}
+
 			break;
 		}
 	}
@@ -145,4 +157,20 @@ rspamd_zstd_decompress_bounded(ZSTD_DStream *zstream,
 	}
 
 	return body;
+}
+
+rspamd_fstring_t *
+rspamd_zstd_decompress_bounded(ZSTD_DStream *zstream,
+							   const void *in, gsize inlen,
+							   gsize max_out, GError **err)
+{
+	return rspamd_zstd_decompress_impl(zstream, in, inlen, max_out, FALSE, err);
+}
+
+rspamd_fstring_t *
+rspamd_zstd_decompress_complete(ZSTD_DStream *zstream,
+								const void *in, gsize inlen,
+								gsize max_out, GError **err)
+{
+	return rspamd_zstd_decompress_impl(zstream, in, inlen, max_out, TRUE, err);
 }

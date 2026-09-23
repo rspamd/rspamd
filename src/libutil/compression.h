@@ -33,6 +33,7 @@ enum rspamd_decompress_error {
 	RSPAMD_DECOMPRESS_ERROR_INIT = 0,
 	RSPAMD_DECOMPRESS_ERROR_DATA,
 	RSPAMD_DECOMPRESS_ERROR_TOO_LARGE,
+	RSPAMD_DECOMPRESS_ERROR_TRUNCATED,
 };
 
 GQuark rspamd_decompress_quark(void);
@@ -58,6 +59,17 @@ rspamd_fstring_t *rspamd_zstd_decompress_bounded(ZSTD_DStream *zstream,
 												 const void *in, gsize inlen,
 												 gsize max_out,
 												 GError **err)
+	G_GNUC_WARN_UNUSED_RESULT;
+
+/**
+ * Same as rspamd_zstd_decompress_bounded, but input that ends before its last
+ * frame is complete is an error (RSPAMD_DECOMPRESS_ERROR_TRUNCATED) instead
+ * of partial output: for data that must be whole, such as maps
+ */
+rspamd_fstring_t *rspamd_zstd_decompress_complete(ZSTD_DStream *zstream,
+												  const void *in, gsize inlen,
+												  gsize max_out,
+												  GError **err)
 	G_GNUC_WARN_UNUSED_RESULT;
 
 #ifdef __cplusplus

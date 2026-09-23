@@ -154,6 +154,37 @@ TEST_SUITE("bounded zstd decompression")
 		rspamd_fstring_free(body);
 	}
 
+	TEST_CASE("truncated frame: partial output, or an error when complete is required")
+	{
+		std::string plain;
+		for (int i = 0; i < 5000; i++) {
+			plain += std::to_string(i) + " line of a map\n";
+		}
+
+		for (auto compressed: {unit_zstd_compress_oneshot(plain), unit_zstd_compress_stream(plain)}) {
+			GError *err = nullptr;
+			auto *whole = rspamd_zstd_decompress_complete(nullptr, compressed.data(),
+														  compressed.size(), 0, &err);
+			REQUIRE(whole != nullptr);
+			CHECK(std::string{whole->str, whole->len} == plain);
+			rspamd_fstring_free(whole);
+
+			auto half = compressed.size() / 2;
+			auto *partial = rspamd_zstd_decompress_bounded(nullptr, compressed.data(),
+														   half, 0, &err);
+			REQUIRE(partial != nullptr);
+			CHECK(partial->len < plain.size());
+			rspamd_fstring_free(partial);
+
+			auto *strict = rspamd_zstd_decompress_complete(nullptr, compressed.data(),
+														   half, 0, &err);
+			CHECK(strict == nullptr);
+			REQUIRE(err != nullptr);
+			CHECK(err->code == RSPAMD_DECOMPRESS_ERROR_TRUNCATED);
+			g_error_free(err);
+		}
+	}
+
 	TEST_CASE("corrupt input is an error")
 	{
 		std::string garbage = "definitely not a zstd frame at all";

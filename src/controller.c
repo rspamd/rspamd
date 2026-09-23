@@ -2996,13 +2996,30 @@ rspamd_controller_handle_savemap(struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (write(fd, msg->body_buf.begin, msg->body_buf.len) == -1) {
-		msg_info_session("map %s write error: %s", tempname, strerror(errno));
-		unlink(tempname);
-		close(fd);
-		rspamd_controller_send_error(conn_ent, 500, "Map write error: %s",
-									 strerror(errno));
-		return 0;
+	/* A short write must not replace the map with a truncated copy */
+	const char *wpos = msg->body_buf.begin;
+	gsize wremain = msg->body_buf.len;
+
+	while (wremain > 0) {
+		gssize w = write(fd, wpos, wremain);
+
+		if (w == -1 && errno == EINTR) {
+			continue;
+		}
+
+		if (w <= 0) {
+			int saved_errno = w == 0 ? EIO : errno;
+
+			msg_info_session("map %s write error: %s", tempname, strerror(saved_errno));
+			unlink(tempname);
+			close(fd);
+			rspamd_controller_send_error(conn_ent, 500, "Map write error: %s",
+										 strerror(saved_errno));
+			return 0;
+		}
+
+		wpos += w;
+		wremain -= w;
 	}
 
 	/* Rename */

@@ -634,6 +634,14 @@ http_map_finish(struct rspamd_http_connection *conn,
 	char next_check_date[128];
 	unsigned char *in = NULL;
 	gsize dlen = 0;
+	/*
+	 * Validators of the data we have: a new response updates them before it
+	 * is decoded and cached, so they are restored if that fails, otherwise
+	 * the next conditional request would skip the update we never applied
+	 */
+	time_t saved_last_modified = 0, saved_last_checked = 0;
+	rspamd_fstring_t *saved_etag = NULL;
+	gboolean validators_saved = FALSE;
 
 	map = cbd->map;
 	bk = cbd->bk;
@@ -660,6 +668,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 
 		/* This code is executed when we are actually reading a map */
+		saved_last_checked = cbd->data->last_checked;
+		saved_last_modified = cbd->data->last_modified;
+		saved_etag = cbd->data->etag ? rspamd_fstring_new_init(cbd->data->etag->str, cbd->data->etag->len) : NULL;
+		validators_saved = TRUE;
 		cbd->data->last_checked = msg->date;
 
 		if (msg->last_modified) {
@@ -816,8 +828,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 			GError *derr = NULL;
 			rspamd_fstring_t *decompressed;
 
-			decompressed = rspamd_zstd_decompress_bounded(NULL, payload, payload_len,
-														  max_size, &derr);
+			decompressed = rspamd_zstd_decompress_complete(NULL, payload, payload_len,
+														   max_size, &derr);
 
 			if (decompressed == NULL) {
 				msg_err_map("%s(%s): cannot decompress data: %s",
@@ -901,6 +913,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 		g_atomic_int_set(&data->cache->available, 1);
 		g_atomic_int_set(&map->shared->loaded, 1);
 		g_atomic_int_set(&map->shared->cached, 1);
+
+		/* The new validators describe the data we have now */
+		if (saved_etag) {
+			rspamd_fstring_free(saved_etag);
+		}
 
 		rspamd_map_process_periodic(cbd->periodic);
 	}
@@ -993,6 +1010,17 @@ err:
 	if (in != NULL) {
 		/* Failed after the shmem segment has been mapped */
 		munmap(in, dlen);
+	}
+
+	if (validators_saved) {
+		cbd->data->last_checked = saved_last_checked;
+		cbd->data->last_modified = saved_last_modified;
+
+		if (cbd->data->etag) {
+			rspamd_fstring_free(cbd->data->etag);
+		}
+
+		cbd->data->etag = saved_etag;
 	}
 
 	cbd->periodic->errored = 1;
@@ -1282,9 +1310,9 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 					GError *derr = NULL;
 					rspamd_fstring_t *decompressed;
 
-					decompressed = rspamd_zstd_decompress_bounded(NULL, payload, payload_len,
-																  map->cfg ? map->cfg->max_map_size : 0,
-																  &derr);
+					decompressed = rspamd_zstd_decompress_complete(NULL, payload, payload_len,
+																   map->cfg ? map->cfg->max_map_size : 0,
+																   &derr);
 
 					if (decompressed == NULL) {
 						msg_err_map("%s: cannot decompress data: %s",
@@ -1371,9 +1399,9 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 			GError *derr = NULL;
 			rspamd_fstring_t *decompressed;
 
-			decompressed = rspamd_zstd_decompress_bounded(NULL, bytes, len,
-														  map->cfg ? map->cfg->max_map_size : 0,
-														  &derr);
+			decompressed = rspamd_zstd_decompress_complete(NULL, bytes, len,
+														   map->cfg ? map->cfg->max_map_size : 0,
+														   &derr);
 
 			if (decompressed == NULL) {
 				msg_err_map("%s: cannot decompress data: %s",
@@ -1867,7 +1895,12 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 	 */
 	len = data->cache->len;
 
-	if (bk->is_encrypted || bk->is_compressed) {
+	/*
+	 * Detect zstd without the compressed flag too, as the fetching process
+	 * does: otherwise the other workers would parse compressed bytes
+	 */
+	if (bk->is_encrypted || bk->is_compressed ||
+		rspamd_map_payload_is_zstd((const unsigned char *) in, len)) {
 		unsigned char *payload = (unsigned char *) in;
 		gsize payload_len = len;
 		unsigned char *dec = NULL;
@@ -1887,9 +1920,9 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 			GError *derr = NULL;
 			rspamd_fstring_t *decompressed;
 
-			decompressed = rspamd_zstd_decompress_bounded(NULL, payload, payload_len,
-														  map->cfg ? map->cfg->max_map_size : 0,
-														  &derr);
+			decompressed = rspamd_zstd_decompress_complete(NULL, payload, payload_len,
+														   map->cfg ? map->cfg->max_map_size : 0,
+														   &derr);
 
 			if (decompressed == NULL) {
 				msg_err_map("%s: cannot decompress data: %s",
@@ -2677,18 +2710,10 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 	map = cbd->map;
 	map->scheduled_check = NULL;
 
-	/* For each backend we need to check for modifications */
-	if (cbd->cur_backend >= cbd->map->backends->len) {
-		/* Last backend */
-		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
-					  cbd->map->backends->len);
-		MAP_RELEASE(cbd, "periodic");
-
-		return;
-	}
-
-	bk = g_ptr_array_index(map->backends, cbd->cur_backend);
-
+	/*
+	 * Check for an error first: a failure of the last backend must reach the
+	 * consumer too, or it would install partial data in place of the map
+	 */
 	if (cbd->errored) {
 		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
@@ -2702,6 +2727,18 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 		return;
 	}
+
+	/* For each backend we need to check for modifications */
+	if (cbd->cur_backend >= cbd->map->backends->len) {
+		/* Last backend */
+		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
+					  cbd->map->backends->len);
+		MAP_RELEASE(cbd, "periodic");
+
+		return;
+	}
+
+	bk = g_ptr_array_index(map->backends, cbd->cur_backend);
 
 	if (cbd->map->wrk && cbd->map->wrk->state == rspamd_worker_state_running) {
 
