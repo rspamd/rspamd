@@ -171,6 +171,8 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE (1 << 3)
 #define RSPAMD_LUA_HTTP_FLAG_YIELDED (1 << 4)
 #define RSPAMD_LUA_HTTP_FLAG_NO_LOCAL (1 << 5)
+/* Per-request connection tuning was read from the request table */
+#define RSPAMD_LUA_HTTP_FLAG_TUNED (1 << 6)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -180,7 +182,6 @@ struct lua_http_cbdata {
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	struct rspamd_task *task;
-	lua_State *L;
 	ev_tstamp timeout;
 	/* optional per-request tuning */
 	double connect_timeout;
@@ -222,9 +223,53 @@ lua_http_global_resolver(struct ev_loop *ev_base)
 }
 
 static void
+lua_http_read_tuning(lua_State *L, int idx, struct lua_http_cbdata *cbd)
+{
+	static const struct {
+		const char *name;
+		gsize offset;
+	} fields[] = {
+		{"connect_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, connect_timeout)},
+		{"ssl_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, ssl_timeout)},
+		{"write_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, write_timeout)},
+		{"read_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, read_timeout)},
+		{"connection_ttl", G_STRUCT_OFFSET(struct lua_http_cbdata, connection_ttl)},
+		{"idle_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, idle_timeout)},
+	};
+
+	for (unsigned int i = 0; i < G_N_ELEMENTS(fields); i++) {
+		lua_getfield(L, idx, fields[i].name);
+
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			G_STRUCT_MEMBER(double, cbd, fields[i].offset) = lua_tonumber(L, -1);
+		}
+
+		lua_pop(L, 1);
+	}
+
+	lua_getfield(L, idx, "max_reuse");
+
+	if (lua_type(L, -1) == LUA_TNUMBER) {
+		cbd->max_reuse = lua_tointeger(L, -1);
+	}
+
+	lua_pop(L, 1);
+	cbd->flags |= RSPAMD_LUA_HTTP_FLAG_TUNED;
+}
+
+static void
 lua_http_fin(gpointer arg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) arg;
+
+	if (cbd->thread) {
+		/*
+		 * A cancelled session finalises the request directly, without
+		 * lua_http_cbd_dtor, which releases the entry otherwise
+		 */
+		lua_thread_pool_release_entry(cbd->thread);
+		cbd->thread = NULL;
+	}
 
 	if (cbd->cbref != -1) {
 		luaL_unref(cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->cbref);
@@ -292,6 +337,10 @@ lua_http_cbd_dtor(struct lua_http_cbdata *cbd)
 			}
 
 			rspamd_session_remove_event(cbd->session, lua_http_fin, cbd);
+		}
+		else {
+			/* Failed before its session event was added, e.g. in DNS */
+			lua_http_fin(cbd);
 		}
 	}
 	else {
@@ -610,41 +659,13 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
-		/* Optional per-request tuning from table (if present) */
-		if (lua_type(cbd->L, 1) == LUA_TTABLE) {
-			double connect_timeout = 0, ssl_timeout = 0, write_timeout = 0, read_timeout = 0;
-			double connection_ttl = 0, idle_timeout = 0;
-			unsigned int max_reuse = 0;
-			lua_pushstring(cbd->L, "connect_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) connect_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "ssl_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) ssl_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "write_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) write_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "read_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) read_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			rspamd_http_connection_set_timeouts(cbd->conn, connect_timeout, ssl_timeout, write_timeout, read_timeout);
-			lua_pushstring(cbd->L, "connection_ttl");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) connection_ttl = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "idle_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) idle_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "max_reuse");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) max_reuse = lua_tointeger(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			rspamd_http_connection_set_keepalive_tuning(cbd->conn, connection_ttl, idle_timeout, max_reuse);
+		/* Optional per-request tuning, read from the request table */
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TUNED) {
+			rspamd_http_connection_set_timeouts(cbd->conn, cbd->connect_timeout,
+												cbd->ssl_timeout, cbd->write_timeout,
+												cbd->read_timeout);
+			rspamd_http_connection_set_keepalive_tuning(cbd->conn, cbd->connection_ttl,
+														cbd->idle_timeout, cbd->max_reuse);
 		}
 
 		if (cbd->task) {
@@ -1371,7 +1392,14 @@ lua_http_request(lua_State *L)
 	cbd->url = url;
 	cbd->auth = auth;
 	cbd->task = task;
-	cbd->L = L;
+
+	/*
+	 * Per-request tuning is read now: the connection may be made from the
+	 * DNS reply callback, when this call frame and its arguments are gone
+	 */
+	if (lua_type(L, 1) == LUA_TTABLE) {
+		lua_http_read_tuning(L, 1, cbd);
+	}
 
 	if (up) {
 		cbd->up = rspamd_upstream_ref(up);

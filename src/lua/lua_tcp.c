@@ -265,7 +265,15 @@ struct lua_tcp_read_handler {
 	char *stop_pattern;
 	unsigned int plen;
 	int cbref;
+	/* Buffered bytes already searched for the stop pattern */
+	gsize scanned;
 };
+
+/*
+ * Data buffered while waiting for a stop pattern: a peer that never sends
+ * it must not grow the buffer until the timeout
+ */
+#define LUA_TCP_MAX_READ_BUFFER (16 * 1024 * 1024)
 
 struct lua_tcp_write_handler {
 	struct iovec *iov;
@@ -465,8 +473,15 @@ lua_tcp_fin(gpointer arg)
 		rspamd_ssl_connection_free(cbd->ssl_conn);
 	}
 
-	if (cbd->fd != -1) {
+	/*
+	 * Stop the watchers whether or not the descriptor is still open: a
+	 * connection closed from a callback may have been rearmed afterwards
+	 */
+	if (cbd->event_loop) {
 		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+	}
+
+	if (cbd->fd != -1) {
 		close(cbd->fd);
 		cbd->fd = -1;
 	}
@@ -1060,40 +1075,57 @@ lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 
 	if (rh->stop_pattern) {
 		slen = rh->plen;
+		pos = -1;
 
 		if (cbd->in->len >= slen) {
-			if ((pos = rspamd_substring_search(cbd->in->data, cbd->in->len,
-											   rh->stop_pattern, slen)) != -1) {
-				msg_debug_tcp("found TCP stop pattern");
-				lua_tcp_push_data(cbd, cbd->in->data, pos);
+			/*
+			 * Search only the data that could not hold a match before: the
+			 * new bytes and the tail a match could start in
+			 */
+			gsize from = rh->scanned >= slen ? rh->scanned - (slen - 1) : 0;
 
-				if (!IS_SYNC(cbd)) {
-					lua_tcp_shift_handler(cbd);
-				}
-				if (pos + slen < cbd->in->len) {
-					/* We have a leftover */
-					memmove(cbd->in->data, cbd->in->data + pos + slen,
-							cbd->in->len - (pos + slen));
-					cbd->in->len = cbd->in->len - (pos + slen);
-				}
-				else {
-					cbd->in->len = 0;
-				}
+			pos = rspamd_substring_search(cbd->in->data + from, cbd->in->len - from,
+										  rh->stop_pattern, slen);
 
-				return TRUE;
+			if (pos != -1) {
+				pos += from;
 			}
 			else {
-				/* Plan new read */
-				msg_debug_tcp("NOT found TCP stop pattern");
+				rh->scanned = cbd->in->len;
+			}
+		}
 
-				if (!cbd->eof) {
-					lua_tcp_plan_read(cbd);
-				}
-				else {
-					/* Got session finished but no stop pattern */
-					lua_tcp_push_error(cbd, TRUE,
-									   "IO read error: connection terminated");
-				}
+		if (pos != -1) {
+			msg_debug_tcp("found TCP stop pattern");
+			rh->scanned = 0;
+			lua_tcp_push_data(cbd, cbd->in->data, pos);
+
+			if (!IS_SYNC(cbd)) {
+				lua_tcp_shift_handler(cbd);
+			}
+			if (pos + slen < cbd->in->len) {
+				/* We have a leftover */
+				memmove(cbd->in->data, cbd->in->data + pos + slen,
+						cbd->in->len - (pos + slen));
+				cbd->in->len = cbd->in->len - (pos + slen);
+			}
+			else {
+				cbd->in->len = 0;
+			}
+
+			return TRUE;
+		}
+		else {
+			/* Plan new read, also when there is less data than the pattern */
+			msg_debug_tcp("NOT found TCP stop pattern");
+
+			if (!cbd->eof) {
+				lua_tcp_plan_read(cbd);
+			}
+			else {
+				/* Got session finished but no stop pattern */
+				lua_tcp_push_error(cbd, TRUE,
+								   "IO read error: connection terminated");
 			}
 		}
 	}
@@ -1129,11 +1161,23 @@ lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
 	if (r > 0) {
 		if (cbd->flags & LUA_TCP_FLAG_PARTIAL) {
 			lua_tcp_push_data(cbd, in, r);
-			/* Plan next event */
-			lua_tcp_plan_read(cbd);
+
+			/* Plan next event, unless the callback has closed the connection */
+			if (cbd->fd != -1) {
+				lua_tcp_plan_read(cbd);
+			}
 		}
 		else {
 			g_byte_array_append(cbd->in, in, r);
+
+			if (rh->stop_pattern && cbd->in->len > LUA_TCP_MAX_READ_BUFFER) {
+				lua_tcp_push_error(cbd, TRUE,
+								   "IO read error: %d bytes read without the stop pattern",
+								   (int) cbd->in->len);
+				lua_tcp_release_conn(cbd);
+
+				return;
+			}
 
 			if (!lua_tcp_process_read_handler(cbd, rh, FALSE)) {
 				/* Plan more read */
@@ -1231,6 +1275,15 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 	if (what == EV_READ) {
 		if (cbd->ssl_conn) {
 			r = rspamd_ssl_read(cbd->ssl_conn, inbuf, sizeof(inbuf));
+
+			if (r == -1 && errno != EAGAIN) {
+				/*
+				 * The TLS layer has already reported the error through
+				 * lua_tcp_ssl_on_error, which drained the handlers and
+				 * released the connection: nothing is left to read into
+				 */
+				goto out;
+			}
 		}
 		else {
 			r = read(cbd->fd, inbuf, sizeof(inbuf));

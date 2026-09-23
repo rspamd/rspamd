@@ -354,11 +354,16 @@ lua_redis_push_error(const char *err,
 	va_end(ap);
 }
 
+/*
+ * With text_data, strings are pushed as rspamd_text: views into the reply,
+ * valid while the reply lives, unless copy_text asks for owned copies for a
+ * reply freed before Lua gets the result
+ */
 static void
-lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data)
+lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
+					 gboolean copy_text)
 {
 	unsigned int i;
-	struct rspamd_lua_text *t;
 
 	switch (r->type) {
 	case REDIS_REPLY_INTEGER:
@@ -370,11 +375,7 @@ lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data)
 	case REDIS_REPLY_STRING:
 	case REDIS_REPLY_STATUS:
 		if (text_data) {
-			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, rspamd_text_classname, -1);
-			t->flags = 0;
-			t->start = r->str;
-			t->len = r->len;
+			lua_new_text(L, r->str, r->len, copy_text);
 		}
 		else {
 			lua_pushlstring(L, r->str, r->len);
@@ -383,7 +384,7 @@ lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data)
 	case REDIS_REPLY_ARRAY:
 		lua_createtable(L, r->elements, 0);
 		for (i = 0; i < r->elements; ++i) {
-			lua_redis_push_reply(L, r->element[i], text_data);
+			lua_redis_push_reply(L, r->element[i], text_data, copy_text);
 			lua_rawseti(L, -2, i + 1); /* Store sub-reply */
 		}
 		break;
@@ -419,7 +420,7 @@ lua_redis_push_data(const redisReply *r, struct lua_redis_ctx *ctx,
 			/* Error is nil */
 			lua_pushnil(cbs.L);
 			/* Data */
-			lua_redis_push_reply(cbs.L, r, ctx->flags & LUA_REDIS_TEXTDATA);
+			lua_redis_push_reply(cbs.L, r, ctx->flags & LUA_REDIS_TEXTDATA, FALSE);
 
 			if (ud->item) {
 				rspamd_symcache_set_cur_item(ud->task, ud->item);
@@ -640,7 +641,8 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 			if (r != NULL) {
 				if (reply->type != REDIS_REPLY_ERROR) {
 					result->is_error = FALSE;
-					lua_redis_push_reply(L, reply, ctx->flags & LUA_REDIS_TEXTDATA);
+					/* Stored for the coroutine, which may run after hiredis frees the reply */
+					lua_redis_push_reply(L, reply, ctx->flags & LUA_REDIS_TEXTDATA, TRUE);
 				}
 				else {
 					result->is_error = TRUE;
@@ -1426,7 +1428,8 @@ lua_redis_make_request_sync(lua_State *L)
 		if (r != NULL) {
 			if (r->type != REDIS_REPLY_ERROR) {
 				lua_pushboolean(L, TRUE);
-				lua_redis_push_reply(L, r, flags & LUA_REDIS_TEXTDATA);
+				/* The reply is freed right below */
+				lua_redis_push_reply(L, r, flags & LUA_REDIS_TEXTDATA, TRUE);
 			}
 			else {
 				lua_pushboolean(L, FALSE);
