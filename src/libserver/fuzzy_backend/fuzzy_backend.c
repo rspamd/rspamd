@@ -417,8 +417,10 @@ rspamd_fuzzy_backend_deduplicate_queue(GArray *updates)
 			switch (cmd->cmd) {
 			case FUZZY_WRITE:
 				if (found->cmd.normal.cmd == FUZZY_WRITE) {
-					/* Already seen */
-					found->cmd.normal.value += cmd->value;
+					/* Already seen: add up weights, saturating */
+					int64_t sum = (int64_t) found->cmd.normal.value + cmd->value;
+
+					found->cmd.normal.value = (int32_t) CLAMP(sum, G_MININT32, G_MAXINT32);
 					cmd->cmd = FUZZY_DUP; /* Ignore this one */
 				}
 				else if (found->cmd.normal.cmd == FUZZY_REFRESH) {

@@ -399,9 +399,11 @@ rspamd_fuzzy_redis_shingles_callback(redisAsyncContext *c, gpointer r,
 			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 				cur = reply->element[i];
 
-				if (cur->type == REDIS_REPLY_STRING) {
+				/* Anything but a full digest is garbage in the storage */
+				if (cur->type == REDIS_REPLY_STRING &&
+					cur->len == sizeof(shingles[i].digest)) {
 					shingles[i].found = 1;
-					memcpy(shingles[i].digest, cur->str, MIN(64, cur->len));
+					memcpy(shingles[i].digest, cur->str, sizeof(shingles[i].digest));
 					found++;
 				}
 				else {
