@@ -151,6 +151,9 @@ local settings = {
   http_timeout = 4,
   redis_timeout = 2, -- redis timeout for cache operations  (redis.conf module has higher priority)
   nested_limit = 2, -- how many redirects to follow
+  -- Hops in a whole chain, cached ones included: cached hops cost no HTTP
+  -- request, and ^nested lets every scan extend a chain further
+  max_chain_length = 16,
   --proxy = "http://example.com:3128", -- send request through proxy, not yet implemented
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
@@ -241,10 +244,51 @@ end
 -- Mixed into the hashed cache key; bump on incompatible value-format changes
 -- so old-format entries hash elsewhere and get re-resolved, not misread.
 -- v1: value is the raw (percent-encoded) URL, not the decoded text.
-local cache_format_version = 'v1:'
+-- v2: keyed by the raw URL too, see url_identity.
+local cache_format_version = 'v2:'
 
--- Per-URL Redis cache key: hash the URL (fixed-length, URL-safe). tostring()
--- (not get_raw) keeps the hash stable across the write-then-read round-trip.
+-- A URL as it is requested. The decoded form (tostring) merges URLs that
+-- differ in percent-encoded delimiters, e.g. /a%3Fb and /a?b, which are
+-- different requests with possibly different redirects. Cached values are
+-- raw URLs too, so a hop re-parsed from the cache keeps its identity.
+local function url_identity(url)
+  return url:get_raw()
+end
+
+-- Resolves a redirect Location against the URL that returned it
+-- (RFC 3986 section 5.2, dot segments are left to the server). Without it a
+-- relative location either fails to parse, ending the chain early, or has a
+-- URL-looking substring picked out of it as the target.
+local function resolve_location(base_raw, loc)
+  if loc:match('^%a[%w+.-]*:') then
+    -- Absolute, any scheme
+    return loc
+  end
+
+  local scheme, authority, path = base_raw:match('^(%a[%w+.-]*:)//([^/?#]*)([^?#]*)')
+  if not scheme then
+    return loc
+  end
+
+  local first = loc:sub(1, 1)
+
+  if loc:sub(1, 2) == '//' then
+    return scheme .. loc
+  elseif first == '/' then
+    return scheme .. '//' .. authority .. loc
+  elseif first == '?' then
+    return scheme .. '//' .. authority .. path .. loc
+  elseif first == '#' or loc == '' then
+    -- The same resource again
+    return base_raw:match('^[^#]*')
+  end
+
+  -- A relative path replaces the last segment of the base path
+  local dir = path:match('^(.*/)') or '/'
+  return scheme .. '//' .. authority .. dir .. loc
+end
+
+-- Per-URL Redis cache key: hash the URL identity (fixed-length, URL-safe).
 local function cache_key_for_url(url_str)
   return settings.key_prefix ..
       hash.create(cache_format_version .. url_str):base32():sub(1, 32)
@@ -296,7 +340,7 @@ local function chain_append(chain, hop_url)
     return
   end
   local tail = chain[#chain]
-  if tail == nil or tostring(hop_url) ~= tostring(tail) then
+  if tail == nil or url_identity(hop_url) ~= url_identity(tail) then
     table.insert(chain, hop_url)
   end
 end
@@ -371,7 +415,7 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
   end
 
   local function write_link(prev_url, next_url, marker)
-    local link_key = cache_key_for_url(tostring(prev_url))
+    local link_key = cache_key_for_url(url_identity(prev_url))
     -- Cache the raw (percent-encoded) form: keeps query boundaries intact so
     -- cached hops re-parse identically to live ones, and it is already URL-safe.
     local next_str = next_url:get_raw()
@@ -470,7 +514,7 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
 
   if data == nil then
     local last = chain[#chain]
-    local last_str = tostring(last)
+    local last_str = url_identity(last)
     local next_key = cache_key_for_url(last_str)
     local ret = lua_redis.redis_make_request(task,
         redis_params, next_key, false,
@@ -531,6 +575,13 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
     return
   end
 
+  if #chain >= settings.max_chain_length then
+    lua_util.debugm(N, task, 'chain is %s hops long, stop at %s',
+        #chain, val)
+    step_finish(task, chain, http_extended)
+    return
+  end
+
   local hop = rspamd_url.create(task:get_mempool(), val,
       { 'redirect_target' })
   if not hop then
@@ -561,9 +612,9 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
     end
     lua_util.debugm(N, task,
         'extending past cached ^nested:%s with live HTTP', val)
-    -- seen was keyed by the raw cached string above; http_walk keys by
-    -- tostring(), so clear that form or its cycle guard fires immediately.
-    seen[tostring(hop)] = nil
+    -- seen was marked for this hop above and http_walk marks it again on
+    -- entry, so clear it or its cycle guard fires immediately.
+    seen[url_identity(hop)] = nil
     http_walk(task, orig_url, hop, ntries + 1, chain, seen)
     return
   end
@@ -607,9 +658,8 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   -- Mirror the cache walk's cycle guard: a redirector loop A->B->A->B
   -- (e.g. login redirector flapping between two hosts) would otherwise
   -- chew through nested_limit and bloat the chain with alternating
-  -- entries. tostring() (not get_raw): the cycle guard, cache key and
-  -- GET-map match need a stable identity that collapses encoding variants;
-  local url_str = tostring(url)
+  -- entries.
+  local url_str = url_identity(url)
   if seen[url_str] then
     lua_util.debugm(N, task, 'cycle in http walk at %s', url_str)
     finalize_chain(task, chain, nil)
@@ -649,7 +699,8 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
       if loc then
         -- Encode problematic characters (spaces, etc.) that
         -- http_parser doesn't accept. Fixes issue #5525.
-        local encoded_loc = encode_url_for_redirect(loc)
+        local encoded_loc = resolve_location(url:get_raw(),
+            encode_url_for_redirect(loc))
         redir_url = rspamd_url.create(task:get_mempool(), encoded_loc)
         if not redir_url and encoded_loc ~= loc then
           rspamd_logger.infox(task,
@@ -685,7 +736,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           -- scan resolved redir_url as its own orig), splice into step
           -- and let the cache walk continue from there. Cache miss/lock:
           -- fall back to live HEAD as before.
-          local k = cache_key_for_url(tostring(redir_url))
+          local k = cache_key_for_url(url_identity(redir_url))
           local ret = lua_redis.redis_make_request(task,
               redis_params, k, false,
               function(probe_err, probe_data)
@@ -696,7 +747,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
                       'cache hit on redirect target %s, splicing into cache walk',
                       redir_url)
                   chain_append(chain, redir_url)
-                  seen[tostring(redir_url)] = true
+                  seen[url_identity(redir_url)] = true
                   -- Pass current ntries so any onward ^nested-bridge
                   -- inside step counts HEADs already done in this
                   -- scan toward nested_limit, instead of resetting.
@@ -755,7 +806,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
 
   local method = 'head'
   if settings.redirector_get_urls_map
-      and settings.redirector_get_urls_map:get_key(url_str) then
+      and settings.redirector_get_urls_map:get_key(tostring(url)) then
     method = 'get'
   end
 
@@ -825,11 +876,11 @@ end
 -- Cycle protection is a per-walk seen-set keyed by URL string that
 -- both step and http_walk share, so cycles spanning the two are caught.
 local function resolve_cached(task, orig_url)
-  local key = cache_key_for_url(tostring(orig_url))
+  local key = cache_key_for_url(url_identity(orig_url))
   local chain = { orig_url }
   -- seen grows as we walk forward; we do not pre-seed it with orig_url
   -- because the writer caches direct-200 URLs as a length-1 self-loop
-  -- (hash(orig) = tostring(orig)), and a pre-seed would false-fire the
+  -- (hash(orig) = raw orig), and a pre-seed would false-fire the
   -- cycle check on legitimate terminals. chain_append's tostring-eq
   -- dedup keeps us from double-appending orig in that case.
   local seen = {}

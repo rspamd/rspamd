@@ -144,6 +144,12 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/chain_intermediate_2":
             # Final hop to a tel: URL
             self.redirect("tel:88006007776")
+        elif path == "/relative_redirect":
+            # Relative location: must be resolved against this URL; the query
+            # carries a URL that must not be picked as the target instead
+            self.redirect("rel/target?u=http://decoy.example.net/")
+        elif path == "/rel/target":
+            self.redirect("/hello")
         elif path == "/chain1":
             # Intermediate hop to chain2
             self.redirect(f"{self.request.protocol}://{self.request.host}/chain2")
