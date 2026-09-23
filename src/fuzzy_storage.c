@@ -55,6 +55,12 @@
 /* TCP constants */
 #define FUZZY_TCP_BUFFER_LENGTH 8192
 #define DEFAULT_TCP_TIMEOUT 5.0
+/*
+ * Commands in flight plus replies not yet written on one TCP connection.
+ * Past it the connection is not read until the backlog drains, so a client
+ * that keeps sending without reading replies cannot grow the queue.
+ */
+#define FUZZY_TCP_MAX_BACKLOG 1024
 
 static const char *local_db_name = "local";
 
@@ -128,6 +134,10 @@ struct fuzzy_tcp_session {
 	 * must check this first.
 	 */
 	bool closed;
+
+	/* See FUZZY_TCP_MAX_BACKLOG */
+	unsigned int cmds_inflight;
+	unsigned int replies_queued;
 
 	struct fuzzy_common_session common;
 	ref_entry_t ref;
@@ -397,6 +407,47 @@ rspamd_fuzzy_reply_io(EV_P_ ev_io *w, int revents)
 	REF_RELEASE(session);
 }
 
+/*
+ * Arms the watcher for what the connection needs now: reading while the
+ * backlog has room, writing while replies are queued
+ */
+static void
+rspamd_fuzzy_tcp_update_events(struct fuzzy_tcp_session *tcp_session)
+{
+	struct ev_loop *loop = tcp_session->common.ctx->event_loop;
+	ev_io *io = &tcp_session->common.io;
+	int events = 0;
+
+	if (tcp_session->closed) {
+		return;
+	}
+
+	if (tcp_session->cmds_inflight + tcp_session->replies_queued < FUZZY_TCP_MAX_BACKLOG) {
+		events |= EV_READ;
+	}
+
+	if (tcp_session->replies_queue != NULL) {
+		events |= EV_WRITE;
+	}
+
+	if (ev_is_active(io) && io->events == events) {
+		return;
+	}
+
+	if (ev_is_active(io)) {
+		ev_io_stop(loop, io);
+	}
+
+	if (events != 0) {
+		/*
+		 * With nothing armed, the commands in flight rearm it once they
+		 * complete, and the session timeout keeps running meanwhile
+		 */
+		ev_io_set(io, tcp_session->common.fd, events);
+		ev_io_start(loop, io);
+	}
+}
+
 static void
 rspamd_fuzzy_tcp_enqueue_reply(struct fuzzy_session *session)
 {
@@ -463,25 +514,13 @@ rspamd_fuzzy_tcp_enqueue_reply(struct fuzzy_session *session)
 
 	/* Add to queue */
 	DL_APPEND(tcp_session->replies_queue, reply_elt);
+	tcp_session->replies_queued++;
 
 	msg_debug_fuzzy_storage("enqueued TCP reply to %s, %z bytes",
 							rspamd_inet_address_to_string(session->addr),
 							len);
 
-	/* Enable write event if not already enabled */
-	if (ev_is_active(&tcp_session->common.io)) {
-		int events = tcp_session->common.io.events;
-		if (!(events & EV_WRITE)) {
-			ev_io_stop(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
-			ev_io_set(&tcp_session->common.io, tcp_session->common.fd, EV_READ | EV_WRITE);
-			ev_io_start(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
-		}
-	}
-	else {
-		/* Watcher is not active, start it with both read and write */
-		ev_io_set(&tcp_session->common.io, tcp_session->common.fd, EV_READ | EV_WRITE);
-		ev_io_start(tcp_session->common.ctx->event_loop, &tcp_session->common.io);
-	}
+	rspamd_fuzzy_tcp_update_events(tcp_session);
 }
 
 static void
@@ -1331,6 +1370,54 @@ rspamd_fuzzy_check_callback(struct rspamd_fuzzy_multiflag_result *mf_result, voi
 	REF_RELEASE(session);
 }
 
+/*
+ * The per-source bucket, consumed at most once per command: `state` is -1
+ * until it is checked, then the cached result
+ */
+static bool
+rspamd_fuzzy_source_rate_allowed(struct fuzzy_session *session, bool ip_exempt,
+								 int *state)
+{
+	if (*state < 0) {
+		bool allowed = true;
+
+		if (!ip_exempt && session->ctx->ratelimit_buckets) {
+			allowed = rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
+												   session->worker, session->timestamp);
+
+			if (session->ctx->ratelimit_log_only) {
+				allowed = true;
+			}
+		}
+
+		*state = allowed ? 1 : 0;
+	}
+
+	return *state == 1;
+}
+
+/*
+ * Replies with an error that needs no authorisation to trigger, so it is
+ * metered by the source bucket like the unauthenticated commands are: a
+ * rate limited source gets no reply at all
+ */
+static void
+rspamd_fuzzy_reject_command(struct fuzzy_session *session,
+							struct rspamd_fuzzy_cmd *cmd,
+							struct rspamd_fuzzy_reply *result,
+							int32_t code, int send_flags,
+							bool ip_exempt, int *rate_state)
+{
+	if (!rspamd_fuzzy_source_rate_allowed(session, ip_exempt, rate_state)) {
+		session->ctx->stat.ratelimited_requests++;
+		return;
+	}
+
+	result->v1.value = code;
+	result->v1.prob = 0.0f;
+	rspamd_fuzzy_make_reply(cmd, result, NULL, session, send_flags);
+}
+
 static void
 rspamd_fuzzy_process_command(struct fuzzy_session *session)
 {
@@ -1501,18 +1588,19 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	}
 
 
+	/* See rspamd_fuzzy_source_rate_allowed */
+	int rate_state = -1;
+
 	if (G_UNLIKELY(cmd == NULL || up_len == 0)) {
-		result.v1.value = 500;
-		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
+		rspamd_fuzzy_reject_command(session, cmd, &result, 500, send_flags,
+									ip_exempt, &rate_state);
 		return;
 	}
 
 	if (session->ctx->encrypted_only && !encrypted) {
 		/* Do not accept unencrypted commands */
-		result.v1.value = 415;
-		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
+		rspamd_fuzzy_reject_command(session, cmd, &result, 415, send_flags,
+									ip_exempt, &rate_state);
 		return;
 	}
 
@@ -1529,16 +1617,28 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	 */
 	bool is_rate_allowed = true;
 
-	if (!ip_exempt && session->ctx->ratelimit_buckets &&
-		(cmd->cmd == FUZZY_CHECK || cmd->cmd == FUZZY_PING ||
-		 cmd->cmd == FUZZY_STAT)) {
-		if (session->ctx->ratelimit_log_only) {
-			(void) rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
-												session->worker, session->timestamp); /* Check but ignore */
-		}
-		else {
-			is_rate_allowed = rspamd_fuzzy_check_ratelimit(session->ctx, session->addr,
-														   session->worker, session->timestamp);
+	if (cmd->cmd == FUZZY_CHECK || cmd->cmd == FUZZY_PING ||
+		cmd->cmd == FUZZY_STAT) {
+		is_rate_allowed = rspamd_fuzzy_source_rate_allowed(session, ip_exempt,
+														   &rate_state);
+	}
+
+	if (session->key && !isnan(session->key->expire) &&
+		cmd->cmd != FUZZY_PING && cmd->cmd != FUZZY_STAT) {
+		/*
+		 * An expired key loses every right it had, writes included. The
+		 * command timestamp comes from the event loop clock, so the check
+		 * is exact to the loop iteration
+		 */
+		if (session->timestamp > session->key->expire) {
+			if (!session->key->expired) {
+				msg_info("key %s is expired", session->key->name);
+				session->key->expired = true;
+			}
+
+			rspamd_fuzzy_reject_command(session, cmd, &result, 503, send_flags,
+										ip_exempt, &rate_state);
+			return;
 		}
 	}
 
@@ -1612,38 +1712,11 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			}
 		}
 
-		if (session->key && !isnan(session->key->expire)) {
-			/* Check expire */
-			static ev_tstamp today = NAN;
-
-			/*
-			 * Update `today` sometimes
-			 */
-			if (isnan(today)) {
-				today = ev_time();
-			}
-			else if (rspamd_random_uint64_fast() > 0xFFFF000000000000ULL) {
-				today = ev_time();
-			}
-
-			if (today > session->key->expire) {
-				if (!session->key->expired) {
-					msg_info("key %s is expired", session->key->name);
-					session->key->expired = true;
-				}
-
-				result.v1.value = 503;
-				result.v1.prob = 0.0f;
-				rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
-				return;
-			}
-		}
 
 		/* Key is not allowed to read */
 		if (session->key && !(session->key->flags & FUZZY_KEY_READ)) {
-			result.v1.value = 503;
-			result.v1.prob = 0.0f;
-			rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
+			rspamd_fuzzy_reject_command(session, cmd, &result, 503, send_flags,
+										ip_exempt, &rate_state);
 			return;
 		}
 
@@ -1756,8 +1829,10 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 			result.v1.prob = 1.0f;
 		}
 		else {
-			result.v1.value = 503;
-			result.v1.prob = 0.0f;
+			/* Refused writes are answered to anyone, so meter them */
+			rspamd_fuzzy_reject_command(session, cmd, &result, 503, send_flags,
+										ip_exempt, &rate_state);
+			return;
 		}
 	reply:
 		rspamd_fuzzy_make_reply(cmd, &result, NULL, session, send_flags);
@@ -2026,8 +2101,13 @@ fuzzy_session_destroy(gpointer d)
 		session->worker->nconns--;
 	}
 	else {
+		struct fuzzy_tcp_session *tcp_session = session->tcp_session;
+
+		/* The command no longer holds the backlog: reading may resume */
+		tcp_session->cmds_inflight--;
+		rspamd_fuzzy_tcp_update_events(tcp_session);
 		/* Release the reference to the TCP session */
-		REF_RELEASE(session->tcp_session);
+		REF_RELEASE(tcp_session);
 	}
 
 	if (session->ip_stat) {
@@ -2345,7 +2425,10 @@ rspamd_fuzzy_tcp_write_reply(struct fuzzy_tcp_session *session,
 	if (reply->written >= total_len) {
 		/* Reply fully sent */
 		DL_DELETE(session->replies_queue, reply);
+		session->replies_queued--;
 		g_free(reply);
+		/* The client reads replies, so it is alive even if it sends nothing */
+		ev_timer_again(session->common.ctx->event_loop, &session->tm);
 
 		msg_debug_fuzzy_storage("TCP reply sent to %s, %z bytes",
 								rspamd_inet_address_to_string(session->common.addr),
@@ -2478,6 +2561,7 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 				/* Replies go to the TCP queue, not the socket directly */
 				cmd_session->tcp_session = session;
 				REF_RETAIN(session); /* released by fuzzy_session_destroy */
+				session->cmds_inflight++;
 
 				if (rspamd_fuzzy_cmd_from_wire(session->input_buf + processed_offset,
 											   frame_len, cmd_session)) {
@@ -2513,6 +2597,13 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 				session->bytes_unprocessed = 0;
 			}
 		}
+
+		if (session->closed) {
+			return;
+		}
+
+		/* Stop reading if this has filled the backlog */
+		rspamd_fuzzy_tcp_update_events(session);
 	}
 
 	if (revents & EV_WRITE) {
@@ -2538,10 +2629,8 @@ rspamd_fuzzy_tcp_io(EV_P_ ev_io *w, int revents)
 			}
 		}
 
-		/* All replies sent, disable write event */
-		ev_io_stop(EV_A_ w);
-		ev_io_set(w, w->fd, EV_READ);
-		ev_io_start(EV_A_ w);
+		/* All replies sent: disable writing, and resume reading if paused */
+		rspamd_fuzzy_tcp_update_events(session);
 	}
 }
 
