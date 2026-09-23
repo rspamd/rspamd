@@ -50,7 +50,7 @@ local function peekaboo_config(opts)
     log_clean = false,
     set_clean_symbol = false,
     retransmits = 2,
-    cache_expire = 7200, -- expire redis in 1d
+    cache_expire = 7200, -- expire redis in 2h
     min_size = 300,
     message = '${SCANNER}: Peekaboo threat message found: "${VIRUS}"',
     detection_category = "sandbox threat",
@@ -431,6 +431,8 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
             log_prefix, job_id, result.result, result.reason)
           common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
             rule.symbols.peekaboo_good.score, rule.symbols.peekaboo_good.symbol, maybe_part)
+          -- cache clean verdicts too, so they expire and get rescanned like bad ones
+          common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
         elseif tostring(result.result) == 'ignored' then
           lua_util.debugm(N, task, '%s: job-id %s - found ignored result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
