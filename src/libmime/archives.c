@@ -1486,8 +1486,13 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 		return NULL;
 	}
 
-	folder_nstreams = rspamd_mempool_alloc0(task->task_pool,
-											sizeof(uint64_t) * num_folders);
+	folder_nstreams = rspamd_mempool_alloc(task->task_pool,
+										   sizeof(uint64_t) * num_folders);
+
+	/* Without kNumUnPackStream, every folder holds a single stream */
+	for (i = 0; i < num_folders; i++) {
+		folder_nstreams[i] = 1;
+	}
 
 	while (p != NULL && p < end) {
 		/*
@@ -1522,21 +1527,36 @@ rspamd_7zip_read_substreams_info(struct rspamd_task *task,
 				folder_nstreams[i] = tmp;
 			}
 			break;
-		case kCRC:
+		case kCRC: {
 			/*
-			 * Read the comment in the rspamd_7zip_read_coders_info
+			 * Digests are listed per stream, except for single stream
+			 * folders whose CRC is already known from the folder itself.
+			 * Only the number of folders without a CRC is known here, which
+			 * is exact when either all or none of them have one
 			 */
-			p = rspamd_7zip_read_digest(task, p, end, arch, num_nodigest,
+			uint64_t num_streams = 0, num_single = 0;
+
+			for (i = 0; i < num_folders; i++) {
+				if (folder_nstreams[i] == 1) {
+					num_single++;
+				}
+				else {
+					num_streams += folder_nstreams[i];
+				}
+			}
+
+			num_streams += MIN(num_single, num_nodigest);
+			p = rspamd_7zip_read_digest(task, p, end, arch, num_streams,
 										NULL);
 			break;
+		}
 		case kSize:
 			/*
-			 * Another brain damaged logic, but we have to support it
-			 * as there are no ways to proceed without it.
-			 * In fact, it is just absent in the real life...
+			 * Sizes of all streams in a folder but the last one, which
+			 * is implied by the folder unpacked size
 			 */
 			for (i = 0; i < num_folders; i++) {
-				for (unsigned int j = 0; j < folder_nstreams[i]; j++) {
+				for (uint64_t j = 1; j < folder_nstreams[i]; j++) {
 					uint64_t tmp;
 
 					SZ_READ_VINT(tmp); /* Who cares indeed */
