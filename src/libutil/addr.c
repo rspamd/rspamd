@@ -2015,9 +2015,16 @@ rspamd_inet_address_is_local(const rspamd_inet_addr_t *addr)
 			}
 		}
 		else if (addr->af == AF_INET6) {
-			if (IN6_IS_ADDR_LOOPBACK(&addr->u.in.addr.s6.sin6_addr) ||
-				IN6_IS_ADDR_LINKLOCAL(&addr->u.in.addr.s6.sin6_addr) ||
-				IN6_IS_ADDR_SITELOCAL(&addr->u.in.addr.s6.sin6_addr)) {
+			const struct in6_addr *a6 = &addr->u.in.addr.s6.sin6_addr;
+
+			if (IN6_IS_ADDR_LOOPBACK(a6) ||
+				IN6_IS_ADDR_LINKLOCAL(a6) ||
+				IN6_IS_ADDR_SITELOCAL(a6)) {
+				return TRUE;
+			}
+
+			/* IPv4 loopback in its mapped form, ::ffff:127.0.0.0/104 */
+			if (IN6_IS_ADDR_V4MAPPED(a6) && a6->s6_addr[12] == 0x7f) {
 				return TRUE;
 			}
 		}

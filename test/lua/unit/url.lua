@@ -263,6 +263,22 @@ context("URL check functions", function()
     end)
   end
 
+  test("URL ending with an IPv6 host keeps its length", function()
+    for _, u in ipairs({ "http://[::1]", "http://[2001:db8::1]" }) do
+      local res = url.create(pool, u)
+      assert_not_nil(res, "cannot parse " .. u)
+      assert_equal(#res:get_raw(), #u, u)
+      assert_equal(res:get_host(), u:match("%[(.+)%]"), u)
+    end
+  end)
+
+  test("IPv4 mapped loopback is local", function()
+    local rspamd_ip = require "rspamd_ip"
+    assert_true(rspamd_ip.from_string("::ffff:127.0.0.1"):is_local())
+    assert_true(rspamd_ip.from_string("::ffff:127.1.2.3"):is_local())
+    assert_false(rspamd_ip.from_string("::ffff:128.0.0.1"):is_local())
+  end)
+
   test("URL public suffix", function()
     local bit = require "bit"
     local tld_lookup = require "rspamd_tld_lookup"

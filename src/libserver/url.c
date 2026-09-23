@@ -1074,6 +1074,11 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				SET_U(u, UF_HOST);
 				p++;
 
+				if (p == last) {
+					/* The host ends the input, e.g. http://[::1] */
+					break;
+				}
+
 				if (*p == ':') {
 					st = parse_port;
 					c = p + 1;
@@ -1090,7 +1095,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					st = parse_part;
 					c = p + 1;
 				}
-				else if (p != last) {
+				else {
 					goto out;
 				}
 			}
