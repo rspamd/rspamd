@@ -37,6 +37,7 @@
 #include <glib.h>
 
 static constexpr unsigned int CTA_WEIGHT_SCALE = 1000;
+static constexpr std::size_t CTA_LABEL_MAX_LEN = 4096; /* An unclosed link spans the rest of the part */
 
 namespace rspamd::html {
 namespace {
@@ -138,7 +139,7 @@ static auto to_lower_ascii(std::string_view input) -> std::string
 
 static auto get_cta_label(const html_tag &tag, const html_content &hc) -> std::string
 {
-	auto content = trim_ascii(tag.get_content(&hc));
+	auto content = trim_ascii(tag.get_content(&hc).substr(0, CTA_LABEL_MAX_LEN));
 	if (!content.empty()) {
 		return std::string{content};
 	}

@@ -25,6 +25,8 @@
 
 namespace rspamd::html {
 
+static const std::size_t max_visible_part_len = 4096; /* Check only this prefix of a link text */
+
 static auto
 rspamd_url_is_subdomain(std::string_view t1, std::string_view t2) -> bool
 {
@@ -322,6 +324,21 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 	if (visible_part.empty()) {
 		/* No displayed url, just some text within <a> tag */
 		return;
+	}
+
+	/*
+	 * An unclosed <a> spans the rest of the part, so N nested links would
+	 * each copy and scan the whole tail
+	 */
+	if (visible_part.size() > max_visible_part_len) {
+		auto len = max_visible_part_len;
+
+		/* Do not split a multibyte character */
+		while (len > 0 && (visible_part[len] & 0xC0) == 0x80) {
+			len--;
+		}
+
+		visible_part = visible_part.substr(0, len);
 	}
 
 	if (url->ext == nullptr) {

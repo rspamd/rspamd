@@ -507,10 +507,13 @@ exports.text_part_heuristic = function(part, log_obj, _)
     end
 
     if is_text and mtype ~= 'message' then
+      local lsubtype = msubtype:lower()
+      -- JSON strings often carry markup, it is data and not a document
+      local is_json = mtype == 'application' and (lsubtype == 'json' or lsubtype:sub(-5) == '+json')
       -- Try patterns
       local span_len = math.min(4096, clen)
       local start_span = content:span(1, span_len)
-      local matches = txt_trie:match(start_span)
+      local matches = not is_json and txt_trie:match(start_span)
       local res = {}
       local fname = part:get_filename()
 

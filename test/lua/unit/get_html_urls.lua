@@ -578,4 +578,40 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("Visible part of nested unclosed links is bounded", function()
+    local links = {}
+    for i = 1, 50 do
+      links[#links + 1] = string.format('<a href="http://example.com/%d">link%d %s', i, i, string.rep('x', 10000))
+    end
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+]] .. table.concat(links) .. [[
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local nlinks = 0
+    for _, u in ipairs(task:get_urls() or {}) do
+      local visible = u:get_visible()
+      if visible then
+        nlinks = nlinks + 1
+        assert_true(#visible <= 4096,
+            string.format("visible part of %s is %d bytes", tostring(u), #visible))
+        local n = tostring(u):match('/(%d+)$')
+        assert_equal(visible:sub(1, 4 + #n), 'link' .. n)
+      end
+    end
+    assert_equal(nlinks, 50)
+
+    task:destroy()
+  end)
+
 end)
