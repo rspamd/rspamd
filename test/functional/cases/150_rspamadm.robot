@@ -13,6 +13,30 @@ ${ENCRYPTED_TEXT}      8KGF6VLI7vnweUdR8FuQZuT+ID8=
 ${PYTHON_SCRIPT}       ${RSPAMD_TESTDIR}/../../utils/encrypt_decrypt_header.py
 
 *** Test Cases ***
+MIME HTML Structure Has Bounded Content Previews
+  ${body} =  Evaluate  '<span>' + 'x' * 4095 + chr(0x20ac) + '</span>' + ('<span>' + 'x' * 5000) * 300
+  ${message} =  Catenate  SEPARATOR=\n  Content-Type: text/html; charset=utf-8  ${EMPTY}  ${body}
+  Create File  ${RSPAMADM_TMPDIR}/nested.eml  ${message}
+  ${result} =  Rspamadm  --var\=LUALIBDIR\=${TOPDIR}/lualib  mime  -j  extract  --html  --structure  ${RSPAMADM_TMPDIR}/nested.eml
+  Should Be Equal As Integers  ${result.rc}  0
+  ${tags} =  Evaluate  list(json.loads($result.stdout).values())[0][0]  modules=json
+  ${lengths} =  Evaluate  [len(t.get('content', '').encode('utf-8')) for t in $tags]
+  Should Be True  max($lengths) <= 4096
+  Should Be True  sum($lengths) <= 1024 * 1024
+  Should Be True  any(t.get('content_truncated') for t in $tags)
+  Should Be True  any(t.get('content_length') == 4098 and len(t['content']) == 4095 for t in $tags)
+
+MIME HTML Structure Serializes URL Extras
+  ${message} =  Catenate  SEPARATOR=\n
+  ...  Content-Type: text/html
+  ...  ${EMPTY}
+  ...  <a href="https://example.com/path">Click here</a>
+  Create File  ${RSPAMADM_TMPDIR}/url.eml  ${message}
+  ${result} =  Rspamadm  --var\=LUALIBDIR\=${TOPDIR}/lualib  mime  -j  extract  --html  --structure  ${RSPAMADM_TMPDIR}/url.eml
+  Should Be Equal As Integers  ${result.rc}  0
+  ${tags} =  Evaluate  list(json.loads($result.stdout).values())[0][0]  modules=json
+  Should Be True  any(t.get('extra') == 'https://example.com/path' and t['content'] == 'Click here' for t in $tags)
+
 Config Test
   ${result} =  Rspamadm  configtest
   Should Match Regexp  ${result.stderr}  ^$
@@ -54,7 +78,7 @@ Verbose mode
   Should Match Regexp  ${result.stderr}  ^$
   Should Match Regexp  ${result.stdout}  hello world\n
   Should Be Equal As Integers  ${result.rc}  0
-  
+
 Password Check Via Env Correct
   ${enc} =  Rspamadm  pw  -p  nq1
   ${result} =  Run Process  ${RSPAMADM}  pw  -c  -p  ${enc.stdout}  env:RSPAMADM_PASSWORD=nq1
@@ -82,7 +106,7 @@ SecretBox python encrypt/decrypt
   ${result1} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  decrypt  -t  ${NONCE}${ENCRYPTED_TEXT}  -k  ${KEY}
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Strings  ${result1.stdout}  ${TEXT}
-  
+
 SecretBox encrypt python with nonce decrypt rspamadm
   ${result} =  Run Process  python3  ${PYTHON_SCRIPT}  -B  encrypt  -t  ${TEXT}  -k  ${KEY}  -n  ${NONCE}
   ${result1} =  Rspamadm  secret_box  -B  decrypt  -t  ${result.stdout}  -k  ${KEY}

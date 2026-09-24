@@ -164,12 +164,39 @@ html_tag_alloc(struct html_content *hc, int flags = 0) -> html_tag *
 	return ntag;
 }
 
+struct html_balance_state {
+	std::size_t indexed_tags = 0;
+	ankerl::unordered_dense::map<std::int32_t, std::vector<html_tag *>> open_tags;
+
+	auto has_open_tag(const html_content &hc, std::int32_t id) -> bool
+	{
+		/* Index each opening once, including hashed IDs of unknown tags. */
+		while (indexed_tags < hc.all_tags.size()) {
+			auto *tag = hc.all_tags[indexed_tags++].get();
+			if (!(tag->flags & FL_CLOSED)) {
+				open_tags[tag->id].push_back(tag);
+			}
+		}
+
+		auto it = open_tags.find(id);
+		if (it == open_tags.end()) {
+			return false;
+		}
+		auto &candidates = it->second;
+		while (!candidates.empty() && (candidates.back()->flags & FL_CLOSED)) {
+			candidates.pop_back();
+		}
+		return !candidates.empty();
+	}
+};
+
 /*
  * This function is expected to be called on a closing tag to fill up all tags
  * and return the current parent (meaning unclosed) tag
  */
 static auto
 html_check_balance(struct html_content *hc,
+				   html_balance_state &balance,
 				   struct html_tag *tag,
 				   goffset tag_start_offset,
 				   goffset tag_end_offset) -> html_tag *
@@ -200,6 +227,9 @@ html_check_balance(struct html_content *hc,
 	};
 
 	auto balance_tag = [&]() -> html_tag * {
+		if (!balance.has_open_tag(*hc, tag->id)) {
+			return nullptr;
+		}
 		auto it = tag->parent;
 		auto found_pair = false;
 
@@ -288,7 +318,7 @@ html_check_balance(struct html_content *hc,
 			tag->parent = vtag;
 
 			/* Recursively call with a virtual <html> tag inserted */
-			return html_check_balance(hc, tag, tag_start_offset, tag_end_offset);
+			return html_check_balance(hc, balance, tag, tag_start_offset, tag_end_offset);
 		}
 	}
 
@@ -1958,12 +1988,28 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		goffset initial_parsed_offset = 0;
 		goffset initial_invisible_offset = 0;
 		goffset cur_offset = 0;
+		std::size_t first_visible_offset = std::string::npos;
+		std::size_t scanned_parsed_offset = 0;
 		bool entered = false;
 		bool finished = false;
 		bool is_visible = true;
 		bool is_block = false;
 		bool is_spaces = false;
 		bool is_transparent = false;
+	};
+
+	/* Scan each appended segment once; parents inherit the child's result. */
+	auto scan_visible_content = [hc](append_frame &frame) -> void {
+		if (frame.first_visible_offset == std::string::npos &&
+			frame.scanned_parsed_offset < hc->parsed.size()) {
+			auto sz = hc->parsed.size() - frame.scanned_parsed_offset;
+			auto *trimmed = rspamd_string_unicode_trim_inplace(
+				hc->parsed.data() + frame.scanned_parsed_offset, &sz);
+			if (sz > 0) {
+				frame.first_visible_offset = trimmed - hc->parsed.data();
+			}
+		}
+		frame.scanned_parsed_offset = hc->parsed.size();
 	};
 
 	auto calculate_final_tag_offsets = [hc](append_frame &frame) -> void {
@@ -2006,6 +2052,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		frame.next_tag_offset = cur->closing.end;
 		frame.initial_parsed_offset = hc->parsed.size();
 		frame.initial_invisible_offset = hc->invisible.size();
+		frame.scanned_parsed_offset = hc->parsed.size();
 
 		if (cur->closing.end == -1) {
 			if (cur->closing.start != -1) {
@@ -2096,12 +2143,16 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		if (frame.is_visible) {
 			if (cur->id == Tag_A) {
-				auto written_len = hc->parsed.size() - frame.initial_parsed_offset;
+				scan_visible_content(frame);
+				auto visible_offset = frame.first_visible_offset == std::string::npos
+										  ? hc->parsed.size()
+										  : frame.first_visible_offset;
+				auto written_len = hc->parsed.size() - visible_offset;
 				html_process_displayed_href_tag(
 					pool, hc,
-					{hc->parsed.data() + frame.initial_parsed_offset,
+					{hc->parsed.data() + visible_offset,
 					 std::size_t(written_len)},
-					cur, exceptions, url_set, frame.initial_parsed_offset, L,
+					cur, exceptions, url_set, visible_offset, L,
 					max_urls);
 
 				if (std::holds_alternative<rspamd_url *>(cur->extra)) {
@@ -2137,6 +2188,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			}
 		}
 
+		scan_visible_content(frame);
 		calculate_final_tag_offsets(frame);
 	};
 
@@ -2163,6 +2215,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 								   frame.is_transparent, len, dest);
 			}
 
+			scan_visible_content(frame);
 			stack.push_back({child});
 			continue;
 		}
@@ -2172,10 +2225,18 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		}
 
 		result = frame.next_tag_offset;
+		auto first_visible_offset = frame.first_visible_offset;
 		stack.pop_back();
 
-		if (!stack.empty() && result > stack.back().cur_offset) {
-			stack.back().cur_offset = result;
+		if (!stack.empty()) {
+			auto &parent = stack.back();
+			if (result > parent.cur_offset) {
+				parent.cur_offset = result;
+			}
+			if (parent.first_visible_offset == std::string::npos) {
+				parent.first_visible_offset = first_visible_offset;
+			}
+			parent.scanned_parsed_offset = hc->parsed.size();
 		}
 	}
 
@@ -2199,6 +2260,7 @@ auto html_process_input(struct rspamd_task *task,
 	auto overflow_input = false;
 	struct html_tag *cur_tag = nullptr, *parent_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
+	html_balance_state balance;
 	/*
 	 * Result of the last quote lookahead for `>` inside a quoted attribute:
 	 * the position of the next such quote or `end` if there is none. It stays
@@ -3072,7 +3134,7 @@ auto html_process_input(struct rspamd_task *task,
 				}
 
 				/* cur_tag here is a closing tag */
-				auto *next_cur_tag = html_check_balance(hc, cur_tag,
+				auto *next_cur_tag = html_check_balance(hc, balance, cur_tag,
 														c - start, p - start + 1);
 
 				if (cur_tag->id == Tag_STYLE && allow_css) {
@@ -3159,7 +3221,7 @@ auto html_process_input(struct rspamd_task *task,
 		cur_closing_tag.parent = cur_tag;
 		cur_closing_tag.id = cur_tag->id;
 		cur_tag = &cur_closing_tag;
-		html_check_balance(hc, cur_tag,
+		html_check_balance(hc, balance, cur_tag,
 						   end - start, end - start);
 	}
 
