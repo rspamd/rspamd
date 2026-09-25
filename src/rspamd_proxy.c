@@ -20,6 +20,8 @@
 #include "libserver/http/http_connection.h"
 #include "libserver/http/http_private.h"
 #include "libserver/protocol.h"
+#include "libserver/scan_finalization.h"
+#include "libserver/multistage.h"
 #include "libserver/protocol_internal.h"
 #include "libserver/cfg_file.h"
 #include "libserver/url.h"
@@ -266,9 +268,20 @@ struct rspamd_proxy_session {
 	/* ESMTP arguments from milter session */
 	GHashTable *mail_esmtp_args;
 	GPtrArray *rcpt_esmtp_args;
+	rspamd_fstring_t *early_record;
+	double early_started;
+	rspamd_fstring_t *early_binding;
+	char early_id[RSPAMD_MULTISTAGE_ID_LEN + 1];
+	uint64_t early_transaction;
+	gboolean early_pending;
+	struct rspamd_task *early_task;
+	ev_timer early_cleanup;
 };
 
 static gboolean proxy_send_master_message(struct rspamd_proxy_session *session);
+static void proxy_multistage_complete(struct rspamd_proxy_session *session, const char *wire, gsize len);
+static void proxy_multistage_cancel(struct rspamd_proxy_session *session);
+static gboolean proxy_multistage_self_scan(struct rspamd_proxy_session *session);
 
 static void
 proxy_add_client_ip_header(struct rspamd_http_message *msg,
@@ -1328,9 +1341,11 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		conn->results = ucl_object_lua_import(L, -1);
 		lua_settop(L, 0);
 	}
-	else if (ct && rspamd_substring_search_caseless(ct->begin, ct->len,
-													"multipart/mixed", sizeof("multipart/mixed") - 1) != -1) {
-		/* V3 multipart/mixed response */
+	else if (ct && (rspamd_substring_search_caseless(ct->begin, ct->len,
+													 "multipart/mixed", sizeof("multipart/mixed") - 1) != -1 ||
+					rspamd_substring_search_caseless(ct->begin, ct->len,
+													 "multipart/form-data", sizeof("multipart/form-data") - 1) != -1)) {
+		/* V3 multipart response */
 		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
 			ct->begin, ct->len, session->pool);
 
@@ -1629,6 +1644,7 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 	unsigned int i;
 	int cbref;
 	struct rspamd_proxy_backend_connection *conn;
+	proxy_multistage_cancel(session);
 
 	if (session->master_conn && session->master_conn->results) {
 		for (i = 0; i < session->ctx->cmp_refs->len; i++) {
@@ -2786,6 +2802,14 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 	struct rspamd_proxy_session *session;
 
 	session = bk_conn->s;
+
+	if (session->early_pending) {
+		rspamd_upstream_fail(bk_conn->up, FALSE, err ? err->message : "DATA transport failure");
+		proxy_backend_close_connection(bk_conn);
+		proxy_multistage_complete(session, NULL, 0);
+		return;
+	}
+
 	session->retries++;
 	msg_info_session("abnormally closing connection from backend: %s, error: %e,"
 					 " retries left: %d",
@@ -2853,6 +2877,17 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg(session->master_conn->backend_conn);
+
+	if (session->early_pending) {
+		gsize len;
+		const char *wire = rspamd_http_message_get_body(msg, &len);
+		rspamd_upstream_ok(bk_conn->up);
+		proxy_backend_close_connection(bk_conn);
+		proxy_multistage_complete(session, msg->code == 200 ? wire : NULL, len);
+		rspamd_http_message_free(msg);
+		return 0;
+	}
+
 	proxy_request_decompress(msg, session->ctx->cfg->max_message);
 
 	/*
@@ -3036,12 +3071,12 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	case CMD_CHECK_RSPAMC:
 	case CMD_CHECK_SPAMC:
 	case CMD_CHECK_V2:
-		rspamd_task_set_finish_time(task);
+		rspamd_task_finalize_scan(task);
 		rspamd_protocol_http_reply(msg, task, &rep, out_type);
 		rspamd_protocol_write_log_pipe(task);
 		break;
 	case CMD_CHECK_V3:
-		rspamd_task_set_finish_time(task);
+		rspamd_task_finalize_scan(task);
 		rep = rspamd_protocol_write_ucl(task, RSPAMD_PROTOCOL_DEFAULT | RSPAMD_PROTOCOL_URLS);
 		ctype = rspamd_protocol_http_reply_v3(msg, task);
 		rspamd_protocol_write_log_pipe(task);
@@ -3299,7 +3334,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 	rspamd_http_message_remove_header(session->client_message, "Connection");
 
 	/* Set keepalive flag based on backend configuration */
-	if (backend && backend->keepalive) {
+	if (backend && backend->keepalive && !session->early_pending) {
 		session->flags |= RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE;
 	}
 	else {
@@ -3315,6 +3350,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		session->backend = backend;
 
 		if (backend->self_scan) {
+			if (session->early_pending) return proxy_multistage_self_scan(session);
 			return rspamd_proxy_self_scan(session);
 		}
 	retry:
@@ -3367,7 +3403,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 														   hash_key, hash_len);
 		}
 
-		session->master_conn->timeout = backend->timeout;
+		session->master_conn->timeout = session->early_pending ? rspamd_multistage_timeout(session->ctx->cfg) + 0.5 : backend->timeout;
 
 		if (session->master_conn->up == NULL) {
 			msg_err_session("cannot select upstream for %s",
@@ -3411,6 +3447,8 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 			rspamd_upstream_fail(session->master_conn->up, TRUE,
 								 strerror(errno));
 			session->retries++;
+
+			if (session->early_pending) goto err;
 			goto retry;
 		}
 
@@ -3453,6 +3491,11 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 			http_opts,
 			session->master_conn->backend_sock);
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
+
+		if (session->early_pending) {
+			rspamd_http_connection_set_max_size(session->master_conn->backend_conn, RSPAMD_MULTISTAGE_MAX_WIRE);
+		}
+
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
 
@@ -3489,7 +3532,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		/* Add/overwrite IP header with the actual client IP */
 		proxy_add_client_ip_header(msg, session);
 
-		if (master_allows_shm) {
+		if (master_allows_shm && !session->early_pending) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header(msg, "File", session->fname);
@@ -3512,15 +3555,16 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 
 			msg->method = HTTP_POST;
 
-			if (backend->compress) {
+			if (backend->compress && !session->early_pending) {
 				proxy_request_compress(msg);
-				if (session->client_milter_conn) {
+
+				if (session->client_milter_conn && !rspamd_http_message_find_header(msg, "Content-Type")) {
 					rspamd_http_message_add_header(msg, "Content-Type",
 												   "application/octet-stream");
 				}
 			}
 			else {
-				if (session->client_milter_conn) {
+				if (session->client_milter_conn && !rspamd_http_message_find_header(msg, "Content-Type")) {
 					rspamd_http_message_add_header(msg, "Content-Type",
 												   "text/plain");
 				}
@@ -3537,6 +3581,12 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 	return TRUE;
 
 err:
+	if (session->early_pending) {
+		proxy_backend_close_connection(session->master_conn);
+		proxy_multistage_complete(session, NULL, 0);
+		return TRUE;
+	}
+
 	if (session->client_milter_conn) {
 		rspamd_milter_send_action(session->client_milter_conn,
 								  RSPAMD_MILTER_TEMPFAIL);
@@ -3680,8 +3730,195 @@ err:
 }
 
 static void
+proxy_multistage_free_task(struct rspamd_proxy_session *session)
+{
+	if (session->early_task) {
+		struct rspamd_task *task = session->early_task;
+
+		session->early_task = NULL;
+
+		if (task->s) {
+			rspamd_session_destroy(task->s);
+		}
+		else {
+			rspamd_task_free(task);
+		}
+	}
+}
+
+static void
+proxy_multistage_cleanup(EV_P_ ev_timer *timer, int revents)
+{
+	struct rspamd_proxy_session *session = timer->data;
+	proxy_multistage_free_task(session);
+}
+
+static void
+proxy_multistage_cancel(struct rspamd_proxy_session *session)
+{
+	ev_timer_stop(session->ctx->event_loop, &session->early_cleanup);
+	proxy_multistage_free_task(session);
+
+	if (session->early_pending) {
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_CANCELLED);
+		rspamd_multistage_observe(session->worker, ev_now(session->ctx->event_loop) - session->early_started);
+
+		if (session->master_conn && session->master_conn->up &&
+			!(session->master_conn->flags & RSPAMD_BACKEND_CLOSED)) {
+			rspamd_upstream_release(session->master_conn->up);
+		}
+
+		proxy_backend_close_connection(session->master_conn);
+		rspamd_http_message_unref(session->client_message);
+		session->client_message = NULL;
+	}
+
+	session->early_pending = FALSE;
+
+	if (session->early_record) {
+		rspamd_fstring_free(session->early_record);
+	}
+
+	if (session->early_binding) {
+		rspamd_fstring_free(session->early_binding);
+	}
+
+	session->early_record = session->early_binding = NULL;
+	session->retries = 0;
+}
+
+static void
+proxy_multistage_complete(struct rspamd_proxy_session *session, const char *wire, gsize len)
+{
+	enum rspamd_multistage_decision decision;
+	rspamd_fstring_t *reason = NULL;
+	char action = RSPAMD_MILTER_CONTINUE;
+
+	if (!session->early_pending) {
+		return;
+	}
+
+	decision = rspamd_multistage_check_reply(session->ctx->cfg, wire, len,
+											 session->early_id, session->early_binding,
+											 &session->early_record, &reason);
+
+	switch (decision) {
+	case RSPAMD_MULTISTAGE_REJECT:
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_REJECTED);
+		action = RSPAMD_MILTER_REJECT;
+		break;
+	case RSPAMD_MULTISTAGE_TEMPFAIL:
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_TEMPFAILED);
+		action = RSPAMD_MILTER_TEMPFAIL;
+		break;
+	case RSPAMD_MULTISTAGE_CONTINUE:
+		rspamd_multistage_count(session->worker, session->early_record ? RSPAMD_MULTISTAGE_DATA_CONTINUED : RSPAMD_MULTISTAGE_DATA_FALLBACK);
+		break;
+	}
+
+	rspamd_multistage_observe(session->worker, ev_now(session->ctx->event_loop) - session->early_started);
+	session->early_pending = FALSE;
+	session->retries = 0;
+	rspamd_http_message_unref(session->client_message);
+	session->client_message = NULL;
+
+	if (session->client_milter_conn) {
+		gboolean queued = rspamd_milter_reply_data(session->client_milter_conn, session->early_transaction, action, reason);
+
+		if (action != RSPAMD_MILTER_CONTINUE) {
+			msg_info_session("DATA decision %c; event %s; reply queued: %s", action,
+							 session->early_id, queued ? "yes" : "no");
+		}
+	}
+
+	if (reason) {
+		rspamd_fstring_free(reason);
+	}
+}
+
+static void
+proxy_multistage_self_done(struct rspamd_task *task, const rspamd_fstring_t *reply, void *ud)
+{
+	struct rspamd_proxy_session *session = ud;
+	proxy_multistage_complete(session, reply ? reply->str : NULL, reply ? reply->len : 0);
+	/* The DATA pump still owns its stack until this callback returns. */
+	ev_timer_init(&session->early_cleanup, proxy_multistage_cleanup, 0, 0);
+	session->early_cleanup.data = session;
+	ev_timer_start(session->ctx->event_loop, &session->early_cleanup);
+}
+
+static gboolean
+proxy_multistage_self_scan(struct rspamd_proxy_session *session)
+{
+	struct rspamd_task *task = rspamd_task_new(session->worker, session->ctx->cfg,
+											   NULL, session->ctx->lang_det, session->ctx->event_loop, FALSE);
+	session->early_task = task;
+	task->resolver = session->ctx->resolver;
+	task->client_addr = rspamd_inet_address_copy(session->client_addr, NULL);
+
+	if (!rspamd_multistage_start(task, session->client_message, proxy_multistage_self_done, session)) {
+		proxy_multistage_self_done(task, NULL, session);
+	}
+
+	return TRUE;
+}
+
+static void
+proxy_multistage_start(struct rspamd_proxy_session *session, struct rspamd_milter_session *rms)
+{
+	unsigned char random[RSPAMD_MULTISTAGE_ID_LEN / 2];
+	ucl_object_t *metadata;
+
+	proxy_multistage_cancel(session);
+	session->backend = session->ctx->default_upstream;
+
+	if (!session->backend || session->backend->extra_headers || session->backend->parser_from_ref != -1 ||
+		session->backend->parser_to_ref != -1 || session->ctx->discard_on_reject ||
+		session->ctx->quarantine_on_reject) {
+		rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_BYPASSED);
+		rspamd_milter_reply_data(rms, rms->transaction, RSPAMD_MILTER_CONTINUE, NULL);
+		return;
+	}
+
+	ottery_rand_bytes(random, sizeof(random));
+	rspamd_encode_hex_buf(random, sizeof(random), session->early_id, RSPAMD_MULTISTAGE_ID_LEN);
+	session->early_id[RSPAMD_MULTISTAGE_ID_LEN] = '\0';
+
+	metadata = rspamd_milter_to_ucl_metadata(rms, session->backend->settings_id);
+	session->early_binding = rspamd_multistage_binding(metadata, session->early_id);
+	session->client_message = NULL;
+
+	if (session->early_binding) {
+		session->client_message = rspamd_multistage_data_request(session->ctx->cfg, metadata, session->early_id);
+	}
+
+	ucl_object_unref(metadata);
+
+	session->early_transaction = rms->transaction;
+	session->early_pending = TRUE;
+	session->early_started = ev_now(session->ctx->event_loop);
+	rspamd_multistage_count(session->worker, RSPAMD_MULTISTAGE_DATA_STARTED);
+
+	if (!session->master_conn) {
+		session->master_conn = rspamd_mempool_alloc0(session->pool, sizeof(*session->master_conn));
+		session->master_conn->s = session;
+		session->master_conn->name = "master";
+		session->master_conn->backend_sock = -1;
+		session->master_conn->flags = RSPAMD_BACKEND_CLOSED;
+	}
+
+	if (!session->client_message) {
+		proxy_multistage_complete(session, NULL, 0);
+	}
+	else {
+		proxy_send_master_message(session);
+	}
+}
+
+static void
 proxy_milter_finish_handler(int fd,
 							struct rspamd_milter_session *rms,
+							enum rspamd_milter_event event,
 							void *ud)
 {
 	struct rspamd_proxy_session *session = ud;
@@ -3689,7 +3926,17 @@ proxy_milter_finish_handler(int fd,
 
 	session->client_milter_conn = rms;
 
-	if (rms->message == NULL || rms->message->len == 0) {
+	if (event == RSPAMD_MILTER_EVENT_DATA) {
+		proxy_multistage_start(session, rms);
+		return;
+	}
+
+	if (event == RSPAMD_MILTER_EVENT_ABORT || event == RSPAMD_MILTER_EVENT_RESET) {
+		proxy_multistage_cancel(session);
+		return;
+	}
+
+	if (event == RSPAMD_MILTER_EVENT_CLOSE) {
 		msg_info_session("finished milter connection");
 		proxy_backend_close_connection(session->master_conn);
 		/* MTA TCP connection is closing: this is the one authoritative
@@ -3721,6 +3968,13 @@ proxy_milter_finish_handler(int fd,
 		/* Milter protocol doesn't support compression, so no need to set compression flag */
 
 		proxy_open_mirror_connections(session);
+
+		if (session->early_record) {
+			ucl_object_t *metadata = rspamd_milter_to_ucl_metadata(rms, session->backend->settings_id);
+			rspamd_multistage_attach_record(msg, metadata, session->early_record);
+			ucl_object_unref(metadata);
+		}
+
 		proxy_send_master_message(session);
 	}
 }
@@ -4020,6 +4274,7 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	ctx->milter_ctx.quarantine_message = ctx->quarantine_message;
 	ctx->milter_ctx.tempfail_message = ctx->tempfail_message;
 	ctx->milter_ctx.cfg = ctx->cfg;
+	ctx->milter_ctx.data_checkpoint = rspamd_multistage_enabled(ctx->cfg);
 	rspamd_milter_init_library(&ctx->milter_ctx);
 
 	if (is_controller) {

@@ -19,6 +19,7 @@
 #include "lua/lua_thread_pool.h"
 
 #include "cfg_file.h"
+#include "multistage.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
 #include "libmime/mime_parser.h"
@@ -925,6 +926,11 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 						enum rspamd_post_load_options opts)
 {
 	auto ret = tl::expected<void, std::string>{};
+
+	if (!rspamd_multistage_validate(cfg)) {
+		msg_err_config("invalid multistage configuration: expected a 32-64 byte key, timeout in (0, 30] seconds, and reject/soft reject policies with name, symbol and reason");
+		return FALSE;
+	}
 
 	rspamd_adjust_clocks_resolution(cfg);
 	rspamd_logger_configure_modules(cfg->debug_modules);

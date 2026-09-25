@@ -2768,6 +2768,7 @@ rspamd_worker_metrics_object(struct rspamd_config *cfg, struct rspamd_stat *stat
 		ucl_object_insert_key(top, sub, "actions", 0, false);
 	}
 
+	ucl_object_insert_key(top, rspamd_multistage_stats(&stat->multistage, FALSE), "multistage", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(spam), "spam_count", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(ham), "ham_count", 0, false);
 	ucl_object_insert_key(top,
@@ -2807,6 +2808,8 @@ rspamd_fstring_t *
 rspamd_metrics_to_prometheus_string(const ucl_object_t *top)
 {
 	rspamd_fstring_t *output = rspamd_fstring_sized_new(1024);
+
+	rspamd_multistage_metrics(ucl_object_lookup(top, "multistage"), &output);
 
 	rspamd_printf_fstring(&output, "# HELP rspamd_build_info A metric with a constant '1' value "
 								   "labeled by version from which rspamd was built.\n");

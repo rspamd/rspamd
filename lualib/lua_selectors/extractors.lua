@@ -45,6 +45,7 @@ end
 local extractors = {
   -- Plain id function
   ['id'] = {
+    ['required_inputs'] = {},
     ['get_value'] = function(_, args)
       if args[1] then
         return args[1], 'string'
@@ -58,6 +59,7 @@ For example, `id('Something')` returns a string 'Something']],
   },
   -- Similar but for making lists
   ['list'] = {
+    ['required_inputs'] = {},
     ['get_value'] = function(_, args)
       if args[1] then
         return fun.map(tostring, args), 'string_list'
@@ -70,6 +72,7 @@ For example, `list('foo', 'bar')` returns a list {'foo', 'bar'}]],
   },
   -- Get source IP address
   ['ip'] = {
+    ['required_inputs'] = { 'connection' },
     ['get_value'] = function(task)
       local ip = task:get_ip()
       if ip and ip:is_valid() then
@@ -81,6 +84,10 @@ For example, `list('foo', 'bar')` returns a list {'foo', 'bar'}]],
   },
   -- Get MIME from
   ['from'] = {
+    ['required_inputs'] = function(args)
+      return args and args[1] == 'smtp' and
+          (#args == 1 or (#args == 2 and args[2] == 'orig')) and { 'sender' } or { 'eom' }
+    end,
     ['get_value'] = function(task, args)
       local from
       if type(args) == 'table' then
@@ -98,6 +105,10 @@ uses any type by default); add `orig` (e.g. `from('mime', 'orig')`) to get the
 address as it was seen in the message, before any rewrite (e.g. by the aliases module)]],
   },
   ['rcpts'] = {
+    ['required_inputs'] = function(args)
+      return args and args[1] == 'smtp' and
+          (#args == 1 or (#args == 2 and args[2] == 'orig')) and { 'recipients' } or { 'eom' }
+    end,
     ['get_value'] = function(task, args)
       local rcpts
       if type(args) == 'table' then
@@ -116,6 +127,7 @@ addresses as they were seen in the message, before any rewrite (e.g. by the alia
   },
   -- Get country (ASN module must be executed first)
   ['country'] = {
+    ['required_inputs'] = { 'connection' },
     ['get_value'] = function(task)
       local country = task:get_mempool():get_variable('country')
       if not country then
@@ -129,6 +141,7 @@ addresses as they were seen in the message, before any rewrite (e.g. by the alia
   },
   -- Get ASN number
   ['asn'] = {
+    ['required_inputs'] = { 'connection' },
     ['type'] = 'string',
     ['get_value'] = function(task)
       local asn = task:get_mempool():get_variable('asn')
@@ -143,6 +156,7 @@ addresses as they were seen in the message, before any rewrite (e.g. by the alia
   },
   -- Get authenticated username
   ['user'] = {
+    ['required_inputs'] = { 'connection' },
     ['get_value'] = function(task)
       local auser = task:get_user()
       if not auser then
@@ -234,6 +248,7 @@ the second optional argument is optional hash type (`blake2`, `sha256`, `sha1`, 
   },
   -- Get helo value
   ['helo'] = {
+    ['required_inputs'] = { 'helo' },
     ['get_value'] = function(task)
       return task:get_helo(), 'string'
     end,
@@ -242,6 +257,7 @@ the second optional argument is optional hash type (`blake2`, `sha256`, `sha1`, 
   -- Get header with the name that is expected as an argument. Returns list of
   -- headers with this name
   ['header'] = {
+    ['required_inputs'] = { 'headers' },
     ['get_value'] = function(task, args)
       local strong = false
       if args[2] then

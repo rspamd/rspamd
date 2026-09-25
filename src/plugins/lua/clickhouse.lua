@@ -20,6 +20,7 @@ local lua_util = require "lua_util"
 local lua_clickhouse = require "lua_clickhouse"
 local lua_settings = require "lua_settings"
 local fun = require "fun"
+local lua_selectors = require "lua_selectors"
 
 local N = "clickhouse"
 
@@ -33,7 +34,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 12 -- Current schema version
+local schema_version = 13 -- Current schema version
 
 local extra_tables = {}
 local extra_table_rows = {}
@@ -149,7 +150,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     Helo String COMMENT 'Full hostname as sent by the SMTP client (RFC5321.HELO/.EHLO)',
     Score Float32 COMMENT 'Message score',
     NRcpt UInt8 COMMENT 'Number of envelope recipients (RFC5321.RcptTo)',
-    Size UInt32 COMMENT 'Message size in bytes',
+    Size UInt32 COMMENT 'Message size in bytes; 0 when HasBody = 0',
     IsWhitelist Enum8('blacklist' = 0, 'whitelist' = 1, 'unknown' = 2) DEFAULT 'unknown' COMMENT 'Based on symbols configured in `whitelist_symbols` module option',
     IsBayes Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2) DEFAULT 'unknown' COMMENT 'Based on symbols configured in `bayes_spam_symbols` and `bayes_ham_symbols` module options',
     IsFuzzy Enum8('whitelist' = 0, 'deny' = 1, 'unknown' = 2) DEFAULT 'unknown' COMMENT 'Based on symbols configured in `fuzzy_symbols` module option',
@@ -157,7 +158,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     IsDkim Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'dnsfail' = 3, 'na' = 4) DEFAULT 'unknown' COMMENT 'Based on symbols configured in dkim_* module options',
     IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'softfail' = 3, 'na' = 4, 'quarantine' = 5) DEFAULT 'unknown' COMMENT 'Based on symbols configured in dmarc_* module options',
     IsSpf Enum8('reject' = 0, 'allow' = 1, 'neutral' = 2, 'dnsfail' = 3, 'na' = 4, 'unknown' = 5) DEFAULT 'unknown' COMMENT 'Based on symbols configured in spf_* module options',
-    NUrls Int32 COMMENT 'Number of URLs and email extracted from the message',
+    NUrls Int32 COMMENT 'Number of URLs and email extracted from the message; 0 when HasMime = 0',
     Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action' COMMENT 'Action returned for the message; if action is not predefined actual action will be in `CustomAction` field',
     CustomAction LowCardinality(String) COMMENT 'Action string for custom action',
     FromUser String COMMENT 'Local part of the return address (RFC5321.MailFrom)',
@@ -196,6 +197,15 @@ CREATE TABLE IF NOT EXISTS rspamd
     SettingsId LowCardinality(String) COMMENT 'ID for the settings profile',
     Digest FixedString(32) COMMENT '[Deprecated]',
     TaskUUID UUID COMMENT 'Native UUID v7 (RFC 9562) for task identification',
+    DecisionStage LowCardinality(String) DEFAULT 'eom',
+    CompletionKind LowCardinality(String) DEFAULT 'full_scan',
+    EventId String,
+    Policy LowCardinality(String),
+    PolicyRecipient String,
+    PolicyReason String,
+    HasHeaders UInt8 DEFAULT 1,
+    HasBody UInt8 DEFAULT 1,
+    HasMime UInt8 DEFAULT 1,
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
     SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'The first envelope recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
@@ -353,6 +363,21 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (12)]],
   },
+  [12] = {
+    -- Existing rows retain their EOM classification.
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS DecisionStage LowCardinality(String) DEFAULT 'eom',
+      ADD COLUMN IF NOT EXISTS CompletionKind LowCardinality(String) DEFAULT 'full_scan',
+      ADD COLUMN IF NOT EXISTS EventId String,
+      ADD COLUMN IF NOT EXISTS Policy LowCardinality(String),
+      ADD COLUMN IF NOT EXISTS PolicyRecipient String,
+      ADD COLUMN IF NOT EXISTS PolicyReason String,
+      ADD COLUMN IF NOT EXISTS HasHeaders UInt8 DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS HasBody UInt8 DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS HasMime UInt8 DEFAULT 1
+    ]],
+    [[INSERT INTO rspamd_version (Version) Values (13)]],
+  },
 }
 
 local predefined_actions = {
@@ -402,6 +427,15 @@ local function clickhouse_main_row(res)
     -- 2.0 +
     'AuthUser',
     'SettingsId',
+    'DecisionStage',
+    'CompletionKind',
+    'EventId',
+    'Policy',
+    'PolicyRecipient',
+    'PolicyReason',
+    'HasHeaders',
+    'HasBody',
+    'HasMime',
   }
 
   for _, v in ipairs(fields) do
@@ -730,6 +764,8 @@ local function get_extra_tables()
 end
 
 local function clickhouse_collect(task)
+  local terminal = task:get_terminal_event()
+
   if task:has_flag('skip') then
     return
   end
@@ -768,7 +804,7 @@ local function clickhouse_collect(task)
 
   local mime_domain = ''
   local mime_user = ''
-  if task:has_from('mime') then
+  if not terminal and task:has_from('mime') then
     local from = task:get_from({ 'mime', 'orig' })[1]
     if from then
       mime_domain = from['domain']:lower()
@@ -777,7 +813,7 @@ local function clickhouse_collect(task)
   end
 
   local mime_recipients = {}
-  if task:has_recipients('mime') then
+  if not terminal and task:has_recipients('mime') then
     local recipients = task:get_recipients({ 'mime', 'orig' })
     for _, rcpt in ipairs(recipients) do
       table.insert(mime_recipients, rcpt['user'] .. '@' .. rcpt['domain']:lower())
@@ -812,9 +848,12 @@ local function clickhouse_collect(task)
     end
   end
 
-  local list_id = task:get_header('List-Id') or ''
-  local message_id = lua_util.maybe_obfuscate_string(task:get_message_id() or '',
-      settings, 'mid')
+  local list_id, message_id = '', ''
+
+  if not terminal then
+    list_id = task:get_header('List-Id') or ''
+    message_id = lua_util.maybe_obfuscate_string(task:get_message_id() or '', settings, 'mid')
+  end
 
   local score = task:get_metric_score()[1];
   local fields = {
@@ -908,7 +947,7 @@ local function clickhouse_collect(task)
   end
 
   local nurls = 0
-  local task_urls = task:get_urls({
+  local task_urls = not terminal and task:get_urls({
     content = true,
     images = true,
     emails = false,
@@ -932,7 +971,7 @@ local function clickhouse_collect(task)
 
   local digest = ''
 
-  if settings.enable_digest then
+  if settings.enable_digest and not terminal then
     digest = task:get_digest()
   end
 
@@ -943,7 +982,7 @@ local function clickhouse_collect(task)
   end
 
   local subject = ''
-  if settings.insert_subject then
+  if settings.insert_subject and not terminal then
     subject = lua_util.maybe_obfuscate_string(task:get_subject() or '', settings, 'subject')
   end
 
@@ -981,7 +1020,7 @@ local function clickhouse_collect(task)
     helo,
     score,
     nrcpts,
-    task:get_size(),
+    terminal and 0 or task:get_size(),
     fields.whitelist,
     fields.bayes,
     fields.fuzzy,
@@ -1005,7 +1044,16 @@ local function clickhouse_collect(task)
     scan_real,
     custom_action,
     auth_user,
-    settings_id
+    settings_id,
+    terminal and terminal.decision_stage or 'eom',
+    terminal and terminal.completion_kind or 'full_scan',
+    terminal and terminal.event_id or task_uuid,
+    terminal and terminal.policy or '',
+    terminal and terminal.policy_recipient or '',
+    terminal and terminal.reason or '',
+    (not terminal or terminal.has_headers) and 1 or 0,
+    (not terminal or terminal.has_body) and 1 or 0,
+    (not terminal or terminal.has_mime) and 1 or 0,
   }
 
   -- Attachments step
@@ -1013,7 +1061,7 @@ local function clickhouse_collect(task)
   local attachments_ctypes = {}
   local attachments_lengths = {}
   local attachments_digests = {}
-  for _, part in ipairs(task:get_parts()) do
+  for _, part in ipairs(not terminal and task:get_parts() or {}) do
     if part:is_attachment() then
       table.insert(attachments_fnames, part:get_filename() or '')
       local mime_type, mime_subtype = part:get_type()
@@ -1097,7 +1145,7 @@ local function clickhouse_collect(task)
   table.insert(row, urls_flags)
 
   -- Emails step
-  if task:has_urls(true) then
+  if not terminal and task:has_urls(true) then
     local emails = task:get_emails() or {}
     local emails_formatted = {}
     for i, u in ipairs(emails) do
@@ -1115,7 +1163,7 @@ local function clickhouse_collect(task)
   local fuzzy_probs = {}
   local fuzzy_flags = {}
 
-  for _, m in ipairs(task:get_fuzzy_results() or {}) do
+  for _, m in ipairs(not terminal and task:get_fuzzy_results() or {}) do
     fuzzy_hashes[#fuzzy_hashes + 1] = m.found
     fuzzy_queried[#fuzzy_queried + 1] = m.queried
     fuzzy_rules[#fuzzy_rules + 1] = m.rule
@@ -1184,7 +1232,11 @@ local function clickhouse_collect(task)
   -- Extra columns
   if #settings.extra_columns > 0 then
     for _, col in ipairs(settings.extra_columns) do
-      local elts = col.real_selector(task)
+      local elts
+
+      if not terminal or col.early then
+        elts = col.real_selector(task)
+      end
 
       if elts then
         table.insert(row, elts)
@@ -1195,14 +1247,15 @@ local function clickhouse_collect(task)
   end
 
   -- Custom data
-  for k, rule in pairs(settings.custom_rules) do
+  -- Custom callbacks have no input contract and remain EOM-only.
+  for k, rule in pairs(not terminal and settings.custom_rules or {}) do
     if not custom_rows[k] then
       custom_rows[k] = {}
     end
     table.insert(custom_rows[k], lua_clickhouse.row_to_tsv(rule.get_row(task)))
   end
 
-  for name, tbl_config in pairs(extra_tables) do
+  for name, tbl_config in pairs(not terminal and extra_tables or {}) do
     if not extra_table_rows[name] then
       extra_table_rows[name] = {}
     end
@@ -1872,7 +1925,6 @@ if opts then
 
     if settings.extra_columns then
       -- Check sanity and create selector closures
-      local lua_selectors = require "lua_selectors"
       local columns_transformed = {}
       local need_sort = false
       -- Select traverse function depending on what we have
@@ -1906,6 +1958,14 @@ if opts then
               end
             end
             col_data.real_selector = selector
+            local inputs = lua_selectors.get_required_inputs(rspamd_config, col_data.selector)
+            col_data.early = inputs ~= nil
+
+            for _, input in ipairs(inputs or {}) do
+              if input ~= 'connection' and input ~= 'helo' and input ~= 'sender' and input ~= 'recipients' then
+                col_data.early = false
+              end
+            end
             if not col_data.name then
               col_data.name = col_name
               need_sort = true
@@ -1926,10 +1986,20 @@ if opts then
       settings.extra_columns = columns_transformed
     end
 
+    -- An exception may need content or an unavailable map. Do not bypass it
+    -- merely because this scan stopped before those inputs arrived.
+    local early = not settings.exceptions
+
+    if not early then
+      rspamd_logger.infox(rspamd_config, 'ClickHouse DATA export disabled: exceptions require an audited input contract')
+    end
+
     rspamd_config:register_symbol({
       name = 'CLICKHOUSE_COLLECT',
       type = 'idempotent',
       callback = clickhouse_collect,
+      required_inputs = early and { 'connection', 'helo', 'sender', 'recipients' } or nil,
+      terminal_observer = early,
       flags = 'empty,explicit_disable,ignore_passthrough',
       augmentations = { string.format("timeout=%f", settings.timeout) },
     })

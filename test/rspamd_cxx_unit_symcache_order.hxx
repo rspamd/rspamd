@@ -185,6 +185,63 @@ struct symcache_order_fixture {
 
 TEST_SUITE("symcache_order")
 {
+	TEST_CASE_FIXTURE(symcache_order_fixture, "input readiness includes virtual producers and transitive dependencies")
+	{
+		auto sender = add("SENDER", 0, SYMBOL_TYPE_NORMAL);
+		auto body = add("BODY", 0, SYMBOL_TYPE_NORMAL);
+		auto chain = add("CHAIN", 0, SYMBOL_TYPE_NORMAL);
+		auto consumer = add("CONSUMER", 0, SYMBOL_TYPE_NORMAL);
+		add_virtual("BODY_RESULT", body);
+		add("LEGACY_EMPTY", 0, SYMBOL_TYPE_NORMAL | SYMBOL_TYPE_EMPTY);
+		REQUIRE(rspamd_symcache_set_symbol_inputs(cache, sender, RSPAMD_SYMCACHE_INPUT_SENDER));
+		REQUIRE(rspamd_symcache_set_symbol_inputs(cache, body, RSPAMD_SYMCACHE_INPUT_BODY));
+		REQUIRE(rspamd_symcache_set_symbol_inputs(cache, chain, RSPAMD_SYMCACHE_INPUT_CONNECTION));
+		REQUIRE(rspamd_symcache_set_symbol_inputs(cache, consumer, RSPAMD_SYMCACHE_INPUT_HELO));
+		depends("CHAIN", "BODY_RESULT");
+		depends("CONSUMER", "CHAIN", true);
+		init();
+
+		CHECK(info("SENDER").effective_inputs == RSPAMD_SYMCACHE_INPUT_SENDER);
+		CHECK(info("BODY_RESULT").effective_inputs == RSPAMD_SYMCACHE_INPUT_BODY);
+		CHECK(info("LEGACY_EMPTY").effective_inputs == RSPAMD_SYMCACHE_INPUT_EOM);
+		CHECK(info("CHAIN").effective_inputs == (RSPAMD_SYMCACHE_INPUT_CONNECTION | RSPAMD_SYMCACHE_INPUT_BODY));
+		CHECK(info("CONSUMER").effective_inputs == (RSPAMD_SYMCACHE_INPUT_CONNECTION | RSPAMD_SYMCACHE_INPUT_HELO | RSPAMD_SYMCACHE_INPUT_BODY));
+		CHECK_FALSE(rspamd_symcache_set_symbol_inputs(cache, sender, 0));
+	}
+
+	TEST_CASE_FIXTURE(symcache_order_fixture, "invalid dependency graphs cannot enable early execution")
+	{
+		for (auto name: {"MISSING", "LATER", "CYCLE_A", "CYCLE_B", "SELF"}) {
+			auto id = add(name, 0, SYMBOL_TYPE_NORMAL);
+			REQUIRE(rspamd_symcache_set_symbol_inputs(cache, id, RSPAMD_SYMCACHE_INPUT_CONNECTION));
+		}
+
+		auto post = add("POST", 0, SYMBOL_TYPE_POSTFILTER);
+		REQUIRE(rspamd_symcache_set_symbol_inputs(cache, post, 0));
+		depends("MISSING", "UNKNOWN");
+		depends("LATER", "POST");
+		depends("CYCLE_A", "CYCLE_B");
+		depends("CYCLE_B", "CYCLE_A");
+		depends("SELF", "SELF");
+		init();
+
+		for (auto name: {"MISSING", "LATER", "CYCLE_A", "CYCLE_B", "POST", "SELF"}) {
+			CAPTURE(name);
+			CHECK((info(name).effective_inputs & RSPAMD_SYMCACHE_INPUT_EOM) != 0);
+		}
+	}
+
+	TEST_CASE_FIXTURE(symcache_order_fixture, "input declarations reject invalid masks and virtual symbols")
+	{
+		auto id = add("PRODUCER", 0, SYMBOL_TYPE_NORMAL);
+		auto virt = add_virtual("RESULT", id);
+		CHECK_FALSE(rspamd_symcache_set_symbol_inputs(cache, -1, 0));
+		CHECK_FALSE(rspamd_symcache_set_symbol_inputs(cache, id, ~0u));
+		CHECK_FALSE(rspamd_symcache_set_symbol_inputs(cache, virt, 0));
+		init();
+		CHECK(info("PRODUCER").effective_inputs == RSPAMD_SYMCACHE_INPUT_EOM);
+	}
+
 	TEST_CASE_FIXTURE(symcache_order_fixture, "declared types define stages and levels")
 	{
 		add("CONN", 1, SYMBOL_TYPE_CONNFILTER);

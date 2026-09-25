@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
+#include "libserver/scan_finalization.h"
 #include "libserver/dynamic_cfg.h"
 #include "libserver/cfg_file_private.h"
 #include "libutil/rrd.h"
@@ -1737,7 +1738,7 @@ rspamd_controller_handle_legacy_history(
 			obj = ucl_object_typed_new(UCL_OBJECT);
 			ucl_object_insert_key(obj, ucl_object_fromstring(timebuf), "time", 0, false);
 			ucl_object_insert_key(obj, ucl_object_fromint(row->timestamp), "unix_time", 0, false);
-			ucl_object_insert_key(obj, ucl_object_fromstring(row->message_id), "id", 0, false);
+			ucl_object_insert_key(obj, row->partial ? ucl_object_typed_new(UCL_NULL) : ucl_object_fromstring(row->message_id), "id", 0, false);
 			ucl_object_insert_key(obj, ucl_object_fromstring(row->from_addr),
 								  "ip", 0, false);
 			ucl_object_insert_key(obj,
@@ -1753,7 +1754,10 @@ rspamd_controller_handle_legacy_history(
 									  ucl_object_fromdouble(0.0), "score", 0, false);
 			}
 
-			if (!isnan(row->required_score)) {
+			if (row->partial) {
+				ucl_object_insert_key(obj, ucl_object_typed_new(UCL_NULL), "required_score", 0, false);
+			}
+			else if (!isnan(row->required_score)) {
 				ucl_object_insert_key(obj,
 									  ucl_object_fromdouble(
 										  row->required_score),
@@ -1790,7 +1794,7 @@ rspamd_controller_handle_legacy_history(
 				g_strfreev(syms);
 			}
 
-			ucl_object_insert_key(obj, ucl_object_fromint(row->len),
+			ucl_object_insert_key(obj, row->partial ? ucl_object_typed_new(UCL_NULL) : ucl_object_fromint(row->len),
 								  "size", 0, false);
 			ucl_object_insert_key(obj,
 								  ucl_object_fromdouble(row->scan_time),
@@ -1805,6 +1809,7 @@ rspamd_controller_handle_legacy_history(
 			}
 			ucl_array_append(top, obj);
 			rows_proc++;
+			rspamd_roll_history_add_completion(row, obj);
 		}
 	}
 
@@ -2339,9 +2344,10 @@ rspamd_controller_scan_reply(struct rspamd_task *task)
 	msg->date = time(NULL);
 	msg->code = 200;
 
+	rspamd_task_finalize_scan(task);
+
 	if (task->cmd == CMD_CHECK_V3) {
 		/* v3 returns a multipart/mixed reply; ctype carries the boundary */
-		rspamd_task_set_finish_time(task);
 		ctype = rspamd_protocol_http_reply_v3(msg, task);
 	}
 	else {
@@ -3168,6 +3174,7 @@ rspamd_controller_handle_stat_common(
 						  "read_only", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_scanned), "scanned", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(stat->messages_learned), "learned", 0, false);
+	ucl_object_insert_key(top, rspamd_multistage_stats(&ctx->srv->stat->multistage, do_reset), "multistage", 0, false);
 
 	sub = ucl_object_typed_new(UCL_OBJECT);
 	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
@@ -3437,6 +3444,7 @@ rspamd_controller_handle_metrics_common(
 	memcpy(&stat_copy, session->ctx->worker->srv->stat, sizeof(stat_copy));
 
 	top = rspamd_worker_metrics_object(session->ctx->cfg, &stat_copy, uptime);
+	ucl_object_replace_key(top, rspamd_multistage_stats(&ctx->srv->stat->multistage, do_reset), "multistage", 0, false);
 	ucl_object_insert_key(top, ucl_object_fromint(session->ctx->srv->start_time), "start_time", 0, false);
 	ucl_object_insert_key(top, ucl_object_frombool(session->is_read_only),
 						  "read_only", 0, false);

@@ -28,6 +28,41 @@ context("lua_maps - map cache key", function()
     assert_equal(first, second)
   end)
 
+  test("inline and empty maps use the same callback contract as native maps", function()
+    for _, values in ipairs({ { 'key value' }, {} }) do
+      local map = lua_maps.map_add_from_ucl(values, 'hash', 'callback map')
+
+      for _, key in ipairs({ 'key', 'missing' }) do
+        local calls = 0
+        local context = {}
+        map:get_key(key, function(found, result, code, ctx)
+          calls = calls + 1
+          assert_equal(context, ctx)
+
+          if key == 'key' and #values > 0 then
+            assert_true(found)
+            assert_equal('value', result)
+            assert_equal(200, code)
+          else
+            assert_false(found)
+            assert_equal(404, code)
+          end
+        end, context)
+        assert_equal(1, calls)
+      end
+    end
+  end)
+
+  test("inline map digests distinguish values and effective types", function()
+    local first = lua_maps.map_add_from_ucl({ 'key value' }, 'hash', 'first digest')
+    local same = lua_maps.map_add_from_ucl({ 'key value' }, 'hash', 'same digest')
+    local changed = lua_maps.map_add_from_ucl({ 'key other' }, 'hash', 'changed digest')
+    local set = lua_maps.map_add_from_ucl({ 'key value' }, 'set', 'set digest')
+    assert_equal(first:get_data_digest(), same:get_data_digest())
+    assert_not_equal(first:get_data_digest(), changed:get_data_digest())
+    assert_not_equal(first:get_data_digest(), set:get_data_digest())
+  end)
+
   test("type prefix inside the list defines the effective type", function()
     -- `hash;` overrides whatever type the caller asked for, so requests for
     -- different types on the same prefixed list must converge on one map

@@ -116,31 +116,33 @@ auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool;
  */
 auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>;
 
-struct item_condition {
+struct item_lua_callback {
 private:
 	lua_State *L = nullptr;
 	int cb = -1;
 
 public:
-	explicit item_condition(lua_State *L_, int cb_) noexcept
+	explicit item_lua_callback(lua_State *L_, int cb_) noexcept
 		: L(L_), cb(cb_)
 	{
 	}
-	item_condition(item_condition &&other) noexcept
+	item_lua_callback(item_lua_callback &&other) noexcept
 	{
 		*this = std::move(other);
 	}
 	/* Make it move only */
-	item_condition(const item_condition &) = delete;
-	item_condition &operator=(item_condition &&other) noexcept
+	item_lua_callback(const item_lua_callback &) = delete;
+	item_lua_callback &operator=(item_lua_callback &&other) noexcept
 	{
 		std::swap(other.L, L);
 		std::swap(other.cb, cb);
 		return *this;
 	}
-	~item_condition();
+	~item_lua_callback();
 
-	auto check(std::string_view sym_name, struct rspamd_task *task) const -> bool;
+	/* Supplying facts selects the synchronous replay callback contract. */
+	auto check(std::string_view sym_name, struct rspamd_task *task,
+			   const ucl_object_t *facts = nullptr) const -> bool;
 };
 
 class normal_item {
@@ -148,7 +150,8 @@ private:
 	symbol_func_t func = nullptr;
 	void *user_data = nullptr;
 	std::vector<cache_item *> virtual_children;
-	std::vector<item_condition> conditions;
+	std::vector<item_lua_callback> conditions;
+	std::optional<item_lua_callback> replay_callback;
 
 public:
 	explicit normal_item(symbol_func_t _func, void *_user_data)
@@ -159,6 +162,22 @@ public:
 	auto add_condition(lua_State *L, int cbref) -> void
 	{
 		conditions.emplace_back(L, cbref);
+	}
+
+	auto has_conditions() const -> bool
+	{
+		return !conditions.empty();
+	}
+
+	auto set_replay_callback(lua_State *L, int cbref) -> void
+	{
+		replay_callback.emplace(L, cbref);
+	}
+
+	auto restore_replay(std::string_view sym_name, struct rspamd_task *task,
+						const ucl_object_t *facts) const -> bool
+	{
+		return !replay_callback || replay_callback->check(sym_name, task, facts);
 	}
 
 	auto call(struct rspamd_task *task, struct rspamd_symcache_dynamic_item *item) const -> void
@@ -274,6 +293,22 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	cache_item *hoisted_by = nullptr;
 	/* Set once the plan has been computed for the item (symbols may be registered after init) */
 	bool planned = false;
+	unsigned int required_inputs = RSPAMD_SYMCACHE_INPUT_EOM;
+	unsigned int effective_inputs = RSPAMD_SYMCACHE_INPUT_EOM;
+	bool input_dependency_invalid = false;
+	unsigned int replay_version = 0;
+	bool terminal_observer = false;
+
+	auto input_ready(unsigned int available, bool terminal, bool portable) const -> bool
+	{
+		return (effective_inputs & ~available) == 0 && terminal_observer == terminal &&
+			   (!portable || terminal || replay_version != 0);
+	}
+
+	/* Independently scheduled parts of one public check. Ownership controls
+	 * admission; dependencies still control execution and input readiness. */
+	cache_item *execution_parent = nullptr;
+	std::vector<cache_item *> execution_children;
 
 	/* Specific data for virtual and callback symbols */
 	std::variant<normal_item, virtual_item> specific;
@@ -439,6 +474,11 @@ public:
 		return flags;
 	};
 
+	auto get_execution_flags() const -> int
+	{
+		return flags | (execution_parent ? execution_parent->flags : 0);
+	}
+
 	auto add_condition(lua_State *L, int cbref) -> bool
 	{
 		if (!is_virtual()) {
@@ -489,12 +529,21 @@ public:
 	 * @param task
 	 * @return
 	 */
-	auto check_conditions(struct rspamd_task *task) const -> auto
+	auto check_conditions(struct rspamd_task *task) const -> bool
 	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
 			return filter_data.check_conditions(symbol, task);
+		}
+
+		return false;
+	}
+
+	auto restore_replay(struct rspamd_task *task, const ucl_object_t *facts) const -> bool
+	{
+		if (std::holds_alternative<normal_item>(specific)) {
+			return std::get<normal_item>(specific).restore_replay(symbol, task, facts);
 		}
 
 		return false;

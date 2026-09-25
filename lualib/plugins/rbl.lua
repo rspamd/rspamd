@@ -342,7 +342,170 @@ local plugin_schema = T.table({
 PluginSchema.register("plugins.rbl.rule", rule_schema)
 PluginSchema.register("plugins.rbl", plugin_schema)
 
+-- A rule keeps one public symbol but can have independently scheduled sources.
+-- Scripts and require_symbols have unrestricted task access, so both parts of
+-- those rules remain at EOM. Selectors themselves belong to the message part.
+local function rule_phases(rule)
+  local envelope, message = false, false
+
+  for name, check in pairs(check_types) do
+    if rule[name] then
+      if check.connfilter then
+        envelope = true
+      else
+        message = true
+      end
+    end
+  end
+
+  return envelope, message, not (rule.process_script or rule.require_symbols)
+end
+
+-- Keep DNS accounting and the per-rule answer cache shared by both phases.
+-- An incomplete submission cannot become a reusable negative result.
+local function dns_session(task, cache_key, replayable)
+  local resolver = task:get_resolver()
+  local answers = task:cache_get(cache_key) or {}
+  local exported_answers, waiting = {}, {}
+  local pending, emitted, complete = 0, false, true
+
+  task:cache_set(cache_key, answers)
+
+  local function save_completion()
+    if replayable and emitted and pending == 0 then
+      task:set_check_fact('answers', exported_answers)
+      task:set_check_fact('complete', complete)
+    end
+  end
+
+  local function resolve(qtype, params)
+    local callback = params.callback
+    pending = pending + 1
+
+    params.callback = function(...)
+      callback(...)
+      pending = pending - 1
+      save_completion()
+    end
+
+    if not resolver:resolve(qtype, params) then
+      pending = pending - 1
+      complete = false
+
+      return false
+    end
+
+    return true
+  end
+
+  local function query(name, forced, callback)
+    local cached = answers[name]
+
+    if cached then
+      callback(cached.results, cached.error or nil)
+
+      return
+    end
+
+    if waiting[name] then
+      table.insert(waiting[name], callback)
+
+      return
+    end
+
+    waiting[name] = { callback }
+
+    if not resolve('a', {
+      task = task,
+      name = name,
+      forced = forced,
+      callback = function(_, _, results, err)
+        local strings = {}
+
+        for _, ip in ipairs(results or {}) do
+          strings[#strings + 1] = tostring(ip)
+        end
+
+        exported_answers[name] = { results = strings, error = err or false }
+        answers[name] = { results = results or {}, error = err or false }
+
+        for _, cb in ipairs(waiting[name]) do
+          cb(results, err)
+        end
+
+        waiting[name] = nil
+      end,
+    }) then
+      waiting[name] = nil
+    end
+  end
+
+  return {
+    resolve = resolve,
+    query = query,
+    invalidate = function()
+      complete = false
+    end,
+    finish = function()
+      emitted = true
+      save_completion()
+    end,
+  }
+end
+
+local function matcher_digests(rule)
+  local digests = {}
+
+  for symbol, map in pairs(rule.returncodes_maps or {}) do
+    digests[symbol] = map:get_data_digest() or false
+  end
+
+  return digests
+end
+
+local function decode_answers(answers)
+  if type(answers) ~= 'table' then
+    return nil
+  end
+
+  local rspamd_ip = require 'rspamd_ip'
+  local decoded = {}
+
+  for name, answer in pairs(answers) do
+    if type(name) ~= 'string' or type(answer) ~= 'table' or
+        type(answer.results) ~= 'table' or
+        not (answer.error == false or type(answer.error) == 'string') then
+      return nil
+    end
+
+    local ips = {}
+
+    for i, value in pairs(answer.results) do
+      if type(i) ~= 'number' or i < 1 or i % 1 ~= 0 or i > #answer.results or
+          type(value) ~= 'string' then
+        return nil
+      end
+
+      local ip = rspamd_ip.from_string(value)
+
+      if not (ip and ip:is_valid()) then
+        return nil
+      end
+
+      ips[i] = ip
+    end
+
+    decoded[name] = { results = ips, error = answer.error }
+  end
+
+  return decoded
+end
+
 return {
+  rule_phases = rule_phases,
+  dns_session = dns_session,
+  matcher_digests = matcher_digests,
+  decode_answers = decode_answers,
   check_types = check_types,
   rule_schema = rule_schema,
   default_options = default_options,
