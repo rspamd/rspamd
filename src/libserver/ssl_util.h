@@ -79,12 +79,15 @@ gboolean rspamd_ssl_accept_fd(struct rspamd_ssl_connection *conn, int fd,
  * @param handler
  * @param err_handler
  * @param handler_data
+ * @param ev_what
+ * @param timeout timeout of the stage that follows, the handshake one is not kept
  */
 void rspamd_ssl_connection_restore_handlers(struct rspamd_ssl_connection *conn,
 											rspamd_ssl_handler_t handler,
 											rspamd_ssl_error_handler_t err_handler,
 											gpointer handler_data,
-											short ev_what);
+											short ev_what,
+											ev_tstamp timeout);
 
 /**
  * Perform async read from SSL socket

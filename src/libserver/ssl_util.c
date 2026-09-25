@@ -555,10 +555,14 @@ rspamd_ssl_event_handler(int fd, short what, gpointer ud)
 			rspamd_ssl_connection_dtor(conn);
 		}
 		else {
+			gboolean handshake = conn->state == ssl_conn_init ||
+								 conn->state == ssl_conn_init_accept;
+
 			conn->shut = ssl_shut_unclean;
 			rspamd_ev_watcher_stop(conn->event_loop, conn->ev);
-			g_set_error(&err, rspamd_ssl_quark(), 408,
-						"ssl connection timed out");
+			/* Past the handshake the timer is the one of the IO stage, as in plain HTTP */
+			g_set_error(&err, rspamd_ssl_quark(), 408, "%s",
+						handshake ? "ssl connection timed out" : "IO timeout");
 			conn->err_handler(conn->handler_data, err);
 			g_error_free(err);
 		}
@@ -878,7 +882,8 @@ void rspamd_ssl_connection_restore_handlers(struct rspamd_ssl_connection *conn,
 											rspamd_ssl_handler_t handler,
 											rspamd_ssl_error_handler_t err_handler,
 											gpointer handler_data,
-											short ev_what)
+											short ev_what,
+											ev_tstamp timeout)
 {
 	conn->handler = handler;
 	conn->err_handler = err_handler;
@@ -886,7 +891,7 @@ void rspamd_ssl_connection_restore_handlers(struct rspamd_ssl_connection *conn,
 
 	rspamd_ev_watcher_stop(conn->event_loop, conn->ev);
 	rspamd_ev_watcher_init(conn->ev, conn->fd, ev_what, rspamd_ssl_event_handler, conn);
-	rspamd_ev_watcher_start(conn->event_loop, conn->ev, conn->ev->timeout);
+	rspamd_ev_watcher_start(conn->event_loop, conn->ev, timeout);
 }
 
 gssize

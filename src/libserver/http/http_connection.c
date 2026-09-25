@@ -1320,6 +1320,19 @@ rspamd_http_connection_stop_watcher(struct rspamd_http_connection_private *priv)
 	rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 }
 
+/*
+ * The watcher is started with the connect or handshake timeout, and nothing else
+ * restarts it before the read stage: switch to the write stage one once writable
+ */
+static inline void
+rspamd_http_connection_enter_write_stage(struct rspamd_http_connection_private *priv)
+{
+	if (priv->timeout > 0 && priv->ev.timeout != priv->timeout) {
+		rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
+		rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, priv->timeout);
+	}
+}
+
 static void
 rspamd_http_event_handler(int fd, short what, gpointer ud)
 {
@@ -1521,6 +1534,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		}
 	}
 	else if (what & EV_WRITE) {
+		rspamd_http_connection_enter_write_stage(priv);
 		rspamd_http_write_helper(conn);
 	}
 
@@ -2041,7 +2055,8 @@ rspamd_http_connection_read_message_common(struct rspamd_http_connection *conn,
 											   rspamd_http_event_handler,
 											   rspamd_http_ssl_err_handler,
 											   conn,
-											   EV_READ);
+											   EV_READ,
+											   priv->timeout);
 	}
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
@@ -3052,7 +3067,8 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												   rspamd_http_event_handler,
 												   rspamd_http_ssl_err_handler,
 												   conn,
-												   EV_WRITE | EV_READ);
+												   EV_WRITE | EV_READ,
+												   priv->timeout);
 		}
 	}
 }
@@ -3062,7 +3078,8 @@ else if (priv->ssl) {
 										   rspamd_http_event_handler,
 										   rspamd_http_ssl_err_handler,
 										   conn,
-										   EV_WRITE);
+										   EV_WRITE,
+										   priv->timeout);
 }
 else {
 	/* Watch for READ too on client to detect early server responses */
