@@ -271,6 +271,12 @@ MAP - REDIS - IP - MISS
   ...   Settings={symbols_enabled = [REDIS_IPADDR]}
   Do Not Expect Symbol  REDIS_IPADDR
 
+MAP - REDIS - IP - IPV6 ULA PREFIX
+  Redis HSET  ipaddr  fc00::/7  ${EMPTY}
+  Scan File  ${MESSAGE}  IP=fd12:3456:789a::1
+  ...   Settings={symbols_enabled = [REDIS_IPADDR]}
+  Expect Symbol  REDIS_IPADDR
+
 MAP - REDIS - FROM
   Redis HSET  emailaddr  from@rspamd.tk  ${EMPTY}
   Scan File  ${MESSAGE}  From=from@rspamd.tk
