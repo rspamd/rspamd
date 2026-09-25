@@ -17,8 +17,8 @@ MIME HTML Structure Has Bounded Content Previews
   ${body} =  Evaluate  '<span>' + 'x' * 4095 + chr(0x20ac) + '</span>' + ('<span>' + 'x' * 5000) * 300
   ${message} =  Catenate  SEPARATOR=\n  Content-Type: text/html; charset=utf-8  ${EMPTY}  ${body}
   Create File  ${RSPAMADM_TMPDIR}/nested.eml  ${message}
-  ${result} =  Rspamadm  --var\=LUALIBDIR\=${TOPDIR}/lualib  mime  -j  extract  --html  --structure  ${RSPAMADM_TMPDIR}/nested.eml
-  Should Be Equal As Integers  ${result.rc}  0
+  ${result} =  Rspamadm  mime  -j  extract  --html  --structure  ${RSPAMADM_TMPDIR}/nested.eml
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stderr}
   ${tags} =  Evaluate  list(json.loads($result.stdout).values())[0][0]  modules=json
   ${lengths} =  Evaluate  [len(t.get('content', '').encode('utf-8')) for t in $tags]
   Should Be True  max($lengths) <= 4096
@@ -32,8 +32,8 @@ MIME HTML Structure Serializes URL Extras
   ...  ${EMPTY}
   ...  <a href="https://example.com/path">Click here</a>
   Create File  ${RSPAMADM_TMPDIR}/url.eml  ${message}
-  ${result} =  Rspamadm  --var\=LUALIBDIR\=${TOPDIR}/lualib  mime  -j  extract  --html  --structure  ${RSPAMADM_TMPDIR}/url.eml
-  Should Be Equal As Integers  ${result.rc}  0
+  ${result} =  Rspamadm  mime  -j  extract  --html  --structure  ${RSPAMADM_TMPDIR}/url.eml
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stderr}
   ${tags} =  Evaluate  list(json.loads($result.stdout).values())[0][0]  modules=json
   Should Be True  any(t.get('extra') == 'https://example.com/path' and t['content'] == 'Click here' for t in $tags)
 
