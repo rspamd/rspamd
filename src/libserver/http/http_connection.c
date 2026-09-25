@@ -1521,6 +1521,13 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		}
 	}
 	else if (what & EV_WRITE) {
+		/* The socket is connected (and TLS handshaking has finished). Switch
+		 * to the write deadline once, without extending it on later writes.
+		 * Keep the existing deadline when only a single timeout is used. */
+		if (priv->ev.timeout != priv->timeout) {
+			rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
+			rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, priv->timeout);
+		}
 		rspamd_http_write_helper(conn);
 	}
 
@@ -2041,7 +2048,7 @@ rspamd_http_connection_read_message_common(struct rspamd_http_connection *conn,
 											   rspamd_http_event_handler,
 											   rspamd_http_ssl_err_handler,
 											   conn,
-											   EV_READ);
+											   EV_READ, priv->timeout);
 	}
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
@@ -3052,7 +3059,7 @@ if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 												   rspamd_http_event_handler,
 												   rspamd_http_ssl_err_handler,
 												   conn,
-												   EV_WRITE | EV_READ);
+												   EV_WRITE | EV_READ, priv->timeout);
 		}
 	}
 }
@@ -3062,7 +3069,7 @@ else if (priv->ssl) {
 										   rspamd_http_event_handler,
 										   rspamd_http_ssl_err_handler,
 										   conn,
-										   EV_WRITE);
+										   EV_WRITE, priv->timeout);
 }
 else {
 	/* Watch for READ too on client to detect early server responses */
