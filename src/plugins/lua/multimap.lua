@@ -1291,7 +1291,7 @@ local function multimap_query_redis(key, task, value, callback)
     srch[#srch + 1] = tostring(value)
     -- IPv6 case
     local maxbits = 128
-    local minbits = 64
+    local minbits = 7
     if value:get_version() == 4 then
       maxbits = 32
       minbits = 8
