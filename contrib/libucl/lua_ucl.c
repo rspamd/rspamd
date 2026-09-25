@@ -116,6 +116,24 @@ struct rspamd_compat_lua_text {
 	unsigned int flags;
 };
 
+static bool
+lua_ucl_is_text(lua_State *L, int idx)
+{
+	bool is_text = false;
+
+	if (luaL_getmetafield(L, idx, "cookie")) {
+		/* The public rspamd_text metatable cookie, also used by text slices. */
+		is_text = lua_isnumber(L, -1) && lua_tonumber(L, -1) == 0x2b21ef6fU;
+		lua_pop(L, 1);
+	}
+
+#if LUA_VERSION_NUM >= 502
+	return is_text && lua_rawlen(L, idx) >= sizeof(struct rspamd_compat_lua_text);
+#else
+	return is_text && lua_objlen(L, idx) >= sizeof(struct rspamd_compat_lua_text);
+#endif
+}
+
 enum lua_ucl_push_flags {
 	LUA_UCL_DEFAULT_FLAGS = 0,
 	LUA_UCL_ALLOW_ARRAY = (1u << 0u),
@@ -545,8 +563,7 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 		if (lua_topointer(L, idx) == ucl_null) {
 			obj = ucl_object_typed_new(UCL_NULL);
 		}
-		else {
-			/* Assume it is a text like object */
+		else if (lua_ucl_is_text(L, idx)) {
 			struct rspamd_compat_lua_text *t = lua_touserdata(L, idx);
 
 			if (t) {
@@ -562,6 +579,14 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 					obj->flags |= UCL_OBJECT_BINARY;
 				}
 			}
+		}
+		else if (luaL_callmeta(L, idx, "__tostring")) {
+			str = lua_tolstring(L, -1, &sz);
+			obj = str ? ucl_object_fromlstring(str, sz) : ucl_object_typed_new(UCL_NULL);
+			lua_pop(L, 1);
+		}
+		else {
+			obj = ucl_object_typed_new(UCL_NULL);
 		}
 		break;
 	case LUA_TTABLE:

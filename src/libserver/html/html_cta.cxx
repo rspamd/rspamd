@@ -37,6 +37,7 @@
 #include <glib.h>
 
 static constexpr unsigned int CTA_WEIGHT_SCALE = 1000;
+static constexpr std::size_t CTA_LABEL_MAX_LEN = 4096; /* An unclosed link spans the rest of the part */
 
 namespace rspamd::html {
 namespace {
@@ -138,7 +139,7 @@ static auto to_lower_ascii(std::string_view input) -> std::string
 
 static auto get_cta_label(const html_tag &tag, const html_content &hc) -> std::string
 {
-	auto content = trim_ascii(tag.get_content(&hc));
+	auto content = trim_ascii(tag.get_content(&hc).substr(0, CTA_LABEL_MAX_LEN));
 	if (!content.empty()) {
 		return std::string{content};
 	}
@@ -165,20 +166,6 @@ static auto get_cta_label(const html_tag &tag, const html_content &hc) -> std::s
 	}
 
 	return {};
-}
-
-static auto tag_is_effectively_hidden(const html_tag *tag) -> bool
-{
-	for (auto current = tag; current != nullptr; current = current->parent) {
-		if (current->block && !current->block->is_visible()) {
-			return true;
-		}
-		if (current->flags & FL_IGNORE) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 static constexpr auto buttonish_class_tokens = rspamd::array_of<std::string_view>(
@@ -433,10 +420,6 @@ static auto compute_cta_weight(const html_tag &tag,
 		return 0.0f;
 	}
 
-	if (tag_is_effectively_hidden(&tag)) {
-		return 0.0f;
-	}
-
 	float base = compute_semantic_base_score(tag, url);
 	if (base <= 0.0f) {
 		return 0.0f;
@@ -477,8 +460,22 @@ void html_compute_cta_weights(html_content &hc)
 {
 	hc.url_button_weights.clear();
 
-	for (const auto &tag_ptr: hc.all_tags) {
-		const auto &tag = *tag_ptr;
+	if (!hc.root_tag) {
+		return;
+	}
+
+	std::vector<const html_tag *> stack{hc.root_tag};
+	while (!stack.empty()) {
+		const auto &tag = *stack.back();
+		stack.pop_back();
+
+		/* Skip hidden subtrees instead of walking every link's ancestors. */
+		if ((tag.flags & FL_IGNORE) || (tag.block && !tag.block->is_visible())) {
+			continue;
+		}
+		for (auto it = tag.children.rbegin(); it != tag.children.rend(); ++it) {
+			stack.push_back(*it);
+		}
 		if (!std::holds_alternative<rspamd_url *>(tag.extra)) {
 			continue;
 		}

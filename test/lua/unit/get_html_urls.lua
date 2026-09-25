@@ -578,4 +578,115 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  local padding_cases = {
+    { 'no padding', '', 'https://example.org/', true },
+    { 'zero-width padding', string.rep('\226\128\139', 1400), 'https://example.org/', true },
+    { 'transparent padding', '<span style="color:transparent">' .. string.rep('x', 4200) .. '</span>',
+      'https://example.org/', true },
+    { 'nested padding', string.rep('<span>\226\128\139</span>', 1400), 'https://example.org/', true },
+    { 'image alt after padding', string.rep('\226\128\139', 1400),
+      '<img alt="https://example.org/">', true },
+    { 'matching domain after padding', string.rep('\226\128\139', 1400), 'https://example.com/', false },
+    { 'ordinary label before URL', 'Read this: ', 'https://example.org/', false },
+  }
+
+  for _, case in ipairs(padding_cases) do
+    test('Displayed URL with ' .. case[1], function()
+      local res, task = rspamd_task.load_from_string(
+          'From: test@example.com\r\nContent-Type: text/html; charset=utf-8\r\n\r\n' ..
+          '<a href="https://example.com/">' .. case[2] .. case[3] .. '</a>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local found, phished, visible
+      for _, u in ipairs(task:get_urls() or {}) do
+        if u:get_host() == 'example.com' then
+          found = true
+          phished = u:is_phished()
+          visible = u:get_visible()
+        end
+      end
+      task:destroy()
+      assert_true(found)
+      assert_equal(case[4], phished)
+      if case[4] then
+        assert_not_nil(visible:match('^https://example%.org/%s*$'))
+      end
+    end)
+  end
+
+  test('Nested links share long leading padding without losing the displayed domain', function()
+    local body = {}
+    for i = 1, 50 do
+      body[#body + 1] = '<a href="https://example.com/' .. i .. '">' ..
+          string.rep('\226\128\139', 1400)
+    end
+    body[#body + 1] = 'https://example.org/'
+    local res, task = rspamd_task.load_from_string(
+        'Content-Type: text/html; charset=utf-8\r\n\r\n' .. table.concat(body), rspamd_config)
+    assert_true(res)
+    task:process_message()
+    local nlinks = 0
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == 'example.com' then
+        nlinks = nlinks + 1
+        assert_true(u:is_phished())
+        assert_equal('https://example.org/', u:get_visible())
+      end
+    end
+    assert_equal(50, nlinks)
+    task:destroy()
+  end)
+
+  test('Visible text truncation keeps whole UTF-8 characters', function()
+    for _, ch in ipairs({ '\194\163', '\226\130\172', '\240\159\152\128' }) do
+      local res, task = rspamd_task.load_from_string(
+          'Content-Type: text/html; charset=utf-8\r\n\r\n<a href="https://example.com/">' ..
+          string.rep('x', 4095) .. ch .. 'tail</a>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local visible
+      for _, u in ipairs(task:get_urls() or {}) do
+        if u:get_host() == 'example.com' then visible = u:get_visible() end
+      end
+      task:destroy()
+      assert_equal(string.rep('x', 4095), visible)
+    end
+  end)
+
+  test("Visible part of nested unclosed links is bounded", function()
+    local links = {}
+    for i = 1, 50 do
+      links[#links + 1] = string.format('<a href="http://example.com/%d">link%d %s', i, i, string.rep('x', 10000))
+    end
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+]] .. table.concat(links) .. [[
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local nlinks = 0
+    for _, u in ipairs(task:get_urls() or {}) do
+      local visible = u:get_visible()
+      if visible then
+        nlinks = nlinks + 1
+        assert_true(#visible <= 4096,
+            string.format("visible part of %s is %d bytes", tostring(u), #visible))
+        local n = tostring(u):match('/(%d+)$')
+        assert_equal(visible:sub(1, 4 + #n), 'link' .. n)
+      end
+    end
+    assert_equal(nlinks, 50)
+
+    task:destroy()
+  end)
+
 end)
