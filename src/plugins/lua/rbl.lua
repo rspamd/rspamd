@@ -397,6 +397,21 @@ local function gen_rbl_callback(rule)
       req_str = tostring(req)
     end
 
+    -- `no_ip` must cover textual sources as well: helo and selectors (e.g. the
+    -- `mid` one in DBL) can yield a bare IP literal, rejected by domain zones
+    if rule.no_ip and not is_ip and type(req_str) == 'string' then
+      -- Literals are bracketed in helo: [192.0.2.1], [IPv6:2001:db8::1]
+      local bare = req_str:match('^%[IPv6:(.+)%]$') or
+          req_str:match('^%[(.+)%]$') or req_str
+      local maybe_ip = rspamd_ip.from_string(bare)
+
+      if maybe_ip and maybe_ip:is_valid() then
+        lua_util.debugm(N, task, 'skip ip %s from %s: no_ip for rbl %s',
+            req_str, label, rule.symbol)
+        return
+      end
+    end
+
     if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
       return
     end
