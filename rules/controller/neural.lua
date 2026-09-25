@@ -20,6 +20,7 @@ local ucl = require "ucl"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
+local lua_settings = require "lua_settings"
 local rspamd_logger = require "rspamd_logger"
 
 local E = {}
@@ -380,91 +381,160 @@ local function handle_learn_message(task, conn)
   end
 end
 
-local function handle_train(task, conn, req_params)
-  local rule_name = req_params.rule or 'default'
-  local rule = neural_common.settings.rules[rule_name]
-  if not rule then
-    conn:send_error(400, 'unknown rule')
-    return
+-- Resolve a rule's settings element (`set`) from an explicit settings id.
+-- Accepts a numeric id, a named settings id, or nil/'default' for the default
+-- set (rule.settings[-1]). Follows reference entries (number -> another id).
+local function resolve_set(rule, settings_id)
+  local set
+  if settings_id == nil or settings_id == '' or settings_id == 'default' then
+    set = rule.settings[-1]
+  else
+    local sid = tonumber(settings_id)
+    if not sid then
+      sid = lua_settings.numeric_settings_id(tostring(settings_id))
+    end
+    set = rule.settings[sid]
   end
 
-  -- Get the set for this rule
-  local set = neural_common.get_rule_settings(task, rule)
-  if not set then
-    -- Try to find any available set
-    for sid, s in pairs(rule.settings or {}) do
-      if type(s) == 'table' then
-        set = s
-        set.name = set.name or sid
-        break
+  local guard = 0
+  while type(set) == 'number' and guard < 16 do
+    set = rule.settings[set]
+    guard = guard + 1
+  end
+
+  if type(set) == 'table' then
+    return set
+  end
+  return nil
+end
+
+-- Force a training run from the vectors already stored in Redis, decoupling the
+-- corpus feed from the train. Reads the current profile's _spam_set/_ham_set,
+-- runs exactly one training via neural_common.force_train_from_redis (which
+-- bypasses the max_trains/frozen gate, requiring only both classes non-empty,
+-- and is single-flight with a guaranteed lock release), then replies with the
+-- trained model's metadata. The HTTP connection is held open until training
+-- completes via a polling task timer (which keeps the controller session
+-- alive across the training subprocess).
+--
+-- Parameters come from the query string (rule, settings_id, timeout) and, if a
+-- JSON body is present, from {rule, settings_id} there as a fallback.
+local function handle_train(task, conn, req_params)
+  local p = req_params or {}
+
+  -- Optional JSON body fallback for {rule, settings_id}. The endpoint is
+  -- normally driven by query parameters (no body), so guard the read.
+  local _, body = pcall(function()
+    return task:get_rawbody()
+  end)
+  if body and #tostring(body) > 0 then
+    local bparser = ucl.parser()
+    if bparser:parse_text(tostring(body)) then
+      local obj = bparser:get_object()
+      if type(obj) == 'table' then
+        p.rule = p.rule or obj.rule
+        p.settings_id = p.settings_id or obj.settings_id
+        p.timeout = p.timeout or obj.timeout
       end
     end
   end
 
-  if not set then
-    conn:send_error(400, 'no settings found for rule')
+  local rule_name = p.rule or 'default'
+  local rule = neural_common.settings.rules[rule_name]
+  if not rule then
+    conn:send_error(404, 'unknown rule')
     return
   end
 
-  -- Check pending vectors count
-  local pending_key = neural_common.pending_train_key(rule, set)
+  local set = resolve_set(rule, p.settings_id)
+  if not set then
+    conn:send_error(404, 'no settings found for rule')
+    return
+  end
 
-  local function check_and_train(spam_count, ham_count)
-    if spam_count > 0 and ham_count > 0 then
-      rspamd_logger.infox(task, 'manual train trigger for %s:%s with %s spam, %s ham vectors',
-        rule.prefix, set.name, spam_count, ham_count)
+  local deadline = tonumber(p.timeout) or 60.0
+  local poll_interval = 0.1
+  local started = rspamd_util.get_time()
 
-      -- The training will be picked up by the next check_anns cycle
-      -- For immediate training, we'd need access to the worker object
-      conn:send_ucl({
-        success = true,
-        message = 'training vectors available',
-        spam_vectors = spam_count,
-        ham_vectors = ham_count,
-        pending_key = pending_key
-      })
-    else
+  -- Filled in by the force-train callback; the polling timer below observes
+  -- these and writes the HTTP reply exactly once.
+  local train_done, train_err, train_res = false, nil, nil
+  local replied = false
+
+  local function reply_now()
+    if replied then
+      return
+    end
+    replied = true
+
+    if train_err then
       conn:send_ucl({
         success = false,
-        message = 'not enough vectors for training',
-        spam_vectors = spam_count,
-        ham_vectors = ham_count
+        trained = false,
+        rule = rule_name,
+        settings = set.name,
+        error = train_err,
+      })
+    else
+      local res = train_res or {}
+      conn:send_ucl({
+        success = true,
+        trained = true,
+        rule = rule_name,
+        settings = set.name,
+        spam = res.spam,
+        ham = res.ham,
+        bytes = res.bytes,
+        version = res.version,
+        redis_key = res.redis_key,
       })
     end
   end
 
-  -- Count pending vectors
-  local spam_count = 0
-  local function count_ham_cb(err, data)
-    local ham_count = 0
-    if not err and (type(data) == 'number' or type(data) == 'string') then
-      ham_count = tonumber(data) or 0
+  -- Polling timer: keeps the controller session alive across the training
+  -- subprocess and writes the reply once training resolves (or on deadline).
+  --
+  -- task:add_timer cannot reschedule itself (its native re-arm calls
+  -- ev_timer_again with repeat=0 on an already-stopped one-shot timer, a no-op),
+  -- so each tick that still needs to wait arms a *fresh* one-shot timer and then
+  -- returns nil. The new timer's session event is added before the current one
+  -- is removed, so the controller session never drains to zero events (which
+  -- would finalize the request and drop the connection) until we deliberately
+  -- stop re-arming after the reply is sent.
+  local poll_cb
+  local function schedule_poll()
+    task:add_timer(poll_interval, poll_cb)
+  end
+  poll_cb = function(_)
+    if train_done then
+      reply_now()
+      return -- stop polling: event drains, session finalizes, connection closes
     end
-    check_and_train(spam_count, ham_count)
+    if (rspamd_util.get_time() - started) >= deadline then
+      train_err = train_err or string.format('training did not complete within %s seconds', deadline)
+      reply_now()
+      return
+    end
+    schedule_poll()
+    return
   end
 
-  local function count_spam_cb(err, data)
-    if not err and (type(data) == 'number' or type(data) == 'string') then
-      spam_count = tonumber(data) or 0
-    end
-    lua_redis.redis_make_request(task,
-      rule.redis,
-      nil,
-      false,
-      count_ham_cb,
-      'SCARD',
-      { pending_key .. '_ham_set' }
-    )
-  end
+  schedule_poll()
 
-  lua_redis.redis_make_request(task,
-    rule.redis,
-    nil,
-    false,
-    count_spam_cb,
-    'SCARD',
-    { pending_key .. '_spam_set' }
-  )
+  rspamd_logger.infox(task, 'force-train requested for %s:%s', rule.prefix, set.name)
+
+  neural_common.force_train_from_redis(task:get_worker(), task:get_ev_base(), rule, set,
+    function(err, res)
+      train_done = true
+      if err then
+        train_err = err
+        rspamd_logger.infox(task, 'force-train for %s:%s failed: %s', rule.prefix, set.name, err)
+      else
+        train_res = res
+        rspamd_logger.infox(task, 'force-train for %s:%s done: version=%s spam=%s ham=%s bytes=%s',
+          rule.prefix, set.name, res.version, res.spam, res.ham, res.bytes)
+      end
+    end)
 end
 
 return {
