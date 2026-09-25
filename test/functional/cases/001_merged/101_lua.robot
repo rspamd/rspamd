@@ -51,7 +51,9 @@ External Maps Simple
   Expect Symbol With Exact Options  EXTERNAL_MAP  +hello map
 
 Chunked Http Map
-  Wait Until Keyword Succeeds  10x  0.5s  Check Chunked Http Map
+  # The initial HTTP fetch and the scanning worker's shared-cache poll are
+  # independently jittered; both must complete before the map is available.
+  Wait Until Keyword Succeeds  15s  0.5s  Check Chunked Http Map
   ${bad} =  Grep File  ${RSPAMD_TMPDIR}/rspamd.log  CHUNKED_MAP_BAD
   Should Be Empty  ${bad}  chunked map was corrupted in the fetching worker
 
