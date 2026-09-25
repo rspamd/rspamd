@@ -65,7 +65,13 @@ local my_victim = [[/(?:victim|prey)/{words}]]
 local your_webcam = [[/webcam/{words}]]
 local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
 local password_in_words = [[/^pass(?:(?:word)|(?:phrase))$/i{words}]]
-local btc_wallet_address = [[has_symbol(BITCOIN_ADDR)]]
+-- Both format-only symbols listed here have a distinctive enough shape (0x + 40
+-- hex, 95 chars starting with 4) to be safe as a scam gate.
+local any_wallet_address = '(has_symbol(BITCOIN_ADDR) | has_symbol(LITECOIN_ADDR) | ' ..
+    'has_symbol(DOGECOIN_ADDR) | has_symbol(TRON_ADDR) | has_symbol(XRP_ADDR) | ' ..
+    'has_symbol(ZCASH_ADDR) | has_symbol(CARDANO_ADDR) | has_symbol(COSMOS_ADDR) | ' ..
+    'has_symbol(STELLAR_ADDR) | has_symbol(TON_ADDR) | ' ..
+    'has_symbol(ETHEREUM_ADDR_MAYBE) | has_symbol(MONERO_ADDR_MAYBE))'
 local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 local list_unsub = [[header_exists(List-Unsubscribe)]]
@@ -73,11 +79,11 @@ local x_php_origin = [[header_exists(X-PHP-Originating-Script)]]
 
 reconf['LEAKED_PASSWORD_SCAM_RE'] = {
   re = string.format('%s & (%s | %s | %s | %s | %s | %s | %s | %s | %s)',
-      btc_wallet_address, password_in_words, wallet_word,
+      any_wallet_address, password_in_words, wallet_word,
       my_victim, your_webcam, your_onan,
       broken_unicode, 'lua:check_data_images',
       list_unsub, x_php_origin),
-  description = 'Contains BTC wallet address and malicious regexps',
+  description = 'Contains a crypto wallet address and malicious regexps',
   functions = {
     check_data_images = function(task)
       local tp = task:get_text_parts() or {}
@@ -99,7 +105,9 @@ reconf['LEAKED_PASSWORD_SCAM_RE'] = {
   group = 'scams'
 }
 
-rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM', 'BITCOIN_ADDR')
+-- has_symbol() reads results, which is a genuine ordering dependency. One edge on
+-- the parent covers every per-currency virtual symbol above.
+rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM_RE', 'CRYPTO_ADDR_CHECK')
 
 -- Heurististic for detecting InterPlanetary File System (IPFS) gateway URLs:
 -- These contain "ipfs" somewhere (either in the FQDN or the URL path) and a
