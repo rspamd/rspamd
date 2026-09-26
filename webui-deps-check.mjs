@@ -86,7 +86,7 @@ const LIBS = [
         regex: /RequireJS (\d+(?:\.\d+)*)/u,
     },
     {
-        files: ["interface/js/lib/tabulator.min.js", "interface/css/tabulator_bs5.min.css"],
+        files: ["interface/js/lib/tabulator.min.js", "interface/css/tabulator_bootstrap5.min.css"],
         name: "tabulator",
         npm: "tabulator-tables",
         regex: /Tabulator v(\d+(?:\.\d+)*)/u,
