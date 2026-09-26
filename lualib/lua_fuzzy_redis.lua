@@ -22,6 +22,7 @@ local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local rspamd_ip = require "rspamd_ip"
 local ucl = require "ucl"
 
 local N = "fuzzy_redis"
@@ -596,7 +597,7 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
       config = rspamd_config,
       callback = cb,
       upstream = st.upstream,
-      host = st.server,
+      host = st.addr,
     }, req) then
       cb('cannot send SCAN request', nil)
     end
@@ -613,10 +614,17 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
   end
 
   local function begin_pass(res, data)
-    local up, server
+    local up, addr, server
 
     if res == 'resume' and data[3] ~= '' then
       up, server = find_read_upstream(data[2]), data[3]
+      if up then
+        -- Checkpoints store the display address, including "unix:" for sockets.
+        addr = rspamd_ip.from_string((server:gsub('^unix:', '')))
+        if not addr:is_valid() then
+          up = nil
+        end
+      end
     end
 
     if up then
@@ -625,7 +633,7 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
       st.stats = decode_stats(data[8]) or new_stats()
     else
       up = redis_params.read_servers:get_upstream_round_robin()
-      local addr = up and up:get_addr()
+      addr = up and up:get_addr()
 
       if not addr then
         st.server, st.batches = 'none', 0
@@ -640,7 +648,7 @@ exports.lua_fuzzy_redis_start_count_scan = function(redis_params, ev_base, prefi
 
     st.script_known = false
 
-    st.upstream, st.server, st.errors = up, server, 0
+    st.upstream, st.addr, st.server, st.errors = up, addr, server, 0
     st.phase = 'scanning'
     st.last_checkpoint = rspamd_util.get_ticks()
     wait(0)
