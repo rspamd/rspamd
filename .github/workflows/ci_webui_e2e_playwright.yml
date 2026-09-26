@@ -34,7 +34,7 @@ jobs:
             label: latest
     steps:
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: src
 
@@ -42,7 +42,7 @@ jobs:
         run: echo "PREFIX=${GITHUB_WORKSPACE}/install" >> "$GITHUB_ENV"
 
       - name: Download rspamd binary from build job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rspamd-binary-${{ inputs.name }}
           path: ${{ env.PREFIX }}
@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version || 'lts/*' }}
 
@@ -116,7 +116,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/ms-playwright-${{ matrix.label }}
           key: ${{ steps.browsers-key.outputs.key }}
@@ -161,7 +161,7 @@ jobs:
 
       - name: Upload Playwright reports (${{ matrix.label }})
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.label }}
           path: ${{ github.workspace }}/playwright-report-${{ matrix.label }}
@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload Playwright artifacts on failure (${{ matrix.label }})
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-artifacts-${{ matrix.label }}
           path: ${{ github.workspace }}/playwright-artifacts-${{ matrix.label }}

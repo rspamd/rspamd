@@ -42,7 +42,7 @@ jobs:
           sudo chown -R build:build ${GITHUB_WORKSPACE}
 
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: src
 
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload robot logs
         if: (success() || failure())
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: robotlog-${{ inputs.name }}
           path: |
@@ -187,7 +187,7 @@ jobs:
 
       - name: Upload rspamd logs
         if: (success() || failure())
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rspamdlog-${{ inputs.name }}
           path: ${{ env.CONTAINER_WORKSPACE }}/build/robot-save

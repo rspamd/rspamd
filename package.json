@@ -1,6 +1,7 @@
 {
     "scripts": {
         "build:icons": "node icons-build.mjs",
+        "check:deps": "node webui-deps-check.mjs",
         "check:icons": "node icons-check.mjs && node icons-build.mjs && git diff --exit-code -- interface/img/icons.svg interface/css/icons.css"
     },
     "devDependencies": {
