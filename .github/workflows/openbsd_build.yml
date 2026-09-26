@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build on OpenBSD
         uses: vmactions/openbsd-vm@v1

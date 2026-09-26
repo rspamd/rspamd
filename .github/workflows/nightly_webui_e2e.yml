@@ -40,7 +40,7 @@ jobs:
           sudo chown -R build:build ${GITHUB_WORKSPACE}
 
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: src
 
