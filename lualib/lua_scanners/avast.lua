@@ -114,6 +114,13 @@ local function avast_check(task, content, digest, rule, maybe_part)
 
     -- Used to make a dialog
     local tcp_conn
+    -- Avast replies with one line per scanned object; for archives these are
+    -- the inner files followed by the (clean) container itself, so the verdict
+    -- is aggregated over all lines and yielded/cached once on the final line
+    local threats = {}
+    local seen_threats = {}
+    local seen_clean = false
+    local seen_error = false
 
     -- Save content in file as avast can work with files only
     local fname = string.format('%s/%s.avtmp',
@@ -153,6 +160,11 @@ local function avast_check(task, content, digest, rule, maybe_part)
             rule['symbol'], rule['type'])
         common.yield_result(task, rule, 'failed to scan and retransmits exceed',
             0.0, 'fail', maybe_part)
+        if #threats > 0 then
+          -- Do not lose threats reported before the connection broke,
+          -- but do not cache an incomplete verdict either
+          common.yield_result(task, rule, threats, 1.0, nil, maybe_part)
+        end
 
         return
       end
@@ -237,49 +249,46 @@ local function avast_check(task, content, digest, rule, maybe_part)
               tcp_conn:close()
               tcp_conn = nil
             end
-          else
-            -- Check line using regular expressions
-            local cached
-            local ret = clean_re:search(mdata, false, true)
 
-            if ret then
-              cached = 'OK'
+            if #threats > 0 then
+              common.yield_result(task, rule, threats, 1.0, nil, maybe_part)
+              common.save_cache(task, digest, rule, threats, 1.0, maybe_part)
+            elseif seen_clean and not seen_error then
               if rule.log_clean then
                 rspamd_logger.infox(task,
                     '%s [%s]: message or mime_part is clean',
                     rule.symbol, rule.type)
               end
+              common.save_cache(task, digest, rule, 'OK', 1.0, maybe_part)
             end
+          else
+            -- Check line using regular expressions
+            local ret = clean_re:search(mdata, false, true)
 
-            if not cached then
+            if ret then
+              seen_clean = true
+            else
               ret = virus_re:search(mdata, false, true)
 
-              if ret then
-                local vname = ret[1][2]
+              if ret and ret[1][2] then
+                local vname = ret[1][2]:gsub('\\ ', ' '):gsub('\\\\', '\\')
+                if not seen_threats[vname] then
+                  seen_threats[vname] = true
+                  table.insert(threats, vname)
+                end
+              else
+                ret = error_re:search(mdata, false, true)
 
-                if vname then
-                  vname = vname:gsub('\\ ', ' '):gsub('\\\\', '\\')
-                  common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
-                  cached = vname
+                if ret then
+                  seen_error = true
+                  rspamd_logger.errx(task, '%s: error: %s', rule.log_prefix, ret[1][2])
+                  common.yield_result(task, rule, 'error:' .. ret[1][2],
+                      0.0, 'fail', maybe_part)
+                else
+                  -- Unexpected reply
+                  rspamd_logger.errx(task, '%s: unexpected reply: %s', rule.log_prefix, mdata)
                 end
               end
-            end
-
-            if not cached then
-              ret = error_re:search(mdata, false, true)
-
-              if ret then
-                rspamd_logger.errx(task, '%s: error: %s', rule.log_prefix, ret[1][2])
-                common.yield_result(task, rule, 'error:' .. ret[1][2],
-                    0.0, 'fail', maybe_part)
-              end
-            end
-
-            if cached then
-              common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
-            else
-              -- Unexpected reply
-              rspamd_logger.errx(task, '%s: unexpected reply: %s', rule.log_prefix, mdata)
             end
             -- Read more
             if tcp_conn then
