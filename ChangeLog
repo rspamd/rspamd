@@ -1,3 +1,45 @@
+4.2.1: 01 Oct 2026
+
+  ** Bug fixes **
+  * [CritFix] http: Do not size the body from a chunk size or Content-Length sent by the peer (a huge chunk size caused a heap overflow)
+  * [CritFix] http: Keep zero-copy reads inside the body (use-after-free when a finish handler replaces the body)
+  * [CritFix] fstring: Refuse a length that cannot be allocated (the size wrapped and later writes went out of bounds)
+  * [CritFix] cryptobox: Fail closed on low order public keys (an uninitialised shared secret was cached and used to decrypt fuzzy requests)
+  * [CritFix] hiredis: Keep the socket until async cleanup (assertion abort when redis is down)
+  * [Fix] http_parser: Refuse a message framed by both Content-Length and Transfer-Encoding
+  * [Fix] http_parser: Check Content-Length and chunk sizes before they overflow
+  * [Fix] http: Finish the last trailer of a chunked message and keep chunk framing out of encrypted inner bodies
+  * [Fix] http: Apply timeouts at the correct I/O stage
+  * [Fix] maps: Use the HTTP body length instead of the shared memory size (garbage in large chunked maps and their cache)
+  * [Fix] maps: Keep the previous map on failed reloads, reject truncated zstd frames and write the whole map on /savemap
+  * [Fix] maps: Skip the HTTP cache header when reading cdb maps
+  * [Fix] maps: Do not leak the shared memory mapping on errors
+  * [Fix] fuzzy_storage: Bound the TCP backlog, meter unauthenticated error replies and enforce key expiry for writes and deletes
+  * [Fix] fuzzy_backend: Saturate deduplicated weights and reject short redis shingle digests
+  * [Fix] fuzzy: Preserve address userdata in Redis count scans
+  * [Fix] rdns: Fix TCP queue accounting, a dropped last byte of TCP packets, malformed reply handling and the retransmit channel lifetime
+  * [Fix] lua_tcp: Stop after a fatal TLS read and bound the data buffered for a stop pattern
+  * [Fix] lua_http/lua_redis: Fix request tuning after DNS, coroutine cleanup on cancellation and freed redis replies read from Lua
+  * [Fix] re_cache: Verify hyperscan prefiltered regexps per input and saturate hit counts instead of wrapping
+  * [Fix] regexp: Validate UTF-8 once per search instead of on every remaining suffix
+  * [Fix] spf: Match a and mx without a prefix length per address family, and apply the macro digit transformer
+  * [Fix] dkim: Fix a header table leak and the l= body check with relaxed canonicalisation
+  * [Fix] url: Do not read past an IPv6 host at the end of the input, and treat mapped loopback as local
+  * [Fix] url_redirector: Key by the raw URL, cap the whole chain and resolve relative Location headers
+  * [Fix] rbl: Fix whitelists for IPv6 addresses
+  * [Fix] multimap: Support IPv6 ULA prefixes in Redis maps
+  * [Fix] avast: Keep the cached virus verdict for archives
+  * [Fix] archives: Harden rar, 7z and libarchive parsing
+  * [Fix] 7z: Read substreams sizes and digests per stream (archives with an unpacked header listed no files)
+  * [Fix] html: Bound the text inspected per link and do not sniff JSON attachments as HTML
+  * [Fix] html: Bound nested HTML processing and structure exports without losing phishing checks
+  * [Fix] html: Stop rescanning quoted attributes for '>' and keep entity replacements within the consumed input
+  * [Fix] css: Bound the token count while building the block tree and do not swallow the byte after a hex escape
+  * [Fix] mime: Decode adjacent encoded words with their own charsets
+  * [Fix] ucl: Let binary msgpack strings own their value (use-after-free once the input buffer is released)
+  * [Fix] ucl: Keep the key when a msgpack map ends in an empty value
+  * [Fix] Rules: Exempt Mailchimp from SUBJ_EXCESS_QP and REPLYTO_EXCESS_QP
+
 4.2.0: 18 Sep 2026
 
   ** Incompatible changes **
