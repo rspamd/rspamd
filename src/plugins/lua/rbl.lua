@@ -141,6 +141,24 @@ local function ip_to_rbl(ip)
   return table.concat(ip:inversed_str_octets(), '.')
 end
 
+-- Checks whether a textual lookup key (helo, selector result) is an IP literal.
+-- RFC 5321 brackets literals in helo: [192.0.2.1], [IPv6:2001:db8::1].
+-- rspamd_ip.from_string warns on every failed parse, so only strings shaped
+-- like an address are handed to it.
+local function is_ip_literal(str)
+  local bare = str:match('^%[[Ii][Pp][Vv]6:(.+)%]$') or
+      str:match('^%[(.+)%]$') or str
+
+  if not (bare:match('^%d+%.%d+%.%d+%.%d+$') or
+      bare:match('^[%x:]*:[%x:]*:[%x:%.]*$')) then
+    return false
+  end
+
+  local ip = rspamd_ip.from_string(bare)
+
+  return ip and ip:is_valid()
+end
+
 local function gen_check_rcvd_conditions(rbl, received_total)
   local min_pos = tonumber(rbl.received_min_pos)
   local max_pos = tonumber(rbl.received_max_pos)
@@ -395,6 +413,15 @@ local function gen_rbl_callback(rule)
     local req_str = req
     if is_ip then
       req_str = tostring(req)
+    end
+
+    -- `no_ip` must cover textual sources as well: helo and selectors (e.g. the
+    -- `mid` one in DBL) can yield a bare IP literal, rejected by domain zones.
+    -- Unflattened selectors return rspamd_text, hence the tostring
+    if rule.no_ip and not is_ip and is_ip_literal(tostring(req_str)) then
+      lua_util.debugm(N, task, 'skip ip %s from %s: no_ip for rbl %s',
+          req_str, label, rule.symbol)
+      return
     end
 
     if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
