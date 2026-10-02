@@ -1297,8 +1297,23 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 		 * but it might be unsuitable (e.g. in broken headers)
 		 */
 		if (cb->part_start < pos && cb->cur_boundary) {
+			const char *part_end = pos;
+
+			if (b->start >= 0) {
+				/*
+				 * RFC 2046, 5.1.1: the CRLF preceding the boundary delimiter
+				 * belongs to the delimiter, not to the encapsulated part
+				 */
+				if (part_end > cb->part_start && *(part_end - 1) == '\n') {
+					part_end--;
+				}
+				if (part_end > cb->part_start && *(part_end - 1) == '\r') {
+					part_end--;
+				}
+			}
+
 			if ((ret = rspamd_mime_process_multipart_node(task, cb->st,
-														  cb->multipart, cb->part_start, pos, TRUE, cb->err)) != RSPAMD_MIME_PARSE_OK) {
+														  cb->multipart, cb->part_start, part_end, TRUE, cb->err)) != RSPAMD_MIME_PARSE_OK) {
 				return ret;
 			}
 
