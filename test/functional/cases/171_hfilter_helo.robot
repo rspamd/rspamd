@@ -10,7 +10,7 @@ ${CONFIG}          ${RSPAMD_TESTDIR}/configs/hfilter.conf
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_SCOPE}    Suite
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${SETTINGS}        {symbols_enabled = [HFILTER_CHECK, HFILTER_HELO_IP_A, HFILTER_HELO_NORES_A_OR_MX, HFILTER_HELO_NORESOLVE_MX, HFILTER_HELO_NOT_FQDN]}
+${SETTINGS}        {symbols_enabled = [HFILTER_CHECK, HFILTER_HELO_IP_A, HFILTER_HELO_NORES_A_OR_MX, HFILTER_HELO_NORESOLVE_MX, HFILTER_HELO_NOT_FQDN, HFILTER_HELO_DNSFAIL]}
 
 *** Test Cases ***
 # HFILTER_HELO_IP_A is documented as "Helo A IP != hostname IP", so a HELO
@@ -59,3 +59,31 @@ HELO with no address records keeps being flagged
 HELO with one transiently failed family is not flagged
   Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=partialfail.test  Settings=${SETTINGS}
   Do Not Expect Symbol  HFILTER_HELO_IP_A
+
+# Staying silent is right, but silence is indistinguishable from a clean
+# pass. A deployment that enforces HFILTER_HELO_IP_A needs to be able to tell
+# "verified, no mismatch" from "could not verify", so the transient failure
+# is published as its own symbol to soft reject on.
+HELO with a transiently failed family reports the DNS failure
+  Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=partialfail.test  Settings=${SETTINGS}
+  Expect Symbol  HFILTER_HELO_DNSFAIL
+
+# Both families time out. The two lookups share one callback, so the symbol
+# must be inserted once rather than once per callback; a per-callback insert
+# scores 2.00.
+HELO with both families transiently failed reports the DNS failure once
+  Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=bothfail.test  Settings=${SETTINGS}
+  Expect Symbol With Score  HFILTER_HELO_DNSFAIL  1.00
+
+# Control: a HELO that resolves cleanly must not be reported as unverifiable.
+HELO that resolves cleanly reports no DNS failure
+  Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=match.test  Settings=${SETTINGS}
+  Do Not Expect Symbol  HFILTER_HELO_DNSFAIL
+
+# Control: NXDOMAIN is an authoritative answer, not a failure to obtain one.
+# It is already reported as HFILTER_HELO_NORES_A_OR_MX and must not also be
+# reported as a DNS failure, or the soft-reject signal becomes useless.
+HELO with no address records reports no DNS failure
+  Scan File  ${MESSAGE}  IP=1.2.3.4  Helo=noaddr.test  Settings=${SETTINGS}
+  Expect Symbol  HFILTER_HELO_NORES_A_OR_MX
+  Do Not Expect Symbol  HFILTER_HELO_DNSFAIL
