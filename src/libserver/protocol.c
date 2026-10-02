@@ -2037,10 +2037,9 @@ rspamd_protocol_update_stats(struct rspamd_task *task)
  * For milter protocol, skip past the raw headers to return only the body.
  * Shared between v2 and v3 reply handlers.
  */
-static void
-rspamd_protocol_get_rewritten_body(struct rspamd_task *task,
-								   const char **body_start,
-								   gsize *body_len)
+void rspamd_protocol_get_rewritten_body(struct rspamd_task *task,
+										const char **body_start,
+										gsize *body_len)
 {
 	*body_start = task->msg.begin;
 	*body_len = task->msg.len;
