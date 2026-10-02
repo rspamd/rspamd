@@ -652,7 +652,8 @@ exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_
 
   local full_url = string.format('%s/v1/%s/%s',
     settings.vault_url, vault_path, selector.domain)
-  local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url)
+  local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url,
+      rspamd_config)
 
   local function vault_callback(err, code, body, _)
     if code ~= 200 then

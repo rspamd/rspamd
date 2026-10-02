@@ -1874,7 +1874,7 @@ exports.unhex = function(str)
 end
 
 local http_upstream_lists = {}
-local function http_upstreams_by_url(pool, url)
+local function http_upstreams_by_url(pool, url, cfg)
   local rspamd_url = require "rspamd_url"
 
   local cached = http_upstream_lists[url]
@@ -1892,7 +1892,16 @@ local function http_upstreams_by_url(pool, url)
   local proto = real_url:get_protocol() or 'http'
   local port = real_url:get_port() or (proto == 'https' and 443 or 80)
   local upstream_list = require "rspamd_upstream_list"
-  local upstreams = upstream_list.create(host, port)
+  -- Attach to the config upstream context when available: otherwise a
+  -- failed startup DNS lookup leaves the upstream pending forever, as the
+  -- deferred resolve timer is armed only for upstreams owned by the ctx
+  cfg = cfg or rawget(_G, 'rspamd_config')
+  local upstreams
+  if cfg then
+    upstreams = upstream_list.create(cfg, host, port)
+  else
+    upstreams = upstream_list.create(host, port)
+  end
 
   if upstreams then
     http_upstream_lists[url] = upstreams
@@ -1902,10 +1911,11 @@ local function http_upstreams_by_url(pool, url)
   return nil
 end
 ---[[[
--- @function lua_util.http_upstreams_by_url(pool, url)
+-- @function lua_util.http_upstreams_by_url(pool, url[, cfg])
 -- Returns a cached or new upstreams list that corresponds to the specific url
 -- @param {mempool} pool memory pool to use (typically static pool from rspamd_config)
 -- @param {string} url full url
+-- @param {config} cfg optional rspamd config (global rspamd_config is used if nil)
 -- @return {upstreams_list} object to get upstream from an url
 --]]]
 exports.http_upstreams_by_url = http_upstreams_by_url

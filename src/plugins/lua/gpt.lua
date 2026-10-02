@@ -1384,7 +1384,7 @@ if opts then
     return
   end
 
-  settings.upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.url)
+  settings.upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.url, rspamd_config)
 
   local id = rspamd_config:register_symbol({
     name = 'GPT_CHECK',
