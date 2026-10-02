@@ -31,6 +31,13 @@
 #   --status-file PATH   (optional)     write final status here for the test
 #                                        to verify QUIT timing out-of-band
 #   --pid-file PATH      (default /tmp/dummy_smtp_<mode>.pid)
+#   --ehlo-caps CAPS     (sink mode)    comma-separated EHLO capability
+#                                        tokens advertised in a multi-line
+#                                        250- / 250 reply, e.g. "8BITMIME".
+#                                        Default: plain single-line "250 ok".
+#   --reject-ehlo        (sink mode)    reply 502 to EHLO (HELO is still
+#                                        accepted normally) to exercise a
+#                                        client's HELO fallback.
 
 import argparse
 import os
@@ -60,6 +67,58 @@ def _make_handler(args):
         def handle(self):
             if args.pre_wait > 0:
                 time.sleep(args.pre_wait)
+
+            if args.mode == "sink":
+                transcript = []
+                message = []
+                in_data = False
+                stream = self.request.makefile("rwb", buffering=0)
+                stream.write(b"220 dummy smtp\r\n")
+                while True:
+                    line = stream.readline()
+                    if not line:
+                        break
+                    text = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if in_data:
+                        if text == ".":
+                            in_data = False
+                            stream.write(b"250 queued\r\n")
+                        else:
+                            # RFC 5321 4.5.2: the receiver strips the extra
+                            # leading '.' the sender added for transparency
+                            if text.startswith("."):
+                                text = text[1:]
+                            message.append(text)
+                        continue
+
+                    transcript.append(text)
+                    command = text.upper()
+                    if command.startswith("EHLO "):
+                        if args.reject_ehlo:
+                            stream.write(b"502-command not implemented\r\n")
+                            stream.write(b"502 use HELO instead\r\n")
+                        elif args.ehlo_caps:
+                            caps = args.ehlo_caps.split(",")
+                            stream.write(b"250-dummy smtp\r\n")
+                            for i, cap in enumerate(caps):
+                                sep = b" " if i == len(caps) - 1 else b"-"
+                                stream.write(b"250" + sep + cap.encode("ascii") + b"\r\n")
+                        else:
+                            stream.write(b"250 ok\r\n")
+                    elif command.startswith(("HELO ", "MAIL FROM:", "RCPT TO:")):
+                        stream.write(b"250 ok\r\n")
+                    elif command == "DATA":
+                        in_data = True
+                        stream.write(b"354 send data\r\n")
+                    elif command == "QUIT":
+                        stream.write(b"221 bye\r\n")
+                        break
+                    else:
+                        stream.write(b"500 unsupported\r\n")
+
+                _write_status(args.status_file,
+                              "\n".join(transcript + ["MESSAGE"] + message))
+                return
 
             if args.mode == "silent":
                 try:
@@ -147,7 +206,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=11125)
     parser.add_argument("--mode",
-                        choices=["silent", "error", "messy",
+                        choices=["silent", "error", "messy", "sink",
                                  "greeting_single", "greeting_multi"],
                         default="silent")
     parser.add_argument("--host", default="127.0.0.1")
@@ -156,6 +215,13 @@ if __name__ == "__main__":
                         default=0.2)
     parser.add_argument("--status-file", dest="status_file", default=None)
     parser.add_argument("--pid-file", dest="pid_file", default=None)
+    parser.add_argument("--ehlo-caps", dest="ehlo_caps", default=None,
+                        help="sink mode: comma-separated EHLO capability "
+                             "tokens, e.g. '8BITMIME'")
+    parser.add_argument("--reject-ehlo", dest="reject_ehlo",
+                        action="store_true",
+                        help="sink mode: reply 502 to EHLO to exercise "
+                             "HELO fallback")
     args = parser.parse_args()
 
     if not args.pid_file:
