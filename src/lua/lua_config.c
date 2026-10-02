@@ -20,6 +20,7 @@
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
 #include "libserver/re_cache.h"
+#include "libserver/symcache/symcache_checkpoint.h"
 #include "lua/lua_map.h"
 #include "lua/lua_thread_pool.h"
 #include "utlist.h"
@@ -237,6 +238,8 @@ LUA_FUNCTION_DEF(config, get_classifier);
  *   + `explicit_disable` requires explicit disabling (e.g. via settings)
  *   + `ignore_passthrough` executed even if passthrough result has been set
  * - `parent`: id of parent symbol (useful for virtual symbols)
+ * - `execution_parent`: public callback id owning this independently scheduled
+ *   part; inherits admission and external dependencies, and waits for all parts
  * - `score`: default score of the symbol
  * - `description`: description of the symbol
  * - `group`: group of the symbol (ungrouped if missing)
@@ -1483,6 +1486,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 	*ptask = task;
 
 	if ((ret = lua_pcall(L, 1, LUA_MULTRET, err_idx)) != 0) {
+		rspamd_symcache_checkpoint_invalidate(task);
 		msg_err_task("call to (%s) failed (%d): %s", cd->symbol, ret,
 					 lua_tostring(L, -1));
 		lua_settop(L, err_idx); /* Not -1 here, as err_func is popped below */
@@ -1636,6 +1640,7 @@ lua_metric_symbol_callback_error(struct thread_entry *thread_entry,
 	struct lua_callback_data *cd = thread_entry->cd;
 	struct rspamd_task *task = thread_entry->task;
 	msg_err_task("call to coroutine (%s) failed (%d): %s", cd->symbol, ret, msg);
+	rspamd_symcache_checkpoint_invalidate(task);
 
 	rspamd_symcache_item_async_dec_check(task, cd->item, "lua coro symbol");
 }
@@ -2271,6 +2276,10 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	int id, nshots, cb_ref, parent = -1;
 	unsigned int flags = 0;
 	gboolean optional = FALSE;
+	unsigned int required_inputs = RSPAMD_SYMCACHE_INPUT_EOM;
+	gboolean has_required_inputs = FALSE;
+	unsigned int replay_version = 0;
+	bool terminal_observer = false;
 
 	/*
 	 * Table can have the following attributes:
@@ -2279,6 +2288,8 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	 * "priority" - optional priority
 	 * "type" - optional type (normal, virtual, callback)
 	 * "flags" - optional flags
+	 * "replay_version" - version of explicitly exported producer results/state
+	 * "replay_callback" - synchronous function(task, facts), see rspamd_symcache.h
 	 * -- Metric options
 	 * "score" - optional default score (overridden by metric)
 	 * "group" - optional default group
@@ -2286,6 +2297,74 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	 * "description" - optional description
 	 */
 	lua_pushvalue(L, tbl_idx); /* Push table on top of the stack */
+
+	lua_getfield(L, -1, "terminal_observer");
+
+	if (!lua_isnil(L, -1)) {
+		if (!lua_isboolean(L, -1)) {
+			return luaL_error(L, "terminal_observer must be a boolean");
+		}
+
+		terminal_observer = lua_toboolean(L, -1);
+	}
+
+	lua_pop(L, 1);
+
+	lua_getfield(L, -1, "replay_version");
+
+	if (!lua_isnil(L, -1)) {
+		if (lua_type(L, -1) != LUA_TNUMBER || lua_tonumber(L, -1) < 1 ||
+			!isfinite(lua_tonumber(L, -1)) ||
+			lua_tonumber(L, -1) > G_MAXUINT ||
+			lua_tonumber(L, -1) != lua_tointeger(L, -1)) {
+			return luaL_error(L, "replay_version must be a positive integer");
+		}
+
+		replay_version = lua_tointeger(L, -1);
+	}
+
+	lua_pop(L, 1);
+
+	lua_getfield(L, -1, "replay_callback");
+
+	if (!lua_isnil(L, -1) && (!lua_isfunction(L, -1) || replay_version == 0)) {
+		return luaL_error(L, "replay_callback must be a function with a replay_version");
+	}
+
+	lua_pop(L, 1);
+	lua_getfield(L, -1, "required_inputs");
+
+	if (!lua_isnil(L, -1)) {
+		if (!lua_istable(L, -1)) {
+			return luaL_error(L, "required_inputs must be an array of input names");
+		}
+
+		has_required_inputs = TRUE;
+		required_inputs = 0;
+		unsigned int ninputs = rspamd_lua_table_size(L, -1);
+
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			if (lua_type(L, -2) != LUA_TNUMBER || lua_type(L, -1) != LUA_TSTRING ||
+				lua_tonumber(L, -2) < 1 || lua_tonumber(L, -2) > ninputs ||
+				lua_tonumber(L, -2) != lua_tointeger(L, -2)) {
+				return luaL_error(L, "required_inputs must be an array of input names");
+			}
+
+			size_t input_len;
+			const char *input_name = lua_tolstring(L, -1, &input_len);
+			unsigned int input = input_len == strlen(input_name)
+									 ? rspamd_symcache_input_from_string(input_name)
+									 : 0;
+
+			if (input == 0) {
+				return luaL_error(L, "unknown required input: %s", lua_tostring(L, -1));
+			}
+
+			required_inputs |= input;
+		}
+	}
+
+	lua_pop(L, 1);
 
 	if (name == NULL) {
 		/* Try to resolve name */
@@ -2437,6 +2516,42 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 	}
 
 	if (id != -1) {
+		lua_getfield(L, -1, "execution_parent");
+
+		if (!lua_isnil(L, -1) &&
+			(lua_type(L, -1) != LUA_TNUMBER || lua_tonumber(L, -1) != lua_tointeger(L, -1) ||
+			 !rspamd_symcache_set_execution_parent(cfg->cache, id, lua_tointeger(L, -1)))) {
+			return luaL_error(L, "cannot set execution parent for symbol %s", name);
+		}
+
+		lua_pop(L, 1);
+
+		if (has_required_inputs && !rspamd_symcache_set_symbol_inputs(cfg->cache, id, required_inputs)) {
+			return luaL_error(L, "cannot declare inputs for symbol %s", name);
+		}
+
+		if (replay_version && !rspamd_symcache_set_symbol_replay(cfg->cache, id, replay_version)) {
+			return luaL_error(L, "cannot declare replay for symbol %s", name);
+		}
+
+		lua_getfield(L, -1, "replay_callback");
+
+		if (lua_isfunction(L, -1)) {
+			int replay_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+			if (!rspamd_symcache_set_symbol_replay_callback(cfg->cache, id, L, replay_ref)) {
+				luaL_unref(L, LUA_REGISTRYINDEX, replay_ref);
+				return luaL_error(L, "cannot register replay callback for symbol %s", name);
+			}
+		}
+		else {
+			lua_pop(L, 1);
+		}
+
+		if (terminal_observer && !rspamd_symcache_set_terminal_observer(cfg->cache, id)) {
+			return luaL_error(L, "terminal observer %s must be idempotent", name);
+		}
+
 		if (cb_ref != -1) {
 			/* Check for condition */
 			lua_pushstring(L, "condition");

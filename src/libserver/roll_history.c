@@ -19,6 +19,8 @@
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include "cfg_file_private.h"
+#include "scan_finalization.h"
+#include <math.h>
 
 static const char rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
 
@@ -127,6 +129,22 @@ void rspamd_roll_history_update(struct roll_history *history,
 	}
 
 	/* Add information from task to roll history */
+	row->message_id[0] = '\0';
+	row->symbols[0] = '\0';
+	row->event_id[0] = '\0';
+	row->early_policy[0] = '\0';
+	row->early_reason[0] = '\0';
+	row->score = NAN;
+	row->required_score = NAN;
+	row->partial = task->early_result != NULL;
+
+	if (row->partial) {
+		const ucl_object_t *event = rspamd_task_get_terminal_event(task);
+		rspamd_strlcpy(row->event_id, ucl_object_tostring(ucl_object_lookup(event, "event_id")), sizeof(row->event_id));
+		rspamd_strlcpy(row->early_policy, ucl_object_tostring(ucl_object_lookup(event, "policy")), sizeof(row->early_policy));
+		rspamd_strlcpy(row->early_reason, ucl_object_tostring(ucl_object_lookup(event, "reason")), sizeof(row->early_reason));
+	}
+
 	if (task->from_addr) {
 		rspamd_strlcpy(row->from_addr,
 					   rspamd_inet_address_to_string(task->from_addr),
@@ -161,23 +179,43 @@ void rspamd_roll_history_update(struct roll_history *history,
 		row->score = metric_res->score;
 		action = rspamd_check_action_metric(task, NULL, NULL);
 		row->action = action->action_type;
-		row->required_score = rspamd_task_get_required_score(task, metric_res);
+
+		if (!row->partial) {
+			row->required_score = rspamd_task_get_required_score(task, metric_res);
+		}
+
 		cbdata.pos = row->symbols;
 		cbdata.remain = sizeof(row->symbols);
 		rspamd_task_symbol_result_foreach(task, NULL,
 										  roll_history_symbols_callback,
 										  &cbdata);
-		if (cbdata.remain > 0) {
-			/* Remove last whitespace and comma */
-			*cbdata.pos-- = '\0';
-			*cbdata.pos-- = '\0';
-			*cbdata.pos = '\0';
+
+		if (cbdata.pos - row->symbols >= 2 && cbdata.pos[-2] == ',' && cbdata.pos[-1] == ' ') {
+			cbdata.pos[-2] = '\0';
 		}
 	}
 
 	row->scan_time = task->time_real_finish - task->task_timestamp;
 	row->len = task->msg.len;
 	g_atomic_int_set(&row->completed, TRUE);
+}
+
+void rspamd_roll_history_add_completion(const struct roll_history_row *row, ucl_object_t *object)
+{
+	if (!row->partial) {
+		return;
+	}
+
+	ucl_object_insert_key(object, ucl_object_frombool(true), "partial", 0, false);
+	ucl_object_insert_key(object, ucl_object_fromstring("data"), "decision_stage", 0, false);
+	ucl_object_insert_key(object, ucl_object_fromstring(row->action == METRIC_ACTION_REJECT ? "early_reject" : "early_tempfail"),
+						  "completion_kind", 0, false);
+	ucl_object_insert_key(object, ucl_object_fromstring(row->event_id), "event_id", 0, false);
+	ucl_object_insert_key(object, ucl_object_fromstring(row->early_policy), "policy", 0, false);
+	ucl_object_insert_key(object, ucl_object_fromstring(row->early_reason), "reason", 0, false);
+	ucl_object_insert_key(object, ucl_object_frombool(false), "has_headers", 0, false);
+	ucl_object_insert_key(object, ucl_object_frombool(false), "has_body", 0, false);
+	ucl_object_insert_key(object, ucl_object_frombool(false), "has_mime", 0, false);
 }
 
 /**
@@ -282,6 +320,28 @@ rspamd_roll_history_load(struct roll_history *history, const char *filename)
 		if (cur != NULL && ucl_object_type(cur) == UCL_OBJECT) {
 			row = &history->rows[i];
 			memset(row, 0, sizeof(*row));
+			row->partial = ucl_object_toboolean(ucl_object_lookup(cur, "partial"));
+			const struct {
+				const char *key;
+				char *destination;
+				size_t size;
+			} fields[] = {
+				{"event_id", row->event_id, sizeof(row->event_id)},
+				{"policy", row->early_policy, sizeof(row->early_policy)},
+				{"reason", row->early_reason, sizeof(row->early_reason)},
+			};
+
+			for (unsigned int j = 0; j < G_N_ELEMENTS(fields); j++) {
+				elt = ucl_object_lookup(cur, fields[j].key);
+
+				if (elt && ucl_object_type(elt) == UCL_STRING) {
+					rspamd_strlcpy(fields[j].destination, ucl_object_tostring(elt), fields[j].size);
+				}
+			}
+
+			if (row->partial) {
+				row->required_score = NAN;
+			}
 
 			elt = ucl_object_lookup(cur, "time");
 
@@ -399,7 +459,7 @@ rspamd_roll_history_save(struct roll_history *history, const char *filename)
 
 		ucl_object_insert_key(elt, ucl_object_fromdouble(row->timestamp),
 							  "time", 0, false);
-		ucl_object_insert_key(elt, ucl_object_fromstring(row->message_id),
+		ucl_object_insert_key(elt, row->partial ? ucl_object_typed_new(UCL_NULL) : ucl_object_fromstring(row->message_id),
 							  "id", 0, false);
 		ucl_object_insert_key(elt, ucl_object_fromstring(row->symbols),
 							  "symbols", 0, false);
@@ -407,16 +467,17 @@ rspamd_roll_history_save(struct roll_history *history, const char *filename)
 							  "user", 0, false);
 		ucl_object_insert_key(elt, ucl_object_fromstring(row->from_addr),
 							  "from", 0, false);
-		ucl_object_insert_key(elt, ucl_object_fromint(row->len),
+		ucl_object_insert_key(elt, row->partial ? ucl_object_typed_new(UCL_NULL) : ucl_object_fromint(row->len),
 							  "len", 0, false);
 		ucl_object_insert_key(elt, ucl_object_fromdouble(row->scan_time),
 							  "scan_time", 0, false);
 		ucl_object_insert_key(elt, ucl_object_fromdouble(row->score),
 							  "score", 0, false);
-		ucl_object_insert_key(elt, ucl_object_fromdouble(row->required_score),
+		ucl_object_insert_key(elt, row->partial ? ucl_object_typed_new(UCL_NULL) : ucl_object_fromdouble(row->required_score),
 							  "required_score", 0, false);
 		ucl_object_insert_key(elt, ucl_object_fromint(row->action),
 							  "action", 0, false);
+		rspamd_roll_history_add_completion(row, elt);
 
 		ucl_array_append(obj, elt);
 	}

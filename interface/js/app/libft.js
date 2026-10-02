@@ -135,6 +135,11 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
             const data = cell.getData();
             const score = cell.getValue();
             const required = data.required_score;
+
+            if (data.decision_stage === "data") {
+                return `<span title="Partial score at DATA">${score.toFixed(2)} (DATA)</span>`;
+            }
+
             const cls = score < required ? "text-success" : "text-danger";
             return `<span class="${cls}">${score.toFixed(2)} / ${required}</span>`;
         }
@@ -157,6 +162,7 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
         // ── Public functions ─────────────────────────────────────────────────
 
         ui.formatBytesIEC = function (bytes) {
+            if (bytes === null || typeof bytes === "undefined") return "—";
             if (bytes === 0) return "0 B";
             if (!Number.isInteger(Number(bytes)) || bytes < 0) return "NaN";
 
@@ -710,6 +716,7 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
 
         ui.preprocess_item = function (item) {
             function escape_HTML_array(arr) {
+                if (!Array.isArray(arr)) return;
                 arr.forEach((d, i) => { arr[i] = common.escapeHTML(d); });
             }
 
@@ -898,12 +905,12 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
                     }
                     item.time = item.unix_time;
                     item.time_real = item.time_real.toFixed(3);
-                    item.id = item["message-id"];
+                    item.id = item["message-id"] || item.event_id;
 
                     if (table === "history") {
                         // eslint-disable-next-line no-useless-assignment
                         let rcpt = {};
-                        if (!item.rcpt_mime.length) {
+                        if (!item.rcpt_mime || !item.rcpt_mime.length) {
                             rcpt = format_rcpt(true, false);
                         } else if (
                             item.rcpt_mime.some((x) => !item.rcpt_smtp.includes(x)) ||
@@ -917,7 +924,7 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
                         item.rcpt_mime = rcpt.full;
 
                         if (item.sender_mime !== item.sender_smtp) {
-                            item.sender_mime = "[" + item.sender_smtp + "] " + item.sender_mime;
+                            item.sender_mime = "[" + item.sender_smtp + "] " + (item.sender_mime || "");
                         }
                     }
                     items.push(item);

@@ -109,15 +109,26 @@ auto symcache::init() -> bool
 		}
 	}
 
+	/* Statically disabling a public check also removes its owned parts. */
+	for (const auto &[id, item]: items_by_id) {
+		if (item->execution_parent && disabled_ids.contains(item->execution_parent->id)) {
+			disabled_ids.insert(id);
+		}
+	}
+
 	/* Deal with the delayed dependencies */
 	msg_debug_cache("resolving delayed dependencies: %d in list", (int) delayed_deps->size());
 	for (const auto &delayed_dep: *delayed_deps) {
 		auto virt_source = get_item_by_name(delayed_dep.from, false);
-		auto real_source = get_item_by_name(delayed_dep.from, true);
+		auto real_source = get_item_by_name_mut(delayed_dep.from, true);
 
 		auto real_destination = get_item_by_name(delayed_dep.to, true);
 
 		if (virt_source == nullptr || real_source == nullptr || real_destination == nullptr) {
+			if (real_source != nullptr) {
+				real_source->input_dependency_invalid = true;
+			}
+
 			if (real_destination != nullptr) {
 				msg_err_cache("cannot register delayed dependency %s -> %s: "
 							  "source %s is missing",
@@ -155,6 +166,25 @@ auto symcache::init() -> bool
 
 	/* Remove delayed dependencies, as they are no longer needed at this point */
 	delayed_deps.reset();
+
+	/* Inherit external dependencies before disabled items are removed, while
+	 * all dependency pointers and ownership links are still valid. The parent's
+	 * structural edges to its own parts must not be inherited. */
+	for (const auto &[id, item]: items_by_id) {
+		if (auto *parent = item->execution_parent; parent && !disabled_ids.contains(id)) {
+			item->input_dependency_invalid |= parent->input_dependency_invalid;
+
+			for (const auto &[dep_id, dep]: parent->deps) {
+				if (dep.item->execution_parent != parent) {
+					item->deps.try_emplace(dep_id, dep);
+				}
+			}
+		}
+
+		std::erase_if(item->execution_children, [&](const auto *child) {
+			return disabled_ids.contains(child->id);
+		});
+	}
 
 	/* Physically remove ids that are disabled statically */
 	for (auto id_to_disable: disabled_ids) {
@@ -630,6 +660,8 @@ auto symcache::break_dependency_cycles() -> void
 		auto found = it->deps.find(dep_id);
 
 		if (found != it->deps.end()) {
+			it->input_dependency_invalid = true;
+
 			if (found->second.item != nullptr) {
 				found->second.item->rdeps.erase(it->id);
 			}
@@ -642,6 +674,54 @@ auto symcache::break_dependency_cycles() -> void
 auto symcache::compute_exec_plan() -> void
 {
 	auto log_func = RSPAMD_LOG_FUNC;
+	/* Compute readiness independently of stage hoisting. Recompute on resort
+	 * so newly registered producers cannot inherit an obsolete input plan. */
+	ankerl::unordered_dense::set<int> inputs_done, inputs_path;
+	const auto plan_inputs = [&](cache_item *item, auto &&self) -> unsigned int {
+		if (inputs_done.contains(item->id)) {
+			return item->effective_inputs;
+		}
+
+		if (!inputs_path.insert(item->id).second) {
+			return RSPAMD_SYMCACHE_INPUT_EOM;
+		}
+
+		auto inputs = item->required_inputs;
+
+		if (item->is_virtual()) {
+			auto *parent = item->get_parent_mut(*this);
+			inputs = parent ? self(parent, self) : RSPAMD_SYMCACHE_INPUT_EOM;
+		}
+		else {
+			if (item->get_execution_flags() & SYMBOL_TYPE_MIME_ONLY) {
+				inputs |= RSPAMD_SYMCACHE_INPUT_MIME;
+			}
+
+			if (item->input_dependency_invalid ||
+				(item->type != symcache_item_type::FILTER && item->type != symcache_item_type::CONNFILTER &&
+				 !(item->type == symcache_item_type::PREFILTER && item->replay_version != 0) &&
+				 !item->terminal_observer) ||
+				std::get<normal_item>(item->specific).has_conditions() ||
+				(item->execution_parent &&
+				 (item->execution_parent->input_dependency_invalid ||
+				  std::get<normal_item>(item->execution_parent->specific).has_conditions()))) {
+				inputs |= RSPAMD_SYMCACHE_INPUT_EOM;
+			}
+
+			for (const auto &[id, dep]: item->deps) {
+				inputs |= dep.item ? self(dep.item, self) : RSPAMD_SYMCACHE_INPUT_EOM;
+			}
+		}
+
+		inputs_path.erase(item->id);
+		inputs_done.insert(item->id);
+		item->effective_inputs = inputs;
+		return inputs;
+	};
+
+	for (const auto &[id, item]: items_by_id) {
+		plan_inputs(item.get(), plan_inputs);
+	}
 
 	/*
 	 * Seed from the declared types and priorities. Items that already have a

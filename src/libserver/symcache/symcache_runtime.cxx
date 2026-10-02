@@ -17,6 +17,7 @@
 #include "symcache_internal.hxx"
 #include "symcache_item.hxx"
 #include "symcache_runtime.hxx"
+#include "symcache_checkpoint.hxx"
 #include "libutil/cxx/util.hxx"
 #include "libserver/task.h"
 #include "libmime/scan_result.h"
@@ -223,6 +224,8 @@ auto symcache_runtime::savepoint_dtor(struct rspamd_task *task) -> void
 	order.reset();
 	delete force_enabled_ids;
 	force_enabled_ids = nullptr;
+	delete execution_conditions;
+	execution_conditions = nullptr;
 }
 
 auto symcache_runtime::add_force_enabled(int id) -> void
@@ -248,7 +251,7 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 		 * stripped from the flags at registration, so `SYMBOL_TYPE_IDEMPOTENT`
 		 * in the mask spares the idempotent symbols as intended
 		 */
-		if (item->get_flags() & skip_mask) {
+		if (item->get_execution_flags() & skip_mask) {
 			continue;
 		}
 
@@ -263,7 +266,8 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 		 * wrong when an enabled symbol depends on a non-enabled one.
 		 * Items that are already running are finalised as usual.
 		 */
-		if (dyn_item->status == cache_item_status::not_started) {
+		if (dyn_item->status == cache_item_status::not_started ||
+			dyn_item->status == cache_item_status::deferred) {
 			set_status(dyn_item, cache_item_status::suppressed);
 		}
 	}
@@ -288,6 +292,10 @@ auto symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &
 
 			set_status(dyn_item, cache_item_status::disabled);
 			msg_debug_cache_task("disable execution of %s", name.data());
+
+			for (const auto *child: item->execution_children) {
+				disable_symbol(task, cache, child->symbol);
+			}
 
 			return true;
 		}
@@ -329,7 +337,9 @@ auto symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &c
 				return false;
 			}
 
-			set_status(dyn_item, cache_item_status::not_started);
+			set_status(dyn_item, checkpoint_mode && !input_ready(item)
+									 ? cache_item_status::deferred
+									 : cache_item_status::not_started);
 
 			if (item->get_flags() & SYMBOL_TYPE_EXPLICIT_ENABLE) {
 				/* An explicit enable call unlocks `explicit_enable` symbols */
@@ -337,6 +347,10 @@ auto symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &c
 			}
 
 			msg_debug_cache_task("enable execution of %s", name.data());
+
+			for (const auto *child: item->execution_children) {
+				enable_symbol(task, cache, child->symbol);
+			}
 
 			return true;
 		}
@@ -360,7 +374,8 @@ auto symcache_runtime::is_symbol_checked(const symcache &cache, std::string_view
 		auto *dyn_item = get_dynamic_item(item->id);
 
 		if (dyn_item) {
-			return dyn_item->status != cache_item_status::not_started;
+			return dyn_item->status != cache_item_status::not_started &&
+				   dyn_item->status != cache_item_status::deferred;
 		}
 	}
 
@@ -372,6 +387,9 @@ auto symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcach
 
 	const auto *item = cache.get_item_by_name(name, true);
 	if (item) {
+		if (checkpoint_mode && !input_ready(item)) {
+			return false;
+		}
 
 		if (!item->is_allowed(task, true)) {
 			return false;
@@ -380,13 +398,15 @@ auto symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcach
 			auto *dyn_item = get_dynamic_item(item->id);
 
 			if (dyn_item) {
-				if (dyn_item->status != cache_item_status::not_started) {
+				if (dyn_item->status != cache_item_status::not_started &&
+					dyn_item->status != cache_item_status::deferred) {
 					/* Already started */
 					return false;
 				}
 
 				if (!item->is_virtual()) {
-					return std::get<normal_item>(item->specific).check_conditions(item->symbol, task);
+					return (!item->execution_parent || item->execution_parent->check_conditions(task)) &&
+						   item->check_conditions(task);
 				}
 			}
 			else {
@@ -432,7 +452,27 @@ static auto exec_stage_from_task_stage(unsigned int stage) -> exec_stage
 
 auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache, unsigned int stage) -> bool
 {
+	if (task->early_result) {
+		return false;
+	}
+
 	msg_debug_cache_task("symbols processing stage at pass: %d", stage);
+
+	if (checkpoint_mode) {
+		if (checkpoint_running || items_inflight != 0 ||
+			(task->s && rspamd_session_events_pending(task->s) != 0)) {
+			return false;
+		}
+
+		checkpoint_mode = false;
+		rspamd_symcache_checkpoint_flush_frequencies(task);
+
+		for (auto i = 0u; i < order->size(); i++) {
+			if (dynamic_items[i].status == cache_item_status::deferred) {
+				set_status(&dynamic_items[i], cache_item_status::not_started);
+			}
+		}
+	}
 
 	if (RSPAMD_TASK_IS_SKIPPED(task)) {
 		return true;
@@ -489,14 +529,14 @@ auto symcache_runtime::should_skip(const cache_item *item, check_status status) 
 		return false;
 	case symcache_item_type::FILTER:
 		/* Filters (hoisted ones included) are also stopped by the score limit */
-		if (item->get_flags() & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
+		if (item->get_execution_flags() & (SYMBOL_TYPE_FINE | SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
 			return false;
 		}
 
 		return true;
 	default:
 		/* Connfilters, prefilters and postfilters are stopped by passthrough results only */
-		if (item->get_flags() & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
+		if (item->get_execution_flags() & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
 			return false;
 		}
 
@@ -509,8 +549,53 @@ static inline auto session_has_events(struct rspamd_task *task) -> bool
 	return task->s != nullptr && rspamd_session_events_pending(task->s) > 0;
 }
 
+auto symcache_runtime::check_item_conditions(struct rspamd_task *task, const cache_item *item) -> bool
+{
+	const auto *parent = item->execution_parent ? item->execution_parent : item;
+
+	if (!parent->execution_children.empty() && std::get<normal_item>(parent->specific).has_conditions()) {
+		if (!execution_conditions) {
+			execution_conditions = new ankerl::unordered_dense::map<int, bool>();
+		}
+
+		auto [it, inserted] = execution_conditions->try_emplace(parent->id, false);
+		auto allowed = it->second;
+
+		if (inserted) {
+			allowed = parent->check_conditions(task);
+			(*execution_conditions)[parent->id] = allowed;
+		}
+
+		if (!allowed || parent == item) {
+			return allowed;
+		}
+	}
+
+	return item->check_conditions(task);
+}
+
+auto symcache_runtime::input_ready(const cache_item *item) const -> bool
+{
+	return item->input_ready(available_inputs, terminal_mode, portable_checkpoint);
+}
+
 auto symcache_runtime::is_bucket_open(struct rspamd_task *task, unsigned int bucket) const -> bool
 {
+	if (checkpoint_mode) {
+		for (auto b = 0u; b < bucket; b++) {
+			const auto &earlier = order->buckets[b];
+
+			for (auto i = earlier.first; i < earlier.first + earlier.count; i++) {
+				if (input_ready(order->d[i].get()) &&
+					!is_item_done(dynamic_items[i].status)) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
 	const auto stage = order->buckets[bucket].stage;
 	const auto first = order->stage_buckets[static_cast<unsigned int>(stage)].first;
 
@@ -530,7 +615,7 @@ auto symcache_runtime::is_bucket_open(struct rspamd_task *task, unsigned int buc
 
 auto symcache_runtime::may_start(struct rspamd_task *task, const cache_item *item, const cache_dynamic_item *dyn_item) const -> bool
 {
-	if (item->get_stage() != cur_stage) {
+	if (checkpoint_mode ? !input_ready(item) : item->get_stage() != cur_stage) {
 		return false;
 	}
 
@@ -538,6 +623,95 @@ auto symcache_runtime::may_start(struct rspamd_task *task, const cache_item *ite
 	auto bucket = order->item_bucket[idx];
 
 	return bucket != order_generation::no_bucket && is_bucket_open(task, bucket);
+}
+
+auto symcache_runtime::process_checkpoint(struct rspamd_task *task, symcache &cache, unsigned int inputs, bool terminal)
+	-> rspamd_symcache_checkpoint_result
+{
+	if (auto *store = checkpoint_store::get(task); store && store->has_import()) {
+		return RSPAMD_SYMCACHE_CHECKPOINT_ERROR;
+	}
+
+	if (cur_stage != exec_stage::none || checkpoint_running || (task->early_result != nullptr) != terminal ||
+		(available_inputs & ~inputs) != 0 || rspamd_session_blocked(task->s)) {
+		return RSPAMD_SYMCACHE_CHECKPOINT_ERROR;
+	}
+
+	checkpoint_mode = true;
+	terminal_mode = terminal;
+	portable_checkpoint = task->multistage != nullptr;
+	available_inputs = inputs;
+	checkpoint_running = true;
+
+	for (auto i = 0u; i < order->size(); i++) {
+		auto *dyn = &dynamic_items[i];
+
+		if (dyn->status == cache_item_status::not_started || dyn->status == cache_item_status::deferred) {
+			set_status(dyn, input_ready(order->d[i].get())
+								? cache_item_status::not_started
+								: cache_item_status::deferred);
+		}
+	}
+
+	for (const auto &bucket: order->buckets) {
+		for (auto i = bucket.first; i < bucket.first + bucket.count; i++) {
+			auto *dyn = &dynamic_items[i];
+
+			if (dyn->status != cache_item_status::not_started) {
+				continue;
+			}
+
+			auto *item = order->d[i].get();
+
+			if (slow_status != slow_status::enabled && may_start(task, item, dyn) &&
+				check_item_deps(task, cache, item, dyn, false)) {
+				process_symbol(task, cache, item, dyn);
+			}
+		}
+	}
+
+	checkpoint_running = false;
+
+	if (session_has_events(task)) {
+		return RSPAMD_SYMCACHE_CHECKPOINT_PENDING;
+	}
+
+	for (auto i = 0u; i < order->size(); i++) {
+		if (!is_item_done(dynamic_items[i].status) &&
+			dynamic_items[i].status != cache_item_status::deferred) {
+			if (terminal_mode) {
+				/* Optional observers blocked by unexecuted prerequisites do not
+				 * cause those checks to run after a frozen decision. */
+				set_status(&dynamic_items[i], cache_item_status::skipped);
+				continue;
+			}
+
+			/* Unfinished work without an event cannot make progress. */
+			return RSPAMD_SYMCACHE_CHECKPOINT_ERROR;
+		}
+	}
+
+	return RSPAMD_SYMCACHE_CHECKPOINT_COMPLETE;
+}
+
+auto symcache_runtime::can_export_checkpoint() const -> bool
+{
+	if (!checkpoint_mode || terminal_mode || checkpoint_running || items_inflight != 0 || cur_stage != exec_stage::none) {
+		return false;
+	}
+
+	for (auto i = 0u; i < order->size(); i++) {
+		if (!is_item_done(dynamic_items[i].status) && dynamic_items[i].status != cache_item_status::deferred) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+auto symcache_runtime::can_import_checkpoint() const -> bool
+{
+	return !checkpoint_mode && !checkpoint_running && items_inflight == 0 && cur_stage == exec_stage::none;
 }
 
 auto symcache_runtime::process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool
@@ -705,11 +879,33 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 	/* Check has been started */
 	auto check = true;
 
-	if (!item->is_allowed(task, true) || !item->check_conditions(task)) {
-		check = false;
+	if (item->execution_parent) {
+		const auto *parent = get_dynamic_item(item->execution_parent->id);
+		check = parent && parent->status != cache_item_status::disabled &&
+				parent->status != cache_item_status::suppressed;
 	}
 
+	check = check && item->is_allowed(task, true) && check_item_conditions(task, item);
+
 	if (check) {
+		/* Replay at the producer's ordinary slot, after settings, conditions,
+		 * dependencies and score/passthrough checks. Do not profile a callback
+		 * that did not run, or expose its facts before this point. */
+		if (!checkpoint_mode) {
+			if (auto *store = checkpoint_store::get(task)) {
+				auto *saved = cur_item;
+				cur_item = dyn_item;
+				auto replayed = store->replay(task, *item);
+				cur_item = saved;
+
+				if (replayed) {
+					set_status(dyn_item, cache_item_status::finished);
+					process_item_rdeps(task, item);
+					return true;
+				}
+			}
+		}
+
 		set_status(dyn_item, cache_item_status::started);
 		msg_debug_cache_task("execute %s, %d; symbol type = %s, stage = %s, level = %d",
 							 item->symbol.data(), item->id, item_type_to_str(item->type),
@@ -738,7 +934,9 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		cur_item = dyn_item;
 		items_inflight++;
 		/* Callback now must finalize itself */
-
+		if (checkpoint_mode && item->replay_version != 0) {
+			checkpoint_store::get(task, true)->start(*item);
+		}
 
 		if (item->call(task, dyn_item)) {
 			cur_item = saved_cur_item;
@@ -764,6 +962,12 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		}
 		else {
 			/* We were not able to call item, so we assume it is not callable */
+			if (checkpoint_mode) {
+				if (auto *store = checkpoint_store::get(task)) {
+					store->discard(*item);
+				}
+			}
+
 			msg_debug_cache_task("cannot call %s, %d; symbol type = %s", item->symbol.data(),
 								 item->id, item_type_to_str(item->type));
 			cur_item = saved_cur_item;
@@ -839,7 +1043,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 				continue;
 			}
 
-			if (dep_dyn_item->status == cache_item_status::not_started &&
+			if (!checkpoint_mode && dep_dyn_item->status == cache_item_status::not_started &&
 				dep.item->get_stage() < cur_stage) {
 				/*
 				 * The dependency stage has passed (e.g. it was enabled too late),
@@ -859,6 +1063,11 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 			 * depend on a non-enabled one.
 			 */
 			const auto cascade = [&](cache_item_status dep_status) -> bool {
+				if (checkpoint_mode && dep_status == cache_item_status::deferred) {
+					set_status(dyn_item, cache_item_status::deferred);
+					return true;
+				}
+
 				if (dep_status == cache_item_status::disabled || dep_status == cache_item_status::skipped) {
 					if (dep.hard) {
 						set_status(dyn_item, dep_status);
@@ -1028,6 +1237,13 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 	}
 
 	msg_debug_cache_task("process finalize for item %s(%d)", item->symbol.c_str(), item->id);
+
+	if (checkpoint_mode) {
+		if (auto *store = checkpoint_store::get(task)) {
+			store->finish(*item);
+		}
+	}
+
 	set_status(dyn_item, cache_item_status::finished);
 	items_inflight--;
 	cur_item = nullptr;
@@ -1146,6 +1362,29 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 
 	// Avoid race condition with the runtime destruction and the delay timer
 	if (!order) {
+		return;
+	}
+
+	if (checkpoint_mode) {
+		/* Start input-ready dependents as soon as their prerequisite finishes
+		 * instead of waiting for every in-flight event to drain. The score
+		 * limit does not apply: a checkpoint never stops on a partial score. */
+		for (const auto &[id, rdep]: item->rdeps.values()) {
+			if (!rdep.item || slow_status == slow_status::enabled) {
+				continue;
+			}
+
+			auto *dyn_item = get_dynamic_item(rdep.item->id);
+
+			if (dyn_item && dyn_item->status == cache_item_status::not_started &&
+				may_start(task, rdep.item, dyn_item) &&
+				check_item_deps(task, *cache_ptr, rdep.item, dyn_item, false)) {
+				msg_debug_cache_task("start %d(%s) rdep of %s at the checkpoint",
+									 rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
+				process_symbol(task, *cache_ptr, rdep.item, dyn_item);
+			}
+		}
+
 		return;
 	}
 

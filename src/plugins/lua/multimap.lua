@@ -1423,7 +1423,7 @@ local function multimap_callback(task, rule)
       end
     end
 
-    if rule.action then
+    if rule.action and not task:is_checkpoint() then
       local message = rule.message
       if rule.message_func then
         message = rule.message_func(task, rule.symbol, opt)
@@ -2405,14 +2405,27 @@ if opts and type(opts) == 'table' then
       table.insert(augmentations, 'passthrough')
     end
 
+    local callback, inputs, dependencies, replay = require('plugins/multimap').wrap_callback(
+        rspamd_config, rule, gen_multimap_callback(rule))
     local id = rspamd_config:register_symbol({
       type = 'normal',
       name = rule['symbol'],
       augmentations = augmentations,
-      callback = gen_multimap_callback(rule),
+      callback = callback,
+      required_inputs = inputs,
+      replay_version = replay and 1 or nil,
+      replay_callback = replay,
     })
 
     rule.callback_id = id
+
+    if replay then
+      require('lua_multistage').register_connection_consumer(rspamd_config, rule.symbol)
+
+      for _, dependency in ipairs(dependencies) do
+        rspamd_config:register_dependency(rule.symbol, dependency)
+      end
+    end
 
     -- Symbols used by the selectors of the rule must be checked before it
     for _, selector_str in pairs({ rule.selector_str, rule.redis_selector_str }) do

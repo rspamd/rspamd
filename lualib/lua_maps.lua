@@ -287,6 +287,18 @@ local function query_external_map(map_config, upstreams, key, callback, task_or_
   end
 end
 
+local function map_result(result, callback, task_or_ctx)
+  if callback then
+    if result then
+      callback(true, result, 200, task_or_ctx)
+    else
+      callback(false, 'not found', 404, task_or_ctx)
+    end
+  else
+    return result
+  end
+end
+
 --[[[
 -- @function lua_maps.map_add_from_ucl(opt, mtype, description)
 -- Creates a map from static data
@@ -320,16 +332,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             query_external_map(t.__data, t.__upstreams, k, cb, task_or_ctx)
           end
         else
-          local result = t.__data:get_key(k)
-          if cb then
-            if result then
-              cb(true, result, 200, task_or_ctx)
-            else
-              cb(false, 'not found', 404, task_or_ctx)
-            end
-          else
-            return result
-          end
+          return map_result(t.__data:get_key(k), cb, task_or_ctx)
         end
       end
 
@@ -340,7 +343,14 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     end,
     on_load = function(t, cb)
       t.__data:on_load(cb)
-    end
+    end,
+    -- External lookups have no reusable data snapshot. Native maps expose a
+    -- digest of their loaded contents; immutable inline maps override this.
+    get_data_digest = function(t)
+      if not rawget(t, '__external') and type(rawget(t, '__data')) == 'userdata' then
+        return t.__data:get_data_digest()
+      end
+    end,
   }
   local ret_mt = {
     __index = function(t, k, key_callback, task_or_ctx)
@@ -427,7 +437,10 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       -- Empty table: return a static empty map without involving C map infrastructure,
       -- avoiding a spurious error log when an intentionally empty default is used.
       rspamd_logger.warnx(rspamd_config, 'empty static map definition for: %s', description)
-      ret.get_key = function(_, _) return nil end
+      ret.get_key = function(_, _, cb, task_or_ctx)
+        return map_result(nil, cb or callback, task_or_ctx)
+      end
+      ret.get_data_digest = function() return cache_key end
       ret.foreach = function(_, _) return true end
       ret.on_load = function(_, cb)
         rspamd_config:add_on_load(function(_, _, _) cb() end)
@@ -550,9 +563,10 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           if nelts > 0 then
             -- Plain Lua table that is used as a map
             ret.__data = data
-            ret.get_key = function(t, k)
+            ret.get_data_digest = function() return cache_key end
+            ret.get_key = function(t, k, cb, task_or_ctx)
               if k ~= '__data' then
-                return t.__data[k]
+                return map_result(t.__data[k], cb or callback, task_or_ctx)
               end
 
               return nil

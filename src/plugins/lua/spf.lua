@@ -84,6 +84,96 @@ else
   local_config = default_config
 end
 
+-- Received-based relay selection needs the message even if map loading fails.
+local replay_enabled = not local_config.external_relay
+
+local function spf_skip_reason(task, ip)
+  if ip then
+    if local_config.whitelist and local_config.whitelist:get_key(ip) then
+      return 'whitelist'
+    end
+
+    if lua_util.is_skip_local_or_authed(task, auth_and_local_conf, ip) then
+      return 'local_or_authed'
+    end
+  end
+
+  return false
+end
+
+local function spf_identity(task, ip)
+  local from = task:get_from({ 'smtp', 'orig' })
+
+  return {
+    ip = ip and tostring(ip) or false,
+    sender = from and from[1] and from[1].addr or false,
+    helo = task:get_helo() or false,
+    skip = spf_skip_reason(task, ip),
+    result = false,
+    record = false,
+  }
+end
+
+local function spf_count_check(task)
+  -- Preserve the legacy contribution even without an IP; whitelist and
+  -- local/authenticated skips contribute nothing. DKIM owns its own increment.
+  local mpool = task:get_mempool()
+  local dmarc_checks = mpool:get_variable('dmarc_checks', 'double') or 0
+  mpool:set_variable('dmarc_checks', dmarc_checks + 1)
+end
+
+local spf_results = {
+  pass = true,
+  fail = true,
+  softfail = true,
+  neutral = true,
+  temperror = true,
+  permerror = true,
+  none = true,
+}
+
+local function spf_replay_callback(task, facts)
+  local saved = facts.spf
+
+  if type(saved) ~= 'table' or
+      (saved.result ~= false and
+          (type(saved.result) ~= 'string' or not spf_results[saved.result])) or
+      (saved.record ~= false and
+          (type(saved.record) ~= 'string' or saved.record:find('%z'))) then
+    return false
+  end
+
+  local current = spf_identity(task, task:get_from_ip())
+
+  for _, key in ipairs({ 'ip', 'sender', 'helo', 'skip' }) do
+    if saved[key] ~= current[key] then
+      return false
+    end
+  end
+
+  if (saved.skip or not saved.ip) and (saved.result or saved.record) then
+    return false
+  end
+
+  -- Validation is complete. Restore only SPF's contribution, before the
+  -- scheduler releases DMARC, reputation and fuzzy dependencies.
+  local mpool = task:get_mempool()
+
+  if saved.result then
+    mpool:set_variable('spf_result', saved.result)
+  end
+
+  if saved.record then
+    mpool:set_variable('spf_record', saved.record)
+  end
+
+  if not saved.skip then
+    spf_count_check(task)
+  end
+
+  return true
+end
+
 local function spf_check_callback(task)
 
   local ip
@@ -110,6 +200,7 @@ local function spf_check_callback(task)
         break
       end
     end
+
     if not found then
       ip = task:get_from_ip()
       rspamd_logger.warnx(task,
@@ -120,11 +211,20 @@ local function spf_check_callback(task)
     ip = task:get_from_ip()
   end
 
+  local evidence = spf_identity(task, ip)
+
+  local function save_evidence()
+    if replay_enabled then
+      task:set_check_fact('spf', evidence)
+    end
+  end
+
   -- Publish the policy result so that other modules (e.g. fuzzy_check) can use
   -- it without matching our symbol names, which are configurable
   local function publish_result(res)
     if res then
       task:get_mempool():set_variable('spf_result', res)
+      evidence.result = res
     end
   end
 
@@ -178,6 +278,7 @@ local function spf_check_callback(task)
       if result then
         local sym, code = policy_decode(flag_or_policy)
         local opt = string.format('%s%s', code, error_or_addr.str or '???')
+
         if bit.band(flags, rspamd_spf.flags.cached) ~= 0 then
           opt = opt .. ':c'
           rspamd_logger.infox(task,
@@ -187,6 +288,7 @@ local function spf_check_callback(task)
               record:get_ttl() - math.floor(task:get_timeval(true) -
                   record:get_timestamp()));
         end
+
         task:insert_result(sym, 1.0, opt)
       else
         local sym = flag_to_symbol(flag_or_policy)
@@ -196,32 +298,32 @@ local function spf_check_callback(task)
       local sym = flag_to_symbol(flags)
       task:insert_result(sym, 1.0, err)
     end
+
+    evidence.record = task:get_mempool():get_variable('spf_record') or false
+    save_evidence()
   end
 
   if ip then
-    if local_config.whitelist and ip and local_config.whitelist:get_key(ip) then
+    if evidence.skip == 'whitelist' then
       rspamd_logger.infox(task, 'whitelisted SPF checks from %s',
           tostring(ip))
+      save_evidence()
       return
     end
 
-    if lua_util.is_skip_local_or_authed(task, auth_and_local_conf, ip) then
+    if evidence.skip == 'local_or_authed' then
       rspamd_logger.infox(task, 'skip SPF checks for local networks and authorized users')
+      save_evidence()
       return
     end
 
     rspamd_spf.resolve(task, spf_resolved_cb)
   else
     lua_util.debugm(N, task, "spf checks are not possible as no source IP address is defined")
+    save_evidence()
   end
 
-  -- FIXME: we actually need to set this variable when we really checked SPF
-  -- However, the old C module has set it all the times
-  -- Hence, we follow the same rule for now. It should be better designed at some day
-  local mpool = task:get_mempool()
-  local dmarc_checks = mpool:get_variable('dmarc_checks', 'double') or 0
-  dmarc_checks = dmarc_checks + 1
-  mpool:set_variable('dmarc_checks', dmarc_checks)
+  spf_count_check(task)
 end
 
 -- Register all symbols and init rspamd_spf library
@@ -233,11 +335,16 @@ local sym_id = rspamd_config:register_symbol {
   groups = { 'policies', 'spf' },
   score = 0.0,
   callback = spf_check_callback,
+  required_inputs = replay_enabled and { 'connection', 'helo', 'sender' } or { 'eom' },
+  replay_version = replay_enabled and 1 or nil,
+  replay_callback = replay_enabled and spf_replay_callback or nil,
   -- We can merely estimate timeout here, as it is possible to construct an SPF record that would cause
   -- many DNS requests. But we won't like to set the maximum value for that all the time, as
   -- the majority of requests will typically have 1-4 subrequests
   augmentations = { string.format("timeout=%f", rspamd_config:get_dns_timeout() * 4 or 0.0) },
 }
+
+require('lua_multistage').register_connection_consumer(rspamd_config, 'SPF_CHECK')
 
 if local_config.whitelist then
   local lua_maps = require "lua_maps"
@@ -261,5 +368,3 @@ for _, sym in pairs(local_config.symbols) do
     groups = { 'policies', 'spf' },
   }
 end
-
-

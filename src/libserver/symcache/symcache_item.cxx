@@ -147,6 +147,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				msg_err_cache("cannot add dependency on self: %s -> %s "
 							  "(resolved to %s)",
 							  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+				real_source->input_dependency_invalid = true;
 				dep.item = nullptr;
 				continue;
 			}
@@ -158,6 +159,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 							  dit->symbol.c_str(), item_type_to_str(dst_type),
 							  item_type_to_str(src_type));
 				/* Drop the edge, so it is removed below and never reaches the runtime */
+				real_source->input_dependency_invalid = true;
 				dep.item = nullptr;
 				continue;
 			}
@@ -183,6 +185,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 		else {
 			msg_err_cache("cannot find dependency named %s for symbol %s",
 						  dep.sym.c_str(), symbol.c_str());
+			input_dependency_invalid = true;
 		}
 	}
 
@@ -345,8 +348,13 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 		}
 	}
 
-	/* Settings checks */
-	if (task->settings_elt != nullptr) {
+	if (execution_parent) {
+		return execution_parent->is_allowed(task, exec_only);
+	}
+
+	/* DATA has its own policy selection. Named EOM settings still govern
+	 * execution and result insertion when the portable record is replayed. */
+	if (task->settings_elt != nullptr && !task->multistage) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {
 			/* Check if force-enabled by merged settings */
 			auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
@@ -668,14 +676,15 @@ auto cache_item::get_exec_type(const symcache &cache) const -> symcache_item_typ
 	return type;
 }
 
-item_condition::~item_condition()
+item_lua_callback::~item_lua_callback()
 {
 	if (cb != -1 && L != nullptr) {
 		luaL_unref(L, LUA_REGISTRYINDEX, cb);
 	}
 }
 
-auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) const -> bool
+auto item_lua_callback::check(std::string_view sym_name, struct rspamd_task *task,
+							  const ucl_object_t *facts) const -> bool
 {
 	if (cb != -1 && L != nullptr) {
 		auto ret = false;
@@ -686,12 +695,16 @@ auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cb);
 		rspamd_lua_task_push(L, task);
 
-		if (lua_pcall(L, 1, 1, err_idx) != 0) {
-			msg_info_task("call to condition for %s failed: %s",
-						  sym_name.data(), lua_tostring(L, -1));
+		if (facts) {
+			ucl_object_push_lua(L, facts, true);
+		}
+
+		if (lua_pcall(L, facts ? 2 : 1, 1, err_idx) != 0) {
+			msg_info_task("call to %s for %s failed: %s",
+						  facts ? "replay callback" : "condition", sym_name.data(), lua_tostring(L, -1));
 		}
 		else {
-			ret = lua_toboolean(L, -1);
+			ret = (!facts || lua_isboolean(L, -1)) && lua_toboolean(L, -1);
 		}
 
 		lua_settop(L, err_idx - 1);

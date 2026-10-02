@@ -114,6 +114,8 @@ rspamd_milter_session_reset(struct rspamd_milter_session *session,
 
 	if (how & RSPAMD_MILTER_RESET_COMMON) {
 		msg_debug_milter("cleanup common data on abort");
+		priv->data_pending = FALSE;
+		priv->data_seen = FALSE;
 
 		if (session->message) {
 			session->message->len = 0;
@@ -403,6 +405,15 @@ rspamd_milter_parse_esmtp_args(const unsigned char *pos,
 	return args;
 }
 
+static void
+rspamd_milter_notify(struct rspamd_milter_session *session, enum rspamd_milter_event event)
+{
+	struct rspamd_milter_private *priv = session->priv;
+	REF_RETAIN(session);
+	priv->fin_cb(priv->fd, session, event, priv->ud);
+	REF_RELEASE(session);
+}
+
 static gboolean
 rspamd_milter_process_command(struct rspamd_milter_session *session,
 							  struct rspamd_milter_private *priv)
@@ -418,10 +429,24 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 	cmdlen = priv->parser.datalen;
 	end = pos + cmdlen;
 
+	if ((priv->data_pending || priv->data_terminal) &&
+		priv->parser.cur_cmd != RSPAMD_MILTER_CMD_ABORT &&
+		priv->parser.cur_cmd != RSPAMD_MILTER_CMD_QUIT &&
+		priv->parser.cur_cmd != RSPAMD_MILTER_CMD_QUIT_NC &&
+		priv->parser.cur_cmd != RSPAMD_MILTER_CMD_MAIL &&
+		priv->parser.cur_cmd != RSPAMD_MILTER_CMD_MACRO) {
+		err = g_error_new(rspamd_milter_quark(), EINVAL, "command after pending or terminal DATA");
+		rspamd_milter_on_protocol_error(session, priv, err);
+		return FALSE;
+	}
+
 	switch (priv->parser.cur_cmd) {
 	case RSPAMD_MILTER_CMD_ABORT:
 		msg_debug_milter("got abort command");
+		rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_ABORT);
+		session->transaction++;
 		rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
+		priv->data_terminal = FALSE;
 		break;
 	case RSPAMD_MILTER_CMD_BODY:
 		if (!session->message) {
@@ -634,9 +659,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_BODYEOB:
 		msg_debug_milter("got eob command");
-		REF_RETAIN(session);
-		priv->fin_cb(priv->fd, session, priv->ud);
-		REF_RELEASE(session);
+		rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_EOM);
 		break;
 	case RSPAMD_MILTER_CMD_HELO:
 		msg_debug_milter("got helo command");
@@ -667,6 +690,9 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_CMD_QUIT_NC:
 		/* We need to reset session and start over */
 		msg_debug_milter("got quit_nc command");
+		rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_RESET);
+		session->transaction++;
+		priv->data_terminal = FALSE;
 		rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_QUIT_NC);
 		break;
 	case RSPAMD_MILTER_CMD_HEADER:
@@ -747,6 +773,14 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_MAIL:
 		msg_debug_milter("mail command");
+
+		if (session->from || priv->data_pending || priv->data_seen) {
+			rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_ABORT);
+			rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
+		}
+
+		session->transaction++;
+		priv->data_terminal = FALSE;
 
 		while (pos < end) {
 			struct rspamd_email_address *addr;
@@ -844,6 +878,10 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		actions |= RSPAMD_MILTER_ACTIONS_MASK;
 		protocol = RSPAMD_MILTER_FLAG_NOREPLY_MASK;
 
+		if (priv->data_checkpoint) {
+			protocol &= ~RSPAMD_MILTER_FLAG_NR_DATA;
+		}
+
 		/*
 		 * Ask the MTA to keep header values verbatim if it can: otherwise it
 		 * strips one space after the colon on the way in and adds one back on
@@ -875,9 +913,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 							 session->ref.refcount);
 
 			priv->state = RSPAMD_MILTER_WANNA_DIE;
-			REF_RETAIN(session);
-			priv->fin_cb(priv->fd, session, priv->ud);
-			REF_RELEASE(session);
+			rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_CLOSE);
 			return FALSE;
 		}
 		break;
@@ -1010,6 +1046,20 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		}
 		break;
 	case RSPAMD_MILTER_CMD_DATA:
+		if (priv->data_checkpoint) {
+			if (priv->data_seen || !session->from || !session->rcpts ||
+				(session->message && session->message->len)) {
+				err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid DATA checkpoint state");
+				rspamd_milter_on_protocol_error(session, priv, err);
+				return FALSE;
+			}
+
+			priv->data_seen = TRUE;
+			priv->data_pending = TRUE;
+			rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_DATA);
+			break;
+		}
+
 		if (!session->message) {
 			session->message = rspamd_fstring_sized_new(
 				RSPAMD_MILTER_MESSAGE_CHUNK);
@@ -1315,9 +1365,7 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 								 session->ref.refcount);
 
 				/* Session should be destroyed by fin_cb... */
-				REF_RETAIN(session);
-				priv->fin_cb(priv->fd, session, priv->ud);
-				REF_RELEASE(session);
+				rspamd_milter_notify(session, RSPAMD_MILTER_EVENT_CLOSE);
 
 				return FALSE;
 			}
@@ -1443,6 +1491,7 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 	priv->pool = rspamd_mempool_new_short_lived("milter");
 	priv->discard_on_reject = milter_ctx->discard_on_reject;
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
+	priv->data_checkpoint = milter_ctx->data_checkpoint;
 	priv->ev.timeout = timeout;
 
 	rspamd_ev_watcher_init(&priv->ev, priv->fd, EV_READ | EV_WRITE,
@@ -1465,6 +1514,39 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 	}
 
 	return rspamd_milter_handle_session(session, priv);
+}
+
+gboolean rspamd_milter_reply_data(struct rspamd_milter_session *session,
+								  uint64_t transaction, enum rspamd_milter_reply action, rspamd_fstring_t *reason)
+{
+	struct rspamd_milter_private *priv = session->priv;
+
+	if (!priv->data_pending || transaction != session->transaction ||
+		(action != RSPAMD_MILTER_CONTINUE && action != RSPAMD_MILTER_REJECT && action != RSPAMD_MILTER_TEMPFAIL)) {
+		return FALSE;
+	}
+
+	priv->data_pending = FALSE;
+
+	if (action != RSPAMD_MILTER_CONTINUE) {
+		rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
+		priv->data_terminal = TRUE;
+
+		if (reason) {
+			const char *code = action == RSPAMD_MILTER_REJECT ? RSPAMD_MILTER_RCODE_REJECT : RSPAMD_MILTER_RCODE_TEMPFAIL;
+			const char *enhanced = action == RSPAMD_MILTER_REJECT ? RSPAMD_MILTER_XCODE_REJECT : RSPAMD_MILTER_XCODE_TEMPFAIL;
+			rspamd_fstring_t *rcode = rspamd_fstring_new_init(code, strlen(code));
+			rspamd_fstring_t *xcode = rspamd_fstring_new_init(enhanced, strlen(enhanced));
+			gboolean ret = rspamd_milter_set_reply(session, rcode, xcode, reason);
+
+			rspamd_fstring_free(rcode);
+			rspamd_fstring_free(xcode);
+
+			return ret;
+		}
+	}
+
+	return rspamd_milter_send_action(session, action);
 }
 
 gboolean
@@ -1831,7 +1913,7 @@ rspamd_milter_macro_http(struct rspamd_milter_session *session,
 }
 
 struct rspamd_http_message *
-rspamd_milter_to_http(struct rspamd_milter_session *session)
+rspamd_milter_to_http_metadata(struct rspamd_milter_session *session)
 {
 	struct rspamd_http_message *msg;
 	unsigned int i;
@@ -1844,11 +1926,6 @@ rspamd_milter_to_http(struct rspamd_milter_session *session)
 
 	msg->url = rspamd_fstring_assign(msg->url, "/" MSG_CMD_CHECK_V2,
 									 sizeof("/" MSG_CMD_CHECK_V2) - 1);
-
-	if (session->message) {
-		rspamd_http_message_set_body_from_fstring_steal(msg, session->message);
-		session->message = NULL;
-	}
 
 	if (session->hostname && RSPAMD_FSTRING_LEN(session->hostname) > 0) {
 		if (!(session->hostname->len == sizeof("unknown") - 1 &&
@@ -1951,6 +2028,138 @@ rspamd_milter_to_http(struct rspamd_milter_session *session)
 				}
 			}
 		}
+	}
+
+	return msg;
+}
+
+static ucl_object_t *
+rspamd_milter_esmtp_args_to_ucl(GHashTable *args)
+{
+	ucl_object_t *out = ucl_object_typed_new(UCL_OBJECT);
+	GHashTableIter iter;
+	gpointer key, value;
+
+	if (args) {
+		g_hash_table_iter_init(&iter, args);
+
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			rspamd_ftok_t *name = key;
+			rspamd_ftok_t *arg = value;
+
+			ucl_object_insert_key(out, ucl_object_fromlstring(arg->begin, arg->len),
+								  name->begin, name->len, true);
+		}
+	}
+
+	return out;
+}
+
+ucl_object_t *
+rspamd_milter_to_ucl_metadata(struct rspamd_milter_session *session, const char *settings_id)
+{
+	static const struct {
+		const char *header;
+		const char *key;
+		const char *parent;
+	} fields[] = {
+		{"From", "from", NULL},
+		{"IP", "ip", NULL},
+		{"Helo", "helo", NULL},
+		{"Hostname", "hostname", NULL},
+		{"User", "user", NULL},
+		{"Queue-Id", "queue_id", NULL},
+		{"TLS-Cipher", "cipher", "tls"},
+		{"MTA-Name", "name", "mta"},
+	};
+	struct rspamd_http_message *http = rspamd_milter_to_http_metadata(session);
+	ucl_object_t *out = ucl_object_typed_new(UCL_OBJECT);
+	ucl_object_t *headers = ucl_object_typed_new(UCL_OBJECT);
+	ucl_object_t *recipients = ucl_object_typed_new(UCL_ARRAY);
+	ucl_object_t *rcpt_args = ucl_object_typed_new(UCL_ARRAY);
+	ucl_object_t *flags = ucl_object_typed_new(UCL_ARRAY);
+
+	/* Preserve repeated headers and their order, including MTA macros. */
+	for (khiter_t i = kh_begin(http->headers); i != kh_end(http->headers); i++) {
+		if (!kh_exist(http->headers, i)) {
+			continue;
+		}
+
+		struct rspamd_http_header *header = kh_val(http->headers, i);
+		struct rspamd_http_header *cur;
+		ucl_object_t *values = ucl_object_typed_new(UCL_ARRAY);
+
+		DL_FOREACH(header, cur)
+		{
+			ucl_array_append(values, ucl_object_fromlstring(cur->value.begin, cur->value.len));
+		}
+
+		ucl_object_insert_key(headers, values, header->name.begin, header->name.len, true);
+	}
+
+	ucl_object_insert_key(out, headers, "headers", 0, true);
+
+	for (unsigned int i = 0; i < G_N_ELEMENTS(fields); i++) {
+		const rspamd_ftok_t *value = rspamd_http_message_find_header(http, fields[i].header);
+		ucl_object_t *parent = out;
+
+		if (!value) {
+			continue;
+		}
+
+		if (fields[i].parent) {
+			parent = ucl_object_typed_new(UCL_OBJECT);
+			ucl_object_insert_key(out, parent, fields[i].parent, 0, true);
+		}
+
+		ucl_object_insert_key(parent, ucl_object_fromlstring(value->begin, value->len),
+							  fields[i].key, 0, true);
+	}
+
+	rspamd_http_message_unref(http);
+
+	if (settings_id) {
+		ucl_object_insert_key(out, ucl_object_fromstring(settings_id), "settings_id", 0, true);
+	}
+
+	if (session->rcpts) {
+		for (unsigned int i = 0; i < session->rcpts->len; i++) {
+			struct rspamd_email_address *rcpt = g_ptr_array_index(session->rcpts, i);
+
+			ucl_array_append(recipients, ucl_object_fromlstring(rcpt->raw, rcpt->raw_len));
+		}
+	}
+
+	ucl_object_insert_key(out, recipients, "rcpt", 0, true);
+
+	ucl_object_insert_key(out, rspamd_milter_esmtp_args_to_ucl(session->mail_esmtp_args),
+						  "mail_esmtp_args", 0, true);
+
+	if (session->rcpt_esmtp_args) {
+		for (unsigned int i = 0; i < session->rcpt_esmtp_args->len; i++) {
+			GHashTable *args = g_ptr_array_index(session->rcpt_esmtp_args, i);
+
+			ucl_array_append(rcpt_args, rspamd_milter_esmtp_args_to_ucl(args));
+		}
+	}
+
+	ucl_object_insert_key(out, rcpt_args, "rcpt_esmtp_args", 0, true);
+
+	ucl_array_append(flags, ucl_object_fromstring("milter"));
+	ucl_array_append(flags, ucl_object_fromstring("body_block"));
+	ucl_object_insert_key(out, flags, "flags", 0, true);
+
+	return out;
+}
+
+struct rspamd_http_message *
+rspamd_milter_to_http(struct rspamd_milter_session *session)
+{
+	struct rspamd_http_message *msg = rspamd_milter_to_http_metadata(session);
+
+	if (session->message) {
+		rspamd_http_message_set_body_from_fstring_steal(msg, session->message);
+		session->message = NULL;
 	}
 
 	return msg;
@@ -2131,42 +2340,42 @@ rspamd_milter_process_milter_block(struct rspamd_milter_session *session,
 	GString *hname, *hvalue;
 
 	if (obj && ucl_object_type(obj) == UCL_OBJECT) {
-	elt = ucl_object_lookup(obj, "remove_headers");
-	/*
+		elt = ucl_object_lookup(obj, "remove_headers");
+		/*
 	 * remove_headers:  {"name": 1, ... }
 	 * -or-
 	 * remove_headers:  {"name": [1, 2, ...], ... }
 	 * where number is the header's position starting from '1'
 	 */
-	if (elt && ucl_object_type(elt) == UCL_OBJECT) {
-		it = NULL;
+		if (elt && ucl_object_type(elt) == UCL_OBJECT) {
+			it = NULL;
 
-		while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
-			if (ucl_object_type(cur) == UCL_INT) {
-				rspamd_milter_remove_header_safe(session,
-												 ucl_object_key(cur),
-												 ucl_object_toint(cur));
-			}
-			else if (ucl_object_type(cur) == UCL_ARRAY) {
-				/* Multiple positions for the same header name */
-				ucl_object_iter_t *array_it;
-				const ucl_object_t *array_elt;
-
-				array_it = ucl_object_iterate_new(cur);
-
-				while ((array_elt = ucl_object_iterate_safe(array_it,
-															true)) != NULL) {
-					if (ucl_object_type(array_elt) == UCL_INT) {
-						rspamd_milter_remove_header_safe(session,
-														 ucl_object_key(cur),
-														 ucl_object_toint(array_elt));
-					}
+			while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+				if (ucl_object_type(cur) == UCL_INT) {
+					rspamd_milter_remove_header_safe(session,
+													 ucl_object_key(cur),
+													 ucl_object_toint(cur));
 				}
+				else if (ucl_object_type(cur) == UCL_ARRAY) {
+					/* Multiple positions for the same header name */
+					ucl_object_iter_t *array_it;
+					const ucl_object_t *array_elt;
 
-				ucl_object_iterate_free(array_it);
+					array_it = ucl_object_iterate_new(cur);
+
+					while ((array_elt = ucl_object_iterate_safe(array_it,
+																true)) != NULL) {
+						if (ucl_object_type(array_elt) == UCL_INT) {
+							rspamd_milter_remove_header_safe(session,
+															 ucl_object_key(cur),
+															 ucl_object_toint(array_elt));
+						}
+					}
+
+					ucl_object_iterate_free(array_it);
+				}
 			}
 		}
-	}
 
 		elt = ucl_object_lookup(obj, "add_headers");
 		/*

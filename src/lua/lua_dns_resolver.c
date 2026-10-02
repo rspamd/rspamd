@@ -15,6 +15,7 @@
  */
 #include "lua_common.h"
 #include "lua_thread_pool.h"
+#include "libserver/symcache/symcache_checkpoint.h"
 #include "utlist.h"
 
 
@@ -177,6 +178,10 @@ lua_dns_resolver_callback(struct rdns_reply *reply, gpointer arg)
 	}
 
 	if (lua_pcall(L, 7, 0, err_idx) != 0) {
+		if (cd->task) {
+			rspamd_symcache_checkpoint_invalidate(cd->task);
+		}
+
 		msg_err_pool_check("call to dns callback failed: %s",
 						   lua_tostring(L, -1));
 	}

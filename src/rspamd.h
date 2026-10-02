@@ -31,6 +31,7 @@
 #include "libserver/async_session.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
+#include "libserver/multistage.h"
 
 #include <openssl/ssl.h>
 
@@ -299,6 +300,7 @@ struct RSPAMD_ALIGNED(64) rspamd_stat {
 	unsigned int control_connections_count;       /**< connections count to control interface			*/
 	unsigned int messages_learned;                /**< messages learned								*/
 	struct rspamd_avg_time avg_time;              /**< average time stats								*/
+	struct rspamd_multistage_stat multistage;
 };
 
 /**
