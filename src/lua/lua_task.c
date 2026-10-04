@@ -5429,9 +5429,10 @@ lua_task_resolve_shadow_result(lua_State *L,
 	return TRUE;
 }
 
-/* Push a name+info pair into the map table currently at top of stack. */
+/* Push a name+info pair into the map table at absolute index map_idx. */
 static inline void
 lua_task_symbol_push_into_map(lua_State *L,
+							  int map_idx,
 							  struct rspamd_task *task,
 							  const char *name,
 							  struct rspamd_symbol_result *s,
@@ -5439,7 +5440,7 @@ lua_task_symbol_push_into_map(lua_State *L,
 							  unsigned int *count)
 {
 	if (rspamd_lua_push_symbol_result(L, task, name, s, sres, FALSE, FALSE)) {
-		lua_setfield(L, -2, name);
+		lua_setfield(L, map_idx, name);
 		(*count)++;
 	}
 }
@@ -5464,12 +5465,13 @@ lua_task_get_symbol(lua_State *L)
 		}
 
 		lua_createtable(L, 0, 4);
+		int map_idx = lua_gettop(L);
 
 		lua_pushnil(L);
 		while (lua_next(L, 2) != 0) {
 			if (lua_type(L, -1) == LUA_TSTRING) {
 				const char *name = lua_tostring(L, -1);
-				lua_task_symbol_push_into_map(L, task, name, NULL, sres, &count);
+				lua_task_symbol_push_into_map(L, map_idx, task, name, NULL, sres, &count);
 			}
 			lua_pop(L, 1);
 		}
@@ -5537,11 +5539,12 @@ lua_task_get_symbol_regexp(lua_State *L)
 	}
 
 	lua_createtable(L, 0, 4);
+	int map_idx = lua_gettop(L);
 
 	kh_foreach_value(sres->symbols, s, {
 		if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED) && s->name) {
 			if (rspamd_regexp_match(re->re, s->name, strlen(s->name), FALSE)) {
-				lua_task_symbol_push_into_map(L, task, s->name, s, sres, &count);
+				lua_task_symbol_push_into_map(L, map_idx, task, s->name, s, sres, &count);
 			}
 		}
 	});

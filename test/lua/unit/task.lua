@@ -512,4 +512,25 @@ Thank you,
 
     task:destroy()
   end)
+
+  test("get_symbol table form returns a map of present symbols", function()
+    local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
+    assert_true(res, "failed to load message")
+    task:insert_result(true, "GET_SYMBOL_TEST_A", 1.0, "x")
+    task:insert_result(true, "GET_SYMBOL_TEST_B", 1.0, "y")
+
+    local syms = task:get_symbol({ "NOPE_A", "GET_SYMBOL_TEST_A", "NOPE_B", "GET_SYMBOL_TEST_B" })
+    assert_not_nil(syms, "table form")
+    assert_not_nil(syms.GET_SYMBOL_TEST_A, "table form A")
+    assert_not_nil(syms.GET_SYMBOL_TEST_B)
+    assert_nil(syms.NOPE_A)
+    assert_nil(task:get_symbol({ "NOPE_A", "NOPE_B" }))
+
+    local re_syms = task:get_symbol_regexp(require("rspamd_regexp").create_cached("/^GET_SYMBOL_TEST_.*$/"))
+    assert_not_nil(re_syms, "regexp form")
+    assert_not_nil(re_syms.GET_SYMBOL_TEST_A)
+    assert_not_nil(re_syms.GET_SYMBOL_TEST_B)
+
+    task:destroy()
+  end)
 end)
