@@ -1828,12 +1828,17 @@ lua_util_lower_utf8(lua_State *L)
 	t = lua_check_text_or_string(L, 1);
 
 	if (t) {
-		dst = g_malloc(t->len);
+		/*
+		 * U+023A and U+023E grow from 2 to 3 bytes when lowercased, and
+		 * U8_APPEND does not check the capacity for ASCII characters
+		 */
+		int32_t dst_len = t->len + t->len / 2;
+		dst = g_malloc(dst_len);
 
 		while (i < t->len && err == 0) {
 			U8_NEXT((uint8_t *) t->start, i, t->len, uc);
 			uc = u_tolower(uc);
-			U8_APPEND(dst, j, t->len, uc, err);
+			U8_APPEND(dst, j, dst_len, uc, err);
 		}
 
 		if (lua_isstring(L, 1)) {
