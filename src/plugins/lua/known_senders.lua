@@ -282,7 +282,7 @@ local function verify_local_replies_set(task)
   end
 
   local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
-      settings.sender_prefix)
+      'reply_sender')
   local replies_sender_key = make_key_replies(replies_sender_string:lower(), 8)
 
   local function redis_zscore_script_cb(err, data)
@@ -337,7 +337,7 @@ local function check_known_incoming_mail_callback(task)
   -- making sender key
   lua_util.debugm(N, task, 'Sender: %s', replies_sender)
   local replies_sender_string = lua_util.maybe_obfuscate_string(tostring(replies_sender), settings,
-      settings.sender_prefix)
+      'reply_sender')
   local replies_sender_key = make_key_replies(replies_sender_string:lower(), 8)
 
   lua_util.debugm(N, task, 'Sender key: %s', replies_sender_key)
