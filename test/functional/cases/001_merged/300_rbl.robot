@@ -87,6 +87,42 @@ SELECTORS COMBINED
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_from
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
 
+# no_ip rules must not look up IP literals from textual sources; the same
+# literals are listed on test9.uribl and test10.uribl, so the RBL_SELECTOR_SINGLE
+# control proves they would otherwise hit
+NO_IP HELO CONTROL
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=4.3.2.1
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_SINGLE]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_SINGLE  4.3.2.1:selector
+
+NO_IP HELO DOMAIN
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=example.org
+  ...  Settings={symbols_enabled = [RBL_NOIP_HELO, RBL_NOIP_SELECTOR]}
+  Expect Symbol With Exact Options  RBL_NOIP_HELO  example.org:helo
+  Expect Symbol With Exact Options  RBL_NOIP_SELECTOR  example.org:selector
+
+NO_IP HELO BARE LITERAL
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=4.3.2.1
+  ...  Settings={symbols_enabled = [RBL_NOIP_HELO, RBL_NOIP_SELECTOR]}
+  Do Not Expect Symbol  RBL_NOIP_HELO
+  Do Not Expect Symbol  RBL_NOIP_SELECTOR
+
+NO_IP HELO BRACKETED LITERAL
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=[4.3.2.1]
+  ...  Settings={symbols_enabled = [RBL_NOIP_HELO, RBL_NOIP_SELECTOR]}
+  Do Not Expect Symbol  RBL_NOIP_HELO
+  Do Not Expect Symbol  RBL_NOIP_SELECTOR
+
+NO_IP UNFLATTENED SELECTOR DOMAIN
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=example.org
+  ...  Settings={symbols_enabled = [RBL_NOIP_HELO_TEXT, RBL_NOIP_SELECTOR_TEXT]}
+  Expect Symbol With Exact Options  RBL_NOIP_SELECTOR_TEXT  example.org:selector
+
+NO_IP UNFLATTENED SELECTOR LITERAL
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=4.3.2.1
+  ...  Settings={symbols_enabled = [RBL_NOIP_HELO_TEXT, RBL_NOIP_SELECTOR_TEXT]}
+  Do Not Expect Symbol  RBL_NOIP_SELECTOR_TEXT
+
 NUMERIC URLS
   Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
   ...  Settings={symbols_enabled = [URIBL_NUMERIC]}
