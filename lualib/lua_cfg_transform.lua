@@ -385,9 +385,9 @@ return function(cfg)
 
       for k, v in cfg:at('actions'):pairs() do
         if not actions_set[k] then
-          -- Check if this is a custom action with flags (e.g., no_threshold)
+          -- Custom action defined as an object with a score or flags (e.g., no_threshold)
           local is_custom_action = false
-          if v and v:type() == 'object' and v:at('flags') then
+          if v and v:type() == 'object' and (v:at('flags') or v:at('score') or v:at('threshold')) then
             is_custom_action = true
           end
           if not is_custom_action then
