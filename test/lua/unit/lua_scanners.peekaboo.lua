@@ -328,7 +328,7 @@ context("lua_scanners peekaboo", function()
         with_responses({ { 200, '{"result":"good","reason":"whitelist match"}' } }, function()
           peekaboo.report(task, nil, 'test-digest', rule, part)
         end)
-        assert_equal(cached.value, symbol .. '\v' .. details .. '\t1\ttrusted.pdf')
+        assert_equal(cached.value, symbol .. '\v' .. details .. '\t' .. tostring(1.0) .. '\ttrusted.pdf')
         assert_equal(task:get_symbol(symbol)[1].score, metric_score)
         assert_false(task:has_pre_result())
         local fresh_entry = task:cache_get('av_result_cache')['test-digest']
