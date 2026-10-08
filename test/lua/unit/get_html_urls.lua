@@ -689,4 +689,21 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test('Visible part is terminated after zero width characters are stripped', function()
+    -- U+FEFF and U+200B inside the displayed text shrink it on normalisation
+    for _, zw in ipairs({ '\239\187\191', '\226\128\139' }) do
+      local res, task = rspamd_task.load_from_string(
+          'Content-Type: text/html; charset=utf-8\r\n\r\n' ..
+          '<a href="http://evil.example.net/r">https://pay' .. zw .. 'pal.com</a>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local visible
+      for _, u in ipairs(task:get_urls() or {}) do
+        if u:get_host() == 'evil.example.net' then visible = u:get_visible() end
+      end
+      task:destroy()
+      assert_equal('https://paypal.com', visible)
+    end
+  end)
+
 end)

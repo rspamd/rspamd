@@ -405,6 +405,8 @@ void html_check_displayed_url(rspamd_mempool_t *pool,
 	}
 
 	rspamd_normalise_unicode_inplace(url->ext->visible_part, &dlen);
+	/* Trimming and normalisation can only shrink the visible part */
+	url->ext->visible_part[dlen] = '\0';
 }
 
 auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State *L)
