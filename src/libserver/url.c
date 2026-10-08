@@ -25,6 +25,7 @@
 #include "contrib/http-parser/http_parser.h"
 #include "lua/lua_common.h"
 #include <unicode/utf8.h>
+#include <unicode/utf16.h>
 #include <unicode/uchar.h>
 #include <unicode/usprep.h>
 #include <unicode/ucnv.h>
@@ -600,7 +601,75 @@ is_domain_start(int p)
 	return FALSE;
 }
 
+/*
+ * Invisible code points (zero width spaces, word joiner, variation selectors,
+ * tags...) that obfuscate a hostname: they are stripped from the host before
+ * nameprep and the url is flagged if they are inside the hostname. Bidi
+ * controls are excluded, as they are legitimate URL delimiters in RTL text
+ * and IDNA rejects them anyway.
+ */
+static inline bool
+is_invisible_host_char(UChar32 uc)
+{
+	/* U+1806 is mapped to nothing by nameprep, like the soft hyphen */
+	return uc == 0x1806 ||
+		   (u_hasBinaryProperty(uc, UCHAR_DEFAULT_IGNORABLE_CODE_POINT) &&
+			!u_hasBinaryProperty(uc, UCHAR_BIDI_CONTROL));
+}
+
+/*
+ * A variation selector after a non-ASCII character (emoji presentation,
+ * Mongolian or ideographic variants) is a legitimate part of the hostname
+ */
+static inline bool
+is_suspicious_invisible_host_char(UChar32 uc, bool after_non_ascii)
+{
+	return !after_non_ascii || !u_hasBinaryProperty(uc, UCHAR_VARIATION_SELECTOR);
+}
+
+/*
+ * Checks whether a hostname goes on after a run of invisible characters:
+ * otherwise they are an artefact after the url (e.g. a preheader filler)
+ */
+static bool
+is_host_continuation(const char *p, const char *last)
+{
+	if (p >= last) {
+		return false;
+	}
+
+	if (!(*p & 0x80)) {
+		/* A final dot is kept as in a plain hostname, but it is not flagged */
+		if (g_ascii_isalnum(*p) || *p == '.' || *p == '%' ||
+			*p == '/' || *p == '\\' || *p == '?' || *p == '#') {
+			return true;
+		}
+
+		if (p + 1 >= last) {
+			return false;
+		}
+
+		if (*p == ':') {
+			/* Port */
+			return g_ascii_isdigit(p[1]);
+		}
+
+		/* Not a dash */
+		return (*p == '-' || *p == '_') &&
+			   (g_ascii_isalnum(p[1]) || (p[1] & 0x80));
+	}
+
+	int32_t i = 0;
+	UChar32 uc;
+
+	U8_NEXT((const unsigned char *) p, i, last - p, uc);
+
+	return uc >= 0 && u_isalnum(uc);
+}
+
 static const unsigned int max_domain_length = 253;
+/* Raw hostname limit, including invisible characters */
+static const unsigned int max_domain_bytes = 253 * 4;
 static const unsigned int max_dns_label = 63;
 static const unsigned int max_email_user = 64;
 
@@ -951,7 +1020,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			   *password_start = NULL, *user_start = NULL;
 	char t = 0;
 	UChar32 uc;
-	glong pt;
+	glong pt, invisible_len = 0;
 	int ret = 1;
 	gboolean user_seen = FALSE;
 	gboolean user_oversized = FALSE;
@@ -1262,13 +1331,15 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 		case parse_domain_start:
 			if (is_domain_start(t)) {
 				st = parse_domain;
+				invisible_len = 0;
 			}
 			else {
 				goto out;
 			}
 			break;
 		case parse_domain:
-			if (p - c > max_domain_length) {
+			if (p - c - invisible_len > max_domain_length ||
+				p - c > max_domain_bytes) {
 				/* Too large domain */
 				goto out;
 			}
@@ -1330,8 +1401,40 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 						if (!u_isalnum(uc)) {
 							/* Bad symbol */
-							if (IS_ZERO_WIDTH_SPACE(uc)) {
-								(*flags) |= RSPAMD_URL_FLAG_ZW_SPACES;
+							if (is_invisible_host_char(uc)) {
+								/*
+								 * Skip the whole run of invisible characters, the url
+								 * is flagged when they are stripped from the host
+								 */
+								const char *run_end = p + i;
+
+								while (run_end < last && run_end - c <= max_domain_bytes) {
+									unsigned int ni = 0;
+									UChar32 nc;
+
+									U8_NEXT(((const unsigned char *) run_end), ni, last - run_end, nc);
+
+									if (nc < 0 || !is_invisible_host_char(nc)) {
+										break;
+									}
+
+									run_end += ni;
+								}
+
+								if (run_end - c > max_domain_bytes) {
+									/* Too large domain */
+									p = run_end;
+									goto out;
+								}
+
+								if ((parse_flags & RSPAMD_URL_PARSE_CHECK) &&
+									!is_host_continuation(run_end, last)) {
+									/* Invisible characters after the url */
+									goto set;
+								}
+
+								invisible_len += run_end - p;
+								i = run_end - p;
 							}
 							else {
 								if (!u_isgraph(uc)) {
@@ -2429,9 +2532,50 @@ rspamd_url_parse(struct rspamd_url *uri,
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
-	norm_utf16 = rspamd_mempool_alloc(pool, utf16_len * sizeof(UChar));
+	/*
+	 * Strip invisible characters: nameprep maps only some of them to nothing
+	 * and rejects the rest (e.g. U+2061 or tags), losing the whole URL.
+	 * The output capacity is kept, as nameprep can also expand a host.
+	 */
+	int32_t norm_capacity = utf16_len, src_pos = 0, dst_pos = 0;
+	UChar32 prev_uc = 0;
+	bool pending_invisible = false;
+
+	while (src_pos < utf16_len) {
+		int32_t cur_pos = src_pos;
+		UChar32 uc;
+
+		U16_NEXT(utf16_hostname, src_pos, utf16_len, uc);
+
+		if (uc >= 0x80 && is_invisible_host_char(uc)) {
+			if (is_suspicious_invisible_host_char(uc, prev_uc >= 0x80)) {
+				pending_invisible = true;
+			}
+			continue;
+		}
+
+		if (pending_invisible && uc != '.') {
+			/* Invisible characters inside the hostname, not before its final dot */
+			uri->flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+			pending_invisible = false;
+		}
+
+		prev_uc = uc;
+
+		while (cur_pos < src_pos) {
+			utf16_hostname[dst_pos++] = utf16_hostname[cur_pos++];
+		}
+	}
+
+	utf16_len = dst_pos;
+
+	if (utf16_len == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
+
+	norm_utf16 = rspamd_mempool_alloc(pool, norm_capacity * sizeof(UChar));
 	norm_utf16_len = usprep_prepare(nameprep, utf16_hostname, utf16_len,
-									norm_utf16, utf16_len, USPREP_DEFAULT, &parse_error, &uc_err);
+									norm_utf16, norm_capacity, USPREP_DEFAULT, &parse_error, &uc_err);
 
 	if (!U_SUCCESS(uc_err)) {
 

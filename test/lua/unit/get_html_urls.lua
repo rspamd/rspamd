@@ -689,6 +689,41 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test('Long invisible runs in href hosts do not stall the parser', function()
+    for _, lead in ipairs({ "a", "ab", "abc", "abcd" }) do
+      for _, ch in ipairs({ '\226\129\160', '\243\160\129\129' }) do
+        local res, task = rspamd_task.load_from_string(
+            'Content-Type: text/html; charset=utf-8\r\n\r\n' ..
+            '<a href="http://' .. lead .. string.rep(ch, 340) .. 'b.com/p">x</a>' ..
+            '<a href="http://e' .. string.rep(ch, 80) .. 'vil.com/">y</a>', rspamd_config)
+        assert_true(res)
+        task:process_message()
+        local hosts = {}
+        for _, u in ipairs(task:get_urls() or {}) do
+          hosts[u:get_host()] = u:get_flags().zw_spaces or false
+        end
+        task:destroy()
+        assert_true(hosts['evil.com'], 'padded host must be found and flagged')
+      end
+    end
+  end)
+
+  test('Displayed and text urls ending with a zero width character and a dot are merged', function()
+    for _, zw in ipairs({ '&#8203;', '&zwnj;', '&#8288;' }) do
+      local res, task = rspamd_task.load_from_string(
+          'Content-Type: text/html; charset=utf-8\r\n\r\n' ..
+          '<p>Go to <a href="http://other.org/">http://example.com' .. zw .. '.</a> Next</p>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local nexample = 0
+      for _, u in ipairs(task:get_urls(true) or {}) do
+        if u:get_host() == 'example.com' then nexample = nexample + 1 end
+      end
+      task:destroy()
+      assert_equal(1, nexample, zw)
+    end
+  end)
+
   test('Visible part is terminated after zero width characters are stripped', function()
     -- U+FEFF and U+200B inside the displayed text shrink it on normalisation
     for _, zw in ipairs({ '\239\187\191', '\226\128\139' }) do

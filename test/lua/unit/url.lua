@@ -302,6 +302,100 @@ context("URL check functions", function()
     assert_nil(u:get_public_suffix())
   end)
 
+  test("Invisible characters in host are flagged and stripped", function()
+    local obfuscated_cases = {
+      -- U+2060 WORD JOINER
+      "http://exa\226\129\160mple.com/path text",
+      "exa\226\129\160mple.com text",
+      -- U+FE0F VARIATION SELECTOR-16
+      "http://exa\239\184\143mple.com/ text",
+      -- U+E0041 TAG LATIN CAPITAL LETTER A (rejected by nameprep)
+      "http://exa\243\160\129\129mple.com/ text",
+      -- U+2061 FUNCTION APPLICATION, percent encoded (rejected by nameprep)
+      "http://exa%E2%81%A1mple.com/ text",
+    }
+
+    for _, c in ipairs(obfuscated_cases) do
+      local u = url.create(pool, c)
+      assert_not_nil(u, "cannot parse " .. c)
+      assert_equal("example.com", u:get_host(), c)
+      assert_true(u:get_flags().zw_spaces, "no zw_spaces flag for " .. c)
+    end
+
+    -- Invisible characters do not count against the hostname length limit
+    local u = url.create(pool, "http://e" .. string.rep("\226\129\160", 90) .. "vil.com/ text")
+    assert_not_nil(u, "cannot parse padded url")
+    assert_equal("evil.com", u:get_host())
+    assert_true(u:get_flags().zw_spaces)
+
+    -- Stripped characters leave nameprep its room to expand the host
+    u = url.create(pool, "http://stra\239\184\143\195\159e.com/ text")
+    assert_not_nil(u, "cannot parse url with sharp s")
+    assert_equal("strasse.com", u:get_host())
+
+    -- A host made of invisible characters only is not a host
+    assert_nil(url.create(pool, "http://%E2%81%A0/path text"))
+
+    -- Invisible characters after the hostname end the url and are not flagged
+    local clean_cases = {
+      "http://example.com\226\129\160 text",
+      "http://example.com" .. string.rep("\226\129\160", 90) .. " text",
+      -- Preheader filler: CGJ, ZWNJ, NBSP
+      "https://example.com\205\143\226\128\140\194\160\205\143\226\128\140\194\160 text",
+      -- Bidi controls terminate a URL in RTL text
+      "\215\169\215\156\215\149\215\157 http://example.com\226\128\143 text",
+      -- Punctuation after the url
+      "Visit https://example.com\226\129\160. Next",
+      "Visit https://example.com\226\129\160: great",
+      "Visit https://example.com\226\129\160\226\128\148 next",
+      "Visit https://example.com\226\129\160- next",
+    }
+
+    for _, c in ipairs(clean_cases) do
+      u = url.create(pool, c)
+      assert_not_nil(u, "cannot parse " .. c)
+      assert_equal("example.com", u:get_host(), c)
+      assert_nil(u:get_flags().zw_spaces, "unexpected zw_spaces flag for " .. c)
+    end
+
+    -- Invisible characters between the hostname and the path keep the url whole
+    u = url.create(pool, "https://example.com\226\129\160/login now")
+    assert_not_nil(u, "cannot parse url with invisible character before path")
+    assert_equal("example.com", u:get_host())
+    assert_equal("login", u:get_path())
+    assert_nil(u:get_flags().zw_spaces)
+
+    u = url.create(pool, "https://example.com\226\129\160:8080/ now")
+    assert_not_nil(u, "cannot parse url with invisible character before port")
+    assert_equal("example.com", u:get_host())
+    assert_equal(8080, u:get_port())
+
+    -- Before a dot inside the hostname
+    u = url.create(pool, "http://example\226\129\160.com/ text")
+    assert_not_nil(u, "cannot parse url with invisible character before a dot")
+    assert_equal("example.com", u:get_host())
+    assert_true(u:get_flags().zw_spaces)
+
+    -- Runs longer than the raw hostname limit are rejected, whatever their alignment
+    for _, lead in ipairs({ "a", "ab", "abc", "abcd" }) do
+      for _, ch in ipairs({ "\226\129\160", "\243\160\129\129" }) do
+        assert_nil(url.create(pool, "http://" .. lead .. string.rep(ch, 340) .. "b.com/p text"))
+      end
+    end
+
+    -- Emoji presentation selector is a legitimate part of an emoji host
+    u = url.create(pool, "http://ex\226\152\186\239\184\143ample.com/ text")
+    assert_not_nil(u, "cannot parse emoji url")
+    assert_equal("ex\226\152\186ample.com", u:get_host())
+    assert_nil(u:get_flags().zw_spaces)
+
+    -- U+FEFF ZERO WIDTH NO-BREAK SPACE outside of the host
+    u = url.create(pool, "http://example.com/pa\239\187\191th text")
+    assert_not_nil(u, "cannot parse url with BOM in path")
+    assert_equal("path", u:get_path())
+    assert_true(u:get_flags().zw_spaces, "no zw_spaces flag for BOM in path")
+  end)
+
   test("URL regexp issue", function()
     local rspamd_regexp = require "rspamd_regexp"
     local u = url.create(pool,
