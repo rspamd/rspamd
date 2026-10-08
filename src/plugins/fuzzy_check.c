@@ -2304,6 +2304,10 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->html_weight = ucl_object_todouble(value);
 	}
 
+	if ((value = ucl_object_lookup(obj, "html_ignore_domains")) != NULL) {
+		rule->html_ignore_domains = ucl_object_toboolean(value);
+	}
+
 	if ((value = ucl_object_lookup(obj, "checks")) != NULL) {
 		fuzzy_rule_apply_checks(rule, cfg, value);
 	}
