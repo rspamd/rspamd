@@ -49,11 +49,14 @@ local function peekaboo_config(opts)
     timeout = 3.0,
     log_clean = false,
     set_clean_symbol = false,
+    defer_if_no_result = false,
+    defer_message = 'Message temporarily deferred pending attachment analysis, please try again later',
     retransmits = 2,
     cache_expire = 7200, -- expire redis in 2h
     min_size = 300,
     message = '${SCANNER}: Peekaboo threat message found: "${VIRUS}"',
     detection_category = "sandbox threat",
+    score = 1.0,
     default_score = 1,
     action = false,
     dynamic_scan = false,
@@ -61,6 +64,7 @@ local function peekaboo_config(opts)
     symbol_report = 'PEEKABOO_REPORT',
     symbol_type = 'callback',
     symbol_report_type = 'postfilter',
+    replay_cached_categories = true,
     symbols = {
       peekaboo_good = {
         symbol = 'PEEKABOO_GOOD';
@@ -397,6 +401,10 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
         log_prefix, job_id)
       common.yield_result(task, rule, string.format('job_id: %s', job_id),
         0.0, rule.symbols.peekaboo_in_process.symbol, maybe_part)
+      if rule.defer_if_no_result and task:get_metric_action() ~= 'reject' then
+        -- 'least' lets a later reject from another part take precedence
+        task:set_pre_result('soft reject', rule.defer_message, rule.name, nil, nil, 'least')
+      end
     else
       -- Parse the response
       if upstream then upstream:ok() end
@@ -410,6 +418,9 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
       end
 
       local result = ucl_parser:get_object()
+      -- tabs and vertical tabs delimit fields in the redis verdict cache
+      local details = string.format("job-id %s: %s", job_id,
+        (tostring(result.reason):gsub('[\t\v]', ' ')))
 
       lua_util.debugm(N, task, '%s: job-id %s - JSON OBJECT - %s', log_prefix, job_id, result)
 
@@ -417,29 +428,24 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
         if tostring(result.result) == 'bad' then
           lua_util.debugm(N, task, '%s: job-id %s - found bad result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
-          common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
-            1.0, nil, maybe_part)
-          common.save_cache(task, digest, rule,
-            string.format("job-id %s: %s", job_id, result.reason), 1.0, maybe_part)
+          common.yield_result(task, rule, details, rule.default_score, nil, maybe_part)
+          common.save_cache(task, digest, rule, details, rule.default_score, maybe_part)
         elseif tostring(result.result) == 'failed' or tostring(result.result) == 'unchecked' then
           lua_util.debugm(N, task, '%s: job-id %s - found failed/unchecked result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
-          common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
-            0.0, 'fail', maybe_part)
+          common.yield_result(task, rule, details, 0.0, 'fail', maybe_part)
         elseif tostring(result.result) == 'good' then
           lua_util.debugm(N, task, '%s: job-id %s - found good result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
-          common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
-            rule.symbols.peekaboo_good.score, rule.symbols.peekaboo_good.symbol, maybe_part)
+          common.yield_result(task, rule, details, 1.0, rule.symbols.peekaboo_good.symbol, maybe_part)
           -- cache clean verdicts too, so they expire and get rescanned like bad ones
-          common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
+          common.save_cache(task, digest, rule, { rule.symbols.peekaboo_good.symbol, details }, 1.0, maybe_part)
         elseif tostring(result.result) == 'ignored' then
           lua_util.debugm(N, task, '%s: job-id %s - found ignored result - %s (%s)',
             log_prefix, job_id, result.result, result.reason)
         elseif tostring(result.result) == 'unknown' then
           if rule.set_clean_symbol then
-            common.yield_result(task, rule, string.format("job-id %s: %s", job_id, result.reason),
-              rule.symbols.peekaboo_pass.score, rule.symbols.peekaboo_pass.symbol, maybe_part)
+            common.yield_result(task, rule, details, 1.0, rule.symbols.peekaboo_pass.symbol, maybe_part)
           end
           lua_util.debugm(N, task, '%s: job-id %s - found unknown result (no threat found) - %s (%s)',
             log_prefix, job_id, result.result, result.reason)

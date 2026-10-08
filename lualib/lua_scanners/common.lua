@@ -320,7 +320,11 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
             local details = threat_string[2]
             lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - %s',
               rule.log_prefix, key, symbol_name, details)
-            task:insert_result(symbol_name, 1.0, details)
+            if rule.replay_cached_categories then
+              yield_result(task, rule, details, score, symbol_name, maybe_part)
+            else
+              task:insert_result(symbol_name, 1.0, details)
+            end
           else
             -- Old format without symbol name
             lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
