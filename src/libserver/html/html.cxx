@@ -2243,6 +2243,18 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	return result;
 }
 
+/*
+ * Table layout sizes a table and its parts by their content: `width` and
+ * `height` there are only lower bounds (CSS 2.1 17.5.2 and 17.5.3), so the
+ * enclosing box does not constrain them, and a zero width on a table does
+ * not clip its cells
+ */
+static inline auto
+html_tag_bounded_by_parent(const html_tag *tag) -> bool
+{
+	return tag->id != Tag_TABLE && !(tag->flags & (CM_TABLE | CM_ROW));
+}
+
 auto html_process_input(struct rspamd_task *task,
 						GByteArray *in,
 						GList **exceptions,
@@ -3244,7 +3256,8 @@ auto html_process_input(struct rspamd_task *task,
 				 * and would never be compared against the visibility limits
 				 */
 				if (tag->parent && tag->parent->block) {
-					tag->block->resolve_sizes(*tag->parent->block);
+					tag->block->resolve_sizes(*tag->parent->block,
+											  html_tag_bounded_by_parent(tag));
 				}
 				else {
 					static const html_block undefined_parent{};
@@ -3292,7 +3305,8 @@ auto html_process_input(struct rspamd_task *task,
 					cld_tag->block = rspamd_mempool_alloc0_type(pool, html_block);
 				}
 
-				cld_tag->block->propagate_block(*tag->block);
+				cld_tag->block->propagate_block(*tag->block,
+												html_tag_bounded_by_parent(cld_tag));
 			}
 		}
 		return true;

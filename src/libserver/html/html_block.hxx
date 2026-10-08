@@ -194,9 +194,10 @@ public:
 	/**
 	 * Propagate values from the block if they are not defined by the current block
 	 * @param other
+	 * @param bounded whether the width and height of `other` bound this block
 	 * @return
 	 */
-	auto propagate_block(const html_block &other) -> void
+	auto propagate_block(const html_block &other, bool bounded = true) -> void
 	{
 		fg_color_mask = html_block::simple_prop(fg_color_mask, other.fg_color_mask,
 												fg_color, other.fg_color);
@@ -217,21 +218,26 @@ public:
 												   display, other.display);
 		}
 
-		resolve_sizes(other);
+		resolve_sizes(other, bounded);
 	}
 
 	/*
 	 * Turn sizes that are still relative into absolute ones against an
 	 * already computed parent. Called on propagation, and again once a
 	 * stylesheet block has been merged, since that happens after the parent
-	 * has propagated and can introduce a fresh relative value
+	 * has propagated and can introduce a fresh relative value.
+	 * When the parent does not bound this block, its width and height are
+	 * neither inherited nor used to resolve relative ones
 	 */
-	auto resolve_sizes(const html_block &other) -> void
+	auto resolve_sizes(const html_block &other, bool bounded = true) -> void
 	{
-		height_mask = html_block::size_prop(height_mask, other.height_mask,
-											height, other.height, static_cast<std::int16_t>(800));
-		width_mask = html_block::size_prop(width_mask, other.width_mask,
-										   width, other.width, static_cast<std::int16_t>(1024));
+		static const html_block unbounded{};
+		const auto &box = bounded ? other : unbounded;
+
+		height_mask = html_block::size_prop(height_mask, box.height_mask,
+											height, box.height, static_cast<std::int16_t>(800));
+		width_mask = html_block::size_prop(width_mask, box.width_mask,
+										   width, box.width, static_cast<std::int16_t>(1024));
 		font_mask = html_block::size_prop(font_mask, other.font_mask,
 										  font_size, other.font_size, static_cast<std::int16_t>(16));
 	}
