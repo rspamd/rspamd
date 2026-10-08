@@ -184,7 +184,7 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 		zw_spaces.add(0x200C);
 		/* See github issue #4290 for explanation. It seems that the ZWJ has many legit use cases */
 		//zw_spaces.add(0x200D);
-		zw_spaces.add(0xFEF);
+		zw_spaces.add(0xFEFF);
 		zw_spaces.add(0x00AD);
 		zw_spaces.freeze();
 	}
@@ -378,6 +378,8 @@ TEST_SUITE("utf8 utils")
 			{"س\u200Cت", "ست", RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			// String containing a soft hyphen
 			{"in\u00ADter\u00ADest\u00ADing", "interesting", RSPAMD_UNICODE_NORM_ZERO_SPACES},
+			// String containing a zero width no-break space (BOM)
+			{"\uFEFFte\uFEFFst", "test", RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			// String with ligature
 			{"ﬁsh", "fish", RSPAMD_UNICODE_NORM_UNNORMAL},
 			// String with accented characters and zero-width spaces
