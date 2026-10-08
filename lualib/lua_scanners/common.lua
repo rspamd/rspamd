@@ -189,7 +189,8 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
   update_av_result_cache(task, rule, category, threat_table, symbols_table,
     all_whitelisted, maybe_part)
 
-  if rule.action and category ~= 'fail' and not all_whitelisted then
+  if rule.action and not all_whitelisted
+      and (not category or category == 'macro' or category == 'encrypted') then
     threat_table = table.concat(threat_table, '; ')
     if rule.action ~= 'reject' then
       flags = 'least'
@@ -306,10 +307,10 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
       if threat_string[1] ~= 'OK' then
         if threat_string[1] == 'MACRO' then
           yield_result(task, rule, 'File contains macros',
-            0.0, 'macro', maybe_part)
+            1.0, 'macro', maybe_part)
         elseif threat_string[1] == 'ENCRYPTED' then
           yield_result(task, rule, 'File is encrypted',
-            0.0, 'encrypted', maybe_part)
+            1.0, 'encrypted', maybe_part)
         else
           -- Check if cached data contains symbol name (for category-based scanners)
           -- Format: "SYMBOL_NAME\vdetails" or just "details"
