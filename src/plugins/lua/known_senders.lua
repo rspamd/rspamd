@@ -57,7 +57,7 @@ local settings_schema = lua_redis.enrich_schema({
   max_ttl = T.one_of({
     T.number(),
     T.transform(T.string(), lua_util.parse_time_interval)
-  }):optional():doc({ summary = "Maximum sender lifetime (seconds)" }),
+  }):optional():doc({ summary = "Forget senders not seen for this time (seconds, 0 to disable, not for bloom)" }),
   use_bloom = T.boolean():optional():doc({ summary = "Use Redis bloom filters" }),
   redis_key = T.string():optional():doc({ summary = "Redis key for known senders" }),
   symbol = T.string():optional():doc({ summary = "Symbol for known senders" }),
@@ -85,7 +85,7 @@ known_senders {
   domains = "https://maps.rspamd.com/freemail/free.txt.zst";
   # Maximum number of elements
   max_senders = 100000;
-  # Maximum time to live (when not using bloom filters)
+  # Forget senders not seen for this time (not with bloom filters)
   max_ttl = 30d;
   # Use bloom filters (must be enabled in Redis as a plugin)
   use_bloom = false;
@@ -110,8 +110,28 @@ local function make_key_replies(goop, sz, prefix)
 end
 
 local zscore_script_id
+local zset_check_script_id
 
 local function configure_scripts(_, _, _)
+  -- script checks if the sender is in the known senders set; a sender seen
+  -- within max_ttl is refreshed and reported as known (1), otherwise it is
+  -- (re)inserted, and the set is trimmed by age and by cardinality (0)
+  local redis_zset_check_script = [[
+    local now = tonumber(ARGV[2])
+    local max_ttl = tonumber(ARGV[3])
+    local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+    redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
+    if score and (max_ttl <= 0 or tonumber(score) >= now - max_ttl) then
+      return 1
+    end
+    if max_ttl > 0 then
+      redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', '(' .. (now - max_ttl))
+    end
+    redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -(tonumber(ARGV[4]) + 1))
+    return 0
+  ]]
+  zset_check_script_id = lua_redis.add_redis_script(redis_zset_check_script, redis_params)
+
   -- script checks if given recipients are in the local replies set of the sender
   local redis_zscore_script = [[
     local replies_recipients_addrs = ARGV
@@ -147,33 +167,13 @@ local function check_redis_key(task, key, key_ty)
     lua_util.debugm(N, task, 'got data: %s', data)
     if err then
       rspamd_logger.errx(task, 'redis error: %s', err)
-    elseif data then
-      if type(data) ~= 'userdata' then
-        -- non-null reply
-        task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
-      else
-        if settings.symbol_unknown then
-          task:insert_result(settings.symbol_unknown, 1.0, string.format("%s:%s", key_ty, key))
-        end
-        lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
-        -- Insert key to zset and trim it's cardinality
-        lua_redis.redis_make_request(task,
-            redis_params, -- connect params
-            key, -- hash key
-            true, -- is write
-            nil, --callback
-            'ZADD', -- command
-            { settings.redis_key, tostring(task:get_timeval(true)), key } -- arguments
-        )
-        lua_redis.redis_make_request(task,
-            redis_params, -- connect params
-            key, -- hash key
-            true, -- is write
-            nil, --callback
-            'ZREMRANGEBYRANK', -- command
-            { settings.redis_key, '0',
-              tostring(-(settings.max_senders + 1)) } -- arguments
-        )
+    elseif data == 1 then
+      task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
+    else
+      -- The script has already inserted the key
+      lua_util.debugm(N, task, 'inserted key %s, type: %s', key, key_ty)
+      if settings.symbol_unknown then
+        task:insert_result(settings.symbol_unknown, 1.0, string.format("%s:%s", key_ty, key))
       end
     end
   end
@@ -223,14 +223,16 @@ local function check_redis_key(task, key, key_ty)
         { settings.redis_key, key } -- arguments
     )
   else
-    lua_redis.redis_make_request(task,
-        redis_params, -- connect params
-        key, -- hash key
-        false, -- is write
-        redis_zset_callback, --callback
-        'ZSCORE', -- command
-        { settings.redis_key, key } -- arguments
-    )
+    local ret = lua_redis.exec_redis_script(zset_check_script_id,
+        { task = task, key = key, is_write = true },
+        redis_zset_callback,
+        { settings.redis_key },
+        { key, tostring(task:get_timeval(true)), tostring(settings.max_ttl or 0),
+          tostring(settings.max_senders) })
+
+    if not ret then
+      rspamd_logger.errx(task, "redis script request wasn't scheduled")
+    end
   end
 end
 

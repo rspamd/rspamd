@@ -11,6 +11,7 @@ ${SETTINGS_REPLIES}               {symbols_enabled = [REPLIES_CHECK, REPLIES_SET
 ${SYMBOL_GLOBAL}                  INC_MAIL_KNOWN_GLOBALLY
 ${SYMBOL_LOCAL}                   INC_MAIL_KNOWN_LOCALLY
 ${REDIS_SCOPE}                    Suite
+${SPAM_SENDER_KEY}                51656dfdd4e5febda570a45f839201b4
 ${RSPAMD_SCOPE}                   Suite
 
 *** Test Cases ***
@@ -77,3 +78,36 @@ INCOMING MAIL SENDER IS KNOWN RECIPIENTS ARE KNOWN
   ...  Settings={symbols_enabled [${SYMBOL_GLOBAL}, ${SYMBOL_LOCAL}]}
   Expect Symbol  ${SYMBOL_GLOBAL}
   Expect Symbol  ${SYMBOL_LOCAL}
+
+STALE SENDER EXPIRES
+  # The sender of spam_message.eml was last seen long ago
+  Redis Command  ZADD  rs_known_senders  1  ${SPAM_SENDER_KEY}
+  Redis Command  ZADD  rs_known_senders  1  stale_sender
+  Scan File  ${RSPAMD_TESTDIR}/messages/spam_message.eml
+  ...  Settings={symbols_enabled [KNOWN_SENDER]}
+  Do Not Expect Symbol  KNOWN_SENDER
+  Expect Symbol  UNKNOWN_SENDER
+  ${score} =  Redis Command  ZSCORE  rs_known_senders  stale_sender
+  Should Be Empty  ${score}
+  Scan File  ${RSPAMD_TESTDIR}/messages/spam_message.eml
+  ...  Settings={symbols_enabled [KNOWN_SENDER]}
+  Expect Symbol  KNOWN_SENDER
+  Do Not Expect Symbol  UNKNOWN_SENDER
+
+RECENT SENDER IS REFRESHED
+  ${now} =  Get Time  epoch
+  ${seen} =  Evaluate  ${now} - 29 * 86400
+  Redis Command  ZADD  rs_known_senders  ${seen}  ${SPAM_SENDER_KEY}
+  Scan File  ${RSPAMD_TESTDIR}/messages/spam_message.eml
+  ...  Settings={symbols_enabled [KNOWN_SENDER]}
+  Expect Symbol  KNOWN_SENDER
+  ${score} =  Redis Command  ZSCORE  rs_known_senders  ${SPAM_SENDER_KEY}
+  Should Be True  ${score} >= ${now} - 5
+
+*** Keywords ***
+Redis Command
+  [Arguments]  @{args}
+  ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}  @{args}
+  Log  ${result.stdout}
+  Should Be Equal As Integers  ${result.rc}  0
+  RETURN  ${result.stdout}
