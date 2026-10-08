@@ -604,6 +604,10 @@ local function check_parts_match(task, rule)
       end
     end
 
+    if match_exclude then
+      return false
+    end
+
     -- check text_part has more words than text_part_min_words_check
     -- (unset text_part_min_words means "no minimum" - do not silently skip scan_text_mime)
     if rule.scan_text_mime and p:is_text() then
