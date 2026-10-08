@@ -340,7 +340,7 @@ local function milter_headers(task)
 
   routines['x-spamd-bar'] = function()
     local local_mod = settings.routines['x-spamd-bar']
-    if skip_wanted('x-rspamd-bar') then
+    if skip_wanted('x-spamd-bar') then
       return
     end
     if not common['metric_score'] then
@@ -475,7 +475,7 @@ local function milter_headers(task)
           add_header('x-virus', local_mod.status_clean)
         end
       else
-        if local_mod.status_clean then
+        if local_mod.status_fail then
           add_header('x-virus', string.format('%s(%s)',
             local_mod.status_fail, fail_reason))
         end

@@ -38,6 +38,13 @@ CHECK HEADERS WITHOUT TEST SYMBOL
   Do Not Expect Added Header  X-Spam-Level
   Expect Removed Header  X-Spam-Level
 
+CHECK HEADERS FROM LOCAL IP
+  # Only the routines listed in local_headers run for local connections
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Settings=${SETTINGS_TEST}
+  Expect Added Header  My-Spamd-Bar  ++
+  Do Not Expect Added Header  X-Virus
+  Do Not Expect Added Header  X-Spam-Level
+
 CHECK HEADERS WITH OVERRIDE SETTINGS
   # id_milter_headers_override setting enables only authentication-results and x-spam-level routines
   Scan File  ${MESSAGE}  Settings-Id=id_milter_headers_override
