@@ -336,6 +336,7 @@ local function peekaboo_report(task, content, digest, rule, maybe_part)
     return
   end
 
+  -- TODO: Pin reports and retries when the upstream API supports affinity acquisition.
   -- select the upstream only once a request is certain to avoid an unused inflight reference
   local upstream = rule.upstreams:get_upstream_by_hash(digest)
   if not upstream then

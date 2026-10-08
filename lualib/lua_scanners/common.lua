@@ -128,7 +128,6 @@ local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
     threat_table = vname
   end
 
-  -- fail is the only category with a default other than 1.0 (callers pass their own weight otherwise)
   if not dyn_weight then
     dyn_weight = (category == 'fail') and 0.0 or 1.0
   end
@@ -230,13 +229,7 @@ local function message_not_too_small(task, content, rule)
 end
 
 local function message_min_words(task, rule, maybe_part)
-  -- This gate only concerns whether the message's *body text* is worth
-  -- scanning; when scan_mime_parts dispatches an actual mime part (e.g. an
-  -- attachment) for scanning, maybe_part is that part. Applying the
-  -- whole-task text word count against an attachment scan would silently
-  -- skip attachment/AV scanning on any message with a short/empty body,
-  -- which is exactly the shape of most malspam (empty body, malicious
-  -- attachment) - so only gate here for whole-message or text-part scans.
+  -- A short message body must not suppress attachment scanning.
   if maybe_part and not maybe_part:is_text() then
     return true
   end
@@ -687,11 +680,6 @@ local function get_upstream_or_fail(task, rule, maybe_part, reason)
 end
 
 --[[
-Shared plumbing for antivirus.lua and external_services.lua: symbol
-derivation/whitelist/eicar-testing/scan-callback/registration helpers.
---]]
-
---[[
 Derive the standard symbol / symbol_fail / symbol_encrypted / symbol_macro /
 symbol_ignore names for a scanner rule instance from its config key `sym`,
 without mutating `opts`. Existing `opts.symbol*` overrides always win.
@@ -706,11 +694,6 @@ local function derive_symbols(sym, opts)
   return symbol, symbol_fail, symbol_encrypted, symbol_macro, symbol_ignore
 end
 
---[[
-Configure `rule.whitelist` from `opts.whitelist` using the modern lua_maps
-API (replaces the legacy `rspamd_config:add_hash_map`, which has no other
-callers left in the tree).
---]]
 local function configure_whitelist(rule, opts, description)
   if opts.whitelist then
     rule.whitelist = lua_maps.map_add_from_ucl(opts.whitelist, 'hash',
@@ -869,23 +852,11 @@ local function build_symbol_registration(name, cb, m, group, symbol_type)
   return t
 end
 
---[[
-Build the `rspamd_config:register_symbol()` parameter table for a scanner
-rule's main scheduled callback symbol (`anchor_symbol`), scheduled per
-`m.symbol_type`.
---]]
 local function scanner_symbol_registration(anchor_symbol, cb, m, group)
   return build_symbol_registration(anchor_symbol, cb, m, group, m.symbol_type)
 end
 
---[[
-Build the `rspamd_config:register_symbol()` parameter table for a scanner
-rule's independent report symbol (`m.symbol_report`), scheduled per
-`m.symbol_report_type`. Unlike the fail/encrypted/macro symbols, the report
-symbol is not a virtual child of the main callback symbol -- it is its own
-scheduled callback, since it typically polls a result independently of the
-main check (see `make_report_callback`).
---]]
+-- Reports run as independent callbacks, not virtual children of the main check.
 local function report_symbol_registration(symbol_report, cb, m, group)
   return build_symbol_registration(symbol_report, cb, m, group, m.symbol_report_type)
 end
