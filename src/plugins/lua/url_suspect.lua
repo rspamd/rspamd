@@ -170,6 +170,12 @@ local maps = {
 }
 
 -- Obfuscated text helpers
+local zero_width_chars = {
+  '\226\128\139', '\226\128\140', '\226\128\141', '\239\187\191', '\194\173',
+}
+local unicode_dots = {'\226\128\164', '\226\128\167', '\194\183'}
+local host_char_groups = {zero_width_chars, unicode_dots}
+
 local function normalize_obfuscated_text(text, max_len)
   max_len = max_len or 512
 
@@ -179,7 +185,9 @@ local function normalize_obfuscated_text(text, max_len)
   end
 
   -- 1. Remove zero-width characters (U+200B, U+200C, U+200D, BOM, soft hyphen)
-  text = text:gsub("[\226\128\139\226\128\140\226\128\141\239\187\191\194\173]", "")
+  for _, char in ipairs(zero_width_chars) do
+    text = text:gsub(char, "")
+  end
 
   -- 2. HTML entity decode (using C binding for comprehensive entity support)
   local decoded = rspamd_util.decode_html_entities(text)
@@ -205,9 +213,9 @@ local function normalize_obfuscated_text(text, max_len)
   text = text:gsub("/+", "/")
 
   -- 8. Special unicode dots -> ASCII dot
-  text = text:gsub("\226\128\164", ".")  -- U+2024 ONE DOT LEADER
-  text = text:gsub("\226\128\167", ".")  -- U+2027 HYPHENATION POINT
-  text = text:gsub("\194\183", ".")      -- U+00B7 MIDDLE DOT
+  for _, char in ipairs(unicode_dots) do
+    text = text:gsub(char, ".")
+  end
 
   return lua_util.str_trim(text)
 end
@@ -238,11 +246,11 @@ local function extract_url_from_normalized(text, obf_type)
   -- Pattern 1: URL with explicit protocol. Normalization collapses repeated
   -- slashes, so "://" arrives here as ":/". Only the host is kept: the path
   -- of free text runs into trailing punctuation.
-  local proto, host_part = text:match("^(https?):/+([%w%.%-_~:@]+)")
+  local proto, host_part, url_end = text:match("^(https?):/+([%w%.%-_~:@]+)()")
   if proto then
     -- Validate: must have at least a dot in the host part
     if host_part:find("%.") then
-      return proto .. "://" .. host_part, "explicit_protocol"
+      return proto .. "://" .. host_part, "explicit_protocol", url_end - 1
     end
   end
 
@@ -266,7 +274,7 @@ local function extract_url_from_normalized(text, obf_type)
       -- Additional check: must not be too many dots (likely random text)
       local _, dot_count = naked:gsub("%.", "")
       if dot_count <= 4 then
-        return "http://" .. naked, "naked_domain"
+        return "http://" .. naked, "naked_domain", #naked
       end
     end
   end
@@ -277,14 +285,41 @@ end
 -- start_pos/end_pos are the 1-based inclusive bounds of the match. The window
 -- begins at the host run that precedes the match ("example" in
 -- "example[.]com", "secure-login" in "secure-login dot net"), looking back at
--- most context_before bytes, and never earlier: whatever precedes that run is
--- not part of the obfuscated URL.
+-- most context_before bytes. Keep encoded host characters and separators so a
+-- mixed-obfuscation URL is not reduced to a suffix of its hostname.
 local function extract_context_window(text, start_pos, end_pos, cfg)
   local min_start = math.max(1, start_pos - cfg.context_before)
   local window_start = start_pos
-  while window_start > min_start and
-      text:sub(window_start - 1, window_start - 1):match("[%w%-%.]") do
-    window_start = window_start - 1
+  while window_start > min_start do
+    local prefix = text:sub(min_start, window_start - 1)
+    local suffix = prefix:match("[%w%-%.]+$") or
+        prefix:match("[%[%(%{]%s*%.%s*[%]%)%}]$") or
+        prefix:match("%s+[dD][oO][tT]%s+$")
+
+    if not suffix then
+      for _, chars in ipairs(host_char_groups) do
+        for _, char in ipairs(chars) do
+          if prefix:sub(-#char) == char then
+            suffix = char
+            break
+          end
+        end
+        if suffix then break end
+      end
+    end
+
+    if not suffix then
+      local entity = prefix:match("&[#%w]+;$")
+      if entity then
+        local decoded = normalize_obfuscated_text(entity, cfg.max_normalize_length)
+        if decoded:match("^[%w%-%.]*$") then
+          suffix = entity
+        end
+      end
+    end
+
+    if not suffix then break end
+    window_start = window_start - #suffix
   end
   local window_end = math.min(#text, end_pos + cfg.context_after)
   local window_len = window_end - window_start
@@ -294,7 +329,7 @@ local function extract_context_window(text, start_pos, end_pos, cfg)
     window_end = window_start + cfg.max_normalize_length
   end
 
-  return text:sub(window_start, window_end)
+  return text:sub(window_start, window_end), start_pos - window_start + 1
 end
 
 -- Check implementations
@@ -914,7 +949,7 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
           local obf_type = meta and meta.name or 'unknown'
 
           -- Extract context window
-          local window = extract_context_window(txt, start_pos, end_pos, obf_cfg)
+          local window, match_start = extract_context_window(txt, start_pos, end_pos, obf_cfg)
           if #window < obf_cfg.min_match_length then
             return 0  -- continue matching
           end
@@ -927,8 +962,16 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
             return 0
           end
 
-          local extracted_url = extract_url_from_normalized(normalized, obf_type)
+          local extracted_url, _, url_end = extract_url_from_normalized(normalized, obf_type)
           if not extracted_url then
+            return 0
+          end
+
+          -- The matched obfuscation must occur inside the extracted URL, not
+          -- in trailing prose such as example.org&#39;s archive&#39;.
+          local prefix = normalize_obfuscated_text(window:sub(1, match_start - 1),
+              obf_cfg.max_normalize_length)
+          if #prefix >= url_end then
             return 0
           end
 
