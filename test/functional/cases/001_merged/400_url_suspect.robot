@@ -111,3 +111,48 @@ URL Suspect - Obfuscated Spaced Protocol
   Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_spaced.eml
   ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
   Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Word Dot In Prose
+  # "the dot food", "from Dot Food" are prose; the list address in the
+  # trailing context is in plain sight and must not be reported either
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_word_dot_prose.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Do Not Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Plain Sight Domain Near Entities
+  # An entity match must not report a plain-sight domain from its context
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_plain_sight.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Do Not Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Mixed Entity And Bracket Obfuscation
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_mixed_entity.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+  Expect URL  example.com
+  List Should Not Contain Value  ${SCAN_RESULT}[urls]  xample.com
+
+URL Suspect - Mixed Zero Width And Bracket Obfuscation
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_mixed_zero_width.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+  Expect URL  example.com
+  List Should Not Contain Value  ${SCAN_RESULT}[urls]  ample.com
+
+URL Suspect - Multiple Bracket Dots Keep Full Host
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_multiple_brackets.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+  Expect URL  secure.login.example.com
+  List Should Not Contain Value  ${SCAN_RESULT}[urls]  login.example.com
+
+URL Suspect - Plain Sight Domain Before Entities
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_domain_before_entities.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Do Not Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Entity Encoded Protocol
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_entity_protocol.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Expect Symbol  URL_OBFUSCATED_TEXT
+  Expect URL  evil-site.com

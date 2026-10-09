@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Multiple obfuscated dots in one hostname
+Content-Type: text/plain; charset=utf-8
+
+Visit secure[.]login[.]example.com for details
