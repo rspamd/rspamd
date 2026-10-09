@@ -3456,6 +3456,8 @@ fuzzy_cmd_hash(struct fuzzy_rule *rule,
 	cmd->version = fuzzy_cmd_version(rule);
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32();
+	cmd->flag = flag;
+	cmd->value = weight;
 
 	io = rspamd_mempool_alloc(pool, sizeof(*io));
 	io->flags = 0;
