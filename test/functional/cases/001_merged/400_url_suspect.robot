@@ -111,3 +111,16 @@ URL Suspect - Obfuscated Spaced Protocol
   Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_spaced.eml
   ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
   Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Word Dot In Prose
+  # "the dot food", "from Dot Food" are prose; the list address in the
+  # trailing context is in plain sight and must not be reported either
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_word_dot_prose.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Do Not Expect Symbol  URL_OBFUSCATED_TEXT
+
+URL Suspect - Plain Sight Domain Near Entities
+  # An entity match must not report a plain-sight domain from its context
+  Scan File  ${RSPAMD_TESTDIR}/messages/url_obfuscated_plain_sight.eml
+  ...  Settings={symbols_enabled = [URL_OBFUSCATED_TEXT]}
+  Do Not Expect Symbol  URL_OBFUSCATED_TEXT

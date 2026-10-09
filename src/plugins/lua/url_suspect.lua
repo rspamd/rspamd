@@ -188,8 +188,8 @@ local function normalize_obfuscated_text(text, max_len)
   end
 
   -- 3. Normalize spaced protocol: h t t p s : / / -> https://
-  text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*[sS]?%s*:%s*/%s*/", "https://")
-  text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*:%s*/%s*/", "http://")
+  text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*[sS]?%s*:%s*/%s*/%s*", "https://")
+  text = text:gsub("[hH]%s+[tT]%s+[tT]%s+[pP]%s*:%s*/%s*/%s*", "http://")
 
   -- 4. hxxp -> http (case insensitive)
   text = text:gsub("[hH][xX][xX][pP][sS]?", "http")
@@ -212,24 +212,49 @@ local function normalize_obfuscated_text(text, max_len)
   return lua_util.str_trim(text)
 end
 
+-- English function words that commonly precede the noun "dot" in prose
+-- ("the dot food co-op", "from Dot Food", "a dot com startup"). A spelled-out
+-- host never starts with one of them, so a word_dot match whose first label
+-- is in this set is ordinary text, not an obfuscated domain.
+local word_dot_stopwords = lua_util.list_to_hash({
+  'a', 'about', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'but', 'by',
+  'each', 'every', 'for', 'from', 'her', 'his', 'how', 'in', 'into', 'is',
+  'its', 'my', 'no', 'not', 'of', 'on', 'one', 'or', 'our', 'over', 'per',
+  'some', 'than', 'that', 'the', 'their', 'then', 'these', 'this', 'those',
+  'to', 'under', 'via', 'was', 'what', 'when', 'where', 'which', 'who',
+  'with', 'your',
+})
+
+-- The text window passed here starts at the obfuscated URL (see
+-- extract_context_window), so the URL must be at the very beginning of the
+-- normalized text. Searching the whole window instead picks up any
+-- plain-sight domain in the trailing context - a quoted list address, a
+-- signature link - and reports it as obfuscated.
 local function extract_url_from_normalized(text, obf_type)
   if not text or #text == 0 then
     return nil, nil
   end
 
-  -- Pattern 1: URL with explicit protocol
-  local url_with_proto = text:match("https?://[%w%.%-_~:/?#@!$&'()*+,;=%%]+")
-  if url_with_proto then
+  -- Pattern 1: URL with explicit protocol. Normalization collapses repeated
+  -- slashes, so "://" arrives here as ":/". Only the host is kept: the path
+  -- of free text runs into trailing punctuation.
+  local proto, host_part = text:match("^(https?):/+([%w%.%-_~:@]+)")
+  if proto then
     -- Validate: must have at least a dot in the host part
-    local host_part = url_with_proto:match("https?://([^/]+)")
-    if host_part and host_part:find("%.") then
-      return url_with_proto, "explicit_protocol"
+    if host_part:find("%.") then
+      return proto .. "://" .. host_part, "explicit_protocol"
     end
   end
 
   -- Pattern 2: Naked domain (more strict to avoid false positives)
   -- Must start with word boundary, have valid structure
-  local naked = text:match("[%w][%w%-]+%.[%a][%w%-%.]+")
+  local naked = text:match("^[%w][%w%-]+%.[%a][%w%-%.]+")
+  if naked and obf_type == 'word_dot' then
+    local first_label = naked:match("^([^%.]+)")
+    if word_dot_stopwords[first_label:lower()] then
+      return nil, nil
+    end
+  end
   if naked then
     -- Validate: must have valid TLD (at least 2 chars)
     local tld = naked:match("%.([%a][%w%-]*)$")
@@ -249,8 +274,18 @@ local function extract_url_from_normalized(text, obf_type)
   return nil, nil
 end
 
+-- start_pos/end_pos are the 1-based inclusive bounds of the match. The window
+-- begins at the host run that precedes the match ("example" in
+-- "example[.]com", "secure-login" in "secure-login dot net"), looking back at
+-- most context_before bytes, and never earlier: whatever precedes that run is
+-- not part of the obfuscated URL.
 local function extract_context_window(text, start_pos, end_pos, cfg)
-  local window_start = math.max(1, start_pos - cfg.context_before)
+  local min_start = math.max(1, start_pos - cfg.context_before)
+  local window_start = start_pos
+  while window_start > min_start and
+      text:sub(window_start - 1, window_start - 1):match("[%w%-%.]") do
+    window_start = window_start - 1
+  end
   local window_end = math.min(#text, end_pos + cfg.context_after)
   local window_len = window_end - window_start
 
@@ -926,14 +961,16 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
             local txt = tostring(content)
 
             -- Use trie:match with callback and report_start=true for positions
+            -- Trie offsets are 0-based with an exclusive end; convert them to
+            -- 1-based inclusive string positions
             obf_trie:match(txt, function(pattern_idx, match_pos)
               local start_pos, end_pos
               if type(match_pos) == 'table' then
-                start_pos, end_pos = match_pos[1], match_pos[2]
+                start_pos, end_pos = match_pos[1] + 1, match_pos[2]
               else
                 -- Only end position provided
                 end_pos = match_pos
-                start_pos = math.max(1, end_pos - obf_cfg.max_match_length)
+                start_pos = math.max(1, end_pos - obf_cfg.max_match_length + 1)
               end
 
               return process_match(txt, start_pos, end_pos, pattern_idx)
@@ -951,6 +988,9 @@ if settings.enabled and settings.checks.obfuscated_text and settings.checks.obfu
         callback = obfuscated_text_prefilter,
         group = 'url',
         score = 5.0,
+        -- Replies quote the same text over and over: one obfuscated URL in a
+        -- thread would otherwise be scored once per quoting level
+        one_shot = true,
         description = 'Obfuscated URL found in message text'
       })
 

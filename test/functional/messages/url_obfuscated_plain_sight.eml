@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test plain sight domain near entities
+Content-Type: text/plain; charset=utf-8
+
+It&#39;s&#39; fine, see lists.example.org for the archive
