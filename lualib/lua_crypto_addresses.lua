@@ -688,18 +688,65 @@ exports.currencies = {
 
 -- Extraction ----------------------------------------------------------------
 
--- A single candidate regexp keeps the scan to one pass per text part; the
--- validators above decide what a candidate actually is.
-local wallet_re = rspamd_regexp.create([[/\b(?:]] ..
-    [[0x[0-9a-fA-F]{40}|]] ..                                  -- EVM
-    [[G[A-Z2-7]{55}|]] ..                                      -- Stellar
-    [[[EUk0]Q[A-Za-z0-9_-]{46}|]] ..                           -- TON
-    [[[A-Za-z]{2,12}1[qpzry9x8gf2tvdw0s3jn54khce6mua7lQPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{10,100}|]] .. -- bech32/bech32m
-    [[[A-Za-z]+:[qpzry9x8gf2tvdw0s3jn54khce6mua7lQPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{14,}|]] .. -- cashaddr with prefix
-    [[[qpzry9x8gf2tvdw0s3jn54khce6mua7lQPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{42}|]] .. -- cashaddr without prefix
-    [[4[1-9AB][1-9A-HJ-NP-Za-km-z]{93}|]] ..                   -- Monero
-    [[[13LM9ADTrt][1-9A-HJ-NP-Za-km-z]{24,34}]] ..             -- Base58Check family
-    [[)\b/]])
+-- Every family brings its own boundaries: TON addresses contain '-' and may
+-- end in one, which a shared \b would cut off. The validators below decide what
+-- a candidate actually is.
+-- Variants indexed 1 + (not first) + 2 * (not last): a slice edge that is not the text edge must not act as a boundary
+local function make_scan_regexps(pattern)
+  local grouped = '(?:' .. pattern .. ')'
+
+  return {
+    rspamd_regexp.create('/' .. grouped .. '/'),
+    rspamd_regexp.create([=[/(?<!\A)]=] .. grouped .. '/'),
+    rspamd_regexp.create('/' .. grouped .. [=[(?!\z)/]=]),
+    rspamd_regexp.create([=[/(?<!\A)]=] .. grouped .. [=[(?!\z)/]=]),
+  }
+end
+
+local bech32_class = 'qpzry9x8gf2tvdw0s3jn54khce6mua7lQPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L'
+local wallet_re = make_scan_regexps(table.concat({
+  [=[\b0x[0-9a-fA-F]{40}\b]=],                                         -- EVM
+  [=[\bG[A-Z2-7]{55}\b]=],                                             -- Stellar
+  [=[(?<![A-Za-z0-9_])[EUk0]Q[A-Za-z0-9_-]{46}(?![A-Za-z0-9_-])]=],    -- TON
+  [=[\b[A-Za-z]{2,12}1[]=] .. bech32_class .. [=[]{10,101}\b]=],        -- bech32/bech32m
+  [=[\b[A-Za-z]{1,12}:[]=] .. bech32_class .. [=[]{42,112}\b]=],        -- cashaddr with prefix
+  [=[\b[]=] .. bech32_class .. [=[]{42}\b]=],                           -- cashaddr without prefix
+  [=[\b4[1-9AB][1-9A-HJ-NP-Za-km-z]{93}\b]=],                          -- Monero
+  [=[\b[13LM9ADTrt][1-9A-HJ-NP-Za-km-z]{24,34}\b]=],                   -- Base58Check family
+}, '|'))
+
+-- Scam senders split a Base58/XRP address with single spaces or tabs to dodge
+-- wallet_re ("1N42 K1P 3hMB yPXev ..."). This finds runs of short Base58 tokens;
+-- the run is greedy, so it may also swallow neighbouring prose words, and the
+-- real address is then located by sliding a window over its tokens. A run is cut
+-- at 16 tokens, so an address straddling such a cut is missed.
+local wallet_re_spaced = make_scan_regexps(
+  [[\b[1-9A-HJ-NP-Za-km-z]{1,8}(?:[ \t][1-9A-HJ-NP-Za-km-z]{1,8}){1,15}\b]])
+
+-- First characters of the Base58Check family that can be split (bitcoin, litecoin,
+-- dogecoin, tron, xrp, zcash); bech32 and friends are never typed in groups
+local spaced_first = {}
+
+for c in ('13LM9ADTrt'):gmatch('.') do
+  spaced_first[c:byte()] = true
+end
+
+-- Base58Check addresses of the splittable kinds are 25..35 characters long
+local SPACED_MIN_LEN, SPACED_MAX_LEN = 25, 35
+
+exports.limits = {
+  -- Distinct candidates one scan (get_addresses) may run through the validators; a Base58 one costs a full checksum
+  -- decode. Candidates seen before are free.
+  max_candidates = 512,
+  -- The share of those the whitespace-split scan may use: it produces far more
+  -- false candidates than the plain one
+  max_spaced_candidates = 64,
+  -- A scan ends once it holds this many addresses
+  max_addresses = 64,
+  -- Text is searched in slices of this size, which keeps the table of matches
+  -- bounded no matter how large the body is
+  chunk_size = 64 * 1024,
+}
 
 -- Subject (decoded) plus every text part
 local function get_haystacks(task)
@@ -722,6 +769,151 @@ local function get_haystacks(task)
   return haystacks
 end
 
+local function new_scan(found)
+  local seen, nfound = {}, 0
+  local limits = exports.limits
+
+  for currency, lst in pairs(found) do
+    for _, addr in ipairs(lst) do
+      seen[addr] = currency
+      nfound = nfound + 1
+    end
+  end
+
+  return {
+    found = found,
+    seen = seen,
+    nfound = nfound,
+    budget = nfound < limits.max_addresses and limits.max_candidates or 0,
+    spaced_budget = limits.max_spaced_candidates,
+  }
+end
+
+local function check_word(task, word, scan, how, spaced)
+  if scan.seen[word] ~= nil or scan.budget <= 0 or (spaced and scan.spaced_budget <= 0) then
+    return
+  end
+
+  scan.budget = scan.budget - 1
+
+  if spaced then
+    scan.spaced_budget = scan.spaced_budget - 1
+  end
+
+  -- Memoise failures too: without this, every repetition of a candidate (the
+  -- same body in a text and an html part, say) pays for the full Base58Check
+  -- decode again
+  local currency = classify(task, word) or false
+  scan.seen[word] = currency
+
+  if currency then
+    local lst = scan.found[currency]
+
+    if not lst then
+      lst = {}
+      scan.found[currency] = lst
+    end
+
+    lst[#lst + 1] = word
+    scan.nfound = scan.nfound + 1
+    lua_util.debugm(N, task, 'found valid %s address%s: %s', currency, how, word)
+
+    if scan.nfound >= exports.limits.max_addresses then
+      scan.budget = 0
+    end
+  end
+end
+
+local function scan_spaced(task, hay, scan, regexp)
+  local byte, concat = string.byte, table.concat
+
+  for _, run in ipairs(regexp:search(hay) or E) do
+    if scan.budget <= 0 or scan.spaced_budget <= 0 then
+      return
+    end
+
+    -- Prose is full of runs of short Base58 words, a real address of this length
+    -- almost always has a digit (about 99.8% for 34 characters), and testing for
+    -- one is far cheaper than a checksum
+    if run:find('%d') then
+      local toks, n = {}, 0
+
+      for tok in run:gmatch('[^ \t]+') do
+        n = n + 1
+        toks[n] = tok
+      end
+
+      for i = 1, n - 1 do
+        if spaced_first[byte(toks[i], 1)] then
+          local len = #toks[i]
+
+          for j = i + 1, n do
+            len = len + #toks[j]
+
+            if len > SPACED_MAX_LEN then
+              break
+            end
+
+            if len >= SPACED_MIN_LEN then
+              check_word(task, concat(toks, '', i, j), scan, ' split by whitespace', true)
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
+-- No candidate is longer than a split address (16 tokens of up to 8 characters
+-- and their separators), so slices overlap by more than that and nothing is
+-- lost at a border; `seen` absorbs the candidates both slices find
+local CHUNK_OVERLAP = 256
+
+-- Calls `fn` with consecutive slices of `hay` (a string or an rspamd_text, the
+-- latter without copying); `fn` returns true to stop
+local function each_chunk(hay, fn)
+  local total = #hay
+  local size = exports.limits.chunk_size
+
+  if total <= size then
+    fn(hay, true, true)
+    return
+  end
+
+  local is_string = type(hay) == 'string'
+  local pos = 1
+
+  while true do
+    local len = math.min(size, total - pos + 1)
+    local stop = fn(is_string and hay:sub(pos, pos + len - 1) or hay:span(pos, len),
+        pos == 1, pos + len > total)
+
+    if stop or pos + len > total then
+      return
+    end
+
+    pos = pos + math.max(size - CHUNK_OVERLAP, 1)
+  end
+end
+
+local function scan_text(task, hay, scan)
+  each_chunk(hay, function(chunk, first, last)
+    local variant = 1 + (first and 0 or 1) + (last and 0 or 2)
+
+    for _, word in ipairs(wallet_re[variant]:search(chunk) or E) do
+      if scan.budget <= 0 then
+        return true
+      end
+
+      check_word(task, word, scan, '')
+    end
+
+    scan_spaced(task, chunk, scan, wallet_re_spaced[variant])
+
+    return scan.budget <= 0
+  end)
+end
+
 --[[[
 -- @function lua_crypto_addresses.get_addresses(task)
 -- Returns a table of `currency -> {address, ...}` for the message, computing it
@@ -736,33 +928,10 @@ local function get_addresses(task)
   end
 
   local found = {}
-  local seen = {}
+  local scan = new_scan(found)
 
   for _, hay in ipairs(get_haystacks(task)) do
-    for _, raw_word in ipairs(wallet_re:search(hay) or E) do
-      local word = tostring(raw_word)
-      local currency = seen[word]
-
-      if currency == nil then
-        -- Memoise failures too: without this, every repetition of a candidate
-        -- (the same body in a text and an html part, say) pays for the full
-        -- Base58Check decode again
-        currency = classify(task, word) or false
-        seen[word] = currency
-
-        if currency then
-          local lst = found[currency]
-
-          if not lst then
-            lst = {}
-            found[currency] = lst
-          end
-
-          lst[#lst + 1] = word
-          lua_util.debugm(N, task, 'found valid %s address: %s', currency, word)
-        end
-      end
-    end
+    scan_text(task, hay, scan)
   end
 
   task:cache_set('crypto_addresses', found)

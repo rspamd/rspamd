@@ -136,4 +136,206 @@ context("Crypto addresses test", function()
           string.format('%s must not validate', addr))
     end
   end)
+
+  local rspamd_task = require "rspamd_task"
+
+  local ltc = 'LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd'
+  local ltc_bad = 'LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvX'
+  local xrp = 'raLnyR4PTuc5SgXGHqYA894a4eoKqoFwu'
+  local btc = '16L5yRNPTuciSgXGHqYwn9N6NeoKqopAu'
+
+  -- Cuts an address into groups of `n` characters joined by `sep`
+  local function split(addr, n, sep)
+    local parts = {}
+
+    for i = 1, #addr, n do
+      parts[#parts + 1] = addr:sub(i, i + n - 1)
+    end
+
+    return table.concat(parts, sep)
+  end
+
+  local function with_task(body, fn)
+    local msg = "From: <>\r\nTo: <nobody@example.com>\r\nSubject: test\r\n" ..
+        "Content-Type: text/plain\r\n\r\n" .. body .. "\r\n"
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+
+    assert(res, "failed to load message")
+    task:process_message()
+    fn(task)
+    task:destroy()
+  end
+
+  local function flat(task)
+    return lua_crypto_addresses.get_addresses_flat(task)
+  end
+
+  test("finds a plain address in a message", function()
+    with_task('send it to ' .. btc .. ' please', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+    end)
+  end)
+
+  test("finds addresses split by whitespace and reports them joined", function()
+    with_task('pay ' .. split(ltc, 4, ' ') .. ' today', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+
+    with_task('pay ' .. split(xrp, 5, '\t') .. ' today', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { xrp } })
+    end)
+  end)
+
+  test("finds a split address next to words that join the same run", function()
+    -- None of these words contain l, I, O or 0, so they all land in one run
+    -- together with the address and the real tokens have to be cut out of it
+    with_task('send to ' .. split(ltc, 4, ' ') .. ' now thanks', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+  end)
+
+  test("does not report a split address twice", function()
+    with_task(ltc .. ' also written as ' .. split(ltc, 4, ' '), function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+  end)
+
+  test("rejects a split address with a broken checksum", function()
+    with_task('pay ' .. split(ltc_bad, 4, ' '), function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+  end)
+
+  test("ignores prose that merely looks like split tokens", function()
+    with_task('the quick brown fox jumps over 13 lazy dogs and then some more words ' ..
+        'that go on for a while 2024', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+  end)
+
+  test("spaced scan stops at its candidate budget", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.max_spaced_candidates
+
+    limits.max_spaced_candidates = 0
+    with_task('pay ' .. split(ltc, 4, ' '), function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+
+    -- Distinct runs that all pass the cheap filters but fail the checksum use
+    -- the budget up, so an address after them is never reached
+    limits.max_spaced_candidates = 2
+    local filler = {}
+
+    for i = 1, 20 do
+      -- Two digits from 1-9 each: 0 is not a Base58 character
+      filler[#filler + 1] = split(string.format('1Nabcdefghijkmnopqrstuvwxy%d%d',
+          i % 9 + 1, math.floor(i / 9) + 1), 4, ' ')
+    end
+
+    with_task(table.concat(filler, ' ') .. ' ' .. split(ltc, 4, ' '), function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+
+    limits.max_spaced_candidates = saved
+    with_task('pay ' .. split(ltc, 4, ' '), function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+  end)
+
+  test("finds a TON address that ends in a dash", function()
+    -- '-' belongs to the URL safe alphabet but is not a word character, so a
+    -- plain \b after the address would never match
+    local ton = 'EQ' .. string.rep('A', 42) .. 'IOs-'
+
+    assert_equal(lua_crypto_addresses.classify(nil, ton), 'ton')
+
+    for _, body in ipairs({ 'ton: ' .. ton .. ' thanks', 'ton: ' .. ton, ton .. '.', '(' .. ton .. ')' }) do
+      with_task(body, function(task)
+        assert_rspamd_table_eq({ actual = flat(task), expect = { ton } })
+      end)
+    end
+  end)
+
+  test("candidate budget stops the scan", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.max_candidates
+    local junk = {}
+
+    -- Base58 shaped, so each one reaches the checksum, and distinct, so the
+    -- memo does not make them free
+    for i = 1, 6 do
+      junk[i] = '1Nabcdefghijkmnopqrstuvwxyz' .. i
+    end
+
+    local body = table.concat(junk, ' ') .. ' ' .. btc
+
+    limits.max_candidates = 3
+    with_task(body, function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+
+    limits.max_candidates = saved
+    with_task(body, function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+    end)
+  end)
+
+  test("address cap ends the scan", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.max_addresses
+
+    limits.max_addresses = 1
+    with_task(ltc .. ' ' .. btc, function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+
+    limits.max_addresses = saved
+  end)
+
+  test("does not treat slice edges as address boundaries", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.chunk_size
+    local ton = 'EQ' .. string.rep('A', 42) .. 'IOs-'
+
+    limits.chunk_size = 512
+
+    for _, address in ipairs({ btc, ton }) do
+      local bodies = {
+        string.rep('.', 512 - #address) .. address .. 'a' .. string.rep('.', 600),
+        string.rep('.', 255) .. 'a' .. address .. string.rep('.', 600),
+        string.rep('.', 768 - #address) .. address .. 'a' .. string.rep('.', 600),
+        string.rep('.', 511) .. 'a' .. address .. string.rep('.', 600),
+      }
+
+      for _, body in ipairs(bodies) do
+        with_task(body, function(task)
+          assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+        end)
+      end
+
+      for _, body in ipairs({ address .. string.rep('.', 600), string.rep('.', 600) .. address }) do
+        with_task(body, function(task)
+          assert_rspamd_table_eq({ actual = flat(task), expect = { address } })
+        end)
+      end
+    end
+
+    limits.chunk_size = saved
+  end)
+
+  test("finds addresses at the borders of the slices a large text is searched in", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.chunk_size
+
+    limits.chunk_size = 512
+
+    for _, offset in ipairs({ 0, 100, 240, 300, 480, 500, 511, 512, 700, 1500 }) do
+      with_task(string.rep('.', offset) .. btc .. string.rep('.', 600), function(task)
+        assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+      end)
+    end
+
+    limits.chunk_size = saved
+  end)
 end)
