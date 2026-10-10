@@ -512,7 +512,11 @@ rspamd_http_on_headers_complete(http_parser *parser)
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
 			rspamd_http_context_push_keepalive(conn->priv->ctx, conn,
 											   msg, conn->priv->ctx->event_loop);
-			rspamd_http_connection_reset(conn);
+
+			/* push_keepalive() may decline pooling and leave conn->finished == TRUE */
+			if (!conn->finished) {
+				rspamd_http_connection_reset(conn);
+			}
 		}
 		else {
 			conn->finished = TRUE;
@@ -824,7 +828,11 @@ rspamd_http_on_headers_complete_decrypted(http_parser *parser)
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
 			rspamd_http_context_push_keepalive(conn->priv->ctx, conn,
 											   msg, conn->priv->ctx->event_loop);
-			rspamd_http_connection_reset(conn);
+
+			/* push_keepalive() may decline pooling and leave conn->finished == TRUE */
+			if (!conn->finished) {
+				rspamd_http_connection_reset(conn);
+			}
 		}
 		else {
 			conn->finished = TRUE;
@@ -1015,7 +1023,11 @@ rspamd_http_on_message_complete(http_parser *parser)
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
 			rspamd_http_context_push_keepalive(conn->priv->ctx, conn,
 											   priv->msg, conn->priv->ctx->event_loop);
-			rspamd_http_connection_reset(conn);
+
+			/* push_keepalive() may decline pooling and leave conn->finished == TRUE */
+			if (!conn->finished) {
+				rspamd_http_connection_reset(conn);
+			}
 		}
 		else {
 			conn->finished = TRUE;
@@ -1437,13 +1449,19 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		}
 		else {
 			if (!priv->ssl) {
-				err = g_error_new(HTTP_ERROR,
-								  500,
-								  "HTTP IO read error: %s",
-								  strerror(errno));
-				rspamd_http_connection_stop_watcher(priv);
-				conn->error_handler(conn, err);
-				g_error_free(err);
+				if (!conn->finished) {
+					err = g_error_new(HTTP_ERROR,
+									  500,
+									  "HTTP IO read error: %s",
+									  strerror(errno));
+					rspamd_http_connection_stop_watcher(priv);
+					conn->error_handler(conn, err);
+					g_error_free(err);
+				}
+				else {
+					msg_err("got error after HTTP request is finished: %s",
+							strerror(errno));
+				}
 			}
 
 			REF_RELEASE(pbuf);
