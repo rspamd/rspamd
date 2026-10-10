@@ -95,6 +95,44 @@ SELECTORS MERGED FAIL
   ...  FAILTEST.EXAMPLE:server fail  failtest.example:server fail
   Expect Symbol With Score  RBL_MERGED_ERR_FAIL  1.0
 
+SELECTORS MERGED FAIL NOMERGE
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_MERGED_ERR_NOMERGE]}
+  # merge_checks = false keeps one failure, and one score shot, per origin
+  Expect Symbol With Exact Options  RBL_MERGED_ERR_NOMERGE_FAIL
+  ...  FAILTEST.EXAMPLE:server fail  failtest.example:server fail
+  Expect Symbol With Score  RBL_MERGED_ERR_NOMERGE_FAIL  2.0
+
+SELECTORS SCRIPT TRAILING DOT
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SCRIPT_DOT]}
+  # The script names the same query with and without the root dot: one lookup, one score
+  Expect Symbol With Exact Options  RBL_SCRIPT_DOT  example.org:plain  example.org.:dotted
+  Expect Symbol With Score  RBL_SCRIPT_DOT  2.0
+
+SELECTORS MALFORMED DOTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_MALFORMED]}
+  # Only one root dot may go: "malformed.." must not turn into the listed "malformed"
+  Do Not Expect Symbol  RBL_SELECTOR_MALFORMED
+
+SELECTORS SCRIPT MALFORMED DOTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SCRIPT_MALFORMED]}
+  Do Not Expect Symbol  RBL_SCRIPT_MALFORMED
+
+SELECTORS RESOLVE IP MALFORMED DOTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_RESOLVE_MALFORMED]}
+  Expect Symbol With Exact Options  RBL_RESOLVE_MALFORMED_HIT
+  ...  8.8.8.9:example.ru:plain  8.8.8.9:example.ru.:dotted
+
+SELECTORS HASHED BASE64 CASE
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_B64]}
+  # A base64 hash is case-sensitive data, so the query keeps its case
+  Expect Symbol With Exact Options  RBL_SELECTOR_B64  example.org:selector
+
 SELECTORS HASHED TRAILING DOT
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RBL_SELECTOR_HASH]}
@@ -133,6 +171,13 @@ SELECTORS RESOLVE IP COMBINED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RBL_SELECTOR_RESOLVE]}
   Expect Symbol With Exact Options  RBL_SELECTOR_RESOLVE_HIT  8.8.8.9:example.ru:first,second
+
+RESOLVE IP PHASE COLLISION
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  IP=1.2.3.4  Helo=4.3.2.1.test9.uribl
+  ...  Settings={symbols_enabled = [RBL_RESOLVE_PHASE]}
+  # HELO equals the client IP's RBL query name; the two lookups must stay separate
+  Expect Symbol With Exact Options  RBL_RESOLVE_PHASE_DIRECT  1.2.3.4:from
+  Expect Symbol With Exact Options  RBL_RESOLVE_PHASE_HELO  127.0.0.2:4.3.2.1.test9.uribl:helo
 
 SELECTORS MERGED WHITELIST
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml

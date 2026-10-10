@@ -130,6 +130,24 @@ local function maybe_make_hash(data, rule)
   end
 end
 
+-- Only the one legal root dot goes, so a malformed "name.." stays invalid
+local function strip_root_dot(s)
+  if s:sub(-1) == '.' and s:sub(-2) ~= '..' then
+    return s:sub(1, -2)
+  end
+
+  return s
+end
+
+-- DNS names are case-insensitive, but a base64 hash carries data in its case
+local function fold_case(rule, name)
+  if rule.hash and rule.hash_format == 'base64' then
+    return name
+  end
+
+  return name:lower()
+end
+
 local function is_excluded_ip(rip)
   if local_exclusions and local_exclusions:get_key(rip) then
     return true
@@ -267,7 +285,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
     end
   end
 
-  -- merge_checks false restores the pre-4.1.6 one-insertion-per-check behavior
+  -- merge_checks false restores the pre-4.2.3 one-insertion-per-check behavior
   local merge_checks = rbl.merge_checks ~= false
 
   local function insert_results(s, ip)
@@ -326,7 +344,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
     local failed_origins = lua_util.keys(resolve_table_elt.origins)
     table.sort(failed_origins)
     for i, origin in ipairs(failed_origins) do
-      task:insert_result(rbl.symbol .. '_FAIL', i == 1 and 1.0 or 0.0,
+      task:insert_result(rbl.symbol .. '_FAIL', (not merge_checks or i == 1) and 1.0 or 0.0,
           string.format('%s:%s', origin, err))
     end
     return
@@ -471,11 +489,12 @@ local function gen_rbl_callback(rule)
       local resolve_ip = rule.resolve_ip and not is_ip
       if rule.process_script then
         local processed = rule.process_script(req, rule.rbl, task, resolve_ip)
+        local n = processed and strip_root_dot(tostring(processed))
 
-        if processed then
+        if n and n ~= '' then
           nreq = {
             forced = forced,
-            n = tostring(processed):lower(),
+            n = fold_case(rule, n),
             orig = req_str,
             resolve_ip = resolve_ip,
             what = { [label] = true },
@@ -485,19 +504,23 @@ local function gen_rbl_callback(rule)
         end
       else
         local to_resolve
-        -- Strip trailing dots first so hashing treats "foo." and "foo" alike
-        local origin = tostring(req):gsub('%.+$', '')
+        local origin = strip_root_dot(tostring(req))
+
+        if origin == '' then
+          lua_util.debugm(N, task, 'skip empty RBL request for %s (%s)',
+              rule.symbol, label)
+          return
+        end
 
         if not resolve_ip then
           origin = maybe_make_hash(origin, rule)
-          to_resolve = string.format('%s.%s',
+          to_resolve = fold_case(rule, string.format('%s.%s',
               origin,
-              rule.rbl)
+              rule.rbl))
         else
           -- First, resolve origin stuff without hashing or anything
-          to_resolve = origin
+          to_resolve = origin:lower()
         end
-        to_resolve = to_resolve:lower()
 
         nreq = {
           forced = forced,
@@ -997,11 +1020,10 @@ local function gen_rbl_callback(rule)
     end
 
     -- Now check all DNS requests pending and emit them
-    -- Deduplicate by actual DNS query name to merge equivalent queries from different checks
+    -- Deduplicate by DNS query name and resolution phase
     local deduped_req = {}
     for _, req in pairs(dns_req) do
-      local dedupe_key = tostring(req.n):lower()
-      req.n = dedupe_key
+      local dedupe_key = (req.resolve_ip and 'resolve:' or 'rbl:') .. req.n
       local existing = deduped_req[dedupe_key]
       if existing then
         for label, _ in pairs(req.what) do
