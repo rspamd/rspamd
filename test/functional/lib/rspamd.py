@@ -1439,3 +1439,116 @@ def validate_attachments_have_content_type(data):
         if 'content_type' in att and att['content_type']:
             count += 1
     return count
+
+
+def _smtp_status_message(status_text):
+    lines = status_text.splitlines()
+    try:
+        idx = lines.index('MESSAGE')
+    except ValueError:
+        raise Exception('No MESSAGE marker found in SMTP status file')
+    return '\n'.join(lines[idx + 1:])
+
+
+def decode_email_header(status_text, name):
+    """Return the RFC 2047-decoded value of a top-level header of the message
+    captured in a dummy_smtp 'sink' status file, or None if it is absent.
+
+    Example:
+    | ${subject} = | Decode Email Header | ${smtp_status} | Subject |
+    """
+    import email
+    import email.policy
+    from email.header import decode_header, make_header
+
+    msg = email.message_from_bytes(
+        _smtp_status_message(status_text).encode('utf-8'),
+        policy=email.policy.compat32)
+    value = msg.get(name)
+    if value is None:
+        return None
+    # RFC 5322 unfolding removes the line breaks only, keeping whitespace
+    value = value.replace('\r\n', '').replace('\n', '')
+    return str(make_header(decode_header(value)))
+
+
+def validate_multipart_email(status_text):
+    """Parse the DATA portion of a dummy_smtp 'sink' status file as a MIME
+    message and summarize its top-level multipart structure for assertions.
+
+    Returns a dict: is_multipart, content_type, subtype, part_count,
+    mime_version, message_id, and parts (list of dicts with content_type,
+    cte, disposition, filename - RFC 2231 parameters are decoded by email).
+    A nested multipart part (e.g. a multipart/alternative group inside a
+    multipart/mixed message) is summarized as {content_type, subtype,
+    subparts: [...]} instead of decoded_text/decoded_length/decoded_sha256.
+    For a single-part message, cte and decoded_text describe its body;
+    has_8bit/headers_8bit tell whether any 8-bit data was transmitted at all
+    or within the top-level header block.
+
+    Example:
+    | ${info} = | Validate Multipart Email | ${smtp_status} |
+    """
+    import email
+    import email.policy
+    import hashlib
+
+    def summarize_part(part):
+        if part.is_multipart():
+            subparts = [summarize_part(p) for p in part.get_payload()]
+            return {
+                'content_type': part.get_content_type(),
+                'subtype': part.get_content_subtype(),
+                'part_count': len(subparts),
+                'subparts': subparts,
+            }
+        decoded = part.get_payload(decode=True) or b''
+        decoded_text = ''
+        if part.get_content_maintype() == 'text':
+            decoded_text = decoded.decode(part.get_content_charset() or 'utf-8')
+        return {
+            'content_type': part.get_content_type(),
+            'cte': part.get('Content-Transfer-Encoding', ''),
+            'disposition': part.get('Content-Disposition', ''),
+            'filename': part.get_filename(),
+            'decoded_text': decoded_text,
+            'decoded_length': len(decoded),
+            'decoded_sha256': hashlib.sha256(decoded).hexdigest(),
+        }
+
+    raw_message = _smtp_status_message(status_text)
+    msg = email.message_from_bytes(
+        raw_message.encode('utf-8'), policy=email.policy.compat32)
+
+    parts = []
+    if msg.is_multipart():
+        for part in msg.get_payload():
+            parts.append(summarize_part(part))
+    top = summarize_part(msg)
+    header_block = raw_message.split('\n\n', 1)[0]
+
+    return {
+        'is_multipart': msg.is_multipart(),
+        'content_type': msg.get_content_type(),
+        'subtype': msg.get_content_subtype(),
+        'part_count': len(parts),
+        'parts': parts,
+        # Single-part messages only; a multipart summary has no body of its own
+        'cte': top.get('cte', ''),
+        'decoded_text': top.get('decoded_text', ''),
+        # The sink decodes DATA as UTF-8, so any 8-bit octet sent shows up as
+        # a non-ASCII character (raw UTF-8 or a replacement character)
+        'has_8bit': any(ord(ch) > 127 for ch in raw_message),
+        'headers_8bit': any(ord(ch) > 127 for ch in header_block),
+        'mime_version': msg.get('MIME-Version'),
+        'message_id': msg.get('Message-Id'),
+        # Only the wrapper's own Content-Type belongs at top level; the
+        # template's Content-Type, if any, moves onto its own part instead
+        'content_type_header_count': len(msg.get_all('Content-Type') or []),
+        'cte_header_count': len(
+            msg.get_all('Content-Transfer-Encoding') or []),
+        # RFC 5322 caps a line at 998 octets; long parameters must be folded
+        'max_line_length': max(
+            (len(line.encode('utf-8')) for line in raw_message.splitlines()),
+            default=0),
+    }

@@ -407,6 +407,17 @@ int lua_parsers_parse_content_type(lua_State *L)
 												 *cur;
 				unsigned int i = 1;
 
+				/*
+				 * charset and boundary already have their own string fields;
+				 * an attribute table under the same key would replace them
+				 */
+				if ((param->name.len == sizeof("charset") - 1 &&
+					 g_ascii_strncasecmp(param->name.begin, "charset", param->name.len) == 0) ||
+					(param->name.len == sizeof("boundary") - 1 &&
+					 g_ascii_strncasecmp(param->name.begin, "boundary", param->name.len) == 0)) {
+					continue;
+				}
+
 				lua_pushlstring(L, param->name.begin, param->name.len);
 				lua_createtable(L, 1, 0);
 

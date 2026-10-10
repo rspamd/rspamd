@@ -208,12 +208,14 @@ LUA_FUNCTION_DEF(text, oneline);
  * Normalizes line endings in text to the specified format.
  * - If mode is "lf" or "unix": converts CRLF to LF
  * - If mode is "crlf" or "windows" (default): converts bare LF to CRLF
+ * - If mode is "smtp": converts every bare CR and bare LF to CRLF, as SMTP
+ *   allows CR and LF only as a CRLF pair (RFC 5321 2.3.8)
  *
  * If the text is owned, it may be modified in-place.
  * If a mempool is provided, new memory is allocated from it.
  * Otherwise, g_malloc is used and OWN flag is set.
  *
- * @param {string} mode target newline mode: "lf" or "crlf" (default: "crlf")
+ * @param {string} mode target newline mode: "lf", "crlf" or "smtp" (default: "crlf")
  * @param {mempool} pool optional mempool for allocation
  * @return {rspamd_text} normalized text (may be same as input if no changes)
  */
@@ -510,6 +512,72 @@ rspamd_lua_text_normalize_newlines(struct rspamd_lua_text *t,
 					*out++ = '\r'; /* Insert CR */
 				}
 				*out++ = *p++; /* Copy LF */
+			}
+		}
+
+		/* Free old memory if owned */
+		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			g_free((void *) t->start);
+		}
+
+		t->start = new_start;
+		t->len = new_len;
+		t->flags = pool ? 0 : RSPAMD_TEXT_FLAG_OWN;
+	}
+	else if (mode == RSPAMD_TEXT_NEWLINES_SMTP) {
+		/*
+		 * SMTP allows CR and LF only as CRLF: a bare CR is as much a line end as a
+		 * bare LF, and leaving it would let "<CR>.<CR><LF>" pass dot-stuffing
+		 */
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\r\n", 2);
+			p += span;
+
+			if (p < end) {
+				if (*p == '\r' && p + 1 < end && *(p + 1) == '\n') {
+					p += 2;
+				}
+				else {
+					count++;
+					p++;
+				}
+			}
+		}
+
+		if (count == 0) {
+			return t; /* Already normalized */
+		}
+
+		/* Every bare CR or LF grows into a CRLF pair */
+		size_t new_len = t->len + count;
+		char *new_start;
+
+		if (pool) {
+			new_start = rspamd_mempool_alloc(pool, new_len);
+		}
+		else {
+			new_start = g_malloc(new_len);
+		}
+
+		char *out = new_start;
+		p = t->start;
+
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\r\n", 2);
+			memcpy(out, p, span);
+			out += span;
+			p += span;
+
+			if (p < end) {
+				if (*p == '\r' && p + 1 < end && *(p + 1) == '\n') {
+					*out++ = *p++;
+					*out++ = *p++;
+				}
+				else {
+					*out++ = '\r';
+					*out++ = '\n';
+					p++;
+				}
 			}
 		}
 
@@ -1990,8 +2058,11 @@ lua_text_normalize_newlines(lua_State *L)
 				 g_ascii_strcasecmp(mode_str, "windows") == 0) {
 			mode = RSPAMD_TEXT_NEWLINES_CRLF;
 		}
+		else if (g_ascii_strcasecmp(mode_str, "smtp") == 0) {
+			mode = RSPAMD_TEXT_NEWLINES_SMTP;
+		}
 		else {
-			return luaL_error(L, "invalid mode: %s (expected 'lf' or 'crlf')", mode_str);
+			return luaL_error(L, "invalid mode: %s (expected 'lf', 'crlf' or 'smtp')", mode_str);
 		}
 	}
 

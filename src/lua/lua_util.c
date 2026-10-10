@@ -796,9 +796,11 @@ LUA_FUNCTION_DEF(util, parse_content_type);
 
 /***
  *  @function util.mime_header_encode(hdr[, is_structured])
- * Encodes header if needed
+ * RFC 2047-encodes a header value if it carries 8-bit data
  * @param {string} hdr input header
- * @param {boolean} is_structured if true, then we encode as structured header (e.g. encode all non alpha-numeric characters)
+ * @param {boolean} is_structured if true, the value is an address list: only
+ * display names, group names and comments are encoded, addresses (which have
+ * no RFC 2047 form) are kept as they are; otherwise it is unstructured text
  * @return encoded header
  */
 LUA_FUNCTION_DEF(util, mime_header_encode);

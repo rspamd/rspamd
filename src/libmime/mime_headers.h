@@ -97,10 +97,16 @@ char *rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 								gsize inlen, gboolean *invalid_utf);
 
 /**
- * Encode mime header if needed
+ * RFC 2047-encode a header value if it carries 8-bit data; a 7-bit value is
+ * returned unchanged. Encoded-words are always delimited by whitespace or
+ * structure, are at most 75 characters long and never split a UTF-8 sequence.
  * @param in
  * @param len
- * @param is_structured if true, then we encode as structured header (e.g. encode all non alpha-numeric characters)
+ * @param is_structured if false, the value is unstructured text (Subject...)
+ * and every word with 8-bit data is encoded as a whole; if true, it is an
+ * address list (From, To...): display names, group names and comments are
+ * encoded in place, while addresses, which have no RFC 2047 form, and values
+ * with unbalanced syntax are kept as they are, 8-bit data included
  * @return newly allocated encoded header
  */
 char *rspamd_mime_header_encode(const char *in, gsize len, bool is_structured);
