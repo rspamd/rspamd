@@ -1,3 +1,43 @@
+4.2.2: 10 Oct 2026
+
+  ** Incompatible changes **
+  * [Fix] mime: Exclude the CRLF preceding a boundary delimiter from parts (message and non-base64 part digests change for multipart messages)
+
+  ** Features **
+  * [Feature] crypto: Detect wallet addresses for Bitcoin and forks, Litecoin, Dogecoin, Tron, XRP, Zcash, Cardano, Cosmos, Stellar, TON, Ethereum and Monero, replacing bitcoin.lua with one independent symbol per currency
+  * [Feature] lua_crypto_addresses: Add a bounded wallet address scanner that catches split addresses, plus add_from_string for text recovered from attachments
+  * [Feature] lua_selectors: Add the crypto_addresses() extractor
+  * [Feature] metadata_exporter: Add custom variables and selector expansion for mail_from, mail_to, helo, channel, stream_key and the email template
+  * [Feature] metadata_exporter: Build multipart email alerts from email_parts, grouping plain and html parts into multipart/alternative
+  * [Feature] metadata_exporter: Encode non-ASCII headers in email alerts automatically
+  * [Feature] metadata_exporter: Validate rules against a schema, so configtest fails on invalid rules
+  * [Feature] lua_smtp: Negotiate EHLO and 8BITMIME with a HELO fallback, and downgrade 8-bit messages to 7-bit when 8BITMIME is not advertised
+  * [Feature] str_util: Add RFC 5322 folding for unstructured headers (util.fold_header_unstructured)
+  * [Feature] lua_text: Add the smtp newline normalization mode
+
+  ** Bug fixes **
+  * [CritFix] lua_util: Fix a heap overflow in lower_utf8 (U+023A and U+023E grow when lowercased)
+  * [Fix] http: Guard connection-finished checks around keepalive reset (crash on a late error handler when the peer closes the connection)
+  * [Fix] html: Do not inherit box sizes into table elements (HIDDEN_TEXT and MANY_INVISIBLE_PARTS on tables pasted from Google Sheets)
+  * [Fix] html: Terminate the visible link text after normalisation (stale trailing bytes broke phishing checks)
+  * [Fix] url: Accept invisible characters in hostnames and flag them instead of truncating the URL
+  * [Fix] utf8: Strip U+FEFF in unicode normalisation
+  * [Fix] url_suspect: Anchor obfuscated URL extraction to the matched URL and make URL_OBFUSCATED_TEXT one-shot (plain-sight domains were reported as obfuscated)
+  * [Fix] crypto: Gate LEAKED_PASSWORD_SCAM only on checksum-verified addresses and drop "wallet" as a scam signal
+  * [Fix] mime_headers: Emit valid RFC 2047 encoded-words and keep addresses intact in structured mode
+  * [Fix] lua_smtp: Dot-stuff DATA (a bare '.' line truncated messages), turn bare CR into CRLF, accept a bare reply code and read multi-line greetings
+  * [Fix] lua_util: Retry deferred DNS for HTTP upstreams (gpt, aws_s3, http maps and dkim vault were stuck after a failed startup lookup)
+  * [Fix] lua_util: Let callback_from_string compile whole-chunk callbacks
+  * [Fix] lua_task: Fix get_symbol() with a table of names when the symbols are present
+  * [Fix] lua_parsers: Keep boundary and charset as strings in parse_content_type
+  * [Fix] known_senders: Expire senders after max_ttl in zset mode
+  * [Fix] replies, known_senders: Honour reply_sender_privacy
+  * [Fix] milter_headers: Apply header skipping to x-spamd-bar and fix the x-virus fail branch
+  * [Fix] fuzzy_check: Parse top-level html_ignore_domains
+  * [Fix] metadata_exporter: Always emit an integer redis_stream MAXLEN
+  * [Fix] cfg_transform: Do not warn about scored custom actions
+  * [Fix] rspamadm: Fix epoch labels in fuzzy_stat
+
 4.2.1: 01 Oct 2026
 
   ** Bug fixes **
