@@ -2077,6 +2077,106 @@ rspamd_header_value_fold(const char *name, gsize name_len,
 	return res;
 }
 
+GString *
+rspamd_header_value_fold_unstructured(const char *name, gsize name_len,
+									  const char *value, gsize value_len,
+									  unsigned int fold_max,
+									  enum rspamd_newlines_type how)
+{
+	const unsigned int default_fold_max = 76;
+	const char *p = value, *end = value + value_len, *newline;
+	gsize cur_len = name_len + 2; /* "Name: " */
+	gboolean line_has_word = FALSE;
+	GString *res;
+
+	g_assert(name != NULL);
+	g_assert(value != NULL);
+
+	/* Filter insane values */
+	if (fold_max < 20) {
+		fold_max = default_fold_max;
+	}
+
+	switch (how) {
+	case RSPAMD_TASK_NEWLINES_LF:
+		newline = "\n";
+		break;
+	case RSPAMD_TASK_NEWLINES_CR:
+		newline = "\r";
+		break;
+	case RSPAMD_TASK_NEWLINES_CRLF:
+	default:
+		newline = "\r\n";
+		break;
+	}
+
+	res = g_string_sized_new(value_len + value_len / 16 + 8);
+
+	while (p < end) {
+		const char *ws = p, *word;
+
+		if (*p == '\r' || *p == '\n') {
+			/* A line break already in the value (an existing fold) stays */
+			while (p < end && (*p == '\r' || *p == '\n')) {
+				g_string_append_c(res, *p++);
+			}
+
+			cur_len = 0;
+			line_has_word = FALSE;
+			continue;
+		}
+
+		while (p < end && (*p == ' ' || *p == '\t')) {
+			p++;
+		}
+
+		word = p;
+
+		while (p < end && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n') {
+			p++;
+		}
+
+		/*
+		 * A word that would overflow the line moves to a continuation line
+		 * that starts with whitespace from before it, so unfolding (removing
+		 * the line break) restores the value byte for byte. A whitespace run
+		 * takes one fold at most (RFC 5322 3.2.2), so a long run is split
+		 * there: as little of it as possible stays at the end of the line
+		 * for the continuation to fit fold_max, or else the 998 octets line
+		 * limit (RFC 5322 2.1.1). A word longer than a line is never split.
+		 */
+		if (word > ws && p > word && line_has_word &&
+			cur_len + (p - ws) > fold_max) {
+			const gsize line_limits[] = {fold_max, 998};
+			gsize run = word - ws, total = p - ws, keep = run - 1;
+			unsigned int i;
+
+			for (i = 0; i < G_N_ELEMENTS(line_limits); i++) {
+				gsize need = total > line_limits[i] ? total - line_limits[i] : 0;
+
+				if (need < run && cur_len + need <= line_limits[i]) {
+					keep = need;
+					break;
+				}
+			}
+
+			g_string_append_len(res, ws, keep);
+			g_string_append(res, newline);
+			ws += keep;
+			cur_len = 0;
+		}
+
+		g_string_append_len(res, ws, p - ws);
+		cur_len += p - ws;
+
+		if (p > word) {
+			line_has_word = TRUE;
+		}
+	}
+
+	return res;
+}
+
 static inline bool rspamd_substring_cmp_func(unsigned char a, unsigned char b)
 {
 	return a == b;

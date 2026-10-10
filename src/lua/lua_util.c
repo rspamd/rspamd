@@ -200,6 +200,20 @@ LUA_FUNCTION_DEF(util, levenshtein_distance);
 LUA_FUNCTION_DEF(util, fold_header);
 
 /***
+ * @function util.fold_header_unstructured(name, value, [how])
+ * Fold an unstructured header value (Subject, free text) the RFC 5322 way:
+ * line breaks go only before existing whitespace, which is kept, so unfolding
+ * gives the value back unchanged. Unlike `fold_header`, it never folds after
+ * ',' or ';' and never turns the folding whitespace into a tab.
+ *
+ * @param {string} name name of the header
+ * @param {string} value value of the header
+ * @param {string} how "cr" for \r, "lf" for \n and "crlf" for \r\n (default)
+ * @return {string} Folded value of the header
+ */
+LUA_FUNCTION_DEF(util, fold_header_unstructured);
+
+/***
  * @function util.is_uppercase(str)
  * Returns true if a string is all uppercase
  *
@@ -826,6 +840,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, parse_html),
 	LUA_INTERFACE_DEF(util, levenshtein_distance),
 	LUA_INTERFACE_DEF(util, fold_header),
+	LUA_INTERFACE_DEF(util, fold_header_unstructured),
 	LUA_INTERFACE_DEF(util, is_uppercase),
 	LUA_INTERFACE_DEF(util, humanize_number),
 	LUA_INTERFACE_DEF(util, get_tld),
@@ -1661,6 +1676,40 @@ lua_util_fold_header(lua_State *L)
 	}
 
 	lua_pushnil(L);
+	return 1;
+}
+
+static int
+lua_util_fold_header_unstructured(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *name, *value;
+	enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
+	GString *folded;
+
+	name = lua_check_text_or_string(L, 1);
+	value = lua_check_text_or_string(L, 2);
+
+	if (!name || !value) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (lua_isstring(L, 3)) {
+		const char *how_str = lua_tostring(L, 3);
+
+		if (strcmp(how_str, "cr") == 0) {
+			how = RSPAMD_TASK_NEWLINES_CR;
+		}
+		else if (strcmp(how_str, "lf") == 0) {
+			how = RSPAMD_TASK_NEWLINES_LF;
+		}
+	}
+
+	folded = rspamd_header_value_fold_unstructured(name->start, name->len,
+												   value->start, value->len, 0, how);
+	lua_pushlstring(L, folded->str, folded->len);
+	g_string_free(folded, TRUE);
+
 	return 1;
 }
 
