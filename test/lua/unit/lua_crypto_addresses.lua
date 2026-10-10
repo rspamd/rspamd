@@ -44,13 +44,21 @@ context("Crypto addresses test", function()
     ['112D2adLM3UKy4Z4giRbReR6gjWuvHUqB'] = 'bitcoin',
     ['GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV'] = 'stellar',
     ['EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B'] = 'ton',
+    -- Masterchain (workchain -1), bounceable and not
+    ['Ef8AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH-Lr'] = 'ton',
+    ['Uf8AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH78u'] = 'ton',
     -- Format-only, no checksum available
     ['0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed'] = 'ethereum',
     ['4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh'] = 'monero',
+    -- Monero subaddress (95 chars, 8...) and integrated address (106 chars, 4[B-M]...)
+    ['8B' .. string.rep('h82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWhz', 1):sub(1, 93)] = 'monero',
+    ['4C' .. string.rep('h82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN', 3):sub(1, 104)] = 'monero',
   }
 
   -- Same addresses with a busted checksum: every one of these must be rejected
   local invalid = {
+    -- Correct CRC, but workchain 1 does not exist (only 0 and -1 do)
+    'EQEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH5B_',
     '16L5yRNPTuciSgXGHqYwn9N6NeoKqopAX',
     '31nM1WuowNDzocNxPPW9NQWJEtwWpjfcLX',
     'bc1qqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5fcj4z4',
@@ -412,5 +420,157 @@ context("Crypto addresses test", function()
     end
 
     limits.chunk_size = saved
+  end)
+  -- A Base58Check encoder, to make as many distinct valid addresses as a test needs
+  local function b58check(payload)
+    local hash = require "rspamd_cryptobox_hash"
+    local alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    local sha = hash.create_specific('sha256', hash.create_specific('sha256', payload):bin()):bin()
+    local bytes = { payload:byte(1, -1) }
+
+    for i = 1, 4 do
+      bytes[#bytes + 1] = sha:byte(i)
+    end
+
+    local out, zeros = {}, 0
+
+    while zeros < #bytes and bytes[zeros + 1] == 0 do
+      zeros = zeros + 1
+    end
+
+    while #bytes > 0 do
+      local rem, next_bytes = 0, {}
+
+      for _, b in ipairs(bytes) do
+        local acc = rem * 256 + b
+        local q = math.floor(acc / 58)
+        rem = acc % 58
+
+        if #next_bytes > 0 or q > 0 then
+          next_bytes[#next_bytes + 1] = q
+        end
+      end
+
+      out[#out + 1] = alphabet:sub(rem + 1, rem + 1)
+      bytes = next_bytes
+    end
+
+    return string.rep('1', zeros) .. string.reverse(table.concat(out))
+  end
+
+  local function p2pkh(i)
+    local hash = require "rspamd_cryptobox_hash"
+
+    return b58check('\0' .. hash.create_specific('sha256', tostring(i)):bin():sub(1, 20))
+  end
+
+  test("decoy addresses do not push a later address out of the result", function()
+    local decoys = {}
+
+    for i = 1, 100 do
+      decoys[i] = p2pkh(i)
+    end
+
+    with_task(table.concat(decoys, ' ') .. ' ' .. ltc, function(task)
+      local found = flat(task)
+
+      assert_equal(#found, 101)
+      assert_rspamd_table_eq({ actual = lua_crypto_addresses.get_addresses_flat(task, 'litecoin'),
+                               expect = { ltc } })
+    end)
+  end)
+
+  test("candidates rejected by a cheap check do not use the budget", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.max_candidates
+    local junk = {}
+
+    -- bech32 shaped (hrp + '1' + 10 data characters) and distinct, but with an
+    -- hrp no currency uses
+    local cs = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+
+    for i = 1, 600 do
+      local a, b = math.floor(i / 32) + 1, i % 32 + 1
+      junk[i] = 'xy1qqqqqqqq' .. cs:sub(a, a) .. cs:sub(b, b)
+    end
+
+    limits.max_candidates = 5
+    with_task(table.concat(junk, ' ') .. ' ' .. btc, function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+    end)
+    limits.max_candidates = saved
+  end)
+
+  local function with_raw(msg, fn)
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+
+    assert(res, "failed to load message")
+    task:process_message()
+    fn(task)
+    task:destroy()
+  end
+
+  test("junk in an attachment cannot starve the visible text", function()
+    local limits = lua_crypto_addresses.limits
+    local saved_total, saved_part = limits.max_candidates, limits.max_candidates_per_part
+    local junk = {}
+
+    -- Base58 shaped and distinct, so every one costs a decode
+    for i = 1, 50 do
+      junk[i] = string.format('1Nabcdefghijkmnopqrstuvwx%d%d', i % 9 + 1, math.floor(i / 9) + 1)
+    end
+
+    -- The attachment follows the text, as in a real message: text parts are not
+    -- returned in MIME order, so this is the layout that put the junk first
+    local function message(attachment_first)
+      local text = { '--b', 'Content-Type: text/plain', '', 'send it to ' .. btc .. ' please', '' }
+      local attachment = { '--b', 'Content-Type: text/plain',
+                           'Content-Disposition: attachment; filename="log.txt"', '',
+                           table.concat(junk, ' '), '' }
+      local lines = { 'From: <>', 'To: <nobody@example.com>', 'Subject: test',
+                      'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="b"', '' }
+
+      for _, block in ipairs(attachment_first and { attachment, text } or { text, attachment }) do
+        for _, line in ipairs(block) do
+          lines[#lines + 1] = line
+        end
+      end
+
+      lines[#lines + 1] = '--b--'
+      lines[#lines + 1] = ''
+
+      return table.concat(lines, '\r\n')
+    end
+
+    -- Both a per-part share and a total budget the junk alone would use up
+    limits.max_candidates = 20
+    limits.max_candidates_per_part = 10
+
+    for _, attachment_first in ipairs({ false, true }) do
+      with_raw(message(attachment_first), function(task)
+        assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+      end)
+    end
+
+    limits.max_candidates, limits.max_candidates_per_part = saved_total, saved_part
+  end)
+
+  test("finds a split address after ordinary prose", function()
+    with_task('Pay the fee to my new account at ' .. split(ltc, 4, ' ') .. ' today', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+
+    -- Longer groups and double spaces
+    with_task('Please pay the fee to my new account right away at ' .. split(ltc, 9, '  ') ..
+        ' before the end of the day', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { ltc } })
+    end)
+  end)
+
+  test("finds a cashaddr behind an unknown prefix", function()
+    with_task('send to BCH:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a now', function(task)
+      assert_rspamd_table_eq({ actual = flat(task),
+                               expect = { 'qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a' } })
+    end)
   end)
 end)
