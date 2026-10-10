@@ -155,6 +155,159 @@ BITCOIN ADDR 4
   Expect Symbol With Exact Options  BITCOIN_ADDR  1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
   ...  bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq  bitcoincash:qztslqhavnjcgth9zwu6dw0jjcfy4zahfy7vf0smwp
 
+ETHEREUM ADDR MAYBE
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [ETHEREUM_ADDR_MAYBE]}
+  Expect Symbol With Exact Options  ETHEREUM_ADDR_MAYBE  0x000000000000000000000000000000000000dEaD
+
+TRON ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [TRON_ADDR]}
+  Expect Symbol With Exact Options  TRON_ADDR  T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb
+
+DOGECOIN ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [DOGECOIN_ADDR]}
+  Expect Symbol With Exact Options  DOGECOIN_ADDR  D596YFweJQuHY1BbjazZYmAbt8jJPbKehC
+
+XRP ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [XRP_ADDR]}
+  Expect Symbol With Exact Options  XRP_ADDR  rrrrrrrrrrrrrrrrrrrrrhoLvTp
+
+MONERO ADDR MAYBE
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [MONERO_ADDR_MAYBE]}
+  Expect Symbol With Exact Options  MONERO_ADDR_MAYBE
+  ...  4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
+
+NO WALLET ADDRESS IN ORDINARY TOKENS
+  # A 44 char Base58 run, a commit hash and a UUID: none of them is an address.
+  # With no checksum to verify, a Base58 run of that shape matches ordinary
+  # base64 and token blobs, so nothing may claim it.
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_negative.eml
+  ...  Settings={symbols_enabled = [CRYPTO_ADDR_CHECK]}
+  Do Not Expect Symbol  CRYPTO_ADDR_CHECK
+
+BITCOIN ADDR TAPROOT
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol With Option  BITCOIN_ADDR  bc1pqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7rusqwk0jyn
+
+UPPERCASE BITCOIN ADDRESSES
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_uppercase.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol With Exact Options  BITCOIN_ADDR
+  ...  BC1QQYPQXPQ9QCRSSZG2PVXQ6RS0ZQG3YYC5FCJ4Z3
+  ...  BITCOINCASH:QPM2QSZNHKS23Z7629MMS6S4CWEF74VCWVY22GDX6A
+
+LITECOIN ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR]}
+  Expect Symbol With Exact Options  LITECOIN_ADDR  LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd
+  ...  ltc1qqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5dyg36p
+
+ZCASH ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [ZCASH_ADDR]}
+  Expect Symbol With Exact Options  ZCASH_ADDR  t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu
+
+CARDANO ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [CARDANO_ADDR]}
+  Expect Symbol With Exact Options  CARDANO_ADDR
+  ...  addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg
+
+COSMOS ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [COSMOS_ADDR]}
+  Expect Symbol With Exact Options  COSMOS_ADDR  cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu
+
+STELLAR ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [STELLAR_ADDR]}
+  Expect Symbol With Exact Options  STELLAR_ADDR
+  ...  GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV
+
+TON ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [TON_ADDR]}
+  Expect Symbol With Exact Options  TON_ADDR  EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B
+
+CRYPTO ADDR CHECK
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [CRYPTO_ADDR_CHECK]}
+  Expect Symbol With Exact Options  CRYPTO_ADDR_CHECK
+  ...  bitcoin:16L5yRNPTuciSgXGHqYwn9N6NeoKqopAu
+  ...  bitcoin:bc1pqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7rusqwk0jyn
+  ...  litecoin:LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd
+  ...  litecoin:ltc1qqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5dyg36p
+  ...  dogecoin:D596YFweJQuHY1BbjazZYmAbt8jJPbKehC
+  ...  tron:T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb
+  ...  xrp:rrrrrrrrrrrrrrrrrrrrrhoLvTp
+  ...  zcash:t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu
+  ...  cardano:addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg
+  ...  cosmos:cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu
+  ...  stellar:GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV
+  ...  ton:EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B
+  ...  ethereum:0x000000000000000000000000000000000000dEaD
+  ...  monero:4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
+
+CRYPTO ADDR SELECTOR MAP
+  # The selector computes the addresses itself, so no dependency on
+  # CRYPTO_ADDR_CHECK is needed and it works with only this symbol enabled
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [CRYPTO_ADDR_SELECTOR_MAP]}
+  Expect Symbol With Exact Options  CRYPTO_ADDR_SELECTOR_MAP
+  ...  16L5yRNPTuciSgXGHqYwn9N6NeoKqopAu
+  ...  4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
+
+LEAKED PASSWORD SCAM NON BITCOIN
+  # The composite used to require BITCOIN_ADDR, so a scam quoting any other
+  # currency scored nothing. A Litecoin address with a scam phrase is enough now.
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_scam.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR A NEWSLETTER
+  # List-Unsubscribe alone gates Bitcoin as it always did, but not the others
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_newsletter.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  LITECOIN_ADDR
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR A WITHDRAWAL NOTICE
+  # An exchange notice names the wallet the funds went to: the word "wallet"
+  # next to a real address is ordinary, not a scam signal
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_withdrawal.eml
+  ...  Settings={symbols_enabled = [TRON_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  TRON_ADDR
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR HEX DATA
+  # Any 0x + 40 hex token passes as an Ethereum address (a SHA-1 here), so the
+  # format-only symbol must not gate the scam rule
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_hex_ham.eml
+  ...  Settings={symbols_enabled = [ETHEREUM_ADDR_MAYBE, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  ETHEREUM_ADDR_MAYBE
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+DISABLING ONE CURRENCY KEEPS THE OTHERS
+  # Every other symbol runs here, greylisting included: a unique envelope keeps
+  # its greylist record away from the other tests
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  From=crypto-disabled@example.com  Rcpt=crypto-disabled-rcpt@example.com
+  ...  Settings={symbols_disabled = [ETHEREUM_ADDR_MAYBE]}
+  Expect Symbol  BITCOIN_ADDR
+  Do Not Expect Symbol  ETHEREUM_ADDR_MAYBE
+
+ENABLING ONE CURRENCY ENABLES ONLY IT
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol  BITCOIN_ADDR
+  Do Not Expect Symbol  LITECOIN_ADDR
+  Do Not Expect Symbol  ETHEREUM_ADDR_MAYBE
+
 RCVD_COUNT_ONE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RCVD_COUNT_ONE]}
