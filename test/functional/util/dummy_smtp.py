@@ -34,6 +34,8 @@
 #   --ehlo-caps CAPS     (sink mode)    comma-separated EHLO capability
 #                                        tokens advertised in a multi-line
 #                                        250- / 250 reply, e.g. "8BITMIME".
+#                                        A trailing empty token ends the
+#                                        reply with a bare "250" line.
 #                                        Default: plain single-line "250 ok".
 #   --reject-ehlo        (sink mode)    reply 502 to EHLO (HELO is still
 #                                        accepted normally) to exercise a
@@ -102,6 +104,11 @@ def _make_handler(args):
                             stream.write(b"250-dummy smtp\r\n")
                             for i, cap in enumerate(caps):
                                 sep = b" " if i == len(caps) - 1 else b"-"
+                                if not cap and sep == b" ":
+                                    # RFC 5321 allows a final line with
+                                    # the reply code alone
+                                    stream.write(b"250\r\n")
+                                    continue
                                 stream.write(b"250" + sep + cap.encode("ascii") + b"\r\n")
                         else:
                             stream.write(b"250 ok\r\n")

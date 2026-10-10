@@ -1441,6 +1441,37 @@ def validate_attachments_have_content_type(data):
     return count
 
 
+def _smtp_status_message(status_text):
+    lines = status_text.splitlines()
+    try:
+        idx = lines.index('MESSAGE')
+    except ValueError:
+        raise Exception('No MESSAGE marker found in SMTP status file')
+    return '\n'.join(lines[idx + 1:])
+
+
+def decode_email_header(status_text, name):
+    """Return the RFC 2047-decoded value of a top-level header of the message
+    captured in a dummy_smtp 'sink' status file, or None if it is absent.
+
+    Example:
+    | ${subject} = | Decode Email Header | ${smtp_status} | Subject |
+    """
+    import email
+    import email.policy
+    from email.header import decode_header, make_header
+
+    msg = email.message_from_bytes(
+        _smtp_status_message(status_text).encode('utf-8'),
+        policy=email.policy.compat32)
+    value = msg.get(name)
+    if value is None:
+        return None
+    # RFC 5322 unfolding removes the line breaks only, keeping whitespace
+    value = value.replace('\r\n', '').replace('\n', '')
+    return str(make_header(decode_header(value)))
+
+
 def validate_multipart_email(status_text):
     """Parse the DATA portion of a dummy_smtp 'sink' status file as a MIME
     message and summarize its top-level multipart structure for assertions.
@@ -1451,6 +1482,9 @@ def validate_multipart_email(status_text):
     A nested multipart part (e.g. a multipart/alternative group inside a
     multipart/mixed message) is summarized as {content_type, subtype,
     subparts: [...]} instead of decoded_text/decoded_length/decoded_sha256.
+    For a single-part message, cte and decoded_text describe its body;
+    has_8bit/headers_8bit tell whether any 8-bit data was transmitted at all
+    or within the top-level header block.
 
     Example:
     | ${info} = | Validate Multipart Email | ${smtp_status} |
@@ -1482,13 +1516,7 @@ def validate_multipart_email(status_text):
             'decoded_sha256': hashlib.sha256(decoded).hexdigest(),
         }
 
-    lines = status_text.splitlines()
-    try:
-        idx = lines.index('MESSAGE')
-    except ValueError:
-        raise Exception('No MESSAGE marker found in SMTP status file')
-
-    raw_message = '\n'.join(lines[idx + 1:])
+    raw_message = _smtp_status_message(status_text)
     msg = email.message_from_bytes(
         raw_message.encode('utf-8'), policy=email.policy.compat32)
 
@@ -1496,6 +1524,8 @@ def validate_multipart_email(status_text):
     if msg.is_multipart():
         for part in msg.get_payload():
             parts.append(summarize_part(part))
+    top = summarize_part(msg)
+    header_block = raw_message.split('\n\n', 1)[0]
 
     return {
         'is_multipart': msg.is_multipart(),
@@ -1503,6 +1533,13 @@ def validate_multipart_email(status_text):
         'subtype': msg.get_content_subtype(),
         'part_count': len(parts),
         'parts': parts,
+        # Single-part messages only; a multipart summary has no body of its own
+        'cte': top.get('cte', ''),
+        'decoded_text': top.get('decoded_text', ''),
+        # The sink decodes DATA as UTF-8, so any 8-bit octet sent shows up as
+        # a non-ASCII character (raw UTF-8 or a replacement character)
+        'has_8bit': any(ord(ch) > 127 for ch in raw_message),
+        'headers_8bit': any(ord(ch) > 127 for ch in header_block),
         'mime_version': msg.get('MIME-Version'),
         'message_id': msg.get('Message-Id'),
         # Only the wrapper's own Content-Type belongs at top level; the

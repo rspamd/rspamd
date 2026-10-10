@@ -33,6 +33,8 @@ ${SMTP_STATUS_8}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp8.status
 ${SMTP_PID_8}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp8.pid
 ${SMTP_STATUS_9}       ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp9.status
 ${SMTP_PID_9}          ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp9.pid
+${SMTP_STATUS_10}      ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp10.status
+${SMTP_PID_10}         ${RSPAMD_TMP_PREFIX}/metadata_exporter_smtp10.pid
 
 *** Test Cases ***
 Structured export to Redis stream - UUID v7 and metadata
@@ -102,17 +104,32 @@ Email export expands and validates selector addresses
   Should Contain  ${smtp}  EHLO selector-test@example.com
   Should Contain  ${smtp}  RCPT TO: <first@example.com>
   Should Contain  ${smtp}  RCPT TO: <second@example.com>
-  Should Not Contain  ${smtp}  not-an-address
+  Should Contain  ${smtp}  RCPT TO: <postmaster>
+  Should Not Contain  ${smtp}  not an address
   Should Contain  ${smtp}  From: <sender@example.com>
   Should Contain  ${smtp}  To: <first@example.com>, <second@example.com>
   Should Contain  ${smtp}  X-Custom: template-custom
   Should Contain  ${smtp}  X-Selector: selector-test@example.com
+  # CR/LF from a custom variable is collapsed instead of starting a header
+  Should Contain  ${smtp}  X-Injected: safe Bcc: injected@example.com
+  Should Not Match Regexp  ${smtp}  (?m)^Bcc:
+  # Array-valued variables are joined like selector results
+  Should Contain  ${smtp}  X-List: alpha,beta,gamma
+  Should Contain  ${smtp}  List: alpha,beta,gamma
+  # Substituted values are not expanded again
+  Should Contain  ${smtp}  X-Literal: cost $100 \${user} $ip
+  Should Contain  ${smtp}  Literal: cost $100 \${user} $ip
+  # A header that needs no encoding is kept as written, not refolded
+  Should Contain  ${smtp}
+  ...  X-Hosts: host-alpha,host-beta,host-gamma,host-delta,host-epsilon,host-zeta,host-eta
   ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log
   Should Contain  ${rspamd_log}  METADATA_OPTIONS_EXPANDED
   Should Not Contain  ${rspamd_log}  METADATA_OPTIONS_FAILED
 
 Email export auto-encodes non-ASCII headers
-  [Documentation]  Non-ASCII address display names and Subject get RFC 2047-encoded
+  [Documentation]  Non-ASCII display names, group names, comments and the
+  ...  Subject get RFC 2047-encoded in place; addresses stay untouched and no
+  ...  raw 8-bit octet is left in the header block
   Scan File  ${MESSAGE}
   ...  From=sender@example.com
   ...  Rcpt=first@example.com,second@example.com
@@ -121,16 +138,27 @@ Email export auto-encodes non-ASCII headers
 
   Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_2}
   ${smtp2} =  Get File  ${SMTP_STATUS_2}
-  Should Contain  ${smtp2}  From: J=?UTF-8?Q?
-  Should Contain  ${smtp2}  To: =?UTF-8?Q?
-  Should Contain  ${smtp2}  Subject: Pr=?UTF-8?Q?
-  Should Contain  ${smtp2}  <sender@example.com>
-  Should Contain  ${smtp2}  <first@example.com>, <second@example.com>
-  Should Contain  ${smtp2}  Cc: Jörg <third@example.com> (Kommentar)
+  ${info} =  Validate Multipart Email  ${smtp2}
+  Should Not Be True  ${info}[headers_8bit]
+  Should Contain  ${smtp2}  From: =?UTF-8?Q?J=C3=B6rg_M=C3=BCller?= <sender@example.com>
+  Should Contain  ${smtp2}  To: =?UTF-8?Q?=C3=84nne_Example?= <first@example.com>, <second@example.com>
+  Should Contain  ${smtp2}  Cc: =?UTF-8?Q?J=C3=B6rg?= <third@example.com> (=?UTF-8?Q?Komment=C3=A4r?=)
+  # Long enough to be folded after the group's first member
+  Should Contain  ${smtp2}  Reply-To: =?UTF-8?Q?Gruppe_=C3=84?=: <a@example.com>,
+  Should Contain  ${smtp2}  \t=?UTF-8?Q?=C3=96_=28x=29?= <b@example.com>;
+  Should Contain  ${smtp2}  Subject: =?UTF-8?Q?Pr=C3=BCfung_m=C3=B6glich?=
+  ${from} =  Decode Email Header  ${smtp2}  From
+  Should Be Equal  ${from}  Jörg Müller <sender@example.com>
+  ${cc} =  Decode Email Header  ${smtp2}  Cc
+  Should Be Equal  ${cc}  Jörg <third@example.com> (Kommentär)
+  ${subject} =  Decode Email Header  ${smtp2}  Subject
+  Should Be Equal  ${subject}  Prüfung möglich
+  # A long re-encoded header is folded at existing whitespace only, so it
+  # unfolds back to the very same text (no whitespace added after commas)
+  ${report} =  Decode Email Header  ${smtp2}  X-Report
+  Should Be Equal  ${report}
+  ...  Prüfung for 1,000,000 messages from host-alpha,host-beta,host-gamma,host-delta,host-epsilon
   Should Contain  ${smtp2}  Metadata alert
-  Should Not Contain  ${smtp2}  Jörg Müller
-  Should Not Contain  ${smtp2}  Änne Beispiel
-  Should Not Contain  ${smtp2}  Prüfung möglich
 
 Email export builds multipart from email_parts
   [Documentation]  email_parts assembles a multipart/mixed message: an
@@ -203,7 +231,10 @@ Email export preserves template body MIME headers
   ${smtp4} =  Get File  ${SMTP_STATUS_4}
   ${info} =  Validate Multipart Email  ${smtp4}
 
+  # The sink advertises only X8BITMIME, so the 8bit template part must be
+  # converted to quoted-printable before DATA (RFC 6152 section 3)
   Should Not Contain  ${smtp4}  BODY=8BITMIME
+  Should Not Be True  ${info}[has_8bit]
   Should Be True  ${info}[is_multipart]
   Should Be Equal  ${info}[subtype]  mixed
   Should Be Equal  ${info}[mime_version]  1.0
@@ -215,7 +246,7 @@ Email export preserves template body MIME headers
 
   ${part1} =  Set Variable  ${info}[parts][0]
   Should Be Equal  ${part1}[content_type]  text/html
-  Should Be Equal  ${part1}[cte]  8bit
+  Should Be Equal  ${part1}[cte]  quoted-printable
   Should Be Equal  ${part1}[decoded_text]  <p>Grüße</p>
 
   ${part2} =  Set Variable  ${info}[parts][1]
@@ -224,7 +255,8 @@ Email export preserves template body MIME headers
 
 Email export negotiates BODY=8BITMIME when advertised
   [Documentation]  lua_smtp tries EHLO first; when the server advertises
-  ...  8BITMIME, MAIL FROM gets the BODY=8BITMIME parameter.
+  ...  8BITMIME, MAIL FROM gets the BODY=8BITMIME parameter and an 8bit body
+  ...  is sent as is. The sink ends its EHLO reply with a bare "250" line.
   Scan File  ${MESSAGE}
   ...  From=sender@example.com
   ...  Rcpt=first@example.com
@@ -236,10 +268,15 @@ Email export negotiates BODY=8BITMIME when advertised
   Should Contain  ${smtp5}  EHLO selector-test@example.com
   Should Contain  ${smtp5}  MAIL FROM: <sender@example.com> BODY=8BITMIME
   Should Not Contain  ${smtp5}  HELO selector-test@example.com
+  ${info} =  Validate Multipart Email  ${smtp5}
+  Should Be True  ${info}[has_8bit]
+  Should Be Equal  ${info}[cte]  8bit
+  Should Be Equal  ${info}[decoded_text]  Metadata alert: Grüße
 
 Email export falls back to HELO when EHLO is rejected
   [Documentation]  A server that rejects EHLO gets a plain HELO retry, and
-  ...  MAIL FROM is sent without a BODY= parameter.
+  ...  MAIL FROM is sent without a BODY= parameter. Without 8BITMIME the 8bit
+  ...  body is converted to quoted-printable, so only 7-bit data is sent.
   Scan File  ${MESSAGE}
   ...  From=sender@example.com
   ...  Rcpt=first@example.com
@@ -252,6 +289,41 @@ Email export falls back to HELO when EHLO is rejected
   Should Contain  ${smtp6}  HELO selector-test@example.com
   Should Contain  ${smtp6}  MAIL FROM: <sender@example.com>
   Should Not Contain  ${smtp6}  BODY=8BITMIME
+  ${info} =  Validate Multipart Email  ${smtp6}
+  Should Not Be True  ${info}[has_8bit]
+  Should Be Equal  ${info}[cte]  quoted-printable
+  Should Be Equal  ${info}[decoded_text]  Metadata alert: Grüße
+
+Email export refuses 8-bit headers without 8BITMIME
+  [Documentation]  Raw 8-bit header octets (auto-encoding disabled) cannot be
+  ...  converted to 7bit, so the transaction stops before MAIL FROM.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  File Should Exist  ${SMTP_STATUS_10}
+  ${smtp10} =  Get File  ${SMTP_STATUS_10}
+  Should Contain  ${smtp10}  EHLO selector-test@example.com
+  Should Not Contain  ${smtp10}  MAIL FROM
+  Should Not Contain  ${smtp10}  Grüße
+  Wait Until Keyword Succeeds  5s  100ms  Rspamd Log Should Contain
+  ...  the message cannot be converted to 7bit: 8-bit data in message headers
+
+Email export refuses a header it cannot encode
+  [Documentation]  A non-ASCII address has no RFC 2047 form, so the alert is
+  ...  not sent rather than sent with raw 8-bit header octets.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=selector-test@example.com
+  ...  Settings={symbols_enabled = []}
+
+  Wait Until Keyword Succeeds  5s  100ms  Rspamd Log Should Contain
+  ...  email alert is not sent: cannot encode To header
+  Wait Until Keyword Succeeds  5s  100ms  Rspamd Log Should Contain
+  ...  email alert is not sent: cannot encode Content-Type header
 
 Email export renders a literal content part
   [Documentation]  A `content` part (as opposed to content_from_variables) is
@@ -334,6 +406,28 @@ Email export uses a top-level alternative when it is the only content
   Should Be Equal  ${info}[parts][1][content_type]  text/html
   Should Be Equal  ${info}[parts][1][decoded_text]  <p>HTML only body.</p>
 
+Email export defers when the alert cannot be built
+  [Documentation]  An invalid mail_from stops the alert; with defer = true
+  ...  that soft-rejects the message like a failed send would.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=defer-test@example.com
+  ...  Settings={symbols_enabled = []}
+  Expect Action  soft reject
+
+Email export defers when a custom variable raises
+  [Documentation]  A custom variable that raises while a part is built is
+  ...  caught and treated as a failure, so defer still soft-rejects.
+  Scan File  ${MESSAGE}
+  ...  From=sender@example.com
+  ...  Rcpt=first@example.com
+  ...  User=defer-throw@example.com
+  ...  Settings={symbols_enabled = []}
+  Expect Action  soft reject
+  Wait Until Keyword Succeeds  5s  100ms  Rspamd Log Should Contain
+  ...  custom variable [boom] failed
+
 Invalid rule with unknown key fails configtest
   [Documentation]  A rule with an unrecognized option is rejected by the
   ...  schema, disabled at config load time, and reported by configtest.
@@ -351,15 +445,22 @@ Invalid rule with unknown key fails configtest
   Should Contain  ${result.stdout}${result.stderr}  INVALID_RULE_BAD_KEY
   Should Contain  ${result.stdout}${result.stderr}  INVALID_PART_BOTH_SOURCES
   Should Contain  ${result.stdout}${result.stderr}  INVALID_PART_NO_SOURCE
+  Should Contain  ${result.stdout}${result.stderr}  INVALID_AMBIGUOUS_TEMPLATE
+  Should Contain  ${result.stdout}${result.stderr}  INVALID_MAIL_FROM
   Should Contain  ${result.stdout}${result.stderr}  custom_variables[invalid_non_string]
   Should Contain  ${result.stdout}${result.stderr}  custom_variables[invalid_no_callback]
 
 *** Keywords ***
+Rspamd Log Should Contain
+  [Arguments]  ${text}
+  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log
+  Should Contain  ${rspamd_log}  ${text}
+
 Metadata Exporter Structured Setup
   Run Redis
   Remove Files  ${SMTP_STATUS}  ${SMTP_STATUS_2}  ${SMTP_STATUS_3}  ${SMTP_STATUS_4}
   ...  ${SMTP_STATUS_5}  ${SMTP_STATUS_6}  ${SMTP_STATUS_7}  ${SMTP_STATUS_8}
-  ...  ${SMTP_STATUS_9}
+  ...  ${SMTP_STATUS_9}  ${SMTP_STATUS_10}
   ${smtp} =  Start Dummy Smtp  11126  sink  127.0.0.1  ${SMTP_PID}
   ...  --status-file  ${SMTP_STATUS}
   Set Test Variable  ${DUMMY_SMTP_PROC}  ${smtp}
@@ -373,7 +474,7 @@ Metadata Exporter Structured Setup
   ...  --status-file  ${SMTP_STATUS_4}  --ehlo-caps  X8BITMIME
   Set Test Variable  ${DUMMY_SMTP_PROC_4}  ${smtp4}
   ${smtp5} =  Start Dummy Smtp  11130  sink  127.0.0.1  ${SMTP_PID_5}
-  ...  --status-file  ${SMTP_STATUS_5}  --ehlo-caps  8BITMIME
+  ...  --status-file  ${SMTP_STATUS_5}  --ehlo-caps  8BITMIME,
   Set Test Variable  ${DUMMY_SMTP_PROC_5}  ${smtp5}
   ${smtp6} =  Start Dummy Smtp  11131  sink  127.0.0.1  ${SMTP_PID_6}
   ...  --status-file  ${SMTP_STATUS_6}  --reject-ehlo
@@ -387,6 +488,9 @@ Metadata Exporter Structured Setup
   ${smtp9} =  Start Dummy Smtp  11135  sink  127.0.0.1  ${SMTP_PID_9}
   ...  --status-file  ${SMTP_STATUS_9}
   Set Test Variable  ${DUMMY_SMTP_PROC_9}  ${smtp9}
+  ${smtp10} =  Start Dummy Smtp  11136  sink  127.0.0.1  ${SMTP_PID_10}
+  ...  --status-file  ${SMTP_STATUS_10}
+  Set Test Variable  ${DUMMY_SMTP_PROC_10}  ${smtp10}
   Rspamd Setup
 
 Metadata Exporter Structured Teardown
@@ -409,4 +513,6 @@ Metadata Exporter Structured Teardown
   Wait For Process  ${DUMMY_SMTP_PROC_8}
   Terminate Process  ${DUMMY_SMTP_PROC_9}
   Wait For Process  ${DUMMY_SMTP_PROC_9}
+  Terminate Process  ${DUMMY_SMTP_PROC_10}
+  Wait For Process  ${DUMMY_SMTP_PROC_10}
   Redis Teardown
