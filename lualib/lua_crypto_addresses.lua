@@ -735,7 +735,8 @@ end
 local SPACED_MIN_LEN, SPACED_MAX_LEN = 25, 35
 
 exports.limits = {
-  -- Distinct candidates one scan (get_addresses) may run through the validators; a Base58 one costs a full checksum
+  -- Distinct candidates one scan (get_addresses, or one add_from_string call made
+  -- after it) may run through the validators; a Base58 one costs a full checksum
   -- decode. Candidates seen before are free.
   max_candidates = 512,
   -- The share of those the whitespace-split scan may use: it produces far more
@@ -746,7 +747,13 @@ exports.limits = {
   -- Text is searched in slices of this size, which keeps the table of matches
   -- bounded no matter how large the body is
   chunk_size = 64 * 1024,
+  -- add_from_string keeps at most this many bytes of one call...
+  max_string_size = 256 * 1024,
+  -- ...and at most this many bytes per task while get_addresses has not run yet
+  max_pending_size = 1024 * 1024,
 }
+
+local pending_key = 'crypto_addresses_pending'
 
 -- Subject (decoded) plus every text part
 local function get_haystacks(task)
@@ -934,12 +941,71 @@ local function get_addresses(task)
     scan_text(task, hay, scan)
   end
 
+  local pending = task:cache_get(pending_key)
+
+  for _, str in ipairs(pending and pending.strs or E) do
+    scan_text(task, str, scan)
+  end
+
   task:cache_set('crypto_addresses', found)
 
   return found
 end
 
 exports.get_addresses = get_addresses
+
+--[[[
+-- @function lua_crypto_addresses.add_from_string(task, str)
+-- Offers text that `get_addresses` never sees on its own (recovered from an
+-- attachment or a QR code, say) as a source of wallet addresses, so that later
+-- `get_addresses` and `get_addresses_flat` calls include them. Meant to be
+-- called from `lua_content` handlers, which run before the message's text parts
+-- exist: until `get_addresses` has run the string is only stored, and nothing
+-- is scanned, so this must never trigger `get_addresses` itself (it would cache
+-- a scan of a half built message). Calling it afterwards scans at once. Only the
+-- first `limits.max_string_size` bytes of a call are used, and stored strings
+-- are capped at `limits.max_pending_size` per task. Symbols that already ran do
+-- not see addresses added after them.
+--]]
+local function add_from_string(task, str)
+  if not str or #str == 0 then
+    return
+  end
+
+  if #str > exports.limits.max_string_size then
+    str = str:sub(1, exports.limits.max_string_size)
+  end
+
+  local found = task:cache_get('crypto_addresses')
+
+  if found then
+    scan_text(task, str, new_scan(found))
+
+    return
+  end
+
+  local pending = task:cache_get(pending_key)
+
+  if not pending then
+    pending = { strs = {}, size = 0 }
+    task:cache_set(pending_key, pending)
+  end
+
+  local room = exports.limits.max_pending_size - pending.size
+
+  if room <= 0 then
+    return
+  end
+
+  if #str > room then
+    str = str:sub(1, room)
+  end
+
+  pending.strs[#pending.strs + 1] = str
+  pending.size = pending.size + #str
+end
+
+exports.add_from_string = add_from_string
 
 --[[[
 -- @function lua_crypto_addresses.get_addresses_flat(task, currency, typed)

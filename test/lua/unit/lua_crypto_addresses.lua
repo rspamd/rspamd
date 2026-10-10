@@ -243,6 +243,81 @@ context("Crypto addresses test", function()
     end)
   end)
 
+  test("add_from_string only stores text until get_addresses runs", function()
+    with_task('nothing to see here', function(task)
+      lua_crypto_addresses.add_from_string(task, 'qr: ' .. btc)
+
+      -- Scanning here would cache a result for a message whose text parts do
+      -- not exist yet when lua_content handlers call this
+      assert_nil(task:cache_get('crypto_addresses'))
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+
+      -- The deferred scan ends up in the same cache the later consumers read
+      assert_rspamd_table_eq({ actual = task:cache_get('crypto_addresses').bitcoin, expect = { btc } })
+    end)
+  end)
+
+  test("add_from_string merges several early calls with the message", function()
+    with_task('already here: ' .. btc, function(task)
+      lua_crypto_addresses.add_from_string(task, ltc)
+      lua_crypto_addresses.add_from_string(task, split(xrp, 5, ' '))
+      lua_crypto_addresses.add_from_string(task, btc)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc, ltc, xrp } })
+    end)
+  end)
+
+  test("add_from_string scans at once after get_addresses", function()
+    with_task('nothing to see here', function(task)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+
+      lua_crypto_addresses.add_from_string(task, 'qr: ' .. btc)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc } })
+
+      -- Split form, and a repeat of something already on record
+      lua_crypto_addresses.add_from_string(task, split(ltc, 4, ' ') .. ' ' .. btc)
+      lua_crypto_addresses.add_from_string(task, btc)
+      assert_rspamd_table_eq({ actual = flat(task), expect = { btc, ltc } })
+    end)
+  end)
+
+  test("add_from_string tolerates empty input", function()
+    with_task('nothing to see here', function(task)
+      lua_crypto_addresses.add_from_string(task, nil)
+      lua_crypto_addresses.add_from_string(task, '')
+      assert_nil(task:cache_get('crypto_addresses_pending'))
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+  end)
+
+  test("add_from_string ignores input past the size limit", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.max_string_size
+
+    limits.max_string_size = 64
+    with_task('nothing to see here', function(task)
+      lua_crypto_addresses.add_from_string(task, string.rep(' ', 64) .. btc)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+
+    limits.max_string_size = saved
+  end)
+
+  test("add_from_string stops storing past the pending limit", function()
+    local limits = lua_crypto_addresses.limits
+    local saved = limits.max_pending_size
+
+    limits.max_pending_size = 40
+    with_task('nothing to see here', function(task)
+      lua_crypto_addresses.add_from_string(task, string.rep(' ', 30))
+      -- Only 10 bytes of room are left, so this is cut inside the address
+      lua_crypto_addresses.add_from_string(task, btc)
+      lua_crypto_addresses.add_from_string(task, ltc)
+      assert_rspamd_table_eq({ actual = flat(task), expect = {} })
+    end)
+
+    limits.max_pending_size = saved
+  end)
+
   test("finds a TON address that ends in a dash", function()
     -- '-' belongs to the URL safe alphabet but is not a word character, so a
     -- plain \b after the address would never match
