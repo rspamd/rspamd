@@ -218,7 +218,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
                 rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
                 common.yield_result(task, rule,
                     'failed - err: ' .. oletools_rc[oletools_rc_code],
-                    0.0, 'encrypted', maybe_part)
+                    1.0, 'encrypted', maybe_part)
                 common.save_cache(task, digest, rule, 'encrypted', 1.0, maybe_part)
                 return
               elseif oletools_rc_code == 5 then

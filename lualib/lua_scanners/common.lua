@@ -22,8 +22,11 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_util = require "rspamd_util"
+local rspamd_cryptobox = require "rspamd_cryptobox_hash"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local lua_maps = require "lua_maps"
 local lua_magic_types = require "lua_magic/types"
 local fun = require "fun"
 
@@ -62,13 +65,62 @@ local function match_patterns(default_sym, found, patterns, dyn_weight)
   end
 end
 
-local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
+-- strip quotes, backslashes and control characters so a mime part filename
+-- can't break out of a generated `Content-Disposition: ...; filename="..."` header
+local function sanitize_header_filename(name)
+  if not name then
+    return name
+  end
+
+  return (name:gsub('[%c"\\]', '_'))
+end
+
+local av_result_cache_key = 'av_result_cache'
+
+--[[
+Merge one scanner's per-mime-part verdict into the task-wide av_result_cache
+(keyed by mime-part digest, holding hash_sha256/hash_sha1/filename/scanners
+per digest). sha256/sha1 and the filename are computed exactly once per
+digest, on the first scanner to record a result for it.
+--]]
+local function update_av_result_cache(task, rule, category, threats, symbols, is_whitelisted, maybe_part)
+  if not maybe_part then
+    return
+  end
+
+  local av_cache = task:cache_get(av_result_cache_key) or {}
+  local digest = maybe_part:get_digest()
+  local part_entry = av_cache[digest]
+
+  if not part_entry then
+    local content = maybe_part:get_content('raw_parsed')
+    part_entry = {
+      hash_sha256 = rspamd_cryptobox.create_specific('sha256', content):hex(),
+      hash_sha1 = rspamd_cryptobox.create_specific('sha1', content):hex(),
+      filename = maybe_part:get_filename(),
+      scanners = {},
+    }
+    av_cache[digest] = part_entry
+  end
+
+  part_entry.scanners[rule.log_prefix] = {
+    category = category or rule.detection_category or 'virus',
+    threats = threats,
+    symbols = symbols,
+    is_whitelisted = is_whitelisted,
+  }
+
+  task:cache_set(av_result_cache_key, av_cache)
+end
+
+local function yield_result(task, rule, vname, dyn_weight, category, maybe_part)
   local all_whitelisted = true
   local patterns
   local symbol
   local threat_table
   local threat_info
   local flags
+  local symbols_table = {}
 
   if type(vname) == 'string' then
     threat_table = { vname }
@@ -76,40 +128,52 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     threat_table = vname
   end
 
+  if not dyn_weight then
+    dyn_weight = (category == 'fail') and 0.0 or 1.0
+  end
 
-  -- This should be more generic
-  if not is_fail then
+  if not category then
     patterns = rule.patterns
     symbol = rule.symbol
     threat_info = rule.detection_category .. 'found'
-    if not dyn_weight then
-      dyn_weight = 1.0
-    end
-  elseif is_fail == 'fail' then
+  elseif category == 'fail' then
     patterns = rule.patterns_fail
     symbol = rule.symbol_fail
     threat_info = "FAILED with error"
-    dyn_weight = 0.0
-  elseif is_fail == 'encrypted' then
+  elseif category == 'encrypted' then
     patterns = rule.patterns
     symbol = rule.symbol_encrypted
     threat_info = "Scan has returned that input was encrypted"
-    dyn_weight = 1.0
-  elseif is_fail == 'macro' then
+  elseif category == 'macro' then
     patterns = rule.patterns
     symbol = rule.symbol_macro
     threat_info = "Scan has returned that input contains macros"
-    dyn_weight = 1.0
+  else
+    patterns = rule.patterns
+    symbol = category
+    threat_info = string.format("special scan result set by %s: %s", rule.name, category)
   end
 
   for _, tm in ipairs(threat_table) do
     local symname, symscore = match_patterns(symbol, tm, patterns, dyn_weight)
     if rule.whitelist and rule.whitelist:get_key(tm) then
       rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, tm)
+
+      if rule.symbol_ignore then
+        table.insert(symbols_table, rule.symbol_ignore)
+        if maybe_part and rule.show_attachments and maybe_part:get_filename() then
+          local fname = maybe_part:get_filename()
+          task:insert_result(rule.symbol_ignore, symscore, string.format("%s|%s",
+            tm, fname))
+        else
+          task:insert_result(rule.symbol_ignore, symscore, tm)
+        end
+      end
     else
       all_whitelisted = false
       rspamd_logger.infox(task, '%s: result - %s: "%s - score: %s"',
         rule.log_prefix, threat_info, tm, symscore)
+      table.insert(symbols_table, symname)
 
       if maybe_part and rule.show_attachments and maybe_part:get_filename() then
         local fname = maybe_part:get_filename()
@@ -121,7 +185,11 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     end
   end
 
-  if rule.action and is_fail ~= 'fail' and not all_whitelisted then
+  update_av_result_cache(task, rule, category, threat_table, symbols_table,
+    all_whitelisted, maybe_part)
+
+  if rule.action and not all_whitelisted
+      and (not category or category == 'macro' or category == 'encrypted') then
     threat_table = table.concat(threat_table, '; ')
     if rule.action ~= 'reject' then
       flags = 'least'
@@ -160,7 +228,12 @@ local function message_not_too_small(task, content, rule)
   return true
 end
 
-local function message_min_words(task, rule)
+local function message_min_words(task, rule, maybe_part)
+  -- A short message body must not suppress attachment scanning.
+  if maybe_part and not maybe_part:is_text() then
+    return true
+  end
+
   if rule.text_part_min_words and tonumber(rule.text_part_min_words) > 0 then
     local text_part_above_limit = false
     local text_parts = task:get_text_parts()
@@ -227,10 +300,10 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
       if threat_string[1] ~= 'OK' then
         if threat_string[1] == 'MACRO' then
           yield_result(task, rule, 'File contains macros',
-            0.0, 'macro', maybe_part)
+            1.0, 'macro', maybe_part)
         elseif threat_string[1] == 'ENCRYPTED' then
           yield_result(task, rule, 'File is encrypted',
-            0.0, 'encrypted', maybe_part)
+            1.0, 'encrypted', maybe_part)
         else
           -- Check if cached data contains symbol name (for category-based scanners)
           -- Format: "SYMBOL_NAME\vdetails" or just "details"
@@ -240,7 +313,11 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
             local details = threat_string[2]
             lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - %s',
               rule.log_prefix, key, symbol_name, details)
-            task:insert_result(symbol_name, 1.0, details)
+            if rule.replay_cached_categories then
+              yield_result(task, rule, details, score, symbol_name, maybe_part)
+            else
+              task:insert_result(symbol_name, 1.0, details)
+            end
           else
             -- Old format without symbol name
             lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
@@ -261,7 +338,7 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
 
     local f_message_not_too_large = message_not_too_large(task, content, rule)
     local f_message_not_too_small = message_not_too_small(task, content, rule)
-    local f_message_min_words = message_min_words(task, rule)
+    local f_message_min_words = message_min_words(task, rule, maybe_part)
     local f_dynamic_scan = dynamic_scan(task, rule)
 
     if uncached and
@@ -397,11 +474,17 @@ local function gen_extension(fname)
   return ext[1], ext[2], filename_parts
 end
 
+local function table_is_empty(t)
+  return next(t or {}) == nil
+end
+
 local function check_parts_match(task, rule)
   local filter_func = function(p)
     local mtype, msubtype = p:get_type()
     local detected_ext = p:get_detected_ext()
     local fname = p:get_filename()
+    local match = false
+    local match_exclude = false
     local ext, ext2
 
     if rule.scan_all_mime_parts == false then
@@ -410,13 +493,22 @@ local function check_parts_match(task, rule)
       if fname ~= nil then
         ext, ext2 = gen_extension(fname)
         --lua_util.debugm(rule.name, task, '%s: extension, fname: |%s|%s|%s|', rule.log_prefix, ext, ext2, fname)
+        -- include match
         if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
             or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
           lua_util.debugm(rule.name, task, '%s: extension matched: |%s|%s|', rule.log_prefix, ext, ext2)
-          return true
+          match = true
         elseif match_filter(task, rule, fname, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: filename regex matched', rule.log_prefix)
-          return true
+          match = true
+        end
+        -- exclude match (not ext2 match)
+        if match_filter(task, rule, ext, rule.mime_parts_filter_ext_exclude, 'ext') then
+          lua_util.debugm(rule.name, task, '%s: exclude - extension matched: |%s|%s|', rule.log_prefix, ext, ext2)
+          match_exclude = true
+        elseif match_filter(task, rule, fname, rule.mime_parts_filter_regex_exclude, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: exclude - filename regex matched', rule.log_prefix)
+          match_exclude = true
         end
       end
       -- check content type string regex matching
@@ -424,7 +516,11 @@ local function check_parts_match(task, rule)
         local ct = string.format('%s/%s', mtype, msubtype):lower()
         if match_filter(task, rule, ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex content-type: %s', rule.log_prefix, ct)
-          return true
+          match = true
+        end
+        if match_filter(task, rule, ct, rule.mime_parts_filter_regex_exclude, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: exclude - regex content-type: %s', rule.log_prefix, ct)
+          match_exclude = true
         end
       end
       -- check detected content type (libmagic) regex matching
@@ -432,36 +528,90 @@ local function check_parts_match(task, rule)
         local magic = lua_magic_types[detected_ext] or {}
         if match_filter(task, rule, detected_ext, rule.mime_parts_filter_ext, 'ext') then
           lua_util.debugm(rule.name, task, '%s: detected extension matched: |%s|', rule.log_prefix, detected_ext)
-          return true
+          match = true
         elseif magic.ct and match_filter(task, rule, magic.ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s',
             rule.log_prefix, magic.ct)
-          return true
+          match = true
+        end
+        if match_filter(task, rule, detected_ext, rule.mime_parts_filter_ext_exclude, 'ext') then
+          lua_util.debugm(rule.name, task, '%s: exclude - detected extension matched: |%s|',
+            rule.log_prefix, detected_ext)
+          match_exclude = true
+        elseif magic.ct and match_filter(task, rule, magic.ct, rule.mime_parts_filter_regex_exclude, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: exclude - regex detected libmagic content-type: %s',
+            rule.log_prefix, magic.ct)
+          match_exclude = true
         end
       end
       -- check filenames in archives
-      if p:is_archive() then
+      if p:is_archive() and rule.mime_parts_match_archive ~= false then
         local arch = p:get_archive()
         local filelist = arch:get_files_full(1000)
+        -- an archive as a whole can only be excluded if every single file in it is excluded
+        local archive_all_excluded = not table_is_empty(filelist)
+
         for _, f in ipairs(filelist) do
           ext, ext2 = gen_extension(f.name)
           if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
               or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
             lua_util.debugm(rule.name, task, '%s: extension matched in archive: |%s|%s|', rule.log_prefix, ext, ext2)
             --lua_util.debugm(rule.name, task, '%s: extension matched in archive: %s', rule.log_prefix, ext)
-            return true
+            match = true
           elseif match_filter(task, rule, f.name, rule.mime_parts_filter_regex, 'regex') then
             lua_util.debugm(rule.name, task, '%s: filename regex matched in archive', rule.log_prefix)
-            return true
+            match = true
+          end
+
+          if archive_all_excluded and not (
+              match_filter(task, rule, ext, rule.mime_parts_filter_ext_exclude, 'ext')
+              or match_filter(task, rule, ext2, rule.mime_parts_filter_ext_exclude, 'ext')
+              or match_filter(task, rule, f.name, rule.mime_parts_filter_regex_exclude, 'regex')) then
+            archive_all_excluded = false
           end
         end
+
+        if archive_all_excluded then
+          lua_util.debugm(rule.name, task, '%s: exclude - all files in archive matched exclude filters',
+            rule.log_prefix)
+          match_exclude = true
+        end
+      end
+
+      if match then
+        if match_exclude then
+          lua_util.debugm(rule.name, task, '%s: found a match, but also an exclude match - not scanning',
+            rule.log_prefix)
+        else
+          return true
+        end
+      elseif table_is_empty(rule.mime_parts_filter_ext) and table_is_empty(rule.mime_parts_filter_regex)
+          and (not table_is_empty(rule.mime_parts_filter_ext_exclude)
+            or not table_is_empty(rule.mime_parts_filter_regex_exclude)) then
+        -- assuming only blacklisting when no include rules are set: match all - exclude some
+        if match_exclude then
+          lua_util.debugm(rule.name, task, '%s: assuming match all, but also an exclude match - not scanning',
+            rule.log_prefix)
+        else
+          lua_util.debugm(rule.name, task, '%s: assuming match all and found no exclude match', rule.log_prefix)
+          return true
+        end
+      else
+        lua_util.debugm(rule.name, task, '%s: no include or exclude rule matched', rule.log_prefix)
       end
     end
 
+    if match_exclude then
+      return false
+    end
+
     -- check text_part has more words than text_part_min_words_check
-    if rule.scan_text_mime and rule.text_part_min_words and p:is_text() and
-        p:get_text():get_words_count() >= tonumber(rule.text_part_min_words) then
-      return true
+    -- (unset text_part_min_words means "no minimum" - do not silently skip scan_text_mime)
+    if rule.scan_text_mime and p:is_text() then
+      local min_words = rule.text_part_min_words and tonumber(rule.text_part_min_words)
+      if not min_words or p:get_text():get_words_count() >= min_words then
+        return true
+      end
     end
 
     if rule.scan_image_mime and p:is_image() then
@@ -529,15 +679,296 @@ local function get_upstream_or_fail(task, rule, maybe_part, reason)
   return upstream
 end
 
+--[[
+Derive the standard symbol / symbol_fail / symbol_encrypted / symbol_macro /
+symbol_ignore names for a scanner rule instance from its config key `sym`,
+without mutating `opts`. Existing `opts.symbol*` overrides always win.
+--]]
+local function derive_symbols(sym, opts)
+  local symbol = opts.symbol or sym:upper()
+  local symbol_fail = opts.symbol_fail or (symbol .. '_FAIL')
+  local symbol_encrypted = opts.symbol_encrypted or (symbol .. '_ENCRYPTED')
+  local symbol_macro = opts.symbol_macro or (symbol .. '_MACRO')
+  local symbol_ignore = opts.symbol_ignore or (symbol .. '_IGNORE')
+
+  return symbol, symbol_fail, symbol_encrypted, symbol_macro, symbol_ignore
+end
+
+local function configure_whitelist(rule, opts, description)
+  if opts.whitelist then
+    rule.whitelist = lua_maps.map_add_from_ucl(opts.whitelist, 'hash',
+      description or (rule.log_prefix .. ' whitelist'))
+  end
+end
+
+--[[
+When a scanner's `cfg.configure(opts)` fails (e.g. bad `servers=`), register
+a stub rule that always emits `symbol_fail` with a clear reason instead of
+silently dropping the rule. Returns the fail-callback, a nil report-callback
+(a stub rule never has anything to report), and the stub rule, in the same
+shape `add_antivirus_rule`/`add_scanner_rule` callers expect.
+--]]
+local function configure_failed_stub(scanner_type, sym, opts, symbol, symbol_fail,
+                                      symbol_encrypted, symbol_macro, symbol_ignore)
+  rspamd_logger.errx(rspamd_config,
+    'cannot configure %s for %s; registering fail-only rule that always emits %s',
+    scanner_type, symbol, symbol_fail)
+
+  local fail_reason = string.format('%s: configuration failed (see startup log)', scanner_type)
+
+  local stub_rule = {
+    type = scanner_type,
+    name = opts.name or sym,
+    symbol = symbol,
+    symbol_fail = symbol_fail,
+    symbol_encrypted = symbol_encrypted,
+    symbol_macro = symbol_macro,
+    symbol_ignore = symbol_ignore,
+    symbol_type = opts.symbol_type,
+    timeout = opts.timeout,
+    log_prefix = opts.name or sym,
+    configuration_failed = true,
+  }
+
+  local function fail_cb(task)
+    task:insert_result(symbol_fail, 1.0, fail_reason)
+  end
+
+  return fail_cb, nil, stub_rule
+end
+
+-- Encoded as base32 in the source to avoid crappy stuff.
+local eicar_pattern = rspamd_util.decode_base32(
+  [[akp6woykfbonrepmwbzyfpbmibpone3mj3pgwbffzj9e1nfjdkorisckwkohrnfe1nt41y3jwk1cirjki4w4nkieuni4ndfjcktnn1yjmb1wn]]
+)
+
+--[[
+If `rule.eicar_fake_pattern` is set and `content` matches it exactly, swap in
+the real (base32-decoded) EICAR test string. Useful for E2E testing when
+another party removes/blocks EICAR attachments before they reach the
+scanner.
+--]]
+local function maybe_apply_eicar_fake_pattern(task, rule, content, fname)
+  local pattern = rule.eicar_fake_pattern
+  if not pattern then
+    return content
+  end
+
+  if type(pattern) == 'string' then
+    local rspamd_text = require "rspamd_text"
+    pattern = rspamd_text.fromstring(pattern)
+    rule.eicar_fake_pattern = pattern
+  end
+
+  if #content == #pattern and content == pattern then
+    rspamd_logger.infox(task, '%s: found eicar fake replacement part in the part (filename="%s")',
+      rule.log_prefix, fname)
+    return eicar_pattern
+  end
+
+  return content
+end
+
+--[[
+Build the mime-part/whole-message scan callback shared by antivirus.lua and
+external_services.lua. `cfg` is the scanner module (providing `check`),
+`rule` is the already configured rule table.
+--]]
+local function make_scan_callback(cfg, rule)
+  return function(task)
+    if rule.scan_mime_parts then
+      fun.each(function(p)
+        local content = p:get_content()
+        if content and #content > 0 then
+          content = maybe_apply_eicar_fake_pattern(task, rule, content, p:get_filename())
+          cfg.check(task, content, p:get_digest(), rule, p)
+        end
+      end, check_parts_match(task, rule))
+    else
+      cfg.check(task, task:get_content(), task:get_digest(), rule)
+    end
+  end
+end
+
+--[[
+Build the mime-part/whole-message report callback for scanners that expose a
+`report` function alongside `check` (e.g. an async scanner that polls a job
+result separately from submitting it). Returns nil when `cfg.report` isn't a
+function, so callers can treat the result the same way as an absent report
+symbol.
+--]]
+local function make_report_callback(cfg, rule)
+  if type(cfg.report) ~= 'function' then
+    return nil
+  end
+
+  return function(task)
+    if rule.scan_mime_parts then
+      fun.each(function(p)
+        local content = p:get_content()
+        if content and #content > 0 then
+          cfg.report(task, content, p:get_digest(), rule, p)
+        end
+      end, check_parts_match(task, rule))
+    else
+      cfg.report(task, task:get_content(), task:get_digest(), rule)
+    end
+  end
+end
+
+--[[
+Build the `rspamd_config:register_symbol()` parameter table for a callback
+symbol scheduled as `symbol_type` ('normal' (default), 'postfilter' or
+'prefilter').
+--]]
+local function build_symbol_registration(name, cb, m, group, symbol_type)
+  local t = {
+    name = name,
+    callback = cb,
+    score = 0.0,
+    group = group,
+  }
+
+  if symbol_type == 'postfilter' then
+    t.type = 'postfilter'
+    t.priority = lua_util.symbols_priorities.medium
+  elseif symbol_type == 'prefilter' then
+    t.type = 'prefilter'
+    t.priority = lua_util.symbols_priorities.medium
+  elseif symbol_type == 'callback' then
+    t.type = 'callback'
+  else
+    t.type = 'normal'
+  end
+
+  t.augmentations = {}
+
+  if type(m.timeout) == 'number' then
+    -- Here, we ignore possible DNS timeout and timeout from multiple retries
+    -- as these situations are not usual nor likely for these modules
+    table.insert(t.augmentations, string.format("timeout=%f", m.timeout))
+  end
+
+  return t
+end
+
+local function scanner_symbol_registration(anchor_symbol, cb, m, group)
+  return build_symbol_registration(anchor_symbol, cb, m, group, m.symbol_type)
+end
+
+-- Reports run as independent callbacks, not virtual children of the main check.
+local function report_symbol_registration(symbol_report, cb, m, group)
+  return build_symbol_registration(symbol_report, cb, m, group, m.symbol_report_type)
+end
+
+--[[
+Register the virtual child symbols (fail/encrypted/macro/ignore,
+pattern-derived, category `symbols` tree, and the metric symbol) for a
+scanner rule, plus the scanner's own main result symbol when it differs
+from `anchor_symbol` (e.g. the `_CHECK` anchor used by external_services.lua
+for scanners with hardcoded default symbols). `id` is the id returned when
+registering the main callback symbol (see `scanner_symbol_registration`).
+--]]
+local function register_scanner_symbols(id, anchor_symbol, m, group)
+  local function reg_virtual(name)
+    if name then
+      rspamd_config:register_symbol({
+        type = 'virtual',
+        name = name,
+        parent = id,
+        score = 0.0,
+        group = group,
+      })
+    end
+  end
+
+  if m.symbol and m.symbol ~= anchor_symbol then
+    reg_virtual(m.symbol)
+  end
+
+  reg_virtual(m.symbol_fail)
+  reg_virtual(m.symbol_encrypted)
+  reg_virtual(m.symbol_macro)
+  reg_virtual(m.symbol_ignore)
+
+  local function reg_pattern_symbols(patterns)
+    if type(patterns) ~= 'table' then
+      return
+    end
+    if patterns[1] then
+      for _, p in ipairs(patterns) do
+        if type(p) == 'table' then
+          for sym in pairs(p) do
+            reg_virtual(sym)
+          end
+        end
+      end
+    else
+      for sym in pairs(patterns) do
+        reg_virtual(sym)
+      end
+    end
+  end
+
+  reg_pattern_symbols(m.patterns)
+  reg_pattern_symbols(m.patterns_fail)
+
+  local function reg_symbols(tbl)
+    for _, sym in pairs(tbl) do
+      if type(sym) == 'string' then
+        reg_virtual(sym)
+      elseif type(sym) == 'table' then
+        if sym.symbol then
+          reg_virtual(sym.symbol)
+
+          if sym.score then
+            rspamd_config:set_metric_symbol({
+              name = sym.symbol,
+              score = sym.score,
+              description = sym.description,
+              group = sym.group or group,
+            })
+          end
+        else
+          reg_symbols(sym)
+        end
+      end
+    end
+  end
+
+  if m.symbols then
+    reg_symbols(m.symbols)
+  end
+
+  if m.score then
+    rspamd_config:set_metric_symbol({
+      name = m.symbol,
+      score = m.score,
+      description = m.description or (group .. ' symbol'),
+      group = m.group or group,
+    })
+  end
+end
+
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
+exports.sanitize_header_filename = sanitize_header_filename
 exports.condition_check_and_continue = need_check
 exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match
 exports.check_metric_results = check_metric_results
 exports.get_upstream_or_fail = get_upstream_or_fail
+exports.derive_symbols = derive_symbols
+exports.configure_whitelist = configure_whitelist
+exports.configure_failed_stub = configure_failed_stub
+exports.maybe_apply_eicar_fake_pattern = maybe_apply_eicar_fake_pattern
+exports.make_scan_callback = make_scan_callback
+exports.make_report_callback = make_report_callback
+exports.scanner_symbol_registration = scanner_symbol_registration
+exports.report_symbol_registration = report_symbol_registration
+exports.register_scanner_symbols = register_scanner_symbols
 
 setmetatable(exports, {
   __call = function(t, override)
