@@ -845,244 +845,594 @@ rspamd_mime_header_decode(rspamd_mempool_t *pool, const char *in,
 	return ret;
 }
 
-char *
-rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
+/* An encoded-word is at most 75 characters long (RFC 2047 section 2) */
+#define RSPAMD_RFC2047_WORD_MAX 75
+#define RSPAMD_RFC2047_PREFIX "=?UTF-8?Q?"
+#define RSPAMD_RFC2047_SUFFIX "?="
+
+static inline gboolean
+rspamd_mime_header_is_wsp(char c)
 {
-	static const size_t max_token_size = 76 - 12; /* 12 is the length of "=?UTF-8?Q??="; */
-	GString *outbuf = g_string_sized_new(len);
-	char *encode_buf = g_alloca(max_token_size + 3);
-	const char *p = in;
-	const char *end = in + len;
-	/* Accumulate pending whitespace between segments to embed into next encoded-word */
-	size_t pending_spaces = 0, pending_tabs = 0;
+	return c == ' ' || c == '\t';
+}
+
+static inline gboolean
+rspamd_mime_header_is_space(char c)
+{
+	return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+/*
+ * Appends text as Q encoded-words separated by a space, each one at most
+ * RSPAMD_RFC2047_WORD_MAX long and never splitting a UTF-8 sequence. The
+ * whitespace between adjacent encoded-words is not part of the decoded text
+ * (RFC 2047 section 6.2), so the separators do not change it.
+ */
+static void
+rspamd_mime_header_append_encoded(GString *out, const char *text, gsize len)
+{
+	const gsize max_payload = RSPAMD_RFC2047_WORD_MAX -
+							  (sizeof(RSPAMD_RFC2047_PREFIX) - 1) -
+							  (sizeof(RSPAMD_RFC2047_SUFFIX) - 1);
+	const uint8_t *s = (const uint8_t *) text;
+	int32_t i = 0, total = (int32_t) len;
+	gboolean first = TRUE;
+
+	while (i < total) {
+		int32_t word_start = i;
+		gsize payload = 0, old_len;
+		gssize written;
+
+		while (i < total) {
+			int32_t next = i, k;
+			gsize enc = 0;
+
+			/* One code point; an ill-formed sequence is stepped over as a whole */
+			U8_FWD_1(s, next, total);
+
+			/* Same rules as rspamd_encode_qp2047_buf */
+			for (k = i; k < next; k++) {
+				enc += (g_ascii_isalnum(s[k]) || s[k] == ' ') ? 1 : 3;
+			}
+
+			if (payload + enc > max_payload && i > word_start) {
+				break;
+			}
+
+			payload += enc;
+			i = next;
+		}
+
+		if (!first) {
+			g_string_append_c(out, ' ');
+		}
+		first = FALSE;
+
+		g_string_append_len(out, RSPAMD_RFC2047_PREFIX, sizeof(RSPAMD_RFC2047_PREFIX) - 1);
+		old_len = out->len;
+		g_string_set_size(out, old_len + payload);
+		written = rspamd_encode_qp2047_buf(text + word_start, i - word_start,
+										   out->str + old_len, payload);
+		g_string_set_size(out, old_len + MAX(written, 0));
+		g_string_append_len(out, RSPAMD_RFC2047_SUFFIX, sizeof(RSPAMD_RFC2047_SUFFIX) - 1);
+	}
+}
+
+/*
+ * Length of a folding line break at p (CRLF, LF or CR followed by whitespace),
+ * not counting that whitespace; 0 if there is none
+ */
+static gsize
+rspamd_mime_header_fold_len(const char *p, const char *end)
+{
+	const char *r = p;
+
+	if (r < end && *r == '\r') {
+		r++;
+	}
+	if (r < end && *r == '\n') {
+		r++;
+	}
+
+	if (r == p || r == end || !rspamd_mime_header_is_wsp(*r)) {
+		return 0;
+	}
+
+	return r - p;
+}
+
+/*
+ * Encodes a run of words that may span folds. A fold stays between two
+ * encoded-words, where whitespace is not part of the decoded text (RFC 2047
+ * 6.2), so the whitespace after it - the text separator once unfolded - is
+ * repeated inside the next encoded-word.
+ */
+static void
+rspamd_mime_header_append_encoded_run(GString *out, GString *segment,
+									  const char *p, const char *end)
+{
+	g_string_set_size(segment, 0);
 
 	while (p < end) {
-		/* Collect linear white space to possibly include into next encoded-word */
-		if (*p == ' ') {
-			pending_spaces++;
+		gsize fold = (*p == '\r' || *p == '\n') ? rspamd_mime_header_fold_len(p, end) : 0;
+
+		if (fold == 0) {
+			g_string_append_c(segment, *p);
 			p++;
 			continue;
 		}
-		else if (*p == '\t') {
-			pending_tabs++;
+
+		rspamd_mime_header_append_encoded(out, segment->str, segment->len);
+		g_string_set_size(segment, 0);
+		g_string_append_len(out, p, fold);
+		p += fold;
+
+		while (p < end && rspamd_mime_header_is_wsp(*p)) {
+			g_string_append_c(out, *p);
+			g_string_append_c(segment, *p);
 			p++;
-			continue;
-		}
-		else if (*p == '\r' || *p == '\n') {
-			/* Flush pending WS before hard newlines */
-			while (pending_spaces--) {
-				g_string_append_c(outbuf, ' ');
-			}
-			pending_spaces = 0;
-			while (pending_tabs--) {
-				g_string_append_c(outbuf, '\t');
-			}
-			pending_tabs = 0;
-			g_string_append_c(outbuf, *p);
-			p++;
-			continue;
-		}
-		else if (*p == '(' || *p == ')') {
-			/* Flush pending WS around CFWS delimiters */
-			while (pending_spaces--) {
-				g_string_append_c(outbuf, ' ');
-			}
-			pending_spaces = 0;
-			while (pending_tabs--) {
-				g_string_append_c(outbuf, '\t');
-			}
-			pending_tabs = 0;
-			g_string_append_c(outbuf, *p);
-			p++;
-			continue;
-		}
-		else {
-			/* Decide whether we start an encoded span right away */
-			unsigned char first_c = (unsigned char) *p;
-			gboolean starts_encoding = (first_c >= 128) || (is_structured && !g_ascii_isalnum(first_c));
-
-			const char *piece_end = end;
-			size_t piece_len = piece_end - p;
-			gboolean need_encoding = FALSE;
-			size_t unencoded_prefix = 0;
-			size_t encoded_len_count = 0;
-			size_t enc_span = 0;
-			gboolean include_pending_ws = starts_encoding && (pending_spaces > 0 || pending_tabs > 0);
-			size_t pending_ws_budget = include_pending_ws ? (pending_spaces + pending_tabs * 3) : 0;
-
-			/* Determine how much of this piece needs encoding and fits the budget */
-			size_t utf8_char_start = 0;
-			size_t enc_span_at_utf8_start = 0;
-			size_t encoded_len_at_utf8_start = 0;
-
-			for (size_t i = 0; i < piece_len; i++) {
-				unsigned char c = p[i];
-				/* UTF-8 lead byte or ASCII */
-				gboolean is_utf8_start = (c < 0x80) || (c >= 0xC0);
-
-				if (!need_encoding) {
-					if (c >= 128 || (is_structured && !g_ascii_isalnum(c))) {
-						need_encoding = TRUE;
-						/* Start encoded region with this char */
-						size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
-
-						if (add + pending_ws_budget > max_token_size) {
-							/* Nothing fits, stop here to emit prefix only */
-							piece_len = i;
-							piece_end = p + piece_len;
-							break;
-						}
-
-						encoded_len_count = pending_ws_budget + add;
-						enc_span = 1;
-						if (is_utf8_start) {
-							utf8_char_start = i;
-							enc_span_at_utf8_start = 0;
-							encoded_len_at_utf8_start = pending_ws_budget;
-						}
-					}
-					else {
-						/* Still in unencoded prefix */
-						unencoded_prefix++;
-					}
-				}
-				else {
-					if (is_utf8_start) {
-						utf8_char_start = i;
-						enc_span_at_utf8_start = enc_span;
-						encoded_len_at_utf8_start = encoded_len_count;
-					}
-
-					/* Also stop on parentheses to keep CFWS outside */
-					if (c == '(' || c == ')') {
-						piece_len = i;
-						piece_end = p + piece_len;
-						break;
-					}
-
-					/* Break on whitespace to keep spaces outside encoded-words */
-					if (c == ' ' || c == '\t') {
-						piece_len = i;
-						piece_end = p + piece_len;
-						break;
-					}
-
-					/* For non-structured, include ASCII punctuation only if bridging to non-ASCII ahead */
-					if (!is_structured && c < 128 && !g_ascii_isalnum(c)) {
-						gboolean bridge_to_non_ascii = FALSE;
-						for (size_t j = i + 1; j < piece_len; j++) {
-							unsigned char nc = p[j];
-							if (nc >= 128) {
-								bridge_to_non_ascii = TRUE;
-								break;
-							}
-							if (g_ascii_isspace(nc) || nc == '(' || nc == ')') {
-								break;
-							}
-						}
-
-						if (!bridge_to_non_ascii) {
-							piece_len = i;
-							piece_end = p + piece_len;
-							break;
-						}
-					}
-
-					size_t add = (g_ascii_isalnum(c) || c == ' ') ? 1 : 3;
-
-					if (encoded_len_count + add > max_token_size) {
-						/* Budget exceeded; stop at UTF-8 boundary */
-						if (is_utf8_start) {
-							piece_len = i;
-							piece_end = p + piece_len;
-						}
-						else {
-							/* Back up to UTF-8 char start */
-							piece_len = utf8_char_start;
-							piece_end = p + piece_len;
-							enc_span = enc_span_at_utf8_start;
-							encoded_len_count = encoded_len_at_utf8_start;
-						}
-						break;
-					}
-
-					encoded_len_count += add;
-					enc_span++;
-				}
-			}
-
-			if (need_encoding && enc_span > 0) {
-				/* Emit prefix; if we are not starting encoding, flush pending WS literally */
-				if (!include_pending_ws && (pending_spaces > 0 || pending_tabs > 0)) {
-					while (pending_spaces--) {
-						g_string_append_c(outbuf, ' ');
-					}
-					pending_spaces = 0;
-					while (pending_tabs--) {
-						g_string_append_c(outbuf, '\t');
-					}
-					pending_tabs = 0;
-				}
-				g_string_append_len(outbuf, p, unencoded_prefix);
-				p += unencoded_prefix;
-
-				/* Encode encoded span safely within budget */
-				g_string_append(outbuf, "=?UTF-8?Q?");
-
-				/* Prepend pending whitespace inside encoded-word if any */
-				if (include_pending_ws) {
-					for (size_t i = 0; i < pending_spaces; i++) {
-						g_string_append_c(outbuf, '_');
-					}
-					for (size_t i = 0; i < pending_tabs; i++) {
-						g_string_append_len(outbuf, "=09", 3);
-					}
-					pending_spaces = 0;
-					pending_tabs = 0;
-				}
-
-				size_t out_budget = max_token_size - (include_pending_ws ? pending_ws_budget : 0);
-				gssize enc_written = rspamd_encode_qp2047_buf(p, enc_span,
-															  encode_buf, out_budget);
-
-				if (G_UNLIKELY(enc_written < 0)) {
-					/* Extremely conservative fallback: shrink until it fits */
-					while (enc_span > 0 && enc_written < 0) {
-						enc_span--;
-						enc_written = rspamd_encode_qp2047_buf(p, enc_span,
-															   encode_buf, max_token_size);
-					}
-				}
-
-				if (enc_span > 0 && enc_written >= 0) {
-					g_string_append_len(outbuf, encode_buf, (size_t) enc_written);
-					g_string_append(outbuf, "?=");
-					p += enc_span;
-				}
-
-				/* Do not append any suffix here; remaining bytes will be handled next loop */
-			}
-			else {
-				/* No encoding needed or nothing to encode */
-				/* Flush pending whitespace literally before ASCII chunk */
-				if (pending_spaces > 0 || pending_tabs > 0) {
-					while (pending_spaces--) {
-						g_string_append_c(outbuf, ' ');
-					}
-					pending_spaces = 0;
-					while (pending_tabs--) {
-						g_string_append_c(outbuf, '\t');
-					}
-					pending_tabs = 0;
-				}
-				g_string_append_len(outbuf, p, piece_len);
-				p += piece_len;
-			}
 		}
 	}
 
-	/* return the allocated string and free the GString struct */
-	return g_string_free(outbuf, FALSE);
+	rspamd_mime_header_append_encoded(out, segment->str, segment->len);
+}
+
+/*
+ * A word of unstructured text needs encoding if it carries 8-bit data, or if
+ * it looks like an encoded-word: next to a real one, a decoder would decode it
+ * too and drop the whitespace between them
+ */
+static gboolean
+rspamd_mime_header_word_needs_encoding(const char *word, gsize len)
+{
+	return rspamd_str_has_8bit((const unsigned char *) word, len) ||
+		   rspamd_substring_search(word, len, "=?", 2) != -1;
+}
+
+/*
+ * Unstructured text (RFC 2047 5(1)): an encoded-word must be delimited by
+ * whitespace, so a word holding 8-bit data is encoded as a whole, together
+ * with the words after it that need encoding too and the whitespace between
+ * them, folds included. Other line breaks stay where they are. A value without
+ * 8-bit data is returned as is, encoded-word lookalikes included.
+ */
+static void
+rspamd_mime_header_encode_unstructured(GString *out, const char *in, gsize len)
+{
+	const char *p = in, *end = in + len;
+	GString *segment = g_string_sized_new(64);
+
+	while (p < end) {
+		const char *word = p, *run_end, *q;
+
+		if (rspamd_mime_header_is_space(*p)) {
+			g_string_append_c(out, *p);
+			p++;
+			continue;
+		}
+
+		while (p < end && !rspamd_mime_header_is_space(*p)) {
+			p++;
+		}
+
+		if (!rspamd_mime_header_word_needs_encoding(word, p - word)) {
+			g_string_append_len(out, word, p - word);
+			continue;
+		}
+
+		run_end = p;
+		q = p;
+
+		for (;;) {
+			const char *next_word;
+			gsize fold;
+
+			while (q < end && rspamd_mime_header_is_wsp(*q)) {
+				q++;
+			}
+
+			/* A run spans folds, including whitespace-only continuation lines */
+			while ((fold = rspamd_mime_header_fold_len(q, end)) > 0) {
+				q += fold;
+
+				while (q < end && rspamd_mime_header_is_wsp(*q)) {
+					q++;
+				}
+			}
+
+			if (q == end || rspamd_mime_header_is_space(*q)) {
+				break;
+			}
+
+			next_word = q;
+
+			while (q < end && !rspamd_mime_header_is_space(*q)) {
+				q++;
+			}
+
+			if (!rspamd_mime_header_word_needs_encoding(next_word, q - next_word)) {
+				break;
+			}
+
+			run_end = q;
+		}
+
+		rspamd_mime_header_append_encoded_run(out, segment, word, run_end);
+		p = run_end;
+	}
+
+	g_string_free(segment, TRUE);
+}
+
+enum rspamd_mime_header_token_type {
+	RSPAMD_HDR_TOKEN_ATOM,
+	RSPAMD_HDR_TOKEN_QUOTED,
+	RSPAMD_HDR_TOKEN_COMMENT,
+	RSPAMD_HDR_TOKEN_ANGLE,
+	RSPAMD_HDR_TOKEN_LITERAL,
+	RSPAMD_HDR_TOKEN_WS,
+	RSPAMD_HDR_TOKEN_SPECIAL,
+};
+
+struct rspamd_mime_header_token {
+	enum rspamd_mime_header_token_type type;
+	const char *s;
+	gsize len;
+	gboolean nested; /* a comment holding another comment */
+};
+
+static inline gboolean
+rspamd_mime_header_is_atom_end(char c)
+{
+	switch (c) {
+	case '"':
+	case '(':
+	case ')':
+	case '<':
+	case '>':
+	case '[':
+	case ']':
+	case ',':
+	case ':':
+	case ';':
+	case '@':
+	case '.':
+		return TRUE;
+	default:
+		return rspamd_mime_header_is_space(c);
+	}
+}
+
+/* The closing `close` of a token opened at p, honouring quoted-pairs */
+static const char *
+rspamd_mime_header_scan_delimited(const char *p, const char *end, char close)
+{
+	for (p = p + 1; p < end; p++) {
+		if (*p == '\\' && p + 1 < end) {
+			p++;
+		}
+		else if (*p == close) {
+			return p;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Splits an address-list value into lossless tokens: quoted strings, (nested)
+ * comments, angle-addrs, domain literals, whitespace, specials and atoms.
+ * Returns FALSE when quotes, comments or brackets are unbalanced.
+ */
+static gboolean
+rspamd_mime_header_tokenize(const char *in, gsize len, GArray *tokens)
+{
+	const char *p = in, *end = in + len, *stop;
+	struct rspamd_mime_header_token tok;
+	int depth;
+
+	while (p < end) {
+		memset(&tok, 0, sizeof(tok));
+		tok.s = p;
+
+		switch (*p) {
+		case '"':
+			stop = rspamd_mime_header_scan_delimited(p, end, '"');
+			tok.type = RSPAMD_HDR_TOKEN_QUOTED;
+			break;
+		case '(':
+			depth = 1;
+			for (stop = p + 1; stop < end; stop++) {
+				if (*stop == '\\' && stop + 1 < end) {
+					stop++;
+				}
+				else if (*stop == '(') {
+					depth++;
+					tok.nested = TRUE;
+				}
+				else if (*stop == ')' && --depth == 0) {
+					break;
+				}
+			}
+			if (stop >= end) {
+				stop = NULL;
+			}
+			tok.type = RSPAMD_HDR_TOKEN_COMMENT;
+			break;
+		case '<':
+			/* A quoted local part may contain '>' */
+			for (stop = p + 1; stop != NULL && stop < end && *stop != '>'; stop++) {
+				if (*stop == '"') {
+					stop = rspamd_mime_header_scan_delimited(stop, end, '"');
+					if (stop == NULL) {
+						break;
+					}
+				}
+			}
+			if (stop != NULL && stop >= end) {
+				stop = NULL;
+			}
+			tok.type = RSPAMD_HDR_TOKEN_ANGLE;
+			break;
+		case '[':
+			stop = rspamd_mime_header_scan_delimited(p, end, ']');
+			tok.type = RSPAMD_HDR_TOKEN_LITERAL;
+			break;
+		case ',':
+		case ':':
+		case ';':
+		case '@':
+		case '.':
+			stop = p;
+			tok.type = RSPAMD_HDR_TOKEN_SPECIAL;
+			break;
+		case ')':
+		case '>':
+		case ']':
+			stop = NULL;
+			break;
+		default:
+			stop = p;
+			if (rspamd_mime_header_is_space(*p)) {
+				while (stop + 1 < end && rspamd_mime_header_is_space(stop[1])) {
+					stop++;
+				}
+				tok.type = RSPAMD_HDR_TOKEN_WS;
+			}
+			else {
+				while (stop + 1 < end && !rspamd_mime_header_is_atom_end(stop[1])) {
+					stop++;
+				}
+				tok.type = RSPAMD_HDR_TOKEN_ATOM;
+			}
+			break;
+		}
+
+		if (stop == NULL) {
+			return FALSE;
+		}
+
+		tok.len = stop - p + 1;
+		g_array_append_val(tokens, tok);
+		p = stop + 1;
+	}
+
+	return TRUE;
+}
+
+static inline gboolean
+rspamd_mime_header_token_has_8bit(const struct rspamd_mime_header_token *tok)
+{
+	return rspamd_str_has_8bit((const unsigned char *) tok->s, tok->len);
+}
+
+/* Appends text without quoted-pair backslashes and folding line breaks */
+static void
+rspamd_mime_header_append_unescaped(GString *out, const char *s, gsize len)
+{
+	const char *end = s + len;
+
+	for (; s < end; s++) {
+		if (*s == '\r' || *s == '\n') {
+			continue;
+		}
+		if (*s == '\\' && s + 1 < end) {
+			s++;
+		}
+		g_string_append_c(out, *s);
+	}
+}
+
+/*
+ * Appends a comment; its text becomes encoded-words if it carries 8-bit data
+ * (RFC 2047 5(2)). A nested comment is kept as is: its inner parentheses
+ * would turn into plain text once encoded.
+ */
+static void
+rspamd_mime_header_append_comment(GString *out, GString *tmp,
+								  const struct rspamd_mime_header_token *tok)
+{
+	if (tok->nested || !rspamd_mime_header_token_has_8bit(tok)) {
+		g_string_append_len(out, tok->s, tok->len);
+		return;
+	}
+
+	g_string_set_size(tmp, 0);
+	rspamd_mime_header_append_unescaped(tmp, tok->s + 1, tok->len - 2);
+	g_string_append_c(out, '(');
+	rspamd_mime_header_append_encoded(out, tmp->str, tmp->len);
+	g_string_append_c(out, ')');
+}
+
+/*
+ * Appends a display name or group name. Each stretch of words between comments
+ * that carries 8-bit data becomes encoded-words (RFC 2047 5(3): an encoded-word
+ * replaces whole words, never text inside a quoted-string); whitespace around
+ * a stretch is kept as is.
+ */
+static void
+rspamd_mime_header_append_phrase(GString *out, GString *tmp,
+								 const struct rspamd_mime_header_token *toks,
+								 gsize ntoks)
+{
+	gsize i = 0, start, last, k;
+	gboolean need_encoding;
+
+	while (i < ntoks) {
+		if (toks[i].type == RSPAMD_HDR_TOKEN_COMMENT) {
+			rspamd_mime_header_append_comment(out, tmp, &toks[i]);
+			i++;
+			continue;
+		}
+
+		if (toks[i].type == RSPAMD_HDR_TOKEN_WS) {
+			g_string_append_len(out, toks[i].s, toks[i].len);
+			i++;
+			continue;
+		}
+
+		start = i;
+		last = i;
+
+		while (last < ntoks && toks[last].type != RSPAMD_HDR_TOKEN_COMMENT) {
+			last++;
+		}
+		while (last > start && toks[last - 1].type == RSPAMD_HDR_TOKEN_WS) {
+			last--;
+		}
+
+		need_encoding = FALSE;
+
+		for (k = start; k < last; k++) {
+			if (rspamd_mime_header_token_has_8bit(&toks[k])) {
+				need_encoding = TRUE;
+				break;
+			}
+		}
+
+		if (need_encoding) {
+			g_string_set_size(tmp, 0);
+
+			for (k = start; k < last; k++) {
+				if (toks[k].type == RSPAMD_HDR_TOKEN_QUOTED) {
+					rspamd_mime_header_append_unescaped(tmp, toks[k].s + 1, toks[k].len - 2);
+				}
+				else {
+					rspamd_mime_header_append_unescaped(tmp, toks[k].s, toks[k].len);
+				}
+			}
+
+			rspamd_mime_header_append_encoded(out, tmp->str, tmp->len);
+		}
+		else {
+			for (k = start; k < last; k++) {
+				g_string_append_len(out, toks[k].s, toks[k].len);
+			}
+		}
+
+		i = last;
+	}
+}
+
+/*
+ * Appends the tokens between two delimiters (',' ';' ':' or an angle-addr).
+ * Holding '@' or a domain literal makes them an address, whose only encodable
+ * parts are comments; anything else is a display name or a group name.
+ */
+static void
+rspamd_mime_header_append_run(GString *out, GString *tmp,
+							  const struct rspamd_mime_header_token *toks,
+							  gsize ntoks)
+{
+	gboolean is_address = FALSE;
+	gsize k;
+
+	for (k = 0; k < ntoks; k++) {
+		if (toks[k].type == RSPAMD_HDR_TOKEN_LITERAL ||
+			(toks[k].type == RSPAMD_HDR_TOKEN_SPECIAL && *toks[k].s == '@')) {
+			is_address = TRUE;
+			break;
+		}
+	}
+
+	if (!is_address) {
+		rspamd_mime_header_append_phrase(out, tmp, toks, ntoks);
+		return;
+	}
+
+	for (k = 0; k < ntoks; k++) {
+		if (toks[k].type == RSPAMD_HDR_TOKEN_COMMENT) {
+			rspamd_mime_header_append_comment(out, tmp, &toks[k]);
+		}
+		else {
+			g_string_append_len(out, toks[k].s, toks[k].len);
+		}
+	}
+}
+
+/*
+ * Structured address-list fields (From, To, Cc...): display names, group names
+ * and comments are encoded in place and everything else is kept byte for byte.
+ * An address has no RFC 2047 form, so 8-bit data in it, like a value that
+ * cannot be tokenized, is left as it is; callers can detect that by checking
+ * the result for 8-bit data.
+ */
+static void
+rspamd_mime_header_encode_structured(GString *out, const char *in, gsize len)
+{
+	GArray *tokens = g_array_sized_new(FALSE, FALSE,
+									   sizeof(struct rspamd_mime_header_token), 16);
+	const struct rspamd_mime_header_token *toks;
+	GString *tmp;
+	gsize i, run_start = 0;
+
+	if (!rspamd_mime_header_tokenize(in, len, tokens)) {
+		g_string_append_len(out, in, len);
+		g_array_free(tokens, TRUE);
+
+		return;
+	}
+
+	tmp = g_string_sized_new(len);
+	toks = (const struct rspamd_mime_header_token *) tokens->data;
+
+	for (i = 0; i < tokens->len; i++) {
+		gboolean delimiter = toks[i].type == RSPAMD_HDR_TOKEN_ANGLE ||
+							 (toks[i].type == RSPAMD_HDR_TOKEN_SPECIAL &&
+							  (*toks[i].s == ',' || *toks[i].s == ';' || *toks[i].s == ':'));
+
+		if (delimiter) {
+			rspamd_mime_header_append_run(out, tmp, toks + run_start, i - run_start);
+			g_string_append_len(out, toks[i].s, toks[i].len);
+			run_start = i + 1;
+		}
+	}
+
+	rspamd_mime_header_append_run(out, tmp, toks + run_start, tokens->len - run_start);
+
+	g_string_free(tmp, TRUE);
+	g_array_free(tokens, TRUE);
+}
+
+char *
+rspamd_mime_header_encode(const char *in, gsize len, bool is_structured)
+{
+	GString *out;
+
+	if (!rspamd_str_has_8bit((const unsigned char *) in, len)) {
+		return g_string_free(g_string_new_len(in, len), FALSE);
+	}
+
+	out = g_string_sized_new(len + len / 2);
+
+	if (is_structured) {
+		rspamd_mime_header_encode_structured(out, in, len);
+	}
+	else {
+		rspamd_mime_header_encode_unstructured(out, in, len);
+	}
+
+	return g_string_free(out, FALSE);
 }
 
 
