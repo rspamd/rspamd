@@ -29,6 +29,7 @@ local rspamd_tcp = require "rspamd_tcp"
 local lua_redis = require "lua_redis"
 local lua_mime = require "lua_mime"
 local ucl = require "ucl"
+local lua_scan_result = require "lua_scan_result"
 local E = {}
 local N = 'metadata_exporter'
 local HOSTNAME = rspamd_util.get_hostname()
@@ -71,6 +72,12 @@ Symbols: $symbols]],
 }
 
 local function get_general_metadata(task, flatten, no_content)
+  local terminal = lua_scan_result.get_terminal_metadata(task)
+
+  if terminal then
+    return terminal
+  end
+
   local r = {}
   local ip = task:get_from_ip()
   if ip and ip:is_valid() then
@@ -403,6 +410,11 @@ local selectors = {
 }
 
 local function maybe_defer(task, rule)
+  if task:get_terminal_event() then
+    task:set_terminal_observer_error()
+    return
+  end
+
   if rule.defer then
     rspamd_logger.warnx(task, 'deferring message')
     task:set_pre_result('soft reject', 'deferred', N)
@@ -468,7 +480,7 @@ local pushers = {
       end
     end
 
-    rspamd_http.request({
+    local ret = rspamd_http.request({
       task = task,
       url = rule.url,
       user = rule.user,
@@ -487,6 +499,11 @@ local pushers = {
       write_timeout = rule.write_timeout or settings.write_timeout,
       read_timeout = rule.read_timeout or settings.read_timeout,
     })
+
+    if not ret then
+      rspamd_logger.errx(task, 'cannot schedule HTTP export')
+      maybe_defer(task, rule)
+    end
   end,
   send_mail = function(task, formatted, rule, extra)
     local lua_smtp = require "lua_smtp"
@@ -515,7 +532,7 @@ local pushers = {
       end
       return true
     end
-    rspamd_tcp.request({
+    local ret = rspamd_tcp.request({
       task = task,
       host = rule.host,
       port = rule.port,
@@ -524,6 +541,11 @@ local pushers = {
       timeout = rule.timeout or settings.timeout,
       read = false,
     })
+
+    if not ret then
+      rspamd_logger.errx(task, 'cannot schedule TCP export')
+      maybe_defer(task, rule)
+    end
   end,
   redis_list = function(task, formatted, rule)
     local function do_rpush(list_key)
@@ -647,6 +669,23 @@ local pushers = {
       do_xadd(rule.stream_key)
     end
   end,
+}
+
+local terminal_formats = {
+  json = 'json-compact',
+  json_with_message = 'json-compact',
+  msgpack = 'msgpack',
+  structured = 'msgpack',
+  multipart = 'multipart',
+}
+local terminal_formatters = lua_util.shallowcopy(formatters)
+local terminal_selectors = lua_util.shallowcopy(selectors)
+local terminal_pushers = {
+  http = pushers.http,
+  json_raw_tcp = pushers.json_raw_tcp,
+  redis_pubsub = pushers.redis_pubsub,
+  redis_list = pushers.redis_list,
+  redis_stream = pushers.redis_stream,
 }
 
 local opts = rspamd_config:get_all_opt(N)
@@ -988,7 +1027,28 @@ local function gen_exporter(rule)
     if selected then
       lua_util.debugm(N, task, 'Message selected for processing')
       local formatter = rule.formatter or 'default'
-      local formatted, extra = formatters[formatter](task, rule)
+      local terminal = lua_scan_result.get_terminal_metadata(task)
+      local formatted, extra
+
+      if terminal then
+        local format = terminal_formats[formatter]
+
+        if format == 'multipart' then
+          local boundary = rspamd_util.random_hex(16)
+          formatted = lua_util.table_to_multipart_body({
+            metadata = {
+              data = ucl.to_format(terminal, 'json-compact'),
+              ['content-type'] = 'application/json',
+            },
+          }, boundary)
+          extra = { multipart_boundary = boundary }
+        else
+          formatted = ucl.to_format(terminal, format)
+        end
+      else
+        formatted, extra = formatters[formatter](task, rule)
+      end
+
       if formatted then
         pushers[rule.backend](task, formatted, rule, extra)
       else
@@ -1005,10 +1065,19 @@ if not next(settings.rules) then
   lua_util.disable_module(N, "config")
 end
 for k, r in pairs(settings.rules) do
+  local formatter = r.formatter or 'default'
+  local selector = r.selector or 'default'
+  local early = terminal_formats[formatter] ~= nil and
+      formatters[formatter] == terminal_formatters[formatter] and
+      terminal_selectors[selector] ~= nil and selectors[selector] == terminal_selectors[selector] and
+      terminal_pushers[r.backend] ~= nil and pushers[r.backend] == terminal_pushers[r.backend]
+
   rspamd_config:register_symbol({
     name = 'EXPORT_METADATA_' .. k,
     type = 'idempotent',
     callback = gen_exporter(r),
+    required_inputs = early and { 'connection', 'helo', 'sender', 'recipients' } or nil,
+    terminal_observer = early,
     flags = 'empty,explicit_disable,ignore_passthrough',
     augmentations = { string.format("timeout=%f", r.timeout or settings.timeout or 0.0) }
   })

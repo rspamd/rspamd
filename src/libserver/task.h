@@ -247,6 +247,10 @@ struct rspamd_task {
 	struct ev_io guard_ev;                /**< Event for input sanity guard 					*/
 
 	gpointer symcache_runtime;                       /**< Opaque checkpoint data							*/
+	gpointer symcache_checkpoint;                    /**< Lazy portable-check journal and facts */
+	gpointer early_result;                           /**< Frozen DATA decision and observer state */
+	gpointer multistage;                             /**< Authenticated DATA request and async owner */
+	unsigned int finalization_flags;                 /**< Accounting and log delivery guards */
 	ucl_object_t *settings;                          /**< Settings applied to task						*/
 	struct rspamd_config_settings_elt *settings_elt; /**< preprocessed settings id elt				*/
 

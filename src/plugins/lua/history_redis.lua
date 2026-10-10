@@ -152,6 +152,7 @@ local function history_save(task)
     if err then
       rspamd_logger.errx(task, 'got error %s when writing history row',
           err)
+      task:set_terminal_observer_error()
     end
   end
 
@@ -160,10 +161,26 @@ local function history_save(task)
     return
   end
 
-  local data = task:get_protocol_reply { 'metrics', 'basic' }
+  local terminal = require('lua_scan_result').get_terminal_metadata(task)
+  local data = terminal or task:get_protocol_reply { 'metrics', 'basic' }
   local prefix = lua_util.jinja_template(settings.key_prefix, template_env, false, true)
 
-  if data then
+  if terminal then
+    local symbols = data.symbols
+    data.symbols = {}
+
+    for _, symbol in ipairs(symbols) do
+      data.symbols[symbol.name] = symbol
+    end
+
+    data.sender_smtp = terminal.sender or ucl.null
+    data.sender_mime = ucl.null
+    data.rcpt_smtp = terminal.recipients
+    data.rcpt_mime = ucl.null
+    data.unix_time = terminal.timestamp
+    data.time_real = terminal.early_time
+    data.required_score = ucl.null
+  elseif data then
     normalise_results(data, task)
   else
     rspamd_logger.errx(task, 'cannot get protocol reply, skip saving in history')
@@ -191,6 +208,8 @@ local function history_save(task)
     if settings.expire and settings.expire > 0 then
       conn:add_cmd('EXPIRE', { prefix, string.format('%d', settings.expire) })
     end
+  else
+    task:set_terminal_observer_error()
   end
 end
 
@@ -314,6 +333,8 @@ if opts then
       name = 'HISTORY_SAVE',
       type = 'idempotent',
       callback = history_save,
+      required_inputs = { 'connection', 'helo', 'sender', 'recipients' },
+      terminal_observer = true,
       flags = 'empty,explicit_disable,ignore_passthrough',
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
     })

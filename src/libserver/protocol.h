@@ -75,6 +75,7 @@ struct ucl_parser *rspamd_ucl_parser_new_untrusted(gsize inlen);
  * @param msg
  * @return
  */
+gboolean rspamd_protocol_handle_metadata(struct rspamd_task *task, const ucl_object_t *metadata);
 gboolean rspamd_protocol_handle_headers(struct rspamd_task *task,
 										struct rspamd_http_message *msg);
 

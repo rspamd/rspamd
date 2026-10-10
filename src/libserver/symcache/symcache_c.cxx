@@ -28,6 +28,42 @@
 #define C_API_SYMCACHE_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_item *>(ptr))
 #define C_API_SYMCACHE_DYN_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_dynamic_item *>(ptr))
 
+static constexpr std::pair<const char *, unsigned int> input_names[] = {
+	{"connection", RSPAMD_SYMCACHE_INPUT_CONNECTION},
+	{"helo", RSPAMD_SYMCACHE_INPUT_HELO},
+	{"sender", RSPAMD_SYMCACHE_INPUT_SENDER},
+	{"recipients", RSPAMD_SYMCACHE_INPUT_RECIPIENTS},
+	{"headers", RSPAMD_SYMCACHE_INPUT_HEADERS},
+	{"body", RSPAMD_SYMCACHE_INPUT_BODY},
+	{"mime", RSPAMD_SYMCACHE_INPUT_MIME},
+	{"content", RSPAMD_SYMCACHE_INPUT_CONTENT},
+	{"eom", RSPAMD_SYMCACHE_INPUT_EOM},
+};
+
+unsigned int rspamd_symcache_input_from_string(const char *name)
+{
+	for (const auto &[input_name, mask]: input_names) {
+		if (name != nullptr && strcmp(name, input_name) == 0) {
+			return mask;
+		}
+	}
+
+	return 0;
+}
+
+ucl_object_t *rspamd_symcache_inputs_to_ucl(unsigned int inputs)
+{
+	auto *out = ucl_object_typed_new(UCL_ARRAY);
+
+	for (const auto &[name, mask]: input_names) {
+		if (inputs & mask) {
+			ucl_array_append(out, ucl_object_fromstring(name));
+		}
+	}
+
+	return out;
+}
+
 void rspamd_symcache_destroy(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -124,6 +160,20 @@ void rspamd_symcache_set_peak_callback(struct rspamd_symcache *cache, int cbref)
 	real_cache->set_peak_cb(cbref);
 }
 
+gboolean rspamd_symcache_set_symbol_inputs(struct rspamd_symcache *cache,
+										   int id, unsigned int inputs)
+{
+	auto *item = C_API_SYMCACHE(cache)->get_item_by_id_mut(id, false);
+
+	if (item == nullptr || item->is_virtual() || item->planned ||
+		(inputs & ~RSPAMD_SYMCACHE_INPUT_ALL) != 0) {
+		return FALSE;
+	}
+
+	item->required_inputs = inputs;
+	return TRUE;
+}
+
 gboolean
 rspamd_symcache_add_condition_delayed(struct rspamd_symcache *cache,
 									  const char *sym, lua_State *L, int cbref)
@@ -132,6 +182,68 @@ rspamd_symcache_add_condition_delayed(struct rspamd_symcache *cache,
 
 	real_cache->add_delayed_condition(sym, cbref);
 
+	return TRUE;
+}
+
+gboolean rspamd_symcache_set_symbol_replay(struct rspamd_symcache *cache,
+										   int id, unsigned int version)
+{
+	auto *item = C_API_SYMCACHE(cache)->get_item_by_id_mut(id, false);
+
+	if (!item || item->is_virtual() || item->planned || version == 0 ||
+		(item->type != rspamd::symcache::symcache_item_type::FILTER &&
+		 item->type != rspamd::symcache::symcache_item_type::PREFILTER &&
+		 item->type != rspamd::symcache::symcache_item_type::CONNFILTER)) {
+		return FALSE;
+	}
+
+	item->replay_version = version;
+	return TRUE;
+}
+
+gboolean rspamd_symcache_set_execution_parent(struct rspamd_symcache *cache,
+											  int id, int parent_id)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto *item = real_cache->get_item_by_id_mut(id, false);
+	auto *parent = real_cache->get_item_by_id_mut(parent_id, false);
+
+	if (!item || !parent || item == parent || item->planned || parent->planned ||
+		!item->is_filter() || !parent->is_filter() || item->execution_parent ||
+		parent->execution_parent || !item->execution_children.empty()) {
+		return FALSE;
+	}
+
+	item->execution_parent = parent;
+	parent->execution_children.push_back(item);
+	real_cache->add_dependency(parent_id, item->symbol, id, -1, false);
+
+	return TRUE;
+}
+
+gboolean rspamd_symcache_set_symbol_replay_callback(struct rspamd_symcache *cache,
+													int id, lua_State *L, int cbref)
+{
+	auto *item = C_API_SYMCACHE(cache)->get_item_by_id_mut(id, false);
+
+	if (!item || item->planned || item->replay_version == 0 ||
+		!std::holds_alternative<rspamd::symcache::normal_item>(item->specific)) {
+		return FALSE;
+	}
+
+	std::get<rspamd::symcache::normal_item>(item->specific).set_replay_callback(L, cbref);
+	return TRUE;
+}
+
+gboolean rspamd_symcache_set_terminal_observer(struct rspamd_symcache *cache, int id)
+{
+	auto *item = C_API_SYMCACHE(cache)->get_item_by_id_mut(id, false);
+
+	if (!item || item->planned || item->type != rspamd::symcache::symcache_item_type::IDEMPOTENT) {
+		return FALSE;
+	}
+
+	item->terminal_observer = true;
 	return TRUE;
 }
 
@@ -382,6 +494,55 @@ rspamd_symcache_describe_inflight_symbols(struct rspamd_task *task)
 	return cache_runtime->describe_inflight_symbols();
 }
 
+/* Static admission only: task settings and producer readiness still apply. */
+static void
+rspamd_symcache_add_input_details(const rspamd::symcache::cache_item &item,
+								  const rspamd::symcache::symcache &cache, ucl_object_t *out)
+{
+	ucl_object_insert_key(out, rspamd_symcache_inputs_to_ucl(item.required_inputs), "required_inputs", 0, false);
+	ucl_object_insert_key(out, rspamd_symcache_inputs_to_ucl(item.effective_inputs), "effective_inputs", 0, false);
+	ucl_object_insert_key(out, ucl_object_fromint(item.replay_version), "replay_version", 0, false);
+	ucl_object_insert_key(out, ucl_object_frombool(item.terminal_observer), "terminal_observer", 0, false);
+	ankerl::unordered_dense::map<int, bool> candidates;
+	const auto candidate = [&](const rspamd::symcache::cache_item *check, auto &&self) -> bool {
+		if (!check) {
+			return false;
+		}
+
+		check = cache.get_item_by_id(check->id, true);
+
+		if (!check || !check->input_ready(RSPAMD_SYMCACHE_INPUT_ENVELOPE, false, true)) {
+			return false;
+		}
+
+		if (auto found = candidates.find(check->id); found != candidates.end()) {
+			return found->second;
+		}
+
+		candidates[check->id] = false;
+
+		for (const auto &[id, dep]: check->deps) {
+			if (!self(dep.item, self)) {
+				return false;
+			}
+		}
+
+		candidates[check->id] = true;
+		return true;
+	};
+	auto ready = candidate(&item, candidate);
+	auto *blocked = ucl_object_typed_new(UCL_ARRAY);
+
+	for (const auto &[id, dep]: item.deps) {
+		if (dep.item && !candidate(dep.item, candidate)) {
+			ucl_array_append(blocked, ucl_object_fromstring(dep.item->symbol.c_str()));
+		}
+	}
+
+	ucl_object_insert_key(out, ucl_object_frombool(ready), "data_candidate", 0, false);
+	ucl_object_insert_key(out, blocked, "data_blocking_dependencies", 0, false);
+}
+
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,
 										ucl_object_t *this_sym_ucl)
@@ -394,6 +555,17 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 		ucl_object_insert_key(this_sym_ucl,
 							  ucl_object_fromstring(sym->get_type_str()),
 							  "type", strlen("type"), false);
+		const auto *producer = sym->is_virtual() ? sym->get_parent(*real_cache) : sym;
+
+		if (producer != nullptr) {
+			rspamd_symcache_add_input_details(*producer, *real_cache, this_sym_ucl);
+
+			if (producer->execution_parent) {
+				ucl_object_insert_key(this_sym_ucl,
+									  ucl_object_fromstring(producer->execution_parent->symbol.c_str()),
+									  "execution_parent", 0, false);
+			}
+		}
 
 		/* Modifier flags; structural types are already covered by `type` */
 		static constexpr const std::pair<int, const char *> flag_names[] = {
@@ -485,6 +657,8 @@ gboolean rspamd_symcache_get_symbol_exec_info(struct rspamd_symcache *cache,
 	info->stage = rspamd::symcache::exec_stage_to_str(sym->get_stage());
 	info->level = sym->get_level();
 	info->hoisted_by = sym->is_hoisted() ? sym->hoisted_by->get_name().c_str() : nullptr;
+	info->required_inputs = sym->required_inputs;
+	info->effective_inputs = sym->effective_inputs;
 
 	return TRUE;
 }
@@ -523,6 +697,7 @@ ucl_object_t *rspamd_symcache_dump_exec_plan(struct rspamd_symcache *cache)
 			ucl_object_insert_key(sym_ucl,
 								  ucl_object_fromstring(sym->get_type_str()),
 								  "type", strlen("type"), false);
+			rspamd_symcache_add_input_details(*sym, *real_cache, sym_ucl);
 
 			if (sym->is_hoisted()) {
 				ucl_object_insert_key(sym_ucl,
@@ -922,6 +1097,24 @@ rspamd_symcache_process_symbols(struct rspamd_task *task,
 
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	return cache_runtime->process_symbols(task, *real_cache, stage);
+}
+
+enum rspamd_symcache_checkpoint_result rspamd_symcache_process_checkpoint(
+	struct rspamd_task *task, struct rspamd_symcache *cache, unsigned int inputs)
+{
+	if (task == nullptr || cache == nullptr || task->s == nullptr ||
+		task->processed_stages != 0 || (inputs & ~RSPAMD_SYMCACHE_INPUT_ALL) != 0 ||
+		(inputs & RSPAMD_SYMCACHE_INPUT_EOM) != 0) {
+		return RSPAMD_SYMCACHE_CHECKPOINT_ERROR;
+	}
+
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	if (task->symcache_runtime == nullptr) {
+		rspamd::symcache::symcache_runtime::create(task, *real_cache);
+	}
+
+	return C_API_SYMCACHE_RUNTIME(task->symcache_runtime)->process_checkpoint(task, *real_cache, inputs);
 }
 
 void rspamd_symcache_finalize_item(struct rspamd_task *task,

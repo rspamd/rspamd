@@ -41,6 +41,12 @@ local E = {}
 local extractors = require "lua_selectors/extractors"
 local transform_function = require "lua_selectors/transforms"
 
+-- Built-in transforms only consume their arguments and the extracted value.
+-- Extensions must declare their own requirements when they are registered.
+for _, transform in pairs(transform_function) do
+  transform.required_inputs = transform.required_inputs or {}
+end
+
 local text_cookie = rspamd_text.cookie
 
 local function pure_type(ltype)
@@ -384,6 +390,7 @@ exports.parse_selector = function(cfg, str)
         local processor = {
           name = tostring(method_name),
           method = true,
+          required_inputs = {},
           args = proc_tbl[2] or E,
           types = {
             userdata = true,
@@ -497,6 +504,46 @@ exports.get_dependencies = function(cfg, str)
   end
 
   return deps
+end
+
+--[[[
+-- @function lua_selectors.get_required_inputs(cfg, str)
+-- Return the inputs required by all extractors and transforms in a pipeline.
+-- Undeclared extensions and ambiguous SMTP/MIME address selection require EOM.
+-- Producer dependencies are returned separately by get_dependencies().
+--]]
+exports.get_required_inputs = function(cfg, str)
+  local parsed = exports.parse_selector(cfg, str)
+
+  if not parsed then
+    return nil
+  end
+
+  local seen = {}
+
+  local function collect(component)
+    local inputs = component.required_inputs
+
+    if type(inputs) == 'function' then
+      inputs = inputs(component.args)
+    end
+
+    for _, input in ipairs(inputs or { 'eom' }) do
+      seen[input] = true
+    end
+  end
+
+  for _, sel in ipairs(parsed) do
+    collect(sel.selector)
+
+    for _, processor in ipairs(sel.processor_pipe) do
+      collect(processor)
+    end
+  end
+
+  local inputs = lua_util.keys(seen)
+  table.sort(inputs)
+  return inputs
 end
 
 --[[[

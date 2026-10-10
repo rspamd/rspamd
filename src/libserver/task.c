@@ -1141,6 +1141,11 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 	gboolean ret = TRUE, all_done = TRUE;
 	GError *stat_error = NULL;
 
+	if (task->early_result || task->multistage) {
+		/* The DATA owner drives observation/finalization explicitly. */
+		return FALSE;
+	}
+
 	/* Avoid nested calls */
 	if (task->flags & RSPAMD_TASK_FLAG_PROCESSING) {
 		return TRUE;
