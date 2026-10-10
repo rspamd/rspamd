@@ -1,0 +1,11 @@
+From: news@exchange.example
+To: <test@test.ru>
+Subject: Our deposit address has changed
+Date: Mon, 27 Apr 2020 19:54:10 +0300
+Message-ID: <newsletter-1@exchange.example>
+List-Unsubscribe: <mailto:unsub@exchange.example>
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+Our Litecoin deposit address is now
+LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd

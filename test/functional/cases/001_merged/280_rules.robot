@@ -181,13 +181,13 @@ MONERO ADDR MAYBE
   Expect Symbol With Exact Options  MONERO_ADDR_MAYBE
   ...  4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
 
-NO BARE BASE58 FALSE POSITIVE
-  # crypto.eml still carries a 44 char Base58 run. Nothing may claim it: with no
-  # checksum to verify, that shape matches ordinary base64 and token blobs.
-  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+NO WALLET ADDRESS IN ORDINARY TOKENS
+  # A 44 char Base58 run, a commit hash and a UUID: none of them is an address.
+  # With no checksum to verify, a Base58 run of that shape matches ordinary
+  # base64 and token blobs, so nothing may claim it.
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_negative.eml
   ...  Settings={symbols_enabled = [CRYPTO_ADDR_CHECK]}
-  Do Not Expect Symbol With Option  CRYPTO_ADDR_CHECK
-  ...  solana:vQBQPEjJmki5fhBboGBWRJhmcFkMvrr4Fu3tMSJ5Edyn
+  Do Not Expect Symbol  CRYPTO_ADDR_CHECK
 
 BITCOIN ADDR TAPROOT
   Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
@@ -264,10 +264,41 @@ CRYPTO ADDR SELECTOR MAP
 
 LEAKED PASSWORD SCAM NON BITCOIN
   # The composite used to require BITCOIN_ADDR, so a scam quoting any other
-  # currency scored nothing. Monero alone must be enough now.
+  # currency scored nothing. A Litecoin address with a scam phrase is enough now.
   Scan File  ${RSPAMD_TESTDIR}/messages/crypto_scam.eml
-  ...  Settings={symbols_enabled = [MONERO_ADDR_MAYBE, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
   Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR A NEWSLETTER
+  # List-Unsubscribe alone gates Bitcoin as it always did, but not the others
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_newsletter.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  LITECOIN_ADDR
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR HEX DATA
+  # Any 0x + 40 hex token passes as an Ethereum address (a SHA-1 here), so the
+  # format-only symbol must not gate the scam rule
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_hex_ham.eml
+  ...  Settings={symbols_enabled = [ETHEREUM_ADDR_MAYBE, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  ETHEREUM_ADDR_MAYBE
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+DISABLING ONE CURRENCY KEEPS THE OTHERS
+  # Every other symbol runs here, greylisting included: a unique envelope keeps
+  # its greylist record away from the other tests
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  From=crypto-disabled@example.com  Rcpt=crypto-disabled-rcpt@example.com
+  ...  Settings={symbols_disabled = [ETHEREUM_ADDR_MAYBE]}
+  Expect Symbol  BITCOIN_ADDR
+  Do Not Expect Symbol  ETHEREUM_ADDR_MAYBE
+
+ENABLING ONE CURRENCY ENABLES ONLY IT
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol  BITCOIN_ADDR
+  Do Not Expect Symbol  LITECOIN_ADDR
+  Do Not Expect Symbol  ETHEREUM_ADDR_MAYBE
 
 RCVD_COUNT_ONE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
