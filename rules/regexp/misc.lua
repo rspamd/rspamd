@@ -65,24 +65,42 @@ local my_victim = [[/(?:victim|prey)/{words}]]
 local your_webcam = [[/webcam/{words}]]
 local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
 local password_in_words = [[/^pass(?:(?:word)|(?:phrase))$/i{words}]]
--- Both format-only symbols listed here have a distinctive enough shape (0x + 40
--- hex, 95 chars starting with 4) to be safe as a scam gate.
-local any_wallet_address = '(has_symbol(BITCOIN_ADDR) | has_symbol(LITECOIN_ADDR) | ' ..
-    'has_symbol(DOGECOIN_ADDR) | has_symbol(TRON_ADDR) | has_symbol(XRP_ADDR) | ' ..
-    'has_symbol(ZCASH_ADDR) | has_symbol(CARDANO_ADDR) | has_symbol(COSMOS_ADDR) | ' ..
-    'has_symbol(STELLAR_ADDR) | has_symbol(TON_ADDR) | ' ..
-    'has_symbol(ETHEREUM_ADDR_MAYBE) | has_symbol(MONERO_ADDR_MAYBE))'
+-- Wallet symbols that gate the scam rule: only currencies with a verified
+-- checksum. The format-only ETHEREUM_ADDR_MAYBE and MONERO_ADDR_MAYBE stay out:
+-- any 0x + 40 hex token (a SHA-1, a constant quoted from code) passes as the
+-- former, which made ordinary list mail score as a scam.
+local wallet_symbols = {
+  'BITCOIN_ADDR', 'LITECOIN_ADDR', 'DOGECOIN_ADDR', 'TRON_ADDR', 'XRP_ADDR', 'ZCASH_ADDR',
+  'CARDANO_ADDR', 'COSMOS_ADDR', 'STELLAR_ADDR', 'TON_ADDR',
+}
+local bitcoin_address = 'has_symbol(BITCOIN_ADDR)'
+local other_wallet_address
+
+do
+  local atoms = {}
+
+  for i = 2, #wallet_symbols do
+    atoms[#atoms + 1] = string.format('has_symbol(%s)', wallet_symbols[i])
+  end
+
+  other_wallet_address = '(' .. table.concat(atoms, ' | ') .. ')'
+end
 local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 local list_unsub = [[header_exists(List-Unsubscribe)]]
 local x_php_origin = [[header_exists(X-PHP-Originating-Script)]]
 
+-- What turns a wallet address into a scam signal. A List-Unsubscribe header is a
+-- weak one (every newsletter has it); it keeps gating Bitcoin as it always did,
+-- but is not enough for the other currencies.
+local scam_signals = table.concat({ password_in_words, wallet_word,
+  my_victim, your_webcam, your_onan, broken_unicode, 'lua:check_data_images',
+  x_php_origin }, ' | ')
+
 reconf['LEAKED_PASSWORD_SCAM_RE'] = {
-  re = string.format('%s & (%s | %s | %s | %s | %s | %s | %s | %s | %s)',
-      any_wallet_address, password_in_words, wallet_word,
-      my_victim, your_webcam, your_onan,
-      broken_unicode, 'lua:check_data_images',
-      list_unsub, x_php_origin),
+  re = string.format('(%s & (%s | %s)) | (%s & (%s))',
+      bitcoin_address, scam_signals, list_unsub,
+      other_wallet_address, scam_signals),
   description = 'Contains a crypto wallet address and malicious regexps',
   functions = {
     check_data_images = function(task)
@@ -105,9 +123,11 @@ reconf['LEAKED_PASSWORD_SCAM_RE'] = {
   group = 'scams'
 }
 
--- has_symbol() reads results, which is a genuine ordering dependency. One edge on
--- the parent covers every per-currency virtual symbol above.
-rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM_RE', 'CRYPTO_ADDR_CHECK')
+-- has_symbol() reads results, which is a genuine ordering dependency on every
+-- wallet symbol the expression looks at
+for _, sym in ipairs(wallet_symbols) do
+  rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM_RE', sym)
+end
 
 -- Heurististic for detecting InterPlanetary File System (IPFS) gateway URLs:
 -- These contain "ipfs" somewhere (either in the FQDN or the URL path) and a
