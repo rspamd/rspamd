@@ -17,12 +17,15 @@ limitations under the License.
 -- Cryptocurrency wallet address filter rules.
 --
 -- Matching and validation live in `lua_crypto_addresses`, which scans a message
--- at most once and memoises the result on the task. Both the symbols below and
--- the `crypto_addresses` selector go through it, so:
+-- at most once and memoises the result on the task. The symbols below and the
+-- `crypto_addresses` selector all go through it, so:
 --
 --  * a message is never scanned twice, however many consumers ask;
 --  * a message nobody asks about is never scanned at all;
---  * the selector needs no dependency on this symbol, because it computes the
+--  * every symbol stands on its own: disabling one (say, the noisy
+--    ETHEREUM_ADDR_MAYBE) leaves the others working, and enabling one does not
+--    drag the others in;
+--  * the selector needs no dependency on these symbols, because it computes the
 --    addresses itself rather than reading a symbol's results.
 
 local lua_crypto_addresses = require "lua_crypto_addresses"
@@ -56,32 +59,19 @@ local wallet_checks = {
         'Arbitrum, ...) wallet address (format-only: 0x + 40 hex chars; EIP-55 checksum ' ..
         'not verified)' },
   monero = { symbol = 'MONERO_ADDR_MAYBE',
-    description = 'Message has a possible Monero wallet address ' ..
-        '(format-only: 95-char Base58 starting with 4; Keccak-256 checksum not verified)' },
+    description = 'Message has a possible Monero wallet address (format-only: standard, ' ..
+        'subaddress or integrated address shape; Keccak-256 checksum not verified)' },
 }
 
 local function check_crypto_addresses(task)
-  local found = lua_crypto_addresses.get_addresses(task)
-  local combined_opts = {}
+  local typed = lua_crypto_addresses.get_addresses_flat(task, nil, true)
 
-  for _, currency in ipairs(lua_crypto_addresses.currencies) do
-    local addresses = found[currency]
-
-    if addresses and #addresses > 0 then
-      task:insert_result(wallet_checks[currency].symbol, 1.0, addresses)
-
-      for _, addr in ipairs(addresses) do
-        combined_opts[#combined_opts + 1] = currency .. ':' .. addr
-      end
-    end
-  end
-
-  if #combined_opts > 0 then
-    task:insert_result('CRYPTO_ADDR_CHECK', 1.0, combined_opts)
+  if #typed > 0 then
+    task:insert_result('CRYPTO_ADDR_CHECK', 1.0, typed)
   end
 end
 
-local crypto_id = rspamd_config:register_symbol({
+rspamd_config:register_symbol({
   name = 'CRYPTO_ADDR_CHECK',
   type = 'normal',
   callback = check_crypto_addresses,
@@ -93,16 +83,24 @@ local crypto_id = rspamd_config:register_symbol({
 })
 
 -- Registration walks the ordered list rather than `pairs(wallet_checks)`, so
--- symbol ids stay stable between runs instead of churning the symbol cache
+-- symbol ids stay stable between runs instead of churning the symbol cache.
+-- These are callback symbols, not virtual children of CRYPTO_ADDR_CHECK: settings
+-- that disable a virtual symbol disable its parent, and with it every currency.
 for _, currency in ipairs(lua_crypto_addresses.currencies) do
   local chk = wallet_checks[currency]
 
   rspamd_config:register_symbol({
     name = chk.symbol,
-    parent = crypto_id,
-    type = 'virtual',
+    type = 'normal',
+    callback = function(task)
+      local addresses = lua_crypto_addresses.get_addresses(task)[currency]
+
+      if addresses and #addresses > 0 then
+        task:insert_result(chk.symbol, 1.0, addresses)
+      end
+    end,
     score = 0.0,
-    one_shot = true,
+    flags = 'empty,nostat',
     group = 'scams',
     description = chk.description,
   })
