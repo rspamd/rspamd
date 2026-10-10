@@ -216,7 +216,7 @@ CARDANO ADDR
   Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
   ...  Settings={symbols_enabled = [CARDANO_ADDR]}
   Expect Symbol With Exact Options  CARDANO_ADDR
-  ...  addr1qyqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8qz42jwu
+  ...  addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg
 
 COSMOS ADDR
   Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
@@ -246,7 +246,7 @@ CRYPTO ADDR CHECK
   ...  tron:T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb
   ...  xrp:rrrrrrrrrrrrrrrrrrrrrhoLvTp
   ...  zcash:t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu
-  ...  cardano:addr1qyqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8qz42jwu
+  ...  cardano:addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg
   ...  cosmos:cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu
   ...  stellar:GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV
   ...  ton:EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B

@@ -96,6 +96,22 @@ local function base58check_decode(word, lut, total_len)
     end
   end
 
+  -- Each leading zero symbol stands for exactly one leading zero byte; the
+  -- fixed width accumulator above would otherwise swallow extra ones
+  local zero_symbols, zero_bytes = 0, 0
+
+  while zero_symbols < #word and lut[byte(word, zero_symbols + 1)] == 0 do
+    zero_symbols = zero_symbols + 1
+  end
+
+  while zero_bytes < total_len and bytes[zero_bytes + 1] == 0 do
+    zero_bytes = zero_bytes + 1
+  end
+
+  if zero_symbols ~= zero_bytes then
+    return nil
+  end
+
   local body_len = total_len - 4
   -- A single update on the whole body: one C call instead of body_len calls,
   -- each of which would otherwise allocate a one byte string
@@ -236,13 +252,71 @@ local function bech32_to_bytes(data, first, last)
   return out
 end
 
+-- CIP-19 Shelley address on mainnet: the address type is the high nibble of the
+-- header byte, the network id (1 = mainnet, which is what `addr` stands for) the low one
+local function cardano_payload_ok(prog)
+  local n = #prog
+
+  if n == 0 or bit.band(prog[1], 0x0f) ~= 1 then
+    return false
+  end
+
+  local kind = bit.rshift(prog[1], 4)
+
+  if kind <= 3 then
+    return n == 57 -- payment and stake credential
+  elseif kind <= 5 then
+    if n < 32 or n > 59 then
+      return false
+    end
+
+    local pos = 30
+
+    for _, max_bytes in ipairs({ 10, 10, 10 }) do
+      local first = pos
+
+      while true do
+        local value = prog[pos]
+
+        if not value or pos - first >= max_bytes or
+            (pos == first and value == 0x80) then
+          return false
+        end
+
+        if pos - first == 9 and bit.band(prog[first], 0x7f) > 1 then
+          return false
+        end
+
+        pos = pos + 1
+
+        if value < 0x80 then
+          break
+        end
+      end
+    end
+
+    return pos == n + 1
+  elseif kind <= 7 then
+    return n == 29 -- enterprise, payment credential only
+  end
+
+  -- Byron, reward and reserved types do not appear under this prefix
+  return false
+end
+
+-- Cosmos SDK account addresses are 20 bytes, module and contract ones 32
+local function cosmos_payload_ok(prog)
+  return #prog == 20 or #prog == 32
+end
+
 -- Bech32 human readable parts we care about, mapped to a currency. Segwit like
--- chains (bc/ltc) carry a witness version that selects the checksum constant.
+-- chains (bc/ltc) carry a witness version that selects the checksum constant;
+-- the others are plain bech32 and must carry a payload of the right shape.
 local bech32_hrps = {
   bc = { currency = 'bitcoin', segwit = true },
   ltc = { currency = 'litecoin', segwit = true },
-  addr = { currency = 'cardano' },
-  cosmos = { currency = 'cosmos' },
+  addr = { currency = 'cardano', payload_ok = cardano_payload_ok },
+  cosmos = { currency = 'cosmos', payload_ok = cosmos_payload_ok },
 }
 
 --[[[
@@ -316,7 +390,13 @@ local function check_bech32(word)
     return known.currency
   end
 
-  if chk == BECH32_CONST then
+  if chk ~= BECH32_CONST then
+    return nil
+  end
+
+  local prog = bech32_to_bytes(data, 1, #data - 6)
+
+  if prog and known.payload_ok(prog) then
     return known.currency
   end
 
@@ -367,11 +447,26 @@ local function check_cashaddr(task, word)
 
   lua_util.debugm(N, task, 'cashaddr polymod table for %s: %s', word, polymod_tbl)
 
-  if rspamd_util.btc_polymod(polymod_tbl) then
-    return 'bitcoin'
+  if not rspamd_util.btc_polymod(polymod_tbl) then
+    return nil
   end
 
-  return nil
+  local payload = bech32_to_bytes(decoded, 1, #decoded - 8)
+
+  if not payload or #payload == 0 then
+    return nil
+  end
+
+  local version = payload[1]
+  local hash_sizes = { 20, 24, 28, 32, 40, 48, 56, 64 }
+
+  -- Types 0/1 are P2PKH/P2SH, 2/3 their CashTokens token-aware forms
+  if bit.band(version, 0x80) ~= 0 or bit.rshift(version, 3) > 3 or
+      #payload - 1 ~= hash_sizes[bit.band(version, 7) + 1] then
+    return nil
+  end
+
+  return 'bitcoin'
 end
 
 -- CRC16/XMODEM (Stellar and TON) --------------------------------------------

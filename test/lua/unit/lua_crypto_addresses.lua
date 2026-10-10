@@ -19,6 +19,8 @@ context("Crypto addresses test", function()
     ['BITCOINCASH:QPM2QSZNHKS23Z7629MMS6S4CWEF74VCWVY22GDX6A'] = 'bitcoin', -- uppercase cashaddr
     ['qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a'] = 'bitcoin',            -- bare cashaddr
     ['QPM2QSZNHKS23Z7629MMS6S4CWEF74VCWVY22GDX6A'] = 'bitcoin',            -- bare cashaddr, uppercase
+    ['bitcoincash:qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpkch56vmk'] = 'bitcoin',
+    ['bitcoincash:zqqszqgpqyqszqgpqyqszqgpqyqszqgpqyywmxr8cj'] = 'bitcoin', -- token-aware P2PKH
     -- Litecoin: distinguished from bitcoin by the decoded version byte
     ['LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd'] = 'litecoin',
     ['M7zVKQKmtV5Rc7erVGVVC3khZbXxsS5HEX'] = 'litecoin',
@@ -29,10 +31,17 @@ context("Crypto addresses test", function()
     ['raLnyR4PTuc5SgXGHqYA894a4eoKqoFwu'] = 'xrp',
     ['t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu'] = 'zcash',
     ['t3Jex1rKwuh1bQFRrKpKGWDcDVZ8bbQuNrB'] = 'zcash',
-    ['addr1qyqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8qz42jwu'] = 'cardano',
-    ['ADDR1QYQSYQCYQ5RQWZQFPG9SCRGWPUGPZYSNZS23V9CCRYDPK8QZ42JWU'] = 'cardano',  -- uppercase
+    -- CIP-19 mainnet Shelley addresses: base (57 bytes), pointer, enterprise (29 bytes)
+    ['addr1qyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcur50p7gppyg3jgffxyu5zj23t9skjutesxyerxdp4xcmskm46z7'] = 'cardano',
+    [('addr1qyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcur50p7gppyg3jgffxyu5zj23t9skjutesxyerxdp4xcmskm46z7'):upper()] = 'cardano', -- uppercase
+    ['addr1gyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcpqgps5xhtvl'] = 'cardano',
+    ['addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg'] = 'cardano',
+    -- Cosmos SDK: 20 byte accounts and 32 byte module/contract addresses
     ['cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu'] = 'cosmos',
     ['COSMOS1QYPQXPQ9QCRSSZG2PVXQ6RS0ZQG3YYC5LZV7XU'] = 'cosmos',                -- uppercase
+    ['cosmos1qqqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8qarc0sxaggsw'] = 'cosmos',
+    -- Leading zero symbols are significant: this payload starts with two zero bytes
+    ['112D2adLM3UKy4Z4giRbReR6gjWuvHUqB'] = 'bitcoin',
     ['GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV'] = 'stellar',
     ['EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B'] = 'ton',
     -- Format-only, no checksum available
@@ -67,8 +76,28 @@ context("Crypto addresses test", function()
     'TA4Y62o6YC2Zsck9rZVGTvqW1AQ7X9zTnX',
     'raLnyR4PTuc5SgXGHqYA894a4eoKqoFwX',
     't1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvX',
-    'addr1qyqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8qz42jwq',
+    'addr1qyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcur50p7gppyg3jgffxyu5zj23t9skjutesxyerxdp4xcmskm46z8',
     'cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xq',
+    -- A correct checksum on a payload that cannot be an address of the chain
+    'cosmos1qqqqk0wkhp',                                                  -- 2 byte payload
+    'addr1qqqqxn5hht',                                                    -- 2 byte payload
+    'cosmos1qqqsyqcyq5rqwzqfpg9scrgwpugpzysnzszga8hs',                    -- 21 byte payload
+    'addr1qyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcur50p7gppyg3jgffxyu5zj23t9skjutesxyerxdp4xcgg24wk', -- base address of 56 bytes
+    'addr1qqqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcur50p7gppyg3jgffxyu5zj23t9skjutesxyerxdp4xcms8duasr', -- testnet network id under the mainnet prefix
+    'addr1syqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcur50p7gppyg3jgffxyu5zj23t9skjutesxyerxdp4xcms4czay6', -- Byron type
+    'addr1uyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcg36alg',         -- reward address type
+    'addr1gxqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqq3acw9e',
+    'addr1gyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqvqqqqqqat9c3h',
+    'addr1gyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgqqqqqqvv4y2k',
+    'addr1gyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqvzllllllllllll7lcqqq2ruxtk',
+    'bitcoincash:sqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqc3zsmrpy',
+    'bitcoincash:yqqszqgpqyqszqgpqyqszqgpqyqszqgpqyds8d3dsw',             -- unsupported type 4
+    'bitcoincash:qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyvada2h6p',
+    'bitcoincash:qqqszqgpqyqszqgpqyqszqgpqyqszqgpq9s83n5z5q',
+    -- Prepending zero symbols decodes to the same bytes but is not the address
+    '1' .. '16L5yRNPTuciSgXGHqYwn9N6NeoKqopAu',
+    '1' .. '112D2adLM3UKy4Z4giRbReR6gjWuvHUqB',
+    'r' .. 'raLnyR4PTuc5SgXGHqYA894a4eoKqoFwu',
     'GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOA',
     'EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8A',
   }
