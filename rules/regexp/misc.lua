@@ -85,15 +85,16 @@ do
 
   other_wallet_address = '(' .. table.concat(atoms, ' | ') .. ')'
 end
-local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 local list_unsub = [[header_exists(List-Unsubscribe)]]
 local x_php_origin = [[header_exists(X-PHP-Originating-Script)]]
 
--- What turns a wallet address into a scam signal. A List-Unsubscribe header is a
--- weak one (every newsletter has it); it keeps gating Bitcoin as it always did,
--- but is not enough for the other currencies.
-local scam_signals = table.concat({ password_in_words, wallet_word,
+-- What turns a wallet address into a scam signal. The word "wallet" is not one:
+-- every legitimate deposit, withdrawal or payment mail that carries an address
+-- uses it. A List-Unsubscribe header is a weak one (every newsletter has it); it
+-- keeps gating Bitcoin as it always did, but is not enough for the other
+-- currencies.
+local scam_signals = table.concat({ password_in_words,
   my_victim, your_webcam, your_onan, broken_unicode, 'lua:check_data_images',
   x_php_origin }, ' | ')
 

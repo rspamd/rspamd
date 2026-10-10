@@ -276,6 +276,14 @@ NO LEAKED PASSWORD SCAM FOR A NEWSLETTER
   Expect Symbol  LITECOIN_ADDR
   Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
 
+NO LEAKED PASSWORD SCAM FOR A WITHDRAWAL NOTICE
+  # An exchange notice names the wallet the funds went to: the word "wallet"
+  # next to a real address is ordinary, not a scam signal
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_withdrawal.eml
+  ...  Settings={symbols_enabled = [TRON_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  TRON_ADDR
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
 NO LEAKED PASSWORD SCAM FOR HEX DATA
   # Any 0x + 40 hex token passes as an Ethereum address (a SHA-1 here), so the
   # format-only symbol must not gate the scam rule
