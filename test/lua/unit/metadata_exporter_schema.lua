@@ -280,3 +280,27 @@ context("metadata_exporter multipart/alternative layout planner", function()
     assert_equal(#tree, 2)
   end)
 end)
+
+context("metadata_exporter custom backend schema", function()
+  local schema = require "plugins/metadata_exporter"
+
+  test("a custom backend rule keeps keys the built-in schema does not know", function()
+    local res = schema.custom_rule_schema:transform({
+      backend = "webhook",
+      token = "secret",
+      timeout = 2.0,
+    })
+    assert_not_nil(res)
+    assert_equal(res.token, "secret")
+    assert_equal(res.timeout, 2.0)
+  end)
+
+  test("known keys are still type-checked for a custom backend", function()
+    local res, err = schema.custom_rule_schema:transform({
+      backend = "webhook",
+      timeout = "soon",
+    })
+    assert_nil(res)
+    assert_not_nil(err)
+  end)
+end)

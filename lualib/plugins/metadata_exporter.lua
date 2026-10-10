@@ -60,7 +60,7 @@ local email_parts_schema = T.one_of({
   end),
 }):optional()
 
-local rule_schema = T.table({
+local rule_fields = {
   backend = T.string()
             :doc({ summary = "Push backend: http, send_mail, redis_pubsub, redis_stream, " ..
                 "json_raw_tcp, or a custom_push name" }),
@@ -154,7 +154,15 @@ local rule_schema = T.table({
       :doc({ summary = "TCP host to push to (json_raw_tcp backend)" }),
   port = T.number():optional()
       :doc({ summary = "TCP port to push to (json_raw_tcp backend)" }),
-}, { open = false }):doc({ summary = "metadata_exporter rule configuration" })
+}
+
+local rule_schema = T.table(rule_fields, { open = false })
+    :doc({ summary = "metadata_exporter rule configuration" })
+
+-- A custom_push backend reads whatever options it needs from its rule, so
+-- keys the built-in backends do not know are passed through to it
+local custom_rule_schema = T.table(rule_fields, { open = true })
+    :doc({ summary = "metadata_exporter rule configuration for a custom_push backend" })
 
 -- Required fields per backend, checked against a rule AFTER it has been
 -- merged with plugin-wide defaults (a rule may rely on a global mail_to/smtp)
@@ -248,6 +256,7 @@ PluginSchema.register("plugins.metadata_exporter.part", part_schema)
 
 return {
   rule_schema = rule_schema,
+  custom_rule_schema = custom_rule_schema,
   part_schema = part_schema,
   backend_required_elements = backend_required_elements,
   encodings = encodings,

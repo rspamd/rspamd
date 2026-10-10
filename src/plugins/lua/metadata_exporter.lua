@@ -97,6 +97,17 @@ local variables = {
   end,
 }
 
+-- Custom variables are user code: an error in one must not escape the
+-- exporter (skipping `defer` on the way), so it counts as returning no value
+local function call_variable(task, name)
+  local ok, res = pcall(variables[name], task)
+  if not ok then
+    rspamd_logger.errx(task, 'custom variable [%s] failed: %s', name, res)
+    return nil
+  end
+  return res
+end
+
 local function get_selector(log_obj, expr)
   local selector = selector_cache[expr]
   if selector == nil then
@@ -109,66 +120,162 @@ local function get_selector(log_obj, expr)
   return selector or nil
 end
 
-local function expand_selectors(task, str, meta)
+-- Flattens a variable or selector result into `out`. Arrays (a selector-backed
+-- list, for instance) are flattened depth-first, one entry per element, rather
+-- than stringified as a table address; anything that cannot carry text is
+-- rejected so the caller can fail instead of inserting junk.
+local function flatten_value(value, out)
+  local vtype = type(value)
+
+  if vtype == 'table' then
+    for _, elt in ipairs(value) do
+      if not flatten_value(elt, out) then
+        return false
+      end
+    end
+    return true
+  end
+
+  if vtype == 'string' then
+    table.insert(out, value)
+    return true
+  end
+
+  if vtype == 'number' or vtype == 'boolean' then
+    table.insert(out, tostring(value))
+    return true
+  end
+
+  if vtype == 'userdata' then
+    -- rspamd_text and friends carry their bytes behind :str(), other objects
+    -- (an IP address, say) at least render through __tostring
+    local ok, converted = pcall(function()
+      return value:str()
+    end)
+    if ok and type(converted) == 'string' then
+      table.insert(out, converted)
+      return true
+    end
+    local mt = getmetatable(value)
+    if type(mt) == 'table' and mt.__tostring then
+      table.insert(out, tostring(value))
+      return true
+    end
+  end
+
+  return false
+end
+
+-- Converts a variable or selector result to text, joining array elements
+-- with `sep`; returns nil when it cannot carry text
+local function stringify_value(value, sep)
+  if value == nil then
+    return nil
+  end
+
+  local out = {}
+  if not flatten_value(value, out) then
+    return nil
+  end
+
+  -- A table with no array part carries no text; an empty one is just empty
+  -- content, which is allowed
+  if #out == 0 and type(value) == 'table' and next(value) ~= nil then
+    return nil
+  end
+
+  return table.concat(out, sep)
+end
+
+-- Replaces every $name and ${expr} placeholder of `str` in a single pass, so
+-- substituted text is never scanned for placeholders again: message data that
+-- looks like "${header(...)}" or "$ip" stays literal. A name resolves to a
+-- `meta` entry, then to a custom variable; ${expr} falls back to a selector.
+-- Variable and selector results are collapsed to one line; `meta` values only
+-- when `inline_meta` is set (header rendering), so a body keeps them verbatim.
+-- An unknown $name is kept as is.
+local function expand_placeholders(task, str, meta, inline_meta)
   if not str or not string.find(str, '$', 1, true) then
     return str
   end
 
-  local function stringify(extracted)
-    local str_val
-    if type(extracted) == 'table' then
-      str_val = table.concat(extracted, ',')
-    else
-      str_val = tostring(extracted)
+  local function stringify(what, extracted)
+    local str_val = stringify_value(extracted, ',')
+    if str_val == nil then
+      rspamd_logger.errx(task, '%s returned a value that cannot be converted to text', what)
+      return '((error extracting value))'
     end
     return sanitize_inline(str_val)
   end
 
-  str = string.gsub(str, '%$([%w_]+)', function(name)
+  local function resolve(name, braced)
     if meta and meta[name] ~= nil then
-      return '$' .. name
+      local value = tostring(meta[name])
+      return inline_meta and sanitize_inline(value) or value
     end
     if variables[name] then
-      local extracted = variables[name](task)
-      if extracted ~= nil then
-        return stringify(extracted)
+      local extracted = call_variable(task, name)
+      if extracted == nil then
+        rspamd_logger.errx(task, 'custom variable [%s] returned no value', name)
+        return '((error extracting value))'
       end
-      rspamd_logger.errx(task, 'custom variable [%s] returned no value', name)
+      return stringify(string.format('custom variable [%s]', name), extracted)
+    end
+    if not braced then
+      return nil
+    end
+    local selector = get_selector(task, name)
+    if not selector then
+      return '((could not create selector))'
+    end
+    local extracted = selector(task)
+    if not extracted then
+      rspamd_logger.errx(task, 'could not extract value with selector [%s]', name)
       return '((error extracting value))'
     end
-    return '$' .. name
-  end)
-
-  local function process_placeholder(whole, expr)
-    if meta and meta[expr] ~= nil then
-      return whole
-    end
-
-    local extracted
-    if variables[expr] then
-      extracted = variables[expr](task)
-    else
-      local selector = get_selector(task, expr)
-      if not selector then
-        return '((could not create selector))'
-      end
-      extracted = selector(task)
-    end
-    if extracted then
-      extracted = stringify(extracted)
-    else
-      rspamd_logger.errx(task, 'could not extract value with selector [%s]', expr)
-      extracted = '((error extracting value))'
-    end
-    return extracted
+    return stringify(string.format('selector [%s]', name), extracted)
   end
 
-  return (string.gsub(str, '(%${(.-)})', process_placeholder))
+  local out = {}
+  local pos, len = 1, #str
+  while pos <= len do
+    local dollar = string.find(str, '$', pos, true)
+    if not dollar then
+      out[#out + 1] = string.sub(str, pos)
+      break
+    end
+    out[#out + 1] = string.sub(str, pos, dollar - 1)
+
+    local replacement, next_pos
+    if string.sub(str, dollar + 1, dollar + 1) == '{' then
+      local close = string.find(str, '}', dollar + 2, true)
+      if close then
+        replacement = resolve(string.sub(str, dollar + 2, close - 1), true)
+        next_pos = close + 1
+      end
+    else
+      local name_s, name_e = string.find(str, '^[A-Za-z0-9_]+', dollar + 1)
+      if name_s then
+        replacement = resolve(string.sub(str, name_s, name_e), false)
+        next_pos = name_e + 1
+      end
+    end
+
+    if replacement then
+      out[#out + 1] = replacement
+      pos = next_pos
+    else
+      out[#out + 1] = '$'
+      pos = dollar + 1
+    end
+  end
+
+  return table.concat(out)
 end
 
 local function expand_value(task, val)
   if type(val) == 'string' then
-    return expand_selectors(task, val)
+    return expand_placeholders(task, val)
   elseif type(val) == 'table' then
     local expanded = {}
     for k, elt in pairs(val) do
@@ -199,6 +306,7 @@ local settings_fallback_fields = {
   'helo',
   'host',
   'keepalive',
+  'list_key',
   'mail_from',
   'mail_to',
   'max_len',
@@ -236,19 +344,62 @@ local function resolve_rule(task, rule)
   return resolved
 end
 
-local function add_template_variables(task, tmpl, meta)
+-- Evaluates every custom variable the templates refer to exactly once, so all
+-- occurrences (a MIME boundary used in a header and in the body, say) get the
+-- same value, and stores it as text
+local function add_template_variables(task, templates, meta)
   local requested = {}
-  for name in string.gmatch(tmpl, '%$([%w_]+)') do
-    requested[name] = true
-  end
-  for name in string.gmatch(tmpl, '%${([%w_]+)}') do
-    requested[name] = true
+  for _, tmpl in ipairs(templates) do
+    for name in string.gmatch(tmpl, '%$([%w_]+)') do
+      requested[name] = true
+    end
+    for name in string.gmatch(tmpl, '%${([%w_]+)}') do
+      requested[name] = true
+    end
   end
   for name in pairs(requested) do
     if meta[name] == nil and variables[name] then
-      meta[name] = variables[name](task)
+      local value = stringify_value(call_variable(task, name), ',')
+      if value == nil then
+        rspamd_logger.errx(task, 'custom variable [%s] returned no usable value', name)
+        value = '((error extracting value))'
+      end
+      meta[name] = value
     end
   end
+end
+
+-- Splits email_template at its first blank line into the header block, the
+-- separator and the body; the separator is empty for a template without a body
+local function split_template(tmpl)
+  local sep_start, sep_end = string.find(tmpl, '\r?\n\r?\n')
+  if not sep_start then
+    return tmpl, '', ''
+  end
+  return string.sub(tmpl, 1, sep_start - 1), string.sub(tmpl, sep_start, sep_end),
+      string.sub(tmpl, sep_end + 1)
+end
+
+-- Renders email_template. The header block and the body are rendered
+-- separately: values substituted into the headers are collapsed to one line,
+-- so neither a custom variable nor message metadata can add a header or move
+-- the header/body boundary, while the body keeps values verbatim ($content
+-- may carry a whole message). Returns the header block, the separator and the
+-- body; the separator is empty for a template without a body.
+local function render_email_template(task, tmpl, meta)
+  local header_tmpl, separator, body_tmpl = split_template(tmpl)
+
+  local header_block = expand_placeholders(task, header_tmpl, meta, true)
+  local body = expand_placeholders(task, body_tmpl, meta, false)
+
+  return header_block, separator, body
+end
+
+-- RFC 5321 4.1.1.3 has servers accept a bare "postmaster", and a plain SASL
+-- username is a usual alert target: a local part without a domain is kept as
+-- is. Only dot-atom characters qualify, so it cannot carry CR/LF or syntax.
+local function is_bare_local_part(value)
+  return string.find(value, "^[A-Za-z0-9!#$%%&'*+/=?^_`{|}~.-]+$") ~= nil
 end
 
 local function add_mail_targets(task, source, values, mail_targets, display_emails)
@@ -261,6 +412,12 @@ local function add_mail_targets(task, source, values, mail_targets, display_emai
 
   if type(values) ~= 'string' or values == '' then
     rspamd_logger.errx(task, '%s returned no email address', source)
+    return
+  end
+
+  if is_bare_local_part(values) then
+    table.insert(mail_targets, values)
+    table.insert(display_emails, string.format('<%s>', values))
     return
   end
 
@@ -288,6 +445,9 @@ local function normalize_mail_from(task, value)
   if type(value) ~= 'string' then
     rspamd_logger.errx(task, 'mail_from is not a string')
     return nil
+  end
+  if is_bare_local_part(value) then
+    return value
   end
 
   local parsed = rspamd_util.parse_mail_address(value, task:get_mempool())
@@ -343,43 +503,12 @@ local function is_ascii(str)
   return not string.find(str, '[\128-\255]')
 end
 
-local function encode_address_header(task, value)
-  if string.find(value, '[():]') then
-    return value
-  end
-
-  local parsed = rspamd_util.parse_mail_address(value, task:get_mempool())
-  if not parsed or #parsed == 0 then
-    return value
-  end
-
-  local changed = false
-  local out = {}
-  for _, a in ipairs(parsed) do
-    if a.name and a.name ~= '' and not is_ascii(a.name) then
-      changed = true
-      local encoded_name = rspamd_util.mime_header_encode(a.name, true)
-      if a.addr and a.addr ~= '' then
-        table.insert(out, encoded_name .. ' <' .. a.addr .. '>')
-      else
-        table.insert(out, encoded_name)
-      end
-    else
-      table.insert(out, a.raw)
-    end
-  end
-
-  if not changed then
-    return value
-  end
-
-  return table.concat(out, ', ')
-end
-
--- Joins folded continuation lines so each entry is one logical header
+-- Joins folded continuation lines so each entry is one logical header. Lines
+-- may end in CRLF (a template edited that way); the CR is dropped so it never
+-- ends up inside a header value
 local function split_logical_headers(header_block)
   local logical = {}
-  for line in (header_block .. '\n'):gmatch('(.-)\n') do
+  for line in (header_block .. '\n'):gmatch('(.-)\r?\n') do
     if #logical > 0 and string.match(line, '^[ \t]') then
       logical[#logical] = logical[#logical] .. '\n' .. line
     else
@@ -409,15 +538,12 @@ local function has_mime_parameter(value, name)
   return false
 end
 
-local function encode_email_headers(task, text)
-  local sep_start, sep_end = string.find(text, '\r?\n\r?\n')
-  if not sep_start then
-    return text
-  end
-  local header_block = string.sub(text, 1, sep_start - 1)
-  local separator = string.sub(text, sep_start, sep_end)
-  local body = string.sub(text, sep_end + 1)
-
+-- RFC 2047-encodes the rendered top-level header block, as 8BITMIME covers
+-- message bodies only. Address lists get their display names and comments
+-- encoded, unstructured fields their non-ASCII words. What has no RFC 2047
+-- form - a non-ASCII address, non-ASCII in another structured field - makes
+-- the alert unsendable rather than sent with raw 8-bit header octets.
+local function encode_header_block(task, header_block)
   local out = {}
   for _, entry in ipairs(split_logical_headers(header_block)) do
     local colon = string.find(entry, ':', 1, true)
@@ -428,67 +554,85 @@ local function encode_email_headers(task, text)
       local value = string.gsub(string.sub(entry, colon + 1), '\r?\n[ \t]+', ' ')
       value = string.match(value, '^[ \t]*(.*)$')
       local lname = string.lower(name)
+      local encoded, unstructured
       if address_headers[lname] then
-        table.insert(out, name .. ': ' .. encode_address_header(task, value))
+        encoded = rspamd_util.mime_header_encode(value, true)
       elseif structured_headers[lname] then
-        table.insert(out, name .. ': ' .. lua_util.fold_header_with_encoding(task, name, value, { encode = false }))
+        encoded = value
       else
-        table.insert(out, name .. ': ' .. lua_util.fold_header_with_encoding(task, name, value, { encode = true }))
+        encoded = rspamd_util.mime_header_encode(value, false)
+        unstructured = true
+      end
+      if not is_ascii(encoded) then
+        return nil, string.format('cannot encode %s header: its non-ASCII data has no RFC 2047 form', name)
+      end
+      if encoded == value then
+        -- Refolding would only change a header nothing was wrong with
+        table.insert(out, entry)
+      else
+        -- Generated content uses LF whatever the scanned message used;
+        -- lua_smtp turns it into CRLF on the wire. Unstructured text folds
+        -- only at existing whitespace, so it unfolds back unchanged; the
+        -- structured folder may break after ',' and add whitespace there
+        local fold = unstructured and rspamd_util.fold_header_unstructured or rspamd_util.fold_header
+        table.insert(out, name .. ': ' .. fold(name, encoded, 'lf'))
       end
     end
   end
 
-  return table.concat(out, '\n') .. separator .. body
+  return table.concat(out, '\n')
 end
 
--- Splits a rendered email_template into (header_block, separator, body).
--- Unlike encode_email_headers, a missing blank-line separator is not an
--- error case here: it just means the template has no body of its own,
--- which email_parts assembly treats as "no implicit first part".
-local function split_headers_body(text)
-  local sep_start, sep_end = string.find(text, '\r?\n\r?\n')
-  if not sep_start then
-    -- No blank-line separator: the whole text is headers. Strip any
-    -- trailing newline so callers that re-join with their own '\n' don't
-    -- end up inserting a blank line before what they append.
-    return (string.gsub(text, '\r?\n$', '')), '\n\n', ''
-  end
-  return string.sub(text, 1, sep_start - 1), string.sub(text, sep_start, sep_end), string.sub(text, sep_end + 1)
-end
-
--- 7bit/8bit put content on the wire verbatim, so NUL bytes and lines over the
--- RFC 5322 998-octet limit break framing there. Quoted-printable encodes and
--- folds both away. A bare "." line needs no handling here: dot-stuffing is the
--- SMTP transport's job and lua_smtp does it (RFC 5321 4.5.2).
-local function needs_encoding_for_transport(content)
+-- Classifies a part body in place, without copying it: `ascii` tells whether it
+-- is free of 8-bit octets, `unsafe` whether 7bit/8bit would break framing on
+-- the wire (NUL bytes or lines over the RFC 5322 998-octet limit), which
+-- quoted-printable encodes and folds away. A bare "." line needs no handling
+-- here: dot-stuffing is the SMTP transport's job and lua_smtp does it
+-- (RFC 5321 4.5.2).
+local function scan_part_content(content)
+  local len = #content
+  local ascii = not string.find(content, '[\128-\255]')
   -- Plain find of a literal NUL: the %z class was removed in Lua 5.2 and
   -- matches the letter 'z' there instead
-  if string.find(content, '\0', 1, true) then
-    return true
-  end
-  for line in (content .. '\n'):gmatch('(.-)\n') do
-    if #(string.gsub(line, '\r$', '')) > 998 then
-      return true
+  local unsafe = string.find(content, '\0', 1, true) ~= nil
+
+  if not unsafe and len > 998 then
+    local pos = 1
+    while pos <= len do
+      local nl = string.find(content, '\n', pos, true)
+      local line_end = (nl or len + 1) - 1
+      if line_end >= pos and string.byte(content, line_end) == 13 then
+        line_end = line_end - 1
+      end
+      if line_end - pos + 1 > 998 then
+        unsafe = true
+        break
+      end
+      if not nl then
+        break
+      end
+      pos = nl + 1
     end
   end
-  return false
+
+  return { ascii = ascii, unsafe = unsafe }
 end
 
-local function guess_text_cte(content)
-  if not is_ascii(content) or needs_encoding_for_transport(content) then
+local function guess_text_cte(scan)
+  if not scan.ascii or scan.unsafe then
     return 'quoted-printable'
   end
-  return '8bit'
+  return '7bit'
 end
 
 -- An explicitly configured encoding is honoured unless it violates its MIME
 -- constraints or would corrupt the message on the wire.
-local function sanitize_cte(task, label, cte, content)
-  if cte == '7bit' and (not is_ascii(content) or needs_encoding_for_transport(content)) then
+local function sanitize_cte(task, label, cte, scan)
+  if cte == '7bit' and (not scan.ascii or scan.unsafe) then
     rspamd_logger.warnx(task,
       '%s content is not valid 7bit data, using quoted-printable instead', label)
     return 'quoted-printable'
-  elseif cte == '8bit' and needs_encoding_for_transport(content) then
+  elseif cte == '8bit' and scan.unsafe then
     rspamd_logger.warnx(task,
       '%s content has NUL bytes or over-long lines, using quoted-printable instead of 8bit', label)
     return 'quoted-printable'
@@ -499,9 +643,9 @@ end
 local function encode_part_content(task, value, cte)
   local encoded
   if cte == 'base64' then
-    encoded = rspamd_util.encode_base64(value, 76, task:get_newlines_type())
+    encoded = rspamd_util.encode_base64(value, 76, 'lf')
   elseif cte == 'quoted-printable' then
-    encoded = rspamd_util.encode_qp(value, 76, task:get_newlines_type())
+    encoded = rspamd_util.encode_qp(value, 76, 'lf')
   else
     return value
   end
@@ -583,65 +727,6 @@ local function render_multipart(parts, boundary)
   return table.concat(body, '\n')
 end
 
--- Flattens one custom variable result into part content. Arrays (a
--- selector-backed list, for instance) are flattened depth-first into one line
--- per element rather than stringified as a table address; anything that cannot
--- carry body text is rejected so the caller aborts instead of attaching junk.
-local function flatten_part_value(value, out)
-  local vtype = type(value)
-
-  if vtype == 'table' then
-    for _, elt in ipairs(value) do
-      if not flatten_part_value(elt, out) then
-        return false
-      end
-    end
-    return true
-  end
-
-  if vtype == 'string' then
-    table.insert(out, value)
-    return true
-  end
-
-  if vtype == 'number' or vtype == 'boolean' then
-    table.insert(out, tostring(value))
-    return true
-  end
-
-  if vtype == 'userdata' then
-    -- rspamd_text and friends carry their bytes behind :str()
-    local ok, converted = pcall(function()
-      return value:str()
-    end)
-    if ok and type(converted) == 'string' then
-      table.insert(out, converted)
-      return true
-    end
-  end
-
-  return false
-end
-
-local function stringify_part_value(value)
-  if value == nil then
-    return nil
-  end
-
-  local out = {}
-  if not flatten_part_value(value, out) then
-    return nil
-  end
-
-  -- A table with no array part carries no body text; an empty one is just
-  -- empty content, which is allowed
-  if #out == 0 and type(value) == 'table' and next(value) ~= nil then
-    return nil
-  end
-
-  return table.concat(out, '\n')
-end
-
 -- content/content_from_variables accept a single string or an array; the
 -- schema does not normalize this (see lualib/plugins/metadata_exporter.lua)
 local function part_content_names(value)
@@ -653,7 +738,8 @@ end
 
 -- Renders the template's own body into a part block, returning its
 -- classification kind alongside it for the layout planner
-local function build_template_part(task, template_body, template_part_headers)
+-- Content type of the template's own body part and its grouping kind
+local function template_part_type(template_part_headers)
   local content_type = 'text/plain; charset=utf-8'
   if template_part_headers.content_type then
     for _, entry in ipairs(template_part_headers) do
@@ -662,6 +748,12 @@ local function build_template_part(task, template_body, template_part_headers)
       end
     end
   end
+  local has_filename = template_part_headers.filename or has_mime_parameter(content_type, 'name')
+  return content_type, schema.classify_text_kind(content_type, has_filename, template_part_headers.disposition)
+end
+
+local function build_template_part(task, template_body, template_part_headers)
+  local content_type, kind = template_part_type(template_part_headers)
 
   local headers = {}
   for _, entry in ipairs(template_part_headers) do
@@ -671,13 +763,12 @@ local function build_template_part(task, template_body, template_part_headers)
     table.insert(headers, 'Content-Type: ' .. content_type)
   end
   if not template_part_headers.cte then
-    local cte = guess_text_cte(template_body)
+    local cte = guess_text_cte(scan_part_content(template_body))
     table.insert(headers, 'Content-Transfer-Encoding: ' .. cte)
     template_body = encode_part_content(task, template_body, cte)
   end
   local part = table.concat(headers, '\n') .. '\n\n' .. template_body
-  local has_filename = template_part_headers.filename or has_mime_parameter(content_type, 'name')
-  return schema.classify_text_kind(content_type, has_filename, template_part_headers.disposition), part
+  return kind, part
 end
 
 -- Builds the multipart body for email_alert: an optional leading part from
@@ -705,7 +796,8 @@ local function assemble_email_parts(task, rule, template_body, template_part_hea
           rspamd_logger.errx(task, 'email_parts[%s] references unknown variable [%s]', i, name)
           return nil
         end
-        local v = stringify_part_value(variables[name](task))
+        -- A part body keeps one line per element of an array-valued variable
+        local v = stringify_value(call_variable(task, name), '\n')
         if v == nil then
           rspamd_logger.errx(task, 'email_parts[%s] variable [%s] returned nil or unconvertible content',
             i, name)
@@ -716,15 +808,12 @@ local function assemble_email_parts(task, rule, template_body, template_part_hea
       value = table.concat(resolved, '\n')
     else
       -- Literal/template content is expanded like the email template itself
-      local text = table.concat(part_content_names(entry.content), '\n')
-      text = expand_selectors(task, text, meta)
-      value = lua_util.template(text, meta)
+      value = expand_placeholders(task, table.concat(part_content_names(entry.content), '\n'), meta, false)
     end
 
     local filename
     if entry.filename then
-      local expanded_filename = expand_selectors(task, entry.filename, meta)
-      filename = stringify_part_value(lua_util.template(expanded_filename, meta))
+      filename = expand_placeholders(task, entry.filename, meta, false)
     end
     if filename == '' then
       filename = nil
@@ -736,9 +825,16 @@ local function assemble_email_parts(task, rule, template_body, template_part_hea
     local cte = entry.encoding
     if not cte or cte == 'auto' then
       -- MIME type names are case-insensitive, so match accordingly
-      cte = string.match(string.lower(content_type), '^text/') and guess_text_cte(value) or 'base64'
+      if string.match(string.lower(content_type), '^text/') then
+        cte = guess_text_cte(scan_part_content(value))
+      else
+        cte = 'base64'
+      end
+    elseif cte == '7bit' or cte == '8bit' then
+      -- Only verbatim encodings need the scan; base64/quoted-printable are
+      -- always transport-safe
+      cte = sanitize_cte(task, string.format('email_parts[%s]', i), cte, scan_part_content(value))
     end
-    cte = sanitize_cte(task, string.format('email_parts[%s]', i), cte, value)
 
     local part = build_part_header_lines(content_type, filename, disposition, cte)
       .. '\n\n' .. encode_part_content(task, value, cte)
@@ -757,8 +853,8 @@ local function assemble_email_parts(task, rule, template_body, template_part_hea
   })
   local tree = tree_or_err
   if not subtype then
-    -- Only the template's body part can create this at runtime - a rule's own
-    -- email_parts were already rejected by validate_rule if ambiguous
+    -- validate_rule rejects ambiguous layouts, so this only happens when the
+    -- template's body headers are known after rendering (variables in them)
     rspamd_logger.warnx(task, 'email_alert: %s; using flat multipart/%s instead',
       tree_or_err, rule.email_parts_type or 'mixed')
     subtype = rule.email_parts_type or 'mixed'
@@ -932,9 +1028,8 @@ local function get_general_metadata(task, flatten, no_content)
         return l
       else
         -- Fold duplicates the way format_symlist does: joining them with a bare
-        -- '\n' lets an empty duplicate insert a blank line, which moves the
-        -- header/body boundary that split_headers_body finds in the rendered
-        -- email_template
+        -- '\n' lets an empty duplicate insert a blank line into the rendered
+        -- email_template body
         local folded = {}
         for i, v in ipairs(l) do
           folded[i] = sanitize_inline(v)
@@ -969,19 +1064,42 @@ local function get_general_metadata(task, flatten, no_content)
   return r
 end
 
+local function maybe_defer(task, rule)
+  if rule.defer then
+    rspamd_logger.warnx(task, 'deferring message')
+    task:set_pre_result('soft reject', 'deferred', N)
+  end
+end
+
 local formatters = {
   default = function(task)
     return task:get_content(), {}
   end,
   email_alert = function(task, rule)
+    -- An alert that cannot be built is a failed push as far as `defer` goes
+    local function fail()
+      maybe_defer(task, rule)
+      return nil
+    end
     local meta = get_general_metadata(task, true)
     local display_emails = {}
     local mail_targets = {}
     local tmpl = rule.email_template or settings.email_template
-    add_template_variables(task, tmpl, meta)
+    local templates = { tmpl }
+    for _, entry in ipairs(rule.email_parts or E) do
+      if entry.content ~= nil then
+        for _, text in ipairs(part_content_names(entry.content)) do
+          table.insert(templates, text)
+        end
+      end
+      if entry.filename then
+        table.insert(templates, entry.filename)
+      end
+    end
+    add_template_variables(task, templates, meta)
     meta.mail_from = normalize_mail_from(task, rule.mail_from)
     if not meta.mail_from then
-      return nil
+      return fail()
     end
     add_mail_targets(task, 'mail_to', rule.mail_to, mail_targets, display_emails)
     if rule.email_alert_sender then
@@ -992,7 +1110,7 @@ local formatters = {
     end
     if rule.email_alert_sender_variable then
       if variables[rule.email_alert_sender_variable] then
-        local addr = variables[rule.email_alert_sender_variable](task)
+        local addr = call_variable(task, rule.email_alert_sender_variable)
         lua_util.debugm(N, task, 'email_alert_sender_variable: %s: %s', rule.email_alert_sender_variable, addr)
         add_mail_targets(task, 'email_alert_sender_variable', addr, mail_targets, display_emails)
       else
@@ -1017,29 +1135,49 @@ local formatters = {
     end
     if #mail_targets == 0 then
       rspamd_logger.errx(task, 'email alert has no valid recipients')
-      return nil
+      return fail()
     end
     meta.mail_to = table.concat(display_emails, ', ')
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    tmpl = expand_selectors(task, tmpl, meta)
-    local rendered = lua_util.template(tmpl, meta)
+    local header_block, separator, body = render_email_template(task, tmpl, meta)
 
     if rule.email_parts and #rule.email_parts > 0 then
-      local header_block, separator, body = split_headers_body(rendered)
+      if separator == '' then
+        -- The template has no body of its own, so there is no implicit first
+        -- part; drop a trailing newline so the separator is not doubled
+        header_block = string.gsub(header_block, '\r?\n$', '')
+        separator = '\n\n'
+      end
       local other_headers, template_part_headers, has_mime_version = split_template_content_headers(header_block)
+      if rule.email_auto_encode_headers then
+        -- These move into a part, out of reach of encode_header_block below
+        for _, entry in ipairs(template_part_headers) do
+          if not is_ascii(entry) then
+            rspamd_logger.errx(task, 'email alert is not sent: cannot encode %s header: '
+                .. 'its non-ASCII data has no RFC 2047 form', string.match(entry, '^([^:]*)'))
+            return fail()
+          end
+        end
+      end
       local mp_body, subtype, boundary = assemble_email_parts(task, rule, body, template_part_headers, meta)
       if not mp_body then
-        return nil
+        return fail()
       end
-      local multipart_headers = finalize_multipart_headers(other_headers, has_mime_version, subtype, boundary)
-      rendered = multipart_headers .. separator .. mp_body
+      header_block = finalize_multipart_headers(other_headers, has_mime_version, subtype, boundary)
+      body = mp_body
     end
 
     if rule.email_auto_encode_headers then
-      rendered = encode_email_headers(task, rendered)
+      local encoded, err = encode_header_block(task, header_block)
+      if not encoded then
+        rspamd_logger.errx(task, 'email alert is not sent: %s', err)
+        return fail()
+      end
+      header_block = encoded
     end
-    return rendered, { mail_targets = mail_targets }
+
+    return header_block .. separator .. body, { mail_targets = mail_targets }
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -1210,13 +1348,6 @@ local selectors = {
     return (action ~= 'soft reject')
   end,
 }
-
-local function maybe_defer(task, rule)
-  if rule.defer then
-    rspamd_logger.warnx(task, 'deferring message')
-    task:set_pre_result('soft reject', 'deferred', N)
-  end
-end
 
 local pushers = {
   redis_pubsub = function(task, formatted, rule)
@@ -1476,6 +1607,12 @@ local pushers = {
     end
   end,
 }
+
+-- custom_push may add pushers below; rules of those get an open schema
+local builtin_pushers = {}
+for name in pairs(pushers) do
+  builtin_pushers[name] = true
+end
 
 local opts = rspamd_config:get_all_opt(N)
 if not opts then
@@ -1773,6 +1910,24 @@ end
 -- Dynamic checks that the schema cannot express: selector/formatter/backend
 -- names are extensible at runtime via custom_select/custom_format/custom_push,
 -- and per-backend required settings may be satisfied by a plugin-wide default
+-- The literal (placeholder-free) address that fails to parse, if any
+local function invalid_literal_address(value, single)
+  if type(value) ~= 'string' or value == '' or string.find(value, '$', 1, true) or
+      is_bare_local_part(value) then
+    return nil
+  end
+  local parsed = rspamd_util.parse_mail_address(value, rspamd_config:get_mempool())
+  if not parsed or #parsed == 0 or (single and #parsed ~= 1) then
+    return value
+  end
+  for _, address in ipairs(parsed) do
+    if not (address.flags and address.flags.valid) then
+      return address.raw or value
+    end
+  end
+  return nil
+end
+
 local function validate_rule(k, rule)
   for _, e in ipairs(schema.backend_required_elements[rule.backend] or E) do
     if rule[e] == nil and settings[e] == nil then
@@ -1789,6 +1944,29 @@ local function validate_rule(k, rule)
     rspamd_logger.errx(rspamd_config, 'rule %s: has invalid formatter %s', k, rule.formatter)
     return false
   end
+  if rule.backend == 'send_mail' or rule.formatter == 'email_alert' then
+    -- Literal addresses are checked once here rather than failing every message
+    local mail_from = rule.mail_from
+    if mail_from == nil then
+      mail_from = settings.mail_from
+    end
+    local bad = invalid_literal_address(mail_from, true)
+    if bad then
+      rspamd_logger.errx(rspamd_config, 'rule %s: mail_from is not a valid address: %s', k, bad)
+      return false
+    end
+    local mail_to = rule.mail_to
+    if mail_to == nil then
+      mail_to = settings.mail_to
+    end
+    for _, value in ipairs(type(mail_to) == 'table' and mail_to or { mail_to }) do
+      bad = invalid_literal_address(value)
+      if bad then
+        rspamd_logger.errx(rspamd_config, 'rule %s: mail_to is not a valid address: %s', k, bad)
+        return false
+      end
+    end
+  end
   if rule.meta_headers then
     rspamd_logger.warnx(rspamd_config,
       'rule %s: uses deprecated meta_headers option; use formatter = "multipart" or "json" instead', k)
@@ -1800,6 +1978,14 @@ local function validate_rule(k, rule)
       end
     end
     local descriptors = {}
+    -- The template's own body becomes the leading part, so it takes part in
+    -- grouping just like at runtime
+    local header_tmpl, _, body_tmpl = split_template(rule.email_template or settings.email_template)
+    if #body_tmpl > 0 then
+      local _, template_part_headers = split_template_content_headers(header_tmpl)
+      local _, kind = template_part_type(template_part_headers)
+      table.insert(descriptors, { kind = kind })
+    end
     for _, part in ipairs(rule.email_parts) do
       table.insert(descriptors,
         { kind = schema.classify_text_kind(part.content_type, part.filename, part.disposition) })
@@ -1836,7 +2022,8 @@ for k, v in pairs(settings.rules) do
       lua_util.config_utils.push_config_error(N, string.format('rule %s: has invalid backend %s', k, backend))
       settings.rules[k] = nil
     else
-      local res, err = schema.rule_schema:transform(v)
+      local rule_schema = builtin_pushers[backend] and schema.rule_schema or schema.custom_rule_schema
+      local res, err = rule_schema:transform(v)
       if not res then
         local msg = string.format('rule %s: invalid configuration -> rule DISABLED: %s', k, T.format_error(err))
         rspamd_logger.errx(rspamd_config, '%s', msg)
