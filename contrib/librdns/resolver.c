@@ -72,6 +72,7 @@ rdns_send_request(struct rdns_request *req, int fd, bool new_req)
 	struct rdns_resolver *resolver = req->resolver;
 	struct dns_header *header;
 	const int max_id_cycles = 32;
+	bool reconnected = false;
 	khiter_t k;
 
 	/* Find ID collision */
@@ -95,6 +96,7 @@ rdns_send_request(struct rdns_request *req, int fd, bool new_req)
 		}
 	}
 
+retry_send:
 	if (resolver->curve_plugin == NULL) {
 		if (!IS_CHANNEL_CONNECTED(req->io)) {
 			r = sendto(fd, req->packet, req->pos, 0,
@@ -136,6 +138,15 @@ rdns_send_request(struct rdns_request *req, int fd, bool new_req)
 			 * should take care about events processing
 			 */
 			return 0;
+		}
+		else if (!reconnected && IS_CHANNEL_CONNECTED(req->io) &&
+				 (errno == EDESTADDRREQ || errno == ENOTCONN || errno == ECONNABORTED)) {
+			/* Kernel dropped the association (SOCK_DESTROY, e.g. an eBPF LB backend went away): reconnect */
+			rdns_info("socket for server %s has been disconnected (%s), reconnecting",
+					  serv->name, strerror(errno));
+			req->io->flags &= ~RDNS_CHANNEL_CONNECTED;
+			reconnected = true;
+			goto retry_send;
 		}
 		else {
 			rdns_debug("send failed: %s for server %s", strerror(errno), serv->name);
