@@ -1928,11 +1928,17 @@ lua_dkim_verify_handler(lua_State *L)
 			ret = rspamd_dkim_check(cbd->ctx, cbd->key, cbd->task);
 			dkim_module_lua_push_verify_result(cbd, ret, NULL);
 		}
-		else {
-			rspamd_get_dkim_key(ctx,
-								task,
-								dkim_module_lua_on_key,
-								cbd);
+		else if (!rspamd_get_dkim_key(ctx,
+									  task,
+									  dkim_module_lua_on_key,
+									  cbd)) {
+			/* No DNS request means no callback, so report an immediate failure */
+			luaL_unref(L, LUA_REGISTRYINDEX, cbd->cbref);
+			lua_pushboolean(L, false);
+			lua_pushfstring(L, "cannot request DKIM key %s",
+							rspamd_dkim_get_dns_key(ctx));
+
+			return 2;
 		}
 	}
 	else {

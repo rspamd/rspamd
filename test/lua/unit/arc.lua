@@ -25,6 +25,14 @@ context('ARC seal completion', function()
       headers['ARC-Authentication-Results'][#headers['ARC-Authentication-Results'] + 1] = {
         decoded = aar, value = aar }
     end
+    if opts.drop_aar then
+      table.remove(headers['ARC-Authentication-Results'], count - opts.drop_aar + 1)
+    end
+    if opts.extra_aar then
+      -- Prepended above the real AARs, so no seal covers it
+      table.insert(headers['ARC-Authentication-Results'], 1,
+        { decoded = opts.extra_aar, value = opts.extra_aar })
+    end
     local task = {
       get_header_full = function(_, name) return headers[name] end,
       cache_set = function(_, name, value) cache[name] = value end,
@@ -64,6 +72,9 @@ context('ARC seal completion', function()
           local index = tonumber(header:match('i=(%d+)'))
           local domain = 'forwarder' .. index .. '.example'
           if kind == 'arc-sign' then
+            if opts.signature_immediate then
+              return false, 'cannot start verification'
+            end
             callback(task, not opts.signature_failure, 'signature failure', domain)
             return true
           end
@@ -220,4 +231,37 @@ context('ARC seal completion', function()
     assert_nil(symbols.ARC_ALLOW)
     assert_nil(cache['arc-allow'])
   end)
+
+  test('immediate AMS failure rejects', function()
+    local _, symbols, cache, requested = start_checks({ signature_immediate = true })
+    assert_equal(0, #requested)
+    assert_equal(1, #(symbols.ARC_REJECT or {}))
+    assert_nil(symbols.ARC_ALLOW)
+    assert_nil(cache['arc-allow'])
+  end)
+
+  test('whitelisted immediate AMS failure verifies seals', function()
+    local _, symbols, cache, requested = start_checks({ signature_immediate = true,
+      synchronous = true, whitelist = { ['forwarder3.example'] = true } })
+    assert_equal(3, #requested)
+    assert_equal(1, #(symbols.ARC_ALLOW or {}))
+    assert_nil(symbols.ARC_REJECT)
+    assert_equal('forwarder3.example:s=arc:i=3', cache['arc-allow'])
+  end)
+
+  for name, aar_opts in pairs({
+    ['unsealed extra AAR'] = { extra_aar = 'i=1; forwarder1.example; dmarc=pass header.from=bank.example' },
+    ['missing AAR'] = { drop_aar = 2 },
+    ['duplicate AAR instance'] = { drop_aar = 2,
+      extra_aar = 'i=1; forwarder1.example; dmarc=pass header.from=bank.example' },
+  }) do
+    test(name .. ' invalidates the chain', function()
+      aar_opts.whitelisted_signers_map = { ['forwarder1.example'] = true }
+      aar_opts.synchronous = true
+      local _, symbols, cache, requested = start_checks(aar_opts)
+      assert_equal(0, #requested)
+      assert_equal(1, #(symbols.ARC_INVALID or {}))
+      assert_pending(symbols, cache)
+    end)
+  end
 end)

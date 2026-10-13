@@ -162,8 +162,17 @@ local function parse_arc_header(hdr, target, is_aar)
   end)
 end
 
-local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
+local function arc_validate_seals(task, seals, sigs, ars)
   local fail_reason
+  -- Each ARC set must contain exactly one AAR; extra AARs are not covered
+  -- by any seal and must not be used as trusted results
+  if #ars ~= #seals then
+    fail_reason = string.format('invalid count of ARC-Authentication-Results: %d, expected %d',
+      #ars, #seals)
+    rspamd_logger.infox(task, fail_reason)
+    task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+    return false, fail_reason
+  end
   for i = 1, #seals do
     if (sigs[i].i or 0) ~= i then
       fail_reason = string.format('bad i for signature: %d, expected %d; d=%s',
@@ -175,6 +184,13 @@ local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
     if (seals[i].i or 0) ~= i then
       fail_reason = string.format('bad i for seal: %d, expected %d; d=%s',
         seals[i].i, i, seals[i].d)
+      rspamd_logger.infox(task, fail_reason)
+      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+      return false, fail_reason
+    end
+    if (tonumber(ars[i].i) or 0) ~= i then
+      fail_reason = string.format('bad i for authentication results: %s, expected %d',
+        tostring(ars[i].i), i)
       rspamd_logger.infox(task, fail_reason)
       task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
       return false, fail_reason
@@ -286,7 +302,7 @@ local function arc_callback(task)
 
   -- Now check sanity of what we have
   local valid, validation_error = arc_validate_seals(task, cbdata.seals, cbdata.sigs,
-    arc_seal_headers, arc_sig_headers)
+    cbdata.ars)
   if not valid then
     task:cache_set('arc-failure', validation_error)
     return
@@ -464,31 +480,15 @@ local function arc_callback(task)
        Status is "pass", and the algorithm is complete.
   ]] --
 
-  local processed = 0
   local sig = cbdata.sigs[#cbdata.sigs] -- last AMS
   local ret, err = dkim_verify(task, sig.header, arc_signature_cb, 'arc-sign')
 
   if not ret then
-    -- Check if this domain is whitelisted for broken ARC implementations
-    if settings.whitelist and sig.d and settings.whitelist:get_key(sig.d) then
-      rspamd_logger.infox(task, 'ARC signature dkim_verify failed for whitelisted domain %s, treating as valid: %s',
-        sig.d, err)
-      lua_util.debugm(N, task, 'whitelisted domain %s ARC signature dkim_verify failure ignored', sig.d)
-      processed = processed + 1
-    else
-      cbdata.res = 'fail'
-      table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
-    end
+    -- No callback is scheduled, so complete the signature check here
+    arc_signature_cb(task, false, err or 'verification failed', sig.d or '')
   else
-    processed = processed + 1
     lua_util.debugm(N, task, 'processed arc signature %s[%s]: %s(%s), %s total',
       sig.d, sig.i, ret, err, #cbdata.seals)
-  end
-
-  if processed == 0 then
-    task:insert_result(arc_symbols['reject'], 1.0,
-      rspamd_logger.slog('cannot verify %s of %s signatures: %s',
-        #arc_sig_headers - processed, #arc_sig_headers, cbdata.errors))
   end
 end
 
