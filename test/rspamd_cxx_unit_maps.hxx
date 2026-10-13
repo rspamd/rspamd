@@ -25,6 +25,10 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include <cstring>
+
+#include "libserver/maps/map_helpers.h"
+#include "libserver/maps/map_private.h"
 
 /* Declared non-static in src/libserver/maps/map.c for unit testing */
 extern "C" char *rspamd_map_uri_redacted(const char *uri);
@@ -67,6 +71,28 @@ TEST_SUITE("rspamd_maps")
 				g_free(out);
 			}
 		}
+	}
+
+	TEST_CASE("regexp map skips an invalid regexp given twice")
+	{
+		struct rspamd_map map;
+		memset(&map, 0, sizeof(map));
+		map.name = (char *) "test";
+		rspamd_strlcpy(map.tag, "test", sizeof(map.tag));
+
+		auto *re_map = rspamd_map_helper_new_regexp(&map, (enum rspamd_regexp_map_flags) 0);
+
+		/* The second line used to read the value the first one never stored, and crash */
+		rspamd_map_helper_insert_re(re_map, "[invalid", "1");
+		rspamd_map_helper_insert_re(re_map, "[invalid", "2");
+		rspamd_map_helper_insert_re(re_map, "^valid$", "3");
+
+		auto *found = (const char *) rspamd_match_regexp_map_single(re_map, "valid", 5);
+		REQUIRE(found != nullptr);
+		CHECK(std::string{found} == "3");
+		CHECK(rspamd_match_regexp_map_single(re_map, "[invalid", 8) == nullptr);
+
+		rspamd_map_helper_destroy_regexp(re_map);
 	}
 }
 
