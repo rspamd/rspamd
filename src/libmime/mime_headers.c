@@ -275,6 +275,11 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 			else if (g_ascii_isspace(*p)) {
 				const char *colon = p;
 
+				if (target == MESSAGE_FIELD(task, raw_headers)) {
+					/* Obsolete spacing is still anomalous; exclude MIME parts. */
+					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				}
+
 				while (colon < end && (*colon == ' ' || *colon == '\t')) {
 					colon++;
 				}
@@ -286,10 +291,6 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 				}
 
 				/* Not header but some garbage */
-				if (target == MESSAGE_FIELD(task, raw_headers)) {
-					/* Do not propagate flag from the attachments */
-					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
-				}
 				state = 100;
 				next_state = 0;
 			}

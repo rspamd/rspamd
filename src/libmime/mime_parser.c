@@ -1668,6 +1668,7 @@ rspamd_mime_parser_headers_heuristic(GString *input, goffset *body_start)
 	const char *p, *end;
 	enum {
 		st_before_colon = 0,
+		st_spaces_before_colon,
 		st_colon,
 		st_spaces_after_colon,
 		st_value,
@@ -1683,10 +1684,23 @@ rspamd_mime_parser_headers_heuristic(GString *input, goffset *body_start)
 			if (G_UNLIKELY(*p == ':')) {
 				state = st_colon;
 			}
+			else if (*p == ' ' || *p == '\t') {
+				state = st_spaces_before_colon;
+			}
 			else if (G_UNLIKELY(!g_ascii_isgraph(*p))) {
 				state = st_error;
 			}
 
+			p++;
+			break;
+		case st_spaces_before_colon:
+			/* Only an uninterrupted SP/HTAB run immediately before ':'. */
+			if (*p == ':') {
+				state = st_colon;
+			}
+			else if (*p != ' ' && *p != '\t') {
+				state = st_error;
+			}
 			p++;
 			break;
 		case st_colon:

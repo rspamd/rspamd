@@ -348,6 +348,19 @@ PHISH_SENDER_C
   ...  Settings={symbols_enabled = [BROKEN_HEADERS]}
   Expect Symbol  BROKEN_HEADERS
 
+OBSOLETE FROM RETAINS ANOMALY SCORE
+  FOR  ${whitespace}  IN  ${SPACE}  \t  ${SPACE}\t${SPACE}
+    ${file} =  Set Variable  ${RSPAMD_TMPDIR}/obsolete-from-score.eml
+    Create File  ${file}  From${whitespace}: spoof@example.org\r\nSubject: test\r\n\r\nbody\r\n
+    Scan File  ${file}
+    ...  Settings={symbols_enabled = [BROKEN_HEADERS, MISSING_FROM]}
+    # The default headers group caps its total score at 8.0.
+    Expect Symbol With Score  BROKEN_HEADERS  8.0
+    Do Not Expect Symbol  MISSING_FROM
+    Expect Score  8.0
+    Remove File  ${file}
+  END
+
 PHISH_SENDER_D
   Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender4.eml
   ...  Settings={symbols_enabled = [BROKEN_HEADERS]}
