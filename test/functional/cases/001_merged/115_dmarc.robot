@@ -4,6 +4,7 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 Library         Process
 Library         DateTime
+Library         String
 
 *** Variables ***
 ${DMARC_SETTINGS}    {symbols_enabled = [DMARC_CHECK, DKIM_CHECK, SPF_CHECK]}
@@ -13,6 +14,19 @@ DMARC NONE PASS DKIM
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/pass_none.eml
   ...  Settings=${DMARC_SETTINGS}
   Expect Symbol  DMARC_POLICY_ALLOW
+
+DMARC NONE PASS DKIM WITH OBSOLETE FROM
+  ${message} =  Get File  ${RSPAMD_TESTDIR}/messages/dmarc/pass_none.eml
+  ${message} =  Replace String  ${message}  \nFrom:  \nFrom${SPACE}\t:
+  Should Contain  ${message}  \nFrom${SPACE}\t:
+  ${file} =  Set Variable  ${RSPAMD_TMPDIR}/signed-obsolete-from.eml
+  Create File  ${file}  ${message}
+  Scan File  ${file}
+  ...  Settings=${DMARC_SETTINGS}
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol  DMARC_POLICY_ALLOW
+  Do Not Expect Symbol  DMARC_NA
+  Remove File  ${file}
 
 DMARC NONE PASS SPF
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
@@ -31,6 +45,15 @@ DMARC REJECT FAIL
   ...  IP=1.2.3.4
   ...  From=foo@example.net
   Expect Symbol  DMARC_POLICY_REJECT
+
+DMARC REJECT WITH SPACE BEFORE FROM COLON
+  Check DMARC With Obsolete From  ${SPACE}
+
+DMARC REJECT WITH TAB BEFORE FROM COLON
+  Check DMARC With Obsolete From  \t
+
+DMARC REJECT WITH MIXED WHITESPACE BEFORE FROM COLON
+  Check DMARC With Obsolete From  ${SPACE}\t${SPACE}
 
 DMARC QUARANTINE FAIL
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/fail_quarantine.eml
@@ -157,6 +180,18 @@ DMARC REPORT NO RUA DOMAIN SKIPS REDIS
   ...  msg=DMARC report key should NOT exist for domain without rua
 
 *** Keywords ***
+Check DMARC With Obsolete From
+  [Arguments]  ${whitespace}
+  ${file} =  Set Variable  ${RSPAMD_TMPDIR}/obsolete-from.eml
+  Create File  ${file}  From${whitespace}: Rspamd <foo@reject.cacophony.za.org>\r\n\r\nhello\r\n
+  Scan File  ${file}
+  ...  Settings=${DMARC_SETTINGS}
+  ...  IP=1.2.3.4
+  ...  From=foo@example.net
+  Expect Symbol  DMARC_POLICY_REJECT
+  Do Not Expect Symbol  DMARC_NA
+  Remove File  ${file}
+
 Get DMARC Report Key
   [Documentation]  Generate the DMARC report key for today
   [Arguments]  ${domain}  ${rua}

@@ -258,6 +258,10 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 				nh = rspamd_mempool_alloc0(task->task_pool,
 										   sizeof(struct rspamd_mime_header));
 				l = p - c;
+				/* RFC 5322 obs-fields allow SP/HTAB before the colon. */
+				while (l > 0 && (c[l - 1] == ' ' || c[l - 1] == '\t')) {
+					l--;
+				}
 				tmp = rspamd_mempool_alloc(task->task_pool, l + 1);
 				rspamd_null_safe_copy(c, l, tmp, l + 1);
 				nh->name = tmp;
@@ -269,11 +273,24 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 				c = p;
 			}
 			else if (g_ascii_isspace(*p)) {
-				/* Not header but some garbage */
+				const char *colon = p;
+
 				if (target == MESSAGE_FIELD(task, raw_headers)) {
-					/* Do not propagate flag from the attachments */
+					/* Obsolete spacing is still anomalous; exclude MIME parts. */
 					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 				}
+
+				while (colon < end && (*colon == ' ' || *colon == '\t')) {
+					colon++;
+				}
+
+				if (colon < end && *colon == ':') {
+					/* Trim the lookup name, retaining the original raw header. */
+					p = colon;
+					break;
+				}
+
+				/* Not header but some garbage */
 				state = 100;
 				next_state = 0;
 			}
