@@ -7,8 +7,20 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import tempfile
 import time
+
+
+def has_hyperscan(rspamadm):
+    probe = subprocess.run([
+        str(rspamadm), 'lua', '-b', '-e',
+        "print('HS_CACHE_SUPPORTED=' .. tostring(require('rspamd_trie').has_hyperscan()))",
+    ], check=True, capture_output=True, text=True)
+    if 'HS_CACHE_SUPPORTED=false' in probe.stdout:
+        return False
+    assert 'HS_CACHE_SUPPORTED=true' in probe.stdout, probe.stdout + probe.stderr
+    return True
 
 
 def run_startup(rspamd, source, directory, delayed, postfork):
@@ -182,6 +194,9 @@ if __name__ == '__main__':
     parser.add_argument('--rspamadm', type=Path, required=True)
     parser.add_argument('--source', type=Path, required=True)
     args = parser.parse_args()
+    if not has_hyperscan(args.rspamadm):
+        print('SKIP: Hyperscan is unavailable in this build or on this CPU')
+        sys.exit(77)
     for delayed in (False, True):
         check_recovery(args.rspamd, args.rspamadm, args.source, delayed)
     check_recovery(args.rspamd, args.rspamadm, args.source, True, postfork=True)

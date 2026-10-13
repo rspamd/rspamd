@@ -50,7 +50,7 @@ add_test(
         COMMAND rspamd-test-cxx
 )
 
-if (ENABLE_HYPERSCAN)
+if (WITH_HYPERSCAN)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if (Python3_Interpreter_FOUND)
         set(HYPERSCAN_TEST_TARGETS rspamd rspamadm)
@@ -62,7 +62,7 @@ if (ENABLE_HYPERSCAN)
                 --rspamadm $<TARGET_FILE:rspamadm>
                 --source ${CMAKE_SOURCE_DIR}
         )
-        set_tests_properties(hyperscan-cache-recovery PROPERTIES TIMEOUT 90)
+        set_tests_properties(hyperscan-cache-recovery PROPERTIES TIMEOUT 90 SKIP_RETURN_CODE 77)
     endif ()
 endif ()
 
