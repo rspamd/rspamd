@@ -69,6 +69,31 @@ FORCE ACTIONS numeric priority on main stage
   Expect Symbol  FORCE_ACTION_FORCE_PRIO_C_ADD_HEADER
   Expect Symbol  FORCE_ACTION_FORCE_PRIO_C_REJECT
 
+FORCE ACTIONS same action priorities survive a competing action
+  [Documentation]  The score already selects reject, so a critical reject rule
+  ...  must still record its passthrough result or a later normal rule wins
+  Scan File  ${MESSAGE}  Settings-Id=id_priority_same_action
+  Expect Action  reject
+  Expect Symbol  FORCE_ACTION_FORCE_PRIO_D_A_LOW_REJECT
+  Expect Symbol  FORCE_ACTION_FORCE_PRIO_D_B_CRITICAL_REJECT
+  Expect Symbol  FORCE_ACTION_FORCE_PRIO_D_C_NORMAL_ADD_HEADER
+
+FORCE ACTIONS default same action priority beats a low priority competitor
+  [Documentation]  An implicit normal-priority reject must record its result
+  ...  even when the score already selects reject
+  Scan File  ${MESSAGE}  Settings-Id=id_priority_same_action_default
+  Expect Action  reject
+  Expect Symbol  FORCE_ACTION_FORCE_PRIO_E_A_DEFAULT_REJECT
+  Expect Symbol  FORCE_ACTION_FORCE_PRIO_E_B_LOW_ADD_HEADER
+
+FORCE ACTIONS same action result does not stop the scan
+  [Documentation]  The rule has no process_all, yet the composite must still
+  ...  be evaluated because the action was already selected by the score
+  Scan File  ${MESSAGE}  Settings-Id=id_priority_same_action_continue
+  Expect Action  reject
+  Expect Symbol  FORCE_ACTION_FORCE_PRIO_F_REJECT
+  Expect Symbol  FA_PRIO6_WITNESS
+
 FORCE ACTIONS main stage rule outranks later postfilter rule
   [Documentation]  The postfilter rule runs last but has the lower priority, so
   ...  it must not override the main stage result
