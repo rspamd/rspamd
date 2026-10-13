@@ -50,6 +50,22 @@ add_test(
         COMMAND rspamd-test-cxx
 )
 
+if (ENABLE_HYPERSCAN)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        set(HYPERSCAN_TEST_TARGETS rspamd rspamadm)
+        add_test(
+                NAME hyperscan-cache-recovery
+                COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/functional/util/hyperscan_cache_recovery.py
+                --rspamd $<TARGET_FILE:rspamd>
+                --rspamadm $<TARGET_FILE:rspamadm>
+                --source ${CMAKE_SOURCE_DIR}
+        )
+        set_tests_properties(hyperscan-cache-recovery PROPERTIES TIMEOUT 90)
+    endif ()
+endif ()
+
 # Copy test Lua scripts for out-of-source builds
 if (NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
     # Find Lua test files
@@ -97,7 +113,7 @@ set_tests_properties(rspamd-test PROPERTIES
 # Custom target for running all tests directly (convenience target)
 add_custom_target(run-tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS rspamd-test rspamd-test-cxx
+        DEPENDS rspamd-test rspamd-test-cxx ${HYPERSCAN_TEST_TARGETS}
         COMMENT "Running all Rspamd tests"
 )
 
