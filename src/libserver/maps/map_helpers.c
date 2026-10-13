@@ -2427,6 +2427,13 @@ struct rspamd_regexp_map_async_load_ctx {
 	void (*cb)(gboolean success, void *ud);
 	void *ud;
 	char *cache_dir;
+	/*
+	 * The cache key of the entry being loaded: the load callback needs it to
+	 * drop the entry when deserialization fails. By that time the load request
+	 * itself no longer carries the key, and the map may have been re-read in
+	 * the meantime, so the key cannot be recovered from the current helper
+	 */
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	gboolean callback_processed;
 };
 
@@ -2501,7 +2508,17 @@ rspamd_regexp_map_async_load_cb(gboolean success,
 		hs_database_t *db = NULL;
 
 		if (hs_deserialize_database((const char *) data, len, &db) != HS_SUCCESS) {
-			msg_err_map("cannot deserialize hyperscan database from cache backend");
+			msg_err_map("cannot deserialize hyperscan database from the cache backend for %s: "
+						"removing the stale entry",
+						map ? map->name : "unknown");
+			/*
+			 * Stale blob (e.g. serialized by an incompatible hyperscan version
+			 * or fork): remove it so that the pending compilation queue or
+			 * hs_helper recompiles and re-stores a valid database, as re_cache does
+			 */
+			rspamd_hs_cache_lua_delete_async(ctx->cache_key,
+											 map ? map->name : "regexp_map",
+											 NULL, NULL);
 		}
 		else {
 			/* Free old database if any */
@@ -2589,6 +2606,7 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	ctx->cb = cb;
 	ctx->ud = ud;
 	ctx->cache_dir = g_strdup(cache_dir);
+	rspamd_strlcpy(ctx->cache_key, cache_key, sizeof(ctx->cache_key));
 	ctx->map_digest = map_digest;
 
 	rspamd_hs_cache_lua_load_async(cache_key,

@@ -1856,6 +1856,15 @@ rspamd_multipattern_load_from_cache_cb(gboolean success,
 					mp->hs_db = NULL;
 				}
 			}
+			else {
+				/*
+				 * Stale blob (e.g. serialized by an incompatible hyperscan
+				 * version or fork): remove it so that a valid database is
+				 * compiled and re-stored, as re_cache does
+				 */
+				rspamd_hs_cache_lua_delete_async(ctx->cache_key, "multipattern",
+												 NULL, NULL);
+			}
 		}
 		else {
 			msg_debug("multipattern is not in the compiling state (%d), cannot hot-swap it",
