@@ -185,6 +185,23 @@ context('ARC seal completion', function()
     assert_equal('forwarder3.example:s=arc:i=3', cache['arc-allow'])
   end)
 
+  for mode, fail_opts in pairs({ callback = {}, immediate = { immediate = { [1] = true } } }) do
+    test('whitelisted ' .. mode .. ' seal failure earns no trust', function()
+      fail_opts.whitelist = { ['forwarder1.example'] = true }
+      fail_opts.whitelisted_signers_map = { ['forwarder1.example'] = true,
+        ['forwarder3.example'] = true }
+      local callbacks, symbols, cache = start_checks(fail_opts)
+      if callbacks[1] then callbacks[1](false) end
+      callbacks[2](true)
+      callbacks[3](true)
+      assert_equal(1, #symbols.ARC_ALLOW)
+      assert_nil(symbols.ARC_REJECT)
+      assert_equal(1, #symbols.ARC_ALLOW_TRUSTED)
+      assert_equal('forwarder3.example:s=arc:i=3', symbols.ARC_ALLOW_TRUSTED[1].option)
+      assert_equal('3', cache.arc_trusted_aar.i)
+    end)
+  end
+
   for _, count in ipairs({ 1, 3 }) do
     test('synchronous callbacks: ' .. count .. ' seals', function()
       local _, symbols, cache, requested = start_checks({ count = count, synchronous = true })

@@ -272,6 +272,7 @@ local function arc_callback(task)
     -- Count all seals up front: cached keys can complete verification inline.
     seals_remaining = #arc_seal_headers,
     seal_domains = {},
+    seal_verified = {},
   }
 
   parse_arc_header(arc_seal_headers, cbdata.seals, false)
@@ -329,7 +330,13 @@ local function arc_callback(task)
     if settings.whitelisted_signers_map then
       for index, sig in ipairs(cbdata.seals) do
         local domain = cbdata.seal_domains[index]
-        if settings.whitelisted_signers_map:get_key(sig.d) then
+        local trusted = settings.whitelisted_signers_map:get_key(sig.d)
+        if trusted and not cbdata.seal_verified[index] then
+          -- The whitelist keeps the chain valid, but a failed seal does not
+          -- authenticate its d= or the AAR of its instance
+          rspamd_logger.infox(task, 'do not trust forwarder %s on i=%s: its seal was not verified',
+            domain, index)
+        elseif trusted then
           -- Whitelisted signer has been found in a valid chain
           local mult = 1.0
           local cur_aar = cbdata.ars[index]
@@ -382,6 +389,7 @@ local function arc_callback(task)
       end
       domain = domain or sig.d or ''
       cbdata.seal_domains[index] = domain
+      cbdata.seal_verified[index] = res and true or false
       lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
         res, err, index)
 
