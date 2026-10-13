@@ -253,7 +253,9 @@ local function arc_callback(task)
     ars = {},
     res = 'success',
     errors = {},
-    allowed_by_trusted = false
+    -- Count all seals up front: cached keys can complete verification inline.
+    seals_remaining = #arc_seal_headers,
+    seal_domains = {},
   }
 
   parse_arc_header(arc_seal_headers, cbdata.seals, false)
@@ -299,34 +301,25 @@ local function arc_callback(task)
     return
   end
 
-  local function gen_arc_seal_cb(index, sig)
-    return function(_, res, err, domain)
-      lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
-        res, err, index)
+  local function finish_arc_seals()
+    if cbdata.res ~= 'success' then
+      task:insert_result(arc_symbols.reject, 1.0,
+        rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
+          cbdata.errors))
+      return
+    end
 
-      if not res then
-        -- Check if this domain is whitelisted for broken ARC implementations
-        if settings.whitelist and domain and settings.whitelist:get_key(domain) then
-          rspamd_logger.infox(task, 'ARC seal validation failed for whitelisted domain %s, treating as valid: %s',
-            domain, err)
-          lua_util.debugm(N, task, 'whitelisted domain %s ARC seal failure ignored', domain)
-          res = true -- Treat as valid to continue the chain
-        else
-          cbdata.res = 'fail'
-          if err and domain then
-            table.insert(cbdata.errors, string.format('sig:%s:%s', domain, err))
-          end
-        end
-      end
-
-      if settings.whitelisted_signers_map and cbdata.res == 'success' then
+    -- Publish trust only after the entire chain succeeds, in instance order.
+    if settings.whitelisted_signers_map then
+      for index, sig in ipairs(cbdata.seals) do
+        local domain = cbdata.seal_domains[index]
         if settings.whitelisted_signers_map:get_key(sig.d) then
           -- Whitelisted signer has been found in a valid chain
           local mult = 1.0
           local cur_aar = cbdata.ars[index]
           if not cur_aar then
             rspamd_logger.warnx(task, "cannot find Arc-Authentication-Results for trusted " ..
-              "forwarder %s on i=%s", domain, cbdata.index)
+              "forwarder %s on i=%s", domain, index)
           else
             task:cache_set(AR_TRUSTED_CACHE_KEY, cur_aar)
             local seen_dmarc
@@ -355,18 +348,42 @@ local function arc_callback(task)
             string.format('%s:s=%s:i=%d', domain, sig.s, index))
         end
       end
+    end
 
-      if index == #arc_sig_headers then
-        if cbdata.res == 'success' then
-          local arc_allow_result = string.format('%s:s=%s:i=%d',
-            domain, sig.s, index)
-          task:insert_result(arc_symbols.allow, 1.0, arc_allow_result)
-          task:cache_set('arc-allow', arc_allow_result)
+    local index = #cbdata.seals
+    local sig = cbdata.seals[index]
+    local arc_allow_result = string.format('%s:s=%s:i=%d',
+      cbdata.seal_domains[index], sig.s, index)
+    task:insert_result(arc_symbols.allow, 1.0, arc_allow_result)
+    task:cache_set('arc-allow', arc_allow_result)
+  end
+
+  local function gen_arc_seal_cb(index, sig)
+    return function(_, res, err, domain)
+      -- Also used when verification cannot start and no callback is scheduled.
+      if cbdata.seal_domains[index] then
+        return
+      end
+      domain = domain or sig.d or ''
+      cbdata.seal_domains[index] = domain
+      lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
+        res, err, index)
+
+      if not res then
+        if settings.whitelist and settings.whitelist:get_key(domain) then
+          rspamd_logger.infox(task, 'ARC seal validation failed for whitelisted domain %s, treating as valid: %s',
+            domain, err)
+          lua_util.debugm(N, task, 'whitelisted domain %s ARC seal failure ignored', domain)
         else
-          task:insert_result(arc_symbols.reject, 1.0,
-            rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
-              cbdata.errors))
+          cbdata.res = 'fail'
+          table.insert(cbdata.errors, string.format('seal:%s:s=%s:i=%s:%s',
+            domain, sig.s or '', sig.i or '', err or 'verification failed'))
         end
+      end
+
+      cbdata.seals_remaining = cbdata.seals_remaining - 1
+      if cbdata.seals_remaining == 0 then
+        finish_arc_seals()
       end
     end
   end
@@ -392,20 +409,10 @@ local function arc_callback(task)
     if cbdata.res == 'success' then
       -- Verify seals
       for i, sig in ipairs(cbdata.seals) do
-        local ret, lerr = dkim_verify(task, sig.header, gen_arc_seal_cb(i, sig), 'arc-seal')
+        local callback = gen_arc_seal_cb(i, sig)
+        local ret, lerr = dkim_verify(task, sig.header, callback, 'arc-seal')
         if not ret then
-          -- Check if this domain is whitelisted for broken ARC implementations
-          if settings.whitelist and sig.d and settings.whitelist:get_key(sig.d) then
-            rspamd_logger.infox(task, 'ARC seal dkim_verify failed for whitelisted domain %s, treating as valid: %s',
-              sig.d, lerr)
-            lua_util.debugm(N, task, 'whitelisted domain %s ARC seal dkim_verify failure ignored', sig.d)
-          else
-            cbdata.res = 'fail'
-            table.insert(cbdata.errors, string.format('seal:%s:s=%s:i=%s:%s',
-              sig.d or '', sig.s or '', sig.i or '', lerr))
-            lua_util.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
-              sig.d, ret, lerr, i)
-          end
+          callback(task, false, lerr, sig.d)
         end
       end
     else
