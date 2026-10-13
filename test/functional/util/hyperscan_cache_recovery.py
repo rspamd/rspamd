@@ -47,12 +47,10 @@ hs_cache.create_backend = function(config)
 end
 if %s then
   rspamd_config:add_on_load(function(config, ev_base, worker)
-    if worker:get_name() ~= 'controller' then return end
+    local name = worker:get_name()
+    if name ~= 'controller' and name ~= 'normal' then return end
     config:add_periodic(ev_base, 0.01, function()
-      local file = assert(io.open('%s/patterns.map', 'w'))
-      for i = 0, 149 do
-        file:write(string.format('/probe%%04d/ value%%d\\n', i, i))
-      end
+      local file = assert(io.open('%s/ready-' .. name, 'w'))
       file:close()
       return false
     end, false)
@@ -68,8 +66,13 @@ rspamd_config:register_symbol{
 }
 ''' % ('true' if delayed else 'false', 'true' if postfork else 'false',
        directory, directory))
-    (directory / 'patterns.map').write_text('' if postfork else ''.join(
-        '/probe%04d/ value%d\n' % (i, i) for i in range(150)))
+    patterns = ''.join('/probe%04d/ value%d\n' % (i, i) for i in range(150))
+    map_file = directory / 'patterns.map'
+    map_file.write_text('' if postfork else patterns)
+    ready_files = [directory / ('ready-' + name) for name in ('normal', 'controller')]
+    for ready in ready_files:
+        if ready.exists():
+            ready.unlink()
     config = directory / 'rspamd.conf'
     config.write_text('''
 options {
@@ -105,10 +108,15 @@ lua = "%s";
                                    stderr=output, start_new_session=True)
         try:
             deadline = time.monotonic() + 10
+            map_written = not postfork
             while time.monotonic() < deadline:
                 text = log.read_text(errors='replace')
                 if process.poll() is not None:
                     raise AssertionError(text + (directory / 'output').read_text())
+                # Publish only after both event loops have installed their file watches.
+                if not map_written and all(ready.exists() for ready in ready_files):
+                    map_file.write_text(patterns)
+                    map_written = True
                 # Both workers must load the map and all four stopword groups.
                 if (text.count('loaded hyperscan database from cache backend for') >= 2
                         and text.count('hot-swapped to hyperscan (backend)') >= 8):
