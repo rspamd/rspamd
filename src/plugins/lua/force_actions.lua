@@ -23,6 +23,8 @@ end
 local E = {}
 local N = 'force_actions'
 local selector_cache = {}
+-- Set when any rule has an explicit priority, results must then compete by priority
+local priorities_used = false
 
 local fun = require "fun"
 local lua_util = require "lua_util"
@@ -31,11 +33,8 @@ local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 local lua_selectors = require "lua_selectors"
 
--- Composite symbols are only resolved after normal filters have run, so a
--- 'normal' symbol cannot depend on them via register_dependency (the cache
--- rejects such cross-stage deps). Any rule referencing a composite atom must
--- therefore be registered as a postfilter instead.
--- Such a rule is still starved if any earlier pre-result was set without
+-- Composites are resolved after normal filters, so a rule referencing one must
+-- be a postfilter. It is still starved if an earlier pre-result lacks
 -- `process_all`, since that suppresses composite evaluation entirely.
 local function has_composite_atom(atoms)
   for _, a in ipairs(atoms) do
@@ -175,7 +174,9 @@ local function gen_cb(params)
     end
 
     local cact = task:get_metric_action()
-    if not params.message and not params.subject and params.act and cact == params.act then
+    local already_selected = not params.message and not params.subject
+        and params.act and cact == params.act
+    if already_selected and not priorities_used then
       return false
     end
     if params.honor and params.honor[cact] then
@@ -192,6 +193,11 @@ local function gen_cb(params)
       end
 
       local flags = params.flags or ""
+
+      -- The action is already selected: compete by priority without cutting the scan short
+      if already_selected and not flags:find('process_all', 1, true) then
+        flags = flags == '' and 'process_all' or (flags .. ',process_all')
+      end
 
       if type(params.message) == 'string' then
         -- process selector expressions in the message
@@ -296,6 +302,9 @@ local function configure_module()
         local raction = lua_util.list_to_hash(sett.require_action)
         local honor = lua_util.list_to_hash(sett.honor_action)
         local priority = check_priority(name, sett.priority)
+        if priority then
+          priorities_used = true
+        end
         if priority and sett.least then
           rspamd_logger.warnx(rspamd_config,
               'force_actions rule %1: `least` is set, so `priority` cannot outrank a non-least rule ' ..
