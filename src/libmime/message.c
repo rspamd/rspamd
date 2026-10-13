@@ -1622,18 +1622,27 @@ rspamd_message_parse(struct rspamd_task *task)
 	 */
 	if (len > sizeof("From ") - 1) {
 		if (memcmp(p, "From ", sizeof("From ") - 1) == 0) {
-			/* Skip to CRLF */
-			msg_info_task("mailbox input detected, enable workaround");
-			p += sizeof("From ") - 1;
-			len -= sizeof("From ") - 1;
+			const char *colon = p + sizeof("From ") - 1, *end = p + len;
 
-			while (len > 0 && *p != '\n') {
-				p++;
-				len--;
+			while (colon < end && (*colon == ' ' || *colon == '\t')) {
+				colon++;
 			}
-			while (len > 0 && g_ascii_isspace(*p)) {
-				p++;
-				len--;
+
+			/* An obs-from field is not a mailbox separator. */
+			if (colon == end || *colon != ':') {
+				/* Skip to CRLF */
+				msg_info_task("mailbox input detected, enable workaround");
+				p += sizeof("From ") - 1;
+				len -= sizeof("From ") - 1;
+
+				while (len > 0 && *p != '\n') {
+					p++;
+					len--;
+				}
+				while (len > 0 && g_ascii_isspace(*p)) {
+					p++;
+					len--;
+				}
 			}
 		}
 	}
