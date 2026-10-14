@@ -705,7 +705,7 @@ void rspamd_map_helper_insert_re(gpointer st, gconstpointer key, gconstpointer v
 			g_error_free(err);
 		}
 
-		/* Drop the key: a later duplicate would read its unset value */
+		/* Drop the key: a later duplicate or a map traversal would read its unset value */
 		kh_del(rspamd_map_hash, re_map->htb, k);
 
 		return;
