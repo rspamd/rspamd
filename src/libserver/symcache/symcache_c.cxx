@@ -407,7 +407,6 @@ void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 			{SYMBOL_TYPE_MIME_ONLY, "mime"},
 			{SYMBOL_TYPE_TRIVIAL, "trivial"},
 			{SYMBOL_TYPE_SKIPPED, "skip"},
-			{SYMBOL_TYPE_COMPOSITE, "composite"},
 			{SYMBOL_TYPE_GHOST, "ghost"},
 			{SYMBOL_TYPE_USE_CORO, "coro"},
 		};
