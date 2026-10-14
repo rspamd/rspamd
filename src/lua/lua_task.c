@@ -206,7 +206,7 @@ LUA_FUNCTION_DEF(task, remove_result);
  * - message: string
  * - module: string
  * - score: number
- * - priority: integer
+ * - priority: integer, 0 (low) to 3 (critical), the default is 1 (normal)
  * - flags: flags string
  * - result: named result if needed
  *
@@ -214,8 +214,8 @@ LUA_FUNCTION_DEF(task, remove_result);
  * @param {string} message action message
  * @param {string} module optional module name
  * @param {number/nil} score optional explicit score
- * @param {number/nil} priority optional explicit priority
- * @param {string/nil} flags optional flags (e.g. 'least' for least action)
+ * @param {number/nil} priority optional explicit priority, 1 (normal) by default
+ * @param {string/nil} flags optional comma separated flags: 'least', 'process_all', 'no_smtp_message'
 @example
 local function cb(task)
 	local gr = task:get_header('Greylist')
@@ -2547,8 +2547,9 @@ lua_task_set_pre_result(lua_State *L)
 		if (lua_type(L, 2) == LUA_TTABLE) {
 			GError *err = NULL;
 
+			/* Missing keys keep their defaults, so the priority stays normal */
 			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "*action=S;message=S;module=S;score=D;priority=i;flags=S;result=S",
 												  &act_str, &message, &module, &score, &priority, &fl_str, &res_name)) {
 				int ret = luaL_error(L, "invalid arguments: %s", err->message);
@@ -2620,10 +2621,10 @@ lua_task_set_pre_result(lua_State *L)
 			if (strstr(fl_str, "least") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_LEAST;
 			}
-			else if (strstr(fl_str, "no_smtp_message") != NULL) {
+			if (strstr(fl_str, "no_smtp_message") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE;
 			}
-			else if (strstr(fl_str, "process_all") != NULL) {
+			if (strstr(fl_str, "process_all") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_PROCESS_ALL;
 			}
 		}
