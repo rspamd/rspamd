@@ -17,3 +17,16 @@ FORCE ACTIONS without priorities skips an already selected action
   Expect Action  reject
   Do Not Expect Symbol  FORCE_ACTION_FORCE_SAME_REJECT
   Expect Symbol  FA_SAME_WITNESS
+
+FORCE ACTIONS without priorities a match stops the scan
+  Scan File  ${MESSAGE}  Settings-Id=id_stop
+  Expect Action  add header
+  Expect Symbol  FORCE_ACTION_FORCE_STOP_ADD_HEADER
+  Do Not Expect Symbol  FA_STOP_WITNESS
+
+FORCE ACTIONS rule without priority is not starved by a low one
+  Scan File  ${MESSAGE}  Settings-Id=id_unset_outranks_low
+  Expect Action  no action
+  Expect Symbol  FORCE_ACTION_FORCE_UNSET_A_LOW_REJECT
+  Expect Symbol  FA_UNSET_COMPOSITE
+  Expect Symbol  FORCE_ACTION_FORCE_UNSET_B_NO_ACTION
