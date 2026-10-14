@@ -227,12 +227,16 @@ end
 LUA_FUNCTION_DEF(task, set_pre_result);
 
 /***
- * @method task:has_pre_result()
+ * @method task:has_pre_result([selected])
  * Returns true if task has some pre-result being set.
- * If result has been set this function also returns pre result action,
- * message and module as strings in this order.
+ * If result has been set this function also returns pre result action name,
+ * message, module and flags (comma separated, as for `set_pre_result`) as
+ * strings in this order. These are of the pre-result with the highest priority,
+ * or, if `selected` is true, of the one that selects the action and the reply:
+ * then it returns false when the score selects the action.
  *
- * @return {boolean,[string,string,string]} true if task has some pre-result being set
+ * @param {boolean} selected return the pre-result that selects the action
+ * @return {boolean,[string,string,string,string]} true if task has some pre-result being set
  */
 LUA_FUNCTION_DEF(task, has_pre_result);
 /***
@@ -2665,15 +2669,39 @@ lua_task_has_pre_result(lua_State *L)
 	int nret = 1;
 
 	if (task) {
-		if (task->result->passthrough_result) {
-			struct rspamd_passthrough_result *pr = task->result->passthrough_result;
+		struct rspamd_passthrough_result *pr = task->result->passthrough_result;
+
+		if (pr && lua_toboolean(L, 2)) {
+			/*
+			 * The one that selects the action and the reply, if any. Selecting
+			 * may raise the score to a least threshold: leave it to the caller
+			 */
+			double saved_score = task->result->score;
+
+			pr = NULL;
+			rspamd_check_action_metric(task, &pr, NULL);
+			task->result->score = saved_score;
+		}
+
+		if (pr) {
+			static const struct {
+				int flag;
+				const char *name;
+			} pr_flags[] = {
+				{RSPAMD_PASSTHROUGH_LEAST, "least"},
+				{RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE, "no_smtp_message"},
+				{RSPAMD_PASSTHROUGH_PROCESS_ALL, "process_all"},
+			};
+			char flags_buf[64];
+			size_t flags_len = 0;
 
 			lua_pushboolean(L, true);
-			nret = 4;
-			/* bool, action, message, module */
+			nret = 5;
+			/* bool, action, message, module, flags */
 
 			if (pr->action) {
-				lua_pushstring(L, rspamd_action_to_str(pr->action->action_type));
+				/* All custom actions share one type, so use the name */
+				lua_pushstring(L, pr->action->name);
 			}
 			else {
 				lua_pushnil(L);
@@ -2691,6 +2719,16 @@ lua_task_has_pre_result(lua_State *L)
 			else {
 				lua_pushnil(L);
 			}
+
+			/* In the format that set_pre_result accepts */
+			for (unsigned int i = 0; i < G_N_ELEMENTS(pr_flags); i++) {
+				if (pr->flags & pr_flags[i].flag) {
+					flags_len += rspamd_snprintf(flags_buf + flags_len, sizeof(flags_buf) - flags_len,
+												 "%s%s", flags_len > 0 ? "," : "", pr_flags[i].name);
+				}
+			}
+
+			lua_pushlstring(L, flags_buf, flags_len);
 		}
 		else {
 			lua_pushboolean(L, false);
