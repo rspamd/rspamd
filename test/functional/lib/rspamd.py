@@ -272,6 +272,32 @@ def HTTPS_With_Headers(method, host, port, path, data=None, headers={}):
     return [s, t, h]
 
 
+def HTTPS_Post_Single_Record(host, port, path, body_size, timeout=5):
+    """POST over TLS with the headers and the body in a single write.
+
+    http.client sends the headers and the body separately, so each TLS record
+    fits into the 8 KiB buffer Rspamd reads the headers into. One write of up
+    to 16 KiB goes out as one record instead: Rspamd has to take the part it
+    could not read at once from OpenSSL rather than wait for the socket to
+    become readable again. Returns the status code.
+    """
+    body = b"x" * int(body_size)
+    req = ("POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n"
+           "Connection: close\r\n\r\n" % (path, host, len(body))).encode() + body
+    assert 8192 < len(req) <= 16384, \
+        "request must exceed 8 KiB and fit into one TLS record"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host, int(port)), timeout=float(timeout)) as raw:
+        with ctx.wrap_socket(raw) as s:
+            s.sendall(req)
+            r = http.client.HTTPResponse(s)
+            r.begin()
+            r.read()
+            return r.status
+
+
 def generate_ssl_cert(tmpdir):
     """Generate a self-signed EC certificate and key in tmpdir.
     Returns (cert_path, key_path).
