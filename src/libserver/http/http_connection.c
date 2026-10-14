@@ -1378,97 +1378,107 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			priv->flags |= RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE;
 		}
 
-		r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
+		/*
+		 * SSL_read can leave decrypted data buffered in OpenSSL without
+		 * another socket read event. Drain it while the current message is
+		 * active; parser callbacks can finish or reset the connection and
+		 * replace its read buffer.
+		 */
+		do {
+			r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
-		if (r > 0) {
-			if (http_parser_execute(&priv->parser, &priv->parser_cb,
-									d, r) != (size_t) r ||
-				priv->parser.http_errno != 0) {
-				if (priv->flags & RSPAMD_HTTP_CONN_FLAG_TOO_LARGE) {
-					err = g_error_new(HTTP_ERROR, 413,
-									  "Request entity too large: %zu",
-									  (size_t) priv->parser.content_length);
-				}
-				else if (priv->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED) {
-					err = g_error_new(HTTP_ERROR, 400,
-									  "Encryption required");
-				}
-				else if (priv->parser.http_errno == HPE_CLOSED_CONNECTION) {
-					msg_err("got garbage after end of the message, ignore it");
+			if (r > 0) {
+				if (http_parser_execute(&priv->parser, &priv->parser_cb,
+										d, r) != (size_t) r ||
+					priv->parser.http_errno != 0) {
+					if (priv->flags & RSPAMD_HTTP_CONN_FLAG_TOO_LARGE) {
+						err = g_error_new(HTTP_ERROR, 413,
+										  "Request entity too large: %zu",
+										  (size_t) priv->parser.content_length);
+					}
+					else if (priv->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED) {
+						err = g_error_new(HTTP_ERROR, 400,
+										  "Encryption required");
+					}
+					else if (priv->parser.http_errno == HPE_CLOSED_CONNECTION) {
+						msg_err("got garbage after end of the message, ignore it");
+
+						REF_RELEASE(pbuf);
+						rspamd_http_connection_unref(conn);
+
+						return;
+					}
+					else {
+						if (priv->parser.http_errno > HPE_CB_status) {
+							err = g_error_new(HTTP_ERROR, 400,
+											  "HTTP parser error: %s",
+											  http_errno_description(priv->parser.http_errno));
+						}
+						else {
+							err = g_error_new(HTTP_ERROR, 500,
+											  "HTTP parser internal error: %s",
+											  http_errno_description(priv->parser.http_errno));
+						}
+					}
+
+					if (!conn->finished) {
+						rspamd_http_connection_stop_watcher(priv);
+						conn->error_handler(conn, err);
+					}
+					else {
+						msg_err("got error after HTTP request is finished: %e", err);
+					}
+
+					g_error_free(err);
 
 					REF_RELEASE(pbuf);
 					rspamd_http_connection_unref(conn);
 
 					return;
 				}
-				else {
-					if (priv->parser.http_errno > HPE_CB_status) {
-						err = g_error_new(HTTP_ERROR, 400,
-										  "HTTP parser error: %s",
-										  http_errno_description(priv->parser.http_errno));
-					}
-					else {
-						err = g_error_new(HTTP_ERROR, 500,
-										  "HTTP parser internal error: %s",
-										  http_errno_description(priv->parser.http_errno));
-					}
-				}
+			}
+			else if (r == 0) {
+				/* We can still call http parser */
+				http_parser_execute(&priv->parser, &priv->parser_cb, d, r);
 
 				if (!conn->finished) {
+					err = g_error_new(HTTP_ERROR,
+									  400,
+									  "IO read error: unexpected EOF");
 					rspamd_http_connection_stop_watcher(priv);
 					conn->error_handler(conn, err);
+					g_error_free(err);
 				}
-				else {
-					msg_err("got error after HTTP request is finished: %e", err);
-				}
+				REF_RELEASE(pbuf);
+				rspamd_http_connection_unref(conn);
 
-				g_error_free(err);
+				return;
+			}
+			else {
+				if (!priv->ssl) {
+					if (!conn->finished) {
+						err = g_error_new(HTTP_ERROR,
+										  500,
+										  "HTTP IO read error: %s",
+										  strerror(errno));
+						rspamd_http_connection_stop_watcher(priv);
+						conn->error_handler(conn, err);
+						g_error_free(err);
+					}
+					else {
+						msg_err("got error after HTTP request is finished: %s",
+								strerror(errno));
+					}
+				}
 
 				REF_RELEASE(pbuf);
 				rspamd_http_connection_unref(conn);
 
 				return;
 			}
-		}
-		else if (r == 0) {
-			/* We can still call http parser */
-			http_parser_execute(&priv->parser, &priv->parser_cb, d, r);
-
-			if (!conn->finished) {
-				err = g_error_new(HTTP_ERROR,
-								  400,
-								  "IO read error: unexpected EOF");
-				rspamd_http_connection_stop_watcher(priv);
-				conn->error_handler(conn, err);
-				g_error_free(err);
-			}
-			REF_RELEASE(pbuf);
-			rspamd_http_connection_unref(conn);
-
-			return;
-		}
-		else {
-			if (!priv->ssl) {
-				if (!conn->finished) {
-					err = g_error_new(HTTP_ERROR,
-									  500,
-									  "HTTP IO read error: %s",
-									  strerror(errno));
-					rspamd_http_connection_stop_watcher(priv);
-					conn->error_handler(conn, err);
-					g_error_free(err);
-				}
-				else {
-					msg_err("got error after HTTP request is finished: %s",
-							strerror(errno));
-				}
-			}
-
-			REF_RELEASE(pbuf);
-			rspamd_http_connection_unref(conn);
-
-			return;
-		}
+		} while (!conn->finished && !IS_CONN_RESETED(priv) &&
+				 priv->buf == pbuf && priv->msg != NULL && priv->ssl != NULL &&
+				 rspamd_ssl_pending(priv->ssl) > 0);
 	}
 	else if (what & EV_TIMEOUT) {
 		if (!priv->ssl) {
