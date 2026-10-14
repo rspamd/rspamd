@@ -289,50 +289,49 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
   local merge_checks = rbl.merge_checks ~= false
 
   local function insert_results(s, ip)
-    -- Only the first insertion of a symbol carries score; later spellings just add options
-    local scored_symbols = {}
-
-    local function insert_origin_labels(sym_name, origin, labels)
-      table.sort(labels)
-
-      if merge_checks then
-        local weight = scored_symbols[sym_name] and 0.0 or 1.0
-        scored_symbols[sym_name] = true
-        task:insert_result(sym_name, weight,
-            make_option(origin, ip, table.concat(labels, ',')))
-      else
-        for _, label in ipairs(labels) do
-          task:insert_result(sym_name, 1.0, make_option(origin, ip, label))
-        end
-      end
-    end
+    -- Symbol name -> origin -> labels; symbols_prefixes may split one origin
+    local by_symbol = {}
 
     for origin, origin_labels in pairs(resolve_table_elt.origins) do
-      if rbl.symbols_prefixes then
-        local by_prefix = {}
-        for label in pairs(origin_labels) do
+      for label in pairs(origin_labels) do
+        local sym_name = s
+        if rbl.symbols_prefixes then
           local prefix = rbl.symbols_prefixes[label]
-          local sym_name
           if not prefix then
             rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
-            sym_name = s
           else
             sym_name = prefix .. '_' .. s
           end
-          if not by_prefix[sym_name] then
-            by_prefix[sym_name] = {}
+        end
+        local sym_origins = by_symbol[sym_name]
+        if not sym_origins then
+          sym_origins = {}
+          by_symbol[sym_name] = sym_origins
+        end
+        if not sym_origins[origin] then
+          sym_origins[origin] = {}
+        end
+        table.insert(sym_origins[origin], tostring(label))
+      end
+    end
+
+    for sym_name, sym_origins in pairs(by_symbol) do
+      local options = {}
+      for origin, labels in pairs(sym_origins) do
+        table.sort(labels)
+        if merge_checks then
+          options[#options + 1] = make_option(origin, ip, table.concat(labels, ','))
+        else
+          for _, label in ipairs(labels) do
+            task:insert_result(sym_name, 1.0, make_option(origin, ip, label))
           end
-          by_prefix[sym_name][#by_prefix[sym_name] + 1] = tostring(label)
         end
-        for sym_name, labels in pairs(by_prefix) do
-          insert_origin_labels(sym_name, origin, labels)
-        end
-      else
-        local labels = {}
-        for label in pairs(origin_labels) do
-          labels[#labels + 1] = tostring(label)
-        end
-        insert_origin_labels(s, origin, labels)
+      end
+
+      if merge_checks then
+        -- A single insertion, so the weight is counted (and a shot spent) once
+        table.sort(options)
+        task:insert_result(sym_name, 1.0, options)
       end
     end
   end
@@ -340,12 +339,19 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
   if err and (err ~= 'requested record is not found' and
       err ~= 'no records with this name') then
     rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
-    -- Report every merged origin, but only the first insertion carries weight
+    -- Report every merged origin
     local failed_origins = lua_util.keys(resolve_table_elt.origins)
     table.sort(failed_origins)
+    local options = {}
     for i, origin in ipairs(failed_origins) do
-      task:insert_result(rbl.symbol .. '_FAIL', (not merge_checks or i == 1) and 1.0 or 0.0,
-          string.format('%s:%s', origin, err))
+      options[i] = string.format('%s:%s', origin, err)
+    end
+    if merge_checks then
+      task:insert_result(rbl.symbol .. '_FAIL', 1.0, options)
+    else
+      for _, opt in ipairs(options) do
+        task:insert_result(rbl.symbol .. '_FAIL', 1.0, opt)
+      end
     end
     return
   end
@@ -457,25 +463,39 @@ local function gen_rbl_callback(rule)
 
     local req_str = tostring(req)
 
-    if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
-      return
+    if whitelist then
+      if is_whitelisted(task, req, req_str, whitelist, label) then
+        return
+      end
+
+      -- The query below drops a root dot, so the whitelist must see that name too
+      if not is_ip and not rule.process_script and (rule.resolve_ip or not rule.hash) then
+        local stripped = strip_root_dot(req_str)
+        if stripped ~= req_str and is_whitelisted(task, stripped, stripped, whitelist, label) then
+          return
+        end
+      end
     end
 
     if is_ip then
       req = ip_to_rbl(req)
     end
 
-    if requests_table[req] then
+    local resolve_ip = rule.resolve_ip and not is_ip
+    -- A name that is resolved first must not share a slot with an address
+    -- whose reversed octets are spelled the same
+    local req_key = resolve_ip and ('resolve:' .. req_str) or req
+
+    if requests_table[req_key] then
       -- Duplicate request
-      local nreq = requests_table[req]
+      local nreq = requests_table[req_key]
       if forced and not nreq.forced then
         nreq.forced = true
       end
       if not nreq.what[label] then
         nreq.what[label] = true
-        lua_util.debugm(N, task, 'merging duplicate RBL request for %s: %s (%s added to %s)',
-            rule.symbol, req_str, label,
-            table.concat(lua_util.keys(nreq.what), ','))
+        lua_util.debugm(N, task, 'merging duplicate RBL request for %s: %s (%s)',
+            rule.symbol, req_str, label)
       end
       if not nreq.origins[req_str] then
         nreq.origins[req_str] = {}
@@ -486,7 +506,6 @@ local function gen_rbl_callback(rule)
     else
       local nreq
 
-      local resolve_ip = rule.resolve_ip and not is_ip
       if rule.process_script then
         local processed = rule.process_script(req, rule.rbl, task, resolve_ip)
         local n = processed and strip_root_dot(tostring(processed))
@@ -494,17 +513,23 @@ local function gen_rbl_callback(rule)
         if n and n ~= '' then
           nreq = {
             forced = forced,
-            n = fold_case(rule, n),
+            -- The script owns the name and its case may carry data
+            n = n,
             orig = req_str,
             resolve_ip = resolve_ip,
             what = { [label] = true },
             origins = { [req_str] = { [label] = true } },
           }
-          requests_table[req] = nreq
+          requests_table[req_key] = nreq
         end
       else
         local to_resolve
-        local origin = strip_root_dot(tostring(req))
+        local origin = tostring(req)
+
+        -- A hash covers the value as data, a trailing dot included
+        if resolve_ip or not rule.hash then
+          origin = strip_root_dot(origin)
+        end
 
         if origin == '' then
           lua_util.debugm(N, task, 'skip empty RBL request for %s (%s)',
@@ -530,7 +555,7 @@ local function gen_rbl_callback(rule)
           what = { [label] = true },
           origins = { [req_str] = { [label] = true } },
         }
-        requests_table[req] = nreq
+        requests_table[req_key] = nreq
       end
       return false, nreq
     end
@@ -1064,19 +1089,23 @@ local function gen_rbl_callback(rule)
               -- Add result as an actual RBL request
               local nreq
               for label in pairs(orig_resolve_table_elt.what) do
-                _, nreq = add_dns_request(task, dns_res, false, true,
-                    resolved_req, label)
+                -- Not `_, nreq =`: Lua 5.5 makes the loop variable `_` constant
+                nreq = select(2, add_dns_request(task, dns_res, false, true,
+                    resolved_req, label))
               end
 
-              local ip_str = tostring(dns_res)
-              nreq.origins[ip_str] = nil
-              for origin, labels in pairs(orig_resolve_table_elt.origins) do
-                local resolved_origin = string.format('%s:%s', ip_str, origin)
-                if not nreq.origins[resolved_origin] then
-                  nreq.origins[resolved_origin] = {}
-                end
-                for label in pairs(labels) do
-                  nreq.origins[resolved_origin][label] = true
+              -- No request if process_script dropped the address
+              if nreq then
+                local ip_str = tostring(dns_res)
+                nreq.origins[ip_str] = nil
+                for origin, labels in pairs(orig_resolve_table_elt.origins) do
+                  local resolved_origin = string.format('%s:%s', ip_str, origin)
+                  if not nreq.origins[resolved_origin] then
+                    nreq.origins[resolved_origin] = {}
+                  end
+                  for label in pairs(labels) do
+                    nreq.origins[resolved_origin][label] = true
+                  end
                 end
               end
             end
@@ -1486,6 +1515,11 @@ for key, rbl in pairs(opts.rbls) do
           rbl[rbl_opt] = opts[default_opt_key]
         end
       end
+    end
+    -- merge_checks changes scoring, so its global opt-out must also reach
+    -- the rules that ignore the other defaults
+    if rbl.merge_checks == nil then
+      rbl.merge_checks = opts.default_merge_checks
     end
 
     if not rbl.requests_limit then

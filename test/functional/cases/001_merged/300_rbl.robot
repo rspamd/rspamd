@@ -136,8 +136,37 @@ SELECTORS HASHED BASE64 CASE
 SELECTORS HASHED TRAILING DOT
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RBL_SELECTOR_HASH]}
-  # The trailing dot is stripped before hashing, so both spellings hash alike
-  Expect Symbol With Exact Options  RBL_SELECTOR_HASH  example.org:plain  example.org.:dotted
+  # A hash covers the value as data, so the dotted spelling is another hash
+  Expect Symbol With Exact Options  RBL_SELECTOR_HASH  example.org:plain
+
+SELECTORS SCRIPT CASE
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SCRIPT_CASE]}
+  # The name returned by process_script is queried with its case intact
+  Expect Symbol With Exact Options  RBL_SCRIPT_CASE  example.org:selector
+
+SELECTORS MERGED SHOTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SHOTS]}
+  # Each listed value spends one shot however many spellings it merges
+  Expect Symbol With Exact Options  RBL_SHOTS
+  ...  example.org:lower_org  EXAMPLE.ORG:upper_org  example.com:lower_com  EXAMPLE.COM:upper_com
+  Expect Symbol With Score  RBL_SHOTS  2.0
+
+SELECTORS MERGED FAIL SHOTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_FAIL_SHOTS]}
+  # Each failed query spends one shot of _FAIL however many spellings it merges
+  Expect Symbol With Exact Options  RBL_FAIL_SHOTS_FAIL
+  ...  failtest.example:server fail  FAILTEST.EXAMPLE:server fail
+  ...  failtest2.example:server fail  FAILTEST2.EXAMPLE:server fail
+  Expect Symbol With Score  RBL_FAIL_SHOTS_FAIL  2.0
+
+SELECTORS DOTTED NAME WHITELISTED
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_SELECTOR_DOT_WL]}
+  # "example.org." is queried as "example.org", so the whitelist entry covers it
+  Expect Symbol With Exact Options  RBL_SELECTOR_DOT_WL  example.com:other
 
 SELECTORS COMBINED DISABLED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
@@ -178,6 +207,19 @@ RESOLVE IP PHASE COLLISION
   # HELO equals the client IP's RBL query name; the two lookups must stay separate
   Expect Symbol With Exact Options  RBL_RESOLVE_PHASE_DIRECT  1.2.3.4:from
   Expect Symbol With Exact Options  RBL_RESOLVE_PHASE_HELO  127.0.0.2:4.3.2.1.test9.uribl:helo
+
+RESOLVE IP HELO EQUALS REVERSED IP
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  IP=1.2.3.4  Helo=4.3.2.1
+  ...  Settings={symbols_enabled = [RBL_RESOLVE_PHASE]}
+  # The HELO is resolved as a name; the client IP is still looked up directly
+  Expect Symbol With Exact Options  RBL_RESOLVE_PHASE_DIRECT  1.2.3.4:from
+  Expect Symbol With Exact Options  RBL_RESOLVE_PHASE_HELO  127.0.0.2:4.3.2.1:helo
+
+RESOLVE IP SCRIPT DROPS ADDRESS
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [RBL_RESOLVE_DROP]}
+  # A resolved address dropped by process_script must not stop the others
+  Expect Symbol With Exact Options  RBL_RESOLVE_DROP_HIT  8.8.8.9:example.ru:kept
 
 SELECTORS MERGED WHITELIST
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
