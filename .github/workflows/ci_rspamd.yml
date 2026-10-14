@@ -78,6 +78,8 @@ jobs:
 
       - name: Run unit tests
         if: "!(inputs.name == 'ubuntu-ci' && runner.arch == 'ARM64')"
+        env:
+          CTEST_OUTPUT_ON_FAILURE: "1"
         run: |
           cd ${GITHUB_WORKSPACE}/build
           ninja test

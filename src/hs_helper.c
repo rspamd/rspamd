@@ -944,15 +944,16 @@ rspamd_hs_helper_mp_compiled_cb(struct rspamd_multipattern *mp,
 }
 
 static void
-rspamd_hs_helper_mp_exists_cb(gboolean success,
-							  const unsigned char *data,
-							  gsize len,
-							  const char *error,
-							  void *ud)
+rspamd_hs_helper_mp_cache_cb(gboolean success,
+							 const unsigned char *data,
+							 gsize len,
+							 const char *error,
+							 void *ud)
 {
 	struct rspamd_hs_helper_mp_async_ctx *mpctx = ud;
 	struct rspamd_multipattern_pending *entry = &mpctx->pending[mpctx->idx];
-	bool exists = (success && data == NULL && len == 1);
+	gboolean valid = FALSE;
+	GError *err = NULL;
 	/*
 	 * Save entry data before any operation that might trigger ev_run,
 	 * as ev_run could process deferred timers that call
@@ -963,8 +964,21 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 
 	(void) error;
 
-	if (exists) {
-		msg_debug_hyperscan("multipattern cache already exists for '%s', skipping compilation", entry_name);
+	if (success && data != NULL && len > 0) {
+		rspamd_hyperscan_t *db = rspamd_hyperscan_load_from_header((const char *) data, len, &err);
+
+		if (db != NULL) {
+			rspamd_hyperscan_free(db, false);
+			valid = TRUE;
+		}
+		else {
+			msg_info("recompiling stale multipattern cache for '%s': %e", entry_name, err);
+			g_clear_error(&err);
+		}
+	}
+
+	if (valid) {
+		msg_debug_hyperscan("valid multipattern cache for '%s', skipping compilation", entry_name);
 		rspamd_hs_helper_mp_send_notification(mpctx->ctx, mpctx->worker, entry_name);
 		mpctx->idx++;
 		/*
@@ -992,7 +1006,7 @@ rspamd_hs_helper_mp_exists_cb(gboolean success,
 	rspamd_multipattern_compile_hs_to_cache_async(mp, mpctx->ctx->hs_dir,
 												  mpctx->ctx->event_loop,
 												  rspamd_hs_helper_mp_compiled_cb, mpctx);
-	/* Release the reference from exists_async callback */
+	/* Release the reference from load_async callback */
 	REF_RELEASE(mpctx);
 }
 
@@ -1017,8 +1031,8 @@ rspamd_hs_helper_compile_pending_multipatterns_next(struct rspamd_hs_helper_mp_a
 		rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 						(int) sizeof(entry->hash) / 2, entry->hash);
 		REF_RETAIN(mpctx);
-		rspamd_hs_cache_lua_exists_async(cache_key, entry->name,
-										 rspamd_hs_helper_mp_exists_cb, mpctx);
+		rspamd_hs_cache_lua_load_async(cache_key, entry->name,
+									   rspamd_hs_helper_mp_cache_cb, mpctx);
 		return;
 	}
 

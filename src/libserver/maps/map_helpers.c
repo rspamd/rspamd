@@ -2427,6 +2427,13 @@ struct rspamd_regexp_map_async_load_ctx {
 	void (*cb)(gboolean success, void *ud);
 	void *ud;
 	char *cache_dir;
+	/*
+	 * The cache key of the entry being loaded: the load callback needs it to
+	 * drop the entry when deserialization fails. By that time the load request
+	 * itself no longer carries the key, and the map may have been re-read in
+	 * the meantime, so the key cannot be recovered from the current helper
+	 */
+	char cache_key[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	gboolean callback_processed;
 };
 
@@ -2501,7 +2508,17 @@ rspamd_regexp_map_async_load_cb(gboolean success,
 		hs_database_t *db = NULL;
 
 		if (hs_deserialize_database((const char *) data, len, &db) != HS_SUCCESS) {
-			msg_err_map("cannot deserialize hyperscan database from cache backend");
+			msg_err_map("cannot deserialize hyperscan database from the cache backend for %s: "
+						"removing the stale entry",
+						map ? map->name : "unknown");
+			/*
+			 * Stale blob (e.g. serialized by an incompatible hyperscan version
+			 * or fork): remove it so that the pending compilation queue or
+			 * hs_helper recompiles and re-stores a valid database, as re_cache does
+			 */
+			rspamd_hs_cache_lua_delete_async(ctx->cache_key,
+											 map ? map->name : "regexp_map",
+											 NULL, NULL);
 		}
 		else {
 			/* Free old database if any */
@@ -2589,6 +2606,7 @@ void rspamd_regexp_map_load_from_cache_async(struct rspamd_regexp_map_helper *re
 	ctx->cb = cb;
 	ctx->ud = ud;
 	ctx->cache_dir = g_strdup(cache_dir);
+	rspamd_strlcpy(ctx->cache_key, cache_key, sizeof(ctx->cache_key));
 	ctx->map_digest = map_digest;
 
 	rspamd_hs_cache_lua_load_async(cache_key,
@@ -2805,36 +2823,52 @@ rspamd_regexp_map_pending_compiled_cb(struct rspamd_regexp_map_helper *re_map,
 }
 
 static void
-rspamd_regexp_map_pending_exists_cb(gboolean success,
-									const unsigned char *data,
-									gsize len,
-									const char *error,
-									void *ud)
+rspamd_regexp_map_pending_cache_cb(gboolean success,
+								   const unsigned char *data,
+								   gsize len,
+								   const char *error,
+								   void *ud)
 {
 	struct rspamd_regexp_map_pending_ctx *rmctx = ud;
 	const char *name = g_ptr_array_index(rmctx->names, rmctx->idx);
-	bool exists = (success && data == NULL && len == 1);
+	gboolean valid = FALSE;
+	unsigned char hash[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_regexp_map_helper *re_map;
 
 	(void) error;
 
-	if (exists) {
-		msg_debug_hyperscan("regexp map cache already exists for '%s', skipping compilation",
-							name);
-		rspamd_regexp_map_pending_notify(rmctx, name);
-		rspamd_regexp_map_pending_install(rmctx, name);
-		rspamd_regexp_map_pending_done_with(rmctx, name);
+	/* Resolve the current helper before trusting the cached version */
+	memcpy(hash, rmctx->hash, sizeof(hash));
+	re_map = rspamd_regexp_map_pending_resolve(rmctx, name);
+
+	if (re_map == NULL) {
+		msg_debug_hyperscan("regexp map '%s' has left the queue", name);
 		rmctx->idx++;
 		rspamd_regexp_map_compile_pending_next(rmctx);
 		REF_RELEASE(rmctx);
 		return;
 	}
 
-	/* The event loop has been running whilst the check was in flight */
-	re_map = rspamd_regexp_map_pending_resolve(rmctx, name);
+	if (success && data != NULL && len > 0 &&
+		memcmp(hash, rmctx->hash, sizeof(hash)) == 0) {
+		hs_database_t *db = NULL;
+		hs_error_t ret = hs_deserialize_database((const char *) data, len, &db);
 
-	if (re_map == NULL) {
-		msg_debug_hyperscan("regexp map '%s' has left the queue", name);
+		if (ret == HS_SUCCESS) {
+			hs_free_database(db);
+			valid = TRUE;
+		}
+		else {
+			msg_info("recompiling stale regexp map cache for '%s': error %d", name, ret);
+		}
+	}
+
+	if (valid) {
+		msg_debug_hyperscan("valid regexp map cache for '%s', skipping compilation",
+							name);
+		rspamd_regexp_map_pending_notify(rmctx, name);
+		rspamd_regexp_map_pending_install(rmctx, name);
+		rspamd_regexp_map_pending_done_with(rmctx, name);
 		rmctx->idx++;
 		rspamd_regexp_map_compile_pending_next(rmctx);
 		REF_RELEASE(rmctx);
@@ -2855,7 +2889,7 @@ rspamd_regexp_map_pending_exists_cb(gboolean success,
 												rmctx->event_loop,
 												rspamd_regexp_map_pending_compiled_cb,
 												rmctx);
-	/* Release the reference from exists_async callback */
+	/* Release the reference from load_async callback */
 	REF_RELEASE(rmctx);
 }
 
@@ -2888,8 +2922,8 @@ rspamd_regexp_map_compile_pending_next(struct rspamd_regexp_map_pending_ctx *rmc
 			rspamd_snprintf(cache_key, sizeof(cache_key), "%*xs",
 							(int) rspamd_cryptobox_HASHBYTES / 2, rmctx->hash);
 			REF_RETAIN(rmctx);
-			rspamd_hs_cache_lua_exists_async(cache_key, name,
-											 rspamd_regexp_map_pending_exists_cb, rmctx);
+			rspamd_hs_cache_lua_load_async(cache_key, name,
+										   rspamd_regexp_map_pending_cache_cb, rmctx);
 			return;
 		}
 
