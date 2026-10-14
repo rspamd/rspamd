@@ -113,6 +113,7 @@ auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool;
  * This is a public helper to convert a legacy C type to a more static type
  * @param type input type as a C enum
  * @return pair of type safe symcache_item_type + the remaining flags or an error
+ * (the composite flag is the only structural one that is kept in the flags)
  */
 auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>;
 
