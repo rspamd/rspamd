@@ -206,6 +206,7 @@ struct rspamd_message {
 	gboolean text_newlines_limit_reached;
 	struct rspamd_tokenize_budget words_budget; /**< message wide words budget */
 	gboolean text_words_limit_reached;
+	gboolean text_words_processed; /**< per-part words and message-wide averages finalized */
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
