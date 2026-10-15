@@ -533,4 +533,20 @@ Thank you,
 
     task:destroy()
   end)
+
+  test("get_stat_tokens without a classifier", function()
+    -- the unit tests config has no classifier, hence no tokenizer
+    local msg = hdrs .. [[
+Content-Type: text/plain
+
+Some words to tokenize.
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local tokens = task:get_stat_tokens()
+    assert_not_nil(tokens)
+    assert_equal(#tokens, 0)
+    task:destroy()
+  end)
 end)

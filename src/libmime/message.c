@@ -71,7 +71,8 @@ free_byte_array_callback(void *pointer)
 
 static void
 rspamd_mime_part_extract_words(struct rspamd_task *task,
-							   struct rspamd_mime_text_part *part)
+							   struct rspamd_mime_text_part *part,
+							   gboolean update_stats)
 {
 	rspamd_stat_token_t *w;
 	unsigned int i, total_len = 0, short_len = 0;
@@ -113,7 +114,7 @@ rspamd_mime_part_extract_words(struct rspamd_task *task,
 			}
 		}
 
-		if (kv_size(part->utf_words)) {
+		if (update_stats && kv_size(part->utf_words)) {
 			double *avg_len_p, *short_len_p;
 
 			avg_len_p = rspamd_mempool_get_variable(task->task_pool,
@@ -1355,6 +1356,19 @@ void rspamd_message_process_injected_text_part(struct rspamd_task *task,
 	}
 
 	rspamd_mime_part_create_words(task, text_part);
+
+	/*
+	 * Parts injected during MIME processing are finalized by the regular loop.
+	 * For later injections, complete the words here without adding raw totals
+	 * to the message-wide statistics that have already been averaged.
+	 */
+	if (MESSAGE_FIELD(task, text_words_processed)) {
+		if (!text_part->language) {
+			rspamd_mime_part_detect_language(task, text_part);
+		}
+
+		rspamd_mime_part_extract_words(task, text_part, FALSE);
+	}
 }
 
 /* Creates message from various data using libmagic to detect type */
@@ -1858,6 +1872,8 @@ void rspamd_message_process(struct rspamd_task *task)
 	lua_State *L = NULL;
 	int content_func_pos = -1, old_top = -1, funcs_top = -1;
 
+	MESSAGE_FIELD(task, text_words_processed) = FALSE;
+
 	if (task->cfg) {
 		L = task->cfg->lua_state;
 	}
@@ -2047,7 +2063,7 @@ void rspamd_message_process(struct rspamd_task *task)
 			rspamd_mime_part_detect_language(task, text_part);
 		}
 
-		rspamd_mime_part_extract_words(task, text_part);
+		rspamd_mime_part_extract_words(task, text_part, TRUE);
 
 		if (text_part->utf_words.a) {
 			total_words += text_part->nwords;
@@ -2195,6 +2211,8 @@ void rspamd_message_process(struct rspamd_task *task)
 			*var /= (double) total_words;
 		}
 	}
+
+	MESSAGE_FIELD(task, text_words_processed) = TRUE;
 
 	rspamd_images_link(task);
 	rspamd_tokenize_meta_words(task);
