@@ -622,9 +622,8 @@ rspamd_words_levenshtein_distance(struct rspamd_task *task,
 								  GArray *w1, GArray *w2)
 {
 	unsigned int s1len, s2len, x, y, lastdiag, olddiag;
-	unsigned int *column, ret;
+	unsigned int *column, ret, substitution_cost;
 	uint64_t h1, h2;
-	int eq;
 	static const unsigned int max_words = 8192;
 
 	s1len = w1->len;
@@ -657,13 +656,13 @@ rspamd_words_levenshtein_distance(struct rspamd_task *task,
 			olddiag = column[y];
 			h1 = g_array_index(w1, uint64_t, y - 1);
 			h2 = g_array_index(w2, uint64_t, x - 1);
-			eq = (h1 == h2) ? 1 : 0;
+			substitution_cost = (h1 == h2) ? 0 : 2;
 			/*
-			 * Cost of replacement is twice higher than cost of add/delete
-			 * to calculate percentage properly
+			 * Matching hashes have zero cost. Replacement costs twice as much
+			 * as insertion/deletion to normalize by the total number of words.
 			 */
 			column[y] = MIN3(column[y] + 1, column[y - 1] + 1,
-							 lastdiag + (eq * 2));
+							 lastdiag + substitution_cost);
 			lastdiag = olddiag;
 		}
 	}
