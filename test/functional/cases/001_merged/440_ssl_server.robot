@@ -17,6 +17,13 @@ Controller SSL - errors
   [Documentation]  Fetch /errors over HTTPS from the controller SSL port
   Fetch HTTPS And Expect 200  ${RSPAMD_PORT_CONTROLLER_SSL}  /errors
 
+Controller SSL - request in one TLS record larger than 8 KiB
+  [Documentation]  Headers and body arrive in one TLS record that does not fit
+  ...              into the 8 KiB read buffer: the remainder stays decrypted
+  ...              inside OpenSSL and must be read without a socket event
+  ${status} =  HTTPS Post Single Record  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER_SSL}  /ping  12000
+  Should Be Equal As Integers  ${status}  200
+
 Controller plain still works alongside SSL
   [Documentation]  Plain HTTP controller port must still work when SSL port is also configured
   @{result} =  HTTP  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /stat
@@ -31,6 +38,11 @@ Normal worker SSL - checkv3
   [Documentation]  Scan a message via /checkv3 over HTTPS on the normal worker SSL port
   Scan File V3 SSL  ${GTUBE}  Settings=${SETTINGS_NOSYMBOLS}
   Expect Symbol  GTUBE
+
+Normal worker SSL - request in one TLS record larger than 8 KiB
+  [Documentation]  Same as the controller case, for /checkv2 on the normal worker
+  ${status} =  HTTPS Post Single Record  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL_SSL}  /checkv2  12000
+  Should Be Equal As Integers  ${status}  200
 
 Normal worker plain still works alongside SSL
   [Documentation]  Plain HTTP normal port must still work when SSL port is also configured

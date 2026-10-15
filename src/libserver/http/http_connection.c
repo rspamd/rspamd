@@ -1378,6 +1378,7 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			priv->flags |= RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE;
 		}
 
+	read_again:
 		r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
 		if (r > 0) {
@@ -1428,6 +1429,19 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 				rspamd_http_connection_unref(conn);
 
 				return;
+			}
+
+			/*
+			 * SSL_read returns at most the room left in our buffer and keeps
+			 * the rest of the TLS record decrypted inside OpenSSL: the socket
+			 * will not become readable for it again, so drain it now. Parser
+			 * callbacks can finish or reset the connection and replace its
+			 * read buffer, stop then.
+			 */
+			if (priv->ssl && !conn->finished && !IS_CONN_RESETED(priv) &&
+				priv->buf == pbuf && priv->msg != NULL &&
+				rspamd_ssl_pending(priv->ssl) > 0) {
+				goto read_again;
 			}
 		}
 		else if (r == 0) {

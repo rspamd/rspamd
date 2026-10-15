@@ -966,6 +966,14 @@ rspamd_ssl_read(struct rspamd_ssl_connection *conn, gpointer buf,
 	return -1;
 }
 
+gsize
+rspamd_ssl_pending(struct rspamd_ssl_connection *conn)
+{
+	g_assert(conn != NULL);
+
+	return conn->ssl ? (gsize) SSL_pending(conn->ssl) : 0;
+}
+
 gssize
 rspamd_ssl_write(struct rspamd_ssl_connection *conn, gconstpointer buf,
 				 gsize buflen)
