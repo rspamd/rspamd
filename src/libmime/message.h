@@ -241,6 +241,14 @@ void rspamd_message_process_injected_text_part(struct rspamd_task *task,
 											   uint16_t *cur_url_order);
 
 /**
+ * Returns the HTML part of the multipart/alternative pair that `parts_distance`
+ * is computed for: the first non-attachment HTML part with an alternative
+ * @param task
+ * @return HTML text part (its pair is `alt_text_part`) or NULL
+ */
+struct rspamd_mime_text_part *rspamd_message_get_alternative_html_part(struct rspamd_task *task);
+
+/**
  * Converts string to cte
  * @param str
  * @return

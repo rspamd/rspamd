@@ -1358,6 +1358,24 @@ void rspamd_message_process_injected_text_part(struct rspamd_task *task,
 	rspamd_mime_part_create_words(task, text_part);
 }
 
+struct rspamd_mime_text_part *
+rspamd_message_get_alternative_html_part(struct rspamd_task *task)
+{
+	struct rspamd_mime_text_part *text_part;
+	unsigned int i;
+
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
+	{
+		if (IS_TEXT_PART_HTML(text_part) &&
+			!IS_TEXT_PART_ATTACHMENT(text_part) &&
+			text_part->alt_text_part) {
+			return text_part;
+		}
+	}
+
+	return NULL;
+}
+
 /* Creates message from various data using libmagic to detect type */
 static void
 rspamd_message_from_data(struct rspamd_task *task, const unsigned char *start,
@@ -2074,18 +2092,7 @@ void rspamd_message_process(struct rspamd_task *task)
 	}
 
 	/* Calculate distance for alternative parts */
-	struct rspamd_mime_text_part *html_part = NULL;
-
-	/* Find the first non-attachment HTML part that has an alternative */
-	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, text_part)
-	{
-		if (IS_TEXT_PART_HTML(text_part) &&
-			!IS_TEXT_PART_ATTACHMENT(text_part) &&
-			text_part->alt_text_part) {
-			html_part = text_part;
-			break;
-		}
-	}
+	struct rspamd_mime_text_part *html_part = rspamd_message_get_alternative_html_part(task);
 
 	if (html_part) {
 		p1 = html_part;
