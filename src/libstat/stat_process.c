@@ -18,6 +18,7 @@
 #include "rspamd.h"
 #include "stat_internal.h"
 #include "libmime/message.h"
+#include "libmime/content_type.h"
 #include "libmime/images.h"
 #include "libserver/html/html.h"
 #include "lua/lua_common.h"
@@ -29,8 +30,6 @@
 #define RSPAMD_CLASSIFY_OP 0
 #define RSPAMD_LEARN_OP 1
 #define RSPAMD_UNLEARN_OP 2
-
-static const double similarity_threshold = 80.0;
 
 void rspamd_task_set_multiclass_result(struct rspamd_task *task,
 									   rspamd_multiclass_result_t *result,
@@ -197,6 +196,167 @@ meta_words_error:
 }
 
 /*
+ * Bound the extra work spent proving that alternative parts are duplicates.
+ * Count words visited on both sides (including skipped words), and byte pairs
+ * compared with memcmp. Exhaustion keeps the current and remaining pairs.
+ */
+static const size_t max_stat_parts_words = 100000;
+static const size_t max_stat_parts_bytes = 1024 * 1024;
+
+struct rspamd_stat_parts_budget {
+	size_t words_left;
+	size_t bytes_left;
+	gboolean exhausted;
+};
+
+static const rspamd_word_t *
+rspamd_stat_next_word(const rspamd_words_t *words, size_t *pos,
+					  struct rspamd_stat_parts_budget *budget)
+{
+	while (*pos < kv_size(*words)) {
+		if (budget->words_left == 0) {
+			budget->exhausted = TRUE;
+			return NULL;
+		}
+		budget->words_left--;
+
+		const rspamd_word_t *word = &kv_A(*words, (*pos)++);
+
+		if (!(word->flags & (RSPAMD_STAT_TOKEN_FLAG_STOP_WORD |
+							 RSPAMD_STAT_TOKEN_FLAG_SKIPPED))) {
+			return word;
+		}
+	}
+
+	return NULL;
+}
+
+/*
+ * Compare the effective input to OSB, including flags and word boundaries.
+ * Hash equality or a similarity estimate is not sufficient to discard text.
+ */
+static gboolean
+rspamd_stat_parts_equal(const struct rspamd_mime_text_part *p1,
+						const struct rspamd_mime_text_part *p2,
+						struct rspamd_stat_parts_budget *budget)
+{
+	size_t i = 0, j = 0;
+	gboolean have_words = FALSE;
+
+	if (budget->exhausted ||
+		(p1->flags & RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED) ||
+		(p2->flags & RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED) ||
+		IS_TEXT_PART_UTF(p1) != IS_TEXT_PART_UTF(p2)) {
+		return FALSE;
+	}
+
+	/* OSB's final short window uses the last flags, even for a skipped word. */
+	if (kv_size(p1->utf_words) == 0 || kv_size(p2->utf_words) == 0 ||
+		kv_A(p1->utf_words, kv_size(p1->utf_words) - 1).flags !=
+			kv_A(p2->utf_words, kv_size(p2->utf_words) - 1).flags) {
+		return FALSE;
+	}
+
+	for (;;) {
+		const rspamd_word_t *w1 = rspamd_stat_next_word(&p1->utf_words, &i, budget);
+		const rspamd_word_t *w2 = rspamd_stat_next_word(&p2->utf_words, &j, budget);
+		const rspamd_ftok_t *t1, *t2;
+
+		if (budget->exhausted) {
+			return FALSE;
+		}
+		if (!w1 || !w2) {
+			return !w1 && !w2 && have_words;
+		}
+		if (w1->flags != w2->flags) {
+			return FALSE;
+		}
+
+		t1 = (w1->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) ? &w1->stemmed : &w1->original;
+		t2 = (w2->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) ? &w2->stemmed : &w2->original;
+
+		/* Missing word preparation must never be interpreted as equality. */
+		if (!t1->begin || !t2->begin || t1->len == 0 || t2->len == 0 ||
+			t1->len != t2->len) {
+			return FALSE;
+		}
+		if (t1->len > budget->bytes_left) {
+			budget->exhausted = TRUE;
+			return FALSE;
+		}
+		budget->bytes_left -= t1->len;
+		if (memcmp(t1->begin, t2->begin, t1->len) != 0) {
+			return FALSE;
+		}
+		have_words = TRUE;
+	}
+}
+
+/*
+ * Only a direct text/plain + text/html pair in a two-child alternative is
+ * unambiguous here. Keep nested/complex branches, attachments and computed
+ * parts. Do not rely on alt_text_part, which may select one of several texts.
+ */
+static struct rspamd_mime_text_part *
+rspamd_stat_plain_alternative(struct rspamd_mime_text_part *html)
+{
+	struct rspamd_mime_part *mp = html->mime_part, *parent, *other;
+	rspamd_ftok_t text_type, html_subtype, multipart_type, alternative_subtype, plain_subtype;
+	GPtrArray *children;
+
+	RSPAMD_FTOK_ASSIGN(&text_type, "text");
+	RSPAMD_FTOK_ASSIGN(&html_subtype, "html");
+	RSPAMD_FTOK_ASSIGN(&multipart_type, "multipart");
+	RSPAMD_FTOK_ASSIGN(&alternative_subtype, "alternative");
+	RSPAMD_FTOK_ASSIGN(&plain_subtype, "plain");
+
+	if (!IS_TEXT_PART_HTML(html) || IS_TEXT_PART_ATTACHMENT(html) || !IS_PART_TEXT(mp) ||
+		(mp->flags & (RSPAMD_MIME_PART_COMPUTED | RSPAMD_MIME_PART_ATTACHEMENT |
+					  RSPAMD_MIME_PART_BAD_CTE)) ||
+		!mp->ct || (mp->ct->flags & RSPAMD_CONTENT_TYPE_BROKEN) ||
+		rspamd_ftok_casecmp(&mp->ct->type, &text_type) != 0 ||
+		rspamd_ftok_casecmp(&mp->ct->subtype, &html_subtype) != 0) {
+		return NULL;
+	}
+
+	parent = mp->parent_part;
+	if (!IS_PART_MULTIPART(parent) || !parent->ct ||
+		(parent->ct->flags & RSPAMD_CONTENT_TYPE_BROKEN) ||
+		rspamd_ftok_casecmp(&parent->ct->type, &multipart_type) != 0 ||
+		rspamd_ftok_casecmp(&parent->ct->subtype, &alternative_subtype) != 0 ||
+		!parent->specific.mp || !parent->specific.mp->children) {
+		return NULL;
+	}
+
+	children = parent->specific.mp->children;
+	if (children->len != 2) {
+		return NULL;
+	}
+	if (g_ptr_array_index(children, 0) == mp) {
+		other = g_ptr_array_index(children, 1);
+	}
+	else if (g_ptr_array_index(children, 1) == mp) {
+		other = g_ptr_array_index(children, 0);
+	}
+	else {
+		return NULL;
+	}
+
+	if (!IS_PART_TEXT(other) || other == mp || other->parent_part != parent ||
+		(other->flags & (RSPAMD_MIME_PART_COMPUTED | RSPAMD_MIME_PART_ATTACHEMENT |
+						 RSPAMD_MIME_PART_BAD_CTE)) ||
+		!other->ct || (other->ct->flags & RSPAMD_CONTENT_TYPE_BROKEN) ||
+		rspamd_ftok_casecmp(&other->ct->type, &text_type) != 0 ||
+		rspamd_ftok_casecmp(&other->ct->subtype, &plain_subtype) != 0 ||
+		!other->specific.txt || IS_TEXT_PART_HTML(other->specific.txt) ||
+		IS_TEXT_PART_ATTACHMENT(other->specific.txt)) {
+		return NULL;
+	}
+
+	return other->specific.txt;
+}
+
+/*
  * Tokenize task using the tokenizer specified
  */
 void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
@@ -206,7 +366,8 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 	rspamd_cryptobox_hash_state_t hst;
 	rspamd_token_t *st_tok;
 	unsigned int i, reserved_len = 0;
-	double *pdiff;
+	GHashTable *eligible_parts, *duplicate_parts;
+	struct rspamd_stat_parts_budget budget = {max_stat_parts_words, max_stat_parts_bytes, FALSE};
 	unsigned char hout[rspamd_cryptobox_HASHBYTES];
 	char *b32_hout;
 
@@ -215,11 +376,14 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 	}
 
 	g_assert(st_ctx != NULL);
+	eligible_parts = g_hash_table_new(g_direct_hash, g_direct_equal);
+	duplicate_parts = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
 		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
 			reserved_len += kv_size(part->utf_words);
+			g_hash_table_add(eligible_parts, part);
 		}
 		/* XXX: normal window size */
 		reserved_len += 5;
@@ -229,23 +393,32 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 	rspamd_mempool_add_destructor(task->task_pool,
 								  rspamd_ptr_array_free_hard, task->tokens);
 	rspamd_mempool_notify_alloc(task->task_pool, reserved_len * sizeof(gpointer));
-	pdiff = rspamd_mempool_get_variable(task->task_pool, "parts_distance");
+
+	/* Select duplicates before tokenizing, independently of text part order. */
+	if (st_ctx->tokenizer && st_ctx->tokenizer->tokenize_func == rspamd_tokenizer_osb) {
+		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
+		{
+			struct rspamd_mime_text_part *plain = rspamd_stat_plain_alternative(part);
+
+			if (plain && g_hash_table_contains(eligible_parts, part) &&
+				g_hash_table_contains(eligible_parts, plain) &&
+				rspamd_stat_parts_equal(part, plain, &budget)) {
+				g_hash_table_add(duplicate_parts, plain);
+			}
+		}
+	}
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
-		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
+		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a &&
+			!g_hash_table_contains(duplicate_parts, part)) {
 			st_ctx->tokenizer->tokenize_func(st_ctx, task,
 											 &part->utf_words, IS_TEXT_PART_UTF(part),
 											 NULL, task->tokens);
 		}
-
-
-		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_threshold) {
-			msg_debug_bayes("message has two common parts (%.2f), so skip the last one",
-							*pdiff);
-			break;
-		}
 	}
+	g_hash_table_unref(duplicate_parts);
+	g_hash_table_unref(eligible_parts);
 
 	if (task->meta_words.a) {
 		st_ctx->tokenizer->tokenize_func(st_ctx,
