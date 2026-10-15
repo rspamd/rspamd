@@ -103,12 +103,13 @@ struct fixture {
 		}
 	}
 
-	rspamd_mime_text_part *text(bool html, const std::vector<std::string> &values = {"alpha", "beta", "gamma"})
+	rspamd_mime_text_part *text(bool html, const std::vector<std::string> &values = {"alpha", "beta", "gamma"},
+								const char *subtype = nullptr)
 	{
 		auto *part = allocate<rspamd_mime_part>();
 		auto *txt = allocate<rspamd_mime_text_part>();
 		part->part_type = RSPAMD_MIME_PART_TEXT;
-		part->ct = type("text", html ? "html" : "plain");
+		part->ct = type("text", subtype ? subtype : (html ? "html" : "plain"));
 		part->specific.txt = txt;
 		txt->mime_part = part;
 		txt->flags = RSPAMD_MIME_TEXT_PART_FLAG_UTF;
@@ -118,6 +119,25 @@ struct fixture {
 		words(txt, values);
 		g_ptr_array_add(message.text_parts, txt);
 		return txt;
+	}
+
+	rspamd_mime_part *image()
+	{
+		auto *part = allocate<rspamd_mime_part>();
+		part->part_type = RSPAMD_MIME_PART_IMAGE;
+		part->ct = type("image", "png");
+		return part;
+	}
+
+	void param(rspamd_mime_part *part, const char *name)
+	{
+		auto *attrs = g_hash_table_new(rspamd_ftok_icase_hash, rspamd_ftok_icase_equal);
+		rspamd_mempool_add_destructor(task.task_pool,
+									  reinterpret_cast<rspamd_mempool_destruct_t>(g_hash_table_unref), attrs);
+		auto *key = allocate<rspamd_ftok_t>();
+		*key = token(name);
+		g_hash_table_insert(attrs, key, key);
+		part->ct->attrs = attrs;
 	}
 
 	rspamd_mime_part *group(std::initializer_list<rspamd_mime_part *> parts,
@@ -303,6 +323,30 @@ TEST_SUITE("stat parts")
 		}
 	}
 
+	TEST_CASE("HTML as the root of multipart/related retains HTML")
+	{
+		fixture f;
+		auto *plain = f.text(false);
+		auto *html = f.text(true);
+		auto *related = f.group({html->mime_part, f.image()}, "related");
+		f.group({plain->mime_part, related});
+		f.link(plain, html);
+		f.distance(0.0);
+		f.check({html});
+	}
+
+	TEST_CASE("other children of the alternative do not matter")
+	{
+		fixture f;
+		auto *plain = f.text(false);
+		auto *html = f.text(true);
+		auto *calendar = f.text(false, {"meeting", "invitation"}, "calendar");
+		f.group({plain->mime_part, html->mime_part, calendar->mime_part});
+		f.link(plain, html);
+		f.distance(0.0);
+		f.check({html, calendar});
+	}
+
 	TEST_CASE("mixed nested and ambiguous MIME structures retain every text")
 	{
 		SUBCASE("mixed siblings") {
@@ -314,7 +358,8 @@ TEST_SUITE("stat parts")
 			f.distance(0.0);
 			f.check({plain, html});
 		}
-		SUBCASE("three children") {
+		SUBCASE("two plain children")
+		{
 			fixture f;
 			auto *p1 = f.text(false);
 			auto *p2 = f.text(false);
@@ -324,12 +369,47 @@ TEST_SUITE("stat parts")
 			f.distance(0.0);
 			f.check({p1, p2, html});
 		}
-		SUBCASE("nested branch") {
+		SUBCASE("HTML in multipart/mixed")
+		{
 			fixture f;
 			auto *plain = f.text(false);
 			auto *html = f.text(true);
-			auto *related = f.group({html->mime_part}, "related");
+			auto *mixed = f.group({html->mime_part, f.image()}, "mixed");
+			f.group({plain->mime_part, mixed});
+			f.link(plain, html);
+			f.distance(0.0);
+			f.check({plain, html});
+		}
+		SUBCASE("HTML is not the first part of multipart/related")
+		{
+			fixture f;
+			auto *plain = f.text(false);
+			auto *html = f.text(true);
+			auto *related = f.group({f.image(), html->mime_part}, "related");
 			f.group({plain->mime_part, related});
+			f.link(plain, html);
+			f.distance(0.0);
+			f.check({plain, html});
+		}
+		SUBCASE("multipart/related with a start parameter")
+		{
+			fixture f;
+			auto *plain = f.text(false);
+			auto *html = f.text(true);
+			auto *related = f.group({html->mime_part, f.image()}, "related");
+			f.param(related, "start");
+			f.group({plain->mime_part, related});
+			f.link(plain, html);
+			f.distance(0.0);
+			f.check({plain, html});
+		}
+		SUBCASE("plain in a nested branch")
+		{
+			fixture f;
+			auto *plain = f.text(false);
+			auto *html = f.text(true);
+			auto *related = f.group({plain->mime_part}, "related");
+			f.group({related, html->mime_part});
 			f.link(plain, html);
 			f.distance(0.0);
 			f.check({plain, html});
