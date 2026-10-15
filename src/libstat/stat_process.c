@@ -18,6 +18,7 @@
 #include "rspamd.h"
 #include "stat_internal.h"
 #include "libmime/message.h"
+#include "libmime/content_type.h"
 #include "libmime/images.h"
 #include "libserver/html/html.h"
 #include "lua/lua_common.h"
@@ -31,6 +32,11 @@
 #define RSPAMD_UNLEARN_OP 2
 
 static const double similarity_threshold = 80.0;
+/*
+ * Above this total number of words in both alternatives, parts_distance only
+ * compares the numbers of words (see rspamd_words_levenshtein_distance)
+ */
+static const int max_distance_words = 8192;
 
 void rspamd_task_set_multiclass_result(struct rspamd_task *task,
 									   rspamd_multiclass_result_t *result,
@@ -196,17 +202,150 @@ meta_words_error:
 			"memory allocation error, skipping the remaining");
 }
 
+/* Checks the content type of a MIME part */
+static gboolean
+rspamd_stat_part_has_type(const struct rspamd_mime_part *mp,
+						  const char *type, const char *subtype)
+{
+	rspamd_ftok_t srch;
+
+	if (mp == NULL || mp->ct == NULL || (mp->ct->flags & RSPAMD_CONTENT_TYPE_BROKEN)) {
+		return FALSE;
+	}
+
+	RSPAMD_FTOK_FROM_STR(&srch, type);
+
+	if (rspamd_ftok_casecmp(&mp->ct->type, &srch) != 0) {
+		return FALSE;
+	}
+
+	RSPAMD_FTOK_FROM_STR(&srch, subtype);
+
+	return rspamd_ftok_casecmp(&mp->ct->subtype, &srch) == 0;
+}
+
+/* Checks that a text part is the message's own: not computed, attached or broken */
+static gboolean
+rspamd_stat_own_text_part(const struct rspamd_mime_text_part *part, const char *subtype)
+{
+	const struct rspamd_mime_part *mp = part->mime_part;
+
+	return IS_PART_TEXT(mp) && !IS_TEXT_PART_ATTACHMENT(part) &&
+		   !(mp->flags & (RSPAMD_MIME_PART_COMPUTED | RSPAMD_MIME_PART_ATTACHEMENT |
+						  RSPAMD_MIME_PART_BAD_CTE)) &&
+		   rspamd_stat_part_has_type(mp, "text", subtype);
+}
+
+/*
+ * Returns the alternative of an HTML part if it is the plain text fallback for
+ * it. Mail clients display one child of multipart/alternative, and the root of
+ * multipart/related, so this is the case when:
+ * - the plain part is a direct text/plain child of multipart/alternative;
+ * - HTML is a direct child too, or the root of a multipart/related child;
+ * - there is no other text/plain child, as it is not clear then which one is
+ *   the fallback.
+ * Other children, e.g. text/calendar, do not matter.
+ */
+static struct rspamd_mime_text_part *
+rspamd_stat_plain_alternative(struct rspamd_mime_text_part *html)
+{
+	struct rspamd_mime_text_part *plain = html->alt_text_part;
+	struct rspamd_mime_part *alt, *branch, *child;
+	rspamd_ftok_t start;
+	unsigned int i;
+
+	if (plain == NULL || !IS_TEXT_PART_HTML(html) || IS_TEXT_PART_HTML(plain) ||
+		!rspamd_stat_own_text_part(html, "html") ||
+		!rspamd_stat_own_text_part(plain, "plain")) {
+		return NULL;
+	}
+
+	alt = plain->mime_part->parent_part;
+
+	if (!IS_PART_MULTIPART(alt) || !alt->specific.mp || !alt->specific.mp->children ||
+		!rspamd_stat_part_has_type(alt, "multipart", "alternative")) {
+		return NULL;
+	}
+
+	branch = html->mime_part->parent_part;
+
+	if (branch != alt) {
+		/* The root of multipart/related is its first part unless `start` is set */
+		RSPAMD_FTOK_ASSIGN(&start, "start");
+
+		if (!IS_PART_MULTIPART(branch) || branch->parent_part != alt ||
+			!branch->specific.mp || !branch->specific.mp->children ||
+			!rspamd_stat_part_has_type(branch, "multipart", "related") ||
+			branch->specific.mp->children->len == 0 ||
+			g_ptr_array_index(branch->specific.mp->children, 0) != html->mime_part ||
+			(branch->ct->attrs && g_hash_table_lookup(branch->ct->attrs, &start))) {
+			return NULL;
+		}
+	}
+
+	PTR_ARRAY_FOREACH(alt->specific.mp->children, i, child)
+	{
+		if (child != plain->mime_part && rspamd_stat_part_has_type(child, "text", "plain")) {
+			return NULL;
+		}
+	}
+
+	return plain;
+}
+
+/*
+ * Returns the plain alternative that is not tokenized, so Bayes does not count
+ * the same text twice. HTML is kept, as this is what is displayed.
+ *
+ * Exact equality of the words is not required: alternatives written by mail
+ * clients rarely give the same words, e.g. URLs are written out in the plain
+ * text only and HTML blocks join words. So the decision is made by
+ * parts_distance, which is computed for one pair only and is exact only up to
+ * max_distance_words.
+ */
+static struct rspamd_mime_text_part *
+rspamd_stat_duplicate_alternative(struct rspamd_task *task)
+{
+	struct rspamd_mime_text_part *html, *plain;
+	double *pdiff;
+	int *ptw;
+
+	pdiff = rspamd_mempool_get_variable(task->task_pool, "parts_distance");
+	ptw = rspamd_mempool_get_variable(task->task_pool, "total_words");
+
+	if (pdiff == NULL || ptw == NULL || *ptw > max_distance_words ||
+		(1.0 - *pdiff) * 100.0 <= similarity_threshold) {
+		return NULL;
+	}
+
+	html = rspamd_message_get_alternative_html_part(task);
+
+	if (html == NULL || IS_TEXT_PART_EMPTY(html) || html->utf_words.a == NULL) {
+		return NULL;
+	}
+
+	plain = rspamd_stat_plain_alternative(html);
+
+	if (plain == NULL) {
+		return NULL;
+	}
+
+	msg_debug_bayes("plain and HTML alternatives are %.2f%% similar, skip the plain one",
+					(1.0 - *pdiff) * 100.0);
+
+	return plain;
+}
+
 /*
  * Tokenize task using the tokenizer specified
  */
 void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 								  struct rspamd_task *task)
 {
-	struct rspamd_mime_text_part *part;
+	struct rspamd_mime_text_part *part, *skipped_part;
 	rspamd_cryptobox_hash_state_t hst;
 	rspamd_token_t *st_tok;
 	unsigned int i, reserved_len = 0;
-	double *pdiff;
 	unsigned char hout[rspamd_cryptobox_HASHBYTES];
 	char *b32_hout;
 
@@ -238,21 +377,16 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 	rspamd_mempool_add_destructor(task->task_pool,
 								  rspamd_ptr_array_free_hard, task->tokens);
 	rspamd_mempool_notify_alloc(task->task_pool, reserved_len * sizeof(gpointer));
-	pdiff = rspamd_mempool_get_variable(task->task_pool, "parts_distance");
+
+	/* Other text parts, e.g. the text extracted from attachments, are kept */
+	skipped_part = rspamd_stat_duplicate_alternative(task);
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
-		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
+		if (part != skipped_part && !IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
 			st_ctx->tokenizer->tokenize_func(st_ctx, task,
 											 &part->utf_words, IS_TEXT_PART_UTF(part),
 											 NULL, task->tokens);
-		}
-
-
-		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_threshold) {
-			msg_debug_bayes("message has two common parts (%.2f), so skip the last one",
-							*pdiff);
-			break;
 		}
 	}
 

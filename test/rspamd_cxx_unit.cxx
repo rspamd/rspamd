@@ -47,6 +47,7 @@
 #include "rspamd_cxx_unit_symcache_timeout.hxx"
 #include "rspamd_cxx_unit_symcache_order.hxx"
 #include "rspamd_cxx_unit_text_stats.hxx"
+#include "rspamd_cxx_unit_stat_parts.hxx"
 #include "rspamd_cxx_unit_multipattern.hxx"
 #include "rspamd_cxx_unit_regexp.hxx"
 #include "rspamd_cxx_unit_re_cache.hxx"

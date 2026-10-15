@@ -37,6 +37,14 @@ MIME HTML Structure Serializes URL Extras
   ${tags} =  Evaluate  list(json.loads($result.stdout).values())[0][0]  modules=json
   Should Be True  any(t.get('extra') == 'https://example.com/path' and t['content'] == 'Click here' for t in $tags)
 
+MIME Bayes Tokens Keep Alternative Body With Injected Text
+  # The SVG text is injected before the similar alternatives, which still
+  # must be tokenized once
+  ${result} =  Rspamadm  mime  stat  -b  ${RSPAMD_TESTDIR}/messages/alternative-svg-text.eml
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stderr}
+  Should Contain  ${result.stdout}  "spreadsheet"
+  Should Contain  ${result.stdout}  "orchestra"
+
 Config Test
   ${result} =  Rspamadm  configtest
   Should Match Regexp  ${result.stderr}  ^$
