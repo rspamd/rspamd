@@ -216,6 +216,15 @@ void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
 
 	g_assert(st_ctx != NULL);
 
+	if (st_ctx->tokenizer == NULL) {
+		/* No classifier is configured, so there is no tokenizer either */
+		task->tokens = g_ptr_array_new();
+		rspamd_mempool_add_destructor(task->task_pool,
+									  rspamd_ptr_array_free_hard, task->tokens);
+
+		return;
+	}
+
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
 	{
 		if (!IS_TEXT_PART_EMPTY(part) && part->utf_words.a) {
