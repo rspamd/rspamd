@@ -16,6 +16,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "rspamd_control.h"
+#include "file_write.h"
 #include "worker_util.h"
 #include "libserver/http/http_connection.h"
 #include "libserver/http/http_private.h"
@@ -1181,6 +1182,34 @@ rspamd_fill_health_reply(struct rspamd_main *srv, struct rspamd_srv_reply *rep)
 }
 
 
+/* A bounded, one-way handoff, deliberately not a broadcast. Admission and all
+ * write results travel on the attached socket. A full control pipe fails this
+ * operation instead of building an unbounded queue in the main process. */
+static int
+rspamd_control_forward_file_write(struct rspamd_main *srv, int sock)
+{
+	GHashTableIter it;
+	gpointer value;
+	struct rspamd_control_command cmd = {.type = RSPAMD_CONTROL_FILE_WRITE};
+	GQuark type = g_quark_try_string("file_helper");
+
+	if (sock < 0) return EINVAL;
+	g_hash_table_iter_init(&it, srv->workers);
+	while (g_hash_table_iter_next(&it, NULL, &value)) {
+		struct rspamd_worker *worker = value;
+		if (worker->type == type && worker->state == rspamd_worker_state_running &&
+			worker->control_pipe[0] >= 0) {
+			struct msghdr msg;
+			struct iovec iov;
+			unsigned char control[CMSG_SPACE(sizeof(int))];
+			rspamd_control_fill_msghdr(&cmd, sock, &msg, &iov, control, sizeof(control));
+			ssize_t n = sendmsg(worker->control_pipe[0], &msg, 0);
+			return n == sizeof(cmd) ? 0 : (n < 0 ? errno : EIO);
+		}
+	}
+	return ENOTCONN;
+}
+
 static void
 rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 {
@@ -1246,6 +1275,13 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 			}
 
 			switch (cmd.type) {
+			case RSPAMD_SRV_FILE_WRITE:
+				rdata->rep.reply.status = rspamd_control_forward_file_write(rspamd_main, rfd);
+				if (rdata->rep.reply.status != 0) {
+					rspamd_file_writer_reject(rfd, rdata->rep.reply.status);
+					rfd = -1;
+				}
+				break;
 			case RSPAMD_SRV_SOCKETPAIR:
 				spair = g_hash_table_lookup(rspamd_main->spairs, cmd.cmd.spair.pair_id);
 				if (spair == NULL) {
@@ -1654,6 +1690,11 @@ rspamd_srv_pipe_handler(EV_P_ ev_io *w, int revents)
 			/* Successfully sent, remove from send queue but keep in hash */
 			LL_DELETE(ctx->send_queue, rd);
 			rd->sent = TRUE;
+			/* This new command explicitly transfers ownership of the peer. */
+			if (rd->cmd.type == RSPAMD_SRV_FILE_WRITE && rd->attached_fd != -1) {
+				close(rd->attached_fd);
+				rd->attached_fd = -1;
+			}
 		}
 	}
 
@@ -1694,6 +1735,13 @@ rspamd_srv_pipe_handler(EV_P_ ev_io *w, int revents)
 			/* Look up request by ID */
 			k = kh_get(rspamd_srv_requests, ctx->requests, rep.id);
 			if (k == kh_end(ctx->requests)) {
+				if (rep.type == RSPAMD_SRV_FILE_WRITE) {
+					/* A cancelled handoff can still have its server reply in flight. */
+					if (msg.msg_controllen >= CMSG_LEN(sizeof(int))) {
+						close(*(int *) CMSG_DATA(CMSG_FIRSTHDR(&msg)));
+					}
+					continue;
+				}
 				msg_warn("received reply for unknown request id %uL",
 						 rep.id);
 				continue;
@@ -1788,6 +1836,22 @@ void rspamd_srv_pipe_cleanup(void)
 	srv_pipe_ctx = NULL;
 }
 
+void rspamd_srv_cancel_file_write(uint64_t id)
+{
+	if (srv_pipe_ctx) {
+		khiter_t k = kh_get(rspamd_srv_requests, srv_pipe_ctx->requests, id);
+		if (k != kh_end(srv_pipe_ctx->requests)) {
+			struct rspamd_srv_request_data *rd = kh_val(srv_pipe_ctx->requests, k);
+			if (rd->cmd.type != RSPAMD_SRV_FILE_WRITE) return;
+			if (!rd->sent) LL_DELETE(srv_pipe_ctx->send_queue, rd);
+			if (rd->attached_fd != -1) close(rd->attached_fd);
+			kh_del(rspamd_srv_requests, srv_pipe_ctx->requests, k);
+			g_free(rd);
+			rspamd_srv_pipe_update_watcher(srv_pipe_ctx);
+		}
+	}
+}
+
 void rspamd_srv_send_command(struct rspamd_worker *worker,
 							 struct ev_loop *ev_base,
 							 struct rspamd_srv_command *cmd,
@@ -1821,6 +1885,7 @@ void rspamd_srv_send_command(struct rspamd_worker *worker,
 	k = kh_put(rspamd_srv_requests, srv_pipe_ctx->requests, rd->id, &ret);
 	if (ret < 0) {
 		msg_err("cannot add request to hash table");
+		if (cmd->type == RSPAMD_SRV_FILE_WRITE && attached_fd != -1) close(attached_fd);
 		g_free(rd);
 		return;
 	}
@@ -1891,6 +1956,9 @@ rspamd_control_command_to_string(enum rspamd_control_type cmd)
 	const char *reply = "unknown";
 
 	switch (cmd) {
+	case RSPAMD_CONTROL_FILE_WRITE:
+		reply = "file_write";
+		break;
 	case RSPAMD_CONTROL_STAT:
 		reply = "stat";
 		break;
@@ -1951,6 +2019,9 @@ const char *rspamd_srv_command_to_string(enum rspamd_srv_type cmd)
 	const char *reply = "unknown";
 
 	switch (cmd) {
+	case RSPAMD_SRV_FILE_WRITE:
+		reply = "file_write";
+		break;
 	case RSPAMD_SRV_SOCKETPAIR:
 		reply = "socketpair";
 		break;

@@ -43,6 +43,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_REGEXP_MAP_LOADED,
 	RSPAMD_CONTROL_MEMORY_STAT,
 	RSPAMD_CONTROL_FUZZY_HASH,
+	RSPAMD_CONTROL_FILE_WRITE, /* One-way socket handoff to file_helper */
 	RSPAMD_CONTROL_MAX
 };
 
@@ -61,6 +62,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_REGEXP_MAP_LOADED,   /* Regexp map HS compiled and ready */
 	RSPAMD_SRV_BUSY,                /* Worker is busy with long-running operation */
 	RSPAMD_SRV_RECOMPILE_REQUEST,   /* Worker requests hs_helper to recompile (stale cache) */
+	RSPAMD_SRV_FILE_WRITE,          /* Main forwards attached socket to file_helper */
 };
 
 enum rspamd_log_pipe_type {
@@ -439,6 +441,10 @@ void rspamd_srv_pipe_init(struct rspamd_worker *worker, struct ev_loop *ev_base)
  * Should be called during worker shutdown
  */
 void rspamd_srv_pipe_cleanup(void);
+
+/* Drop a FILE_WRITE request, including its fd if still queued. The operation
+ * socket is shut down separately by the caller, cancelling a sent handoff. */
+void rspamd_srv_cancel_file_write(uint64_t id);
 
 G_END_DECLS
 

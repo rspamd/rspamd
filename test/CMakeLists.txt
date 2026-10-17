@@ -12,6 +12,7 @@ set(RSPAMD_TEST_SOURCES
         rspamd_upstream_test.c
         rspamd_lua_pcall_vs_resume_test.c
         rspamd_lua_test.c
+        rspamd_lua_task_async_test.c
         rspamd_cryptobox_test.c
         rspamd_heap_test.c
         rspamd_test_suite.c
@@ -48,6 +49,11 @@ set_target_properties(rspamd-test-cxx PROPERTIES
 add_test(
         NAME rspamd-test-cxx
         COMMAND rspamd-test-cxx
+)
+
+add_test(
+        NAME rspamd-test-lua-task-async
+        COMMAND rspamd-test -p /rspamd/lua_task_async
 )
 
 if (WITH_HYPERSCAN)
