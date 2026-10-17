@@ -28,7 +28,21 @@ Pre and Post Filters
   Expect Symbol  TEST_PRE
   Expect Symbol  TEST_POST
 
+Async File Storage
+  [Setup]  Lua Setup  ${RSPAMD_TESTDIR}/lua/store_in_file_async.lua
+  Scan File  ${MESSAGE}
+  Expect Symbol  ASYNC_FILE_FIRST
+  Expect Symbol  ASYNC_FILE_SECOND
+  Expect Symbol  ASYNC_FILE_AFTER
+  Do Not Expect Symbol  ASYNC_FILE_ERROR
+  Wait Until Keyword Succeeds  2s  50ms  No Async File Temporaries
+
 *** Keywords ***
+No Async File Temporaries
+  ${files} =  List Files In Directory  ${RSPAMD_TMPDIR}  async-file-*
+  Should Be Empty  ${files}
+
+
 Lua Setup
   [Arguments]  ${RSPAMD_LUA_SCRIPT}
   Set Test Variable  ${RSPAMD_LUA_SCRIPT}

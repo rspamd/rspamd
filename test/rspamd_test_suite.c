@@ -84,6 +84,7 @@ int main(int argc, char **argv)
 	g_test_add_func("/rspamd/cryptobox", rspamd_cryptobox_test_func);
 	g_test_add_func("/rspamd/heap", rspamd_heap_test_func);
 	g_test_add_func("/rspamd/lua_pcall", rspamd_lua_lua_pcall_vs_resume_test_func);
+	g_test_add_func("/rspamd/lua_task_async", rspamd_lua_task_async_test_func);
 
 #if 0
 	g_test_add_func ("/rspamd/http", rspamd_http_test_func);
