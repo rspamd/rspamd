@@ -100,6 +100,11 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     symbol = rule.symbol_macro
     threat_info = "Scan has returned that input contains macros"
     dyn_weight = 1.0
+  elseif is_fail == 'skipped' then
+    patterns = rule.patterns
+    symbol = rule.symbol_skipped
+    threat_info = "Scan could not be made"
+    dyn_weight = 1.0
   end
 
   for _, tm in ipairs(threat_table) do
@@ -231,6 +236,9 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
         elseif threat_string[1] == 'ENCRYPTED' then
           yield_result(task, rule, 'File is encrypted',
             0.0, 'encrypted', maybe_part)
+        elseif threat_string[1] == 'SKIPPED' then
+          yield_result(task, rule, 'Message skipped by scanner',
+            0.0, 'skipped', maybe_part)
         else
           -- Check if cached data contains symbol name (for category-based scanners)
           -- Format: "SYMBOL_NAME\vdetails" or just "details"
