@@ -447,6 +447,15 @@ int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 					  gboolean allow_symlink);
 
 /**
+ * Write the whole buffer to fd, retrying short and interrupted writes
+ * @param fd file descriptor
+ * @param buf data to write
+ * @param len length of data
+ * @return TRUE if all data has been written, FALSE otherwise (errno is set)
+ */
+gboolean rspamd_write_all(int fd, const void *buf, gsize len);
+
+/**
  * Map file without following symlinks or special stuff
  * @param fname filename
  * @param mode mode to open

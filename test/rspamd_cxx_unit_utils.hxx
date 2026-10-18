@@ -30,6 +30,10 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include <csignal>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 extern "C" long rspamd_http_parse_keepalive_timeout(const rspamd_ftok_t *tok);
 
@@ -237,6 +241,66 @@ TEST_SUITE("rspamd_utils")
 				rspamd_http_message_unref(msg);
 			}
 		}
+	}
+
+	TEST_CASE("rspamd_write_all")
+	{
+		const std::string data = "0123456789abcdef";
+		std::string path = std::string{g_get_tmp_dir()} + "/rspamd-write-all-XXXXXX";
+		int fd = g_mkstemp(path.data());
+		struct stat st;
+
+		REQUIRE(fd != -1);
+
+		SUBCASE("whole buffer is written")
+		{
+			CHECK(rspamd_write_all(fd, data.data(), data.size()));
+			REQUIRE(fstat(fd, &st) == 0);
+			CHECK(st.st_size == (off_t) data.size());
+		}
+
+		SUBCASE("empty buffer")
+		{
+			CHECK(rspamd_write_all(fd, data.data(), 0));
+		}
+
+		SUBCASE("bad fd")
+		{
+			errno = 0;
+			CHECK_FALSE(rspamd_write_all(-1, data.data(), data.size()));
+			CHECK(errno == EBADF);
+		}
+
+#if defined(RLIMIT_FSIZE) && defined(SIGXFSZ)
+		SUBCASE("short write is not reported as success")
+		{
+			struct rlimit old_limit, limit;
+			struct sigaction old_action, action;
+
+			REQUIRE(getrlimit(RLIMIT_FSIZE, &old_limit) == 0);
+			limit = old_limit;
+			limit.rlim_cur = 4;
+			memset(&action, 0, sizeof(action));
+			action.sa_handler = SIG_IGN;
+			sigemptyset(&action.sa_mask);
+			REQUIRE(sigaction(SIGXFSZ, &action, &old_action) == 0);
+			REQUIRE(setrlimit(RLIMIT_FSIZE, &limit) == 0);
+			/* The first write stops at the limit, the next one fails with EFBIG */
+			auto ret = rspamd_write_all(fd, data.data(), data.size());
+			auto saved_errno = errno;
+			/* Restore before any doctest output, it may go to a regular file */
+			setrlimit(RLIMIT_FSIZE, &old_limit);
+			sigaction(SIGXFSZ, &old_action, nullptr);
+
+			CHECK_FALSE(ret);
+			CHECK(saved_errno == EFBIG);
+			REQUIRE(fstat(fd, &st) == 0);
+			CHECK(st.st_size == 4);
+		}
+#endif
+
+		close(fd);
+		unlink(path.c_str());
 	}
 }
 

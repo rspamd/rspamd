@@ -600,15 +600,11 @@ lua_rsa_signature_save(lua_State *L)
 			lua_pushboolean(L, FALSE);
 		}
 		else {
-			while (write(fd, sig->str, sig->len) == -1) {
-				if (errno == EINTR) {
-					continue;
-				}
+			if (!rspamd_write_all(fd, sig->str, sig->len)) {
 				msg_err("cannot write to a signature file: %s, %s",
 						filename,
 						strerror(errno));
 				res = FALSE;
-				break;
 			}
 			lua_pushboolean(L, res);
 			close(fd);

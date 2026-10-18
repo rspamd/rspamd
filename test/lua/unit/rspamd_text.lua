@@ -323,3 +323,42 @@ context("Rspamd_text:normalize_newlines() test", function()
     assert_equal(t:str(), "a\r\n")
   end)
 end)
+
+context("Rspamd_text:save_in_file() test", function()
+  local rspamd_text = require "rspamd_text"
+  local rspamd_util = require "rspamd_util"
+
+  local function tmp_name()
+    return string.format("%s/rspamd-save-in-file-%s", os.getenv("TMPDIR") or "/tmp",
+        rspamd_util.random_hex(8))
+  end
+
+  test("writes the whole text to a new file", function()
+    local fname = tmp_name()
+    local data = string.rep("0123456789\0", 4096)
+    local ok = rspamd_text.fromstring(data):save_in_file(fname)
+    assert_true(ok)
+    local f = assert(io.open(fname, "rb"))
+    local stored = f:read("*a")
+    f:close()
+    os.remove(fname)
+    assert_equal(#stored, #data)
+    assert_true(stored == data)
+  end)
+
+  test("does not close a caller-supplied fd on error", function()
+    local fname = tmp_name()
+    local f = assert(io.open(fname, "wb"))
+    f:close()
+    -- lock_file opens the file read-only, so writing to it fails
+    local fd = rspamd_util.lock_file(fname)
+    assert_not_nil(fd)
+    local ok, err = rspamd_text.fromstring("data"):save_in_file(fd)
+    assert_false(ok)
+    assert_not_nil(err)
+    -- the fd still belongs to the caller and must be closable exactly once
+    local closed = rspamd_util.close_file(fd)
+    os.remove(fname)
+    assert_true(closed)
+  end)
+end)

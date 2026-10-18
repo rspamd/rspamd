@@ -1435,13 +1435,18 @@ lua_text_save_in_file(lua_State *L)
 			}
 		}
 
-		if (write(fd, t->start, t->len) == -1) {
-			if (fd != STDOUT_FILENO) {
+		if (!rspamd_write_all(fd, t->start, t->len)) {
+			int saved_errno = errno;
+
+			/* A caller-supplied fd is owned (and closed) by the caller */
+			if (need_close) {
 				close(fd);
+				/* Do not leave a truncated file behind */
+				unlink(fname);
 			}
 
 			lua_pushboolean(L, false);
-			lua_pushstring(L, strerror(errno));
+			lua_pushstring(L, strerror(saved_errno));
 
 			return 2;
 		}

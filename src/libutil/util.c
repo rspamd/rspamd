@@ -2002,6 +2002,36 @@ int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 	return (fd);
 }
 
+gboolean
+rspamd_write_all(int fd, const void *buf, gsize len)
+{
+	const char *p = buf;
+
+	while (len > 0) {
+		gssize r = write(fd, p, len);
+
+		if (r == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+
+			return FALSE;
+		}
+
+		if (r == 0) {
+			/* Should not happen for len > 0, avoid looping forever */
+			errno = EIO;
+
+			return FALSE;
+		}
+
+		p += r;
+		len -= r;
+	}
+
+	return TRUE;
+}
+
 gpointer
 rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
 				 gboolean allow_symlink)
