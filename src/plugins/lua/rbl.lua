@@ -589,7 +589,7 @@ local function gen_rbl_callback(rule)
   local function check_required_symbols(task, _)
     if rule.require_symbols then
       return fun.all(function(sym)
-        task:has_symbol(sym)
+        return task:has_symbol(sym)
       end, rule.require_symbols)
     end
 
@@ -662,7 +662,7 @@ local function gen_rbl_callback(rule)
           if rule.dkim_match_from then
             -- We check merely mime from
             local domain_tld = domain
-            if not rule.dkim_domainonly then
+            if rule.dkim_domainonly then
               -- Adjust
               domain_tld = rspamd_util.get_tld(domain)
 
@@ -1531,14 +1531,15 @@ for key, rbl in pairs(opts.rbls) do
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
-      res = rbl_common.convert_checks(res, rbl.symbol or key:upper())
-      -- Aliases
+      -- Aliases must be resolved before convert_checks, as it autodetects
+      -- the luapattern matcher by looking at returncodes
       if res.return_codes then
         res.returncodes = res.return_codes
       end
       if res.return_bits then
         res.returnbits = res.return_bits
       end
+      res = rbl_common.convert_checks(res, rbl.symbol or key:upper())
 
       if not res then
         rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
