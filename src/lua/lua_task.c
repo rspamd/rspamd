@@ -7217,8 +7217,9 @@ lua_task_store_in_file(lua_State *L)
 
 	if (task) {
 		if (lua_istable(L, 2)) {
+			/* Keep the defaults above for missing keys (mode must stay 0600) */
 			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "filename=S;tmpmask=S;mode=I;force_new=B;keep=B",
 												  &fname, &tmpmask, &mode, &force_new, &keep)) {
 				msg_err_task("cannot get parameters list: %e", err);

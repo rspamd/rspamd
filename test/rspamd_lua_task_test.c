@@ -117,10 +117,67 @@ rspamd_lua_task_store_in_file_test(gboolean limited, gboolean keep)
 	}
 }
 
+static void
+rspamd_lua_task_store_in_file_default_mode_test(gboolean use_tmpmask)
+{
+	static const char message[] = "Subject: store_in_file\r\n\r\nTest\r\n";
+	lua_State *L = rspamd_main->cfg->lua_state;
+	struct rspamd_task *task;
+	char *dirname, *path, *stored = NULL;
+	struct stat st;
+	gboolean result_ok, mode_ok = FALSE;
+	int ret, top = lua_gettop(L);
+	mode_t old_umask;
+
+	dirname = g_build_filename(g_get_tmp_dir(), "rspamd-store-in-file-XXXXXX", NULL);
+	g_assert_nonnull(g_mkdtemp(dirname));
+	path = g_build_filename(dirname, use_tmpmask ? "message-XXXXXX" : "message", NULL);
+	task = rspamd_task_new(NULL, rspamd_main->cfg, NULL, NULL, event_loop, FALSE);
+	task->msg.begin = message;
+	task->msg.len = sizeof(message) - 1;
+
+	rspamd_lua_task_push(L, task);
+	lua_getfield(L, -1, "store_in_file");
+	lua_pushvalue(L, -2);
+	/* No mode key: the documented default (0600) must be used */
+	lua_newtable(L);
+	lua_pushstring(L, path);
+	lua_setfield(L, -2, use_tmpmask ? "tmpmask" : "filename");
+
+	/* open(2) applies umask to the mode, make the expected mode deterministic */
+	old_umask = umask(022);
+	ret = lua_pcall(L, 2, 1, 0);
+	umask(old_umask);
+
+	result_ok = ret == 0 && lua_type(L, -1) == LUA_TSTRING;
+
+	if (result_ok) {
+		stored = g_strdup(lua_tostring(L, -1));
+		mode_ok = stat(stored, &st) == 0 && (st.st_mode & 0777) == 0600;
+	}
+
+	lua_settop(L, top);
+	rspamd_task_free(task);
+
+	/* Clean up before asserting, including when testing the unpatched code. */
+	if (stored) {
+		unlink(stored);
+	}
+	g_assert_cmpint(rmdir(dirname), ==, 0);
+	g_free(stored);
+	g_free(path);
+	g_free(dirname);
+
+	g_assert(result_ok);
+	g_assert(mode_ok);
+}
+
 void rspamd_lua_task_test_func(void)
 {
 	rspamd_lua_task_store_in_file_test(FALSE, FALSE);
 	rspamd_lua_task_store_in_file_test(FALSE, TRUE);
+	rspamd_lua_task_store_in_file_default_mode_test(FALSE);
+	rspamd_lua_task_store_in_file_default_mode_test(TRUE);
 #if defined(RLIMIT_FSIZE) && defined(SIGXFSZ)
 	rspamd_lua_task_store_in_file_test(TRUE, FALSE);
 	rspamd_lua_task_store_in_file_test(TRUE, TRUE);
