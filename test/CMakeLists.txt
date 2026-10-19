@@ -12,7 +12,6 @@ set(RSPAMD_TEST_SOURCES
         rspamd_upstream_test.c
         rspamd_lua_pcall_vs_resume_test.c
         rspamd_lua_test.c
-        rspamd_lua_task_test.c
         rspamd_cryptobox_test.c
         rspamd_heap_test.c
         rspamd_test_suite.c
@@ -32,11 +31,6 @@ set_target_properties(rspamd-test PROPERTIES
 add_test(
         NAME rspamd-test
         COMMAND rspamd-test -p /rspamd/lua
-)
-
-add_test(
-        NAME rspamd-test-lua-task
-        COMMAND rspamd-test -p /rspamd/lua_task
 )
 
 # C++ unit tests

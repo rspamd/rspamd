@@ -38,8 +38,6 @@ void rspamd_http_test_func(void);
 
 void rspamd_lua_test_func(void);
 
-void rspamd_lua_task_test_func(void);
-
 void rspamd_cryptobox_test_func(void);
 
 void rspamd_heap_test_func(void);

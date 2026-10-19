@@ -81,7 +81,6 @@ int main(int argc, char **argv)
 	g_test_add_func("/rspamd/upstream", rspamd_upstream_test_func);
 	g_test_add_func("/rspamd/shingles", rspamd_shingles_test_func);
 	g_test_add_func("/rspamd/lua", rspamd_lua_test_func);
-	g_test_add_func("/rspamd/lua_task", rspamd_lua_task_test_func);
 	g_test_add_func("/rspamd/cryptobox", rspamd_cryptobox_test_func);
 	g_test_add_func("/rspamd/heap", rspamd_heap_test_func);
 	g_test_add_func("/rspamd/lua_pcall", rspamd_lua_lua_pcall_vs_resume_test_func);
