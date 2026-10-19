@@ -114,3 +114,25 @@ context("Lua util - str_endswith", function()
     end)
   end
 end)
+
+context("Lua util - http_upstreams_by_url", function()
+  -- Load the TLD list so hosts without a public suffix are rejected by
+  -- rspamd_url, as on a config reload
+  require("rspamd_test_helper").init_url_parser()
+  local cases = {
+    'https://llm.internal.lan/v1/chat/completions',
+    'http://user:pw@llm.internal.lan:8080/x',
+    'http://[::1]:11434/api',
+    'https://example.com/v1',
+  }
+
+  for _, u in ipairs(cases) do
+    test('Creates upstreams for ' .. u, function()
+      assert_not_nil(util.http_upstreams_by_url(rspamd_config:get_mempool(), u, rspamd_config))
+    end)
+  end
+
+  test('Returns nil for garbage', function()
+    assert_nil(util.http_upstreams_by_url(rspamd_config:get_mempool(), 'not a url', rspamd_config))
+  end)
+end)

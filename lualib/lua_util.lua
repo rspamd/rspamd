@@ -1895,14 +1895,34 @@ local function http_upstreams_by_url(pool, url, cfg)
   end
 
   local real_url = rspamd_url.create(pool, url)
+  local host, proto, port
 
-  if not real_url then
-    return nil
+  if real_url then
+    host = real_url:get_host()
+    proto = real_url:get_protocol() or 'http'
+    port = real_url:get_port()
+  else
+    -- rspamd_url rejects hosts without a public suffix (e.g. `llm.internal.lan`)
+    -- once the TLD file is loaded, which is the case on config reload
+    local authority
+    proto, authority = url:match('^(%a[%w+.-]*)://([^/?#]+)')
+    if not authority then
+      return nil
+    end
+    proto = proto:lower()
+    authority = authority:match('@([^@]*)$') or authority
+    if authority:sub(1, 1) == '[' then
+      host, port = authority:match('^%[([^%]]+)%]:?(%d*)$')
+    else
+      host, port = authority:match('^([^:]+):?(%d*)$')
+    end
+    if not host then
+      return nil
+    end
+    port = tonumber(port)
   end
 
-  local host = real_url:get_host()
-  local proto = real_url:get_protocol() or 'http'
-  local port = real_url:get_port() or (proto == 'https' and 443 or 80)
+  port = port or (proto == 'https' and 443 or 80)
   local upstream_list = require "rspamd_upstream_list"
   -- Attach to the config upstream context when available: otherwise a
   -- failed startup DNS lookup leaves the upstream pending forever, as the
