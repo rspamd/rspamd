@@ -326,6 +326,122 @@ TEST_SUITE("html")
 		rspamd_mempool_delete(pool);
 	}
 
+	TEST_CASE("html markup declarations")
+	{
+		/*
+		 * Declarations, comments and raw text must end where browsers end
+		 * them, or the markup after them is hidden from the scan (#6321)
+		 */
+		struct decl_case {
+			std::string input;
+			std::vector<std::string> urls;
+			std::string text;
+			bool cdata_in_html;
+		};
+		const std::vector<decl_case> cases{
+			/* CDATA outside SVG/MathML is a bogus comment up to the first `>` */
+			{"<![CDATA[<html><body><p>Hello</p><a href=\"https://user@spam.example.com/x\">click</a></body></html>",
+			 {"https://user@spam.example.com/x"},
+			 "Hello\nclick",
+			 true},
+			/* `]]>` split by hidden tags, as seen in the wild */
+			{"<![CDATA[<html><body><a href=\"http://example.com/\">click</a>]<u style=\"font-size:.0px\">x</u>]<u style=\"font-size:.0px\">y</u>></body></html>",
+			 {"http://example.com/"},
+			 "click]]>",
+			 true},
+			/* The first `>` ends it, even inside a tag */
+			{"<![CDATA[<a href=\"http://example.com/\">click</a>", {}, "click", true},
+			{"<![x[><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<![CDATA[x]]><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", true},
+			/* Outlook downlevel-revealed conditional comments */
+			{"<html><body><![if !mso]><p>Hello</p><![endif]><a href=\"http://example.com/\">click</a></body></html>",
+			 {"http://example.com/"},
+			 "Hello\nclick",
+			 false},
+			/* CDATA in SVG/MathML is legit, but still ends at the first `>` */
+			{"<svg><![CDATA[a]]></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<math><![CDATA[a]]></math><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<svg></svg><![CDATA[a]]><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", true},
+			/* Comments */
+			{"<!-- x --!><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<!-- x --><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<!-- x -- y --><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<!-->click", {}, "click", false},
+			{"<!--->click", {}, "click", false},
+			{"<!-x>click", {}, "click", false},
+			{"<?>click", {}, "click", false},
+			/* Input ending inside markup keeps the text before it */
+			{"click<!--", {}, "click", false},
+			{"click<!-", {}, "click", false},
+			{"click<!-- x", {}, "click", false},
+			{"<p>a</p>b<!-- c", {}, "a\nb", false},
+			{"<div>a<span>b</span>c</b", {}, "abc\n", false},
+			{"<div>a<span>b</span>c</", {}, "abc\n", false},
+			{"click<!DOCTYPE", {}, "click", false},
+			{"click<?xml", {}, "click", false},
+			{"click<a href=\"http://example.com/", {}, "click", false},
+			/* End tags without a name */
+			{"</ x><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"</>click", {}, "click", false},
+			{"<p>a</ <b>b</p>", {}, "ab\n", false},
+			/* Raw text ends at its own end tag, whatever follows the name */
+			{"<style>a{}</style\t><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<style>a{}</STYLE data-x=\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"><a href=\"http://example.com/\">click</a>",
+			 {"http://example.com/"},
+			 "click",
+			 false},
+			{"<style></b><a href=\"http://example.com/\">x</a></style>click", {}, "click", false},
+			{"<style>a{}</stylex></style>click", {}, "click", false},
+			/* Comments inside RCDATA/RAWTEXT are text */
+			{"<textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->",
+			 false},
+			{"<title><!--</title><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<xmp><!--</xmp><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "<!--\nclick", false},
+			{"<iframe><![CDATA[</iframe><a href=\"http://example.com/\">click</a>",
+			 {"http://example.com/"},
+			 "<![CDATA[click",
+			 false},
+			{"<plaintext><a href=\"http://example.com/\">click</a>", {}, "<a href=\"http://example.com/\">click</a>\n", false},
+			/* Mail clients run no scripts, so noscript content is markup */
+			{"<noscript><a href=\"http://example.com/\">click</a></noscript>", {"http://example.com/"}, "click\n", false},
+		};
+
+		rspamd_url_init(NULL);
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"html", 0);
+		struct rspamd_task fake_task;
+		memset(&fake_task, 0, sizeof(fake_task));
+		fake_task.task_pool = pool;
+
+		for (const auto &c: cases) {
+			SUBCASE(c.input.c_str())
+			{
+				GPtrArray *purls = g_ptr_array_new();
+				GByteArray *tmp = g_byte_array_sized_new(c.input.size());
+				g_byte_array_append(tmp, (const uint8_t *) c.input.data(), c.input.size());
+				auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, purls, true, nullptr);
+				CHECK(hc != nullptr);
+				CHECK(hc->parsed == c.text);
+				std::string expected_urls, actual_urls;
+				for (const auto &u: c.urls) {
+					expected_urls += u + " ";
+				}
+				for (auto j = 0u; j < purls->len; ++j) {
+					auto *url = (rspamd_url *) g_ptr_array_index(purls, j);
+					actual_urls += std::string{url->string, url->urllen} + " ";
+				}
+				CHECK(expected_urls == actual_urls);
+				CHECK(((hc->flags & RSPAMD_HTML_FLAG_CDATA_IN_HTML) != 0) == c.cdata_in_html);
+				g_byte_array_free(tmp, TRUE);
+				g_ptr_array_free(purls, TRUE);
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("html deep nesting")
 	{
 		/* Just below max_tags, so every div is parsed as a real DOM node */

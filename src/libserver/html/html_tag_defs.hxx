@@ -174,7 +174,9 @@ static const auto html_tag_defs_array = rspamd::array_of(
 	TAG_DEF(Tag_TIME, "time", (CM_INLINE)),
 	TAG_DEF(Tag_TRACK, "track", (CM_INLINE | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_VIDEO, "video", (CM_INLINE | FL_HREF)),
-	TAG_DEF(Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)));
+	TAG_DEF(Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_MATH, "math", (CM_INLINE)),
+	TAG_DEF(Tag_NOEMBED, "noembed", (CM_INLINE)));
 
 class html_tags_storage {
 	ankerl::unordered_dense::map<std::string_view, html_tag_def> tag_by_name;

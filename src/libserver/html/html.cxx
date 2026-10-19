@@ -2255,6 +2255,76 @@ html_tag_bounded_by_parent(const html_tag *tag) -> bool
 	return tag->id != Tag_TABLE && !(tag->flags & (CM_TABLE | CM_ROW));
 }
 
+/* Whether an open `<svg>` or `<math>` encloses the element */
+static auto
+html_in_foreign_content(const html_tag *tag) -> bool
+{
+	for (; tag != nullptr; tag = tag->parent) {
+		if ((tag->id == Tag_SVG || tag->id == Tag_MATH) && !(tag->flags & FL_CLOSED)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+ * Elements whose content browsers take as text up to their own end tag,
+ * so markup inside them, comments included, is not parsed. `<noscript>`
+ * is not one of them: mail clients run no scripts and render its content
+ */
+static inline auto
+html_is_raw_text_tag(int id) -> bool
+{
+	switch (id) {
+	case Tag_STYLE:
+	case Tag_SCRIPT:
+	case Tag_XMP:
+	case Tag_IFRAME:
+	case Tag_NOEMBED:
+	case Tag_NOFRAMES:
+	case Tag_TITLE:
+	case Tag_TEXTAREA:
+	case Tag_PLAINTEXT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/*
+ * Whether `in` starts with the end tag of a raw text element: `</` and its
+ * name in any case, followed by a character that ends a tag name
+ */
+static auto
+html_is_raw_text_end_tag(std::string_view in, int raw_tag_id) -> bool
+{
+	if (raw_tag_id == Tag_PLAINTEXT) {
+		/* Nothing ends plaintext */
+		return false;
+	}
+
+	auto name = html_tags_defs.name_by_id_safe(raw_tag_id);
+
+	if (in.size() <= name.size() + 2 || in[0] != '<' || in[1] != '/' ||
+		g_ascii_strncasecmp(in.data() + 2, name.data(), name.size()) != 0) {
+		return false;
+	}
+
+	switch (in[name.size() + 2]) {
+	case '\t':
+	case '\n':
+	case '\f':
+	case '\r':
+	case ' ':
+	case '/':
+	case '>':
+		return true;
+	default:
+		return false;
+	}
+}
+
 auto html_process_input(struct rspamd_task *task,
 						GByteArray *in,
 						GList **exceptions,
@@ -2266,7 +2336,9 @@ auto html_process_input(struct rspamd_task *task,
 	const char *p, *c, *end, *start;
 	unsigned char t;
 	auto closing = false;
-	unsigned int obrace = 0, ebrace = 0;
+	unsigned int ebrace = 0;
+	/* Tag whose end tag finishes the current raw text, Tag_UNKNOWN for none */
+	int raw_text_tag_id = Tag_UNKNOWN;
 	struct rspamd_url *url = nullptr;
 	int href_offset = -1;
 	auto overflow_input = false;
@@ -2290,7 +2362,6 @@ auto html_process_input(struct rspamd_task *task,
 		tag_begin,
 		sgml_tag,
 		xml_tag,
-		compound_tag,
 		comment_tag,
 		comment_content,
 		sgml_content,
@@ -2300,7 +2371,6 @@ auto html_process_input(struct rspamd_task *task,
 		html_text_content,
 		xml_tag_end,
 		tag_raw_text,
-		tag_raw_text_less_than,
 		tags_limit_overflow,
 	} state = parse_start;
 
@@ -2753,6 +2823,21 @@ auto html_process_input(struct rspamd_task *task,
 				p++;
 				break;
 			case '/':
+				if (p + 1 < end && !g_ascii_isalpha(p[1])) {
+					/*
+					 * `</` without a tag name: browsers drop `</>` and take
+					 * anything else as a bogus comment up to the first `>`
+					 */
+					cur_tag = new_tag(FL_XML | FL_CLOSED);
+					if (cur_tag) {
+						state = sgml_content;
+					}
+					else {
+						state = tags_limit_overflow;
+					}
+					p++;
+					break;
+				}
 				closing = TRUE;
 				/* We fill fake closing tag to fill it with the content parser */
 				cur_closing_tag.clear();
@@ -2830,10 +2915,21 @@ auto html_process_input(struct rspamd_task *task,
 		case sgml_tag:
 			switch (t) {
 			case '[':
-				state = compound_tag;
-				obrace = 1;
-				ebrace = 0;
-				p++;
+				/*
+				 * Browsers open a CDATA section only in SVG/MathML content and
+				 * take any other `<![` as a bogus comment up to the first `>`,
+				 * so `<![if !mso]>` still works. We end the CDATA section at
+				 * the first `>` even in SVG: the tree does not follow SVG
+				 * closely enough (`</p>` pops `<svg>` in browsers), and
+				 * waiting for `]]>` would hide the rest of the part whenever
+				 * we are wrong
+				 */
+				if (end - p >= (goffset) sizeof("[CDATA[") - 1 &&
+					memcmp(p, "[CDATA[", sizeof("[CDATA[") - 1) == 0 &&
+					!html_in_foreign_content(parent_tag)) {
+					hc->flags |= RSPAMD_HTML_FLAG_CDATA_IN_HTML | RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				}
+				state = sgml_content;
 				break;
 			case '-':
 				cur_tag->flags |= FL_COMMENT;
@@ -2854,6 +2950,7 @@ auto html_process_input(struct rspamd_task *task,
 			else if (t == '>') {
 				/* Misformed xml tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				cur_tag->content_offset = p - start + 1;
 				state = tag_end_opening;
 				continue;
 			}
@@ -2873,25 +2970,11 @@ auto html_process_input(struct rspamd_task *task,
 			p++;
 			break;
 
-		case compound_tag:
-			if (t == '[') {
-				obrace++;
-			}
-			else if (t == ']') {
-				ebrace++;
-			}
-			else if (t == '>' && obrace == ebrace) {
-				state = tag_end_opening;
-				cur_tag->content_offset = p - start + 1;
-				continue;
-			}
-			p++;
-			break;
-
 		case comment_tag:
 			if (t != '-') {
+				/* `<!-` alone opens no comment, browsers skip it up to `>` */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				state = tag_end_opening;
+				state = sgml_content;
 			}
 			else {
 				p++;
@@ -2905,13 +2988,15 @@ auto html_process_input(struct rspamd_task *task,
 				 *  nor contain two consecutive U+002D HYPHEN-MINUS
 				 *  characters (--), nor end with a "-" (U+002D) character.
 				 */
-				if (p[0] == '-' && p + 1 < end && p[1] == '>') {
+				if (p + 1 < end && p[0] == '-' && p[1] == '>') {
 					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 					p++;
+					cur_tag->content_offset = p - start + 1;
 					state = tag_end_opening;
 				}
-				else if (*p == '>') {
+				else if (p < end && *p == '>') {
 					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					cur_tag->content_offset = p - start + 1;
 					state = tag_end_opening;
 				}
 				else {
@@ -2925,6 +3010,14 @@ auto html_process_input(struct rspamd_task *task,
 				ebrace++;
 			}
 			else if (t == '>' && ebrace >= 2) {
+				cur_tag->content_offset = p - start + 1;
+				state = tag_end_opening;
+				continue;
+			}
+			else if (t == '!' && ebrace >= 2 && p + 1 < end && p[1] == '>') {
+				/* `--!>` closes a comment as well */
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				p++;
 				cur_tag->content_offset = p - start + 1;
 				state = tag_end_opening;
 				continue;
@@ -2946,61 +3039,14 @@ auto html_process_input(struct rspamd_task *task,
 			break;
 
 		case tag_raw_text:
-			if (t == '<') {
-				c = p;
-				state = tag_raw_text_less_than;
-			}
-			p++;
-			break;
-		case tag_raw_text_less_than:
-			if (t == '/') {
-				/* Here are special things: we look for obrace and then ensure
-				 * that if there is any closing brace nearby
-				 * (we look maximum at 30 characters). We also need to ensure
-				 * that we have no special characters, such as punctuation marks and
-				 * so on.
-				 * Basically, we validate the input to be sane.
-				 * Since closing tags must not have attributes, these assumptions
-				 * seems to be reasonable enough for our toy parser.
-				 */
-				int cur_lookahead = 1;
-				int max_lookahead = MIN(end - p, 30);
-				bool valid_closing_tag = true;
-
-				if (p + 1 < end && !g_ascii_isalpha(p[1])) {
-					valid_closing_tag = false;
-				}
-				else {
-					while (cur_lookahead < max_lookahead) {
-						char tt = p[cur_lookahead];
-						if (tt == '>') {
-							break;
-						}
-						else if (tt < '\n' || tt == ',') {
-							valid_closing_tag = false;
-							break;
-						}
-						cur_lookahead++;
-					}
-
-					if (cur_lookahead == max_lookahead) {
-						valid_closing_tag = false;
-					}
-				}
-
-				if (valid_closing_tag) {
-					/* Shift back */
-					p = c;
-					state = tag_begin;
-				}
-				else {
-					p++;
-					state = tag_raw_text;
-				}
+			if (t == '<' &&
+				html_is_raw_text_end_tag({p, (std::size_t) (end - p)}, raw_text_tag_id)) {
+				raw_text_tag_id = Tag_UNKNOWN;
+				state = tag_begin;
 			}
 			else {
-				p++;
-				state = tag_raw_text;
+				auto *next_lt = (const char *) memchr(p + 1, '<', end - p - 1);
+				p = next_lt ? next_lt : end;
 			}
 			break;
 		case sgml_content:
@@ -3086,8 +3132,11 @@ auto html_process_input(struct rspamd_task *task,
 			state = html_text_content;
 
 			if (cur_tag) {
-				if (cur_tag->id == Tag_STYLE || cur_tag->id == Tag_NOSCRIPT || cur_tag->id == Tag_SCRIPT) {
+				if (html_is_raw_text_tag(cur_tag->id)) {
 					state = tag_raw_text;
+					raw_text_tag_id = cur_tag->id;
+					/* Browsers ignore `/>` here: the content runs to the end tag */
+					cur_tag->flags &= ~FL_CLOSED;
 				}
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
@@ -3229,12 +3278,52 @@ auto html_process_input(struct rspamd_task *task,
 		}
 	}
 
-	if (cur_tag && !(cur_tag->flags & FL_CLOSED) && cur_tag != &cur_closing_tag) {
+	/*
+	 * The input can end inside markup. A comment or a declaration still
+	 * ends there and a partial opening tag is kept, so they become part of
+	 * the tree; a partial closing tag closes nothing. The open element must
+	 * then be closed at the end, or the text after its last child is lost
+	 */
+	switch (state) {
+	case sgml_tag:
+	case sgml_content:
+	case comment_tag:
+	case comment_content:
+	case xml_tag:
+	case xml_tag_end:
+	case tag_content:
+		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+			cur_tag->content_offset = end - start;
+			process_opening_tag();
+		}
+		break;
+	case tag_end_opening:
+		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+			process_opening_tag();
+		}
+		break;
+	default:
+		break;
+	}
+
+	goffset content_end = end - start;
+
+	if (cur_tag == &cur_closing_tag) {
+		/* The partial closing tag is not text either */
+		content_end = c - start;
+		cur_tag = cur_closing_tag.parent;
+	}
+
+	while (cur_tag && (cur_tag->flags & FL_CLOSED)) {
+		cur_tag = cur_tag->parent;
+	}
+
+	if (cur_tag && cur_tag != &cur_closing_tag) {
 		cur_closing_tag.parent = cur_tag;
 		cur_closing_tag.id = cur_tag->id;
 		cur_tag = &cur_closing_tag;
 		html_check_balance(hc, balance, cur_tag,
-						   end - start, end - start);
+						   content_end, end - start);
 	}
 
 	/* Propagate styles */
@@ -3312,18 +3401,6 @@ auto html_process_input(struct rspamd_task *task,
 		return true;
 	},
 							html_content::traverse_type::PRE_ORDER);
-
-	/* Leftover before content */
-	switch (state) {
-	case tag_end_opening:
-		if (cur_tag != nullptr) {
-			process_opening_tag();
-		}
-		break;
-	default:
-		/* Do nothing */
-		break;
-	}
 
 	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
