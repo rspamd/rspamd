@@ -965,6 +965,15 @@ struct tag_content_parser_state {
 	}
 };
 
+/* Unknown tags get a negative hash of their name, so closing tags match */
+static inline auto
+html_unknown_tag_id(std::string_view name) -> tag_id_t
+{
+	auto nhash = static_cast<std::int32_t>(std::hash<std::string_view>{}(name));
+
+	return static_cast<tag_id_t>(nhash | G_MININT32);
+}
+
 static inline void
 html_parse_tag_content(rspamd_mempool_t *pool,
 					   struct html_content *hc,
@@ -1094,14 +1103,12 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 				if (tag_def == nullptr) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
-					/* Assign -hash to match closing tag if needed */
-					auto nhash = static_cast<std::int32_t>(std::hash<std::string>{}(parser_env.buf));
-					/* Always negative */
-					tag->id = static_cast<tag_id_t>(nhash | G_MININT32);
+					tag->id = html_unknown_tag_id(parser_env.buf);
 				}
 				else {
 					tag->id = tag_def->id;
-					tag->flags = tag_def->flags;
+					/* Keep the slash of `<svg/>` */
+					tag->flags = tag_def->flags | (tag->flags & FL_CLOSED);
 				}
 
 				parser_env.buf.clear();
@@ -2255,17 +2262,167 @@ html_tag_bounded_by_parent(const html_tag *tag) -> bool
 	return tag->id != Tag_TABLE && !(tag->flags & (CM_TABLE | CM_ROW));
 }
 
-/* Whether an open `<svg>` or `<math>` encloses the element */
+/* The innermost open element, the one that new markup goes into */
 static auto
-html_in_foreign_content(const html_tag *tag) -> bool
+html_current_node(html_tag *tag) -> html_tag *
 {
-	for (; tag != nullptr; tag = tag->parent) {
-		if ((tag->id == Tag_SVG || tag->id == Tag_MATH) && !(tag->flags & FL_CLOSED)) {
-			return true;
-		}
+	while (tag && (tag->flags & FL_CLOSED)) {
+		tag = tag->parent;
+	}
+
+	return tag;
+}
+
+static auto
+html_is_mathml_text_integration_point(const html_tag *tag) -> bool
+{
+	static const tag_id_t ids[] = {
+		html_unknown_tag_id("mi"),
+		html_unknown_tag_id("mo"),
+		html_unknown_tag_id("mn"),
+		html_unknown_tag_id("ms"),
+		html_unknown_tag_id("mtext"),
+	};
+
+	return (tag->flags & FL_MATHML) &&
+		   std::find(std::begin(ids), std::end(ids), tag->id) != std::end(ids);
+}
+
+static auto
+html_is_html_integration_point(const html_tag *tag) -> bool
+{
+	static const auto foreign_object_id = html_unknown_tag_id("foreignobject");
+	static const auto desc_id = html_unknown_tag_id("desc");
+	static const auto annotation_xml_id = html_unknown_tag_id("annotation-xml");
+
+	if (tag->flags & FL_SVG) {
+		return tag->id == foreign_object_id || tag->id == desc_id || tag->id == Tag_TITLE;
+	}
+
+	if ((tag->flags & FL_MATHML) && tag->id == annotation_xml_id) {
+		auto encoding = tag->find_component_by_name("encoding");
+
+		return encoding &&
+			   ((encoding->size() == sizeof("text/html") - 1 &&
+				 g_ascii_strncasecmp(encoding->data(), "text/html", encoding->size()) == 0) ||
+				(encoding->size() == sizeof("application/xhtml+xml") - 1 &&
+				 g_ascii_strncasecmp(encoding->data(), "application/xhtml+xml", encoding->size()) == 0));
 	}
 
 	return false;
+}
+
+/*
+ * HTML elements that browsers do not nest in SVG/MathML: they close the
+ * SVG/MathML elements and go into the HTML element around them
+ */
+static auto
+html_is_breakout_tag(const html_tag *tag) -> bool
+{
+	switch (tag->id) {
+	case Tag_B:
+	case Tag_BIG:
+	case Tag_BLOCKQUOTE:
+	case Tag_BODY:
+	case Tag_BR:
+	case Tag_CENTER:
+	case Tag_CODE:
+	case Tag_DD:
+	case Tag_DIV:
+	case Tag_DL:
+	case Tag_DT:
+	case Tag_EM:
+	case Tag_EMBED:
+	case Tag_H1:
+	case Tag_H2:
+	case Tag_H3:
+	case Tag_H4:
+	case Tag_H5:
+	case Tag_H6:
+	case Tag_HEAD:
+	case Tag_HR:
+	case Tag_I:
+	case Tag_IMG:
+	case Tag_LI:
+	case Tag_LISTING:
+	case Tag_MENU:
+	case Tag_META:
+	case Tag_NOBR:
+	case Tag_OL:
+	case Tag_P:
+	case Tag_PRE:
+	case Tag_RUBY:
+	case Tag_S:
+	case Tag_SMALL:
+	case Tag_SPAN:
+	case Tag_STRONG:
+	case Tag_STRIKE:
+	case Tag_SUB:
+	case Tag_SUP:
+	case Tag_TABLE:
+	case Tag_TT:
+	case Tag_U:
+	case Tag_UL:
+	case Tag_VAR:
+		return true;
+	case Tag_FONT:
+		return tag->find_component_by_name("color") ||
+			   tag->find_component_by_name("face") ||
+			   tag->find_component_by_name("size");
+	default:
+		return false;
+	}
+}
+
+/*
+ * The namespace flags of a new element `tag` going into `node`: browsers
+ * build it as HTML under HTML elements and integration points, and as an
+ * element of the parent's namespace inside SVG/MathML otherwise
+ */
+static auto
+html_start_tag_namespace(const html_tag *node, const html_tag *tag) -> unsigned int
+{
+	static const auto annotation_xml_id = html_unknown_tag_id("annotation-xml");
+	static const auto mglyph_id = html_unknown_tag_id("mglyph");
+	static const auto malignmark_id = html_unknown_tag_id("malignmark");
+	auto parent_ns = node ? node->flags & FL_FOREIGN : 0u;
+
+	if (parent_ns && !html_is_html_integration_point(node) &&
+		!(html_is_mathml_text_integration_point(node) &&
+		  tag->id != mglyph_id && tag->id != malignmark_id) &&
+		!((node->flags & FL_MATHML) && node->id == annotation_xml_id && tag->id == Tag_SVG)) {
+		return parent_ns;
+	}
+
+	if (tag->id == Tag_SVG) {
+		return FL_SVG;
+	}
+	if (tag->id == Tag_MATH) {
+		return FL_MATHML;
+	}
+
+	return 0;
+}
+
+/*
+ * Close the SVG/MathML elements from `node` up to the nearest HTML element
+ * or integration point, as browsers do for HTML-only tags, at `offset`.
+ * Returns the element that stays current
+ */
+static auto
+html_pop_foreign(html_tag *node, goffset offset) -> html_tag *
+{
+	for (node = html_current_node(node);
+		 node && (node->flags & FL_FOREIGN) &&
+		 !html_is_html_integration_point(node) &&
+		 !html_is_mathml_text_integration_point(node);
+		 node = html_current_node(node->parent)) {
+		node->flags |= FL_CLOSED;
+		node->closing.start = std::max(offset, (goffset) node->content_offset);
+		node->closing.end = node->closing.start;
+	}
+
+	return node;
 }
 
 /*
@@ -2919,15 +3076,17 @@ auto html_process_input(struct rspamd_task *task,
 				 * Browsers open a CDATA section only in SVG/MathML content and
 				 * take any other `<![` as a bogus comment up to the first `>`,
 				 * so `<![if !mso]>` still works. We end the CDATA section at
-				 * the first `>` even in SVG: the tree does not follow SVG
-				 * closely enough (`</p>` pops `<svg>` in browsers), and
-				 * waiting for `]]>` would hide the rest of the part whenever
-				 * we are wrong
+				 * the first `>` even in SVG: we only approximate how browsers
+				 * build SVG, and waiting for `]]>` would hide the rest of the
+				 * part whenever we are wrong
 				 */
 				if (end - p >= (goffset) sizeof("[CDATA[") - 1 &&
-					memcmp(p, "[CDATA[", sizeof("[CDATA[") - 1) == 0 &&
-					!html_in_foreign_content(parent_tag)) {
-					hc->flags |= RSPAMD_HTML_FLAG_CDATA_IN_HTML | RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					memcmp(p, "[CDATA[", sizeof("[CDATA[") - 1) == 0) {
+					auto *node = html_current_node(parent_tag);
+
+					if (!node || !(node->flags & FL_FOREIGN)) {
+						hc->flags |= RSPAMD_HTML_FLAG_CDATA_IN_HTML | RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					}
 				}
 				state = sgml_content;
 				break;
@@ -3132,11 +3291,26 @@ auto html_process_input(struct rspamd_task *task,
 			state = html_text_content;
 
 			if (cur_tag) {
-				if (html_is_raw_text_tag(cur_tag->id)) {
+				if (!(cur_tag->flags & FL_XML)) {
+					auto *node = html_current_node(parent_tag);
+					auto ns = html_start_tag_namespace(node, cur_tag);
+
+					if (ns != 0 && html_is_breakout_tag(cur_tag)) {
+						parent_tag = html_pop_foreign(node, cur_tag->tag_start);
+						ns = html_start_tag_namespace(parent_tag, cur_tag);
+					}
+
+					cur_tag->flags |= ns;
+
+					/* Browsers ignore `/>` on HTML elements except the void ones */
+					if (!(cur_tag->flags & (CM_EMPTY | FL_FOREIGN))) {
+						cur_tag->flags &= ~FL_CLOSED;
+					}
+				}
+
+				if (html_is_raw_text_tag(cur_tag->id) && !(cur_tag->flags & FL_FOREIGN)) {
 					state = tag_raw_text;
 					raw_text_tag_id = cur_tag->id;
-					/* Browsers ignore `/>` here: the content runs to the end tag */
-					cur_tag->flags &= ~FL_CLOSED;
 				}
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
@@ -3191,6 +3365,15 @@ auto html_process_input(struct rspamd_task *task,
 				else if (html_document_state == html_document_state::head) {
 					if (cur_tag->id == Tag_HEAD) {
 						html_document_state = html_document_state::body;
+					}
+				}
+
+				if (cur_tag->id == Tag_P || cur_tag->id == Tag_BR) {
+					auto *node = html_current_node(cur_tag->parent);
+
+					if (node && (node->flags & FL_FOREIGN)) {
+						/* Like the breakout tags, these leave SVG/MathML */
+						cur_tag->parent = html_pop_foreign(node, c - start);
 					}
 				}
 

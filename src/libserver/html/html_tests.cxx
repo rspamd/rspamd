@@ -326,11 +326,12 @@ TEST_SUITE("html")
 		rspamd_mempool_delete(pool);
 	}
 
-	TEST_CASE("html markup declarations")
+	TEST_CASE("html parsing as in browsers")
 	{
 		/*
-		 * Declarations, comments and raw text must end where browsers end
-		 * them, or the markup after them is hidden from the scan (#6321)
+		 * Declarations, comments, raw text and elements must end where
+		 * browsers end them, or what follows is hidden from the scan or
+		 * taken as visible when it is not (#6321)
 		 */
 		struct decl_case {
 			std::string input;
@@ -406,6 +407,53 @@ TEST_SUITE("html")
 			{"<plaintext><a href=\"http://example.com/\">click</a>", {}, "<a href=\"http://example.com/\">click</a>\n", false},
 			/* Mail clients run no scripts, so noscript content is markup */
 			{"<noscript><a href=\"http://example.com/\">click</a></noscript>", {"http://example.com/"}, "click\n", false},
+			/* `/>` is ignored on HTML elements other than the void ones */
+			{"<span style=\"display:none\"/>poison</span>visible", {}, "visible", false},
+			{"<div style=\"display:none\" />poison", {}, "", false},
+			{"<a href=\"http://example.com/\"/>click", {"http://example.com/"}, "click", false},
+			{"a<br/>b<img alt=c/>", {}, "a\nb c", false},
+			{"<object data=\"x\"/>fallback", {}, "fallback", false},
+			/* ...but not on SVG/MathML elements */
+			{"<svg/><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->",
+			 false},
+			{"<svg><rect style=\"display:none\"/>text</svg>", {}, "text", false},
+			/* SVG elements named like raw text ones hold markup */
+			{"<svg><title></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<svg><style/></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<svg><textarea><!--</textarea>--></svg><a href=\"http://example.com/\">click</a>",
+			 {"http://example.com/"},
+			 "click",
+			 false},
+			/* HTML-only tags and `</p>` leave SVG, raw text is back after them */
+			{"<svg><p><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->\n",
+			 false},
+			{"<svg></p><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->",
+			 false},
+			{"<svg><font color=\"red\"><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->",
+			 false},
+			{"<svg><font><textarea><!--</textarea><a href=\"http://example.com/\">click</a>--></svg>", {}, "", false},
+			/* Integration points hold HTML again */
+			{"<svg><foreignObject><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->",
+			 false},
+			{"<math><mi><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
+			 {"http://example.com/"},
+			 "<!--click-->",
+			 false},
+			/* desc is one in SVG only */
+			{"<math><desc><textarea><!--</textarea><a href=\"http://example.com/\">click</a>--></math>", {}, "", false},
+			/* CDATA is legit in SVG/MathML elements, integration points included */
+			{"<svg><foreignObject><![CDATA[a]]></svg>", {}, "", false},
+			{"<svg><p><![CDATA[a]]>", {}, "", true},
 		};
 
 		rspamd_url_init(NULL);

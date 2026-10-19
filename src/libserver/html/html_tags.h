@@ -161,6 +161,7 @@ typedef enum {
 	Tag_WBR,        /**< WBR */
 	Tag_MATH,       /**< MATH */
 	Tag_NOEMBED,    /**< NOEMBED */
+	Tag_NOBR,       /**< NOBR */
 
 	Tag_MAX,
 

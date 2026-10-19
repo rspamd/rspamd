@@ -99,7 +99,7 @@ static const auto html_tag_defs_array = rspamd::array_of(
 	TAG_DEF(Tag_META, "meta", (CM_HEAD | CM_INLINE | CM_EMPTY)),
 	TAG_DEF(Tag_NOFRAMES, "noframes", (CM_BLOCK)),
 	TAG_DEF(Tag_NOSCRIPT, "noscript", (CM_BLOCK | CM_INLINE | CM_RAW)),
-	TAG_DEF(Tag_OBJECT, "object", (CM_HEAD | CM_IMG | CM_INLINE | CM_PARAM)),
+	TAG_DEF(Tag_OBJECT, "object", (CM_IMG | CM_INLINE | CM_PARAM)),
 	TAG_DEF(Tag_OL, "ol", (CM_BLOCK | FL_BLOCK)),
 	TAG_DEF(Tag_OPTGROUP, "optgroup", (CM_FIELD | CM_OPT)),
 	TAG_DEF(Tag_OPTION, "option", (CM_FIELD | CM_OPT)),
@@ -176,7 +176,8 @@ static const auto html_tag_defs_array = rspamd::array_of(
 	TAG_DEF(Tag_VIDEO, "video", (CM_INLINE | FL_HREF)),
 	TAG_DEF(Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)),
 	TAG_DEF(Tag_MATH, "math", (CM_INLINE)),
-	TAG_DEF(Tag_NOEMBED, "noembed", (CM_INLINE)));
+	TAG_DEF(Tag_NOEMBED, "noembed", (CM_INLINE)),
+	TAG_DEF(Tag_NOBR, "nobr", (CM_INLINE)));
 
 class html_tags_storage {
 	ankerl::unordered_dense::map<std::string_view, html_tag_def> tag_by_name;
