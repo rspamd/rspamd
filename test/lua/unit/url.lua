@@ -499,3 +499,48 @@ context("Query-embedded URL extraction", function()
         "schemaless www url at value start must be extracted")
   end)
 end)
+
+context("Quoted URL extraction", function()
+  local rspamd_task = require "rspamd_task"
+  local rspamd_util = require "rspamd_util"
+  local test_helper = require "rspamd_test_helper"
+
+  local cfg = rspamd_util.config_from_ucl(test_helper.default_config(),
+      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+
+  local function urls_of(body)
+    local msg = string.format(
+        "From: s@example.org\r\nTo: r@example.org\r\nSubject: t\r\n" ..
+        "MIME-Version: 1.0\r\nContent-Type: text/plain\r\n\r\n%s\r\n", body)
+    local res, task = rspamd_task.load_from_string(msg, cfg)
+    assert(res, "failed to load message")
+    assert(task:process_message(), "failed to process message")
+    local out = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      out[u:get_host()] = u:get_text()
+    end
+    return out
+  end
+
+  -- A url opened by a quote ends at the closing one: the quote is not part
+  -- of the path, and markup after it must not make the url invalid
+  local cases = {
+    { 'say "http://dq.example.com/x" now', 'dq.example.com', 'http://dq.example.com/x' },
+    { "say 'http://sq.example.com/x' now", 'sq.example.com', 'http://sq.example.com/x' },
+    { '<a href="http://tag.example.com/">click</a>', 'tag.example.com', 'http://tag.example.com/' },
+    { 'href="http://end.example.com/">', 'end.example.com', 'http://end.example.com/' },
+    { '"www.schemeless.com/path"', 'www.schemeless.com', 'http://www.schemeless.com/path' },
+    { 'see "www.dqschemeless.com" now', 'www.dqschemeless.com', 'http://www.dqschemeless.com' },
+    -- Either quote ends a url in text, as it is never a part of one
+    { 'http://bare.example.com/it"s', 'bare.example.com', 'http://bare.example.com/it' },
+    { "http://bare2.example.com/it's", 'bare2.example.com', 'http://bare2.example.com/it' },
+  }
+
+  for i, c in ipairs(cases) do
+    test("quoted url " .. i, function()
+      local urls = urls_of(c[1])
+      assert_equal(c[3], urls[c[2]],
+          string.format("in %s: expected %s, got %s", c[1], c[3], tostring(urls[c[2]])))
+    end)
+  end
+end)
