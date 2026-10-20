@@ -359,9 +359,15 @@ TEST_SUITE("html")
 			 {"http://example.com/"},
 			 "Hello\nclick",
 			 false},
-			/* CDATA in SVG/MathML is legit, but still ends at the first `>` */
-			{"<svg><![CDATA[a]]></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
-			{"<math><![CDATA[a]]></math><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			/* CDATA in SVG/MathML is legit text up to `]]>`, markup included */
+			{"<svg><![CDATA[a]]></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "aclick", false},
+			{"<math><![CDATA[a]]></math><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "aclick", false},
+			{"<svg><![CDATA[x><p><style>]]></svg><a href=\"http://example.com/\">click</a>",
+			 {"http://example.com/"},
+			 "x><p><style>click",
+			 false},
+			{"<svg><text><![CDATA[a]]]>b</text></svg>", {}, "a]b", false},
+			{"<svg><![CDATA[<a href=\"http://example.com/\">x", {}, "<a href=\"http://example.com/\">x", false},
 			{"<svg></svg><![CDATA[a]]><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", true},
 			/* Comments */
 			{"<!-- x --!><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
@@ -411,7 +417,9 @@ TEST_SUITE("html")
 			{"<span style=\"display:none\"/>poison</span>visible", {}, "visible", false},
 			{"<div style=\"display:none\" />poison", {}, "", false},
 			{"<a href=\"http://example.com/\"/>click", {"http://example.com/"}, "click", false},
-			{"a<br/>b<img alt=c/>", {}, "a\nb c", false},
+			{"a<br/>b<img alt=\"c\"/>", {}, "a\nb c", false},
+			/* ...and stays in an unquoted value */
+			{"<img alt=c/>", {}, "c/", false},
 			{"<object data=\"x\"/>fallback", {}, "fallback", false},
 			/* ...but not on SVG/MathML elements */
 			{"<svg/><textarea><!--</textarea><a href=\"http://example.com/\">click</a>-->",
@@ -419,6 +427,12 @@ TEST_SUITE("html")
 			 "<!--click-->",
 			 false},
 			{"<svg><rect style=\"display:none\"/>text</svg>", {}, "text", false},
+			/* Only `/` right before `>` closes */
+			{"<svg/x><style></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<svg/ ><style></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<svg width=10/><style></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
+			{"<a href=http://example.com/>click</a>", {"http://example.com/"}, "click", false},
+			{"<a href=\"http://example.com/\"/title=x>click</a>", {"http://example.com/"}, "click", false},
 			/* SVG elements named like raw text ones hold markup */
 			{"<svg><title></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
 			{"<svg><style/></svg><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", false},
@@ -452,7 +466,7 @@ TEST_SUITE("html")
 			/* desc is one in SVG only */
 			{"<math><desc><textarea><!--</textarea><a href=\"http://example.com/\">click</a>--></math>", {}, "", false},
 			/* CDATA is legit in SVG/MathML elements, integration points included */
-			{"<svg><foreignObject><![CDATA[a]]></svg>", {}, "", false},
+			{"<svg><foreignObject><![CDATA[a]]></svg>", {}, "a", false},
 			{"<svg><p><![CDATA[a]]>", {}, "", true},
 		};
 

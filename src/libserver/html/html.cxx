@@ -946,7 +946,6 @@ enum tag_parser_state {
 	ignore_bad_tag,
 	tag_end,
 	slash_after_value,
-	slash_in_unquoted_value,
 };
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
@@ -1087,10 +1086,6 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_name:
 		if ((g_ascii_isspace(*in) || *in == '>' || *in == '/')) {
-			if (*in == '/') {
-				tag->flags |= FL_CLOSED;
-			}
-
 			if (parser_env.buf.empty()) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				tag->id = N_TAGS;
@@ -1107,13 +1102,12 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				}
 				else {
 					tag->id = tag_def->id;
-					/* Keep the slash of `<svg/>` */
-					tag->flags = tag_def->flags | (tag->flags & FL_CLOSED);
+					tag->flags = tag_def->flags;
 				}
 
 				parser_env.buf.clear();
 
-				state = spaces_after_param;
+				state = *in == '/' ? slash_after_value : spaces_after_param;
 			}
 		}
 		else {
@@ -1288,10 +1282,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 
 	case parse_value:
-		if (*in == '/') {
-			state = slash_in_unquoted_value;
-		}
-		else if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
+		/* `/` is a part of an unquoted value, `<a href=/x/>` is not closed */
+		if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
 			store_component_value();
 			state = spaces_after_param;
 		}
@@ -1311,7 +1303,6 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		else if (*in == '/') {
 			store_component_value();
-			store_value_character(true);
 			state = slash_after_value;
 		}
 		else {
@@ -1340,27 +1331,18 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		break;
 	case slash_after_value:
+		/* Only `/` right before `>` closes a tag: `<svg/ >` or `<svg/x>` do not */
 		if (*in == '>') {
 			tag->flags |= FL_CLOSED;
 			state = tag_end;
 		}
-		else if (!g_ascii_isspace(*in)) {
+		else if (g_ascii_isspace(*in)) {
+			state = spaces_after_param;
+		}
+		else if (*in != '/') {
 			tag->flags |= FL_BROKEN;
+			store_value_character(true);
 			state = parse_attr_name;
-		}
-		break;
-	case slash_in_unquoted_value:
-		if (*in == '>') {
-			/* That slash was in fact closing tag slash, woohoo */
-			tag->flags |= FL_CLOSED;
-			state = tag_end;
-			store_component_value();
-		}
-		else {
-			/* Welcome to the world of html, revert state and save missing / */
-			parser_env.buf.push_back('/');
-			store_value_character(false);
-			state = parse_value;
 		}
 		break;
 	case ignore_bad_tag:
@@ -2496,6 +2478,8 @@ auto html_process_input(struct rspamd_task *task,
 	unsigned int ebrace = 0;
 	/* Tag whose end tag finishes the current raw text, Tag_UNKNOWN for none */
 	int raw_text_tag_id = Tag_UNKNOWN;
+	/* The declaration being parsed opens a CDATA section */
+	auto cdata_section = false;
 	struct rspamd_url *url = nullptr;
 	int href_offset = -1;
 	auto overflow_input = false;
@@ -2528,6 +2512,7 @@ auto html_process_input(struct rspamd_task *task,
 		html_text_content,
 		xml_tag_end,
 		tag_raw_text,
+		cdata_content,
 		tags_limit_overflow,
 	} state = parse_start;
 
@@ -3075,18 +3060,24 @@ auto html_process_input(struct rspamd_task *task,
 				/*
 				 * Browsers open a CDATA section only in SVG/MathML content and
 				 * take any other `<![` as a bogus comment up to the first `>`,
-				 * so `<![if !mso]>` still works. We end the CDATA section at
-				 * the first `>` even in SVG: we only approximate how browsers
-				 * build SVG, and waiting for `]]>` would hide the rest of the
-				 * part whenever we are wrong
+				 * so `<![if !mso]>` still works. Inside the section, markup is
+				 * text up to `]]>`: ending it earlier would parse that text,
+				 * where `<p><style>` leaves SVG and hides what follows
 				 */
 				if (end - p >= (goffset) sizeof("[CDATA[") - 1 &&
 					memcmp(p, "[CDATA[", sizeof("[CDATA[") - 1) == 0) {
 					auto *node = html_current_node(parent_tag);
 
-					if (!node || !(node->flags & FL_FOREIGN)) {
-						hc->flags |= RSPAMD_HTML_FLAG_CDATA_IN_HTML | RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					if (node && (node->flags & FL_FOREIGN)) {
+						/* Skip the opener like a declaration, its content is text */
+						p += sizeof("[CDATA[") - 2;
+						cur_tag->content_offset = p - start + 1;
+						cdata_section = true;
+						state = tag_end_opening;
+						break;
 					}
+
+					hc->flags |= RSPAMD_HTML_FLAG_CDATA_IN_HTML | RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				}
 				state = sgml_content;
 				break;
@@ -3208,6 +3199,30 @@ auto html_process_input(struct rspamd_task *task,
 				p = next_lt ? next_lt : end;
 			}
 			break;
+		case cdata_content: {
+			auto cdata_len = rspamd_substring_search(p, end - p, "]]>", sizeof("]]>") - 1);
+
+			if (cdata_len == -1) {
+				/* Browsers take the rest as text */
+				p = end;
+				break;
+			}
+
+			/* Skip `]]>` like a declaration */
+			p += cdata_len;
+			c = p;
+			cur_tag = new_tag(FL_XML | FL_CLOSED);
+
+			if (cur_tag) {
+				p += sizeof("]]>") - 2;
+				cur_tag->content_offset = p - start + 1;
+				state = tag_end_opening;
+			}
+			else {
+				state = tags_limit_overflow;
+			}
+			break;
+		}
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
@@ -3311,6 +3326,10 @@ auto html_process_input(struct rspamd_task *task,
 				if (html_is_raw_text_tag(cur_tag->id) && !(cur_tag->flags & FL_FOREIGN)) {
 					state = tag_raw_text;
 					raw_text_tag_id = cur_tag->id;
+				}
+				else if (cdata_section) {
+					state = cdata_content;
+					cdata_section = false;
 				}
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
