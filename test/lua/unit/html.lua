@@ -32,13 +32,25 @@ context("HTML processing", function()
     <script src="script.js"></script>
     <style><!--
 - -a -a -a -- --- -
-  --></head>
+  --></style></head>
   <body>
     <!-- page content -->
     Hello, world!
   </body>
 </html>
       ]], 'Hello, world!' },
+    -- Only its own end tag ends a style, so browsers show nothing here
+    { [[
+<html>
+  <head>
+    <style><!--
+- -a -a -a -- --- -
+  --></head>
+  <body>
+    Hello, world!
+  </body>
+</html>
+      ]], '' },
     { [[
 <html lang="en">
   <head>

@@ -566,7 +566,8 @@ is_url_start(char c)
 		c == '{' ||
 		c == '[' ||
 		c == '<' ||
-		c == '\'') {
+		c == '\'' ||
+		c == '"') {
 		return TRUE;
 	}
 
@@ -580,7 +581,8 @@ is_url_end(char c)
 		c == '}' ||
 		c == ']' ||
 		c == '>' ||
-		c == '\'') {
+		c == '\'' ||
+		c == '"') {
 		return TRUE;
 	}
 
@@ -3038,6 +3040,15 @@ url_web_end(struct url_callback_data *cb,
 	if (match->newline_pos && match->st != '<') {
 		/* We should also limit our match end to the newline */
 		len = MIN(len, match->newline_pos - pos);
+	}
+
+	if (match->st == '"' || match->st == '\'') {
+		/* A quoted url ends at the closing quote, as in `href="..."` */
+		const char *quote = memchr(pos, match->st, len);
+
+		if (quote != NULL) {
+			len = quote - pos;
+		}
 	}
 
 	if (rspamd_web_parse(NULL, pos, len, &last,

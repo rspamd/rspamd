@@ -946,7 +946,6 @@ enum tag_parser_state {
 	ignore_bad_tag,
 	tag_end,
 	slash_after_value,
-	slash_in_unquoted_value,
 };
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
@@ -964,6 +963,15 @@ struct tag_content_parser_state {
 		value_start = nullptr;
 	}
 };
+
+/* Unknown tags get a negative hash of their name, so closing tags match */
+static inline auto
+html_unknown_tag_id(std::string_view name) -> tag_id_t
+{
+	auto nhash = static_cast<std::int32_t>(std::hash<std::string_view>{}(name));
+
+	return static_cast<tag_id_t>(nhash | G_MININT32);
+}
 
 static inline void
 html_parse_tag_content(rspamd_mempool_t *pool,
@@ -1078,10 +1086,6 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_name:
 		if ((g_ascii_isspace(*in) || *in == '>' || *in == '/')) {
-			if (*in == '/') {
-				tag->flags |= FL_CLOSED;
-			}
-
 			if (parser_env.buf.empty()) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				tag->id = N_TAGS;
@@ -1094,10 +1098,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 				if (tag_def == nullptr) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
-					/* Assign -hash to match closing tag if needed */
-					auto nhash = static_cast<std::int32_t>(std::hash<std::string>{}(parser_env.buf));
-					/* Always negative */
-					tag->id = static_cast<tag_id_t>(nhash | G_MININT32);
+					tag->id = html_unknown_tag_id(parser_env.buf);
 				}
 				else {
 					tag->id = tag_def->id;
@@ -1106,7 +1107,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 				parser_env.buf.clear();
 
-				state = spaces_after_param;
+				state = *in == '/' ? slash_after_value : spaces_after_param;
 			}
 		}
 		else {
@@ -1281,10 +1282,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 
 	case parse_value:
-		if (*in == '/') {
-			state = slash_in_unquoted_value;
-		}
-		else if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
+		/* `/` is a part of an unquoted value, `<a href=/x/>` is not closed */
+		if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
 			store_component_value();
 			state = spaces_after_param;
 		}
@@ -1304,7 +1303,6 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		else if (*in == '/') {
 			store_component_value();
-			store_value_character(true);
 			state = slash_after_value;
 		}
 		else {
@@ -1333,27 +1331,18 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		break;
 	case slash_after_value:
+		/* Only `/` right before `>` closes a tag: `<svg/ >` or `<svg/x>` do not */
 		if (*in == '>') {
 			tag->flags |= FL_CLOSED;
 			state = tag_end;
 		}
-		else if (!g_ascii_isspace(*in)) {
+		else if (g_ascii_isspace(*in)) {
+			state = spaces_after_param;
+		}
+		else if (*in != '/') {
 			tag->flags |= FL_BROKEN;
+			store_value_character(true);
 			state = parse_attr_name;
-		}
-		break;
-	case slash_in_unquoted_value:
-		if (*in == '>') {
-			/* That slash was in fact closing tag slash, woohoo */
-			tag->flags |= FL_CLOSED;
-			state = tag_end;
-			store_component_value();
-		}
-		else {
-			/* Welcome to the world of html, revert state and save missing / */
-			parser_env.buf.push_back('/');
-			store_value_character(false);
-			state = parse_value;
 		}
 		break;
 	case ignore_bad_tag:
@@ -1872,7 +1861,8 @@ html_append_parsed(struct html_content *hc,
 				   std::string_view data,
 				   bool transparent,
 				   std::size_t input_len,
-				   std::string &dest) -> std::size_t
+				   std::string &dest,
+				   bool literal = false) -> std::size_t
 {
 	auto cur_offset = dest.size();
 
@@ -1915,10 +1905,12 @@ html_append_parsed(struct html_content *hc,
 		}
 	}
 
-	auto nlen = decode_html_entitles_inplace(dest.data() + cur_offset,
-											 dest.size() - cur_offset, true);
+	auto nlen = dest.size() - cur_offset;
 
-	dest.resize(nlen + cur_offset);
+	if (!literal) {
+		nlen = decode_html_entitles_inplace(dest.data() + cur_offset, nlen, true);
+		dest.resize(nlen + cur_offset);
+	}
 
 	if (transparent) {
 		/* Replace all visible characters with spaces */
@@ -2130,7 +2122,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 				auto &dest = frame.is_visible ? hc->parsed : hc->invisible;
 				html_append_parsed(hc,
 								   {start + frame.cur_offset, std::size_t(final_part_len)},
-								   frame.is_transparent, len, dest);
+								   frame.is_transparent, len, dest,
+								   (cur->flags & FL_LITERAL_TEXT) != 0);
 			}
 		}
 
@@ -2212,7 +2205,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 				auto &dest = frame.is_visible ? hc->parsed : hc->invisible;
 				html_append_parsed(hc,
 								   {start + frame.cur_offset, std::size_t(initial_part_len)},
-								   frame.is_transparent, len, dest);
+								   frame.is_transparent, len, dest,
+								   (frame.tag->flags & FL_LITERAL_TEXT) != 0);
 			}
 
 			scan_visible_content(frame);
@@ -2255,6 +2249,226 @@ html_tag_bounded_by_parent(const html_tag *tag) -> bool
 	return tag->id != Tag_TABLE && !(tag->flags & (CM_TABLE | CM_ROW));
 }
 
+/* The innermost open element, the one that new markup goes into */
+static auto
+html_current_node(html_tag *tag) -> html_tag *
+{
+	while (tag && (tag->flags & FL_CLOSED)) {
+		tag = tag->parent;
+	}
+
+	return tag;
+}
+
+static auto
+html_is_mathml_text_integration_point(const html_tag *tag) -> bool
+{
+	static const tag_id_t ids[] = {
+		html_unknown_tag_id("mi"),
+		html_unknown_tag_id("mo"),
+		html_unknown_tag_id("mn"),
+		html_unknown_tag_id("ms"),
+		html_unknown_tag_id("mtext"),
+	};
+
+	return (tag->flags & FL_MATHML) &&
+		   std::find(std::begin(ids), std::end(ids), tag->id) != std::end(ids);
+}
+
+static auto
+html_is_html_integration_point(const html_tag *tag) -> bool
+{
+	static const auto foreign_object_id = html_unknown_tag_id("foreignobject");
+	static const auto desc_id = html_unknown_tag_id("desc");
+	static const auto annotation_xml_id = html_unknown_tag_id("annotation-xml");
+
+	if (tag->flags & FL_SVG) {
+		return tag->id == foreign_object_id || tag->id == desc_id || tag->id == Tag_TITLE;
+	}
+
+	if ((tag->flags & FL_MATHML) && tag->id == annotation_xml_id) {
+		auto encoding = tag->find_component_by_name("encoding");
+
+		return encoding &&
+			   ((encoding->size() == sizeof("text/html") - 1 &&
+				 g_ascii_strncasecmp(encoding->data(), "text/html", encoding->size()) == 0) ||
+				(encoding->size() == sizeof("application/xhtml+xml") - 1 &&
+				 g_ascii_strncasecmp(encoding->data(), "application/xhtml+xml", encoding->size()) == 0));
+	}
+
+	return false;
+}
+
+/*
+ * HTML elements that browsers do not nest in SVG/MathML: they close the
+ * SVG/MathML elements and go into the HTML element around them
+ */
+static auto
+html_is_breakout_tag(const html_tag *tag) -> bool
+{
+	switch (tag->id) {
+	case Tag_B:
+	case Tag_BIG:
+	case Tag_BLOCKQUOTE:
+	case Tag_BODY:
+	case Tag_BR:
+	case Tag_CENTER:
+	case Tag_CODE:
+	case Tag_DD:
+	case Tag_DIV:
+	case Tag_DL:
+	case Tag_DT:
+	case Tag_EM:
+	case Tag_EMBED:
+	case Tag_H1:
+	case Tag_H2:
+	case Tag_H3:
+	case Tag_H4:
+	case Tag_H5:
+	case Tag_H6:
+	case Tag_HEAD:
+	case Tag_HR:
+	case Tag_I:
+	case Tag_IMG:
+	case Tag_LI:
+	case Tag_LISTING:
+	case Tag_MENU:
+	case Tag_META:
+	case Tag_NOBR:
+	case Tag_OL:
+	case Tag_P:
+	case Tag_PRE:
+	case Tag_RUBY:
+	case Tag_S:
+	case Tag_SMALL:
+	case Tag_SPAN:
+	case Tag_STRONG:
+	case Tag_STRIKE:
+	case Tag_SUB:
+	case Tag_SUP:
+	case Tag_TABLE:
+	case Tag_TT:
+	case Tag_U:
+	case Tag_UL:
+	case Tag_VAR:
+		return true;
+	case Tag_FONT:
+		return tag->find_component_by_name("color") ||
+			   tag->find_component_by_name("face") ||
+			   tag->find_component_by_name("size");
+	default:
+		return false;
+	}
+}
+
+/*
+ * The namespace flags of a new element `tag` going into `node`: browsers
+ * build it as HTML under HTML elements and integration points, and as an
+ * element of the parent's namespace inside SVG/MathML otherwise
+ */
+static auto
+html_start_tag_namespace(const html_tag *node, const html_tag *tag) -> unsigned int
+{
+	static const auto annotation_xml_id = html_unknown_tag_id("annotation-xml");
+	static const auto mglyph_id = html_unknown_tag_id("mglyph");
+	static const auto malignmark_id = html_unknown_tag_id("malignmark");
+	auto parent_ns = node ? node->flags & FL_FOREIGN : 0u;
+
+	if (parent_ns && !html_is_html_integration_point(node) &&
+		!(html_is_mathml_text_integration_point(node) &&
+		  tag->id != mglyph_id && tag->id != malignmark_id) &&
+		!((node->flags & FL_MATHML) && node->id == annotation_xml_id && tag->id == Tag_SVG)) {
+		return parent_ns;
+	}
+
+	if (tag->id == Tag_SVG) {
+		return FL_SVG;
+	}
+	if (tag->id == Tag_MATH) {
+		return FL_MATHML;
+	}
+
+	return 0;
+}
+
+/*
+ * Close the SVG/MathML elements from `node` up to the nearest HTML element
+ * or integration point, as browsers do for HTML-only tags, at `offset`.
+ * Returns the element that stays current
+ */
+static auto
+html_pop_foreign(html_tag *node, goffset offset) -> html_tag *
+{
+	for (node = html_current_node(node);
+		 node && (node->flags & FL_FOREIGN) &&
+		 !html_is_html_integration_point(node) &&
+		 !html_is_mathml_text_integration_point(node);
+		 node = html_current_node(node->parent)) {
+		node->flags |= FL_CLOSED;
+		node->closing.start = std::max(offset, (goffset) node->content_offset);
+		node->closing.end = node->closing.start;
+	}
+
+	return node;
+}
+
+/*
+ * Elements whose content browsers take as text up to their own end tag,
+ * so markup inside them, comments included, is not parsed. `<noscript>`
+ * is not one of them: mail clients run no scripts and render its content
+ */
+static inline auto
+html_is_raw_text_tag(int id) -> bool
+{
+	switch (id) {
+	case Tag_STYLE:
+	case Tag_SCRIPT:
+	case Tag_XMP:
+	case Tag_IFRAME:
+	case Tag_NOEMBED:
+	case Tag_NOFRAMES:
+	case Tag_TITLE:
+	case Tag_TEXTAREA:
+	case Tag_PLAINTEXT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/*
+ * Whether `in` starts with the end tag of a raw text element: `</` and its
+ * name in any case, followed by a character that ends a tag name
+ */
+static auto
+html_is_raw_text_end_tag(std::string_view in, int raw_tag_id) -> bool
+{
+	if (raw_tag_id == Tag_PLAINTEXT) {
+		/* Nothing ends plaintext */
+		return false;
+	}
+
+	auto name = html_tags_defs.name_by_id_safe(raw_tag_id);
+
+	if (in.size() <= name.size() + 2 || in[0] != '<' || in[1] != '/' ||
+		g_ascii_strncasecmp(in.data() + 2, name.data(), name.size()) != 0) {
+		return false;
+	}
+
+	switch (in[name.size() + 2]) {
+	case '\t':
+	case '\n':
+	case '\f':
+	case '\r':
+	case ' ':
+	case '/':
+	case '>':
+		return true;
+	default:
+		return false;
+	}
+}
+
 auto html_process_input(struct rspamd_task *task,
 						GByteArray *in,
 						GList **exceptions,
@@ -2266,7 +2480,11 @@ auto html_process_input(struct rspamd_task *task,
 	const char *p, *c, *end, *start;
 	unsigned char t;
 	auto closing = false;
-	unsigned int obrace = 0, ebrace = 0;
+	unsigned int ebrace = 0;
+	/* Tag whose end tag finishes the current raw text, Tag_UNKNOWN for none */
+	int raw_text_tag_id = Tag_UNKNOWN;
+	/* The declaration being parsed opens a CDATA section */
+	auto cdata_section = false;
 	struct rspamd_url *url = nullptr;
 	int href_offset = -1;
 	auto overflow_input = false;
@@ -2290,7 +2508,6 @@ auto html_process_input(struct rspamd_task *task,
 		tag_begin,
 		sgml_tag,
 		xml_tag,
-		compound_tag,
 		comment_tag,
 		comment_content,
 		sgml_content,
@@ -2300,7 +2517,7 @@ auto html_process_input(struct rspamd_task *task,
 		html_text_content,
 		xml_tag_end,
 		tag_raw_text,
-		tag_raw_text_less_than,
+		cdata_content,
 		tags_limit_overflow,
 	} state = parse_start;
 
@@ -2753,6 +2970,21 @@ auto html_process_input(struct rspamd_task *task,
 				p++;
 				break;
 			case '/':
+				if (p + 1 < end && !g_ascii_isalpha(p[1])) {
+					/*
+					 * `</` without a tag name: browsers drop `</>` and take
+					 * anything else as a bogus comment up to the first `>`
+					 */
+					cur_tag = new_tag(FL_XML | FL_CLOSED);
+					if (cur_tag) {
+						state = sgml_content;
+					}
+					else {
+						state = tags_limit_overflow;
+					}
+					p++;
+					break;
+				}
 				closing = TRUE;
 				/* We fill fake closing tag to fill it with the content parser */
 				cur_closing_tag.clear();
@@ -2830,10 +3062,30 @@ auto html_process_input(struct rspamd_task *task,
 		case sgml_tag:
 			switch (t) {
 			case '[':
-				state = compound_tag;
-				obrace = 1;
-				ebrace = 0;
-				p++;
+				/*
+				 * Browsers open a CDATA section only in SVG/MathML content and
+				 * take any other `<![` as a bogus comment up to the first `>`,
+				 * so `<![if !mso]>` still works. Inside the section, markup is
+				 * text up to `]]>`: ending it earlier would parse that text,
+				 * where `<p><style>` leaves SVG and hides what follows
+				 */
+				if (end - p >= (goffset) sizeof("[CDATA[") - 1 &&
+					memcmp(p, "[CDATA[", sizeof("[CDATA[") - 1) == 0) {
+					auto *node = html_current_node(parent_tag);
+
+					if (node && (node->flags & FL_FOREIGN)) {
+						/* An element holding the section as literal text */
+						cur_tag->flags = FL_LITERAL_TEXT;
+						p += sizeof("[CDATA[") - 2;
+						cur_tag->content_offset = p - start + 1;
+						cdata_section = true;
+						state = tag_end_opening;
+						break;
+					}
+
+					hc->flags |= RSPAMD_HTML_FLAG_CDATA_IN_HTML | RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				}
+				state = sgml_content;
 				break;
 			case '-':
 				cur_tag->flags |= FL_COMMENT;
@@ -2854,6 +3106,7 @@ auto html_process_input(struct rspamd_task *task,
 			else if (t == '>') {
 				/* Misformed xml tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				cur_tag->content_offset = p - start + 1;
 				state = tag_end_opening;
 				continue;
 			}
@@ -2873,25 +3126,11 @@ auto html_process_input(struct rspamd_task *task,
 			p++;
 			break;
 
-		case compound_tag:
-			if (t == '[') {
-				obrace++;
-			}
-			else if (t == ']') {
-				ebrace++;
-			}
-			else if (t == '>' && obrace == ebrace) {
-				state = tag_end_opening;
-				cur_tag->content_offset = p - start + 1;
-				continue;
-			}
-			p++;
-			break;
-
 		case comment_tag:
 			if (t != '-') {
+				/* `<!-` alone opens no comment, browsers skip it up to `>` */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				state = tag_end_opening;
+				state = sgml_content;
 			}
 			else {
 				p++;
@@ -2905,13 +3144,15 @@ auto html_process_input(struct rspamd_task *task,
 				 *  nor contain two consecutive U+002D HYPHEN-MINUS
 				 *  characters (--), nor end with a "-" (U+002D) character.
 				 */
-				if (p[0] == '-' && p + 1 < end && p[1] == '>') {
+				if (p + 1 < end && p[0] == '-' && p[1] == '>') {
 					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 					p++;
+					cur_tag->content_offset = p - start + 1;
 					state = tag_end_opening;
 				}
-				else if (*p == '>') {
+				else if (p < end && *p == '>') {
 					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					cur_tag->content_offset = p - start + 1;
 					state = tag_end_opening;
 				}
 				else {
@@ -2925,6 +3166,14 @@ auto html_process_input(struct rspamd_task *task,
 				ebrace++;
 			}
 			else if (t == '>' && ebrace >= 2) {
+				cur_tag->content_offset = p - start + 1;
+				state = tag_end_opening;
+				continue;
+			}
+			else if (t == '!' && ebrace >= 2 && p + 1 < end && p[1] == '>') {
+				/* `--!>` closes a comment as well */
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				p++;
 				cur_tag->content_offset = p - start + 1;
 				state = tag_end_opening;
 				continue;
@@ -2946,63 +3195,36 @@ auto html_process_input(struct rspamd_task *task,
 			break;
 
 		case tag_raw_text:
-			if (t == '<') {
-				c = p;
-				state = tag_raw_text_less_than;
-			}
-			p++;
-			break;
-		case tag_raw_text_less_than:
-			if (t == '/') {
-				/* Here are special things: we look for obrace and then ensure
-				 * that if there is any closing brace nearby
-				 * (we look maximum at 30 characters). We also need to ensure
-				 * that we have no special characters, such as punctuation marks and
-				 * so on.
-				 * Basically, we validate the input to be sane.
-				 * Since closing tags must not have attributes, these assumptions
-				 * seems to be reasonable enough for our toy parser.
-				 */
-				int cur_lookahead = 1;
-				int max_lookahead = MIN(end - p, 30);
-				bool valid_closing_tag = true;
-
-				if (p + 1 < end && !g_ascii_isalpha(p[1])) {
-					valid_closing_tag = false;
-				}
-				else {
-					while (cur_lookahead < max_lookahead) {
-						char tt = p[cur_lookahead];
-						if (tt == '>') {
-							break;
-						}
-						else if (tt < '\n' || tt == ',') {
-							valid_closing_tag = false;
-							break;
-						}
-						cur_lookahead++;
-					}
-
-					if (cur_lookahead == max_lookahead) {
-						valid_closing_tag = false;
-					}
-				}
-
-				if (valid_closing_tag) {
-					/* Shift back */
-					p = c;
-					state = tag_begin;
-				}
-				else {
-					p++;
-					state = tag_raw_text;
-				}
+			if (t == '<' &&
+				html_is_raw_text_end_tag({p, (std::size_t) (end - p)}, raw_text_tag_id)) {
+				raw_text_tag_id = Tag_UNKNOWN;
+				state = tag_begin;
 			}
 			else {
-				p++;
-				state = tag_raw_text;
+				auto *next_lt = (const char *) memchr(p + 1, '<', end - p - 1);
+				p = next_lt ? next_lt : end;
 			}
 			break;
+		case cdata_content: {
+			auto cdata_len = rspamd_substring_search(p, end - p, "]]>", sizeof("]]>") - 1);
+
+			if (cdata_len == -1) {
+				/* Browsers take the rest as text, the section is closed at the end */
+				p = end;
+				break;
+			}
+
+			/* cur_tag is the section, `]]>` closes it */
+			p += cdata_len;
+			cur_tag->flags |= FL_CLOSED;
+			cur_tag->closing.start = p - start;
+			p += sizeof("]]>") - 1;
+			cur_tag->closing.end = p - start;
+			cur_tag = cur_tag->parent;
+			c = p;
+			state = html_text_content;
+			break;
+		}
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
@@ -3086,8 +3308,35 @@ auto html_process_input(struct rspamd_task *task,
 			state = html_text_content;
 
 			if (cur_tag) {
-				if (cur_tag->id == Tag_STYLE || cur_tag->id == Tag_NOSCRIPT || cur_tag->id == Tag_SCRIPT) {
+				if (!(cur_tag->flags & FL_XML)) {
+					auto *node = html_current_node(parent_tag);
+					auto ns = html_start_tag_namespace(node, cur_tag);
+
+					if (ns != 0 && html_is_breakout_tag(cur_tag)) {
+						parent_tag = html_pop_foreign(node, cur_tag->tag_start);
+						ns = html_start_tag_namespace(parent_tag, cur_tag);
+					}
+
+					cur_tag->flags |= ns;
+
+					/* Browsers ignore `/>` on HTML elements except the void ones */
+					if (!(cur_tag->flags & (CM_EMPTY | FL_FOREIGN))) {
+						cur_tag->flags &= ~FL_CLOSED;
+					}
+				}
+
+				if (html_is_raw_text_tag(cur_tag->id) && !(cur_tag->flags & FL_FOREIGN)) {
 					state = tag_raw_text;
+					raw_text_tag_id = cur_tag->id;
+
+					/* Only title and textarea decode character references */
+					if (cur_tag->id != Tag_TITLE && cur_tag->id != Tag_TEXTAREA) {
+						cur_tag->flags |= FL_LITERAL_TEXT;
+					}
+				}
+				else if (cdata_section) {
+					state = cdata_content;
+					cdata_section = false;
 				}
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
@@ -3142,6 +3391,15 @@ auto html_process_input(struct rspamd_task *task,
 				else if (html_document_state == html_document_state::head) {
 					if (cur_tag->id == Tag_HEAD) {
 						html_document_state = html_document_state::body;
+					}
+				}
+
+				if (cur_tag->id == Tag_P || cur_tag->id == Tag_BR) {
+					auto *node = html_current_node(cur_tag->parent);
+
+					if (node && (node->flags & FL_FOREIGN)) {
+						/* Like the breakout tags, these leave SVG/MathML */
+						cur_tag->parent = html_pop_foreign(node, c - start);
 					}
 				}
 
@@ -3229,12 +3487,52 @@ auto html_process_input(struct rspamd_task *task,
 		}
 	}
 
-	if (cur_tag && !(cur_tag->flags & FL_CLOSED) && cur_tag != &cur_closing_tag) {
+	/*
+	 * The input can end inside markup. A comment or a declaration still
+	 * ends there and a partial opening tag is kept, so they become part of
+	 * the tree; a partial closing tag closes nothing. The open element must
+	 * then be closed at the end, or the text after its last child is lost
+	 */
+	switch (state) {
+	case sgml_tag:
+	case sgml_content:
+	case comment_tag:
+	case comment_content:
+	case xml_tag:
+	case xml_tag_end:
+	case tag_content:
+		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+			cur_tag->content_offset = end - start;
+			process_opening_tag();
+		}
+		break;
+	case tag_end_opening:
+		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+			process_opening_tag();
+		}
+		break;
+	default:
+		break;
+	}
+
+	goffset content_end = end - start;
+
+	if (cur_tag == &cur_closing_tag) {
+		/* The partial closing tag is not text either */
+		content_end = c - start;
+		cur_tag = cur_closing_tag.parent;
+	}
+
+	while (cur_tag && (cur_tag->flags & FL_CLOSED)) {
+		cur_tag = cur_tag->parent;
+	}
+
+	if (cur_tag && cur_tag != &cur_closing_tag) {
 		cur_closing_tag.parent = cur_tag;
 		cur_closing_tag.id = cur_tag->id;
 		cur_tag = &cur_closing_tag;
 		html_check_balance(hc, balance, cur_tag,
-						   end - start, end - start);
+						   content_end, end - start);
 	}
 
 	/* Propagate styles */
@@ -3312,18 +3610,6 @@ auto html_process_input(struct rspamd_task *task,
 		return true;
 	},
 							html_content::traverse_type::PRE_ORDER);
-
-	/* Leftover before content */
-	switch (state) {
-	case tag_end_opening:
-		if (cur_tag != nullptr) {
-			process_opening_tag();
-		}
-		break;
-	default:
-		/* Do nothing */
-		break;
-	}
 
 	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,

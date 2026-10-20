@@ -1282,6 +1282,12 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 #define FL_VIRTUAL (1 << (CM_USER_SHIFT + 7))
 /* Content offsets refer to html_content::invisible rather than ::parsed */
 #define FL_CONTENT_INVISIBLE (1 << (CM_USER_SHIFT + 8))
+/* Elements in the SVG and MathML namespaces (foreign content) */
+#define FL_SVG (1 << (CM_USER_SHIFT + 9))
+#define FL_MATHML (1 << (CM_USER_SHIFT + 10))
+#define FL_FOREIGN (FL_SVG | FL_MATHML)
+/* Content is text without character references (raw text, CDATA) */
+#define FL_LITERAL_TEXT (1 << (CM_USER_SHIFT + 11))
 
 using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
 
