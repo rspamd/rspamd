@@ -942,6 +942,7 @@ local function get_general_metadata(task, flatten, no_content)
   r.subject = task:get_subject() or 'unknown'
   r.action = task:get_metric_action()
   r.rspamd_server = HOSTNAME
+  r.unix_time = task:get_date({ format = 'connect', gmt = true })
 
   local s = task:get_metric_score()[1]
   r.score = flatten and string.format('%.2f', s) or s
