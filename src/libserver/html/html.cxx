@@ -1861,7 +1861,8 @@ html_append_parsed(struct html_content *hc,
 				   std::string_view data,
 				   bool transparent,
 				   std::size_t input_len,
-				   std::string &dest) -> std::size_t
+				   std::string &dest,
+				   bool literal = false) -> std::size_t
 {
 	auto cur_offset = dest.size();
 
@@ -1904,10 +1905,12 @@ html_append_parsed(struct html_content *hc,
 		}
 	}
 
-	auto nlen = decode_html_entitles_inplace(dest.data() + cur_offset,
-											 dest.size() - cur_offset, true);
+	auto nlen = dest.size() - cur_offset;
 
-	dest.resize(nlen + cur_offset);
+	if (!literal) {
+		nlen = decode_html_entitles_inplace(dest.data() + cur_offset, nlen, true);
+		dest.resize(nlen + cur_offset);
+	}
 
 	if (transparent) {
 		/* Replace all visible characters with spaces */
@@ -2119,7 +2122,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 				auto &dest = frame.is_visible ? hc->parsed : hc->invisible;
 				html_append_parsed(hc,
 								   {start + frame.cur_offset, std::size_t(final_part_len)},
-								   frame.is_transparent, len, dest);
+								   frame.is_transparent, len, dest,
+								   (cur->flags & FL_LITERAL_TEXT) != 0);
 			}
 		}
 
@@ -2201,7 +2205,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 				auto &dest = frame.is_visible ? hc->parsed : hc->invisible;
 				html_append_parsed(hc,
 								   {start + frame.cur_offset, std::size_t(initial_part_len)},
-								   frame.is_transparent, len, dest);
+								   frame.is_transparent, len, dest,
+								   (frame.tag->flags & FL_LITERAL_TEXT) != 0);
 			}
 
 			scan_visible_content(frame);
@@ -3069,7 +3074,8 @@ auto html_process_input(struct rspamd_task *task,
 					auto *node = html_current_node(parent_tag);
 
 					if (node && (node->flags & FL_FOREIGN)) {
-						/* Skip the opener like a declaration, its content is text */
+						/* An element holding the section as literal text */
+						cur_tag->flags = FL_LITERAL_TEXT;
 						p += sizeof("[CDATA[") - 2;
 						cur_tag->content_offset = p - start + 1;
 						cdata_section = true;
@@ -3203,24 +3209,20 @@ auto html_process_input(struct rspamd_task *task,
 			auto cdata_len = rspamd_substring_search(p, end - p, "]]>", sizeof("]]>") - 1);
 
 			if (cdata_len == -1) {
-				/* Browsers take the rest as text */
+				/* Browsers take the rest as text, the section is closed at the end */
 				p = end;
 				break;
 			}
 
-			/* Skip `]]>` like a declaration */
+			/* cur_tag is the section, `]]>` closes it */
 			p += cdata_len;
+			cur_tag->flags |= FL_CLOSED;
+			cur_tag->closing.start = p - start;
+			p += sizeof("]]>") - 1;
+			cur_tag->closing.end = p - start;
+			cur_tag = cur_tag->parent;
 			c = p;
-			cur_tag = new_tag(FL_XML | FL_CLOSED);
-
-			if (cur_tag) {
-				p += sizeof("]]>") - 2;
-				cur_tag->content_offset = p - start + 1;
-				state = tag_end_opening;
-			}
-			else {
-				state = tags_limit_overflow;
-			}
+			state = html_text_content;
 			break;
 		}
 		case sgml_content:
@@ -3326,6 +3328,11 @@ auto html_process_input(struct rspamd_task *task,
 				if (html_is_raw_text_tag(cur_tag->id) && !(cur_tag->flags & FL_FOREIGN)) {
 					state = tag_raw_text;
 					raw_text_tag_id = cur_tag->id;
+
+					/* Only title and textarea decode character references */
+					if (cur_tag->id != Tag_TITLE && cur_tag->id != Tag_TEXTAREA) {
+						cur_tag->flags |= FL_LITERAL_TEXT;
+					}
 				}
 				else if (cdata_section) {
 					state = cdata_content;

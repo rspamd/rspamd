@@ -367,6 +367,12 @@ TEST_SUITE("html")
 			 "x><p><style>click",
 			 false},
 			{"<svg><text><![CDATA[a]]]>b</text></svg>", {}, "a]b", false},
+			/* Character references are text in CDATA and raw text, title and textarea decode them */
+			{"<svg><![CDATA[a&amp;b]]>&amp;c</svg>", {}, "a&amp;b&c", false},
+			{"<svg><![CDATA[a&amp;b", {}, "a&amp;b", false},
+			{"<xmp>a&amp;b</xmp>&amp;c", {}, "a&amp;b\n&c", false},
+			{"<plaintext>a&amp;b", {}, "a&amp;b\n", false},
+			{"<textarea>a&amp;b</textarea>", {}, "a&b", false},
 			{"<svg><![CDATA[<a href=\"http://example.com/\">x", {}, "<a href=\"http://example.com/\">x", false},
 			{"<svg></svg><![CDATA[a]]><a href=\"http://example.com/\">click</a>", {"http://example.com/"}, "click", true},
 			/* Comments */
