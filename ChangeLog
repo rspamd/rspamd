@@ -1,3 +1,47 @@
+4.2.3: 21 Oct 2026
+
+  ** Incompatible changes **
+  * [Conf] phishing: Disable phishtank.rspamd.com by default (the zone no longer carries data)
+  * [Feature] rbl: Merge duplicate DNS queries from several checks into one request and one symbol insertion (a rule now scores once per matched value; set merge_checks = false to keep one insertion per check)
+  * [Fix] rbl: Fix the inverted dkim_domainonly test under dkim_match_from (eSLDs were compared when dkim_domainonly was off)
+
+  ** Features **
+  * [Feature] force_actions: Promote rules that depend on composites to postfilters
+  * [Feature] force_actions: Add a priority setting to arbitrate between matching rules, shown as a priority:N symbol option
+  * [Feature] lua_task: Return the action name instead of its type from has_pre_result, plus its flags
+  * [Feature] metadata_exporter: Add unix_time to general metadata
+
+  ** Bug fixes **
+  * [Fix] arc: Do not trust ARC forwarders whose seal failed verification (a whitelisted d= with a broken seal gave ARC_ALLOW_TRUSTED and its AAR could lower DMARC)
+  * [Fix] arc: Require exactly one ARC-Authentication-Results per instance and wait for all seal checks before publishing results
+  * [Fix] dkim: Report a key request that cannot be scheduled as a failure (ARC chains with such a seal published no result)
+  * [Fix] milter: Fix a session use-after-free on connection close
+  * [Fix] maps: Do not crash on a regexp map that repeats an invalid regexp
+  * [Fix] lua_task: Do not crash in get_stat_tokens without a classifier
+  * [Fix] hyperscan: Recompile cached map and multipattern databases that fail to deserialize (stale blobs kept maps on the PCRE fallback)
+  * [Fix] http: Drain pending TLS data (HTTPS reads stalled on records over 8 KiB)
+  * [Fix] librdns: Reconnect the UDP channel after the kernel drops it
+  * [Fix] lua_util: Resolve HTTP upstreams for hosts without a public suffix (gpt failed on every message after a reload)
+  * [Fix] html: End declarations, comments and raw text like browsers (content after them was hidden from the scan)
+  * [Fix] html: Track SVG/MathML elements and honour `/>` only on void and foreign elements, as browsers do
+  * [Fix] html: Run SVG CDATA sections to `]]>` and close tags only on a slash right before `>`
+  * [Fix] html: Keep character references undecoded in CDATA and raw text elements
+  * [Fix] url: End text URLs at quotes and find schemeless URLs after a double quote
+  * [Fix] bayes: Deduplicate plain and HTML alternatives by parts_distance, including HTML inside multipart/related (the body was counted twice)
+  * [Fix] mime: Correct inverted substitution costs in parts distance
+  * [Fix] stat: Finalize statistical words in late-injected parts
+  * [Fix] mime: Accept obsolete whitespace before header colons
+  * [Fix] rbl: Query eSLDs in RSPAMD_URIBL and skip IP literal hosts
+  * [Fix] rbl: Fix require_symbols (rules using it never ran) and luapattern matching for return_codes
+  * [Fix] rbl: Normalise From and DKIM domains consistently
+  * [Fix] monitored: Load every element of an ipnet array
+  * [Fix] lua_task: Retry short writes in store_in_file and save_in_file, keep the default 0600 mode and do not close a caller-supplied descriptor
+  * [Fix] lua_task: Use normal priority by default in table set_pre_result and accept several flags
+  * [Fix] lua_config: Report the composite flag in get_symbol_flags
+  * [Fix] symcache: Fix persistence and file descriptor ownership
+  * [Fix] worker: Fix DNS resolver leaks on shutdown
+  * [Fix] Fix memory leaks of ESMTP argument containers
+
 4.2.2: 10 Oct 2026
 
   ** Incompatible changes **
