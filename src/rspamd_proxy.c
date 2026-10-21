@@ -3732,6 +3732,9 @@ proxy_milter_error_handler(int fd,
 {
 	struct rspamd_proxy_session *session = ud;
 
+	/* Avoid releasing the milter session from the proxy destructor. */
+	session->client_milter_conn = NULL;
+
 	if (err && err->code != 0) {
 		msg_info_session("abnormally closing milter connection from: %s, "
 						 "error: %e",
