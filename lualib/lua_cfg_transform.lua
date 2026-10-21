@@ -66,7 +66,8 @@ local function surbl_section_convert(cfg, section)
         end
 
         if k == 'dkim' and v then
-          converted.dkim_domainonly = false
+          -- surbl checked the aligned eSLD; dkim_domainonly is the eSLD mode now that rbl.lua no longer inverts it
+          converted.dkim_domainonly = true
           converted.dkim_match_from = true
         end
 
