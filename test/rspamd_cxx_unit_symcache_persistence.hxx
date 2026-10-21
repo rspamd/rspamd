@@ -88,8 +88,8 @@ struct symcache_persistence_fixture {
 		cfg->cache_filename = rspamd_mempool_strdup(cfg->cfg_pool, path.c_str());
 		cache = reinterpret_cast<rspamd::symcache::symcache *>(cfg->cache);
 		REQUIRE(cache->add_symbol_with_callback("PERSISTENCE_TEST", 0,
-											  persistence_dummy_callback, nullptr,
-											  SYMBOL_TYPE_NORMAL) >= 0);
+												persistence_dummy_callback, nullptr,
+												SYMBOL_TYPE_NORMAL) >= 0);
 		item = cache->get_item_by_name_mut("PERSISTENCE_TEST", false);
 		REQUIRE(item != nullptr);
 	}
@@ -105,7 +105,7 @@ struct symcache_persistence_fixture {
 	}
 };
 
-} // namespace
+}// namespace
 
 TEST_SUITE("symcache_persistence")
 {
