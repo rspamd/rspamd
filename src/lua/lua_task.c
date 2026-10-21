@@ -7210,15 +7210,16 @@ lua_task_store_in_file(lua_State *L)
 	gboolean force_new = FALSE, keep = FALSE;
 	char fpath[PATH_MAX];
 	const char *tmpmask = NULL, *fname = NULL;
-	unsigned int mode = 00600;
+	int64_t mode = 00600;
 	int fd;
 	struct lua_file_cbdata *cbdata;
 	GError *err = NULL;
 
 	if (task) {
 		if (lua_istable(L, 2)) {
+			/* Keep the defaults above for missing keys (mode must stay 0600) */
 			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "filename=S;tmpmask=S;mode=I;force_new=B;keep=B",
 												  &fname, &tmpmask, &mode, &force_new, &keep)) {
 				msg_err_task("cannot get parameters list: %e", err);
@@ -7266,14 +7267,30 @@ lua_task_store_in_file(lua_State *L)
 				lua_pushnil(L);
 			}
 			else {
-				if (write(fd, task->msg.begin, task->msg.len) == -1) {
-					msg_err_task("cannot write file %s: %s", fpath,
-								 strerror(errno));
-					unlink(fname);
-					close(fd);
-					lua_pushnil(L);
+				const char *wpos = task->msg.begin;
+				gsize wremain = task->msg.len;
 
-					return 1;
+				while (wremain > 0) {
+					gssize w = write(fd, wpos, wremain);
+
+					if (w == -1 && errno == EINTR) {
+						continue;
+					}
+
+					if (w <= 0) {
+						int saved_errno = w == 0 ? EIO : errno;
+
+						msg_err_task("cannot write file %s: %s", fname,
+									 strerror(saved_errno));
+						unlink(fname);
+						close(fd);
+						lua_pushnil(L);
+
+						return 1;
+					}
+
+					wpos += w;
+					wremain -= w;
 				}
 
 				cbdata = rspamd_mempool_alloc(task->task_pool, sizeof(*cbdata));
