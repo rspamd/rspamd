@@ -59,7 +59,7 @@ start_file_helper(struct rspamd_worker *worker)
 #endif
 	ctx->writer = rspamd_file_writer_new(ctx->event_loop);
 	rspamd_control_worker_add_cmd_handler(worker, RSPAMD_CONTROL_FILE_WRITE,
-		file_helper_accept, ctx);
+										  file_helper_accept, ctx);
 	ev_run(ctx->event_loop, 0);
 	rspamd_worker_block_signals();
 	rspamd_file_writer_free(ctx->writer);
@@ -77,5 +77,4 @@ worker_t file_helper_worker = {
 	RSPAMD_WORKER_UNIQUE | RSPAMD_WORKER_KILLABLE | RSPAMD_WORKER_ALWAYS_START |
 		RSPAMD_WORKER_NO_TERMINATE_DELAY,
 	RSPAMD_WORKER_SOCKET_NONE,
-	RSPAMD_WORKER_VER
-};
+	RSPAMD_WORKER_VER};

@@ -4,7 +4,10 @@
 #include "unix-std.h"
 #include <math.h>
 
-enum file_write_state { FILE_HEADER, FILE_REPLY, FILE_DATA, FILE_DISK };
+enum file_write_state { FILE_HEADER,
+						FILE_REPLY,
+						FILE_DATA,
+						FILE_DISK };
 
 struct rspamd_file_writer {
 	struct ev_loop *loop;
@@ -32,7 +35,10 @@ rspamd_file_write_send(int sock, const void *data, size_t len, int fd)
 {
 	struct msghdr msg = {0};
 	struct iovec iov = {.iov_base = (void *) data, .iov_len = len};
-	union { struct cmsghdr align; unsigned char bytes[CMSG_SPACE(sizeof(int))]; } control;
+	union {
+		struct cmsghdr align;
+		unsigned char bytes[CMSG_SPACE(sizeof(int))];
+	} control;
 	int flags = 0;
 
 #ifdef MSG_NOSIGNAL
@@ -53,8 +59,7 @@ rspamd_file_write_send(int sock, const void *data, size_t len, int fd)
 	return sendmsg(sock, &msg, flags);
 }
 
-void
-rspamd_file_writer_reject(int sock, int error)
+void rspamd_file_writer_reject(int sock, int error)
 {
 	if (sock >= 0) {
 		struct rspamd_file_write_reply reply = {.error = error, .done = 1};
@@ -153,7 +158,7 @@ file_write_disk(EV_P_ ev_timer *w, int revents)
 		file_write_queue(job);
 	}
 	else if (n >= 0 || (errno != EAGAIN && errno != EWOULDBLOCK) ||
-		rspamd_get_ticks(FALSE) >= job->header.deadline) {
+			 rspamd_get_ticks(FALSE) >= job->header.deadline) {
 		file_write_drop(job);
 	}
 	else {
@@ -170,7 +175,8 @@ file_write_disk(EV_P_ ev_timer *w, int revents)
 			job->offset += n;
 			job->written += n;
 			if (job->offset < job->used) file_write_queue(job);
-			else file_write_reply(job, 0, job->written == job->header.length);
+			else
+				file_write_reply(job, 0, job->written == job->header.length);
 		}
 	}
 	/* Round robin, including partial writes: neither large messages nor EINTR
@@ -188,7 +194,10 @@ file_write_header(struct file_write_job *job)
 	struct iovec iov = {
 		.iov_base = (char *) &job->header + job->pos,
 		.iov_len = sizeof(job->header) - job->pos};
-	union { struct cmsghdr align; unsigned char bytes[CMSG_SPACE(sizeof(int) * 4)]; } control;
+	union {
+		struct cmsghdr align;
+		unsigned char bytes[CMSG_SPACE(sizeof(int) * 4)];
+	} control;
 	gboolean invalid = FALSE;
 	ssize_t n;
 
@@ -208,10 +217,14 @@ file_write_header(struct file_write_job *job)
 				int fd;
 				memcpy(&fd, (char *) CMSG_DATA(cmsg) + i * sizeof(int), sizeof(fd));
 				if (job->fd == -1) job->fd = fd;
-				else { close(fd); invalid = TRUE; }
+				else {
+					close(fd);
+					invalid = TRUE;
+				}
 			}
 		}
-		else invalid = TRUE;
+		else
+			invalid = TRUE;
 	}
 	if (invalid || (msg.msg_flags & (MSG_TRUNC | MSG_CTRUNC))) return FALSE;
 	job->pos += n;
@@ -248,10 +261,13 @@ file_write_io(EV_P_ ev_io *w, int revents)
 	}
 	if (job->state == FILE_DATA) {
 		size_t target = MIN((uint64_t) RSPAMD_FILE_WRITE_BLOCK,
-			job->header.length - job->written);
+							job->header.length - job->written);
 		n = recv(job->sock, job->block + job->used, target - job->used, 0);
 		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return;
-		if (n <= 0) { file_write_drop(job); return; }
+		if (n <= 0) {
+			file_write_drop(job);
+			return;
+		}
 		job->used += n;
 		if (job->used == target) {
 			job->state = FILE_DISK;
@@ -270,12 +286,18 @@ file_write_io(EV_P_ ev_io *w, int revents)
 	}
 	if (job->state == FILE_REPLY && (revents & EV_WRITE)) {
 		n = rspamd_file_write_send(job->sock, (char *) &job->reply + job->pos,
-			sizeof(job->reply) - job->pos, -1);
+								   sizeof(job->reply) - job->pos, -1);
 		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return;
-		if (n <= 0) { file_write_drop(job); return; }
+		if (n <= 0) {
+			file_write_drop(job);
+			return;
+		}
 		job->pos += n;
 		if (job->pos == sizeof(job->reply)) {
-			if (job->reply.done) { file_write_drop(job); return; }
+			if (job->reply.done) {
+				file_write_drop(job);
+				return;
+			}
 			job->state = FILE_DATA;
 			job->used = 0;
 			file_write_watch(job, EV_READ);
@@ -295,8 +317,7 @@ rspamd_file_writer_new(struct ev_loop *loop)
 	return writer;
 }
 
-void
-rspamd_file_writer_accept(struct rspamd_file_writer *writer, int sock)
+void rspamd_file_writer_accept(struct rspamd_file_writer *writer, int sock)
 {
 	struct file_write_job *job;
 	if (sock < 0) return;
@@ -325,8 +346,7 @@ rspamd_file_writer_accept(struct rspamd_file_writer *writer, int sock)
 	ev_timer_start(writer->loop, &job->timer);
 }
 
-void
-rspamd_file_writer_free(struct rspamd_file_writer *writer)
+void rspamd_file_writer_free(struct rspamd_file_writer *writer)
 {
 	GList *jobs = g_hash_table_get_keys(writer->jobs);
 	for (GList *cur = jobs; cur; cur = cur->next) file_write_drop(cur->data);

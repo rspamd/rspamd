@@ -7336,7 +7336,9 @@ lua_task_store_in_file(lua_State *L)
  * memory. EOF on the per-operation channel cancels even a partial block. */
 static unsigned int lua_task_file_async_jobs;
 
-enum lua_file_write_state { LUA_FILE_HEADER, LUA_FILE_DATA, LUA_FILE_REPLY };
+enum lua_file_write_state { LUA_FILE_HEADER,
+							LUA_FILE_DATA,
+							LUA_FILE_REPLY };
 
 struct lua_task_file_async_cbdata {
 	struct rspamd_task *task;
@@ -7511,7 +7513,7 @@ lua_task_file_async_io(EV_P_ ev_io *w, int revents)
 	}
 	if (cbd->state == LUA_FILE_HEADER) {
 		n = rspamd_file_write_send(cbd->sock, (char *) &cbd->header + cbd->pos,
-			sizeof(cbd->header) - cbd->pos, cbd->pos == 0 ? cbd->fd : -1);
+								   sizeof(cbd->header) - cbd->pos, cbd->pos == 0 ? cbd->fd : -1);
 		if (n > 0) {
 			cbd->pos += n;
 			if (cbd->pos == sizeof(cbd->header)) {
@@ -7526,7 +7528,7 @@ lua_task_file_async_io(EV_P_ ev_io *w, int revents)
 		/* One outstanding block, no full-message copy and no unbounded send loop.
 		 * The session keeps msg.begin alive until cancellation stops this watcher. */
 		n = rspamd_file_write_send(cbd->sock, cbd->task->msg.begin + cbd->sent,
-			cbd->target - cbd->sent, -1);
+								   cbd->target - cbd->sent, -1);
 		if (n > 0) {
 			cbd->sent += n;
 			if (cbd->sent == cbd->target) {
@@ -7539,7 +7541,7 @@ lua_task_file_async_io(EV_P_ ev_io *w, int revents)
 	}
 	else {
 		n = recv(cbd->sock, (char *) &cbd->reply + cbd->pos,
-			sizeof(cbd->reply) - cbd->pos, 0);
+				 sizeof(cbd->reply) - cbd->pos, 0);
 		if (n > 0) {
 			cbd->pos += n;
 			if (cbd->pos != sizeof(cbd->reply)) return;
@@ -7554,7 +7556,7 @@ lua_task_file_async_io(EV_P_ ev_io *w, int revents)
 			}
 			if (cbd->reply.done) goto finish;
 			cbd->target = cbd->sent + MIN((uint64_t) RSPAMD_FILE_WRITE_BLOCK,
-				cbd->header.length - cbd->sent);
+										  cbd->header.length - cbd->sent);
 			cbd->state = LUA_FILE_DATA;
 			lua_task_file_async_watch(cbd, EV_WRITE);
 			return;
@@ -7674,8 +7676,7 @@ lua_task_store_in_file_async(lua_State *L)
 		cbd->fd = rspamd_file_xopen(fname, O_WRONLY | O_CREAT | O_EXCL, mode, FALSE);
 	}
 	else {
-		cbd->fname = tmpmask ? g_strdup(tmpmask) :
-			g_build_filename(task->cfg->temp_dir, "rmsg-XXXXXXXXXX", NULL);
+		cbd->fname = tmpmask ? g_strdup(tmpmask) : g_build_filename(task->cfg->temp_dir, "rmsg-XXXXXXXXXX", NULL);
 		cbd->fd = g_mkstemp_full(cbd->fname, O_WRONLY | O_CREAT | O_EXCL, mode);
 	}
 	if (cbd->fd == -1) {
@@ -7714,8 +7715,7 @@ lua_task_store_in_file_async(lua_State *L)
 schedule:
 	/* Also defer setup errors and the existing-file shortcut: never call inline. */
 	ev_now_update(cbd->event_loop);
-	ev_timer_set(&cbd->timer, cbd->sock == -1 ? 0.0 :
-				 MAX(0.0, cbd->deadline - rspamd_get_ticks(FALSE)), 0.0);
+	ev_timer_set(&cbd->timer, cbd->sock == -1 ? 0.0 : MAX(0.0, cbd->deadline - rspamd_get_ticks(FALSE)), 0.0);
 	ev_timer_start(cbd->event_loop, &cbd->timer);
 	lua_pushboolean(L, TRUE);
 	return 1;

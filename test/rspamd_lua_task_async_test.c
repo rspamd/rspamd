@@ -65,7 +65,10 @@ store_async_broker(EV_P_ ev_io *w, int revents)
 	struct rspamd_srv_command cmd;
 	struct msghdr msg = {0};
 	struct iovec iov = {.iov_base = &cmd, .iov_len = sizeof(cmd)};
-	union { struct cmsghdr align; char bytes[CMSG_SPACE(sizeof(int))]; } control;
+	union {
+		struct cmsghdr align;
+		char bytes[CMSG_SPACE(sizeof(int))];
+	} control;
 	int fd;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
@@ -83,8 +86,10 @@ store_async_broker(EV_P_ ev_io *w, int revents)
 		rspamd_file_writer_free(test_writer);
 		test_writer = rspamd_file_writer_new(EV_A);
 	}
-	else if (broker_case == STORE_BUSY) rspamd_file_writer_reject(fd, EBUSY);
-	else rspamd_file_writer_accept(test_writer, fd);
+	else if (broker_case == STORE_BUSY)
+		rspamd_file_writer_reject(fd, EBUSY);
+	else
+		rspamd_file_writer_accept(test_writer, fd);
 	struct rspamd_srv_reply rep = {.type = cmd.type, .id = cmd.id};
 	g_assert_cmpint(write(w->fd, &rep, sizeof(rep)), ==, sizeof(rep));
 }
@@ -110,7 +115,7 @@ store_async_contents(const char *filename, const char *message, gsize len)
 	char *contents = NULL;
 	gsize actual = 0;
 	gboolean ok = g_file_get_contents(filename, &contents, &actual, NULL) &&
-		actual == len && (len == 0 || memcmp(contents, message, len) == 0);
+				  actual == len && (len == 0 || memcmp(contents, message, len) == 0);
 
 	g_free(contents);
 	return ok;
@@ -121,31 +126,30 @@ store_async_callback(lua_State *L)
 {
 	struct store_async_test *test = lua_touserdata(L, lua_upvalueindex(1));
 	gboolean failed = test->kind == STORE_EXISTS || test->kind == STORE_SHORT_WRITE ||
-		test->kind == STORE_TIMEOUT || test->kind == STORE_HELPER_LOST ||
-		test->kind == STORE_BUSY || test->kind == STORE_NO_WORKER;
+					  test->kind == STORE_TIMEOUT || test->kind == STORE_HELPER_LOST ||
+					  test->kind == STORE_BUSY || test->kind == STORE_NO_WORKER;
 
 	test->calls++;
 	if (failed) {
 		test->callback_ok = lua_type(L, 1) == LUA_TSTRING && lua_isnil(L, 2);
 		if (test->kind == STORE_TIMEOUT) {
 			test->callback_ok = test->callback_ok &&
-				strcmp(lua_tostring(L, 1), strerror(ETIMEDOUT)) == 0;
+								strcmp(lua_tostring(L, 1), strerror(ETIMEDOUT)) == 0;
 		}
 		if (test->kind != STORE_EXISTS) {
 			test->callback_ok = test->callback_ok &&
-				!g_file_test(test->filename, G_FILE_TEST_EXISTS);
+								!g_file_test(test->filename, G_FILE_TEST_EXISTS);
 		}
 	}
 	else {
 		test->callback_ok = test->callback_ok && lua_isnil(L, 1) &&
-			lua_type(L, 2) == LUA_TSTRING;
+							lua_type(L, 2) == LUA_TSTRING;
 		if (lua_type(L, 2) == LUA_TSTRING) {
 			const char *fname = lua_tostring(L, 2);
 			struct stat st;
 
 			if (test->kind != STORE_TMPMASK) {
-				const char *expected = test->calls == 2 ? test->second :
-					(test->kind == STORE_REUSE ? test->input : test->filename);
+				const char *expected = test->calls == 2 ? test->second : (test->kind == STORE_REUSE ? test->input : test->filename);
 
 				test->callback_ok = test->callback_ok && strcmp(fname, expected) == 0;
 			}
@@ -153,14 +157,14 @@ store_async_callback(lua_State *L)
 			test->returned = g_strdup(fname);
 			if (test->kind != STORE_REUSE) {
 				test->contents_ok = test->contents_ok && stat(fname, &st) == 0 &&
-					(st.st_mode & 0777) == test->expected_mode;
+									(st.st_mode & 0777) == test->expected_mode;
 			}
 			if (test->kind == STORE_ZERO_MODE) {
 				/* Check 0000 first, then allow a non-root test runner to read it. */
 				test->contents_ok = chmod(fname, 0600) == 0 && test->contents_ok;
 			}
 			test->contents_ok = test->contents_ok &&
-				store_async_contents(fname, test->message, test->len);
+								store_async_contents(fname, test->message, test->len);
 		}
 	}
 
@@ -195,8 +199,8 @@ store_async_start(lua_State *L, struct store_async_test *test, gboolean second)
 	}
 	/* Cancellation/error must remove files even when the caller asked to keep. */
 	lua_pushboolean(L, test->kind == STORE_KEEP || test->kind == STORE_SHORT_WRITE ||
-		test->kind == STORE_TIMEOUT || test->kind == STORE_CANCEL ||
-		test->kind == STORE_DESTROY || test->kind == STORE_LATE_CANCEL);
+						   test->kind == STORE_TIMEOUT || test->kind == STORE_CANCEL ||
+						   test->kind == STORE_DESTROY || test->kind == STORE_LATE_CANCEL);
 	lua_setfield(L, -2, "keep");
 	lua_pushboolean(L, test->kind == STORE_FORCE_NEW);
 	lua_setfield(L, -2, "force_new");
@@ -265,14 +269,13 @@ store_async_run_case(struct ev_loop *loop, enum store_async_case kind)
 	dirname = g_build_filename(g_get_tmp_dir(), "rspamd-async-file-XXXXXX", NULL);
 	g_assert(g_mkdtemp(dirname));
 	test.filename = g_build_filename(dirname,
-		kind == STORE_TMPMASK ? "message-XXXXXX" : "message", NULL);
+									 kind == STORE_TMPMASK ? "message-XXXXXX" : "message", NULL);
 	test.second = g_build_filename(dirname, "second", NULL);
 	input = g_build_filename(dirname, "input", NULL);
 	test.loop = loop;
 	test.input = input;
 	test.kind = kind;
-	test.expected_mode = kind == STORE_DEFAULTS || kind == STORE_DEFAULT_MODE ? 0600 :
-		(kind == STORE_ZERO_MODE ? 0 : 0640);
+	test.expected_mode = kind == STORE_DEFAULTS || kind == STORE_DEFAULT_MODE ? 0600 : (kind == STORE_ZERO_MODE ? 0 : 0640);
 	test.message = message;
 	test.len = kind == STORE_EMPTY ? 0 : len;
 	test.callback_ok = test.contents_ok = TRUE;
@@ -334,7 +337,10 @@ store_async_run_case(struct ev_loop *loop, enum store_async_case kind)
 #if defined(RLIMIT_FSIZE)
 	if (kind == STORE_SHORT_WRITE) g_assert_cmpint(setrlimit(RLIMIT_FSIZE, &old_limit), ==, 0);
 #endif
-	if (held_socket != -1) { close(held_socket); held_socket = -1; }
+	if (held_socket != -1) {
+		close(held_socket);
+		held_socket = -1;
+	}
 	if (kind == STORE_LATE_CANCEL) {
 		struct stat st;
 		ev_check_stop(loop, &cancel);
@@ -358,7 +364,7 @@ store_async_run_case(struct ev_loop *loop, enum store_async_case kind)
 		original_ok = original_ok && store_async_contents(input, message, len);
 	}
 	cleanup_ok = kind == STORE_EXISTS ||
-		g_file_test(test.filename, G_FILE_TEST_EXISTS) == (kind == STORE_KEEP);
+				 g_file_test(test.filename, G_FILE_TEST_EXISTS) == (kind == STORE_KEEP);
 	if (kind == STORE_TMPMASK) {
 		cleanup_ok = test.returned && !g_file_test(test.returned, G_FILE_TEST_EXISTS);
 	}
@@ -429,12 +435,14 @@ store_async_headers(struct ev_loop *loop)
 		g_assert_cmpint(rspamd_socketpair(pair, SOCK_STREAM), ==, TRUE);
 		rspamd_file_writer_accept(test_writer, pair[1]);
 		g_assert_cmpint(rspamd_file_write_send(pair[0], &header, 1,
-			variant == 2 ? -1 : fd), ==, 1);
+											   variant == 2 ? -1 : fd),
+						==, 1);
 		ev_run(loop, EVRUN_NOWAIT);
 		if (variant == 3) close(pair[0]);
 		else {
 			g_assert_cmpint(rspamd_file_write_send(pair[0], (char *) &header + 1,
-				sizeof(header) - 1, -1), ==, sizeof(header) - 1);
+												   sizeof(header) - 1, -1),
+							==, sizeof(header) - 1);
 		}
 		ev_run(loop, 0);
 		if (variant != 3) {
