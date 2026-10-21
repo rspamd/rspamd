@@ -579,6 +579,29 @@ rspamd_protocol_set_log_tag(struct rspamd_task *task,
 	}
 }
 
+/* Only protocol-created containers belong to task_pool. The task setters
+ * can also install borrowed milter/proxy containers, so task_free must not
+ * unconditionally unref the pointers stored in the task. */
+static void
+rspamd_protocol_esmtp_args_unref(gpointer data)
+{
+	if (data != NULL) {
+		g_hash_table_unref(data);
+	}
+}
+
+static GPtrArray *
+rspamd_protocol_rcpt_esmtp_args_new(struct rspamd_task *task)
+{
+	GPtrArray *args = g_ptr_array_new_with_free_func(
+		rspamd_protocol_esmtp_args_unref);
+
+	rspamd_mempool_add_destructor(task->task_pool,
+		(rspamd_mempool_destruct_t) g_ptr_array_unref, args);
+
+	return args;
+}
+
 static void
 rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 								   const char *key, gsize key_len,
@@ -590,6 +613,8 @@ rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 			rspamd_ftok_icase_equal,
 			rspamd_fstring_mapped_ftok_free,
 			rspamd_fstring_mapped_ftok_free);
+		rspamd_mempool_add_destructor(task->task_pool,
+			rspamd_protocol_esmtp_args_unref, task->mail_esmtp_args);
 	}
 
 	rspamd_fstring_t *fkey = rspamd_fstring_new_init(key, key_len);
@@ -607,7 +632,7 @@ rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
 								   const char *val, gsize val_len)
 {
 	if (!task->rcpt_esmtp_args) {
-		task->rcpt_esmtp_args = g_ptr_array_new();
+		task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
 	}
 
 	while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
@@ -2722,7 +2747,7 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 			else {
 				/* Non-object entry: ensure array slot exists as NULL */
 				if (!task->rcpt_esmtp_args) {
-					task->rcpt_esmtp_args = g_ptr_array_new();
+					task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
 				}
 				while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
 					g_ptr_array_add(task->rcpt_esmtp_args, NULL);
