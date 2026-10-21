@@ -15,6 +15,9 @@
  */
 #include "lua_common.h"
 #include "lua_url.h"
+#include "lua_thread_pool.h"
+#include "libserver/rspamd_control.h"
+#include "libserver/file_write.h"
 
 #include "message.h"
 #include "images.h"
@@ -1284,6 +1287,41 @@ LUA_FUNCTION_DEF(task, get_digest);
 LUA_FUNCTION_DEF(task, store_in_file);
 
 /***
+ * @method task:store_in_file_async(options, callback)
+ * Store the message through the shared, persistent file_helper worker started
+ * by the main process. File creation is synchronous; content transfer is
+ * nonblocking and disk writes run in the helper in 64 KiB blocks.
+ * The synchronous `store_in_file` method is unchanged.
+ *
+ * Options are the same as `store_in_file`, with `timeout` in seconds (default
+ * 5.0, finite and positive). Files are removed with the task unless `keep` is
+ * true. Failed or cancelled writes are removed even with `keep = true`.
+ * An existing input file is reused unless `force_new` is set.
+ *
+ * The callback receives `(err, filename)`: nil and a filename on success,
+ * an error string and nil on failure (including timeout). It is always deferred,
+ * even for setup errors or a reused file, and runs at most once. Session/task
+ * destruction cancels the operation without calling Lua. Timeout limits waiting;
+ * cancellation is checked between disk writes. A blocked kernel write cannot
+ * be interrupted by the helper event loop. The timeout includes queueing and
+ * transfer, but cannot interrupt synchronous file creation in the caller.
+ * At most 64 writes per caller worker and 256 in the helper are admitted;
+ * saturation returns an asynchronous error. A helper crash fails in-flight
+ * writes; later calls use the replacement started by the main process.
+ *
+ * Writes handle short writes and EINTR, but do not fsync the file. A successful
+ * callback means the complete content can be read, not that it is durable.
+ * Requires an active task session, event loop and worker (except file reuse).
+ * Invalid arguments raise an error. If scheduling returns false, the callback
+ * will not be called.
+ *
+ * @param {table} options file options and optional timeout
+ * @param {function} callback completion callback
+ * @return {boolean,string} true if scheduled, otherwise false and an error
+ */
+LUA_FUNCTION_DEF(task, store_in_file_async);
+
+/***
  * @method task:get_protocol_reply([flags])
  * This method being called from a **postfilter** will return reply for a message
  * as it is returned to a client. This method returns the Lua table corresponding
@@ -1552,6 +1590,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, set_milter_reply),
 	LUA_INTERFACE_DEF(task, get_digest),
 	LUA_INTERFACE_DEF(task, store_in_file),
+	LUA_INTERFACE_DEF(task, store_in_file_async),
 	LUA_INTERFACE_DEF(task, get_protocol_reply),
 	LUA_INTERFACE_DEF(task, headers_foreach),
 	LUA_INTERFACE_DEF(task, disable_action),
@@ -7307,6 +7346,395 @@ lua_task_store_in_file(lua_State *L)
 		luaL_error(L, "invalid arguments");
 	}
 
+	return 1;
+}
+
+/* Each session owns one operation. The shared helper never accesses task/Lua
+ * memory. EOF on the per-operation channel cancels even a partial block. */
+static unsigned int lua_task_file_async_jobs;
+
+enum lua_file_write_state { LUA_FILE_HEADER,
+							LUA_FILE_DATA,
+							LUA_FILE_REPLY };
+
+struct lua_task_file_async_cbdata {
+	struct rspamd_task *task;
+	struct rspamd_async_session *session;
+	struct rspamd_config *cfg;
+	struct rspamd_symcache_dynamic_item *item;
+	struct ev_loop *event_loop;
+	ev_timer timer;
+	ev_io io;
+	ref_entry_t ref;
+	char *fname;
+	double deadline;
+	int fd, sock, cbref, error;
+	gboolean owned, keep, completed, counted, handed_off;
+	uint64_t command_id;
+	struct rspamd_file_write_header header;
+	struct rspamd_file_write_reply reply;
+	enum lua_file_write_state state;
+	size_t pos, sent, target;
+};
+
+static void
+lua_task_file_async_disconnect(struct lua_task_file_async_cbdata *cbd)
+{
+	if (cbd->sock != -1) {
+		ev_io_stop(cbd->event_loop, &cbd->io);
+		/* shutdown reaches the peer even while a broker still owns a copy. */
+		shutdown(cbd->sock, SHUT_RDWR);
+		close(cbd->sock);
+		cbd->sock = -1;
+	}
+	if (cbd->handed_off) {
+		rspamd_srv_cancel_file_write(cbd->command_id);
+		cbd->handed_off = FALSE;
+	}
+	if (cbd->counted) {
+		lua_task_file_async_jobs--;
+		cbd->counted = FALSE;
+	}
+}
+
+static void
+lua_task_file_async_discard(struct lua_task_file_async_cbdata *cbd)
+{
+	if (cbd->owned) {
+		unlink(cbd->fname);
+		cbd->owned = FALSE;
+	}
+	if (cbd->fd != -1) {
+		close(cbd->fd);
+		cbd->fd = -1;
+	}
+}
+
+static void
+lua_task_file_async_dtor(gpointer p)
+{
+	struct lua_task_file_async_cbdata *cbd = p;
+
+	lua_task_file_async_disconnect(cbd);
+	lua_task_file_async_discard(cbd);
+	g_free(cbd->fname);
+	CFG_REF_RELEASE(cbd->cfg);
+	g_free(cbd);
+}
+
+static void
+lua_task_file_async_fin(gpointer p)
+{
+	struct lua_task_file_async_cbdata *cbd = p;
+
+	/* Also installed on the pool for tasks destroyed directly from Lua. */
+	rspamd_mempool_replace_destructor(cbd->task->task_pool,
+									  lua_task_file_async_fin, cbd, NULL);
+	cbd->task = NULL;
+	cbd->item = NULL;
+	ev_timer_stop(cbd->event_loop, &cbd->timer);
+	luaL_unref(cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->cbref);
+	cbd->cbref = LUA_NOREF;
+
+	lua_task_file_async_disconnect(cbd);
+	lua_task_file_async_discard(cbd);
+	REF_RELEASE(cbd);
+}
+
+static void
+lua_task_file_async_finish(struct lua_task_file_async_cbdata *cbd)
+{
+	struct lua_callback_state cbs;
+	struct rspamd_symcache_dynamic_item *item;
+	lua_State *L;
+	int top;
+
+	if (cbd->task == NULL || cbd->completed) {
+		return;
+	}
+
+	REF_RETAIN(cbd); /* A callback may destroy the task/session. */
+	cbd->completed = TRUE;
+	if (!cbd->error && rspamd_get_ticks(FALSE) >= cbd->deadline) {
+		cbd->error = ETIMEDOUT;
+	}
+	lua_task_file_async_disconnect(cbd);
+	ev_timer_stop(cbd->event_loop, &cbd->timer);
+
+	if (cbd->error) {
+		lua_task_file_async_discard(cbd);
+	}
+	else if (cbd->owned) {
+		struct lua_file_cbdata *file =
+			rspamd_mempool_alloc(cbd->task->task_pool, sizeof(*file));
+
+		file->fd = cbd->fd;
+		file->fname = rspamd_mempool_strdup(cbd->task->task_pool, cbd->fname);
+		file->keep = cbd->keep;
+		rspamd_mempool_add_destructor(cbd->task->task_pool, lua_tmp_file_dtor, file);
+		cbd->fd = -1;
+		cbd->owned = FALSE;
+	}
+
+	lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &cbs);
+	L = cbs.L;
+	top = lua_gettop(L);
+	lua_pushcfunction(L, rspamd_lua_traceback);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
+	if (cbd->error) {
+		lua_pushstring(L, strerror(cbd->error));
+		lua_pushnil(L);
+	}
+	else {
+		lua_pushnil(L);
+		lua_pushstring(L, cbd->fname);
+	}
+	if (cbd->item) {
+		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+	}
+	if (lua_pcall(L, 2, 0, top + 1) != 0) {
+		msg_err("store_in_file_async callback failed: %s", lua_tostring(L, -1));
+	}
+	lua_settop(L, top);
+	lua_thread_pool_restore_callback(&cbs);
+
+	/* Keep the symbol pending while the callback schedules its next operation. */
+	if (cbd->task && cbd->item) {
+		item = cbd->item;
+		cbd->item = NULL;
+		rspamd_symcache_item_async_dec_check(cbd->task, item, "store_in_file_async");
+	}
+	if (cbd->task) {
+		rspamd_session_remove_event(cbd->session, lua_task_file_async_fin, cbd);
+	}
+	REF_RELEASE(cbd);
+}
+
+static void
+lua_task_file_async_watch(struct lua_task_file_async_cbdata *cbd, int events)
+{
+	ev_io_stop(cbd->event_loop, &cbd->io);
+	ev_io_set(&cbd->io, cbd->sock, events);
+	ev_io_start(cbd->event_loop, &cbd->io);
+}
+
+static void
+lua_task_file_async_io(EV_P_ ev_io *w, int revents)
+{
+	struct lua_task_file_async_cbdata *cbd = w->data;
+	ssize_t n;
+
+	if (rspamd_get_ticks(FALSE) >= cbd->deadline) {
+		cbd->error = ETIMEDOUT;
+		goto finish;
+	}
+	if (cbd->state == LUA_FILE_HEADER) {
+		n = rspamd_file_write_send(cbd->sock, (char *) &cbd->header + cbd->pos,
+								   sizeof(cbd->header) - cbd->pos, cbd->pos == 0 ? cbd->fd : -1);
+		if (n > 0) {
+			cbd->pos += n;
+			if (cbd->pos == sizeof(cbd->header)) {
+				cbd->pos = 0;
+				cbd->state = LUA_FILE_REPLY;
+				lua_task_file_async_watch(cbd, EV_READ);
+			}
+			return;
+		}
+	}
+	else if (cbd->state == LUA_FILE_DATA) {
+		/* One outstanding block, no full-message copy and no unbounded send loop.
+		 * The session keeps msg.begin alive until cancellation stops this watcher. */
+		n = rspamd_file_write_send(cbd->sock, cbd->task->msg.begin + cbd->sent,
+								   cbd->target - cbd->sent, -1);
+		if (n > 0) {
+			cbd->sent += n;
+			if (cbd->sent == cbd->target) {
+				cbd->pos = 0;
+				cbd->state = LUA_FILE_REPLY;
+				lua_task_file_async_watch(cbd, EV_READ);
+			}
+			return;
+		}
+	}
+	else {
+		n = recv(cbd->sock, (char *) &cbd->reply + cbd->pos,
+				 sizeof(cbd->reply) - cbd->pos, 0);
+		if (n > 0) {
+			cbd->pos += n;
+			if (cbd->pos != sizeof(cbd->reply)) return;
+			if (cbd->reply.error) {
+				cbd->error = cbd->reply.error > 0 ? cbd->reply.error : EIO;
+				goto finish;
+			}
+			if (cbd->reply.written != cbd->sent || cbd->reply.done > 1 ||
+				(cbd->reply.done != (cbd->sent == cbd->header.length))) {
+				cbd->error = EPROTO;
+				goto finish;
+			}
+			if (cbd->reply.done) goto finish;
+			cbd->target = cbd->sent + MIN((uint64_t) RSPAMD_FILE_WRITE_BLOCK,
+										  cbd->header.length - cbd->sent);
+			cbd->state = LUA_FILE_DATA;
+			lua_task_file_async_watch(cbd, EV_WRITE);
+			return;
+		}
+	}
+	if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return;
+	cbd->error = n == 0 ? EPIPE : errno;
+finish:
+	/* No cbd accesses after finish: Lua may destroy the task or start a new job. */
+	lua_task_file_async_finish(cbd);
+}
+
+static void
+lua_task_file_async_timer_cb(EV_P_ ev_timer *w, int revents)
+{
+	struct lua_task_file_async_cbdata *cbd = w->data;
+	if (cbd->sock != -1) cbd->error = ETIMEDOUT;
+	lua_task_file_async_finish(cbd);
+}
+
+static int
+lua_task_store_in_file_async(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	struct lua_task_file_async_cbdata *cbd;
+	const char *fname = NULL, *tmpmask = NULL;
+	int64_t mode = 00600;
+	gboolean force_new = FALSE, keep = FALSE;
+	gboolean mode_missing, timeout_missing;
+	double timeout = 5.0;
+	GError *err = NULL;
+	int sp[2];
+
+	if (!task || !lua_istable(L, 2) || !lua_isfunction(L, 3)) {
+		return luaL_error(L, "invalid arguments: options table and callback expected");
+	}
+	/* The default parser zeroes missing numeric options. Preserve explicit zero. */
+	lua_getfield(L, 2, "mode");
+	mode_missing = lua_isnil(L, -1);
+	lua_pop(L, 1);
+	lua_getfield(L, 2, "timeout");
+	timeout_missing = lua_isnil(L, -1);
+	lua_pop(L, 1);
+	if (!rspamd_lua_parse_table_arguments(L, 2, &err,
+										  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+										  "filename=S;tmpmask=S;mode=I;force_new=B;keep=B;timeout=D",
+										  &fname, &tmpmask, &mode, &force_new, &keep, &timeout)) {
+		if (err) {
+			g_error_free(err);
+		}
+		return luaL_error(L, "invalid arguments");
+	}
+	if (mode_missing) {
+		mode = 00600;
+	}
+	if (timeout_missing) {
+		timeout = 5.0;
+	}
+	if (!isfinite(timeout) || timeout <= 0) {
+		return luaL_error(L, "timeout must be finite and positive");
+	}
+	if (!task->cfg || !task->event_loop || !task->s || rspamd_session_blocked(task->s)) {
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, "an active task session is required");
+		return 2;
+	}
+
+	cbd = g_malloc0(sizeof(*cbd));
+	REF_INIT_RETAIN(cbd, lua_task_file_async_dtor); /* Session reference. */
+	cbd->task = task;
+	cbd->session = task->s;
+	cbd->cfg = task->cfg;
+	CFG_REF_RETAIN(cbd->cfg);
+	cbd->event_loop = task->event_loop;
+	cbd->item = rspamd_symcache_get_cur_item(task);
+	cbd->fd = cbd->sock = -1;
+	cbd->keep = keep;
+	lua_pushvalue(L, 3);
+	cbd->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+	ev_timer_init(&cbd->timer, lua_task_file_async_timer_cb, 0.0, 0.0);
+	cbd->timer.data = cbd;
+	rspamd_mempool_add_destructor(task->task_pool, lua_task_file_async_fin, cbd);
+
+	if (!rspamd_session_add_event(task->s, lua_task_file_async_fin, cbd,
+								  "store_in_file_async")) {
+		lua_task_file_async_fin(cbd);
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, "cannot register asynchronous file write");
+		return 2;
+	}
+	if (cbd->item) {
+		rspamd_symcache_item_async_inc(task, cbd->item, "store_in_file_async");
+	}
+	ev_now_update(cbd->event_loop);
+	cbd->deadline = rspamd_get_ticks(FALSE) + timeout;
+
+	if (!force_new && (task->flags & RSPAMD_TASK_FLAG_FILE) && task->msg.fpath) {
+		cbd->fname = g_strdup(task->msg.fpath);
+		goto schedule;
+	}
+
+	if (!task->worker || task->worker->srv_pipe[1] < 0) {
+		cbd->error = ENOTCONN;
+		goto schedule;
+	}
+	if (lua_task_file_async_jobs >= RSPAMD_FILE_WRITE_WORKER_JOBS) {
+		cbd->error = EBUSY;
+		goto schedule;
+	}
+	cbd->counted = TRUE;
+	lua_task_file_async_jobs++;
+
+	/* Reserve the name in the task owner so cancellation can always unlink it. */
+	if (fname) {
+		cbd->fname = g_strdup(fname);
+		cbd->fd = rspamd_file_xopen(fname, O_WRONLY | O_CREAT | O_EXCL, mode, FALSE);
+	}
+	else {
+		cbd->fname = tmpmask ? g_strdup(tmpmask) : g_build_filename(task->cfg->temp_dir, "rmsg-XXXXXXXXXX", NULL);
+		cbd->fd = g_mkstemp_full(cbd->fname, O_WRONLY | O_CREAT | O_EXCL, mode);
+	}
+	if (cbd->fd == -1) {
+		cbd->error = errno;
+		goto schedule;
+	}
+	cbd->owned = TRUE;
+	if (fcntl(cbd->fd, F_SETFD, FD_CLOEXEC) == -1 || fchmod(cbd->fd, mode) == -1) {
+		cbd->error = errno;
+		goto schedule;
+	}
+	if (rspamd_socketpair(sp, SOCK_STREAM) != TRUE) {
+		cbd->error = errno;
+		goto schedule;
+	}
+	if (rspamd_socket_nonblocking(sp[0]) == -1) {
+		cbd->error = errno;
+		close(sp[0]);
+		close(sp[1]);
+		goto schedule;
+	}
+	cbd->sock = sp[0];
+	cbd->header.magic = RSPAMD_FILE_WRITE_MAGIC;
+	cbd->header.length = task->msg.len;
+	cbd->header.deadline = cbd->deadline;
+	cbd->state = LUA_FILE_HEADER;
+	ev_io_init(&cbd->io, lua_task_file_async_io, cbd->sock, EV_WRITE);
+	cbd->io.data = cbd;
+	ev_io_start(cbd->event_loop, &cbd->io);
+	struct rspamd_srv_command cmd = {.type = RSPAMD_SRV_FILE_WRITE};
+	/* FILE_WRITE consumes sp[1], including on a queued-send failure. */
+	rspamd_srv_send_command(task->worker, cbd->event_loop, &cmd, sp[1], NULL, NULL);
+	cbd->command_id = cmd.id;
+	cbd->handed_off = TRUE;
+
+schedule:
+	/* Also defer setup errors and the existing-file shortcut: never call inline. */
+	ev_now_update(cbd->event_loop);
+	ev_timer_set(&cbd->timer, cbd->sock == -1 ? 0.0 : MAX(0.0, cbd->deadline - rspamd_get_ticks(FALSE)), 0.0);
+	ev_timer_start(cbd->event_loop, &cbd->timer);
+	lua_pushboolean(L, TRUE);
 	return 1;
 }
 
