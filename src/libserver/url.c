@@ -1081,8 +1081,14 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				st = parse_slash_slash;
 				*(flags) |= RSPAMD_URL_FLAG_MISSINGSLASHES;
 			}
+			if ((parse_flags & RSPAMD_URL_PARSE_UPSTREAM) && t != '/') {
+				goto out;
+			}
 			break;
 		case parse_slash:
+			if ((parse_flags & RSPAMD_URL_PARSE_UPSTREAM) && t != '/') {
+				goto out;
+			}
 			if (t == '/' || t == '\\') {
 				st = parse_slash_slash;
 			}
@@ -1132,6 +1138,9 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			}
 			else {
 				/* Skip multiple slashes */
+				if (parse_flags & RSPAMD_URL_PARSE_UPSTREAM) {
+					goto out;
+				}
 				p++;
 			}
 			break;
@@ -1216,7 +1225,8 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			else if (!g_ascii_isgraph(t)) {
 				goto out;
 			}
-			else if (!user_oversized && p - c > max_email_user) {
+			else if (!(parse_flags & RSPAMD_URL_PARSE_UPSTREAM) &&
+					 !user_oversized && p - c > max_email_user) {
 				/*
 				 * Oversized user field is itself an obfuscation signal
 				 * (e.g. https://legit.com<lots-of-spaces>@evil.com/...),
@@ -1606,7 +1616,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end(t)) {
+			else if (!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM)) && is_url_end(t)) {
 				goto set;
 			}
 			else if (is_lwsp(t)) {
@@ -1630,7 +1640,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end(t)) {
+			else if (!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM)) && is_url_end(t)) {
 				goto set;
 			}
 			else if (is_lwsp(t)) {
@@ -1647,7 +1657,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			p++;
 			break;
 		case parse_part:
-			if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end(t)) {
+			if (!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM)) && is_url_end(t)) {
 				goto set;
 			}
 			else if (is_lwsp(t)) {
@@ -2296,7 +2306,15 @@ rspamd_url_parse(struct rspamd_url *uri,
 		return URI_ERRNO_EMPTY;
 	}
 
+	/* Direct parsing can also be used while loading the initial config. */
+	if (url_scanner == NULL) {
+		rspamd_url_init(NULL);
+	}
+
 	if (len >= G_MAXUINT16 / 2) {
+		if (parse_flags & RSPAMD_URL_PARSE_UPSTREAM) {
+			return URI_ERRNO_BAD_FORMAT;
+		}
 		flags |= RSPAMD_URL_FLAG_TRUNCATED;
 		len = G_MAXUINT16 / 2;
 	}
@@ -2326,6 +2344,12 @@ rspamd_url_parse(struct rspamd_url *uri,
 	}
 
 	if (ret != 0) {
+		return URI_ERRNO_BAD_FORMAT;
+	}
+
+	if ((parse_flags & RSPAMD_URL_PARSE_UPSTREAM) &&
+		(end != uristring + len || memchr(uristring, '\0', len) != NULL ||
+		 (flags & RSPAMD_URL_FLAG_MISSINGSLASHES))) {
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
@@ -2716,7 +2740,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 			if (!is_whole_hostname_tld) {
 				if (uri->protocol != PROTOCOL_MAILTO) {
-					if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+					if (url_scanner->has_tld_file &&
+						!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM))) {
 						/* Ignore URL's without TLD if it is not a numeric URL */
 						if (!rspamd_url_maybe_regenerate_from_ip(uri, pool)) {
 							return URI_ERRNO_TLD_MISSING;

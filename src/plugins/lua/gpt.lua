@@ -1386,7 +1386,7 @@ if opts then
 
   settings.upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.url, rspamd_config)
   if not settings.upstreams then
-    rspamd_logger.errx(rspamd_config, 'cannot create upstreams for url %s, disabling module', settings.url)
+    rspamd_logger.errx(rspamd_config, 'cannot create HTTP upstreams for configured GPT URL, disabling module')
     lua_util.disable_module(N, "config")
     return
   end
