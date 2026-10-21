@@ -72,6 +72,7 @@ LUA_FUNCTION_DEF(url, get_query_embedded_urls);
 LUA_FUNCTION_DEF(url, get_visible);
 LUA_FUNCTION_DEF(url, get_hash);
 LUA_FUNCTION_DEF(url, create);
+LUA_FUNCTION_DEF(url, parse);
 LUA_FUNCTION_DEF(url, init);
 LUA_FUNCTION_DEF(url, all);
 LUA_FUNCTION_DEF(url, lt);
@@ -120,6 +121,7 @@ static const struct luaL_reg urllib_m[] = {
 static const struct luaL_reg urllib_f[] = {
 	LUA_INTERFACE_DEF(url, init),
 	LUA_INTERFACE_DEF(url, create),
+	LUA_INTERFACE_DEF(url, parse),
 	LUA_INTERFACE_DEF(url, all),
 	{NULL, NULL}};
 
@@ -1046,6 +1048,80 @@ lua_url_create(lua_State *L)
 			}
 		}
 	}
+
+	return 1;
+}
+
+/***
+ * @function url.parse([mempool,] str[, options])
+ * Parse a complete URL directly, without extracting it from text.
+ *
+ * WARNING: Omitting mempool uses a process-wide static pool. Allocations,
+ * including those made by failed parses, are not reclaimed by Lua garbage
+ * collection and remain until process exit. Repeated calls without a pool
+ * therefore cause unbounded memory growth. Never omit the pool in per-message,
+ * per-request, or other unbounded code paths.
+ *
+ * Use task:get_mempool() for message processing, or rspamd_config:get_mempool()
+ * for configured endpoints. The returned URL must not be used after its pool
+ * is destroyed. The pool-less form is only suitable for bounded, process-lifetime
+ * allocations.
+ * @param {rspamd_mempool} mempool pool owning the result; strongly recommended
+ * @param {string} str URL to parse
+ * @param {table} options optional table; upstream=true permits config endpoints
+ * without a public suffix and disables text boundary heuristics
+ * @return {url} URL object, or nil and an error string
+ * @example
+local url, err = require('rspamd_url').parse(
+  rspamd_config:get_mempool(), 'http://user:password@llm.internal.lan:8080/api',
+  {upstream = true})
+ */
+static int
+lua_url_parse(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	rspamd_mempool_t *pool = static_lua_url_pool;
+	int str_pos = 1;
+	enum rspamd_url_parse_flags parse_flags = RSPAMD_URL_PARSE_TEXT;
+
+	if (lua_type(L, 1) == LUA_TUSERDATA) {
+		pool = rspamd_lua_check_mempool(L, 1);
+		str_pos = 2;
+	}
+
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, str_pos);
+	if (pool == NULL || t == NULL) {
+		return luaL_error(L, "invalid arguments: memory pool and URL string expected");
+	}
+
+	if (!lua_isnoneornil(L, str_pos + 1)) {
+		luaL_checktype(L, str_pos + 1, LUA_TTABLE);
+		lua_getfield(L, str_pos + 1, "upstream");
+		if (lua_toboolean(L, -1)) {
+			parse_flags |= RSPAMD_URL_PARSE_UPSTREAM;
+		}
+		lua_pop(L, 1);
+	}
+
+	/* The parser keeps the raw string in the URL's owning pool. */
+	char *input = rspamd_mempool_alloc(pool, t->len + 1);
+	memcpy(input, t->start, t->len);
+	input[t->len] = '\0';
+	struct rspamd_url *url = rspamd_mempool_alloc_type(pool, struct rspamd_url);
+	enum uri_errno err = rspamd_url_parse(url, input, t->len, pool, parse_flags, L);
+
+	if (err == URI_ERRNO_OK && url->rawlen != t->len) {
+		err = URI_ERRNO_BAD_FORMAT;
+	}
+	if (err != URI_ERRNO_OK) {
+		lua_pushnil(L);
+		lua_pushstring(L, rspamd_url_strerror(err));
+		return 2;
+	}
+
+	struct rspamd_lua_url *lua_url = lua_newuserdata(L, sizeof(*lua_url));
+	rspamd_lua_setclass(L, rspamd_url_classname, -1);
+	lua_url->url = url;
 
 	return 1;
 }

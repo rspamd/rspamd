@@ -165,6 +165,8 @@ enum rspamd_url_parse_flags {
 	RSPAMD_URL_PARSE_TEXT = 0u,
 	RSPAMD_URL_PARSE_HREF = (1u << 0u),
 	RSPAMD_URL_PARSE_CHECK = (1u << 1u),
+	/* A complete endpoint from configuration, without public-suffix policy. */
+	RSPAMD_URL_PARSE_UPSTREAM = (1u << 2u),
 };
 
 enum rspamd_url_find_type {

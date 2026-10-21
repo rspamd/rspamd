@@ -84,6 +84,75 @@ context("Lua util - callback_from_string", function()
   end)
 end)
 
+context('Lua util - HTTP endpoint upstreams', function()
+  test('Uses parsed host and port independently of TLD state', function()
+    local helper = require 'rspamd_test_helper'
+    local upstream_list = require 'rspamd_upstream_list'
+    local original_create = upstream_list.create
+    local original_lupa = package.loaded.lupa
+    local calls = {}
+    upstream_list.create = function(cfg, host, port)
+      calls[#calls + 1] = {cfg, host, port}
+      return {}
+    end
+
+    local ok, err = pcall(function()
+      -- Separate module instances prevent the URL cache from hiding a
+      -- dependency on parser initialization in the second pass.
+      for _, loaded in ipairs({false, true}) do
+        if loaded then
+          helper.init_url_parser()
+        else
+          helper.ffi.C.rspamd_url_init(nil)
+        end
+        -- lua_util configures its own template engine; do not reconfigure
+        -- the instance already held by other test modules.
+        package.loaded.lupa = nil
+        local fresh_util = dofile(rspamd_paths.LUALIBDIR .. '/lua_util.lua')
+        package.loaded.lupa = original_lupa
+        for _, c in ipairs({
+          {'https://llm.internal.lan/v1', 'llm.internal.lan', 443},
+          {'http://user:pw@llm.internal.lan:8080/x', 'llm.internal.lan', 8080},
+          {'http://ollama/api', 'ollama', 80},
+          {'http://127.0.0.1:11434/api', '127.0.0.1', 11434},
+          {'http://[::1]:11434/api', '[::1]', 11434},
+        }) do
+          local result = fresh_util.http_upstreams_by_url(rspamd_config:get_mempool(), c[1], rspamd_config)
+          assert_not_nil(result)
+          assert_equal(rspamd_config, calls[#calls][1])
+          assert_equal(c[2], calls[#calls][2])
+          assert_equal(c[3], calls[#calls][3])
+        end
+        local n = #calls
+        for _, input in ipairs({'not a url', 'http://llm.internal.lan:65537/x', 'ftp://files.internal.lan/x'}) do
+          assert_nil(fresh_util.http_upstreams_by_url(rspamd_config:get_mempool(), input, rspamd_config))
+        end
+        assert_equal(n, #calls)
+      end
+    end)
+    upstream_list.create = original_create
+    package.loaded.lupa = original_lupa
+    helper.init_url_parser()
+    if not ok then
+      error(err)
+    end
+  end)
+
+  test('Creates numeric upstreams with the requested port', function()
+    for _, c in ipairs({
+      {'http://127.0.0.1:11434/api', '127.0.0.1'},
+      {'http://[::1]:11434/api', '::1'},
+    }) do
+      local upstreams = util.http_upstreams_by_url(rspamd_config:get_mempool(), c[1], rspamd_config)
+      assert_not_nil(upstreams)
+      local all = upstreams:all_upstreams()
+      assert_equal(1, #all)
+      assert_equal(11434, all[1]:get_port())
+      assert_equal(c[2], all[1]:get_addr():to_string())
+    end
+  end)
+end)
+
 context("Lua util - str_endswith", function()
   local ending = {
     {'a', 'a'},

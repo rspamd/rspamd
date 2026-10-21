@@ -1894,7 +1894,7 @@ local function http_upstreams_by_url(pool, url, cfg)
     return cached
   end
 
-  local real_url = rspamd_url.create(pool, url)
+  local real_url = rspamd_url.parse(pool, url, { upstream = true })
 
   if not real_url then
     return nil
@@ -1902,7 +1902,14 @@ local function http_upstreams_by_url(pool, url, cfg)
 
   local host = real_url:get_host()
   local proto = real_url:get_protocol() or 'http'
+  if proto ~= 'http' and proto ~= 'https' then
+    return nil
+  end
   local port = real_url:get_port() or (proto == 'https' and 443 or 80)
+  -- Upstream definitions require brackets to distinguish IPv6 from host:port.
+  if host:find(':', 1, true) then
+    host = '[' .. host .. ']'
+  end
   local upstream_list = require "rspamd_upstream_list"
   -- Attach to the config upstream context when available: otherwise a
   -- failed startup DNS lookup leaves the upstream pending forever, as the
