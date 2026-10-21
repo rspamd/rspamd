@@ -1055,11 +1055,26 @@ lua_url_create(lua_State *L)
 /***
  * @function url.parse([mempool,] str[, options])
  * Parse a complete URL directly, without extracting it from text.
- * @param {rspamd_mempool} mempool optional pool owning the result
+ *
+ * WARNING: Omitting mempool uses a process-wide static pool. Allocations,
+ * including those made by failed parses, are not reclaimed by Lua garbage
+ * collection and remain until process exit. Repeated calls without a pool
+ * therefore cause unbounded memory growth. Never omit the pool in per-message,
+ * per-request, or other unbounded code paths.
+ *
+ * Use task:get_mempool() for message processing, or rspamd_config:get_mempool()
+ * for configured endpoints. The returned URL must not be used after its pool
+ * is destroyed. The pool-less form is only suitable for bounded, process-lifetime
+ * allocations.
+ * @param {rspamd_mempool} mempool pool owning the result; strongly recommended
  * @param {string} str URL to parse
  * @param {table} options optional table; upstream=true permits config endpoints
  * without a public suffix and disables text boundary heuristics
  * @return {url} URL object, or nil and an error string
+ * @example
+local url, err = require('rspamd_url').parse(
+  rspamd_config:get_mempool(), 'http://user:password@llm.internal.lan:8080/api',
+  {upstream = true})
  */
 static int
 lua_url_parse(lua_State *L)
