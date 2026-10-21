@@ -641,13 +641,12 @@ local function gen_rbl_callback(rule)
       if rule.dkim_match_from then
         -- We check merely mime from
         mime_from_domain = ((task:get_from('mime') or E)[1] or E).domain
-        if mime_from_domain then
-          local mime_from_domain_tld = rule.url_full_hostname and
-              mime_from_domain or rspamd_util.get_tld(mime_from_domain)
+        if mime_from_domain and rule.dkim_domainonly then
+          local mime_from_domain_tld = rspamd_util.get_tld(mime_from_domain)
 
           if rule.url_compose_map then
             mime_from_domain = rule.url_compose_map:process_url(task, mime_from_domain_tld, mime_from_domain)
-          else
+          elseif not rule.url_full_hostname then
             mime_from_domain = mime_from_domain_tld
           end
         end
