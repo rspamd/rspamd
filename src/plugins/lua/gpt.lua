@@ -362,6 +362,10 @@ local function default_condition(task)
     end
   end
 
+  return true, nil
+end
+
+local function check_symbols_to_except(task)
   if settings.symbols_to_except then
     for s, required_weight in pairs(settings.symbols_to_except) do
       if task:has_symbol(s) then
@@ -382,6 +386,11 @@ local function default_condition(task)
       end
     end
   end
+
+  return true, nil
+end
+
+local function check_symbols_to_trigger(task)
   if settings.symbols_to_trigger then
     for s, required_weight in pairs(settings.symbols_to_trigger) do
       if task:has_symbol(s) then
@@ -1195,6 +1204,12 @@ end
 
 local function gpt_check(task)
   local ret, ret_msg = settings.condition(task)
+  if ret then
+    ret, ret_msg = check_symbols_to_except(task)
+  end
+  if ret then
+    ret, ret_msg = check_symbols_to_trigger(task)
+  end
 
   -- Get displayed text part with configurable min_words
   local sel_part = lua_mime.get_displayed_text_part(task, settings.min_words)
