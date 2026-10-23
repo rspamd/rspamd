@@ -1281,7 +1281,21 @@ dkim_module_check(struct dkim_check_result *res)
 			if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
 				from_domain = from_addr->domain;
 				from_domain_len = from_addr->domain_len;
-				(void) rspamd_url_find_tld(from_domain, from_domain_len, &from_tld);
+
+				if (rspamd_str_has_8bit((const unsigned char *) from_domain,
+										from_domain_len)) {
+					unsigned int alabel_len = 0;
+
+					from_domain = rspamd_dns_resolver_idna_convert_utf8(
+						task->resolver, task->task_pool,
+						from_domain, from_domain_len, &alabel_len);
+					from_domain_len = alabel_len;
+				}
+
+				if (from_domain != NULL) {
+					(void) rspamd_url_find_tld(from_domain, from_domain_len,
+											   &from_tld);
+				}
 			}
 		}
 

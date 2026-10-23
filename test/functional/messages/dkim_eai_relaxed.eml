@@ -1,0 +1,13 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=xn--gr-zia.org;
+	s=dkim; t=1788394915; h=from:to:subject:date:message-id:mime-version:content-type;
+	bh=GjYHqYVPILBLUwZh6f4rBjkI8yqjEbckUOE3vazZtWA=;
+	b=PSp047fHdDxqUB1gd5SqSi5enWtjBH103pzQFLADVka77swAqYSnp95p8ls8ZYlrgl8d9CivzVxXIHLPQFtMQiCl1oA3RYh10i4QafgQ4vODkvwILI3Q0S+/Kgb2GqDfN/Xll3BfUfthTfKeq/8IWjpzHGn2p/lQXOCCCplCr8E=
+From: Arnt <arnt@post.grå.org>
+MIME-Version: 1.0
+Date: Mon, 02 Mar 2026 10:00:00 +0000
+Message-ID: <dkim_eai_relaxed@grå.org>
+Subject: EAI alignment fixture
+To: Gøril <gøril@example.com>
+Content-Type: text/plain; charset=utf-8
+
+An internationalised message used to check DKIM alignment reporting.
