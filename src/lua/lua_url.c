@@ -69,6 +69,7 @@ LUA_FUNCTION_DEF(url, get_phished);
 LUA_FUNCTION_DEF(url, set_redirected);
 LUA_FUNCTION_DEF(url, get_count);
 LUA_FUNCTION_DEF(url, get_query_embedded_urls);
+LUA_FUNCTION_DEF(url, get_query_target);
 LUA_FUNCTION_DEF(url, get_visible);
 LUA_FUNCTION_DEF(url, get_hash);
 LUA_FUNCTION_DEF(url, create);
@@ -105,6 +106,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_visible),
 	LUA_INTERFACE_DEF(url, get_count),
 	LUA_INTERFACE_DEF(url, get_query_embedded_urls),
+	LUA_INTERFACE_DEF(url, get_query_target),
 	LUA_INTERFACE_DEF(url, get_hash),
 	LUA_INTERFACE_DEF(url, get_flags),
 	LUA_INTERFACE_DEF(url, get_flags_num),
@@ -520,8 +522,9 @@ lua_url_get_raw(lua_State *L)
 
 /***
  * @method url:is_phished()
- * Check whether URL is treated as phished
- * @return {boolean} `true` if URL is phished
+ * Check whether URL has a displayed-domain mismatch or an obscured display.
+ * This is a parser signal; the phishing module applies scoring and exceptions.
+ * @return {boolean} `true` if URL has a phishing candidate signal
  */
 static int
 lua_url_is_phished(lua_State *L)
@@ -840,6 +843,82 @@ lua_url_get_query_embedded_urls(lua_State *L)
 
 	if (url != NULL && url->url != NULL) {
 		lua_pushinteger(L, url->url->ext ? url->url->ext->query_embedded_urls : 0);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+struct lua_url_query_target_cbd {
+	unsigned int count;
+	struct rspamd_url *single;
+};
+
+static gboolean
+lua_url_query_target_cb(struct rspamd_url *url, gsize start_offset,
+						gsize end_offset, gpointer ud)
+{
+	struct lua_url_query_target_cbd *cbd = ud;
+
+	if ((url->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_FTP)) &&
+		url->tldlen > 0) {
+		cbd->count++;
+		cbd->single = url;
+	}
+
+	return TRUE;
+}
+
+/***
+ * @method url:get_query_target(pool)
+ * Follow a single embedded HTTP/HTTPS/FTP URL per query level to its leaf.
+ * Uses the URL parser's parameter boundaries, decoding and nesting limit.
+ * An embedded target is untrusted input, not evidence of an HTTP redirect.
+ * @param {mempool} pool memory pool for the extracted URLs
+ * @return {url|nil} leaf URL, or nil for no target, ambiguity or depth exhaustion
+ */
+static int
+lua_url_get_query_target(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
+	struct rspamd_url *cur, *leaf = NULL;
+	bool fully_consumed = false;
+
+	if (url == NULL || pool == NULL) {
+		return luaL_error(L, "url and memory pool are required");
+	}
+
+	cur = url->url;
+	for (unsigned int depth = 0; depth < RSPAMD_URL_QUERY_MAX_NESTING; depth++) {
+		if (cur->querylen == 0) {
+			fully_consumed = true;
+			break;
+		}
+
+		struct lua_url_query_target_cbd cbd = {0, NULL};
+		rspamd_url_query_foreach_embedded(pool, cur, RSPAMD_URL_FIND_ALL,
+										  lua_url_query_target_cb, &cbd, L);
+
+		if (cbd.count == 0) {
+			fully_consumed = true;
+			break;
+		}
+		if (cbd.count != 1) {
+			break;
+		}
+
+		leaf = cbd.single;
+		cur = leaf;
+	}
+
+	if (fully_consumed && leaf != NULL) {
+		struct rspamd_lua_url *target = lua_newuserdata(L, sizeof(*target));
+		rspamd_lua_setclass(L, rspamd_url_classname, -1);
+		target->url = leaf;
 	}
 	else {
 		lua_pushnil(L);

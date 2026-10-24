@@ -20,6 +20,46 @@ context("URL check functions", function()
 
   local pool = mpool.create()
 
+  local query_targets = {
+    { 'http://wrap.com/', false },
+    { 'http://wrap.com/?id=123', false },
+    { 'http://wrap.com/?u=http://dest.com/', 'http://dest.com/' },
+    { 'http://wrap.com/?u=http%3A%2F%2Fdest.com%2F&b=x', 'http://dest.com/' },
+    { 'http://wrap.com/?u=http%3A%2F%2Fdest.com%2F%3Fa%3Dx%26b%3Dy&c=z',
+      'http://dest.com/?a=x&b=y' },
+    { 'http://wrap.com/?u=http%3A%2F%2Fmid.com%2F%3Fv%3Dhttp%253A%252F%252Fdest.com%252F',
+      'http://dest.com/' },
+    { 'http://wrap.com/?u=http://dest.com/&v=http://other.com/', false },
+    { 'http://wrap.com/?u=http%3A%2F%2Fmid.com%2F%3Fa%3Dhttp%253A%252F%252Fdest.com%252F%26b%3Dhttp%253A%252F%252Fother.com%252F',
+      false },
+  }
+
+  for i, case in ipairs(query_targets) do
+    test('Unambiguous query target ' .. i, function()
+      local u = url.create(pool, case[1])
+      assert_not_nil(u)
+      local target = u:get_query_target(pool)
+      if case[2] then
+        assert_not_nil(target)
+        assert_equal(case[2], target:get_text())
+      else
+        assert_nil(target)
+      end
+    end)
+  end
+
+  test('Query target depth exhaustion does not return an intermediate match', function()
+    local href = 'http://dest.com/'
+    for i = 1, 6 do
+      href = 'http://wrap' .. i .. '.com/?u=' .. href:gsub('[^%w]', function(c)
+        return string.format('%%%02X', c:byte())
+      end)
+    end
+    local u = url.create(pool, href)
+    assert_not_nil(u)
+    assert_nil(u:get_query_target(pool))
+  end)
+
   local cases = {
     { "test.com", { "test.com", nil } },
     { " test.com", { "test.com", nil } },

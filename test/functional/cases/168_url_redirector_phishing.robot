@@ -10,10 +10,11 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}          ${RSPAMD_TESTDIR}/configs/url_redirector_phishing.conf
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/redir_phishing_safe.eml
+${QUERY_DECOY}     ${RSPAMD_TESTDIR}/messages/redir_phishing_query_decoy.eml
 ${REDIS_SCOPE}     Suite
 ${RSPAMD_SCOPE}    Suite
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK, PHISHING]}
+${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK, PHISHING, PHISHING_QUERY, URL_DISPLAY_MISMATCH]}
 
 *** Test Cases ***
 PHISHING NO FP WHEN DISPLAY TEXT EQUALS REDIRECT DEST
@@ -22,7 +23,16 @@ PHISHING NO FP WHEN DISPLAY TEXT EQUALS REDIRECT DEST
   # equals the displayed URL -- phishing must not fire.
   Scan File  ${MESSAGE}  Settings=${SETTINGS}
   Expect Symbol  URL_REDIRECTOR
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
   Do Not Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
+
+PHISHING CONFIRMED REDIRECT MISMATCH OVERRIDES QUERY DECOY
+  Scan File  ${QUERY_DECOY}  Settings=${SETTINGS}
+  Expect Symbol  URL_REDIRECTOR
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
 
 *** Keywords ***
 Urlredirector Setup
@@ -30,6 +40,8 @@ Urlredirector Setup
   Rspamd Redis Setup
   ${MESSAGE} =  Render Message Template  ${MESSAGE}
   Set Suite Variable  ${MESSAGE}
+  ${QUERY_DECOY} =  Render Message Template  ${QUERY_DECOY}
+  Set Suite Variable  ${QUERY_DECOY}
 
 Urlredirector Teardown
   Rspamd Redis Teardown

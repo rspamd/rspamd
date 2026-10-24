@@ -13,13 +13,17 @@ ${MESSAGE_QNESTED}    ${RSPAMD_TESTDIR}/messages/phishing_query_nested.eml
 ${MESSAGE_QNESTFIRE}  ${RSPAMD_TESTDIR}/messages/phishing_query_nested_fire.eml
 ${MESSAGE_QOVERCAP}   ${RSPAMD_TESTDIR}/messages/phishing_query_overcap.eml
 ${MESSAGE_XTLD}       ${RSPAMD_TESTDIR}/messages/phishing_same_label_cross_tld.eml
-${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,STRICT_PHISHING,STRICTER_PHISHING]}
+${MESSAGE_QTRUSTED}   ${RSPAMD_TESTDIR}/messages/phishing_query_trusted.eml
+${MESSAGE_QSTRICT}    ${RSPAMD_TESTDIR}/messages/phishing_query_strict.eml
+${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,STRICT_PHISHING,STRICTER_PHISHING,TEST_PHISHING_WRAPPER]}
 
 *** Test Cases ***
 TEST PHISHING
   Scan File  ${MESSAGE1}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol  PHISHING
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING_QUERY
 
 TEST PHISHING STRICT ONE
   Scan File  ${MESSAGE2}
@@ -38,13 +42,15 @@ TEST PHISHING NO FP FOR SAME LABEL UNDER DIFFERENT PUBLIC SUFFIX
   Scan File  ${MESSAGE_XTLD}
   ...  Settings=${SETTINGS_PHISHING}
   Do Not Expect Symbol  PHISHING
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING_QUERY
 
-TEST PHISHING NO FP WHEN HREF QUERY DEST EQUALS DISPLAY TEXT
-  # href host differs from the displayed domain, but the href's query embeds a
-  # destination URL equal to the displayed domain (a wrapper/redirector that
-  # points back at the shown domain) -- not phishing.
+TEST PHISHING QUERY MATCH IS A SEPARATE LOWER SCORE SIGNAL
+  # A matching query target cannot prove that the outer server redirects there.
   Scan File  ${MESSAGE_QSAFE}
   ...  Settings=${SETTINGS_PHISHING}
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol With Score  PHISHING_QUERY  1
   Do Not Expect Symbol  PHISHING
 
 TEST PHISHING FIRES WHEN HREF QUERY HAS MULTIPLE URLS
@@ -54,13 +60,14 @@ TEST PHISHING FIRES WHEN HREF QUERY HAS MULTIPLE URLS
   Scan File  ${MESSAGE_QMULTI}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
 
-TEST PHISHING NO FP WHEN NESTED QUERY LEAF EQUALS DISPLAY TEXT
-  # The href wraps a wrapper: its query holds one URL (mid) whose query in turn
-  # holds one URL (the displayed domain). Following the single-target chain to
-  # the leaf, it equals the displayed domain -- not phishing.
+TEST PHISHING NESTED QUERY MATCH IS A SEPARATE LOWER SCORE SIGNAL
+  # Only the unambiguous leaf counts; intermediate matches cannot lower scoring.
   Scan File  ${MESSAGE_QNESTED}
   ...  Settings=${SETTINGS_PHISHING}
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol With Score  PHISHING_QUERY  1
   Do Not Expect Symbol  PHISHING
 
 TEST PHISHING FIRES WHEN NESTED QUERY LEAF DIFFERS FROM DISPLAY TEXT
@@ -71,6 +78,7 @@ TEST PHISHING FIRES WHEN NESTED QUERY LEAF DIFFERS FROM DISPLAY TEXT
   Scan File  ${MESSAGE_QNESTFIRE}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
 
 TEST PHISHING FIRES WHEN NESTED CHAIN EXCEEDS NESTING CAP
   # The href wraps a single-target chain deeper than RSPAMD_URL_QUERY_MAX_NESTING.
@@ -81,3 +89,40 @@ TEST PHISHING FIRES WHEN NESTED CHAIN EXCEEDS NESTING CAP
   Scan File  ${MESSAGE_QOVERCAP}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
+
+TEST PHISHING KNOWN WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
+  Scan File  ${MESSAGE_QTRUSTED}
+  ...  Settings=${SETTINGS_PHISHING}
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol  TEST_PHISHING_WRAPPER
+  Do Not Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
+
+TEST PHISHING QUERY MATCH DOES NOT BYPASS STRICT DOMAIN PROTECTION
+  Scan File  ${MESSAGE_QSTRICT}
+  ...  Settings=${SETTINGS_PHISHING}
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol  STRICT_PHISHING
+  Expect Symbol With Score  PHISHING_QUERY  1
+
+TEST PHISHING QUERY MATCH NORMALISES IDN SPELLINGS
+  Scan File  ${RSPAMD_TESTDIR}/messages/phishing_query_idn.eml
+  ...  Settings=${SETTINGS_PHISHING}
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol With Score  PHISHING_QUERY  1
+  Do Not Expect Symbol  PHISHING
+
+TEST PHISHING AUTHENTICATED WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
+  Scan File  ${RSPAMD_TESTDIR}/messages/phishing_query_dmarc.eml
+  ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
+  ...  Settings={symbols_enabled=[PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
+  Expect Symbol  DMARC_POLICY_ALLOW
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY
+
+TEST PHISHING QUERY SYMBOL CAN ENABLE ITS PARENT CHECK
+  Scan File  ${MESSAGE_QSAFE}
+  ...  Settings={symbols_enabled=[PHISHING_QUERY]}
+  Expect Symbol With Score  PHISHING_QUERY  1

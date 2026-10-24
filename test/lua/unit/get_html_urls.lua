@@ -578,6 +578,26 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test('A matching query target does not erase the displayed domain mismatch', function()
+    local res, task = rspamd_task.load_from_string(
+        'Content-Type: text/html\r\n\r\n' ..
+        '<a href="https://example.com/?url=https://example.org/">https://example.org/</a>',
+        rspamd_config)
+    assert_true(res)
+    task:process_message()
+
+    local found
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == 'example.com' then
+        found = true
+        assert_true(u:is_phished())
+        assert_equal('example.org', u:get_phished():get_host())
+      end
+    end
+    assert_true(found)
+    task:destroy()
+  end)
+
   local padding_cases = {
     { 'no padding', '', 'https://example.org/', true },
     { 'zero-width padding', string.rep('\226\128\139', 1400), 'https://example.org/', true },

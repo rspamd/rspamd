@@ -1,0 +1,3 @@
+Content-Type: text/html
+
+<a href="http://redir.example.net:${RSPAMD_PORT_DUMMY_HTTP}/redir_to_query_decoy?url=http://www.cnn.com/">http://www.cnn.com/</a>
