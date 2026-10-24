@@ -240,6 +240,7 @@ struct rspamd_proxy_session {
 	struct rspamd_proxy_ctx *ctx;
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
+	/* Borrowed from the milter library; only valid until its close callback. */
 	struct rspamd_milter_session *client_milter_conn;
 	struct rspamd_http_upstream *backend;
 	gpointer map;
@@ -260,6 +261,7 @@ struct rspamd_proxy_session {
 	 */
 	gboolean allow_file_shm;
 	gboolean local_client;
+	gboolean conn_counted;
 	/* Key in ctx->conns_per_source, owned by the session, NULL if not counted */
 	char *source_key;
 
@@ -269,6 +271,7 @@ struct rspamd_proxy_session {
 };
 
 static gboolean proxy_send_master_message(struct rspamd_proxy_session *session);
+static void proxy_close_follow_master_mirrors(struct rspamd_proxy_session *session);
 
 static void
 proxy_add_client_ip_header(struct rspamd_http_message *msg,
@@ -1599,6 +1602,10 @@ proxy_source_conn_reserve(struct rspamd_proxy_ctx *ctx, const char *key)
 static void
 proxy_conn_release(struct rspamd_proxy_session *session)
 {
+	if (!session->conn_counted) {
+		return;
+	}
+	session->conn_counted = FALSE;
 	session->worker->nconns--;
 
 	if (session->source_key) {
@@ -1641,10 +1648,7 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		proxy_backend_close_connection(session->master_conn);
 	}
 
-	if (session->client_milter_conn) {
-		rspamd_milter_session_unref(session->client_milter_conn);
-	}
-	else if (session->client_conn) {
+	if (session->client_conn) {
 		rspamd_http_connection_reset(session->client_conn);
 		rspamd_http_connection_unref(session->client_conn);
 	}
@@ -1696,13 +1700,7 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		rspamd_mempool_delete(session->pool);
 	}
 
-	/* For milter sessions nconns is decremented explicitly when the MTA TCP
-	 * connection closes (proxy_milter_finish_handler / proxy_milter_error_handler)
-	 * because proxy_session_refresh creates a new session per message — each
-	 * intermediate session would otherwise decrement nconns prematurely. */
-	if (!session->ctx->milter) {
-		proxy_conn_release(session);
-	}
+	proxy_conn_release(session);
 
 	g_free(session->source_key);
 	g_free(session);
@@ -1851,6 +1849,8 @@ proxy_session_refresh(struct rspamd_proxy_session *session)
 	nsession->local_client = session->local_client;
 	nsession->source_key = session->source_key;
 	session->source_key = NULL;
+	nsession->conn_counted = session->conn_counted;
+	session->conn_counted = FALSE;
 	nsession->ctx = session->ctx;
 	nsession->worker = session->worker;
 	nsession->pool = rspamd_mempool_new_short_lived("proxy");
@@ -2717,8 +2717,11 @@ proxy_client_write_error(struct rspamd_proxy_session *session, int code,
 	struct rspamd_http_message *reply;
 
 	if (session->client_milter_conn) {
-		rspamd_milter_send_action(session->client_milter_conn,
-								  RSPAMD_MILTER_TEMPFAIL);
+		/* Complete this message just like a successful scan: move the transport
+		 * to a fresh session before retiring this message and its mirrors. */
+		struct rspamd_proxy_session *nsession = proxy_session_refresh(session);
+		rspamd_milter_send_tempfail(nsession->client_milter_conn);
+		proxy_close_follow_master_mirrors(session);
 		REF_RELEASE(session);
 	}
 	else {
@@ -2820,15 +2823,9 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 		}
 	}
 	else {
-		if (!proxy_send_master_message(session)) {
-			if (err) {
-				proxy_client_write_error(session, err->code, err->message);
-			}
-			else {
-				proxy_client_write_error(session, 503, "Unknown error on write");
-			}
-		}
-		else {
+		/* proxy_send_master_message owns terminal error completion. It can
+		 * retire session, so do not touch it again when it returns FALSE. */
+		if (proxy_send_master_message(session)) {
 			msg_info_session("retry connection to: %s"
 							 " retries left: %d",
 							 session->master_conn->up ? rspamd_inet_address_to_string(
@@ -3019,6 +3016,10 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
 	rspamd_fstring_t *output;
 	struct rspamd_stat stat_copy;
+
+	if (session->ctx->milter && session->client_milter_conn == NULL) {
+		return;
+	}
 
 	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
 											  "application/msgpack", sizeof("application/msgpack") - 1) != -1) {
@@ -3538,17 +3539,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 
 err:
 	if (session->client_milter_conn) {
-		/* The session is owned by the milter connection: there is exactly
-		 * one reference per accepted MTA connection. Do not release it
-		 * here. The async retry path releases it via
-		 * proxy_client_write_error(), while the direct end-of-message path
-		 * releases it from the QUIT/EOF finish or error callback. Dropping
-		 * the last reference here frees both the proxy and the milter
-		 * sessions while proxy_backend_master_error_handler() and the
-		 * milter library are still using them (use-after-free). It also
-		 * closes the socket before the TEMPFAIL below can be written. */
-		rspamd_milter_send_action(session->client_milter_conn,
-								  RSPAMD_MILTER_TEMPFAIL);
+		proxy_client_write_error(session, err_code, err_status);
 	}
 	else {
 		rspamd_http_connection_steal_msg(session->client_conn);
@@ -3697,40 +3688,26 @@ proxy_milter_finish_handler(int fd,
 
 	session->client_milter_conn = rms;
 
-	if (rms->message == NULL || rms->message->len == 0) {
-		msg_info_session("finished milter connection");
-		proxy_backend_close_connection(session->master_conn);
-		/* MTA TCP connection is closing: this is the one authoritative
-		 * decrement for nconns.  proxy_session_dtor skips nconns-- for milter
-		 * because proxy_session_refresh creates a new session per message and
-		 * each intermediate session destruction must not touch the counter. */
-		proxy_conn_release(session);
-		REF_RELEASE(session);
+	if (!session->master_conn) {
+		session->master_conn = rspamd_mempool_alloc0(session->pool,
+													 sizeof(*session->master_conn));
 	}
-	else {
-		if (!session->master_conn) {
-			session->master_conn = rspamd_mempool_alloc0(session->pool,
-														 sizeof(*session->master_conn));
-		}
 
-		msg = rspamd_milter_to_http(rms);
-		session->master_conn->s = session;
-		session->master_conn->name = "master";
-		session->client_message = msg;
+	msg = rspamd_milter_to_http(rms);
+	session->master_conn->s = session;
+	session->master_conn->name = "master";
+	session->client_message = msg;
 
-		/* Store ESMTP arguments from milter session */
-		if (rms->mail_esmtp_args) {
-			session->mail_esmtp_args = rms->mail_esmtp_args;
-		}
-		if (rms->rcpt_esmtp_args) {
-			session->rcpt_esmtp_args = rms->rcpt_esmtp_args;
-		}
-
-		/* Milter protocol doesn't support compression, so no need to set compression flag */
-
-		proxy_open_mirror_connections(session);
-		proxy_send_master_message(session);
+	/* Store ESMTP arguments from milter session */
+	if (rms->mail_esmtp_args) {
+		session->mail_esmtp_args = rms->mail_esmtp_args;
 	}
+	if (rms->rcpt_esmtp_args) {
+		session->rcpt_esmtp_args = rms->rcpt_esmtp_args;
+	}
+
+	proxy_open_mirror_connections(session);
+	proxy_send_master_message(session);
 }
 
 static void
@@ -3740,7 +3717,8 @@ proxy_milter_error_handler(int fd,
 {
 	struct rspamd_proxy_session *session = ud;
 
-	/* Avoid releasing the milter session from the proxy destructor. */
+	/* All transport exits, including QUIT, arrive here exactly once. Keep the
+	 * connection's base reference until backend and mirror work is cancelled. */
 	session->client_milter_conn = NULL;
 
 	if (err && err->code != 0) {
@@ -3748,21 +3726,28 @@ proxy_milter_error_handler(int fd,
 						 "error: %e",
 						 rspamd_inet_address_to_string_pretty(session->client_addr),
 						 err);
-		/* Terminate session immediately */
-		proxy_backend_close_connection(session->master_conn);
-		proxy_conn_release(session);
-		REF_RELEASE(session);
 	}
 	else {
-		msg_info_session("normally closing milter connection from: %s, "
-						 "%e",
-						 rspamd_inet_address_to_string_pretty(session->client_addr),
-						 err);
-		/* Terminate session immediately */
-		proxy_backend_close_connection(session->master_conn);
-		proxy_conn_release(session);
-		REF_RELEASE(session);
+		msg_info_session("normally closing milter connection from: %s",
+						 rspamd_inet_address_to_string_pretty(session->client_addr));
 	}
+
+	proxy_backend_close_connection(session->master_conn);
+	if (session->master_conn && session->master_conn->task) {
+		struct rspamd_task *task = session->master_conn->task;
+		session->master_conn->task = NULL;
+		rspamd_session_destroy(task->s);
+	}
+	for (unsigned int i = 0; i < session->mirror_conns->len; i++) {
+		struct rspamd_proxy_backend_connection *conn =
+			g_ptr_array_index(session->mirror_conns, i);
+		if (!(conn->flags & RSPAMD_BACKEND_CLOSED)) {
+			proxy_backend_close_connection(conn);
+			REF_RELEASE(session);
+		}
+	}
+	proxy_conn_release(session);
+	REF_RELEASE(session);
 }
 
 static void
@@ -3822,6 +3807,7 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 
 	session = g_malloc0(sizeof(*session));
 	REF_INIT_RETAIN(session, proxy_session_dtor);
+	session->conn_counted = TRUE;
 	session->client_sock = nfd;
 	session->client_addr = addr;
 	session->source_key = source_key;

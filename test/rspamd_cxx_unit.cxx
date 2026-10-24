@@ -56,6 +56,7 @@
 #include "rspamd_cxx_unit_tokenizer.hxx"
 #include "rspamd_cxx_unit_http_timeout.hxx"
 #include "rspamd_cxx_unit_http_chunked.hxx"
+#include "rspamd_cxx_unit_milter_lifecycle.hxx"
 #include "rspamd_cxx_unit_task_input.hxx"
 #include "rspamd_cxx_unit_esmtp_args.hxx"
 #include "rspamd_cxx_unit_ucl_limits.hxx"
