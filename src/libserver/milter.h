@@ -79,9 +79,12 @@ struct rspamd_milter_session {
 	ref_entry_t ref;
 };
 
+/* Called for each complete message. The session is borrowed by the callback. */
 typedef void (*rspamd_milter_finish)(int fd,
 									 struct rspamd_milter_session *session, void *ud);
 
+/* Called exactly once when the connection closes; err is NULL for QUIT.
+ * The library releases the connection's reference after this callback. */
 typedef void (*rspamd_milter_error)(int fd,
 									struct rspamd_milter_session *session,
 									void *ud, GError *err);
@@ -130,6 +133,9 @@ gboolean rspamd_milter_set_reply(struct rspamd_milter_session *session,
  */
 gboolean rspamd_milter_send_action(struct rspamd_milter_session *session,
 								   enum rspamd_milter_reply act, ...);
+
+/* Complete the current message with TEMPFAIL and clear its transaction state. */
+void rspamd_milter_send_tempfail(struct rspamd_milter_session *session);
 
 /**
  * Adds some header

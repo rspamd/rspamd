@@ -250,17 +250,30 @@ rspamd_milter_session_dtor(struct rspamd_milter_session *session)
 }
 
 static void
+rspamd_milter_close_session(struct rspamd_milter_session *session,
+							struct rspamd_milter_private *priv, GError *err)
+{
+	if (priv->state == RSPAMD_MILTER_CLOSED) {
+		return;
+	}
+
+	priv->state = RSPAMD_MILTER_CLOSED;
+	rspamd_ev_watcher_stop(priv->event_loop, &priv->ev);
+	void *ud = priv->ud;
+	priv->ud = NULL;
+	priv->err_cb(priv->fd, session, ud, err);
+	/* The library owns the transport reference. Callers retain the session
+	 * for the whole IO dispatch, including parser work after callbacks. */
+	REF_RELEASE(session);
+}
+
+static void
 rspamd_milter_on_protocol_error(struct rspamd_milter_session *session,
 								struct rspamd_milter_private *priv, GError *err)
 {
 	msg_debug_milter("protocol error: %e", err);
-	priv->state = RSPAMD_MILTER_WANNA_DIE;
-	REF_RETAIN(session);
-	priv->err_cb(priv->fd, session, priv->ud, err);
-	REF_RELEASE(session);
+	rspamd_milter_close_session(session, priv, err);
 	g_error_free(err);
-
-	rspamd_milter_plan_io(session, priv, EV_WRITE);
 }
 
 static void
@@ -281,11 +294,7 @@ rspamd_milter_on_protocol_ping(struct rspamd_milter_session *session,
 		msg_err_milter("cannot write pong reply: %s", strerror(serrno));
 		g_set_error(&err, rspamd_milter_quark(), serrno, "ping command IO error: %s",
 					strerror(serrno));
-		priv->state = RSPAMD_MILTER_WANNA_DIE;
-		REF_RETAIN(session);
-		priv->err_cb(priv->fd, session, priv->ud, err);
-		REF_RELEASE(session);
-		g_error_free(err);
+		rspamd_milter_on_protocol_error(session, priv, err);
 	}
 	else {
 		priv->state = RSPAMD_MILTER_PONG_AND_DIE;
@@ -311,6 +320,7 @@ rspamd_milter_io_handler(int fd, gshort what, void *ud)
 	GError *err;
 
 	priv = session->priv;
+	REF_RETAIN(session);
 
 	if (what == EV_TIMEOUT) {
 		msg_debug_milter("connection timed out");
@@ -321,13 +331,16 @@ rspamd_milter_io_handler(int fd, gshort what, void *ud)
 	else {
 		rspamd_milter_handle_session(session, priv);
 	}
+	REF_RELEASE(session);
 }
 
 static inline void
 rspamd_milter_plan_io(struct rspamd_milter_session *session,
 					  struct rspamd_milter_private *priv, gshort what)
 {
-	rspamd_ev_watcher_reschedule(priv->event_loop, &priv->ev, what);
+	if (priv->state != RSPAMD_MILTER_CLOSED) {
+		rspamd_ev_watcher_reschedule(priv->event_loop, &priv->ev, what);
+	}
 }
 
 
@@ -869,18 +882,15 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 							 session->ref.refcount);
 
 			priv->state = RSPAMD_MILTER_WRITE_AND_DIE;
+			rspamd_milter_plan_io(session, priv, EV_WRITE);
 		}
 		else {
 			msg_debug_milter("quit command, refcount: %d",
 							 session->ref.refcount);
 
-			priv->state = RSPAMD_MILTER_WANNA_DIE;
-			REF_RETAIN(session);
-			priv->fin_cb(priv->fd, session, priv->ud);
-			REF_RELEASE(session);
-			return FALSE;
+			rspamd_milter_close_session(session, priv, NULL);
 		}
-		break;
+		return FALSE;
 	case RSPAMD_MILTER_CMD_RCPT:
 		msg_debug_milter("rcpt command");
 
@@ -1277,12 +1287,8 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 				/* Fatal IO error */
 				err = g_error_new(rspamd_milter_quark(), errno,
 								  "IO read error: %s", strerror(errno));
-				REF_RETAIN(session);
-				priv->err_cb(priv->fd, session, priv->ud, err);
-				REF_RELEASE(session);
+				rspamd_milter_close_session(session, priv, err);
 				g_error_free(err);
-
-				REF_RELEASE(session);
 
 				return FALSE;
 			}
@@ -1290,12 +1296,8 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 		else if (r == 0) {
 			err = g_error_new(rspamd_milter_quark(), ECONNRESET,
 							  "Unexpected EOF");
-			REF_RETAIN(session);
-			priv->err_cb(priv->fd, session, priv->ud, err);
-			REF_RELEASE(session);
+			rspamd_milter_close_session(session, priv, err);
 			g_error_free(err);
-
-			REF_RELEASE(session);
 
 			return FALSE;
 		}
@@ -1314,10 +1316,7 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 				msg_debug_milter("output drained, terminating, refcount: %d",
 								 session->ref.refcount);
 
-				/* Session should be destroyed by fin_cb... */
-				REF_RETAIN(session);
-				priv->fin_cb(priv->fd, session, priv->ud);
-				REF_RELEASE(session);
+				rspamd_milter_close_session(session, priv, NULL);
 
 				return FALSE;
 			}
@@ -1339,17 +1338,14 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 				if (r == -1) {
 					if (errno == EAGAIN || errno == EINTR) {
 						rspamd_milter_plan_io(session, priv, EV_WRITE);
+						return TRUE;
 					}
 					else {
 						/* Fatal IO error */
 						err = g_error_new(rspamd_milter_quark(), errno,
 										  "IO write error: %s", strerror(errno));
-						REF_RETAIN(session);
-						priv->err_cb(priv->fd, session, priv->ud, err);
-						REF_RELEASE(session);
+						rspamd_milter_close_session(session, priv, err);
 						g_error_free(err);
-
-						REF_RELEASE(session);
 
 						return FALSE;
 					}
@@ -1357,12 +1353,8 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 				else if (r == 0) {
 					err = g_error_new(rspamd_milter_quark(), ECONNRESET,
 									  "Unexpected EOF");
-					REF_RETAIN(session);
-					priv->err_cb(priv->fd, session, priv->ud, err);
-					REF_RELEASE(session);
+					rspamd_milter_close_session(session, priv, err);
 					g_error_free(err);
-
-					REF_RELEASE(session);
 
 					return FALSE;
 				}
@@ -1382,24 +1374,24 @@ rspamd_milter_handle_session(struct rspamd_milter_session *session,
 				}
 			}
 
+			if (priv->state == RSPAMD_MILTER_WRITE_AND_DIE) {
+				rspamd_milter_close_session(session, priv, NULL);
+				return FALSE;
+			}
+
 			/* Here we have written everything, so we can plan reading */
 			priv->state = RSPAMD_MILTER_READ_MORE;
 			rspamd_milter_plan_io(session, priv, EV_READ);
 		}
 		break;
-	case RSPAMD_MILTER_WANNA_DIE:
-		/* We are here after processing everything, so release session */
-		REF_RELEASE(session);
+	case RSPAMD_MILTER_CLOSED:
 		return FALSE;
 		break;
 	case RSPAMD_MILTER_PONG_AND_DIE:
 		err = g_error_new(rspamd_milter_quark(), 0,
 						  "ping command");
-		REF_RETAIN(session);
-		priv->err_cb(priv->fd, session, priv->ud, err);
-		REF_RELEASE(session);
+		rspamd_milter_close_session(session, priv, err);
 		g_error_free(err);
-		REF_RELEASE(session);
 		return FALSE;
 		break;
 	}
@@ -1422,6 +1414,7 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 		GError *err = g_error_new(rspamd_milter_quark(), errno,
 								  "dup failed: %s", strerror(errno));
 		error_cb(fd, NULL, ud, err);
+		g_error_free(err);
 
 		return FALSE;
 	}
@@ -1464,7 +1457,10 @@ rspamd_milter_handle_socket(int fd, ev_tstamp timeout,
 										priv->pool->tag.uid, &session->ref.refcount, session);
 	}
 
-	return rspamd_milter_handle_session(session, priv);
+	REF_RETAIN(session);
+	gboolean ret = rspamd_milter_handle_session(session, priv);
+	REF_RELEASE(session);
+	return ret;
 }
 
 gboolean
@@ -1520,6 +1516,10 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 	struct rspamd_milter_outbuf *obuf;
 	struct rspamd_milter_private *priv = session->priv;
 	const rspamd_fstring_t *reason;
+
+	if (priv->state == RSPAMD_MILTER_CLOSED) {
+		return FALSE;
+	}
 
 	va_start(ap, act);
 	cmd = act;
@@ -1647,6 +1647,12 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 	}
 
 	return FALSE;
+}
+
+void rspamd_milter_send_tempfail(struct rspamd_milter_session *session)
+{
+	rspamd_milter_send_action(session, RSPAMD_MILTER_TEMPFAIL);
+	rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
 }
 
 gboolean
