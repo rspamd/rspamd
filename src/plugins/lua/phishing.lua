@@ -694,7 +694,7 @@ if opts then
       type = 'virtual',
       parent = id,
       name = query_symbol,
-      score = 1.0,
+      score = 0.0,
       group = N,
     })
 
@@ -813,6 +813,22 @@ if opts then
   phishing_map('phishing_exceptions', phishing_exceptions_maps, id)
   phishing_map('exceptions', anchor_exceptions_maps, id)
   phishing_map('strict_domains', strict_domains_maps, id)
+  -- Preserve the historical exemption while operators migrate to explicit
+  -- trust maps. Redirector discovery alone does not establish trust.
+  if opts.legacy_redirectors then
+    local legacy_map = lua_maps.map_add_from_ucl(opts.legacy_redirectors, 'set',
+        'Phishing legacy redirectors map')
+    if legacy_map then
+      rspamd_config:register_symbol({
+        type = 'virtual',
+        parent = id,
+        name = 'REDIRECTOR_FALSE',
+        score = 0.0,
+        group = N,
+      })
+      table.insert(anchor_exceptions_maps, { symbol = 'REDIRECTOR_FALSE', map = legacy_map })
+    end
+  end
   for _, def in ipairs({
     { 'trusted_redirectors', 'glob' },
     { 'rewrite_domains', 'hash' },

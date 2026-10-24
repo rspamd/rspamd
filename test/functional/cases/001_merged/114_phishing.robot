@@ -45,12 +45,12 @@ TEST PHISHING NO FP FOR SAME LABEL UNDER DIFFERENT PUBLIC SUFFIX
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
   Do Not Expect Symbol  PHISHING_QUERY
 
-TEST PHISHING QUERY MATCH IS A SEPARATE LOWER SCORE SIGNAL
+TEST PHISHING QUERY MATCH IS OBSERVATION ONLY BY DEFAULT
   # A matching query target cannot prove that the outer server redirects there.
   Scan File  ${MESSAGE_QSAFE}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING
 
 TEST PHISHING FIRES WHEN HREF QUERY HAS MULTIPLE URLS
@@ -62,12 +62,12 @@ TEST PHISHING FIRES WHEN HREF QUERY HAS MULTIPLE URLS
   Expect Symbol  PHISHING
   Do Not Expect Symbol  PHISHING_QUERY
 
-TEST PHISHING NESTED QUERY MATCH IS A SEPARATE LOWER SCORE SIGNAL
+TEST PHISHING NESTED QUERY MATCH IS OBSERVATION ONLY BY DEFAULT
   # Only the unambiguous leaf counts; intermediate matches cannot lower scoring.
   Scan File  ${MESSAGE_QNESTED}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING
 
 TEST PHISHING FIRES WHEN NESTED QUERY LEAF DIFFERS FROM DISPLAY TEXT
@@ -104,13 +104,13 @@ TEST PHISHING QUERY MATCH DOES NOT BYPASS STRICT DOMAIN PROTECTION
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
   Expect Symbol  STRICT_PHISHING
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
 
 TEST PHISHING QUERY MATCH NORMALISES IDN SPELLINGS
   Scan File  ${RSPAMD_TESTDIR}/messages/phishing_query_idn.eml
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING
 
 TEST PHISHING AUTHENTICATED WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
@@ -125,6 +125,11 @@ TEST PHISHING AUTHENTICATED WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
 TEST PHISHING QUERY SYMBOL CAN ENABLE ITS PARENT CHECK
   Scan File  ${MESSAGE_QSAFE}
   ...  Settings={symbols_enabled=[PHISHING_QUERY]}
+  Expect Symbol With Score  PHISHING_QUERY  0
+
+TEST PHISHING QUERY SCORE CAN BE CALIBRATED LOCALLY
+  Scan File  ${MESSAGE_QSAFE}
+  ...  Settings={symbols_enabled=[PHISHING_QUERY],scores={PHISHING_QUERY=1.0}}
   Expect Symbol With Score  PHISHING_QUERY  1
 
 TEST PHISHING DOMAIN PERMITS FIRST WRAPPER
@@ -137,7 +142,7 @@ TEST PHISHING DOMAIN PERMITS SECOND WRAPPER
 
 TEST PHISHING DOMAIN PERMISSION DOES NOT ALLOW OTHER DISPLAYED DOMAINS
   Scan Rewrite Link  https://pair-one.net/?url=https://other.org/  https://other.org/
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
 
 TEST PHISHING WRAPPER PERMITS FIRST DISPLAYED DOMAIN
@@ -151,7 +156,7 @@ TEST PHISHING EXPLICIT PAIR PERMITS STRICT DISPLAYED DOMAIN
 
 TEST PHISHING WRAPPER PERMISSION DOES NOT ALLOW OTHER DISPLAYED DOMAINS
   Scan Rewrite Link  https://inverse-wrapper.net/?url=https://other.org/  https://other.org/
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
 
 TEST PHISHING PAIR PERMISSION DOES NOT ALLOW REVERSED LINKS
@@ -165,17 +170,17 @@ TEST PHISHING TRUSTED WRAPPER GLOB
 
 TEST PHISHING TRUSTED WRAPPER HOST DOES NOT TRUST ITS PARENT DOMAIN
   Scan Rewrite Link  https://other.example.net/?url=https://www.cnn.com/  https://www.cnn.com/
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
 
 TEST PHISHING TRUSTED WRAPPER HOST DOES NOT TRUST SUFFIX LOOKALIKES
   Scan Rewrite Link  https://known-wrapper.example.net.attacker.org/?url=https://www.cnn.com/  https://www.cnn.com/
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
 
 TEST PHISHING KNOWN REDIRECTOR DOES NOT IMPLY TRUST
   Scan Rewrite Link  https://t.co/?url=https://www.cnn.com/  https://www.cnn.com/
-  Expect Symbol With Score  PHISHING_QUERY  1
+  Expect Symbol With Score  PHISHING_QUERY  0
   Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
   Do Not Expect Symbol  REDIRECTOR_FALSE
 
