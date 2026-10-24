@@ -357,7 +357,11 @@ exports.detect = function(part, log_obj)
   local extensions = process_detected(res)
 
   if extensions and #extensions > 0 then
-    return extensions[1], types[extensions[1]]
+    for _, ext in ipairs(extensions) do
+      if ext ~= 'svg' or heuristics.svg_format_heuristic(input, log_obj) then
+        return ext, types[ext]
+      end
+    end
   end
 
   -- Nothing found

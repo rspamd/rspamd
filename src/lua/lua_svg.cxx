@@ -29,6 +29,9 @@
 #include <utility>
 #include <vector>
 
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
+
 /***
  * @module rspamd_svg
  * Native bounded SVG content extraction for lua_content: visible text,
@@ -287,6 +290,98 @@ constexpr std::array<std::string_view, 13> script_keywords{
 	"fetch",
 	"setTimeout",
 };
+
+/* Consume each CSS target before looking for the next one. */
+template<typename HandleUrl, typename CheckDeadline>
+auto scan_css_urls(std::string_view css, HandleUrl &&handle_url, CheckDeadline &&check_deadline) -> status
+{
+	std::size_t offset = 0, next_check = 0;
+	auto checkpoint = [&](std::size_t pos) -> status {
+		if (pos >= next_check) {
+			next_check = pos + 4096;
+			return check_deadline();
+		}
+		return {};
+	};
+
+	while (offset < css.size()) {
+		if (auto ret = checkpoint(offset); !ret) return ret;
+		auto tail = css.substr(offset);
+		bool is_url = starts_with_caseless(tail, "url(");
+		if (!is_url && !starts_with_caseless(tail, "@import")) {
+			offset++;
+			continue;
+		}
+
+		auto value_start = offset + (is_url ? 4 : 7);
+		if (!is_url) {
+			while (value_start < css.size() && g_ascii_isspace(css[value_start])) {
+				if (auto ret = checkpoint(value_start); !ret) return ret;
+				value_start++;
+			}
+			if (starts_with_caseless(css.substr(value_start), "url(")) {
+				offset = value_start;
+				continue;
+			}
+		}
+		auto value_end = value_start;
+		while (value_end < css.size() &&
+			   (is_url ? css[value_end] != ')' : css[value_end] != ';' && css[value_end] != '\n')) {
+			if (auto ret = checkpoint(value_end); !ret) return ret;
+			value_end++;
+		}
+		auto value = trim(css.substr(value_start, value_end - value_start));
+		if (!value.empty() && (value.front() == '"' || value.front() == '\'')) {
+			auto quote = value.front();
+			value.remove_prefix(1);
+			auto close = value.find(quote);
+			if (close != std::string_view::npos) value = value.substr(0, close);
+		}
+		if (auto ret = check_deadline(); !ret) return ret;
+		if (auto ret = handle_url(value); !ret) return ret;
+		offset = value_end + 1;
+	}
+	return check_deadline();
+}
+
+TEST_SUITE("SVG CSS scanning")
+{
+	TEST_CASE("checks deadlines inside long CSS tokens and plain text")
+	{
+		for (const auto &css: {std::string(16384, ' '), "url(" + std::string(16384, 'a') + ")",
+							   "@import" + std::string(16384, ' ') + "url(x)",
+							   "@import " + std::string(16384, 'a') + ";"}) {
+			unsigned checks = 0, urls = 0;
+			auto ret = scan_css_urls(css, [&](std::string_view) -> status {
+				urls++;
+				return {}; }, [&]() -> status {
+				if (++checks == 2) return tl::make_unexpected("deadline");
+				return {}; });
+			CHECK_FALSE(ret);
+			CHECK(checks == 2);
+			CHECK(urls == 0);
+		}
+	}
+
+	TEST_CASE("keeps scanning repeated targets with a bounded number of checkpoints")
+	{
+		for (auto token: {std::string_view{"url(https://example.com/);"},
+						  std::string_view{"@import 'https://example.com/';"}}) {
+			std::string css;
+			for (unsigned i = 0; i < 4096; i++) css.append(token);
+			unsigned checks = 0, urls = 0;
+			auto ret = scan_css_urls(css, [&](std::string_view value) -> status {
+				CHECK(value == "https://example.com/");
+				urls++;
+				return {}; }, [&]() -> status {
+				checks++;
+				return {}; });
+			CHECK(ret);
+			CHECK(urls == 4096);
+			CHECK(checks <= 4097 + css.size() / 4096 + 1);
+		}
+	}
+}
 
 class svg_handler {
 public:
@@ -705,45 +800,12 @@ private:
 	/* url(...) and @import targets inside CSS */
 	auto scan_css(std::string_view css) -> status
 	{
-		std::size_t offset = 0;
-		while (offset < css.size()) {
-			auto found = rspamd_substring_search_caseless(css.data() + offset, css.size() - offset,
-														  "url(", 4);
-			auto import_found = rspamd_substring_search_caseless(css.data() + offset,
-																 css.size() - offset, "@import", 7);
-			if (found == -1 && import_found == -1) break;
-
-			std::size_t value_start;
-			std::size_t value_end;
-			if (found != -1 && (import_found == -1 || found <= import_found)) {
-				value_start = offset + static_cast<std::size_t>(found) + 4;
-				value_end = css.find(')', value_start);
-				if (value_end == std::string_view::npos) value_end = css.size();
+		return scan_css_urls(css, [&](std::string_view value) { return handle_url(value, "css", true); }, [&]() -> status {
+			if (result_.limits.xml.end_timestamp > 0 &&
+				rspamd_get_ticks(FALSE) >= result_.limits.xml.end_timestamp) {
+				return tl::make_unexpected("XML processing timeout");
 			}
-			else {
-				value_start = offset + static_cast<std::size_t>(import_found) + 7;
-				while (value_start < css.size() && g_ascii_isspace(css[value_start])) value_start++;
-				if (value_start + 4 <= css.size() &&
-					rspamd_lc_cmp(css.data() + value_start, "url(", 4) == 0) {
-					offset = value_start;
-					continue;
-				}
-				value_end = value_start;
-				while (value_end < css.size() && css[value_end] != ';' && css[value_end] != '\n') {
-					value_end++;
-				}
-			}
-			auto value = trim(css.substr(value_start, value_end - value_start));
-			if (!value.empty() && (value.front() == '"' || value.front() == '\'')) {
-				auto quote = value.front();
-				value.remove_prefix(1);
-				auto close = value.find(quote);
-				if (close != std::string_view::npos) value = value.substr(0, close);
-			}
-			if (auto ret = handle_url(value, "css", true); !ret) return ret;
-			offset = value_end + 1;
-		}
-		return {};
+			return {}; });
 	}
 
 	svg_result &result_;
@@ -834,11 +896,12 @@ static int lua_svg_extract(lua_State *L)
 	if (input == nullptr) return push_error(L, "string or rspamd_text expected");
 	auto limits = read_svg_limits(L, 2);
 	if (!limits) return push_error(L, limits.error());
+	limits->xml = rspamd::xml::effective_limits(limits->xml);
 
 	svg_result result{*limits};
 	svg_handler handler{result};
 	rspamd::xml::scanner scanner{std::string_view{input->start, input->len},
-								 rspamd::xml::effective_limits(limits->xml), handler};
+								 limits->xml, handler};
 	auto parsed = scanner.parse();
 	if (!parsed) {
 		push_error(L, parsed.error());
@@ -914,8 +977,66 @@ static int lua_svg_extract(lua_State *L)
 	return 3;
 }
 
+class svg_document_handler {
+public:
+	using namespaces = svg_namespaces;
+
+	auto start_element(namespace_id ns, std::string_view name,
+					   const std::vector<xml_attribute> &) -> status
+	{
+		if (depth_++ == 0 &&
+			(name != "svg" || (ns != namespace_id::svg && ns != namespace_id::none))) {
+			return tl::make_unexpected("not an SVG document");
+		}
+		return {};
+	}
+
+	auto end_element(namespace_id, std::string_view) -> status
+	{
+		depth_--;
+		return {};
+	}
+
+	auto text(std::string_view) -> status
+	{
+		return {};
+	}
+
+private:
+	std::size_t depth_ = 0;
+};
+
+/***
+ * @function rspamd_svg.is_document(data)
+ * Checks for one complete SVG document without extracting its content.
+ * @param {string/rspamd_text} data complete SVG source
+ * @return {boolean} true on success, or false, error on invalid input or a limit
+ */
+static int lua_svg_is_document(lua_State *L)
+{
+	auto *input = lua_check_text_or_string(L, 1);
+	if (input == nullptr) return push_error(L, "string or rspamd_text expected");
+	rspamd::xml::limits limits;
+	limits.document = true;
+	limits.allow_doctype = true;
+	limits.max_input = 4U * 1024U * 1024U;
+	limits.max_depth = 128;
+	limits.timeout = 0.05;
+	svg_document_handler handler;
+	rspamd::xml::scanner scanner{std::string_view{input->start, input->len},
+								 rspamd::xml::effective_limits(limits), handler};
+	auto parsed = scanner.parse();
+	lua_pushboolean(L, parsed.has_value());
+	if (!parsed) {
+		lua_pushlstring(L, parsed.error().data(), parsed.error().size());
+		return 2;
+	}
+	return 1;
+}
+
 static const struct luaL_reg svg_lib[] = {
 	{"extract", lua_svg_extract},
+	{"is_document", lua_svg_is_document},
 	{nullptr, nullptr},
 };
 

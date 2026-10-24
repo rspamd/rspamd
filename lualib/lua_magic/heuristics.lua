@@ -622,31 +622,16 @@ exports.pe_part_heuristic = function(input, log_obj, pos, part)
   return 'exe', 30
 end
 
--- SVG heuristic: check if this is actually HTML with embedded SVG
-exports.svg_format_heuristic = function(input, log_obj, pos, part)
+-- A signature only identifies a candidate; embedded SVG must not hide HTML.
+exports.svg_format_heuristic = function(input, log_obj)
   if not input then
     return
   end
 
-  -- Only check content before the <svg> tag position
-  local check_len = math.min(pos, 4096)
-  if check_len < 5 then
-    -- <svg> is at the very beginning, likely a real SVG
-    return 'svg', 40
-  end
-
-  local head = tostring(input:span(1, check_len)):lower()
-
-  -- Check for HTML markers that would appear before <svg> in an HTML document
-  -- If we find these, it's HTML with embedded SVG, not a standalone SVG
-  if head:find('<!doctype%s+html') or
-      head:find('<html[%s>]') or
-      head:find('<head[%s>]') or
-      head:find('<body[%s>]') or
-      head:find('<meta[%s>]') then
-    lua_util.debugm(N, log_obj, 'svg pattern found at %s but HTML markers present, skipping svg detection',
-      pos)
-    return nil
+  local valid, err = require('rspamd_svg').is_document(input)
+  if not valid then
+    lua_util.debugm(N, log_obj, 'skipping SVG detection: %s', err)
+    return
   end
 
   return 'svg', 40

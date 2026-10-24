@@ -82,6 +82,7 @@ struct limits {
 	double timeout = 0;
 	/* Accept a DOCTYPE that names an external subset; internal subsets are always rejected */
 	bool allow_doctype = false;
+	bool document = false;
 	html::entity_decode_mode entities = html::entity_decode_mode::xml;
 };
 
@@ -200,6 +201,10 @@ public:
 				if (next == std::string_view::npos) {
 					next = input_.size();
 				}
+				if (limits_.document && stack_.empty() &&
+					input_.substr(pos_, next - pos_).find_first_not_of(" \t\r\n") != std::string_view::npos) {
+					return fail("text outside XML root", pos_);
+				}
 				if (auto ret = emit_text(input_.substr(pos_, next - pos_), pos_, true); !ret) {
 					return ret;
 				}
@@ -214,6 +219,9 @@ public:
 				pos_ = close + 3;
 			}
 			else if (starts_with(pos_, "<![CDATA[")) {
+				if (limits_.document && stack_.empty()) {
+					return fail("CDATA outside XML root", pos_);
+				}
 				auto close = input_.find("]]>", pos_ + 9);
 				if (close == std::string_view::npos) {
 					return fail("unterminated CDATA section", pos_);
@@ -249,6 +257,9 @@ public:
 		if (!stack_.empty()) {
 			return fail("unclosed XML element", input_.size());
 		}
+		if (limits_.document && !root_seen_) {
+			return fail("missing XML root", input_.size());
+		}
 		return {};
 	}
 
@@ -266,6 +277,9 @@ private:
 	auto prepare_input() -> status
 	{
 		auto raw = raw_input_;
+		if (raw.size() > limits_.max_input) {
+			return fail("XML input limit exceeded", 0);
+		}
 		if (raw.size() >= 2 && static_cast<unsigned char>(raw[0]) == 0xff &&
 			static_cast<unsigned char>(raw[1]) == 0xfe) {
 			auto converted = convert_encoding(raw.substr(2), "UTF-16LE", limits_.max_input);
@@ -641,6 +655,9 @@ private:
 			return fail("XML depth limit exceeded", at);
 		}
 		if (auto ret = add_token(at); !ret) return ret;
+		if (limits_.document && stack_.empty() && root_seen_) {
+			return fail("multiple XML roots", at);
+		}
 		root_seen_ = true;
 		if (auto ret = handler_.start_element(element_namespace, element_name->second, attributes);
 			!ret) {
