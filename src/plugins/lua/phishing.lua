@@ -31,7 +31,6 @@ local symbol = 'PHISHED_URL'
 local mismatch_symbol = 'URL_DISPLAY_MISMATCH'
 local query_symbol = 'PHISHING_QUERY'
 local rewrite_symbol = 'PHISHING_REWRITE_ALLOWED'
-local rewrite_maps = {}
 local phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED'
 local generic_service_symbol = 'PHISHED_GENERIC_SERVICE'
 local openphish_symbol = 'PHISHED_OPENPHISH'
@@ -59,6 +58,38 @@ local openphish_data = {}
 local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
+  return
+end
+
+local maps = {
+  trusted_redirectors = opts.trusted_redirectors,
+  rewrite_domains = opts.rewrite_domains,
+  rewrite_redirectors = opts.rewrite_redirectors,
+  legacy_redirectors = opts.legacy_redirectors,
+}
+if not lua_maps.fill_config_maps(N, maps, {
+  trusted_redirectors = {
+    type = 'glob',
+    description = 'Phishing trusted wrapper hosts',
+    optional = true,
+  },
+  rewrite_domains = {
+    type = 'hash',
+    description = 'Phishing displayed domains and allowed wrappers',
+    optional = true,
+  },
+  rewrite_redirectors = {
+    type = 'hash',
+    description = 'Phishing wrappers and allowed displayed domains',
+    optional = true,
+  },
+  legacy_redirectors = {
+    type = 'set',
+    description = 'Phishing legacy redirectors map',
+    optional = true,
+  },
+}) then
+  lua_util.disable_module(N, 'config')
   return
 end
 
@@ -116,12 +147,12 @@ local function pair_map_allows(task, map, key_host, key_tld, value_host, value_t
 end
 
 local function allowed_rewrite(task, url, displayed)
-  if not next(rewrite_maps) then
+  if not (maps.trusted_redirectors or maps.rewrite_domains or maps.rewrite_redirectors) then
     return nil
   end
   local host = canonical_domain(task, url:get_host())
-  if host and rewrite_maps.trusted_redirectors
-      and rewrite_maps.trusted_redirectors:get_key(host) then
+  if host and maps.trusted_redirectors
+      and maps.trusted_redirectors:get_key(host) then
     return 'trusted_redirector'
   end
 
@@ -131,11 +162,11 @@ local function allowed_rewrite(task, url, displayed)
   if not (host and tld and displayed_host and displayed_tld) then
     return nil
   end
-  if pair_map_allows(task, rewrite_maps.rewrite_domains,
+  if pair_map_allows(task, maps.rewrite_domains,
       displayed_host, displayed_tld, host, tld) then
     return 'rewrite_domains'
   end
-  if pair_map_allows(task, rewrite_maps.rewrite_redirectors,
+  if pair_map_allows(task, maps.rewrite_redirectors,
       host, tld, displayed_host, displayed_tld) then
     return 'rewrite_redirectors'
   end
@@ -815,28 +846,14 @@ if opts then
   phishing_map('strict_domains', strict_domains_maps, id)
   -- Preserve the historical exemption while operators migrate to explicit
   -- trust maps. Redirector discovery alone does not establish trust.
-  if opts.legacy_redirectors then
-    local legacy_map = lua_maps.map_add_from_ucl(opts.legacy_redirectors, 'set',
-        'Phishing legacy redirectors map')
-    if legacy_map then
-      rspamd_config:register_symbol({
-        type = 'virtual',
-        parent = id,
-        name = 'REDIRECTOR_FALSE',
-        score = 0.0,
-        group = N,
-      })
-      table.insert(anchor_exceptions_maps, { symbol = 'REDIRECTOR_FALSE', map = legacy_map })
-    end
-  end
-  for _, def in ipairs({
-    { 'trusted_redirectors', 'glob' },
-    { 'rewrite_domains', 'hash' },
-    { 'rewrite_redirectors', 'hash' },
-  }) do
-    if opts[def[1]] then
-      rewrite_maps[def[1]] = lua_maps.map_add_from_ucl(opts[def[1]], def[2],
-          'Phishing ' .. def[1] .. ' map')
-    end
+  if maps.legacy_redirectors then
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = 'REDIRECTOR_FALSE',
+      score = 0.0,
+      group = N,
+    })
+    table.insert(anchor_exceptions_maps, { symbol = 'REDIRECTOR_FALSE', map = maps.legacy_redirectors })
   end
 end
