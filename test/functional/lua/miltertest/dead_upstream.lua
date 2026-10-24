@@ -27,11 +27,15 @@ local function expect_tempfail(tag)
   print(string.format('%s: got SMFIR_TEMPFAIL', tag))
 end
 
--- First message exercises the failing error path.
+-- First message exercises the failing error path; the second one proves the
+-- milter connection is still usable after the TEMPFAIL.
 setup()
 send_message(innocuous_msg, innocuous_hdrs, 'dead-upstream-1',
              'sender@example.org', {'rcpt@example.org'})
 expect_tempfail('first message')
+send_message(innocuous_msg, innocuous_hdrs, 'dead-upstream-1b',
+             'sender@example.org', {'rcpt@example.org'})
+expect_tempfail('second message on the same connection')
 teardown()
 
 -- Second message on a fresh connection proves the proxy worker is still
