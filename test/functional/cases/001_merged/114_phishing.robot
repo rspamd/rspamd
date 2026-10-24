@@ -15,7 +15,7 @@ ${MESSAGE_QOVERCAP}   ${RSPAMD_TESTDIR}/messages/phishing_query_overcap.eml
 ${MESSAGE_XTLD}       ${RSPAMD_TESTDIR}/messages/phishing_same_label_cross_tld.eml
 ${MESSAGE_QTRUSTED}   ${RSPAMD_TESTDIR}/messages/phishing_query_trusted.eml
 ${MESSAGE_QSTRICT}    ${RSPAMD_TESTDIR}/messages/phishing_query_strict.eml
-${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,STRICT_PHISHING,STRICTER_PHISHING,TEST_PHISHING_WRAPPER]}
+${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,PHISHING_REWRITE_ALLOWED,STRICT_PHISHING,STRICTER_PHISHING,TEST_PHISHING_WRAPPER]}
 
 *** Test Cases ***
 TEST PHISHING
@@ -95,7 +95,7 @@ TEST PHISHING KNOWN WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
   Scan File  ${MESSAGE_QTRUSTED}
   ...  Settings=${SETTINGS_PHISHING}
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
-  Expect Symbol  TEST_PHISHING_WRAPPER
+  Expect Symbol With Option  PHISHING_REWRITE_ALLOWED  cnn.com->example.net:trusted_redirector
   Do Not Expect Symbol  PHISHING
   Do Not Expect Symbol  PHISHING_QUERY
 
@@ -126,3 +126,87 @@ TEST PHISHING QUERY SYMBOL CAN ENABLE ITS PARENT CHECK
   Scan File  ${MESSAGE_QSAFE}
   ...  Settings={symbols_enabled=[PHISHING_QUERY]}
   Expect Symbol With Score  PHISHING_QUERY  1
+
+TEST PHISHING DOMAIN PERMITS FIRST WRAPPER
+  Scan Rewrite Link  https://click.pair-one.net/opaque  https://www.cnn.com/
+  Expect Rewrite Allowed  cnn.com->pair-one.net:rewrite_domains
+
+TEST PHISHING DOMAIN PERMITS SECOND WRAPPER
+  Scan Rewrite Link  https://pair-two.org/opaque  https://www.cnn.com/
+  Expect Rewrite Allowed  cnn.com->pair-two.org:rewrite_domains
+
+TEST PHISHING DOMAIN PERMISSION DOES NOT ALLOW OTHER DISPLAYED DOMAINS
+  Scan Rewrite Link  https://pair-one.net/?url=https://other.org/  https://other.org/
+  Expect Symbol With Score  PHISHING_QUERY  1
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
+
+TEST PHISHING WRAPPER PERMITS FIRST DISPLAYED DOMAIN
+  Scan Rewrite Link  https://inverse-wrapper.net/opaque  https://www.cnn.com/
+  Expect Rewrite Allowed  cnn.com->inverse-wrapper.net:rewrite_redirectors
+
+TEST PHISHING EXPLICIT PAIR PERMITS STRICT DISPLAYED DOMAIN
+  Scan Rewrite Link  https://inverse-wrapper.net/opaque  https://myspace.com/
+  Expect Rewrite Allowed  myspace.com->inverse-wrapper.net:rewrite_redirectors
+  Do Not Expect Symbol  STRICT_PHISHING
+
+TEST PHISHING WRAPPER PERMISSION DOES NOT ALLOW OTHER DISPLAYED DOMAINS
+  Scan Rewrite Link  https://inverse-wrapper.net/?url=https://other.org/  https://other.org/
+  Expect Symbol With Score  PHISHING_QUERY  1
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
+
+TEST PHISHING PAIR PERMISSION DOES NOT ALLOW REVERSED LINKS
+  Scan Rewrite Link  https://www.cnn.com/opaque  https://pair-one.net/
+  Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
+
+TEST PHISHING TRUSTED WRAPPER GLOB
+  Scan Rewrite Link  https://click.trusted-wrapper.example.org/opaque  https://www.cnn.com/
+  Expect Rewrite Allowed  cnn.com->example.org:trusted_redirector
+
+TEST PHISHING TRUSTED WRAPPER HOST DOES NOT TRUST ITS PARENT DOMAIN
+  Scan Rewrite Link  https://other.example.net/?url=https://www.cnn.com/  https://www.cnn.com/
+  Expect Symbol With Score  PHISHING_QUERY  1
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
+
+TEST PHISHING TRUSTED WRAPPER HOST DOES NOT TRUST SUFFIX LOOKALIKES
+  Scan Rewrite Link  https://known-wrapper.example.net.attacker.org/?url=https://www.cnn.com/  https://www.cnn.com/
+  Expect Symbol With Score  PHISHING_QUERY  1
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
+
+TEST PHISHING KNOWN REDIRECTOR DOES NOT IMPLY TRUST
+  Scan Rewrite Link  https://t.co/?url=https://www.cnn.com/  https://www.cnn.com/
+  Expect Symbol With Score  PHISHING_QUERY  1
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
+  Do Not Expect Symbol  REDIRECTOR_FALSE
+
+TEST PHISHING PAIR MAP KEYS NORMALISE IDN SPELLINGS
+  Scan Rewrite Link  https://idn-wrapper.net/opaque  https://bücher.com/
+  Expect Rewrite Allowed  bücher.com->idn-wrapper.net:rewrite_domains
+
+TEST PHISHING EXPLICIT TRUST DOES NOT EXCLUDE FEED CHECKS
+  Scan File  ${MESSAGE_QTRUSTED}
+  ...  Settings={symbols_enabled=[PHISHING,PHISHING_REWRITE_ALLOWED,URL_DISPLAY_MISMATCH,PHISHED_GENERIC_SERVICE]}
+  Expect Symbol  PHISHED_GENERIC_SERVICE
+  Expect Symbol  PHISHING_REWRITE_ALLOWED
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+
+TEST PHISHING LEGACY EXCEPTIONS STILL APPLY
+  Scan Rewrite Link  https://legacy-wrapper.example.net/opaque  https://www.cnn.com/
+  Expect Symbol  TEST_PHISHING_WRAPPER
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING
+
+*** Keywords ***
+Scan Rewrite Link
+  [Arguments]  ${href}  ${displayed}
+  ${message} =  Set Variable  ${RSPAMD_TMPDIR}/phishing-rewrite.eml
+  Create File  ${message}  Content-Type: text/html; charset=utf-8\n\n<a href="${href}">${displayed}</a>
+  Scan File  ${message}  Settings=${SETTINGS_PHISHING}
+
+Expect Rewrite Allowed
+  [Arguments]  ${option}
+  Expect Symbol With Option  PHISHING_REWRITE_ALLOWED  ${option}
+  Expect Symbol With Score  PHISHING_REWRITE_ALLOWED  0
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_QUERY

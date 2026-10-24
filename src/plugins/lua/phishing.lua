@@ -30,6 +30,8 @@ local N = 'phishing'
 local symbol = 'PHISHED_URL'
 local mismatch_symbol = 'URL_DISPLAY_MISMATCH'
 local query_symbol = 'PHISHING_QUERY'
+local rewrite_symbol = 'PHISHING_REWRITE_ALLOWED'
+local rewrite_maps = {}
 local phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED'
 local generic_service_symbol = 'PHISHED_GENERIC_SERVICE'
 local openphish_symbol = 'PHISHED_OPENPHISH'
@@ -85,6 +87,58 @@ local function query_target_matches(task, url, displayed_tld)
   local resolver = task:get_resolver()
   target_tld = resolver:idna_convert_utf8(target_tld)
   return target_tld and target_tld == resolver:idna_convert_utf8(displayed_tld)
+end
+
+local function canonical_domain(task, domain)
+  if not domain then
+    return nil
+  end
+  local name = task:get_resolver():idna_convert_utf8(domain)
+  return name and (name:lower():gsub('%.$', ''))
+end
+
+local function pair_map_allows(task, map, key_host, key_tld, value_host, value_tld)
+  if not map then
+    return false
+  end
+  for _, key in ipairs({ key_host, key_tld }) do
+    local values = map:get_key(key)
+    if type(values) == 'string' then
+      for _, value in ipairs(lua_util.str_split(values, ', \t')) do
+        local domain = canonical_domain(task, value)
+        if domain and (domain == value_host or domain == value_tld) then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
+local function allowed_rewrite(task, url, displayed)
+  if not next(rewrite_maps) then
+    return nil
+  end
+  local host = canonical_domain(task, url:get_host())
+  if host and rewrite_maps.trusted_redirectors
+      and rewrite_maps.trusted_redirectors:get_key(host) then
+    return 'trusted_redirector'
+  end
+
+  local tld = canonical_domain(task, url:get_tld())
+  local displayed_host = canonical_domain(task, displayed:get_host())
+  local displayed_tld = canonical_domain(task, displayed:get_tld())
+  if not (host and tld and displayed_host and displayed_tld) then
+    return nil
+  end
+  if pair_map_allows(task, rewrite_maps.rewrite_domains,
+      displayed_host, displayed_tld, host, tld) then
+    return 'rewrite_domains'
+  end
+  if pair_map_allows(task, rewrite_maps.rewrite_redirectors,
+      host, tld, displayed_host, displayed_tld) then
+    return 'rewrite_redirectors'
+  end
 end
 
 local function phishing_cb(task)
@@ -328,6 +382,16 @@ local function phishing_cb(task)
           lua_util.debugm(N, 'exclude phishing from %s -> %s by dmarc domain', tld,
               ptld)
           return
+        end
+
+        if not redirected then
+          local allowed = allowed_rewrite(task, url, purl)
+          if allowed then
+            -- Explicit rewrite permissions also apply to strictly protected
+            -- displayed domains. Feed checks and the raw mismatch remain.
+            task:insert_result(rewrite_symbol, 1.0, ptld .. '->' .. tld .. ':' .. allowed)
+            return
+          end
         end
 
         -- Compare merely the registrable labels: the first label of an eSLD is
@@ -608,6 +672,7 @@ if opts then
     symbol = opts['symbol']
     mismatch_symbol = opts['mismatch_symbol'] or mismatch_symbol
     query_symbol = opts['query_symbol'] or query_symbol
+    rewrite_symbol = opts['rewrite_symbol'] or rewrite_symbol
     -- Register symbol's callback
     id = rspamd_config:register_symbol({
       name = symbol,
@@ -630,6 +695,14 @@ if opts then
       parent = id,
       name = query_symbol,
       score = 1.0,
+      group = N,
+    })
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = rewrite_symbol,
+      score = 0.0,
       group = N,
     })
 
@@ -740,4 +813,14 @@ if opts then
   phishing_map('phishing_exceptions', phishing_exceptions_maps, id)
   phishing_map('exceptions', anchor_exceptions_maps, id)
   phishing_map('strict_domains', strict_domains_maps, id)
+  for _, def in ipairs({
+    { 'trusted_redirectors', 'glob' },
+    { 'rewrite_domains', 'hash' },
+    { 'rewrite_redirectors', 'hash' },
+  }) do
+    if opts[def[1]] then
+      rewrite_maps[def[1]] = lua_maps.map_add_from_ucl(opts[def[1]], def[2],
+          'Phishing ' .. def[1] .. ' map')
+    end
+  end
 end
