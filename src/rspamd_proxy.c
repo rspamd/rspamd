@@ -3538,9 +3538,17 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 
 err:
 	if (session->client_milter_conn) {
+		/* The session is owned by the milter connection: there is exactly
+		 * one reference per accepted MTA connection. Do not release it
+		 * here. The async retry path releases it via
+		 * proxy_client_write_error(), while the direct end-of-message path
+		 * releases it from the QUIT/EOF finish or error callback. Dropping
+		 * the last reference here frees both the proxy and the milter
+		 * sessions while proxy_backend_master_error_handler() and the
+		 * milter library are still using them (use-after-free). It also
+		 * closes the socket before the TEMPFAIL below can be written. */
 		rspamd_milter_send_action(session->client_milter_conn,
 								  RSPAMD_MILTER_TEMPFAIL);
-		REF_RELEASE(session);
 	}
 	else {
 		rspamd_http_connection_steal_msg(session->client_conn);
