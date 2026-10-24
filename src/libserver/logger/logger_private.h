@@ -225,4 +225,8 @@ static const struct rspamd_logger_funcs console_log_funcs = {
 	.on_fork = NULL,
 };
 
+/* Apply the configured log tag length and stripping policy. */
+int rspamd_log_process_id(rspamd_logger_t *logger,
+						  const char *id, char *processed_id);
+
 #endif

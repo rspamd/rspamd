@@ -1113,8 +1113,7 @@ log_time(double now, rspamd_logger_t *rspamd_log, char *timebuf,
  * @param processed_id buffer to store processed ID (should be at least max_log_tag_len + 1)
  * @return effective length of processed ID
  */
-static inline int
-rspamd_log_process_id(rspamd_logger_t *logger, const char *id, char *processed_id)
+int rspamd_log_process_id(rspamd_logger_t *logger, const char *id, char *processed_id)
 {
 	if (id == NULL) {
 		return 0;
