@@ -527,6 +527,29 @@ local function calculate_redis_hash(params)
   return h:base32()
 end
 
+local tls_option_names = {
+  'ssl', 'no_ssl_verify', 'ssl_ca', 'ssl_ca_dir', 'ssl_cert', 'ssl_key', 'sni'
+}
+
+--[[[
+-- @function lua_redis.copy_tls_options(redis_params, options)
+-- Copies TLS settings from redis params to connection options passed to rspamd_redis
+-- @param {table} redis_params redis server settings
+-- @param {table} options connection options
+-- @return {table} options
+--]]
+local function copy_tls_options(redis_params, options)
+  for _, k in ipairs(tls_option_names) do
+    if redis_params[k] ~= nil then
+      options[k] = redis_params[k]
+    end
+  end
+
+  return options
+end
+
+exports.copy_tls_options = copy_tls_options
+
 local function process_redis_opts(options, redis_params)
   local default_timeout = 1.0
   local default_expand_keys = false
@@ -1248,14 +1271,7 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     options['dbname'] = redis_params['db']
   end
 
-  -- TLS options
-  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then options.sni = redis_params.sni end
+  copy_tls_options(redis_params, options)
 
   lutil.debugm(N, task, 'perform request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', ip_addr,
@@ -1353,14 +1369,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
     options['dbname'] = redis_params['db']
   end
 
-  -- TLS options
-  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then options.sni = redis_params.sni end
+  copy_tls_options(redis_params, options)
 
   lutil.debugm(N, cfg, 'perform taskless request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', options.host:tostring(true),
@@ -1459,6 +1468,8 @@ local function prepare_redis_call(script)
       if script.redis_params['db'] then
         cur_opts['dbname'] = script.redis_params['db']
       end
+
+      copy_tls_options(script.redis_params, cur_opts)
 
       table.insert(options, cur_opts)
     end
@@ -2027,14 +2038,7 @@ exports.request = function(redis_params, attrs, req)
     opts.dbname = redis_params.db
   end
 
-  -- TLS options
-  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then opts.sni = redis_params.sni end
+  copy_tls_options(redis_params, opts)
 
   if opts.callback then
     lutil.debugm(N, 'perform generic async request to redis server' ..
@@ -2143,14 +2147,7 @@ exports.connect = function(redis_params, attrs)
     opts.dbname = redis_params.db
   end
 
-  -- TLS options
-  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then opts.sni = redis_params.sni end
+  copy_tls_options(redis_params, opts)
 
   if opts.callback then
     local ret, conn = rspamd_redis.connect(opts)
@@ -2444,6 +2441,7 @@ local function redis_load_scripts_sync(redis_params, attrs, script_filter)
             if opt.username then options.username = opt.username end
             if opt.password then options.password = opt.password end
             if opt.dbname then options.dbname = opt.dbname end
+            copy_tls_options(opt, options)
 
             local ok, conn = rspamd_redis.connect_sync(options)
             if not ok then
