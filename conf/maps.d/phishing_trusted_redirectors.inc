@@ -10,3 +10,17 @@ urldefense.com
 # Microsoft Safe Links uses <DataCenterLocation>.safelinks.protection.outlook.com:
 # https://learn.microsoft.com/en-us/defender-office-365/safe-links-about
 *.safelinks.protection.outlook.com
+
+# Mimecast URL Protect (exact regional URL hosts; no provider-wide wildcard):
+# https://mimecastsupport.zendesk.com/hc/en-us/articles/34000790117011-Policies-Out-Of-the-Box-Settings
+# The US host is also observed in the ham corpus used to validate this policy.
+url.us.m.mimecastprotect.com
+url.uk.m.mimecastprotect.com
+
+# Barracuda Link Protection:
+# https://documentation.campus.barracuda.com/wiki/spaces/EGD/pages/2850935
+linkprotect.cudasvc.com
+
+# Cisco Secure Email URL rewriting:
+# https://www.cisco.com/c/en/us/support/docs/security/secure-email-gateway/218170-understand-the-url-defang-and-redirect-a.html
+secure-web.cisco.com

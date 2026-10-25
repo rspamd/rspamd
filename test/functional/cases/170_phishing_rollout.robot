@@ -31,6 +31,43 @@ SHIPPED SAFE LINKS NAMESPACE IS TRUSTED
   Scan Rollout Link  https://nam01.safelinks.protection.outlook.com/opaque
   Expect Rollout Trust
 
+SHIPPED MIMECAST US WRAPPER IS TRUSTED
+  Scan Rollout Link  https://url.us.m.mimecastprotect.com/opaque
+  Expect Rollout Trust
+
+SHIPPED MIMECAST UK WRAPPER IS TRUSTED
+  Scan Rollout Link  https://url.uk.m.mimecastprotect.com/opaque
+  Expect Rollout Trust
+
+SHIPPED BARRACUDA WRAPPER IS TRUSTED
+  Scan Rollout Link  https://linkprotect.cudasvc.com/opaque
+  Expect Rollout Trust
+
+SHIPPED CISCO WRAPPER IS TRUSTED
+  Scan Rollout Link  https://secure-web.cisco.com/opaque
+  Expect Rollout Trust
+
+SHIPPED EXACT WRAPPERS DO NOT TRUST PARENT OR SIBLING HOSTS
+  [Template]  Expect No Rollout Trust
+  mimecastprotect.com
+  other.us.m.mimecastprotect.com
+  other.cudasvc.com
+  other.cisco.com
+
+SHIPPED EXACT WRAPPERS DO NOT TRUST SUBDOMAINS
+  [Template]  Expect No Rollout Trust
+  extra.url.us.m.mimecastprotect.com
+  extra.url.uk.m.mimecastprotect.com
+  extra.linkprotect.cudasvc.com
+  extra.secure-web.cisco.com
+
+SHIPPED EXACT WRAPPERS DO NOT TRUST SUFFIX LOOKALIKES
+  [Template]  Expect No Rollout Trust
+  url.us.m.mimecastprotect.com.attacker.org
+  url.uk.m.mimecastprotect.com.attacker.org
+  linkprotect.cudasvc.com.attacker.org
+  secure-web.cisco.com.attacker.org
+
 SHIPPED MAP DOES NOT TRUST OTHER PROOFPOINT HOSTS
   Scan Rollout Link  https://other.proofpoint.com/opaque
   Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
@@ -67,6 +104,12 @@ Scan Rollout Link
   ${message} =  Set Variable  ${RSPAMD_TMPDIR}/phishing-rollout.eml
   Create File  ${message}  Content-Type: text/html; charset=utf-8\n\n<a href="${href}">https://www.cnn.com/</a>
   Scan File  ${message}  Settings=${SETTINGS}
+
+Expect No Rollout Trust
+  [Arguments]  ${host}
+  Scan Rollout Link  https://${host}/opaque
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING_REWRITE_ALLOWED
 
 Expect Rollout Trust
   Expect Symbol With Score  PHISHING_REWRITE_ALLOWED  0
