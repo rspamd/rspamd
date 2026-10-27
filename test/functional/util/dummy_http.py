@@ -138,6 +138,10 @@ class MainHandler(tornado.web.RequestHandler):
             # Redirect to a domain matching the displayed text, so the phishing
             # module sees a 1:1 redirect target and must not fire (no FP).
             self.redirect("http://www.example.com/")
+        elif path == "/redir_to_query_decoy":
+            # The observed destination differs from the displayed cnn.com;
+            # a matching query parameter must not lower the phishing score.
+            self.redirect("http://www.example.com/?url=http://www.cnn.com/")
         elif path == "/chain_intermediate_1":
             # Intermediate hop to chain_to_tel2
             self.redirect(f"{self.request.protocol}://{self.request.host}/chain_intermediate_2")
