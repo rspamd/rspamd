@@ -3068,6 +3068,7 @@ rspamd_controller_stat_fin_task(void *ud)
 
 	if (cbdata->stat) {
 		ucl_object_insert_key(top, cbdata->stat, "statfiles", 0, false);
+		cbdata->stat = NULL; /* Ownership has moved to top */
 	}
 
 	GHashTable *fuzzy_elts = rspamd_mempool_get_variable(cbdata->task->task_pool, RSPAMD_MEMPOOL_FUZZY_STAT);
@@ -3100,6 +3101,8 @@ rspamd_controller_stat_cleanup_task(void *ud)
 	struct rspamd_stat_cbdata *cbdata = ud;
 
 	rspamd_task_free(cbdata->task);
+	/* Metrics and unfinished requests retain ownership of stat */
+	ucl_object_unref(cbdata->stat);
 	ucl_object_unref(cbdata->top);
 	if (cbdata->req_msg) {
 		rspamd_http_message_unref(cbdata->req_msg);
