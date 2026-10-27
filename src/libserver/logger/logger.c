@@ -95,6 +95,11 @@ rspamd_log_default_logger(void)
 	return default_logger;
 }
 
+void rspamd_log_set_default_logger(rspamd_logger_t *logger)
+{
+	default_logger = logger;
+}
+
 rspamd_logger_t *
 rspamd_log_emergency_logger(void)
 {
@@ -138,6 +143,7 @@ void rspamd_log_close(rspamd_logger_t *logger)
 
 	if (logger->debug_ip) {
 		rspamd_map_helper_destroy_radix(logger->debug_ip);
+		logger->debug_ip = NULL;
 	}
 
 	if (logger->pk) {

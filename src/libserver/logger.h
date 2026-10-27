@@ -105,6 +105,8 @@ void rspamd_log_close(rspamd_logger_t *logger);
 
 
 rspamd_logger_t *rspamd_log_default_logger(void);
+/* Select an existing logger without changing its ownership. */
+void rspamd_log_set_default_logger(rspamd_logger_t *logger);
 rspamd_logger_t *rspamd_log_emergency_logger(void);
 
 /**
