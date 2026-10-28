@@ -51,6 +51,21 @@ Learn Test
   Expect Symbol  BAYES_HAM
   Set Suite Variable  ${RSPAMD_STATS_LEARNTEST}  1
 
+Statistics Dump
+  [Arguments]  @{args}
+  ${result} =  Run Process  ${RSPAMADM}
+  ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=DBDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=LOCAL_CONFDIR\=/non-existent
+  ...  --var\=CONFDIR\=${RSPAMD_TESTDIR}/../../conf/
+  ...  statistics_dump  -c  ${CONFIG}  @{args}
+  ...  env:RSPAMD_LOCAL_CONFDIR=/non-existent
+  ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
+  Log  ${result.stderr}
+  Should Be Equal As Integers  ${result.rc}  0
+  RETURN  ${result}
+
 Relearn Test
   [Arguments]  ${user}=${EMPTY}
   IF  ${RSPAMD_STATS_LEARNTEST} == 0

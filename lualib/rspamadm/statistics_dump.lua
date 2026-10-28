@@ -68,6 +68,10 @@ dump:option "-b --batch-size"
     :argname("<elts>")
     :convert(tonumber)
     :default(1000)
+dump:option "-u --user"
+    :description "Dump only per-user statistics of this user (can be repeated)"
+    :argname("<user>")
+    :count "*"
 
 
 -- Restore
@@ -179,6 +183,8 @@ local function check_redis_classifier(cls, cfg)
         symbol = symbol,
         class_name = class_name,
         label = label,
+        -- Statfile label, expanded as %l in the Redis prefix
+        stat_label = tbl.label,
       })
     end
 
@@ -231,14 +237,40 @@ local function check_redis_classifier(cls, cfg)
       end
     end
 
+    -- Same prefix pattern choice as the Redis statistics backend
+    local prefix_pattern = cls.prefix
+    if type(prefix_pattern) ~= 'string' then
+      if cls.per_user or cls.users_enabled then
+        prefix_pattern = '%s%l%r'
+      else
+        prefix_pattern = '%s%l'
+      end
+    end
+
     table.insert(classifiers, {
       name = cls_name,
       symbol_spam = symbol_spam,
       symbol_ham = symbol_ham,
       symbols = symbols,
       redis_params = redis_params,
+      prefix_pattern = prefix_pattern,
     })
   end
+end
+
+-- Expands a classifier prefix pattern for a specific user, mirroring
+-- rspamd_redis_expand_object(): %u and %r are the user, %l is the statfile
+-- label, %s is 'RS'; the 'd' modifier is accepted and ignored
+local function expand_user_prefix(pattern, user, stat_label)
+  local subst = { u = user, r = user, l = stat_label or '', s = 'RS' }
+  return (pattern:gsub('%%(.)(d?)', function(m, mod)
+    return subst[m] or (m .. mod)
+  end))
+end
+
+-- Escapes glob characters of a Redis SCAN MATCH pattern
+local function escape_redis_glob(s)
+  return (s:gsub('[%*%?%[%]\\]', '\\%0'))
 end
 
 local function redis_map_zip(ar)
@@ -498,11 +530,35 @@ end
 local function dump_handler(opts)
   local selected = select_classifier(opts)
   local patterns_seen = {}
+  local users = opts.user or {}
   for _, cls in ipairs(selected) do
     -- Collect class labels for CDB packing
     local class_labels = {}
     for _, s in ipairs(cls.symbols) do
       class_labels[#class_labels + 1] = s.label
+    end
+
+    -- Prefixes of the requested users per symbol, nil means dump everything
+    local user_prefixes
+    local users_found = {}
+    if #users > 0 then
+      if not cls.prefix_pattern:find('%%[ru]') then
+        rspamd_logger.errx("classifier %s has no per-user statistics (prefix pattern: %s)",
+            cls.name, cls.prefix_pattern)
+        os.exit(1)
+      end
+
+      user_prefixes = {}
+      for _, s in ipairs(cls.symbols) do
+        local prefixes = {}
+        for _, u in ipairs(users) do
+          prefixes[#prefixes + 1] = {
+            user = u,
+            prefix = expand_user_prefix(cls.prefix_pattern, u, s.stat_label),
+          }
+        end
+        user_prefixes[s.symbol] = prefixes
+      end
     end
 
     -- Connect to all shards to ensure complete dump
@@ -533,10 +589,34 @@ local function dump_handler(opts)
     end
 
     local out = {}
+    local function get_prefixes(conn, sym_keys, sym)
+      if not user_prefixes then
+        conn:add_cmd('SMEMBERS', { sym_keys })
+        return conn:exec()
+      end
+
+      -- Probe the requested users only, the set can hold many users
+      local found = {}
+      for _, up in ipairs(user_prefixes[sym]) do
+        conn:add_cmd('SISMEMBER', { sym_keys, up.prefix })
+        local ret, is_member = conn:exec()
+
+        if not ret then
+          return false, is_member
+        end
+
+        if tonumber(is_member) == 1 then
+          found[#found + 1] = up.prefix
+          users_found[up.user] = true
+        end
+      end
+
+      return true, found
+    end
+
     local function check_keys(conn, sym)
       local sym_keys_pattern = string.format("%s_keys", sym)
-      conn:add_cmd('SMEMBERS', { sym_keys_pattern })
-      local ret, keys = conn:exec()
+      local ret, keys = get_prefixes(conn, sym_keys_pattern, sym)
 
       if not ret then
         rspamd_logger.errx("cannot execute command to get keys: %s", keys)
@@ -552,7 +632,7 @@ local function dump_handler(opts)
             ucl.to_format(keys, 'json-compact'))
       end
       for _, k in ipairs(keys) do
-        local pat = string.format('%s_*', k)
+        local pat = string.format('%s_*', escape_redis_glob(k))
         if not patterns_seen[pat] then
           conn:add_cmd('HGETALL', { k })
           local _ret, additional_keys = conn:exec()
@@ -578,6 +658,12 @@ local function dump_handler(opts)
     for _, c in ipairs(connections) do
       for _, s in ipairs(cls.symbols) do
         check_keys(c.conn, s.symbol)
+      end
+    end
+
+    for _, u in ipairs(users) do
+      if not users_found[u] then
+        rspamd_logger.warnx("no statistics found for user %s in classifier %s", u, cls.name)
       end
     end
 
