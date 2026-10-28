@@ -1276,6 +1276,9 @@ local function handler(args)
             check_redis_classifier(classifier, obj)
           end
         end
+      elseif classifier.backend and classifier.backend == 'redis' then
+        -- Unnamed classifier section
+        check_redis_classifier(classifier, obj)
       end
     end
   end
