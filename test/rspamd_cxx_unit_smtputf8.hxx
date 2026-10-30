@@ -124,9 +124,10 @@ TEST_SUITE("smtputf8 syntax")
 			{"a\x7f"
 			 "b@example.com",
 			 RSPAMD_SMTPUTF8_CODE_POINT},
-			// The IdentifierClass does not fold case, so the ela
-			// geminada may be upper case
-			{"CEL·LA@example.com", RSPAMD_SMTPUTF8_VALID},
+			// RFC5892 A.3 requires U+006C on both sides, without case folding
+			{"CEL·LA@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
+			{"cel·La@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
+			{"ceL·la@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
 			{"·la@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
 			// RFC5892 A.4: the keraia must precede a Greek letter
 			{"͵α@example.com", RSPAMD_SMTPUTF8_VALID},
@@ -154,6 +155,29 @@ TEST_SUITE("smtputf8 syntax")
 			CAPTURE(c.address);
 			CHECK(check_smtputf8(c.address) == c.expected);
 		}
+	}
+
+	TEST_CASE("long contextual addresses")
+	{
+		const auto repeat = [](const std::string &cp) {
+			std::string result;
+			result.reserve(32768 * cp.size());
+			for (int i = 0; i < 32768; i++) {
+				result.append(cp);
+			}
+			return result;
+		};
+
+		const auto arabic = repeat("٠");
+		const auto extended_arabic = repeat("۰");
+		const auto middle_dots = repeat("・");
+
+		CHECK(check_smtputf8(arabic + "@example.com") == RSPAMD_SMTPUTF8_VALID);
+		CHECK(check_smtputf8(extended_arabic + "@example.com") == RSPAMD_SMTPUTF8_VALID);
+		CHECK(check_smtputf8(arabic + "@۰.example") == RSPAMD_SMTPUTF8_CODE_POINT);
+		CHECK(check_smtputf8(extended_arabic + "@٠.example") == RSPAMD_SMTPUTF8_CODE_POINT);
+		CHECK(check_smtputf8(middle_dots + "@日.example") == RSPAMD_SMTPUTF8_VALID);
+		CHECK(check_smtputf8(middle_dots + "@example.com") == RSPAMD_SMTPUTF8_CODE_POINT);
 	}
 
 	TEST_CASE("result names")

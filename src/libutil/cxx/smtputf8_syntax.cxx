@@ -226,30 +226,53 @@ auto contextj_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
 	return right == U_JT_RIGHT_JOINING || right == U_JT_DUAL_JOINING;
 }
 
-auto contains_any(const std::vector<UChar32> &cps, UChar32 first, UChar32 last) -> bool
+struct contexto_properties {
+	bool arabic_indic = false;
+	bool extended_arabic_indic = false;
+	bool japanese = false;
+};
+
+/* Compute address-wide context once, rather than rescanning for each character. */
+auto get_contexto_properties(const std::vector<UChar32> &cps) -> contexto_properties
 {
+	contexto_properties context;
+	bool middle_dot = false;
+
 	for (auto cp: cps) {
-		if (cp >= first && cp <= last) {
-			return true;
+		context.arabic_indic |= cp >= 0x0660 && cp <= 0x0669;
+		context.extended_arabic_indic |= cp >= 0x06F0 && cp <= 0x06F9;
+		middle_dot |= cp == 0x30FB;
+	}
+
+	if (middle_dot) {
+		for (auto cp: cps) {
+			if (cp < 0x80) {
+				continue;
+			}
+
+			auto script = script_of(cp);
+
+			if (script == USCRIPT_HIRAGANA || script == USCRIPT_KATAKANA ||
+				script == USCRIPT_HAN) {
+				context.japanese = true;
+				break;
+			}
 		}
 	}
 
-	return false;
+	return context;
 }
 
 /* RFC5892 A.3 to A.9 */
-auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
+auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i,
+				 const contexto_properties &context) -> bool
 {
 	auto cp = cps[i];
 
 	if (cp == 0x00B7) {
-		/*
-		 * A.3 asks for U+006C on both sides. IDNA2008 has folded case
-		 * before it gets that far, but the IdentifierClass does not, so
-		 * an upper-case L is fine too.
-		 */
+		/* A.3 requires U+006C on both sides, without case folding. */
 		return i > 0 && i + 1 < cps.size() &&
-			   (cps[i - 1] | 0x20) == 'l' && (cps[i + 1] | 0x20) == 'l';
+			   cps[i - 1] == 'l' && cps[i + 1] == 'l';
 	}
 
 	if (cp == 0x0375) {
@@ -261,24 +284,15 @@ auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
 	}
 
 	if (cp == 0x30FB) {
-		for (auto other: cps) {
-			auto script = script_of(other);
-
-			if (script == USCRIPT_HIRAGANA || script == USCRIPT_KATAKANA ||
-				script == USCRIPT_HAN) {
-				return true;
-			}
-		}
-
-		return false;
+		return context.japanese;
 	}
 
 	if (cp >= 0x0660 && cp <= 0x0669) {
-		return !contains_any(cps, 0x06F0, 0x06F9);
+		return !context.extended_arabic_indic;
 	}
 
 	if (cp >= 0x06F0 && cp <= 0x06F9) {
-		return !contains_any(cps, 0x0660, 0x0669);
+		return !context.arabic_indic;
 	}
 
 	return false;
@@ -370,31 +384,45 @@ rspamd_smtputf8_check_address(const char *user, gsize user_len,
 							  gboolean user_quoted)
 {
 	std::string_view user_sv{user, user_len}, domain_sv{domain, domain_len};
+	const auto is_ascii = [](unsigned char c) { return c < 0x80; };
+	const auto ascii_domain = std::all_of(domain_sv.begin(), domain_sv.end(), is_ascii);
+	const auto ascii_address = ascii_domain &&
+							   std::all_of(user_sv.begin(), user_sv.end(), is_ascii);
 	std::vector<UChar32> cps;
 
-	cps.reserve(user_len + domain_len + 1);
+	if (!ascii_address) {
+		cps.reserve(user_len + domain_len + 1);
 
-	if (!decode_utf8(user_sv, cps)) {
-		return RSPAMD_SMTPUTF8_BAD_UTF8;
-	}
+		if (!decode_utf8(user_sv, cps)) {
+			return RSPAMD_SMTPUTF8_BAD_UTF8;
+		}
 
-	cps.push_back('@');
+		cps.push_back('@');
 
-	if (!decode_utf8(domain_sv, cps)) {
-		return RSPAMD_SMTPUTF8_BAD_UTF8;
+		if (!decode_utf8(domain_sv, cps)) {
+			return RSPAMD_SMTPUTF8_BAD_UTF8;
+		}
 	}
 
 	if (!user_quoted && has_a_label(user_sv)) {
 		return RSPAMD_SMTPUTF8_A_LABEL;
 	}
 
-	auto ascii_domain = std::all_of(domain_sv.begin(), domain_sv.end(),
-									[](unsigned char c) { return c < 0x80; });
-
 	if (!(RSPAMD_SMTPUTF8_ACCEPT_A_LABEL_DOMAINS && ascii_domain) &&
 		has_a_label(domain_sv)) {
 		return RSPAMD_SMTPUTF8_A_LABEL;
 	}
+
+	/* ASCII needs no Unicode allocation, script lookup or normalization. */
+	if (ascii_address) {
+		const auto is_printable = [](unsigned char c) { return c >= 0x20 && c <= 0x7E; };
+		return std::all_of(user_sv.begin(), user_sv.end(), is_printable) &&
+					   std::all_of(domain_sv.begin(), domain_sv.end(), is_printable)
+				   ? RSPAMD_SMTPUTF8_VALID
+				   : RSPAMD_SMTPUTF8_CODE_POINT;
+	}
+
+	const auto context = get_contexto_properties(cps);
 
 	/* Rule 2 admits SPACE on top of the IdentifierClass */
 	for (std::size_t i = 0; i < cps.size(); i++) {
@@ -411,7 +439,7 @@ rspamd_smtputf8_check_address(const char *user, gsize user_len,
 			}
 			break;
 		case precis_class::contexto:
-			if (!contexto_ok(cps, i)) {
+			if (!contexto_ok(cps, i, context)) {
 				return RSPAMD_SMTPUTF8_CODE_POINT;
 			}
 			break;

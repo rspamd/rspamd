@@ -1189,17 +1189,9 @@ rspamd_config.MIME_BASE64_TEXT_BOGUS = {
   group = 'mime'
 }
 
-local function has_8bit(s)
-  return s ~= nil and s:find('[\128-\255]') ~= nil
-end
-
 local function invalid_8bit_addr_reason(addr)
   local flags = addr.flags or {}
   local bad_grammar = flags['8bit']
-
-  if not bad_grammar and not has_8bit(addr.user) and not has_8bit(addr.domain) then
-    return nil
-  end
 
   local valid, reason = util.is_valid_smtputf8_address(addr.user or '',
       addr.domain or '', flags['quoted'])
