@@ -64,6 +64,7 @@
 #include "rspamd_cxx_unit_lru_hash.hxx"
 #include "rspamd_cxx_unit_fuzzy_key_ips.hxx"
 #include "rspamd_cxx_unit_lua_task.hxx"
+#include "rspamd_cxx_unit_scan_result.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

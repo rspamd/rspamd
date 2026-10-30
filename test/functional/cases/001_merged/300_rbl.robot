@@ -85,7 +85,13 @@ SELECTORS COMBINED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  From=user@example.org  Helo=example.org
   ...  Settings={symbols_enabled = [RBL_SELECTOR_MULTIPLE]}
   # Same domain -> same DNS query -> merged into a single, comma-joined option
-  Expect Symbol With Exact Options  RBL_SELECTOR_MULTIPLE  example.org:sel_from,sel_helo
+  Expect Symbol With Exact Options  RBL_SELECTOR_MULTIPLE  example.org:sel_from%2Csel_helo
+
+SELECTORS COMBINED WHITELIST
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  From=user@example.org  Helo=example.org
+  ...  Settings={symbols_enabled = [RBL_CALLBACK_WHITE, RBL_SELECTOR_MERGED_WHITELIST, RBL_SELECTOR_MULTIPLE]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_MERGED_WL_HIT  example.org:sel_from%2Csel_helo
+  Do Not Expect Symbol  RBL_SELECTOR_MULTIPLE
 
 SELECTORS MERGED FAIL
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
@@ -199,7 +205,7 @@ SELECTOR IP USERDATA
 SELECTORS RESOLVE IP COMBINED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RBL_SELECTOR_RESOLVE]}
-  Expect Symbol With Exact Options  RBL_SELECTOR_RESOLVE_HIT  8.8.8.9:example.ru:first,second
+  Expect Symbol With Exact Options  RBL_SELECTOR_RESOLVE_HIT  8.8.8.9:example.ru:first%2Csecond
 
 RESOLVE IP PHASE COLLISION
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  IP=1.2.3.4  Helo=4.3.2.1.test9.uribl

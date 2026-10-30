@@ -513,6 +513,31 @@ Thank you,
     task:destroy()
   end)
 
+  test("symbol options use the safe insertion contract", function()
+    local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
+    assert_true(res, "failed to load message")
+    task:insert_result(true, "OPTION_CONTRACT_TEST", 1.0,
+      { 'a];,[]{x}%5D', 'a%5D', 'a]', 'a]', 'normal', 'é\n' })
+    local opts = task:get_symbol('OPTION_CONTRACT_TEST')[1].options
+    assert_rspamd_table_eq_sorted({
+      actual = opts,
+      expect = { 'a%5D%3B%2C%5B%5D%7Bx%7D%255D', 'a%255D', 'a%5D', 'normal', 'é�' }
+    })
+    local encoded = 'a%5D%3B%2C%5B%5D%7Bx%7D%255D'
+    local ucl = require 'ucl'
+    local parser = ucl.parser()
+    assert_true(parser:parse_string(ucl.to_format({ options = opts }, 'json-compact')))
+    assert_rspamd_table_eq_sorted({ actual = parser:get_object().options, expect = opts })
+    local tsv = require('lua_clickhouse').row_to_tsv({ { encoded, 'normal' } })
+    assert_equal(tostring(tsv), "['" .. encoded .. "','normal']")
+    task:insert_result(true, 'OPTION_LIMIT_TEST', 1.0, string.rep(']', 4096))
+    assert_rspamd_table_eq_sorted({
+      actual = task:get_symbol('OPTION_LIMIT_TEST')[1].options,
+      expect = { '...' }
+    })
+    task:destroy()
+  end)
+
   test("get_symbol table form returns a map of present symbols", function()
     local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
     assert_true(res, "failed to load message")

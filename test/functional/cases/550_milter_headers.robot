@@ -55,3 +55,14 @@ CHECK HEADERS WITH OVERRIDE SETTINGS
   # Verify other headers are not added since only authentication-results and x-spam-level routines run
   Do Not Expect Added Header  X-Virus
   Do Not Expect Added Header  My-Spamd-Bar
+
+ESCAPE SYMBOL OPTIONS IN X-SPAMD-RESULT
+  Scan File  ${RSPAMD_TESTDIR}/messages/svg_symbol_option.eml
+  ...  Settings={symbols_enabled = [SVG_CONTENT]}
+  Expect Symbol With Exact Options  SVG_CONTENT  a%5D(0.00)%5B%5D%3B BAYES_HAM(-9.00)%5Bb%2C%255D.svg  logo.svg
+  Do Not Expect Symbol  BAYES_HAM
+  Expect Header Is Present  X-Spamd-Result
+  ${header} =  Set Variable  ${SCAN_RESULT}[milter][add_headers][X-Spamd-Result][value]
+  ${header} =  Evaluate  ' '.join($header.split())
+  Should Contain  ${header}  SVG_CONTENT(2.00)[a%5D(0.00)%5B%5D%3B BAYES_HAM(-9.00)%5Bb%2C%255D.svg,logo.svg]
+  Should Not Contain  ${header}  ; BAYES_HAM(-9.00)[

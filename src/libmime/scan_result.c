@@ -703,6 +703,10 @@ rspamd_task_option_safe_copy(struct rspamd_task *task,
 
 			p += off;
 		}
+		else if (strchr("%[],;{}", *p) && *p != '\0') {
+			vlen += 3;
+			p++;
+		}
 		else if (!g_ascii_isprint(*p)) {
 			/* Another 0xFFFD */
 			vlen += 3;
@@ -747,6 +751,13 @@ rspamd_task_option_safe_copy(struct rspamd_task *task,
 
 			p += off;
 		}
+		else if (strchr("%[],;{}", *p) && *p != '\0') {
+			static const char hex[] = "0123456789ABCDEF";
+			unsigned char c = *p++;
+			*d++ = '%';
+			*d++ = hex[c >> 4];
+			*d++ = hex[c & 0xf];
+		}
 		else if (!g_ascii_isprint(*p)) {
 			/* Another 0xFFFD */
 			*d++ = '\357';
@@ -778,8 +789,30 @@ rspamd_task_add_result_option(struct rspamd_task *task,
 	khiter_t k;
 	int r;
 	struct rspamd_symbol_result *cur;
+	bool unchanged = true;
 
 	if (s && val) {
+		/* Validate once so unchanged options can be looked up without a copy. */
+		for (gsize i = 0; vlen <= task->cfg->max_opts_len && i < vlen;) {
+			unsigned char c = val[i];
+			if (c >= 0x80) {
+				UChar32 uc;
+				int off = 0;
+				U8_NEXT(val + i, off, vlen - i, uc);
+				if (uc <= 0 || !u_isprint(uc)) {
+					unchanged = false;
+					break;
+				}
+				i += off;
+			}
+			else if (c < 0x20 || c == 0x7f || strchr("%[],;{}", c)) {
+				unchanged = false;
+				break;
+			}
+			else {
+				i++;
+			}
+		}
 		/*
 		 * Here we assume that this function is all the time called with the
 		 * symbol from the default result, not some shadow result, or
@@ -795,56 +828,67 @@ rspamd_task_add_result_option(struct rspamd_task *task,
 				continue;
 			}
 
+			if (cur->sym && (cur->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) {
+				if (s == cur) {
+					ret = FALSE;
+				}
+				continue;
+			}
+
 			if (!cur->options) {
 				cur->options = kh_init(rspamd_options_hash);
 			}
 
-			if (vlen + cur->opts_len > task->cfg->max_opts_len) {
+			if (unchanged && vlen <= task->cfg->max_opts_len) {
+				srch.option = (char *) val;
+				srch.optlen = vlen;
+				if (kh_get(rspamd_options_hash, cur->options, &srch) != kh_end(cur->options)) {
+					continue;
+				}
+			}
+
+			if (vlen > task->cfg->max_opts_len - (gsize) cur->opts_len) {
+				cpy_len = vlen;
+			}
+			else if (unchanged) {
+				opt_cpy = (char *) val;
+				cpy_len = vlen;
+			}
+			else {
+				opt_cpy = rspamd_task_option_safe_copy(task, val, vlen, &cpy_len);
+			}
+			if (cpy_len > task->cfg->max_opts_len - (gsize) cur->opts_len) {
 				/* Add truncated option */
 				msg_info_task("cannot add more options to symbol %s when adding option %s",
 							  cur->name, val);
-				val = "...";
-				vlen = 3;
+				opt_cpy = "...";
+				cpy_len = 3;
 				cur->opts_len = -1;
 			}
 
-			if (!(cur->sym && (cur->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
+			srch.option = opt_cpy;
+			srch.optlen = cpy_len;
+			k = opt_cpy == val ? kh_end(cur->options) : kh_get(rspamd_options_hash, cur->options, &srch);
 
-				srch.option = (char *) val;
-				srch.optlen = vlen;
-				k = kh_get(rspamd_options_hash, cur->options, &srch);
-
-				if (k == kh_end(cur->options)) {
-					opt_cpy = rspamd_task_option_safe_copy(task, val, vlen, &cpy_len);
-					if (cpy_len != vlen) {
-						srch.option = (char *) opt_cpy;
-						srch.optlen = cpy_len;
-						k = kh_get(rspamd_options_hash, cur->options, &srch);
-					}
-					/* Append new options */
-					if (k == kh_end(cur->options)) {
-						opt = rspamd_mempool_alloc0(task->task_pool, sizeof(*opt));
-						opt->optlen = cpy_len;
-						opt->option = opt_cpy;
-
-						kh_put(rspamd_options_hash, cur->options, opt, &r);
-						DL_APPEND(cur->opts_head, opt);
-
-						if (s == cur) {
-							ret = TRUE;
-						}
-					}
+			if (k == kh_end(cur->options)) {
+				if (opt_cpy == val) {
+					opt_cpy = rspamd_mempool_alloc(task->task_pool, cpy_len + 1);
+					memcpy(opt_cpy, val, cpy_len);
+					opt_cpy[cpy_len] = '\0';
 				}
-			}
-			else {
-				/* Skip addition */
+				opt = rspamd_mempool_alloc0(task->task_pool, sizeof(*opt));
+				opt->optlen = cpy_len;
+				opt->option = opt_cpy;
+
+				kh_put(rspamd_options_hash, cur->options, opt, &r);
+				DL_APPEND(cur->opts_head, opt);
+
+				if (cur->opts_len >= 0) {
+					cur->opts_len += cpy_len;
+				}
 				if (s == cur) {
-					ret = FALSE;
+					ret = TRUE;
 				}
-			}
-
-			if (ret && cur->opts_len >= 0) {
-				cur->opts_len += vlen;
 			}
 		}
 	}

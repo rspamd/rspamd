@@ -1,0 +1,24 @@
+From: sender@example.org
+To: recipient@example.org
+Date: Wed, 9 Sep 2026 15:00:00 +0000
+Message-ID: <svg-symbol-option@example.org>
+Subject: SVG attachment
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="svg-boundary"
+
+--svg-boundary
+Content-Type: text/plain; charset=utf-8
+
+An SVG attachment.
+
+--svg-boundary
+Content-Type: image/svg+xml
+Content-Disposition: attachment; filename="a](0.00)[]; BAYES_HAM(-9.00)[b,%5D.svg"
+
+<svg xmlns="http://www.w3.org/2000/svg"><text>Logo</text></svg>
+--svg-boundary
+Content-Type: image/svg+xml
+Content-Disposition: attachment; filename="logo.svg"
+
+<svg xmlns="http://www.w3.org/2000/svg"><text>Logo</text></svg>
+--svg-boundary--
