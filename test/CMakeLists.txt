@@ -34,6 +34,8 @@ add_test(
 )
 
 # C++ unit tests
+add_subdirectory(libucl)
+
 set(CXX_TEST_SOURCES rspamd_cxx_unit.cxx ${CMAKE_SOURCE_DIR}/src/sanitizer_conf.c)
 
 # C++ test executable

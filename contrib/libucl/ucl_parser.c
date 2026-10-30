@@ -146,6 +146,16 @@ ucl_attach_comment(struct ucl_parser *parser, ucl_object_t *obj, bool before)
 	}
 }
 
+/* Attach the comments read inside a container that holds nothing else */
+static void
+ucl_attach_inner_comment(struct ucl_parser *parser, ucl_object_t *obj)
+{
+	if (parser->last_comment) {
+		parser->last_comment->flags |= UCL_OBJECT_INNER_COMMENT;
+		ucl_attach_comment(parser, obj, false);
+	}
+}
+
 /**
  * Skip all comments from the current pos resolving nested and multiline comments
  * @param parser
@@ -204,7 +214,8 @@ start:
 				comments_nested--;
 				if (comments_nested == 0) {
 					if (parser->flags & UCL_PARSER_SAVE_COMMENTS) {
-						ucl_save_comment(parser, beg, p - beg + 1);
+						/* p is past the closing star and slash already */
+						ucl_save_comment(parser, beg, p - beg);
 						beg = NULL;
 					}
 					goto start;
@@ -268,6 +279,43 @@ ucl_lex_num_multiplier(const unsigned char c, bool is_bytes)
 
 
 /**
+ * Multiply a parsed integer by a suffix multiplier, failing on overflow
+ * @param lv
+ * @param mult positive multiplier
+ * @return false if the result does not fit int64_t
+ */
+static inline bool
+ucl_lex_num_mul(int64_t *lv, long mult)
+{
+	if (*lv > INT64_MAX / mult || *lv < INT64_MIN / mult) {
+		return false;
+	}
+
+	*lv *= mult;
+
+	return true;
+}
+
+/**
+ * Convert a parsed double to an integer, failing if it does not fit
+ * @param dv
+ * @param lv
+ * @return false for NaN and for values out of the int64_t range
+ */
+static inline bool
+ucl_lex_double_to_int(double dv, int64_t *lv)
+{
+	/* -2^63 and 2^63 are exact doubles, INT64_MAX is not */
+	if (!(dv >= -9223372036854775808.0 && dv < 9223372036854775808.0)) {
+		return false;
+	}
+
+	*lv = (int64_t) dv;
+
+	return true;
+}
+
+/**
  * Return multiplier for time scaling
  * @param c
  * @return
@@ -320,6 +368,21 @@ ucl_lex_is_comment(const unsigned char c1, const unsigned char c2)
 	return false;
 }
 
+/*
+ * A number ends with the input, with an atom or where a comment starts,
+ * possibly after spaces
+ */
+static inline bool
+ucl_lex_is_number_end(const char *p, const char *end)
+{
+	while (p < end && ucl_test_character(*p, UCL_CHARACTER_WHITESPACE)) {
+		p++;
+	}
+
+	return p >= end || ucl_lex_is_atom_end(*p) ||
+		   (end - p >= 2 && ucl_lex_is_comment(p[0], p[1]));
+}
+
 /**
  * Check variable found
  * @param parser
@@ -367,7 +430,7 @@ ucl_check_variable_safe(struct ucl_parser *parser, const char *ptr, size_t remai
 		if (parser->var_handler(ptr, remain, &dst, &dstlen, &need_free,
 								parser->var_data)) {
 			*found = true;
-			*out_len = dstlen;
+			*out_len += dstlen;
 
 			if (need_free) {
 				free(dst);
@@ -453,7 +516,7 @@ ucl_expand_single_variable(struct ucl_parser *parser, const char *ptr,
 						   size_t in_len, unsigned char **dest, size_t out_len)
 {
 	unsigned char *d = *dest, *dst;
-	const char *p = ptr + 1, *ret;
+	const char *p = ptr + 1, *ret, *var_end;
 	struct ucl_variable *var;
 	size_t dstlen;
 	bool need_free = false;
@@ -492,10 +555,12 @@ ucl_expand_single_variable(struct ucl_parser *parser, const char *ptr,
 	}
 
 	if (!found) {
-		if (strict && parser->var_handler != NULL) {
+		if (strict && parser->var_handler != NULL &&
+			(var_end = memchr(p, '}', in_len)) != NULL) {
 			dstlen = out_len;
 
-			if (parser->var_handler(p, in_len, &dst, &dstlen, &need_free,
+			/* Use the same variable name as the length-counting pass. */
+			if (parser->var_handler(p, var_end - p, &dst, &dstlen, &need_free,
 									parser->var_data)) {
 				if (dstlen > out_len) {
 					/* We do not have enough space! */
@@ -505,7 +570,7 @@ ucl_expand_single_variable(struct ucl_parser *parser, const char *ptr,
 				}
 				else {
 					memcpy(d, dst, dstlen);
-					ret += in_len;
+					ret = var_end + 1;
 					d += dstlen;
 					found = true;
 
@@ -549,7 +614,7 @@ ucl_expand_variable(struct ucl_parser *parser, unsigned char **dst,
 {
 	const char *p, *end = src + in_len;
 	unsigned char *d, *d_end;
-	size_t out_len = 0;
+	size_t out_len = 0, alloc_len;
 	bool vars_found = false;
 
 	if (parser->flags & UCL_PARSER_DISABLE_MACRO) {
@@ -574,7 +639,10 @@ ucl_expand_variable(struct ucl_parser *parser, unsigned char **dst,
 		return in_len;
 	}
 
-	*dst = UCL_ALLOC(out_len + 1);
+	*dst = NULL;
+	if (ucl_size_add(out_len, 1, &alloc_len)) {
+		*dst = UCL_ALLOC(alloc_len);
+	}
 	if (*dst == NULL) {
 		return in_len;
 	}
@@ -651,6 +719,7 @@ ucl_copy_or_store_ptr(struct ucl_parser *parser,
 {
 	ssize_t ret = -1, tret;
 	unsigned char *tmp;
+	size_t alloc_len;
 
 	/*
 	 * Checked before allocating: `in_len` comes straight from the input and
@@ -667,7 +736,10 @@ ucl_copy_or_store_ptr(struct ucl_parser *parser,
 		(need_expand && parser->variables != NULL) ||
 		!(parser->flags & UCL_PARSER_ZEROCOPY)) {
 		/* Copy string */
-		*dst = UCL_ALLOC(in_len + 1);
+		*dst = NULL;
+		if (ucl_size_add(in_len, 1, &alloc_len)) {
+			*dst = UCL_ALLOC(alloc_len);
+		}
 		if (*dst == NULL) {
 			ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for a string",
 						&parser->err);
@@ -685,10 +757,10 @@ ucl_copy_or_store_ptr(struct ucl_parser *parser,
 		}
 
 		if (need_lowercase) {
-			ret = ucl_strlcpy_tolower(*dst, src, in_len + 1);
+			ret = ucl_strlcpy_tolower(*dst, src, alloc_len);
 		}
 		else {
-			ret = ucl_strlcpy_unsafe(*dst, src, in_len + 1);
+			ret = ucl_strlcpy_unsafe(*dst, src, alloc_len);
 		}
 
 		if (need_unescape) {
@@ -790,6 +862,21 @@ ucl_parser_add_container(ucl_object_t *obj, struct ucl_parser *parser,
 
 			return NULL;
 		}
+		if ((obj->type != UCL_NULL || obj->value.ov != NULL) &&
+			obj->type != (is_array ? UCL_ARRAY : UCL_OBJECT)) {
+			/*
+			 * Only an empty placeholder or a container of the same kind can
+			 * become this container: retyping a scalar in place would reuse
+			 * its value as the container's storage. A UCL_NULL object counts as
+			 * a placeholder only if it carries no storage - parsing `null` over
+			 * a scalar sets the type and leaves value.* in place.
+			 */
+			ucl_set_err(parser, UCL_EMERGE,
+						"cannot turn a scalar value into a container",
+						&parser->err);
+
+			return NULL;
+		}
 		nobj = obj;
 		nobj->type = is_array ? UCL_ARRAY : UCL_OBJECT;
 	}
@@ -868,6 +955,38 @@ void ucl_parser_pop_container(struct ucl_parser *parser, struct ucl_stack *st)
 	}
 
 	UCL_FREE(sizeof(struct ucl_stack), st);
+}
+
+/**
+ * Open the frame of the { that starts a chunk going on in the object on top
+ * of the stack. The brace is the chunk's, not the object's: on the object's
+ * frame, the } of the chunk would close the object's own brace as well. The
+ * frame holds that object rather than a container of its own, so it takes no
+ * depth.
+ * @param parser parser object
+ * @param chunk the chunk that starts with the brace
+ * @return true if the frame has been pushed
+ */
+static bool
+ucl_parser_add_chunk_brace(struct ucl_parser *parser, struct ucl_chunk *chunk)
+{
+	struct ucl_stack *st;
+
+	st = UCL_ALLOC(sizeof(struct ucl_stack));
+	if (st == NULL) {
+		ucl_set_err(parser, UCL_EINTERNAL,
+					"cannot allocate memory for an object", &parser->err);
+		return false;
+	}
+
+	st->obj = parser->stack->obj;
+	st->e.params.level = parser->stack->e.params.level;
+	st->e.params.flags = UCL_STACK_HAS_OBRACE | UCL_STACK_AUTOMATIC;
+	st->e.params.line = chunk->line;
+	st->chunk = chunk;
+	LL_PREPEND(parser->stack, st);
+
+	return true;
 }
 
 int ucl_maybe_parse_number(ucl_object_t *obj,
@@ -1004,7 +1123,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 		p = end;
 		goto set_obj;
 	}
-	if (endptr == NULL || ucl_lex_is_atom_end(*endptr) || *endptr == '\0') {
+	if (endptr == NULL || ucl_lex_is_number_end(endptr, end) || *endptr == '\0') {
 		p = endptr;
 		goto set_obj;
 	}
@@ -1033,7 +1152,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 						dv *= ucl_lex_num_multiplier(*p, false);
 					}
 					p += 2;
-					if (end - p > 0 && !ucl_lex_is_atom_end(*p)) {
+					if (!ucl_lex_is_number_end(p, end)) {
 						*pos = start;
 						return EINVAL;
 					}
@@ -1043,22 +1162,29 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 					/* Bytes */
 					if (need_double) {
 						need_double = false;
-						lv = dv;
+						if (!ucl_lex_double_to_int(dv, &lv)) {
+							*pos = start;
+							return ERANGE;
+						}
 					}
-					lv *= ucl_lex_num_multiplier(*p, true);
+					if (!ucl_lex_num_mul(&lv, ucl_lex_num_multiplier(*p, true))) {
+						*pos = start;
+						return ERANGE;
+					}
 					p += 2;
-					if (end - p > 0 && !ucl_lex_is_atom_end(*p)) {
+					if (!ucl_lex_is_number_end(p, end)) {
 						*pos = start;
 						return EINVAL;
 					}
 					goto set_obj;
 				}
-				else if (ucl_lex_is_atom_end(p[1])) {
+				else if (ucl_lex_is_number_end(p + 1, end)) {
 					if (need_double) {
 						dv *= ucl_lex_num_multiplier(*p, false);
 					}
-					else {
-						lv *= ucl_lex_num_multiplier(*p, number_bytes);
+					else if (!ucl_lex_num_mul(&lv, ucl_lex_num_multiplier(*p, number_bytes))) {
+						*pos = start;
+						return ERANGE;
 					}
 					p++;
 					goto set_obj;
@@ -1075,7 +1201,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 						is_time = true;
 						dv *= 60.;
 						p += 3;
-						if (end - p > 0 && !ucl_lex_is_atom_end(*p)) {
+						if (!ucl_lex_is_number_end(p, end)) {
 							*pos = start;
 							return EINVAL;
 						}
@@ -1087,11 +1213,12 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 				if (need_double) {
 					dv *= ucl_lex_num_multiplier(*p, false);
 				}
-				else {
-					lv *= ucl_lex_num_multiplier(*p, number_bytes);
+				else if (!ucl_lex_num_mul(&lv, ucl_lex_num_multiplier(*p, number_bytes))) {
+					*pos = start;
+					return ERANGE;
 				}
 				p++;
-				if (end - p > 0 && !ucl_lex_is_atom_end(*p)) {
+				if (!ucl_lex_is_number_end(p, end)) {
 					*pos = start;
 					return EINVAL;
 				}
@@ -1101,7 +1228,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 		case 'S':
 		case 's':
 			if (allow_time &&
-				(p == end - 1 || ucl_lex_is_atom_end(p[1]))) {
+				ucl_lex_is_number_end(p + 1, end)) {
 				if (!need_double) {
 					need_double = true;
 					dv = lv;
@@ -1120,7 +1247,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 		case 'Y':
 		case 'y':
 			if (allow_time &&
-				(p == end - 1 || ucl_lex_is_atom_end(p[1]))) {
+				ucl_lex_is_number_end(p + 1, end)) {
 				if (!need_double) {
 					need_double = true;
 					dv = lv;
@@ -1136,7 +1263,7 @@ int ucl_maybe_parse_number(ucl_object_t *obj,
 			while (p < end && ucl_test_character(*p, UCL_CHARACTER_WHITESPACE)) {
 				p++;
 			}
-			if (p == end || ucl_lex_is_atom_end(*p))
+			if (ucl_lex_is_number_end(p, end))
 				goto set_obj;
 			break;
 		}
@@ -1368,7 +1495,12 @@ ucl_parser_append_elt(struct ucl_parser *parser, ucl_hash_t *cont,
 				return false;
 			}
 
-			nobj = ucl_object_typed_new(UCL_ARRAY);
+			/*
+			 * The array stands for its values in priority checks, as the head
+			 * of an implicit array does. With priority 0, a later value of the
+			 * key replaced them all whenever their priority was above 0.
+			 */
+			nobj = ucl_object_new_full(UCL_ARRAY, ucl_object_get_priority(top));
 
 			if (nobj == NULL) {
 				ucl_set_err(parser, UCL_EINTERNAL,
@@ -1404,11 +1536,53 @@ ucl_parser_append_elt(struct ucl_parser *parser, ucl_hash_t *cont,
 	return true;
 }
 
-bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *nobj)
+/*
+ * Replace the old value of a key with a new one. With comments saved, the
+ * comment of the key goes to the new value, and those of everything released
+ * with the old one are dropped rather than left to objects reusing addresses.
+ */
+static void
+ucl_parser_replace_elt(struct ucl_parser *parser, ucl_hash_t *cont,
+					   ucl_object_t *old, ucl_object_t *nobj)
+{
+	ucl_hash_replace(cont, old, nobj);
+
+	if (parser->comments != NULL) {
+		ucl_comments_move(parser->comments, old, nobj);
+		ucl_comments_forget(parser->comments, old);
+	}
+
+	ucl_object_unref(old);
+}
+
+/*
+ * What the value of a new element of an object is known to be, as only a
+ * container is merged into an old one. The text parser adds a key before it
+ * reads the value, which may even start in a later chunk.
+ */
+enum ucl_value_kind {
+	UCL_VALUE_SCALAR = 0,
+	UCL_VALUE_CONTAINER,
+	UCL_VALUE_UNKNOWN
+};
+
+static bool
+ucl_parser_add_object_element(struct ucl_parser *parser, ucl_object_t *nobj,
+							  enum ucl_duplicate_strategy strategy,
+							  enum ucl_value_kind kind)
 {
 	ucl_hash_t *container;
-	ucl_object_t *tobj = NULL, *cur;
+	ucl_object_t *tobj = NULL, *cur, *target;
 	char errmsg[256];
+
+	if (parser->pending_merge != NULL) {
+		/*
+		 * Something else has been added before the value of the pending key,
+		 * as ucl_parser_insert_chunk can do: leave that key merged
+		 */
+		ucl_object_unref(parser->pending_merge);
+		parser->pending_merge = NULL;
+	}
 
 	container = parser->stack->obj->value.ov;
 
@@ -1437,6 +1611,8 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 		container = ucl_hash_insert_object(container, nobj,
 										   parser->flags & UCL_PARSER_KEY_LOWERCASE);
 		if (container == NULL) {
+			ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for an object",
+						&parser->err);
 			return false;
 		}
 		nobj->prev = nobj;
@@ -1446,7 +1622,7 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 	else {
 		unsigned priold = ucl_object_get_priority(tobj),
 				 prinew = ucl_object_get_priority(nobj);
-		switch (parser->chunks->strategy) {
+		switch (strategy) {
 
 		case UCL_DUPLICATE_APPEND:
 			/*
@@ -1476,34 +1652,67 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 				DL_APPEND(parser->trash_objs, nobj);
 			}
 			else {
-				ucl_hash_replace(container, tobj, nobj);
-				ucl_object_unref(tobj);
+				ucl_parser_replace_elt(parser, container, tobj, nobj);
 			}
 
 			break;
 
 		case UCL_DUPLICATE_REWRITE:
 			/* We just rewrite old values regardless of priority */
-			ucl_hash_replace(container, tobj, nobj);
-			ucl_object_unref(tobj);
+			ucl_parser_replace_elt(parser, container, tobj, nobj);
 
 			break;
 
 		case UCL_DUPLICATE_ERROR:
 			snprintf(errmsg, sizeof(errmsg),
-					 "duplicate element for key '%s' found",
+					 "duplicate element for key '%.*s' found",
+					 (int) (nobj->keylen < sizeof(errmsg) ? nobj->keylen : sizeof(errmsg)),
 					 nobj->key);
 			ucl_set_err(parser, UCL_EMERGE, errmsg, &parser->err);
+			/* nobj is in no container, and the caller releases it */
 			return false;
 
 		case UCL_DUPLICATE_MERGE:
 			/*
 			 * Here we do have some old object so we just push it on top of objects stack
 			 * Check priority and then perform the merge on the remaining objects
+			 *
+			 * Only a container can be merged into a container: a scalar would
+			 * be parsed over the old one, retyping it in place and leaking its
+			 * elements, so it is subject to priorities like any other scalar.
+			 * A container of the other kind still gets the old one, so that
+			 * opening it reports the mismatch.
+			 *
+			 * Without implicit arrays, the values of a repeated key are kept
+			 * in an explicit array instead: merge into the first of them, as
+			 * an implicit array is merged into its head.
 			 */
-			if (tobj->type == UCL_OBJECT || tobj->type == UCL_ARRAY) {
+			target = tobj;
+
+			if ((parser->flags & UCL_PARSER_NO_IMPLICIT_ARRAYS) &&
+				tobj->type == UCL_ARRAY &&
+				(tobj->flags & UCL_OBJECT_MULTIVALUE)) {
+				target = __DECONST(ucl_object_t *, ucl_array_head(tobj));
+			}
+
+			if (target != NULL &&
+				(target->type == UCL_OBJECT || target->type == UCL_ARRAY) &&
+				kind != UCL_VALUE_SCALAR) {
+				if (kind == UCL_VALUE_UNKNOWN) {
+					/*
+					 * Take the old container for the value until
+					 * ucl_parse_value sees it start, keeping the key to add
+					 * it as a scalar if it is one. Its comment goes to the
+					 * object it ends up in.
+					 */
+					parser->pending_merge = nobj;
+					parser->cur_obj = target;
+
+					return true;
+				}
+
 				ucl_object_unref(nobj);
-				nobj = tobj;
+				nobj = target;
 			}
 			else if (priold == prinew) {
 				if (!ucl_parser_append_elt(parser, container, tobj, nobj)) {
@@ -1519,8 +1728,7 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 				DL_APPEND(parser->trash_objs, nobj);
 			}
 			else {
-				ucl_hash_replace(container, tobj, nobj);
-				ucl_object_unref(tobj);
+				ucl_parser_replace_elt(parser, container, tobj, nobj);
 			}
 			break;
 		}
@@ -1532,6 +1740,54 @@ bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *
 
 	return true;
 }
+
+bool ucl_parser_process_object_element(struct ucl_parser *parser, ucl_object_t *nobj,
+									   bool is_container)
+{
+	return ucl_parser_add_object_element(parser, nobj, parser->chunks->strategy,
+										 is_container ? UCL_VALUE_CONTAINER : UCL_VALUE_SCALAR);
+}
+
+/**
+ * Finish adding the key whose merge has been left pending, now that its value
+ * starts
+ * @param parser
+ * @param is_container true if the value is an object or an array
+ * @return true on success
+ */
+static bool
+ucl_parser_settle_merge(struct ucl_parser *parser, bool is_container)
+{
+	ucl_object_t *nobj = parser->pending_merge;
+
+	parser->pending_merge = NULL;
+
+	if (is_container || parser->stack == NULL ||
+		parser->stack->obj->type != UCL_OBJECT) {
+		/*
+		 * Keep the merge, as well when data inserted after the key has closed
+		 * the object that holds it
+		 */
+		ucl_object_unref(nobj);
+		ucl_attach_comment(parser, parser->cur_obj, false);
+
+		return true;
+	}
+
+	/* Pending only with the merge strategy, whatever this chunk uses */
+	if (!ucl_parser_add_object_element(parser, nobj, UCL_DUPLICATE_MERGE,
+									   UCL_VALUE_SCALAR)) {
+		/* Not taken on failure */
+		ucl_object_unref(nobj);
+
+		return false;
+	}
+
+	return true;
+}
+
+static bool ucl_skip_macro_as_comment(struct ucl_parser *parser,
+									  struct ucl_chunk *chunk);
 
 /**
  * Parse a key in an object
@@ -1602,7 +1858,14 @@ ucl_parse_key(struct ucl_parser *parser, struct ucl_chunk *chunk,
 				*end_of_object = true;
 				return true;
 			}
-			else if (*p == '.' && !(parser->flags & UCL_PARSER_DISABLE_MACRO)) {
+			else if (*p == '.' && (parser->flags & UCL_PARSER_DISABLE_MACRO)) {
+				/* Macros are comments then, so look for a key after it */
+				if (!ucl_skip_macro_as_comment(parser, chunk)) {
+					return false;
+				}
+				p = chunk->pos;
+			}
+			else if (*p == '.') {
 				ucl_chunk_skipc(chunk, p);
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_MACRO_NAME;
@@ -1731,6 +1994,8 @@ ucl_parse_key(struct ucl_parser *parser, struct ucl_chunk *chunk,
 	/* Create a new object */
 	nobj = ucl_object_new_full(UCL_NULL, parser->chunks->priority);
 	if (nobj == NULL) {
+		ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for an object",
+					&parser->err);
 		return false;
 	}
 
@@ -1756,14 +2021,27 @@ ucl_parse_key(struct ucl_parser *parser, struct ucl_chunk *chunk,
 	nobj->key = key;
 	nobj->keylen = keylen;
 
-	if (!ucl_parser_process_object_element(parser, nobj)) {
-		return false;
-	}
-
+	/*
+	 * Must be set before processing: on a merge into an older object of the
+	 * same key, ucl_parser_add_object_element releases nobj, or keeps it
+	 * aside until the value shows whether to merge
+	 */
 	if (ucl_escape) {
 		nobj->flags |= UCL_OBJECT_NEED_KEY_ESCAPE;
 	}
 
+	/*
+	 * The caller nests the following keys into the value whenever next_key is
+	 * set, even by an earlier key of the chain. Otherwise the value is not
+	 * read yet, and it is up to ucl_parse_value whether it is a container.
+	 */
+	if (!ucl_parser_add_object_element(parser, nobj, parser->chunks->strategy,
+									   *next_key ? UCL_VALUE_CONTAINER : UCL_VALUE_UNKNOWN)) {
+		/* Not taken on failure */
+		ucl_object_unref(nobj);
+
+		return false;
+	}
 
 	return true;
 }
@@ -1910,6 +2188,12 @@ ucl_parser_get_container(struct ucl_parser *parser)
 		obj = ucl_object_new_full(UCL_NULL, parser->chunks->priority);
 		t = parser->stack->obj;
 
+		if (obj == NULL) {
+			ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for an object",
+						&parser->err);
+			return NULL;
+		}
+
 		if (!ucl_parser_account_node(parser)) {
 			ucl_object_unref(obj);
 			return NULL;
@@ -1917,6 +2201,8 @@ ucl_parser_get_container(struct ucl_parser *parser)
 
 		if (!ucl_array_append(t, obj)) {
 			ucl_object_unref(obj);
+			ucl_set_err(parser, UCL_EINTERNAL, "cannot allocate memory for an array",
+						&parser->err);
 			return NULL;
 		}
 
@@ -1948,17 +2234,29 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 
 	p = chunk->pos;
 
-	/* Skip any spaces and comments */
-	if (p < chunk->end &&
-		(ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE) ||
-		 (chunk->remain >= 2 && ucl_lex_is_comment(p[0], p[1])))) {
-		while (p < chunk->end && ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
+	/*
+	 * Skip any spaces and comments, in any order: an indented value after
+	 * a comment, as the first one of an array often is, must not take
+	 * the indent
+	 */
+	while (p < chunk->end) {
+		if (ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 			ucl_chunk_skipc(chunk, p);
 		}
-		if (!ucl_skip_comments(parser)) {
-			return false;
+		else if (chunk->remain >= 2 && ucl_lex_is_comment(p[0], p[1])) {
+			if (!ucl_skip_comments(parser)) {
+				return false;
+			}
+			p = chunk->pos;
 		}
-		p = chunk->pos;
+		else {
+			break;
+		}
+	}
+
+	if (parser->pending_merge != NULL && p < chunk->end &&
+		!ucl_parser_settle_merge(parser, *p == '{' || *p == '[')) {
+		return false;
 	}
 
 	while (p < chunk->end) {
@@ -2167,7 +2465,8 @@ ucl_parse_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 			}
 			/* Cut trailing spaces */
 			stripped_spaces = 0;
-			while (ucl_test_character(*(chunk->pos - 1 - stripped_spaces),
+			while (chunk->pos - stripped_spaces > c &&
+				   ucl_test_character(*(chunk->pos - 1 - stripped_spaces),
 									  UCL_CHARACTER_WHITESPACE)) {
 				stripped_spaces++;
 			}
@@ -2226,6 +2525,7 @@ ucl_parse_after_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 	const unsigned char *p;
 	bool got_sep = false;
 	struct ucl_stack *st;
+	ucl_object_t *closed;
 
 	p = chunk->pos;
 
@@ -2268,14 +2568,31 @@ ucl_parse_after_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 					}
 
 					if ((st->e.params.flags & UCL_STACK_AUTOMATIC)) {
-						st->e.params.flags = 0;
+						/* A chunk's brace, which has taken no depth */
+						parser->stack = st->next;
+						UCL_FREE(sizeof(struct ucl_stack), st);
+						closed = NULL;
 					}
 					else {
+						closed = st->obj;
 						ucl_parser_pop_container(parser, st);
 					}
 
-					if (parser->cur_obj) {
+					if (closed != NULL && parser->cur_obj == closed) {
+						/* Nothing has been read inside the container */
+						ucl_attach_inner_comment(parser, closed);
+					}
+					else if (parser->cur_obj) {
 						ucl_attach_comment(parser, parser->cur_obj, true);
+					}
+
+					/*
+					 * Comments after the container that no key or value
+					 * takes follow it rather than the last value inside it,
+					 * as a macro read as a comment is none inside an array
+					 */
+					if (closed != NULL) {
+						parser->cur_obj = closed;
 					}
 
 					while (parser->stack != NULL) {
@@ -2327,110 +2644,6 @@ ucl_parse_after_value(struct ucl_parser *parser, struct ucl_chunk *chunk)
 	}
 
 	return true;
-}
-
-static bool
-ucl_skip_macro_as_comment(struct ucl_parser *parser,
-						  struct ucl_chunk *chunk)
-{
-	const unsigned char *p, *c;
-	enum {
-		macro_skip_start = 0,
-		macro_has_symbols,
-		macro_has_obrace,
-		macro_has_quote,
-		macro_has_backslash,
-		macro_has_sqbrace,
-		macro_save
-	} state = macro_skip_start,
-	  prev_state = macro_skip_start;
-
-	p = chunk->pos;
-	c = chunk->pos;
-
-	while (p < chunk->end) {
-		switch (state) {
-		case macro_skip_start:
-			if (!ucl_test_character(*p, UCL_CHARACTER_WHITESPACE)) {
-				state = macro_has_symbols;
-			}
-			else if (ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
-				state = macro_save;
-				continue;
-			}
-
-			ucl_chunk_skipc(chunk, p);
-			break;
-
-		case macro_has_symbols:
-			if (*p == '{') {
-				state = macro_has_sqbrace;
-			}
-			else if (*p == '(') {
-				state = macro_has_obrace;
-			}
-			else if (*p == '"') {
-				state = macro_has_quote;
-			}
-			else if (*p == '\n') {
-				state = macro_save;
-				continue;
-			}
-
-			ucl_chunk_skipc(chunk, p);
-			break;
-
-		case macro_has_obrace:
-			if (*p == '\\') {
-				prev_state = state;
-				state = macro_has_backslash;
-			}
-			else if (*p == ')') {
-				state = macro_has_symbols;
-			}
-
-			ucl_chunk_skipc(chunk, p);
-			break;
-
-		case macro_has_sqbrace:
-			if (*p == '\\') {
-				prev_state = state;
-				state = macro_has_backslash;
-			}
-			else if (*p == '}') {
-				state = macro_save;
-			}
-
-			ucl_chunk_skipc(chunk, p);
-			break;
-
-		case macro_has_quote:
-			if (*p == '\\') {
-				prev_state = state;
-				state = macro_has_backslash;
-			}
-			else if (*p == '"') {
-				state = macro_save;
-			}
-
-			ucl_chunk_skipc(chunk, p);
-			break;
-
-		case macro_has_backslash:
-			state = prev_state;
-			ucl_chunk_skipc(chunk, p);
-			break;
-
-		case macro_save:
-			if (parser->flags & UCL_PARSER_SAVE_COMMENTS) {
-				ucl_save_comment(parser, c, p - c);
-			}
-
-			return true;
-		}
-	}
-
-	return false;
 }
 
 /**
@@ -2642,6 +2855,99 @@ restore_chunk:
 		}                                                                         \
 	} while (0)
 
+/*
+ * Skip a macro from its '.' to the end of its value as UCL_STATE_MACRO_NAME
+ * and UCL_STATE_MACRO read it, without looking its name up, parsing its
+ * arguments or calling it
+ */
+static bool
+ucl_skip_macro(struct ucl_parser *parser, struct ucl_chunk *chunk)
+{
+	const unsigned char *p = chunk->pos, *name, *value;
+	size_t value_len;
+	int obraces = 1, ebraces = 0;
+	bool quoted = false;
+
+	ucl_chunk_skipc(chunk, p);
+	name = p;
+
+	while (p < chunk->end &&
+		   !ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE) &&
+		   *p != '(') {
+		ucl_chunk_skipc(chunk, p);
+	}
+
+	if (p == name) {
+		ucl_set_err(parser, UCL_ESYNTAX, "invalid macro name", &parser->err);
+		return false;
+	}
+
+	SKIP_SPACES_COMMENTS(parser, chunk, p);
+
+	/* Arguments end at their closing parenthesis, outside of strings */
+	if (chunk->remain >= 2 && *p == '(') {
+		ucl_chunk_skipc(chunk, p);
+
+		while (p < chunk->end && obraces != ebraces) {
+			if (quoted) {
+				if (*p == '"' && *(p - 1) != '\\') {
+					quoted = false;
+				}
+			}
+			else if (*p == '"') {
+				quoted = true;
+			}
+			else if (*p == '(') {
+				obraces++;
+			}
+			else if (*p == ')') {
+				ebraces++;
+			}
+
+			ucl_chunk_skipc(chunk, p);
+		}
+
+		SKIP_SPACES_COMMENTS(parser, chunk, p);
+	}
+
+	return ucl_parse_macro_value(parser, chunk, NULL, &value, &value_len);
+}
+
+/**
+ * With UCL_PARSER_DISABLE_MACRO, read a macro as a comment: skip it, and with
+ * UCL_PARSER_SAVE_COMMENTS save it as it is written, comments inside it
+ * included
+ * @param parser
+ * @param chunk the current chunk, at the '.' that starts the macro
+ * @return true if a whole macro has been skipped
+ */
+static bool
+ucl_skip_macro_as_comment(struct ucl_parser *parser, struct ucl_chunk *chunk)
+{
+	const unsigned char *beg = chunk->pos, *end;
+	int flags = parser->flags;
+	bool ret;
+
+	parser->flags &= ~UCL_PARSER_SAVE_COMMENTS;
+	ret = ucl_skip_macro(parser, chunk);
+	parser->flags = flags;
+
+	if (ret && (flags & UCL_PARSER_SAVE_COMMENTS)) {
+		/* Without the spaces and semicolons skipped after the value */
+		end = chunk->pos;
+
+		while (end > beg &&
+			   (ucl_test_character(end[-1], UCL_CHARACTER_WHITESPACE_UNSAFE) ||
+				end[-1] == ';')) {
+			end--;
+		}
+
+		ucl_save_comment(parser, (const char *) beg, end - beg);
+	}
+
+	return ret;
+}
+
 /**
  * Handle the main states of rcl parser
  * @param parser parser structure
@@ -2723,17 +3029,84 @@ ucl_state_machine(struct ucl_parser *parser)
 					parser->top_obj = obj;
 					parser->cur_obj = obj;
 				}
+				else if (parser->state == UCL_STATE_VALUE) {
+					/*
+					 * An inserted or included chunk that starts with [ has no
+					 * key to attach its value to. Falling through would let
+					 * ucl_parser_get_container() hand back the stale
+					 * parser->cur_obj, i.e. the previous key's value: an
+					 * inserted [5 silently overwrites it, and [{ or [[ reuses
+					 * its scalar storage as the new container's, which crashes
+					 * in ucl_hash_destroy() when the tree is freed.
+					 * Only an array frame can take a value with no key.
+					 */
+					if (parser->stack == NULL || parser->stack->obj == NULL ||
+						parser->stack->obj->type != UCL_ARRAY) {
+						ucl_set_err(parser, UCL_ESYNTAX,
+									"array value without a key",
+									&parser->err);
+						parser->prev_state = parser->state;
+						parser->state = UCL_STATE_ERROR;
+
+						return false;
+					}
+				}
+				else if (parser->state == UCL_STATE_KEY_OBRACE &&
+						 (parser->stack == NULL || parser->stack->obj == NULL ||
+						  parser->stack->obj->type != UCL_OBJECT)) {
+					/*
+					 * The mirror image: { opens the body of the current
+					 * object, so only an object frame can take it. On an
+					 * array frame UCL_STATE_KEY_OBRACE would mark the array
+					 * as braced before the key check in UCL_STATE_KEY could
+					 * reject it, and the array's ] would no longer close it.
+					 */
+					ucl_set_err(parser, UCL_ESYNTAX,
+								"key outside of an object",
+								&parser->err);
+					parser->prev_state = parser->state;
+					parser->state = UCL_STATE_ERROR;
+
+					return false;
+				}
+				else if (parser->state == UCL_STATE_KEY_OBRACE) {
+					/*
+					 * A chunk that starts with { in an open object, as an
+					 * included file can, adds its keys to that object, as in
+					 * an unbraced root. Marked on the object's frame, the
+					 * brace would be closed by the object's own } or take that
+					 * one with it. Its own frame keeps the two apart, and is
+					 * checked at the end of the chunk like any other brace the
+					 * chunk opens.
+					 */
+					if (!ucl_parser_add_chunk_brace(parser, chunk)) {
+						parser->prev_state = parser->state;
+						parser->state = UCL_STATE_ERROR;
+
+						return false;
+					}
+				}
 			}
 			break;
 		case UCL_STATE_KEY_OBRACE:
-			parser->stack->e.params.flags |= UCL_STACK_HAS_OBRACE | UCL_STACK_AUTOMATIC;
+			/*
+			 * The brace has its frame already, see UCL_STATE_INIT. A macro
+			 * at the start of the chunk returns to this state.
+			 */
 			/* FALLTHROUGHT */
 		case UCL_STATE_KEY:
 			/* Skip any spaces */
 			while (p < chunk->end && ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 				ucl_chunk_skipc(chunk, p);
 			}
-			if (p == chunk->end || *p == '}') {
+			if (p == chunk->end) {
+				/*
+				 * The key can start the next chunk, which needs no separator
+				 * before it as UCL_STATE_AFTER_VALUE would
+				 */
+				break;
+			}
+			if (*p == '}') {
 				/* We have the end of an object */
 				parser->state = UCL_STATE_AFTER_VALUE;
 				continue;
@@ -2742,6 +3115,21 @@ ucl_state_machine(struct ucl_parser *parser)
 				/* No objects are on stack, but we want to parse a key */
 				ucl_set_err(parser, UCL_ESYNTAX, "top object is finished but the parser "
 												 "expects a key",
+							&parser->err);
+				parser->prev_state = parser->state;
+				parser->state = UCL_STATE_ERROR;
+				return false;
+			}
+			if (parser->stack->obj->type != UCL_OBJECT) {
+				/*
+				 * Only an object frame can take a key. An array can be on top
+				 * here: an inserted chunk starts in UCL_STATE_INIT, which
+				 * picks this state for anything but [ or {, and .include
+				 * restores the state it was called in even if the included
+				 * chunk closed the enclosing object. ucl_parse_key() would
+				 * then pass the array's storage to ucl_hash_insert().
+				 */
+				ucl_set_err(parser, UCL_ESYNTAX, "key outside of an object",
 							&parser->err);
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_ERROR;
@@ -2817,59 +3205,41 @@ ucl_state_machine(struct ucl_parser *parser)
 			p = chunk->pos;
 			break;
 		case UCL_STATE_MACRO_NAME:
-			if (parser->flags & UCL_PARSER_DISABLE_MACRO) {
-				if (!ucl_skip_macro_as_comment(parser, chunk)) {
-					/* We have invalid macro */
+			if (!ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE) &&
+				*p != '(') {
+				ucl_chunk_skipc(chunk, p);
+			}
+			else {
+				if (c != NULL && p - c > 0) {
+					/* We got macro name */
+					macro_len = (size_t) (p - c);
+					HASH_FIND(hh, parser->macroes, c, macro_len, macro);
+					if (macro == NULL) {
+						ucl_create_err(&parser->err,
+									   "error at %s:%d at column %d: "
+									   "unknown macro: '%.*s', character: '%c'",
+									   chunk->fname ? chunk->fname : "memory",
+									   chunk->line,
+									   chunk->column,
+									   (int) (p - c),
+									   c,
+									   *chunk->pos);
+						parser->state = UCL_STATE_ERROR;
+						return false;
+					}
+					/* Now we need to skip all spaces */
+					SKIP_SPACES_COMMENTS(parser, chunk, p);
+					parser->state = UCL_STATE_MACRO;
+				}
+				else {
+					/* We have invalid macro name */
 					ucl_create_err(&parser->err,
-								   "error at %s:%d at column %d: invalid macro",
+								   "error at %s:%d at column %d: invalid macro name",
 								   chunk->fname ? chunk->fname : "memory",
 								   chunk->line,
 								   chunk->column);
 					parser->state = UCL_STATE_ERROR;
 					return false;
-				}
-				else {
-					p = chunk->pos;
-					parser->state = parser->prev_state;
-				}
-			}
-			else {
-				if (!ucl_test_character(*p, UCL_CHARACTER_WHITESPACE_UNSAFE) &&
-					*p != '(') {
-					ucl_chunk_skipc(chunk, p);
-				}
-				else {
-					if (c != NULL && p - c > 0) {
-						/* We got macro name */
-						macro_len = (size_t) (p - c);
-						HASH_FIND(hh, parser->macroes, c, macro_len, macro);
-						if (macro == NULL) {
-							ucl_create_err(&parser->err,
-										   "error at %s:%d at column %d: "
-										   "unknown macro: '%.*s', character: '%c'",
-										   chunk->fname ? chunk->fname : "memory",
-										   chunk->line,
-										   chunk->column,
-										   (int) (p - c),
-										   c,
-										   *chunk->pos);
-							parser->state = UCL_STATE_ERROR;
-							return false;
-						}
-						/* Now we need to skip all spaces */
-						SKIP_SPACES_COMMENTS(parser, chunk, p);
-						parser->state = UCL_STATE_MACRO;
-					}
-					else {
-						/* We have invalid macro name */
-						ucl_create_err(&parser->err,
-									   "error at %s:%d at column %d: invalid macro name",
-									   chunk->fname ? chunk->fname : "memory",
-									   chunk->line,
-									   chunk->column);
-						parser->state = UCL_STATE_ERROR;
-						return false;
-					}
 				}
 			}
 			break;
@@ -2951,7 +3321,11 @@ ucl_state_machine(struct ucl_parser *parser)
 		}
 	}
 
-	if (parser->last_comment) {
+	/*
+	 * A key whose merge is pending takes the comments before it once its
+	 * value starts, in whichever object that value ends up
+	 */
+	if (parser->last_comment && parser->pending_merge == NULL) {
 		if (parser->cur_obj) {
 			ucl_attach_comment(parser, parser->cur_obj, true);
 		}
@@ -2963,6 +3337,7 @@ ucl_state_machine(struct ucl_parser *parser)
 		}
 		else {
 			ucl_object_unref(parser->last_comment);
+			parser->last_comment = NULL;
 		}
 	}
 
@@ -3248,7 +3623,8 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 
 				if (!special_handler->handler(parser, data, len, &ndata, &nlen,
 											  special_handler->user_data)) {
-					UCL_FREE(sizeof(struct ucl_chunk), chunk);
+					/* Also releases the outputs of the previous handlers */
+					ucl_chunk_free(chunk);
 					ucl_create_err(&parser->err, "call for external handler failed");
 
 					return false;
@@ -3256,6 +3632,21 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 
 				struct ucl_parser_special_handler_chain *nchain;
 				nchain = UCL_ALLOC(sizeof(*nchain));
+				if (nchain == NULL) {
+					/* Release ndata the way ucl_chunk_free would have */
+					if (special_handler->free_function) {
+						special_handler->free_function(ndata, nlen,
+													   special_handler->user_data);
+					}
+					else {
+						UCL_FREE(nlen, ndata);
+					}
+					ucl_chunk_free(chunk);
+					ucl_create_err(&parser->err,
+								   "cannot allocate memory for special handler chain");
+
+					return false;
+				}
 				nchain->begin = ndata;
 				nchain->len = nlen;
 				nchain->special_handler = special_handler;
@@ -3270,7 +3661,18 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 
 		if (parse_type == UCL_PARSE_AUTO && len > 0) {
 			/* We need to detect parse type by the first symbol */
-			if ((*data & 0x80) == 0x80) {
+			if (len >= 3 && data[0] == 0xd9 && data[1] == 0xd9 &&
+				data[2] == 0xf7) {
+				/*
+				 * The self-described cbor tag, 55799. Cbor and msgpack are
+				 * otherwise indistinguishable from their first byte - both
+				 * spend 0x80 to 0xbf on short containers and strings - so
+				 * this prefix is the only thing that tells them apart, and
+				 * cbor without it has to be requested explicitly.
+				 */
+				parse_type = UCL_PARSE_CBOR;
+			}
+			else if ((*data & 0x80) == 0x80) {
 				parse_type = UCL_PARSE_MSGPACK;
 			}
 			else if (*data == '(') {
@@ -3305,6 +3707,18 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 		}
 
 		if (len > 0) {
+			/*
+			 * An empty first chunk exposes an object without starting a parse.
+			 * Replace that placeholder so the first nonempty chunk determines
+			 * the root type and priority, and accounts for the root's cost.
+			 * Real roots, including completed empty containers, stay intact.
+			 */
+			if (parser->top_obj_is_placeholder) {
+				ucl_object_unref(parser->top_obj);
+				parser->top_obj = NULL;
+				parser->top_obj_is_placeholder = false;
+			}
+
 			/* Need to parse something */
 			switch (parse_type) {
 			default:
@@ -3312,6 +3726,8 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 				return ucl_state_machine(parser);
 			case UCL_PARSE_MSGPACK:
 				return ucl_parse_msgpack(parser);
+			case UCL_PARSE_CBOR:
+				return ucl_parse_cbor(parser);
 			case UCL_PARSE_CSEXP:
 				return ucl_parse_csexp(parser);
 			}
@@ -3324,6 +3740,7 @@ bool ucl_parser_add_chunk_full(struct ucl_parser *parser, const unsigned char *d
 				 * read something
 				 */
 				parser->top_obj = ucl_object_new_full(UCL_OBJECT, priority);
+				parser->top_obj_is_placeholder = true;
 			}
 
 			return true;
@@ -3361,33 +3778,100 @@ bool ucl_parser_add_chunk(struct ucl_parser *parser, const unsigned char *data,
 bool ucl_parser_insert_chunk(struct ucl_parser *parser, const unsigned char *data,
 							 size_t len)
 {
-	if (parser == NULL || parser->top_obj == NULL) {
+	if (parser == NULL || parser->top_obj == NULL || parser->stack == NULL) {
+		return false;
+	}
+
+	if (parser->state == UCL_STATE_ERROR) {
+		/* As in ucl_parser_add_chunk_full(): a failed parse stays failed */
+		ucl_create_err(&parser->err, "a parser is in an invalid state");
 		return false;
 	}
 
 	bool res;
-	struct ucl_chunk *chunk;
+	struct ucl_chunk *chunk, *outer = parser->chunks;
+	struct ucl_stack *st;
+	/* The frame the outer chunk stopped in */
+	const ucl_object_t *frame = parser->stack->obj;
+	ucl_type_t frame_type = frame->type;
+	unsigned int depth, new_depth;
 
 	int state = parser->state;
 	parser->state = UCL_STATE_INIT;
+	LL_COUNT(parser->stack, st, depth);
 
 	/* Prevent inserted chunks from unintentionally closing the current object */
 	if (parser->stack != NULL && parser->stack->next != NULL) {
 		parser->stack->e.params.level = parser->stack->next->e.params.level;
 	}
 
-	res = ucl_parser_add_chunk_full(parser, data, len, parser->chunks->priority,
-									parser->chunks->strategy, parser->chunks->parse_type);
+	res = ucl_parser_add_chunk_full(parser, data, len, outer->priority,
+									outer->strategy, outer->parse_type);
 
-	/* Remove chunk from the stack */
-	chunk = parser->chunks;
-	if (chunk != NULL) {
+	if (parser->state == UCL_STATE_MACRO_NAME ||
+		parser->state == UCL_STATE_MACRO) {
+		/*
+		 * A macro cannot go on in the outer chunk: its name and handler are
+		 * locals of the parse that has just returned, and the outer parse
+		 * would use its own on the data that follows. Keep the error of a
+		 * chunk that has failed already.
+		 */
+		ucl_set_err_fallback(parser, UCL_ESYNTAX, "unfinished macro");
+		res = false;
+	}
+
+	/*
+	 * Remove the inserted chunk and resume the outer one. The insert can fail
+	 * before its chunk is added (a special handler refusing the data, for
+	 * one), and a failed .include in it leaves the included chunk on top, so
+	 * remove everything above the outer chunk rather than the head alone.
+	 * Frames left open by a removed chunk now belong to the outer one: the
+	 * check for unmatched braces at the end of a chunk walks the frames of
+	 * that chunk only, and must not compare them with a freed one.
+	 */
+	while (parser->chunks != outer) {
+		chunk = parser->chunks;
 		parser->chunks = chunk->next;
+		LL_FOREACH(parser->stack, st)
+		{
+			if (st->chunk == chunk) {
+				st->chunk = outer;
+			}
+		}
 		ucl_chunk_free(chunk);
 		parser->recursion--;
 	}
 
-	parser->state = state;
+	/*
+	 * Resume the outer chunk only on the frame it stopped in. The inserted
+	 * chunk can close that frame (a keyless [2] closes the array it was
+	 * inserted into, as its [ opens no container) or leave new frames open,
+	 * and then the saved state belongs to another frame: UCL_STATE_VALUE on
+	 * an object frame hands the stale parser->cur_obj to the next value.
+	 * Keep the state the inserted chunk ended in instead, an error included.
+	 * The type check guards against a new frame object reusing the address of
+	 * a frame object that a rewrite has freed.
+	 */
+	LL_COUNT(parser->stack, st, new_depth);
+	if (new_depth == depth && parser->stack->obj == frame &&
+		parser->stack->obj->type == frame_type) {
+		parser->state = state;
+	}
+	else if (parser->state == UCL_STATE_AFTER_VALUE &&
+			 state != UCL_STATE_AFTER_VALUE && parser->stack != NULL) {
+		/*
+		 * The outer chunk has its separator already (a macro value takes
+		 * the one after it), so the end of the inserted chunk separates its
+		 * last value from what follows, as on the same frame, where the
+		 * restored state expects no separator either
+		 */
+		if (parser->stack->obj->type == UCL_OBJECT) {
+			parser->state = UCL_STATE_KEY;
+		}
+		else {
+			parser->state = UCL_STATE_VALUE;
+		}
+	}
 
 	return res;
 }
@@ -3477,6 +3961,11 @@ ucl_parser_get_current_stack_object(struct ucl_parser *parser, unsigned int dept
 	}
 
 	for (unsigned int i = 0; i < depth; ++i) {
+		/* The frame of a chunk's { holds the object of the frame below it */
+		while (stack->next != NULL &&
+			   (stack->e.params.flags & UCL_STACK_AUTOMATIC)) {
+			stack = stack->next;
+		}
 		stack = stack->next;
 		if (stack == NULL || stack->obj == NULL || ucl_object_type(stack->obj) != UCL_OBJECT) {
 			return NULL;

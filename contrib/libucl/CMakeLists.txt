@@ -1,11 +1,13 @@
 SET(UCLSRC            ucl_util.c
                       ucl_parser.c
                       ucl_emitter.c
+                      ucl_emitter_utils.c
                       ucl_emitter_streamline.c
                       ucl_hash.c
                       ucl_schema.c
                       lua_ucl.c
 					  ucl_msgpack.c
+					  ucl_cbor.c
 					  ucl_sexp.c)
 
 

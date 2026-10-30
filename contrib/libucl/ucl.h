@@ -169,6 +169,7 @@ typedef enum ucl_emitter {
 	UCL_EMIT_CONFIG,       /**< Emit human readable config format */
 	UCL_EMIT_YAML,         /**< Emit embedded YAML format */
 	UCL_EMIT_MSGPACK,      /**< Emit msgpack output */
+	UCL_EMIT_CBOR,         /**< Emit CBOR (RFC 8949) output */
 	UCL_EMIT_MAX           /**< Unsupported emitter type */
 } ucl_emitter_t;
 
@@ -189,10 +190,16 @@ typedef enum ucl_parser_flags {
 	UCL_PARSER_NO_FILEVARS = (1 << 6)         /** Do not set file vars */
 } ucl_parser_flags_t;
 
+/**
+ * Flags suitable for input that did not come from a trusted local file:
+ * no macros, no file variables, no time suffixes and no implicit arrays.
+ * Combine with ucl_parser_set_limits() to bound the structural cost as well.
+ */
 #define UCL_PARSER_SAFE_FLAGS (UCL_PARSER_NO_TIME |            \
 							   UCL_PARSER_NO_IMPLICIT_ARRAYS | \
 							   UCL_PARSER_DISABLE_MACRO |      \
 							   UCL_PARSER_NO_FILEVARS)
+
 /**
  * String conversion flags, that are used in #ucl_object_fromstring_common function.
  */
@@ -244,7 +251,12 @@ enum ucl_parse_type {
 	UCL_PARSE_UCL = 0, /**< Default ucl format */
 	UCL_PARSE_MSGPACK, /**< Message pack input format */
 	UCL_PARSE_CSEXP,   /**< Canonical S-expressions */
-	UCL_PARSE_AUTO     /**< Try to detect parse type */
+	UCL_PARSE_AUTO,    /**< Try to detect parse type */
+	/*
+	 * Appended after UCL_PARSE_AUTO on purpose, so that the values of the
+	 * types that came before it stay what they have always been
+	 */
+	UCL_PARSE_CBOR /**< CBOR (RFC 8949) input format */
 };
 
 /**
@@ -641,10 +653,11 @@ UCL_EXTERN bool ucl_object_todouble_safe(const ucl_object_t *obj, double *target
 UCL_EXTERN double ucl_object_todouble(const ucl_object_t *obj);
 
 /**
- * Converts an object to integer value
+ * Converts an object to integer value, a float out of the int64_t range is
+ * clamped to INT64_MIN or INT64_MAX
  * @param obj CL object
  * @param target target integer variable
- * @return true if conversion was successful
+ * @return true if conversion was successful, false for NaN
  */
 UCL_EXTERN bool ucl_object_toint_safe(const ucl_object_t *obj, int64_t *target);
 
@@ -759,7 +772,8 @@ UCL_EXTERN const ucl_object_t *ucl_object_lookup_path(const ucl_object_t *obj,
  * Return object identified by object notation string using arbitrary delimiter
  * @param obj object to search in
  * @param path dot.notation.path to the path to lookup. May use numeric .index on arrays
- * @param sep the sepatorator to use in place of . (incase keys have . in them)
+ * @param sep the separator to use in place of . (in case keys have . in them);
+ * if sep is '\0', the whole path is looked up as a single key
  * @return object matched the specified path or NULL if path is not found
  */
 UCL_EXTERN const ucl_object_t *ucl_object_lookup_path_char(const ucl_object_t *obj,
@@ -919,7 +933,7 @@ UCL_EXTERN ucl_object_iter_t ucl_object_iterate_new(const ucl_object_t *obj)
  * @param iter opaque iterator
  * @return true if exception has occured, false otherwise
  */
-UCL_EXTERN bool ucl_object_iter_chk_excpn(ucl_object_iter_t *it);
+UCL_EXTERN bool ucl_object_iter_chk_excpn(ucl_object_iter_t it);
 
 /**
  * Reset initialized iterator to a new object
@@ -1504,13 +1518,13 @@ struct ucl_emitter_operations {
 								  const ucl_object_t *obj, bool first, bool print_key);
 	/** Start ucl object */
 	void (*ucl_emitter_start_object)(struct ucl_emitter_context *ctx,
-									 const ucl_object_t *obj, bool print_key);
+									 const ucl_object_t *obj, bool first, bool print_key);
 	/** End ucl object */
 	void (*ucl_emitter_end_object)(struct ucl_emitter_context *ctx,
 								   const ucl_object_t *obj);
 	/** Start ucl array */
 	void (*ucl_emitter_start_array)(struct ucl_emitter_context *ctx,
-									const ucl_object_t *obj, bool print_key);
+									const ucl_object_t *obj, bool first, bool print_key);
 	void (*ucl_emitter_end_array)(struct ucl_emitter_context *ctx,
 								  const ucl_object_t *obj);
 };
@@ -1740,5 +1754,8 @@ UCL_EXTERN bool ucl_object_validate_root_ext(const ucl_object_t *schema,
 #define ucl_obj_unref ucl_object_unref
 #define ucl_obj_ref ucl_object_ref
 #define ucl_obj_free ucl_object_free
+
+#define UCL_PRIORITY_MIN 0
+#define UCL_PRIORITY_MAX 15
 
 #endif /* UCL_H_ */
