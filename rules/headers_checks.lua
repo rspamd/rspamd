@@ -1189,19 +1189,38 @@ rspamd_config.MIME_BASE64_TEXT_BOGUS = {
   group = 'mime'
 }
 
-local function is_8bit_addr(addr)
-  if addr.flags and addr.flags['8bit'] then
-    return true
+local function has_8bit(s)
+  return s ~= nil and s:find('[\128-\255]') ~= nil
+end
+
+local function invalid_8bit_addr_reason(addr)
+  local flags = addr.flags or {}
+  local bad_grammar = flags['8bit']
+
+  if not bad_grammar and not has_8bit(addr.user) and not has_8bit(addr.domain) then
+    return nil
   end
 
-  return false;
+  local valid, reason = util.is_valid_smtputf8_address(addr.user or '',
+      addr.domain or '', flags['quoted'])
+
+  if not valid then
+    return reason
+  end
+
+  if bad_grammar then
+    return 'RFC6532 grammar'
+  end
+
+  return nil
 end
 
 local invalid_from_8bit = {
   callback = function(task)
     local from = (task:get_from('mime') or {})[1] or {}
-    if is_8bit_addr(from) then
-      return true
+    local reason = invalid_8bit_addr_reason(from)
+    if reason then
+      return true, 1.0, reason
     end
     return false
   end,
@@ -1213,27 +1232,18 @@ local invalid_from_8bit = {
 local invalid_rcpt_8bit = {
   callback = function(task)
     local rcpts = task:get_recipients('mime') or {}
-    return fun.any(function(rcpt)
-      if is_8bit_addr(rcpt) then
-        return true
+    for _, rcpt in ipairs(rcpts) do
+      local reason = invalid_8bit_addr_reason(rcpt)
+      if reason then
+        return true, 1.0, reason
       end
-      return false
-    end, rcpts)
+    end
+    return false
   end,
   description = 'Invalid 8bit character in recipients headers',
   score = 6.0,
   group = 'headers'
 }
-
-if rspamd_config:is_mime_utf8() then
-  -- Disable some of the rules preserving the underlying logic
-  invalid_from_8bit.condition = function()
-    return false
-  end
-  invalid_rcpt_8bit.condition = function()
-    return false
-  end
-end
 
 rspamd_config.INVALID_FROM_8BIT = invalid_from_8bit
 rspamd_config.INVALID_RCPT_8BIT = invalid_rcpt_8bit
