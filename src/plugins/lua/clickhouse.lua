@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     IPNet String,
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
     `Symbols.Scores` Array(Float32) COMMENT 'Symbol score',
-    `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list)',
+    `Symbols.Options` Array(String) COMMENT 'Symbol options (split on comma, then percent-decode each option once)',
     `Groups.Names` Array(LowCardinality(String)) COMMENT 'Group name',
     `Groups.Scores` Array(Float32) COMMENT 'Group score',
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',
@@ -1160,7 +1160,7 @@ local function clickhouse_collect(task)
       table.insert(scores_tab, s.score)
 
       if s.options then
-        table.insert(options_tab, table.concat(s.options, ','))
+        table.insert(options_tab, lua_util.symbol_options_to_string(s.options))
       else
         table.insert(options_tab, '');
       end

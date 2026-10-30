@@ -199,7 +199,8 @@ struct rspamd_symbol_result *rspamd_task_remove_symbol_result(
 	struct rspamd_scan_result *result);
 /**
  * Adds a symbol option. Printable UTF-8 is preserved except for %, [, ],
- * comma, semicolon and braces, which are percent-encoded using uppercase hex.
+ * semicolon and braces, which are percent-encoded using uppercase hex.
+ * Commas remain valid option data; comma-separated exporters must escape them.
  * Invalid and non-printable characters are replaced by U+FFFD. Consumers can
  * percent-decode once after splitting structured output into individual options.
  * @param task

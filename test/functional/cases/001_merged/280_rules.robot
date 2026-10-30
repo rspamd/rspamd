@@ -87,7 +87,7 @@ XLSX content
   ...  Settings={symbols_enabled = [XLSX_CONTENT, XLSX_EXTERNAL_LINKS, XLSX_SUSPICIOUS, OOXML_MACROS, OOXML_EXTERNAL_DATA, OOXML_OLE_OBJECT, OOXML_REMOTE_TEMPLATE]}
   Expect Symbol With Exact Options  XLSX_CONTENT  invoice.xlsm
   Expect Symbol With Exact Options  XLSX_EXTERNAL_LINKS  invoice.xlsm:3
-  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm%2Cvba%2C_xlnm.Auto_Open
+  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm,vba,_xlnm.Auto_Open
   Expect Symbol With Exact Options  OOXML_EXTERNAL_DATA  invoice.xlsm:externalLinkPath=https://external.example.com/data.xlsx
   Do Not Expect Symbol  XLSX_SUSPICIOUS
   Do Not Expect Symbol  OOXML_OLE_OBJECT
@@ -113,11 +113,11 @@ SVG smuggling
   Scan File  ${MESSAGE14}
   ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
   Expect Symbol With Exact Options  SVG_CONTENT  invoice.svg
-  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2%2Chandlers=1%2Cjavascript=2%2Cexternal=1%2Catob%2CBlob%2CcreateObjectURL%2Clocation
+  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2,handlers=1,javascript=2,external=1,atob,Blob,createObjectURL,location
   Expect Symbol With Exact Options  SVG_FOREIGN_OBJECT  invoice.svg:1
   Expect Symbol With Exact Options  SVG_DATA_URI  invoice.svg:text/html
-  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1%2Cpasswords=1
-  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh%2Cembedded_documents%2Clocation
+  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1,passwords=1
+  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh,embedded_documents,location
   Expect Symbol  SVG_EXTERNAL_RESOURCES
   Do Not Expect Symbol  SVG_SUSPICIOUS
   Expect URL  phish.example.com

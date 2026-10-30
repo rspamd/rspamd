@@ -258,7 +258,7 @@ local function milter_headers(task)
 
     for _, s in ipairs(common.symbols) do
       local sym_str = string.format('%s(%.2f)[%s]',
-        s.name, s.score, table.concat(s.options or {}, ','))
+        s.name, s.score, lua_util.symbol_options_to_string(s.options))
       table.insert(buf, sym_str)
     end
     add_header('x-spamd-result', table.concat(buf, '; '), ';')

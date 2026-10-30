@@ -521,9 +521,9 @@ Thank you,
     local opts = task:get_symbol('OPTION_CONTRACT_TEST')[1].options
     assert_rspamd_table_eq_sorted({
       actual = opts,
-      expect = { 'a%5D%3B%2C%5B%5D%7Bx%7D%255D', 'a%255D', 'a%5D', 'normal', 'é�' }
+      expect = { 'a%5D%3B,%5B%5D%7Bx%7D%255D', 'a%255D', 'a%5D', 'normal', 'é�' }
     })
-    local encoded = 'a%5D%3B%2C%5B%5D%7Bx%7D%255D'
+    local encoded = 'a%5D%3B,%5B%5D%7Bx%7D%255D'
     local ucl = require 'ucl'
     local parser = ucl.parser()
     assert_true(parser:parse_string(ucl.to_format({ options = opts }, 'json-compact')))
@@ -536,6 +536,29 @@ Thank you,
       expect = { '...' }
     })
     task:destroy()
+  end)
+
+  test("comma-separated option exporters escape commas without double encoding", function()
+    local lua_util = require 'lua_util'
+    local options = { 'first,second', 'literal%252C', 'reserved%5B%3B%5D', 'normal' }
+    local serialized = lua_util.symbol_options_to_string(options)
+    assert_equal(serialized, 'first%2Csecond,literal%252C,reserved%5B%3B%5D,normal')
+    assert_equal(options[1], 'first,second')
+    assert_equal(options[2], 'literal%252C')
+    assert_equal(lua_util.symbol_options_to_string({ 'one', 'two' }), 'one,two')
+    assert_equal(lua_util.symbol_options_to_string({}), '')
+    assert_equal(lua_util.symbol_options_to_string(nil), '')
+    local decoded = {}
+    for _, option in ipairs(lua_util.str_split(serialized, ',')) do
+      decoded[#decoded + 1] = option:gsub('%%(%x%x)', function(hex)
+        return string.char(tonumber(hex, 16))
+      end)
+    end
+    assert_rspamd_table_eq_sorted({
+      actual = decoded, expect = { 'first,second', 'literal%2C', 'reserved[;]', 'normal' }
+    })
+    local tsv = require('lua_clickhouse').row_to_tsv({ { serialized } })
+    assert_equal(tostring(tsv), "['" .. serialized .. "']")
   end)
 
   test("get_symbol table form returns a map of present symbols", function()

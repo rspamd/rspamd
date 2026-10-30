@@ -1588,11 +1588,6 @@ local function rbl_callback_white(task)
         ws.options = {}
       end
       for _, opt in ipairs(ws.options) do
-        -- Symbol options are percent-encoded on insertion. Decode once before
-        -- interpreting the RBL rule's own colon- and comma-separated fields.
-        opt = opt:gsub('%%(%x%x)', function(hex)
-          return string.char(tonumber(hex, 16))
-        end)
         local elt, what = rbl_split_option(opt)
         lua_util.debugm(N, task, 'found whitelist from %s: %s(%s)', w,
             elt, what)

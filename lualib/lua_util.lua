@@ -2015,6 +2015,29 @@ local function url_encode_string(str)
 end
 exports.url_encode_string = url_encode_string
 
+---[[[
+-- @function lua_util.symbol_options_to_string(options)
+-- Joins canonical symbol options into a comma-separated list. Escape commas
+-- within each option, preserving the percent escapes added at insertion.
+-- Consumers must split the list before percent-decoding each option once.
+-- This does not accept raw, unencoded input from outside the symbol API.
+-- @param {table} options symbol options, or nil
+-- @return {string} comma-separated encoded options
+---]]]
+exports.symbol_options_to_string = function(options)
+  if not options then return '' end
+  for _, option in ipairs(options) do
+    if option:find(',', 1, true) then
+      local escaped = {}
+      for i, value in ipairs(options) do
+        escaped[i] = value:gsub(',', '%%2C')
+      end
+      return table.concat(escaped, ',')
+    end
+  end
+  return table.concat(options, ',')
+end
+
 assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')
 assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')
 

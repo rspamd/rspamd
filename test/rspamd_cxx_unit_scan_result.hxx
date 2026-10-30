@@ -34,8 +34,9 @@ struct fixture {
 TEST_CASE("safe duplicate symbol options do not allocate from the task pool")
 {
 	fixture f;
-	constexpr auto option = "ordinary-option";
+	constexpr auto option = "ordinary,option";
 	REQUIRE(rspamd_task_add_result_option(&f.task, &f.symbol, option, strlen(option)));
+	CHECK(std::string(f.symbol.opts_head->option, f.symbol.opts_head->optlen) == option);
 	auto used = rspamd_mempool_get_used_size(f.task.task_pool);
 	for (int i = 0; i < 100; i++) {
 		CHECK_FALSE(rspamd_task_add_result_option(&f.task, &f.symbol, option, strlen(option)));

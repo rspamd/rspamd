@@ -1,7 +1,7 @@
 Unreleased
 
   ** Incompatible changes **
-  * [Fix] Symbol options now percent-encode %, [, ], comma, semicolon and braces at insertion. Lua rules, composites, multimap symbol_options, logs, API responses and analytics receive the encoded values; update matches and decode individual options once when original text is needed.
+  * [Fix] Symbol options now percent-encode %, [, ], semicolon and braces at insertion; commas remain valid option data. X-Spamd-Result and ClickHouse additionally encode commas within each option before joining options with commas. Split these lists before percent-decoding individual options once; Lua rules, composites and multimap symbol_options see the stored values. Historical ClickHouse rows keep their previous ambiguous format and must not be decoded using the new contract.
 
 4.2.3: 21 Oct 2026
 

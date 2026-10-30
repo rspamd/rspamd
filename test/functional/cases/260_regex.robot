@@ -24,7 +24,7 @@ Newlines
   Expect Symbol  SA_BODY_WORD_WITH_SPACE_BOUNDARIES_3
   Expect Symbol  SA_BODY_WORD_WITH_SPACE_AND_DOT
   Expect Symbol With Option  FOUND_URL  https://google.com/maps/
-  Expect Symbol With Option  FOUND_URL  https://www.google.com/search?q\=hello%20world&oq\=hello%20world&aqs\=chrome..69i57j0l5.3045j0j7&sourceid\=chrome&ie\=UTF-8
+  Expect Symbol With Option  FOUND_URL  https://www.google.com/search?q\=hello%2520world&oq\=hello%2520world&aqs\=chrome..69i57j0l5.3045j0j7&sourceid\=chrome&ie\=UTF-8
   Expect Symbol With Option  FOUND_URL  https://github.com/google/sanitizers/wiki/AddressSanitizer
 
 Dynamic Config
