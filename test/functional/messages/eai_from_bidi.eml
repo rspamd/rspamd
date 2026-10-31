@@ -1,0 +1,10 @@
+From: ali‮moc.elpmaxe@kravdraa.ec
+To: Gøril <gøril@example.com>
+Date: Fri, 23 Oct 2026 10:00:00 +0200
+Message-ID: <eai_from_bidi@grå.org>
+Subject: A From address with a right-to-left override
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+U+202E makes the From address render as alice.aardvark@example.com.

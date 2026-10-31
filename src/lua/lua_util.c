@@ -23,6 +23,7 @@
 #include "libutil/hash.h"
 #include "libutil/str_util.h"
 #include "libutil/cxx/utf8_util.h"
+#include "libutil/cxx/smtputf8_syntax.h"
 #include <zlib.h> /* for crc32() */
 #include "libserver/html/html.h"
 #include "libserver/hyperscan_tools.h"
@@ -568,6 +569,18 @@ LUA_FUNCTION_DEF(util, get_string_stats);
 LUA_FUNCTION_DEF(util, is_valid_utf8);
 
 /***
+ * @function util.is_valid_smtputf8_address(user, domain[, quoted])
+ * Checks an address against draft-ietf-mailmaint-smtputf8-syntax: no
+ * a-labels (see RSPAMD_SMTPUTF8_ACCEPT_A_LABEL_DOMAINS), only code points
+ * from the PRECIS IdentifierClass, a single script and NFC
+ * @param {string} user local part, without quotes
+ * @param {string} domain domain part
+ * @param {boolean} quoted whether the local part was a quoted string
+ * @return {boolean,string} true, or false and the name of the rule broken
+ */
+LUA_FUNCTION_DEF(util, is_valid_smtputf8_address);
+
+/***
  * @function util.has_obscured_unicode(str)
  * Returns true if a string has obscure UTF symbols (zero width spaces, order marks), ignores invalid utf characters
  * @return {boolean} true if a has obscured unicode characters (+ character and offset if found)
@@ -883,6 +896,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, is_utf_outside_range),
 	LUA_INTERFACE_DEF(util, get_string_stats),
 	LUA_INTERFACE_DEF(util, is_valid_utf8),
+	LUA_INTERFACE_DEF(util, is_valid_smtputf8_address),
 	LUA_INTERFACE_DEF(util, has_obscured_unicode),
 	LUA_INTERFACE_DEF(util, get_text_quality),
 	LUA_INTERFACE_DEF(util, readline),
@@ -3073,6 +3087,31 @@ lua_util_is_valid_utf8(lua_State *L)
 	}
 
 	return 1;
+}
+
+static int
+lua_util_is_valid_smtputf8_address(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize user_len, domain_len;
+	const char *user = luaL_checklstring(L, 1, &user_len);
+	const char *domain = luaL_checklstring(L, 2, &domain_len);
+	gboolean quoted = lua_toboolean(L, 3);
+	enum rspamd_smtputf8_syntax_result r;
+
+	r = rspamd_smtputf8_check_address(user, user_len, domain, domain_len,
+									  quoted);
+
+	if (r == RSPAMD_SMTPUTF8_VALID) {
+		lua_pushboolean(L, true);
+
+		return 1;
+	}
+
+	lua_pushboolean(L, false);
+	lua_pushstring(L, rspamd_smtputf8_result_name(r));
+
+	return 2;
 }
 
 static int
