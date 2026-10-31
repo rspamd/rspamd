@@ -356,6 +356,13 @@ rspamd_dkim_parse_domain(rspamd_dkim_context_t *ctx,
 		}
 	}
 
+	/*
+	 * Domain names are case-insensitive: keep d= in canonical lowercase form,
+	 * so results, symbol options and map lookups never depend on the case
+	 * a signer chose
+	 */
+	rspamd_str_lc(ctx->domain, strlen(ctx->domain));
+
 	return true;
 }
 
