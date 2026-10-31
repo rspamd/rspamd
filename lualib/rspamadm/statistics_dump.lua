@@ -298,13 +298,13 @@ local function connect_to_upstream(up, redis_params)
         up:get_name())
     return false, nil
   end
-  local ret, conn = rspamd_redis.connect_sync({
+  local ret, conn = rspamd_redis.connect_sync(lua_redis.copy_tls_options(redis_params, {
     host = up_addr,
     timeout = redis_params.timeout,
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
-  })
+  }))
 
   if not ret or not conn then
     rspamd_logger.errx("cannot connect to redis %s: %s", up:get_name(), conn)

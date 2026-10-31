@@ -55,6 +55,7 @@ struct rspamd_fuzzy_backend_redis {
 	const char *username;
 	const char *password;
 	const char *dbname;
+	struct rspamd_redis_tls_opts tls; /* strings live in cfg pool */
 	char *id;
 	struct rspamd_redis_pool *pool;
 	double timeout;
@@ -186,6 +187,23 @@ rspamd_fuzzy_backend_redis_dtor(struct rspamd_fuzzy_backend_redis *backend)
 	g_free(backend);
 }
 
+/* Copies a string field of the table on top of the Lua stack to the config pool */
+static const char *
+rspamd_fuzzy_redis_conf_string(lua_State *L, struct rspamd_config *cfg,
+							   const char *name)
+{
+	const char *res = NULL;
+
+	lua_pushstring(L, name);
+	lua_gettable(L, -2);
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		res = rspamd_mempool_strdup(cfg->cfg_pool, lua_tostring(L, -1));
+	}
+	lua_pop(L, 1);
+
+	return res;
+}
+
 void *
 rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 								const ucl_object_t *obj, struct rspamd_config *cfg, GError **err)
@@ -277,6 +295,23 @@ rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 												  lua_tostring(L, -1));
 	}
 	lua_pop(L, 1);
+
+	/* TLS settings, same keys as in lua_redis */
+	lua_pushstring(L, "ssl");
+	lua_gettable(L, -2);
+	backend->tls.use_tls = !!lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "no_ssl_verify");
+	lua_gettable(L, -2);
+	backend->tls.no_ssl_verify = !!lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
+	backend->tls.ca_file = rspamd_fuzzy_redis_conf_string(L, cfg, "ssl_ca");
+	backend->tls.ca_dir = rspamd_fuzzy_redis_conf_string(L, cfg, "ssl_ca_dir");
+	backend->tls.cert_file = rspamd_fuzzy_redis_conf_string(L, cfg, "ssl_cert");
+	backend->tls.key_file = rspamd_fuzzy_redis_conf_string(L, cfg, "ssl_key");
+	backend->tls.sni = rspamd_fuzzy_redis_conf_string(L, cfg, "sni");
 
 	lua_settop(L, 0);
 
@@ -775,11 +810,12 @@ void rspamd_fuzzy_backend_check_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_ext(backend->pool,
+												 backend->dbname,
+												 backend->username, backend->password,
+												 rspamd_inet_address_to_string(addr),
+												 rspamd_inet_address_get_port(addr),
+												 &backend->tls);
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, TRUE, strerror(errno));
@@ -1035,11 +1071,12 @@ void rspamd_fuzzy_backend_inspect_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_ext(backend->pool,
+												 backend->dbname,
+												 backend->username, backend->password,
+												 rspamd_inet_address_to_string(addr),
+												 rspamd_inet_address_get_port(addr),
+												 &backend->tls);
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, TRUE, strerror(errno));
@@ -1131,11 +1168,12 @@ void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_ext(backend->pool,
+												 backend->dbname,
+												 backend->username, backend->password,
+												 rspamd_inet_address_to_string(addr),
+												 rspamd_inet_address_get_port(addr),
+												 &backend->tls);
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, TRUE, strerror(errno));
@@ -1228,11 +1266,12 @@ void rspamd_fuzzy_backend_storage_stats_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_ext(backend->pool,
+												 backend->dbname,
+												 backend->username, backend->password,
+												 rspamd_inet_address_to_string(addr),
+												 rspamd_inet_address_get_port(addr),
+												 &backend->tls);
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, TRUE, strerror(errno));
@@ -1376,11 +1415,12 @@ void rspamd_fuzzy_backend_version_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_ext(backend->pool,
+												 backend->dbname,
+												 backend->username, backend->password,
+												 rspamd_inet_address_to_string(addr),
+												 rspamd_inet_address_get_port(addr),
+												 &backend->tls);
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, FALSE, strerror(errno));
