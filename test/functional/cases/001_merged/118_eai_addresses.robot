@@ -4,7 +4,7 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${SETTINGS_ADDR}       {symbols_enabled = [INVALID_FROM_8BIT,INVALID_RCPT_8BIT]}
+${SETTINGS_ADDR}       {symbols_enabled = [INVALID_FROM_8BIT,INVALID_RCPT_8BIT,INVALID_FROM_ASCII_ADDR,INVALID_RCPT_ASCII_ADDR]}
 
 *** Test Cases ***
 8BIT ADDRESSES THAT FOLLOW THE SMTPUTF8 SYNTAX
@@ -29,25 +29,35 @@ ${SETTINGS_ADDR}       {symbols_enabled = [INVALID_FROM_8BIT,INVALID_RCPT_8BIT]}
   Expect Symbol With Option  INVALID_FROM_8BIT  invalid UTF-8
 
 ASCII FROM WITH AN A-LABEL LOCAL PART
+  [Documentation]  An ASCII address breaks the draft with weaker evidence
+  ...  than an 8-bit one, so it has its own symbol
   Scan File  ${RSPAMD_TESTDIR}/messages/eai_from_a_label.eml
   ...  Settings=${SETTINGS_ADDR}
-  Expect Symbol With Option  INVALID_FROM_8BIT  a-label
+  Expect Symbol With Option  INVALID_FROM_ASCII_ADDR  a-label
+  Do Not Expect Symbol  INVALID_FROM_8BIT
   Do Not Expect Symbol  INVALID_RCPT_8BIT
+  Do Not Expect Symbol  INVALID_RCPT_ASCII_ADDR
 
 ASCII RECIPIENT WITH AN A-LABEL ATOM
   Scan File  ${RSPAMD_TESTDIR}/messages/eai_rcpt_a_label.eml
   ...  Settings=${SETTINGS_ADDR}
-  Expect Symbol With Option  INVALID_RCPT_8BIT  a-label
+  Expect Symbol With Option  INVALID_RCPT_ASCII_ADDR  a-label
+  Do Not Expect Symbol  INVALID_RCPT_8BIT
   Do Not Expect Symbol  INVALID_FROM_8BIT
+  Do Not Expect Symbol  INVALID_FROM_ASCII_ADDR
 
 MIDDLE DOTS REQUIRE LOWERCASE L
   Scan File  ${RSPAMD_TESTDIR}/messages/eai_middle_dot.eml
   ...  Settings=${SETTINGS_ADDR}
   Expect Symbol With Option  INVALID_FROM_8BIT  code point
   Expect Symbol With Option  INVALID_RCPT_8BIT  code point
+  Do Not Expect Symbol  INVALID_FROM_ASCII_ADDR
+  Do Not Expect Symbol  INVALID_RCPT_ASCII_ADDR
 
 PERMITTED ASCII ADDRESSES
   Scan File  ${RSPAMD_TESTDIR}/messages/eai_ascii_valid.eml
   ...  Settings=${SETTINGS_ADDR}
   Do Not Expect Symbol  INVALID_FROM_8BIT
   Do Not Expect Symbol  INVALID_RCPT_8BIT
+  Do Not Expect Symbol  INVALID_FROM_ASCII_ADDR
+  Do Not Expect Symbol  INVALID_RCPT_ASCII_ADDR
