@@ -174,6 +174,10 @@ You can use an AI tool for the review pass as well, but the final check is yours
   (`rspamd::html`, `rspamd::css`).
 * Prefer C++20 for new modules and keep plain C style in existing C files. The code must build with GCC 10, so avoid
   library features that need a newer compiler, such as `std::bit_cast`.
+* Do not use exceptions. Do not throw them and do not use them for control flow; the only exceptions we tolerate are
+  the ones the standard library can raise on its own, such as `std::bad_alloc`. Report errors through return values
+  instead, preferably `tl::expected` (`contrib/expected/expected.hpp`), or `std::optional` when there is nothing to say
+  about the failure.
 * Use `ankerl::unordered_dense` (`contrib/ankerl/unordered_dense.h`) for hash maps and sets in C++, not
   `std::unordered_map` or `std::unordered_set`.
 * Rspamd has its own `printf` implementation with different format specifiers. Read `src/libutil/printf.h` before
