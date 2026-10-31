@@ -168,6 +168,34 @@ TEST_SUITE("rspamd_dkim")
 			}
 		}
 	}
+
+	TEST_CASE("rspamd_dkim_domain_lowercase")
+	{
+		std::vector<std::pair<std::string, std::string>> cases{
+			{"example.com", "example.com"},
+			{"ExAmple.COM", "example.com"},
+			{"Mail.Example.ORG", "mail.example.org"},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "dkim", 0);
+
+		for (auto &&[d, expected]: cases) {
+			SUBCASE(fmt::format("d={}", d).c_str())
+			{
+				GError *err = nullptr;
+				auto sig = fmt::format("v=1; a=rsa-sha256; c=relaxed/relaxed; d={}; s=sel; "
+									   "h=from:to; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=; "
+									   "b=dGVzdA==",
+									   d);
+				auto *ctx = rspamd_create_dkim_context(sig.c_str(), pool, nullptr, 0,
+													   RSPAMD_DKIM_NORMAL, &err);
+				REQUIRE_MESSAGE(ctx != nullptr, (err ? err->message : "unknown error"));
+				CHECK(std::string{rspamd_dkim_get_domain(ctx)} == expected);
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 #endif
