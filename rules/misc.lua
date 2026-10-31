@@ -807,6 +807,74 @@ rspamd_config.COMPLETELY_EMPTY = {
 -- Preserve compatibility
 local rdns_auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, 'once_received',
   false, false)
+
+-- An MTA is expected to publish a client hostname only after forward
+-- confirmed reverse DNS: per the milter interface a name that fails that
+-- check is reported as the bare IP in square brackets instead, which
+-- `task:get_hostname()` deliberately reports as nil. When Rspamd resolves the
+-- PTR itself it has to perform the same verification, otherwise an
+-- unverified name silently replaces the MTA's verdict and
+-- HFILTER_HOSTNAME_UNKNOWN, documented as covering exactly this ("PTR or
+-- FCrDNS verification failed"), can never be inserted.
+local function rdns_verify_forward(task, task_ip, ptr_name)
+  local ip_str = task_ip:to_string()
+  local completed = 0
+  local matched = false
+  local tempfail = false
+
+  local function forward_dns_cb(_, to_resolve, results, err)
+    if err and (err ~= 'requested record is not found' and
+          err ~= 'no records with this name') then
+      rspamd_logger.infox(task, 'error verifying PTR name %s: %s', to_resolve, err)
+      tempfail = true
+    elseif results then
+      for _, addr in ipairs(results) do
+        -- Compare printed forms: `ip:equal()` compares ports as well, and
+        -- the client address carries one whereas a resolved address does not
+        if addr:to_string() == ip_str then
+          matched = true
+        end
+      end
+    end
+
+    -- The A and the AAAA lookups share this callback and complete in
+    -- arbitrary order, so judge only once both have returned: an address
+    -- published in the slower family is not visible yet and a host that does
+    -- confirm would be rejected depending on DNS timing
+    completed = completed + 1
+    if completed < 2 then
+      return
+    end
+
+    if matched then
+      rspamd_logger.infox(task, 'source hostname has not been passed to Rspamd from MTA, ' ..
+        'but we could resolve source IP address PTR as "%s"', ptr_name)
+      task:set_hostname(ptr_name)
+    elseif tempfail then
+      -- Verification could not be completed, which is not evidence against
+      -- the client, so keep trusting the PTR as before. The symbol lets a
+      -- deployment that enforces HFILTER_HOSTNAME_UNKNOWN soft reject these
+      -- rather than treat a resolver failure as a pass
+      task:insert_result('RDNS_FCRDNS_DNSFAIL', 1.0, ptr_name)
+      task:set_hostname(ptr_name)
+    else
+      -- The name provably does not belong to this client, so it is not set:
+      -- this is the same state the task would be in had the MTA done the
+      -- verification itself
+      task:insert_result('RDNS_FCRDNS_FAIL', 1.0, ptr_name)
+    end
+  end
+
+  for _, rr in ipairs({ 'a', 'aaaa' }) do
+    task:get_resolver():resolve(rr, {
+      task = task,
+      name = ptr_name,
+      callback = forward_dns_cb,
+      forced = true
+    })
+  end
+end
+
 -- Check for the hostname if it was not set
 local rnds_check_id = rspamd_config:register_symbol {
   name = 'RDNS_CHECK',
@@ -824,10 +892,7 @@ local rnds_check_id = rspamd_config:register_symbol {
           if not results then
             task:insert_result('RDNS_NONE', 1.0)
           else
-            rspamd_logger.infox(task, 'source hostname has not been passed to Rspamd from MTA, ' ..
-              'but we could resolve source IP address PTR %s as "%s"',
-              to_resolve, results[1])
-            task:set_hostname(results[1])
+            rdns_verify_forward(task, task_ip, results[1])
           end
         end
         task:get_resolver():resolve_ptr({
@@ -868,6 +933,25 @@ rspamd_config:register_symbol {
   name = 'RDNS_NONE',
   score = 2.0,
   description = 'DNS failure resolving RDNS',
+  group = 'hfilter',
+  parent = rnds_check_id,
+}
+-- Informational: the weight for an unverified client already comes from
+-- HFILTER_HOSTNAME_UNKNOWN, which now fires for these, so scoring here too
+-- would count the same fact twice
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'RDNS_FCRDNS_FAIL',
+  score = 0.0,
+  description = 'PTR name does not resolve back to the client IP (FCrDNS verification failed)',
+  group = 'hfilter',
+  parent = rnds_check_id,
+}
+rspamd_config:register_symbol {
+  type = 'virtual',
+  name = 'RDNS_FCRDNS_DNSFAIL',
+  score = 0.0,
+  description = 'DNS failure verifying that the PTR name resolves back to the client IP',
   group = 'hfilter',
   parent = rnds_check_id,
 }
