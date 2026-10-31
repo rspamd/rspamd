@@ -14,10 +14,12 @@ inspired by [Atom editor](https://github.com/atom/atom).
 [How Can I Contribute?](#how-can-i-contribute)
 
 * [Reporting Bugs](#reporting-bugs)
+* [Using AI Tools](#using-ai-tools)
 
 [Styleguides](#styleguides)
 
 * [Git Commit Messages](#git-commit-messages)
+* [C and C++ style guide](#c-and-c-styleguide)
 * [Lua style guide](#lua-styleguide)
 
 ## I don't want to read this whole thing I just have a question
@@ -105,6 +107,44 @@ Include details about your configuration and environment:
   that could be achieved by the following command: `gcc -march=native -Q --help=target|grep march`. In Linux, you can
   also check `/proc/cpuinfo` file for the required details.
 
+### Using AI Tools
+
+Contributions written with the help of AI tools (code assistants, agents, chat models) are welcome. We will not reject
+a pull request because a model wrote part of it.
+
+We do ask you to review the result yourself before you send it. You are the author of the pull request and you are
+responsible for every line in it, no matter what typed it. A change the submitter has not read through costs
+maintainers more time than it saves, and such pull requests may be closed without a detailed review.
+
+Before opening a pull request, go through the change and check the following.
+
+* **It is correct and you understand it.** You should be able to explain why each change is needed and answer review
+  questions without going back to the model. Build the code, run the unit tests, and add tests for new behaviour.
+* **Slop is removed.** AI tools produce a lot of text nobody needs. Remove it, in particular:
+    * comments that restate the code (`/* increment the counter */`), narrate the change (`// Now handle the new
+      case`), or talk to the reviewer;
+    * long doc comments on small static functions;
+    * plan, summary, notes or report files (`IMPLEMENTATION_NOTES.md`, `CHANGES_SUMMARY.md` and so on) and local tool
+      state or settings; none of these belong in the repository;
+    * checks for conditions that cannot happen, unused helpers, dead code and leftover debug output;
+    * reformatting or refactoring of code unrelated to the change.
+
+  Keep commit messages and pull request descriptions short and factual: what changed and why. Skip the headings,
+  emoji and feature lists.
+* **Coding standards are followed.** C and C++ code is formatted with `clang-format` using the project
+  `.clang-format`, and new names follow the [C and C++ style guide](#c-and-c-styleguide). Lua code follows the
+  [Lua style guide](lua_style.md) and passes `luacheck`. Commit messages use the [tags](#git-commit-messages) listed
+  below.
+* **Complexity is reasonable.** Rspamd runs on every message a mail server accepts, so performance matters. Check the
+  algorithmic complexity of new code: no quadratic loops over message parts, headers, URLs or words, no allocations
+  in tight loops that could be done once, and no blocking network or disk I/O in worker processes.
+* **It fits the existing architecture.** Look for an existing helper before writing a new one (`lua_util`,
+  `lua_redis`, `lua_maps`, selectors, the `rspamd_*` utilities in `src/libutil`). Put new code next to similar code
+  and follow the conventions of the module you are changing. New dependencies, new configuration conventions or a
+  second implementation of an existing subsystem should be discussed in an issue first.
+
+You can use an AI tool for the review pass as well, but the final check is yours.
+
 ## Styleguides
 
 ### Git Commit Messages
@@ -121,6 +161,23 @@ Include details about your configuration and environment:
     * [Rework] - some significant logic rework
     * [Conf] - configuration change
     * [Rules] - rules change
+    * [Test] - tests only
+    * [Project] - build system, CI and other project infrastructure
+
+### C and C++ styleguide
+
+* Format the code with `clang-format` using the project `.clang-format`: tabs for indentation, 4 columns wide,
+  pointers aligned to the right (`char *p`).
+* Use `snake_case` for functions, variables and types. Public C functions carry the `rspamd_` prefix followed by the
+  subsystem name (`rspamd_task_new`, `rspamd_url_find_tld`), structures are `struct rspamd_*`, and constant macros
+  and enum values are `UPPER_CASE` with an `RSPAMD_` prefix. C++ code lives in the `rspamd` namespace or a nested one
+  (`rspamd::html`, `rspamd::css`).
+* Prefer C++20 for new modules and keep plain C style in existing C files. The code must build with GCC 10, so avoid
+  library features that need a newer compiler, such as `std::bit_cast`.
+* Use `ankerl::unordered_dense` (`contrib/ankerl/unordered_dense.h`) for hash maps and sets in C++, not
+  `std::unordered_map` or `std::unordered_set`.
+* Rspamd has its own `printf` implementation with different format specifiers. Read `src/libutil/printf.h` before
+  writing logging or formatting code.
 
 ### Lua styleguide
 
