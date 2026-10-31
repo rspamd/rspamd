@@ -486,6 +486,25 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
   send_data_in_batches(1)
 end
 
+-- Claims a key for this run by renaming it to key_processing. RENAMENX,
+-- unlike RENAME, never overwrites the key of a concurrent run: a late write
+-- can recreate the original key after that run has claimed it.
+local function claim_key(key)
+  local claimed = key .. '_processing'
+  local ok, res = lua_redis.request(redis_params, redis_attrs_write,
+      { 'RENAMENX', key, claimed })
+
+  if ok and res == 1 then
+    return claimed
+  end
+
+  if ok then
+    return nil, string.format('%s exists, another run is processing it', claimed)
+  end
+
+  return nil, tostring(res or 'redis request failed')
+end
+
 local function prepare_report(opts, start_time, end_time, rep_key)
   local rua = get_rua(rep_key)
   local reporting_domain = get_domain(rep_key)
@@ -510,14 +529,12 @@ local function prepare_report(opts, start_time, end_time, rep_key)
   -- owns the report, a concurrent run must skip it
   local read_attrs = redis_attrs
   if not opts.no_opt then
-    local renamed, err = lua_redis.request(redis_params, redis_attrs_write,
-        { 'RENAME', rep_key, rep_key .. '_processing' })
-    if not renamed then
-      logger.messagex('Skip report %s: cannot claim it (processed by another run?): %s',
-          rep_key, err)
+    local claimed, err = claim_key(rep_key)
+    if not claimed then
+      logger.messagex('Skip report %s: cannot claim it: %s', rep_key, err)
       return nil
     end
-    rep_key = rep_key .. '_processing'
+    rep_key = claimed
     -- A replica might not have the renamed key yet
     read_attrs = redis_attrs_write
   end
@@ -660,14 +677,12 @@ local function process_report_date(opts, start_time, end_time, date)
   -- processes this date, a concurrent run must skip it
   local read_attrs = redis_attrs
   if not opts.no_opt then
-    local renamed, err = lua_redis.request(redis_params, redis_attrs_write,
-        { 'RENAME', idx_key, idx_key .. '_processing' })
-    if not renamed then
-      logger.messagex('Skip reports for %s: cannot claim them (processed by another run?): %s',
-          date, err)
+    local claimed, err = claim_key(idx_key)
+    if not claimed then
+      logger.messagex('Skip reports for %s: cannot claim them: %s', date, err)
       return {}
     end
-    idx_key = idx_key .. '_processing'
+    idx_key = claimed
     -- A replica might not have the renamed key yet
     read_attrs = redis_attrs_write
   end
