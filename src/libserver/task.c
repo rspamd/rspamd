@@ -1544,6 +1544,43 @@ rspamd_task_compare_log_group(gconstpointer a, gconstpointer b)
 }
 
 
+/*
+ * Options are stored verbatim; when joined into the delimited symbols list
+ * an option that contains a delimiter is percent-encoded (together with '%'),
+ * mirroring lua_util.symbol_options_to_string. Other options are written as is.
+ */
+static void
+rspamd_task_log_append_option(rspamd_fstring_t **symbuf, const char *opt, gsize optlen)
+{
+	static const char delimiters[] = "[]{};,";
+	static const char hex[] = "0123456789ABCDEF";
+	gboolean need_escape = FALSE;
+
+	for (gsize i = 0; i < optlen; i++) {
+		if (opt[i] != '\0' && strchr(delimiters, opt[i]) != NULL) {
+			need_escape = TRUE;
+			break;
+		}
+	}
+
+	if (!need_escape) {
+		rspamd_printf_fstring(symbuf, "%*s", (int) optlen, opt);
+		return;
+	}
+
+	for (gsize i = 0; i < optlen; i++) {
+		unsigned char c = opt[i];
+
+		if (c == '%' || (c != '\0' && strchr(delimiters, c) != NULL)) {
+			char enc[3] = {'%', hex[c >> 4], hex[c & 0xf]};
+			*symbuf = rspamd_fstring_append(*symbuf, enc, sizeof(enc));
+		}
+		else {
+			*symbuf = rspamd_fstring_append(*symbuf, (const char *) &c, 1);
+		}
+	}
+}
+
 static rspamd_ftok_t
 rspamd_task_log_metric_res(struct rspamd_task *task,
 						   struct rspamd_log_format *lf)
@@ -1624,8 +1661,8 @@ rspamd_task_log_metric_res(struct rspamd_task *task,
 
 						DL_FOREACH(sym->opts_head, opt)
 						{
-							rspamd_printf_fstring(&symbuf, "%*s;",
-												  (int) opt->optlen, opt->option);
+							rspamd_task_log_append_option(&symbuf, opt->option, opt->optlen);
+							rspamd_printf_fstring(&symbuf, ";");
 
 							if (j >= max_log_elts && opt->next) {
 								rspamd_printf_fstring(&symbuf, "...;");

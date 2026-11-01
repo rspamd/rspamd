@@ -75,16 +75,17 @@ local function process_ooxml_relationships(task, filename, specific)
   local relationships = specific.relationships
   if not relationships then return end
 
+  -- One option per finding, prefixed by the file name, so that options
+  -- never need to be split on commas
   local macros = {}
   for _, kind in ipairs(relationships.macros or {}) do
-    macros[#macros + 1] = kind
+    macros[#macros + 1] = string.format('%s:%s', filename, kind)
   end
   for _, name in ipairs(specific.auto_exec_names or {}) do
-    macros[#macros + 1] = name
+    macros[#macros + 1] = string.format('%s:%s', filename, name)
   end
   if #macros > 0 then
-    task:insert_result('OOXML_MACROS', 1.0,
-        string.format('%s:%s', filename, table.concat(macros, ',')))
+    task:insert_result('OOXML_MACROS', 1.0, macros)
   end
 
   if (relationships.ole_objects or 0) > 0 then
@@ -142,12 +143,21 @@ local function process_svg_specific(task, part, specific)
   local javascript_urls = specific.javascript_urls or 0
   local external_scripts = specific.external_scripts or 0
   if scripts + handlers + javascript_urls + external_scripts > 0 then
-    local option = string.format('%s:scripts=%d,handlers=%d,javascript=%d,external=%d',
-        filename, scripts, handlers, javascript_urls, external_scripts)
-    if specific.script_indicators and #specific.script_indicators > 0 then
-      option = option .. ',' .. table.concat(specific.script_indicators, ',')
+    local options = {}
+    for _, counter in ipairs({
+      { 'scripts', scripts },
+      { 'handlers', handlers },
+      { 'javascript', javascript_urls },
+      { 'external', external_scripts },
+    }) do
+      if counter[2] > 0 then
+        options[#options + 1] = string.format('%s:%s=%d', filename, counter[1], counter[2])
+      end
     end
-    task:insert_result('SVG_SCRIPT', 1.0, option)
+    for _, indicator in ipairs(specific.script_indicators or {}) do
+      options[#options + 1] = string.format('%s:%s', filename, indicator)
+    end
+    task:insert_result('SVG_SCRIPT', 1.0, options)
   end
 
   if (specific.foreign_objects or 0) > 0 then
@@ -160,12 +170,11 @@ local function process_svg_specific(task, part, specific)
   local smuggled_types = {}
   for _, uri_type in ipairs(specific.data_uri_types or {}) do
     if not uri_type:find('^image/') or uri_type == 'image/svg+xml' then
-      smuggled_types[#smuggled_types + 1] = uri_type
+      smuggled_types[#smuggled_types + 1] = string.format('%s:%s', filename, uri_type)
     end
   end
   if #smuggled_types > 0 then
-    task:insert_result('SVG_DATA_URI', 1.0,
-        string.format('%s:%s', filename, table.concat(smuggled_types, ',')))
+    task:insert_result('SVG_DATA_URI', 1.0, smuggled_types)
   end
 
   if (specific.hyperlinks or 0) > 0 then
@@ -182,25 +191,30 @@ local function process_svg_specific(task, part, specific)
   local forms = specific.forms or 0
   local passwords = specific.password_inputs or 0
   if forms + passwords > 0 then
-    task:insert_result('SVG_FORM', 1.0,
-        string.format('%s:forms=%d,passwords=%d', filename, forms, passwords))
+    local options = {}
+    if forms > 0 then
+      options[#options + 1] = string.format('%s:forms=%d', filename, forms)
+    end
+    if passwords > 0 then
+      options[#options + 1] = string.format('%s:passwords=%d', filename, passwords)
+    end
+    task:insert_result('SVG_FORM', 1.0, options)
   end
 
   local redirects = {}
   if (specific.meta_refresh or 0) > 0 then
-    redirects[#redirects + 1] = 'meta_refresh'
+    redirects[#redirects + 1] = filename .. ':meta_refresh'
   end
   if (specific.embedded_documents or 0) > 0 then
-    redirects[#redirects + 1] = 'embedded_documents'
+    redirects[#redirects + 1] = filename .. ':embedded_documents'
   end
   for _, indicator in ipairs(specific.script_indicators or {}) do
     if indicator == 'location' then
-      redirects[#redirects + 1] = 'location'
+      redirects[#redirects + 1] = filename .. ':location'
     end
   end
   if #redirects > 0 then
-    task:insert_result('SVG_REDIRECT', 1.0,
-        string.format('%s:%s', filename, table.concat(redirects, ',')))
+    task:insert_result('SVG_REDIRECT', 1.0, redirects)
   end
 end
 

@@ -191,10 +191,23 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local disposition = 'none'
   local sampled_out = false
 
-  local function handle_dmarc_failure(what, reason_str)
+  -- One "domain : reason" option per failure reason followed by the extra
+  -- options, so that reasons never need to be joined with commas
+  local function failure_options(reasons, ...)
+    local result = {}
+    for _, r in ipairs(reasons) do
+      result[#result + 1] = policy.domain .. ' : ' .. r
+    end
+    for _, extra in ipairs({ ... }) do
+      result[#result + 1] = extra
+    end
+    return result
+  end
+
+  local function handle_dmarc_failure(what, reasons)
     if not policy.pct or policy.pct == 100 then
       task:insert_result(settings.symbols[what], 1.0,
-        policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+        failure_options(reasons, policy.dmarc_policy))
       disposition = what
     else
       local coin = math.random(100)
@@ -208,19 +221,19 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
           end
 
           task:insert_result(settings.symbols[disposition], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
+            failure_options(reasons, policy.dmarc_policy, "sampled_out"))
           sampled_out = true
           lua_util.debugm(N, task,
             'changed dmarc policy from %s to %s, sampled out: %s < %s',
             what, disposition, coin, policy.pct)
         else
           task:insert_result(settings.symbols[what], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
+            failure_options(reasons, policy.dmarc_policy, "local_policy"))
           disposition = what
         end
       else
         task:insert_result(settings.symbols[what], 1.0,
-          policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+          failure_options(reasons, policy.dmarc_policy))
         disposition = what
       end
     end
@@ -253,8 +266,6 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       publish_result(task, 'temperror')
     else
       -- We can now check the failed policy and maybe send report data elt
-      local reason_str = table.concat(reason, ', ')
-
       if policy.dmarc_policy == 'quarantine' or policy.dmarc_policy == 'reject' then
         publish_result(task, 'fail_' .. policy.dmarc_policy)
       else
@@ -262,13 +273,12 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       end
 
       if policy.dmarc_policy == 'quarantine' then
-        handle_dmarc_failure('quarantine', reason_str)
+        handle_dmarc_failure('quarantine', reason)
       elseif policy.dmarc_policy == 'reject' then
-        handle_dmarc_failure('reject', reason_str)
+        handle_dmarc_failure('reject', reason)
       else
         task:insert_result(settings.symbols['softfail'], 1.0,
-          policy.domain .. ' : ' .. reason_str,
-          policy.dmarc_policy)
+          failure_options(reason, policy.dmarc_policy))
       end
     end
   end

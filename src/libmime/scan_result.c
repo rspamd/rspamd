@@ -703,10 +703,6 @@ rspamd_task_option_safe_copy(struct rspamd_task *task,
 
 			p += off;
 		}
-		else if (strchr("%[];{}", *p) && *p != '\0') {
-			vlen += 3;
-			p++;
-		}
 		else if (!g_ascii_isprint(*p)) {
 			/* Another 0xFFFD */
 			vlen += 3;
@@ -750,13 +746,6 @@ rspamd_task_option_safe_copy(struct rspamd_task *task,
 			}
 
 			p += off;
-		}
-		else if (strchr("%[];{}", *p) && *p != '\0') {
-			static const char hex[] = "0123456789ABCDEF";
-			unsigned char c = *p++;
-			*d++ = '%';
-			*d++ = hex[c >> 4];
-			*d++ = hex[c & 0xf];
 		}
 		else if (!g_ascii_isprint(*p)) {
 			/* Another 0xFFFD */
@@ -805,7 +794,7 @@ rspamd_task_add_result_option(struct rspamd_task *task,
 				}
 				i += off;
 			}
-			else if (c < 0x20 || c == 0x7f || strchr("%[];{}", c)) {
+			else if (c < 0x20 || c == 0x7f) {
 				unchanged = false;
 				break;
 			}

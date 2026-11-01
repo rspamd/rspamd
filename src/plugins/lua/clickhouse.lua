@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     IPNet String,
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
     `Symbols.Scores` Array(Float32) COMMENT 'Symbol score',
-    `Symbols.Options` Array(String) COMMENT 'Symbol options (split on comma, then percent-decode each option once)',
+    `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list; options containing delimiters are percent-encoded)',
     `Groups.Names` Array(LowCardinality(String)) COMMENT 'Group name',
     `Groups.Scores` Array(Float32) COMMENT 'Group score',
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',

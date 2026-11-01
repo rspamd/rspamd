@@ -446,7 +446,7 @@ local function milter_headers(task)
       local s = common.symbols_hash[sym]
       if s then
         if (s.options or E)[1] then
-          table.insert(virii, table.concat(s.options, ','))
+          table.insert(virii, lua_util.symbol_options_to_string(s.options))
         elseif s then
           table.insert(virii, 'unknown')
         end
@@ -466,7 +466,7 @@ local function milter_headers(task)
         if s then
           failed = true
           if (s.options or E)[1] then
-            fail_reason = table.concat(s.options, ',')
+            fail_reason = lua_util.symbol_options_to_string(s.options)
           end
         end
       end

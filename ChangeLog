@@ -1,7 +1,7 @@
 Unreleased
 
-  ** Incompatible changes **
-  * [Fix] Symbol options now percent-encode %, [, ], semicolon and braces at insertion; commas remain valid option data. X-Spamd-Result and ClickHouse additionally encode commas within each option before joining options with commas. Split these lists before percent-decoding individual options once; Lua rules, composites and multimap symbol_options see the stored values. Historical ClickHouse rows keep their previous ambiguous format and must not be decoded using the new contract.
+  * [Fix] Escape symbol option delimiters in X-Spamd-Result and ClickHouse output: an option containing `[`, `]`, `{`, `}`, `;` or `,` is percent-encoded (together with `%`) when options are joined in X-Spamd-Result, X-Virus, metadata_exporter, ClickHouse and the symbols log line, so a crafted attachment name can no longer appear as an extra symbol; options without delimiters are emitted as is. Stored options are unchanged apart from the existing U+FFFD replacement of invalid characters.
+  * [Fix] asn, reputation, rbl, dmarc, content rules and MULTIPLE_UNIQUE_HEADERS insert multi-value results as separate symbol options instead of one comma-joined option
 
   ** Bug fixes **
   * [Fix] lua_aliases: Reject external maps for equivalent domains instead of accepting them and failing every synchronous lookup (custom equivalent domains never folded)

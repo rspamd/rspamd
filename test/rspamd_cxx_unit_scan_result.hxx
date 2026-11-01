@@ -6,6 +6,8 @@
 #include "libserver/cfg_file.h"
 #include "libserver/task.h"
 
+#include <memory>
+
 namespace rspamd_scan_result_test {
 struct fixture {
 	rspamd_task task{};
@@ -58,6 +60,37 @@ TEST_CASE("oneparam symbol options do not allocate from the task pool")
 	auto used = rspamd_mempool_get_used_size(f.task.task_pool);
 	CHECK_FALSE(rspamd_task_add_result_option(&f.task, &f.symbol, "ordinary", 8));
 	CHECK(rspamd_mempool_get_used_size(f.task.task_pool) == used);
+}
+
+TEST_CASE("symbol options are stored verbatim except for invalid characters")
+{
+	const struct {
+		const char *input;
+		const char *expected;
+	} cases[] = {
+		{"95.33%", "95.33%"},
+		{"%2C", "%2C"},
+		{"a](0.00)[]; X[b", "a](0.00)[]; X[b"},
+		{"{x};y", "{x};y"},
+		{"tab\there", "tab\xEF\xBF\xBDhere"},
+		{"bad\xff", "bad\xEF\xBF\xBD"},
+	};
+
+	for (const auto &c: cases) {
+		fixture f;
+		CAPTURE(std::string(c.input));
+		// Do not provide a trailing NUL: the copy must respect the length.
+		auto len = strlen(c.input);
+		auto input = std::make_unique<char[]>(len);
+		memcpy(input.get(), c.input, len);
+		REQUIRE(rspamd_task_add_result_option(&f.task, &f.symbol, input.get(), len));
+		CHECK(std::string(f.symbol.opts_head->option, f.symbol.opts_head->optlen) == std::string(c.expected));
+		if (std::string(c.input) == c.expected) {
+			auto used = rspamd_mempool_get_used_size(f.task.task_pool);
+			CHECK_FALSE(rspamd_task_add_result_option(&f.task, &f.symbol, input.get(), len));
+			CHECK(rspamd_mempool_get_used_size(f.task.task_pool) == used);
+		}
+	}
 }
 }// namespace rspamd_scan_result_test
 

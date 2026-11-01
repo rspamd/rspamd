@@ -2017,25 +2017,37 @@ exports.url_encode_string = url_encode_string
 
 ---[[[
 -- @function lua_util.symbol_options_to_string(options)
--- Joins canonical symbol options into a comma-separated list. Escape commas
--- within each option, preserving the percent escapes added at insertion.
--- Consumers must split the list before percent-decoding each option once.
--- This does not accept raw, unencoded input from outside the symbol API.
+-- Joins symbol options into a comma-separated list suitable for text output
+-- such as X-Spamd-Result. Options are stored verbatim, so an option that
+-- contains one of the structural delimiters `[`, `]`, `{`, `}`, `;` or `,`
+-- is percent-encoded (together with `%`, so that it can be decoded
+-- unambiguously). Options without delimiters are emitted untouched, including
+-- any `%` in them. The C log writer applies the same rule.
 -- @param {table} options symbol options, or nil
--- @return {string} comma-separated encoded options
+-- @return {string} comma-separated options
 ---]]]
+local function symbol_option_escape(c)
+  return string.format('%%%02X', c:byte())
+end
 exports.symbol_options_to_string = function(options)
-  if not options then return '' end
-  for _, option in ipairs(options) do
-    if option:find(',', 1, true) then
-      local escaped = {}
-      for i, value in ipairs(options) do
-        escaped[i] = value:gsub(',', '%%2C')
+  if not options or not options[1] then
+    return ''
+  end
+  local escaped = options
+  for i, option in ipairs(options) do
+    if option:find('[%[%]{};,]') then
+      if escaped == options then
+        escaped = {}
+        for j = 1, i - 1 do
+          escaped[j] = options[j]
+        end
       end
-      return table.concat(escaped, ',')
+      escaped[i] = option:gsub('[%%%[%]{};,]', symbol_option_escape)
+    elseif escaped ~= options then
+      escaped[i] = option
     end
   end
-  return table.concat(options, ',')
+  return table.concat(escaped, ',')
 end
 
 assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')

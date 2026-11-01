@@ -139,12 +139,9 @@ LUA_FUNCTION_DEF(task, get_worker);
  * @method task:insert_result([enforce_symbol,]symbol, weight[, option1, ...])
  * Insert specific symbol to the tasks scanning results assigning the initial
  * weight to it.
- * Options are stored with %, [, ], semicolon and braces percent-encoded
- * using uppercase hex. Invalid and non-printable characters become U+FFFD.
- * This contract applies to all symbol options, including values returned by
- * get_symbol and emitted in logs and protocol responses. Decode at most once,
- * after splitting structured output into individual options.
- * Commas remain valid option data and are escaped by comma-separated exporters.
+ * Options are stored as is; invalid and non-printable characters become U+FFFD.
+ * Exporters that join options into a comma-separated text form escape the
+ * delimiters themselves (see lua_util.symbol_options_to_string).
  * @param {boolean} enforce_symbol if represented and true, then insert symbol even if it is not registered in the metric
  * @param {string} symbol symbol to insert
  * @param {number} weight initial weight (this weight is multiplied by the metric weight)
