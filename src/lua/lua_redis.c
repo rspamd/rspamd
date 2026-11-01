@@ -896,6 +896,57 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 	*nargs = top;
 }
 
+/* Keep fetched values rooted until the pool has copied the connection identity. */
+static const char *
+lua_redis_connection_string(lua_State *L, int index, const char *name,
+							rspamd_mempool_t *pool, gboolean numeric)
+{
+	lua_getfield(L, index, name);
+	if (lua_type(L, -1) == LUA_TSTRING || (numeric && lua_type(L, -1) == LUA_TNUMBER)) {
+		const char *value = lua_tostring(L, -1);
+		return pool ? rspamd_mempool_strdup(pool, value) : value;
+	}
+
+	return NULL;
+}
+
+void rspamd_lua_redis_parse_connection(lua_State *L, int index,
+									   struct rspamd_redis_connection_opts *opts,
+									   rspamd_mempool_t *pool)
+{
+	index = lua_absindex(L, index);
+	luaL_checktype(L, index, LUA_TTABLE);
+	luaL_checkstack(L, 12, "Redis connection options");
+	memset(opts, 0, sizeof(*opts));
+
+	lua_getfield(L, index, "connection");
+	if (!lua_isnil(L, -1)) {
+		/* Never fall back to plaintext when a nested configuration is invalid. */
+		luaL_checktype(L, -1, LUA_TTABLE);
+		index = lua_gettop(L);
+	}
+
+	opts->username = lua_redis_connection_string(L, index, "username", pool, FALSE);
+	opts->password = lua_redis_connection_string(L, index, "password", pool, FALSE);
+	opts->dbname = lua_redis_connection_string(L, index, "dbname", pool, TRUE);
+	if (opts->dbname == NULL) {
+		opts->dbname = lua_redis_connection_string(L, index, "db", pool, TRUE);
+	}
+
+	lua_getfield(L, index, "ssl");
+	opts->tls.use_tls = !!lua_toboolean(L, -1);
+	lua_pop(L, 1);
+	lua_getfield(L, index, "no_ssl_verify");
+	opts->tls.no_ssl_verify = !!lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
+	opts->tls.ca_file = lua_redis_connection_string(L, index, "ssl_ca", pool, FALSE);
+	opts->tls.ca_dir = lua_redis_connection_string(L, index, "ssl_ca_dir", pool, FALSE);
+	opts->tls.cert_file = lua_redis_connection_string(L, index, "ssl_cert", pool, FALSE);
+	opts->tls.key_file = lua_redis_connection_string(L, index, "ssl_key", pool, FALSE);
+	opts->tls.sni = lua_redis_connection_string(L, index, "sni", pool, FALSE);
+}
+
 static struct lua_redis_ctx *
 rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async)
 {
@@ -905,21 +956,18 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	struct rspamd_lua_ip *addr = NULL;
 	struct rspamd_task *task = NULL;
 	const char *host = NULL;
-	const char *username = NULL, *password = NULL, *dbname = NULL, *log_tag = NULL;
-	struct rspamd_redis_tls_opts tls_opts;
+	const char *log_tag = NULL;
+	struct rspamd_redis_connection_opts connection;
 	int cbref = -1;
-	/* Track postponed TLS values on Lua stack and table index */
-	int tls_items = 0;
-	int tls_tbl_idx = 0;
+	const int stack_top = lua_gettop(L);
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
 	struct ev_loop *ev_base = NULL;
 	gboolean ret = FALSE;
 	unsigned int flags = 0;
 
-	memset(&tls_opts, 0, sizeof(tls_opts));
-
 	if (lua_istable(L, 1)) {
+		rspamd_lua_redis_parse_connection(L, 1, &connection, NULL);
 		/* Table version */
 		lua_pushvalue(L, 1);
 		lua_pushstring(L, "task");
@@ -1006,27 +1054,6 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
-		lua_pushstring(L, "username");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			username = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
-
-		lua_pushstring(L, "password");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			password = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
-
-		lua_pushstring(L, "dbname");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			dbname = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
-
 		lua_pushstring(L, "opaque_data");
 		lua_gettable(L, -2);
 		if (!!lua_toboolean(L, -1)) {
@@ -1034,64 +1061,12 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
-		/* TLS options (optional). Postpone pops to keep values alive */
-		tls_tbl_idx = lua_gettop(L);
-
-		lua_pushstring(L, "ssl");
-		lua_gettable(L, tls_tbl_idx);
-		if (!!lua_toboolean(L, -1)) {
-			tls_opts.use_tls = true;
-		}
-		tls_items++;
-
-		lua_pushstring(L, "no_ssl_verify");
-		lua_gettable(L, tls_tbl_idx);
-		if (!!lua_toboolean(L, -1)) {
-			tls_opts.no_ssl_verify = true;
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_ca");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.ca_file = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_ca_dir");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.ca_dir = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_cert");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.cert_file = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_key");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.key_file = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "sni");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.sni = lua_tostring(L, -1);
-		}
-		tls_items++;
-
 		lua_pushstring(L, "no_pool");
-		lua_gettable(L, tls_tbl_idx);
+		lua_gettable(L, -2);
 		if (!!lua_toboolean(L, -1)) {
 			flags |= LUA_REDIS_NO_POOL;
 		}
-		tls_items++;
+		lua_pop(L, 1);
 
 		if (session && rspamd_session_blocked(session)) {
 			msg_err_task_check("Session is being destroying");
@@ -1145,21 +1120,10 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 
 	if (ret) {
 		ud->terminated = 0;
-		ud->ctx = rspamd_redis_pool_connect_ext(ud->pool,
-												dbname, username, password,
-												rspamd_inet_address_to_string(addr->addr),
-												rspamd_inet_address_get_port(addr->addr),
-												&tls_opts);
-
-		/* Pop postponed TLS values and the table itself */
-		if (tls_items > 0) {
-			lua_pop(L, tls_items);
-			tls_items = 0;
-		}
-		if (tls_tbl_idx != 0) {
-			lua_pop(L, 1);
-			tls_tbl_idx = 0;
-		}
+		ud->ctx = rspamd_redis_pool_connect_opts(ud->pool, &connection,
+												 rspamd_inet_address_to_string(addr->addr),
+												 rspamd_inet_address_get_port(addr->addr));
+		lua_settop(L, stack_top);
 
 		if (ip) {
 			rspamd_inet_address_free(ip);
@@ -1193,6 +1157,7 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		rspamd_inet_address_free(ip);
 	}
 
+	lua_settop(L, stack_top);
 	return NULL;
 }
 
@@ -1201,6 +1166,9 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
  * Make request to redis server, params is a table of key=value arguments in any order
  * @param {task} task worker task object
  * @param {ip|string} host server address
+ * @param {table} connection connection settings (username, password, db/dbname,
+ *   ssl, no_ssl_verify, ssl_ca, ssl_ca_dir, ssl_cert, ssl_key, sni). When present,
+ *   this table is authoritative; otherwise legacy flat connection fields apply.
  * @param {function} callback callback to be called in form `function (task, err, data)`
  * @param {string} cmd command to be sent to redis
  * @param {table} args numeric array of strings used as redis arguments
@@ -1467,6 +1435,7 @@ lua_redis_make_request_sync(lua_State *L)
  * Make request to redis server, params is a table of key=value arguments in any order
  * @param {task} task worker task object
  * @param {ip|string} host server address
+ * @param {table} connection optional connection settings, as in make_request
  * @param {number} timeout timeout in seconds for request (1.0 by default)
  * @return {boolean,redis} new connection object or nil if connection failed
  */
@@ -1511,6 +1480,7 @@ lua_redis_connect(lua_State *L)
  * @function rspamd_redis.connect_sync({params})
  * Make blocking request to redis server, params is a table of key=value arguments in any order
  * @param {ip|string} host server address
+ * @param {table} connection optional connection settings, as in make_request
  * @param {number} timeout timeout in seconds for request (1.0 by default)
  * @return {redis} redis object if a request has been successful
  */

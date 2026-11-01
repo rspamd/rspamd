@@ -527,29 +527,6 @@ local function calculate_redis_hash(params)
   return h:base32()
 end
 
-local tls_option_names = {
-  'ssl', 'no_ssl_verify', 'ssl_ca', 'ssl_ca_dir', 'ssl_cert', 'ssl_key', 'sni'
-}
-
---[[[
--- @function lua_redis.copy_tls_options(redis_params, options)
--- Copies TLS settings from redis params to connection options passed to rspamd_redis
--- @param {table} redis_params redis server settings
--- @param {table} options connection options
--- @return {table} options
---]]
-local function copy_tls_options(redis_params, options)
-  for _, k in ipairs(tls_option_names) do
-    if redis_params[k] ~= nil then
-      options[k] = redis_params[k]
-    end
-  end
-
-  return options
-end
-
-exports.copy_tls_options = copy_tls_options
-
 local function process_redis_opts(options, redis_params)
   local default_timeout = 1.0
   local default_expand_keys = false
@@ -1259,19 +1236,7 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     end
   end
 
-  if redis_params['username'] then
-    options['username'] = redis_params['username']
-  end
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  copy_tls_options(redis_params, options)
+  options.connection = redis_params
 
   lutil.debugm(N, task, 'perform request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', ip_addr,
@@ -1357,19 +1322,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
     end
   end
 
-  if redis_params['username'] then
-    options['username'] = redis_params['username']
-  end
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  copy_tls_options(redis_params, options)
+  options.connection = redis_params
 
   lutil.debugm(N, cfg, 'perform taskless request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', options.host:tostring(true),
@@ -1444,6 +1397,7 @@ local function prepare_redis_call(script)
       table.insert(options, { skip = true, upstream = s, server_idx = idx })
     else
       local cur_opts = {
+        connection = script.redis_params,
         host = server_addr,
         timeout = script.redis_params['timeout'],
         cmd = 'SCRIPT',
@@ -1456,20 +1410,6 @@ local function prepare_redis_call(script)
       if not script.servers_ready[idx] then
         script.servers_ready[idx] = "unsent"
       end
-
-      if script.redis_params['username'] then
-        cur_opts['username'] = script.redis_params['username']
-      end
-
-      if script.redis_params['password'] then
-        cur_opts['password'] = script.redis_params['password']
-      end
-
-      if script.redis_params['db'] then
-        cur_opts['dbname'] = script.redis_params['db']
-      end
-
-      copy_tls_options(script.redis_params, cur_opts)
 
       table.insert(options, cur_opts)
     end
@@ -1860,16 +1800,16 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
   end
 
   local options = {
+    connection = redis_params,
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
-    config = cfg or rspamd_config,
-    ev_base = ev_base or rspamadm_ev_base,
-    session = redis_params.session or rspamadm_session
+    config = redis_params.config or cfg or rspamd_config,
+    ev_base = redis_params.ev_base or ev_base or rspamadm_ev_base,
+    session = redis_params.session or rspamadm_session,
+    task = redis_params.task,
+    no_pool = redis_params.no_pool,
+    opaque_data = redis_params.opaque_data,
   }
-
-  for k, v in pairs(redis_params) do
-    options[k] = v
-  end
 
   if not options.config then
     logger.errx('config is not set')
@@ -2026,19 +1966,7 @@ exports.request = function(redis_params, attrs, req)
     opts.args = req
   end
 
-  if redis_params.username then
-    opts.username = redis_params.username
-  end
-
-  if redis_params.password then
-    opts.password = redis_params.password
-  end
-
-  if redis_params.db then
-    opts.dbname = redis_params.db
-  end
-
-  copy_tls_options(redis_params, opts)
+  opts.connection = redis_params
 
   if opts.callback then
     lutil.debugm(N, 'perform generic async request to redis server' ..
@@ -2135,19 +2063,7 @@ exports.connect = function(redis_params, attrs)
   opts.host = addr:get_addr()
   opts.timeout = redis_params.timeout
 
-  if redis_params.username then
-    opts.username = redis_params.username
-  end
-
-  if redis_params.password then
-    opts.password = redis_params.password
-  end
-
-  if redis_params.db then
-    opts.dbname = redis_params.db
-  end
-
-  copy_tls_options(redis_params, opts)
+  opts.connection = redis_params
 
   if opts.callback then
     local ret, conn = rspamd_redis.connect(opts)
@@ -2432,16 +2348,13 @@ local function redis_load_scripts_sync(redis_params, attrs, script_filter)
         for idx, opt in ipairs(opts) do
           if not opt.skip and script.servers_ready[idx] ~= 'done' then
             local options = {
+              connection = opt.connection,
               host = opt.host,
               timeout = attrs.timeout or script.redis_params.timeout or 1.0,
               config = attrs.config or rspamd_config,
               ev_base = attrs.ev_base,
               session = attrs.session,
             }
-            if opt.username then options.username = opt.username end
-            if opt.password then options.password = opt.password end
-            if opt.dbname then options.dbname = opt.dbname end
-            copy_tls_options(opt, options)
 
             local ok, conn = rspamd_redis.connect_sync(options)
             if not ok then

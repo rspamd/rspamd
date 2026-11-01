@@ -1,74 +1,111 @@
--- Unit tests for TLS settings propagation in lua_redis
---
--- Connections are not established here: rspamd_redis is replaced with a stub
--- that records the options lua_redis passes to it.
-
-context("lua_redis TLS options", function()
+-- Connection configuration must cross request builders as one object, so new
+-- connection settings do not need forwarding code in every command path.
+context("lua_redis connection options", function()
   local lua_redis = require "lua_redis"
   local rspamd_ip = require "rspamd_ip"
 
-  local tls = {
-    ssl = true,
-    no_ssl_verify = false,
-    ssl_ca = '/etc/rspamd/redis-ca.pem',
-    ssl_ca_dir = '/etc/ssl/certs',
-    ssl_cert = '/etc/rspamd/redis-client.pem',
-    ssl_key = '/etc/rspamd/redis-client.key',
-    sni = 'redis.example',
-  }
-
-  test("copy_tls_options copies only TLS settings that are set", function()
-    local options = lua_redis.copy_tls_options({
-      ssl = false,
-      ssl_ca = 'ca.pem',
-      password = 'secret',
-    }, { host = 'redis.example' })
-
-    assert_equal(options.ssl, false)
-    assert_equal(options.ssl_ca, 'ca.pem')
-    assert_nil(options.ssl_key)
-    assert_nil(options.password)
-    assert_equal(options.host, 'redis.example')
-  end)
-
-  test("SCRIPT LOAD connections carry TLS settings", function()
-    local addr = rspamd_ip.from_string('127.0.0.1')
+  local function with_connection(f, check)
+    local addr = rspamd_ip.from_string('127.0.0.1:6379')
     local upstream = {
       get_name = function() return 'redis.example' end,
       get_addr = function() return addr end,
       ok = function() end,
       fail = function() end,
     }
-    local redis_params = {
-      timeout = 1.0,
-      read_servers = {
-        all_upstreams = function() return { upstream } end,
-      },
+    local servers = {
+      all_upstreams = function() return { upstream } end,
+      get_upstream_round_robin = function() return upstream end,
+      get_upstream_master_slave = function() return upstream end,
     }
-    for k, v in pairs(tls) do
-      redis_params[k] = v
-    end
-
-    lua_redis.add_redis_script('return 1', redis_params)
-
+    local params = {
+      timeout = 1.0,
+      read_servers = servers,
+      write_servers = servers,
+      username = 'redis-user',
+      password = 'redis-password',
+      db = '3',
+      ssl = true,
+      no_ssl_verify = false,
+      ssl_ca = 'ca.pem',
+      ssl_ca_dir = '/etc/ssl/certs',
+      ssl_cert = 'client.pem',
+      ssl_key = 'client.key',
+      sni = 'redis.example',
+      session = 'fake_session',
+    }
     local captured
     local saved = package.loaded.rspamd_redis
+    local function capture(options)
+      captured = options
+      return false, 'stub'
+    end
     package.loaded.rspamd_redis = {
-      connect_sync = function(options)
-        captured = options
-        return false, 'stub'
-      end,
+      make_request = capture,
+      connect = capture,
+      connect_sync = capture,
     }
-    local ok, err = pcall(lua_redis.prepare_redis_setup, redis_params, {
-      ev_base = 'fake_ev_base',
-      session = 'fake_session',
-    }, function() end)
+    local ok, err = pcall(f, params, addr)
     package.loaded.rspamd_redis = saved
 
-    assert_true(ok, tostring(err))
-    assert_not_nil(captured)
-    for k, v in pairs(tls) do
-      assert_equal(captured[k], v, 'TLS option ' .. k)
+    assert(ok, tostring(err))
+    assert(captured)
+    assert(rawequal(params, captured.connection), 'connection configuration was copied or lost')
+    assert(captured.host == addr)
+    assert(captured.timeout == params.timeout)
+    assert(captured.ssl == nil)
+    assert(captured.password == nil)
+    assert(captured.dbname == nil)
+    check(true)
+  end
+
+  test("task requests retain connection configuration", function()
+    with_connection(function(params)
+      lua_redis.redis_make_request({}, params, nil, false, function() end, 'PING', {})
+    end, assert_true)
+  end)
+
+  test("taskless requests retain connection configuration", function()
+    with_connection(function(params)
+      lua_redis.redis_make_request_taskless('fake_ev_base', rspamd_config, params,
+          nil, false, function() end, 'PING', {})
+    end, assert_true)
+  end)
+
+  for _, method in ipairs({ 'request', 'connect' }) do
+    for _, async in ipairs({ false, true }) do
+      test(method .. (async and ' async' or ' sync') .. " retains connection configuration", function()
+        with_connection(function(params)
+          local attrs = {
+            config = rspamd_config,
+            ev_base = 'fake_ev_base',
+          }
+          if async then attrs.callback = function() end end
+          lua_redis[method](params, attrs, { 'PING' })
+        end, assert_true)
+      end)
     end
+  end
+
+  test("legacy synchronous helper retains connection configuration", function()
+    with_connection(function(params)
+      lua_redis.redis_connect_sync(params, false, nil, rspamd_config, 'fake_ev_base')
+    end, assert_true)
+  end)
+
+  test("synchronous SCRIPT LOAD retains connection configuration", function()
+    with_connection(function(params)
+      lua_redis.add_redis_script('return 1', params)
+      lua_redis.prepare_redis_setup(params, {
+        ev_base = 'fake_ev_base',
+        session = 'fake_session',
+      }, function() end)
+    end, assert_true)
+  end)
+
+  test("asynchronous SCRIPT LOAD retains connection configuration", function()
+    with_connection(function(params)
+      local id = lua_redis.add_redis_script('return 1', params)
+      lua_redis.exec_redis_script(id, { ev_base = 'fake_ev_base' }, function() end, {}, {})
+    end, assert_true)
   end)
 end)

@@ -758,18 +758,35 @@ rspamd_redis_pool_connect_ext(void *p,
 							  const char *password, const char *ip, int port,
 							  const struct rspamd_redis_tls_opts *tls)
 {
+	struct rspamd_redis_connection_opts opts{};
+	opts.dbname = db;
+	opts.username = username;
+	opts.password = password;
+	if (tls) {
+		opts.tls = *tls;
+	}
+
+	return rspamd_redis_pool_connect_opts(p, &opts, ip, port);
+}
+
+struct redisAsyncContext *
+rspamd_redis_pool_connect_opts(void *p,
+							   const struct rspamd_redis_connection_opts *opts,
+							   const char *ip, int port)
+{
 	g_assert(p != NULL);
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
+	const auto *tls = &opts->tls;
 
-	if (tls && tls->use_tls) {
-		return pool->new_connection_ext(db, username, password, ip, port,
+	if (tls->use_tls) {
+		return pool->new_connection_ext(opts->dbname, opts->username, opts->password, ip, port,
 										true, tls->no_ssl_verify,
 										tls->ca_file, tls->ca_dir,
 										tls->cert_file, tls->key_file,
 										tls->sni);
 	}
 	else {
-		return pool->new_connection(db, username, password, ip, port);
+		return pool->new_connection(opts->dbname, opts->username, opts->password, ip, port);
 	}
 }
 
