@@ -299,6 +299,7 @@ local function connect_to_upstream(up, redis_params)
     return false, nil
   end
   local ret, conn = rspamd_redis.connect_sync({
+    connection = redis_params,
     host = up_addr,
     timeout = redis_params.timeout,
     config = rspamd_config,

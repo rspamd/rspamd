@@ -25,20 +25,27 @@ local exports = {}
 local E = {}
 local N = "lua_redis"
 
+local function extend_fields(...)
+  local res = {}
+  for i = 1, select('#', ...) do
+    local tbl = select(i, ...)
+    if tbl then
+      for k, v in pairs(tbl) do res[k] = v end
+    end
+  end
+  return res
+end
+
 local db_schema = T.one_of({
   T.transform(T.number(), tostring),
   T.string()
 }):optional():doc({ summary = "Database number" })
 
-local common_schema = T.table({
+local connection_fields = {
   timeout = T.one_of({
     T.number({ min = 0 }),
     T.transform(T.string(), lutil.parse_time_interval)
   }):optional():doc({ summary = "Connection timeout (seconds)" }),
-  db = db_schema,
-  database = db_schema,
-  dbname = db_schema,
-  prefix = T.string():optional():doc({ summary = "Key prefix" }),
   username = T.string():optional():doc({ summary = "Username" }),
   password = T.string():optional():doc({ summary = "Password" }),
   -- TLS options
@@ -49,11 +56,22 @@ local common_schema = T.table({
   ssl_cert = T.string():optional():doc({ summary = "Client certificate file (PEM)" }),
   ssl_key = T.string():optional():doc({ summary = "Client private key file (PEM)" }),
   sni = T.string():optional():doc({ summary = "SNI server name override" }),
+}
+
+local sentinel_connection_schema = T.table(connection_fields, { open = false })
+local common_schema = T.table(extend_fields(connection_fields, {
+  db = db_schema,
+  database = db_schema,
+  dbname = db_schema,
+  prefix = T.string():optional():doc({ summary = "Key prefix" }),
   expand_keys = T.boolean():optional():doc({ summary = "Expand keys" }),
   sentinels = T.one_of({
     T.string(),
     T.array(T.string())
   }):optional():doc({ summary = "Sentinel servers" }),
+  sentinel = sentinel_connection_schema:optional():doc({
+    summary = "Independent Sentinel credentials, TLS settings and timeout; data-node settings are not inherited"
+  }),
   sentinel_watch_time = T.one_of({
     T.number({ min = 0 }),
     T.transform(T.string(), lutil.parse_time_interval)
@@ -69,20 +87,7 @@ local common_schema = T.table({
     T.number(),
     T.transform(T.string(), tonumber)
   }):optional():doc({ summary = "Redis server version (6 or 7)" }),
-}, { open = true })
-
-local function extend_fields(...)
-  local res = {}
-  for i = 1, select('#', ...) do
-    local tbl = select(i, ...)
-    if tbl then
-      for k, v in pairs(tbl) do
-        res[k] = v
-      end
-    end
-  end
-  return res
-end
+}), { open = true })
 
 -- Register common schema as redis_common first
 PluginSchema.register("mixins.redis_common", common_schema)
@@ -265,7 +270,32 @@ local function flatten_redis_table(tbl)
   return res
 end
 
-local function redis_query_sentinel(ev_base, params, initialised)
+local function sentinel_node(fields, master)
+  if type(fields) ~= 'table' then return nil end
+  local node = flatten_redis_table(fields)
+  local port = tonumber(node.port)
+  if type(node.ip) ~= 'string' or not port or port < 1 or port > 65535 or port % 1 ~= 0 or
+      (master and type(node.name) ~= 'string') then
+    return nil
+  end
+  if node.ip:find(':', 1, true) and node.ip:sub(1, 1) ~= '[' then
+    node.ip = '[' .. node.ip .. ']'
+  end
+  return node
+end
+
+local apply_sentinel_topology
+
+-- Normalize legacy credentials once; Sentinel never inherits data-node settings.
+local function sentinel_connection(params)
+  if not params.sentinel then params.sentinel = {} end
+  local connection = params.sentinel
+  if connection.username == nil then connection.username = params.sentinel_username end
+  if connection.password == nil then connection.password = params.sentinel_password end
+  return connection
+end
+
+local function redis_query_sentinel(ev_base, params)
   -- Coroutines syntax
   local rspamd_redis = require "rspamd_redis"
   local sentinels = params.sentinels
@@ -278,6 +308,12 @@ local function redis_query_sentinel(ev_base, params, initialised)
   end
 
   local host = addr:get_addr()
+  if not host then
+    addr:fail()
+    logger.errx(rspamd_config, 'sentinel address is not resolved; skipping sentinel watch tick')
+    return
+  end
+  local connection = sentinel_connection(params)
   local masters = {}
   local process_masters -- Function that is called to process masters data
 
@@ -285,13 +321,14 @@ local function redis_query_sentinel(ev_base, params, initialised)
     if not err and result and type(result) == 'table' then
 
       local pending_subrequests = 0
+      local subrequests_failed = false
 
       for _, m in ipairs(result) do
-        local master = flatten_redis_table(m)
-
-        -- Wrap IPv6-addresses in brackets
-        if (master.ip:match(":")) then
-          master.ip = "[" .. master.ip .. "]"
+        local master = sentinel_node(m, true)
+        if not master then
+          logger.errx(rspamd_config, 'invalid master returned by sentinel %s', host:to_string(true))
+          addr:fail()
+          return
         end
 
         if params.sentinel_masters_pattern then
@@ -310,23 +347,33 @@ local function redis_query_sentinel(ev_base, params, initialised)
         end
       end
 
+      for _ in pairs(masters) do pending_subrequests = pending_subrequests + 1 end
+      if pending_subrequests == 0 then
+        logger.errx(rspamd_config, 'no masters discovered from sentinel %s', host:to_string(true))
+        addr:fail()
+        return
+      end
+
       -- For each master we need to get a list of slaves
       for k, v in pairs(masters) do
         v.slaves = {}
         local function slaves_cb(slave_err, slave_result)
           if not slave_err and type(slave_result) == 'table' then
             for _, s in ipairs(slave_result) do
-              local slave = flatten_redis_table(s)
+              local slave = sentinel_node(s, false)
+              if not slave then
+                subrequests_failed = true
+                addr:fail()
+                logger.errx(rspamd_config, 'invalid replica returned by sentinel %s', host:to_string(true))
+                break
+              end
               lutil.debugm(N, rspamd_config,
                   'found slave for master %s with ip %s and port %s',
                   v.name, slave.ip, slave.port)
-              -- Wrap IPv6-addresses in brackets
-              if (slave.ip:match(":")) then
-                slave.ip = "[" .. slave.ip .. "]"
-              end
               v.slaves[#v.slaves + 1] = slave
             end
           else
+            subrequests_failed = true
             logger.errx('cannot get slaves data from Redis Sentinel %s: %s',
                 host:to_string(true), slave_err)
             addr:fail()
@@ -334,17 +381,16 @@ local function redis_query_sentinel(ev_base, params, initialised)
 
           pending_subrequests = pending_subrequests - 1
 
-          if pending_subrequests == 0 then
+          if pending_subrequests == 0 and not subrequests_failed then
             -- Finalize masters and slaves
             process_masters()
           end
         end
 
         local ret = rspamd_redis.make_request {
-          host = addr:get_addr(),
-          timeout = params.timeout,
-          username = params.sentinel_username,
-          password = params.sentinel_password,
+          connection = connection,
+          host = host,
+          timeout = connection.timeout or params.timeout,
           config = rspamd_config,
           ev_base = ev_base,
           cmd = 'SENTINEL',
@@ -354,15 +400,13 @@ local function redis_query_sentinel(ev_base, params, initialised)
         }
 
         if not ret then
+          subrequests_failed = true
+          pending_subrequests = pending_subrequests - 1
           logger.errx(rspamd_config, 'cannot connect sentinel when query slaves at address: %s',
               host:to_string(true))
           addr:fail()
-        else
-          pending_subrequests = pending_subrequests + 1
         end
       end
-
-      addr:ok()
     else
       logger.errx('cannot get masters data from Redis Sentinel %s: %s',
           host:to_string(true), err)
@@ -371,12 +415,11 @@ local function redis_query_sentinel(ev_base, params, initialised)
   end
 
   local ret = rspamd_redis.make_request {
-    host = addr:get_addr(),
-    timeout = params.timeout,
+    connection = connection,
+    host = host,
+    timeout = connection.timeout or params.timeout,
     config = rspamd_config,
     ev_base = ev_base,
-    username = params.sentinel_username,
-    password = params.sentinel_password,
     cmd = 'SENTINEL',
     args = { 'masters' },
     no_pool = true,
@@ -390,76 +433,23 @@ local function redis_query_sentinel(ev_base, params, initialised)
   end
 
   process_masters = function()
-    -- We now form new strings for masters and slaves
-    local read_servers_tbl, write_servers_tbl = {}, {}
-
-    for _, master in pairs(masters) do
-      write_servers_tbl[#write_servers_tbl + 1] = string.format(
-          '%s:%s', master.ip, master.port
-      )
-      read_servers_tbl[#read_servers_tbl + 1] = string.format(
-          '%s:%s', master.ip, master.port
-      )
-
-      for _, slave in ipairs(master.slaves) do
-        if slave['master-link-status'] == 'ok' then
-          read_servers_tbl[#read_servers_tbl + 1] = string.format(
-              '%s:%s', slave.ip, slave.port
-          )
-        end
-      end
+    local previous_write_servers = params.write_servers
+    local ok, err = apply_sentinel_topology(params, masters)
+    if not ok then
+      logger.errx(rspamd_config, 'cannot apply topology from sentinel %s: %s', host:to_string(true), err)
+      addr:fail()
+      return
     end
+    addr:ok()
 
-    table.sort(read_servers_tbl)
-    table.sort(write_servers_tbl)
-
-    local read_servers_str = table.concat(read_servers_tbl, ',')
-    local write_servers_str = table.concat(write_servers_tbl, ',')
-
-    lutil.debugm(N, rspamd_config,
-        'new servers list: %s read; %s write',
-        read_servers_str,
-        write_servers_str)
-
-    if read_servers_str ~= params.read_servers_str then
-      local upstream_list = require "rspamd_upstream_list"
-
-      local read_upstreams = upstream_list.create(rspamd_config,
-          read_servers_str, 6379)
-
-      if read_upstreams then
-        logger.infox(rspamd_config, 'sentinel %s: replace read servers with new list: %s',
-            host:to_string(true), read_servers_str)
-        params.read_servers = read_upstreams
-        params.read_servers_str = read_servers_str
-      end
-    end
-
-    if write_servers_str ~= params.write_servers_str then
-      local upstream_list = require "rspamd_upstream_list"
-
-      local write_upstreams = upstream_list.create(rspamd_config,
-          write_servers_str, 6379)
-
-      if write_upstreams then
-        logger.infox(rspamd_config, 'sentinel %s: replace write servers with new list: %s',
-            host:to_string(true), write_servers_str)
-        params.write_servers = write_upstreams
-        params.write_servers_str = write_servers_str
-
-        local queried = false
-
-        local function monitor_failures(up, _, count)
-          if count > params.sentinel_master_maxerrors and not queried then
-            logger.infox(rspamd_config, 'sentinel: master with address %s, caused %s failures, try to query sentinel',
-                host:to_string(true), count)
-            queried = true -- Avoid multiple checks caused by this monitor
-            redis_query_sentinel(ev_base, params, true)
-          end
+    if previous_write_servers ~= params.write_servers then
+      local queried = false
+      params.write_servers:add_watcher('failure', function(_, _, count)
+        if count > params.sentinel_master_maxerrors and not queried then
+          queried = true
+          redis_query_sentinel(ev_base, params)
         end
-
-        write_upstreams:add_watcher('failure', monitor_failures)
-      end
+      end)
     end
   end
 
@@ -489,11 +479,9 @@ local function add_redis_sentinels(params)
   end
 
   rspamd_config:add_on_load(function(_, ev_base, worker)
-    local initialised = false
     if worker:is_scanner() or worker:get_type() == 'fuzzy' then
       rspamd_config:add_periodic(ev_base, 0.0, function()
-        redis_query_sentinel(ev_base, params, initialised)
-        initialised = true
+        redis_query_sentinel(ev_base, params)
 
         return params.sentinel_watch_time
       end, false)
@@ -508,16 +496,28 @@ local function calculate_redis_hash(params)
 
   local h = cr.create()
 
+  local function hash_string(value)
+    h:update(tostring(#value))
+    h:update(':')
+    h:update(value)
+  end
+
   local function rec_hash(k, v)
-    if type(v) == 'string' then
-      h:update(k)
-      h:update(v)
-    elseif type(v) == 'number' then
-      h:update(k)
-      h:update(tostring(v))
-    elseif type(v) == 'table' then
-      for kk, vv in pairs(v) do
-        rec_hash(kk, vv)
+    local kind = type(v)
+    if kind == 'string' or kind == 'number' or kind == 'boolean' or kind == 'table' then
+      hash_string(type(k))
+      hash_string(tostring(k))
+      hash_string(kind)
+      if kind == 'table' then
+        for kk, vv in lutil.spairs(v, function(_, a, b)
+          if type(a) ~= type(b) then return type(a) < type(b) end
+          return tostring(a) < tostring(b)
+        end) do
+          rec_hash(kk, vv)
+        end
+        hash_string('end')
+      else
+        hash_string(tostring(v))
       end
     end
   end
@@ -596,6 +596,17 @@ local function process_redis_opts(options, redis_params)
     redis_params.sentinels = options.sentinels
   end
 
+  if options.sentinel ~= nil then
+    local connection, err = sentinel_connection_schema:transform(options.sentinel)
+    if not connection then
+      error('invalid Sentinel connection configuration: ' .. T.format_error(err))
+    end
+    local current = sentinel_connection(redis_params)
+    for k, v in pairs(connection) do
+      if current[k] == nil then current[k] = v end
+    end
+  end
+
   if options['sentinel_masters_pattern'] and not redis_params['sentinel_masters_pattern'] then
     redis_params['sentinel_masters_pattern'] = options['sentinel_masters_pattern']
   end
@@ -611,6 +622,8 @@ local function process_redis_opts(options, redis_params)
   if options['sentinel_password'] and not redis_params['sentinel_password'] then
     redis_params['sentinel_password'] = options['sentinel_password']
   end
+
+  sentinel_connection(redis_params)
 
   if options['sentinel_master_maxerrors'] and not redis_params['sentinel_master_maxerrors'] then
     redis_params['sentinel_master_maxerrors'] = options['sentinel_master_maxerrors']
@@ -1236,26 +1249,7 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     end
   end
 
-  if redis_params['username'] then
-    options['username'] = redis_params['username']
-  end
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  -- TLS options
-  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then options.sni = redis_params.sni end
+  options.connection = redis_params
 
   lutil.debugm(N, task, 'perform request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', ip_addr,
@@ -1341,26 +1335,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
     end
   end
 
-  if redis_params['username'] then
-    options['username'] = redis_params['username']
-  end
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  -- TLS options
-  if redis_params.ssl ~= nil then options.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then options.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then options.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then options.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then options.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then options.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then options.sni = redis_params.sni end
+  options.connection = redis_params
 
   lutil.debugm(N, cfg, 'perform taskless request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s', options.host:tostring(true),
@@ -1393,16 +1368,6 @@ local function script_set_loaded(script)
 
   script.pending_upload = false -- Allow further reload
 
-  local wait_table = {}
-  for _, s in ipairs(script.waitq) do
-    table.insert(wait_table, s)
-  end
-
-  script.waitq = {}
-
-  for _, s in ipairs(wait_table) do
-    s(script.loaded)
-  end
 end
 
 local function prepare_redis_call(script)
@@ -1435,6 +1400,7 @@ local function prepare_redis_call(script)
       table.insert(options, { skip = true, upstream = s, server_idx = idx })
     else
       local cur_opts = {
+        connection = script.redis_params,
         host = server_addr,
         timeout = script.redis_params['timeout'],
         cmd = 'SCRIPT',
@@ -1446,18 +1412,6 @@ local function prepare_redis_call(script)
       -- By default we start from unsent status
       if not script.servers_ready[idx] then
         script.servers_ready[idx] = "unsent"
-      end
-
-      if script.redis_params['username'] then
-        cur_opts['username'] = script.redis_params['username']
-      end
-
-      if script.redis_params['password'] then
-        cur_opts['password'] = script.redis_params['password']
-      end
-
-      if script.redis_params['db'] then
-        cur_opts['dbname'] = script.redis_params['db']
       end
 
       table.insert(options, cur_opts)
@@ -1491,72 +1445,8 @@ local function script_description(script)
       or ("with id: " .. script.id)
 end
 
-local function load_script_task(script, task, is_write)
-  local rspamd_redis = require "rspamd_redis"
-  local opts = prepare_redis_call(script)
-
-  for idx, opt in ipairs(opts) do
-    -- opt.skip means the upstream was not resolved when prepare_redis_call ran;
-    -- servers_ready is already tempfailed and will be retried on the next pass.
-    if not opt.skip and script.servers_ready[idx] ~= 'done' then
-      opt.task = task
-      opt.is_write = is_write
-      opt.callback = function(err, data)
-        if err then
-          if string.match(err, 'ERR') then
-            logger.errx(task, 'cannot upload script %s to %s: %s; registered from: %s:%s',
-                script_description(script),
-                opt.upstream:get_addr():to_string(true),
-                err, script.caller.short_src, script.caller.currentline)
-            opt.upstream:fail()
-            script.servers_ready[idx] = "failed"
-            return
-          else
-            -- Assume temporary error
-            logger.infox(task, 'temporary error uploading script %s to %s: %s; registered from: %s:%s',
-                script_description(script),
-                opt.upstream:get_addr():to_string(true),
-                err, script.caller.short_src, script.caller.currentline)
-            script.servers_ready[idx] = "tempfail"
-            return
-          end
-        else
-          opt.upstream:ok()
-          logger.infox(task,
-              "uploaded redis script to %s %s, sha: %s",
-              opt.upstream:get_addr():to_string(true),
-              script_description(script), data)
-          script.sha = data -- We assume that sha is the same on all servers
-          script.servers_ready[idx] = "done"
-        end
-        if is_any_server_ready(script) then
-          script_set_loaded(script)
-        elseif is_all_servers_failed(script) then
-          script.pending_upload = false
-          script.fatal_error = "cannot upload script to any server"
-        end
-      end -- callback
-
-      local ret = rspamd_redis.make_request(opt)
-
-      if not ret then
-        logger.errx('cannot execute redis request to load script on %s',
-            opt.upstream:get_addr())
-        script.servers_ready[idx] = "failed"
-        opt.upstream:fail()
-      end
-    end
-
-    if is_any_server_ready(script) then
-      script_set_loaded(script)
-    elseif is_all_servers_failed(script) then
-      script.pending_upload = false
-      script.fatal_error = "cannot upload script to any server"
-    end
-  end
-end
-
 local function load_script_taskless(script, cfg, ev_base, is_write)
+  if (script.uploads_pending or 0) > 0 then return end
   local rspamd_redis = require "rspamd_redis"
   local opts = prepare_redis_call(script)
 
@@ -1566,6 +1456,7 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
       opt.ev_base = ev_base
       opt.is_write = is_write
       opt.callback = function(err, data)
+        script.uploads_pending = script.uploads_pending - 1
         if err then
           if string.match(err, 'ERR') then
             logger.errx(cfg, 'cannot upload script %s to %s: %s; registered from: %s:%s',
@@ -1600,13 +1491,16 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
           script.fatal_error = "cannot upload script to any server"
         end
       end
+      script.uploads_pending = (script.uploads_pending or 0) + 1
       local ret = rspamd_redis.make_request(opt)
 
       if not ret then
+        script.uploads_pending = script.uploads_pending - 1
         logger.errx('cannot execute redis request to load script %s on %s',
             script_description(script),
             opt.upstream:get_addr())
-        script.servers_ready[idx] = "failed"
+        -- A stale bootstrap connection must be retried after Sentinel discovery.
+        script.servers_ready[idx] = "tempfail"
         opt.upstream:fail()
       end
     end
@@ -1618,6 +1512,12 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
       script.fatal_error = "cannot upload script " .. script_description(script) .. " to any server"
     end
   end
+end
+
+local function load_script_task(script, task, is_write)
+  -- Uploads are shared configuration work. They must survive task cancellation
+  -- and must not leave the shared in-flight counter stuck when a task is freed.
+  load_script_taskless(script, rspamd_config, task:get_ev_base(), is_write)
 end
 
 local function load_redis_script(script, cfg, ev_base, _)
@@ -1637,7 +1537,6 @@ local function add_redis_script(script, redis_params, caller_level, maybe_filena
     loaded = false,
     redis_params = redis_params,
     script = script,
-    waitq = {}, -- callbacks pending for script being loaded
     id = #redis_scripts + 1,
     filename = maybe_filename,
   }
@@ -1723,14 +1622,50 @@ local function exec_redis_script(id, params, callback, keys, args)
     return true
   end
 
-  local function do_call(can_reload)
+  local do_call
+  local function wait_for_script(can_reload)
+    -- A global upload callback must not retain a task after its scan finishes.
+    -- Task timers hold a session event and are cancelled with the task.
+    local deadline = rspamd_util.get_ticks() + (script.redis_params.timeout or 1.0)
+    local function check_loaded()
+      local now = rspamd_util.get_ticks()
+      if script.fatal_error then
+        callback(script.fatal_error, nil)
+      elseif script.loaded and script.sha then
+        do_call(can_reload)
+      elseif now >= deadline then
+        callback('Timeout waiting for redis script upload', nil)
+      else
+        if (script.uploads_pending or 0) == 0 and now >= (script.next_upload_attempt or 0) then
+          script.next_upload_attempt = now + 0.1
+          if params.task then
+            load_script_task(script, params.task)
+          else
+            load_script_taskless(script, rspamd_config, params.ev_base)
+          end
+        end
+        return 0.05
+      end
+    end
+    if params.task then
+      params.task:add_timer(0.01, check_loaded)
+    elseif params.ev_base then
+      rspamd_config:add_periodic(params.ev_base, 0.01, function()
+        return check_loaded() or false
+      end, false)
+    else
+      callback('No event base for redis script upload', nil)
+    end
+  end
+
+  do_call = function(can_reload)
     local function redis_cb(err, data)
       if not err then
         callback(err, data)
       elseif string.match(err, 'NOSCRIPT') then
         -- Schedule restart if possible
         if can_reload then
-          table.insert(script.waitq, do_call)
+          wait_for_script(false)
           if not script.pending_upload then
             logger.infox(params.task or rspamd_config,
                 'redis script %s is not loaded (NOSCRIPT returned), scheduling reload',
@@ -1797,7 +1732,7 @@ local function exec_redis_script(id, params, callback, keys, args)
   if script.loaded and script.sha then
     do_call(true)
   else
-    table.insert(script.waitq, do_call)
+    wait_for_script(true)
     if not script.servers_ready then
       -- Delayed until scripts are loaded
       logger.infox(params.task or rspamd_config, 'redis script %s is not loaded, trying to load',
@@ -1849,16 +1784,16 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
   end
 
   local options = {
+    connection = redis_params,
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
-    config = cfg or rspamd_config,
-    ev_base = ev_base or rspamadm_ev_base,
-    session = redis_params.session or rspamadm_session
+    config = redis_params.config or cfg or rspamd_config,
+    ev_base = redis_params.ev_base or ev_base or rspamadm_ev_base,
+    session = redis_params.session or rspamadm_session,
+    task = redis_params.task,
+    no_pool = redis_params.no_pool,
+    opaque_data = redis_params.opaque_data,
   }
-
-  for k, v in pairs(redis_params) do
-    options[k] = v
-  end
 
   if not options.config then
     logger.errx('config is not set')
@@ -2015,26 +1950,7 @@ exports.request = function(redis_params, attrs, req)
     opts.args = req
   end
 
-  if redis_params.username then
-    opts.username = redis_params.username
-  end
-
-  if redis_params.password then
-    opts.password = redis_params.password
-  end
-
-  if redis_params.db then
-    opts.dbname = redis_params.db
-  end
-
-  -- TLS options
-  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then opts.sni = redis_params.sni end
+  opts.connection = redis_params
 
   if opts.callback then
     lutil.debugm(N, 'perform generic async request to redis server' ..
@@ -2131,26 +2047,7 @@ exports.connect = function(redis_params, attrs)
   opts.host = addr:get_addr()
   opts.timeout = redis_params.timeout
 
-  if redis_params.username then
-    opts.username = redis_params.username
-  end
-
-  if redis_params.password then
-    opts.password = redis_params.password
-  end
-
-  if redis_params.db then
-    opts.dbname = redis_params.db
-  end
-
-  -- TLS options
-  if redis_params.ssl ~= nil then opts.ssl = redis_params.ssl end
-  if redis_params.no_ssl_verify ~= nil then opts.no_ssl_verify = redis_params.no_ssl_verify end
-  if redis_params.ssl_ca then opts.ssl_ca = redis_params.ssl_ca end
-  if redis_params.ssl_ca_dir then opts.ssl_ca_dir = redis_params.ssl_ca_dir end
-  if redis_params.ssl_cert then opts.ssl_cert = redis_params.ssl_cert end
-  if redis_params.ssl_key then opts.ssl_key = redis_params.ssl_key end
-  if redis_params.sni then opts.sni = redis_params.sni end
+  opts.connection = redis_params
 
   if opts.callback then
     local ret, conn = rspamd_redis.connect(opts)
@@ -2221,9 +2118,8 @@ end
 -- Build new read/write upstream lists from a flattened sentinel topology
 -- (table of {[master_name] = { ip, port, slaves = {...} }}) and replace
 -- params.read_servers / params.write_servers in-place. Used by the
--- synchronous rspamadm path; the async sentinel watcher in worker context
--- has its own variant that also installs failure-monitor watchers.
-local function apply_sentinel_topology(params, masters)
+-- synchronous rspamadm path and the async worker watcher.
+apply_sentinel_topology = function(params, masters)
   local read_servers_tbl, write_servers_tbl = {}, {}
 
   for _, master in pairs(masters) do
@@ -2252,30 +2148,32 @@ local function apply_sentinel_topology(params, masters)
 
   local upstream_list = require "rspamd_upstream_list"
 
+  local read_upstreams, write_upstreams
   if read_servers_str ~= params.read_servers_str then
-    local read_upstreams = upstream_list.create(rspamd_config,
+    read_upstreams = upstream_list.create(rspamd_config,
         read_servers_str, 6379)
-    if read_upstreams then
-      logger.infox(rspamd_config,
-          'sentinel: replace read servers with new list: %s', read_servers_str)
-      params.read_servers = read_upstreams
-      params.read_servers_str = read_servers_str
-    else
+    if not read_upstreams then
       return false, string.format('cannot parse read servers list: %s', read_servers_str)
     end
   end
 
   if write_servers_str ~= params.write_servers_str then
-    local write_upstreams = upstream_list.create(rspamd_config,
+    write_upstreams = upstream_list.create(rspamd_config,
         write_servers_str, 6379)
-    if write_upstreams then
-      logger.infox(rspamd_config,
-          'sentinel: replace write servers with new list: %s', write_servers_str)
-      params.write_servers = write_upstreams
-      params.write_servers_str = write_servers_str
-    else
+    if not write_upstreams then
       return false, string.format('cannot parse write servers list: %s', write_servers_str)
     end
+  end
+
+  if read_upstreams then
+    logger.infox(rspamd_config, 'sentinel: replace read servers with new list: %s', read_servers_str)
+    params.read_servers = read_upstreams
+    params.read_servers_str = read_servers_str
+  end
+  if write_upstreams then
+    logger.infox(rspamd_config, 'sentinel: replace write servers with new list: %s', write_servers_str)
+    params.write_servers = write_upstreams
+    params.write_servers_str = write_servers_str
   end
 
   return true
@@ -2292,40 +2190,30 @@ local function redis_resolve_sentinels_sync(redis_params, attrs)
 
   local rspamd_redis = require "rspamd_redis"
   local sentinels = redis_params.sentinels
+  local connection = sentinel_connection(redis_params)
   local last_err = 'no sentinel upstreams to query'
 
-  -- Try each sentinel until one succeeds; same upstream may be picked twice
-  -- in a row depending on its weight, so we just bound by upstream count.
-  local nsentinels = #(sentinels:all_upstreams() or E)
-  if nsentinels == 0 then
+  local upstreams = sentinels:all_upstreams() or E
+  if #upstreams == 0 then
     return false, 'sentinel upstream list is empty'
   end
 
-  for _ = 1, nsentinels do
-    local addr = sentinels:get_upstream_round_robin()
-    if not addr then
-      return false, last_err
-    end
-
+  -- Visit every configured Sentinel once, including after an earlier failure.
+  for _, addr in ipairs(upstreams) do
     local sentinel_addr = addr:get_addr()
     if not sentinel_addr then
       addr:fail()
       last_err = 'sentinel address not resolved'
     else
       local options = {
+        connection = connection,
         host = sentinel_addr,
-        timeout = attrs.timeout or redis_params.timeout or 1.0,
+        timeout = attrs.timeout or connection.timeout or redis_params.timeout or 1.0,
         config = attrs.config or rspamd_config,
         ev_base = attrs.ev_base,
         session = attrs.session,
         no_pool = true,
       }
-      if redis_params.sentinel_username then
-        options.username = redis_params.sentinel_username
-      end
-      if redis_params.sentinel_password then
-        options.password = redis_params.sentinel_password
-      end
 
       local masters, err = nil, nil
       local conn_ok, conn = rspamd_redis.connect_sync(options)
@@ -2341,9 +2229,11 @@ local function redis_resolve_sentinels_sync(redis_params, attrs)
         else
           masters = {}
           for _, m in ipairs(masters_result) do
-            local master = flatten_redis_table(m)
-            if master.ip and master.ip:match(':') then
-              master.ip = '[' .. master.ip .. ']'
+            local master = sentinel_node(m, true)
+            if not master then
+              masters = nil
+              err = 'invalid master returned by sentinel'
+              break
             end
             if redis_params.sentinel_masters_pattern then
               if master.name and master.name:match(redis_params.sentinel_masters_pattern) then
@@ -2381,20 +2271,23 @@ local function redis_resolve_sentinels_sync(redis_params, attrs)
             break
           end
           for _, s in ipairs(s_result) do
-            local slave = flatten_redis_table(s)
-            if slave.ip and slave.ip:match(':') then
-              slave.ip = '[' .. slave.ip .. ']'
+            local slave = sentinel_node(s, false)
+            if not slave then
+              all_ok = false
+              err = 'invalid replica returned by sentinel'
+              break
             end
             master.slaves[#master.slaves + 1] = slave
           end
+          if not all_ok then break end
         end
         if all_ok then
-          addr:ok()
           local ok, apply_err = apply_sentinel_topology(redis_params, masters)
           if ok then
+            addr:ok()
             return true
           end
-          return false, apply_err
+          err = apply_err
         end
       end
 
@@ -2435,15 +2328,13 @@ local function redis_load_scripts_sync(redis_params, attrs, script_filter)
         for idx, opt in ipairs(opts) do
           if not opt.skip and script.servers_ready[idx] ~= 'done' then
             local options = {
+              connection = opt.connection,
               host = opt.host,
               timeout = attrs.timeout or script.redis_params.timeout or 1.0,
               config = attrs.config or rspamd_config,
               ev_base = attrs.ev_base,
               session = attrs.session,
             }
-            if opt.username then options.username = opt.username end
-            if opt.password then options.password = opt.password end
-            if opt.dbname then options.dbname = opt.dbname end
 
             local ok, conn = rspamd_redis.connect_sync(options)
             if not ok then

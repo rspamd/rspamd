@@ -704,6 +704,18 @@ gboolean rspamd_lua_require_function(lua_State *L, const char *modname,
 gboolean rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 								   struct rspamd_config *cfg, int *ref_id);
 
+struct rspamd_redis_connection_opts;
+/**
+ * Decode a Redis connection table, or the `connection` table of a request.
+ * A nested connection is authoritative; flat request fields are supported for
+ * existing callers. Strings are copied when pool is non-NULL. Otherwise they
+ * are borrowed and kept alive on the Lua stack. The caller restores the stack
+ * after consuming the options (or after decoding when strings were copied).
+ */
+void rspamd_lua_redis_parse_connection(lua_State *L, int index,
+									   struct rspamd_redis_connection_opts *opts,
+									   rspamd_mempool_t *pool);
+
 struct rspamd_stat_token_s;
 
 /**

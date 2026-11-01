@@ -34,6 +34,14 @@ struct rspamd_redis_tls_opts {
 	const char *sni;       /* optional */
 };
 
+/* Connection identity, independent of the selected endpoint and request. */
+struct rspamd_redis_connection_opts {
+	const char *dbname;
+	const char *username;
+	const char *password;
+	struct rspamd_redis_tls_opts tls;
+};
+
 /**
  * Creates new redis pool
  * @return
@@ -73,6 +81,11 @@ struct redisAsyncContext *rspamd_redis_pool_connect_ext(
 	const char *db, const char *username, const char *password,
 	const char *ip, int port,
 	const struct rspamd_redis_tls_opts *tls);
+
+/** Create or reuse a connection using the complete connection configuration. */
+struct redisAsyncContext *rspamd_redis_pool_connect_opts(
+	void *pool, const struct rspamd_redis_connection_opts *opts,
+	const char *ip, int port);
 
 enum rspamd_redis_pool_release_type {
 	RSPAMD_REDIS_RELEASE_DEFAULT = 0,
