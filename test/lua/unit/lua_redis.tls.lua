@@ -5,6 +5,8 @@ context("lua_redis connection options", function()
   local rspamd_ip = require "rspamd_ip"
 
   local function with_connection(f, check)
+    local saved_config = rspamd_config
+    _G.rspamd_config = { add_on_load = function() end, add_periodic = function() end }
     local addr = rspamd_ip.from_string('127.0.0.1:6379')
     local upstream = {
       get_name = function() return 'redis.example' end,
@@ -46,6 +48,7 @@ context("lua_redis connection options", function()
     }
     local ok, err = pcall(f, params, addr)
     package.loaded.rspamd_redis = saved
+    _G.rspamd_config = saved_config
 
     assert(ok, tostring(err))
     assert(captured)
