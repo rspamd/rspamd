@@ -47,14 +47,14 @@ local take_report_script = [[
 local index_key = KEYS[1]
 local report_key = KEYS[2]
 local max_entries = -(tonumber(KEYS[3]) + 1)
-local keys_expiry = tonumber(KEYS[4])
+local keys_expiry = math.floor(tonumber(KEYS[4]) or 172800)
 local dmarc_domain = ARGV[1]
 local report = ARGV[2]
 redis.call('SADD', index_key, report_key)
-redis.call('EXPIRE', index_key, 172800)
+redis.call('EXPIRE', index_key, keys_expiry)
 redis.call('ZINCRBY', report_key, 1, report)
 redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
-redis.call('EXPIRE', report_key, 172800)
+redis.call('EXPIRE', report_key, keys_expiry)
 ]]
 
 -- Publish the policy evaluation result so that other modules (e.g. fuzzy_check)

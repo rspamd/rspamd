@@ -171,6 +171,35 @@ DMARC REPORT INDEX UPDATED
   Should Contain  ${members}  dmarc_rpt
   ...  msg=DMARC index should contain reference to report key
 
+DMARC REPORT KEYS EXPIRE AS CONFIGURED
+  [Documentation]  The collected report data expires after reporting.keys_expire,
+  ...  which merged-local.conf sets to 1h, rather than a fixed 2 days
+  ${idx_key} =  Get DMARC Index Key
+  ${idx_ttl} =  Redis Command  TTL  ${idx_key}
+  Should Be True  0 < ${idx_ttl} <= 3600
+  ...  msg=Index key TTL ${idx_ttl} should follow keys_expire
+  ${report_key} =  Get DMARC Report Key  reject.cacophony.za.org  mailto:dmarc-reports@rspamd.com
+  ${report_ttl} =  Redis Command  TTL  ${report_key}
+  Should Be True  0 < ${report_ttl} <= 3600
+  ...  msg=Report key TTL ${report_ttl} should follow keys_expire
+
+DMARC REPORT SKIPS A DATE CLAIMED BY ANOTHER RUN
+  [Documentation]  When another run has claimed a date, rspamadm dmarc_report
+  ...  must leave its _processing key alone and skip the date
+  ${idx_key} =  Set Variable  dmarc_idx;20000101
+  Redis Command  SADD  ${idx_key}  dmarc_rpt;example.net;mailto:dmarc@example.net;20000101
+  Redis Command  SADD  ${idx_key}_processing  claimed-by-other-run
+  ${result} =  Run DMARC Report  20000101
+  Should Be Equal As Integers  ${result.rc}  0
+  Should Contain  ${result.stdout}${result.stderr}  Skip reports for 20000101: cannot claim them
+  ${exists} =  Redis Key Exists  ${idx_key}
+  Should Be Equal As Integers  ${exists}  1
+  ...  msg=The unclaimed index key should be left in place
+  ${members} =  Redis Get Set Members  ${idx_key}_processing
+  Should Be Equal  ${members}  claimed-by-other-run
+  ...  msg=The other run's key must not be overwritten
+  [Teardown]  Redis Command  DEL  ${idx_key}  ${idx_key}_processing
+
 DMARC REPORT NO RUA DOMAIN SKIPS REDIS
   [Documentation]  Test that DMARC report is not saved for domains without rua configured
   ...  Using fail_quarantine.eml which uses quarantine.cacophony.za.org (no rua)
@@ -220,6 +249,30 @@ Redis Get Set Members
   ...  SMEMBERS  ${key}
   Should Be Equal As Integers  ${result.rc}  0
   RETURN    ${result.stdout}
+
+Redis Command
+  [Documentation]  Run a Redis command and return its output
+  [Arguments]  @{args}
+  ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
+  ...  @{args}
+  Should Be Equal As Integers  ${result.rc}  0
+  RETURN    ${result.stdout}
+
+Run DMARC Report
+  [Documentation]  Run rspamadm dmarc_report against the merged config
+  [Arguments]  @{args}
+  ${result} =  Run Process  ${RSPAMADM}
+  ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=DBDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=LOCAL_CONFDIR\=/non-existent
+  ...  --var\=CONFDIR\=${RSPAMD_TESTDIR}/../../conf/
+  ...  dmarc_report  -c  ${RSPAMD_TESTDIR}/configs/merged.conf  @{args}
+  ...  env:RSPAMD_LOCAL_CONFDIR=/non-existent
+  ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
+  Log  ${result.stdout}
+  Log  ${result.stderr}
+  RETURN    ${result}
 
 Redis Get Sorted Set Members
   [Documentation]  Get all members of a Redis sorted set
