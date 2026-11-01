@@ -240,7 +240,7 @@ worker "normal" {{ bind_socket="127.0.0.1:{scanner}"; count=1; task_timeout=5s; 
 sentinel_probe {{ {options} }}
 lua="{probe}";
 ''')
-        start([args.rspamd, '-f', '-c', config], 'rspamd')
+        start([args.rspamd, '-f', '--insecure', '-c', config], 'rspamd')
 
         def scan():
             request = urllib.request.Request(f'http://127.0.0.1:{scanner}/checkv2',
