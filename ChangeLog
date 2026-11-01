@@ -3,6 +3,9 @@ Unreleased
   ** Incompatible changes **
   * [Fix] Symbol options now percent-encode %, [, ], semicolon and braces at insertion; commas remain valid option data. X-Spamd-Result and ClickHouse additionally encode commas within each option before joining options with commas. Split these lists before percent-decoding individual options once; Lua rules, composites and multimap symbol_options see the stored values. Historical ClickHouse rows keep their previous ambiguous format and must not be decoded using the new contract.
 
+  ** Bug fixes **
+  * [Fix] lua_aliases: Reject external maps for equivalent domains instead of accepting them and failing every synchronous lookup (custom equivalent domains never folded)
+
 4.2.3: 21 Oct 2026
 
   ** Incompatible changes **

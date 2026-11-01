@@ -636,6 +636,16 @@ local function init_equivalent_domains(rspamd_config, def)
     return false
   end
 
+  if type(def) == 'table' and def.external then
+    -- External maps are queried per key and need a task context, but
+    -- canonical_domain folds domains synchronously while comparing
+    -- addresses, so such a map would fail every lookup
+    rspamd_logger.errx(rspamd_config,
+        'external maps are not supported for equivalent domains: ' ..
+        'use a fully loaded map or an inline table')
+    return false
+  end
+
   if type(def) == 'table' and not def[1] and not def.url and not def.urls
       and not def.external then
     for alias, canonical in pairs(def) do
