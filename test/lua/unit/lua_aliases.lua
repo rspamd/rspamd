@@ -119,4 +119,13 @@ context("Lua aliases - mailbox_identity", function()
     assert_equal(lua_aliases.canonical_domain('googlemail.com'), 'gmail.com')
     assert_false(lua_aliases.init_equivalent_domains(nil, nil))
   end)
+
+  test('external map definitions are rejected', function()
+    -- External maps are queried per key and cannot serve the synchronous
+    -- canonical_domain lookups, so both flavours must be refused upfront
+    assert_false(lua_aliases.init_equivalent_domains(nil,
+        { external = true, cdb = '/nonexistent.cdb' }))
+    assert_false(lua_aliases.init_equivalent_domains(nil,
+        { external = true, backend = 'http://127.0.0.1:1/backend' }))
+  end)
 end)
