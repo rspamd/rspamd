@@ -141,6 +141,83 @@ TEST_SUITE("rspamd_maps")
 		cfg->libs_ctx = nullptr;
 		rspamd_config_free(cfg);
 	}
+
+	TEST_CASE("map HTTP failures are classified")
+	{
+		for (int code: {301, 302, 400, 401, 403, 404, 410, 451}) {
+			CAPTURE(code);
+			CHECK(rspamd_map_http_error_class(code, false) == RSPAMD_MAP_ERROR_PERMANENT);
+			CHECK(rspamd_map_http_error_class(code, true) == RSPAMD_MAP_ERROR_PERMANENT);
+		}
+
+		for (int code: {408, 500, 502, 503, 504}) {
+			CAPTURE(code);
+			CHECK(rspamd_map_http_error_class(code, false) == RSPAMD_MAP_ERROR_TRANSIENT);
+		}
+
+		/* Rate limiting with no time given backs off as hard as a refusal */
+		CHECK(rspamd_map_http_error_class(429, false) == RSPAMD_MAP_ERROR_PERMANENT);
+		CHECK(rspamd_map_http_error_class(429, true) == RSPAMD_MAP_ERROR_TRANSIENT);
+	}
+
+	TEST_CASE("map retry delay after a failure")
+	{
+		const double poll = 300.0;
+		const auto delays = [&](enum rspamd_map_error_class cls, bool has_data) {
+			std::vector<double> out;
+
+			for (unsigned int streak = 1; streak <= 7; streak++) {
+				out.push_back(rspamd_map_error_delay(poll, cls, streak, has_data, 0));
+			}
+
+			return out;
+		};
+
+		SUBCASE("transient failure of a map with no data never waits past the poll interval")
+		{
+			CHECK(delays(RSPAMD_MAP_ERROR_TRANSIENT, false) ==
+				  std::vector<double>{10, 20, 40, 80, 160, 300, 300});
+			CHECK(rspamd_map_error_delay(poll, RSPAMD_MAP_ERROR_TRANSIENT, 1000000, false, 0) == poll);
+		}
+
+		SUBCASE("transient failure of a map with data backs off up to 20 poll intervals")
+		{
+			CHECK(delays(RSPAMD_MAP_ERROR_TRANSIENT, true) ==
+				  std::vector<double>{300, 600, 1200, 2400, 4800, 6000, 6000});
+			CHECK(rspamd_map_error_delay(poll, RSPAMD_MAP_ERROR_TRANSIENT, 1000000, true, 0) == 6000);
+		}
+
+		SUBCASE("permanent failure of a map with no data is tried once more at the poll interval")
+		{
+			CHECK(delays(RSPAMD_MAP_ERROR_PERMANENT, false) ==
+				  std::vector<double>{300, 6000, 6000, 6000, 6000, 6000, 6000});
+		}
+
+		SUBCASE("permanent failure of a map with data backs off at once")
+		{
+			CHECK(delays(RSPAMD_MAP_ERROR_PERMANENT, true) ==
+				  std::vector<double>{6000, 6000, 6000, 6000, 6000, 6000, 6000});
+		}
+
+		SUBCASE("Retry-After is honoured within limits")
+		{
+			for (auto cls: {RSPAMD_MAP_ERROR_TRANSIENT, RSPAMD_MAP_ERROR_PERMANENT}) {
+				for (bool has_data: {false, true}) {
+					CHECK(rspamd_map_error_delay(poll, cls, 1, has_data, 120) == 120);
+					CHECK(rspamd_map_error_delay(poll, cls, 5, has_data, 120) == 120);
+					CHECK(rspamd_map_error_delay(poll, cls, 1, has_data, 100000) == 6000);
+					CHECK(rspamd_map_error_delay(poll, cls, 1, has_data, 0.5) == 2);
+				}
+			}
+		}
+
+		SUBCASE("poll interval shorter than the first transient retry")
+		{
+			CHECK(rspamd_map_error_delay(5, RSPAMD_MAP_ERROR_TRANSIENT, 1, false, 0) == 5);
+			CHECK(rspamd_map_error_delay(5, RSPAMD_MAP_ERROR_TRANSIENT, 4, false, 0) == 5);
+			CHECK(rspamd_map_error_delay(5, RSPAMD_MAP_ERROR_TRANSIENT, 4, true, 0) == 40);
+		}
+	}
 }
 
 #endif
