@@ -35,6 +35,7 @@ local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local lua_maps = require "lua_maps"
+local lua_greylist = require "lua_greylist"
 
 local N = "mx_check"
 local CRLF = '\r\n'
@@ -795,7 +796,7 @@ local function should_greylist(task, kind)
 end
 
 local function advise_greylist(task, reason)
-  task:get_mempool():set_variable('grey_greylisted_required', '1')
+  lua_greylist.request_classic(task)
   lua_util.debugm(N, task, 'advice to greylist: %s', reason)
 end
 

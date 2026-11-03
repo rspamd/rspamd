@@ -79,6 +79,7 @@ local redis_params
 local whitelisted_ip
 local whitelist_domains_map
 local toint = math.ifloor or math.floor
+local lua_greylist = require "lua_greylist"
 local settings = {
   expire = 86400, -- 1 day by default
   timeout = 300, -- greylisting period: 5 minutes by default
@@ -206,32 +207,48 @@ local function envelope_key(task)
   return b32
 end
 
--- Returns pair of booleans: found,greylisted
+-- Returns found,greylisted,end_time (end_time is only set when greylisted)
 local function check_time(task, tm, type, now)
-  local t = tonumber(tm)
+  local record = lua_greylist.decode_record(tm, settings.timeout)
 
-  if not t then
-    rspamd_logger.errx(task, 'not a valid number: %s', tm)
+  if not record then
+    rspamd_logger.errx(task, 'invalid greylist record: %s', tm)
     return false, false
   end
 
-  local age = now - t
-  if age < settings['timeout'] then
+  local timeout = record.timeout
+  local requested_by = record.module
+  local age = now - record.timestamp
+  local records = task:cache_get('greylist_records') or {}
+  records[type] = record
+  task:cache_set('greylist_records', records)
+  if lua_greylist.record_pending(record, now) then
+    if requested_by and requested_by ~= '' then
+      -- Keep reporting who asked for the wait on every retry
+      task:cache_set('greylist_module', requested_by)
+    end
     lua_util.debugm(N, task, 'check_time(%s): record too young, age=%s, timeout=%s, greylisted',
-        type, age, settings['timeout'])
-    return true, true
+        type, age, timeout)
+    return true, true, record.timestamp + timeout
   else
     -- We just set variable to pass when in post-filter stage
-    task:get_mempool():set_variable("grey_whitelisted", type)
+    if task:get_mempool():get_variable("grey_whitelisted") ~= 'body' then
+      task:get_mempool():set_variable("grey_whitelisted", type)
+    end
     lua_util.debugm(N, task, 'check_time(%s): record mature, age=%s, timeout=%s, whitelisted',
-        type, age, settings['timeout'])
+        type, age, timeout)
 
     return true, false
   end
 end
 
 local function greylist_message(task, end_time, why)
-  task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time, why)
+  local requested_by = task:cache_get('greylist_module')
+  if requested_by then
+    task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time, why, 'by:' .. requested_by)
+  else
+    task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time, why)
+  end
 
   if not settings.check_local and rspamd_lua_utils.is_rspamc_or_controller(task) then
     return
@@ -302,25 +319,26 @@ local function greylist_check(task)
           data[1], type(data[1]), data[2], type(data[2]))
 
       if data[1] and type(data[1]) ~= 'userdata' then
-        local tm = tonumber(data[1]) or now
-        ret_body, greylisted_body = check_time(task, data[1], 'body', now)
+        ret_body, greylisted_body, end_time_body = check_time(task, data[1], 'body', now)
         if greylisted_body then
-          end_time_body = tm + settings['timeout']
           task:get_mempool():set_variable("grey_greylisted_body",
               rspamd_util.time_to_string(end_time_body))
         end
       end
 
       if data[2] and type(data[2]) ~= 'userdata' then
-        if not ret_body or greylisted_body then
-          local tm = tonumber(data[2]) or now
-          ret_meta, greylisted_meta = check_time(task, data[2], 'meta', now)
+        local meta_record = lua_greylist.decode_record(data[2], settings.timeout)
+        if not ret_body or greylisted_body or (meta_record and meta_record.explicit) then
+          ret_meta, greylisted_meta, end_time_meta = check_time(task, data[2], 'meta', now)
 
           if greylisted_meta then
-            end_time_meta = tm + settings['timeout']
             task:get_mempool():set_variable("grey_greylisted_meta",
                 rspamd_util.time_to_string(end_time_meta))
           end
+        elseif meta_record then
+          local records = task:cache_get('greylist_records')
+          records.meta = meta_record
+          task:cache_set('greylist_records', records)
         end
       end
 
@@ -332,8 +350,12 @@ local function greylist_check(task)
         task:get_mempool():set_variable("grey_greylisted", 'true')
         lua_util.debugm(N, task, 'no existing record found, will greylist as new')
       elseif greylisted_body and greylisted_meta then
-        end_time_str = rspamd_util.time_to_string(
-            math.min(end_time_body, end_time_meta))
+        local records = task:cache_get('greylist_records')
+        local deadline = end_time_body
+        if records.meta.explicit and end_time_meta then
+          deadline = math.max(deadline, end_time_meta)
+        end
+        end_time_str = rspamd_util.time_to_string(deadline)
         how = 'meta and body'
       elseif greylisted_body then
         end_time_str = rspamd_util.time_to_string(end_time_body)
@@ -374,6 +396,11 @@ end
 local function greylist_set(task)
   local action = task:get_metric_action()
   local ip = task:get_ip()
+  local requests = lua_greylist.get_requests(task)
+  local explicit_request = requests.body or requests.meta
+  -- grey_greylisted_required is the pre-lua_greylist interface, still used by custom rules
+  local do_greylisting_required = explicit_request or requests.classic or
+      task:get_mempool():get_variable('grey_greylisted_required')
 
   lua_util.debugm(N, task, 'greylist_set: action=%s, ip=%s', action, ip)
 
@@ -398,17 +425,16 @@ local function greylist_set(task)
 
   -- We need to update this on each scan, as it can vary per settings or be redefined dynamically
   local greylist_min_score = settings.greylist_min_score or task:get_metric_threshold('greylist')
-  if greylist_min_score then
-    local score = task:get_metric_score()[1]
-    if score < greylist_min_score then
-      rspamd_logger.infox(task, 'Score too low - skip greylisting')
-      if action == 'greylist' then
-        -- We are going to accept message
-        rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
-        task:disable_action('greylist')
-      end
-      return
+  local score_too_low = greylist_min_score and task:get_metric_score()[1] < greylist_min_score
+  -- A requested custom delay does not depend on the score of the message
+  if score_too_low and not explicit_request then
+    rspamd_logger.infox(task, 'Score too low - skip greylisting')
+    if action == 'greylist' then
+      -- We are going to accept message
+      rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
+      task:disable_action('greylist')
     end
+    return
   end
 
   if ((not settings.check_authed and task:get_user()) or
@@ -434,10 +460,21 @@ local function greylist_set(task)
 
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
   local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
-  local do_greylisting_required = task:get_mempool():get_variable("grey_greylisted_required")
 
   lua_util.debugm(N, task, 'greylist_set: is_whitelisted=%s, do_greylisting=%s, do_greylisting_required=%s',
       is_whitelisted, do_greylisting, do_greylisting_required)
+
+  if explicit_request and is_whitelisted then
+    local records = task:cache_get('greylist_records') or {}
+    local now = rspamd_util.get_time()
+    for _, scope in ipairs({ 'body', 'meta' }) do
+      local request = requests[scope]
+      local record = records[scope]
+      if not lua_greylist.request_satisfied(record, request, settings.timeout, now) then
+        is_whitelisted = nil
+      end
+    end
+  end
 
   -- Third and second level domains whitelist
   if not is_whitelisted and whitelist_domains_map then
@@ -510,30 +547,48 @@ local function greylist_set(task)
     if not settings.check_local and is_rspamc then
       return
     end
-    local t = tostring(toint(rspamd_util.get_time()))
-    local end_time = rspamd_util.time_to_string(t + settings['timeout'])
+    local now = toint(rspamd_util.get_time())
+    local records = task:cache_get('greylist_records') or {}
+    local classic = not score_too_low and (requests.classic or action ~= 'no action')
+    local writes = {}
+    local deadline = now
+    for _, scope in ipairs({ 'body', 'meta' }) do
+      local request = requests[scope]
+      if request or classic then
+        local plan = lua_greylist.plan_record(records[scope], request, settings.timeout, settings.expire, now)
+        writes[#writes + 1] = {
+          scope == 'body' and body_key or meta_key,
+          tostring(plan.expire),
+          lua_greylist.encode_record(plan),
+        }
+        if plan.deadline > deadline then
+          deadline = plan.deadline
+          task:cache_set('greylist_module', plan.module)
+        end
+      end
+    end
+    local end_time = rspamd_util.time_to_string(deadline)
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
     greylist_message(task, end_time, 'new record')
     -- Create new record
-    lua_util.debugm(N, task, 'greylist_set: SETEX %s %s %s (new record)',
-        body_key, settings['expire'], t)
+    if #writes == 0 then
+      return
+    end
     ret, conn, upstream = lua_redis.redis_make_request(task,
         redis_params, -- connect params
         hash_key, -- hash key
         true, -- is write
         redis_set_cb, --callback
         'SETEX', -- command
-        { body_key, tostring(toint(settings['expire'])), t } -- arguments
+        writes[1] -- arguments
     )
 
-    if ret then
-      lua_util.debugm(N, task, 'greylist_set: SETEX %s %s %s',
-          meta_key, settings['expire'], t)
-      conn:add_cmd('SETEX', {
-        meta_key, tostring(toint(settings['expire'])), t
-      })
-    else
+    if not ret then
       rspamd_logger.errx(task, 'got error while connecting to redis')
+    else
+      for index = 2, #writes do
+        conn:add_cmd('SETEX', writes[index])
+      end
     end
   else
     if action ~= 'no action' and action ~= 'reject' then

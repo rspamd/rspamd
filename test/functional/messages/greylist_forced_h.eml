@@ -1,0 +1,9 @@
+From: sender@example.com
+To: rcpt@example.com
+Subject: greylist forced h
+Date: Mon, 6 Jul 2015 10:35:56 +0200
+Message-ID: <greylist-forced-h@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+
+Greylist forced delay fixture h, unique body hhh.
