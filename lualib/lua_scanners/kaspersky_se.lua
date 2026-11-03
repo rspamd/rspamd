@@ -244,7 +244,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
             end
           elseif data == 'CLEAN AND CONTAINS OFFICE MACRO' then
             common.yield_result(task, rule, 'File contains macros',
-                0.0, 'macro', maybe_part)
+                1.0, 'macro', maybe_part)
             cached = 'MACRO'
           else
             rspamd_logger.errx(task, '%s: unhandled clean response: %s', rule.log_prefix, data)
@@ -265,7 +265,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
           if why == 'PASSWORD PROTECTED' then
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
             common.yield_result(task, rule, 'File is encrypted: ' .. why,
-                0.0, 'encrypted', maybe_part)
+                1.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
           else
             common.yield_result(task, rule, 'unhandled response:' .. data,

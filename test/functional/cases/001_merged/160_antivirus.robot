@@ -10,6 +10,7 @@ ${MESSAGE}          ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${SETTINGS_AVAST}   {symbols_enabled = [AVAST_VIRUS]}
 ${SETTINGS_CLAM}    {symbols_enabled = [CLAM_VIRUS]}
 ${SETTINGS_FPROT}   {symbols_enabled = [FPROT_VIRUS, FPROT2_VIRUS_DUPLICATE_DEFAULT]}
+${SETTINGS_CLAM_WL}   {symbols_enabled = [CLAM_WL_VIRUS]}
 
 *** Test Cases ***
 CLAMAV MISS
@@ -99,6 +100,14 @@ AVAST CACHE MISS
   ...  Settings=${SETTINGS_AVAST}
   Do Not Expect Symbol  AVAST_VIRUS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
+
+CLAMAV WHITELIST HIT
+  ${process} =  Run Dummy Clam  ${RSPAMD_PORT_CLAM_WL}  1
+  Scan File  ${MESSAGE2}
+  ...  Settings=${SETTINGS_CLAM_WL}
+  Expect Symbol  CLAM_WL_VIRUS_IGNORE
+  Do Not Expect Symbol  CLAM_WL_VIRUS
+  [Teardown]  Terminate Process  ${process}
 
 *** Keywords ***
 Double FProt Teardown
