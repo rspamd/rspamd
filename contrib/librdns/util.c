@@ -606,17 +606,19 @@ rdns_ioc_new (struct rdns_server *serv,
 	if (is_tcp) {
 		/* We also need to connect a TCP channel and set a TCP buffer */
 		nioc->tcp = (struct rdns_tcp_channel *)(((unsigned char *)nioc) + sizeof(*nioc));
+		nioc->flags |= RDNS_CHANNEL_TCP;
 
 		if (!rdns_ioc_tcp_connect(nioc)) {
-			rdns_err ("cannot connect TCP socket to %s: %s", serv->name,
-					strerror (errno));
-			close (nioc->sock);
-			free (nioc);
-
-			return NULL;
+			/*
+			 * Keep the channel: the socket is already closed and
+			 * rdns_ioc_tcp_connect() opens a new one when a truncated reply
+			 * is rescheduled over TCP. Nothing creates TCP channels after
+			 * rdns_resolver_init(), so dropping it here would leave the
+			 * server without TCP for the lifetime of the process.
+			 */
+			rdns_warn ("TCP channel to %s is not connected, will retry on demand",
+					serv->name);
 		}
-
-		nioc->flags |= RDNS_CHANNEL_TCP;
 	}
 	else {
 		nioc->flags |= RDNS_CHANNEL_ACTIVE;
