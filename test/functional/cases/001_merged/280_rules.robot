@@ -386,3 +386,16 @@ SUBJECT_HAS_CURRENCY
   Scan File  ${RSPAMD_TESTDIR}/messages/currency.eml
   ...  Settings={symbols_enabled = [SUBJECT_HAS_CURRENCY]}
   Expect Symbol  SUBJECT_HAS_CURRENCY
+
+APPLE_IOS_MAILER FIVE DIGIT BUILD
+  # iOS 27.2 on iPhone Duo: five digits after the build letter (#6349)
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_duo.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  APPLE_IOS_MAILER
+  Do Not Expect Symbol  FORGED_X_MAILER
+
+FORGED_X_MAILER NOT IOS BUILD
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_forged.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  FORGED_X_MAILER
+  Do Not Expect Symbol  APPLE_IOS_MAILER
