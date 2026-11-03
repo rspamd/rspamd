@@ -3859,7 +3859,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			/* Do oversigning */
 			unsigned int count = 0;
 
-			rh = rspamd_message_get_header_array(task, dh->name, false);
+			rh = rspamd_message_get_header_array(task, dh->name, true);
 
 			if (rh) {
 				DL_FOREACH(rh, cur)
@@ -3888,7 +3888,7 @@ rspamd_dkim_sign(struct rspamd_task *task, const char *selector,
 			}
 		}
 		else {
-			rh = rspamd_message_get_header_array(task, dh->name, false);
+			rh = rspamd_message_get_header_array(task, dh->name, true);
 
 			if (rh) {
 				if (hstat.s.count > 0) {
