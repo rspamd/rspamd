@@ -1367,8 +1367,14 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 				}
 			}
 
-			if ((ret = rspamd_mime_process_multipart_node(task, cb->st,
-														  cb->multipart, cb->part_start, part_end, TRUE, cb->err)) != RSPAMD_MIME_PARSE_OK) {
+			ret = rspamd_mime_process_multipart_node(task, cb->st,
+													 cb->multipart, cb->part_start, part_end, TRUE, cb->err);
+
+			/*
+			 * An empty part (two delimiters separated by a line break only)
+			 * has nothing to parse, but the parts after it must still be parsed
+			 */
+			if (ret != RSPAMD_MIME_PARSE_OK && ret != RSPAMD_MIME_PARSE_NO_PART) {
 				return ret;
 			}
 
@@ -2268,12 +2274,13 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 				if (end > start &&
 					(ret = rspamd_mime_process_multipart_node(task, nst,
 															  NULL, start, end, FALSE, err)) != RSPAMD_MIME_PARSE_OK) {
-					if (nst != st) {
-						rspamd_mime_parse_stack_free(nst);
+					if (ret == RSPAMD_MIME_PARSE_NO_PART) {
+						/* Garbage between two boundaries, look further */
+						continue;
 					}
 
-					if (ret == RSPAMD_MIME_PARSE_NO_PART) {
-						return RSPAMD_MIME_PARSE_OK;
+					if (nst != st) {
+						rspamd_mime_parse_stack_free(nst);
 					}
 
 					return ret;

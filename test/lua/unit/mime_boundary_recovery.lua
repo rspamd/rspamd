@@ -6,6 +6,9 @@ looks it up there: a boundary named `b4--` reopens a `--b4--` line that would
 otherwise close its parent, so the parent goes on and the parts after that line
 are parsed. That search must not be dropped or limited, or such content is no
 longer scanned.
+
+Nothing that a mail client shows after an empty part or a garbage region is
+skipped.
 ]]
 
 context("MIME boundary recovery", function()
@@ -93,5 +96,24 @@ context("MIME boundary recovery", function()
     local hosts = hosts_of(table.concat(lines, "\r\n"))
     assert_true(hosts["recovered.example.org"], "url after the reopened boundary is missing")
     assert_true(hosts["second.example.org"], "url of the last part is missing")
+  end)
+
+  test("an empty part does not hide the parts after it", function()
+    local hosts = hosts_of(table.concat({
+      "From: sender@example.com",
+      "To: rcpt@example.com",
+      "MIME-Version: 1.0",
+      "Content-Type: multipart/mixed; boundary=\"b\"",
+      "",
+      "--b",
+      "",
+      "--b",
+      "Content-Type: text/plain",
+      "",
+      "see http://after-empty.example.org/ now",
+      "--b--",
+      "",
+    }, "\r\n"))
+    assert_true(hosts["after-empty.example.org"], "url after the empty part is missing")
   end)
 end)
