@@ -200,6 +200,37 @@ rspamd_mime_parser_check_part_limit(struct rspamd_task *task, GError **err)
 	return TRUE;
 }
 
+/*
+ * Parser-created parts get their headers table with a reference owned by the
+ * task pool, so a part that is rejected before it gets here does not leak it.
+ * The message parts array owns the extra reference taken here.
+ */
+static void
+rspamd_mime_parser_register_part(struct rspamd_task *task,
+								 struct rspamd_mime_part *part)
+{
+	part->part_number = MESSAGE_FIELD(task, parts)->len;
+	part->urls = g_ptr_array_new();
+
+	if (part->raw_headers) {
+		rspamd_message_headers_ref(part->raw_headers);
+	}
+
+	g_ptr_array_add(MESSAGE_FIELD(task, parts), part);
+}
+
+static struct rspamd_mime_headers_table *
+rspamd_mime_parser_new_headers(struct rspamd_task *task)
+{
+	struct rspamd_mime_headers_table *hdrs = rspamd_message_headers_new();
+
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_message_headers_unref,
+								  hdrs);
+
+	return hdrs;
+}
+
 const char *
 rspamd_cte_to_string(enum rspamd_cte ct)
 {
@@ -881,9 +912,7 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 		g_assert_not_reached();
 	}
 
-	part->part_number = MESSAGE_FIELD(task, parts)->len;
-	part->urls = g_ptr_array_new();
-	g_ptr_array_add(MESSAGE_FIELD(task, parts), part);
+	rspamd_mime_parser_register_part(task, part);
 	msg_debug_mime("parsed data part %T/%T of length %z (%z orig), %s cte",
 				   &part->ct->type, &part->ct->subtype, part->parsed_data.len,
 				   part->raw_data.len, rspamd_cte_to_string(part->cte));
@@ -1181,7 +1210,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	npart = rspamd_mempool_alloc0(task->task_pool,
 								  sizeof(struct rspamd_mime_part));
 	npart->parent_part = multipart;
-	npart->raw_headers = rspamd_message_headers_new();
+	npart->raw_headers = rspamd_mime_parser_new_headers(task);
 	npart->headers_order = NULL;
 
 	if (multipart) {
@@ -1521,9 +1550,7 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 		return RSPAMD_MIME_PARSE_LIMIT;
 	}
 
-	part->part_number = MESSAGE_FIELD(task, parts)->len;
-	part->urls = g_ptr_array_new();
-	g_ptr_array_add(MESSAGE_FIELD(task, parts), part);
+	rspamd_mime_parser_register_part(task, part);
 	st->nesting++;
 	rspamd_mime_part_get_cte(task, part, part->raw_headers, FALSE);
 
@@ -1865,8 +1892,8 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 											MESSAGE_FIELD(task, raw_headers_content).begin,
 											MESSAGE_FIELD(task, raw_headers_content).len,
 											TRUE);
-				npart->raw_headers = rspamd_message_headers_ref(
-					MESSAGE_FIELD(task, raw_headers));
+				/* Owned by the message, registering the part takes a ref */
+				npart->raw_headers = MESSAGE_FIELD(task, raw_headers);
 
 				/* Preserve the natural order */
 				if (MESSAGE_FIELD(task, headers_order)) {
@@ -1895,8 +1922,8 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 												MESSAGE_FIELD(task, raw_headers_content).begin,
 												MESSAGE_FIELD(task, raw_headers_content).len,
 												TRUE);
-					npart->raw_headers = rspamd_message_headers_ref(
-						MESSAGE_FIELD(task, raw_headers));
+					/* Owned by the message, registering the part takes a ref */
+					npart->raw_headers = MESSAGE_FIELD(task, raw_headers);
 
 					/* Preserve the natural order */
 					if (MESSAGE_FIELD(task, headers_order)) {
@@ -1937,7 +1964,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		str.len = part->parsed_data.len;
 
 		hdr_pos = rspamd_string_find_eoh(&str, &body_pos);
-		npart->raw_headers = rspamd_message_headers_new();
+		npart->raw_headers = rspamd_mime_parser_new_headers(task);
 		npart->headers_order = NULL;
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
