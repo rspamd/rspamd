@@ -1765,10 +1765,19 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	cbdata.err = err;
 
 	if (part->ct->boundary.len > 0) {
+		gsize blen = part->ct->boundary.len;
+
 		/* We know our boundary */
 		cbdata.cur_boundary = &part->ct->boundary;
+
+		/* Delimiter lines are hashed without trailing spaces, see preprocess */
+		while (blen > 1 && (cbdata.cur_boundary->begin[blen - 1] == ' ' ||
+							cbdata.cur_boundary->begin[blen - 1] == '\t')) {
+			blen--;
+		}
+
 		rspamd_cryptobox_siphash((unsigned char *) &cbdata.bhash,
-								 cbdata.cur_boundary->begin, cbdata.cur_boundary->len,
+								 cbdata.cur_boundary->begin, blen,
 								 task->cfg->mime_parser_cfg->hkey);
 		msg_debug_mime("hash: %T -> %L", cbdata.cur_boundary, cbdata.bhash);
 	}
@@ -1815,9 +1824,18 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 			p++;
 		}
 
+		/*
+		 * Transport padding may follow a delimiter (RFC 2046, 5.1.1): it is
+		 * not a part of the boundary, which cannot end with a space
+		 */
+		p = text + match_pos;
+
+		while (blen > 0 && (p[blen - 1] == ' ' || p[blen - 1] == '\t')) {
+			blen--;
+		}
+
 		if (blen > 0) {
 			/* We have found something like boundary */
-			p = text + match_pos;
 			bend = p + blen - 1;
 
 			if (*bend == '-') {

@@ -10,8 +10,8 @@ longer scanned.
 Orphan boundaries (that no multipart declares) start parts of their own, also
 inside embedded messages, but the content of each embedded message is parsed
 only once, and nothing that a mail client shows after an empty part or a
-garbage region is skipped. A signature line ("-- ") in a text body stays
-text.
+garbage region is skipped. Delimiters may carry transport padding, while a
+signature line ("-- ") in a text body stays text.
 ]]
 
 context("MIME boundary recovery", function()
@@ -138,6 +138,30 @@ context("MIME boundary recovery", function()
       "",
     }, "\r\n"))
     assert_true(hosts["orphan.example.org"], "url after the orphan boundary is missing")
+  end)
+
+  test("delimiters with transport padding are recognised", function()
+    -- RFC 2046 allows spaces after a delimiter; the boundary itself cannot end with one
+    local hosts = hosts_of(table.concat({
+      "From: sender@example.com",
+      "To: rcpt@example.com",
+      "MIME-Version: 1.0",
+      "Content-Type: multipart/mixed; boundary=\"b\"",
+      "",
+      "--b ",
+      "Content-Type: text/plain",
+      "",
+      "first http://first.example.org/",
+      "--b\t",
+      "Content-Type: text/html",
+      "",
+      "<a href=\"http://padded.example.org/\">x</a>",
+      -- Without padding the close delimiter used to be the only one found
+      "--b--",
+      "",
+    }, "\r\n"))
+    assert_true(hosts["first.example.org"], "url of the first part is missing")
+    assert_true(hosts["padded.example.org"], "url of the second part is missing")
   end)
 
   test("a signature line in a forwarded message does not start a part", function()
