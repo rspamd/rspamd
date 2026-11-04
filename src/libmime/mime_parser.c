@@ -139,7 +139,6 @@ struct rspamd_mime_boundary {
 };
 
 struct rspamd_mime_parser_runtime {
-	GPtrArray *stack;   /* Stack of parts */
 	GArray *boundaries; /* Boundaries found in the whole message */
 	struct rspamd_mime_parser_runtime *root;
 	const char *start;
@@ -1102,11 +1101,15 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 	}
 
 	if (promote_to_message) {
+		enum rspamd_mime_parse_error ret;
+
 		msg_debug_mime("treat part as embedded message (lua_magic)");
-		st->nesting++;
-		g_ptr_array_add(st->stack, npart);
 		npart->part_type = RSPAMD_MIME_PART_MESSAGE;
-		return rspamd_mime_parse_message(task, npart, st, err);
+		st->nesting++;
+		ret = rspamd_mime_parse_message(task, npart, st, err);
+		st->nesting--;
+
+		return ret;
 	}
 
 	return RSPAMD_MIME_PARSE_OK;
@@ -1249,24 +1252,29 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 
 	npart->ct = sel;
 
+	/*
+	 * Nesting is the depth of the current container: it must be restored once
+	 * the child is done, or every sibling container adds to it
+	 */
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-		st->nesting++;
-		g_ptr_array_add(st->stack, npart);
 		npart->part_type = RSPAMD_MIME_PART_MULTIPART;
 		npart->specific.mp = rspamd_mempool_alloc0(task->task_pool,
 												   sizeof(struct rspamd_mime_multipart));
 		memcpy(&npart->specific.mp->boundary, &sel->orig_boundary,
 			   sizeof(rspamd_ftok_t));
+		st->nesting++;
 		ret = rspamd_mime_parse_multipart_part(task, npart, st, err);
+		st->nesting--;
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
-		st->nesting++;
-		g_ptr_array_add(st->stack, npart);
 		npart->part_type = RSPAMD_MIME_PART_MESSAGE;
+		st->nesting++;
 
 		if ((ret = rspamd_mime_parse_normal_part(task, npart, st, sel, err)) == RSPAMD_MIME_PARSE_OK) {
 			ret = rspamd_mime_parse_message(task, npart, st, err);
 		}
+
+		st->nesting--;
 	}
 	else {
 		/* First, decode the part normally */
@@ -1541,11 +1549,7 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	}
 
 	ret = rspamd_multipart_boundaries_filter(task, part, st, &cbdata);
-	/* Cleanup stack */
 	st->nesting--;
-	if (st->stack->len > 0) {
-		g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
-	}
 
 	return ret;
 }
@@ -1807,7 +1811,6 @@ static void
 rspamd_mime_parse_stack_free(struct rspamd_mime_parser_runtime *st)
 {
 	if (st) {
-		g_ptr_array_free(st->stack, TRUE);
 		g_array_free(st->boundaries, TRUE);
 		g_free(st);
 	}
@@ -1921,7 +1924,6 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		 * We allocate new parser context as we need to shift pointers
 		 */
 		nst = g_malloc0(sizeof(*st));
-		nst->stack = g_ptr_array_sized_new(4);
 		nst->boundaries = g_array_sized_new(FALSE, FALSE,
 											sizeof(struct rspamd_mime_boundary), 8);
 		nst->start = part->parsed_data.begin;
@@ -1930,7 +1932,6 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		nst->task = st->task;
 		nst->nesting = st->nesting;
 		nst->root = st->root;
-		st->nesting++;
 
 		str.str = (char *) part->parsed_data.begin;
 		str.len = part->parsed_data.len;
@@ -2016,33 +2017,31 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	}
 
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-		g_ptr_array_add(nst->stack, npart);
-		nst->nesting++;
 		npart->part_type = RSPAMD_MIME_PART_MULTIPART;
 		npart->specific.mp = rspamd_mempool_alloc0(task->task_pool,
 												   sizeof(struct rspamd_mime_multipart));
 		memcpy(&npart->specific.mp->boundary, &sel->orig_boundary,
 			   sizeof(rspamd_ftok_t));
+		nst->nesting++;
 		ret = rspamd_mime_parse_multipart_part(task, npart, nst, err);
+		nst->nesting--;
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
 		/*
 		 * We descend into an embedded message through nst, so the nesting
 		 * limit must be accounted against nst (the runtime that is carried
-		 * into the recursion), not st. Mirror the multipart branch above and
-		 * rspamd_mime_process_multipart_node: push onto the stack and bump
-		 * nst->nesting so the recursive call's cleanup (see below) pops and
-		 * decrements it symmetrically. Without this a chain of message/rfc822
+		 * into the recursion), not st. Without this a chain of message/rfc822
 		 * parts recurses unbounded because max_nested is never reached, which
 		 * exhausts the worker stack.
 		 */
-		g_ptr_array_add(nst->stack, npart);
 		nst->nesting++;
 
 		if ((ret = rspamd_mime_parse_normal_part(task, npart, nst, sel, err)) == RSPAMD_MIME_PARSE_OK) {
 			npart->part_type = RSPAMD_MIME_PART_MESSAGE;
 			ret = rspamd_mime_parse_message(task, npart, nst, err);
 		}
+
+		nst->nesting--;
 	}
 	else {
 		ret = rspamd_mime_parse_normal_part(task, npart, nst, sel, err);
@@ -2057,12 +2056,6 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 			rspamd_mime_parse_stack_free(nst);
 		}
 		return ret;
-	}
-
-	if (part && st->stack->len > 0) {
-		/* Remove message part from the parent stack */
-		g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
-		st->nesting--;
 	}
 
 	/* Process leftovers for boundaries */
@@ -2155,7 +2148,6 @@ rspamd_mime_parse_task(struct rspamd_task *task, GError **err)
 	}
 
 	st = g_malloc0(sizeof(*st));
-	st->stack = g_ptr_array_sized_new(4);
 	st->pos = MESSAGE_FIELD(task, raw_headers_content).body_start;
 	st->end = task->msg.begin + task->msg.len;
 	st->boundaries = g_array_sized_new(FALSE, FALSE,
