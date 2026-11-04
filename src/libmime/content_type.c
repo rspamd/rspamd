@@ -27,6 +27,8 @@
  * from amplifying a bounded input into millions of per-parameter allocations.
  */
 static const unsigned int max_content_type_params = 1024;
+/* Parameters rspamd relies on that are still taken past that cap */
+static const unsigned int max_content_type_params_past_cap = 16;
 
 static gboolean
 rspamd_rfc2231_decode(rspamd_mempool_t *pool,
@@ -326,6 +328,41 @@ rspamd_content_disposition_postprocess(rspamd_mempool_t *pool,
 	}
 }
 
+/*
+ * Parameters rspamd relies on are still taken past the parameters cap: a
+ * reader that follows the RFC takes them from anywhere in the header, so junk
+ * parameters in front must not hide them. A plain name is taken once, RFC 2231
+ * pieces (name*0, name*1*...) as long as they come. Checked without allocating,
+ * and at most max_content_type_params_past_cap of them, so the work is still
+ * bounded whatever the names look like.
+ */
+static gboolean
+rspamd_content_param_keep_past_cap(GHashTable *attrs, unsigned int nparams,
+								   const char *name_start, const char *name_end)
+{
+	static const char *const kept[] = {"boundary", "charset", "name", "filename"};
+	const char *star = memchr(name_start, '*', name_end - name_start);
+	rspamd_ftok_t srch;
+	unsigned int i;
+
+	if (nparams >= max_content_type_params + max_content_type_params_past_cap) {
+		return FALSE;
+	}
+
+	srch.begin = name_start;
+	srch.len = (star ? star : name_end) - name_start;
+
+	for (i = 0; i < G_N_ELEMENTS(kept); i++) {
+		if (srch.len == strlen(kept[i]) &&
+			g_ascii_strncasecmp(srch.begin, kept[i], srch.len) == 0) {
+			return star != NULL || attrs == NULL ||
+				   g_hash_table_lookup(attrs, &srch) == NULL;
+		}
+	}
+
+	return FALSE;
+}
+
 void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 								   struct rspamd_content_type *ct,
 								   char *name_start, char *name_end,
@@ -340,10 +377,15 @@ void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 	if (ct->nparams >= max_content_type_params) {
 		/* Refuse to amplify a crafted header into unbounded allocations */
 		ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
-		return;
+
+		if (!rspamd_content_param_keep_past_cap(ct->attrs, ct->nparams,
+												name_start, name_end)) {
+			return;
+		}
 	}
 
 	ct->nparams++;
+
 	nparam = rspamd_mempool_alloc0(pool, sizeof(*nparam));
 	rspamd_str_lc(name_start, name_end - name_start);
 
@@ -842,10 +884,14 @@ void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 
 	if (cd->nparams >= max_content_type_params) {
 		/* Refuse to amplify a crafted header into unbounded allocations */
-		return;
+		if (!rspamd_content_param_keep_past_cap(cd->attrs, cd->nparams,
+												name_start, name_end)) {
+			return;
+		}
 	}
 
 	cd->nparams++;
+
 	name_cpy = rspamd_mempool_alloc(pool, name_end - name_start);
 	memcpy(name_cpy, name_start, name_end - name_start);
 	name_cpy_end = name_cpy + (name_end - name_start);

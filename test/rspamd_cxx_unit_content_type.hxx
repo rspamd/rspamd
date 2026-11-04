@@ -124,6 +124,100 @@ TEST_SUITE("content_type")
 		rspamd_mempool_delete(pool);
 	}
 
+	/*
+	 * Junk parameters in front used to hide the ones rspamd relies on: an RFC
+	 * reader takes the charset or the filename from anywhere in the header
+	 */
+	TEST_CASE("parameters rspamd uses are kept past the cap")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		std::string junk;
+		for (int i = 0; i < 1100; i++) {
+			junk += "; p" + std::to_string(i) + "=v";
+		}
+
+		std::string hdr = "text/html" + junk + "; charset=\"utf-16le\"; boundary=Zz";
+		/* A plain name once: a second one past the cap is not stored */
+		for (int i = 0; i < 1000; i++) {
+			hdr += "; charset=koi8-r";
+		}
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		CHECK((ct->flags & RSPAMD_CONTENT_TYPE_BROKEN) != 0);
+		CHECK(ct->nparams == expected_param_cap + 2);
+		CHECK(std::string_view{ct->charset.begin, ct->charset.len} == "utf-16le");
+		CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "Zz");
+		CHECK(g_hash_table_size(ct->attrs) == expected_param_cap + 2);
+
+		std::string cd_hdr = "attachment" + junk + "; filename=\"invoice.pdf.js\"";
+		for (int i = 0; i < 1000; i++) {
+			cd_hdr += "; filename=x";
+		}
+		auto *cd = rspamd_content_disposition_parse(cd_hdr.data(), cd_hdr.size(), pool);
+		REQUIRE(cd != nullptr);
+		CHECK(std::string_view{cd->filename.begin, cd->filename.len} == "invoice.pdf.js");
+		CHECK(g_hash_table_size(cd->attrs) == expected_param_cap + 1);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("pieces of a split parameter are kept past the cap")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		std::string hdr = "multipart/mixed";
+		for (int i = 0; i < 1100; i++) {
+			hdr += "; p" + std::to_string(i) + "=v";
+		}
+		hdr += "; boundary*0=\"foo\"; boundary*1=\"bar\"";
+
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "foobar");
+
+		rspamd_mempool_delete(pool);
+	}
+
+	/* Names the RFC 2231 handling stores as they are must not get around the bound */
+	TEST_CASE("starred names do not lift the cap")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		std::string junk;
+		for (int i = 0; i < 1100; i++) {
+			junk += "; p" + std::to_string(i) + "=v";
+		}
+
+		std::string hdr = "text/plain" + junk;
+		std::string cd_hdr = "attachment" + junk;
+		for (int i = 0; i < 5000; i++) {
+			hdr += "; charset*x=1; name**=1";
+			cd_hdr += "; filename*x=1";
+		}
+
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		CHECK(ct->nparams <= expected_param_cap + 16);
+		CHECK(g_hash_table_size(ct->attrs) <= expected_param_cap + 16);
+
+		unsigned int stored = 0;
+		auto *cd = rspamd_content_disposition_parse(cd_hdr.data(), cd_hdr.size(), pool);
+		REQUIRE(cd != nullptr);
+		CHECK(cd->nparams <= expected_param_cap + 16);
+		GHashTableIter it;
+		gpointer k, v;
+		g_hash_table_iter_init(&it, cd->attrs);
+		while (g_hash_table_iter_next(&it, &k, &v)) {
+			for (auto *p = static_cast<rspamd_content_type_param *>(v); p != nullptr; p = p->next) {
+				stored++;
+			}
+		}
+		CHECK(stored <= expected_param_cap + 16);
+
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("content-disposition normal filename is preserved")
 	{
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
