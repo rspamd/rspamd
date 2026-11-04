@@ -442,11 +442,13 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 	/*
 	 * We either evict one node from the eviction list
 	 * or, at some probability scan all table and update eviction
-	 * list first
+	 * list first. An empty list (e.g. after a rehash) is rebuilt by
+	 * a scan as well, as there is nothing to evict from it
 	 */
 	r = rspamd_random_double_fast();
 
-	if (r < ((double) eviction_candidates) / hash->maxsize) {
+	if (hash->eviction_used == 0 ||
+		r < ((double) eviction_candidates) / hash->maxsize) {
 		/* Full hash scan */
 		rspamd_lru_vol_element_t *cur;
 		rspamd_lru_element_t *selected = NULL;
@@ -467,16 +469,16 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 					continue;
 				}
 			}
-			else {
-				rspamd_lru_hash_decrease_counter(node, now);
 
-				if (rspamd_lru_hash_maybe_evict(hash, node)) {
-					if (selected && node->lg_usages < selected->lg_usages) {
-						selected = node;
-					}
-					else if (selected == NULL) {
-						selected = node;
-					}
+			/* Live volatile elements are candidates too, the table is full */
+			rspamd_lru_hash_decrease_counter(node, now);
+
+			if (rspamd_lru_hash_maybe_evict(hash, node)) {
+				if (selected && node->lg_usages < selected->lg_usages) {
+					selected = node;
+				}
+				else if (selected == NULL) {
+					selected = node;
 				}
 			}
 		});
@@ -634,6 +636,11 @@ void rspamd_lru_hash_insert(rspamd_lru_hash_t *hash,
 
 			hash->key_destroy(hash->keys[off]);
 			hash->keys[off] = key;
+		}
+
+		/* Its eviction position is reset below, so leave the pool first */
+		if (node->eviction_pos != (uint8_t) -1) {
+			rspamd_lru_hash_remove_evicted(hash, node);
 		}
 	}
 
