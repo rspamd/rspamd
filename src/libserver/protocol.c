@@ -557,10 +557,15 @@ rspamd_protocol_set_ip(struct rspamd_task *task,
 {
 	rspamd_inet_addr_t *addr = NULL;
 
-	/* The target is written on success only, a bad value keeps the old one */
+	/*
+	 * The target is written on success only, a bad value keeps the old one.
+	 * A unix socket path (milter and proxy pass these for local clients) is
+	 * taken as is: the value comes from the client, so it must not trigger
+	 * the owner and group lookups of a listen socket definition
+	 */
 	if (!rspamd_parse_inet_address(&addr,
 								   ip_str, ip_len,
-								   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+								   RSPAMD_INET_ADDRESS_PARSE_REMOTE)) {
 		msg_err_protocol("bad ip value: '%*s'", (int) ip_len, ip_str);
 	}
 	else {

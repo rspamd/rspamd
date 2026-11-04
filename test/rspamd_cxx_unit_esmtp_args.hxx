@@ -372,6 +372,22 @@ TEST_SUITE("esmtp_args")
 		CHECK(lookup(first, "NOTIFY") == "NEVER");
 	}
 
+	/*
+	 * Unix socket paths come from milter and proxy for local clients; the
+	 * client must not make the worker look users or groups up
+	 */
+	TEST_CASE("v2 IP header takes a unix socket path as is")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"IP", "/var/run/mta.sock owner=no-such-user-for-rspamd"}});
+		auto *task = holder.task;
+		REQUIRE(task->from_addr != nullptr);
+		CHECK(rspamd_inet_address_get_af(task->from_addr) == AF_UNIX);
+		CHECK(std::string(rspamd_inet_address_to_string(task->from_addr)) ==
+			  "/var/run/mta.sock owner=no-such-user-for-rspamd");
+	}
+
 	/* An empty value used to hit an assertion and abort the worker */
 	TEST_CASE("v2 empty Deliver-To keeps the previous value")
 	{
