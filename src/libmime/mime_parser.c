@@ -201,6 +201,12 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 								   gboolean is_finished,
 								   GError **err);
 
+static enum rspamd_mime_parse_error
+rspamd_mime_parse_detached(struct rspamd_task *task,
+						   struct rspamd_mime_parser_runtime *st,
+						   const char *begin, gsize len,
+						   GError **err);
+
 
 #define RSPAMD_MIME_QUARK (rspamd_mime_parser_quark())
 
@@ -1057,27 +1063,31 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 							memcpy(cpy, p7_data, p7_data_len);
 
 							/*
+							 * The copy is all that is needed now: do not keep the
+							 * decoded structures of every level of nested S/MIME
+							 * while the inner levels are parsed
+							 */
+							PKCS7_free(p7);
+							BIO_free(bio);
+							CMS_ContentInfo_free(cms);
+
+							/*
 							 * S/MIME re-enters the parser here without going through
 							 * the multipart/message nesting checks, so account for it
 							 * explicitly to bound recursion on deeply nested S/MIME.
 							 */
 							if (rspamd_mime_parser_too_deep(task, st)) {
-								PKCS7_free(p7);
-								BIO_free(bio);
-								CMS_ContentInfo_free(cms);
 								return RSPAMD_MIME_PARSE_OK;
 							}
 
+							/*
+							 * Not a nested body for the leftovers of st: the
+							 * detached runtime has no leftovers pass of its own
+							 */
 							st->nesting++;
-							ret = rspamd_mime_process_multipart_node(task,
-																	 st, NULL,
-																	 cpy, cpy + p7_data_len,
-																	 TRUE, err);
+							ret = rspamd_mime_parse_detached(task, st,
+															 cpy, p7_data_len, err);
 							st->nesting--;
-
-							PKCS7_free(p7);
-							BIO_free(bio);
-							CMS_ContentInfo_free(cms);
 
 							return ret;
 						}
@@ -2102,6 +2112,37 @@ rspamd_mime_parse_stack_free(struct rspamd_mime_parser_runtime *st)
 
 		g_free(st);
 	}
+}
+
+/*
+ * Parses an entity that is not in the buffer of st, e.g. the content of an
+ * S/MIME part: its boundaries must be looked for in its own buffer
+ */
+static enum rspamd_mime_parse_error
+rspamd_mime_parse_detached(struct rspamd_task *task,
+						   struct rspamd_mime_parser_runtime *st,
+						   const char *begin, gsize len,
+						   GError **err)
+{
+	struct rspamd_mime_parser_runtime *nst;
+	enum rspamd_mime_parse_error ret;
+
+	nst = g_malloc0(sizeof(*nst));
+	nst->boundaries = g_array_sized_new(FALSE, FALSE,
+										sizeof(struct rspamd_mime_boundary), 8);
+	nst->start = begin;
+	nst->end = begin + len;
+	nst->pos = begin;
+	nst->task = st->task;
+	nst->nesting = st->nesting;
+	nst->root = st->root;
+
+	rspamd_mime_preprocess_range(task, nst, begin, len);
+	ret = rspamd_mime_process_multipart_node(task, nst, NULL,
+											 begin, begin + len, TRUE, err);
+	rspamd_mime_parse_stack_free(nst);
+
+	return ret;
 }
 
 static enum rspamd_mime_parse_error
