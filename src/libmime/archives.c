@@ -242,15 +242,114 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 	return true;
 }
 
+enum rspamd_zip_eocd_check {
+	RSPAMD_ZIP_EOCD_USABLE = 0,
+	RSPAMD_ZIP_EOCD_SKIP,
+	RSPAMD_ZIP_EOCD_STOP,
+};
+
+/*
+ * Checks an end of central directory record: the central directory it
+ * describes must be within the data before it and start with its magic.
+ * A zip64 record has the real values in the zip64 record that the locator
+ * right before it points to; when these cannot be read, readers do not look
+ * any further back either.
+ */
+static enum rspamd_zip_eocd_check
+rspamd_archive_zip_check_eocd(const unsigned char *start,
+							  const unsigned char *eocd,
+							  uint64_t *pcd_offset,
+							  uint64_t *pcd_size)
+{
+	static const unsigned char cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
+	const uint32_t zip64_locator_magic = 0x07064b50, zip64_eocd_magic = 0x06064b50;
+	/* Up to the cd size and offset fields, which are the last ones we read */
+	const uint64_t zip64_eocd_len = 56, zip64_locator_len = 20;
+	uint32_t cd_offset32, cd_size32;
+	uint64_t cd_offset, cd_size, limit = eocd - start;
+	enum rspamd_zip_eocd_check bad = RSPAMD_ZIP_EOCD_SKIP;
+
+	memcpy(&cd_size32, eocd + 12, sizeof(cd_size32));
+	cd_size = GUINT32_FROM_LE(cd_size32);
+	memcpy(&cd_offset32, eocd + 16, sizeof(cd_offset32));
+	cd_offset = GUINT32_FROM_LE(cd_offset32);
+
+	if (cd_size == G_MAXUINT32 || cd_offset == G_MAXUINT32) {
+		uint32_t magic;
+		uint64_t z64_offset;
+		const unsigned char *loc;
+
+		bad = RSPAMD_ZIP_EOCD_STOP;
+
+		if (limit < zip64_locator_len) {
+			return bad;
+		}
+
+		loc = eocd - zip64_locator_len;
+		memcpy(&magic, loc, sizeof(magic));
+
+		if (GUINT32_FROM_LE(magic) != zip64_locator_magic) {
+			return bad;
+		}
+
+		memcpy(&z64_offset, loc + 8, sizeof(z64_offset));
+		z64_offset = GUINT64_FROM_LE(z64_offset);
+
+		if (z64_offset > (uint64_t) (loc - start) ||
+			(uint64_t) (loc - start) - z64_offset < zip64_eocd_len) {
+			return bad;
+		}
+
+		memcpy(&magic, start + z64_offset, sizeof(magic));
+
+		if (GUINT32_FROM_LE(magic) != zip64_eocd_magic) {
+			return bad;
+		}
+
+		memcpy(&cd_size, start + z64_offset + 40, sizeof(cd_size));
+		cd_size = GUINT64_FROM_LE(cd_size);
+		memcpy(&cd_offset, start + z64_offset + 48, sizeof(cd_offset));
+		cd_offset = GUINT64_FROM_LE(cd_offset);
+		limit = z64_offset;
+	}
+
+	if (cd_size > limit) {
+		return bad;
+	}
+
+	if (cd_offset > limit - cd_size ||
+		(cd_size >= sizeof(cd_magic) &&
+		 memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) != 0)) {
+		/*
+		 * Offsets of an archive with data in front of it (a self-extracting
+		 * stub, another archive) count from the start of the archive: readers
+		 * then take the central directory right before this record
+		 */
+		if (cd_size < sizeof(cd_magic) ||
+			memcmp(start + limit - cd_size, cd_magic, sizeof(cd_magic)) != 0) {
+			return bad;
+		}
+
+		cd_offset = limit - cd_size;
+	}
+
+	*pcd_offset = cd_offset;
+	*pcd_size = cd_size;
+
+	return RSPAMD_ZIP_EOCD_USABLE;
+}
+
 static void
 rspamd_archive_process_zip(struct rspamd_task *task,
 						   struct rspamd_mime_part *part)
 {
-	const unsigned char *p, *start, *end, *eocd = NULL, *cd;
+	const unsigned char *p, *start, *eocd = NULL, *cd;
 	const uint32_t eocd_magic = 0x06054b50, cd_basic_len = 46;
 	const unsigned char cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
-	const unsigned int max_processed = 1024;
-	uint32_t cd_offset, cd_size, comp_size, uncomp_size, processed = 0;
+	/* The record is followed by a comment of up to 64 KB */
+	const unsigned int max_processed = G_MAXUINT16;
+	uint64_t cd_offset = 0, cd_size = 0;
+	uint32_t comp_size, uncomp_size, processed = 0;
 	uint16_t extra_len, fname_len, comment_len;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f = NULL;
@@ -266,59 +365,40 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	/* Zip files have interesting data at the end of archive */
 	p = part->parsed_data.begin + part->parsed_data.len - 1;
 	start = part->parsed_data.begin;
-	end = p;
 
-	/* Search for EOCD:
-	 * 22 bytes is a typical size of eocd without a comment and
-	 * end points one byte after the last character
+	/*
+	 * Search for EOCD: it is 22 bytes followed by a comment of up to 64 KB,
+	 * as far back as zip readers look. They use the last record; the comment
+	 * may hold the magic as well, so skip records that describe no central
+	 * directory. `p` points to the last character.
 	 */
 	p -= 21;
 
-	while (p > start + sizeof(uint32_t)) {
+	while (p >= start && processed <= max_processed) {
 		uint32_t t;
 
-		if (processed > max_processed) {
-			break;
-		}
-
-		/* XXX: not an efficient approach */
 		memcpy(&t, p, sizeof(t));
 
 		if (GUINT32_FROM_LE(t) == eocd_magic) {
-			eocd = p;
-			break;
+			enum rspamd_zip_eocd_check check = rspamd_archive_zip_check_eocd(start, p,
+																			 &cd_offset, &cd_size);
+
+			if (check == RSPAMD_ZIP_EOCD_USABLE) {
+				eocd = p;
+				break;
+			}
+			else if (check == RSPAMD_ZIP_EOCD_STOP) {
+				break;
+			}
 		}
 
 		p--;
 		processed++;
 	}
 
-
 	if (eocd == NULL) {
 		/* Not a zip file */
-		msg_info_task("zip archive is invalid (no EOCD)");
-
-		return;
-	}
-
-	if (end - eocd < 21) {
-		msg_info_task("zip archive is invalid (short EOCD)");
-
-		return;
-	}
-
-
-	memcpy(&cd_size, eocd + 12, sizeof(cd_size));
-	cd_size = GUINT32_FROM_LE(cd_size);
-	memcpy(&cd_offset, eocd + 16, sizeof(cd_offset));
-	cd_offset = GUINT32_FROM_LE(cd_offset);
-
-	/*
-	 * We need to check sanity as well. Use a 64-bit add to avoid
-	 * a 32-bit wrap that would let a malicious EOCD bypass the check.
-	 */
-	if ((uint64_t) cd_offset + (uint64_t) cd_size > (uint64_t) (eocd - start)) {
-		msg_info_task("zip archive is invalid (bad size/offset for CD)");
+		msg_info_task("zip archive is invalid (no usable EOCD)");
 
 		return;
 	}
