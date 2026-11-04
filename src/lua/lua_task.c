@@ -4215,7 +4215,8 @@ lua_import_email_address(lua_State *L, struct rspamd_task *task,
 	}
 	else {
 		/* Construct addr */
-		len = addr->domain_len + addr->user_len + 1;
+		/* '@' and the terminating zero written by rspamd_snprintf */
+		len = addr->domain_len + addr->user_len + 2;
 		addr->addr = (const char *) rspamd_mempool_alloc(task->task_pool, len);
 		addr->addr_len = rspamd_snprintf((char *) addr->addr, len, "%*s@%*s",
 										 (int) addr->user_len, addr->user,
@@ -4378,7 +4379,7 @@ lua_task_set_recipients(lua_State *L)
 				/* Clear old addresses */
 				PTR_ARRAY_FOREACH(ptrs, i, tmp)
 				{
-					rspamd_email_address_free(addr);
+					rspamd_email_address_free(tmp);
 				}
 
 				g_ptr_array_set_size(ptrs, 0);
@@ -4686,7 +4687,14 @@ lua_task_set_from(lua_State *L)
 		else if (paddr) {
 			/* SMTP from case */
 			if (lua_import_email_address(L, task, 3, &addr)) {
-				task->from_envelope_orig = *paddr;
+				if (task->from_envelope_orig) {
+					/* Keep the original sender, free the previous rewrite */
+					rspamd_email_address_free(*paddr);
+				}
+				else {
+					task->from_envelope_orig = *paddr;
+				}
+
 				task->from_envelope = addr;
 				lua_pushboolean(L, true);
 			}
