@@ -21,7 +21,8 @@
  * complete messages. A message completed with TEMPFAIL, either from the
  * end-of-body callback or later from outside of the IO dispatch (as the proxy
  * does from a backend callback), must leave the connection usable for the
- * next transaction.
+ * next transaction. A MAIL or CONNECT repeated without ABORT or QUIT_NC
+ * replaces the previous state instead of leaking or mixing it.
  */
 
 #ifndef RSPAMD_CXX_UNIT_MILTER_LIFECYCLE_HXX
@@ -31,6 +32,8 @@
 #include "doctest/doctest.h"
 
 #include "libserver/milter.h"
+#include "libmime/email_addr.h"
+#include "libutil/addr.h"
 #include "libutil/util.h"
 #include "rspamd_test_fake_time.hxx"
 #include "contrib/libev/ev.h"
@@ -92,6 +95,22 @@ milter_cmd(char cmd, const std::string &data = {})
 	out += data;
 
 	return out;
+}
+
+static std::string
+milter_connect(const std::string &host, char family,
+			   uint16_t port = 0, const std::string &addr = {})
+{
+	std::string data = host + '\0' + family;
+
+	if (family != 'U') {
+		uint16_t nport = htons(port);
+
+		data.append(reinterpret_cast<const char *>(&nport), sizeof(nport));
+		data += addr + '\0';
+	}
+
+	return milter_cmd('C', data);
 }
 
 static std::string
@@ -296,6 +315,103 @@ TEST_SUITE("milter_lifecycle")
 		CHECK(t.state.closes == 1);
 		CHECK_FALSE(t.state.close_had_error);
 		CHECK(t.replies() == "t");
+	}
+
+	TEST_CASE("MAIL without ABORT drops the unfinished transaction")
+	{
+		milter_fixture t;
+		t.start();
+		/* Two transactions are abandoned without ABORT */
+		t.send(milter_cmd('M', "<first@example.com>\0SIZE=100\0"s) +
+			   milter_cmd('R', "<rcpt1@example.com>\0NOTIFY=NEVER\0"s) +
+			   milter_cmd('T') +
+			   milter_cmd('L', "X-First\0yes\0"s));
+		t.send(milter_cmd('M', "<second@example.com>\0BODY=8BITMIME\0"s));
+		t.send(milter_cmd('M', "<third@example.com>\0"s) +
+			   milter_cmd('R', "<rcpt3@example.com>\0"s) +
+			   milter_cmd('L', "Subject\0test\0"s) +
+			   milter_cmd('N') +
+			   milter_cmd('B', "hello\r\n") +
+			   milter_cmd('E'));
+		t.pump();
+		REQUIRE(t.state.finishes == 1);
+		auto *session = t.state.session;
+		REQUIRE(session != nullptr);
+		REQUIRE(session->from != nullptr);
+		CHECK(std::string(session->from->addr, session->from->addr_len) ==
+			  "third@example.com");
+		/* SIZE and BODY belonged to the abandoned transactions */
+		CHECK(session->mail_esmtp_args == nullptr);
+		REQUIRE(session->rcpts != nullptr);
+		REQUIRE(session->rcpts->len == 1);
+		auto *rcpt = static_cast<struct rspamd_email_address *>(
+			g_ptr_array_index(session->rcpts, 0));
+		CHECK(std::string(rcpt->addr, rcpt->addr_len) == "rcpt3@example.com");
+		REQUIRE(session->rcpt_esmtp_args != nullptr);
+		REQUIRE(session->rcpt_esmtp_args->len == 1);
+		CHECK(g_ptr_array_index(session->rcpt_esmtp_args, 0) == nullptr);
+		REQUIRE(session->message != nullptr);
+		CHECK(std::string(session->message->str, session->message->len) ==
+			  "Subject: test\r\n\r\nhello\r\n");
+		rspamd_milter_send_tempfail(session);
+		t.pump();
+		CHECK(t.replies() == "t");
+		/* The arguments of the current MAIL are kept */
+		t.send(milter_cmd('M', "<fourth@example.com>\0SIZE=5\0"s) +
+			   milter_cmd('R', "<rcpt4@example.com>\0"s) +
+			   milter_cmd('E'));
+		t.pump();
+		REQUIRE(t.state.finishes == 2);
+		session = t.state.session;
+		REQUIRE(session != nullptr);
+		REQUIRE(session->from != nullptr);
+		CHECK(std::string(session->from->addr, session->from->addr_len) ==
+			  "fourth@example.com");
+		REQUIRE(session->mail_esmtp_args != nullptr);
+		CHECK(g_hash_table_size(session->mail_esmtp_args) == 1);
+		REQUIRE(session->rcpts != nullptr);
+		CHECK(session->rcpts->len == 1);
+		rspamd_milter_send_tempfail(session);
+		t.pump();
+		CHECK(t.replies() == "t");
+		t.send(milter_cmd('Q'));
+		t.pump();
+		CHECK(t.state.closes == 1);
+	}
+
+	TEST_CASE("repeated CONNECT replaces the address")
+	{
+		milter_fixture t;
+		t.start();
+		t.send(milter_connect("mx1.example.com", '4', 25, "192.0.2.1") +
+			   milter_connect("mx2.example.com", '6', 587, "2001:db8::1") +
+			   milter_message("first@example.com"));
+		t.pump();
+		REQUIRE(t.state.finishes == 1);
+		REQUIRE(t.state.session != nullptr);
+		REQUIRE(t.state.session->addr != nullptr);
+		CHECK(std::string(rspamd_inet_address_to_string(t.state.session->addr)) ==
+			  "2001:db8::1");
+		CHECK(rspamd_inet_address_get_port(t.state.session->addr) == 587);
+		rspamd_milter_send_tempfail(t.state.session);
+		t.pump();
+		CHECK(t.replies() == "t");
+		/* An unknown peer must not inherit the previous address */
+		t.send(milter_connect("unknown", 'U') +
+			   milter_message("second@example.com"));
+		t.pump();
+		REQUIRE(t.state.finishes == 2);
+		REQUIRE(t.state.session != nullptr);
+		CHECK(t.state.session->addr == nullptr);
+		REQUIRE(t.state.session->hostname != nullptr);
+		CHECK(std::string(t.state.session->hostname->str,
+						  t.state.session->hostname->len) == "unknown");
+		rspamd_milter_send_tempfail(t.state.session);
+		t.pump();
+		CHECK(t.replies() == "t");
+		t.send(milter_cmd('Q'));
+		t.pump();
+		CHECK(t.state.closes == 1);
 	}
 }
 

@@ -487,6 +487,12 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 								 session->hostname);
 			}
 
+			/* A repeated CONNECT replaces the previous address */
+			if (session->addr) {
+				rspamd_inet_address_free(session->addr);
+				session->addr = NULL;
+			}
+
 			pos = zero + 1;
 			proto = *pos++;
 
@@ -760,6 +766,17 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_MAIL:
 		msg_debug_milter("mail command");
+
+		if (session->from || session->mail_esmtp_args || session->rcpts ||
+			(session->message && session->message->len > 0)) {
+			/*
+			 * MAIL without ABORT after an unfinished transaction: abort it
+			 * first, as libmilter does, so nothing of it is mixed into or
+			 * leaked by the new one
+			 */
+			msg_debug_milter("mail command inside a transaction, abort it");
+			rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
+		}
 
 		while (pos < end) {
 			struct rspamd_email_address *addr;
