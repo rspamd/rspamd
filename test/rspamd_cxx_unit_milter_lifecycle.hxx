@@ -413,6 +413,45 @@ TEST_SUITE("milter_lifecycle")
 		t.pump();
 		CHECK(t.state.closes == 1);
 	}
+
+	/*
+	 * The finish callback owns a message until it is replied: a second end
+	 * of body used to start another scan of the same proxy session, which
+	 * freed the session under the first one.
+	 */
+	TEST_CASE("end of body before the previous reply is a protocol error")
+	{
+		milter_fixture t;
+		t.start();
+		t.send(milter_message("first@example.com") + milter_cmd('E'));
+		t.pump();
+		CHECK(t.state.finishes == 1);
+		CHECK(t.state.closes == 1);
+		CHECK(t.state.close_had_error);
+		CHECK(t.state.close_code == EINVAL);
+	}
+
+	TEST_CASE("end of body after the previous reply starts a new message")
+	{
+		milter_fixture t;
+		t.start();
+		t.send(milter_message("first@example.com"));
+		t.pump();
+		REQUIRE(t.state.finishes == 1);
+		REQUIRE(t.state.session != nullptr);
+		rspamd_milter_send_tempfail(t.state.session);
+		t.pump();
+		CHECK(t.replies() == "t");
+		/* ABORT does not end the pending end of body, the reply does */
+		t.send(milter_message("second@example.com"));
+		t.pump();
+		REQUIRE(t.state.finishes == 2);
+		t.send(milter_cmd('A') + milter_cmd('E'));
+		t.pump();
+		CHECK(t.state.finishes == 2);
+		CHECK(t.state.closes == 1);
+		CHECK(t.state.close_had_error);
+	}
 }
 
 }// namespace milter_lifecycle_test

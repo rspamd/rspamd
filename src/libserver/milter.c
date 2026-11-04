@@ -656,6 +656,17 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_BODYEOB:
 		msg_debug_milter("got eob command");
+
+		if (priv->eob_pending) {
+			/* The callback owns the previous message until it is replied */
+			err = g_error_new(rspamd_milter_quark(), EINVAL, "end of body "
+															 "before the reply to the previous one");
+			rspamd_milter_on_protocol_error(session, priv, err);
+
+			return FALSE;
+		}
+
+		priv->eob_pending = TRUE;
 		REF_RETAIN(session);
 		priv->fin_cb(priv->fd, session, priv->ud);
 		REF_RELEASE(session);
@@ -1671,6 +1682,9 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 
 void rspamd_milter_send_tempfail(struct rspamd_milter_session *session)
 {
+	struct rspamd_milter_private *priv = session->priv;
+
+	priv->eob_pending = FALSE;
 	rspamd_milter_send_action(session, RSPAMD_MILTER_TEMPFAIL);
 	rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
 }
@@ -2619,6 +2633,7 @@ cleanup:
 	rspamd_fstring_free(xcode);
 	rspamd_fstring_free(reply);
 
+	priv->eob_pending = FALSE;
 	rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
 }
 
