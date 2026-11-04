@@ -171,6 +171,7 @@ struct rspamd_mime_parser_runtime {
 	unsigned int nesting;
 	unsigned int boundary_candidates;
 	gboolean boundary_limit_reached;
+	gboolean nesting_limit_reached;
 };
 
 static enum rspamd_mime_parse_error
@@ -216,6 +217,29 @@ rspamd_mime_parser_check_part_limit(struct rspamd_task *task, GError **err)
 		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
 					"MIME parts limit is reached: %u", max_mime_parts);
 		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Parts deeper than the limit are not parsed, but their siblings still are:
+ * one deep branch must not hide the rest of the message
+ */
+static gboolean
+rspamd_mime_parser_too_deep(struct rspamd_task *task,
+							struct rspamd_mime_parser_runtime *st)
+{
+	if (st->nesting <= max_nested) {
+		return FALSE;
+	}
+
+	if (!st->root->nesting_limit_reached) {
+		msg_warn_task("MIME nesting limit of %ud is reached; "
+					  "do not parse the parts below it",
+					  max_nested);
+		st->root->nesting_limit_reached = TRUE;
+		task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 	}
 
 	return TRUE;
@@ -1037,14 +1061,11 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 							 * the multipart/message nesting checks, so account for it
 							 * explicitly to bound recursion on deeply nested S/MIME.
 							 */
-							if (st->nesting > max_nested) {
-								g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
-											"S/MIME nesting level is too high: %d",
-											st->nesting);
+							if (rspamd_mime_parser_too_deep(task, st)) {
 								PKCS7_free(p7);
 								BIO_free(bio);
 								CMS_ContentInfo_free(cms);
-								return RSPAMD_MIME_PARSE_NESTING;
+								return RSPAMD_MIME_PARSE_OK;
 							}
 
 							st->nesting++;
@@ -1744,16 +1765,17 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	struct rspamd_mime_multipart_cbdata cbdata;
 	enum rspamd_mime_parse_error ret;
 
-	if (st->nesting > max_nested) {
-		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
-					st->nesting);
-		return RSPAMD_MIME_PARSE_NESTING;
-	}
 	if (!rspamd_mime_parser_check_part_limit(task, err)) {
 		return RSPAMD_MIME_PARSE_LIMIT;
 	}
 
 	rspamd_mime_parser_register_part(task, part);
+
+	if (rspamd_mime_parser_too_deep(task, st)) {
+		/* Keep it as an empty multipart */
+		return RSPAMD_MIME_PARSE_OK;
+	}
+
 	st->nesting++;
 	rspamd_mime_part_get_cte(task, part, part->raw_headers, FALSE);
 
@@ -2100,10 +2122,9 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	struct rspamd_mime_parser_runtime *nst = st;
 	gboolean preprocessed = FALSE;
 
-	if (st->nesting > max_nested) {
-		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
-					st->nesting);
-		return RSPAMD_MIME_PARSE_NESTING;
+	if (rspamd_mime_parser_too_deep(task, st)) {
+		/* The embedded message is not parsed */
+		return RSPAMD_MIME_PARSE_OK;
 	}
 
 	/* Allocate real part */

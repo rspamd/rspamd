@@ -8,7 +8,7 @@ the rest of the message, so content placed after enough harmless containers was
 never parsed or scanned.
 
 The depth limit itself must stay as it is: a deep chain of containers is still
-cut short.
+cut short, but only that chain, not the parts after it.
 ]]
 
 context("MIME nesting depth", function()
@@ -34,13 +34,8 @@ context("MIME nesting depth", function()
     return table.concat(buf)
   end
 
-  local function message_with_depth(depth)
-    local buf = {
-      "From: sender@example.com\r\n",
-      "To: rcpt@example.com\r\n",
-      "Subject: depth\r\n",
-      "MIME-Version: 1.0\r\n",
-    }
+  local function chain(depth)
+    local buf = {}
 
     for i = 1, depth do
       buf[#buf + 1] = string.format(
@@ -54,6 +49,14 @@ context("MIME nesting depth", function()
     end
 
     return table.concat(buf)
+  end
+
+  local function message_with_depth(depth)
+    return "From: sender@example.com\r\n" ..
+        "To: rcpt@example.com\r\n" ..
+        "Subject: depth\r\n" ..
+        "MIME-Version: 1.0\r\n" ..
+        chain(depth)
   end
 
   local function scan(msg)
@@ -117,5 +120,13 @@ context("MIME nesting depth", function()
   test("a very deep chain of multiparts is still cut short", function()
     local hosts = scan(message_with_depth(40))
     assert_nil(hosts["deep.example.org"], "depth limit is not enforced")
+  end)
+
+  test("a part after a too deep branch is parsed", function()
+    local hosts = scan(message_with_siblings(1, function()
+      return chain(40)
+    end))
+    assert_nil(hosts["deep.example.org"], "depth limit is not enforced")
+    assert_true(hosts["tail.example.org"], "url of the part after the deep branch is missing")
   end)
 end)
