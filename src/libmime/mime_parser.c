@@ -114,6 +114,11 @@ static const unsigned int max_nested = 64;
 static const unsigned int max_key_usages = 10000;
 static const unsigned int max_mime_parts = 10000;
 static const unsigned int max_boundary_candidates = 100000;
+/*
+ * Steps a broken part may spend looking for its boundary after its own end,
+ * for the whole message: about 64 such parts over the full candidate limit
+ */
+static const unsigned int max_boundary_scan_steps = 10000000;
 
 #define msg_debug_mime(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                \
 														  rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
@@ -143,7 +148,9 @@ struct rspamd_mime_parser_runtime {
 	struct rspamd_task *task;
 	unsigned int nesting;
 	unsigned int boundary_candidates;
+	unsigned int boundary_scan_steps;
 	gboolean boundary_limit_reached;
+	gboolean boundary_scan_limit_reached;
 };
 
 static enum rspamd_mime_parse_error
@@ -1370,6 +1377,31 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 
 		if (cur->start >= part_offset) {
 			if (cb->cur_boundary) {
+				if (cur->boundary > last_offset) {
+					/*
+					 * The declared boundary is not inside this part. A match
+					 * further on still helps to recover a broken structure
+					 * (see the closed hash case below), but every such part
+					 * would scan the rest of the message, so bound it
+					 */
+					struct rspamd_mime_parser_runtime *root = st->root;
+
+					if (root->boundary_scan_steps >= max_boundary_scan_steps) {
+						if (!root->boundary_scan_limit_reached) {
+							msg_warn_task("MIME boundary search limit of %ud steps "
+										  "is reached; do not look for boundaries "
+										  "after the end of their parts",
+										  max_boundary_scan_steps);
+							root->boundary_scan_limit_reached = TRUE;
+							task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+						}
+
+						break;
+					}
+
+					root->boundary_scan_steps++;
+				}
+
 				/* Check boundary */
 				msg_debug_mime("compare %L and %L (and %L)",
 							   cb->bhash, cur->hash, cur->closed_hash);
