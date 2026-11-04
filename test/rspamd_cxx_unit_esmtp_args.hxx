@@ -404,6 +404,29 @@ TEST_SUITE("esmtp_args")
 		CHECK(std::string(braces.task->deliver_to).empty());
 	}
 
+	/* v3 metadata can repeat a header name far more often than HTTP allows */
+	TEST_CASE("v3 repeated metadata headers keep their order")
+	{
+		using namespace rspamd_esmtp_args_test;
+		constexpr unsigned n = 20000;
+		std::string json = R"({"headers":{"X-Repeated":[)";
+		for (unsigned i = 0; i < n; i++) {
+			json += (i ? ",\"" : "\"") + std::to_string(i) + "\"";
+		}
+		json += "]}}";
+		task_holder holder;
+		REQUIRE(holder.metadata(json.c_str(), true));
+		unsigned count = 0;
+		bool ordered = true;
+		for (auto *cur = rspamd_task_get_request_header_multiple(holder.task, "X-Repeated");
+			 cur != nullptr; cur = cur->next) {
+			ordered = ordered && std::string(cur->hdr->begin, cur->hdr->len) == std::to_string(count);
+			count++;
+		}
+		CHECK(count == n);
+		CHECK(ordered);
+	}
+
 	/*
 	 * Settings elements are refcounted and live in the config pool, so a lost
 	 * reference is invisible to LSan: count the references instead.
