@@ -114,11 +114,6 @@ static const unsigned int max_nested = 64;
 static const unsigned int max_key_usages = 10000;
 static const unsigned int max_mime_parts = 10000;
 static const unsigned int max_boundary_candidates = 100000;
-/*
- * Steps a broken part may spend looking for its boundary after its own end,
- * for the whole message: about 64 such parts over the full candidate limit
- */
-static const unsigned int max_boundary_scan_steps = 10000000;
 
 #define msg_debug_mime(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                \
 														  rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
@@ -138,8 +133,26 @@ struct rspamd_mime_boundary {
 	int flags;
 };
 
+/*
+ * Boundary candidates ordered by hash and then by position, so a part can find
+ * its boundary after its own end without scanning the rest of the message
+ */
+struct rspamd_mime_boundary_ref {
+	uint64_t hash;
+	unsigned int idx; /* in the boundaries array */
+};
+
+struct rspamd_mime_boundary_index {
+	struct rspamd_mime_boundary_ref *refs;
+	/* refs[i] is not checked again if next[i] != i, see the find function */
+	unsigned int *next;
+	unsigned int nrefs;
+	unsigned int nboundaries; /* the array length it was built for */
+};
+
 struct rspamd_mime_parser_runtime {
 	GArray *boundaries; /* Boundaries found in the whole message */
+	struct rspamd_mime_boundary_index *bindex; /* built on demand */
 	struct rspamd_mime_parser_runtime *root;
 	const char *start;
 	const char *pos;
@@ -147,9 +160,7 @@ struct rspamd_mime_parser_runtime {
 	struct rspamd_task *task;
 	unsigned int nesting;
 	unsigned int boundary_candidates;
-	unsigned int boundary_scan_steps;
 	gboolean boundary_limit_reached;
-	gboolean boundary_scan_limit_reached;
 };
 
 static enum rspamd_mime_parse_error
@@ -1375,6 +1386,142 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 	return RSPAMD_MIME_PARSE_OK;
 }
 
+static int
+rspamd_mime_boundary_ref_cmp(const void *a, const void *b)
+{
+	const struct rspamd_mime_boundary_ref *ra = a, *rb = b;
+
+	if (ra->hash != rb->hash) {
+		return ra->hash < rb->hash ? -1 : 1;
+	}
+
+	if (ra->idx != rb->idx) {
+		return ra->idx < rb->idx ? -1 : 1;
+	}
+
+	return 0;
+}
+
+static void
+rspamd_mime_boundary_index_free(struct rspamd_mime_boundary_index *bi)
+{
+	if (bi) {
+		g_free(bi->refs);
+		g_free(bi->next);
+		g_free(bi);
+	}
+}
+
+static struct rspamd_mime_boundary_index *
+rspamd_mime_boundary_index_new(GArray *boundaries)
+{
+	struct rspamd_mime_boundary_index *bi = g_malloc(sizeof(*bi));
+	unsigned int i, n = 0;
+
+	/* A candidate matches both its hash and its closed hash */
+	bi->refs = g_malloc_n(boundaries->len * 2 + 1, sizeof(*bi->refs));
+
+	for (i = 0; i < boundaries->len; i++) {
+		const struct rspamd_mime_boundary *b = &g_array_index(boundaries,
+															  struct rspamd_mime_boundary, i);
+
+		bi->refs[n].hash = b->hash;
+		bi->refs[n].idx = i;
+		n++;
+
+		if (b->closed_hash != 0 && b->closed_hash != b->hash) {
+			bi->refs[n].hash = b->closed_hash;
+			bi->refs[n].idx = i;
+			n++;
+		}
+	}
+
+	qsort(bi->refs, n, sizeof(*bi->refs), rspamd_mime_boundary_ref_cmp);
+	bi->next = g_malloc_n(n + 1, sizeof(*bi->next));
+
+	for (i = 0; i <= n; i++) {
+		bi->next[i] = i;
+	}
+
+	bi->nrefs = n;
+	bi->nboundaries = boundaries->len;
+
+	return bi;
+}
+
+/* The first ref at or after k that is still worth checking */
+static unsigned int
+rspamd_mime_boundary_index_next(struct rspamd_mime_boundary_index *bi,
+								unsigned int k)
+{
+	unsigned int root = k, t;
+
+	while (bi->next[root] != root) {
+		root = bi->next[root];
+	}
+
+	/* Point every ref on the way to the result, so the walk is not repeated */
+	while (bi->next[k] != root) {
+		t = bi->next[k];
+		bi->next[k] = root;
+		k = t;
+	}
+
+	return root;
+}
+
+/*
+ * Returns the first candidate at or after `from` that matches `hash` either as
+ * its hash or as its closed hash (like the linear scan does), or the number of
+ * candidates if there is none
+ */
+static unsigned int
+rspamd_mime_boundary_index_find(struct rspamd_mime_parser_runtime *st,
+								uint64_t hash, unsigned int from)
+{
+	struct rspamd_mime_boundary_index *bi = st->bindex;
+	unsigned int left = 0, right, k;
+
+	if (bi == NULL || bi->nboundaries != st->boundaries->len) {
+		rspamd_mime_boundary_index_free(bi);
+		bi = rspamd_mime_boundary_index_new(st->boundaries);
+		st->bindex = bi;
+	}
+
+	right = bi->nrefs;
+
+	while (left < right) {
+		unsigned int mid = left + (right - left) / 2;
+		const struct rspamd_mime_boundary_ref *r = &bi->refs[mid];
+
+		if (r->hash < hash || (r->hash == hash && r->idx < from)) {
+			left = mid + 1;
+		}
+		else {
+			right = mid;
+		}
+	}
+
+	for (k = rspamd_mime_boundary_index_next(bi, left);
+		 k < bi->nrefs && bi->refs[k].hash == hash;
+		 k = rspamd_mime_boundary_index_next(bi, k + 1)) {
+		const struct rspamd_mime_boundary *b = &g_array_index(st->boundaries,
+															  struct rspamd_mime_boundary, bi->refs[k].idx);
+
+		if (b->hash == hash || b->closed_hash == hash) {
+			return bi->refs[k].idx;
+		}
+
+		/*
+		 * Another part has un-closed this candidate since (its hash is now its
+		 * closed hash), so it never matches this hash again
+		 */
+		bi->next[k] = k + 1;
+	}
+
+	return st->boundaries->len;
+}
+
 static enum rspamd_mime_parse_error
 rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 								   struct rspamd_mime_part *multipart,
@@ -1418,25 +1565,17 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 					/*
 					 * The declared boundary is not inside this part. A match
 					 * further on still helps to recover a broken structure
-					 * (see the closed hash case below), but every such part
-					 * would scan the rest of the message, so bound it
+					 * (see the closed hash case below); look it up by hash, as
+					 * scanning the rest of the message for every such part
+					 * is quadratic
 					 */
-					struct rspamd_mime_parser_runtime *root = st->root;
+					i = rspamd_mime_boundary_index_find(st, cb->bhash, i);
 
-					if (root->boundary_scan_steps >= max_boundary_scan_steps) {
-						if (!root->boundary_scan_limit_reached) {
-							msg_warn_task("MIME boundary search limit of %ud steps "
-										  "is reached; do not look for boundaries "
-										  "after the end of their parts",
-										  max_boundary_scan_steps);
-							root->boundary_scan_limit_reached = TRUE;
-							task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
-						}
-
+					if (i == st->boundaries->len) {
 						break;
 					}
 
-					root->boundary_scan_steps++;
+					cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, i);
 				}
 
 				/* Check boundary */
@@ -1838,6 +1977,7 @@ static void
 rspamd_mime_parse_stack_free(struct rspamd_mime_parser_runtime *st)
 {
 	if (st) {
+		rspamd_mime_boundary_index_free(st->bindex);
 		g_array_free(st->boundaries, TRUE);
 		g_free(st);
 	}
