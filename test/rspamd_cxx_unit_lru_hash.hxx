@@ -26,6 +26,7 @@ extern "C" {
 }
 
 #include <string>
+#include <utility>
 #include <vector>
 
 TEST_SUITE("lru_hash")
@@ -219,6 +220,50 @@ TEST_SUITE("lru_hash")
 		CHECK(destroyed_values == 63);
 
 		rspamd_lru_hash_destroy(h);
+	}
+
+	/*
+	 * Usage counters of recently used keys must not be aged: the scan used to
+	 * compare seconds with the minutes stored in each element, so every scan
+	 * halved every counter and hot keys were evicted with the cold ones.
+	 */
+	TEST_CASE("hot keys survive a stream of cold ones")
+	{
+		/* Cold keys are inserted at the lookup time or a minute behind it */
+		for (auto [ttl, lag]: {std::pair{0U, 0}, std::pair{(unsigned int) -1, 0},
+							   std::pair{0U, 60}}) {
+			CAPTURE(ttl);
+			CAPTURE(lag);
+			auto *h = make_owned(512);
+			auto hot = make_keys(64);
+			time_t now = 1700000000;
+			unsigned int lookups = 0, misses = 0;
+
+			/* Four hot lookups per cold insert, about a minute per 600 inserts */
+			for (int i = 0; i < 50000; i++) {
+				if (i % 600 == 0) {
+					now += 60;
+				}
+
+				for (int j = 0; j < 4; j++) {
+					const auto &k = hot[(i * 4 + j) % hot.size()];
+					lookups++;
+
+					if (rspamd_lru_hash_lookup(h, k.c_str(), now) == nullptr) {
+						misses++;
+						rspamd_lru_hash_insert(h, g_strdup(k.c_str()), g_strdup("hot"),
+											   now, ttl);
+					}
+				}
+
+				rspamd_lru_hash_insert(h, g_strdup_printf("cold%d", i), g_strdup("cold"),
+									   now - lag, ttl);
+			}
+
+			/* About 43% (83% with the lag) of the lookups missed with broken aging */
+			CHECK(misses < lookups / 20);
+			rspamd_lru_hash_destroy(h);
+		}
 	}
 }
 

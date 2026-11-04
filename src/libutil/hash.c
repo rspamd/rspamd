@@ -67,6 +67,8 @@ struct rspamd_lru_volatile_element_s {
 typedef struct rspamd_lru_volatile_element_s rspamd_lru_vol_element_t;
 
 #define TIME_TO_TS(t) ((uint16_t) (((t) / 60) & 0xFFFFU))
+/* Minutes from `last` to `ts`, both TIME_TO_TS values, across the 16 bit wrap */
+#define TS_ELAPSED(ts, last) ((uint16_t) ((uint16_t) (ts) - (uint16_t) (last)))
 
 static rspamd_lru_vol_element_t *
 rspamd_lru_hash_get(const rspamd_lru_hash_t *h, gconstpointer key)
@@ -368,7 +370,13 @@ rspamd_lru_hash_update_counter(rspamd_lru_element_t *elt)
 static inline void
 rspamd_lru_hash_decrease_counter(rspamd_lru_element_t *elt, time_t now)
 {
-	if (now - elt->last > lfu_base_value) {
+	/*
+	 * `last` is in minutes, as stored by TIME_TO_TS; a `now` behind it
+	 * (e.g. an insert with the task start time) is no age at all
+	 */
+	uint16_t elapsed = TS_ELAPSED(TIME_TO_TS(now), elt->last);
+
+	if (elapsed < 0x8000U && elapsed > lfu_base_value) {
 		/* Penalise counters for outdated records */
 		elt->lg_usages /= 2;
 	}
@@ -582,8 +590,13 @@ rspamd_lru_hash_lookup(rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 			}
 		}
 
-		now = TIME_TO_TS(now);
-		res->last = MAX(res->last, now);
+		/* Never go back in time, but follow the 16 bit wrap */
+		uint16_t ts = TIME_TO_TS(now);
+
+		if (TS_ELAPSED(ts, res->last) < 0x8000U) {
+			res->last = ts;
+		}
+
 		rspamd_lru_hash_update_counter(res);
 		rspamd_lru_hash_maybe_evict(hash, res);
 
