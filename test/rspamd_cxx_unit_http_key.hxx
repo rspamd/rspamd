@@ -88,13 +88,15 @@ struct key_state {
 	int finishes = 0;
 	/* Raw peer key the connection holds when the message fails */
 	std::string peer_pk;
+	std::string error;
 };
 
 static void
-record_error(struct rspamd_http_connection *conn, GError *)
+record_error(struct rspamd_http_connection *conn, GError *err)
 {
 	auto *st = static_cast<key_state *>(conn->ud);
 	st->errors++;
+	st->error = err ? err->message : "";
 
 	auto *pk = const_cast<struct rspamd_cryptobox_pubkey *>(rspamd_http_connection_get_peer_key(conn));
 
@@ -253,6 +255,44 @@ TEST_SUITE("http_key")
 		CHECK(t.state.finishes == 0);
 		REQUIRE(t.state.errors == 1);
 		CHECK(t.state.peer_pk == raw_pk(server.get()));
+	}
+
+	/*
+	 * A client parses a reply that arrives while it is still writing the
+	 * request (e.g. an early 413). That reply used to be taken as plaintext
+	 * on a fresh connection, so anyone on the wire could answer an encrypted
+	 * request in clear text.
+	 */
+	TEST_CASE("client refuses a plaintext reply to an encrypted request in progress")
+	{
+		using namespace http_key_test;
+		auto client = new_keypair();
+		auto server = new_keypair();
+		key_fixture t(true);
+
+		rspamd_http_connection_set_key(t.conn, client.get());
+
+		auto *msg = rspamd_http_message_from_url("http://localhost/check");
+		REQUIRE(msg != nullptr);
+		auto pk = raw_pk(server.get());
+		auto *server_pk = rspamd_pubkey_from_bin(reinterpret_cast<const unsigned char *>(pk.data()),
+												 pk.size(), RSPAMD_KEYPAIR_KEX);
+		REQUIRE(server_pk != nullptr);
+		rspamd_http_message_set_peer_key(msg, server_pk);
+		rspamd_pubkey_unref(server_pk);
+		/* Larger than the socket buffers, so the request cannot be sent at once */
+		std::string body(4 * 1024 * 1024, 'x');
+		REQUIRE(rspamd_http_message_set_body(msg, body.data(), body.size()));
+		REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "localhost", nullptr,
+													 &t.state, 1000.0));
+		ev_run(t.loop, EVRUN_NOWAIT);
+		REQUIRE(t.state.errors == 0);
+
+		t.push("HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nforged");
+
+		CAPTURE(t.state.error);
+		CHECK(t.state.finishes == 0);
+		CHECK(t.state.errors == 1);
 	}
 }
 

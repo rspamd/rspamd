@@ -2695,6 +2695,12 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 		}
 
 		encrypted = TRUE;
+		/*
+		 * The reply to an encrypted request must be encrypted as well. The
+		 * read path sets this for a reply read after the request is sent, but
+		 * a client also parses a reply that comes while it is still writing
+		 */
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 
 		if (priv->cache) {
 			rspamd_keypair_cache_process(priv->cache,
