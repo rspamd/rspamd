@@ -346,6 +346,32 @@ TEST_SUITE("esmtp_args")
 		CHECK((task->flags & RSPAMD_TASK_FLAG_NO_IP) == 0);
 	}
 
+	/* Milter passes a keyword without '=' (SMTPUTF8, REQUIRETLS) as is */
+	TEST_CASE("v2 ESMTP keywords without a value are kept")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"X-Rspamd-Mail-Esmtp-Args", "SMTPUTF8"},
+					 {"X-Rspamd-Mail-Esmtp-Args", "SIZE=100"},
+					 {"X-Rspamd-Mail-Esmtp-Args", "=nokey"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "0:REQUIRETLS"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "0:NOTIFY=NEVER"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1:"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1:=nokey"}});
+		auto *mail = holder.task->mail_esmtp_args;
+		REQUIRE(mail != nullptr);
+		CHECK(g_hash_table_size(mail) == 2);
+		CHECK(lookup(mail, "SMTPUTF8").empty());
+		CHECK(lookup(mail, "SIZE") == "100");
+		auto *rcpts = holder.task->rcpt_esmtp_args;
+		REQUIRE(rcpts != nullptr);
+		REQUIRE(rcpts->len == 1);
+		auto *first = static_cast<GHashTable *>(g_ptr_array_index(rcpts, 0));
+		CHECK(g_hash_table_size(first) == 2);
+		CHECK(lookup(first, "REQUIRETLS").empty());
+		CHECK(lookup(first, "NOTIFY") == "NEVER");
+	}
+
 	/* An empty value used to hit an assertion and abort the worker */
 	TEST_CASE("v2 empty Deliver-To keeps the previous value")
 	{

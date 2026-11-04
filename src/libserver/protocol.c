@@ -628,6 +628,32 @@ rspamd_protocol_rcpt_esmtp_args_new(struct rspamd_task *task)
 	return args;
 }
 
+/*
+ * Splits an ESMTP argument into KEY and VALUE; a keyword without a value (e.g.
+ * SMTPUTF8, which milter passes without '=') gets an empty one
+ */
+static gboolean
+rspamd_protocol_split_esmtp_arg(const char *arg, gsize len,
+								rspamd_ftok_t *key, rspamd_ftok_t *val)
+{
+	const char *eq = memchr(arg, '=', len);
+
+	key->begin = arg;
+
+	if (eq == NULL) {
+		key->len = len;
+		val->begin = "";
+		val->len = 0;
+	}
+	else {
+		key->len = eq - arg;
+		val->begin = eq + 1;
+		val->len = len - key->len - 1;
+	}
+
+	return key->len > 0;
+}
+
 static void
 rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 								   const char *key, gsize key_len,
@@ -1056,13 +1082,16 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'X':
 			IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
 			{
-				/* Parse KEY=VALUE format */
-				const char *eq = memchr(hv_tok->begin, '=', hv_tok->len);
+				/* No commas: this is a macro argument */
+				rspamd_ftok_t arg_key;
+				rspamd_ftok_t arg_val;
 
-				if (eq && eq > hv_tok->begin) {
+				/* Parse KEY=VALUE or KEY format */
+				if (rspamd_protocol_split_esmtp_arg(hv_tok->begin, hv_tok->len,
+													&arg_key, &arg_val)) {
 					rspamd_protocol_add_mail_esmtp_arg(task,
-													   hv_tok->begin, eq - hv_tok->begin,
-													   eq + 1, hv_tok->begin + hv_tok->len - eq - 1);
+													   arg_key.begin, arg_key.len,
+													   arg_val.begin, arg_val.len);
 					msg_debug_protocol("parsed mail ESMTP arg from header");
 				}
 			}
@@ -1082,14 +1111,17 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 										  hv_tok);
 					}
 					else {
-						/* Parse KEY=VALUE */
-						p = colon + 1;
-						const char *eq = memchr(p, '=', end - p);
+						rspamd_ftok_t arg_key;
+						rspamd_ftok_t arg_val;
 
-						if (eq && eq > p) {
+						/* Parse KEY=VALUE or KEY */
+						p = colon + 1;
+
+						if (rspamd_protocol_split_esmtp_arg(p, end - p,
+															&arg_key, &arg_val)) {
 							if (rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
-																   p, eq - p,
-																   eq + 1, end - eq - 1)) {
+																   arg_key.begin, arg_key.len,
+																   arg_val.begin, arg_val.len)) {
 								msg_debug_protocol("parsed rcpt ESMTP arg for idx %ul", rcpt_idx);
 							}
 							else {
