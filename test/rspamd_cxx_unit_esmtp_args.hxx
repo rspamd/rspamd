@@ -12,6 +12,8 @@
 #include "libserver/protocol.h"
 #include "libserver/http/http_message.h"
 #include "libserver/cfg_file.h"
+#include "libmime/email_addr.h"
+#include "libutil/addr.h"
 #include "libutil/fstring.h"
 #include "libutil/str_util.h"
 #include <cstring>
@@ -322,6 +324,80 @@ TEST_SUITE("esmtp_args")
 		CHECK(holder.metadata(json.c_str(), true));
 		REQUIRE(holder.task->rcpt_esmtp_args != nullptr);
 		CHECK(holder.task->rcpt_esmtp_args->len == 1024);
+	}
+
+	/* Each repeated header used to overwrite, and leak, the previous address */
+	TEST_CASE("v2 repeated From and IP headers keep the last good value")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"From", "<first@example.com>"},
+					 {"IP", "192.0.2.1"},
+					 {"From", "<second@example.org>"},
+					 {"IP", "198.51.100.7"},
+					 /* Not an address: the previous one stays */
+					 {"IP", "not-an-address"}});
+		auto *task = holder.task;
+		REQUIRE(task->from_envelope != nullptr);
+		CHECK(std::string(task->from_envelope->addr, task->from_envelope->addr_len) ==
+			  "second@example.org");
+		REQUIRE(task->from_addr != nullptr);
+		CHECK(std::string(rspamd_inet_address_to_string(task->from_addr)) == "198.51.100.7");
+		CHECK((task->flags & RSPAMD_TASK_FLAG_NO_IP) == 0);
+	}
+
+	/*
+	 * Settings elements are refcounted and live in the config pool, so a lost
+	 * reference is invisible to LSan: count the references instead.
+	 */
+	TEST_CASE("v2 repeated Settings-ID headers keep one owned reference")
+	{
+		using namespace rspamd_esmtp_args_test;
+		const char *last = nullptr;
+		SUBCASE("known id last")
+		{
+			last = "second";
+		}
+		SUBCASE("unknown id last")
+		{
+			last = "missing";
+		}
+
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		rspamd_config_register_settings_id(cfg, "first", nullptr, nullptr,
+										   RSPAMD_SETTINGS_POLICY_DEFAULT);
+		rspamd_config_register_settings_id(cfg, "second", nullptr, nullptr,
+										   RSPAMD_SETTINGS_POLICY_DEFAULT);
+		auto *first = rspamd_config_find_settings_name_ref(cfg, "first", strlen("first"));
+		auto *second = rspamd_config_find_settings_name_ref(cfg, "second", strlen("second"));
+		REQUIRE(first != nullptr);
+		REQUIRE(second != nullptr);
+		const auto first_refs = first->ref.refcount;
+		const auto second_refs = second->ref.refcount;
+
+		{
+			task_holder holder(false, cfg);
+			holder.send({{"Settings-ID", "first"},
+						 {"Settings-ID", "second"},
+						 {"Settings-ID", last}});
+
+			if (strcmp(last, "second") == 0) {
+				CHECK(holder.task->settings_elt == second);
+				CHECK(second->ref.refcount == second_refs + 1);
+			}
+			else {
+				CHECK(holder.task->settings_elt == nullptr);
+				CHECK(second->ref.refcount == second_refs);
+			}
+
+			CHECK(first->ref.refcount == first_refs);
+			holder.close();
+			CHECK(second->ref.refcount == second_refs);
+		}
+
+		REF_RELEASE(first);
+		REF_RELEASE(second);
+		rspamd_config_free(cfg);
 	}
 }
 

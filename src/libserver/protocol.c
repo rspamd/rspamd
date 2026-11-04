@@ -521,6 +521,10 @@ rspamd_protocol_process_flags(struct rspamd_task *task, const rspamd_ftok_t *hdr
  * v3 (UCL metadata) request formats.
  */
 
+/*
+ * The setters below can run once per repeated header or query argument: the
+ * last value wins, and the value it replaces is released.
+ */
 static void
 rspamd_protocol_set_from_envelope(struct rspamd_task *task,
 								  const char *from_str, gsize from_len)
@@ -528,6 +532,10 @@ rspamd_protocol_set_from_envelope(struct rspamd_task *task,
 	if (from_len == 0) {
 		from_str = "<>";
 		from_len = 2;
+	}
+
+	if (task->from_envelope) {
+		rspamd_email_address_free(task->from_envelope);
 	}
 
 	task->from_envelope = rspamd_email_address_from_smtp(from_str, from_len);
@@ -543,13 +551,22 @@ rspamd_protocol_set_ip(struct rspamd_task *task,
 					   const char *ip_str, gsize ip_len,
 					   gboolean *has_ip)
 {
-	if (!rspamd_parse_inet_address(&task->from_addr,
+	rspamd_inet_addr_t *addr = NULL;
+
+	/* The target is written on success only, a bad value keeps the old one */
+	if (!rspamd_parse_inet_address(&addr,
 								   ip_str, ip_len,
 								   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		msg_err_protocol("bad ip value: '%*s'", (int) ip_len, ip_str);
 	}
 	else {
 		msg_debug_protocol("read IP value: %*s", (int) ip_len, ip_str);
+
+		if (task->from_addr) {
+			rspamd_inet_address_free(task->from_addr);
+		}
+
+		task->from_addr = addr;
 		*has_ip = TRUE;
 	}
 }
@@ -558,6 +575,11 @@ static void
 rspamd_protocol_set_settings_id(struct rspamd_task *task,
 								const char *id_str, gsize id_len)
 {
+	/* The task owns a reference to its settings element */
+	if (task->settings_elt) {
+		REF_RELEASE(task->settings_elt);
+	}
+
 	task->settings_elt = rspamd_config_find_settings_name_ref(
 		task->cfg, id_str, id_len);
 
