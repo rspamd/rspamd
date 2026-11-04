@@ -11,11 +11,14 @@
 #include "libserver/task.h"
 #include "libserver/protocol.h"
 #include "libserver/http/http_message.h"
+#include "libserver/cfg_file.h"
 #include "libutil/fstring.h"
 #include "libutil/str_util.h"
 #include <cstring>
+#include <initializer_list>
 #include <memory>
 #include <string>
+#include <utility>
 
 /* Run this suite under ASan/LSan: without protocol pool destructors the
  * parsing assertions pass, but the containers and their tokens leak.
@@ -40,14 +43,14 @@ static std::string lookup(GHashTable *args, const char *name)
 
 class task_holder {
 public:
-	explicit task_holder(bool external_pool = false)
+	explicit task_holder(bool external_pool = false, struct rspamd_config *cfg = nullptr)
 	{
 		loop = ev_loop_new(0);
 		REQUIRE(loop != nullptr);
 		if (external_pool) {
 			pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "esmtp_test", 0);
 		}
-		task = rspamd_task_new(nullptr, nullptr, pool, nullptr, loop, FALSE);
+		task = rspamd_task_new(nullptr, cfg, pool, nullptr, loop, FALSE);
 	}
 
 	task_holder(const task_holder &) = delete;
@@ -81,6 +84,16 @@ public:
 			replace ? "0:notify=SUCCESS" : "0:NOTIFY=FAILURE");
 		rspamd_http_message_add_header(msg.get(), "X-Rspamd-Rcpt-Esmtp-Args",
 			"3:ORCPT=rfc822;dest@example.net");
+		REQUIRE(rspamd_protocol_handle_headers(task, msg.get()));
+	}
+
+	/* One v2 request; repeated names keep their order, as on the wire */
+	void send(std::initializer_list<std::pair<const char *, const char *>> hdrs)
+	{
+		message_ptr msg{rspamd_http_new_message(HTTP_REQUEST), rspamd_http_message_unref};
+		for (const auto &hdr: hdrs) {
+			rspamd_http_message_add_header(msg.get(), hdr.first, hdr.second);
+		}
 		REQUIRE(rspamd_protocol_handle_headers(task, msg.get()));
 	}
 
@@ -222,6 +235,93 @@ TEST_SUITE("esmtp_args")
 			CHECK(lookup(static_cast<GHashTable *>(g_ptr_array_index(rcpts.get(), 0)), "notify") == "NEVER");
 		}
 		CHECK(borrowed_tokens_freed == 6);
+	}
+
+	/*
+	 * The index used to go through strtol into an int: a negative one (or one
+	 * that wraps to negative) read and wrote outside of the array, and a large
+	 * one grew it to billions of slots.
+	 */
+	TEST_CASE("v2 malformed or out of range recipient indexes are rejected")
+	{
+		using namespace rspamd_esmtp_args_test;
+		/* No config, so the built-in bound of 1024 recipients applies */
+		const char *rejected[] = {
+			"-1:NOTIFY=NEVER",
+			"-2147483648:NOTIFY=NEVER",
+			"4294967295:NOTIFY=NEVER",
+			"2147483647:NOTIFY=NEVER",
+			"18446744073709551616:NOTIFY=NEVER",
+			"1024:NOTIFY=NEVER",
+			"abc:NOTIFY=NEVER",
+			"1x:NOTIFY=NEVER",
+			" 1:NOTIFY=NEVER",
+			"+1:NOTIFY=NEVER",
+			":NOTIFY=NEVER",
+		};
+
+		for (const char *value: rejected) {
+			CAPTURE(value);
+			task_holder holder;
+			holder.send({{"X-Rspamd-Rcpt-Esmtp-Args", value}});
+			CHECK(holder.task->rcpt_esmtp_args == nullptr);
+		}
+
+		/* Next to valid indexes, bad ones must neither be read nor written */
+		task_holder holder;
+		holder.send({{"X-Rspamd-Rcpt-Esmtp-Args", "1:NOTIFY=NEVER"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "-1:ORCPT=rfc822;neg@example.net"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "4294967295:ORCPT=rfc822;wrap@example.net"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1024:ORCPT=rfc822;over@example.net"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1023:ORCPT=rfc822;last@example.net"}});
+		auto *rcpts = holder.task->rcpt_esmtp_args;
+		REQUIRE(rcpts != nullptr);
+		REQUIRE(rcpts->len == 1024);
+		CHECK(g_ptr_array_index(rcpts, 0) == nullptr);
+		auto *second = static_cast<GHashTable *>(g_ptr_array_index(rcpts, 1));
+		CHECK(g_hash_table_size(second) == 1);
+		CHECK(lookup(second, "NOTIFY") == "NEVER");
+		auto *last = static_cast<GHashTable *>(g_ptr_array_index(rcpts, 1023));
+		CHECK(g_hash_table_size(last) == 1);
+		CHECK(lookup(last, "ORCPT") == "rfc822;last@example.net");
+	}
+
+	TEST_CASE("recipient indexes are bounded by max_recipients in both protocols")
+	{
+		using namespace rspamd_esmtp_args_test;
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		cfg->max_recipients = 4;
+		{
+			task_holder holder(false, cfg);
+			holder.send({{"X-Rspamd-Rcpt-Esmtp-Args", "3:NOTIFY=NEVER"},
+						 {"X-Rspamd-Rcpt-Esmtp-Args", "4:NOTIFY=DELAY"}});
+			auto *rcpts = holder.task->rcpt_esmtp_args;
+			REQUIRE(rcpts != nullptr);
+			REQUIRE(rcpts->len == 4);
+			CHECK(lookup(static_cast<GHashTable *>(g_ptr_array_index(rcpts, 3)), "NOTIFY") == "NEVER");
+		}
+		{
+			/* v3 indexes are array positions: entries past the bound are dropped */
+			task_holder holder(false, cfg);
+			CHECK(holder.metadata(R"({"rcpt_esmtp_args":[null,null,null,{"NOTIFY":"NEVER"},{"NOTIFY":"DELAY"},null]})",
+								  true));
+			auto *rcpts = holder.task->rcpt_esmtp_args;
+			REQUIRE(rcpts != nullptr);
+			REQUIRE(rcpts->len == 4);
+			CHECK(lookup(static_cast<GHashTable *>(g_ptr_array_index(rcpts, 3)), "NOTIFY") == "NEVER");
+		}
+		rspamd_config_free(cfg);
+
+		/* Without a config the built-in bound applies to v3 as well */
+		std::string json = R"({"rcpt_esmtp_args":[)";
+		for (unsigned i = 0; i < 1030; i++) {
+			json += "null,";
+		}
+		json += R"({"NOTIFY":"NEVER"}]})";
+		task_holder holder;
+		CHECK(holder.metadata(json.c_str(), true));
+		REQUIRE(holder.task->rcpt_esmtp_args != nullptr);
+		CHECK(holder.task->rcpt_esmtp_args->len == 1024);
 	}
 }
 

@@ -625,18 +625,50 @@ rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 	g_hash_table_replace(task->mail_esmtp_args, key_tok, val_tok);
 }
 
-static void
-rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
-								   int rcpt_idx,
-								   const char *key, gsize key_len,
-								   const char *val, gsize val_len)
+/*
+ * Recipient indexes come from the client and size the per-recipient array, so
+ * they are bounded by `max_recipients`, or by this when the config sets none.
+ */
+#define RSPAMD_PROTOCOL_MAX_RCPT_ESMTP_ARGS 1024
+
+static gulong
+rspamd_protocol_rcpt_esmtp_args_limit(struct rspamd_task *task)
 {
+	if (task->cfg && task->cfg->max_recipients > 0) {
+		return task->cfg->max_recipients;
+	}
+
+	return RSPAMD_PROTOCOL_MAX_RCPT_ESMTP_ARGS;
+}
+
+/* Creates the slot for `rcpt_idx` (NULL if new), FALSE if out of range */
+static gboolean
+rspamd_protocol_rcpt_esmtp_args_reserve(struct rspamd_task *task,
+										gulong rcpt_idx)
+{
+	if (rcpt_idx >= rspamd_protocol_rcpt_esmtp_args_limit(task)) {
+		return FALSE;
+	}
+
 	if (!task->rcpt_esmtp_args) {
 		task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
 	}
 
-	while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
-		g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+	if (task->rcpt_esmtp_args->len <= rcpt_idx) {
+		g_ptr_array_set_size(task->rcpt_esmtp_args, rcpt_idx + 1);
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
+								   gulong rcpt_idx,
+								   const char *key, gsize key_len,
+								   const char *val, gsize val_len)
+{
+	if (!rspamd_protocol_rcpt_esmtp_args_reserve(task, rcpt_idx)) {
+		return FALSE;
 	}
 
 	GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
@@ -655,6 +687,8 @@ rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
 	rspamd_ftok_t *val_tok = rspamd_ftok_map(fval);
 
 	g_hash_table_replace(rcpt_args, key_tok, val_tok);
+
+	return TRUE;
 }
 
 /*
@@ -1011,19 +1045,30 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 				const char *colon = memchr(p, ':', hv_tok->len);
 
 				if (colon && colon > p) {
-					char *endptr;
-					int rcpt_idx = strtol(p, &endptr, 10);
+					gulong rcpt_idx;
 
-					if (endptr == colon) {
+					/* Digits only: no sign, spaces or overflow */
+					if (!rspamd_strtoul(p, colon - p, &rcpt_idx)) {
+						msg_warn_protocol("bad recipient index in rcpt ESMTP arg: '%T'",
+										  hv_tok);
+					}
+					else {
 						/* Parse KEY=VALUE */
 						p = colon + 1;
 						const char *eq = memchr(p, '=', end - p);
 
 						if (eq && eq > p) {
-							rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
-															   p, eq - p,
-															   eq + 1, end - eq - 1);
-							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d", rcpt_idx);
+							if (rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
+																   p, eq - p,
+																   eq + 1, end - eq - 1)) {
+								msg_debug_protocol("parsed rcpt ESMTP arg for idx %ul", rcpt_idx);
+							}
+							else {
+								msg_warn_protocol("recipient index %ul in rcpt ESMTP arg is "
+												  "out of range, limit is %ul",
+												  rcpt_idx,
+												  rspamd_protocol_rcpt_esmtp_args_limit(task));
+							}
 						}
 					}
 				}
@@ -2728,9 +2773,18 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	elt = ucl_object_lookup(metadata, "rcpt_esmtp_args");
 	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
 		ucl_object_iter_t arr_it = NULL;
-		int rcpt_idx = 0;
+		gulong rcpt_idx = 0;
+		const gulong max_rcpts = rspamd_protocol_rcpt_esmtp_args_limit(task);
 
 		while ((cur = ucl_object_iterate(elt, &arr_it, true)) != NULL) {
+			/* Same bound as v2, so the index is always in range below */
+			if (rcpt_idx >= max_rcpts) {
+				msg_warn_protocol("rcpt_esmtp_args has more than %ul entries, "
+								  "ignore the rest",
+								  max_rcpts);
+				break;
+			}
+
 			if (ucl_object_type(cur) == UCL_OBJECT) {
 				ucl_object_iter_t obj_it = NULL;
 				const ucl_object_t *kv;
@@ -2746,12 +2800,7 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 			}
 			else {
 				/* Non-object entry: ensure array slot exists as NULL */
-				if (!task->rcpt_esmtp_args) {
-					task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
-				}
-				while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
-					g_ptr_array_add(task->rcpt_esmtp_args, NULL);
-				}
+				rspamd_protocol_rcpt_esmtp_args_reserve(task, rcpt_idx);
 			}
 			rcpt_idx++;
 		}
