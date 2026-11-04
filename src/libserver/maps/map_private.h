@@ -167,6 +167,15 @@ struct rspamd_map_backend {
 
 struct map_periodic_cbdata;
 
+enum rspamd_map_periodic_opts {
+	RSPAMD_MAP_SCHEDULE_NORMAL = 0,
+	RSPAMD_MAP_SCHEDULE_ERROR = (1u << 0u),
+	RSPAMD_MAP_SCHEDULE_LOCKED = (1u << 1u),
+	RSPAMD_MAP_SCHEDULE_INIT = (1u << 2u),
+	/* The map file has just been truncated: an editor is likely rewriting it */
+	RSPAMD_MAP_SCHEDULE_TRUNCATED = (1u << 3u),
+};
+
 /*
  * Why a map update has failed; it decides how soon we try again
  */
@@ -217,7 +226,9 @@ struct rspamd_map {
 	/* Consecutive failed updates of the same class, reset by a successful one */
 	enum rspamd_map_error_class error_class;
 	unsigned int error_streak;
-	double error_retry_after; /* Retry-After of the last failure, 0 if none */
+	/* Retry-After of the last failure; zero is a valid value */
+	bool error_has_retry_after;
+	double error_retry_after;
 	bool active_http;
 	bool non_trivial;          /* E.g. has http backends in active mode */
 	bool file_only;            /* No HTTP backends found */
@@ -244,6 +255,7 @@ struct map_periodic_cbdata {
 	ev_timer ev;
 	gboolean need_modify;
 	enum rspamd_map_error_class errored;
+	bool has_retry_after;
 	double retry_after;
 	unsigned int cur_backend;
 	ref_entry_t ref;
@@ -306,13 +318,31 @@ enum rspamd_map_error_class rspamd_map_http_error_class(int code,
  * @param cls class of the failure
  * @param streak number of consecutive failures of this class, this one included
  * @param has_data whether the map has any data to serve meanwhile
- * @param retry_after delay requested by the source, 0 if none
+ * @param has_retry_after whether the source has requested a delay
+ * @param retry_after delay requested by the source, zero meaning at once
  */
 double rspamd_map_error_delay(double poll_timeout,
 							  enum rspamd_map_error_class cls,
 							  unsigned int streak,
 							  bool has_data,
+							  bool has_retry_after,
 							  double retry_after);
+
+/**
+ * Parses a Retry-After header value (delta-seconds or an HTTP-date)
+ * @param hdr header value, NULL if there is no header
+ * @param now time the delay is counted from
+ * @param delay output: delay in seconds, zero meaning at once
+ * @return FALSE if the header is missing or malformed
+ */
+gboolean rspamd_map_parse_retry_after(const rspamd_ftok_t *hdr, time_t now,
+									  double *delay);
+
+/**
+ * Arms the timer of the next update check of a map
+ * @param how a combination of `enum rspamd_map_periodic_opts`
+ */
+void rspamd_map_schedule_periodic(struct rspamd_map *map, int how);
 
 #ifdef __cplusplus
 }
