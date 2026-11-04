@@ -64,6 +64,7 @@
 #include "rspamd_cxx_unit_tld_lookup.hxx"
 #include "rspamd_cxx_unit_lru_hash.hxx"
 #include "rspamd_cxx_unit_dkim_cache.hxx"
+#include "rspamd_cxx_unit_mime_expressions.hxx"
 #include "rspamd_cxx_unit_fuzzy_key_ips.hxx"
 #include "rspamd_cxx_unit_lua_task.hxx"
 #include "rspamd_cxx_unit_redis_connection.hxx"
