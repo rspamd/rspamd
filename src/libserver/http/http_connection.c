@@ -183,7 +183,14 @@ rspamd_http_parse_key(rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 											   data->begin + data->len - eq_pos - 1,
 											   RSPAMD_KEYPAIR_KEX);
 				if (pk != NULL) {
-					if (memcmp(rspamd_keypair_get_id(priv->local_key),
+					/*
+					 * Keep a peer key that is already set: a client has
+					 * its server key moved in before the reply is read,
+					 * and an unauthenticated header must not replace it.
+					 * A repeated Key header is ignored the same way.
+					 */
+					if (priv->msg->peer_key == NULL &&
+						memcmp(rspamd_keypair_get_id(priv->local_key),
 							   decoded_id,
 							   RSPAMD_KEYPAIR_SHORT_ID_LEN) == 0) {
 						priv->msg->peer_key = pk;
