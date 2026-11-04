@@ -150,9 +150,19 @@ struct rspamd_mime_boundary_index {
 	unsigned int nboundaries; /* the array length it was built for */
 };
 
+struct rspamd_mime_range {
+	goffset begin;
+	goffset end;
+};
+
 struct rspamd_mime_parser_runtime {
 	GArray *boundaries; /* Boundaries found in the whole message */
 	struct rspamd_mime_boundary_index *bindex; /* built on demand */
+	/*
+	 * Bodies of parts parsed by runtimes of their own (embedded messages,
+	 * S/MIME content), as offsets from start: see the leftovers pass
+	 */
+	GArray *nested_bodies;
 	struct rspamd_mime_parser_runtime *root;
 	const char *start;
 	const char *pos;
@@ -209,6 +219,54 @@ rspamd_mime_parser_check_part_limit(struct rspamd_task *task, GError **err)
 	}
 
 	return TRUE;
+}
+
+/*
+ * A part whose content has been parsed by a runtime of its own (an embedded
+ * message, S/MIME content) had its orphan boundaries looked for there, so the
+ * leftovers pass of st skips its body: otherwise each level of embedded
+ * messages parses the next one twice. Called once that runtime is done.
+ *
+ * That holds only if the other runtime saw the same lines: not for a base64
+ * or uuencoded body (valid ones have no boundaries in the raw text, so st
+ * loses nothing by looking), and not once boundary candidates have run out.
+ */
+static void
+rspamd_mime_parser_add_nested_body(struct rspamd_mime_parser_runtime *st,
+								   const struct rspamd_mime_part *part)
+{
+	const char *begin = part->raw_data.begin;
+	struct rspamd_mime_range r;
+
+	if (part->cte == RSPAMD_CTE_B64 || part->cte == RSPAMD_CTE_UUE ||
+		st->root->boundary_limit_reached) {
+		return;
+	}
+
+	if (begin == NULL || begin < st->start || begin > st->end ||
+		part->raw_data.len > (gsize) (st->end - begin)) {
+		return;
+	}
+
+	if (st->nested_bodies == NULL) {
+		st->nested_bodies = g_array_new(FALSE, FALSE, sizeof(struct rspamd_mime_range));
+	}
+
+	r.begin = begin - st->start;
+	r.end = r.begin + part->raw_data.len;
+	g_array_append_val(st->nested_bodies, r);
+}
+
+static int
+rspamd_mime_range_cmp(const void *a, const void *b)
+{
+	const struct rspamd_mime_range *ra = a, *rb = b;
+
+	if (ra->begin != rb->begin) {
+		return ra->begin < rb->begin ? -1 : 1;
+	}
+
+	return 0;
 }
 
 /*
@@ -1949,6 +2007,24 @@ end:
 }
 
 static void
+rspamd_mime_preprocess_range(struct rspamd_task *task,
+							 struct rspamd_mime_parser_runtime *st,
+							 const char *start, gsize len)
+{
+	if (start == st->start && len > 2 && start[0] == '-' && start[1] == '-') {
+		/*
+		 * The patterns include the line break before the dashes, and there
+		 * is none at the start of the buffer (e.g. of an embedded message)
+		 */
+		rspamd_mime_preprocess_cb(NULL, 0, 0, 2, start, len, st);
+	}
+
+	rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
+							   start, len,
+							   rspamd_mime_preprocess_cb, st, NULL);
+}
+
+static void
 rspamd_mime_preprocess_message(struct rspamd_task *task,
 							   struct rspamd_mime_part *top,
 							   struct rspamd_mime_parser_runtime *st)
@@ -1966,16 +2042,10 @@ rspamd_mime_preprocess_message(struct rspamd_task *task,
 			lookup_len++;
 		}
 
-		rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
-								   lookup_start,
-								   lookup_len,
-								   rspamd_mime_preprocess_cb, st, NULL);
+		rspamd_mime_preprocess_range(task, st, lookup_start, lookup_len);
 	}
 	else {
-		rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
-								   st->pos,
-								   st->end - st->pos,
-								   rspamd_mime_preprocess_cb, st, NULL);
+		rspamd_mime_preprocess_range(task, st, st->pos, st->end - st->pos);
 	}
 }
 
@@ -1985,6 +2055,11 @@ rspamd_mime_parse_stack_free(struct rspamd_mime_parser_runtime *st)
 	if (st) {
 		rspamd_mime_boundary_index_free(st->bindex);
 		g_array_free(st->boundaries, TRUE);
+
+		if (st->nested_bodies) {
+			g_array_free(st->nested_bodies, TRUE);
+		}
+
 		g_free(st);
 	}
 }
@@ -2005,6 +2080,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 	GString str;
 	struct rspamd_mime_parser_runtime *nst = st;
+	gboolean preprocessed = FALSE;
 
 	if (st->nesting > max_nested) {
 		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
@@ -2187,6 +2263,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		(sel->flags & (RSPAMD_CONTENT_TYPE_MULTIPART | RSPAMD_CONTENT_TYPE_MESSAGE))) {
 		/* Not a trivial message, need to preprocess */
 		rspamd_mime_preprocess_message(task, npart, nst);
+		preprocessed = TRUE;
 	}
 
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
@@ -2237,7 +2314,13 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 											   *end_boundary = NULL;
 		goffset cur_offset = nst->pos - nst->start,
 				end_offset = st->end - st->start;
-		unsigned int sel_idx = 0;
+		unsigned int sel_idx = 0, body_idx = 0, nbodies = 0;
+
+		if (nst->nested_bodies) {
+			/* Leftovers come in order, so one pass over sorted bodies is enough */
+			g_array_sort(nst->nested_bodies, rspamd_mime_range_cmp);
+			nbodies = nst->nested_bodies->len;
+		}
 
 		for (;;) {
 			start_boundary = NULL;
@@ -2271,6 +2354,19 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 
 				start = nst->start + start_boundary->start;
 
+				while (body_idx < nbodies &&
+					   g_array_index(nst->nested_bodies, struct rspamd_mime_range, body_idx).end <=
+						   start_boundary->start) {
+					body_idx++;
+				}
+
+				if (body_idx < nbodies &&
+					g_array_index(nst->nested_bodies, struct rspamd_mime_range, body_idx).begin <
+						end - nst->start) {
+					/* Another runtime has looked for leftovers in this content */
+					continue;
+				}
+
 				if (end > start &&
 					(ret = rspamd_mime_process_multipart_node(task, nst,
 															  NULL, start, end, FALSE, err)) != RSPAMD_MIME_PARSE_OK) {
@@ -2293,6 +2389,16 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	}
 
 	if (nst != st) {
+		/*
+		 * nst has looked for orphan boundaries in this message if it has
+		 * collected candidates, or if a part in it (e.g. one promoted to a
+		 * message) has done so. A text body is left to st as before: a
+		 * signature line ("-- ") must not start a part of its own.
+		 */
+		if (preprocessed || (nst->nested_bodies && nst->nested_bodies->len > 0)) {
+			rspamd_mime_parser_add_nested_body(st, part);
+		}
+
 		rspamd_mime_parse_stack_free(nst);
 	}
 
