@@ -457,7 +457,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		 */
 		zero = memchr(pos, '\0', cmdlen);
 
-		if (zero == NULL || zero > (end - sizeof(uint16_t) + 1)) {
+		if (zero == NULL) {
 			err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid "
 															 "connect command (no name)");
 			rspamd_milter_on_protocol_error(session, priv, err);
@@ -494,11 +494,15 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 			}
 
 			pos = zero + 1;
-			proto = *pos++;
+			/* The family and the port may be missing: no address then */
+			proto = pos < end ? *pos++ : RSPAMD_MILTER_CONN_UNKNOWN;
 
 			if (proto == RSPAMD_MILTER_CONN_UNKNOWN) {
 				/* We have no information about host */
 				msg_debug_milter("unknown connect address");
+			}
+			else if (end - pos < (ptrdiff_t) sizeof(port)) {
+				msg_debug_milter("no port in connect command");
 			}
 			else {
 				READ_INT_16(pos, port);
@@ -611,9 +615,9 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		pos++;
 
 		while (pos < end) {
-			zero = memchr(pos, '\0', cmdlen);
+			zero = memchr(pos, '\0', end - pos);
 
-			if (zero == NULL || zero >= end) {
+			if (zero == NULL) {
 				err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid "
 																 "macro command (no name)");
 				rspamd_milter_on_protocol_error(session, priv, err);
@@ -638,7 +642,6 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					msg_debug_milter("got macro: %T -> %T",
 									 name_tok, value_tok);
 
-					cmdlen -= zero_val - pos;
 					pos = zero_val + 1;
 				}
 				else {
