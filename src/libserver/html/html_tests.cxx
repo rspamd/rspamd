@@ -633,9 +633,53 @@ TEST_SUITE("html")
 
 			const auto *atag = find_tag(hc, Tag_A);
 			CHECK(atag != nullptr);
-			CHECK(atag->components.size() == max_attrs_per_tag);
-			/* The first attribute must survive */
+			/* The budget is for attributes rspamd does not interpret */
+			CHECK(atag->components.size() == max_attrs_per_tag + 1);
 			CHECK(atag->find_component_by_name("href").has_value());
+		}
+
+		SUBCASE("junk attributes do not push out the ones rspamd uses")
+		{
+			/* Browsers keep a link whatever comes before it */
+			std::string input = "<a";
+			for (unsigned int i = 0; i < max_attrs_per_tag * 2; i++) {
+				input += fmt::format(" data-x{}=\"{}\"", i, i);
+			}
+			input += " href=\"http://evil.example.com/\" style=\"color:red\" face=\"x\">link</a>";
+
+			auto *hc = process(input);
+			CHECK(hc != nullptr);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS) != 0);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			CHECK(atag != nullptr);
+			CHECK(atag->components.size() == max_attrs_per_tag + 3);
+			REQUIRE(atag->find_href().has_value());
+			CHECK(atag->find_href().value() == "http://evil.example.com/");
+			CHECK(atag->find_style().has_value());
+			/* Read by name to leave foreign content, so kept as well */
+			CHECK(atag->find_component_by_name("face").has_value());
+		}
+
+		SUBCASE("a repeated attribute is ignored, the first one wins")
+		{
+			/* As in browsers; repeating one must not use up any budget either */
+			std::string input = "<a href=\"http://first.example.com/\"";
+			for (unsigned int i = 0; i < max_attrs_per_tag * 2; i++) {
+				input += " href=\"http://other.example.com/\" action=\"x\"";
+			}
+			input += " title=\"t\">link</a>";
+
+			auto *hc = process(input);
+			CHECK(hc != nullptr);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS) == 0);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			CHECK(atag != nullptr);
+			CHECK(atag->components.size() == 2);
+			REQUIRE(atag->find_href().has_value());
+			CHECK(atag->find_href().value() == "http://first.example.com/");
+			CHECK(atag->find_component_by_name("title").has_value());
 		}
 
 		SUBCASE("task-global budget spans parts")
@@ -660,13 +704,17 @@ TEST_SUITE("html")
 			CHECK(stag != nullptr);
 			CHECK(stag->components.size() == max_attrs_per_tag);
 
-			/* The second part of the same task gets no attributes at all */
-			auto *hc2 = process("<a href=\"http://example.com\">link</a>");
+			/*
+			 * The second part of the same task gets no more attributes rspamd
+			 * does not interpret, but still its link
+			 */
+			auto *hc2 = process("<a href=\"http://example.com\" data-x=\"1\">link</a>");
 			CHECK(hc2 != nullptr);
 			CHECK((hc2->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS) != 0);
 			const auto *atag = find_tag(hc2, Tag_A);
 			CHECK(atag != nullptr);
-			CHECK(atag->components.empty());
+			CHECK(atag->components.size() == 1);
+			CHECK(atag->find_href().has_value());
 		}
 
 		rspamd_mempool_delete(pool);

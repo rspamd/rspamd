@@ -42,12 +42,17 @@
 
 #include <functional>
 #include <algorithm>
+#include <array>
+#include <bitset>
+#include <limits>
+#include <optional>
 #include <string>
 #include <unicode/uversion.h>
 
 namespace rspamd::html {
 
 static const unsigned int max_tags = 8192;            /* Ignore tags if this maximum is reached */
+/* Budgets of attributes rspamd does not interpret; the ones it does are always kept, once each */
 static const unsigned int max_attrs_per_tag = 128;    /* Ignore attributes of a single tag if this maximum is reached */
 static const unsigned int max_attrs_per_task = 65536; /* Ignore attributes in all HTML parts of a task if this maximum is reached */
 
@@ -947,13 +952,44 @@ enum tag_parser_state {
 	tag_end,
 	slash_after_value,
 };
+/*
+ * Attributes the parser reads by name although they have no component type of
+ * their own: they are kept like the typed ones, see store_component_value
+ */
+static constexpr std::array<std::string_view, 3> html_untyped_interpreted_attrs{
+	"face", "encoding", "aria-label"};
+/* Typed components first, then the attributes above */
+static constexpr std::size_t html_interpreted_attrs_count =
+	std::numeric_limits<std::uint8_t>::max() + 1 + html_untyped_interpreted_attrs.size();
+
+static inline auto
+html_interpreted_attr_index(std::string_view name) -> std::optional<std::size_t>
+{
+	auto known_it = html_components_map.find(name);
+
+	if (known_it != html_components_map.end()) {
+		return static_cast<std::size_t>(known_it->second);
+	}
+
+	for (std::size_t i = 0; i < html_untyped_interpreted_attrs.size(); i++) {
+		if (name == html_untyped_interpreted_attrs[i]) {
+			return std::numeric_limits<std::uint8_t>::max() + 1 + i;
+		}
+	}
+
+	return std::nullopt;
+}
+
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
 	std::string attr_name;              // Store current attribute name
 	const char *value_start = nullptr;  // Track where attribute value starts in input
 	const char *html_start = nullptr;   // Base pointer to HTML buffer start
-	unsigned int *attrs_count = nullptr;// Task-global attributes counter (task pool variable)
+	unsigned int *attrs_count = nullptr;// Task-global unknown attributes counter (task pool variable)
+	/* Of the current tag: attributes rspamd interprets that it has, and other attributes */
+	std::bitset<html_interpreted_attrs_count> known_attrs;
+	unsigned int unknown_attrs = 0;
 
 	void reset()
 	{
@@ -961,6 +997,8 @@ struct tag_content_parser_state {
 		buf.clear();
 		attr_name.clear();
 		value_start = nullptr;
+		known_attrs.reset();
+		unknown_attrs = 0;
 	}
 };
 
@@ -988,26 +1026,49 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	 */
 	auto store_component_value = [&]() -> void {
 		if (!parser_env.attr_name.empty()) {
-			/*
-			 * Enforce both per-tag and task-global attribute budgets: a single
-			 * tag must not evade the tags limit by cramming everything into
-			 * attributes
-			 */
-			if (tag->components.size() >= max_attrs_per_tag ||
-				*parser_env.attrs_count >= max_attrs_per_task) {
-				if (!(hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS)) {
-					msg_warn_pool("too many attributes in HTML tags; ignoring the rest");
-					hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_ATTRS;
-				}
-
+			auto drop_attribute = [&]() -> void {
 				parser_env.buf.clear();
 				parser_env.attr_name.clear();
 				parser_env.value_start = nullptr;
+			};
+			auto interpreted_idx = html_interpreted_attr_index(parser_env.attr_name);
 
-				return;
+			if (interpreted_idx) {
+				/*
+				 * An attribute rspamd interprets (href, src, style...) is never
+				 * dropped for the budgets below, so junk attributes cannot push
+				 * it out. A repeated one is ignored, as browsers do (the first
+				 * one wins), which also bounds them per tag.
+				 */
+				if (parser_env.known_attrs.test(*interpreted_idx)) {
+					drop_attribute();
+
+					return;
+				}
+
+				parser_env.known_attrs.set(*interpreted_idx);
 			}
+			else {
+				/*
+				 * Other attributes have per-tag and task-global budgets: a single
+				 * tag must not evade the tags limit by cramming everything into
+				 * attributes
+				 */
+				if (parser_env.unknown_attrs >= max_attrs_per_tag ||
+					*parser_env.attrs_count >= max_attrs_per_task) {
+					if (!(hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS)) {
+						msg_warn_pool("too many attributes in HTML tags; ignoring the rest");
+						hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_ATTRS;
+					}
 
-			(*parser_env.attrs_count)++;
+					drop_attribute();
+
+					return;
+				}
+
+				parser_env.unknown_attrs++;
+				(*parser_env.attrs_count)++;
+			}
 
 			std::string_view attr_name_view, value_view;
 
