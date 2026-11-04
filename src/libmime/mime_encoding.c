@@ -176,9 +176,9 @@ rspamd_mime_get_converter_cached(const char *enc,
 			  strcmp(canon_name, "iso-ir-226") == 0)) {
 			conv = g_malloc0(sizeof(*conv));
 			conv->d.conv = ucnv_open(canon_name, err);
-			conv->canon_name = g_strdup(canon_name);
 
 			if (conv->d.conv != NULL) {
+				conv->canon_name = g_strdup(canon_name);
 				ucnv_setToUCallBack(conv->d.conv,
 									UCNV_TO_U_CALLBACK_SUBSTITUTE,
 									NULL,

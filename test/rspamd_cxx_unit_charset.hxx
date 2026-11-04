@@ -219,4 +219,31 @@ TEST_SUITE("mime computed text part conversion")
 	}
 }
 
+TEST_SUITE("mime charset converter")
+{
+	TEST_CASE("charset that ICU cannot open is rejected without leaking")
+	{
+		/*
+		 * A failed ucnv_open is not cached, so the converter cache used to
+		 * leak the duplicated charset name on every such attempt
+		 * (LeakSanitizer reports it at exit).
+		 */
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"charset_conv", 0);
+		char input[] = "abc \xe9";
+
+		for (int i = 0; i < 2; i++) {
+			GError *err = nullptr;
+			gsize olen = 0;
+			auto *res = rspamd_mime_text_to_utf8(pool, input, sizeof(input) - 1,
+												 "x-rspamd-nonexistent", &olen, &err);
+			CHECK(res == nullptr);
+			REQUIRE(err != nullptr);
+			g_error_free(err);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+}
+
 #endif// RSPAMD_CXX_UNIT_CHARSET_HXX
