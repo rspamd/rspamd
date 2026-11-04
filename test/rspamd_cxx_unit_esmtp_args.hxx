@@ -346,6 +346,22 @@ TEST_SUITE("esmtp_args")
 		CHECK((task->flags & RSPAMD_TASK_FLAG_NO_IP) == 0);
 	}
 
+	/* An empty value used to hit an assertion and abort the worker */
+	TEST_CASE("v2 empty Deliver-To keeps the previous value")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"Deliver-To", "<first@example.com>"},
+					 {"Deliver-To", ""}});
+		REQUIRE(holder.task->deliver_to != nullptr);
+		CHECK(std::string(holder.task->deliver_to) == "first@example.com");
+
+		task_holder braces;
+		braces.send({{"Deliver-To", "<<<"}});
+		REQUIRE(braces.task->deliver_to != nullptr);
+		CHECK(std::string(braces.task->deliver_to).empty());
+	}
+
 	/*
 	 * Settings elements are refcounted and live in the config pool, so a lost
 	 * reference is invisible to LSan: count the references instead.

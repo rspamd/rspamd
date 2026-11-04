@@ -112,7 +112,8 @@ rspamd_ucl_parser_new_untrusted(gsize inlen)
 }
 
 /*
- * Remove <> from the fixed string and copy it to the pool
+ * Remove <> from the fixed string and copy it to the pool, NULL for an empty
+ * string (the value comes from the client)
  */
 static char *
 rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
@@ -123,11 +124,14 @@ rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
 	gboolean has_obrace = FALSE;
 
 	g_assert(in != NULL);
-	g_assert(in->len > 0);
+
+	if (in->len == 0) {
+		return NULL;
+	}
 
 	p = in->begin;
 
-	while ((g_ascii_isspace(*p) || *p == '<') && nchars < in->len) {
+	while (nchars < in->len && (g_ascii_isspace(*p) || *p == '<')) {
 		if (*p == '<') {
 			has_obrace = TRUE;
 		}
@@ -805,9 +809,12 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'D':
 			IF_HEADER(DELIVER_TO_HEADER)
 			{
-				task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
-				msg_debug_protocol("read deliver-to header, value: %s",
-								   task->deliver_to);
+				/* An empty value keeps the previous one */
+				if (hv_tok->len > 0) {
+					task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
+					msg_debug_protocol("read deliver-to header, value: %s",
+									   task->deliver_to);
+				}
 			}
 			else
 			{
