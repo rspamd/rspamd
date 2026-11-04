@@ -364,6 +364,12 @@ void rspamd_content_type_add_param(rspamd_mempool_t *pool,
 	else {
 		ct->attrs = g_hash_table_new(rspamd_ftok_icase_hash,
 									 rspamd_ftok_icase_equal);
+		/*
+		 * The parser may still reject the whole value (e.g. an empty type),
+		 * so the pool owns the table from the start
+		 */
+		rspamd_mempool_add_destructor(pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref, ct->attrs);
 	}
 
 	if (!found) {
@@ -727,9 +733,6 @@ rspamd_content_type_parse(const char *in,
 
 	if ((res = rspamd_content_type_parser(cpy, len, pool)) != NULL) {
 		if (res->attrs) {
-			rspamd_mempool_add_destructor(pool,
-										  (rspamd_mempool_destruct_t) g_hash_table_unref, res->attrs);
-
 			rspamd_postprocess_ct_attributes(pool, res->attrs,
 											 rspamd_content_type_postprocess, res);
 		}
@@ -871,6 +874,8 @@ void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 	else {
 		cd->attrs = g_hash_table_new(rspamd_ftok_icase_hash,
 									 rspamd_ftok_icase_equal);
+		rspamd_mempool_add_destructor(pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref, cd->attrs);
 	}
 
 	if (!found) {
@@ -904,8 +909,6 @@ rspamd_content_disposition_parse(const char *in,
 		if (res->attrs) {
 			rspamd_postprocess_ct_attributes(pool, res->attrs,
 											 rspamd_content_disposition_postprocess, res);
-			rspamd_mempool_add_destructor(pool,
-										  (rspamd_mempool_destruct_t) g_hash_table_unref, res->attrs);
 		}
 	}
 	else {

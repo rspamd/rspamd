@@ -22,6 +22,7 @@
 
 #include "libmime/content_type.h"
 
+#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -165,6 +166,26 @@ TEST_SUITE("content_type")
 
 		std::string_view value{param->value.begin, param->value.len};
 		CHECK(value == "ab");
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("empty type with parameters is rejected without leaking")
+	{
+		/*
+		 * The parameter table is created while parsing, before the parser
+		 * finds out that the type is empty and rejects the value. It must
+		 * still be released with the pool (LeakSanitizer reports it at exit
+		 * otherwise).
+		 */
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+
+		for (const auto *hdr: {";a=\"b\"; c=d", "; name*0*=us-ascii''a; name*1=b", " ;a=b"}) {
+			CAPTURE(hdr);
+			auto *ct = rspamd_content_type_parse(hdr, strlen(hdr), pool);
+			CHECK(ct == nullptr);
+		}
 
 		rspamd_mempool_delete(pool);
 	}
