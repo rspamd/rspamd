@@ -1432,6 +1432,17 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 
 	/* Now check boundary */
 	if (!cb->part_start) {
+		if (b->start < 0) {
+			/*
+			 * Closed before any part has started: nothing to parse. The
+			 * leftovers pass looks at the whole buffer then (no boundary
+			 * starts at offset 0), without pointing before it
+			 */
+			st->pos = st->start;
+
+			return RSPAMD_MIME_PARSE_OK;
+		}
+
 		cb->part_start = st->start + b->start;
 		st->pos = cb->part_start;
 	}
