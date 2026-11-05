@@ -59,6 +59,58 @@ rspamd_config.R_PARTS_DIFFER = {
   group = 'body'
 }
 
+-- Conservative recovery of timezone-less Date headers for spam scoring only.
+-- RFC 5322 still considers these headers malformed: INVALID_DATE is retained.
+-- This function never changes the original header or assumes the sender's zone.
+local function far_future_date_without_tz(raw, connected)
+  if type(raw) ~= 'string' or type(connected) ~= 'number' then return nil end
+  local date = raw:match('^%s*(.-)%s*$')
+  if not date then return nil end
+
+  -- Deliberately accept only a narrow RFC-like format with *no* timezone.
+  -- Other invalid forms remain exclusively INVALID_DATE.
+  local weekday, day, month, year, hour, minute, second =
+    date:match('^(%a%a%a),%s+(%d%d?)%s+(%a%a%a)%s+(%d%d%d%d)%s+(%d%d?):(%d%d):(%d%d)$')
+  if not weekday then
+    day, month, year, hour, minute, second =
+      date:match('^(%d%d?)%s+(%a%a%a)%s+(%d%d%d%d)%s+(%d%d?):(%d%d):(%d%d)$')
+  end
+  if not day then return nil end
+
+  -- Append UTC to a temporary copy for arithmetic only.
+  -- The source header remains untouched and is still INVALID_DATE.
+  local wall_as_utc, err = rspamd_parsers.parse_smtp_date(date .. ' +0000')
+  if err or type(wall_as_utc) ~= 'number' then return nil end
+
+  -- Some versions of parse_smtp_date normalize impossible calendar dates.
+  -- Verify each field against the normalized UTC timestamp to avoid accepting
+  -- e.g. 31 Feb as a date in March. Do not rely on the process locale.
+  local normalized = os.date('!*t', wall_as_utc)
+  local month_numbers = { jan = 1, feb = 2, mar = 3, apr = 4, may = 5, jun = 6,
+    jul = 7, aug = 8, sep = 9, oct = 10, nov = 11, dec = 12 }
+  local month_num = month_numbers[month:lower()]
+  if not normalized or not month_num or normalized.year ~= tonumber(year)
+      or normalized.month ~= month_num or normalized.day ~= tonumber(day)
+      or normalized.hour ~= tonumber(hour) or normalized.min ~= tonumber(minute)
+      or normalized.sec ~= tonumber(second) then
+    return nil
+  end
+
+  -- The parser may accept an incorrect weekday. Check it without using
+  -- locale-dependent names (Lua's wday: Sunday = 1).
+  local weekday_numbers = { sun = 1, mon = 2, tue = 3, wed = 4,
+    thu = 5, fri = 6, sat = 7 }
+  if weekday and weekday_numbers[weekday:lower()] ~= normalized.wday then return nil end
+
+  -- A sender in UTC+14 has the earliest possible UTC instant for this
+  -- wall-clock date. Only flag if even that instant is >48h after receipt.
+  local guaranteed_future = wall_as_utc - (14 * 3600) - connected
+  if guaranteed_future > 48 * 3600 then
+    return math.floor(guaranteed_future / 3600)
+  end
+  return nil
+end
+
 -- Date issues
 local date_id = rspamd_config:register_symbol({
   name = 'DATE_CB',
@@ -73,6 +125,11 @@ local date_id = rspamd_config:register_symbol({
     local dm, err = rspamd_parsers.parse_smtp_date(date_time)
     if err then
       task:insert_result('INVALID_DATE', 1.0)
+      local received = task:get_date({ format = 'connect', gmt = true })
+      local hours = far_future_date_without_tz(date_time, received)
+      if hours then
+        task:insert_result('DATE_FAR_FUTURE_NO_TZ', 1.0, tostring(hours))
+      end
       return
     end
 
@@ -111,6 +168,15 @@ rspamd_config:register_symbol({
   name = 'DATE_IN_FUTURE',
   score = 4.0,
   description = 'Message date is in the future',
+  group = 'headers',
+  type = 'virtual',
+  parent = date_id,
+})
+
+rspamd_config:register_symbol({
+  name = 'DATE_FAR_FUTURE_NO_TZ',
+  score = 0.0, -- observation only until production false-positive review
+  description = 'Date without timezone is more than 48h in future for any timezone',
   group = 'headers',
   type = 'virtual',
   parent = date_id,
