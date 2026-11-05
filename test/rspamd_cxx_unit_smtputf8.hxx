@@ -137,7 +137,13 @@ TEST_SUITE("smtputf8 syntax")
 			{"a׳@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
 			// RFC5892 A.7: the katakana middle dot needs Japanese
 			{"カ・ナ@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"・・カ@example.com", RSPAMD_SMTPUTF8_VALID},
 			{"a・b@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
+			// RFC5892 A.8 and A.9: either set of digits, but not both, even
+			// far apart
+			{"٠١٢@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"۰۱۲@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"٠ب@ب۰.example", RSPAMD_SMTPUTF8_CODE_POINT},
 			// RFC5892 A.1 and A.2: the joiners are fine after a virama
 			{"क्‌ष@example.com", RSPAMD_SMTPUTF8_VALID},
 			{"क्‍ष@example.com", RSPAMD_SMTPUTF8_VALID},

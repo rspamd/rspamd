@@ -2,24 +2,22 @@
 #include <unicode/utypes.h>
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
-#include <unicode/uscript.h>
 #include <unicode/normalizer2.h>
 #include <unicode/unistr.h>
 #include <algorithm>
+#include <cstdint>
+#include <iterator>
 #include <initializer_list>
 #include <string_view>
 #include <vector>
 
 #include "smtputf8_syntax.h"
+#include "smtputf8_data.hxx"
 
 namespace {
 
-enum class precis_class {
-	pvalid,
-	contextj,
-	contexto,
-	disallowed,
-};
+using script_code = rspamd::smtputf8::script;
+using rspamd::smtputf8::script_ranges;
 
 /*
  * Rule 1. The ACE prefix is case-insensitive, so XN-- is an a-label too.
@@ -65,112 +63,34 @@ auto decode_utf8(std::string_view s, std::vector<UChar32> &out) -> bool
 	return true;
 }
 
-/*
- * NFKC changes the code point. A precomposed é decomposes canonically but
- * recomposes, so it is not HasCompat, and the decomposition mapping alone
- * cannot answer this.
- */
-auto has_compat(UChar32 cp) -> bool
+static_assert(script_ranges[0] >> 8 == 0 &&
+				  std::is_sorted(std::begin(script_ranges), std::end(script_ranges)),
+			  "script_of() needs a sorted table that starts at U+0000");
+
+/* Binary search, since the table holds about 1500 ranges */
+auto script_of(UChar32 cp) -> script_code
 {
-	UErrorCode uc_err = U_ZERO_ERROR;
-	const auto *nfkc = icu::Normalizer2::getNFKCInstance(uc_err);
+	auto key = (static_cast<std::uint32_t>(cp) << 8) | 0xff;
+	auto it = std::upper_bound(std::begin(script_ranges), std::end(script_ranges), key);
 
-	if (U_FAILURE(uc_err)) {
-		return true;
-	}
-
-	auto normalized = nfkc->isNormalized(icu::UnicodeString(cp), uc_err);
-
-	return U_FAILURE(uc_err) || !normalized;
+	return static_cast<script_code>(*(it - 1) & 0xff);
 }
 
 /*
- * The derived property from RFC8264 8, for the IdentifierClass, in the
- * order RFC8264 gives. The exceptions are from RFC5892 2.6.
+ * RFC5892 2.6 and 2.8 enumerate the code points that need a context rule.
+ * The table gives them a script like any permitted code point, and
+ * gen_smtputf8_data.py fails if Unicode ever adds a join control.
  */
-auto identifier_class(UChar32 cp) -> precis_class
+auto is_contextj(UChar32 cp) -> bool
 {
-	switch (cp) {
-	case 0x00DF:
-	case 0x03C2:
-	case 0x06FD:
-	case 0x06FE:
-	case 0x0F0B:
-	case 0x3007:
-		return precis_class::pvalid;
-	case 0x00B7:
-	case 0x0375:
-	case 0x05F3:
-	case 0x05F4:
-	case 0x30FB:
-		return precis_class::contexto;
-	case 0x0640:
-	case 0x07FA:
-	case 0x302E:
-	case 0x302F:
-	case 0x3031:
-	case 0x3032:
-	case 0x3033:
-	case 0x3034:
-	case 0x3035:
-	case 0x303B:
-		return precis_class::disallowed;
-	default:
-		break;
-	}
-
-	if ((cp >= 0x0660 && cp <= 0x0669) || (cp >= 0x06F0 && cp <= 0x06F9)) {
-		return precis_class::contexto;
-	}
-
-	auto gc = u_charType(cp);
-
-	if (gc == U_UNASSIGNED) {
-		return precis_class::disallowed;
-	}
-
-	if (cp >= 0x21 && cp <= 0x7E) {
-		return precis_class::pvalid;
-	}
-
-	if (u_hasBinaryProperty(cp, UCHAR_JOIN_CONTROL)) {
-		return precis_class::contextj;
-	}
-
-	auto hst = u_getIntPropertyValue(cp, UCHAR_HANGUL_SYLLABLE_TYPE);
-
-	if (hst == U_HST_LEADING_JAMO || hst == U_HST_VOWEL_JAMO ||
-		hst == U_HST_TRAILING_JAMO) {
-		return precis_class::disallowed;
-	}
-
-	if (u_hasBinaryProperty(cp, UCHAR_DEFAULT_IGNORABLE_CODE_POINT) ||
-		u_hasBinaryProperty(cp, UCHAR_NONCHARACTER_CODE_POINT) ||
-		gc == U_CONTROL_CHAR || has_compat(cp)) {
-		return precis_class::disallowed;
-	}
-
-	switch (gc) {
-	case U_LOWERCASE_LETTER:
-	case U_UPPERCASE_LETTER:
-	case U_OTHER_LETTER:
-	case U_DECIMAL_DIGIT_NUMBER:
-	case U_MODIFIER_LETTER:
-	case U_NON_SPACING_MARK:
-	case U_COMBINING_SPACING_MARK:
-		return precis_class::pvalid;
-	default:
-		/* Spaces, symbols, punctuation and other letter-digits */
-		return precis_class::disallowed;
-	}
+	return cp == 0x200C || cp == 0x200D;
 }
 
-auto script_of(UChar32 cp) -> UScriptCode
+auto is_contexto(UChar32 cp) -> bool
 {
-	UErrorCode uc_err = U_ZERO_ERROR;
-	auto script = uscript_getScript(cp, &uc_err);
-
-	return U_FAILURE(uc_err) ? USCRIPT_INVALID_CODE : script;
+	return cp == 0x00B7 || cp == 0x0375 || cp == 0x05F3 || cp == 0x05F4 ||
+		   cp == 0x30FB || (cp >= 0x0660 && cp <= 0x0669) ||
+		   (cp >= 0x06F0 && cp <= 0x06F9);
 }
 
 auto is_virama(UChar32 cp) -> bool
@@ -252,8 +172,8 @@ auto get_contexto_properties(const std::vector<UChar32> &cps) -> contexto_proper
 
 			auto script = script_of(cp);
 
-			if (script == USCRIPT_HIRAGANA || script == USCRIPT_KATAKANA ||
-				script == USCRIPT_HAN) {
+			if (script == script_code::hiragana || script == script_code::katakana ||
+				script == script_code::han) {
 				context.japanese = true;
 				break;
 			}
@@ -276,11 +196,11 @@ auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i,
 	}
 
 	if (cp == 0x0375) {
-		return i + 1 < cps.size() && script_of(cps[i + 1]) == USCRIPT_GREEK;
+		return i + 1 < cps.size() && script_of(cps[i + 1]) == script_code::greek;
 	}
 
 	if (cp == 0x05F3 || cp == 0x05F4) {
-		return i > 0 && script_of(cps[i - 1]) == USCRIPT_HEBREW;
+		return i > 0 && script_of(cps[i - 1]) == script_code::hebrew;
 	}
 
 	if (cp == 0x30FB) {
@@ -298,8 +218,8 @@ auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i,
 	return false;
 }
 
-auto within(const std::vector<UScriptCode> &used,
-			std::initializer_list<UScriptCode> family) -> bool
+auto within(const std::vector<script_code> &used,
+			std::initializer_list<script_code> family) -> bool
 {
 	for (auto script: used) {
 		bool found = false;
@@ -324,7 +244,7 @@ auto within(const std::vector<UScriptCode> &used,
  */
 auto single_script(const std::vector<UChar32> &cps) -> bool
 {
-	std::vector<UScriptCode> used;
+	std::vector<script_code> used;
 
 	for (auto cp: cps) {
 		if (cp < 0x80) {
@@ -333,7 +253,7 @@ auto single_script(const std::vector<UChar32> &cps) -> bool
 
 		auto script = script_of(cp);
 
-		if (script == USCRIPT_COMMON || script == USCRIPT_INHERITED) {
+		if (script == script_code::common || script == script_code::inherited) {
 			continue;
 		}
 
@@ -351,9 +271,9 @@ auto single_script(const std::vector<UChar32> &cps) -> bool
 	}
 
 	return used.size() <= 1 ||
-		   within(used, {USCRIPT_HAN, USCRIPT_HIRAGANA, USCRIPT_KATAKANA}) ||
-		   within(used, {USCRIPT_HAN, USCRIPT_HANGUL}) ||
-		   within(used, {USCRIPT_HAN, USCRIPT_BOPOMOFO});
+		   within(used, {script_code::han, script_code::hiragana, script_code::katakana}) ||
+		   within(used, {script_code::han, script_code::hangul}) ||
+		   within(used, {script_code::han, script_code::bopomofo});
 }
 
 auto is_nfc(const std::vector<UChar32> &cps) -> bool
@@ -426,24 +346,23 @@ rspamd_smtputf8_check_address(const char *user, gsize user_len,
 
 	/* Rule 2 admits SPACE on top of the IdentifierClass */
 	for (std::size_t i = 0; i < cps.size(); i++) {
-		if (cps[i] == ' ') {
+		auto cp = cps[i];
+
+		if (cp == ' ') {
 			continue;
 		}
 
-		switch (identifier_class(cps[i])) {
-		case precis_class::pvalid:
-			break;
-		case precis_class::contextj:
+		if (is_contextj(cp)) {
 			if (!contextj_ok(cps, i)) {
 				return RSPAMD_SMTPUTF8_CODE_POINT;
 			}
-			break;
-		case precis_class::contexto:
+		}
+		else if (is_contexto(cp)) {
 			if (!contexto_ok(cps, i, context)) {
 				return RSPAMD_SMTPUTF8_CODE_POINT;
 			}
-			break;
-		case precis_class::disallowed:
+		}
+		else if (script_of(cp) == script_code::none) {
 			return RSPAMD_SMTPUTF8_CODE_POINT;
 		}
 	}
