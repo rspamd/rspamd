@@ -3873,15 +3873,33 @@ auto html_process_input(struct rspamd_task *task,
 
 	/* A link open where the tags end goes on past them */
 	struct rspamd_url *link_at_limit = nullptr;
+	/*
+	 * And so does an svg element, before the open elements are closed: a link
+	 * in it goes to xlink:href. Only while the current element is in it, as
+	 * in the tree: an HTML element in a foreignObject is HTML content. CDATA
+	 * past the limit is not text for these, as reading it as text where it is
+	 * none would hide the markup in it
+	 */
+	unsigned int svg_at_limit = 0;
 
 	if (state == tags_limit_overflow) {
+		bool in_link = false, in_foreign = cur_tag && (cur_tag->flags & FL_FOREIGN);
+
 		for (auto *t = cur_tag; t != nullptr; t = t->parent) {
-			if (t->id == Tag_A) {
+			if (t->id == Tag_A && !in_link) {
+				/* The innermost link only */
+				in_link = true;
+
 				if (std::holds_alternative<struct rspamd_url *>(t->extra)) {
 					link_at_limit = std::get<struct rspamd_url *>(t->extra);
 				}
+			}
 
-				break;
+			if (!(t->flags & FL_FOREIGN)) {
+				in_foreign = false;
+			}
+			else if (in_foreign && t->id == Tag_SVG) {
+				svg_at_limit++;
 			}
 		}
 	}
@@ -3994,7 +4012,7 @@ auto html_process_input(struct rspamd_task *task,
 		/* Open svg and math elements: CDATA is text in them */
 		unsigned int foreign_depth = 0;
 		/* Open svg elements: a link in them may go to xlink:href */
-		unsigned int svg_depth = 0;
+		unsigned int svg_depth = svg_at_limit;
 		auto *L = task->cfg ? (lua_State *) task->cfg->lua_state : nullptr;
 
 		auto append_text = [&](const char *upto, bool literal = false) -> void {
@@ -4151,9 +4169,12 @@ auto html_process_input(struct rspamd_task *task,
 					if (def->id == Tag_A) {
 						close_link();
 					}
-					else if ((def->id == Tag_SVG || def->id == Tag_MATH) && foreign_depth > 0) {
-						foreign_depth--;
+					else if (def->id == Tag_SVG || def->id == Tag_MATH) {
+						if (foreign_depth > 0) {
+							foreign_depth--;
+						}
 
+						/* An svg open where the tags end is counted here only */
 						if (def->id == Tag_SVG && svg_depth > 0) {
 							svg_depth--;
 						}

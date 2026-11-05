@@ -103,6 +103,85 @@ context("HTML past the tags limit", function()
     })
   end)
 
+  local function hosts_of(html)
+    local msg = table.concat({
+      "From: sender@example.com",
+      "To: rcpt@example.com",
+      "Subject: limit",
+      "MIME-Version: 1.0",
+      "Content-Type: text/html",
+      "",
+      html,
+      "",
+    }, "\r\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert(res, "failed to load message")
+    task:process_message()
+
+    local hosts = {}
+    for _, u in ipairs(task:get_urls(true) or {}) do
+      hosts[#hosts + 1] = u:get_host()
+    end
+    table.sort(hosts)
+    task:destroy()
+
+    return hosts
+  end
+
+  test("svg and math open where the tags end go on after the limit", function()
+    -- The innermost open element counts too, as the svg around a foreignObject
+    -- (a style in it is raw text, as in the tree) or a self-closed <g/>
+    local tail = '<style><!--</style><a href="http://link.example.net/x">x</a>-->'
+    for _, html in ipairs({
+      '<svg>' .. string.rep('<g>', 8200) .. '<a xlink:href="http://link.example.net/x">x</a></svg>',
+      '<svg>' .. string.rep('<g/>', 8200) .. '<a xlink:href="http://link.example.net/x">x</a></svg>',
+      '<svg width=99 height=99><foreignObject width=99 height=99>' .. string.rep('<wbr>', 8200) ..
+          tail .. '</foreignObject></svg>',
+      '<math><mi>' .. string.rep('<wbr>', 8200) .. tail .. '</mi></math>',
+    }) do
+      assert_rspamd_table_eq({
+        actual = hosts_of("<html><body>" .. html),
+        expect = { "link.example.net" },
+      })
+    end
+  end)
+
+  test("CDATA in HTML content of svg or math is no text after the limit", function()
+    -- A div in a foreignObject (or a span in mi) is HTML: CDATA is a bogus
+    -- comment there, ending at the first '>', as in the tree
+    local payload = '<![CDATA[x><a href="http&#58;//cdata&#46;example&#46;net/x">click</a>]]>'
+    for _, html in ipairs({
+      '<svg><foreignObject><div>' .. string.rep('<wbr>', 8200) .. payload,
+      '<math><mi><span>' .. string.rep('<wbr>', 8200) .. payload,
+      -- HTML content or a tag that closes the svg past the limit
+      '<svg><foreignObject>' .. string.rep('<wbr>', 8200) .. '<div>' .. payload,
+      '<svg>' .. string.rep('<g/>', 8200) .. '<p>' .. payload,
+      '<math>' .. string.rep('<mrow/>', 8200) .. '<b>' .. payload,
+    }) do
+      assert_rspamd_table_eq({
+        actual = hosts_of("<html><body>" .. html),
+        expect = { "cdata.example.net" },
+      })
+    end
+  end)
+
+  test("an svg open where the tags end is closed after the limit", function()
+    -- An HTML link after it has no xlink:href to follow
+    assert_rspamd_table_eq({
+      actual = hosts_of("<html><body><svg><g>" .. string.rep("<g/>", 8200) ..
+          '</g></svg><a xlink:href="https://evil.example.net/x">text</a>'),
+      expect = {},
+    })
+  end)
+
+  test("deeply nested svg after the limit", function()
+    assert_rspamd_table_eq({
+      actual = hosts_of("<html><body>" .. string.rep("<b>", 8200) .. string.rep("<svg>", 70) ..
+          string.rep("</svg>", 64) .. '<a xlink:href="http://deep.example.net/x">x</a>'),
+      expect = { "deep.example.net" },
+    })
+  end)
+
   test("markup browsers accept is read after the limit", function()
     local filler = string.rep("<b>", 8200)
     local cases = {
