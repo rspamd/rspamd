@@ -913,23 +913,6 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	case RSPAMD_CTE_7BIT:
 	case RSPAMD_CTE_8BIT:
 	case RSPAMD_CTE_UNKNOWN:
-		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
-			if (part->cte != RSPAMD_CTE_7BIT) {
-				/*
-				 * We have something that has a missing content-type,
-				 * but it has non-7bit characters. Without a charset, only
-				 * ASCII and UTF-8 can be read as they are: anything else is
-				 * broken. It is still processed as text, with a guessed
-				 * charset, as one bad byte must not hide the text from
-				 * the checks.
-				 */
-				if (rspamd_str_has_8bit(part->raw_data.begin, part->raw_data.len) &&
-					rspamd_fast_utf8_validate(part->raw_data.begin, part->raw_data.len) != 0) {
-					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
-				}
-			}
-		}
-
 		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) {
 			/* Need to copy text as we have couple of in-place change functions */
 			parsed = rspamd_fstring_sized_new(part->raw_data.len);
@@ -1108,6 +1091,31 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	return RSPAMD_MIME_PARSE_OK;
 }
 
+/*
+ * Whether the decoded data of a part is binary: more than 1/32 of its first
+ * bytes are control characters that text does not use. 8bit bytes do not
+ * count, so text in any charset passes, valid or not
+ */
+static gboolean
+rspamd_mime_part_data_is_binary(const struct rspamd_mime_part *part)
+{
+	const unsigned char *p = (const unsigned char *) part->parsed_data.begin;
+	gsize len = MIN(part->parsed_data.len, 4096), nctrl = 0;
+
+	for (gsize i = 0; i < len; i++) {
+		unsigned char c = p[i];
+
+		/* Tab, line breaks, and ESC/SO/SI that ISO-2022 charsets use */
+		if ((c < 0x20 && c != '\t' && c != '\n' && c != '\v' && c != '\f' &&
+			 c != '\r' && c != 0x0e && c != 0x0f && c != 0x1b) ||
+			c == 0x7f) {
+			nctrl++;
+		}
+	}
+
+	return nctrl * 32 > len;
+}
+
 /* Run lua_magic.detect_mime_part for a decoded normal part and maybe promote to message */
 static enum rspamd_mime_parse_error
 rspamd_mime_maybe_detect_type(struct rspamd_task *task,
@@ -1225,6 +1233,30 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 					   npart->part_number, (void *) L, cbref);
 	}
 
+	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
+		if (rspamd_mime_part_data_is_binary(npart)) {
+			/*
+			 * Without a Content-Type, text/plain is only a default. The data
+			 * decides, not a lua_magic signature: some of them ("MZ", "MM",
+			 * "begin ") also start readable text, which must stay text
+			 */
+			npart->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
+		}
+		else if (!(npart->detected_type && strcmp(npart->detected_type, "text") != 0) &&
+				 (npart->cte == RSPAMD_CTE_8BIT || npart->cte == RSPAMD_CTE_UNKNOWN) &&
+				 rspamd_str_has_8bit(npart->raw_data.begin, npart->raw_data.len) &&
+				 rspamd_fast_utf8_validate(npart->raw_data.begin, npart->raw_data.len) != 0) {
+			/*
+			 * Text without a charset: only ASCII and UTF-8 can be read as
+			 * they are, anything else is broken. It is still processed as
+			 * text, with a guessed charset, as one bad byte must not hide
+			 * the text from the checks. A known format (e.g. a PDF, which
+			 * has no control characters) has no charset to miss.
+			 */
+			npart->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+		}
+	}
+
 	/* Fallback: if nothing detected but declared CT is text, set detected_type to text */
 	if (npart->detected_type == NULL && npart->ct &&
 		(npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) {
@@ -1269,6 +1301,8 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	struct rspamd_mime_part *npart;
 	GString str;
 	goffset hdr_pos, body_pos;
+	/* The empty line that ends no headers is not a part of the body */
+	gsize empty_hdrs_len = 0;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_FATAL;
 
 	if (start == NULL || end == NULL || start >= end) {
@@ -1286,6 +1320,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 		 */
 		hdr_pos = 0;
 		body_pos = 0;
+		empty_hdrs_len = (*start == '\r' && start + 1 < end && start[1] == '\n') ? 2 : 1;
 
 		if (!is_finished) {
 			/* Ignore garbage */
@@ -1348,8 +1383,8 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	else {
 		npart->raw_headers_str = 0;
 		npart->raw_headers_len = 0;
-		npart->raw_data.begin = start;
-		npart->raw_data.len = end - start;
+		npart->raw_data.begin = start + empty_hdrs_len;
+		npart->raw_data.len = (end - start) - empty_hdrs_len;
 	}
 
 
@@ -1376,9 +1411,28 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	}
 
 	if (sel == NULL) {
+		rspamd_ftok_t digest_tok;
+
+		RSPAMD_FTOK_ASSIGN(&digest_tok, "digest");
 		sel = rspamd_mempool_alloc0(task->task_pool, sizeof(*sel));
-		RSPAMD_FTOK_ASSIGN(&sel->type, "text");
-		RSPAMD_FTOK_ASSIGN(&sel->subtype, "plain");
+
+		if (multipart && multipart->ct &&
+			rspamd_ftok_casecmp(&multipart->ct->subtype, &digest_tok) == 0) {
+			/* RFC 2046 5.1.5: the default in a digest is an embedded message */
+			RSPAMD_FTOK_ASSIGN(&sel->type, "message");
+			RSPAMD_FTOK_ASSIGN(&sel->subtype, "rfc822");
+			sel->flags = RSPAMD_CONTENT_TYPE_MESSAGE;
+		}
+		else {
+			/*
+			 * RFC 2046 5.1: the default is text/plain, as for a message
+			 * without Content-Type, and it is text the same way: a few
+			 * bytes that do not look like text must not hide it
+			 */
+			RSPAMD_FTOK_ASSIGN(&sel->type, "text");
+			RSPAMD_FTOK_ASSIGN(&sel->subtype, "plain");
+			sel->flags = RSPAMD_CONTENT_TYPE_TEXT | RSPAMD_CONTENT_TYPE_MISSING;
+		}
 	}
 
 	npart->ct = sel;
