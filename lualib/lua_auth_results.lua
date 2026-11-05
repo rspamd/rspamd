@@ -294,7 +294,7 @@ local function get_ar_lpeg_atoms()
   end
 
   local lpeg = require "lpeg"
-  local P, S, V, C, Cs, Ct, Cg, Cf = lpeg.P, lpeg.S, lpeg.V, lpeg.C, lpeg.Cs, lpeg.Ct, lpeg.Cg, lpeg.Cf
+  local P, R, S, V, C, Cs, Ct, Cg, Cf = lpeg.P, lpeg.R, lpeg.S, lpeg.V, lpeg.C, lpeg.Cs, lpeg.Ct, lpeg.Cg, lpeg.Cf
 
   local space = S(" \t") ^ 0
   -- As in `quoted_value`, so both agree on where a quoted value ends
@@ -308,6 +308,10 @@ local function get_ar_lpeg_atoms()
 
   -- Single AR element grammar: "dkim=pass (comment) header.d=example.com" → table
   local elt_grammar = Cf(Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
+  -- The method of an element, e.g. "dkim" of "dkim/1=pass": its first token,
+  -- after any comments, which RFC 8601 2.2 allows anywhere
+  local method_grammar = (space * comment) ^ 0 * space *
+      C((R("az", "AZ", "09") + S "_-") ^ 1) * space * S "/="
 
   -- AAR header split grammar: splits on ";" while respecting comments and quotes.
   -- Each captured element is the raw text between semicolons (trimmed).
@@ -318,6 +322,7 @@ local function get_ar_lpeg_atoms()
 
   ar_lpeg_atoms = {
     elt_grammar = elt_grammar,
+    method_grammar = method_grammar,
     aar_split_grammar = aar_split_grammar,
   }
   return ar_lpeg_atoms
@@ -328,9 +333,10 @@ end
 -- result of that method is a result of the element, other `key=value` pairs
 -- are properties, or text that a comment failed to hide.
 local function parse_ar_element(elt)
-  local res = get_ar_lpeg_atoms().elt_grammar:match(elt)
+  local atoms = get_ar_lpeg_atoms()
+  local res = atoms.elt_grammar:match(elt)
   if res then
-    local method = elt:match('^%s*([%w_-]+)%s*[/=]')
+    local method = atoms.method_grammar:match(elt)
     res.method = method and method:lower() or nil
   end
   return res

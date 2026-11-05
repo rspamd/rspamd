@@ -150,6 +150,11 @@ context("Lua auth results - AAR parsing", function()
     test("the method of an element is recorded", function()
       assert_equal("dmarc", lua_auth_results.parse_ar_element("dmarc=pass header.from=a.example").method)
       assert_equal("dkim", lua_auth_results.parse_ar_element("DKIM/1=pass header.d=a.example").method)
+      -- RFC 8601 2.2 allows comments before the method too
+      assert_equal("dmarc", lua_auth_results.parse_ar_element(
+          "(forwarder result) dmarc=pass header.from=a.example").method)
+      assert_equal("dmarc", lua_auth_results.parse_ar_element(
+          "(a (nested\\) one) ) dmarc=pass header.from=a.example").method)
     end)
 
     test("an escaped parenthesis does not end a comment", function()

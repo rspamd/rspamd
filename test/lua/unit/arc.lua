@@ -401,6 +401,12 @@ context('ARC seal completion', function()
     assert_equal(0.1, adjusted[1].weight)
   end)
 
+  test('a comment before the DMARC result does not stop the adjustment', function()
+    local adjusted = adjust_dmarc({ from = from('sender.example'), aar_text = {
+      [3] = '(forwarder result) dmarc=pass header.from=sender.example' } })
+    assert_equal(1, #adjusted)
+  end)
+
   test('DMARC pass for another domain does not adjust the reject', function()
     assert_equal(0, #adjust_dmarc({ from = from('bank.example') }))
   end)
