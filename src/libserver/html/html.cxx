@@ -1136,7 +1136,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	};
 
 	auto store_component_name = [&]() -> bool {
-		decode_html_entitles_inplace(parser_env.buf);
+		/*
+		 * Browsers do not decode character references in attribute names:
+		 * hr&#101;f is some other attribute, which must not be taken for the
+		 * href that follows it
+		 */
 		parser_env.attr_name = parser_env.buf;
 		parser_env.buf.clear();
 		return true;

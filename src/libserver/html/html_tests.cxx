@@ -706,6 +706,26 @@ TEST_SUITE("html")
 			CHECK(ftag->find_href().value() == "https://evil.example.net/form");
 		}
 
+		SUBCASE("a character reference in an attribute name is not decoded")
+		{
+			/* As in browsers: hr&#101;f is another attribute, not a first href */
+			auto *hc = process("<a hr&#101;f=\"https://good.example.org/g\" "
+							   "href=\"https://evil.example.net/g\">x</a>"
+							   "<form &#97;ction=\"https://good.example.org/k\" "
+							   "action=\"https://evil.example.net/k\"></form>");
+			CHECK(hc != nullptr);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			REQUIRE(atag != nullptr);
+			REQUIRE(atag->find_href().has_value());
+			CHECK(atag->find_href().value() == "https://evil.example.net/g");
+
+			const auto *ftag = find_tag(hc, Tag_FORM);
+			REQUIRE(ftag != nullptr);
+			REQUIRE(ftag->find_href().has_value());
+			CHECK(ftag->find_href().value() == "https://evil.example.net/k");
+		}
+
 		SUBCASE("attributes are read under their own names")
 		{
 			auto *hc = process("<a action=\"https://a.example.org/\" href=\"https://h.example.org/\">x</a>"
