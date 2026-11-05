@@ -46,6 +46,15 @@ context('ARC seal completion', function()
         end
       end
     end
+    if opts.aar_decoded then
+      -- What decoding encoded-words in an AAR gives, its raw value unchanged
+      for n, hdr in ipairs(headers['ARC-Authentication-Results']) do
+        local i = count - n + 1
+        if opts.aar_decoded[i] then
+          hdr.decoded = string.format('i=%d; forwarder%d.example; %s', i, i, opts.aar_decoded[i])
+        end
+      end
+    end
     if opts.drop_aar then
       table.remove(headers['ARC-Authentication-Results'], count - opts.drop_aar + 1)
     end
@@ -357,6 +366,7 @@ context('ARC seal completion', function()
   -- Runs ARC_DMARC_ADJUSTMENT after a chain where forwarder3 is trusted
   local function adjust_dmarc(opts)
     local check_opts = { synchronous = true, aar_from = opts.aar_from, aar_text = opts.aar_text,
+      aar_decoded = opts.aar_decoded,
       signature_failure = opts.signature_failure, whitelist = opts.whitelist,
       whitelisted_signers_map = opts.signers or { ['forwarder3.example'] = true } }
     local _, _, cache, _, registered = start_checks(check_opts)
@@ -405,6 +415,18 @@ context('ARC seal completion', function()
     local adjusted = adjust_dmarc({ from = from('sender.example'), aar_text = {
       [3] = '(forwarder result) dmarc=pass header.from=sender.example' } })
     assert_equal(1, #adjusted)
+  end)
+
+  test('an encoded-word in an AAR comment adds no result', function()
+    -- The sender that a forwarder wrote into a comment; decoded, it would close
+    -- the comment and add a DMARC pass
+    local spf = 'dkim=none; spf=pass (fwd.example: domain of "%s@attacker.example" ' ..
+        'designates 192.0.2.1 as permitted sender) smtp.mailfrom=x'
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'),
+      aar_text = { [3] = string.format(spf,
+          '=?us-ascii?q?x=29=3B_dmarc=3Dpass_header=2Efrom=3Dbank=2Eexample_=28y?=') },
+      aar_decoded = { [3] = string.format(spf,
+          'x); dmarc=pass header.from=bank.example (y') } }))
   end)
 
   test('DMARC pass for another domain does not adjust the reject', function()

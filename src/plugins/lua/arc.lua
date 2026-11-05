@@ -88,23 +88,28 @@ local ar_settings = lua_auth_results.default_settings
 
 -- Get Authentication-Results header, optionally filtering by trusted authserv-id
 local function get_trusted_ar_header(task)
-  if settings.trusted_authserv_id then
-    local ar_headers = task:get_header_full('Authentication-Results')
-    if ar_headers then
-      for _, hdr in ipairs(ar_headers) do
-        local authserv_id = string.match(hdr.decoded, '^%s*([^;%s]+)')
-        if authserv_id and authserv_id == settings.trusted_authserv_id then
-          lua_util.debugm(N, task, 'found trusted AR header with authserv-id: %s', authserv_id)
-          return hdr.decoded
-        end
-      end
-      lua_util.debugm(N, task, 'no AR header matched trusted authserv-id: %s',
-          settings.trusted_authserv_id)
-    end
+  -- The values as they are, not decoded: they are copied into the seal, and an
+  -- encoded-word decoded in a comment would close it and add a result
+  local ar_headers = task:get_header_full('Authentication-Results')
+
+  if not ar_headers or #ar_headers == 0 then
     return nil
-  else
-    return task:get_header('Authentication-Results')
   end
+
+  if settings.trusted_authserv_id then
+    for _, hdr in ipairs(ar_headers) do
+      local authserv_id = string.match(hdr.value or '', '^%s*([^;%s]+)')
+      if authserv_id and authserv_id == settings.trusted_authserv_id then
+        lua_util.debugm(N, task, 'found trusted AR header with authserv-id: %s', authserv_id)
+        return hdr.value
+      end
+    end
+    lua_util.debugm(N, task, 'no AR header matched trusted authserv-id: %s',
+        settings.trusted_authserv_id)
+    return nil
+  end
+
+  return ar_headers[1].value
 end
 
 local function parse_arc_header(hdr, target, is_aar)
@@ -141,7 +146,9 @@ local function parse_arc_header(hdr, target, is_aar)
     else
       -- For AAR: use LPeg-based parser that respects comments and quoted
       -- strings when splitting on ';' (fixes #5963)
-      local parsed = lua_auth_results.parse_aar_header(val.decoded)
+      -- Not the decoded value: an encoded-word decoded in a comment (e.g. the
+      -- sender a forwarder put there) would close it and add a result
+      local parsed = lua_auth_results.parse_aar_header(val.value)
       if parsed then
         if parsed.i then
           target[i].i = parsed.i
