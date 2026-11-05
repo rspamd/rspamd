@@ -1497,8 +1497,8 @@ struct html_tag {
 	/*
 	 * The link URL rewriting replaces in this tag, if its place in the source
 	 * is known: src of an image, a frame or an embedded object, which browsers
-	 * load whatever href says; else href, then xlink:href of an SVG link (as
-	 * in find_href), then src
+	 * load whatever href says; else href if the tag has one, else xlink:href
+	 * of an SVG link (as in find_href), else src
 	 */
 	auto clickable_attr() const -> std::optional<html_clickable_attr>
 	{
@@ -1521,22 +1521,30 @@ struct html_tag {
 			return std::nullopt;
 		}
 
-		std::string_view attr_name = "href";
-		auto span = get_attr_span(attr_name);
+		/*
+		 * The attribute is the one browsers follow, whether or not its place
+		 * is known: a later one is not replaced in its stead
+		 */
+		auto clickable = [this](std::string_view attr_name, std::string_view value) -> std::optional<html_clickable_attr> {
+			if (auto span = get_attr_span(attr_name)) {
+				return html_clickable_attr{id, attr_name, value, span.value()};
+			}
 
-		if (!span && id == Tag_A && (flags & FL_SVG)) {
-			attr_name = "xlink:href";
-			span = get_attr_span(attr_name);
+			return std::nullopt;
+		};
+
+		if (auto href = find_component<html_component_href>()) {
+			return clickable("href", href.value()->value);
 		}
 
-		if (span) {
-			return html_clickable_attr{id, attr_name, find_href().value_or(std::string_view{}), span.value()};
+		if (id == Tag_A && (flags & FL_SVG)) {
+			if (auto xlink = find_component<html_component_xlink_href>()) {
+				return clickable("xlink:href", xlink.value()->value);
+			}
 		}
 
-		if ((span = get_attr_span("src"))) {
-			auto src = find_component<html_component_src>();
-
-			return html_clickable_attr{id, "src", src ? src.value()->value : std::string_view{}, span.value()};
+		if (auto src = find_component<html_component_src>()) {
+			return clickable("src", src.value()->value);
 		}
 
 		return std::nullopt;

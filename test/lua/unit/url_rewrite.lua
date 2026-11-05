@@ -642,6 +642,39 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("A link with an href is rewritten by its href only", function()
+    -- Browsers follow href when there is one, even an empty one, whatever
+    -- xlink:href or src say
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><svg><a href=http://evil.example/" xlink:href="http://other.example/">x</a>' ..
+          '<a href="" xlink:href="http://empty.example/">y</a></svg>' ..
+          '<a href="" src="http://src.example/">z</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local seen = {}
+    local result = task:rewrite_html_urls(function(_, url)
+      seen[#seen + 1] = url
+      return "http://safe.com/redirected"
+    end)
+    assert_rspamd_table_eq({ actual = seen, expect = { "http://evil.example/" } })
+    for _, html_text in pairs(result) do
+      local html = tostring(html_text)
+      assert_not_nil(html:find('<a href=http://safe.com/redirected xlink:href="http://other.example/">', 1, true), html)
+      assert_not_nil(html:find('<a href="" xlink:href="http://empty.example/">', 1, true), html)
+      assert_not_nil(html:find('<a href="" src="http://src.example/">', 1, true), html)
+    end
+    task:destroy()
+  end)
+
   test("The policy gets a link without the controls browsers strip", function()
     local msg = table.concat({
       "From: test@example.com",
