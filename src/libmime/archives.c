@@ -132,6 +132,20 @@ rspamd_archive_files_reset(struct rspamd_task *task,
 	arch->flags &= ~RSPAMD_ARCHIVE_FILES_TRUNCATED;
 }
 
+/* Drops the files listed after the first `len` ones */
+static void
+rspamd_archive_files_truncate(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  unsigned int len)
+{
+	while (arch->files->len > len) {
+		rspamd_archive_file_free(g_ptr_array_index(arch->files, arch->files->len - 1));
+		g_ptr_array_set_size(arch->files, arch->files->len - 1);
+		g_assert(MESSAGE_FIELD(task, narchive_files) > 0);
+		MESSAGE_FIELD(task, narchive_files) -= 1;
+	}
+}
+
 
 static bool
 rspamd_archive_file_try_utf(struct rspamd_task *task,
@@ -260,6 +274,12 @@ struct rspamd_zip_cd_set {
 	/* Another one, where the record says, or G_MAXUINT64 */
 	uint64_t alt_offset;
 	uint64_t size;
+	/* The size is not known: the directory ends at the first other data */
+	gboolean open_end;
+	/* The offset the record holds, which counts from the start of its archive */
+	uint64_t declared_offset;
+	/* The size the record holds */
+	uint64_t declared_size;
 };
 
 /*
@@ -290,6 +310,23 @@ rspamd_archive_zip_cd_set(const unsigned char *start, uint64_t limit,
 
 	set->alt_offset = G_MAXUINT64;
 	set->size = cd_size;
+	set->open_end = FALSE;
+	set->declared_offset = cd_offset;
+	set->declared_size = cd_size;
+
+	if (declared && cd_size < sizeof(cd_magic) && limit - cd_offset >= sizeof(cd_magic) &&
+		memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) == 0) {
+		/*
+		 * An empty directory, according to the record, where a directory
+		 * is (a record appended to an archive): unzip and 7-Zip list it,
+		 * up to the record
+		 */
+		set->offset = cd_offset;
+		set->size = limit - cd_offset;
+		set->open_end = TRUE;
+
+		return TRUE;
+	}
 
 	if (adjacent) {
 		set->offset = limit - cd_size;
@@ -402,17 +439,55 @@ rspamd_archive_zip_check_eocd(const unsigned char *start,
 
 enum rspamd_zip_cd_read {
 	RSPAMD_ZIP_CD_OK = 0,
+	/* Stopped at a record that runs past the end record, which is listed */
+	RSPAMD_ZIP_CD_PARTIAL,
 	RSPAMD_ZIP_CD_INVALID,
 	RSPAMD_ZIP_CD_LIMIT,
 };
 
-/* Lists the files of the central directory [cd, cd_end) */
+/*
+ * Directories read for several end records may be the same one, or run into
+ * one another: the records listed so far, one per file of the archive, so that
+ * no record is listed twice
+ */
+struct rspamd_zip_listed {
+	GArray *records; /* const unsigned char *, in the order of the files */
+	/* Records of the earlier reads, sorted, while a directory is read */
+	const unsigned char **prev;
+	gsize nprev;
+};
+
+static int
+rspamd_archive_zip_record_cmp(const void *a, const void *b)
+{
+	const unsigned char *ra = *(const unsigned char *const *) a,
+						*rb = *(const unsigned char *const *) b;
+
+	return ra < rb ? -1 : (ra > rb ? 1 : 0);
+}
+
+static void
+rspamd_archive_zip_unlist(struct rspamd_task *task,
+						  struct rspamd_archive *arch,
+						  struct rspamd_zip_listed *listed,
+						  unsigned int len)
+{
+	rspamd_archive_files_truncate(task, arch, len);
+	g_array_set_size(listed->records, len);
+}
+
+/*
+ * Lists the files of the central directory [cd, cd_end); with `open_end`, its
+ * size is not known and it ends at the first data that is not a record
+ */
 static enum rspamd_zip_cd_read
-rspamd_archive_zip_read_cd(struct rspamd_task *task,
-						   struct rspamd_archive *arch,
-						   const unsigned char *cd,
-						   const unsigned char *cd_end,
-						   const unsigned char *eocd)
+rspamd_archive_zip_read_records(struct rspamd_task *task,
+								struct rspamd_archive *arch,
+								struct rspamd_zip_listed *listed,
+								const unsigned char *cd,
+								const unsigned char *cd_end,
+								const unsigned char *eocd,
+								gboolean open_end)
 {
 	const uint32_t cd_basic_len = 46;
 	const unsigned char cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
@@ -420,13 +495,27 @@ rspamd_archive_zip_read_cd(struct rspamd_task *task,
 	uint16_t extra_len, fname_len, comment_len;
 	struct rspamd_archive_file *f;
 	const unsigned char *p;
+	unsigned int nrecords = 0;
 
 	while (cd < cd_end) {
 		uint16_t flags;
 
+		/*
+		 * Listed by an earlier read, which may have stopped before the end of
+		 * this directory: skipped, and the next records are read
+		 */
+		gboolean listed_before = listed->nprev > 0 &&
+								 bsearch(&cd, listed->prev, listed->nprev, sizeof(*listed->prev),
+										 rspamd_archive_zip_record_cmp) != NULL;
+
 		/* Read central directory record */
 		if (eocd - cd < cd_basic_len ||
 			memcmp(cd, cd_magic, sizeof(cd_magic)) != 0) {
+			if (open_end && nrecords > 0) {
+				/* Its size is not known: it ends with the last record that reads */
+				return RSPAMD_ZIP_CD_OK;
+			}
+
 			msg_info_task("zip archive is invalid (bad cd record)");
 
 			return RSPAMD_ZIP_CD_INVALID;
@@ -445,113 +534,253 @@ rspamd_archive_zip_read_cd(struct rspamd_task *task,
 		memcpy(&comment_len, cd + 32, sizeof(comment_len));
 		comment_len = GUINT16_FROM_LE(comment_len);
 
-		if (cd + fname_len + comment_len + extra_len + cd_basic_len > eocd) {
+		if (cd + cd_basic_len + fname_len > eocd) {
+			if (open_end && nrecords > 0) {
+				return RSPAMD_ZIP_CD_OK;
+			}
+
 			msg_info_task("zip archive is invalid (too large cd record)");
 
 			return RSPAMD_ZIP_CD_INVALID;
 		}
 
-		f = g_malloc0(sizeof(*f));
-		rspamd_archive_file_try_utf(task, arch, f, cd + cd_basic_len, fname_len);
+		/*
+		 * The extra field or the comment may run past the end record: readers
+		 * (Python, unzip, 7-Zip) still list the file, and no record after it
+		 * can be found
+		 */
+		gboolean overrun = cd + cd_basic_len + fname_len + extra_len + comment_len > eocd;
 
-		f->compressed_size = comp_size;
-		f->uncompressed_size = uncomp_size;
+		if (!listed_before) {
+			f = g_malloc0(sizeof(*f));
+			rspamd_archive_file_try_utf(task, arch, f, cd + cd_basic_len, fname_len);
 
-		if (flags & 0x41u) {
-			f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
-		}
+			f->compressed_size = comp_size;
+			f->uncompressed_size = uncomp_size;
 
-		if (f->fname) {
-			if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
-				arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
-			}
-
-			if (!rspamd_archive_file_add(task, arch, f)) {
-				return RSPAMD_ZIP_CD_LIMIT;
-			}
-			msg_debug_archive("found file in zip archive: %v", f->fname);
-		}
-		else {
-			g_free(f);
-
-			return RSPAMD_ZIP_CD_INVALID;
-		}
-
-		/* Process extra fields */
-		const unsigned char *extra = cd + fname_len + cd_basic_len;
-		p = extra;
-
-		while (p + sizeof(uint16_t) * 2 < extra + extra_len) {
-			uint16_t hid, hlen;
-
-			memcpy(&hid, p, sizeof(uint16_t));
-			hid = GUINT16_FROM_LE(hid);
-			memcpy(&hlen, p + sizeof(uint16_t), sizeof(uint16_t));
-			hlen = GUINT16_FROM_LE(hlen);
-
-			if (hid == 0x0017) {
+			if (flags & 0x41u) {
 				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
 			}
 
-			if (hlen + sizeof(uint16_t) * 2 > (gsize) (extra + extra_len - p)) {
-				/* Truncated or malformed extra field */
-				break;
+			if (f->fname) {
+				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+				}
+
+				if (!rspamd_archive_file_add(task, arch, f)) {
+					return RSPAMD_ZIP_CD_LIMIT;
+				}
+				g_array_append_val(listed->records, cd);
+				msg_debug_archive("found file in zip archive: %v", f->fname);
 			}
-			p += hlen + sizeof(uint16_t) * 2;
+			else {
+				g_free(f);
+
+				return RSPAMD_ZIP_CD_INVALID;
+			}
+
+			/* Process extra fields */
+			const unsigned char *extra = cd + fname_len + cd_basic_len,
+								*extra_end = MIN(extra + extra_len, eocd);
+			p = extra;
+
+			while (p + sizeof(uint16_t) * 2 < extra_end) {
+				uint16_t hid, hlen;
+
+				memcpy(&hid, p, sizeof(uint16_t));
+				hid = GUINT16_FROM_LE(hid);
+				memcpy(&hlen, p + sizeof(uint16_t), sizeof(uint16_t));
+				hlen = GUINT16_FROM_LE(hlen);
+
+				if (hid == 0x0017) {
+					f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+				}
+
+				if (hlen + sizeof(uint16_t) * 2 > (gsize) (extra_end - p)) {
+					/* Truncated or malformed extra field */
+					break;
+				}
+				p += hlen + sizeof(uint16_t) * 2;
+			}
+		}
+
+		nrecords++;
+
+		if (overrun) {
+			/*
+			 * Readers that keep it go no further, others refuse the
+			 * directory: the next choices are still tried
+			 */
+			return RSPAMD_ZIP_CD_PARTIAL;
 		}
 
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
+
+		if (open_end && cd < cd_end && (cd_end - cd < sizeof(cd_magic) || memcmp(cd, cd_magic, sizeof(cd_magic)) != 0)) {
+			/* Its size is not known: the directory ends at the first other data */
+			break;
+		}
 	}
 
 	return RSPAMD_ZIP_CD_OK;
 }
 
-/* Lists the files of the first set of directories of an end record that reads */
+static enum rspamd_zip_cd_read
+rspamd_archive_zip_read_cd(struct rspamd_task *task,
+						   struct rspamd_archive *arch,
+						   struct rspamd_zip_listed *listed,
+						   const unsigned char *cd,
+						   const unsigned char *cd_end,
+						   const unsigned char *eocd,
+						   gboolean open_end)
+{
+	enum rspamd_zip_cd_read read;
+
+	listed->nprev = listed->records->len;
+
+	if (listed->nprev > 0) {
+		listed->prev = g_malloc(listed->nprev * sizeof(*listed->prev));
+		memcpy(listed->prev, listed->records->data, listed->nprev * sizeof(*listed->prev));
+		qsort(listed->prev, listed->nprev, sizeof(*listed->prev),
+			  rspamd_archive_zip_record_cmp);
+	}
+
+	read = rspamd_archive_zip_read_records(task, arch, listed, cd, cd_end, eocd, open_end);
+
+	g_free(listed->prev);
+	listed->prev = NULL;
+	listed->nprev = 0;
+
+	return read;
+}
+
+/*
+ * Lists the files of the first set of directories of an end record that reads.
+ * A directory that does not read leaves no files; one that stops at a record
+ * running past the end record keeps its files, and the next set is tried too
+ */
 static enum rspamd_zip_cd_read
 rspamd_archive_zip_read_sets(struct rspamd_task *task,
 							 struct rspamd_archive *arch,
+							 struct rspamd_zip_listed *listed,
 							 const unsigned char *start,
 							 const unsigned char *eocd,
 							 const struct rspamd_zip_cd_set *sets,
-							 unsigned int nsets)
+							 unsigned int nsets,
+							 const struct rspamd_zip_cd_set **pread_set)
 {
-	enum rspamd_zip_cd_read read = RSPAMD_ZIP_CD_INVALID;
+	enum rspamd_zip_cd_read read, res = RSPAMD_ZIP_CD_INVALID;
 
-	for (unsigned int i = 0; i < nsets && read == RSPAMD_ZIP_CD_INVALID; i++) {
+	for (unsigned int i = 0; i < nsets; i++) {
 		const struct rspamd_zip_cd_set *set = &sets[i];
+		unsigned int mark = arch->files->len;
 
-		if (i > 0) {
-			rspamd_archive_files_reset(task, arch);
+		read = rspamd_archive_zip_read_cd(task, arch, listed, start + set->offset,
+										  start + set->offset + set->size, eocd,
+										  set->open_end);
+
+		if (read == RSPAMD_ZIP_CD_INVALID) {
+			rspamd_archive_zip_unlist(task, arch, listed, mark);
+
+			if (set->open_end && set->declared_size == 0) {
+				/* Nothing there reads: the directory is empty, as the record says */
+				read = RSPAMD_ZIP_CD_OK;
+			}
+			else if (set->alt_offset != G_MAXUINT64) {
+				/* Only the directory where the record says can be read */
+				read = rspamd_archive_zip_read_cd(task, arch, listed, start + set->alt_offset,
+												  start + set->alt_offset + set->size,
+												  eocd, FALSE);
+
+				if (read == RSPAMD_ZIP_CD_INVALID) {
+					rspamd_archive_zip_unlist(task, arch, listed, mark);
+				}
+			}
 		}
-
-		read = rspamd_archive_zip_read_cd(task, arch, start + set->offset,
-										  start + set->offset + set->size, eocd);
-
-		if (set->alt_offset == G_MAXUINT64) {
-			continue;
+		else if (read != RSPAMD_ZIP_CD_LIMIT && set->alt_offset != G_MAXUINT64) {
+			/*
+			 * The other directory, as far as it reads, which some readers
+			 * list, also when the first one stops at a record running past
+			 * the end record. Its records that the first one has listed
+			 * are skipped
+			 */
+			rspamd_archive_zip_read_cd(task, arch, listed, start + set->alt_offset,
+									   start + set->alt_offset + set->size,
+									   eocd, FALSE);
 		}
 
 		if (read == RSPAMD_ZIP_CD_INVALID) {
-			/* Only the directory where the record says can be read */
-			rspamd_archive_files_reset(task, arch);
-			read = rspamd_archive_zip_read_cd(task, arch, start + set->alt_offset,
-											  start + set->alt_offset + set->size, eocd);
+			continue;
 		}
-		else if (read == RSPAMD_ZIP_CD_OK) {
-			/*
-			 * The other directory, as far as it reads, which some readers
-			 * list. It comes before the first one (the record is the end of
-			 * both), and it ends where the first one starts at most, not to
-			 * list it twice
-			 */
-			rspamd_archive_zip_read_cd(task, arch, start + set->alt_offset,
-									   MIN(start + set->alt_offset + set->size,
-										   start + set->offset),
-									   eocd);
+
+		*pread_set = set;
+
+		if (read != RSPAMD_ZIP_CD_PARTIAL) {
+			return read;
 		}
+
+		res = RSPAMD_ZIP_CD_PARTIAL;
 	}
 
-	return read;
+	return res;
+}
+
+/*
+ * An archive with data in front of it may follow another archive (`cat a.zip
+ * b.zip`): readers that take the record at the end list the last one, but
+ * 7-Zip and WinRAR read from the start and list the first one. That is the
+ * first record whose offsets count from the start of the data and describe
+ * the directory right before it; its files are listed too
+ */
+static void
+rspamd_archive_zip_read_first(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  struct rspamd_zip_listed *listed,
+							  const unsigned char *start,
+							  const unsigned char *last_eocd,
+							  const struct rspamd_zip_cd_set *last_set)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
+							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02},
+							   eocd_magic[] = {0x50, 0x4b, 0x05, 0x06};
+	const unsigned char *p = start, *end;
+
+	if (last_set->offset <= last_set->declared_offset ||
+		last_eocd - start < sizeof(lh_magic) ||
+		memcmp(start, lh_magic, sizeof(lh_magic)) != 0) {
+		return;
+	}
+
+	/* The first archive ends where the last one starts */
+	end = start + (last_set->offset - last_set->declared_offset);
+
+	while (end - p >= 22) {
+		uint32_t cd_size, cd_offset;
+
+		p = memchr(p, eocd_magic[0], end - p - 21);
+
+		if (p == NULL) {
+			break;
+		}
+
+		if (memcmp(p, eocd_magic, sizeof(eocd_magic)) == 0) {
+			memcpy(&cd_size, p + 12, sizeof(cd_size));
+			cd_size = GUINT32_FROM_LE(cd_size);
+			memcpy(&cd_offset, p + 16, sizeof(cd_offset));
+			cd_offset = GUINT32_FROM_LE(cd_offset);
+
+			if (cd_size >= sizeof(cd_magic) && cd_size <= (uint64_t) (p - start) &&
+				cd_offset == (uint64_t) (p - start) - cd_size &&
+				memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) == 0) {
+				rspamd_archive_zip_read_cd(task, arch, listed, start + cd_offset,
+										   start + cd_offset + cd_size, p, FALSE);
+
+				return;
+			}
+		}
+
+		p++;
+	}
 }
 
 static void
@@ -570,6 +799,11 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	const unsigned int max_records_read = 4;
 	struct rspamd_archive *arch = NULL;
 	enum rspamd_zip_cd_read read = RSPAMD_ZIP_CD_INVALID;
+	const struct rspamd_zip_cd_set *read_set = NULL;
+	const unsigned char *read_eocd = NULL;
+	/* The sets of the record that was read, as `sets` changes with each record */
+	struct rspamd_zip_cd_set read_set_copy;
+	struct rspamd_zip_listed listed = {NULL, NULL, 0};
 
 	/*
 	 * Need at least 22 bytes for a minimal EOCD record; otherwise the
@@ -582,6 +816,7 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	/* Zip files have interesting data at the end of archive */
 	p = part->parsed_data.begin + part->parsed_data.len - 1;
 	start = part->parsed_data.begin;
+	listed.records = g_array_new(FALSE, FALSE, sizeof(const unsigned char *));
 
 	/*
 	 * Search for EOCD: it is 22 bytes followed by a comment of up to 64 KB,
@@ -615,13 +850,24 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 					}
 				}
 
-				read = rspamd_archive_zip_read_sets(task, arch, start, p, sets, nsets);
+				enum rspamd_zip_cd_read record_read = rspamd_archive_zip_read_sets(task, arch, &listed,
+																				   start, p, sets, nsets, &read_set);
 
-				if (read != RSPAMD_ZIP_CD_INVALID || ++records_read >= max_records_read) {
-					break;
+				if (record_read != RSPAMD_ZIP_CD_INVALID) {
+					read_eocd = p;
+					read = record_read;
+					read_set_copy = *read_set;
+					read_set = &read_set_copy;
 				}
 
-				rspamd_archive_files_reset(task, arch);
+				/*
+				 * A directory that stopped at a record running past the end
+				 * record keeps its files, and earlier records are looked at
+				 */
+				if ((record_read != RSPAMD_ZIP_CD_INVALID && record_read != RSPAMD_ZIP_CD_PARTIAL) ||
+					++records_read >= max_records_read) {
+					break;
+				}
 			}
 			else if (check == RSPAMD_ZIP_EOCD_STOP) {
 				break;
@@ -635,11 +881,18 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	if (read == RSPAMD_ZIP_CD_INVALID) {
 		/* Not a zip file */
 		msg_info_task("zip archive is invalid (no usable EOCD)");
+		g_array_free(listed.records, TRUE);
 
 		return;
 	}
 
+	if (read != RSPAMD_ZIP_CD_LIMIT && read_set != NULL) {
+		/* Data in front of the archive, which may be another archive */
+		rspamd_archive_zip_read_first(task, arch, &listed, start, read_eocd, read_set);
+	}
+
 set:
+	g_array_free(listed.records, TRUE);
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 

@@ -108,10 +108,11 @@ context("Zip archive listing", function()
   end)
 
   test("an archive appended to another one is read", function()
-    -- Its offsets count from its own start, readers use its last end record
+    -- Its offsets count from its own start; readers that use the last end
+    -- record list it, 7-Zip the first archive: both, the last one first
     assert_rspamd_table_eq({
       actual = files_of(make_zip("readme.txt", "") .. make_zip("invoice.pdf.exe", "")),
-      expect = { "invoice.pdf.exe" },
+      expect = { "invoice.pdf.exe", "readme.txt" },
     })
   end)
 
@@ -186,6 +187,110 @@ context("Zip archive listing", function()
     assert_rspamd_table_eq({
       actual = sorted(files_of(lh .. extra .. cd .. eocd(#cd, #lh))),
       expect = { "a.txt", "b.exe", "c.exe" },
+    })
+  end)
+  test("a last record whose comment runs past the end record keeps its file", function()
+    -- Python, unzip and 7-Zip list both files
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local last = "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", #"runme.exe") ..
+        "\0\0" .. rspamd_util.pack("<I2", 0xffff) .. string.rep("\0", 12) .. "runme.exe"
+    local cd = cd_record("readme.txt") .. last
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh))),
+      expect = { "readme.txt", "runme.exe" },
+    })
+  end)
+
+  local function overrun_record(name)
+    -- Its comment runs past the end record
+    return "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", #name) ..
+        "\0\0" .. rspamd_util.pack("<I2", 0xffff) .. string.rep("\0", 12) .. name
+  end
+
+  test("a directory that runs past its end record does not hide the declared one", function()
+    -- Python lists the directory right before the record, 7-Zip the one
+    -- at the offset
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local declared = cd_record("declared.exe")
+    local adjacent = cd_record("a.txt") .. overrun_record("b.txt")
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. declared .. adjacent .. eocd(#adjacent, #lh))),
+      expect = { "a.txt", "b.txt", "declared.exe" },
+    })
+  end)
+
+  test("a directory that runs past its end record does not hide an earlier record", function()
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local first = cd_record("evil.exe")
+    local last = overrun_record("readme.txt")
+    local zip = lh .. first .. eocd(#first, #lh) ..
+        last .. eocd(#last, #lh + #first + 22)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(zip)),
+      expect = { "evil.exe", "readme.txt" },
+    })
+  end)
+
+  test("a directory that runs past its end record does not cut the declared one", function()
+    -- The directory before the end record is a record hidden in the extra
+    -- field of the declared directory's first record: the declared one is
+    -- still read to its end, as when the other one does not read at all
+    local function cd_rec(name, extra, comment_len)
+      return "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", #name) ..
+          rspamd_util.pack("<I2", #extra) .. rspamd_util.pack("<I2", comment_len) ..
+          string.rep("\0", 12) .. name .. extra
+    end
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local hidden = cd_rec("p1.txt", "", 0xffff)
+    local first = cd_rec("a1.txt", rspamd_util.pack("<I2", 0xcafe) ..
+        rspamd_util.pack("<I2", #hidden) .. hidden, 0)
+    local second = cd_rec("a2.exe", "", 0)
+    local pad = string.rep("\0", 56)
+    local cd_size = #lh + #first + #second + #pad - (#lh + 56)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. first .. second .. pad .. eocd(cd_size, #lh))),
+      expect = { "a1.txt", "a2.exe", "p1.txt" },
+    })
+  end)
+
+  test("a directory read for two end records is listed once", function()
+    -- The last record is empty and the directory runs past it: the record
+    -- before it describes the same directory
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local cd = cd_record("a.txt") .. overrun_record("b.exe")
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh) .. eocd(0, #lh))),
+      expect = { "a.txt", "b.exe" },
+    })
+  end)
+
+  test("an empty end record keeps the files that read before broken data", function()
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local bad = "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", 0xffff) ..
+        string.rep("\0", 16)
+    assert_rspamd_table_eq({
+      actual = files_of(lh .. cd_record("runme.exe") .. bad .. eocd(0, #lh)),
+      expect = { "runme.exe" },
+    })
+  end)
+
+  test("an empty end record appended to an archive does not hide its files", function()
+    -- The appended record says the directory is empty but points to it:
+    -- unzip and 7-Zip list it
+    local zip = make_zip("runme.exe", "")
+    assert_rspamd_table_eq({
+      actual = files_of(zip .. eocd(0, 30 + #"runme.exe")),
+      expect = { "runme.exe" },
+    })
+  end)
+
+  test("the first of two archives one after the other is listed too", function()
+    -- `cat evil.zip benign.zip`: Python and unzip list the last archive,
+    -- 7-Zip and WinRAR the first one
+    local files = files_of(make_zip("invoice.exe", "") .. make_zip("readme.txt", ""))
+    assert_rspamd_table_eq({
+      actual = sorted(files),
+      expect = { "invoice.exe", "readme.txt" },
     })
   end)
 end)
