@@ -905,24 +905,16 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	case RSPAMD_CTE_UNKNOWN:
 		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
 			if (part->cte != RSPAMD_CTE_7BIT) {
-				/* We have something that has a missing content-type,
-				 * but it has non-7bit characters.
-				 *
-				 * In theory, it is very unsafe to process it as a text part
-				 * as we unlikely get some sane result
-				 */
-
 				/*
-				 * On the other hand, there is an evidence that some
-				 * emails actually rely on that.
-				 * So we apply an expensive hack here:
-				 * if there are no 8bit characters -OR- the content is valid
-				 * UTF8, we can still imply Content-Type == text/plain
+				 * We have something that has a missing content-type,
+				 * but it has non-7bit characters. Without a charset, only
+				 * ASCII and UTF-8 can be read as they are: anything else is
+				 * broken. It is still processed as text, with a guessed
+				 * charset, as one bad byte must not hide the text from
+				 * the checks.
 				 */
-
 				if (rspamd_str_has_8bit(part->raw_data.begin, part->raw_data.len) &&
-					!rspamd_fast_utf8_validate(part->raw_data.begin, part->raw_data.len)) {
-					part->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
+					rspamd_fast_utf8_validate(part->raw_data.begin, part->raw_data.len) != 0) {
 					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 				}
 			}
