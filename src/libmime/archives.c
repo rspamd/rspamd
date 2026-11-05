@@ -1776,22 +1776,50 @@ rspamd_7zip_read_archive_props(struct rspamd_task *task,
 	return p;
 }
 
+/*
+ * 7z stores names as UTF-16LE at any offset of the header, so code units are
+ * assembled from bytes: a uint16_t load there is misaligned and host-endian
+ */
+static inline UChar32
+rspamd_7zip_utf16le_unit(const unsigned char *p, gsize idx)
+{
+	return (UChar32) p[idx * 2] | ((UChar32) p[idx * 2 + 1] << 8);
+}
+
+/*
+ * Converts a UTF-16LE name; an unpaired surrogate becomes U+FFFD and sets
+ * `obfuscated` rather than losing the whole name (and its extension)
+ */
 static GString *
 rspamd_7zip_ucs2_to_utf8(struct rspamd_task *task, const unsigned char *p,
-						 const unsigned char *end)
+						 const unsigned char *end, gboolean *obfuscated)
 {
 	GString *res;
-	goffset dest_pos = 0, src_pos = 0;
+	goffset dest_pos = 0;
+	gsize src_pos = 0;
 	const gsize len = (end - p) / sizeof(uint16_t);
-	uint16_t *up;
-	UChar32 wc;
+	UChar32 wc, trail;
 	UBool is_error = 0;
 
 	res = g_string_sized_new((end - p) * 3 / 2 + sizeof(wc) + 1);
-	up = (uint16_t *) p;
 
 	while (src_pos < len) {
-		U16_NEXT(up, src_pos, len, wc);
+		/* U16_NEXT on units read in little-endian order */
+		wc = rspamd_7zip_utf16le_unit(p, src_pos++);
+
+		if (U16_IS_LEAD(wc) && src_pos < len) {
+			trail = rspamd_7zip_utf16le_unit(p, src_pos);
+
+			if (U16_IS_TRAIL(trail)) {
+				src_pos++;
+				wc = U16_GET_SUPPLEMENTARY(wc, trail);
+			}
+		}
+
+		if (U_IS_SURROGATE(wc)) {
+			wc = 0xFFFD;
+			*obfuscated = TRUE;
+		}
 
 		if (wc > 0) {
 			U8_APPEND(res->str, dest_pos,
@@ -1892,11 +1920,19 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 						goto end;
 					}
 
-					res = rspamd_7zip_ucs2_to_utf8(task, p, fend);
+					gboolean obfuscated = FALSE;
+
+					res = rspamd_7zip_ucs2_to_utf8(task, p, fend, &obfuscated);
 
 					if (res != NULL) {
 						fentry = g_malloc0(sizeof(*fentry));
 						fentry->fname = res;
+
+						if (obfuscated) {
+							fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+							arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+						}
+
 						if (!rspamd_archive_file_add(task, arch, fentry)) {
 							p = NULL;
 							goto end;
