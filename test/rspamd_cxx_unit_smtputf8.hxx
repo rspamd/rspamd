@@ -4,6 +4,8 @@
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
 
+#include <algorithm>
+#include <ctime>
 #include <string>
 #include "libutil/cxx/smtputf8_syntax.h"
 
@@ -187,6 +189,72 @@ TEST_SUITE("smtputf8 syntax")
 		CHECK(check_smtputf8(extended_arabic + "@٠.example") == RSPAMD_SMTPUTF8_CODE_POINT);
 		CHECK(check_smtputf8(middle_dots + "@日.example") == RSPAMD_SMTPUTF8_VALID);
 		CHECK(check_smtputf8(middle_dots + "@example.com") == RSPAMD_SMTPUTF8_CODE_POINT);
+	}
+
+	// Tripling the input should roughly triple the time. Test
+	// that by testing a few long strings, short-long-short-long,
+	// and checking that the time difference stays below a factor
+	// of seven. Random scheduler variation makes this difficult
+	// to test, but using the fastest of a few runs, interspersing
+	// the short and long runs, and using a limit more than twice
+	// the expected behaviour makes the test reliable. Quadratic
+	// code implies a factor of nine, so if this test is flaky,
+	// the most likely cause is a combination of quadratic code
+	// and a great optimiser.
+	//
+	// Very loosely based on
+	// https://github.com/arnt/uts58/blob/main/javascript/test/timing.test.js
+	TEST_CASE("runtime scales roughly linearly, not quadratically")
+	{
+		const auto repeat = [](const std::string &s, int n) {
+			std::string result;
+			result.reserve(n * s.size());
+			for (int i = 0; i < n; i++) {
+				result.append(s);
+			}
+			return result;
+		};
+		const auto cpu_ms = [](const std::string &address) {
+			timespec start, end;
+			clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
+			check_smtputf8(address);
+			clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+			return (end.tv_sec - start.tv_sec) * 1e3 +
+				   (end.tv_nsec - start.tv_nsec) / 1e6;
+		};
+		const struct {
+			std::string rule;
+			std::string unit;
+			std::string tail;
+		} inputs[] = {
+			// Each dot needs Japanese, which comes last
+			{"RFC5892 A.7", "・", "@日.example"},
+			// Each digit needs the absence of the other set
+			{"RFC5892 A.8", "٠", "@example.com"},
+			// Each ZWNJ looks at its neighbours' joining types
+			{"RFC5892 A.1", "ب‌", "ب@example.com"},
+			// Script lookups and NFC
+			{"rules 2 to 4", "中", "@例子.中国"},
+		};
+
+		for (const auto &input: inputs) {
+			const auto build = [&](int n) {
+				return repeat(input.unit, n) + input.tail;
+			};
+			REQUIRE(check_smtputf8(build(10)) == RSPAMD_SMTPUTF8_VALID);
+			cpu_ms(build(1000));// warm the CPU cache(s)
+
+			const auto small = build(2000), large = build(6000);
+			double t1 = 1e9, t2 = 1e9;
+			for (int i = 0; i < 7; i++) {
+				t1 = std::min(t1, cpu_ms(small));
+				t2 = std::min(t2, cpu_ms(large));
+			}
+			CAPTURE(input.rule);
+			CAPTURE(t1);
+			CAPTURE(t2);
+			CHECK(t2 / t1 < 7);
+		}
 	}
 
 	TEST_CASE("result names")
