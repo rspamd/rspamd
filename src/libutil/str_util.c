@@ -1644,7 +1644,12 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 			seen_spaces = 0;
 		}
 
-		if (QP_SPAN_NORMAL(span, str_len)) {
+		/*
+		 * In CR mode, not right before a literal LF: `=\r` and the LF would
+		 * read as a soft CRLF break, and the line ends at the LF anyway
+		 */
+		if (QP_SPAN_NORMAL(span, str_len) &&
+			!(how == RSPAMD_TASK_NEWLINES_CR && p + 1 < end && p[1] == '\n')) {
 			/* Add new line and then continue */
 			if (p + 1 < end || span > str_len || seen_spaces) {
 				switch (how) {

@@ -155,6 +155,24 @@ context("Quoted-Printable encoding", function()
   end
 
 
+  test("A line break right after a full line is kept", function()
+    -- A soft break there is of no use, and in CR mode '=\r' with the LF
+    -- that follows would read as a soft CRLF break
+    for _, how in ipairs({ 'cr', 'lf', 'crlf' }) do
+      for _, inp in ipairs({
+        string.rep('x', 73) .. '  \ny',
+        string.rep('x', 75) .. '\ny',
+        string.rep('x', 75) .. '\r\ny',
+        string.rep('x', 74) .. ' \ny',
+      }) do
+        assert_rspamd_eq({
+          expect = inp,
+          actual = tostring(rspamd_util.decode_qp(rspamd_util.encode_qp(inp, 76, how))),
+        })
+      end
+    end
+  end)
+
   if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
     -- Fuzz testing
     local charset = {}
