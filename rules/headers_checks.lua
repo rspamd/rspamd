@@ -1189,54 +1189,94 @@ rspamd_config.MIME_BASE64_TEXT_BOGUS = {
   group = 'mime'
 }
 
-local function is_8bit_addr(addr)
-  if addr.flags and addr.flags['8bit'] then
+-- The 8bit flag means the address had 8bit characters and failed the grammar
+local function addr_has_8bit(addr)
+  local flags = addr.flags or {}
+
+  if flags['8bit'] then
     return true
   end
 
-  return false;
+  return (addr.user or ''):find('[\128-\255]') ~= nil or
+      (addr.domain or ''):find('[\128-\255]') ~= nil
 end
 
-local invalid_from_8bit = {
-  callback = function(task)
-    local from = (task:get_from('mime') or {})[1] or {}
-    if is_8bit_addr(from) then
-      return true
-    end
-    return false
-  end,
-  description = 'Invalid 8bit character in From header',
-  score = 6.0,
-  group = 'headers'
-}
+-- Returns the rule of draft-ietf-mailmaint-smtputf8-syntax that addr breaks
+local function smtputf8_addr_reason(addr)
+  local flags = addr.flags or {}
 
-local invalid_rcpt_8bit = {
-  callback = function(task)
-    local rcpts = task:get_recipients('mime') or {}
-    return fun.any(function(rcpt)
-      if is_8bit_addr(rcpt) then
-        return true
+  local valid, reason = util.is_valid_smtputf8_address(addr.user or '',
+      addr.domain or '', flags['quoted'])
+
+  if not valid then
+    return reason
+  end
+
+  if flags['8bit'] then
+    return 'RFC6532 grammar'
+  end
+
+  return nil
+end
+
+-- 8bit and ASCII addresses go to different symbols: an ASCII address
+-- breaks the draft only through an a-label atom or a control character,
+-- which is far weaker evidence than a broken 8bit address
+local function check_addrs(addrs, want_8bit)
+  for _, addr in ipairs(addrs) do
+    if addr_has_8bit(addr) == want_8bit then
+      local reason = smtputf8_addr_reason(addr)
+
+      if reason then
+        return true, 1.0, reason
       end
-      return false
-    end, rcpts)
+    end
+  end
+
+  return false
+end
+
+local function first_from(task)
+  local from = (task:get_from('mime') or {})[1]
+
+  return from and { from } or {}
+end
+
+rspamd_config.INVALID_FROM_8BIT = {
+  callback = function(task)
+    return check_addrs(first_from(task), true)
   end,
-  description = 'Invalid 8bit character in recipients headers',
+  description = 'Invalid 8bit From address: not UTF-8, or breaks the SMTPUTF8 address syntax',
   score = 6.0,
   group = 'headers'
 }
 
-if rspamd_config:is_mime_utf8() then
-  -- Disable some of the rules preserving the underlying logic
-  invalid_from_8bit.condition = function()
-    return false
-  end
-  invalid_rcpt_8bit.condition = function()
-    return false
-  end
-end
+rspamd_config.INVALID_RCPT_8BIT = {
+  callback = function(task)
+    return check_addrs(task:get_recipients('mime') or {}, true)
+  end,
+  description = 'Invalid 8bit recipient address: not UTF-8, or breaks the SMTPUTF8 address syntax',
+  score = 6.0,
+  group = 'headers'
+}
 
-rspamd_config.INVALID_FROM_8BIT = invalid_from_8bit
-rspamd_config.INVALID_RCPT_8BIT = invalid_rcpt_8bit
+rspamd_config.INVALID_FROM_ASCII_ADDR = {
+  callback = function(task)
+    return check_addrs(first_from(task), false)
+  end,
+  description = 'ASCII From address breaks the SMTPUTF8 address syntax: a-label local part or control character',
+  score = 1.0,
+  group = 'headers'
+}
+
+rspamd_config.INVALID_RCPT_ASCII_ADDR = {
+  callback = function(task)
+    return check_addrs(task:get_recipients('mime') or {}, false)
+  end,
+  description = 'ASCII recipient address breaks the SMTPUTF8 address syntax: a-label local part or control character',
+  score = 1.0,
+  group = 'headers'
+}
 
 rspamd_config.XM_CASE = {
   callback = function(task)

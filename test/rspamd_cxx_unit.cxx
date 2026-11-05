@@ -66,6 +66,7 @@
 #include "rspamd_cxx_unit_lua_task.hxx"
 #include "rspamd_cxx_unit_redis_connection.hxx"
 #include "rspamd_cxx_unit_scan_result.hxx"
+#include "rspamd_cxx_unit_smtputf8.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

@@ -1,0 +1,9 @@
+From: xn--gr-zia@example.com
+To: recipient@example.com
+Date: Fri, 30 Oct 2026 10:00:00 +0000
+Message-ID: <eai_from_a_label@example.com>
+Subject: ASCII local part containing an A-label
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+
+The From local part is an unquoted A-label.
