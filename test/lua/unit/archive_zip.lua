@@ -289,6 +289,95 @@ context("Zip archive listing", function()
     })
   end)
 
+  test("an archive followed by an empty one is listed", function()
+    -- 7-Zip reads the first one
+    assert_rspamd_table_eq({
+      actual = files_of(make_zip("payload.exe", "") .. eocd(0, 0)),
+      expect = { "payload.exe" },
+    })
+  end)
+
+  test("a zip64 archive followed by another one is listed too", function()
+    local name = "payload.exe"
+    local lh = "PK\3\4" .. string.rep("\0", 26) .. name
+    local cd = cd_record(name)
+    local z64 = "PK\6\6" .. rspamd_util.pack("<I8", 44) .. string.rep("\0", 28) ..
+        rspamd_util.pack("<I8", #cd) .. rspamd_util.pack("<I8", #lh)
+    local loc = "PK\6\7" .. string.rep("\0", 4) ..
+        rspamd_util.pack("<I8", #lh + #cd) .. rspamd_util.pack("<I4", 1)
+    local first = lh .. cd .. z64 .. loc .. "PK\5\6" .. string.rep("\0", 4) ..
+        string.rep("\255", 4) .. string.rep("\255", 8) .. "\0\0"
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. make_zip("readme.txt", ""))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+  end)
+
+  local function cd_rec(name, lh_offset, comment, comment_len)
+    return "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", #name) .. "\0\0" ..
+        rspamd_util.pack("<I2", comment_len or #comment) .. string.rep("\0", 8) ..
+        rspamd_util.pack("<I4", lh_offset) .. name .. comment
+  end
+
+  local function z64_rec(cd_size, cd_offset)
+    return "PK\6\6" .. rspamd_util.pack("<I8", 44) .. string.rep("\0", 28) ..
+        rspamd_util.pack("<I8", cd_size) .. rspamd_util.pack("<I8", cd_offset)
+  end
+
+  local function z64_loc(offset)
+    return "PK\6\7" .. string.rep("\0", 4) .. rspamd_util.pack("<I8", offset) ..
+        rspamd_util.pack("<I4", 1)
+  end
+
+  test("the first archive is found through the directory 7-Zip reads", function()
+    -- The zip64 directory of the last archive runs past its end record; the
+    -- 32-bit one, right before the record, shows the archive in front
+    local first = make_zip("payload.exe", "")
+    local lh = "PK\3\4" .. string.rep("\0", 26) .. "readme.txt" ..
+        "PK\3\4" .. string.rep("\0", 26) .. "x.txt"
+    local cd_x = cd_rec("x.txt", 40, "", 0xffff)
+    local cd32_at = #lh + #cd_x
+    local z64_at = #first + cd32_at + 46 + #"readme.txt"
+    local cd32 = cd_rec("readme.txt", 0,
+        z64_rec(#cd_x, #first + #lh) .. z64_loc(z64_at))
+    local last = lh .. cd_x .. cd32 .. eocd(#cd32, cd32_at)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. last)),
+      expect = { "payload.exe", "readme.txt", "x.txt" },
+    })
+  end)
+
+  test("the first archive is found when the last one counts from the start", function()
+    -- `cat a.zip b.zip; zip -A`, or an empty record at its own offset. The
+    -- entries of the last archive are found by their local headers
+    local first = make_zip("payload.exe", "")
+    local lh = "PK\3\4" .. string.rep("\0", 22) .. rspamd_util.pack("<I2", #"readme.txt") ..
+        "\0\0" .. "readme.txt"
+    local cd = cd_rec("readme.txt", #first, "")
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. lh .. cd .. eocd(#cd, #first + #lh))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+    assert_rspamd_table_eq({
+      actual = files_of(first .. eocd(0, #first)),
+      expect = { "payload.exe" },
+    })
+  end)
+
+  test("a record in front that reads no directory does not hide the archive", function()
+    local lh = "PK\3\4" .. string.rep("\0", 26) .. "payload.exe"
+    -- File data that looks like a directory and its end record
+    local fake = "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", 0xffff) ..
+        string.rep("\0", 16)
+    local data = fake .. eocd(#fake, #lh)
+    local cd = cd_record("payload.exe")
+    local first = lh .. data .. cd .. eocd(#cd, #lh + #data)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. make_zip("readme.txt", ""))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+  end)
+
   test("an empty end record appended to an archive does not hide its files", function()
     -- The appended record says the directory is empty but points to it:
     -- unzip and 7-Zip list it

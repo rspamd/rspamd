@@ -280,6 +280,12 @@ struct rspamd_zip_cd_set {
 	uint64_t declared_offset;
 	/* The size the record holds */
 	uint64_t declared_size;
+	/*
+	 * Where the archive of the record starts, when its directory is right
+	 * before the record (G_MAXUINT64 if not): data in front of it may be
+	 * another archive
+	 */
+	uint64_t front;
 };
 
 /*
@@ -313,6 +319,7 @@ rspamd_archive_zip_cd_set(const unsigned char *start, uint64_t limit,
 	set->open_end = FALSE;
 	set->declared_offset = cd_offset;
 	set->declared_size = cd_size;
+	set->front = G_MAXUINT64;
 
 	if (declared && cd_size < sizeof(cd_magic) && limit - cd_offset >= sizeof(cd_magic) &&
 		memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) == 0) {
@@ -326,6 +333,11 @@ rspamd_archive_zip_cd_set(const unsigned char *start, uint64_t limit,
 		set->open_end = TRUE;
 
 		return TRUE;
+	}
+
+	if ((adjacent || cd_size < sizeof(cd_magic)) && limit - cd_size >= cd_offset) {
+		/* An empty directory is right before its record too */
+		set->front = limit - cd_size - cd_offset;
 	}
 
 	if (adjacent) {
@@ -659,8 +671,8 @@ rspamd_archive_zip_read_cd(struct rspamd_task *task,
  * zip64 values and the 32-bit ones, when they differ, are what different
  * readers take (Python and bsdtar the former, 7-Zip the latter). A directory
  * that does not read leaves no files; one that stops at a record running past
- * the end record keeps its files. Sets the first set that read in full, else
- * the last one that read
+ * the end record keeps its files. Sets the set that read with the most data
+ * in front of its archive, which rspamd_archive_zip_read_first looks into
  */
 static enum rspamd_zip_cd_read
 rspamd_archive_zip_read_sets(struct rspamd_task *task,
@@ -674,7 +686,6 @@ rspamd_archive_zip_read_sets(struct rspamd_task *task,
 {
 	enum rspamd_zip_cd_read read, res = RSPAMD_ZIP_CD_INVALID;
 	const struct rspamd_zip_cd_set *first_read = NULL;
-	gboolean first_partial = FALSE;
 
 	for (unsigned int i = 0; i < nsets; i++) {
 		const struct rspamd_zip_cd_set *set = &sets[i];
@@ -718,9 +729,10 @@ rspamd_archive_zip_read_sets(struct rspamd_task *task,
 			continue;
 		}
 
-		if (first_read == NULL || first_partial) {
+		if (first_read == NULL ||
+			(set->front != G_MAXUINT64 &&
+			 (first_read->front == G_MAXUINT64 || set->front > first_read->front))) {
 			first_read = set;
-			first_partial = read == RSPAMD_ZIP_CD_PARTIAL;
 		}
 
 		if (read == RSPAMD_ZIP_CD_LIMIT) {
@@ -742,10 +754,11 @@ rspamd_archive_zip_read_sets(struct rspamd_task *task,
 
 /*
  * An archive with data in front of it may follow another archive (`cat a.zip
- * b.zip`): readers that take the record at the end list the last one, but
- * 7-Zip and WinRAR read from the start and list the first one. That is the
- * first record whose offsets count from the start of the data and describe
- * the directory right before it; its files are listed too
+ * b.zip`, the last one possibly empty): readers that take the record at the
+ * end list the last one, but 7-Zip and WinRAR read from the start and list
+ * the first one. That is the first record, zip64 or not, whose offsets count
+ * from the start of the data and describe the directory right before it; its
+ * files are listed too
  */
 static void
 rspamd_archive_zip_read_first(struct rspamd_task *task,
@@ -758,20 +771,75 @@ rspamd_archive_zip_read_first(struct rspamd_task *task,
 	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
 							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02},
 							   eocd_magic[] = {0x50, 0x4b, 0x05, 0x06};
+	const uint64_t cd_basic_len = 46, lh_basic_len = 30;
+	/* Records in front tried, each a directory read: not free */
+	const unsigned int max_candidates = 8;
+	unsigned int candidates = 0;
 	const unsigned char *p = start, *end;
+	uint64_t front = last_set->front, limit = last_eocd - start;
 
-	if (last_set->offset <= last_set->declared_offset ||
-		last_eocd - start < sizeof(lh_magic) ||
+	if (front == G_MAXUINT64 || limit < sizeof(lh_magic) ||
 		memcmp(start, lh_magic, sizeof(lh_magic)) != 0) {
 		return;
 	}
 
+	if (front == 0) {
+		/*
+		 * Offsets that count from the start of the data (`zip -A` after
+		 * `cat`): the last archive starts where its entries do (the local
+		 * headers its records point to, with their names), or at an empty
+		 * directory
+		 */
+		if (last_set->declared_size < sizeof(cd_magic)) {
+			front = last_set->declared_offset;
+		}
+		else {
+			const unsigned char *cd = start + last_set->offset,
+								*cd_end = cd + last_set->size;
+
+			front = G_MAXUINT64;
+
+			while (cd < cd_end && (uint64_t) (cd_end - cd) >= cd_basic_len &&
+				   memcmp(cd, cd_magic, sizeof(cd_magic)) == 0) {
+				uint32_t lh_offset;
+				uint16_t fname_len, extra_len, comment_len, lh_fname_len;
+
+				memcpy(&lh_offset, cd + 42, sizeof(lh_offset));
+				lh_offset = GUINT32_FROM_LE(lh_offset);
+				memcpy(&fname_len, cd + 28, sizeof(fname_len));
+				fname_len = GUINT16_FROM_LE(fname_len);
+				memcpy(&extra_len, cd + 30, sizeof(extra_len));
+				memcpy(&comment_len, cd + 32, sizeof(comment_len));
+
+				if ((uint64_t) (cd_end - cd) >= cd_basic_len + fname_len &&
+					(uint64_t) lh_offset + lh_basic_len + fname_len <= limit &&
+					memcmp(start + lh_offset, lh_magic, sizeof(lh_magic)) == 0) {
+					memcpy(&lh_fname_len, start + lh_offset + 26, sizeof(lh_fname_len));
+
+					if (GUINT16_FROM_LE(lh_fname_len) == fname_len &&
+						memcmp(start + lh_offset + lh_basic_len, cd + cd_basic_len, fname_len) == 0) {
+						front = MIN(front, lh_offset);
+					}
+				}
+
+				cd += cd_basic_len + fname_len + GUINT16_FROM_LE(extra_len) +
+					  GUINT16_FROM_LE(comment_len);
+			}
+		}
+
+		if (front == G_MAXUINT64 || front == 0) {
+			return;
+		}
+	}
+
+	if (front > limit) {
+		return;
+	}
+
 	/* The first archive ends where the last one starts */
-	end = start + (last_set->offset - last_set->declared_offset);
+	end = start + front;
 
-	while (end - p >= 22) {
-		uint32_t cd_size, cd_offset;
-
+	while (end - p >= 22 && candidates < max_candidates) {
 		p = memchr(p, eocd_magic[0], end - p - 21);
 
 		if (p == NULL) {
@@ -779,17 +847,46 @@ rspamd_archive_zip_read_first(struct rspamd_task *task,
 		}
 
 		if (memcmp(p, eocd_magic, sizeof(eocd_magic)) == 0) {
-			memcpy(&cd_size, p + 12, sizeof(cd_size));
-			cd_size = GUINT32_FROM_LE(cd_size);
-			memcpy(&cd_offset, p + 16, sizeof(cd_offset));
-			cd_offset = GUINT32_FROM_LE(cd_offset);
+			struct rspamd_zip_cd_set sets[2];
+			unsigned int nsets = 0, mark = arch->files->len;
+			gboolean read_any = FALSE;
 
-			if (cd_size >= sizeof(cd_magic) && cd_size <= (uint64_t) (p - start) &&
-				cd_offset == (uint64_t) (p - start) - cd_size &&
-				memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) == 0) {
-				rspamd_archive_zip_read_cd(task, arch, listed, start + cd_offset,
-										   start + cd_offset + cd_size, p, FALSE);
+			if (rspamd_archive_zip_check_eocd(start, p, sets, &nsets) == RSPAMD_ZIP_EOCD_USABLE) {
+				/* An archive at the start, its directory right before its record */
+				for (unsigned int i = 0; i < nsets; i++) {
+					const unsigned char *cd = start + sets[i].offset;
+					uint16_t fname_len;
 
+					if (sets[i].open_end || sets[i].declared_size < sizeof(cd_magic) ||
+						sets[i].front != 0) {
+						continue;
+					}
+
+					/* Its first record must read, which the directory read checks again */
+					if ((uint64_t) (p - cd) < cd_basic_len || memcmp(cd, cd_magic, sizeof(cd_magic)) != 0) {
+						continue;
+					}
+
+					memcpy(&fname_len, cd + 28, sizeof(fname_len));
+
+					if ((uint64_t) (p - cd) < cd_basic_len + GUINT16_FROM_LE(fname_len)) {
+						continue;
+					}
+
+					candidates++;
+
+					/*
+					 * Both directories, as for the last archive; their records
+					 * are kept as far as they read
+					 */
+					if (rspamd_archive_zip_read_cd(task, arch, listed, cd, cd + sets[i].size,
+												   p, FALSE) != RSPAMD_ZIP_CD_INVALID) {
+						read_any = TRUE;
+					}
+				}
+			}
+
+			if (read_any || arch->files->len > mark) {
 				return;
 			}
 		}
