@@ -173,6 +173,14 @@ context("Text parts that hold a file signature", function()
     task:destroy()
   end)
 
+  test("a calendar with control bytes in it stays text", function()
+    -- Text formats have no binary form
+    local task = load('text/plain', 'BEGIN:VCALENDAR\n' .. text .. string.rep('\1', 2000) ..
+        '\n' .. string.rep('END:VCALENDAR\n', 8))
+    assert_not_nil(text_with(task, 'signature.example.com'))
+    task:destroy()
+  end)
+
   test("a binary GIF with a Content-ID is an image", function()
     local task = load('text/plain\nContent-ID: <img2>', gif_bytes)
     local images = 0

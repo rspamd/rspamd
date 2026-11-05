@@ -1384,18 +1384,26 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 		 * the other checks. Binary data (a real image or PDF sent as text,
 		 * checked over 64 KB, as images often start with readable metadata)
 		 * and an attachment named as what was found (x.pdf holding a PDF)
-		 * are files of that type, as before.
+		 * are files of that type, as before. Formats that are text (XML, SVG,
+		 * CSV, iCalendar, vCard) have no binary form: control bytes added to
+		 * them do not make them a file.
 		 */
 		if ((rspamd_ftok_casecmp(&npart->ct->subtype, &plain_tok) == 0 ||
 			 rspamd_ftok_casecmp(&npart->ct->subtype, &html_tok) == 0) &&
-			!rspamd_mime_part_attached_as(npart, npart->detected_ext) &&
-			!rspamd_mime_part_data_is_binary(npart, 65536)) {
-			msg_debug_mime("part #%ud is text, not %s",
-						   npart->part_number,
-						   npart->detected_ext ? npart->detected_ext : "(unknown)");
-			npart->detected_type = rspamd_mempool_strdup(task->task_pool, "text");
-			npart->flags &= ~RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
-			npart->flags |= RSPAMD_MIME_PART_TEXT_CONTENT;
+			!rspamd_mime_part_attached_as(npart, npart->detected_ext)) {
+			gboolean text_format = (npart->detected_type &&
+									strcmp(npart->detected_type, "text") == 0) ||
+								   (npart->detected_ext &&
+									g_ascii_strcasecmp(npart->detected_ext, "svg") == 0);
+
+			if (text_format || !rspamd_mime_part_data_is_binary(npart, 65536)) {
+				msg_debug_mime("part #%ud is text, not %s",
+							   npart->part_number,
+							   npart->detected_ext ? npart->detected_ext : "(unknown)");
+				npart->detected_type = rspamd_mempool_strdup(task->task_pool, "text");
+				npart->flags &= ~RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+				npart->flags |= RSPAMD_MIME_PART_TEXT_CONTENT;
+			}
 		}
 	}
 
