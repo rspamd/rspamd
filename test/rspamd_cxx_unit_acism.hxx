@@ -26,6 +26,7 @@ extern "C" {
 
 #include <algorithm>
 #include <compare>
+#include <cstdint>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -105,6 +106,75 @@ TEST_SUITE("acism")
 		CHECK(acism_scan(pats, "aa") == std::vector<acism_hit>{{0, 1}, {0, 2}});
 		CHECK(acism_scan(pats, "abba") ==
 			  std::vector<acism_hit>{{0, 1}, {0, 4}, {1, 2}, {2, 3}});
+	}
+
+	static std::vector<acism_hit> naive_scan(const std::vector<std::string> &pats,
+											 const std::string &text)
+	{
+		std::vector<acism_hit> hits;
+
+		for (std::size_t i = 0; i < pats.size(); i++) {
+			for (auto pos = text.find(pats[i]); pos != std::string::npos;
+				 pos = text.find(pats[i], pos + 1)) {
+				hits.push_back({(int) i, (int) (pos + pats[i].size())});
+			}
+		}
+
+		std::sort(hits.begin(), hits.end());
+
+		return hits;
+	}
+
+	TEST_CASE("suffix that is a leaf")
+	{
+		/*
+		 * "bc" is the longest suffix of "abc", but it is a leaf: the lookup
+		 * must go on from "c", or "cd" is not found after "abc"
+		 */
+		std::vector<std::string> pats{"abcd", "bc", "cd"};
+
+		CHECK(acism_scan(pats, "abcd") ==
+			  std::vector<acism_hit>{{0, 4}, {1, 3}, {2, 4}});
+		CHECK(acism_scan(pats, "abce") == std::vector<acism_hit>{{1, 3}});
+		CHECK(acism_scan(pats, "abcbcd") ==
+			  std::vector<acism_hit>{{1, 3}, {1, 5}, {2, 6}});
+	}
+
+	TEST_CASE("all matches as a naive search finds them")
+	{
+		/* Small alphabet, so the patterns are often suffixes of each other */
+		std::uint32_t seed = 42;
+		auto next_rand = [&seed](std::uint32_t mod) {
+			seed = seed * 1103515245u + 12345u;
+			return (seed >> 16) % mod;
+		};
+		auto random_string = [&](std::size_t len) {
+			std::string s;
+
+			for (std::size_t i = 0; i < len; i++) {
+				s.push_back("abcd"[next_rand(4)]);
+			}
+
+			return s;
+		};
+
+		for (int round = 0; round < 2000; round++) {
+			std::vector<std::string> pats;
+			auto npats = 1 + next_rand(8);
+
+			while (pats.size() < npats) {
+				auto p = random_string(1 + next_rand(5));
+
+				if (std::find(pats.begin(), pats.end(), p) == pats.end()) {
+					pats.push_back(std::move(p));
+				}
+			}
+
+			auto text = random_string(next_rand(40));
+			CAPTURE(round);
+			CAPTURE(text);
+			CHECK(acism_scan(pats, text) == naive_scan(pats, text));
+		}
 	}
 }
 

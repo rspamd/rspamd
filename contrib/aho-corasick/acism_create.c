@@ -231,16 +231,34 @@ add_backlinks(TNODE *troot, TNODE **v1, TNODE **v2)
                 //  for the child (dstp).
                 // Note that backlinks do not point at the suffix match;
                 //  they point at the PARENT of that match.
+                //
+                // That is true for leaves only: an inner node needs a
+                //  state to continue from, so its backlink is the longest
+                //  suffix that has children. A leaf suffix has no
+                //  transitions and no state of its own: the lookup would
+                //  restart from the root and miss the matches that the
+                //  shorter suffixes lead to ("cd" in "abcd" for
+                //  {abcd, bc, cd}). A leaf suffix still marks a match,
+                //  so (sp), the longest suffix, sets is_suffix.
+                TNODE *sp = NULL;
 
-                for (tp = srcp->back; tp; tp = tp->back)
-                    if ((bp = find_child(tp, dstp->sym)))
-                        break;
+                for (tp = srcp->back; tp; tp = tp->back) {
+                    if ((bp = find_child(tp, dstp->sym))) {
+                        if (!sp)
+                            sp = bp;
+                        if (bp->child || !dstp->child)
+                            break;
+                        bp = NULL;
+                    }
+                }
                 if (!bp)
                     bp = troot;
+                if (!sp)
+                    sp = troot;
 
                 dstp->back = dstp->child ? bp : tp ? tp : troot;
                 dstp->back->nrefs++;
-                dstp->is_suffix = bp->match || bp->is_suffix;
+                dstp->is_suffix = sp->match || sp->is_suffix;
             }
         }
         *dpp = 0;
