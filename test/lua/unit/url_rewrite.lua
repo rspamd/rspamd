@@ -497,4 +497,43 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("An SVG link is rewritten", function()
+    -- An SVG link without href goes to xlink:href; an HTML one does not
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><svg><a xlink:href="http://example.com/svg"><text>x</text></a></svg>' ..
+          '<a xlink:href="http://example.com/html">h</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local listed = {}
+    for _, urls in pairs(task:get_html_urls() or {}) do
+      for _, u in ipairs(urls) do
+        listed[#listed + 1] = string.format("%s %s.%s", u.url, u.tag, u.attr)
+      end
+    end
+    assert_rspamd_table_eq({ actual = listed, expect = { "http://example.com/svg a.xlink:href" } })
+
+    local result = task:rewrite_html_urls(function(_, url)
+      if url == "http://example.com/svg" then
+        return "http://safe.com/redirected"
+      end
+      return nil
+    end)
+
+    assert_not_nil(result, "rewrite should return results")
+    for _, html_text in pairs(result) do
+      local html = tostring(html_text)
+      assert_not_nil(html:find('<a xlink:href="http://safe.com/redirected">', 1, true), html)
+      assert_not_nil(html:find('<a xlink:href="http://example.com/html">', 1, true), html)
+    end
+    task:destroy()
+  end)
 end)

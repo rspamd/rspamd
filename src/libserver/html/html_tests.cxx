@@ -283,6 +283,12 @@ TEST_SUITE("html")
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/f\">Go</button></form>",
 			 {"https://good.example.org/f", "https://evil.example.net/f"},
 			 std::nullopt},
+			/* An SVG link without href */
+			{"<svg><a xlink:href=\"https://evil.example.net/x\"><text>x</text></a></svg>",
+			 {"https://evil.example.net/x"},
+			 std::nullopt},
+			/* Browsers take xlink:href on SVG links only */
+			{"<a xlink:href=\"https://evil.example.net/x\">x</a>", {}, "x"},
 			/* Controls that do not submit the form go nowhere */
 			{"<form action=\"https://good.example.org/f\">"
 			 "<button type=\"Button\" formaction=\"https://evil.example.net/b\">b</button>"
@@ -309,6 +315,9 @@ TEST_SUITE("html")
 			 std::nullopt},
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/p\"",
 			 {"https://good.example.org/f", "https://evil.example.net/p"},
+			 std::nullopt},
+			{"<svg><a xlink:href=\"https://evil.example.net/s\">",
+			 {"https://evil.example.net/s"},
 			 std::nullopt},
 		};
 
@@ -696,6 +705,26 @@ TEST_SUITE("html")
 			CHECK(atag->find_component_by_name("face").has_value());
 		}
 
+		SUBCASE("junk attributes do not push out an SVG link or a submit type")
+		{
+			std::string junk;
+			for (unsigned int i = 0; i < max_attrs_per_tag * 2; i++) {
+				junk += fmt::format(" data-x{}=\"{}\"", i, i);
+			}
+			std::string input = "<svg><a" + junk + " xlink:href=\"http://evil.example.com/a\">x</a></svg>";
+			input += "<input formaction=\"http://evil.example.com/i\"" + junk + " type=submit>";
+			auto *hc = process(input);
+			CHECK(hc != nullptr);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			REQUIRE(atag != nullptr);
+			CHECK(atag->find_href().value_or("") == "http://evil.example.com/a");
+
+			const auto *itag = find_tag(hc, Tag_INPUT);
+			REQUIRE(itag != nullptr);
+			CHECK((itag->flags & FL_HREF) != 0);
+		}
+
 		SUBCASE("a repeated attribute is ignored, the first one wins")
 		{
 			/* As in browsers; repeating one must not use up any budget either */
@@ -770,6 +799,30 @@ TEST_SUITE("html")
 			CHECK(btag->find_href().value() == "https://evil.example.net/b");
 			CHECK(btag->find_component_by_name("formaction").value_or("") == "https://evil.example.net/b");
 			CHECK(btag->find_component_by_name("href").value_or("") == "https://good.example.org/b");
+		}
+
+		SUBCASE("href of an SVG link wins over xlink:href")
+		{
+			auto *hc = process("<svg><a xlink:href=\"https://good.example.org/a\" "
+							   "href=\"https://evil.example.net/a\">x</a></svg>");
+			CHECK(hc != nullptr);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			REQUIRE(atag != nullptr);
+			REQUIRE(atag->find_href().has_value());
+			CHECK(atag->find_href().value() == "https://evil.example.net/a");
+		}
+
+		SUBCASE("xlink:href is no href attribute")
+		{
+			auto *hc = process("<svg><a xlink:href=\"https://evil.example.net/a\">x</a></svg>");
+			CHECK(hc != nullptr);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			REQUIRE(atag != nullptr);
+			CHECK(atag->find_href().value_or("") == "https://evil.example.net/a");
+			CHECK(!atag->find_component_by_name("href").has_value());
+			CHECK(atag->find_component_by_name("xlink:href").value_or("") == "https://evil.example.net/a");
 		}
 
 		SUBCASE("attributes are read under their own names")

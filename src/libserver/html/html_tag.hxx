@@ -117,6 +117,8 @@ enum class html_component_enum_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_DATA_TRACK,
 	RSPAMD_HTML_COMPONENT_DATA_ID,
 	RSPAMD_HTML_COMPONENT_DATA_URL,
+	// SVG
+	RSPAMD_HTML_COMPONENT_XLINK_HREF,
 };
 
 // Forward declarations for component types
@@ -1181,6 +1183,21 @@ struct html_component_data_url : html_component_base {
 	}
 };
 
+/* Where an SVG link without href goes, see html_tag::find_href */
+struct html_component_xlink_href : html_component_base {
+	std::string_view value;
+	std::size_t offset = 0;// offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len = 0;   // length in UTF-8 HTML buffer (utf_raw_content)
+	explicit html_component_xlink_href(std::string_view v, std::size_t off = 0, std::size_t l = 0)
+		: value(v), offset(off), len(l)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
 // The variant type that holds all possible components
 using html_tag_component = std::variant<
 	html_component_name,
@@ -1262,6 +1279,8 @@ using html_tag_component = std::variant<
 	html_component_data_track,
 	html_component_data_id,
 	html_component_data_url,
+	// SVG
+	html_component_xlink_href,
 	// Unknown
 	html_component_unknown>;
 
@@ -1347,6 +1366,12 @@ struct html_tag {
 		if (auto comp = find_component<html_component_href>()) {
 			return comp.value()->value;
 		}
+		if (id == Tag_A && (flags & FL_SVG)) {
+			/* An SVG link without href goes to xlink:href, which href overrides */
+			if (auto comp = find_component<html_component_xlink_href>()) {
+				return comp.value()->value;
+			}
+		}
 		return std::nullopt;
 	}
 
@@ -1422,6 +1447,13 @@ struct html_tag {
 		}
 		else if (attr_name == "src") {
 			if (auto comp = find_component<html_component_src>()) {
+				if (comp.value()->len > 0) {
+					return attr_span{comp.value()->offset, comp.value()->len};
+				}
+			}
+		}
+		else if (attr_name == "xlink:href") {
+			if (auto comp = find_component<html_component_xlink_href>()) {
 				if (comp.value()->len > 0) {
 					return attr_span{comp.value()->offset, comp.value()->len};
 				}

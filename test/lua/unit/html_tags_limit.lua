@@ -70,6 +70,39 @@ context("HTML past the tags limit", function()
     assert_true(r.image, "the image url is missing")
   end)
 
+  test("an SVG link and a submit button are found after the limit", function()
+    local msg = table.concat({
+      "From: sender@example.com",
+      "To: rcpt@example.com",
+      "Subject: limit",
+      "MIME-Version: 1.0",
+      "Content-Type: text/html",
+      "",
+      "<html><body>" .. string.rep("<b>", 8200) ..
+          '<svg><a xlink:href="http://svglink.example.net/x"><text>x</text></a></svg>' ..
+          '<a xlink:href="http://htmllink.example.net/x">y</a>' ..
+          '<form action="http://form.example.org/f">' ..
+          '<button formaction="http://button.example.net/b">Go</button>' ..
+          '<button type="reset" formaction="http://reset.example.net/b">No</button></form>',
+      "",
+    }, "\r\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local hosts = {}
+    for _, u in ipairs(task:get_urls(true) or {}) do
+      hosts[#hosts + 1] = u:get_host()
+    end
+    table.sort(hosts)
+    task:destroy()
+
+    assert_rspamd_table_eq({
+      actual = hosts,
+      expect = { "button.example.net", "form.example.org", "svglink.example.net" },
+    })
+  end)
+
   test("markup browsers accept is read after the limit", function()
     local filler = string.rep("<b>", 8200)
     local cases = {

@@ -107,7 +107,7 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 	hc->for_each_clickable_attr([&](const html_tag *tag, std::string_view attr_name, const attr_span &span) -> bool {
 		// Get the href or src value
 		std::string_view url_value;
-		if (attr_name == "href") {
+		if (attr_name == "href" || attr_name == "xlink:href") {
 			if (auto href = tag->find_href()) {
 				url_value = href.value();
 			}

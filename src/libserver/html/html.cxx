@@ -140,6 +140,7 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 		{"data-track", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_TRACK},
 		{"data-id", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_ID},
 		{"data-url", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_URL},
+		{"xlink:href", html_component_enum_type::RSPAMD_HTML_COMPONENT_XLINK_HREF},
 	});
 
 #define msg_debug_html(...) rspamd_conditional_debug_fast(NULL, NULL,                                \
@@ -483,6 +484,8 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 			return html_component_data_id{value};
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_URL:
 			return html_component_data_url{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_XLINK_HREF:
+			return html_component_xlink_href{value, offset, len};
 		default:
 			return html_component_unknown{name, value};
 		}
@@ -552,7 +555,14 @@ static const auto component_extractors = frozen::make_unordered_map<frozen::stri
 		 }},
 		/* The destination of a tag is read under its own name, the others are plain attributes */
 		{"href", [](const html_tag *tag) -> std::optional<std::string_view> {
-			 return html_tag_destination_attr(tag->id) == "href" ? tag->find_href() : tag->find_unknown_component("href");
+			 if (html_tag_destination_attr(tag->id) != "href") {
+				 return tag->find_unknown_component("href");
+			 }
+			 /* Not find_href, which falls back to xlink:href */
+			 if (auto comp = tag->find_component<html_component_href>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
 		 }},
 		{"action", [](const html_tag *tag) -> std::optional<std::string_view> {
 			 return html_tag_destination_attr(tag->id) == "action" ? tag->find_href() : tag->find_unknown_component("action");
@@ -950,6 +960,12 @@ static const auto component_extractors = frozen::make_unordered_map<frozen::stri
 		 }},
 		{"data-url", [](const html_tag *tag) -> std::optional<std::string_view> {
 			 if (auto comp = tag->find_component<html_component_data_url>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"xlink:href", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_xlink_href>()) {
 				 return comp.value()->value;
 			 }
 			 return std::nullopt;
@@ -3828,6 +3844,8 @@ auto html_process_input(struct rspamd_task *task,
 		std::size_t open_link_offset = hc->parsed.size();
 		/* Open svg and math elements: CDATA is text in them */
 		unsigned int foreign_depth = 0;
+		/* Open svg elements: a link in them may go to xlink:href */
+		unsigned int svg_depth = 0;
 		auto *L = task->cfg ? (lua_State *) task->cfg->lua_state : nullptr;
 
 		auto append_text = [&](const char *upto, bool literal = false) -> void {
@@ -3986,6 +4004,10 @@ auto html_process_input(struct rspamd_task *task,
 					}
 					else if ((def->id == Tag_SVG || def->id == Tag_MATH) && foreign_depth > 0) {
 						foreign_depth--;
+
+						if (def->id == Tag_SVG && svg_depth > 0) {
+							svg_depth--;
+						}
 					}
 
 					append_separator(def->id, def->flags);
@@ -4043,7 +4065,14 @@ auto html_process_input(struct rspamd_task *task,
 			pos = tag_end;
 			text_start = pos;
 
-			/* Namespaces are not tracked here: controls are taken as HTML ones */
+			/*
+			 * Namespaces are not tracked here: a link in svg reads xlink:href,
+			 * and controls are taken as HTML ones, not to miss a destination
+			 */
+			if (scratch.id == Tag_A && svg_depth > 0) {
+				scratch.flags |= FL_SVG;
+			}
+
 			html_tag_mark_submit_link(&scratch);
 
 			/* FL_BROKEN is set on markup browsers still take, such as <a/href=...> */
@@ -4085,6 +4114,10 @@ auto html_process_input(struct rspamd_task *task,
 			else if ((scratch.id == Tag_SVG || scratch.id == Tag_MATH) &&
 					 !(scratch.flags & FL_CLOSED)) {
 				foreign_depth++;
+
+				if (scratch.id == Tag_SVG) {
+					svg_depth++;
+				}
 			}
 
 			append_separator(scratch.id, scratch.flags);

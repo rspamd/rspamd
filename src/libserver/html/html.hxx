@@ -165,17 +165,22 @@ struct html_content {
 
 			// Check for tags with href or src attributes
 			if (tag->flags & FL_HREF || tag->id == Tag_A || tag->id == Tag_IMG || tag->id == Tag_LINK || tag->id == Tag_BASE) {
-				// Try href first
-				if (auto span = tag->get_attr_span("href")) {
-					if (!callback(tag.get(), "href", span.value())) {
-						return;
-					}
+				// Try href first, then xlink:href of an SVG link (as in find_href), then src
+				std::string_view attr_name = "href";
+				auto span = tag->get_attr_span(attr_name);
+
+				if (!span && tag->id == Tag_A && (tag->flags & FL_SVG)) {
+					attr_name = "xlink:href";
+					span = tag->get_attr_span(attr_name);
 				}
-				// Then try src
-				else if (auto span = tag->get_attr_span("src")) {
-					if (!callback(tag.get(), "src", span.value())) {
-						return;
-					}
+
+				if (!span) {
+					attr_name = "src";
+					span = tag->get_attr_span(attr_name);
+				}
+
+				if (span && !callback(tag.get(), attr_name, span.value())) {
+					return;
 				}
 			}
 		}
