@@ -182,12 +182,24 @@ context("Multipart child without Content-Type", function()
     task:destroy()
   end)
 
-  test("a whole message that lua_magic recognises is not text", function()
-    local task = load("Subject: t\n\n" .. elf)
-    assert_equal(#task:get_text_parts(), 0)
-    assert_false(task:get_parts()[1]:is_broken())
-    task:destroy()
-  end)
+  -- A whole message without Content-Type is read as text whatever it starts
+  -- with: bytes in front of the text must not hide it
+  for _, prefix in ipairs({ string.rep("\0", 140), "MZ" .. string.rep("\0", 140) }) do
+    test(string.format("a whole message starting with %d binary bytes is text", #prefix), function()
+      local task = load("Subject: t\n\n" .. prefix ..
+          "Hello friend, see http://nul-padded.example.com/login now\n")
+      local _, part = texts(task, 'Hello friend')
+      assert_not_nil(part)
+      local found = false
+      for _, u in ipairs(task:get_urls(true)) do
+        if u:get_host() == 'nul-padded.example.com' then
+          found = true
+        end
+      end
+      assert_true(found)
+      task:destroy()
+    end)
+  end
 
   test("a digest child is an embedded message", function()
     local task = load(table.concat({

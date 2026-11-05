@@ -1351,28 +1351,19 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 	gboolean known_format = npart->detected_type &&
 							strcmp(npart->detected_type, "text") != 0;
 
-	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
+	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
+		(npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+		!promote_to_message && !known_format &&
+		(npart->cte == RSPAMD_CTE_8BIT || npart->cte == RSPAMD_CTE_UNKNOWN) &&
+		rspamd_str_has_8bit(npart->raw_data.begin, npart->raw_data.len) &&
+		rspamd_fast_utf8_validate(npart->raw_data.begin, npart->raw_data.len) != 0) {
 		/*
-		 * Without a Content-Type, text/plain is only a default: data that
-		 * starts as binary is not text. Only the start counts, as junk after
-		 * the text a client shows first must not hide that text
+		 * Text without a charset: only ASCII and UTF-8 can be read as they
+		 * are, anything else is broken. It is still processed as text, with
+		 * a guessed charset, as one bad byte must not hide the text from the
+		 * checks. A file of a known format (x.pdf) has no charset to miss.
 		 */
-		if (rspamd_mime_part_data_is_binary(npart, 4096)) {
-			npart->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
-		}
-		else if (!promote_to_message && !known_format &&
-				 (npart->cte == RSPAMD_CTE_8BIT || npart->cte == RSPAMD_CTE_UNKNOWN) &&
-				 rspamd_str_has_8bit(npart->raw_data.begin, npart->raw_data.len) &&
-				 rspamd_fast_utf8_validate(npart->raw_data.begin, npart->raw_data.len) != 0) {
-			/*
-			 * Text without a charset: only ASCII and UTF-8 can be read as
-			 * they are, anything else is broken. It is still processed as
-			 * text, with a guessed charset, as one bad byte must not hide
-			 * the text from the checks. A file of a known format (x.pdf)
-			 * has no charset to miss.
-			 */
-			npart->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
-		}
+		npart->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 	}
 
 	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
@@ -1617,6 +1608,18 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 		ret = rspamd_mime_parse_normal_part(task, npart, st, sel, err);
 
 		if (ret == RSPAMD_MIME_PARSE_OK) {
+			if ((sel->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
+				rspamd_mime_part_data_is_binary(npart, 4096)) {
+				/*
+				 * The text/plain default of a child does not hold for data
+				 * that starts as binary (an attachment without Content-Type).
+				 * Only the start counts: junk after the text a client shows
+				 * first must not hide that text. A whole message without
+				 * Content-Type is always read as text, as before
+				 */
+				sel->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
+			}
+
 			/* Always try to detect type after normal parse */
 			ret = rspamd_mime_maybe_detect_type(task, npart, st, err);
 		}
