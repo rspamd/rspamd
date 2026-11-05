@@ -55,6 +55,16 @@ local exports = {
 
 local local_hostname = rspamd_util.get_hostname()
 
+-- The text of a comment, which ends at the first unescaped ')': the sender
+-- or a reason in it must not close it and add results of its own
+-- ("x)dmarc=pass header.from=bank.example(y"@attacker.example)
+local function escape_comment(s)
+  s = tostring(s):gsub('%c', function(c)
+    return c == '\t' and c or '?'
+  end)
+  return (s:gsub('[\\()]', '\\%0'))
+end
+
 local function gen_auth_results(task, settings)
   local auth_results, hdr_parts = {}, {}
 
@@ -127,7 +137,8 @@ local function gen_auth_results(task, settings)
     hdr[1] = string.format('dkim=%s', ar_string)
 
     if dres.fail_reason then
-      hdr[#hdr + 1] = string.format('(%s)', lua_util.maybe_smtp_quote_value(dres.fail_reason))
+      hdr[#hdr + 1] = string.format('(%s)',
+          escape_comment(lua_util.maybe_smtp_quote_value(dres.fail_reason)))
     end
 
     if dres.domain then
@@ -164,7 +175,7 @@ local function gen_auth_results(task, settings)
           hdr = hdr .. lua_util.maybe_smtp_quote_value(key)
         end
         if key == 'pass' then
-          hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(opts[2]) .. ')'
+          hdr = hdr .. ' (policy=' .. escape_comment(lua_util.maybe_smtp_quote_value(opts[2])) .. ')'
           hdr = hdr .. ' header.from=' .. lua_util.maybe_smtp_quote_value(opts[1])
         elseif key ~= 'none' then
           local t = { opts[1]:match('^([^%s]+) : (.*)$') }
@@ -179,7 +190,7 @@ local function gen_auth_results(task, settings)
           if key == 'softfail' then
             hdr = hdr .. ' (policy=none)'
           else
-            hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(key) .. ')'
+            hdr = hdr .. ' (policy=' .. escape_comment(lua_util.maybe_smtp_quote_value(key)) .. ')'
           end
         end
         table.insert(hdr_parts, hdr)
@@ -188,7 +199,8 @@ local function gen_auth_results(task, settings)
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
           for _, v in ipairs(opts) do
             hdr = string.format('%s%s=%s (%s)', hdr, auth_type,
-                lua_util.maybe_smtp_quote_value(key), lua_util.maybe_smtp_quote_value(v))
+                lua_util.maybe_smtp_quote_value(key),
+                escape_comment(lua_util.maybe_smtp_quote_value(v)))
             table.insert(hdr_parts, hdr)
           end
         end
@@ -235,7 +247,7 @@ local function gen_auth_results(task, settings)
                 mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
           end
           hdr = string.format('%s=%s (%s) %s=%s', auth_type, key,
-              comment, sender_type, sender)
+              escape_comment(comment), sender_type, sender)
         else
           hdr = string.format('%s=%s', auth_type, key)
         end
@@ -282,13 +294,17 @@ local function get_ar_lpeg_atoms()
   end
 
   local lpeg = require "lpeg"
-  local P, S, V, C, Ct, Cg, Cf = lpeg.P, lpeg.S, lpeg.V, lpeg.C, lpeg.Ct, lpeg.Cg, lpeg.Cf
+  local P, S, V, C, Cs, Ct, Cg, Cf = lpeg.P, lpeg.S, lpeg.V, lpeg.C, lpeg.Cs, lpeg.Ct, lpeg.Cg, lpeg.Cf
 
   local space = S(" \t") ^ 0
-  local doublequoted = space * P '"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1)) ^ 0 * '"' * space
-  local comment = space * P { "(" * ((1 - S "()") + V(1)) ^ 0 * ")" } * space
+  -- As in `quoted_value`, so both agree on where a quoted value ends
+  local doublequoted = space * P '"' * ((1 - S '"\\') + (P '\\' * 1)) ^ 0 * '"' * space
+  -- A quoted-pair does not close or open a comment (RFC 5322)
+  local comment = space * P { "(" * ((P '\\' * 1) + (1 - S "()\\") + V(1)) ^ 0 * ")" } * space
   local name = C((1 - S('=(" \t')) ^ 1) * space
-  local pair = Cg(name * "=" * space * name) * space
+  -- A value may be a quoted-string (RFC 8601): its content, unescaped
+  local quoted_value = P '"' * Cs(((P '\\' / '') * 1 + (1 - S '"\\')) ^ 0) * P '"' * space
+  local pair = Cg(name * "=" * space * (quoted_value + name)) * space
 
   -- Single AR element grammar: "dkim=pass (comment) header.d=example.com" → table
   local elt_grammar = Cf(Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
@@ -307,9 +323,17 @@ local function get_ar_lpeg_atoms()
   return ar_lpeg_atoms
 end
 
--- Parse a single AR element (e.g. "dkim=pass header.d=example.com") into a kv table
+-- Parse a single AR element (e.g. "dkim=pass header.d=example.com") into a kv table.
+-- The table also has `method`: the method of the element, e.g. "dkim". Only the
+-- result of that method is a result of the element, other `key=value` pairs
+-- are properties, or text that a comment failed to hide.
 local function parse_ar_element(elt)
-  return get_ar_lpeg_atoms().elt_grammar:match(elt)
+  local res = get_ar_lpeg_atoms().elt_grammar:match(elt)
+  if res then
+    local method = elt:match('^%s*([%w_-]+)%s*[/=]')
+    res.method = method and method:lower() or nil
+  end
+  return res
 end
 exports.parse_ar_element = parse_ar_element
 
@@ -333,7 +357,7 @@ local function parse_aar_header(decoded)
       result.i = v
     else
       -- Try to parse as an AR element (method=result prop=value ...)
-      local ar_elt = atoms.elt_grammar:match(trimmed)
+      local ar_elt = parse_ar_element(trimmed)
       if ar_elt then
         if not result.ar then
           result.ar = {}
