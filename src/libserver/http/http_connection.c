@@ -164,7 +164,7 @@ rspamd_http_parse_key(rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 {
 	unsigned char *decoded_id;
 	const char *eq_pos;
-	gsize id_len;
+	gsize id_len, pk_len;
 	struct rspamd_cryptobox_pubkey *pk;
 
 	if (priv->local_key == NULL) {
@@ -178,9 +178,16 @@ rspamd_http_parse_key(rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 			decoded_id = rspamd_decode_base32(data->begin, eq_pos - data->begin,
 											  &id_len, RSPAMD_BASE32_DEFAULT);
 
-			if (decoded_id != NULL && id_len >= RSPAMD_KEYPAIR_SHORT_ID_LEN) {
-				pk = rspamd_pubkey_from_base32(eq_pos + 1,
-											   data->begin + data->len - eq_pos - 1,
+			/*
+			 * The key is the rest of the value, and an empty one must not reach
+			 * rspamd_pubkey_from_base32: it takes a length of 0 for a
+			 * NUL-terminated string, which a header value is not.
+			 */
+			pk_len = data->begin + data->len - eq_pos - 1;
+
+			if (decoded_id != NULL && id_len >= RSPAMD_KEYPAIR_SHORT_ID_LEN &&
+				pk_len > 0) {
+				pk = rspamd_pubkey_from_base32(eq_pos + 1, pk_len,
 											   RSPAMD_KEYPAIR_KEX);
 				if (pk != NULL) {
 					/*
