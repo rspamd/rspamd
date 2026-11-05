@@ -667,4 +667,50 @@ Content-Type: text/html
     end
     task:destroy()
   end)
+
+  test("Links past the tags limit are rewritten", function()
+    -- Tags past the limit are not kept, their links are
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body>' .. string.rep('<b>', 8200) ..
+          '<a href="http://example.com/far">far</a>' ..
+          '<svg><a xlink:href="http://example.com/svg"><text>x</text></a></svg>' ..
+          '<img src="http://example.com/img.png"></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local listed = {}
+    for _, urls in pairs(task:get_html_urls() or {}) do
+      for _, u in ipairs(urls) do
+        listed[#listed + 1] = string.format("%s %s.%s", u.url, u.tag, u.attr)
+      end
+    end
+    assert_rspamd_table_eq({
+      actual = listed,
+      expect = {
+        "http://example.com/far a.href",
+        "http://example.com/svg a.xlink:href",
+        "http://example.com/img.png img.src",
+      },
+    })
+
+    local result = task:rewrite_html_urls(function(_, url)
+      return "http://safe.com/" .. url:match("[^/]+$")
+    end)
+    assert_not_nil(result, "rewrite should return results")
+    for _, html_text in pairs(result) do
+      local html = tostring(html_text)
+      assert_not_nil(html:find('<a href="http://safe.com/far">far</a>', 1, true))
+      assert_not_nil(html:find('<a xlink:href="http://safe.com/svg">', 1, true))
+      assert_not_nil(html:find('<img src="http://safe.com/img.png">', 1, true))
+    end
+    task:destroy()
+  end)
 end)

@@ -27,6 +27,8 @@
 
 
 #include <vector>
+#include <array>
+#include <algorithm>
 #include "contrib/ankerl/unordered_dense.h"
 #include <memory>
 #include <string>
@@ -48,6 +50,18 @@ struct html_content {
 	std::vector<bool> tags_seen;
 	std::vector<html_image *> images;
 	std::vector<std::unique_ptr<struct html_tag>> all_tags;
+	/*
+	 * Links of the tags past the tags limit, which are not kept: one per tag,
+	 * so they are kept small
+	 */
+	struct clickable_past_limit_entry {
+		std::string_view value;
+		std::uint32_t offset;
+		std::uint32_t len;
+		std::int32_t tag_id;
+		std::uint8_t attr;
+	};
+	std::vector<clickable_past_limit_entry> clickable_past_limit;
 	std::string parsed;
 	std::string invisible;
 	std::shared_ptr<css::css_style_sheet> css_style;
@@ -156,6 +170,8 @@ struct html_content {
 	 * Enumerate the links URL rewriting replaces (see html_tag::clickable_attr), with their spans
 	 * @param callback function(clickable) -> bool (return false to stop iteration)
 	 */
+	static constexpr std::array<std::string_view, 3> clickable_attr_names{"href", "xlink:href", "src"};
+
 	auto for_each_clickable_attr(fu2::function<bool(const html_clickable_attr &)> &&callback) const -> void
 	{
 		/*
@@ -170,6 +186,37 @@ struct html_content {
 				}
 			}
 		}
+
+		/* Links past the tags limit, which are in no tag of the tree */
+		for (const auto &entry: clickable_past_limit) {
+			html_clickable_attr clickable{entry.tag_id, clickable_attr_names[entry.attr], entry.value,
+										  attr_span{entry.offset, entry.len}};
+
+			if (!callback(clickable)) {
+				return;
+			}
+		}
+	}
+
+	auto add_clickable_past_limit(const html_clickable_attr &clickable) -> void
+	{
+		/* Values that URL rewriting leaves alone are not kept */
+		if (clickable.value.empty() || clickable.value.starts_with("data:") ||
+			clickable.value.starts_with("cid:") ||
+			clickable.span.offset > G_MAXUINT32 || clickable.span.len > G_MAXUINT32) {
+			return;
+		}
+
+		auto attr = std::find(clickable_attr_names.begin(), clickable_attr_names.end(),
+							  clickable.attr_name);
+
+		if (attr == clickable_attr_names.end()) {
+			return;
+		}
+
+		clickable_past_limit.push_back({clickable.value, (std::uint32_t) clickable.span.offset,
+										(std::uint32_t) clickable.span.len, clickable.tag_id,
+										(std::uint8_t) (attr - clickable_attr_names.begin())});
 	}
 
 private:

@@ -4199,6 +4199,11 @@ auto html_process_input(struct rspamd_task *task,
 
 			html_tag_mark_submit_link(&scratch);
 
+			if (auto clickable = scratch.clickable_attr()) {
+				/* Not in the tree, but URL rewriting replaces it as well */
+				hc->add_clickable_past_limit(clickable.value());
+			}
+
 			/* FL_BROKEN is set on markup browsers still take, such as <a/href=...> */
 			if (scratch.flags & FL_HREF) {
 				auto maybe_url = process_href_tag(&scratch);
