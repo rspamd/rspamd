@@ -1668,24 +1668,61 @@ html_process_url_tag(rspamd_mempool_t *pool,
 
 		if (hc && hc->base_url) {
 			/*
-			 * Relative url cannot start from the following:
-			 * schema://
-			 * data:
-			 * slash
+			 * Resolved as browsers do: a link with a scheme of its own is not
+			 * relative (mailto:, or http:x.com under an https base), two
+			 * slashes take only the scheme of the base (//evil.com is another
+			 * host), one slash its host, anything else its path
 			 */
+			auto is_slash = [](char c) { return c == '/' || c == '\\'; };
+			auto scheme_char = [](char c) { return g_ascii_isalnum(c) || c == '+' || c == '-' || c == '.'; };
+			std::string_view scheme, rest = href_value;
+			std::string_view base_scheme{hc->base_url->string, hc->base_url->protocollen};
 
-			if (!html_is_absolute_url(href_value)) {
+			if (auto colon = href_value.find(':'); colon != std::string_view::npos && colon > 0 &&
+												   g_ascii_isalpha(href_value[0]) &&
+												   std::all_of(href_value.begin(), href_value.begin() + colon, scheme_char)) {
+				scheme = href_value.substr(0, colon);
+			}
 
-				if (href_value.size() >= sizeof("data:") &&
-					g_ascii_strncasecmp(href_value.data(), "data:", sizeof("data:") - 1) == 0) {
-					/* Image data url, never insert as url */
-					return std::nullopt;
-				}
+			if (!scheme.empty() && scheme.size() == sizeof("data") - 1 &&
+				g_ascii_strncasecmp(scheme.data(), "data", scheme.size()) == 0) {
+				/* Image data url, never insert as url */
+				return std::nullopt;
+			}
 
-				/* Assume relative url */
+			bool same_scheme = !scheme.empty() && scheme.size() == base_scheme.size() &&
+							   g_ascii_strncasecmp(scheme.data(), base_scheme.data(), scheme.size()) == 0;
+
+			if (same_scheme) {
+				rest = href_value.substr(scheme.size() + 1);
+			}
+
+			if (!scheme.empty() && !same_scheme) {
+				/* Not relative */
+			}
+			else if (rest.size() >= 2 && is_slash(rest[0]) && is_slash(rest[1])) {
+				/* Relative to the scheme */
+				auto len = base_scheme.size() + 1 + rest.size();
+				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s:%*s",
+														  (int) base_scheme.size(), base_scheme.data(),
+														  (int) rest.size(), rest.data());
+				href_value = {buf, nlen};
+			}
+			else if (!rest.empty() && is_slash(rest[0])) {
+				/* Relative to the host */
+				auto len = rest.size() + hc->base_url->hostlen + base_scheme.size() + 3 /* for :// */;
+				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s://%*s%*s",
+														  (int) base_scheme.size(), base_scheme.data(),
+														  (int) hc->base_url->hostlen, rspamd_url_host_unsafe(hc->base_url),
+														  (int) rest.size(), rest.data());
+				href_value = {buf, nlen};
+			}
+			else {
+				/* Relative to the path */
 				auto need_slash = false;
-
-				auto orig_len = href_value.size();
+				auto orig_len = rest.size();
 				auto len = orig_len + hc->base_url->urllen;
 
 				if (hc->base_url->datalen == 0) {
@@ -1698,19 +1735,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 														  "%*s%s%*s",
 														  (int) hc->base_url->urllen, hc->base_url->string,
 														  need_slash ? "/" : "",
-														  (int) orig_len, href_value.data());
-				href_value = {buf, nlen};
-			}
-			else if (href_value.size() > 2 && href_value[0] == '/' && href_value[1] != '/') {
-				/* Relative to the hostname */
-				auto orig_len = href_value.size();
-				auto len = orig_len + hc->base_url->hostlen + hc->base_url->protocollen +
-						   3 /* for :// */;
-				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
-				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s://%*s/%*s",
-														  (int) hc->base_url->protocollen, hc->base_url->string,
-														  (int) hc->base_url->hostlen, rspamd_url_host_unsafe(hc->base_url),
-														  (int) orig_len, href_value.data());
+														  (int) orig_len, rest.data());
 				href_value = {buf, nlen};
 			}
 		}

@@ -349,6 +349,16 @@ TEST_SUITE("html")
 			{"<base href=\"https://base.example.org/\"><a href=\" \x01https://evil.example.net/b\">x</a>",
 			 {"https://evil.example.net/b"},
 			 std::nullopt},
+			/* Links resolved against a base as browsers do */
+			{"<base href=\"https://www.paypal.com/a/\">"
+			 "<a href=\"//evil.example.net/x\">1</a>"
+			 "<a href=\"\\\\evil.example.net/y\">2</a>"
+			 "<a href=\"http:evil.example.net/z\">3</a>"
+			 "<a href=\"/p\">4</a>"
+			 "<a href=\"rel\">5</a>",
+			 {"https://evil.example.net/x", "https://evil.example.net/y", "http://evil.example.net/z",
+			  "https://www.paypal.com/p", "https://www.paypal.com/a/rel"},
+			 std::nullopt},
 			/* A tag the input ends in */
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/e\">",
 			 {"https://good.example.org/f", "https://evil.example.net/e"},
