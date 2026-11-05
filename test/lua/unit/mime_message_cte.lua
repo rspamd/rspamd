@@ -224,6 +224,24 @@ context("Content-Transfer-Encoding of embedded messages", function()
     task:destroy()
   end)
 
+  test("data that does not uudecode is kept whole", function()
+    local text = string.rep('This line is not uuencoded at all. ', 30) ..
+        'Tail: http://tail.example.com/'
+    local task = load(table.concat({
+      'Subject: t',
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain',
+      'Content-Transfer-Encoding: x-uuencode',
+      '',
+      text,
+      '',
+    }, '\n'))
+    local part, all = find_text(task, 'tail.example.com')
+    assert_not_nil(part, all)
+    assert_equal(#task:get_urls(true), 1)
+    task:destroy()
+  end)
+
   test("a quoted-printable multipart leaves its children as they are", function()
     local task = load(table.concat({
       'Subject: t',

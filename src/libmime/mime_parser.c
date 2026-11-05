@@ -1043,16 +1043,15 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 									  (rspamd_mempool_destruct_t) rspamd_fstring_free, parsed);
 		break;
 	case RSPAMD_CTE_UUE:
-		parsed = rspamd_fstring_sized_new(part->raw_data.len / 4 * 3 + 12);
+		/* Room for the raw data too: data that does not decode is kept whole */
+		parsed = rspamd_fstring_sized_new(MAX(part->raw_data.len,
+											  part->raw_data.len / 4 * 3 + 12));
 		r = rspamd_decode_uue_buf(part->raw_data.begin, part->raw_data.len,
 								  parsed->str, parsed->allocated);
-		rspamd_mempool_notify_alloc(task->task_pool, parsed->len);
 		rspamd_mempool_add_destructor(task->task_pool,
 									  (rspamd_mempool_destruct_t) rspamd_fstring_free, parsed);
 		if (r != -1) {
 			parsed->len = r;
-			part->parsed_data.begin = parsed->str;
-			part->parsed_data.len = parsed->len;
 		}
 		else {
 			msg_err_task("invalid uuencoding in encoded part, assume 8bit");
@@ -1060,12 +1059,12 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 				part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 			}
 			part->cte = RSPAMD_CTE_8BIT;
-			parsed->len = MIN(part->raw_data.len, parsed->allocated);
+			parsed->len = part->raw_data.len;
 			memcpy(parsed->str, part->raw_data.begin, parsed->len);
-			rspamd_mempool_notify_alloc(task->task_pool, parsed->len);
-			part->parsed_data.begin = parsed->str;
-			part->parsed_data.len = parsed->len;
 		}
+		rspamd_mempool_notify_alloc(task->task_pool, parsed->len);
+		part->parsed_data.begin = parsed->str;
+		part->parsed_data.len = parsed->len;
 		break;
 	default:
 		g_assert_not_reached();
