@@ -623,6 +623,92 @@ rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 	return ret;
 }
 
+/*
+ * Whether data has the form of base64: lines of base64 characters only, with
+ * no space inside a line, as words of text have
+ */
+static gboolean
+rspamd_mime_data_looks_base64(const char *begin, gsize len)
+{
+	const unsigned char *p = (const unsigned char *) begin, *end = p + len;
+	gboolean line_data = FALSE, line_gap = FALSE;
+	gsize nchars = 0;
+
+	for (; p < end; p++) {
+		unsigned char c = *p;
+
+		if (c == '\r' || c == '\n') {
+			line_data = FALSE;
+			line_gap = FALSE;
+		}
+		else if (c == ' ' || c == '\t') {
+			line_gap = line_data;
+		}
+		else if (g_ascii_isalnum(c) || c == '+' || c == '/' || c == '=') {
+			if (line_gap) {
+				return FALSE;
+			}
+
+			line_data = TRUE;
+			nchars++;
+		}
+		else {
+			return FALSE;
+		}
+	}
+
+	return nchars > 0;
+}
+
+/*
+ * Whether a part without Content-Transfer-Encoding takes the one of its
+ * parent
+ */
+static gboolean
+rspamd_mime_part_takes_parent_cte(const struct rspamd_mime_part *part)
+{
+	const struct rspamd_mime_part *parent = part->parent_part;
+
+	if (parent == NULL || parent->cte == RSPAMD_CTE_UNKNOWN ||
+		(parent->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
+		return FALSE;
+	}
+
+	if (parent->cte == RSPAMD_CTE_7BIT || parent->cte == RSPAMD_CTE_8BIT) {
+		/* These leave the data as it is */
+		return TRUE;
+	}
+
+	if (parent->part_type != RSPAMD_MIME_PART_MULTIPART) {
+		/*
+		 * An embedded message is read from the data of its part once
+		 * decoded: decoding it again turns it into garbage
+		 */
+		return FALSE;
+	}
+
+	if (part->part_type == RSPAMD_MIME_PART_MULTIPART) {
+		/* Its own data is never decoded: it only passes the CTE on */
+		return TRUE;
+	}
+
+	/*
+	 * The children of a multipart are slices of its raw data. RFC 2045 6.4
+	 * allows only 7bit, 8bit and binary on a multipart, and mail clients
+	 * show its children as they are: decoding them can hide what they show
+	 * (base64 turns text into garbage, quoted-printable "=2D=2D" can open
+	 * an HTML comment). Broken mailers may still encode the children with
+	 * the base64 of the multipart: only data that is all base64 is decoded
+	 * then, as a client would show nothing readable of it anyway (base64
+	 * followed by a footer is left as it is)
+	 */
+	if (parent->cte == RSPAMD_CTE_B64) {
+		return rspamd_mime_data_looks_base64(part->raw_data.begin, part->raw_data.len);
+	}
+
+	return FALSE;
+}
+
 static void
 rspamd_mime_part_get_cte(struct rspamd_task *task, struct rspamd_mime_part *part,
 						 struct rspamd_mime_headers_table *hdrs,
@@ -636,18 +722,7 @@ rspamd_mime_part_get_cte(struct rspamd_task *task, struct rspamd_mime_part *part
 											  "Content-Transfer-Encoding", FALSE);
 
 	if (hdr == NULL) {
-		/*
-		 * The children of a multipart are slices of its raw data, and they
-		 * take its CTE. An embedded message is read from the data of its
-		 * part once decoded: decoding it again turns it into garbage, so it
-		 * only takes an encoding that leaves the data as it is
-		 */
-		if (part->parent_part &&
-			part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
-			!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE) &&
-			(part->parent_part->part_type == RSPAMD_MIME_PART_MULTIPART ||
-			 part->parent_part->cte == RSPAMD_CTE_7BIT ||
-			 part->parent_part->cte == RSPAMD_CTE_8BIT)) {
+		if (rspamd_mime_part_takes_parent_cte(part)) {
 			part->cte = part->parent_part->cte;
 			parent_propagated = TRUE;
 

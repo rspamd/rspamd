@@ -180,7 +180,51 @@ context("Content-Transfer-Encoding of embedded messages", function()
     task:destroy()
   end)
 
-  test("a multipart still passes its encoding to its children", function()
+  local function multipart_with_cte(cte, child_body)
+    return table.concat({
+      'Subject: t',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/mixed; boundary="XX"',
+      'Content-Transfer-Encoding: ' .. cte,
+      '',
+      '--XX',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      child_body,
+      '--XX--',
+      '',
+    }, '\n')
+  end
+
+  -- RFC 2045 6.4 allows no such encoding on a multipart, and mail clients show
+  -- its children as they are: readable text must not be decoded into garbage
+  test("a base64 multipart leaves a readable child as it is", function()
+    local task = load(multipart_with_cte('base64',
+        'Please visit http://evil.example.com/login now'))
+    local part, all = find_text(task, 'Please visit')
+    assert_not_nil(part, all)
+    assert_equal(#task:get_urls(true), 1)
+    task:destroy()
+  end)
+
+  test("a base64 multipart still decodes a base64 child", function()
+    local task = load(multipart_with_cte('base64',
+        tostring(rspamd_util.encode_base64('hello world from a base64 child', 76))))
+    local part, all = find_text(task, 'hello world from a base64 child')
+    assert_not_nil(part, all)
+    task:destroy()
+  end)
+
+  test("a uuencoded multipart leaves a readable child as it is", function()
+    local task = load(multipart_with_cte('x-uuencode',
+        'Please visit http://evil.example.com/login now'))
+    local part, all = find_text(task, 'Please visit')
+    assert_not_nil(part, all)
+    assert_false(part:is_broken())
+    task:destroy()
+  end)
+
+  test("a quoted-printable multipart leaves its children as they are", function()
     local task = load(table.concat({
       'Subject: t',
       'MIME-Version: 1.0',
@@ -194,9 +238,18 @@ context("Content-Transfer-Encoding of embedded messages", function()
       '--XX--',
       '',
     }, '\n'))
-    local part, all = find_text(task, 'café au lait')
+    local part, all = find_text(task, 'caf=C3=A9 au lait')
     assert_not_nil(part, all)
-    assert_equal(part:get_cte(), 'quoted-printable')
+    assert_not_equal(part:get_cte(), 'quoted-printable')
+    task:destroy()
+  end)
+
+  test("a base64 multipart leaves a child that is not all base64 as it is", function()
+    local task = load(multipart_with_cte('base64',
+        'A' .. string.rep('\n', 5000) .. 'Please visit http://evil.example.com/login now'))
+    local part, all = find_text(task, 'Please visit')
+    assert_not_nil(part, all)
+    assert_equal(#task:get_urls(true), 1)
     task:destroy()
   end)
 end)
