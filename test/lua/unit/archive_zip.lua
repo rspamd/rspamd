@@ -274,6 +274,21 @@ context("Zip archive listing", function()
     })
   end)
 
+  test("zip64 and 32-bit values that point to different directories", function()
+    -- Python and bsdtar take the zip64 values, 7-Zip the 32-bit ones
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local cd32 = cd_record("payload.exe")
+    local cd64 = cd_record("readme.txt")
+    local z64 = "PK\6\6" .. rspamd_util.pack("<I8", 44) .. string.rep("\0", 28) ..
+        rspamd_util.pack("<I8", #cd64) .. rspamd_util.pack("<I8", #lh + #cd32)
+    local loc = "PK\6\7" .. string.rep("\0", 4) ..
+        rspamd_util.pack("<I8", #lh + #cd32 + #cd64) .. rspamd_util.pack("<I4", 1)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd32 .. cd64 .. z64 .. loc .. eocd(#cd32, #lh))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+  end)
+
   test("an empty end record appended to an archive does not hide its files", function()
     -- The appended record says the directory is empty but points to it:
     -- unzip and 7-Zip list it

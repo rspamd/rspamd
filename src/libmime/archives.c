@@ -655,9 +655,12 @@ rspamd_archive_zip_read_cd(struct rspamd_task *task,
 }
 
 /*
- * Lists the files of the first set of directories of an end record that reads.
- * A directory that does not read leaves no files; one that stops at a record
- * running past the end record keeps its files, and the next set is tried too
+ * Lists the files of the sets of directories of an end record that read: the
+ * zip64 values and the 32-bit ones, when they differ, are what different
+ * readers take (Python and bsdtar the former, 7-Zip the latter). A directory
+ * that does not read leaves no files; one that stops at a record running past
+ * the end record keeps its files. Sets the first set that read in full, else
+ * the last one that read
  */
 static enum rspamd_zip_cd_read
 rspamd_archive_zip_read_sets(struct rspamd_task *task,
@@ -670,6 +673,8 @@ rspamd_archive_zip_read_sets(struct rspamd_task *task,
 							 const struct rspamd_zip_cd_set **pread_set)
 {
 	enum rspamd_zip_cd_read read, res = RSPAMD_ZIP_CD_INVALID;
+	const struct rspamd_zip_cd_set *first_read = NULL;
+	gboolean first_partial = FALSE;
 
 	for (unsigned int i = 0; i < nsets; i++) {
 		const struct rspamd_zip_cd_set *set = &sets[i];
@@ -713,13 +718,23 @@ rspamd_archive_zip_read_sets(struct rspamd_task *task,
 			continue;
 		}
 
-		*pread_set = set;
-
-		if (read != RSPAMD_ZIP_CD_PARTIAL) {
-			return read;
+		if (first_read == NULL || first_partial) {
+			first_read = set;
+			first_partial = read == RSPAMD_ZIP_CD_PARTIAL;
 		}
 
-		res = RSPAMD_ZIP_CD_PARTIAL;
+		if (read == RSPAMD_ZIP_CD_LIMIT) {
+			res = read;
+			break;
+		}
+
+		if (read == RSPAMD_ZIP_CD_OK || res == RSPAMD_ZIP_CD_INVALID) {
+			res = read;
+		}
+	}
+
+	if (first_read != NULL) {
+		*pread_set = first_read;
 	}
 
 	return res;
