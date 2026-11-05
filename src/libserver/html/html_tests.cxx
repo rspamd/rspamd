@@ -279,6 +279,37 @@ TEST_SUITE("html")
 			{"<a action=\"https://good.example.org/\" href=\"https://evil.example.net/\">click</a>",
 			 {"https://evil.example.net/"},
 			 "click"},
+			/* A submit button goes where its formaction says */
+			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/f\">Go</button></form>",
+			 {"https://good.example.org/f", "https://evil.example.net/f"},
+			 std::nullopt},
+			/* Controls that do not submit the form go nowhere */
+			{"<form action=\"https://good.example.org/f\">"
+			 "<button type=\"Button\" formaction=\"https://evil.example.net/b\">b</button>"
+			 "<button type=reset formaction=\"https://evil.example.net/r\">r</button>"
+			 "<input type=text formaction=\"https://evil.example.net/t\">"
+			 "<input formaction=\"https://evil.example.net/n\"></form>",
+			 {"https://good.example.org/f"},
+			 std::nullopt},
+			{"<input type=\"IMAGE\" formaction=\"https://evil.example.net/i\">"
+			 "<input formaction=\"https://evil.example.net/s\" type=submit>",
+			 {"https://evil.example.net/i", "https://evil.example.net/s"},
+			 std::nullopt},
+			/* In svg and math they are no form controls, unless in an HTML island */
+			{"<form action=\"https://good.example.org/f\">"
+			 "<svg><button formaction=\"https://evil.example.net/svg\">b</button></svg>"
+			 "<math><input type=submit formaction=\"https://evil.example.net/math\"></math>"
+			 "<svg><foreignObject><button formaction=\"https://evil.example.net/fo\">c</button>"
+			 "</foreignObject></svg></form>",
+			 {"https://good.example.org/f", "https://evil.example.net/fo"},
+			 std::nullopt},
+			/* A tag the input ends in */
+			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/e\">",
+			 {"https://good.example.org/f", "https://evil.example.net/e"},
+			 std::nullopt},
+			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/p\"",
+			 {"https://good.example.org/f", "https://evil.example.net/p"},
+			 std::nullopt},
 		};
 
 		rspamd_url_init(NULL);
@@ -724,6 +755,21 @@ TEST_SUITE("html")
 			REQUIRE(ftag != nullptr);
 			REQUIRE(ftag->find_href().has_value());
 			CHECK(ftag->find_href().value() == "https://evil.example.net/k");
+		}
+
+		SUBCASE("the destination of buttons")
+		{
+			/* href of a button is no destination */
+			auto *hc = process("<button href=\"https://good.example.org/b\" "
+							   "formaction=\"https://evil.example.net/b\">Go</button>");
+			CHECK(hc != nullptr);
+
+			const auto *btag = find_tag(hc, Tag_BUTTON);
+			REQUIRE(btag != nullptr);
+			REQUIRE(btag->find_href().has_value());
+			CHECK(btag->find_href().value() == "https://evil.example.net/b");
+			CHECK(btag->find_component_by_name("formaction").value_or("") == "https://evil.example.net/b");
+			CHECK(btag->find_component_by_name("href").value_or("") == "https://good.example.org/b");
 		}
 
 		SUBCASE("attributes are read under their own names")

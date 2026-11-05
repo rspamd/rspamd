@@ -492,6 +492,54 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 	}
 }
 
+/*
+ * The attribute that holds where a tag goes, as browsers read it: "action" of
+ * a form, "formaction" of a submit button or input, "href" of anything else
+ */
+static auto
+html_tag_destination_attr(std::int32_t id) -> std::string_view
+{
+	switch (id) {
+	case Tag_FORM:
+		return "action";
+	case Tag_BUTTON:
+	case Tag_INPUT:
+		return "formaction";
+	default:
+		return "href";
+	}
+}
+
+/*
+ * A button or an input with formaction is a link to where the form goes, if
+ * it submits the form: a button that is not of type "button" or "reset", an
+ * input of type "submit" or "image". Known once all its attributes are read
+ */
+static auto
+html_tag_mark_submit_link(html_tag *tag) -> void
+{
+	/* In svg or math, they are foreign elements that submit nothing */
+	if ((tag->id != Tag_BUTTON && tag->id != Tag_INPUT) || (tag->flags & FL_FOREIGN) ||
+		!tag->find_component<html_component_href>()) {
+		return;
+	}
+
+	std::optional<std::string_view> type;
+	if (auto comp = tag->find_component<html_component_type>()) {
+		type = comp.value()->value;
+	}
+	auto type_is = [&](std::string_view name) -> bool {
+		return type && type->size() == name.size() &&
+			   g_ascii_strncasecmp(type->data(), name.data(), name.size()) == 0;
+	};
+	bool submits = tag->id == Tag_BUTTON ? !(type_is("button") || type_is("reset"))
+										 : (type_is("submit") || type_is("image"));
+
+	if (submits) {
+		tag->flags |= FL_HREF;
+	}
+}
+
 using component_extractor_func = std::function<std::optional<std::string_view>(const html_tag *)>;
 static const auto component_extractors = frozen::make_unordered_map<frozen::string, component_extractor_func>(
 	{
@@ -502,12 +550,15 @@ static const auto component_extractors = frozen::make_unordered_map<frozen::stri
 			 }
 			 return std::nullopt;
 		 }},
-		/* The destination of a form is its action; href and action of other tags are not */
+		/* The destination of a tag is read under its own name, the others are plain attributes */
 		{"href", [](const html_tag *tag) -> std::optional<std::string_view> {
-			 return tag->id == Tag_FORM ? tag->find_unknown_component("href") : tag->find_href();
+			 return html_tag_destination_attr(tag->id) == "href" ? tag->find_href() : tag->find_unknown_component("href");
 		 }},
 		{"action", [](const html_tag *tag) -> std::optional<std::string_view> {
-			 return tag->id == Tag_FORM ? tag->find_href() : tag->find_unknown_component("action");
+			 return html_tag_destination_attr(tag->id) == "action" ? tag->find_href() : tag->find_unknown_component("action");
+		 }},
+		{"formaction", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 return html_tag_destination_attr(tag->id) == "formaction" ? tag->find_href() : tag->find_unknown_component("formaction");
 		 }},
 		{"src", [](const html_tag *tag) -> std::optional<std::string_view> {
 			 if (auto comp = tag->find_component<html_component_src>()) {
@@ -1044,12 +1095,14 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			 * ordinary attribute, which must not take the place of the real
 			 * destination: <a action="good" href="evil"> goes to evil.
 			 */
-			bool foreign_destination =
-				(parser_env.attr_name == "action" && tag->id != Tag_FORM) ||
-				(parser_env.attr_name == "href" && tag->id == Tag_FORM);
+			bool destination_name = parser_env.attr_name == "href" ||
+									parser_env.attr_name == "action" ||
+									parser_env.attr_name == "formaction";
+			bool foreign_destination = destination_name &&
+									   parser_env.attr_name != html_tag_destination_attr(tag->id);
 			auto interpreted_idx = foreign_destination
 									   ? std::nullopt
-									   : html_interpreted_attr_index(parser_env.attr_name);
+									   : html_interpreted_attr_index(destination_name ? "href" : parser_env.attr_name);
 
 			if (interpreted_idx) {
 				/*
@@ -1122,6 +1175,10 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 			if (foreign_destination) {
 				tag->components.emplace_back(html_component_unknown{attr_name_view, value_view});
+			}
+			else if (parser_env.attr_name == "formaction") {
+				/* Where a submit control sends its form, see html_tag_mark_submit_link */
+				tag->components.emplace_back(html_component_href{value_view, value_offset, value_len});
 			}
 			else {
 				// Create the appropriate component variant with span info
@@ -2785,6 +2842,30 @@ auto html_process_input(struct rspamd_task *task,
 		return href_url;
 	};
 
+	/*
+	 * The namespace of an opening tag and what follows from it, once all its
+	 * attributes are read, also for a tag the input ends in
+	 */
+	auto finish_opening_tag = [&]() {
+		if (!(cur_tag->flags & FL_XML)) {
+			auto *node = html_current_node(parent_tag);
+			auto ns = html_start_tag_namespace(node, cur_tag);
+
+			if (ns != 0 && html_is_breakout_tag(cur_tag)) {
+				parent_tag = html_pop_foreign(node, cur_tag->tag_start);
+				ns = html_start_tag_namespace(parent_tag, cur_tag);
+			}
+
+			cur_tag->flags |= ns;
+			html_tag_mark_submit_link(cur_tag);
+
+			/* Browsers ignore `/>` on HTML elements except the void ones */
+			if (!(cur_tag->flags & (CM_EMPTY | FL_FOREIGN))) {
+				cur_tag->flags &= ~FL_CLOSED;
+			}
+		}
+	};
+
 	auto process_opening_tag = [&]() {
 		if (cur_tag->id > Tag_UNKNOWN) {
 			if (cur_tag->flags & CM_UNIQUE) {
@@ -3410,22 +3491,7 @@ auto html_process_input(struct rspamd_task *task,
 			state = html_text_content;
 
 			if (cur_tag) {
-				if (!(cur_tag->flags & FL_XML)) {
-					auto *node = html_current_node(parent_tag);
-					auto ns = html_start_tag_namespace(node, cur_tag);
-
-					if (ns != 0 && html_is_breakout_tag(cur_tag)) {
-						parent_tag = html_pop_foreign(node, cur_tag->tag_start);
-						ns = html_start_tag_namespace(parent_tag, cur_tag);
-					}
-
-					cur_tag->flags |= ns;
-
-					/* Browsers ignore `/>` on HTML elements except the void ones */
-					if (!(cur_tag->flags & (CM_EMPTY | FL_FOREIGN))) {
-						cur_tag->flags &= ~FL_CLOSED;
-					}
-				}
+				finish_opening_tag();
 
 				if (html_is_raw_text_tag(cur_tag->id) && !(cur_tag->flags & FL_FOREIGN)) {
 					state = tag_raw_text;
@@ -3608,11 +3674,13 @@ auto html_process_input(struct rspamd_task *task,
 	case tag_content:
 		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
 			cur_tag->content_offset = end - start;
+			finish_opening_tag();
 			process_opening_tag();
 		}
 		break;
 	case tag_end_opening:
 		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+			finish_opening_tag();
 			process_opening_tag();
 		}
 		break;
@@ -3974,6 +4042,9 @@ auto html_process_input(struct rspamd_task *task,
 			content_parser_env.reset();
 			pos = tag_end;
 			text_start = pos;
+
+			/* Namespaces are not tracked here: controls are taken as HTML ones */
+			html_tag_mark_submit_link(&scratch);
 
 			/* FL_BROKEN is set on markup browsers still take, such as <a/href=...> */
 			if (scratch.flags & FL_HREF) {
