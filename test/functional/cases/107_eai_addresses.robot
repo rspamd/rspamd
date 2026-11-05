@@ -61,10 +61,10 @@ ASCII RECIPIENT WITH AN A-LABEL ATOM
   Do Not Expect Symbol  INVALID_FROM_8BIT
   Do Not Expect Symbol  INVALID_FROM_ASCII_ADDR
 
-MIDDLE DOTS REQUIRE LOWERCASE L
+MIDDLE DOTS NEED AN L ON EACH SIDE
   Scan File  ${RSPAMD_TESTDIR}/messages/eai_middle_dot.eml
   ...  Settings=${SETTINGS_ADDR}
-  Expect Symbol With Option  INVALID_FROM_8BIT  code point
+  Do Not Expect Symbol  INVALID_FROM_8BIT
   Expect Symbol With Option  INVALID_RCPT_8BIT  code point
   Do Not Expect Symbol  INVALID_FROM_ASCII_ADDR
   Do Not Expect Symbol  INVALID_RCPT_ASCII_ADDR

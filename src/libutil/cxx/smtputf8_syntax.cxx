@@ -190,9 +190,13 @@ auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i,
 	auto cp = cps[i];
 
 	if (cp == 0x00B7) {
-		/* A.3 requires U+006C on both sides, without case folding. */
+		/*
+		 * A.3 specifies U+006C, because in the DNS, the label
+		 * has been folded to lower case before that point. However,
+		 * email addresses are not folded, so we accept L here.
+		 */
 		return i > 0 && i + 1 < cps.size() &&
-			   cps[i - 1] == 'l' && cps[i + 1] == 'l';
+			   (cps[i - 1] | 0x20) == 'l' && (cps[i + 1] | 0x20) == 'l';
 	}
 
 	if (cp == 0x0375) {
