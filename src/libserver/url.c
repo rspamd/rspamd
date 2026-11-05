@@ -2897,12 +2897,18 @@ url_file_end(struct url_callback_data *cb,
 	unsigned int i;
 
 	p = pos + strlen(match->pattern);
+
+	/* The text is not NUL-terminated: a bare scheme at its end is no url */
+	if (p >= cb->end) {
+		return FALSE;
+	}
+
 	stop = *p;
 	if (*p == '/') {
 		p++;
 	}
 
-	for (i = 0; i < G_N_ELEMENTS(url_braces) / 2; i += 2) {
+	for (i = 0; p < cb->end && i < G_N_ELEMENTS(url_braces) / 2; i += 2) {
 		if (*p == url_braces[i]) {
 			stop = url_braces[i + 1];
 			break;

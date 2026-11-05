@@ -71,6 +71,7 @@
 #include "rspamd_cxx_unit_redis_connection.hxx"
 #include "rspamd_cxx_unit_scan_result.hxx"
 #include "rspamd_cxx_unit_acism.hxx"
+#include "rspamd_cxx_unit_url_find.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
