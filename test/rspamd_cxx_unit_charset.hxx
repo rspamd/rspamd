@@ -244,6 +244,57 @@ TEST_SUITE("mime charset converter")
 
 		rspamd_mempool_delete(pool);
 	}
+
+	TEST_CASE("ISO-8859-16 converts through the internal table under any alias")
+	{
+		/*
+		 * ICU's alias table resolves every ISO-8859-16 alias to the converter
+		 * name "iso-8859_16-2001", which its default data does not ship, so
+		 * these names must reach the internal table, whether they come from
+		 * rspamd_mime_detect_charset or straight from the message
+		 */
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"charset_8859_16", 0);
+		/* S-comma, s-comma, T-comma, t-comma: the letters only ISO-8859-16 has */
+		static const char expected[] = "\xc8\x98\xc8\x99\xc8\x9a\xc8\x9b";
+
+		for (const char *label: {"iso-8859-16", "ISO-8859-16", "latin10",
+								 "iso-ir-226", "l10", "ISO_8859-16"}) {
+			INFO("label: ", std::string{label});
+			auto tok = rspamd_charset_test::ftok_of(label);
+			const auto *cs = rspamd_mime_detect_charset(&tok, pool);
+			REQUIRE(cs != nullptr);
+
+			for (const char *name: {cs, label}) {
+				INFO("name: ", std::string{name});
+				UErrorCode uc_err = U_ZERO_ERROR;
+				CHECK(rspamd_mime_get_converter_cached(name, pool, TRUE, &uc_err) != nullptr);
+
+				char input[] = "\xaa\xba\xde\xfe";
+				GError *err = nullptr;
+				gsize olen = 0;
+				auto *res = rspamd_mime_text_to_utf8(pool, input, sizeof(input) - 1,
+													 name, &olen, &err);
+				CHECK(res != nullptr);
+				if (res) {
+					CHECK(std::string(res, olen) == expected);
+				}
+				if (err) {
+					g_error_free(err);
+				}
+			}
+
+			/* The RFC 2047 decoder converts encoded words this way */
+			auto *in = g_byte_array_new(), *out = g_byte_array_new();
+			g_byte_array_append(in, (const guint8 *) "\xaa\xba\xde\xfe", 4);
+			CHECK(rspamd_mime_to_utf8_byte_array(in, out, pool, cs));
+			CHECK(std::string((const char *) out->data, out->len) == expected);
+			g_byte_array_free(in, TRUE);
+			g_byte_array_free(out, TRUE);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 #endif// RSPAMD_CXX_UNIT_CHARSET_HXX

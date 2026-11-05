@@ -133,6 +133,25 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 	}
 }
 
+/*
+ * ICU's alias table knows ISO-8859-16, but its default data has no converter
+ * for it: every alias resolves to "iso-8859_16-2001", for which ucnv_open
+ * fails, so any name of this charset is served by the internal table
+ */
+static gboolean
+rspamd_charset_is_iso_8859_16(const char *name)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	const char *conv_name = ucnv_getAlias(name, 0, &uc_err);
+
+	if (conv_name != NULL && U_SUCCESS(uc_err)) {
+		return strcmp(conv_name, "iso-8859_16-2001") == 0;
+	}
+
+	return g_ascii_strcasecmp(name, "ISO-8859-16") == 0 ||
+		   g_ascii_strcasecmp(name, "latin10") == 0 ||
+		   g_ascii_strcasecmp(name, "iso-ir-226") == 0;
+}
 
 struct rspamd_charset_converter *
 rspamd_mime_get_converter_cached(const char *enc,
@@ -171,9 +190,7 @@ rspamd_mime_get_converter_cached(const char *enc,
 	conv = rspamd_lru_hash_lookup(cache, (gpointer) canon_name, 0);
 
 	if (conv == NULL) {
-		if (!(strcmp(canon_name, "ISO-8859-16") == 0 ||
-			  strcmp(canon_name, "latin10") == 0 ||
-			  strcmp(canon_name, "iso-ir-226") == 0)) {
+		if (!rspamd_charset_is_iso_8859_16(canon_name)) {
 			conv = g_malloc0(sizeof(*conv));
 			conv->d.conv = ucnv_open(canon_name, err);
 
