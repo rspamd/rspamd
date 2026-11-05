@@ -719,6 +719,84 @@ TEST_SUITE("html")
 
 		rspamd_mempool_delete(pool);
 	}
+
+	TEST_CASE("html empty numeric attributes")
+	{
+		rspamd_url_init(NULL);
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"html", 0);
+		struct rspamd_task fake_task;
+		memset(&fake_task, 0, sizeof(fake_task));
+		fake_task.task_pool = pool;
+
+		auto find_tag = [&](const std::string &input, tag_id_t id) -> const html_tag * {
+			GByteArray *tmp = g_byte_array_sized_new(input.size());
+			g_byte_array_append(tmp, (const uint8_t *) input.data(), input.size());
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
+			g_byte_array_free(tmp, TRUE);
+			REQUIRE(hc != nullptr);
+			const html_tag *found = nullptr;
+			hc->traverse_all_tags([&](const html_tag *t) -> bool {
+				if (t->id == id) {
+					found = t;
+					return false;
+				}
+				return true;
+			});
+			REQUIRE(found != nullptr);
+			return found;
+		};
+
+		/*
+		 * A valueless or empty attribute has an empty value with no data:
+		 * it must give no number (and no arithmetic on a null pointer, UBSan)
+		 */
+		for (const auto *input: {"<img width height>", "<img width=\"\" height=\"\">"}) {
+			CAPTURE(input);
+			const auto *img = find_tag(input, Tag_IMG);
+			auto width = img->find_component<html_component_width>();
+			REQUIRE(width.has_value());
+			CHECK(width.value()->get_string_value().empty());
+			CHECK_FALSE(width.value()->get_numeric_value().has_value());
+			auto height = img->find_component<html_component_height>();
+			REQUIRE(height.has_value());
+			CHECK_FALSE(height.value()->get_numeric_value().has_value());
+		}
+
+		const auto *font = find_tag("<font size>x</font>", Tag_FONT);
+		REQUIRE(font->find_component<html_component_size>().has_value());
+		CHECK_FALSE(font->find_component<html_component_size>().value()->get_numeric_value().has_value());
+
+		const auto *table = find_tag("<table cellpadding cellspacing>", Tag_TABLE);
+		REQUIRE(table->find_component<html_component_cellpadding>().has_value());
+		CHECK_FALSE(table->find_component<html_component_cellpadding>().value()->get_numeric_value().has_value());
+		REQUIRE(table->find_component<html_component_cellspacing>().has_value());
+		CHECK_FALSE(table->find_component<html_component_cellspacing>().value()->get_numeric_value().has_value());
+
+		const auto *span = find_tag("<span tabindex max-height>x</span>", Tag_SPAN);
+		REQUIRE(span->find_component<html_component_tabindex>().has_value());
+		CHECK_FALSE(span->find_component<html_component_tabindex>().value()->get_numeric_value().has_value());
+		REQUIRE(span->find_component<html_component_max_height>().has_value());
+		CHECK_FALSE(span->find_component<html_component_max_height>().value()->get_numeric_value().has_value());
+
+		/* Opacity with no number in it is no opacity, not opacity 0 */
+		for (const auto *input: {"<div opacity>x</div>", "<div opacity=\"abc\">x</div>"}) {
+			CAPTURE(input);
+			const auto *div = find_tag(input, Tag_DIV);
+			auto opacity = div->find_component<html_component_opacity>();
+			REQUIRE(opacity.has_value());
+			CHECK_FALSE(opacity.value()->get_numeric_value().has_value());
+		}
+
+		/* Values still parse */
+		const auto *img = find_tag("<img width=\"12\">", Tag_IMG);
+		CHECK(img->find_component<html_component_width>().value()->get_numeric_value() == 12u);
+		const auto *div = find_tag("<div opacity=\"0.5\" tabindex=\"-3\">x</div>", Tag_DIV);
+		CHECK(div->find_component<html_component_opacity>().value()->get_numeric_value() == doctest::Approx(0.5));
+		CHECK(div->find_component<html_component_tabindex>().value()->get_numeric_value() == -3);
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 } /* namespace rspamd::html */

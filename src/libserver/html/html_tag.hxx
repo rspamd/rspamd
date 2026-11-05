@@ -678,13 +678,19 @@ struct html_component_opacity : html_component_base {
 	explicit html_component_opacity(std::string_view v)
 		: raw_value(v)
 	{
+		/* A valueless attribute has no data at all, and no number either */
+		if (v.empty()) {
+			return;
+		}
+
 		char numbuf[128], *endptr = nullptr;
 		size_t n = std::min(v.size(), sizeof(numbuf) - 1);
 		memcpy(numbuf, v.data(), n);
 		numbuf[n] = '\0';
 		auto num = g_ascii_strtod(numbuf, &endptr);
 
-		if (!std::isnan(num)) {
+		/* Nothing parsed (e.g. opacity="abc") is no number, not opacity 0 */
+		if (endptr != numbuf && !std::isnan(num)) {
 			numeric_value = num;
 		}
 	}
