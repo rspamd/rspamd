@@ -1657,6 +1657,15 @@ html_process_url_tag(rspamd_mempool_t *pool,
 		/* Check base url */
 		auto &href_value = found_href_maybe.value();
 
+		/* Browsers strip C0 controls and spaces around a link before they resolve it */
+		while (!href_value.empty() && (unsigned char) href_value.front() <= 0x20) {
+			href_value.remove_prefix(1);
+		}
+
+		while (!href_value.empty() && (unsigned char) href_value.back() <= 0x20) {
+			href_value.remove_suffix(1);
+		}
+
 		if (hc && hc->base_url) {
 			/*
 			 * Relative url cannot start from the following:
@@ -1887,6 +1896,15 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	// Fallback to HREF (for backward compatibility or non-standard usage)
 	else if (auto href_comp = tag->find_href()) {
 		href_value = href_comp;
+	}
+
+	/* Browsers strip C0 controls and spaces around a link before they resolve it */
+	while (href_value && !href_value->empty() && (unsigned char) href_value->front() <= 0x20) {
+		href_value->remove_prefix(1);
+	}
+
+	while (href_value && !href_value->empty() && (unsigned char) href_value->back() <= 0x20) {
+		href_value->remove_suffix(1);
 	}
 
 	if (href_value && href_value->size() > 0) {

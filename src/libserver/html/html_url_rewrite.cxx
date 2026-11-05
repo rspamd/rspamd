@@ -107,6 +107,15 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 	hc->for_each_clickable_attr([&](const html_clickable_attr &clickable) -> bool {
 		std::string_view url_value = clickable.value;
 
+		/* As browsers and URL extraction take it; the span still covers it all */
+		while (!url_value.empty() && (unsigned char) url_value.front() <= 0x20) {
+			url_value.remove_prefix(1);
+		}
+
+		while (!url_value.empty() && (unsigned char) url_value.back() <= 0x20) {
+			url_value.remove_suffix(1);
+		}
+
 		if (url_value.empty()) {
 			return true;// Continue to next
 		}

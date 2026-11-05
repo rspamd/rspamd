@@ -641,4 +641,30 @@ Content-Type: text/html
     })
     task:destroy()
   end)
+
+  test("The policy gets a link without the controls browsers strip", function()
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><a href="\1http://example.com/c0 ">A</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local seen = {}
+    local result = task:rewrite_html_urls(function(_, url)
+      seen[#seen + 1] = url
+      return "http://safe.com/redirected"
+    end)
+    assert_rspamd_table_eq({ actual = seen, expect = { "http://example.com/c0" } })
+    for _, html_text in pairs(result) do
+      assert_not_nil(tostring(html_text):find('<a href="http://safe.com/redirected">A</a>', 1, true))
+    end
+    task:destroy()
+  end)
 end)

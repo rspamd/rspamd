@@ -342,6 +342,13 @@ TEST_SUITE("html")
 			 "<embed src=\"https://evil.example.net/e\">",
 			 {"https://evil.example.net/f", "https://evil.example.net/e"},
 			 std::nullopt},
+			/* Browsers strip C0 controls around a link, also before a base applies */
+			{"<a href=\"\x01https://evil.example.net/c\x1f\">x</a>",
+			 {"https://evil.example.net/c"},
+			 std::nullopt},
+			{"<base href=\"https://base.example.org/\"><a href=\" \x01https://evil.example.net/b\">x</a>",
+			 {"https://evil.example.net/b"},
+			 std::nullopt},
 			/* A tag the input ends in */
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/e\">",
 			 {"https://good.example.org/f", "https://evil.example.net/e"},

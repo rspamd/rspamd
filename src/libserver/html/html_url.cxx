@@ -349,6 +349,17 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 
 	auto sz = input.length();
 	const auto *trimmed = rspamd_string_unicode_trim_inplace(input.data(), &sz);
+
+	/* Browsers also strip C0 controls around a link: `\x01https://...` works */
+	while (sz > 0 && (unsigned char) *trimmed <= 0x20) {
+		trimmed++;
+		sz--;
+	}
+
+	while (sz > 0 && (unsigned char) trimmed[sz - 1] <= 0x20) {
+		sz--;
+	}
+
 	input = {trimmed, sz};
 
 	const auto *start = input.data();
