@@ -253,7 +253,7 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
 {
     unsigned usev_size = nnodes + nsyms;
     char *usev = g_malloc0(usev_size * sizeof(*usev));
-    STATE last_trans = 0, startv[257][2];
+    STATE last_trans = 0, last_base = 0, startv[257][2];
     TNODE *cp, **tmp;
 
     memset(startv, 0, nsyms * sizeof*startv);
@@ -295,6 +295,7 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
                 if (!cp) break;
             }
             tp->state = pos;
+            if (last_base < pos) last_base = pos;
 
             // Mark node's base and children as used:
             usev[pos] |= need;
@@ -320,7 +321,11 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
     }
 
     g_free(usev);
-    return last_trans + 1;
+    // acism_lookup reads tranv[state + sym] for every symbol of the
+    //  alphabet, not only for the children of (state), so the table must
+    //  extend a whole alphabet past the highest base. The extra slots
+    //  stay zero, which decodes as an invalid transition.
+    return last_base + nsyms;
 }
 
 static void
