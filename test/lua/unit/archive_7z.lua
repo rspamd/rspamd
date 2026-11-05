@@ -81,6 +81,20 @@ AQEAAQEADAcCAAgKAQLh/38fCOpGAAAFAhkFAAAAAAARHQBhAC4AdAB4AHQAAACsIADeQQAu
 AHQAeAB0AAAAAAA=
 ]]
 
+  -- The odd-offset archive with its header packed (kEncodedHeader), the way
+  -- 7-Zip writes it by default: libarchive lists those
+  local packed_header_b64 = [[
+N3q8ryccAASx8LXHVwAAAAAAAAASAAAAAAAAAACkRhloZWxsbyEKeAoBBAYAAgkHAgAHCwIA
+AQEAAQEADAcCAAgKAQLh/38fCOpGAAAFAhkFAAAAAAARHQBhAC4AdAB4AHQAAACsID3YAN4u
+AHQAeAB0AAAAAAAXBgkBCU4ABwsBAAEBAAxOAAA=
+]]
+  -- ... with a lone high surrogate in the first name
+  local packed_lone_lead_b64 = [[
+N3q8ryccAASx8LXHVwAAAAAAAAASAAAAAAAAAACkRhloZWxsbyEKeAoBBAYAAgkHAgAHCwIA
+AQEAAQEADAcCAAgKAQLh/38fCOpGAAAFAhkFAAAAAAARHQCsID3YQQAuAHQAeAB0AAAAYQAu
+AHQAeAB0AAAAAAAXBgkBCU4ABwsBAAEBAAxOAAA=
+]]
+
   local function message(archive_b64)
     return table.concat({
       'From: a@example.com',
@@ -147,5 +161,23 @@ AHQAeAB0AAAAAAA=
       })
       assert_true(obfuscated, "the archive is not flagged as obfuscated")
     end
+  end)
+
+  test("lists non-ASCII names from a packed header", function()
+    local names, obfuscated = list(packed_header_b64)
+    assert_rspamd_table_eq({
+      actual = names,
+      expect = { "a.txt", "\226\130\172\240\159\152\128.txt" },
+    })
+    assert_false(obfuscated)
+  end)
+
+  test("a bad name in a packed header does not hide the next files", function()
+    local names, obfuscated = list(packed_lone_lead_b64)
+    assert_rspamd_table_eq({
+      actual = names,
+      expect = { "\239\191\189", "a.txt" },
+    })
+    assert_true(obfuscated, "the archive is not flagged as obfuscated")
   end)
 end)

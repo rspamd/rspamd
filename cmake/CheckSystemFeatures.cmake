@@ -16,6 +16,7 @@ function(CheckSystemFeatures)
     check_library_exists(m tanh "" HAVE_TANH)
     check_function_exists(mkstemp HAVE_MKSTEMP)
     check_function_exists(clock_gettime HAVE_CLOCK_GETTIME)
+    check_function_exists(uselocale HAVE_USELOCALE)
 
     # Check macros and constants
     check_symbol_exists(PATH_MAX limits.h HAVE_PATH_MAX)

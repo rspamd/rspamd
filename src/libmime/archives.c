@@ -26,6 +26,12 @@
 
 #include <archive.h>
 #include <archive_entry.h>
+#ifdef HAVE_USELOCALE
+#include <locale.h>
+#ifdef __APPLE__
+#include <xlocale.h>
+#endif
+#endif
 #include <zlib.h>
 #include "ottery.h"
 
@@ -1968,6 +1974,33 @@ end:
 	return p;
 }
 
+#ifdef HAVE_USELOCALE
+/*
+ * libarchive converts 7z names (UTF-16LE) to the charset of the current
+ * locale, and rspamd runs in the C locale unless LANG is set: there every
+ * non-ASCII name fails to convert. The names are converted in a UTF-8 locale
+ * instead, created once; (locale_t) 0 if the system has none
+ */
+static locale_t
+rspamd_archive_utf8_locale(void)
+{
+	static locale_t utf8_locale = (locale_t) 0;
+	static gboolean initialized = FALSE;
+
+	if (!initialized) {
+		static const char *names[] = {"C.UTF-8", "en_US.UTF-8", "UTF-8"};
+
+		initialized = TRUE;
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(names) && utf8_locale == (locale_t) 0; i++) {
+			utf8_locale = newlocale(LC_CTYPE_MASK, names[i], (locale_t) 0);
+		}
+	}
+
+	return utf8_locale;
+}
+#endif
+
 static const unsigned char *
 rspamd_7zip_read_next_section(struct rspamd_task *task,
 							  const unsigned char *p, const unsigned char *end,
@@ -2008,19 +2041,58 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 			rspamd_archive_files_reset(task, arch);
 
 			struct archive_entry *ae;
+			/* Whether a name that fails to convert is not valid UTF-16 */
+			gboolean names_utf8 = FALSE;
+#ifdef HAVE_USELOCALE
+			locale_t utf8_locale = rspamd_archive_utf8_locale(), old_locale = (locale_t) 0;
 
-			while (archive_read_next_header(a, &ae) == ARCHIVE_OK) {
+			if (utf8_locale != (locale_t) 0) {
+				old_locale = uselocale(utf8_locale);
+				names_utf8 = TRUE;
+			}
+#endif
+
+			/*
+			 * A name that does not convert gives ARCHIVE_WARN: the entry is
+			 * still read, and the entries after it too
+			 */
+			while ((r = archive_read_next_header(a, &ae)) == ARCHIVE_OK || r == ARCHIVE_WARN) {
 				const char *name = archive_entry_pathname_utf8(ae);
+				struct rspamd_archive_file *f = NULL;
+
 				if (name) {
 					msg_debug_archive("7zip: found file %s", name);
-					struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
+					f = g_malloc0(sizeof(*f));
 					f->fname = g_string_new(name);
-					if (!rspamd_archive_file_add(task, arch, f)) {
-						break;
+				}
+				else if (r == ARCHIVE_WARN) {
+					/*
+					 * libarchive gives nothing of a name it cannot convert: the
+					 * file is kept with U+FFFD for a name, and flagged as a bad
+					 * name in a plain header is
+					 */
+					msg_debug_archive("7zip: found file with a name that cannot be converted");
+					f = g_malloc0(sizeof(*f));
+					f->fname = g_string_new("\xEF\xBF\xBD");
+
+					if (names_utf8) {
+						f->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 					}
 				}
+
+				if (f != NULL && !rspamd_archive_file_add(task, arch, f)) {
+					break;
+				}
+
 				archive_read_data_skip(a);
 			}
+
+#ifdef HAVE_USELOCALE
+			if (utf8_locale != (locale_t) 0) {
+				uselocale(old_locale);
+			}
+#endif
 
 			if (archive_read_has_encrypted_entries(a) > 0) {
 				msg_debug_archive("7zip: found encrypted stuff");
