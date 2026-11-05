@@ -2020,8 +2020,14 @@ void rspamd_message_process(struct rspamd_task *task)
 			ptask = lua_newuserdata(L, sizeof(struct rspamd_task *));
 			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 			*ptask = task;
+			/*
+			 * Text that only looks like a format (e.g. "%PDF-1.4" in a
+			 * text/plain part) is read by the content module, but stays text:
+			 * taking it over would hide its text
+			 */
+			lua_pushboolean(L, !!(part->flags & RSPAMD_MIME_PART_TEXT_CONTENT));
 
-			if (lua_pcall(L, 2, 0, err_idx) != 0) {
+			if (lua_pcall(L, 3, 0, err_idx) != 0) {
 				msg_err_task("cannot detect content: %s", lua_tostring(L, -1));
 			}
 

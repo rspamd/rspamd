@@ -1167,14 +1167,14 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 
 /*
  * Whether the decoded data of a part is binary: more than 1/32 of its first
- * bytes are control characters that text does not use. 8bit bytes do not
- * count, so text in any charset passes, valid or not
+ * `limit` bytes are control characters that text does not use. 8bit bytes do
+ * not count, so text in any charset passes, valid or not
  */
 static gboolean
-rspamd_mime_part_data_is_binary(const struct rspamd_mime_part *part)
+rspamd_mime_part_data_is_binary(const struct rspamd_mime_part *part, gsize limit)
 {
 	const unsigned char *p = (const unsigned char *) part->parsed_data.begin;
-	gsize len = MIN(part->parsed_data.len, 4096), nctrl = 0;
+	gsize len = MIN(part->parsed_data.len, limit), nctrl = 0;
 
 	for (gsize i = 0; i < len; i++) {
 		unsigned char c = p[i];
@@ -1188,6 +1188,46 @@ rspamd_mime_part_data_is_binary(const struct rspamd_mime_part *part)
 	}
 
 	return nctrl * 32 > len;
+}
+
+/*
+ * Whether a part is a file whose name has the extension `ext`: a part with
+ * "Content-Disposition: attachment" (a name= parameter alone does not keep a
+ * text part from being shown inline), or a part without Content-Type, where
+ * the name is all a mail client has
+ */
+static gboolean
+rspamd_mime_part_attached_as(const struct rspamd_mime_part *part, const char *ext)
+{
+	const rspamd_ftok_t *fn;
+	gsize ext_len;
+
+	if (ext == NULL || part->cd == NULL) {
+		return FALSE;
+	}
+
+	if (!(part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) &&
+		(part->cd->type != RSPAMD_CT_ATTACHMENT ||
+		 rspamd_message_get_header_from_hash(part->raw_headers,
+											 "Content-Disposition", FALSE) == NULL)) {
+		return FALSE;
+	}
+
+	fn = &part->cd->filename;
+	ext_len = strlen(ext);
+	/* Trailing dots and spaces, which Windows drops from file names */
+	gsize fn_len = fn->len;
+
+	while (fn_len > 0 && (fn->begin[fn_len - 1] == '.' || fn->begin[fn_len - 1] == ' ')) {
+		fn_len--;
+	}
+
+	if (ext_len == 0 || fn_len <= ext_len) {
+		return FALSE;
+	}
+
+	return fn->begin[fn_len - ext_len - 1] == '.' &&
+		   g_ascii_strncasecmp(fn->begin + fn_len - ext_len, ext, ext_len) == 0;
 }
 
 /* Run lua_magic.detect_mime_part for a decoded normal part and maybe promote to message */
@@ -1307,16 +1347,20 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 					   npart->part_number, (void *) L, cbref);
 	}
 
+	/* A format that lua_magic recognised, other than text */
+	gboolean known_format = npart->detected_type &&
+							strcmp(npart->detected_type, "text") != 0;
+
 	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
-		if (rspamd_mime_part_data_is_binary(npart)) {
-			/*
-			 * Without a Content-Type, text/plain is only a default. The data
-			 * decides, not a lua_magic signature: some of them ("MZ", "MM",
-			 * "begin ") also start readable text, which must stay text
-			 */
+		/*
+		 * Without a Content-Type, text/plain is only a default: data that
+		 * starts as binary is not text. Only the start counts, as junk after
+		 * the text a client shows first must not hide that text
+		 */
+		if (rspamd_mime_part_data_is_binary(npart, 4096)) {
 			npart->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
 		}
-		else if (!(npart->detected_type && strcmp(npart->detected_type, "text") != 0) &&
+		else if (!promote_to_message && !known_format &&
 				 (npart->cte == RSPAMD_CTE_8BIT || npart->cte == RSPAMD_CTE_UNKNOWN) &&
 				 rspamd_str_has_8bit(npart->raw_data.begin, npart->raw_data.len) &&
 				 rspamd_fast_utf8_validate(npart->raw_data.begin, npart->raw_data.len) != 0) {
@@ -1324,10 +1368,43 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 			 * Text without a charset: only ASCII and UTF-8 can be read as
 			 * they are, anything else is broken. It is still processed as
 			 * text, with a guessed charset, as one bad byte must not hide
-			 * the text from the checks. A known format (e.g. a PDF, which
-			 * has no control characters) has no charset to miss.
+			 * the text from the checks. A file of a known format (x.pdf)
+			 * has no charset to miss.
 			 */
 			npart->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+		}
+	}
+
+	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+		!promote_to_message &&
+		(known_format || (npart->flags & RSPAMD_MIME_PART_NO_TEXT_EXTRACTION))) {
+		rspamd_ftok_t plain_tok, html_tok;
+
+		RSPAMD_FTOK_ASSIGN(&plain_tok, "plain");
+		RSPAMD_FTOK_ASSIGN(&html_tok, "html");
+
+		/*
+		 * Readable text/plain or text/html, declared or by default, is shown
+		 * as text by mail clients. A signature that lua_magic finds in it
+		 * ("GIF89a", "%PDF-1.4" in the first KB, "<?xml", "BEGIN:VCALENDAR")
+		 * must not make it an image, a document or data without text: that
+		 * would hide its text and URLs. The content modules still read such a
+		 * part, without taking it over, and what lua_magic found is kept for
+		 * the other checks. Binary data (a real image or PDF sent as text,
+		 * checked over 64 KB, as images often start with readable metadata)
+		 * and an attachment named as what was found (x.pdf holding a PDF)
+		 * are files of that type, as before.
+		 */
+		if ((rspamd_ftok_casecmp(&npart->ct->subtype, &plain_tok) == 0 ||
+			 rspamd_ftok_casecmp(&npart->ct->subtype, &html_tok) == 0) &&
+			!rspamd_mime_part_attached_as(npart, npart->detected_ext) &&
+			!rspamd_mime_part_data_is_binary(npart, 65536)) {
+			msg_debug_mime("part #%ud is text, not %s",
+						   npart->part_number,
+						   npart->detected_ext ? npart->detected_ext : "(unknown)");
+			npart->detected_type = rspamd_mempool_strdup(task->task_pool, "text");
+			npart->flags &= ~RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+			npart->flags |= RSPAMD_MIME_PART_TEXT_CONTENT;
 		}
 	}
 

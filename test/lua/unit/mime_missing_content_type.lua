@@ -161,6 +161,27 @@ context("Multipart child without Content-Type", function()
     end)
   end
 
+  -- Only the start decides: junk after the text a client shows first does not
+  test("text followed by control bytes stays text", function()
+    local body = string.rep("Plain words that a client shows. ", 200) ..
+        "See http://after.example.com/ now\n" .. string.rep("\1", 600)
+    local task = load(mixed("\n" .. body))
+    local _, part = texts(task, 'after.example.com')
+    assert_not_nil(part)
+    task:destroy()
+  end)
+
+  -- A known format has no charset to miss
+  test("an uncompressed PDF without Content-Type is not broken", function()
+    local pdf = "%PDF-1.4\n%\226\227\207\211\n1 0 obj << /Type /Catalog >> endobj\n" ..
+        "trailer << /Root 1 0 R >>\n%%EOF\n"
+    local task = load(mixed("\n" .. pdf))
+    for _, p in ipairs(task:get_parts()) do
+      assert_false(p:is_broken())
+    end
+    task:destroy()
+  end)
+
   test("a whole message that lua_magic recognises is not text", function()
     local task = load("Subject: t\n\n" .. elf)
     assert_equal(#task:get_text_parts(), 0)
