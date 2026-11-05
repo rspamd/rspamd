@@ -897,7 +897,18 @@ rspamd_create_dkim_context(const char *sig,
 	while (p <= end) {
 		switch (state) {
 		case DKIM_STATE_TAG:
-			if (g_ascii_isspace(*p)) {
+			if (*p == ';') {
+				/*
+				 * An empty tag-spec (`;;`) or one without `=`: skip it, as
+				 * arc.lua does. A `;` must never become part of a tag name:
+				 * `;;i=1` would hide from us a tag that arc.lua checks
+				 */
+				state = DKIM_STATE_SKIP_SPACES;
+				next_state = DKIM_STATE_TAG;
+				taglen = 0;
+				p++;
+			}
+			else if (g_ascii_isspace(*p)) {
 				taglen = (int) (p - c);
 				while (*p && g_ascii_isspace(*p)) {
 					/* Skip spaces before '=' sign */

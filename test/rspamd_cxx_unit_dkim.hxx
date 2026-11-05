@@ -247,6 +247,48 @@ TEST_SUITE("rspamd_dkim")
 			}
 		}
 	}
+
+	TEST_CASE("rspamd_dkim_empty_tag_spec")
+	{
+		/*
+		 * arc.lua splits the header on `;` and drops elements without `=`;
+		 * the C parser must read the same tags, never a `;i` tag name
+		 */
+		struct test_case {
+			std::string sig;
+			bool valid;
+			std::string domain;
+		};
+		std::vector<test_case> cases{
+			{"cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;i=1", true, "example.com"},
+			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;i=0", false, ""},
+			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==; x;i=0", false, ""},
+			{"i=1; cv=none; a=rsa-sha256; d=attacker.example; s=sel; b=dGVzdA==;;d=trusted.example",
+			 true, "trusted.example"},
+			{";i=1; ; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;", true, "example.com"},
+		};
+
+		for (auto &&c: cases) {
+			SUBCASE(fmt::format("arc-seal: {}", c.sig).c_str())
+			{
+				auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "dkim", 0);
+				GError *err = nullptr;
+				auto *ctx = rspamd_create_dkim_context(c.sig.c_str(), pool, nullptr, 0,
+													   RSPAMD_DKIM_ARC_SEAL, &err);
+				if (c.valid) {
+					REQUIRE_MESSAGE(ctx != nullptr, (err ? err->message : "unknown error"));
+					CHECK(std::string{rspamd_dkim_get_domain(ctx)} == c.domain);
+				}
+				else {
+					CHECK(ctx == nullptr);
+				}
+				if (err) {
+					g_error_free(err);
+				}
+				rspamd_mempool_delete(pool);
+			}
+		}
+	}
 }
 
 #endif
