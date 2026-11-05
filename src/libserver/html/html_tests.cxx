@@ -309,6 +309,29 @@ TEST_SUITE("html")
 			 "</foreignObject></svg></form>",
 			 {"https://good.example.org/f", "https://evil.example.net/fo"},
 			 std::nullopt},
+			/*
+			 * A quote in an unquoted value: browsers read on, rspamd up to it,
+			 * unless an `@` in the authority sends browsers to another host
+			 */
+			{"<a href=https://good.example.org/a\"b>x</a>"
+			 "<a href=3D\"https://good.example.org/qp\">y</a>",
+			 {"https://good.example.org/a"},
+			 std::nullopt},
+			{"<a href=https://www.paypal.com\"@evil.example.net/x>x</a>",
+			 {"https://www.paypal.com\"@evil.example.net/x"},
+			 std::nullopt},
+			{"<a href=https://www.paypal.com\"&#64;evil.example.net/x>x</a>",
+			 {"https://www.paypal.com\"@evil.example.net/x"},
+			 std::nullopt},
+			/* Character references are decoded before the authority is looked at */
+			{"<a href=https://www.paypal&#46;com\"@evil.example.net/x>x</a>"
+			 "<a href=https&#58;//www.paypal.com\"@evil.example.net/y>y</a>",
+			 {"https://www.paypal.com\"@evil.example.net/x", "https://www.paypal.com\"@evil.example.net/y"},
+			 std::nullopt},
+			/* URL parsers drop tabs and line breaks in a link */
+			{"<a href=ht&#9;tps://www.paypal.com\"@evil.example.net/t>x</a>",
+			 {"https://www.paypal.com\"@evil.example.net/t"},
+			 std::nullopt},
 			/* A tag the input ends in */
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/e\">",
 			 {"https://good.example.org/f", "https://evil.example.net/e"},

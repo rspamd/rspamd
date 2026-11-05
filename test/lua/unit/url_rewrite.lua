@@ -574,9 +574,10 @@ Content-Type: text/html
   end)
 
   test("Links are rewritten as browsers read their values", function()
-    -- A missing closing quote: browsers take the value up to the next quote,
-    -- which is replaced as a whole. An unquoted value with a quote in it is
-    -- longer in browsers than rspamd reads: it is left alone
+    -- A missing closing quote: browsers take the value up to the next quote.
+    -- An unquoted value goes on past a quote in browsers, which rspamd reads
+    -- up to the quote (href=3D"... of undecoded quoted-printable is no link
+    -- to that site). Each is replaced as a whole
     local msg = table.concat({
       "From: test@example.com",
       "To: nobody@example.com",
@@ -584,7 +585,8 @@ Content-Type: text/html
       "Content-Type: text/html",
       "",
       '<html><body><a href="http://example.com/open target="_blank">A</a>' ..
-          '<a href=3D"http://example.com/qp">B</a></body></html>',
+          '<a href=3D"http://example.com/qp">B</a>' ..
+          '<a href=http://example.com/cut"tail>C</a></body></html>',
       "",
     }, "\n")
     local res, task = rspamd_task.load_from_string(msg, rspamd_config)
@@ -597,12 +599,16 @@ Content-Type: text/html
       return "http://safe.com/redirected"
     end)
 
-    assert_rspamd_table_eq({ actual = seen, expect = { "http://example.com/open target=" } })
+    assert_rspamd_table_eq({
+      actual = seen,
+      expect = { "http://example.com/open target=", "3D", "http://example.com/cut" },
+    })
     assert_not_nil(result, "rewrite should return results")
     for _, html_text in pairs(result) do
       local html = tostring(html_text)
       assert_not_nil(html:find('<a href="http://safe.com/redirected"_blank">A</a>', 1, true), html)
-      assert_not_nil(html:find('<a href=3D"http://example.com/qp">B</a>', 1, true), html)
+      assert_not_nil(html:find('<a href=http://safe.com/redirected>B</a>', 1, true), html)
+      assert_not_nil(html:find('<a href=http://safe.com/redirected>C</a>', 1, true), html)
     end
     task:destroy()
   end)

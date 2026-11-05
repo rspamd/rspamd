@@ -1058,6 +1058,8 @@ struct tag_content_parser_state {
 	std::string buf;
 	std::string attr_name;              // Store current attribute name
 	const char *value_start = nullptr;  // Track where attribute value starts in input
+	/* Where the first quote is in an unquoted value, see html_unquoted_value_length */
+	std::size_t value_quote = std::string::npos;
 	const char *html_start = nullptr;   // Base pointer to HTML buffer start
 	unsigned int *attrs_count = nullptr;// Task-global unknown attributes counter (task pool variable)
 	/* Of the current tag: attributes rspamd interprets that it has, and other attributes */
@@ -1070,10 +1072,96 @@ struct tag_content_parser_state {
 		buf.clear();
 		attr_name.clear();
 		value_start = nullptr;
+		value_quote = std::string::npos;
 		known_attrs.reset();
 		unknown_attrs = 0;
 	}
 };
+
+/*
+ * Browsers read an unquoted attribute value on past a quote, rspamd up to it:
+ * `href=3D"https://...` of undecoded quoted-printable is a relative link,
+ * not one to that site, and `href=http://x.com/a"b` goes to x.com anyway.
+ * Unless the quote is in the authority of the link and an `@` follows there:
+ * browsers go to the host after it then (`https://www.paypal.com"@evil.com/`),
+ * so the whole value is kept. Its place in the source is the whole value in
+ * any case, which URL rewriting replaces
+ */
+static auto
+html_unquoted_value_length(std::string_view value, std::size_t quote) -> std::size_t
+{
+	/*
+	 * Character references are decoded in attribute values (none spans the
+	 * quote), and URL parsers drop tabs and line breaks anywhere in a link
+	 */
+	std::string prefix{value.substr(0, quote)}, rest{value.substr(quote)};
+	auto normalise = [](std::string &part) {
+		part.resize(decode_html_entitles_inplace(part.data(), part.size()));
+		std::erase_if(part, [](char c) { return c == '\t' || c == '\n' || c == '\r'; });
+	};
+	normalise(prefix);
+	normalise(rest);
+
+	std::string_view link{prefix};
+
+	/* Browsers skip leading C0 controls and spaces */
+	while (!link.empty() && (unsigned char) link.front() <= 0x20) {
+		link.remove_prefix(1);
+	}
+
+	auto is_slash = [](char c) { return c == '/' || c == '\\'; };
+	auto ends_authority = [&](char c) { return is_slash(c) || c == '?' || c == '#'; };
+	std::size_t authority = std::string_view::npos;
+
+	if (link.size() >= 2 && is_slash(link[0]) && is_slash(link[1])) {
+		authority = 2;
+	}
+	else if (auto colon = link.find(':'); colon != std::string_view::npos && colon > 0 &&
+										  g_ascii_isalpha(link[0])) {
+		auto scheme = link.substr(0, colon);
+		auto scheme_char = [](char c) { return g_ascii_isalnum(c) || c == '+' || c == '-' || c == '.'; };
+
+		if (std::all_of(scheme.begin(), scheme.end(), scheme_char)) {
+			auto is_scheme = [&](std::string_view name) {
+				return scheme.size() == name.size() &&
+					   g_ascii_strncasecmp(scheme.data(), name.data(), name.size()) == 0;
+			};
+
+			authority = colon + 1;
+
+			if (is_scheme("http") || is_scheme("https") || is_scheme("ftp") ||
+				is_scheme("ws") || is_scheme("wss")) {
+				/* Their authority comes after any slashes, or none */
+				while (authority < link.size() && is_slash(link[authority])) {
+					authority++;
+				}
+			}
+			else if (link.substr(authority, 2) == "//") {
+				authority += 2;
+			}
+			else {
+				authority = std::string_view::npos;
+			}
+		}
+	}
+
+	/* The quote must be in the authority, which an `@` after it ends */
+	if (authority == std::string_view::npos || authority > link.size() ||
+		std::any_of(link.begin() + authority, link.end(), ends_authority)) {
+		return quote;
+	}
+
+	for (auto c: rest) {
+		if (ends_authority(c)) {
+			break;
+		}
+		if (c == '@') {
+			return value.size();
+		}
+	}
+
+	return quote;
+}
 
 /* Unknown tags get a negative hash of their name, so closing tags match */
 static inline auto
@@ -1098,6 +1186,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	 * Parser env is cleared after storing
 	 */
 	auto store_component_value = [&]() -> void {
+		if (parser_env.value_quote != std::string::npos) {
+			parser_env.buf.resize(html_unquoted_value_length(parser_env.buf, parser_env.value_quote));
+			parser_env.value_quote = std::string::npos;
+		}
+
 		if (!parser_env.attr_name.empty()) {
 			auto drop_attribute = [&]() -> void {
 				parser_env.buf.clear();
@@ -1443,16 +1536,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 
 	case parse_value:
-		/* `/` is a part of an unquoted value, `<a href=/x/>` is not closed */
-		if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
-			if (*in == '"') {
-				/*
-				 * Browsers keep the quote and what follows in the value
-				 * (`href=3D"https://...` of undecoded quoted-printable): its
-				 * place in the source is not known, so it is not rewritten
-				 */
-				parser_env.value_start = nullptr;
-			}
+		/*
+		 * `/` and quotes are a part of an unquoted value, as in browsers:
+		 * `<a href=/x/>` is not closed, see html_unquoted_value_length
+		 */
+		if (g_ascii_isspace(*in) || *in == '>') {
 			store_component_value();
 			state = spaces_after_param;
 		}
@@ -1461,6 +1549,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			if (parser_env.value_start == nullptr) {
 				parser_env.value_start = in;
 			}
+
+			if (*in == '"' && parser_env.value_quote == std::string::npos) {
+				parser_env.value_quote = parser_env.buf.size();
+			}
+
 			store_value_character(false);
 		}
 		break;
