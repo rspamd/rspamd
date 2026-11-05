@@ -606,7 +606,8 @@ void rspamd_mime_charset_utf_enforce(char *in, gsize len)
 
 			U8_NEXT(p, cur_offset, len, uc);
 
-			if (uc > 0) {
+			/* NUL is valid too: bad bytes followed by NULs must be replaced */
+			if (uc >= 0) {
 				/* Fill string between err_offset and tmp with `?` character */
 				memset(p + err_offset, '?', tmp - err_offset);
 				break;
@@ -769,6 +770,11 @@ rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
 					if (rspamd_regexp_match(utf_compatible_re,
 											real_charset, strlen(real_charset), TRUE)) {
 						RSPAMD_FTOK_ASSIGN(charset, UTF8_CHARSET);
+						/*
+						 * CED only tells that the bytes are meant as UTF-8,
+						 * it does not make the broken sequences valid
+						 */
+						rspamd_mime_charset_utf_enforce(in, len);
 
 						return TRUE;
 					}
@@ -930,6 +936,16 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 
 		if (rspamd_mime_charset_utf_check(&charset_tok, part_content->data,
 										  part_content->len, !checked)) {
+			if (checked) {
+				/*
+				 * The check above has not looked at the content: CED has
+				 * already guessed a UTF-8 compatible charset for a part with
+				 * no charset or an unknown one, which does not make its bytes
+				 * valid UTF-8, or the part is labelled with an ASCII charset
+				 */
+				rspamd_mime_charset_utf_enforce((char *) part_content->data,
+												part_content->len);
+			}
 			SET_PART_UTF(text_part);
 			text_part->utf_raw_content = part_content;
 			text_part->real_charset = UTF8_CHARSET;
