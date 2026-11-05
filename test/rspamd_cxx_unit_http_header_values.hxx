@@ -23,6 +23,10 @@
  * NUL-terminated, and an empty value is a token of length 0. Both parsers used
  * to take a length of 0 for "NUL-terminated, measure it", so an empty value had
  * them run strlen past the end of the header storage.
+ *
+ * A field line without ':' has no value at all. The parser used to accept one:
+ * the next field was taken as the rest of its name, and as the last line of
+ * the headers, its value length wrapped.
  */
 
 #ifndef RSPAMD_CXX_UNIT_HTTP_HEADER_VALUES_HXX
@@ -39,6 +43,7 @@
 #include "libcryptobox/keypair.h"
 #include "libutil/util.h"
 #include "contrib/libev/ev.h"
+#include "contrib/uthash/utlist.h"
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -67,6 +72,9 @@ struct date_state {
 	time_t date = 0;
 	time_t last_modified = 0;
 	bool peer_key = false;
+	int headers = 0;
+	/* A header with no name, or a value that is not inside its storage */
+	bool bad_header = false;
 };
 
 static void
@@ -85,6 +93,23 @@ record_finish(struct rspamd_http_connection *conn, struct rspamd_http_message *m
 	st->date = msg->date;
 	st->last_modified = msg->last_modified;
 	st->peer_key = rspamd_http_connection_get_peer_key(conn) != nullptr;
+
+	for (khiter_t k = kh_begin(msg->headers); k != kh_end(msg->headers); ++k) {
+		if (!kh_exist(msg->headers, k)) {
+			continue;
+		}
+
+		struct rspamd_http_header *cur;
+
+		DL_FOREACH(kh_value(msg->headers, k), cur)
+		{
+			st->headers++;
+
+			if (cur->name.len == 0 || cur->value.len > cur->combined->len) {
+				st->bad_header = true;
+			}
+		}
+	}
 
 	return 0;
 }
@@ -253,6 +278,63 @@ TEST_SUITE("http_header_values")
 		/* No key to decrypt with, so the request fails like any bad key */
 		CHECK(t.state.finishes + t.state.errors == 1);
 		CHECK_FALSE(t.state.peer_key);
+	}
+
+	TEST_CASE("server: a last header line without a colon")
+	{
+		using namespace http_date_test;
+		date_fixture t(false);
+
+		rspamd_http_connection_read_message(t.conn, &t.state, 1000.0);
+		/* Its value length used to wrap to SIZE_MAX */
+		t.push("GET / HTTP/1.1\r\nFoo: bar\r\nX\r\n\r\n");
+
+		CHECK(t.state.errors == 1);
+		CHECK(t.state.finishes == 0);
+	}
+
+	TEST_CASE("server: a header line without a colon before another one")
+	{
+		using namespace http_date_test;
+		date_fixture t(false);
+
+		rspamd_http_connection_read_message(t.conn, &t.state, 1000.0);
+		/* It used to be glued to the next field: "XContent-Length: 2" */
+		t.push("POST / HTTP/1.1\r\nX\r\nContent-Length: 2\r\n\r\nok");
+
+		CHECK(t.state.errors == 1);
+		CHECK(t.state.finishes == 0);
+	}
+
+	TEST_CASE("server: a header with an empty value")
+	{
+		using namespace http_date_test;
+		date_fixture t(false);
+
+		rspamd_http_connection_read_message(t.conn, &t.state, 1000.0);
+		t.push("GET / HTTP/1.1\r\nX:\r\nFoo: bar\r\n\r\n");
+
+		CHECK(t.state.errors == 0);
+		REQUIRE(t.state.finishes == 1);
+		CHECK(t.state.headers == 2);
+		CHECK_FALSE(t.state.bad_header);
+	}
+
+	TEST_CASE("client: a last header line without a colon")
+	{
+		using namespace http_date_test;
+		date_fixture t(true);
+
+		auto *msg = rspamd_http_message_from_url("http://example.com/");
+		REQUIRE(msg != nullptr);
+		REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "example.com", nullptr,
+													 &t.state, 1000.0));
+		t.drain();
+
+		t.push("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nX\r\n\r\nok");
+
+		CHECK(t.state.errors == 1);
+		CHECK(t.state.finishes == 0);
 	}
 }
 

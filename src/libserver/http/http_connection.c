@@ -288,6 +288,8 @@ rspamd_http_on_status(http_parser *parser, const char *at, size_t length)
 	return 0;
 }
 
+static void rspamd_http_drop_header(struct rspamd_http_connection_private *priv);
+
 static void
 rspamd_http_finish_header(struct rspamd_http_connection *conn,
 						  struct rspamd_http_connection_private *priv)
@@ -295,6 +297,17 @@ rspamd_http_finish_header(struct rspamd_http_connection *conn,
 	struct rspamd_http_header *hdr;
 	khiter_t k;
 	int r;
+
+	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_NEW_HEADER)) {
+		/*
+		 * The field never got a value. The parser refuses a line without
+		 * ':', but should a field still end this way, it is not a header,
+		 * and without the ": " separator the value length below would wrap
+		 */
+		rspamd_http_drop_header(priv);
+
+		return;
+	}
 
 	priv->header->combined = rspamd_fstring_append(priv->header->combined,
 												   "\r\n", 2);
