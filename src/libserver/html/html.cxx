@@ -1445,6 +1445,14 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	case parse_value:
 		/* `/` is a part of an unquoted value, `<a href=/x/>` is not closed */
 		if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
+			if (*in == '"') {
+				/*
+				 * Browsers keep the quote and what follows in the value
+				 * (`href=3D"https://...` of undecoded quoted-printable): its
+				 * place in the source is not known, so it is not rewritten
+				 */
+				parser_env.value_start = nullptr;
+			}
 			store_component_value();
 			state = spaces_after_param;
 		}

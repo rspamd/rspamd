@@ -497,6 +497,42 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test("A link that browsers follow despite broken markup is rewritten", function()
+    -- `/` between the tag name and an attribute marks the tag broken, but
+    -- browsers still take <a/href=...> as a link
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><a/href="http://example.com/broken">Click</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local result = task:rewrite_html_urls(function(_, url)
+      if url == "http://example.com/broken" then
+        return "http://safe.com/redirected"
+      end
+      return nil
+    end)
+
+    assert_not_nil(result, "rewrite should return results")
+    local found = false
+    for _, html_text in pairs(result) do
+      local html = tostring(html_text)
+      if html:find("http://safe.com/redirected", 1, true) then
+        found = true
+      end
+      assert_nil(html:find("http://example.com/broken", 1, true))
+    end
+    assert_true(found)
+    task:destroy()
+  end)
+
   test("An SVG link is rewritten", function()
     -- An SVG link without href goes to xlink:href; an HTML one does not
     local msg = table.concat({
@@ -533,6 +569,40 @@ Content-Type: text/html
       local html = tostring(html_text)
       assert_not_nil(html:find('<a xlink:href="http://safe.com/redirected">', 1, true), html)
       assert_not_nil(html:find('<a xlink:href="http://example.com/html">', 1, true), html)
+    end
+    task:destroy()
+  end)
+
+  test("Links are rewritten as browsers read their values", function()
+    -- A missing closing quote: browsers take the value up to the next quote,
+    -- which is replaced as a whole. An unquoted value with a quote in it is
+    -- longer in browsers than rspamd reads: it is left alone
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><a href="http://example.com/open target="_blank">A</a>' ..
+          '<a href=3D"http://example.com/qp">B</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local seen = {}
+    local result = task:rewrite_html_urls(function(_, url)
+      seen[#seen + 1] = url
+      return "http://safe.com/redirected"
+    end)
+
+    assert_rspamd_table_eq({ actual = seen, expect = { "http://example.com/open target=" } })
+    assert_not_nil(result, "rewrite should return results")
+    for _, html_text in pairs(result) do
+      local html = tostring(html_text)
+      assert_not_nil(html:find('<a href="http://safe.com/redirected"_blank">A</a>', 1, true), html)
+      assert_not_nil(html:find('<a href=3D"http://example.com/qp">B</a>', 1, true), html)
     end
     task:destroy()
   end)

@@ -159,7 +159,12 @@ struct html_content {
 	auto for_each_clickable_attr(fu2::function<bool(const html_tag *, std::string_view, const attr_span &)> &&callback) const -> void
 	{
 		for (const auto &tag: all_tags) {
-			if (tag->flags & (FL_XML | FL_VIRTUAL | FL_BROKEN)) {
+			/*
+			 * A tag marked broken can still be a link that browsers follow,
+			 * such as <a/href=...>: its href is rewritten when its place in
+			 * the source is known (a span), as for any other link
+			 */
+			if (tag->flags & (FL_XML | FL_VIRTUAL)) {
 				continue;
 			}
 
