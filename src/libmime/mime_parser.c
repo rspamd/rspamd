@@ -636,8 +636,18 @@ rspamd_mime_part_get_cte(struct rspamd_task *task, struct rspamd_mime_part *part
 											  "Content-Transfer-Encoding", FALSE);
 
 	if (hdr == NULL) {
-		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
-			!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
+		/*
+		 * The children of a multipart are slices of its raw data, and they
+		 * take its CTE. An embedded message is read from the data of its
+		 * part once decoded: decoding it again turns it into garbage, so it
+		 * only takes an encoding that leaves the data as it is
+		 */
+		if (part->parent_part &&
+			part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
+			!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE) &&
+			(part->parent_part->part_type == RSPAMD_MIME_PART_MULTIPART ||
+			 part->parent_part->cte == RSPAMD_CTE_7BIT ||
+			 part->parent_part->cte == RSPAMD_CTE_8BIT)) {
 			part->cte = part->parent_part->cte;
 			parent_propagated = TRUE;
 
