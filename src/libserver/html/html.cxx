@@ -502,7 +502,13 @@ static const auto component_extractors = frozen::make_unordered_map<frozen::stri
 			 }
 			 return std::nullopt;
 		 }},
-		{"href", [](const html_tag *tag) { return tag->find_href(); }},
+		/* The destination of a form is its action; href and action of other tags are not */
+		{"href", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 return tag->id == Tag_FORM ? tag->find_unknown_component("href") : tag->find_href();
+		 }},
+		{"action", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 return tag->id == Tag_FORM ? tag->find_href() : tag->find_unknown_component("action");
+		 }},
 		{"src", [](const html_tag *tag) -> std::optional<std::string_view> {
 			 if (auto comp = tag->find_component<html_component_src>()) {
 				 return comp.value()->value;
@@ -1031,7 +1037,19 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				parser_env.attr_name.clear();
 				parser_env.value_start = nullptr;
 			};
-			auto interpreted_idx = html_interpreted_attr_index(parser_env.attr_name);
+			/*
+			 * "href" (links) and "action" (forms) are both read as the
+			 * destination of a tag, but a tag has only one: browsers follow
+			 * "href" of <a> and "action" of <form>. The other one is an
+			 * ordinary attribute, which must not take the place of the real
+			 * destination: <a action="good" href="evil"> goes to evil.
+			 */
+			bool foreign_destination =
+				(parser_env.attr_name == "action" && tag->id != Tag_FORM) ||
+				(parser_env.attr_name == "href" && tag->id == Tag_FORM);
+			auto interpreted_idx = foreign_destination
+									   ? std::nullopt
+									   : html_interpreted_attr_index(parser_env.attr_name);
 
 			if (interpreted_idx) {
 				/*
@@ -1102,9 +1120,14 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				value_view = {value_storage, sz};
 			}
 
-			// Create the appropriate component variant with span info
-			auto component = html_component_from_string(attr_name_view, value_view, value_offset, value_len);
-			tag->components.emplace_back(std::move(component));
+			if (foreign_destination) {
+				tag->components.emplace_back(html_component_unknown{attr_name_view, value_view});
+			}
+			else {
+				// Create the appropriate component variant with span info
+				auto component = html_component_from_string(attr_name_view, value_view, value_offset, value_len);
+				tag->components.emplace_back(std::move(component));
+			}
 		}
 
 		parser_env.buf.clear();

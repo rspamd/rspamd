@@ -275,6 +275,10 @@ TEST_SUITE("html")
 			{"<a href=\"mailto:x@y.com\">explicit</a>",
 			 {"mailto:x@y.com"},
 			 "explicit"},
+			/* The action of a link is not where it goes */
+			{"<a action=\"https://good.example.org/\" href=\"https://evil.example.net/\">click</a>",
+			 {"https://evil.example.net/"},
+			 "click"},
 		};
 
 		rspamd_url_init(NULL);
@@ -666,7 +670,7 @@ TEST_SUITE("html")
 			/* As in browsers; repeating one must not use up any budget either */
 			std::string input = "<a href=\"http://first.example.com/\"";
 			for (unsigned int i = 0; i < max_attrs_per_tag * 2; i++) {
-				input += " href=\"http://other.example.com/\" action=\"x\"";
+				input += " href=\"http://other.example.com/\" style=\"x\"";
 			}
 			input += " title=\"t\">link</a>";
 
@@ -676,10 +680,47 @@ TEST_SUITE("html")
 
 			const auto *atag = find_tag(hc, Tag_A);
 			CHECK(atag != nullptr);
-			CHECK(atag->components.size() == 2);
+			CHECK(atag->components.size() == 3);
 			REQUIRE(atag->find_href().has_value());
 			CHECK(atag->find_href().value() == "http://first.example.com/");
 			CHECK(atag->find_component_by_name("title").has_value());
+		}
+
+		SUBCASE("a tag goes where browsers go: href of a link, action of a form")
+		{
+			/* The attribute that is not the destination of the tag must not mask it */
+			auto *hc = process("<a action=\"https://good.example.org/\" "
+							   "href=\"https://evil.example.net/\">click</a>"
+							   "<form href=\"https://good.example.org/\" "
+							   "action=\"https://evil.example.net/form\"></form>");
+			CHECK(hc != nullptr);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			REQUIRE(atag != nullptr);
+			REQUIRE(atag->find_href().has_value());
+			CHECK(atag->find_href().value() == "https://evil.example.net/");
+
+			const auto *ftag = find_tag(hc, Tag_FORM);
+			REQUIRE(ftag != nullptr);
+			REQUIRE(ftag->find_href().has_value());
+			CHECK(ftag->find_href().value() == "https://evil.example.net/form");
+		}
+
+		SUBCASE("attributes are read under their own names")
+		{
+			auto *hc = process("<a action=\"https://a.example.org/\" href=\"https://h.example.org/\">x</a>"
+							   "<form href=\"https://h.example.net/\" action=\"https://a.example.net/\"></form>");
+			CHECK(hc != nullptr);
+
+			const auto *atag = find_tag(hc, Tag_A);
+			REQUIRE(atag != nullptr);
+			CHECK(atag->find_component_by_name("href").value_or("") == "https://h.example.org/");
+			CHECK(atag->find_component_by_name("action").value_or("") == "https://a.example.org/");
+
+			const auto *ftag = find_tag(hc, Tag_FORM);
+			REQUIRE(ftag != nullptr);
+			CHECK(ftag->find_component_by_name("href").value_or("") == "https://h.example.net/");
+			CHECK(ftag->find_component_by_name("action").value_or("") == "https://a.example.net/");
 		}
 
 		SUBCASE("task-global budget spans parts")
