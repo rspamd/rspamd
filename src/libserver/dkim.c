@@ -732,7 +732,12 @@ rspamd_dkim_parse_idx(rspamd_dkim_context_t *ctx,
 {
 	unsigned long val;
 
-	if (!rspamd_strtoul(param, len, &val)) {
+	/*
+	 * Instances start at 1 (RFC 8617 4.2.1); checking the range here also
+	 * keeps a value above UINT_MAX from being truncated into a valid one
+	 */
+	if (!rspamd_strtoul(param, len, &val) || val == 0 ||
+		val > RSPAMD_DKIM_MAX_ARC_IDX) {
 		g_set_error(err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_INVALID_L,
@@ -783,9 +788,17 @@ rspamd_dkim_add_arc_seal_headers(rspamd_mempool_t *pool,
 								 struct rspamd_dkim_common_ctx *ctx)
 {
 	struct rspamd_dkim_header *hdr;
-	int count = ctx->idx, i;
+	unsigned int count = ctx->idx, i;
 
-	ctx->hlist = g_ptr_array_sized_new(count * 3 - 1);
+	/*
+	 * Instance i covers 3 * i - 1 headers. The verifier validates i= before
+	 * calling this; a sign context has no instance yet and gets an empty list
+	 */
+	if (count > RSPAMD_DKIM_MAX_ARC_IDX) {
+		count = 0;
+	}
+
+	ctx->hlist = g_ptr_array_sized_new(count > 0 ? count * 3 - 1 : 0);
 
 	for (i = 0; i < count; i++) {
 		/* Authentication results */
@@ -1161,7 +1174,17 @@ rspamd_create_dkim_context(const char *sig,
 		}
 	}
 
+	if (ctx->common.type != RSPAMD_DKIM_NORMAL && (ctx->common.idx == 0 ||
+												   ctx->common.idx > RSPAMD_DKIM_MAX_ARC_IDX)) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"i parameter missing or invalid for ARC");
+		return NULL;
+	}
+
 	if (type == RSPAMD_DKIM_ARC_SEAL) {
+		/* Sized from i=, so only once it has been validated */
 		rspamd_dkim_add_arc_seal_headers(pool, &ctx->common);
 	}
 
@@ -1269,15 +1292,6 @@ rspamd_create_dkim_context(const char *sig,
 					DKIM_ERROR,
 					DKIM_SIGERROR_EXPIRED,
 					"signature has expired");
-		return NULL;
-	}
-
-	if (ctx->common.type != RSPAMD_DKIM_NORMAL && (ctx->common.idx == 0 ||
-												   ctx->common.idx > RSPAMD_DKIM_MAX_ARC_IDX)) {
-		g_set_error(err,
-					DKIM_ERROR,
-					DKIM_SIGERROR_UNKNOWN,
-					"i parameter missing or invalid for ARC");
 		return NULL;
 	}
 
