@@ -104,19 +104,8 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 	}
 
 	// Enumerate all clickable attributes with spans
-	hc->for_each_clickable_attr([&](const html_tag *tag, std::string_view attr_name, const attr_span &span) -> bool {
-		// Get the href or src value
-		std::string_view url_value;
-		if (attr_name == "href" || attr_name == "xlink:href") {
-			if (auto href = tag->find_href()) {
-				url_value = href.value();
-			}
-		}
-		else if (attr_name == "src") {
-			if (auto src_comp = tag->find_component<html_component_src>()) {
-				url_value = src_comp.value()->value;
-			}
-		}
+	hc->for_each_clickable_attr([&](const html_clickable_attr &clickable) -> bool {
+		std::string_view url_value = clickable.value;
 
 		if (url_value.empty()) {
 			return true;// Continue to next
@@ -133,7 +122,8 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 		std::string absolute_url{url_value};
 
 		// Create candidate
-		candidates.push_back(rewrite_candidate{tag, attr_name, std::move(absolute_url), span.offset, span.len, part_id});
+		candidates.push_back(rewrite_candidate{clickable.tag_id, clickable.attr_name, std::move(absolute_url),
+											   clickable.span.offset, clickable.span.len, part_id});
 
 		return true;// Continue to next
 	});

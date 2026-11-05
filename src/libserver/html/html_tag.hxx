@@ -1333,6 +1333,32 @@ struct attr_span {
 	std::size_t len;
 };
 
+/* Frames, embedded objects and media: browsers load their src and ignore any href */
+static inline auto
+html_tag_goes_to_src(int id) -> bool
+{
+	switch (id) {
+	case Tag_IFRAME:
+	case Tag_FRAME:
+	case Tag_EMBED:
+	case Tag_AUDIO:
+	case Tag_VIDEO:
+	case Tag_SOURCE:
+	case Tag_TRACK:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* A link of a tag that URL rewriting can replace: where it goes and its place */
+struct html_clickable_attr {
+	int tag_id;
+	std::string_view attr_name;
+	std::string_view value;
+	attr_span span;
+};
+
 struct html_tag {
 	unsigned int tag_start = 0;
 	unsigned int content_offset = 0;
@@ -1363,6 +1389,12 @@ struct html_tag {
 	// Helper methods for common component access
 	auto find_href() const -> std::optional<std::string_view>
 	{
+		if (html_tag_goes_to_src(id)) {
+			if (auto comp = find_component<html_component_src>()) {
+				return comp.value()->value;
+			}
+			return std::nullopt;
+		}
 		if (auto comp = find_component<html_component_href>()) {
 			return comp.value()->value;
 		}
@@ -1459,6 +1491,54 @@ struct html_tag {
 				}
 			}
 		}
+		return std::nullopt;
+	}
+
+	/*
+	 * The link URL rewriting replaces in this tag, if its place in the source
+	 * is known: src of an image, a frame or an embedded object, which browsers
+	 * load whatever href says; else href, then xlink:href of an SVG link (as
+	 * in find_href), then src
+	 */
+	auto clickable_attr() const -> std::optional<html_clickable_attr>
+	{
+		if (flags & (FL_XML | FL_VIRTUAL)) {
+			return std::nullopt;
+		}
+
+		if (id == Tag_IMG || html_tag_goes_to_src(id)) {
+			auto src = find_component<html_component_src>();
+
+			if (src && src.value()->len > 0) {
+				return html_clickable_attr{id, "src", src.value()->value,
+										   attr_span{src.value()->offset, src.value()->len}};
+			}
+
+			return std::nullopt;
+		}
+
+		if (!(flags & FL_HREF) && id != Tag_A && id != Tag_LINK && id != Tag_BASE) {
+			return std::nullopt;
+		}
+
+		std::string_view attr_name = "href";
+		auto span = get_attr_span(attr_name);
+
+		if (!span && id == Tag_A && (flags & FL_SVG)) {
+			attr_name = "xlink:href";
+			span = get_attr_span(attr_name);
+		}
+
+		if (span) {
+			return html_clickable_attr{id, attr_name, find_href().value_or(std::string_view{}), span.value()};
+		}
+
+		if ((span = get_attr_span("src"))) {
+			auto src = find_component<html_component_src>();
+
+			return html_clickable_attr{id, "src", src ? src.value()->value : std::string_view{}, span.value()};
+		}
+
 		return std::nullopt;
 	}
 

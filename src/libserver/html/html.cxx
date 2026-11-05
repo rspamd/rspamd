@@ -497,11 +497,16 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 
 /*
  * The attribute that holds where a tag goes, as browsers read it: "action" of
- * a form, "formaction" of a submit button or input, "href" of anything else
+ * a form, "formaction" of a submit button or input, "src" of a frame or an
+ * embedded object, "href" of anything else
  */
 static auto
 html_tag_destination_attr(std::int32_t id) -> std::string_view
 {
+	if (html_tag_goes_to_src(id)) {
+		return "src";
+	}
+
 	switch (id) {
 	case Tag_FORM:
 		return "action";

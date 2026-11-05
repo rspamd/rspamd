@@ -153,38 +153,19 @@ struct html_content {
 	}
 
 	/**
-	 * Enumerate all clickable attributes (href, src) with their spans for URL rewriting
-	 * @param callback function(tag, attr_name, span) -> bool (return false to stop iteration)
+	 * Enumerate the links URL rewriting replaces (see html_tag::clickable_attr), with their spans
+	 * @param callback function(clickable) -> bool (return false to stop iteration)
 	 */
-	auto for_each_clickable_attr(fu2::function<bool(const html_tag *, std::string_view, const attr_span &)> &&callback) const -> void
+	auto for_each_clickable_attr(fu2::function<bool(const html_clickable_attr &)> &&callback) const -> void
 	{
+		/*
+		 * A tag marked broken can still be a link that browsers follow,
+		 * such as <a/href=...>: its href is rewritten when its place in
+		 * the source is known (a span), as for any other link
+		 */
 		for (const auto &tag: all_tags) {
-			/*
-			 * A tag marked broken can still be a link that browsers follow,
-			 * such as <a/href=...>: its href is rewritten when its place in
-			 * the source is known (a span), as for any other link
-			 */
-			if (tag->flags & (FL_XML | FL_VIRTUAL)) {
-				continue;
-			}
-
-			// Check for tags with href or src attributes
-			if (tag->flags & FL_HREF || tag->id == Tag_A || tag->id == Tag_IMG || tag->id == Tag_LINK || tag->id == Tag_BASE) {
-				// Try href first, then xlink:href of an SVG link (as in find_href), then src
-				std::string_view attr_name = "href";
-				auto span = tag->get_attr_span(attr_name);
-
-				if (!span && tag->id == Tag_A && (tag->flags & FL_SVG)) {
-					attr_name = "xlink:href";
-					span = tag->get_attr_span(attr_name);
-				}
-
-				if (!span) {
-					attr_name = "src";
-					span = tag->get_attr_span(attr_name);
-				}
-
-				if (span && !callback(tag.get(), attr_name, span.value())) {
+			if (auto clickable = tag->clickable_attr()) {
+				if (!callback(clickable.value())) {
 					return;
 				}
 			}

@@ -87,14 +87,8 @@ int lua_task_get_html_urls(lua_State *L)
 
 			// tag field - get tag name
 			lua_pushstring(L, "tag");
-			if (cand.tag) {
-				const char *tag_name = rspamd_html_tag_by_id(cand.tag->id);
-				if (tag_name) {
-					lua_pushstring(L, tag_name);
-				}
-				else {
-					lua_pushstring(L, "unknown");
-				}
+			if (const char *tag_name = rspamd_html_tag_by_id(cand.tag_id)) {
+				lua_pushstring(L, tag_name);
 			}
 			else {
 				lua_pushstring(L, "unknown");

@@ -332,6 +332,16 @@ TEST_SUITE("html")
 			{"<a href=ht&#9;tps://www.paypal.com\"@evil.example.net/t>x</a>",
 			 {"https://www.paypal.com\"@evil.example.net/t"},
 			 std::nullopt},
+			/* Media go where their src says */
+			{"<video href=\"https://good.example.org/v\" src=\"https://evil.example.net/v.mp4\"></video>"
+			 "<audio src=\"https://evil.example.net/a.mp3\"></audio>",
+			 {"https://evil.example.net/v.mp4", "https://evil.example.net/a.mp3"},
+			 std::nullopt},
+			/* Frames and embedded objects go where their src says */
+			{"<iframe href=\"https://good.example.org/\" src=\"https://evil.example.net/f\"></iframe>"
+			 "<embed src=\"https://evil.example.net/e\">",
+			 {"https://evil.example.net/f", "https://evil.example.net/e"},
+			 std::nullopt},
 			/* A tag the input ends in */
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/e\">",
 			 {"https://good.example.org/f", "https://evil.example.net/e"},

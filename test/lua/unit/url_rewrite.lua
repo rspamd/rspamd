@@ -612,4 +612,33 @@ Content-Type: text/html
     end
     task:destroy()
   end)
+
+  test("The src of images and frames is rewritten, not their href", function()
+    -- Browsers load the src and ignore href there
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><img href="http://example.com/ih" src="http://example.com/is">' ..
+          '<iframe href="http://example.com/fh" src="http://example.com/fs"></iframe></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local listed = {}
+    for _, urls in pairs(task:get_html_urls() or {}) do
+      for _, u in ipairs(urls) do
+        listed[#listed + 1] = string.format("%s %s.%s", u.url, u.tag, u.attr)
+      end
+    end
+    assert_rspamd_table_eq({
+      actual = listed,
+      expect = { "http://example.com/is img.src", "http://example.com/fs iframe.src" },
+    })
+    task:destroy()
+  end)
 end)
