@@ -124,4 +124,68 @@ context("Zip archive listing", function()
       expect = { "invoice.pdf.exe" },
     })
   end)
+  test("two archives one after the other are both listed", function()
+    -- The offset in the last end record points to the directory of the first
+    -- archive: Python's zipfile and unzip read the directory right before the
+    -- record, other readers the offset. Both lists are kept.
+    local first = make_zip("readme.txt", "")
+    local second = make_zip("runme_.exe", "")
+    local files = files_of(first .. second)
+    table.sort(files)
+    assert_rspamd_table_eq({
+      actual = files,
+      expect = { "readme.txt", "runme_.exe" },
+    })
+  end)
+  local function cd_record(name)
+    return "PK\1\2" .. string.rep("\0", 24) ..
+        rspamd_util.pack("<I2", #name) .. string.rep("\0", 16) .. name
+  end
+
+  local function eocd(cd_size, cd_offset)
+    return "PK\5\6" .. string.rep("\0", 8) ..
+        rspamd_util.pack("<I4", cd_size) .. rspamd_util.pack("<I4", cd_offset) .. "\0\0"
+  end
+
+  local function sorted(t)
+    table.sort(t)
+    return t
+  end
+
+  test("zip64 records between the directory and the end record", function()
+    -- The 32-bit end record holds the real values; a first directory record of
+    -- 76 bytes (the size of the zip64 records) must not shift the directory
+    local name1 = string.rep("a", 30)
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local cd = cd_record(name1) .. cd_record("evil.exe")
+    local z64 = "PK\6\6" .. rspamd_util.pack("<I8", 44) .. string.rep("\0", 4 + 8) ..
+        rspamd_util.pack("<I8", 2) .. rspamd_util.pack("<I8", 2) ..
+        rspamd_util.pack("<I8", #cd) .. rspamd_util.pack("<I8", #lh)
+    local loc = "PK\6\7" .. string.rep("\0", 4) ..
+        rspamd_util.pack("<I8", #lh + #cd) .. rspamd_util.pack("<I4", 1)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. z64 .. loc .. eocd(#cd, #lh))),
+      expect = sorted({ name1, "evil.exe" }),
+    })
+  end)
+
+  test("a broken directory before the end record does not hide the declared one", function()
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local cd = cd_record("runme_.exe")
+    local junk = "PK\1\2" .. string.rep("x", #cd - 4)
+    assert_rspamd_table_eq({
+      actual = files_of(lh .. cd .. junk .. eocd(#cd, #lh)),
+      expect = { "runme_.exe" },
+    })
+  end)
+
+  test("a declared directory that runs into the other one lists no file twice", function()
+    local lh = "PK\3\4" .. string.rep("\0", 26)
+    local extra = cd_record("a.txt")
+    local cd = cd_record("b.exe") .. cd_record("c.exe")
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. extra .. cd .. eocd(#cd, #lh))),
+      expect = { "a.txt", "b.exe", "c.exe" },
+    })
+  end)
 end)
