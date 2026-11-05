@@ -1230,6 +1230,18 @@ rspamd_mime_part_attached_as(const struct rspamd_mime_part *part, const char *ex
 		   g_ascii_strncasecmp(fn->begin + fn_len - ext_len, ext, ext_len) == 0;
 }
 
+/*
+ * Whether clients show a part in the message, not as a file attached with
+ * "Content-Disposition: attachment" (an image that the HTML shows by its
+ * Content-ID is known only once the HTML is read)
+ */
+static gboolean
+rspamd_mime_part_shown_inline(const struct rspamd_mime_part *part)
+{
+	return !(part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT &&
+			 rspamd_message_get_header_from_hash(part->raw_headers, "Content-Disposition", FALSE));
+}
+
 /* Run lua_magic.detect_mime_part for a decoded normal part and maybe promote to message */
 static enum rspamd_mime_parse_error
 rspamd_mime_maybe_detect_type(struct rspamd_task *task,
@@ -1386,7 +1398,8 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 		 * and an attachment named as what was found (x.pdf holding a PDF)
 		 * are files of that type, as before. Formats that are text (XML, SVG,
 		 * CSV, iCalendar, vCard) have no binary form: control bytes added to
-		 * them do not make them a file.
+		 * them do not make them a file. A binary part still read as a file
+		 * is shown as text by clients, so the URLs in it are read.
 		 */
 		if ((rspamd_ftok_casecmp(&npart->ct->subtype, &plain_tok) == 0 ||
 			 rspamd_ftok_casecmp(&npart->ct->subtype, &html_tok) == 0) &&
@@ -1403,6 +1416,9 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 				npart->detected_type = rspamd_mempool_strdup(task->task_pool, "text");
 				npart->flags &= ~RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
 				npart->flags |= RSPAMD_MIME_PART_TEXT_CONTENT;
+			}
+			else if (rspamd_mime_part_shown_inline(npart)) {
+				npart->flags |= RSPAMD_MIME_PART_SHOWN_AS_TEXT;
 			}
 		}
 	}
@@ -1616,8 +1632,10 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 		ret = rspamd_mime_parse_normal_part(task, npart, st, sel, err);
 
 		if (ret == RSPAMD_MIME_PARSE_OK) {
-			if ((sel->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
-				rspamd_mime_part_data_is_binary(npart, 4096)) {
+			gboolean binary_start = (sel->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
+									rspamd_mime_part_data_is_binary(npart, 4096);
+
+			if (binary_start) {
 				/*
 				 * The text/plain default of a child does not hold for data
 				 * that starts as binary (an attachment without Content-Type).
@@ -1630,6 +1648,14 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 
 			/* Always try to detect type after normal parse */
 			ret = rspamd_mime_maybe_detect_type(task, npart, st, err);
+
+			if (binary_start && ret == RSPAMD_MIME_PARSE_OK &&
+				npart->part_type != RSPAMD_MIME_PART_MESSAGE &&
+				!rspamd_mime_part_attached_as(npart, npart->detected_ext) &&
+				rspamd_mime_part_shown_inline(npart)) {
+				/* Clients still show it as text, so its links are read */
+				npart->flags |= RSPAMD_MIME_PART_SHOWN_AS_TEXT;
+			}
 		}
 	}
 

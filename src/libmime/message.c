@@ -1880,6 +1880,71 @@ rspamd_mime_text_part_position_compare_func(const void *v1, const void *v2)
 	}
 }
 
+struct rspamd_message_content_url_cbd {
+	struct rspamd_task *task;
+	struct rspamd_mime_part *part;
+};
+
+/* Takes a URL found in such a part; FALSE once no more URLs are taken */
+static gboolean
+rspamd_message_content_add_url(struct rspamd_message_content_url_cbd *cbd, struct rspamd_url *url)
+{
+	struct rspamd_task *task = cbd->task;
+	unsigned int max_urls = task->cfg ? task->cfg->max_urls : 0;
+
+	if (max_urls > 0 && kh_size(MESSAGE_FIELD(task, urls)) >= max_urls) {
+		return FALSE;
+	}
+
+	if (url->protocol == PROTOCOL_MAILTO && url->userlen == 0) {
+		return TRUE;
+	}
+
+	url->flags |= RSPAMD_URL_FLAG_CONTENT;
+
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false, max_urls) &&
+		cbd->part->urls) {
+		g_ptr_array_add(cbd->part->urls, url);
+	}
+
+	return TRUE;
+}
+
+/*
+ * A URL in the query of one found in such a part: rspamd_url_find_in_query
+ * already looks into its own query, up to its nesting limit
+ */
+static gboolean
+rspamd_message_content_query_callback(struct rspamd_url *url, gsize start_offset,
+									  gsize end_offset, gpointer ud)
+{
+	url->flags |= RSPAMD_URL_FLAG_QUERY;
+
+	return rspamd_message_content_add_url(ud, url);
+}
+
+/* URLs in a part read as a file that clients show as text */
+static gboolean
+rspamd_message_content_url_callback(struct rspamd_url *url, gsize start_offset,
+									gsize end_offset, gpointer ud)
+{
+	struct rspamd_message_content_url_cbd *cbd = ud;
+	struct rspamd_task *task = cbd->task;
+
+	if (!rspamd_message_content_add_url(cbd, url)) {
+		/* No more URLs are taken: stop reading */
+		return FALSE;
+	}
+
+	if (url->querylen > 0) {
+		rspamd_url_find_in_query(task->task_pool, url, RSPAMD_URL_FIND_ALL,
+								 rspamd_message_content_query_callback, cbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
+	}
+
+	return TRUE;
+}
+
 void rspamd_message_process(struct rspamd_task *task)
 {
 	unsigned int i;
@@ -2228,6 +2293,29 @@ void rspamd_message_process(struct rspamd_task *task)
 	MESSAGE_FIELD(task, text_words_processed) = TRUE;
 
 	rspamd_images_link(task);
+
+	/*
+	 * Parts read as a file that clients show as text: their links, after
+	 * those of the text parts, which come first when there are too many.
+	 * Not an image that the HTML shows by its Content-ID
+	 */
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
+	{
+		if ((part->flags & RSPAMD_MIME_PART_SHOWN_AS_TEXT) && part->parsed_data.len > 0 &&
+			part->part_type != RSPAMD_MIME_PART_TEXT &&
+			part->part_type != RSPAMD_MIME_PART_MESSAGE &&
+			part->part_type != RSPAMD_MIME_PART_MULTIPART &&
+			!(part->part_type == RSPAMD_MIME_PART_IMAGE && part->specific.img &&
+			  part->specific.img->html_image)) {
+			struct rspamd_message_content_url_cbd cbd = {.task = task, .part = part};
+
+			rspamd_url_find_multiple(task->task_pool, part->parsed_data.begin,
+									 part->parsed_data.len, RSPAMD_URL_FIND_STRICT, NULL,
+									 rspamd_message_content_url_callback, &cbd,
+									 task->cfg ? task->cfg->lua_state : NULL);
+		}
+	}
+
 	rspamd_tokenize_meta_words(task);
 }
 

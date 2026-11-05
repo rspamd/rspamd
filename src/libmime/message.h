@@ -40,6 +40,8 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_COMPUTED = (1u << 7u),
 	/* Readable text/plain or text/html that lua_magic took for some format */
 	RSPAMD_MIME_PART_TEXT_CONTENT = (1u << 8u),
+	/* Binary data that clients show as text (text/plain or text/html, or a child without Content-Type) */
+	RSPAMD_MIME_PART_SHOWN_AS_TEXT = (1u << 9u),
 };
 
 enum rspamd_mime_part_type {

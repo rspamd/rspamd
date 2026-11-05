@@ -173,6 +173,111 @@ context("Text parts that hold a file signature", function()
     task:destroy()
   end)
 
+  local function has_url(task, host)
+    for _, u in ipairs(task:get_urls(true)) do
+      if u:get_host() == host then
+        return u
+      end
+    end
+  end
+
+  test("the links of binary data that clients show as text are read", function()
+    -- Control bytes make it binary, so it is read as a GIF, but clients show
+    -- the text and its link
+    local task = load('text/plain', 'GIF89a ' .. text .. string.rep('\1', 4096))
+    local u = has_url(task, 'signature.example.com')
+    assert_not_nil(u)
+    assert_true(u:get_flags().content)
+    task:destroy()
+  end)
+
+  test("links in the query of such links are read too", function()
+    local task = load('text/plain', 'GIF89a ' .. string.rep('\1', 600) ..
+        'https://www.google.com/url?q=https%3A%2F%2Fquery.example.com%2Flogin&sa=D\n')
+    assert_not_nil(has_url(task, 'query.example.com'))
+    task:destroy()
+  end)
+
+  test("an image the HTML shows by its Content-ID is not read for links", function()
+    -- Clients show it as an image, not as text
+    local res, task = rspamd_task.load_from_string(table.concat({
+      'Subject: t',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/related; boundary="RR"',
+      '',
+      '--RR',
+      'Content-Type: text/html',
+      '',
+      '<html><body><img src="cid:img3"></body></html>',
+      '--RR',
+      'Content-Type: text/plain',
+      'Content-ID: <img3>',
+      '',
+      'GIF89a ' .. text .. string.rep('\1', 4096),
+      '--RR--',
+      '',
+    }, '\n'), rspamd_config)
+    assert_true(res)
+    task:process_message()
+    assert_nil(has_url(task, 'signature.example.com'))
+    task:destroy()
+  end)
+
+  test("a Content-ID alone does not keep links from being read", function()
+    local task = load('text/plain\nContent-ID: <img4>', 'GIF89a ' .. text .. string.rep('\1', 4096))
+    assert_not_nil(has_url(task, 'signature.example.com'))
+    task:destroy()
+  end)
+
+  test("nested links in queries are read in linear time", function()
+    local link = 'https://end.example.com/x'
+    for n = 1, 24 do
+      link = string.format('https://h%d.example.com/r?u=%s', n, link)
+    end
+    local task = load('text/plain', 'GIF89a ' .. string.rep('\1', 600) .. link .. '\n')
+    assert_not_nil(has_url(task, 'h24.example.com'))
+    task:destroy()
+  end)
+
+  test("a child without Content-Type named as its type is a file", function()
+    local res, task = rspamd_task.load_from_string(table.concat({
+      'Subject: t',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/mixed; boundary="XX"',
+      '',
+      '--XX',
+      'Content-Disposition: inline; filename="image.gif"',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      'GIF89a' .. string.rep('\16', 300) .. text,
+      '--XX--',
+      '',
+    }, '\n'), rspamd_config)
+    assert_true(res)
+    task:process_message()
+    assert_nil(has_url(task, 'signature.example.com'))
+    task:destroy()
+  end)
+
+  test("the links of a binary child without Content-Type are read", function()
+    local res, task = rspamd_task.load_from_string(table.concat({
+      'Subject: t',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/mixed; boundary="XX"',
+      '',
+      '--XX',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      string.rep('\16', 300) .. text,
+      '--XX--',
+      '',
+    }, '\n'), rspamd_config)
+    assert_true(res)
+    task:process_message()
+    assert_not_nil(has_url(task, 'signature.example.com'))
+    task:destroy()
+  end)
+
   test("a calendar with control bytes in it stays text", function()
     -- Text formats have no binary form
     local task = load('text/plain', 'BEGIN:VCALENDAR\n' .. text .. string.rep('\1', 2000) ..
