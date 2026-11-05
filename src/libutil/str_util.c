@@ -1582,6 +1582,11 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 						out[i++] = hexdigests[(last_sp & 0xF)];
 
 						span = 0;
+						/*
+						 * The newline is read again: without the spaces it is
+						 * written as is, or it would overwrite the last digit
+						 */
+						seen_spaces = 0;
 					}
 					else {
 						/* Encode last space */
