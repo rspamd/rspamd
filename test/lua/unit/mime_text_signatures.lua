@@ -191,6 +191,56 @@ context("Text parts that hold a file signature", function()
     task:destroy()
   end)
 
+  test("binary text/html is read as HTML for its links", function()
+    -- Clients show it as HTML, which decodes entities in links and text
+    local task = load('text/html', 'GIF89a ' .. string.rep('\1', 600) ..
+        '<a href="https&#58;//entity.example.com/x">a</a>' ..
+        '<p>https&#x3a;&#x2f;&#x2f;text.example.com/y</p>\n')
+    assert_not_nil(has_url(task, 'entity.example.com'))
+    assert_not_nil(has_url(task, 'text.example.com'))
+    task:destroy()
+  end)
+
+  test("such data is read in the charset it declares", function()
+    -- UTF-16 hides all its ASCII from a read of the bytes
+    local function utf16le(s)
+      return (s:gsub('.', function(c)
+        return c .. '\0'
+      end))
+    end
+    local body = 'GIF89a' .. utf16le('<a href="https&#58;//u16.example.com/x">a</a> https://u16text.example.com/y')
+    local task = load('text/html; charset=utf-16le\nContent-Transfer-Encoding: base64',
+        tostring(require('rspamd_util').encode_base64(body, 76)))
+    assert_not_nil(has_url(task, 'u16.example.com'))
+    assert_not_nil(has_url(task, 'u16text.example.com'))
+    task:destroy()
+  end)
+
+  test("binary data under a label clients do not decode is read as it is", function()
+    -- Converted, ASCII under utf-32 would turn into junk
+    local task = load('text/html; charset=utf-32', 'GIF89a ' .. string.rep('\1', 600) ..
+        '<a href="https://u32.example.com/x">a</a>\n')
+    assert_not_nil(has_url(task, 'u32.example.com'))
+    task:destroy()
+  end)
+
+  test("links of binary text/html are counted as in an HTML part", function()
+    local html = '<a href="https://dup.example.com/">https://dup.example.com/</a>' ..
+        '<a href="https://amp.example.com/c?u=1&amp;id=2">x</a>\n'
+    local function count(task)
+      local n = 0
+      for _, u in ipairs(task:get_urls(true)) do
+        n = n + u:get_count()
+      end
+      return n
+    end
+    local plain = load('text/html', html)
+    local binary = load('text/html', 'GIF89a <!--' .. string.rep('\1', 600) .. '-->' .. html)
+    assert_equal(count(binary), count(plain))
+    plain:destroy()
+    binary:destroy()
+  end)
+
   test("links in the query of such links are read too", function()
     local task = load('text/plain', 'GIF89a ' .. string.rep('\1', 600) ..
         'https://www.google.com/url?q=https%3A%2F%2Fquery.example.com%2Flogin&sa=D\n')

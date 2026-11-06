@@ -1883,6 +1883,8 @@ rspamd_mime_text_part_position_compare_func(const void *v1, const void *v2)
 struct rspamd_message_content_url_cbd {
 	struct rspamd_task *task;
 	struct rspamd_mime_part *part;
+	/* Another read of the part found its URLs: add new ones only, uncounted */
+	gboolean only_new;
 };
 
 /* Takes a URL found in such a part; FALSE once no more URLs are taken */
@@ -1897,6 +1899,10 @@ rspamd_message_content_add_url(struct rspamd_message_content_url_cbd *cbd, struc
 	}
 
 	if (url->protocol == PROTOCOL_MAILTO && url->userlen == 0) {
+		return TRUE;
+	}
+
+	if (cbd->only_new && rspamd_url_set_has(MESSAGE_FIELD(task, urls), url)) {
 		return TRUE;
 	}
 
@@ -2307,10 +2313,69 @@ void rspamd_message_process(struct rspamd_task *task)
 			part->part_type != RSPAMD_MIME_PART_MULTIPART &&
 			!(part->part_type == RSPAMD_MIME_PART_IMAGE && part->specific.img &&
 			  part->specific.img->html_image)) {
-			struct rspamd_message_content_url_cbd cbd = {.task = task, .part = part};
+			struct rspamd_message_content_url_cbd cbd = {.task = task, .part = part, .only_new = FALSE};
+			const char *text = part->parsed_data.begin;
+			gsize text_len = part->parsed_data.len;
 
-			rspamd_url_find_multiple(task->task_pool, part->parsed_data.begin,
-									 part->parsed_data.len, RSPAMD_URL_FIND_STRICT, NULL,
+			if (part->ct && part->ct->charset.len > 0) {
+				/*
+				 * Clients decode UTF-16 as it declares, which hides all ASCII
+				 * from a read of the bytes. Other charsets keep ASCII, and the
+				 * bytes are read as they are: a label clients do not know
+				 * (utf-32, EBCDIC) turns the data into junk once converted
+				 */
+				const char *charset = rspamd_mime_detect_charset(&part->ct->charset, task->task_pool);
+
+				if (charset != NULL && g_ascii_strncasecmp(charset, "UTF-16", sizeof("UTF-16") - 1) == 0) {
+					GByteArray in = {.data = (uint8_t *) part->parsed_data.begin,
+									 .len = part->parsed_data.len};
+					GByteArray *utf = g_byte_array_new();
+
+					rspamd_mempool_add_destructor(task->task_pool,
+												  (rspamd_mempool_destruct_t) g_byte_array_unref, utf);
+
+					if (rspamd_mime_to_utf8_byte_array(&in, utf, task->task_pool, charset)) {
+						text = (const char *) utf->data;
+						text_len = utf->len;
+					}
+				}
+			}
+
+			if (part->ct && !(part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
+				rspamd_ftok_cstr_equal(&part->ct->type, "text", TRUE) &&
+				rspamd_ftok_cstr_equal(&part->ct->subtype, "html", TRUE)) {
+				/*
+				 * Clients show text/html as HTML whatever bytes it holds: it is
+				 * read as an HTML part, its links as browsers read them
+				 * (entities, base) and its text, with the same counts
+				 */
+				GByteArray html_in = {.data = (uint8_t *) text, .len = text_len};
+				rspamd_ftok_t html_text;
+				void *html = rspamd_html_process_part_full(task, &html_in, NULL,
+														   MESSAGE_FIELD(task, urls), part->urls,
+														   task->cfg ? task->cfg->enable_css_parser : true,
+														   &cur_url_order);
+
+				if (html && rspamd_html_get_parsed_content(html, &html_text) && html_text.len > 0) {
+					rspamd_url_find_multiple(task->task_pool, html_text.begin, html_text.len,
+											 RSPAMD_URL_FIND_STRICT, NULL,
+											 rspamd_message_content_url_callback, &cbd,
+											 task->cfg ? task->cfg->lua_state : NULL);
+				}
+
+				continue;
+			}
+
+			if (text != part->parsed_data.begin) {
+				rspamd_url_find_multiple(task->task_pool, text, text_len, RSPAMD_URL_FIND_STRICT, NULL,
+										 rspamd_message_content_url_callback, &cbd,
+										 task->cfg ? task->cfg->lua_state : NULL);
+				/* The bytes as they are, for what the charset does not show */
+				cbd.only_new = TRUE;
+			}
+
+			rspamd_url_find_multiple(task->task_pool, part->parsed_data.begin, part->parsed_data.len,
+									 RSPAMD_URL_FIND_STRICT, NULL,
 									 rspamd_message_content_url_callback, &cbd,
 									 task->cfg ? task->cfg->lua_state : NULL);
 		}
