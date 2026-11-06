@@ -309,6 +309,59 @@ context("Text parts that hold a file signature", function()
     assert_true(u:is_phished())
     assert_equal(count, u:get_count())
     task:destroy()
+    -- It pretends to be the name it is shown under, not the link it is in the query of
+    task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(string.rep('A\0', 200) ..
+            utf16le('<a href="https://wrap.example.com/r?u=https://evil.example.com/x">a</a>') ..
+            utf16be('<a href="https://evil.example.com/x">https://paypal.com/signin</a>'), 76)))
+    u = has_url(task, 'evil.example.com')
+    assert_not_nil(u)
+    assert_true(u:is_phished())
+    assert_equal('paypal.com', u:get_phished():get_host())
+    task:destroy()
+    -- Nor a name that does not parse (obscured), with or without a link it is in the query of
+    require('rspamd_test_helper').init_url_parser()
+    for _, first in ipairs({
+      '<a href="https://evil.example.com/x">http://1.2.3.4.5/</a>',
+      '<a href="https://wrap.example.com/r?u=https://evil.example.com/x">a</a>' ..
+          '<a href="https://evil.example.com/x">http://1.2.3.4.5/</a>',
+    }) do
+      task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+          tostring(b64(string.rep('A\0', 200) .. utf16le(first) ..
+              utf16be('<a href="https://evil.example.com/x">https://paypal.com/signin</a>'), 76)))
+      u = has_url(task, 'evil.example.com')
+      assert_not_nil(u)
+      assert_true(u:get_flags().obscured)
+      local phished = u:get_phished()
+      assert_not_nil(phished)
+      assert_equal('paypal.com', phished:get_host())
+      task:destroy()
+    end
+    -- Nor the link it is in the query of, when another read shows that link as text
+    local function part(body)
+      return table.concat({ '--XX', 'Content-Type: text/html; charset=utf-16',
+        'Content-Transfer-Encoding: base64', '', tostring(b64(body, 76)) }, '\n')
+    end
+    local res
+    res, task = rspamd_task.load_from_string(table.concat({
+      'Subject: t', 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="XX"', '',
+      part(string.rep('A\0', 200) .. utf16le('<p>hi</p>') ..
+          utf16be('<a href="https://evil.example.com/x">https://paypal.com/signin</a>')),
+      part(string.rep('A\0', 200) ..
+          utf16le('<a href="https://wrap.example.com/r?u=https://evil.example.com/x">a</a>' ..
+              '<a href="https://evil.example.com/x">http://1.2.3.4.5/</a>') ..
+          utf16be('<a href="https://z.example.net/">https://wrap.example.com/r?u=https://evil.example.com/x</a>')),
+      '--XX--', '',
+    }, '\n'), rspamd_config)
+    assert_true(res)
+    task:process_message()
+    u = has_url(task, 'evil.example.com')
+    assert_not_nil(u)
+    assert_not_nil(u:get_phished())
+    assert_equal('paypal.com', u:get_phished():get_host())
+    -- A link is still checked when another read only shows it as text
+    assert_false(has_url(task, 'wrap.example.com'):is_html_displayed())
+    task:destroy()
     -- The other order of text is junk, which is no bad unicode clients show
     task = load('text/plain; charset=utf-16\nContent-Transfer-Encoding: base64',
         tostring(b64(utf16le('Hello ') .. '\0\173\172\185' .. utf16le(' team, see you soon.\n'), 76)))

@@ -1961,7 +1961,8 @@ rspamd_message_other_read_url(struct rspamd_task *task, struct rspamd_mime_part 
 {
 	khash_t(rspamd_url_hash) *set = MESSAGE_FIELD(task, urls);
 	khiter_t k = kh_get(rspamd_url_hash, set, url);
-	struct rspamd_url *existing;
+	struct rspamd_url *existing, *shown, *other_shown;
+	gboolean shown_as_other;
 
 	if (k == kh_end(set)) {
 		if (rspamd_url_set_add_or_increase(set, url, false, task->cfg ? task->cfg->max_urls : 0) &&
@@ -1978,16 +1979,38 @@ rspamd_message_other_read_url(struct rspamd_task *task, struct rspamd_mime_part 
 		return;
 	}
 
-	existing->flags |= url->flags;
+	/*
+	 * A linked URL is the name a link is shown under when it is displayed
+	 * (phished), else the link a URL is in the query of, or none (a phished
+	 * link shown under an obscured name)
+	 */
+	shown = existing->ext ? existing->ext->linked_url : NULL;
+	other_shown = url->ext ? url->ext->linked_url : NULL;
 
-	if ((url->flags & RSPAMD_URL_FLAG_PHISHED) && url->ext && url->ext->linked_url &&
-		(existing->ext == NULL || existing->ext->linked_url == NULL)) {
+	if (other_shown && !(other_shown->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED)) {
+		other_shown = NULL;
+	}
+
+	shown_as_other = (existing->flags & RSPAMD_URL_FLAG_REDIRECTED) ||
+					 ((existing->flags & RSPAMD_URL_FLAG_PHISHED) && shown &&
+					  (shown->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED));
+	/*
+	 * A link that this read only shows as text is not shown so in the task:
+	 * one read gives such text a URL of its own
+	 */
+	existing->flags |= url->flags & ~RSPAMD_URL_FLAG_HTML_DISPLAYED;
+
+	if ((url->flags & RSPAMD_URL_FLAG_PHISHED) && !shown_as_other && (other_shown || shown)) {
+		/*
+		 * Phished as this read shows it, as a first read does: the link it is
+		 * in the query of (if any) gives way to the name it is shown under
+		 */
 		if (existing->ext == NULL) {
 			existing->ext = rspamd_mempool_alloc0_type(task->task_pool, struct rspamd_url_ext);
 		}
 
-		existing->ext->linked_url = url->ext->linked_url;
-		existing->ext->visible_part = url->ext->visible_part;
+		existing->ext->linked_url = other_shown;
+		existing->ext->visible_part = url->ext ? url->ext->visible_part : NULL;
 	}
 }
 
