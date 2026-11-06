@@ -364,6 +364,8 @@ rspamd_archive_zip_cd_set(const unsigned char *start, uint64_t limit,
  * take the values of the zip64 record, whatever the 32-bit fields hold; when
  * these fields are not maxed out, they are the next choice (base readers use
  * them), and when they are, readers do not look any further back either.
+ * Without a zip64 record, a maxed offset alone (Info-ZIP `zip -fz` to a pipe)
+ * still leaves the directory right before the record, which readers take.
  * Fills up to two sets of directories, in the order to read them.
  */
 static enum rspamd_zip_eocd_check
@@ -433,7 +435,7 @@ rspamd_archive_zip_check_eocd(const unsigned char *start,
 		}
 	}
 
-	if (!maxed &&
+	if ((!maxed || (z64_pos == G_MAXUINT64 && cd_size32 != G_MAXUINT32)) &&
 		rspamd_archive_zip_cd_set(start, limit, cd_offset32, cd_size32, &sets[*nsets])) {
 		if (*nsets == 0 || sets[1].offset != sets[0].offset ||
 			sets[1].size != sets[0].size) {

@@ -397,4 +397,23 @@ context("Zip archive listing", function()
       expect = { "invoice.exe", "readme.txt" },
     })
   end)
+
+  local function stored_lh(name, data, flags, csize)
+    return "PK\3\4" .. "\0\0" .. rspamd_util.pack("<I2", flags or 0) .. string.rep("\0", 10) ..
+        rspamd_util.pack("<I4", csize or #data) .. rspamd_util.pack("<I4", csize or #data) ..
+        rspamd_util.pack("<I2", #name) .. "\0\0" .. name
+  end
+
+  test("a maxed directory offset without zip64 records keeps the archive", function()
+    -- Info-ZIP `zip -fz` to a pipe: readers take the directory right before
+    -- the record
+    local data = "MZ"
+    local lh = stored_lh("payload.exe", data) .. data
+    local cd = cd_rec("payload.exe", 0, "")
+    assert_rspamd_table_eq({
+      actual = files_of(lh .. cd .. eocd(#cd, 0xffffffff)),
+      expect = { "payload.exe" },
+    })
+  end)
+
 end)
