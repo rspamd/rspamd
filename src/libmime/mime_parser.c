@@ -836,8 +836,20 @@ rspamd_mime_part_get_cd(struct rspamd_task *task, struct rspamd_mime_part *part)
 			}
 
 			if (cd) {
-				/* We still need to check filename */
-				if (cd->filename.len == 0) {
+				/*
+				 * We still need to check filename: also when it is no value
+				 * readers take (pieces without a first one...), for which they
+				 * show the name of Content-Type
+				 */
+				struct rspamd_content_type_param *cd_fname = NULL;
+
+				if (cd->attrs) {
+					RSPAMD_FTOK_ASSIGN(&srch, "filename");
+					cd_fname = g_hash_table_lookup(cd->attrs, &srch);
+				}
+
+				if (cd->filename.len == 0 ||
+					(cd_fname && (cd_fname->flags & RSPAMD_CONTENT_PARAM_NO_VALUE))) {
 					if (part->ct && part->ct->attrs) {
 						RSPAMD_FTOK_ASSIGN(&srch, "name");
 						found = g_hash_table_lookup(part->ct->attrs, &srch);
@@ -847,7 +859,8 @@ rspamd_mime_part_get_cd(struct rspamd_task *task, struct rspamd_mime_part *part)
 							found = g_hash_table_lookup(part->ct->attrs, &srch);
 						}
 
-						if (found) {
+						if (found && (cd->filename.len == 0 ||
+									  !(found->flags & RSPAMD_CONTENT_PARAM_NO_VALUE))) {
 							cd->type = RSPAMD_CT_ATTACHMENT;
 							memcpy(&cd->filename, &found->value,
 								   sizeof(cd->filename));

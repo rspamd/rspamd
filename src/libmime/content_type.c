@@ -49,104 +49,143 @@ rspamd_rfc2231_value_data(const char *start, const char *end)
 	return start;
 }
 
+/* The charset label and the data of an RFC 2231 value: charset'language'data, charset'data or data */
+static void
+rspamd_rfc2231_split(const char *start, const char *end, rspamd_ftok_t *label, rspamd_ftok_t *data)
+{
+	label->begin = start;
+	label->len = 0;
+	data->begin = rspamd_rfc2231_value_data(start, end);
+	data->len = end - data->begin;
+
+	if (data->begin != start) {
+		label->len = (const char *) memchr(start, '\'', end - start) - start;
+	}
+}
+
+/* Percent decoded into a copy */
+static rspamd_ftok_t
+rspamd_rfc2231_unescape(rspamd_mempool_t *pool, const char *start, gsize len)
+{
+	rspamd_ftok_t res;
+	char *buf = rspamd_mempool_alloc(pool, len + 1);
+
+	memcpy(buf, start, len);
+	res.begin = buf;
+	res.len = rspamd_url_decode(buf, buf, len);
+
+	return res;
+}
+
+/* ISO-2022-*, HZ and UTF-7 write their characters in ASCII */
+static gboolean
+rspamd_rfc2231_seven_bit_charset(const rspamd_ftok_t *label)
+{
+	return (label->len >= 8 && g_ascii_strncasecmp(label->begin, "ISO-2022", 8) == 0) ||
+		   (label->len >= 5 && g_ascii_strncasecmp(label->begin, "HZ-GB", 5) == 0) ||
+		   (label->len >= 5 && g_ascii_strncasecmp(label->begin, "UTF-7", 5) == 0);
+}
+
 /*
- * Decodes an RFC 2231 value, charset'language'data or data, percent encoded,
- * into the value of `param`, which is not changed when it cannot be. A value
- * that readers do not take (Thunderbird) is flagged BROKEN: bytes that are
- * not UTF-8 (ASCII included) under a charset that is not known or is UTF-8
+ * The bytes of an RFC 2231 value as readers take them (Thunderbird): ASCII or
+ * UTF-8, or with no charset, as they are, unless the charset writes its
+ * characters in ASCII; others in the charset of the label, which must be
+ * known and convert them, else they are no value (FALSE). x-user-defined,
+ * which only WHATWG knows, is served by an internal table
  */
 static gboolean
-rspamd_rfc2231_decode(rspamd_mempool_t *pool,
-					  struct rspamd_content_type_param *param,
-					  char *value_start, char *value_end)
+rspamd_rfc2231_convert(rspamd_mempool_t *pool, const rspamd_ftok_t *bytes,
+					   const rspamd_ftok_t *label, rspamd_ftok_t *out)
 {
-	char *quote_pos;
+	const char *charset;
+	char *converted;
+	gsize converted_len = 0;
+	GError *err = NULL;
+	gboolean utf8 = rspamd_fast_utf8_validate((const unsigned char *) bytes->begin, bytes->len) == 0;
 
-	quote_pos = memchr(value_start, '\'', value_end - value_start);
+	if (label->len == 0 || (utf8 && !rspamd_rfc2231_seven_bit_charset(label))) {
+		*out = *bytes;
 
-	if (quote_pos == NULL) {
-		/* Plain percent encoding */
-		gsize r = rspamd_url_decode(value_start, value_start,
-									value_end - value_start);
-		param->value.begin = value_start;
-		param->value.len = r;
+		return TRUE;
+	}
+
+	if (label->len == sizeof("x-user-defined") - 1 &&
+		g_ascii_strncasecmp(label->begin, "x-user-defined", label->len) == 0) {
+		charset = "x-user-defined";
 	}
 	else {
-		/*
-		 * We can have encoding'language'data, or
-		 * encoding'data (in theory).
-		 * Try to handle both...
-		 */
-		const char *charset = NULL, *label_charset;
-		const char *converted;
+		charset = rspamd_mime_detect_charset(label, pool);
+	}
+
+	/* Not UTF-8 under UTF-8 is not valid there */
+	if (charset == NULL || g_ascii_strcasecmp(charset, "UTF-8") == 0) {
+		if (utf8) {
+			*out = *bytes;
+		}
+
+		return utf8;
+	}
+
+	converted = rspamd_mime_text_to_utf8(pool, (char *) bytes->begin, bytes->len,
+										 charset, &converted_len, &err);
+
+	if (converted == NULL) {
+		msg_debug_pool("cannot convert parameter from charset %s: %e", charset, err);
+
+		if (err) {
+			g_error_free(err);
+		}
+	}
+	else if (rspamd_substring_search(converted, converted_len, "\xEF\xBF\xBD", 3) != -1) {
+		/* Bytes that are no characters there, which the conversion replaced */
+		converted = NULL;
+	}
+
+	if (converted == NULL) {
+		if (utf8) {
+			/* A 7-bit charset that was wrong: as they are */
+			*out = *bytes;
+
+			return TRUE;
+		}
+
+		return FALSE;
+	}
+
+	out->begin = converted;
+	out->len = converted_len;
+
+	return TRUE;
+}
+
+/* The same, for a value no reader takes: converted as it can be, to keep what it holds */
+static rspamd_ftok_t
+rspamd_rfc2231_convert_any(rspamd_mempool_t *pool, const rspamd_ftok_t *bytes,
+						   const rspamd_ftok_t *label)
+{
+	rspamd_ftok_t out;
+	const char *charset;
+
+	if (rspamd_rfc2231_convert(pool, bytes, label, &out)) {
+		return out;
+	}
+
+	charset = rspamd_mime_charset_find_by_content(bytes->begin, bytes->len, TRUE);
+
+	if (charset != NULL) {
 		gsize converted_len = 0;
-		gboolean utf8;
-		rspamd_ftok_t ctok;
+		char *converted = rspamd_mime_text_to_utf8(pool, (char *) bytes->begin, bytes->len,
+												   charset, &converted_len, NULL);
 
-		ctok.begin = value_start;
-		ctok.len = quote_pos - value_start;
+		if (converted != NULL) {
+			out.begin = converted;
+			out.len = converted_len;
 
-		if (ctok.len > 0) {
-			charset = rspamd_mime_detect_charset(&ctok, pool);
-		}
-
-		label_charset = charset;
-
-		/* Now, we can check for either next quote sign or, eh, ignore that */
-		value_start = quote_pos + 1;
-
-		quote_pos = memchr(value_start, '\'', value_end - value_start);
-
-		if (quote_pos) {
-			/* Ignore language */
-			value_start = quote_pos + 1;
-		}
-
-		/* Perform percent decoding */
-		gsize r = rspamd_url_decode(value_start, value_start,
-									value_end - value_start);
-		GError *err = NULL;
-
-		utf8 = rspamd_fast_utf8_validate((const unsigned char *) value_start, r) == 0;
-
-		if (charset == NULL) {
-			/* Try heuristic */
-			charset = rspamd_mime_charset_find_by_content(value_start, r, TRUE);
-		}
-
-		if (charset == NULL) {
-			msg_warn_pool("cannot convert parameter from charset %T", &ctok);
-
-			return FALSE;
-		}
-
-		converted = rspamd_mime_text_to_utf8(pool,
-											 value_start, r,
-											 charset, &converted_len, &err);
-
-		if (converted == NULL) {
-			msg_warn_pool("cannot convert parameter from charset %s: %e",
-						  charset, err);
-
-			if (err) {
-				g_error_free(err);
-			}
-
-			return FALSE;
-		}
-
-		param->value.begin = converted;
-		param->value.len = converted_len;
-
-		if (!utf8 && ctok.len > 0 &&
-			(label_charset == NULL || g_ascii_strcasecmp(label_charset, "UTF-8") == 0)) {
-			param->flags |= RSPAMD_CONTENT_PARAM_BROKEN;
+			return out;
 		}
 	}
 
-	param->flags |= RSPAMD_CONTENT_PARAM_RFC2231;
-
-	return TRUE;
+	return *bytes;
 }
 
 /* Whether each '%' is followed by two hex digits, which readers require of the data of name*= */
@@ -218,17 +257,16 @@ rspamd_param_maybe_rfc2231_process(rspamd_mempool_t *pool,
 	 */
 
 	if (star_pos == name_end - 1) {
-		/* First */
-		gboolean escapes_valid = rspamd_rfc2231_escapes_valid(
-			rspamd_rfc2231_value_data(value_start, value_end), value_end);
+		/* First: decoded with the other values of the name, see rspamd_content_param_resolve */
+		param->flags |= RSPAMD_CONTENT_PARAM_RFC2231;
+		param->name.begin = name_start;
+		param->name.len = name_end - name_start - 1;
+		param->value.begin = value_start;
+		param->value.len = value_end - value_start;
 
-		if (rspamd_rfc2231_decode(pool, param, value_start, value_end)) {
-			param->name.begin = name_start;
-			param->name.len = name_end - name_start - 1;
-
-			if (!escapes_valid) {
-				param->flags |= RSPAMD_CONTENT_PARAM_BAD_ESCAPE;
-			}
+		if (!rspamd_rfc2231_escapes_valid(rspamd_rfc2231_value_data(value_start, value_end),
+										  value_end)) {
+			param->flags |= RSPAMD_CONTENT_PARAM_BAD_ESCAPE;
 		}
 	}
 	else if (*(name_end - 1) == '*') {
@@ -286,123 +324,160 @@ rspamd_cmp_pieces(struct rspamd_content_type_param *p1, struct rspamd_content_ty
 	return 0;
 }
 
-/* Joins the pieces in [first, ...) in their order, flagged and decoded as name*0* says */
-static void
+/*
+ * Joins the pieces in their order, each name*N*= percent decoded on its own;
+ * `first` is the data of piece 0 when it is not the value of pieces[0]
+ */
+static rspamd_ftok_t
 rspamd_content_param_join(rspamd_mempool_t *pool, struct rspamd_content_type_param **pieces,
-						  unsigned int npieces, struct rspamd_content_type_param *res)
+						  unsigned int npieces, const rspamd_ftok_t *first, gboolean first_ext)
 {
+	rspamd_ftok_t res;
 	gsize tlen = 0;
 	char *ndata, *pos;
 	unsigned int n;
-	gboolean ext = (pieces[0]->flags & RSPAMD_CONTENT_PARAM_RFC2231) != 0;
 
 	for (n = 0; n < npieces; n++) {
-		tlen += pieces[n]->value.len;
+		tlen += (n == 0 && first) ? first->len : pieces[n]->value.len;
 	}
 
 	ndata = rspamd_mempool_alloc(pool, tlen + 1);
 	pos = ndata;
 
 	for (n = 0; n < npieces; n++) {
-		struct rspamd_content_type_param *cur = pieces[n];
+		const char *src = pieces[n]->value.begin;
+		gsize len = pieces[n]->value.len;
+		gboolean ext = (pieces[n]->flags & RSPAMD_CONTENT_PARAM_RFC2231) != 0;
 
-		memcpy(pos, cur->value.begin, cur->value.len);
+		if (n == 0 && first) {
+			src = first->begin;
+			len = first->len;
+			ext = first_ext;
+		}
 
-		if (n > 0 && !ext && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
-			/* Percent encoded, without a charset */
-			pos += rspamd_url_decode(pos, pos, cur->value.len);
-		}
-		else {
-			pos += cur->value.len;
-		}
+		memcpy(pos, src, len);
+		pos += ext ? rspamd_url_decode(pos, pos, len) : len;
 	}
 
-	*res = *pieces[0];
-	res->flags &= ~RSPAMD_CONTENT_PARAM_BROKEN;
-	res->value.begin = ndata;
-	res->value.len = pos - ndata;
+	res.begin = ndata;
+	res.len = pos - ndata;
 
-	if (ext && !rspamd_rfc2231_decode(pool, res, ndata, pos)) {
-		/* As they are */
-		res->value.begin = ndata;
-		res->value.len = pos - ndata;
-		res->flags |= RSPAMD_CONTENT_PARAM_BROKEN;
-	}
+	return res;
 }
 
 /*
- * The value of a parameter whose first one is a piece (name*0, name*1...):
- * other ones of that name may be name*= (RFC 2231) or name= (plain). As in
- * Thunderbird, name*= is taken, else the pieces joined from 0 up to a missing
- * one, else the plain one: a plain value is never a piece (name*1=x;
- * name="a.exe" is a.exe, not a.exex). Pieces are taken in their order up to a
- * repeated one or a quoted one with percent encoding, which readers refuse.
- * The name*= taken is the first with data and good escapes; it or the pieces
- * are no value when empty or when they do not decode (BROKEN, see
- * rspamd_rfc2231_decode). With no value at all, the pieces are joined as they
- * are, to keep what they hold. Also used when the first one is a name*= that
- * is no value.
+ * The value of a name whose first value is name*= (RFC 2231) or a piece
+ * (name*0, name*1*...), as Thunderbird takes it: name*= if it is valid, else
+ * the pieces joined from 0 up to a missing one, else the first plain value. A plain value is never a
+ * piece (name*1=x; name="a.exe" is a.exe, not a.exex). In the order of the
+ * header:
+ * - the name*= taken is the first with data and good escapes, and the last
+ *   name*= names its charset; a later name*= with data is piece 0;
+ * - pieces are taken up to a repeated one or a quoted one with percent
+ *   encoding; name*0*= names the charset of the pieces;
+ * - bytes are valid when they are ASCII or UTF-8, or convert from the
+ *   charset named (rspamd_rfc2231_convert); joined into nothing, the pieces
+ *   are no value.
+ * With no value readers take, what the values hold is kept, flagged BROKEN
+ * and NO_VALUE.
  */
 static struct rspamd_content_type_param *
 rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_param *head)
 {
-	struct rspamd_content_type_param *by_num[max_rfc2231_pieces], **all;
-	struct rspamd_content_type_param *ext = NULL, *plain = NULL, *cur, *sorted, joined;
+	struct rspamd_content_type_param *by_num[max_rfc2231_pieces];
+	struct rspamd_content_type_param *plain = NULL, *ext = NULL, *cur, *sorted, **all;
+	rspamd_ftok_t ext_data = {0, NULL}, label_b = {0, NULL}, label_cd = {0, NULL},
+				  first = {0, NULL}, label, data, bytes, out;
+	gboolean accept = TRUE, have_first = FALSE;
 	unsigned int n, nall = 0;
-	gboolean accept = TRUE, seen_ext = FALSE;
 
 	memset(by_num, 0, sizeof(by_num));
 
 	DL_FOREACH(head, cur)
 	{
-		if (!(cur->flags & RSPAMD_CONTENT_PARAM_PIECEWISE)) {
-			if (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231) {
-				/* The first one with data and good escapes, even if it does not decode */
-				if (!seen_ext && cur->value.len > 0 && !(cur->flags & RSPAMD_CONTENT_PARAM_BAD_ESCAPE)) {
-					seen_ext = TRUE;
-
-					if (!(cur->flags & RSPAMD_CONTENT_PARAM_BROKEN)) {
-						ext = cur;
-					}
-				}
-			}
-			else if (plain == NULL) {
+		if (!(cur->flags & (RSPAMD_CONTENT_PARAM_RFC2231 | RSPAMD_CONTENT_PARAM_PIECEWISE))) {
+			if (plain == NULL) {
 				plain = cur;
 			}
 
 			continue;
 		}
 
-		if (cur->rfc2231_id >= max_rfc2231_pieces) {
+		if (!(cur->flags & RSPAMD_CONTENT_PARAM_PIECEWISE)) {
+			/* name*= */
+			rspamd_rfc2231_split(cur->value.begin, cur->value.begin + cur->value.len, &label, &data);
+			label_b = label;
+
+			if (data.len == 0) {
+				continue;
+			}
+
+			if (ext == NULL) {
+				if (!(cur->flags & RSPAMD_CONTENT_PARAM_BAD_ESCAPE)) {
+					ext = cur;
+					ext_data = data;
+				}
+			}
+			else if (by_num[0] != NULL || (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED)) {
+				accept = FALSE;
+			}
+			else {
+				by_num[0] = cur;
+				first = data;
+				have_first = TRUE;
+			}
+
+			continue;
+		}
+
+		nall++;
+		n = cur->rfc2231_id;
+
+		if (!accept) {
+			continue;
+		}
+
+		if (n == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
+			/* name*0*=charset'language'data: names the charset, even if it is no piece */
+			rspamd_rfc2231_split(cur->value.begin, cur->value.begin + cur->value.len, &label, &data);
+			label_cd = label;
+
+			if (data.len == 0) {
+				continue;
+			}
+		}
+
+		if (n >= max_rfc2231_pieces || by_num[n] != NULL ||
+			((cur->flags & RSPAMD_CONTENT_PARAM_RFC2231) && (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED))) {
 			accept = FALSE;
 			continue;
 		}
 
-		if (accept) {
-			if (by_num[cur->rfc2231_id] != NULL ||
-				((cur->flags & RSPAMD_CONTENT_PARAM_RFC2231) &&
-				 (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED))) {
-				accept = FALSE;
-			}
-			else {
-				by_num[cur->rfc2231_id] = cur;
-			}
+		if (n == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
+			first = data;
+			have_first = TRUE;
 		}
 
-		nall++;
+		by_num[n] = cur;
 	}
 
 	if (ext != NULL) {
-		return ext;
+		bytes = rspamd_rfc2231_unescape(pool, ext_data.begin, ext_data.len);
+
+		if (rspamd_rfc2231_convert(pool, &bytes, &label_b, &out)) {
+			ext->value = out;
+
+			return ext;
+		}
 	}
 
 	if (by_num[0] != NULL) {
 		for (n = 0; n < max_rfc2231_pieces && by_num[n] != NULL; n++) {}
 
-		rspamd_content_param_join(pool, by_num, n, &joined);
+		bytes = rspamd_content_param_join(pool, by_num, n, have_first ? &first : NULL, TRUE);
 
-		if (joined.value.len > 0 && !(joined.flags & RSPAMD_CONTENT_PARAM_BROKEN)) {
-			*by_num[0] = joined;
+		if (bytes.len > 0 && rspamd_rfc2231_convert(pool, &bytes, &label_cd, &out)) {
+			by_num[0]->value = out;
 
 			return by_num[0];
 		}
@@ -412,16 +487,27 @@ rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_
 		return plain;
 	}
 
+	/* No value readers take: what the values hold */
+	if (ext != NULL) {
+		bytes = rspamd_rfc2231_unescape(pool, ext_data.begin, ext_data.len);
+		ext->value = rspamd_rfc2231_convert_any(pool, &bytes, &label_b);
+		ext->flags |= RSPAMD_CONTENT_PARAM_BROKEN | RSPAMD_CONTENT_PARAM_NO_VALUE;
+
+		return ext;
+	}
+
 	if (nall == 0) {
-		/* A name*= that readers do not take, alone: as it is */
+		head->flags |= RSPAMD_CONTENT_PARAM_BROKEN | RSPAMD_CONTENT_PARAM_NO_VALUE;
+
 		return head;
 	}
 
-	/* No value readers take: all the pieces in the order of their numbers */
+	/* All the pieces in the order of their numbers */
 	all = rspamd_mempool_alloc(pool, nall * sizeof(*all));
 	sorted = head;
 	DL_SORT(sorted, rspamd_cmp_pieces);
 	n = 0;
+	label_cd.len = 0;
 
 	DL_FOREACH(sorted, cur)
 	{
@@ -430,9 +516,17 @@ rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_
 		}
 	}
 
-	rspamd_content_param_join(pool, all, n, &joined);
-	joined.flags |= RSPAMD_CONTENT_PARAM_BROKEN;
-	*all[0] = joined;
+	if (all[0]->flags & RSPAMD_CONTENT_PARAM_RFC2231) {
+		rspamd_rfc2231_split(all[0]->value.begin, all[0]->value.begin + all[0]->value.len,
+							 &label_cd, &first);
+		bytes = rspamd_content_param_join(pool, all, n, &first, TRUE);
+	}
+	else {
+		bytes = rspamd_content_param_join(pool, all, n, NULL, FALSE);
+	}
+
+	all[0]->value = rspamd_rfc2231_convert_any(pool, &bytes, &label_cd);
+	all[0]->flags |= RSPAMD_CONTENT_PARAM_BROKEN | RSPAMD_CONTENT_PARAM_NO_VALUE;
 
 	return all[0];
 }
@@ -456,10 +550,14 @@ rspamd_postprocess_ct_attributes(rspamd_mempool_t *pool,
 	while (g_hash_table_iter_next(&it, &k, &v)) {
 		param = (struct rspamd_content_type_param *) v;
 
-		if ((param->flags & RSPAMD_CONTENT_PARAM_PIECEWISE) ||
-			((param->flags & RSPAMD_CONTENT_PARAM_RFC2231) &&
-			 (param->value.len == 0 ||
-			  (param->flags & (RSPAMD_CONTENT_PARAM_BROKEN | RSPAMD_CONTENT_PARAM_BAD_ESCAPE))))) {
+		/*
+		 * A name whose first value is an RFC 2231 one. When the first one is
+		 * plain, it is the value, as on Python and as before: Thunderbird
+		 * would take name*= or pieces after it, but its parser and rspamd's do
+		 * not read the same parameters (comments, quoted names, quotes past
+		 * the value), so these could change a name every reader shows
+		 */
+		if (param->flags & (RSPAMD_CONTENT_PARAM_PIECEWISE | RSPAMD_CONTENT_PARAM_RFC2231)) {
 			struct rspamd_content_type_param *chosen = rspamd_content_param_resolve(pool, param);
 
 			if (chosen != param) {
@@ -551,15 +649,16 @@ rspamd_content_disposition_postprocess(rspamd_mempool_t *pool,
 }
 
 /*
- * Places taken past the cap: of each name, its pieces, then name*, then
+ * Places taken past the cap: of each name, its pieces, then two name*= (a
+ * second one is piece 0 for readers, see rspamd_content_param_resolve), then
  * name, then whether a repeated piece has ended its pieces
  */
 #define rspamd_past_cap_ext max_rfc2231_pieces
-#define rspamd_past_cap_plain (max_rfc2231_pieces + 1)
-#define rspamd_past_cap_stopped (max_rfc2231_pieces + 2)
+#define rspamd_past_cap_plain (max_rfc2231_pieces + 2)
+#define rspamd_past_cap_stopped (max_rfc2231_pieces + 3)
 
 struct rspamd_content_params_past_cap {
-	uint8_t taken[4][(max_rfc2231_pieces + 3 + 7) / 8];
+	uint8_t taken[4][(max_rfc2231_pieces + 4 + 7) / 8];
 };
 
 /*
@@ -567,15 +666,13 @@ struct rspamd_content_params_past_cap {
  * reader that follows the RFC takes them from anywhere in the header, so junk
  * parameters in front must not hide them. A plain name is taken once, and so
  * is each RFC 2231 form of it: name*, and each piece name*N or name*N* that
- * readers join. Each of these places is taken by the first parameter that
- * comes for it, so copies or junk of one cannot crowd out another one, and
- * the work is still bounded whatever the names look like. As readers do, a
- * repeated piece ends the pieces, and a name*= with no data or a bad escape
- * is no value. Other
- * names with a star are no RFC 2231 forms, which readers do not take for
- * these parameters. A plain name is not taken after a value that is no
- * piece, which comes first and is the value (see
- * rspamd_content_param_resolve).
+ * readers join, and a second name*=. Each of these places is taken by the
+ * first parameter that comes for it, so copies or junk of one cannot crowd
+ * out another one, and the work is still bounded whatever the names look
+ * like. As readers do, a repeated piece ends the pieces, and a name*= with no
+ * data or a bad escape is no value. Other names with a star are no RFC 2231 forms, which readers
+ * do not take for these parameters. A plain name is not taken after a plain
+ * one, which is the one taken (see rspamd_content_param_resolve).
  */
 static gboolean
 rspamd_content_param_take_past_cap(rspamd_mempool_t *pool, GHashTable *attrs,
@@ -625,7 +722,9 @@ rspamd_content_param_take_past_cap(rspamd_mempool_t *pool, GHashTable *attrs,
 			if (place == rspamd_past_cap_plain && attrs != NULL) {
 				struct rspamd_content_type_param *found = g_hash_table_lookup(attrs, &srch);
 
-				if (found != NULL && !(found->flags & RSPAMD_CONTENT_PARAM_PIECEWISE)) {
+				/* The first plain value is the one taken */
+				if (found != NULL &&
+					!(found->flags & (RSPAMD_CONTENT_PARAM_PIECEWISE | RSPAMD_CONTENT_PARAM_RFC2231))) {
 					return FALSE;
 				}
 			}
@@ -639,6 +738,10 @@ rspamd_content_param_take_past_cap(rspamd_mempool_t *pool, GHashTable *attrs,
 			if (place < max_rfc2231_pieces &&
 				(taken[rspamd_past_cap_stopped / 8] & (1u << (rspamd_past_cap_stopped % 8)))) {
 				return FALSE;
+			}
+
+			if (place == rspamd_past_cap_ext && (taken[place / 8] & (1u << (place % 8)))) {
+				place++;
 			}
 
 			if (taken[place / 8] & (1u << (place % 8))) {

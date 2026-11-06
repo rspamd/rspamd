@@ -317,9 +317,6 @@ TEST_SUITE("content_type")
 													"ct-test", 0);
 		const std::pair<std::string, std::string> cases[] = {
 			{"attachment; filename*0=\"invoice\"; filename*1=\"\"; filename*2=\".exe\"", "invoice.exe"},
-			/* An empty value does not end the parameters, and an empty piece is a piece */
-			{"attachment; foo=; filename=x.exe", "x.exe"},
-			{"attachment; filename*0=\"invoice\"; filename*1=; filename*2=\".exe\"", "invoice.exe"},
 			{"attachment; filename*0=evil.exe; filename*=utf-8''good%FF.pdf", "evil.exe"},
 			{"attachment; filename*0=evil.exe; filename*=utf-8''good%ZZ.pdf", "evil.exe"},
 			{"attachment; filename*0*=utf-8''good%FF.pdf; filename=\"evil.exe\"", "evil.exe"},
@@ -329,6 +326,20 @@ TEST_SUITE("content_type")
 			{"attachment; filename*=\"\"; filename=\"evil.exe\"", "evil.exe"},
 			{"attachment; filename*=utf-8''good%FF.pdf; filename=\"evil.exe\"", "evil.exe"},
 			{"attachment; filename*0=evil.exe; filename*=utf-8''%FF; filename*=utf-8''good.pdf", "evil.exe"},
+			/* A plain value first is taken, as in Python; the first of several */
+			{"attachment; filename=\"good.pdf\"; filename*=utf-8''evil.exe", "good.pdf"},
+			{"attachment; filename=\"good.pdf\"; filename*0=evil; filename*1=.exe", "good.pdf"},
+			{"attachment; filename=\"a.exe\"; filename=\"b.pdf\"", "a.exe"},
+			/* An empty value does not end the parameters, and an empty piece is a piece */
+			{"attachment; foo=; filename=x.exe", "x.exe"},
+			{"attachment; filename*0=\"invoice\"; filename*1=; filename*2=\".exe\"", "invoice.exe"},
+			/* ASCII is valid under any label, even one ICU cannot open */
+			{"attachment; filename=\"invoice.exe\"; filename*=de''invoice.exe; filename*0=invoice.pdf", "invoice.exe"},
+			/* The last name*= names the charset of the first one, a later one is piece 0 */
+			{"attachment; filename*=koi8-r''%F3%DE%C5%D4.pdf; filename*=utf-8''invoice.exe; filename=\"x.pdf\"",
+			 "invoice.exe"},
+			/* x-user-defined: the bytes past ASCII are U+F780 to U+F7FF */
+			{"attachment; filename*0=invoice.pdf; filename*=x-user-defined''invoice%FF.exe", "invoice\uF7FF.exe"},
 			/* Readers check escapes in the data only, and no charset is not checked */
 			{"attachment; filename*0=invoice.pdf; filename*=utf-8'%'invoice.exe", "invoice.exe"},
 			{"attachment; filename*0=invoice.pdf; filename*=x-cp1251''%D1%F7%E5%F2.exe", "\u0421\u0447\u0435\u0442.exe"},
@@ -339,6 +350,41 @@ TEST_SUITE("content_type")
 			REQUIRE(cd != nullptr);
 			std::string_view fname{cd->filename.begin, cd->filename.len};
 			CHECK_MESSAGE(fname == c.second, c.first);
+		}
+
+		/* A charset that writes its characters in ASCII is decoded all the same */
+		{
+			std::string hdr = "application/octet-stream; name*=iso-2022-jp''%1B%24B%25F%259%25H%1B%28B.txt; "
+							  "name=\"x.txt\"";
+			auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(ct != nullptr);
+			rspamd_ftok_t key;
+			key.begin = "name";
+			key.len = 4;
+			auto *param = (struct rspamd_content_type_param *) g_hash_table_lookup(ct->attrs, &key);
+			REQUIRE(param != nullptr);
+			CHECK(std::string_view{param->value.begin, param->value.len} == "\u30C6\u30B9\u30C8.txt");
+		}
+
+		/* The boundary as readers take it */
+		{
+			std::string hdr = "multipart/mixed; boundary*=windows-1251''%D1%F7; boundary*=utf-8''evil; boundary=\"good\"";
+			auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(ct != nullptr);
+			CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "evil");
+		}
+
+		/* Pieces without a first one are no value: the name of Content-Type is taken */
+		{
+			const char *msg_cd = "attachment; filename*1=x.pdf";
+			auto *cd = rspamd_content_disposition_parse(msg_cd, strlen(msg_cd), pool);
+			REQUIRE(cd != nullptr);
+			rspamd_ftok_t key;
+			key.begin = "filename";
+			key.len = 8;
+			auto *param = (struct rspamd_content_type_param *) g_hash_table_lookup(cd->attrs, &key);
+			REQUIRE(param != nullptr);
+			CHECK((param->flags & RSPAMD_CONTENT_PARAM_NO_VALUE) != 0);
 		}
 
 		/* An empty charset is not checked, as in readers */
@@ -355,6 +401,18 @@ TEST_SUITE("content_type")
 			auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
 			REQUIRE(cd != nullptr);
 			CHECK(std::string_view{cd->filename.begin, cd->filename.len}.ends_with("abc.exe"));
+
+			hdr = std::string{"attachment; filename*="} + charset + "''abc.exe";
+			cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK(std::string_view{cd->filename.begin, cd->filename.len} == "abc.exe");
+
+			/* Readers take the first name*=, which does not decode, then the pieces */
+			hdr = std::string{"attachment; filename*0=good.pdf; filename*="} + charset +
+				  "''abc; filename*=utf-8''evil.exe";
+			cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK(std::string_view{cd->filename.begin, cd->filename.len} != "evil.exe");
 
 			std::string ct_hdr = std::string{"text/plain; charset*0*="} + charset + "''koi8-r";
 			CHECK(rspamd_content_type_parse(ct_hdr.data(), ct_hdr.size(), pool) != nullptr);

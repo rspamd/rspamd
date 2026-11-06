@@ -45,6 +45,8 @@ enum rspamd_content_param_flags {
 	RSPAMD_CONTENT_PARAM_QUOTED = (1 << 3),
 	/* An RFC 2231 value with a '%' not followed by two hex digits */
 	RSPAMD_CONTENT_PARAM_BAD_ESCAPE = (1 << 4),
+	/* No value that readers take: what the values hold, kept */
+	RSPAMD_CONTENT_PARAM_NO_VALUE = (1 << 5),
 };
 
 /* Parameters rspamd relies on taken past the parameters cap, see content_type.c */
