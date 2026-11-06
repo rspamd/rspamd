@@ -249,6 +249,73 @@ context("Text parts that hold a file signature", function()
     task:destroy()
   end)
 
+  test("UTF-16 without a byte order mark has its links read in both orders", function()
+    -- Padding can choose the order rspamd reads, and clients read either one
+    local function utf16le(s)
+      return (s:gsub('.', function(c)
+        return c .. '\0'
+      end))
+    end
+    local function utf16be(s)
+      return (s:gsub('.', function(c)
+        return '\0' .. c
+      end))
+    end
+    local b64 = require('rspamd_util').encode_base64
+    local cases = {
+      -- Big-endian padding, a little-endian link, and the other way round
+      { 'text/html', string.rep('\0A', 400) .. utf16le('<a href="https://le.example.com/x">a</a>'),
+        'le.example.com' },
+      { 'text/html', string.rep('A\0', 400) .. utf16be('<a href="https://be.example.com/x">a</a>'),
+        'be.example.com' },
+      { 'text/plain', string.rep('\0A', 400) .. utf16le(' https://plain.example.com/x '),
+        'plain.example.com' },
+      -- Read as a file, shown as text
+      { 'text/html', 'GIF89a' .. string.rep('\0A', 400) ..
+          utf16le('<a href="https://gif.example.com/x">a</a>'), 'gif.example.com' },
+    }
+    for _, c in ipairs(cases) do
+      local task = load(c[1] .. '; charset=utf-16\nContent-Transfer-Encoding: base64',
+          tostring(b64(c[2], 76)))
+      assert_not_nil(has_url(task, c[3]), c[3])
+      task:destroy()
+    end
+    -- A link in both orders is counted once, as in one
+    local link = '<a href="https://same.example.com/x">a</a>'
+    local task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(utf16le(link) .. utf16be(link), 76)))
+    local u = has_url(task, 'same.example.com')
+    assert_not_nil(u)
+    assert_equal(1, u:get_count())
+    task:destroy()
+    -- Lines are joined as in the first read: a link in brackets over two lines
+    task = load('text/plain; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(string.rep('\0A', 400) ..
+            utf16le('see <https://br.example.com/very/long\n/tail.php?id=1> now'), 76)))
+    u = has_url(task, 'br.example.com')
+    assert_not_nil(u)
+    assert_equal('very/long/tail.php', u:get_path())
+    task:destroy()
+    -- A link that the other order shows under another name is phished, not counted again
+    local shown = string.rep('A\0', 200) ..
+        utf16le('<a href="https://evil.example.com/x">https://evil.example.com/x</a>')
+    task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64', tostring(b64(shown, 76)))
+    local count = has_url(task, 'evil.example.com'):get_count()
+    task:destroy()
+    task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(shown .. utf16be('<a href="https://evil.example.com/x">https://paypal.com/signin</a>'), 76)))
+    u = has_url(task, 'evil.example.com')
+    assert_not_nil(u)
+    assert_true(u:is_phished())
+    assert_equal(count, u:get_count())
+    task:destroy()
+    -- The other order of text is junk, which is no bad unicode clients show
+    task = load('text/plain; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(utf16le('Hello ') .. '\0\173\172\185' .. utf16le(' team, see you soon.\n'), 76)))
+    assert_false(task:has_flag('bad_unicode'))
+    task:destroy()
+  end)
+
   test("binary data under a label clients do not decode is read as it is", function()
     -- Converted, ASCII under utf-32 would turn into junk
     local task = load('text/html; charset=utf-32', 'GIF89a ' .. string.rep('\1', 600) ..

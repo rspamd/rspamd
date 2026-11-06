@@ -119,6 +119,47 @@ rspamd_converter_dtor(gpointer p)
 	g_free(c);
 }
 
+/* Whether `charset` is UTF-16 without an order and the data has no byte order mark */
+static gboolean
+rspamd_mime_utf16_unmarked(const char *charset, const char *data, gsize len)
+{
+	const unsigned char *bom = (const unsigned char *) data;
+
+	return charset != NULL && g_ascii_strcasecmp(charset, "UTF-16") == 0 &&
+		   !(len >= 2 && ((bom[0] == 0xfe && bom[1] == 0xff) || (bom[0] == 0xff && bom[1] == 0xfe)));
+}
+
+/*
+ * UTF-16 without a byte order mark: clients do not agree on it (big-endian in
+ * Apple Mail and ICU, little-endian in browsers and Thunderbird), so it is
+ * read in the order of the data, where ASCII has its zero bytes;
+ * little-endian when that says nothing. The data chooses this order, so the
+ * links of the other one are read too (rspamd_mime_utf16_other_order)
+ */
+static gboolean
+rspamd_mime_utf16_data_is_be(const char *data, gsize len)
+{
+	gsize zeros[2] = {0, 0};
+
+	for (gsize i = 0; i < len; i++) {
+		if (data[i] == 0) {
+			zeros[i & 1]++;
+		}
+	}
+
+	return zeros[0] > zeros[1];
+}
+
+const char *
+rspamd_mime_utf16_other_order(const char *charset, const char *data, gsize len)
+{
+	if (!rspamd_mime_utf16_unmarked(charset, data, len)) {
+		return NULL;
+	}
+
+	return rspamd_mime_utf16_data_is_be(data, len) ? "UTF-16LE" : "UTF-16BE";
+}
+
 int32_t
 rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 						   UChar *dest,
@@ -129,28 +170,13 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 {
 	if (!cnv->is_internal) {
 		UConverter *conv = cnv->d.conv;
-		const unsigned char *bom = (const unsigned char *) src;
 
-		if (cnv->canon_name && g_ascii_strcasecmp(cnv->canon_name, "UTF-16") == 0 &&
-			!(srcLength >= 2 && ((bom[0] == 0xfe && bom[1] == 0xff) ||
-								 (bom[0] == 0xff && bom[1] == 0xfe)))) {
-			/*
-			 * UTF-16 without a byte order mark: clients do not agree on it
-			 * (big-endian in Apple Mail and ICU, little-endian in browsers
-			 * and Thunderbird), so the order is the one of the data, where
-			 * ASCII has its zero bytes; little-endian when that says nothing
-			 */
-			gsize zeros[2] = {0, 0};
+		if (srcLength > 0 && rspamd_mime_utf16_unmarked(cnv->canon_name, src, srcLength)) {
+			/* In the order of the data, see rspamd_mime_utf16_data_is_be */
 			UErrorCode order_err = U_ZERO_ERROR;
 			struct rspamd_charset_converter *ordered;
 
-			for (int32_t i = 0; i < srcLength; i++) {
-				if (src[i] == 0) {
-					zeros[i & 1]++;
-				}
-			}
-
-			ordered = rspamd_mime_get_converter_cached(zeros[0] > zeros[1] ? "UTF-16BE" : "UTF-16LE",
+			ordered = rspamd_mime_get_converter_cached(rspamd_mime_utf16_data_is_be(src, srcLength) ? "UTF-16BE" : "UTF-16LE",
 													   NULL, TRUE, &order_err);
 
 			if (ordered != NULL && !ordered->is_internal) {

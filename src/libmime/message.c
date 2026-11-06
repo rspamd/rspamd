@@ -1207,6 +1207,13 @@ rspamd_message_part_can_be_parsed_as_text(struct rspamd_task *task,
 	return res;
 }
 
+static void rspamd_message_utf16_other_order_urls(struct rspamd_task *task,
+												  struct rspamd_mime_part *part,
+												  const char *charset, gboolean html,
+												  enum rspamd_url_find_type how,
+												  enum rspamd_url_flags url_flags,
+												  uint16_t *cur_url_order);
+
 static gboolean
 rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 									   struct rspamd_mime_part *mime_part,
@@ -1273,38 +1280,28 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 	/* Post process part */
 	rspamd_normalize_text_part(task, text_part);
 
-	if (!IS_TEXT_PART_HTML(text_part)) {
-		if (mime_part->parent_part) {
-			struct rspamd_mime_part *parent = mime_part->parent_part;
+	enum rspamd_url_find_type how = RSPAMD_URL_FIND_STRICT;
 
-			if (IS_PART_MULTIPART(parent) && parent->specific.mp->children &&
-				parent->specific.mp->children->len == 2) {
-				/*
-				 * Use strict extraction mode: we will extract missing urls from
-				 * an html part if needed
-				 */
-				rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
-										RSPAMD_URL_FIND_STRICT);
-			}
-			else {
-				/*
-				 * Fall back to full text extraction using TLD patterns
-				 */
-				rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
-										RSPAMD_URL_FIND_ALL);
-			}
-		}
-		else {
-			/*
-			 * Fall back to full text extraction using TLD patterns
-			*/
-			rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
-									RSPAMD_URL_FIND_ALL);
+	if (!IS_TEXT_PART_HTML(text_part)) {
+		struct rspamd_mime_part *parent = mime_part->parent_part;
+
+		/*
+		 * Use strict extraction mode when we will extract missing urls from
+		 * an html part if needed, full text extraction using TLD patterns
+		 * otherwise
+		 */
+		if (!(parent && IS_PART_MULTIPART(parent) && parent->specific.mp->children &&
+			  parent->specific.mp->children->len == 2)) {
+			how = RSPAMD_URL_FIND_ALL;
 		}
 	}
-	else {
-		rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order,
-								RSPAMD_URL_FIND_STRICT);
+
+	rspamd_url_text_extract(task->task_pool, task, text_part, cur_url_order, how);
+
+	if (IS_TEXT_PART_UTF(text_part)) {
+		rspamd_message_utf16_other_order_urls(task, mime_part, text_part->real_charset,
+											  IS_TEXT_PART_HTML(text_part), how,
+											  RSPAMD_URL_FLAG_FROM_TEXT, cur_url_order);
 	}
 
 	if (text_part->exceptions) {
@@ -1885,6 +1882,8 @@ struct rspamd_message_content_url_cbd {
 	struct rspamd_mime_part *part;
 	/* Another read of the part found its URLs: add new ones only, uncounted */
 	gboolean only_new;
+	/* Where the URLs are found */
+	enum rspamd_url_flags url_flags;
 };
 
 /* Takes a URL found in such a part; FALSE once no more URLs are taken */
@@ -1906,7 +1905,7 @@ rspamd_message_content_add_url(struct rspamd_message_content_url_cbd *cbd, struc
 		return TRUE;
 	}
 
-	url->flags |= RSPAMD_URL_FLAG_CONTENT;
+	url->flags |= cbd->url_flags;
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false, max_urls) &&
 		cbd->part->urls) {
@@ -1949,6 +1948,149 @@ rspamd_message_content_url_callback(struct rspamd_url *url, gsize start_offset,
 	}
 
 	return TRUE;
+}
+
+/*
+ * A URL that the HTML of another read of a part has: added when the task has
+ * no such URL, else what that read shows of it (a phished link) is kept on
+ * the one the task has, which is not counted again
+ */
+static void
+rspamd_message_other_read_url(struct rspamd_task *task, struct rspamd_mime_part *part,
+							  struct rspamd_url *url, gboolean of_part)
+{
+	khash_t(rspamd_url_hash) *set = MESSAGE_FIELD(task, urls);
+	khiter_t k = kh_get(rspamd_url_hash, set, url);
+	struct rspamd_url *existing;
+
+	if (k == kh_end(set)) {
+		if (rspamd_url_set_add_or_increase(set, url, false, task->cfg ? task->cfg->max_urls : 0) &&
+			of_part && part->urls) {
+			g_ptr_array_add(part->urls, url);
+		}
+
+		return;
+	}
+
+	existing = kh_key(set, k);
+
+	if (existing == url) {
+		return;
+	}
+
+	existing->flags |= url->flags;
+
+	if ((url->flags & RSPAMD_URL_FLAG_PHISHED) && url->ext && url->ext->linked_url &&
+		(existing->ext == NULL || existing->ext->linked_url == NULL)) {
+		if (existing->ext == NULL) {
+			existing->ext = rspamd_mempool_alloc0_type(task->task_pool, struct rspamd_url_ext);
+		}
+
+		existing->ext->linked_url = url->ext->linked_url;
+		existing->ext->visible_part = url->ext->visible_part;
+	}
+}
+
+/*
+ * UTF-16 without a byte order mark is read in the byte order its data looks
+ * like, which padding can choose: clients that read it in the other order
+ * show the links of that read, which are added as well
+ */
+static void
+rspamd_message_utf16_other_order_urls(struct rspamd_task *task,
+									  struct rspamd_mime_part *part,
+									  const char *charset, gboolean html,
+									  enum rspamd_url_find_type how,
+									  enum rspamd_url_flags url_flags,
+									  uint16_t *cur_url_order)
+{
+	const char *other = rspamd_mime_utf16_other_order(charset, part->parsed_data.begin,
+													  part->parsed_data.len);
+	struct rspamd_message_content_url_cbd cbd = {.task = task, .part = part, .only_new = TRUE, .url_flags = url_flags};
+	GByteArray in, *utf;
+	GPtrArray *newlines = NULL;
+	rspamd_ftok_t text;
+
+	if (other == NULL) {
+		return;
+	}
+
+	in.data = (uint8_t *) part->parsed_data.begin;
+	in.len = part->parsed_data.len;
+	utf = g_byte_array_new();
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) g_byte_array_unref, utf);
+
+	if (!rspamd_mime_to_utf8_byte_array(&in, utf, task->task_pool, other)) {
+		return;
+	}
+
+	text.begin = (const char *) utf->data;
+	text.len = utf->len;
+
+	if (html) {
+		/* Its links in their order, then the other URLs it finds (displayed ones) */
+		khash_t(rspamd_url_hash) *other_urls = kh_init(rspamd_url_hash);
+		GPtrArray *other_part_urls = g_ptr_array_new();
+		struct rspamd_url *url;
+		void *other_html;
+
+		other_html = rspamd_html_process_part_full(task, utf, NULL, other_urls, other_part_urls,
+												   task->cfg ? task->cfg->enable_css_parser : true,
+												   cur_url_order);
+
+		for (unsigned int i = 0; i < other_part_urls->len; i++) {
+			rspamd_message_other_read_url(task, part, g_ptr_array_index(other_part_urls, i), TRUE);
+		}
+
+		kh_foreach_key(other_urls, url, {
+			rspamd_message_other_read_url(task, part, url, FALSE);
+		});
+
+		kh_destroy(rspamd_url_hash, other_urls);
+		g_ptr_array_free(other_part_urls, TRUE);
+
+		if (other_html == NULL || !rspamd_html_get_parsed_content(other_html, &text)) {
+			return;
+		}
+
+		how = RSPAMD_URL_FIND_STRICT;
+	}
+	else {
+		/* Its lines joined as those of a text part, for links over lines */
+		struct rspamd_mime_text_part *lines = rspamd_mempool_alloc0(task->task_pool, sizeof(*lines));
+
+		lines->flags = RSPAMD_MIME_TEXT_PART_FLAG_UTF;
+		lines->utf_stripped_content = g_byte_array_sized_new(text.len);
+		lines->newlines = g_ptr_array_new();
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) free_byte_array_callback,
+									  lines->utf_stripped_content);
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+									  lines->newlines);
+		unsigned int bad_unicode = task->flags & RSPAMD_TASK_FLAG_BAD_UNICODE;
+
+		rspamd_strip_newlines_parse(task, text.begin, text.begin + text.len, lines);
+		/* What a read of junk looks like is not what clients show */
+		task->flags = (task->flags & ~RSPAMD_TASK_FLAG_BAD_UNICODE) | bad_unicode;
+
+		for (unsigned int i = 0; i < lines->newlines->len; i++) {
+			goffset off = (goffset) g_ptr_array_index(lines->newlines, i);
+
+			g_ptr_array_index(lines->newlines, i) = (gpointer) (lines->utf_stripped_content->data + off);
+		}
+
+		text.begin = (const char *) lines->utf_stripped_content->data;
+		text.len = lines->utf_stripped_content->len;
+		newlines = lines->newlines;
+	}
+
+	if (text.len > 0) {
+		rspamd_url_find_multiple(task->task_pool, text.begin, text.len, how, newlines,
+								 rspamd_message_content_url_callback, &cbd,
+								 task->cfg ? task->cfg->lua_state : NULL);
+	}
 }
 
 void rspamd_message_process(struct rspamd_task *task)
@@ -2313,8 +2455,8 @@ void rspamd_message_process(struct rspamd_task *task)
 			part->part_type != RSPAMD_MIME_PART_MULTIPART &&
 			!(part->part_type == RSPAMD_MIME_PART_IMAGE && part->specific.img &&
 			  part->specific.img->html_image)) {
-			struct rspamd_message_content_url_cbd cbd = {.task = task, .part = part, .only_new = FALSE};
-			const char *text = part->parsed_data.begin;
+			struct rspamd_message_content_url_cbd cbd = {.task = task, .part = part, .only_new = FALSE, .url_flags = RSPAMD_URL_FLAG_CONTENT};
+			const char *text = part->parsed_data.begin, *charset = NULL;
 			gsize text_len = part->parsed_data.len;
 
 			if (part->ct && part->ct->charset.len > 0) {
@@ -2324,7 +2466,7 @@ void rspamd_message_process(struct rspamd_task *task)
 				 * bytes are read as they are: a label clients do not know
 				 * (utf-32, EBCDIC) turns the data into junk once converted
 				 */
-				const char *charset = rspamd_mime_detect_charset(&part->ct->charset, task->task_pool);
+				charset = rspamd_mime_detect_charset(&part->ct->charset, task->task_pool);
 
 				if (charset != NULL && g_ascii_strncasecmp(charset, "UTF-16", sizeof("UTF-16") - 1) == 0) {
 					GByteArray in = {.data = (uint8_t *) part->parsed_data.begin,
@@ -2363,6 +2505,12 @@ void rspamd_message_process(struct rspamd_task *task)
 											 task->cfg ? task->cfg->lua_state : NULL);
 				}
 
+				if (text != part->parsed_data.begin) {
+					rspamd_message_utf16_other_order_urls(task, part, charset, TRUE,
+														  RSPAMD_URL_FIND_STRICT, RSPAMD_URL_FLAG_CONTENT,
+														  &cur_url_order);
+				}
+
 				continue;
 			}
 
@@ -2370,6 +2518,9 @@ void rspamd_message_process(struct rspamd_task *task)
 				rspamd_url_find_multiple(task->task_pool, text, text_len, RSPAMD_URL_FIND_STRICT, NULL,
 										 rspamd_message_content_url_callback, &cbd,
 										 task->cfg ? task->cfg->lua_state : NULL);
+				rspamd_message_utf16_other_order_urls(task, part, charset, FALSE,
+													  RSPAMD_URL_FIND_STRICT, RSPAMD_URL_FLAG_CONTENT,
+													  &cur_url_order);
 				/* The bytes as they are, for what the charset does not show */
 				cbd.only_new = TRUE;
 			}
