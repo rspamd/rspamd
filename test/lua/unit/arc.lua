@@ -503,6 +503,44 @@ context('ARC seal completion', function()
     assert_equal(0, #adjusted)
   end)
 
+  test('a quote or a comment of the sender does not hide the DMARC result after it', function()
+    -- The quote is closed by one the forwarder writes after its own result
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=fail (x); dmarc=pass header.from=bank.example ") smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail (p=reject) header.from=bank.example; dkim=none reason="no signature"' } }))
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=fail (x); dmarc=pass header.from=bank.example (\\) smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail (p=reject) header.from=bank.example; x-note=none (closing))' } }))
+  end)
+
+  test('a comment in front of an injected pass does not hide it from the count', function()
+    for _, comment in ipairs({ '(;)', '(a\\))', '(\\()' }) do
+      assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+        [3] = 'spf=fail (x); ' .. comment .. ' dmarc=pass header.from=bank.example ") smtp.mailfrom=a@attacker.example; '
+            .. 'dmarc=fail (p=reject) header.from=bank.example; dkim=none reason="no signature"' } }), comment)
+    end
+  end)
+
+  test('an AAR too long to be read gives no DMARC result to trust', function()
+    local dkim = {}
+    for i = 1, 60 do
+      dkim[#dkim + 1] = string.format('dkim=pass header.d=sig%d.bank.example header.s=selector%d-long-selector-name', i, i)
+    end
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = table.concat(dkim, '; ') .. '; dmarc=pass header.from=bank.example' } }))
+  end)
+
+  test('a chain that fails before its seals are read is not sealed further', function()
+    local _, symbols, cache = start_checks({ synchronous = true, count = 51 })
+    assert_not_nil(symbols.ARC_INVALID)
+    assert_not_nil(cache['arc-failure'])
+    -- Comments nested deeper than the parser goes
+    _, symbols, cache = start_checks({ synchronous = true, aar_text = {
+      [3] = string.rep('(', 420) .. 'dmarc=pass' } })
+    assert_not_nil(symbols.ARC_INVALID)
+    assert_not_nil(cache['arc-failure'])
+  end)
+
   test('a method property makes no DMARC result', function()
     assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
       [3] = '"x" method=dmarc dmarc=pass header.from=bank.example' } }))

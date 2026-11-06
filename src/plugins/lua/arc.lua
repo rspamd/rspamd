@@ -156,6 +156,7 @@ local function parse_arc_header(hdr, target, is_aar)
         if parsed.ar then
           target[i].ar = parsed.ar
         end
+        target[i].truncated = parsed.truncated
       end
     end
 
@@ -182,12 +183,27 @@ local function aar_method_results(aar, method)
   return res
 end
 
+-- The DMARC results that a split on every ';' finds, ignoring comments and
+-- quotes: text that should have been a comment (a sender written unescaped)
+-- may open a quote or a comment that hides a later result from the split
+-- that respects them
+local function naive_dmarc_count(raw)
+  -- Each place where an element can start one: after ';' or after a comment
+  -- in front of it, blanks between. Never fewer than the split finds
+  local n = 0
+  for _ in (';' .. raw):gmatch('[;)]%s*[Dd][Mm][Aa][Rr][Cc]%s*[/=]') do
+    n = n + 1
+  end
+  return n
+end
+
 -- The DMARC result of an AAR: a forwarder writes one. More of them means that
 -- text that should have been a comment looks like a result: when unsure, do
 -- not take any. The second value is true then
 local function aar_dmarc_result(aar)
   local res = aar_method_results(aar, 'dmarc')
-  if #res > 1 then
+  -- An AAR too long to be read gives no result to trust either
+  if aar.truncated or #res > 1 or (aar.raw_header and naive_dmarc_count(aar.raw_header) > #res) then
     return nil, true
   end
   return res[1], false
@@ -286,11 +302,30 @@ local function arc_callback(task)
     return
   end
 
+  -- A chain that fails here is not sealed further either (see 'arc-failure')
+  local function fail_chain(reason)
+    task:insert_result(arc_symbols['invalid'], 1.0, reason)
+    task:cache_set('arc-failure', reason)
+  end
+
+  if #arc_seal_headers > 50 or (arc_ar_headers and #arc_ar_headers > 50) then
+    -- RFC 8617 5.2: at most 50 sets, else the chain fails
+    fail_chain('too many ARC sets')
+    return
+  end
+
   if #arc_sig_headers ~= #arc_seal_headers then
     -- We mandate that count of seals is equal to count of signatures
     rspamd_logger.infox(task, 'number of seals (%s) is not equal to number of signatures (%s)',
       #arc_seal_headers, #arc_sig_headers)
-    task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
+    fail_chain('invalid count of seals and signatures')
+    return
+  end
+
+  if arc_ar_headers and #arc_ar_headers ~= #arc_seal_headers then
+    -- Each set has one AAR (checked again with the seals): not parsed for nothing
+    fail_chain(string.format('invalid count of ARC-Authentication-Results: %d, expected %d',
+      #arc_ar_headers, #arc_seal_headers))
     return
   end
 
@@ -310,7 +345,13 @@ local function arc_callback(task)
   parse_arc_header(arc_sig_headers, cbdata.sigs, false)
 
   if arc_ar_headers then
-    parse_arc_header(arc_ar_headers, cbdata.ars, true)
+    -- Malformed results (e.g. comments nested too deep for the parser) fail the chain
+    local ok, err = pcall(parse_arc_header, arc_ar_headers, cbdata.ars, true)
+    if not ok then
+      rspamd_logger.infox(task, 'cannot parse ARC-Authentication-Results: %s', err)
+      fail_chain('cannot parse ARC-Authentication-Results')
+      return
+    end
   end
 
   -- Fix i type
