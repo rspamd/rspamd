@@ -343,6 +343,10 @@ TEST_SUITE("content_type")
 			/* Readers check escapes in the data only, and no charset is not checked */
 			{"attachment; filename*0=invoice.pdf; filename*=utf-8'%'invoice.exe", "invoice.exe"},
 			{"attachment; filename*0=invoice.pdf; filename*=x-cp1251''%D1%F7%E5%F2.exe", "\u0421\u0447\u0435\u0442.exe"},
+			/* Percent decoding as readers do it: '+' stays, and so does a bad escape in a piece */
+			{"attachment; filename*=utf-8''a+b.exe", "a+b.exe"},
+			{"attachment; filename*0*=utf-8''a+b; filename*1*=%2Bc.exe", "a+b+c.exe"},
+			{"attachment; filename*0*=utf-8''a%ZZ; filename*1*=%2.exe", "a%ZZ%2.exe"},
 		};
 
 		for (const auto &c: cases) {

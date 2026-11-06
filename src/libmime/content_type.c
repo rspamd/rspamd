@@ -17,7 +17,6 @@
 #include "libmime/content_type.h"
 #include "smtp_parsers.h"
 #include "utlist.h"
-#include "libserver/url.h"
 #include "libmime/mime_encoding.h"
 #include "rspamd_simdutf.h"
 
@@ -63,6 +62,29 @@ rspamd_rfc2231_split(const char *start, const char *end, rspamd_ftok_t *label, r
 	}
 }
 
+/*
+ * Percent decoding of RFC 2231 data in place, as readers do it (Thunderbird):
+ * '%' and two hex digits is a byte, anything else stays, '+' too
+ */
+static gsize
+rspamd_rfc2231_percent_decode(char *buf, gsize len)
+{
+	const char *p = buf, *end = buf + len;
+	char *d = buf;
+
+	while (p < end) {
+		if (*p == '%' && end - p >= 3 && g_ascii_isxdigit(p[1]) && g_ascii_isxdigit(p[2])) {
+			*d++ = (char) ((g_ascii_xdigit_value(p[1]) << 4) | g_ascii_xdigit_value(p[2]));
+			p += 3;
+		}
+		else {
+			*d++ = *p++;
+		}
+	}
+
+	return d - buf;
+}
+
 /* Percent decoded into a copy */
 static rspamd_ftok_t
 rspamd_rfc2231_unescape(rspamd_mempool_t *pool, const char *start, gsize len)
@@ -72,7 +94,7 @@ rspamd_rfc2231_unescape(rspamd_mempool_t *pool, const char *start, gsize len)
 
 	memcpy(buf, start, len);
 	res.begin = buf;
-	res.len = rspamd_url_decode(buf, buf, len);
+	res.len = rspamd_rfc2231_percent_decode(buf, len);
 
 	return res;
 }
@@ -356,7 +378,7 @@ rspamd_content_param_join(rspamd_mempool_t *pool, struct rspamd_content_type_par
 		}
 
 		memcpy(pos, src, len);
-		pos += ext ? rspamd_url_decode(pos, pos, len) : len;
+		pos += ext ? rspamd_rfc2231_percent_decode(pos, len) : len;
 	}
 
 	res.begin = ndata;
