@@ -263,6 +263,45 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 	return true;
 }
 
+/*
+ * Readers that take the name of a file as a C string show it up to its first
+ * NUL: that name is listed after the file as another name of it. FALSE when
+ * no more files can be listed
+ */
+static gboolean
+rspamd_archive_file_add_cstr_name(struct rspamd_task *task,
+								  struct rspamd_archive *arch,
+								  const struct rspamd_archive_file *f,
+								  const unsigned char *name, gsize len)
+{
+	const unsigned char *nul = memchr(name, 0, len);
+	struct rspamd_archive_file *cf;
+
+	if (nul == NULL || nul == name || f->fname == NULL) {
+		return TRUE;
+	}
+
+	cf = g_malloc0(sizeof(*cf));
+	rspamd_archive_file_try_utf(task, arch, cf, (const char *) name, nul - name);
+
+	if (cf->fname == NULL || g_string_equal(cf->fname, f->fname)) {
+		rspamd_archive_file_free(cf);
+
+		return TRUE;
+	}
+
+	cf->compressed_size = f->compressed_size;
+	cf->uncompressed_size = f->uncompressed_size;
+	cf->flags |= (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) | RSPAMD_ARCHIVE_FILE_ALIAS |
+				 RSPAMD_ARCHIVE_FILE_SAME_ENTRY;
+
+	if (cf->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+		arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+	}
+
+	return rspamd_archive_file_add(task, arch, cf);
+}
+
 enum rspamd_zip_eocd_check {
 	RSPAMD_ZIP_EOCD_USABLE = 0,
 	RSPAMD_ZIP_EOCD_SKIP,
@@ -2012,6 +2051,12 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 				if (!rspamd_archive_file_add(task, arch, f)) {
 					goto end;
 				}
+
+				/* A name with a NUL is shown up to it (a Unicode name follows its NUL) */
+				if (!(flags & 0x200) &&
+					!rspamd_archive_file_add_cstr_name(task, arch, f, p, fname_len)) {
+					goto end;
+				}
 			}
 			else {
 				g_free(f);
@@ -2269,6 +2314,11 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 
 						ex += vint_len + cur_sz;
 					}
+				}
+
+				/* A name with a NUL is shown up to it */
+				if (f && !rspamd_archive_file_add_cstr_name(task, arch, f, p, fname_len)) {
+					goto end;
 				}
 			}
 
