@@ -347,6 +347,154 @@ rspamd_cmp_pieces(struct rspamd_content_type_param *p1, struct rspamd_content_ty
 }
 
 /*
+ * The RFC 2231 values of a name read in the order of the header, as
+ * Thunderbird reads them: what is taken so far
+ */
+struct rspamd_rfc2231_walk {
+	rspamd_ftok_t label_b;  /* The charset of name*=: that of the last one */
+	rspamd_ftok_t label_cd; /* The charset of the pieces: that of the last name*0*= */
+	gboolean have_ext;      /* A value of name*= is taken */
+	gboolean accept;        /* Pieces are still taken */
+};
+
+enum rspamd_rfc2231_step {
+	/* No value, which may still name a charset or end the pieces */
+	RSPAMD_RFC2231_STEP_NONE = 0,
+	/* The value of name*= */
+	RSPAMD_RFC2231_STEP_EXT,
+	/* A piece: its number, or 0 for a later name*= */
+	RSPAMD_RFC2231_STEP_PIECE,
+};
+
+/*
+ * Reads one RFC 2231 value of a name, `cur`, after the ones before it:
+ * - each name*= names the charset of name*=; the first one with data and
+ *   good escapes is the value of name*=, a later one with data is piece 0,
+ *   unless piece 0 is taken or it is quoted, which ends the pieces;
+ * - pieces are taken up to a repeated one or a quoted one with percent
+ *   encoding; name*0*= names the charset of the pieces, even repeated.
+ * `have_piece` is whether its piece (0 for name*=) is taken already. `data`
+ * is the data of name*= and of name*0*=
+ */
+static enum rspamd_rfc2231_step
+rspamd_rfc2231_walk_step(struct rspamd_rfc2231_walk *walk, const struct rspamd_content_type_param *cur,
+						 gboolean have_piece, rspamd_ftok_t *data)
+{
+	const char *end = cur->value.begin + cur->value.len;
+
+	if (!(cur->flags & RSPAMD_CONTENT_PARAM_PIECEWISE)) {
+		/* name*= */
+		rspamd_rfc2231_split(cur->value.begin, end, &walk->label_b, data);
+
+		if (data->len == 0) {
+			return RSPAMD_RFC2231_STEP_NONE;
+		}
+
+		if (!walk->have_ext) {
+			if (cur->flags & RSPAMD_CONTENT_PARAM_BAD_ESCAPE) {
+				return RSPAMD_RFC2231_STEP_NONE;
+			}
+
+			walk->have_ext = TRUE;
+
+			return RSPAMD_RFC2231_STEP_EXT;
+		}
+
+		if (have_piece || (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED)) {
+			walk->accept = FALSE;
+
+			return RSPAMD_RFC2231_STEP_NONE;
+		}
+
+		return RSPAMD_RFC2231_STEP_PIECE;
+	}
+
+	if (!walk->accept) {
+		return RSPAMD_RFC2231_STEP_NONE;
+	}
+
+	if (cur->rfc2231_id == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
+		/* name*0*=charset'language'data: names the charset, even if it is no piece */
+		rspamd_rfc2231_split(cur->value.begin, end, &walk->label_cd, data);
+
+		if (data->len == 0) {
+			return RSPAMD_RFC2231_STEP_NONE;
+		}
+	}
+
+	if (cur->rfc2231_id >= max_rfc2231_pieces || have_piece ||
+		((cur->flags & RSPAMD_CONTENT_PARAM_RFC2231) && (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED))) {
+		walk->accept = FALSE;
+
+		return RSPAMD_RFC2231_STEP_NONE;
+	}
+
+	return RSPAMD_RFC2231_STEP_PIECE;
+}
+
+/* The piece number of an RFC 2231 value for rspamd_rfc2231_walk_step: name*= is piece 0 */
+static inline unsigned int
+rspamd_rfc2231_walk_piece(const struct rspamd_content_type_param *cur)
+{
+	return (cur->flags & RSPAMD_CONTENT_PARAM_PIECEWISE) ? cur->rfc2231_id : 0;
+}
+
+/*
+ * Names rspamd relies on, which are still taken past the parameters cap (see
+ * rspamd_content_param_take_past_cap)
+ */
+static const char *const rspamd_past_cap_names[] = {"boundary", "charset", "name", "filename"};
+
+/*
+ * Of each of these names: all its values read so far, of which only those
+ * readers take are kept past the cap
+ */
+struct rspamd_content_params_past_cap {
+	struct rspamd_past_cap_name {
+		struct rspamd_rfc2231_walk walk;
+		uint8_t pieces[(max_rfc2231_pieces + 7) / 8]; /* Those taken */
+		/* Copies of the charsets named past the cap: the header is not kept */
+		char *label_b, *label_cd;
+		gsize label_b_size, label_cd_size;
+		gboolean started, have_plain;
+		gboolean have_head; /* Its first value is kept */
+	} names[G_N_ELEMENTS(rspamd_past_cap_names)];
+};
+
+static int
+rspamd_past_cap_name_index(const char *name, gsize len)
+{
+	unsigned int i;
+
+	for (i = 0; i < G_N_ELEMENTS(rspamd_past_cap_names); i++) {
+		if (len == strlen(rspamd_past_cap_names[i]) &&
+			g_ascii_strncasecmp(name, rspamd_past_cap_names[i], len) == 0) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+/*
+ * The whole read of the values of a name, when some are past the cap: the
+ * values kept give the same pieces and the same value of name*=, but not the
+ * charsets that values not kept named
+ */
+static const struct rspamd_rfc2231_walk *
+rspamd_past_cap_walk(const struct rspamd_content_params_past_cap *past_cap, const rspamd_ftok_t *name)
+{
+	int i;
+
+	if (past_cap == NULL || (i = rspamd_past_cap_name_index(name->begin, name->len)) < 0 ||
+		!past_cap->names[i].started) {
+		return NULL;
+	}
+
+	return &past_cap->names[i].walk;
+}
+
+/*
  * Joins the pieces in their order, each name*N*= percent decoded on its own;
  * `first` is the data of piece 0 when it is not the value of pieces[0]
  */
@@ -391,26 +539,23 @@ rspamd_content_param_join(rspamd_mempool_t *pool, struct rspamd_content_type_par
  * The value of a name whose first value is name*= (RFC 2231) or a piece
  * (name*0, name*1*...), as Thunderbird takes it: name*= if it is valid, else
  * the pieces joined from 0 up to a missing one, else the first plain value. A plain value is never a
- * piece (name*1=x; name="a.exe" is a.exe, not a.exex). In the order of the
- * header:
- * - the name*= taken is the first with data and good escapes, and the last
- *   name*= names its charset; a later name*= with data is piece 0;
- * - pieces are taken up to a repeated one or a quoted one with percent
- *   encoding; name*0*= names the charset of the pieces;
- * - bytes are valid when they are ASCII or UTF-8, or convert from the
- *   charset named (rspamd_rfc2231_convert); joined into nothing, the pieces
- *   are no value.
+ * piece (name*1=x; name="a.exe" is a.exe, not a.exex). The values are read
+ * in the order of the header (rspamd_rfc2231_walk_step), and bytes are valid
+ * when they are ASCII or UTF-8, or convert from the charset named
+ * (rspamd_rfc2231_convert); joined into nothing, the pieces are no value.
+ * `whole` is the read of all values when some are past the cap.
  * With no value readers take, what the values hold is kept, flagged BROKEN
  * and NO_VALUE.
  */
 static struct rspamd_content_type_param *
-rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_param *head)
+rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_param *head,
+							 const struct rspamd_rfc2231_walk *whole)
 {
 	struct rspamd_content_type_param *by_num[max_rfc2231_pieces];
 	struct rspamd_content_type_param *plain = NULL, *ext = NULL, *cur, *sorted, **all;
-	rspamd_ftok_t ext_data = {0, NULL}, label_b = {0, NULL}, label_cd = {0, NULL},
-				  first = {0, NULL}, label, data, bytes, out;
-	gboolean accept = TRUE, have_first = FALSE;
+	struct rspamd_rfc2231_walk walk = {.accept = TRUE};
+	rspamd_ftok_t ext_data = {0, NULL}, label_b, label_cd, first = {0, NULL}, data, bytes, out;
+	gboolean have_first = FALSE;
 	unsigned int n, nall = 0;
 
 	memset(by_num, 0, sizeof(by_num));
@@ -425,63 +570,38 @@ rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_
 			continue;
 		}
 
-		if (!(cur->flags & RSPAMD_CONTENT_PARAM_PIECEWISE)) {
-			/* name*= */
-			rspamd_rfc2231_split(cur->value.begin, cur->value.begin + cur->value.len, &label, &data);
-			label_b = label;
+		if (cur->flags & RSPAMD_CONTENT_PARAM_PIECEWISE) {
+			nall++;
+		}
 
-			if (data.len == 0) {
-				continue;
-			}
+		n = rspamd_rfc2231_walk_piece(cur);
 
-			if (ext == NULL) {
-				if (!(cur->flags & RSPAMD_CONTENT_PARAM_BAD_ESCAPE)) {
-					ext = cur;
-					ext_data = data;
-				}
-			}
-			else if (by_num[0] != NULL || (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED)) {
-				accept = FALSE;
-			}
-			else {
-				by_num[0] = cur;
+		switch (rspamd_rfc2231_walk_step(&walk, cur, n < max_rfc2231_pieces && by_num[n] != NULL, &data)) {
+		case RSPAMD_RFC2231_STEP_EXT:
+			ext = cur;
+			ext_data = data;
+			break;
+		case RSPAMD_RFC2231_STEP_PIECE:
+			by_num[n] = cur;
+
+			if (n == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
 				first = data;
 				have_first = TRUE;
 			}
-
-			continue;
+			break;
+		default:
+			break;
 		}
-
-		nall++;
-		n = cur->rfc2231_id;
-
-		if (!accept) {
-			continue;
-		}
-
-		if (n == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
-			/* name*0*=charset'language'data: names the charset, even if it is no piece */
-			rspamd_rfc2231_split(cur->value.begin, cur->value.begin + cur->value.len, &label, &data);
-			label_cd = label;
-
-			if (data.len == 0) {
-				continue;
-			}
-		}
-
-		if (n >= max_rfc2231_pieces || by_num[n] != NULL ||
-			((cur->flags & RSPAMD_CONTENT_PARAM_RFC2231) && (cur->flags & RSPAMD_CONTENT_PARAM_QUOTED))) {
-			accept = FALSE;
-			continue;
-		}
-
-		if (n == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
-			first = data;
-			have_first = TRUE;
-		}
-
-		by_num[n] = cur;
 	}
+
+	/* Values not kept past the cap still named charsets */
+	if (whole != NULL) {
+		walk.label_b = whole->label_b;
+		walk.label_cd = whole->label_cd;
+	}
+
+	label_b = walk.label_b;
+	label_cd = walk.label_cd;
 
 	if (ext != NULL) {
 		bytes = rspamd_rfc2231_unescape(pool, ext_data.begin, ext_data.len);
@@ -556,6 +676,7 @@ rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_
 static void
 rspamd_postprocess_ct_attributes(rspamd_mempool_t *pool,
 								 GHashTable *htb,
+								 const struct rspamd_content_params_past_cap *past_cap,
 								 void (*proc)(rspamd_mempool_t *, struct rspamd_content_type_param *, gpointer ud),
 								 gpointer procd)
 {
@@ -580,7 +701,8 @@ rspamd_postprocess_ct_attributes(rspamd_mempool_t *pool,
 		 * the value), so these could change a name every reader shows
 		 */
 		if (param->flags & (RSPAMD_CONTENT_PARAM_PIECEWISE | RSPAMD_CONTENT_PARAM_RFC2231)) {
-			struct rspamd_content_type_param *chosen = rspamd_content_param_resolve(pool, param);
+			struct rspamd_content_type_param *chosen = rspamd_content_param_resolve(pool, param,
+																					rspamd_past_cap_walk(past_cap, &param->name));
 
 			if (chosen != param) {
 				param = chosen;
@@ -670,31 +792,60 @@ rspamd_content_disposition_postprocess(rspamd_mempool_t *pool,
 	}
 }
 
-/*
- * Places taken past the cap: of each name, its pieces, then two name*= (a
- * second one is piece 0 for readers, see rspamd_content_param_resolve), then
- * name, then whether a repeated piece has ended its pieces
- */
-#define rspamd_past_cap_ext max_rfc2231_pieces
-#define rspamd_past_cap_plain (max_rfc2231_pieces + 2)
-#define rspamd_past_cap_stopped (max_rfc2231_pieces + 3)
+/* Keeps a charset named past the cap in `*buf`, which grows as needed */
+static void
+rspamd_past_cap_keep_label(rspamd_mempool_t *pool, rspamd_ftok_t *label, char **buf, gsize *size)
+{
+	if (label->len > *size) {
+		*size = MAX(label->len, *size * 2);
+		*buf = rspamd_mempool_alloc(pool, *size);
+	}
 
-struct rspamd_content_params_past_cap {
-	uint8_t taken[4][(max_rfc2231_pieces + 4 + 7) / 8];
-};
+	if (label->len > 0) {
+		memcpy(*buf, label->begin, label->len);
+	}
+
+	label->begin = *buf;
+}
+
+static inline gboolean
+rspamd_past_cap_has_piece(const struct rspamd_past_cap_name *st, unsigned int n)
+{
+	return n < max_rfc2231_pieces && (st->pieces[n / 8] & (1u << (n % 8)));
+}
+
+/* Reads a value of the name, and keeps the piece it is */
+static enum rspamd_rfc2231_step
+rspamd_past_cap_read(struct rspamd_past_cap_name *st, const struct rspamd_content_type_param *param)
+{
+	unsigned int n = rspamd_rfc2231_walk_piece(param);
+	rspamd_ftok_t data;
+	enum rspamd_rfc2231_step step;
+
+	step = rspamd_rfc2231_walk_step(&st->walk, param, rspamd_past_cap_has_piece(st, n), &data);
+
+	if (step == RSPAMD_RFC2231_STEP_PIECE && n < max_rfc2231_pieces) {
+		st->pieces[n / 8] |= 1u << (n % 8);
+	}
+
+	return step;
+}
 
 /*
  * Parameters rspamd relies on are still taken past the parameters cap: a
  * reader that follows the RFC takes them from anywhere in the header, so junk
- * parameters in front must not hide them. A plain name is taken once, and so
- * is each RFC 2231 form of it: name*, and each piece name*N or name*N* that
- * readers join, and a second name*=. Each of these places is taken by the
- * first parameter that comes for it, so copies or junk of one cannot crowd
- * out another one, and the work is still bounded whatever the names look
- * like. As readers do, a repeated piece ends the pieces, and a name*= with no
- * data or a bad escape is no value. Other names with a star are no RFC 2231 forms, which readers
- * do not take for these parameters. A plain name is not taken after a plain
- * one, which is the one taken (see rspamd_content_param_resolve).
+ * parameters in front must not hide them. All the values of such a name are
+ * read as readers read them (rspamd_rfc2231_walk_step), from the first one on,
+ * and a value past the cap is kept when it is one readers take: the first
+ * plain one, the value of name*=, or a piece, each once. The first value of a
+ * name is kept whatever it is, as it decides how the name is taken (see
+ * rspamd_postprocess_ct_attributes). A value that is not kept still names a
+ * charset or ends the pieces, which the read keeps for
+ * rspamd_content_param_resolve; with no value readers take, what is kept of
+ * the values may hold less than they do. So copies or junk of one value cannot
+ * crowd out another one, and the work is still bounded whatever the names
+ * look like. Other names with a star are no RFC 2231 forms, which readers do
+ * not take for these parameters.
  */
 static gboolean
 rspamd_content_param_take_past_cap(rspamd_mempool_t *pool, GHashTable *attrs,
@@ -702,82 +853,88 @@ rspamd_content_param_take_past_cap(rspamd_mempool_t *pool, GHashTable *attrs,
 								   const char *name_start, const char *name_end,
 								   const char *value_start, const char *value_end)
 {
-	static const char *const kept[] = {"boundary", "charset", "name", "filename"};
 	const char *star = memchr(name_start, '*', name_end - name_start);
+	struct rspamd_content_type_param cur, *found = NULL, *elt;
+	struct rspamd_past_cap_name *st;
 	rspamd_ftok_t srch;
-	unsigned int place = rspamd_past_cap_plain, i;
-
-	G_STATIC_ASSERT(G_N_ELEMENTS(kept) == G_N_ELEMENTS(((struct rspamd_content_params_past_cap *) NULL)->taken));
-
-	if (star != NULL) {
-		const char *num_end = name_end;
-
-		if (star == name_end - 1) {
-			/* No data or a bad escape in it is no value, which readers skip */
-			const char *data = rspamd_rfc2231_value_data(value_start, value_end);
-
-			if (data == value_end || !rspamd_rfc2231_escapes_valid(data, value_end)) {
-				return FALSE;
-			}
-
-			place = rspamd_past_cap_ext;
-		}
-		else {
-			if (*(name_end - 1) == '*') {
-				num_end--;
-			}
-
-			if (!rspamd_rfc2231_piece_number(star + 1, num_end, &place)) {
-				return FALSE;
-			}
-		}
-	}
+	enum rspamd_rfc2231_step step;
+	int i;
 
 	srch.begin = name_start;
 	srch.len = (star ? star : name_end) - name_start;
+	i = rspamd_past_cap_name_index(srch.begin, srch.len);
 
-	for (i = 0; i < G_N_ELEMENTS(kept); i++) {
-		if (srch.len == strlen(kept[i]) &&
-			g_ascii_strncasecmp(srch.begin, kept[i], srch.len) == 0) {
-			uint8_t *taken;
+	if (i < 0) {
+		return FALSE;
+	}
 
-			if (place == rspamd_past_cap_plain && attrs != NULL) {
-				struct rspamd_content_type_param *found = g_hash_table_lookup(attrs, &srch);
+	memset(&cur, 0, sizeof(cur));
 
-				/* The first plain value is the one taken */
-				if (found != NULL &&
-					!(found->flags & (RSPAMD_CONTENT_PARAM_PIECEWISE | RSPAMD_CONTENT_PARAM_RFC2231))) {
-					return FALSE;
-				}
-			}
+	if (star != NULL &&
+		!rspamd_param_maybe_rfc2231_process(pool, &cur, (char *) name_start, (char *) name_end,
+											(char *) value_start, (char *) value_end)) {
+		return FALSE;
+	}
 
-			if (*past_cap == NULL) {
-				*past_cap = rspamd_mempool_alloc0(pool, sizeof(**past_cap));
-			}
+	if (*past_cap == NULL) {
+		*past_cap = rspamd_mempool_alloc0(pool, sizeof(**past_cap));
+	}
 
-			taken = (*past_cap)->taken[i];
+	st = &(*past_cap)->names[i];
 
-			if (place < max_rfc2231_pieces &&
-				(taken[rspamd_past_cap_stopped / 8] & (1u << (rspamd_past_cap_stopped % 8)))) {
-				return FALSE;
-			}
+	if (!st->started) {
+		/* The values before the cap, read once */
+		st->started = TRUE;
+		st->walk.accept = TRUE;
 
-			if (place == rspamd_past_cap_ext && (taken[place / 8] & (1u << (place % 8)))) {
-				place++;
-			}
-
-			if (taken[place / 8] & (1u << (place % 8))) {
-				if (place < max_rfc2231_pieces) {
-					taken[rspamd_past_cap_stopped / 8] |= 1u << (rspamd_past_cap_stopped % 8);
-				}
-
-				return FALSE;
-			}
-
-			taken[place / 8] |= 1u << (place % 8);
-
-			return TRUE;
+		if (attrs != NULL) {
+			found = g_hash_table_lookup(attrs, &srch);
 		}
+
+		DL_FOREACH(found, elt)
+		{
+			if (elt->flags & (RSPAMD_CONTENT_PARAM_RFC2231 | RSPAMD_CONTENT_PARAM_PIECEWISE)) {
+				rspamd_past_cap_read(st, elt);
+			}
+			else {
+				st->have_plain = TRUE;
+			}
+		}
+
+		st->have_head = found != NULL;
+	}
+
+	if (star == NULL) {
+		/* The first plain value is the one taken */
+		if (st->have_plain) {
+			return FALSE;
+		}
+
+		st->have_plain = TRUE;
+		st->have_head = TRUE;
+
+		return TRUE;
+	}
+
+	if (value_start > name_end && *(value_start - 1) == '"') {
+		cur.flags |= RSPAMD_CONTENT_PARAM_QUOTED;
+	}
+
+	step = rspamd_past_cap_read(st, &cur);
+
+	/* The header is not kept: neither are the charsets that point into it */
+	if (st->walk.label_b.begin == value_start) {
+		rspamd_past_cap_keep_label(pool, &st->walk.label_b, &st->label_b, &st->label_b_size);
+	}
+
+	if (st->walk.label_cd.begin == value_start) {
+		rspamd_past_cap_keep_label(pool, &st->walk.label_cd, &st->label_cd, &st->label_cd_size);
+	}
+
+	if (step != RSPAMD_RFC2231_STEP_NONE || !st->have_head) {
+		st->have_head = TRUE;
+
+		return TRUE;
 	}
 
 	return FALSE;
@@ -1199,7 +1356,7 @@ rspamd_content_type_parse(const char *in,
 
 	if ((res = rspamd_content_type_parser(cpy, len, pool)) != NULL) {
 		if (res->attrs) {
-			rspamd_postprocess_ct_attributes(pool, res->attrs,
+			rspamd_postprocess_ct_attributes(pool, res->attrs, res->past_cap,
 											 rspamd_content_type_postprocess, res);
 		}
 
@@ -1381,7 +1538,7 @@ rspamd_content_disposition_parse(const char *in,
 		rspamd_str_lc(res->lc_data, len);
 
 		if (res->attrs) {
-			rspamd_postprocess_ct_attributes(pool, res->attrs,
+			rspamd_postprocess_ct_attributes(pool, res->attrs, res->past_cap,
 											 rspamd_content_disposition_postprocess, res);
 		}
 	}

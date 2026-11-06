@@ -431,14 +431,39 @@ TEST_SUITE("content_type")
 			{"; filename*0=good.pdf; filename*=utf-8''; filename*=utf-8''evil.exe", "evil.exe"},
 			{"; filename*0=\"a.exe\"; filename*1=\"x\"; filename*1=\"y\"; filename*2=\".pdf\"", "a.exex"},
 			{"; filename*0=good.pdf; filename*=utf-8''a%ZZ; filename*=utf-8''evil.exe", "evil.exe"},
+			/* Values readers take no data of still name the charset */
+			{"; filename*=utf-8''invoice+AC4-exe; filename*=utf-7''", "invoice.exe"},
+			{"; filename*=utf-8''invoice+AC4-exe; filename*=utf-8''b; filename*=utf-8''c; filename*=utf-7''",
+			 "invoice.exe"},
+			{"; filename*0*=utf-8''invoice+AC4-exe; filename*0*=utf-7''x", "invoice.exe"},
+			{"; filename*0*=utf-7''; filename*0*=utf-8''a.exe", "a.exe"},
+			/* A third name*= ends the pieces, a quoted second one leaves piece 0 to the next */
+			{"; filename*=utf-8''%FF; filename*=utf-8''evil; filename*1=.exe; filename*=utf-8''z; filename*2=.txt",
+			 "evil.exe"},
+			{"; filename*=utf-8''%FF; filename*=\"utf-8''q\"; filename*=utf-8''evil.exe", "evil.exe"},
+			/* A first value that is no value still makes a plain one after it no first one */
+			{"; filename*=utf-8''; filename=a.txt; filename*=utf-8''evil.exe", "evil.exe"},
+			{"; filename*0*=\"utf-8''x\"; filename=a.txt; filename*=utf-8''evil.exe", "evil.exe"},
+			{"; filename*0*=utf-8''; filename=a.txt; filename*0*=utf-8''evil.exe", "evil.exe"},
 		};
 
+		/* As readers take them, and the same past the cap */
 		for (const auto &c: cap_cases) {
-			std::string hdr = "attachment" + junk + c.first;
-			auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
-			REQUIRE(cd != nullptr);
-			std::string_view fname{cd->filename.begin, cd->filename.len};
-			CHECK_MESSAGE(fname == c.second, c.first);
+			for (const auto *pad: {"", junk.c_str()}) {
+				std::string hdr = "attachment" + std::string{pad} + c.first;
+				auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+				REQUIRE(cd != nullptr);
+				std::string_view fname{cd->filename.begin, cd->filename.len};
+				CHECK_MESSAGE(fname == c.second, c.first);
+			}
+		}
+
+		for (const auto *pad: {"", junk.c_str()}) {
+			std::string hdr = "multipart/mixed" + std::string{pad} +
+							  "; boundary*=us-ascii''; boundary=AAA; boundary*=us-ascii''BBB";
+			auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(ct != nullptr);
+			CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "BBB");
 		}
 
 		rspamd_mempool_delete(pool);
