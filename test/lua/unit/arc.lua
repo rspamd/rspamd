@@ -417,6 +417,23 @@ context('ARC seal completion', function()
     assert_equal(1, #adjusted)
   end)
 
+  test('a DMARC result in capitals or with a version adjusts the reject', function()
+    -- Methods, results and names of properties are case-insensitive (RFC 8601)
+    for _, text in ipairs({
+      'DMARC=PASS Header.From=sender.example',
+      'dmarc/1=pass header.from=sender.example',
+      'dmarc / 1 = pass (policy=none) header.from=sender.example',
+    }) do
+      assert_equal(1, #adjust_dmarc({ from = from('sender.example'), aar_text = { [3] = text } }), text)
+    end
+  end)
+
+  test('a pass after the DMARC result of an element is not its result', function()
+    -- Text that a comment failed to hide, after the result the forwarder wrote
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'dmarc=fail (x)dmarc=pass header.from=bank.example' } }))
+  end)
+
   test('an encoded-word in an AAR comment adds no result', function()
     -- The sender that a forwarder wrote into a comment; decoded, it would close
     -- the comment and add a DMARC pass
@@ -476,6 +493,19 @@ context('ARC seal completion', function()
       [3] = 'spf=pass (x); dmarc=pass header.from=bank.example (y) smtp.mailfrom=a@attacker.example; '
           .. 'dmarc=fail header.from=bank.example' } })
     assert_equal(0, #adjusted)
+  end)
+
+  test('an empty element does not hide the DMARC result after it', function()
+    -- The sender ended its text with ";;", which ended the split there
+    local adjusted = adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=pass (x); dmarc=pass header.from=bank.example;; (y) smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail header.from=bank.example' } })
+    assert_equal(0, #adjusted)
+  end)
+
+  test('a method property makes no DMARC result', function()
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = '"x" method=dmarc dmarc=pass header.from=bank.example' } }))
   end)
 
   test('a DMARC result in a comment does not lift the weight of trust', function()

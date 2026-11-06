@@ -34,6 +34,36 @@ context("Lua auth results - AAR parsing", function()
       assert_equal("pass", r.arc)
     end)
 
+    test("method and result in any case, with a version", function()
+      for _, elt in ipairs({ "DMARC=Pass Header.From=example.com", "dmarc/1=pass header.from=example.com",
+                             "dmarc / 1 = pass (comment) header.from=example.com",
+                             "(first) Dmarc=(why) PASS header.from=example.com" }) do
+        local r = lua_auth_results.parse_ar_element(elt)
+        assert_not_nil(r, elt)
+        assert_equal("dmarc", r.method, elt)
+        assert_equal("pass", r.dmarc, elt)
+        assert_equal("example.com", r["header.from"], elt)
+      end
+    end)
+
+    test("the result is the one of the method, not a pair after it", function()
+      local r = lua_auth_results.parse_ar_element("dmarc=fail (x)dmarc=pass header.from=example.com")
+      assert_not_nil(r)
+      assert_equal("dmarc", r.method)
+      assert_equal("fail", r.dmarc)
+      r = lua_auth_results.parse_ar_element("spf=pass (x)dmarc=pass smtp.mailfrom=a@example.com")
+      assert_equal("spf", r.method)
+      assert_equal("pass", r.spf)
+    end)
+
+    test("a method property is no method", function()
+      local r = lua_auth_results.parse_ar_element('"x" method=dmarc dmarc=pass header.from=example.com')
+      assert_not_nil(r)
+      assert_nil(r.method)
+      r = lua_auth_results.parse_ar_element("method=dmarc dmarc=pass header.from=example.com")
+      assert_equal("method", r.method)
+    end)
+
     test("authserv-id without equals returns nil", function()
       local r = lua_auth_results.parse_ar_element("mail.example.com")
       assert_nil(r)
@@ -105,6 +135,29 @@ context("Lua auth results - AAR parsing", function()
       assert_not_nil(r)
       assert_equal("1", r.i)
       -- ar may be nil or empty since "none" has no '='
+    end)
+
+    test("an empty element does not end the split", function()
+      local r = lua_auth_results.parse_aar_header(
+        "i=1; mx.example.com;; spf=pass smtp.helo=a; ; dmarc=fail header.from=example.com")
+      assert_not_nil(r)
+      assert_equal("1", r.i)
+      assert_equal(2, #r.ar)
+      assert_equal("pass", r.ar[1].spf)
+      assert_equal("fail", r.ar[2].dmarc)
+    end)
+
+    test("a long run of blanks or escaped quotes is split in linear time", function()
+      local t0 = os.clock()
+      local r = lua_auth_results.parse_aar_header("i=1; mx.example; dmarc=" .. string.rep(" ", 4000) ..
+          "pass header.from=example.com")
+      assert_not_nil(r)
+      assert_equal("pass", r.ar[1].dmarc)
+      -- Longer ones give their instance only
+      r = lua_auth_results.parse_aar_header("i=2; mx.example; dmarc=pass" .. string.rep('"\\', 30000))
+      assert_equal("2", r.i)
+      assert_nil(r.ar)
+      assert_true(os.clock() - t0 < 1.0)
     end)
 
     test("empty string returns nil", function()

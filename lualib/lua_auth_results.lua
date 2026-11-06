@@ -302,27 +302,41 @@ local function get_ar_lpeg_atoms()
   -- A quoted-pair does not close or open a comment (RFC 5322)
   local comment = space * P { "(" * ((P '\\' * 1) + (1 - S "()\\") + V(1)) ^ 0 * ")" } * space
   local name = C((1 - S('=(" \t')) ^ 1) * space
+  -- Names of properties are case-insensitive (RFC 8601): lowercase
+  local key = (C((1 - S('=(" \t')) ^ 1) / string.lower) * space
   -- A value may be a quoted-string (RFC 8601): its content, unescaped
   local quoted_value = P '"' * Cs(((P '\\' / '') * 1 + (1 - S '"\\')) ^ 0) * P '"' * space
-  local pair = Cg(name * "=" * space * (quoted_value + name)) * space
+  local pair = Cg(key * "=" * space * (quoted_value + name)) * space
 
   -- Single AR element grammar: "dkim=pass (comment) header.d=example.com" → table
   local elt_grammar = Cf(Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
-  -- The method of an element, e.g. "dkim" of "dkim/1=pass": its first token,
-  -- after any comments, which RFC 8601 2.2 allows anywhere
-  local method_grammar = (space * comment) ^ 0 * space *
-      C((R("az", "AZ", "09") + S "_-") ^ 1) * space * S "/="
+  -- The properties of an element, after its result
+  local props_grammar = Cf(Ct("") * space * (pair + comment + doublequoted) ^ 0, rawset)
+  -- The method and the result of an element, e.g. "dkim" and "pass" of
+  -- "dkim/1=pass" (RFC 8601 2.2: methodspec), and where its properties start.
+  -- Comments may come anywhere, spaces around "/" and "=" too
+  local keyword = (R("az", "AZ", "09") + S "_-") ^ 1
+  local methodspec_grammar = (space * comment) ^ 0 * space * C(keyword) * space *
+      (P "/" * space * R("09") ^ 1 * space) ^ -1 * P "=" * space * comment ^ 0 * space *
+      C(keyword) * lpeg.Cp()
 
   -- AAR header split grammar: splits on ";" while respecting comments and quotes.
   -- Each captured element is the raw text between semicolons (trimmed).
-  local safe_char = (comment + doublequoted + (1 - S ";")) -- consume one "safe" token
-  local element = C(safe_char ^ 1) -- capture the raw text of one element
+  -- Without the blanks in front, which (1 - S ";") takes one by one: a token
+  -- starting with them would scan a run of blanks again from each of them
+  local comment_core = P { "(" * ((P '\\' * 1) + (1 - S "()\\") + V(1)) ^ 0 * ")" }
+  local doublequoted_core = P '"' * ((1 - S '"\\') + (P '\\' * 1)) ^ 0 * '"'
+  local safe_char = (comment_core + doublequoted_core + (1 - S ";")) -- consume one "safe" token
+  -- The raw text of one element, which may be empty (";;"): the split goes on
+  -- to the end, so that the elements after it are not lost
+  local element = C(safe_char ^ 0)
   local sep = P ";" * space
-  local aar_split_grammar = Ct(space * element * (sep * element) ^ 0)
+  local aar_split_grammar = Ct(space * element * (sep * element) ^ 0) * -1
 
   ar_lpeg_atoms = {
     elt_grammar = elt_grammar,
-    method_grammar = method_grammar,
+    props_grammar = props_grammar,
+    methodspec_grammar = methodspec_grammar,
     aar_split_grammar = aar_split_grammar,
   }
   return ar_lpeg_atoms
@@ -331,22 +345,47 @@ end
 -- Parse a single AR element (e.g. "dkim=pass header.d=example.com") into a kv table.
 -- The table also has `method`: the method of the element, e.g. "dkim". Only the
 -- result of that method is a result of the element, other `key=value` pairs
--- are properties, or text that a comment failed to hide.
+-- are properties, or text that a comment failed to hide. The result is under
+-- the method, lowercased as names of properties are, whatever case or version
+-- the element has ("DMARC=Pass", "dmarc/1=pass" give dmarc = "pass").
 local function parse_ar_element(elt)
   local atoms = get_ar_lpeg_atoms()
-  local res = atoms.elt_grammar:match(elt)
-  if res then
-    local method = atoms.method_grammar:match(elt)
-    res.method = method and method:lower() or nil
+  local method, result, props_start = atoms.methodspec_grammar:match(elt)
+  if not method then
+    -- No method, whatever its properties say
+    local res = atoms.elt_grammar:match(elt)
+    if res then
+      res.method = nil
+    end
+    return res
   end
+  local res = atoms.props_grammar:match(elt, props_start) or {}
+  method = method:lower()
+  -- The result of the method, not a pair after it that looks like one
+  res[method] = result:lower()
+  -- Last, so no property (or a method named "method") takes its place
+  res.method = method
   return res
 end
 exports.parse_ar_element = parse_ar_element
 
+-- Longer AARs are not split: real ones are a few hundred bytes, and the split
+-- of a crafted one costs a square of its length (unclosed quotes or comments
+-- are scanned to the end from each of them)
+local max_aar_len = 4096
+
 -- Split an AAR header value into elements by ";" while respecting comments and
 -- quoted strings, then parse each element.  Returns { i = <number>,
--- ar = { {method=result, ...}, ... } } or nil on failure.
+-- ar = { {method=result, ...}, ... } } or nil on failure. An AAR longer than
+-- max_aar_len gives its i= only, with no results and truncated = true.
 local function parse_aar_header(decoded)
+  if decoded:match("^[%s;]*$") then
+    return nil
+  end
+  if #decoded > max_aar_len then
+    local i = decoded:match("^%s*i%s*=%s*(%d+)%s*;")
+    return i and { i = i, truncated = true } or nil
+  end
   local atoms = get_ar_lpeg_atoms()
   local elts = atoms.aar_split_grammar:match(decoded)
   if not elts or #elts == 0 then
@@ -356,7 +395,7 @@ local function parse_aar_header(decoded)
   local result = {}
 
   for _, raw_elt in ipairs(elts) do
-    local trimmed = raw_elt:match("^%s*(.-)%s*$")
+    local trimmed = lua_util.rspamd_str_trim(raw_elt)
     if trimmed and #trimmed > 0 and trimmed:match("^i%s*=%s*%d+$") then
       -- ARC instance tag
       local v = trimmed:match("^i%s*=%s*(%d+)$")
