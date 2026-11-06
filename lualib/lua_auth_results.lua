@@ -320,24 +320,10 @@ local function get_ar_lpeg_atoms()
       (P "/" * space * R("09") ^ 1 * space) ^ -1 * P "=" * space * comment ^ 0 * space *
       C(keyword) * lpeg.Cp()
 
-  -- AAR header split grammar: splits on ";" while respecting comments and quotes.
-  -- Each captured element is the raw text between semicolons (trimmed).
-  -- Without the blanks in front, which (1 - S ";") takes one by one: a token
-  -- starting with them would scan a run of blanks again from each of them
-  local comment_core = P { "(" * ((P '\\' * 1) + (1 - S "()\\") + V(1)) ^ 0 * ")" }
-  local doublequoted_core = P '"' * ((1 - S '"\\') + (P '\\' * 1)) ^ 0 * '"'
-  local safe_char = (comment_core + doublequoted_core + (1 - S ";")) -- consume one "safe" token
-  -- The raw text of one element, which may be empty (";;"): the split goes on
-  -- to the end, so that the elements after it are not lost
-  local element = C(safe_char ^ 0)
-  local sep = P ";" * space
-  local aar_split_grammar = Ct(space * element * (sep * element) ^ 0) * -1
-
   ar_lpeg_atoms = {
     elt_grammar = elt_grammar,
     props_grammar = props_grammar,
     methodspec_grammar = methodspec_grammar,
-    aar_split_grammar = aar_split_grammar,
   }
   return ar_lpeg_atoms
 end
@@ -369,10 +355,102 @@ local function parse_ar_element(elt)
 end
 exports.parse_ar_element = parse_ar_element
 
--- Longer AARs are not split: real ones are a few hundred bytes, and the split
--- of a crafted one costs a square of its length (unclosed quotes or comments
--- are scanned to the end from each of them)
-local max_aar_len = 4096
+-- Splits an AAR value into the raw text of its elements, on each ';' that is
+-- not in a comment or a quoted string, each element without the blanks in
+-- front of it; an empty element (";;") does not end the split. A comment or a
+-- quoted string that does not close is none: its '(' or '"' is text then.
+-- In linear time. A comment or a quoted string that starts at a '(' or a '"'
+-- reads quoted-pairs ('\' and the byte after it) from the next byte, as any
+-- of them read before it does once past that '(' or '"'. So one read of the
+-- quoted-pairs from the first of them finds where each of them closes: a
+-- quoted string at the next '"' that is no quoted-pair, a comment where the
+-- depth of the parentheses falls below the one it starts at. Comments nested
+-- deeper than max_comment_depth give nil: the element grammars cannot read
+-- them, and no real AAR has them
+local max_comment_depth = 200
+
+local function split_aar_header(s)
+  local byte = string.byte
+  local n = #s
+  local closes = {}
+  local first = s:find('[("]')
+
+  if first then
+    local depth, nopen, nquotes = 0, 0, 0
+    local open_pos, open_target, quote_pos = {}, {}, {}
+    local escaped = false
+
+    for i = first, n do
+      local c = byte(s, i)
+      if c == 40 then
+        -- '(': its comment closes when the depth falls below its own
+        nopen = nopen + 1
+        open_pos[nopen] = i
+        if escaped then
+          open_target[nopen] = depth - 1
+        else
+          open_target[nopen] = depth
+          depth = depth + 1
+          if depth > max_comment_depth then
+            return nil
+          end
+        end
+      elseif c == 41 and not escaped then
+        depth = depth - 1
+        while nopen > 0 and open_target[nopen] >= depth do
+          closes[open_pos[nopen]] = i
+          nopen = nopen - 1
+        end
+      elseif c == 34 then
+        -- '"': closes the quoted strings before it, unless it is a quoted-pair
+        if not escaped then
+          for k = 1, nquotes do
+            closes[quote_pos[k]] = i
+          end
+          nquotes = 0
+        end
+        nquotes = nquotes + 1
+        quote_pos[nquotes] = i
+      end
+      escaped = not escaped and c == 92 and i > first
+    end
+  end
+
+  local function skip_blanks(pos)
+    while pos <= n do
+      local c = byte(s, pos)
+      if c ~= 32 and c ~= 9 then
+        break
+      end
+      pos = pos + 1
+    end
+    return pos
+  end
+
+  local elts = {}
+  local i = skip_blanks(1)
+  local start = i
+
+  while i <= n do
+    local c = byte(s, i)
+    if (c == 40 or c == 34) and closes[i] then
+      i = closes[i] + 1
+    elseif c == 59 then
+      elts[#elts + 1] = s:sub(start, i - 1)
+      i = skip_blanks(i + 1)
+      start = i
+    else
+      i = i + 1
+    end
+  end
+  elts[#elts + 1] = s:sub(start, n)
+
+  return elts
+end
+exports.split_aar_header = split_aar_header
+
+-- Longer AARs are not read: real ones are a few hundred bytes
+local max_aar_len = 16384
 
 -- Split an AAR header value into elements by ";" while respecting comments and
 -- quoted strings, then parse each element.  Returns { i = <number>,
@@ -386,9 +464,8 @@ local function parse_aar_header(decoded)
     local i = decoded:match("^%s*i%s*=%s*(%d+)%s*;")
     return i and { i = i, truncated = true } or nil
   end
-  local atoms = get_ar_lpeg_atoms()
-  local elts = atoms.aar_split_grammar:match(decoded)
-  if not elts or #elts == 0 then
+  local elts = split_aar_header(decoded)
+  if not elts then
     return nil
   end
 

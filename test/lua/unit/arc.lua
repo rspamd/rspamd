@@ -523,7 +523,7 @@ context('ARC seal completion', function()
 
   test('an AAR too long to be read gives no DMARC result to trust', function()
     local dkim = {}
-    for i = 1, 60 do
+    for i = 1, 240 do
       dkim[#dkim + 1] = string.format('dkim=pass header.d=sig%d.bank.example header.s=selector%d-long-selector-name', i, i)
     end
     assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {

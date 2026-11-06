@@ -144,8 +144,9 @@ local function parse_arc_header(hdr, target, is_aar)
         end, elts)
       )
     else
-      -- For AAR: use LPeg-based parser that respects comments and quoted
-      -- strings when splitting on ';' (fixes #5963)
+      -- For AAR: a parser that respects comments and quoted strings when
+      -- splitting on ';' (fixes #5963); comments nested too deep give no
+      -- AAR, which fails the chain
       -- Not the decoded value: an encoded-word decoded in a comment (e.g. the
       -- sender a forwarder put there) would close it and add a result
       local parsed = lua_auth_results.parse_aar_header(val.value)
@@ -345,7 +346,7 @@ local function arc_callback(task)
   parse_arc_header(arc_sig_headers, cbdata.sigs, false)
 
   if arc_ar_headers then
-    -- Malformed results (e.g. comments nested too deep for the parser) fail the chain
+    -- Results that the parser cannot read fail the chain
     local ok, err = pcall(parse_arc_header, arc_ar_headers, cbdata.ars, true)
     if not ok then
       rspamd_logger.infox(task, 'cannot parse ARC-Authentication-Results: %s', err)

@@ -153,11 +153,31 @@ context("Lua auth results - AAR parsing", function()
           "pass header.from=example.com")
       assert_not_nil(r)
       assert_equal("pass", r.ar[1].dmarc)
+      -- Quotes and comments that do not close, which the split read to the end from each of them
+      r = lua_auth_results.parse_aar_header("i=3; mx.example; dmarc=pass header.from=example.com; x=" ..
+          string.rep('"\\', 4000) .. string.rep('(\\', 4000))
+      assert_equal("pass", r.ar[1].dmarc)
       -- Longer ones give their instance only
       r = lua_auth_results.parse_aar_header("i=2; mx.example; dmarc=pass" .. string.rep('"\\', 30000))
       assert_equal("2", r.i)
       assert_nil(r.ar)
       assert_true(os.clock() - t0 < 1.0)
+    end)
+
+    test("the split respects comments and quoted strings that close, and only them", function()
+      local split = lua_auth_results.split_aar_header
+      assert_rspamd_table_eq({ actual = split('i=1; a (x;y) b; "c;d" e;; f'),
+                               expect = { 'i=1', 'a (x;y) b', '"c;d" e', '', 'f' } })
+      -- Comments nested too deep to be read give nothing
+      assert_nil(split('a; (' .. string.rep('(', 250) .. string.rep(')', 251) .. ' b'))
+      assert_nil(lua_auth_results.parse_aar_header('i=1; mx.example; dmarc=pass ' ..
+          string.rep('(', 250) .. string.rep(')', 250)))
+      assert_equal(2, #split('a; (' .. string.rep('(', 150) .. string.rep(')', 151) .. ' b'))
+      -- An unclosed one is text: the ';' after it splits
+      assert_rspamd_table_eq({ actual = split('a "b; c (d; e'), expect = { 'a "b', 'c (d', 'e' } })
+      -- Quoted-pairs, and comments in comments
+      assert_rspamd_table_eq({ actual = split('a (b \\) ; (c) d) ; e "f\\";g"'),
+                               expect = { 'a (b \\) ; (c) d) ', 'e "f\\";g"' } })
     end)
 
     test("empty string returns nil", function()
