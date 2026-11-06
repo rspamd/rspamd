@@ -1666,6 +1666,19 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			href_value.remove_suffix(1);
 		}
 
+		/*
+		 * Browsers remove tabs and line breaks anywhere in a link before
+		 * they read it: `/<tab>/evil.com` is `//evil.com`, another host
+		 */
+		auto is_tab_or_newline = [](char c) { return c == '\t' || c == '\n' || c == '\r'; };
+
+		if (std::any_of(href_value.begin(), href_value.end(), is_tab_or_newline)) {
+			auto *buf = rspamd_mempool_alloc_buffer(pool, href_value.size());
+			auto *last = std::remove_copy_if(href_value.begin(), href_value.end(), buf,
+											 is_tab_or_newline);
+			href_value = {buf, (std::size_t) (last - buf)};
+		}
+
 		if (hc && hc->base_url) {
 			/*
 			 * Resolved as browsers do: a link with a scheme of its own is not

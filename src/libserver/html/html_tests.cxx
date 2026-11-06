@@ -359,6 +359,20 @@ TEST_SUITE("html")
 			 {"https://evil.example.net/x", "https://evil.example.net/y", "http://evil.example.net/z",
 			  "https://www.paypal.com/p", "https://www.paypal.com/a/rel"},
 			 std::nullopt},
+			/* One slash or backslash after a special scheme is read as two by browsers */
+			{"<a href=\"http:/evil.example.net/a\">1</a>"
+			 "<a href=\"HTTPS:\\evil.example.net/b\">2</a>"
+			 "<base href=\"https://www.paypal.com/a/\">"
+			 "<a href=\"http:/&#9;evil.example.net/c\">3</a>",
+			 {"http://evil.example.net/a", "https://evil.example.net/b", "http://evil.example.net/c"},
+			 std::nullopt},
+			/* Browsers remove tabs and line breaks before they resolve a link */
+			{"<base href=\"https://www.paypal.com/a/\">"
+			 "<a href=\"/&#9;/evil.example.net/x\">1</a>"
+			 "<a href=\"ht&#10;tps://evil.example.net/y\">2</a>"
+			 "<a href=\"https:/\r/evil.example.net/z\">3</a>",
+			 {"https://evil.example.net/x", "https://evil.example.net/y", "https://evil.example.net/z"},
+			 std::nullopt},
 			/* A tag the input ends in */
 			{"<form action=\"https://good.example.org/f\"><button formaction=\"https://evil.example.net/e\">",
 			 {"https://good.example.org/f", "https://evil.example.net/e"},
