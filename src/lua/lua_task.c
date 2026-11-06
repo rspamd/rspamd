@@ -1415,6 +1415,10 @@ LUA_FUNCTION_DEF(task, add_timer);
  * @method task:rewrite_html_urls(callback)
  * Rewrites URLs in HTML parts using the specified Lua callback function.
  * The callback receives (task, url) and should return the replacement URL or nil.
+ * The url is the attribute value as browsers read it, the one the replacement
+ * takes the place of: it may differ from the text of task:get_urls(), e.g. an
+ * unquoted value with a quote in it (`href=http://x.example/a"b`), so compare
+ * hosts or parsed URLs rather than text.
  * @param {function} callback Lua function to call for each URL
  * @return {table|nil} table of rewritten HTML parts indexed by part number, or nil on error
  */
@@ -1424,6 +1428,7 @@ LUA_FUNCTION_DEF(task, rewrite_html_urls);
  * @method task:get_html_urls()
  * Extracts all URLs from HTML parts without rewriting.
  * Useful for async URL checking workflows where URLs need to be batched.
+ * Each url is the one task:rewrite_html_urls() gives to its callback.
  * @return {table|nil} table indexed by part number, each containing an array of URL info tables with keys: url, attr, tag
  */
 /* Implemented in lua_html_url_rewrite.cxx as C++ binding */

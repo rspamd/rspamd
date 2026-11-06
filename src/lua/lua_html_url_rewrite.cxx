@@ -59,7 +59,9 @@ int lua_task_get_html_urls(lua_State *L)
 		auto candidates = rspamd::html::enumerate_rewrite_candidates(
 			static_cast<const rspamd::html::html_content *>(text_part->html),
 			task,
-			text_part->mime_part->part_number);
+			text_part->mime_part->part_number,
+			std::string_view{(const char *) text_part->utf_raw_content->data,
+							 text_part->utf_raw_content->len});
 
 		if (candidates.empty()) {
 			continue;

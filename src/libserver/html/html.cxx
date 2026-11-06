@@ -1090,7 +1090,8 @@ struct tag_content_parser_state {
  * Unless the quote is in the authority of the link and an `@` follows there:
  * browsers go to the host after it then (`https://www.paypal.com"@evil.com/`),
  * so the whole value is kept. Its place in the source is the whole value in
- * any case, which URL rewriting replaces
+ * any case, which URL rewriting replaces, and gives to its policy whole (see
+ * whole_unquoted_value)
  */
 static auto
 html_unquoted_value_length(std::string_view value, std::size_t quote) -> std::size_t

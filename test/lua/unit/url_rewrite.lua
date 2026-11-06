@@ -575,9 +575,9 @@ Content-Type: text/html
 
   test("Links are rewritten as browsers read their values", function()
     -- A missing closing quote: browsers take the value up to the next quote.
-    -- An unquoted value goes on past a quote in browsers, which rspamd reads
-    -- up to the quote (href=3D"... of undecoded quoted-printable is no link
-    -- to that site). Each is replaced as a whole
+    -- An unquoted value goes on past a quote in browsers: rspamd reads its
+    -- link up to the quote (href=3D"... of undecoded quoted-printable is no
+    -- link to that site), and the policy gets all of it, which is replaced
     local msg = table.concat({
       "From: test@example.com",
       "To: nobody@example.com",
@@ -601,7 +601,7 @@ Content-Type: text/html
 
     assert_rspamd_table_eq({
       actual = seen,
-      expect = { "http://example.com/open target=", "3D", "http://example.com/cut" },
+      expect = { "http://example.com/open target=", '3D"http://example.com/qp"', 'http://example.com/cut"tail' },
     })
     assert_not_nil(result, "rewrite should return results")
     for _, html_text in pairs(result) do
@@ -610,6 +610,79 @@ Content-Type: text/html
       assert_not_nil(html:find('<a href=http://safe.com/redirected>B</a>', 1, true), html)
       assert_not_nil(html:find('<a href=http://safe.com/redirected>C</a>', 1, true), html)
     end
+    task:destroy()
+  end)
+
+  test("The policy gets all of an unquoted value with a quote in it", function()
+    -- A URL the policy returns for a part of it would lose the rest
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html",
+      "",
+      '<html><body><a href=https://example.org/reset?token=abc"def&amp;x=1>A</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local listed = {}
+    for _, urls in pairs(task:get_html_urls() or {}) do
+      for _, u in ipairs(urls) do
+        listed[#listed + 1] = u.url
+      end
+    end
+    assert_rspamd_table_eq({
+      actual = listed,
+      expect = { 'https://example.org/reset?token=abc"def&x=1' },
+    })
+
+    local seen = {}
+    local result = task:rewrite_html_urls(function(_, url)
+      seen[#seen + 1] = url
+      return "https://safe.example/?u=" .. url
+    end)
+    assert_rspamd_table_eq({
+      actual = seen,
+      expect = { 'https://example.org/reset?token=abc"def&x=1' },
+    })
+    for _, html_text in pairs(result) do
+      local html = tostring(html_text)
+      assert_not_nil(html:find('<a href=https://safe.example/?u=https://example.org/reset?token=abc&quot;def&amp;x=1>A</a>',
+          1, true), html)
+    end
+    task:destroy()
+  end)
+
+  test("The policy gets all of such a value whatever its references or NUL", function()
+    -- The rest from the quote on is read on its own, as browsers read it
+    local msg = table.concat({
+      "From: test@example.com",
+      "To: nobody@example.com",
+      "Subject: test",
+      "Content-Type: text/html; charset=utf-8",
+      "",
+      '<html><body><a href=https://example.org/caf&eacute"tail>A</a>' ..
+          '<a href=http://x.example/\0"a>B</a>' ..
+          '<a href=https://example.org/?a=&amp;x&#"c>C</a></body></html>',
+      "",
+    }, "\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local seen = {}
+    task:rewrite_html_urls(function(_, url)
+      seen[#seen + 1] = url
+      return "https://safe.example/"
+    end)
+    assert_rspamd_table_eq({
+      actual = seen,
+      expect = { 'https://example.org/caf\195\169"tail', 'http://x.example/\239\191\189"a',
+                 'https://example.org/?a=&x&#"c' },
+    })
     task:destroy()
   end)
 
@@ -665,7 +738,7 @@ Content-Type: text/html
       seen[#seen + 1] = url
       return "http://safe.com/redirected"
     end)
-    assert_rspamd_table_eq({ actual = seen, expect = { "http://evil.example/" } })
+    assert_rspamd_table_eq({ actual = seen, expect = { 'http://evil.example/"' } })
     for _, html_text in pairs(result) do
       local html = tostring(html_text)
       assert_not_nil(html:find('<a href=http://safe.com/redirected xlink:href="http://other.example/">', 1, true), html)

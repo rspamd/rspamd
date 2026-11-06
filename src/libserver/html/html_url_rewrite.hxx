@@ -70,9 +70,12 @@ struct rewrite_patch {
  * @param hc HTML content structure
  * @param task Rspamd task
  * @param part_id MIME part ID
+ * @param source the UTF-8 HTML buffer (utf_raw_content) the spans point into,
+ * where a value cut at a quote is read whole
  * @return vector of rewrite candidates
  */
-auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *task, int part_id)
+auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *task, int part_id,
+								  std::string_view source)
 	-> std::vector<rewrite_candidate>;
 
 /**
