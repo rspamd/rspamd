@@ -404,6 +404,75 @@ context("Zip archive listing", function()
         rspamd_util.pack("<I2", #name) .. "\0\0" .. name
   end
 
+  test("a directory in the data of a file does not hide the first archive", function()
+    -- 7-Zip walks the entries of the first archive by their sizes, past
+    -- data that looks like a directory and its end record
+    local name = "payload.exe"
+    local fake = cd_rec("fake.txt", 0, "")
+    local data = "MZ" .. fake .. eocd(#fake, 30 + #name + 2)
+    local lh = stored_lh(name, data)
+    local cd = cd_rec(name, 0, "")
+    local first = lh .. data .. cd .. eocd(#cd, #lh + #data)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. make_zip("readme.txt", ""))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+    -- The size is only in the data descriptor after the data
+    lh = stored_lh(name, data, 8, 0)
+    local dd = "PK\7\8" .. string.rep("\0", 4) .. rspamd_util.pack("<I4", #data) ..
+        rspamd_util.pack("<I4", #data)
+    first = lh .. data .. dd .. cd .. eocd(#cd, #lh + #data + #dd)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. make_zip("readme.txt", ""))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+  end)
+
+  test("a record that runs past its end record does not hide the first archive", function()
+    -- The lengths of the first record cover the end record of its archive
+    local lh = stored_lh("payload.exe", "") .. stored_lh("x.txt", "")
+    local cd = cd_rec("payload.exe", 0, "", 60) .. cd_rec("x.txt", 41, "")
+    local first = lh .. cd .. eocd(#cd, #lh)
+    local files = files_of(first .. make_zip("mid.txt", "") .. make_zip("readme.txt", ""))
+    assert_true(#files > 0)
+    local listed = {}
+    for _, f in ipairs(files) do
+      listed[f] = true
+    end
+    assert_true(listed["payload.exe"])
+    assert_true(listed["readme.txt"])
+  end)
+
+  local function has_all(files, names)
+    local listed = {}
+    for _, f in ipairs(files) do
+      listed[f] = true
+    end
+    for _, n in ipairs(names) do
+      if not listed[n] then
+        return false
+      end
+    end
+    return true
+  end
+
+  test("a directory in the zip64 end record of the first archive is passed", function()
+    local data = "MZ"
+    local lh = stored_lh("payload.exe", data) .. data
+    local cd = cd_rec("payload.exe", 0, "")
+    local z64_at = #lh + #cd
+    local fake = cd_rec("fake.txt", 0, "")
+    local ext = fake .. eocd(#fake, z64_at + 56)
+    local z64 = "PK\6\6" .. rspamd_util.pack("<I8", 44 + #ext) .. string.rep("\0", 28) ..
+        rspamd_util.pack("<I8", #cd) .. rspamd_util.pack("<I8", #lh) .. ext
+    local first = lh .. cd .. z64 .. z64_loc(z64_at) .. "PK\5\6" .. string.rep("\0", 4) ..
+        string.rep("\255", 4) .. string.rep("\255", 8) .. "\0\0"
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(first .. make_zip("readme.txt", ""))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+  end)
+
   test("a maxed directory offset without zip64 records keeps the archive", function()
     -- Info-ZIP `zip -fz` to a pipe: readers take the directory right before
     -- the record
@@ -414,6 +483,21 @@ context("Zip archive listing", function()
       actual = files_of(lh .. cd .. eocd(#cd, 0xffffffff)),
       expect = { "payload.exe" },
     })
+  end)
+
+  test("the size in the header of an entry with a descriptor does not lead the walk", function()
+    -- 7-Zip takes the descriptor whose size is its distance from the data
+    local fake = cd_rec("decoy.txt", 0, "")
+    local data = string.rep("A", 40) .. fake .. eocd(#fake, 30 + 5 + 40) .. string.rep("B", 30)
+    local lh = stored_lh("a.txt", data, 8, 40)
+    local dd = "PK\7\8" .. string.rep("\0", 4) .. rspamd_util.pack("<I4", #data) ..
+        rspamd_util.pack("<I4", #data)
+    local lh2 = stored_lh("payload.exe", "MZ")
+    local entries = lh .. data .. dd .. lh2 .. "MZ"
+    local cd = cd_rec("a.txt", 0, "") .. cd_rec("payload.exe", #lh + #data + #dd, "")
+    local first = entries .. cd .. eocd(#cd, #entries)
+    assert_true(has_all(files_of(first .. make_zip("readme.txt", "")),
+        { "a.txt", "payload.exe", "readme.txt" }))
   end)
 
 end)
