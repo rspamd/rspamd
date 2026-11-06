@@ -451,6 +451,52 @@ rspamd_archive_zip_check_eocd(const unsigned char *start,
 	return RSPAMD_ZIP_EOCD_USABLE;
 }
 
+/*
+ * The next Info-ZIP Unicode Path field in `extra` from `*pos`. Readers show
+ * its name when its CRC is the one of the name field (7-Zip, Python) or of
+ * the Unicode Path before it (bsdtar), whatever its version. `*upath` holds
+ * the one before, NULL at first
+ */
+static gboolean
+rspamd_archive_zip_next_unicode_path(const unsigned char *extra, gsize extra_len, gsize *pos,
+									 const unsigned char *name, gsize name_len,
+									 const unsigned char **upath, gsize *upath_len)
+{
+	uint32_t name_crc = crc32(0, (const Bytef *) name, name_len);
+
+	while (*pos <= extra_len && extra_len - *pos >= 4) {
+		const unsigned char *p = extra + *pos;
+		uint16_t hid, hlen;
+		uint32_t crc;
+
+		memcpy(&hid, p, sizeof(hid));
+		memcpy(&hlen, p + 2, sizeof(hlen));
+		hid = GUINT16_FROM_LE(hid);
+		hlen = GUINT16_FROM_LE(hlen);
+
+		if (hlen > extra_len - *pos - 4) {
+			break;
+		}
+
+		*pos += 4 + hlen;
+
+		if (hid == 0x7075 && hlen > 5) {
+			memcpy(&crc, p + 5, sizeof(crc));
+			crc = GUINT32_FROM_LE(crc);
+
+			if (crc == name_crc ||
+				(*upath != NULL && crc == crc32(0, (const Bytef *) *upath, *upath_len))) {
+				*upath = p + 9;
+				*upath_len = hlen - 5;
+
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
 enum rspamd_zip_cd_read {
 	RSPAMD_ZIP_CD_OK = 0,
 	/* Stopped at a record that runs past the end record, which is listed */
@@ -614,7 +660,40 @@ rspamd_archive_zip_read_records(struct rspamd_task *task,
 					/* Truncated or malformed extra field */
 					break;
 				}
+
 				p += hlen + sizeof(uint16_t) * 2;
+			}
+
+			const unsigned char *upath = NULL;
+			gsize upath_len = 0, upath_pos = 0;
+
+			while (rspamd_archive_zip_next_unicode_path(extra, extra_end - extra, &upath_pos,
+														cd + cd_basic_len, fname_len,
+														&upath, &upath_len)) {
+				/* The name these readers show, listed as well */
+				struct rspamd_archive_file *uf = g_malloc0(sizeof(*uf));
+
+				rspamd_archive_file_try_utf(task, arch, uf, (const char *) upath, upath_len);
+
+				if (uf->fname == NULL || g_string_equal(uf->fname, f->fname)) {
+					rspamd_archive_file_free(uf);
+				}
+				else {
+					uf->compressed_size = f->compressed_size;
+					uf->uncompressed_size = f->uncompressed_size;
+					uf->flags |= (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) | RSPAMD_ARCHIVE_FILE_ALIAS;
+
+					if (uf->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+					}
+
+					if (!rspamd_archive_file_add(task, arch, uf)) {
+						return RSPAMD_ZIP_CD_LIMIT;
+					}
+
+					/* Its record, as for any file listed */
+					g_array_append_val(listed->records, cd);
+				}
 			}
 		}
 
@@ -767,6 +846,54 @@ rspamd_archive_zip_entry_follows(const unsigned char *start, uint64_t limit, uin
 }
 
 /*
+ * The local headers a walk reached: one per name and extra field, which
+ * copies of a header do not hide another one behind
+ */
+struct rspamd_zip_locals {
+	GArray *lhs;        /* uint64_t offsets */
+	GHashTable *seen;   /* rspamd_ftok_t * over the name and extra field */
+	gboolean truncated; /* some were dropped at the files limit */
+};
+
+static unsigned int
+rspamd_archive_ftok_hash(gconstpointer key)
+{
+	return rspamd_ftok_hash((const rspamd_ftok_t *) key);
+}
+
+static gboolean
+rspamd_archive_ftok_equal(gconstpointer a, gconstpointer b)
+{
+	return rspamd_ftok_cmp((const rspamd_ftok_t *) a, (const rspamd_ftok_t *) b) == 0;
+}
+
+static rspamd_ftok_t *
+rspamd_archive_ftok_dup(const rspamd_ftok_t *tok)
+{
+	rspamd_ftok_t *res = g_new(rspamd_ftok_t, 1);
+
+	*res = *tok;
+
+	return res;
+}
+
+static void
+rspamd_archive_zip_locals_init(struct rspamd_zip_locals *locals)
+{
+	locals->lhs = g_array_new(FALSE, FALSE, sizeof(uint64_t));
+	locals->seen = g_hash_table_new_full(rspamd_archive_ftok_hash, rspamd_archive_ftok_equal,
+										 g_free, NULL);
+	locals->truncated = FALSE;
+}
+
+static void
+rspamd_archive_zip_locals_free(struct rspamd_zip_locals *locals)
+{
+	g_array_free(locals->lhs, TRUE);
+	g_hash_table_unref(locals->seen);
+}
+
+/*
  * A data descriptor at `at` for the data from `data`: the size it holds is
  * their distance and an entry follows it. With its signature or without
  * (`signed_only` FALSE), 32 or 64-bit. Returns its end, or G_MAXUINT64
@@ -819,12 +946,14 @@ rspamd_archive_zip_descriptor_at(const unsigned char *start, uint64_t limit,
  * do: each local header, its data by the size it holds, its data descriptor,
  * up to the central directory, whose records are walked by their lengths too.
  * Data that looks like a directory and its end record, in a file or in a
- * record, is passed this way. Returns where the end record of that archive is: right after its
+ * record, is passed this way. The local headers walked are kept in `locals`.
+ * Returns where the end record of that archive is: right after its
  * directory, or, when the walk cannot go on, at the local header it stopped
  * at
  */
 static uint64_t
-rspamd_archive_zip_walk_first(const unsigned char *start, uint64_t limit)
+rspamd_archive_zip_walk_first(const unsigned char *start, uint64_t limit,
+							  struct rspamd_zip_locals *locals)
 {
 	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
 							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02},
@@ -853,6 +982,21 @@ rspamd_archive_zip_walk_first(const unsigned char *start, uint64_t limit)
 
 		if (data > limit) {
 			return entry;
+		}
+
+		if (data > pos + lh_basic_len) {
+			rspamd_ftok_t key = {.begin = (const char *) start + pos + lh_basic_len,
+								 .len = data - pos - lh_basic_len};
+
+			if (!g_hash_table_contains(locals->seen, &key)) {
+				if (locals->lhs->len < max_archive_files) {
+					g_hash_table_add(locals->seen, rspamd_archive_ftok_dup(&key));
+					g_array_append_val(locals->lhs, entry);
+				}
+				else {
+					locals->truncated = TRUE;
+				}
+			}
 		}
 
 		if (csize == G_MAXUINT32) {
@@ -987,6 +1131,166 @@ rspamd_archive_zip_walk_first(const unsigned char *start, uint64_t limit)
 }
 
 /*
+ * The files of the local headers walked that no directory listed: 7-Zip
+ * lists these entries too, and so do readers that go by local headers
+ * (bsdtar, macOS), so that a directory that names other files, or data that
+ * looks like a directory, does not hide them
+ */
+static void
+rspamd_archive_zip_list_local(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  struct rspamd_zip_listed *listed,
+							  const unsigned char *start,
+							  struct rspamd_zip_locals *locals)
+{
+	const uint64_t lh_basic_len = 30;
+	GHashTable *names, *raw_names;
+
+	if (locals->truncated) {
+		arch->flags |= RSPAMD_ARCHIVE_FILES_TRUNCATED;
+	}
+
+	if (locals->lhs->len == 0) {
+		return;
+	}
+
+	names = g_hash_table_new((GHashFunc) g_string_hash, (GEqualFunc) g_string_equal);
+	/* Names as they are, each converted once: a name of a record is not again */
+	raw_names = g_hash_table_new_full(rspamd_archive_ftok_hash, rspamd_archive_ftok_equal,
+									  g_free, NULL);
+
+	for (unsigned int i = 0; i < arch->files->len; i++) {
+		struct rspamd_archive_file *f = g_ptr_array_index(arch->files, i);
+
+		if (f->fname) {
+			g_hash_table_add(names, f->fname);
+		}
+	}
+
+	for (unsigned int i = 0; i < listed->records->len; i++) {
+		const unsigned char *cd = g_array_index(listed->records, const unsigned char *, i);
+		uint16_t fname_len;
+		rspamd_ftok_t key;
+
+		memcpy(&fname_len, cd + 28, sizeof(fname_len));
+		key.begin = (const char *) cd + 46;
+		key.len = GUINT16_FROM_LE(fname_len);
+		g_hash_table_add(raw_names, rspamd_archive_ftok_dup(&key));
+	}
+
+	for (unsigned int i = 0; i < locals->lhs->len; i++) {
+		const unsigned char *lh = start + g_array_index(locals->lhs, uint64_t, i),
+							*upath = NULL, *name;
+		uint16_t flags, fname_len, extra_len;
+		uint32_t csize, usize;
+		gsize name_len, upath_len = 0, upath_pos = 0;
+		gboolean first = TRUE, stop = FALSE;
+
+		memcpy(&fname_len, lh + 26, sizeof(fname_len));
+		fname_len = GUINT16_FROM_LE(fname_len);
+		memcpy(&extra_len, lh + 28, sizeof(extra_len));
+		extra_len = GUINT16_FROM_LE(extra_len);
+		memcpy(&flags, lh + 6, sizeof(flags));
+		memcpy(&csize, lh + 18, sizeof(csize));
+		memcpy(&usize, lh + 22, sizeof(usize));
+
+		/* Its name, then the Unicode Paths in its extra field */
+		for (;;) {
+			struct rspamd_archive_file *f;
+			rspamd_ftok_t key;
+
+			if (first) {
+				name = lh + lh_basic_len;
+				name_len = fname_len;
+				first = FALSE;
+			}
+			else if (rspamd_archive_zip_next_unicode_path(lh + lh_basic_len + fname_len, extra_len,
+														  &upath_pos, lh + lh_basic_len, fname_len,
+														  &upath, &upath_len)) {
+				name = upath;
+				name_len = upath_len;
+			}
+			else {
+				break;
+			}
+
+			key.begin = (const char *) name;
+			key.len = name_len;
+
+			if (name_len == 0 || g_hash_table_contains(raw_names, &key)) {
+				continue;
+			}
+
+			g_hash_table_add(raw_names, rspamd_archive_ftok_dup(&key));
+			f = g_malloc0(sizeof(*f));
+			rspamd_archive_file_try_utf(task, arch, f, (const char *) name, name_len);
+
+			if (f->fname == NULL || g_hash_table_contains(names, f->fname)) {
+				rspamd_archive_file_free(f);
+				continue;
+			}
+
+			f->compressed_size = GUINT32_FROM_LE(csize);
+			f->uncompressed_size = GUINT32_FROM_LE(usize);
+			/*
+			 * Mostly a file of the directory under another name: counts of
+			 * files go by the directory
+			 */
+			f->flags |= RSPAMD_ARCHIVE_FILE_ALIAS;
+
+			if (GUINT16_FROM_LE(flags) & 0x41u) {
+				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+			}
+
+			if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+				arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+			}
+
+			if (!rspamd_archive_file_add(task, arch, f)) {
+				stop = TRUE;
+				break;
+			}
+
+			g_hash_table_add(names, f->fname);
+			msg_debug_archive("found file in a local header of zip archive: %v", f->fname);
+		}
+
+		if (stop) {
+			break;
+		}
+	}
+
+	g_hash_table_unref(names);
+	g_hash_table_unref(raw_names);
+}
+
+/*
+ * The local headers of the archive that starts at `base`, up to its
+ * directory at `cd_offset`: the files that no directory listed
+ */
+static void
+rspamd_archive_zip_list_main(struct rspamd_task *task,
+							 struct rspamd_archive *arch,
+							 struct rspamd_zip_listed *listed,
+							 const unsigned char *start,
+							 uint64_t base,
+							 uint64_t cd_offset)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04};
+	struct rspamd_zip_locals locals;
+
+	if (base >= cd_offset || cd_offset - base < sizeof(lh_magic) ||
+		memcmp(start + base, lh_magic, sizeof(lh_magic)) != 0) {
+		return;
+	}
+
+	rspamd_archive_zip_locals_init(&locals);
+	rspamd_archive_zip_walk_first(start + base, cd_offset - base, &locals);
+	rspamd_archive_zip_list_local(task, arch, listed, start + base, &locals);
+	rspamd_archive_zip_locals_free(&locals);
+}
+
+/*
  * End records in [p, end) of an archive at the start of the data, whose
  * directory is right before them: the first one that lists files does.
  * Returns whether one did
@@ -1070,7 +1374,9 @@ rspamd_archive_zip_scan_first(struct rspamd_task *task,
  * end list the last one, but 7-Zip and WinRAR read from the start and list
  * the first one. That is the record after its entries, else the first one,
  * zip64 or not, whose offsets count from the start of the data and describe
- * the directory right before it; its files are listed too
+ * the directory right before it; its files are listed too, and so are the
+ * local headers walked. Sets `*last_start` to where the last archive starts
+ * when its offsets count from the start of the data
  */
 static void
 rspamd_archive_zip_read_first(struct rspamd_task *task,
@@ -1078,12 +1384,14 @@ rspamd_archive_zip_read_first(struct rspamd_task *task,
 							  struct rspamd_zip_listed *listed,
 							  const unsigned char *start,
 							  const unsigned char *last_eocd,
-							  const struct rspamd_zip_cd_set *last_set)
+							  const struct rspamd_zip_cd_set *last_set,
+							  uint64_t *last_start)
 {
 	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
 							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
 	const uint64_t cd_basic_len = 46, lh_basic_len = 30;
 	uint64_t front = last_set->front, limit = last_eocd - start, walked;
+	struct rspamd_zip_locals locals;
 
 	if (front == G_MAXUINT64 || limit < sizeof(lh_magic) ||
 		memcmp(start, lh_magic, sizeof(lh_magic)) != 0) {
@@ -1134,6 +1442,10 @@ rspamd_archive_zip_read_first(struct rspamd_task *task,
 			}
 		}
 
+		if (front != G_MAXUINT64) {
+			*last_start = front;
+		}
+
 		if (front == G_MAXUINT64 || front == 0) {
 			return;
 		}
@@ -1148,13 +1460,17 @@ rspamd_archive_zip_read_first(struct rspamd_task *task,
 	 * is after its entries. When nothing is found there, the records in
 	 * front of that place are tried as well
 	 */
-	walked = rspamd_archive_zip_walk_first(start, front);
+	rspamd_archive_zip_locals_init(&locals);
+	walked = rspamd_archive_zip_walk_first(start, front, &locals);
 
 	if (!rspamd_archive_zip_scan_first(task, arch, listed, start, start + walked, start + front) &&
 		walked > 0) {
 		rspamd_archive_zip_scan_first(task, arch, listed, start, start,
 									  start + MIN(front, walked + 21));
 	}
+
+	rspamd_archive_zip_list_local(task, arch, listed, start, &locals);
+	rspamd_archive_zip_locals_free(&locals);
 }
 
 static void
@@ -1261,8 +1577,12 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	}
 
 	if (read != RSPAMD_ZIP_CD_LIMIT && read_set != NULL) {
+		/* Where the archive starts: offsets count from the start of the data when not known */
+		uint64_t last_start = read_set->front == G_MAXUINT64 ? 0 : read_set->front;
+
 		/* Data in front of the archive, which may be another archive */
-		rspamd_archive_zip_read_first(task, arch, &listed, start, read_eocd, read_set);
+		rspamd_archive_zip_read_first(task, arch, &listed, start, read_eocd, read_set, &last_start);
+		rspamd_archive_zip_list_main(task, arch, &listed, start, last_start, read_set->offset);
 	}
 
 set:

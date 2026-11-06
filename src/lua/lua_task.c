@@ -762,7 +762,9 @@ LUA_FUNCTION_DEF(task, get_images);
  * Each archive has the following methods available:
  *
  * * `get_files` - return list of strings with filenames inside archive
- * * `get_files_full` - return list of tables with all information about files
+ * * `get_files_full` - return list of tables with all information about files;
+ *   `alias` is true for another name of a file listed already (the name of its
+ *   local header, its Unicode Path), which counts of files skip
  * * `is_encrypted` - return true if an archive is encrypted
  * * `is_truncated` - return true if the archive file list hit the task limit
  * * `get_type` - return string representation of image's type (e.g. 'zip')
@@ -8444,7 +8446,7 @@ lua_archive_get_files_full(lua_State *L)
 		for (i = 0; i < max_files; i++) {
 			f = g_ptr_array_index(arch->files, i);
 
-			lua_createtable(L, 0, 4);
+			lua_createtable(L, 0, 5);
 
 			lua_pushstring(L, "name");
 			lua_pushlstring(L, f->fname->str, f->fname->len);
@@ -8460,6 +8462,10 @@ lua_archive_get_files_full(lua_State *L)
 
 			lua_pushstring(L, "encrypted");
 			lua_pushboolean(L, (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) ? true : false);
+			lua_settable(L, -3);
+
+			lua_pushstring(L, "alias");
+			lua_pushboolean(L, (f->flags & RSPAMD_ARCHIVE_FILE_ALIAS) ? true : false);
 			lua_settable(L, -3);
 
 			lua_rawseti(L, -2, i + 1);

@@ -39,6 +39,11 @@ enum rspamd_archive_flags {
 enum rspamd_archive_file_flags {
 	RSPAMD_ARCHIVE_FILE_ENCRYPTED = (1u << 0u),
 	RSPAMD_ARCHIVE_FILE_OBFUSCATED = (1u << 1u),
+	/*
+	 * Another name of a file listed already, which some readers show instead
+	 * (its local header, its Unicode Path): not one more file
+	 */
+	RSPAMD_ARCHIVE_FILE_ALIAS = (1u << 2u),
 };
 
 struct rspamd_archive_file {

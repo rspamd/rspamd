@@ -456,6 +456,26 @@ context("Zip archive listing", function()
     return true
   end
 
+  test("the local headers of the first archive are listed when no directory lists them", function()
+    -- 7-Zip lists the entries it walks: a directory that names a decoy, or
+    -- lengths that lead to a fake directory, do not hide them
+    local data = "MZ"
+    local lh = stored_lh("payload.exe", data) .. data
+    local cd = cd_rec("decoy.txt", 0, "")
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh) .. make_zip("readme.txt", ""))),
+      expect = { "decoy.txt", "payload.exe", "readme.txt" },
+    })
+    -- The comment length of the last record covers the end record, and a
+    -- directory with its end record follows in the comment of that record
+    cd = cd_rec("payload.exe", 0, "", 26)
+    local fake = cd_rec("fake.txt", 0, "")
+    local comment = "PPPP" .. fake .. eocd(#fake, #lh + #cd + 22 + 4)
+    local real_eocd = eocd(#cd, #lh):sub(1, 20) .. rspamd_util.pack("<I2", #comment) .. comment
+    assert_true(has_all(files_of(lh .. cd .. real_eocd .. make_zip("readme.txt", "")),
+        { "payload.exe", "readme.txt" }))
+  end)
+
   test("a directory in the zip64 end record of the first archive is passed", function()
     local data = "MZ"
     local lh = stored_lh("payload.exe", data) .. data
@@ -485,6 +505,58 @@ context("Zip archive listing", function()
     })
   end)
 
+  local function cd_upath(name, upath, lh_offset)
+    local crc = require("rspamd_util").crc32(name)
+    local field = "\117\112" .. rspamd_util.pack("<I2", 5 + #upath) .. "\1" ..
+        rspamd_util.pack("<I4", crc) .. upath
+    return "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", #name) ..
+        rspamd_util.pack("<I2", #field) .. string.rep("\0", 10) ..
+        rspamd_util.pack("<I4", lh_offset) .. name .. field
+  end
+
+  local function aliases_of(zip)
+    local msg = table.concat({
+      "Subject: zip",
+      "MIME-Version: 1.0",
+      "Content-Type: application/zip; name=\"a.zip\"",
+      "Content-Disposition: attachment; filename=\"a.zip\"",
+      "Content-Transfer-Encoding: base64",
+      "",
+      tostring(rspamd_util.encode_base64(zip, 76)),
+      "",
+    }, "\r\n")
+    local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+    task:process_message()
+    local aliases = {}
+    for _, a in ipairs(task:get_archives() or {}) do
+      for _, f in ipairs(a:get_files_full() or {}) do
+        if f.alias then
+          aliases[#aliases + 1] = f.name
+        end
+      end
+    end
+    task:destroy()
+    table.sort(aliases)
+
+    return aliases
+  end
+
+  test("local headers named otherwise than the directory are listed", function()
+    -- bsdtar and macOS go by local headers, 7-Zip too when they differ
+    local data = "MZ"
+    local lh = stored_lh("payload.exe", data) .. data
+    local cd = cd_rec("readme.txt", 0, "")
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+    -- Another name of the one file, which counts of files skip
+    assert_rspamd_table_eq({
+      actual = aliases_of(lh .. cd .. eocd(#cd, #lh)),
+      expect = { "payload.exe" },
+    })
+  end)
+
   test("the size in the header of an entry with a descriptor does not lead the walk", function()
     -- 7-Zip takes the descriptor whose size is its distance from the data
     local fake = cd_rec("decoy.txt", 0, "")
@@ -500,4 +572,45 @@ context("Zip archive listing", function()
         { "a.txt", "payload.exe", "readme.txt" }))
   end)
 
+  test("an archive with a fake directory appended under a maxed offset is listed", function()
+    local data = "MZ"
+    local lh = stored_lh("payload.exe", data) .. data
+    local cd = cd_rec("payload.exe", 0, "")
+    local fake = cd_rec("decoy.txt", 0, "")
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh) .. fake .. eocd(#fake, 0xffffffff)),
+        { "payload.exe" }))
+  end)
+
+  test("the Unicode Path of a file is listed", function()
+    -- 7-Zip, bsdtar and Python show it when its CRC is the one of the name
+    local data = "MZ"
+    local lh = stored_lh("readme.txt", data) .. data
+    local cd = cd_upath("readme.txt", "payload.exe", 0)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh))),
+      expect = { "payload.exe", "readme.txt" },
+    })
+    assert_rspamd_table_eq({
+      actual = aliases_of(lh .. cd .. eocd(#cd, #lh)),
+      expect = { "payload.exe" },
+    })
+    -- Another version, and one Unicode Path after another (bsdtar)
+    local up2 = "\117\112" .. rspamd_util.pack("<I2", 5 + #"report.txt") .. "\1" ..
+        rspamd_util.pack("<I4", require("rspamd_util").crc32("payload.exe")) .. "report.txt"
+    local cd2 = cd_upath("readme.txt", "payload.exe", 0):gsub("\117\112(..)\1", "\117\112%1\0")
+    cd2 = cd2:sub(1, 30) .. rspamd_util.pack("<I2", #cd2 - 46 - #"readme.txt" + #up2) ..
+        cd2:sub(33) .. up2
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd2 .. eocd(#cd2, #lh))),
+      expect = { "payload.exe", "readme.txt", "report.txt" },
+    })
+    -- With a CRC of another name, it is not
+    cd = cd_upath("readme.txt", "payload.exe", 0):gsub("\117\112(..)\1....", function(len)
+      return "\117\112" .. len .. "\1" .. "\0\0\0\0"
+    end)
+    assert_rspamd_table_eq({
+      actual = files_of(lh .. cd .. eocd(#cd, #lh)),
+      expect = { "readme.txt" },
+    })
+  end)
 end)
