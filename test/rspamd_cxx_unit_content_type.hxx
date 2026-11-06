@@ -317,6 +317,9 @@ TEST_SUITE("content_type")
 													"ct-test", 0);
 		const std::pair<std::string, std::string> cases[] = {
 			{"attachment; filename*0=\"invoice\"; filename*1=\"\"; filename*2=\".exe\"", "invoice.exe"},
+			/* An empty value does not end the parameters, and an empty piece is a piece */
+			{"attachment; foo=; filename=x.exe", "x.exe"},
+			{"attachment; filename*0=\"invoice\"; filename*1=; filename*2=\".exe\"", "invoice.exe"},
 			{"attachment; filename*0=evil.exe; filename*=utf-8''good%FF.pdf", "evil.exe"},
 			{"attachment; filename*0=evil.exe; filename*=utf-8''good%ZZ.pdf", "evil.exe"},
 			{"attachment; filename*0*=utf-8''good%FF.pdf; filename=\"evil.exe\"", "evil.exe"},
