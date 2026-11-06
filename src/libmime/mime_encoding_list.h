@@ -1577,6 +1577,17 @@ static const struct rspamd_charset_substitution sub[] = {
 		.canon = "tis-620",
 		.flags = 0,
 	},
+	/* WHATWG labels of UTF-16 in a given byte order, unknown to ICU */
+	{
+		.input = "unicodefeff",
+		.canon = "UTF-16LE",
+		.flags = 0,
+	},
+	{
+		.input = "unicodefffe",
+		.canon = "UTF-16BE",
+		.flags = 0,
+	},
 };
 
 #endif /* SRC_LIBMIME_MIME_ENCODING_LIST_H_ */

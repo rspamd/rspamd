@@ -216,6 +216,39 @@ context("Text parts that hold a file signature", function()
     task:destroy()
   end)
 
+  test("UTF-16 without a byte order mark is read in the order of its data", function()
+    -- Browsers and Thunderbird take it as little-endian, Apple Mail as big-endian
+    local function utf16le(s)
+      return (s:gsub('.', function(c)
+        return c .. '\0'
+      end))
+    end
+    local function utf16be(s)
+      return (s:gsub('.', function(c)
+        return '\0' .. c
+      end))
+    end
+    local b64 = require('rspamd_util').encode_base64
+    local body = 'GIF89a' .. utf16le(' <a href="https://le16.example.com/x">a</a> ')
+    local task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(body, 76)))
+    assert_not_nil(has_url(task, 'le16.example.com'))
+    task:destroy()
+    task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(utf16le('<a href="https://text16.example.com/x">a</a>'), 76)))
+    assert_not_nil(has_url(task, 'text16.example.com'))
+    task:destroy()
+    task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
+        tostring(b64(utf16be('<a href="https://be16.example.com/x">a</a>'), 76)))
+    assert_not_nil(has_url(task, 'be16.example.com'))
+    task:destroy()
+    -- WHATWG labels of each order
+    task = load('text/html; charset=unicodefffe\nContent-Transfer-Encoding: base64',
+        tostring(b64(utf16be('<a href="https://fffe.example.com/x">a</a>'), 76)))
+    assert_not_nil(has_url(task, 'fffe.example.com'))
+    task:destroy()
+  end)
+
   test("binary data under a label clients do not decode is read as it is", function()
     -- Converted, ASCII under utf-32 would turn into junk
     local task = load('text/html; charset=utf-32', 'GIF89a ' .. string.rep('\1', 600) ..

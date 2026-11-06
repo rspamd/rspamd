@@ -109,7 +109,37 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 						   UErrorCode *pErrorCode)
 {
 	if (!cnv->is_internal) {
-		return ucnv_toUChars(cnv->d.conv,
+		UConverter *conv = cnv->d.conv;
+		const unsigned char *bom = (const unsigned char *) src;
+
+		if (cnv->canon_name && g_ascii_strcasecmp(cnv->canon_name, "UTF-16") == 0 &&
+			!(srcLength >= 2 && ((bom[0] == 0xfe && bom[1] == 0xff) ||
+								 (bom[0] == 0xff && bom[1] == 0xfe)))) {
+			/*
+			 * UTF-16 without a byte order mark: clients do not agree on it
+			 * (big-endian in Apple Mail and ICU, little-endian in browsers
+			 * and Thunderbird), so the order is the one of the data, where
+			 * ASCII has its zero bytes; little-endian when that says nothing
+			 */
+			gsize zeros[2] = {0, 0};
+			UErrorCode order_err = U_ZERO_ERROR;
+			struct rspamd_charset_converter *ordered;
+
+			for (int32_t i = 0; i < srcLength; i++) {
+				if (src[i] == 0) {
+					zeros[i & 1]++;
+				}
+			}
+
+			ordered = rspamd_mime_get_converter_cached(zeros[0] > zeros[1] ? "UTF-16BE" : "UTF-16LE",
+													   NULL, TRUE, &order_err);
+
+			if (ordered != NULL && !ordered->is_internal) {
+				conv = ordered->d.conv;
+			}
+		}
+
+		return ucnv_toUChars(conv,
 							 dest, destCapacity,
 							 src, srcLength,
 							 pErrorCode);
