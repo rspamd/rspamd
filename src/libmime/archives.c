@@ -24,6 +24,8 @@
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
 #include <unicode/ucnv.h>
+#include <unicode/unorm2.h>
+#include <unicode/ustring.h>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -494,27 +496,17 @@ rspamd_archive_zip_check_eocd(const unsigned char *start,
 /*
  * Where libarchive (bsdtar) shows a name: it compares the CRC of a Unicode
  * Path with that of the name it shows so far only when that name converts to
- * the locale, else it takes the next Unicode Path whatever its CRC
+ * the locale, else it takes the next Unicode Path whatever its CRC. Names in
+ * UTF-8 (Unicode Paths, names with the UTF-8 flag) are normalized as they
+ * convert, and the CRC is that of the normalized name
  */
 enum rspamd_zip_bsdtar_locale {
-	RSPAMD_ZIP_BSDTAR_ANY = 0, /* Windows: names convert with replacements */
-	RSPAMD_ZIP_BSDTAR_UTF8,    /* A UTF-8 locale: valid UTF-8 converts */
-	RSPAMD_ZIP_BSDTAR_ASCII,   /* The C locale: ASCII converts */
+	RSPAMD_ZIP_BSDTAR_ANY = 0,  /* Names compared as they are stored */
+	RSPAMD_ZIP_BSDTAR_UTF8_NFC, /* A UTF-8 locale: valid UTF-8 converts, to NFC */
+	RSPAMD_ZIP_BSDTAR_UTF8_NFD, /* The same on macOS, to NFD */
+	RSPAMD_ZIP_BSDTAR_ASCII,    /* The C locale: ASCII converts */
 	RSPAMD_ZIP_BSDTAR_LOCALES,
 };
-
-static gboolean
-rspamd_zip_bsdtar_converts(enum rspamd_zip_bsdtar_locale locale, const unsigned char *s, gsize len)
-{
-	switch (locale) {
-	case RSPAMD_ZIP_BSDTAR_UTF8:
-		return rspamd_fast_utf8_validate(s, len) == 0;
-	case RSPAMD_ZIP_BSDTAR_ASCII:
-		return !rspamd_str_has_8bit(s, len);
-	default:
-		return TRUE;
-	}
-}
 
 /* The length of a name up to its first NUL, as readers that take it as a C string do */
 static gsize
@@ -529,6 +521,168 @@ static uint32_t
 rspamd_zip_cstr_crc(const unsigned char *s, gsize len)
 {
 	return crc32(0, (const Bytef *) s, rspamd_zip_cstr_len(s, len));
+}
+
+/* Buffers to normalize names, kept over the names of an entry */
+struct rspamd_zip_norm_bufs {
+	UChar *u16, *norm;
+	char *u8;
+	int32_t u16_size, norm_size, u8_size;
+};
+
+static void
+rspamd_zip_norm_bufs_free(struct rspamd_zip_norm_bufs *bufs)
+{
+	g_free(bufs->u16);
+	g_free(bufs->norm);
+	g_free(bufs->u8);
+}
+
+/*
+ * Combining marks in a row past which a name is not normalized, as ICU sorts
+ * them in quadratic time (30 is the limit of the stream-safe text format); a
+ * character that decomposes to marks counts as one
+ */
+#define rspamd_zip_norm_max_marks 30
+
+/*
+ * The CRC of a name, `u16_len` units of `bufs->u16` from `len` bytes of valid
+ * UTF-8 `s`, normalized to NFC or NFD; FALSE if it cannot be normalized.
+ * libarchive has normalizers of its own, which compose or decompose pairs by
+ * tables of Unicode 6.0 and differ from these on some names (singletons,
+ * composition exclusions, order of marks, later marks)
+ */
+static gboolean
+rspamd_zip_normalized_crc(const UNormalizer2 *norm, const char *s, int32_t len,
+						  struct rspamd_zip_norm_bufs *bufs, int32_t u16_len, uint32_t *crc)
+{
+	UErrorCode err = U_ZERO_ERROR;
+	int32_t norm_len, u8_len;
+
+	if (unorm2_spanQuickCheckYes(norm, bufs->u16, u16_len, &err) == u16_len && U_SUCCESS(err)) {
+		/* Already in that form */
+		*crc = crc32(0, (const Bytef *) s, len);
+
+		return TRUE;
+	}
+
+	err = U_ZERO_ERROR;
+	norm_len = unorm2_normalize(norm, bufs->u16, u16_len, bufs->norm, bufs->norm_size, &err);
+
+	if (err == U_BUFFER_OVERFLOW_ERROR) {
+		err = U_ZERO_ERROR;
+		bufs->norm_size = norm_len + 1;
+		bufs->norm = g_realloc_n(bufs->norm, bufs->norm_size, sizeof(UChar));
+		norm_len = unorm2_normalize(norm, bufs->u16, u16_len, bufs->norm, bufs->norm_size, &err);
+	}
+
+	if (U_FAILURE(err)) {
+		return FALSE;
+	}
+
+	u_strToUTF8(bufs->u8, bufs->u8_size, &u8_len, bufs->norm, norm_len, &err);
+
+	if (err == U_BUFFER_OVERFLOW_ERROR || err == U_STRING_NOT_TERMINATED_WARNING) {
+		err = U_ZERO_ERROR;
+		bufs->u8_size = u8_len + 1;
+		bufs->u8 = g_realloc(bufs->u8, bufs->u8_size);
+		u_strToUTF8(bufs->u8, bufs->u8_size, &u8_len, bufs->norm, norm_len, &err);
+	}
+
+	if (U_FAILURE(err)) {
+		return FALSE;
+	}
+
+	*crc = crc32(0, (const Bytef *) bufs->u8, u8_len);
+
+	return TRUE;
+}
+
+/*
+ * What bsdtar shows of a name in UTF-8 in each locale: whether it converts,
+ * and the CRC of what it shows (up to a NUL)
+ */
+struct rspamd_zip_bsdtar_name {
+	uint32_t crc;
+	gboolean converts;
+};
+
+static void
+rspamd_zip_bsdtar_utf8_names(const unsigned char *s, gsize len,
+							 struct rspamd_zip_norm_bufs *bufs,
+							 struct rspamd_zip_bsdtar_name names[RSPAMD_ZIP_BSDTAR_LOCALES])
+{
+	static const enum rspamd_zip_bsdtar_locale normalized[] = {
+		RSPAMD_ZIP_BSDTAR_UTF8_NFC,
+		RSPAMD_ZIP_BSDTAR_UTF8_NFD,
+	};
+	UErrorCode err = U_ZERO_ERROR;
+	const UNormalizer2 *norms[G_N_ELEMENTS(normalized)];
+	gsize clen = rspamd_zip_cstr_len(s, len);
+	uint32_t crc = crc32(0, (const Bytef *) s, clen);
+	int32_t u16_len, i, marks = 0, max_marks = 0;
+	unsigned int j;
+
+	names[RSPAMD_ZIP_BSDTAR_ANY].crc = crc;
+	names[RSPAMD_ZIP_BSDTAR_ANY].converts = TRUE;
+
+	if (!rspamd_str_has_8bit(s, clen)) {
+		/* ASCII is the same in all forms and converts to all locales */
+		for (j = RSPAMD_ZIP_BSDTAR_ANY + 1; j < RSPAMD_ZIP_BSDTAR_LOCALES; j++) {
+			names[j].crc = crc;
+			names[j].converts = TRUE;
+		}
+
+		return;
+	}
+
+	/*
+	 * What is not ASCII does not convert to the C locale: libarchive only
+	 * composes, which never gives ASCII (NFC of ICU may)
+	 */
+	for (j = RSPAMD_ZIP_BSDTAR_ANY + 1; j < RSPAMD_ZIP_BSDTAR_LOCALES; j++) {
+		names[j].crc = 0;
+		names[j].converts = FALSE;
+	}
+
+	if (rspamd_fast_utf8_validate(s, clen) != 0) {
+		return;
+	}
+
+	if (bufs->u16_size < (int32_t) clen + 1) {
+		bufs->u16_size = clen + 1;
+		bufs->u16 = g_realloc_n(bufs->u16, bufs->u16_size, sizeof(UChar));
+	}
+
+	u_strFromUTF8(bufs->u16, bufs->u16_size, &u16_len, (const char *) s, clen, &err);
+
+	if (U_FAILURE(err)) {
+		return;
+	}
+
+	for (i = 0; i < u16_len;) {
+		UChar32 uc;
+
+		U16_NEXT(bufs->u16, i, u16_len, uc);
+		/* Marks it decomposes to, at most two, go on with the run (U+0F73 is two) */
+		marks = u_getIntPropertyValue(uc, UCHAR_LEAD_CANONICAL_COMBINING_CLASS) != 0 ? marks + 1 : 0;
+		max_marks = MAX(max_marks, marks);
+	}
+
+	norms[0] = unorm2_getNFCInstance(&err);
+	norms[1] = unorm2_getNFDInstance(&err);
+
+	for (j = 0; j < G_N_ELEMENTS(normalized); j++) {
+		if (max_marks > rspamd_zip_norm_max_marks || U_FAILURE(err)) {
+			/* Taken as it is: libarchive does not sort such marks either */
+			names[normalized[j]].crc = crc;
+			names[normalized[j]].converts = TRUE;
+		}
+		else if (rspamd_zip_normalized_crc(norms[j], (const char *) s, clen, bufs, u16_len,
+										   &names[normalized[j]].crc)) {
+			names[normalized[j]].converts = TRUE;
+		}
+	}
 }
 
 /* Names that readers show of the Unicode Paths of an entry, each in its own way */
@@ -550,13 +704,13 @@ rspamd_zip_cstr_crc(const unsigned char *s, gsize len)
  * - others may take the first or the last field with the CRC of the name;
  * - bsdtar: each field with the CRC of the name it shows so far (as a C
  *   string) replaces that name, any field when that name does not convert
- *   to the locale; a name with the UTF-8 flag converts from UTF-8. It also
- *   normalizes converted names (NFD on macOS, NFC elsewhere) before their
- *   CRC, which is not done here.
+ *   to the locale; a name with the UTF-8 flag converts from UTF-8, and names
+ *   from UTF-8 are normalized (NFD on macOS, NFC elsewhere) before their CRC.
+ *   Its decoding of CESU-8 is not done here.
  * Python, unzip and bsdtar show a name up to its first NUL, so the name and
  * each of these names are also there up to it. Each name is in `paths` once,
- * and not when it is the name. The CRC of the name is computed once, and that
- * of each name bsdtar takes once
+ * and not when it is the name. The CRC of the name is computed once, and what
+ * bsdtar shows of the name and of each field at most once
  */
 static unsigned int
 rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
@@ -573,30 +727,24 @@ rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
 		pick_bsdtar,
 	};
 	rspamd_ftok_t picks[rspamd_zip_unicode_readers];
-	struct {
-		uint32_t crc;
-		gboolean converts;
-	} shown[RSPAMD_ZIP_BSDTAR_LOCALES];
+	struct rspamd_zip_bsdtar_name shown[RSPAMD_ZIP_BSDTAR_LOCALES];
+	struct rspamd_zip_norm_bufs bufs;
 	uint32_t name_crc = crc32(0, (const Bytef *) name, name_len),
 			 name_cstr_crc = rspamd_zip_cstr_crc(name, name_len);
-	gboolean first = TRUE, in_run = TRUE;
+	gboolean first = TRUE, in_run = TRUE, name_shown = FALSE;
 	unsigned int npaths = 0, i, j, k;
 	gsize pos = 0;
 
 	memset(picks, 0, sizeof(picks));
-
-	for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
-		shown[i].crc = name_cstr_crc;
-		shown[i].converts = !utf8_name ||
-							rspamd_zip_bsdtar_converts(i, name, rspamd_zip_cstr_len(name, name_len));
-	}
+	memset(&bufs, 0, sizeof(bufs));
 
 	while (extra_len - pos >= 4) {
 		const unsigned char *p = extra + pos;
 		uint16_t hid, hlen;
 		uint32_t crc;
 		unsigned int version;
-		gboolean of_name;
+		gboolean of_name, path_shown = FALSE;
+		struct rspamd_zip_bsdtar_name path_names[RSPAMD_ZIP_BSDTAR_LOCALES];
 		rspamd_ftok_t path;
 
 		memcpy(&hid, p, sizeof(hid));
@@ -661,19 +809,39 @@ rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
 			picks[pick_last] = path;
 		}
 
+		if (!name_shown) {
+			/* What bsdtar shows of the name, once a Unicode Path needs it */
+			if (utf8_name) {
+				rspamd_zip_bsdtar_utf8_names(name, name_len, &bufs, shown);
+			}
+			else {
+				/* Taken as it is, without a conversion */
+				for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
+					shown[i].crc = name_cstr_crc;
+					shown[i].converts = TRUE;
+				}
+			}
+
+			name_shown = TRUE;
+		}
+
 		for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
 			if (!shown[i].converts || crc == shown[i].crc) {
 				picks[pick_bsdtar + i] = path;
-				shown[i].converts = rspamd_zip_bsdtar_converts(i, (const unsigned char *) path.begin,
-															   rspamd_zip_cstr_len((const unsigned char *) path.begin,
-																				   path.len));
 
-				if (shown[i].converts) {
-					shown[i].crc = rspamd_zip_cstr_crc((const unsigned char *) path.begin, path.len);
+				if (!path_shown) {
+					/* A Unicode Path is in UTF-8 */
+					rspamd_zip_bsdtar_utf8_names((const unsigned char *) path.begin, path.len,
+												 &bufs, path_names);
+					path_shown = TRUE;
 				}
+
+				shown[i] = path_names[i];
 			}
 		}
 	}
+
+	rspamd_zip_norm_bufs_free(&bufs);
 
 	/* The name, then each pick: each as it is, then up to its first NUL */
 	for (i = 0; i <= G_N_ELEMENTS(picks); i++) {

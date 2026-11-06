@@ -676,6 +676,67 @@ context("Zip archive listing", function()
     assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "a.txt", "evil.exe" }))
   end)
 
+  test("bsdtar compares the CRC of a name in UTF-8 as it normalizes it", function()
+    -- The UTF-8 flag on a header and a directory record
+    local function utf8_lh(name, extra)
+      local lh = lh_extra(name, "MZ", extra)
+      return lh:sub(1, 6) .. rspamd_util.pack("<I2", 0x800) .. lh:sub(9)
+    end
+    local function utf8_cd(name)
+      local cd = cd_extra(name, "", 0)
+      return cd:sub(1, 8) .. rspamd_util.pack("<I2", 0x800) .. cd:sub(11)
+    end
+    local nfd, nfc = "e\204\129.txt", "\195\169.txt"
+    -- A decomposed name: NFC elsewhere (the C locale takes the decoy, as it cannot convert)
+    local extra = upath(1, "zzz", "decoy.txt") .. upath(1, nfc, "evil.exe")
+    local lh = utf8_lh(nfd, extra)
+    local cd = utf8_cd(nfd)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "decoy.txt", "evil.exe" }))
+    -- A composed name: NFD on macOS
+    extra = upath(1, "zzz", "decoy.txt") .. upath(1, nfd, "evil.exe")
+    lh = utf8_lh(nfc, extra)
+    cd = utf8_cd(nfc)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "decoy.txt", "evil.exe" }))
+    -- A Unicode Path is in UTF-8 whatever the flag: the next one has the CRC of its NFC
+    extra = upath(1, "a.txt", nfd) .. upath(1, "zzz", "decoy.txt") .. upath(1, nfc, "next.exe")
+    lh = lh_extra("a.txt", "MZ", extra)
+    cd = cd_extra("a.txt", "", 0)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "next.exe" }))
+    -- What is not ASCII does not convert to the C locale, though ICU makes ASCII of a Kelvin sign
+    local kelvin = "\226\132\170"
+    extra = upath(1, "a.txt", kelvin) .. upath(1, "zzz", "evil.exe")
+    lh = lh_extra("a.txt", "MZ", extra)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "evil.exe" }))
+    lh = utf8_lh(kelvin .. ".txt", upath(1, "zzz", "evil.exe"))
+    cd = utf8_cd(kelvin .. ".txt")
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "evil.exe" }))
+  end)
+
+  test("names of many combining marks are read in linear time", function()
+    -- Marks in the reverse of their canonical order, which ICU would sort one by one,
+    -- and Tibetan vowels that are no marks but decompose to two of them
+    for _, name in ipairs({
+      "a" .. string.rep("\204\129", 16000) .. string.rep("\204\150", 16000),
+      "a" .. string.rep("\224\189\179", 21000),
+    }) do
+      local entries, cd = {}, {}
+      local off = 0
+      for i = 1, 4 do
+        local lh = lh_extra(name, "MZ", upath(1, name, string.format("f%d.exe", i)))
+        lh = lh:sub(1, 6) .. rspamd_util.pack("<I2", 0x800) .. lh:sub(9)
+        local rec = cd_extra(name, upath(1, name, string.format("f%d.exe", i)), off)
+        cd[#cd + 1] = rec:sub(1, 8) .. rspamd_util.pack("<I2", 0x800) .. rec:sub(11)
+        entries[#entries + 1] = lh
+        off = off + #lh
+      end
+      local data, dir = table.concat(entries), table.concat(cd)
+      local start = os.clock()
+      local files = files_of(data .. dir .. eocd(#dir, #data))
+      assert_true(os.clock() - start < 2, "took " .. (os.clock() - start))
+      assert_true(has_all(files, { "f1.exe", "f4.exe" }))
+    end
+  end)
+
   test("the first Unicode Path of version 1 is listed (yauzl)", function()
     for _, first in ipairs({ upath(0, "a.txt", "a1.txt"), upath(2, "a.txt", "a1.txt"), upath(1, "a.txt", "") }) do
       local extra = first .. upath(1, "a.txt", "evil.exe") .. upath(1, "a.txt", "safe.txt")
