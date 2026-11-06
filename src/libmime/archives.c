@@ -19,6 +19,7 @@
 #include "task.h"
 #include "archives.h"
 #include "libmime/mime_encoding.h"
+#include "rspamd_simdutf.h"
 #include <unicode/uchar.h>
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
@@ -452,49 +453,203 @@ rspamd_archive_zip_check_eocd(const unsigned char *start,
 }
 
 /*
- * The next Info-ZIP Unicode Path field in `extra` from `*pos`. Readers show
- * its name when its CRC is the one of the name field (7-Zip, Python) or of
- * the Unicode Path before it (bsdtar), whatever its version. `*upath` holds
- * the one before, NULL at first
+ * Where libarchive (bsdtar) shows a name: it compares the CRC of a Unicode
+ * Path with that of the name it shows so far only when that name converts to
+ * the locale, else it takes the next Unicode Path whatever its CRC
  */
-static gboolean
-rspamd_archive_zip_next_unicode_path(const unsigned char *extra, gsize extra_len, gsize *pos,
-									 const unsigned char *name, gsize name_len,
-									 const unsigned char **upath, gsize *upath_len)
-{
-	uint32_t name_crc = crc32(0, (const Bytef *) name, name_len);
+enum rspamd_zip_bsdtar_locale {
+	RSPAMD_ZIP_BSDTAR_ANY = 0, /* Windows: names convert with replacements */
+	RSPAMD_ZIP_BSDTAR_UTF8,    /* A UTF-8 locale: valid UTF-8 converts */
+	RSPAMD_ZIP_BSDTAR_ASCII,   /* The C locale: ASCII converts */
+	RSPAMD_ZIP_BSDTAR_LOCALES,
+};
 
-	while (*pos <= extra_len && extra_len - *pos >= 4) {
-		const unsigned char *p = extra + *pos;
+static gboolean
+rspamd_zip_bsdtar_converts(enum rspamd_zip_bsdtar_locale locale, const unsigned char *s, gsize len)
+{
+	switch (locale) {
+	case RSPAMD_ZIP_BSDTAR_UTF8:
+		return rspamd_fast_utf8_validate(s, len) == 0;
+	case RSPAMD_ZIP_BSDTAR_ASCII:
+		return !rspamd_str_has_8bit(s, len);
+	default:
+		return TRUE;
+	}
+}
+
+/* The length of a name up to its first NUL, as readers that take it as a C string do */
+static gsize
+rspamd_zip_cstr_len(const unsigned char *s, gsize len)
+{
+	const unsigned char *nul = memchr(s, 0, len);
+
+	return nul ? (gsize) (nul - s) : len;
+}
+
+static uint32_t
+rspamd_zip_cstr_crc(const unsigned char *s, gsize len)
+{
+	return crc32(0, (const Bytef *) s, rspamd_zip_cstr_len(s, len));
+}
+
+/* Names that readers show of the Unicode Paths of an entry, each in its own way */
+#define rspamd_zip_unicode_readers (6 + RSPAMD_ZIP_BSDTAR_LOCALES)
+
+/*
+ * The names readers show in place of the name of an entry from its Info-ZIP
+ * Unicode Path fields (0x7075), which hold a version, the CRC of the name they
+ * replace, and a name. Readers do not take the same field (checked with 7-Zip
+ * 17, Python 3.13, bsdtar 3.7 and the sources of unzip 6.0, yauzl and
+ * libarchive):
+ * - 7-Zip: the first field, if it has the CRC of the name;
+ * - Info-ZIP unzip: the last of the fields from the first one on that have
+ *   the CRC of the name (as a C string) and version 1 at most;
+ * - Python: the last field with the CRC of the name, version 1 and a name;
+ * - yauzl: the first such field;
+ * - others may take the first or the last field with the CRC of the name;
+ * - bsdtar: each field with the CRC of the name it shows so far (as a C
+ *   string) replaces that name, any field when that name does not convert
+ *   to the locale; a name with the UTF-8 flag converts from UTF-8. It also
+ *   normalizes converted names (NFD on macOS, NFC elsewhere) before their
+ *   CRC, which is not done here.
+ * Each name is in `paths` once, and not when it is the name. The CRC of the
+ * name is computed once, and that of each name bsdtar takes once
+ */
+static unsigned int
+rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
+								 const unsigned char *name, gsize name_len, gboolean utf8_name,
+								 rspamd_ftok_t paths[rspamd_zip_unicode_readers])
+{
+	enum {
+		pick_7zip = 0,
+		pick_unzip,
+		pick_python,
+		pick_yauzl,
+		pick_first,
+		pick_last,
+		pick_bsdtar,
+	};
+	rspamd_ftok_t picks[rspamd_zip_unicode_readers];
+	struct {
+		uint32_t crc;
+		gboolean converts;
+	} shown[RSPAMD_ZIP_BSDTAR_LOCALES];
+	uint32_t name_crc = crc32(0, (const Bytef *) name, name_len),
+			 name_cstr_crc = rspamd_zip_cstr_crc(name, name_len);
+	gboolean first = TRUE, in_run = TRUE;
+	unsigned int npaths = 0, i, j;
+	gsize pos = 0;
+
+	memset(picks, 0, sizeof(picks));
+
+	for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
+		shown[i].crc = name_cstr_crc;
+		shown[i].converts = !utf8_name ||
+							rspamd_zip_bsdtar_converts(i, name, rspamd_zip_cstr_len(name, name_len));
+	}
+
+	while (extra_len - pos >= 4) {
+		const unsigned char *p = extra + pos;
 		uint16_t hid, hlen;
 		uint32_t crc;
+		unsigned int version;
+		gboolean of_name;
+		rspamd_ftok_t path;
 
 		memcpy(&hid, p, sizeof(hid));
 		memcpy(&hlen, p + 2, sizeof(hlen));
 		hid = GUINT16_FROM_LE(hid);
 		hlen = GUINT16_FROM_LE(hlen);
 
-		if (hlen > extra_len - *pos - 4) {
+		if (hlen > extra_len - pos - 4) {
 			break;
 		}
 
-		*pos += 4 + hlen;
+		pos += 4 + hlen;
 
-		if (hid == 0x7075 && hlen > 5) {
-			memcpy(&crc, p + 5, sizeof(crc));
-			crc = GUINT32_FROM_LE(crc);
+		if (hid != 0x7075) {
+			continue;
+		}
 
-			if (crc == name_crc ||
-				(*upath != NULL && crc == crc32(0, (const Bytef *) *upath, *upath_len))) {
-				*upath = p + 9;
-				*upath_len = hlen - 5;
+		if (hlen < 5) {
+			/* No CRC: no reader takes it, and it ends the fields of unzip */
+			first = FALSE;
+			in_run = FALSE;
+			continue;
+		}
 
-				return TRUE;
+		version = p[4];
+		memcpy(&crc, p + 5, sizeof(crc));
+		crc = GUINT32_FROM_LE(crc);
+		path.begin = (const char *) p + 9;
+		path.len = hlen - 5;
+		of_name = crc == name_crc;
+
+		if (first) {
+			first = FALSE;
+
+			if (of_name) {
+				picks[pick_7zip] = path;
+			}
+		}
+
+		if (in_run) {
+			if (crc == name_cstr_crc && version <= 1) {
+				picks[pick_unzip] = path;
+			}
+			else {
+				in_run = FALSE;
+			}
+		}
+
+		if (of_name && path.len > 0) {
+			if (version == 1) {
+				picks[pick_python] = path;
+
+				if (picks[pick_yauzl].len == 0) {
+					picks[pick_yauzl] = path;
+				}
+			}
+
+			if (picks[pick_first].len == 0) {
+				picks[pick_first] = path;
+			}
+
+			picks[pick_last] = path;
+		}
+
+		for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
+			if (!shown[i].converts || crc == shown[i].crc) {
+				picks[pick_bsdtar + i] = path;
+				shown[i].converts = rspamd_zip_bsdtar_converts(i, (const unsigned char *) path.begin,
+															   rspamd_zip_cstr_len((const unsigned char *) path.begin,
+																				   path.len));
+
+				if (shown[i].converts) {
+					shown[i].crc = rspamd_zip_cstr_crc((const unsigned char *) path.begin, path.len);
+				}
 			}
 		}
 	}
 
-	return FALSE;
+	for (i = 0; i < G_N_ELEMENTS(picks); i++) {
+		if (picks[i].len == 0 ||
+			(picks[i].len == name_len && memcmp(picks[i].begin, name, name_len) == 0)) {
+			continue;
+		}
+
+		for (j = 0; j < npaths; j++) {
+			if (rspamd_ftok_cmp(&paths[j], &picks[i]) == 0) {
+				break;
+			}
+		}
+
+		if (j == npaths) {
+			paths[npaths++] = picks[i];
+		}
+	}
+
+	return npaths;
 }
 
 enum rspamd_zip_cd_read {
@@ -664,16 +819,16 @@ rspamd_archive_zip_read_records(struct rspamd_task *task,
 				p += hlen + sizeof(uint16_t) * 2;
 			}
 
-			const unsigned char *upath = NULL;
-			gsize upath_len = 0, upath_pos = 0;
+			rspamd_ftok_t upaths[rspamd_zip_unicode_readers];
+			unsigned int nupaths = rspamd_archive_zip_unicode_paths(extra, extra_end - extra,
+																	cd + cd_basic_len, fname_len,
+																	(flags & 0x800u) != 0, upaths);
 
-			while (rspamd_archive_zip_next_unicode_path(extra, extra_end - extra, &upath_pos,
-														cd + cd_basic_len, fname_len,
-														&upath, &upath_len)) {
+			for (unsigned int k = 0; k < nupaths; k++) {
 				/* The name these readers show, listed as well */
 				struct rspamd_archive_file *uf = g_malloc0(sizeof(*uf));
 
-				rspamd_archive_file_try_utf(task, arch, uf, (const char *) upath, upath_len);
+				rspamd_archive_file_try_utf(task, arch, uf, upaths[k].begin, upaths[k].len);
 
 				if (uf->fname == NULL || g_string_equal(uf->fname, f->fname)) {
 					rspamd_archive_file_free(uf);
@@ -1179,12 +1334,12 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 	}
 
 	for (unsigned int i = 0; i < locals->lhs->len; i++) {
-		const unsigned char *lh = start + g_array_index(locals->lhs, uint64_t, i),
-							*upath = NULL, *name;
+		const unsigned char *lh = start + g_array_index(locals->lhs, uint64_t, i);
 		uint16_t flags, fname_len, extra_len;
 		uint32_t csize, usize;
-		gsize name_len, upath_len = 0, upath_pos = 0;
-		gboolean first = TRUE, stop = FALSE;
+		rspamd_ftok_t lh_names[1 + rspamd_zip_unicode_readers];
+		unsigned int nlh_names;
+		gboolean stop = FALSE;
 
 		memcpy(&fname_len, lh + 26, sizeof(fname_len));
 		fname_len = GUINT16_FROM_LE(fname_len);
@@ -1194,36 +1349,24 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 		memcpy(&csize, lh + 18, sizeof(csize));
 		memcpy(&usize, lh + 22, sizeof(usize));
 
-		/* Its name, then the Unicode Paths in its extra field */
-		for (;;) {
+		/* Its name, then the names readers show from its Unicode Paths */
+		lh_names[0].begin = (const char *) lh + lh_basic_len;
+		lh_names[0].len = fname_len;
+		nlh_names = 1 + rspamd_archive_zip_unicode_paths(lh + lh_basic_len + fname_len, extra_len,
+														 lh + lh_basic_len, fname_len,
+														 (GUINT16_FROM_LE(flags) & 0x800u) != 0, lh_names + 1);
+
+		for (unsigned int k = 0; k < nlh_names; k++) {
 			struct rspamd_archive_file *f;
-			rspamd_ftok_t key;
+			const rspamd_ftok_t *key = &lh_names[k];
 
-			if (first) {
-				name = lh + lh_basic_len;
-				name_len = fname_len;
-				first = FALSE;
-			}
-			else if (rspamd_archive_zip_next_unicode_path(lh + lh_basic_len + fname_len, extra_len,
-														  &upath_pos, lh + lh_basic_len, fname_len,
-														  &upath, &upath_len)) {
-				name = upath;
-				name_len = upath_len;
-			}
-			else {
-				break;
-			}
-
-			key.begin = (const char *) name;
-			key.len = name_len;
-
-			if (name_len == 0 || g_hash_table_contains(raw_names, &key)) {
+			if (key->len == 0 || g_hash_table_contains(raw_names, key)) {
 				continue;
 			}
 
-			g_hash_table_add(raw_names, rspamd_archive_ftok_dup(&key));
+			g_hash_table_add(raw_names, rspamd_archive_ftok_dup(key));
 			f = g_malloc0(sizeof(*f));
-			rspamd_archive_file_try_utf(task, arch, f, (const char *) name, name_len);
+			rspamd_archive_file_try_utf(task, arch, f, key->begin, key->len);
 
 			if (f->fname == NULL || g_hash_table_contains(names, f->fname)) {
 				rspamd_archive_file_free(f);

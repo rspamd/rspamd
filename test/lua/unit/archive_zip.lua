@@ -613,4 +613,75 @@ context("Zip archive listing", function()
       expect = { "readme.txt" },
     })
   end)
+
+  -- A Unicode Path field: version, CRC of the name it replaces, name
+  local function upath(version, crc_of, name)
+    return "\117\112" .. rspamd_util.pack("<I2", 5 + #name) .. string.char(version) ..
+        rspamd_util.pack("<I4", rspamd_util.crc32(crc_of)) .. name
+  end
+
+  local function cd_extra(name, extra, lh_offset)
+    return "PK\1\2" .. string.rep("\0", 24) .. rspamd_util.pack("<I2", #name) ..
+        rspamd_util.pack("<I2", #extra) .. string.rep("\0", 10) ..
+        rspamd_util.pack("<I4", lh_offset) .. name .. extra
+  end
+
+  local function lh_extra(name, data, extra)
+    return "PK\3\4" .. string.rep("\0", 14) .. rspamd_util.pack("<I4", #data) ..
+        rspamd_util.pack("<I4", #data) .. rspamd_util.pack("<I2", #name) ..
+        rspamd_util.pack("<I2", #extra) .. name .. extra .. data
+  end
+
+  test("the Unicode Path each reader shows is listed", function()
+    -- bsdtar takes the one with the CRC of the name it shows so far: d.exe
+    local lh = lh_extra("a.txt", "MZ", upath(1, "a.txt", "b.txt") .. upath(1, "a.txt", "c.txt") ..
+        upath(1, "b.txt", "d.exe"))
+    local cd = cd_extra("a.txt", "", 0)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh))),
+      expect = { "a.txt", "b.txt", "c.txt", "d.exe" },
+    })
+  end)
+
+  test("Unicode Paths after a name bsdtar cannot convert are listed", function()
+    -- bsdtar checks no CRC after a name that does not convert: evil.exe
+    local extra = upath(1, "a.txt", "x\255.txt") .. upath(1, "a.txt", "evil.exe") ..
+        upath(1, "a.txt", "safe.txt")
+    local lh = lh_extra("a.txt", "MZ", extra)
+    local cd = cd_extra("a.txt", "", 0)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "evil.exe", "safe.txt" }))
+  end)
+
+  test("bsdtar converts a Unicode Path up to its first NUL", function()
+    -- a.txt converts, so the CRC of a.txt leads to evil.exe, not any field to decoy.txt
+    local extra = upath(1, "n.txt", "x\255.txt") .. upath(1, "qqq", "a.txt\0\255") ..
+        upath(1, "zzz", "decoy.txt") .. upath(1, "a.txt", "evil.exe")
+    local lh = lh_extra("n.txt", "MZ", extra)
+    local cd = cd_extra("n.txt", "", 0)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "evil.exe" }))
+  end)
+
+  test("the first Unicode Path of version 1 is listed (yauzl)", function()
+    for _, first in ipairs({ upath(0, "a.txt", "a1.txt"), upath(2, "a.txt", "a1.txt"), upath(1, "a.txt", "") }) do
+      local extra = first .. upath(1, "a.txt", "evil.exe") .. upath(1, "a.txt", "safe.txt")
+      local lh = lh_extra("a.txt", "MZ", "")
+      local cd = cd_extra("a.txt", extra, 0)
+      assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "evil.exe", "safe.txt" }))
+    end
+  end)
+
+  test("an entry lists the names readers show of its Unicode Paths, not all of them", function()
+    -- 7-Zip and bsdtar show the first one, unzip and Python the last one
+    local fields = {}
+    for i = 1, 50 do
+      fields[i] = upath(1, "a.txt", string.format("n%d.txt", i))
+    end
+    local extra = table.concat(fields)
+    local lh = lh_extra("a.txt", "MZ", extra)
+    local cd = cd_extra("a.txt", extra, 0)
+    assert_rspamd_table_eq({
+      actual = sorted(files_of(lh .. cd .. eocd(#cd, #lh))),
+      expect = { "a.txt", "n1.txt", "n50.txt" },
+    })
+  end)
 end)
