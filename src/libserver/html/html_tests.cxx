@@ -684,6 +684,10 @@ TEST_SUITE("html")
 			{"a &nGt; tail", "a &nGt; tail"},
 			{"&amp;&amp;&nGt;tail", "&&\u226B\u20D2tail"},
 			{"&acE;tail", "\u223E\u0333tail"},
+			/* An unfinished entity at the end, once, after others made room */
+			{"?a=&amp;x&#zz", "?a=&x&#zz"},
+			{"?a=&amp;x&#", "?a=&x&#"},
+			{"&amp;&amp;&amp;&\"c", "&&&&\"c"},
 		};
 
 		for (const auto &c: cases) {
