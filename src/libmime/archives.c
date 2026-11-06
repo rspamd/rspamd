@@ -494,6 +494,8 @@ rspamd_zip_cstr_crc(const unsigned char *s, gsize len)
 
 /* Names that readers show of the Unicode Paths of an entry, each in its own way */
 #define rspamd_zip_unicode_readers (6 + RSPAMD_ZIP_BSDTAR_LOCALES)
+/* Those names and the name, each also up to its first NUL */
+#define rspamd_zip_entry_names (2 * (rspamd_zip_unicode_readers + 1))
 
 /*
  * The names readers show in place of the name of an entry from its Info-ZIP
@@ -512,13 +514,15 @@ rspamd_zip_cstr_crc(const unsigned char *s, gsize len)
  *   to the locale; a name with the UTF-8 flag converts from UTF-8. It also
  *   normalizes converted names (NFD on macOS, NFC elsewhere) before their
  *   CRC, which is not done here.
- * Each name is in `paths` once, and not when it is the name. The CRC of the
- * name is computed once, and that of each name bsdtar takes once
+ * Python, unzip and bsdtar show a name up to its first NUL, so the name and
+ * each of these names are also there up to it. Each name is in `paths` once,
+ * and not when it is the name. The CRC of the name is computed once, and that
+ * of each name bsdtar takes once
  */
 static unsigned int
 rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
 								 const unsigned char *name, gsize name_len, gboolean utf8_name,
-								 rspamd_ftok_t paths[rspamd_zip_unicode_readers])
+								 rspamd_ftok_t paths[rspamd_zip_entry_names])
 {
 	enum {
 		pick_7zip = 0,
@@ -537,7 +541,7 @@ rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
 	uint32_t name_crc = crc32(0, (const Bytef *) name, name_len),
 			 name_cstr_crc = rspamd_zip_cstr_crc(name, name_len);
 	gboolean first = TRUE, in_run = TRUE;
-	unsigned int npaths = 0, i, j;
+	unsigned int npaths = 0, i, j, k;
 	gsize pos = 0;
 
 	memset(picks, 0, sizeof(picks));
@@ -632,20 +636,41 @@ rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
 		}
 	}
 
-	for (i = 0; i < G_N_ELEMENTS(picks); i++) {
-		if (picks[i].len == 0 ||
-			(picks[i].len == name_len && memcmp(picks[i].begin, name, name_len) == 0)) {
-			continue;
+	/* The name, then each pick: each as it is, then up to its first NUL */
+	for (i = 0; i <= G_N_ELEMENTS(picks); i++) {
+		rspamd_ftok_t forms[2];
+
+		if (i == 0) {
+			forms[0].begin = (const char *) name;
+			forms[0].len = name_len;
+		}
+		else {
+			forms[0] = picks[i - 1];
 		}
 
-		for (j = 0; j < npaths; j++) {
-			if (rspamd_ftok_cmp(&paths[j], &picks[i]) == 0) {
-				break;
+		forms[1].begin = forms[0].begin;
+		forms[1].len = 0;
+
+		if (forms[0].len > 0) {
+			forms[1].len = rspamd_zip_cstr_len((const unsigned char *) forms[0].begin, forms[0].len);
+		}
+
+		for (k = 0; k < G_N_ELEMENTS(forms); k++) {
+			if (forms[k].len == 0 ||
+				(forms[k].len == name_len && memcmp(forms[k].begin, name, name_len) == 0)) {
+				continue;
 			}
-		}
 
-		if (j == npaths) {
-			paths[npaths++] = picks[i];
+			for (j = 0; j < npaths; j++) {
+				if (rspamd_ftok_cmp(&paths[j], &forms[k]) == 0) {
+					break;
+				}
+			}
+
+			if (j == npaths) {
+				g_assert(npaths < rspamd_zip_entry_names);
+				paths[npaths++] = forms[k];
+			}
 		}
 	}
 
@@ -819,7 +844,7 @@ rspamd_archive_zip_read_records(struct rspamd_task *task,
 				p += hlen + sizeof(uint16_t) * 2;
 			}
 
-			rspamd_ftok_t upaths[rspamd_zip_unicode_readers];
+			rspamd_ftok_t upaths[rspamd_zip_entry_names];
 			unsigned int nupaths = rspamd_archive_zip_unicode_paths(extra, extra_end - extra,
 																	cd + cd_basic_len, fname_len,
 																	(flags & 0x800u) != 0, upaths);
@@ -1338,7 +1363,7 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 		const unsigned char *lh = start + g_array_index(locals->lhs, uint64_t, i);
 		uint16_t flags, fname_len, extra_len;
 		uint32_t csize, usize;
-		rspamd_ftok_t lh_names[1 + rspamd_zip_unicode_readers];
+		rspamd_ftok_t lh_names[1 + rspamd_zip_entry_names];
 		unsigned int nlh_names;
 		gboolean stop = FALSE, listed_one = FALSE;
 
@@ -1350,7 +1375,7 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 		memcpy(&csize, lh + 18, sizeof(csize));
 		memcpy(&usize, lh + 22, sizeof(usize));
 
-		/* Its name, then the names readers show from its Unicode Paths */
+		/* Its name, then the other names readers show of it */
 		lh_names[0].begin = (const char *) lh + lh_basic_len;
 		lh_names[0].len = fname_len;
 		nlh_names = 1 + rspamd_archive_zip_unicode_paths(lh + lh_basic_len + fname_len, extra_len,

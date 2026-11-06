@@ -661,6 +661,21 @@ context("Zip archive listing", function()
     assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "evil.exe" }))
   end)
 
+  test("a name is listed up to its first NUL, as Python, unzip and bsdtar show it", function()
+    -- In a Unicode Path
+    local lh = lh_extra("a.txt", "MZ", "")
+    local cd = cd_extra("a.txt", upath(1, "a.txt", "payload.exe\0.txt"), 0)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "a.txt", "payload.exe" }))
+    -- In the name itself, of the directory and of a local header
+    lh = lh_extra("payload.exe\0.txt", "MZ", "")
+    cd = cd_extra("payload.exe\0.txt", "", 0)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "payload.exe" }))
+    assert_true(has_all(aliases_of(lh .. cd .. eocd(#cd, #lh)), { "payload.exe" }))
+    lh = lh_extra("evil.exe\0.txt", "MZ", "")
+    cd = cd_extra("a.txt", "", 0)
+    assert_true(has_all(files_of(lh .. cd .. eocd(#cd, #lh)), { "a.txt", "evil.exe" }))
+  end)
+
   test("the first Unicode Path of version 1 is listed (yauzl)", function()
     for _, first in ipairs({ upath(0, "a.txt", "a1.txt"), upath(2, "a.txt", "a1.txt"), upath(1, "a.txt", "") }) do
       local extra = first .. upath(1, "a.txt", "evil.exe") .. upath(1, "a.txt", "safe.txt")
