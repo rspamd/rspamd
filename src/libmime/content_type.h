@@ -41,7 +41,14 @@ enum rspamd_content_param_flags {
 	RSPAMD_CONTENT_PARAM_RFC2231 = (1 << 0),
 	RSPAMD_CONTENT_PARAM_PIECEWISE = (1 << 1),
 	RSPAMD_CONTENT_PARAM_BROKEN = (1 << 2),
+	/* Its value was a quoted string */
+	RSPAMD_CONTENT_PARAM_QUOTED = (1 << 3),
+	/* An RFC 2231 value with a '%' not followed by two hex digits */
+	RSPAMD_CONTENT_PARAM_BAD_ESCAPE = (1 << 4),
 };
+
+/* Parameters rspamd relies on taken past the parameters cap, see content_type.c */
+struct rspamd_content_params_past_cap;
 
 struct rspamd_content_type_param {
 	rspamd_ftok_t name;
@@ -60,7 +67,9 @@ struct rspamd_content_type {
 	rspamd_ftok_t orig_boundary;
 	enum rspamd_content_type_flags flags;
 	unsigned int nparams; /* Number of parameters added (bounded, see content_type.c) */
-	GHashTable *attrs;    /* Can be empty */
+	/* Allocated at the parameters cap, see content_type.c */
+	struct rspamd_content_params_past_cap *past_cap;
+	GHashTable *attrs; /* Can be empty */
 };
 
 enum rspamd_content_disposition_type {
@@ -74,7 +83,9 @@ struct rspamd_content_disposition {
 	enum rspamd_content_disposition_type type;
 	rspamd_ftok_t filename;
 	unsigned int nparams; /* Number of parameters added (bounded, see content_type.c) */
-	GHashTable *attrs;    /* Can be empty */
+	/* Allocated at the parameters cap, see content_type.c */
+	struct rspamd_content_params_past_cap *past_cap;
+	GHashTable *attrs; /* Can be empty */
 };
 
 /**

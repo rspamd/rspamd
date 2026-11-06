@@ -51,11 +51,14 @@
 
   action Param_Value_End {
     if (pname_end) {
+      gboolean quoted = FALSE;
+
       if (qstart) {
         pvalue_start = qstart;
       }
       if (qend && qend >= qstart) {
         pvalue_end = qend;
+        quoted = qstart != NULL;
       }
       else if (p >= pvalue_start) {
         pvalue_end = p;
@@ -63,7 +66,17 @@
       qstart = NULL;
       qend = NULL;
 
-      if (pvalue_end && pvalue_end > pvalue_start && pname_end > pname_start) {
+      /*
+       * An empty quoted piece of an RFC 2231 value (name*1="") is a piece,
+       * which readers join past: dropped, it would end the pieces there.
+       * Other empty values (name*="", name="") are no value, as before
+       */
+      const unsigned char *star = pname_end > pname_start ?
+        memchr (pname_start, '*', pname_end - pname_start) : NULL;
+
+      if (pvalue_end && pname_end > pname_start &&
+          (pvalue_end > pvalue_start ||
+           (quoted && star != NULL && star + 1 < pname_end && g_ascii_isdigit (star[1])))) {
         rspamd_content_disposition_add_param (pool, cd, pname_start, pname_end, pvalue_start, pvalue_end);
       }
     }

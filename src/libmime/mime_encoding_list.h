@@ -1588,6 +1588,107 @@ static const struct rspamd_charset_substitution sub[] = {
 		.canon = "UTF-16BE",
 		.flags = 0,
 	},
+	/* Other WHATWG labels that ICU does not know, of the charsets it has */
+	{
+		.input = "x-cp1250",
+		.canon = "windows-1250",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1251",
+		.canon = "windows-1251",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1252",
+		.canon = "windows-1252",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1253",
+		.canon = "windows-1253",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1254",
+		.canon = "windows-1254",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1255",
+		.canon = "windows-1255",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1256",
+		.canon = "windows-1256",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1257",
+		.canon = "windows-1257",
+		.flags = 0,
+	},
+	{
+		.input = "x-cp1258",
+		.canon = "windows-1258",
+		.flags = 0,
+	},
+	{
+		.input = "x-gbk",
+		.canon = "GBK",
+		.flags = 0,
+	},
+	{
+		.input = "cn-big5",
+		.canon = "Big5",
+		.flags = 0,
+	},
+	{
+		.input = "x-x-big5",
+		.canon = "Big5",
+		.flags = 0,
+	},
+	{
+		.input = "koi",
+		.canon = "KOI8-R",
+		.flags = 0,
+	},
+	{
+		.input = "koi8-ru",
+		.canon = "KOI8-U",
+		.flags = 0,
+	},
+	{
+		.input = "dos-874",
+		.canon = "windows-874",
+		.flags = 0,
+	},
+	{
+		.input = "x-mac-ukrainian",
+		.canon = "x-mac-cyrillic",
+		.flags = 0,
+	},
+	{
+		.input = "visual",
+		.canon = "ISO-8859-8",
+		.flags = 0,
+	},
+	{
+		.input = "csiso88598e",
+		.canon = "ISO-8859-8",
+		.flags = 0,
+	},
+	{
+		.input = "logical",
+		.canon = "ISO-8859-8-I",
+		.flags = 0,
+	},
+	{
+		.input = "csiso88598i",
+		.canon = "ISO-8859-8-I",
+		.flags = 0,
+	},
 };
 
 #endif /* SRC_LIBMIME_MIME_ENCODING_LIST_H_ */

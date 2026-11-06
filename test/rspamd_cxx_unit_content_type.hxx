@@ -176,6 +176,22 @@ TEST_SUITE("content_type")
 		REQUIRE(ct != nullptr);
 		CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "foobar");
 
+		/* 17 pieces, from before the cap or all past it */
+		for (int junk: {1023, 1024}) {
+			std::string cd_hdr = "attachment";
+			for (int i = 0; i < junk; i++) {
+				cd_hdr += "; p" + std::to_string(i) + "=v";
+			}
+			for (int i = 0; i < 16; i++) {
+				cd_hdr += "; filename*" + std::to_string(i) + "=" + std::string(1, (char) ('a' + i));
+			}
+			cd_hdr += "; filename*16=.exe";
+
+			auto *cd = rspamd_content_disposition_parse(cd_hdr.data(), cd_hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK(std::string_view{cd->filename.begin, cd->filename.len} == "abcdefghijklmnop.exe");
+		}
+
 		rspamd_mempool_delete(pool);
 	}
 
@@ -218,6 +234,151 @@ TEST_SUITE("content_type")
 		rspamd_mempool_delete(pool);
 	}
 
+	/*
+	 * Copies of one parameter past the cap used to take the room of the
+	 * others, and junk names with a star that of the pieces of a value
+	 */
+	TEST_CASE("parameters past the cap are not crowded out by others")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		std::string junk;
+		for (int i = 0; i < 1100; i++) {
+			junk += "; p" + std::to_string(i) + "=v";
+		}
+
+		std::string copies;
+		for (int i = 0; i < 100; i++) {
+			copies += "; name*0=x; charset*x=1; boundary*1x=z; filename*1=w";
+		}
+		/* Once: copies of a piece end the pieces of that name, as in readers */
+		copies += "; boundary*99=y";
+
+		std::string hdr = "multipart/mixed" + junk + copies +
+						  "; charset=\"utf-16le\"; boundary*0=\"foo\"; boundary*1=\"bar\"";
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		CHECK(std::string_view{ct->charset.begin, ct->charset.len} == "utf-16le");
+		CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "foobar");
+		/* Once each: name*0, boundary*99, filename*1, the charset and two pieces */
+		CHECK(ct->nparams == expected_param_cap + 6);
+
+		std::string cd_hdr = "attachment" + junk + copies + "; filename=\"invoice.pdf.exe\"";
+		auto *cd = rspamd_content_disposition_parse(cd_hdr.data(), cd_hdr.size(), pool);
+		REQUIRE(cd != nullptr);
+		CHECK(std::string_view{cd->filename.begin, cd->filename.len} == "invoice.pdf.exe");
+
+		rspamd_mempool_delete(pool);
+	}
+
+	/* Readers take the plain value then: a.exe, not a.exew */
+	TEST_CASE("a plain parameter is not merged into pieces without a first one")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		const std::pair<std::string, std::string> cases[] = {
+			{"attachment; filename*1=w; filename=\"invoice.pdf.exe\"", "invoice.pdf.exe"},
+			{"attachment; filename=\"invoice.pdf.exe\"; filename*1=w", "invoice.pdf.exe"},
+			{"attachment; filename*1=b; filename*0=a; filename=\"x.exe\"", "ab"},
+			/* No piece 0 for readers: a leading zero, a number that wraps, a quoted extended one */
+			{"attachment; filename*00=\"invoice.pdf\"; filename=\"invoice.pdf.exe\"", "invoice.pdf.exe"},
+			{"attachment; filename*4294967296=\"invoice.pdf\"; filename=\"invoice.pdf.exe\"", "invoice.pdf.exe"},
+			{"attachment; filename*0*=\"invoice.pdf\"; filename=\"invoice.exe\"", "invoice.exe"},
+			/* name*= before pieces, whatever the order (Thunderbird) */
+			{"attachment; filename*0=invoice.pdf; filename*=utf-8''invoice.exe", "invoice.exe"},
+			/* A repeated piece ends them */
+			{"attachment; filename*0=a; filename*0=b; filename*1=c", "a"},
+		};
+
+		for (const auto &[hdr, expected]: cases) {
+			auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK(std::string_view{cd->filename.begin, cd->filename.len} == expected);
+		}
+
+		/* Pieces joined into nothing are no value */
+		std::string hdr = "application/octet-stream; name*0=; name=\"invoice.pdf.exe\"";
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		rspamd_ftok_t key;
+		key.begin = "name";
+		key.len = 4;
+		auto *param = (struct rspamd_content_type_param *) g_hash_table_lookup(ct->attrs, &key);
+		REQUIRE(param != nullptr);
+		CHECK(std::string_view{param->value.begin, param->value.len} == "invoice.pdf.exe");
+
+		rspamd_mempool_delete(pool);
+	}
+
+	/* As Thunderbird: values that do not decode are no value, empty pieces are pieces */
+	TEST_CASE("RFC 2231 values readers do not take")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		const std::pair<std::string, std::string> cases[] = {
+			{"attachment; filename*0=\"invoice\"; filename*1=\"\"; filename*2=\".exe\"", "invoice.exe"},
+			{"attachment; filename*0=evil.exe; filename*=utf-8''good%FF.pdf", "evil.exe"},
+			{"attachment; filename*0=evil.exe; filename*=utf-8''good%ZZ.pdf", "evil.exe"},
+			{"attachment; filename*0*=utf-8''good%FF.pdf; filename=\"evil.exe\"", "evil.exe"},
+			/* No value readers take: the pieces as they hold, decoded */
+			{"attachment; filename*0*=\"utf-8''invoice%2Eexe\"", "invoice.exe"},
+			/* An empty name*= is no value, nor one that does not decode, first or not */
+			{"attachment; filename*=\"\"; filename=\"evil.exe\"", "evil.exe"},
+			{"attachment; filename*=utf-8''good%FF.pdf; filename=\"evil.exe\"", "evil.exe"},
+			{"attachment; filename*0=evil.exe; filename*=utf-8''%FF; filename*=utf-8''good.pdf", "evil.exe"},
+			/* Readers check escapes in the data only, and no charset is not checked */
+			{"attachment; filename*0=invoice.pdf; filename*=utf-8'%'invoice.exe", "invoice.exe"},
+			{"attachment; filename*0=invoice.pdf; filename*=x-cp1251''%D1%F7%E5%F2.exe", "\u0421\u0447\u0435\u0442.exe"},
+		};
+
+		for (const auto &c: cases) {
+			auto *cd = rspamd_content_disposition_parse(c.first.data(), c.first.size(), pool);
+			REQUIRE(cd != nullptr);
+			std::string_view fname{cd->filename.begin, cd->filename.len};
+			CHECK_MESSAGE(fname == c.second, c.first);
+		}
+
+		/* An empty charset is not checked, as in readers */
+		{
+			std::string hdr = "attachment; filename*0=invoice.pdf; filename*=''invoice%E9.exe";
+			auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK(std::string_view{cd->filename.begin, cd->filename.len}.ends_with(".exe"));
+		}
+
+		/* A charset that ICU cannot open, with nothing else to take */
+		for (const char *charset: {"x-mac-thai", "johab"}) {
+			std::string hdr = std::string{"attachment; filename*0*="} + charset + "''abc.exe";
+			auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK(std::string_view{cd->filename.begin, cd->filename.len}.ends_with("abc.exe"));
+
+			std::string ct_hdr = std::string{"text/plain; charset*0*="} + charset + "''koi8-r";
+			CHECK(rspamd_content_type_parse(ct_hdr.data(), ct_hdr.size(), pool) != nullptr);
+		}
+
+		/* Past the cap too: an empty name*= is no value, a repeated piece ends them */
+		std::string junk;
+		for (int i = 0; i < 1030; i++) {
+			junk += "; p" + std::to_string(i) + "=v";
+		}
+		const std::pair<std::string, std::string> cap_cases[] = {
+			{"; filename*0=good.pdf; filename*=utf-8''; filename*=utf-8''evil.exe", "evil.exe"},
+			{"; filename*0=\"a.exe\"; filename*1=\"x\"; filename*1=\"y\"; filename*2=\".pdf\"", "a.exex"},
+			{"; filename*0=good.pdf; filename*=utf-8''a%ZZ; filename*=utf-8''evil.exe", "evil.exe"},
+		};
+
+		for (const auto &c: cap_cases) {
+			std::string hdr = "attachment" + junk + c.first;
+			auto *cd = rspamd_content_disposition_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(cd != nullptr);
+			std::string_view fname{cd->filename.begin, cd->filename.len};
+			CHECK_MESSAGE(fname == c.second, c.first);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("content-disposition normal filename is preserved")
 	{
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
@@ -245,21 +406,31 @@ TEST_SUITE("content_type")
 		 * and truncated to int32_t, which wraps and reverses the order. The
 		 * reconstructed value must be "ab" (id 0 then id 3000000000), not "ba".
 		 */
-		std::string hdr = "text/plain; x*0=a; x*3000000000=b";
+		/*
+		 * Readers take no piece numbered above 999 (Thunderbird), so that one
+		 * is another parameter now; pieces given out of order are joined in
+		 * their order
+		 */
+		const std::pair<std::string, std::string> cases[] = {
+			{"text/plain; x*0=a; x*3000000000=b", "a"},
+			{"text/plain; x*1=b; x*0=a", "ab"},
+		};
 
-		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
-		REQUIRE(ct != nullptr);
-		REQUIRE(ct->attrs != nullptr);
+		for (const auto &[hdr, expected]: cases) {
+			auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(ct != nullptr);
+			REQUIRE(ct->attrs != nullptr);
 
-		rspamd_ftok_t key;
-		key.begin = "x";
-		key.len = 1;
-		auto *param = (struct rspamd_content_type_param *)
-			g_hash_table_lookup(ct->attrs, &key);
-		REQUIRE(param != nullptr);
+			rspamd_ftok_t key;
+			key.begin = "x";
+			key.len = 1;
+			auto *param = (struct rspamd_content_type_param *)
+				g_hash_table_lookup(ct->attrs, &key);
+			REQUIRE(param != nullptr);
 
-		std::string_view value{param->value.begin, param->value.len};
-		CHECK(value == "ab");
+			std::string_view value{param->value.begin, param->value.len};
+			CHECK(value == expected);
+		}
 
 		rspamd_mempool_delete(pool);
 	}
