@@ -44,6 +44,11 @@ enum rspamd_archive_file_flags {
 	 * (its local header, its Unicode Path): not one more file
 	 */
 	RSPAMD_ARCHIVE_FILE_ALIAS = (1u << 2u),
+	/*
+	 * Another name of the entry listed right before it, from its Unicode Path:
+	 * limits on the files read count that entry once
+	 */
+	RSPAMD_ARCHIVE_FILE_SAME_ENTRY = (1u << 3u),
 };
 
 struct rspamd_archive_file {

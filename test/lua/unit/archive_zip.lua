@@ -684,4 +684,71 @@ context("Zip archive listing", function()
       expect = { "a.txt", "n1.txt", "n50.txt" },
     })
   end)
+
+  test("other names of a file do not crowd the files after it out of a limit", function()
+    -- Five readers, five names: 7-Zip p1, unzip p2, Python p4, others p5, bsdtar q
+    local extra = upath(1, "readme.txt", "p1.txt") .. upath(1, "readme.txt", "p2.txt") ..
+        upath(2, "p1.txt", "q.txt") .. upath(1, "readme.txt", "p4.txt") .. upath(0, "readme.txt", "p5.txt")
+    local lh1 = lh_extra("readme.txt", "MZ", "")
+    local lh2 = lh_extra("payload.exe", "MZ", "")
+    local cd = cd_extra("readme.txt", extra, 0) .. cd_extra("payload.exe", "", #lh1)
+    local zip = lh1 .. lh2 .. cd .. eocd(#cd, #lh1 + #lh2)
+    local msg = table.concat({
+      "Subject: zip",
+      "MIME-Version: 1.0",
+      "Content-Type: application/zip; name=\"a.zip\"",
+      "Content-Disposition: attachment; filename=\"a.zip\"",
+      "Content-Transfer-Encoding: base64",
+      "",
+      tostring(rspamd_util.encode_base64(zip, 76)),
+      "",
+    }, "\r\n")
+    local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+    task:process_message()
+    local arch = task:get_archives()[1]
+    local full = {}
+    for _, f in ipairs(arch:get_files_full(2)) do
+      full[#full + 1] = f.name
+    end
+    local first = arch:get_files(1)
+    task:destroy()
+    assert_rspamd_table_eq({
+      actual = sorted(full),
+      expect = { "p1.txt", "p2.txt", "p4.txt", "p5.txt", "payload.exe", "q.txt", "readme.txt" },
+    })
+    assert_rspamd_table_eq({
+      actual = sorted(first),
+      expect = { "p1.txt", "p2.txt", "p4.txt", "p5.txt", "q.txt", "readme.txt" },
+    })
+  end)
+
+  test("names of local headers do not crowd a file only a local header names out of a limit", function()
+    -- 7-Zip and bsdtar list x0..x4 and payload.exe, Python f0..f4
+    local entries, cd = {}, {}
+    local off = 0
+    for i = 0, 4 do
+      local lh = lh_extra(string.format("x%d.txt", i), "MZ", "")
+      entries[#entries + 1] = lh
+      cd[#cd + 1] = cd_extra(string.format("f%d.txt", i), "", off)
+      off = off + #lh
+    end
+    entries[#entries + 1] = lh_extra("payload.exe", "MZ", "")
+    local data, dir = table.concat(entries), table.concat(cd)
+    local zip = data .. dir .. eocd(#dir, #data)
+    local msg = table.concat({
+      "Subject: zip",
+      "MIME-Version: 1.0",
+      "Content-Type: application/zip; name=\"a.zip\"",
+      "Content-Disposition: attachment; filename=\"a.zip\"",
+      "Content-Transfer-Encoding: base64",
+      "",
+      tostring(rspamd_util.encode_base64(zip, 76)),
+      "",
+    }, "\r\n")
+    local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+    task:process_message()
+    local names = task:get_archives()[1]:get_files(10)
+    task:destroy()
+    assert_true(has_all(names, { "f0.txt", "x4.txt", "payload.exe" }))
+  end)
 end)

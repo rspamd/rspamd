@@ -836,7 +836,8 @@ rspamd_archive_zip_read_records(struct rspamd_task *task,
 				else {
 					uf->compressed_size = f->compressed_size;
 					uf->uncompressed_size = f->uncompressed_size;
-					uf->flags |= (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) | RSPAMD_ARCHIVE_FILE_ALIAS;
+					uf->flags |= (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) | RSPAMD_ARCHIVE_FILE_ALIAS |
+								 RSPAMD_ARCHIVE_FILE_SAME_ENTRY;
 
 					if (uf->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
@@ -1339,7 +1340,7 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 		uint32_t csize, usize;
 		rspamd_ftok_t lh_names[1 + rspamd_zip_unicode_readers];
 		unsigned int nlh_names;
-		gboolean stop = FALSE;
+		gboolean stop = FALSE, listed_one = FALSE;
 
 		memcpy(&fname_len, lh + 26, sizeof(fname_len));
 		fname_len = GUINT16_FROM_LE(fname_len);
@@ -1381,6 +1382,11 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 			 */
 			f->flags |= RSPAMD_ARCHIVE_FILE_ALIAS;
 
+			if (listed_one) {
+				/* Another name of this local header, listed after it */
+				f->flags |= RSPAMD_ARCHIVE_FILE_SAME_ENTRY;
+			}
+
 			if (GUINT16_FROM_LE(flags) & 0x41u) {
 				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
 			}
@@ -1394,6 +1400,7 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 				break;
 			}
 
+			listed_one = TRUE;
 			g_hash_table_add(names, f->fname);
 			msg_debug_archive("found file in a local header of zip archive: %v", f->fname);
 		}
