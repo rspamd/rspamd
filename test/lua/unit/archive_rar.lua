@@ -50,12 +50,21 @@ context("Rar archive listing", function()
   end
 
   -- Rar 4: headers of a CRC, a type, flags and a size
-  local function rar4_file(name, data, flags, name_size)
+  local function rar4_block(htype, flags, body)
+    return "\0\0" .. string.char(htype) .. rspamd_util.pack("<I2", flags) ..
+        rspamd_util.pack("<I2", 7 + #body) .. body
+  end
+
+  -- A file header of any type and flags, then its data
+  local function rar4_head(htype, flags, name, data, name_size)
     local fields = rspamd_util.pack("<I4", #data) .. rspamd_util.pack("<I4", #data) ..
         string.rep("\0", 11) .. rspamd_util.pack("<I2", name_size or #name) ..
         rspamd_util.pack("<I4", 0x20)
-    return "\0\0\116" .. rspamd_util.pack("<I2", 0x8000 + (flags or 0)) ..
-        rspamd_util.pack("<I2", 7 + #fields + #name) .. fields .. name .. data
+    return rar4_block(htype, flags, fields .. name) .. data
+  end
+
+  local function rar4_file(name, data, flags, name_size)
+    return rar4_head(116, 0x8000 + (flags or 0), name, data, name_size)
   end
 
   local rar4_start = "Rar!\26\7\0" .. "\0\0\115" .. rspamd_util.pack("<I2", 0) ..
@@ -197,6 +206,97 @@ context("Rar archive listing", function()
     names = names_of("Rar!\26\7\1\0" .. rar5_block("\1\0\1") .. rar5_file("invoice.txt", "MZ") ..
         rar5_end .. "junk" .. "Rar!\26\7\1\0" .. rar5_file("payload.exe", "MZ") .. rar5_end)
     assert_equal("file", names["invoice.txt"])
+    assert_equal("file", names["payload.exe"])
+  end)
+
+  local rar4_payload = rar4_file("payload.exe", "MZ")
+
+  test("a rar 4 file is skipped with its data whatever its flags, as readers skip it", function()
+    -- Headers in the data are not files
+    local names = names_of(rar4_start .. rar4_head(116, 0, "invoice.exe", rar4_file("decoy.txt", "x")) ..
+        rar4_payload .. rar4_end)
+    assert_equal("file", names["invoice.exe"])
+    assert_equal("file", names["payload.exe"])
+    assert_nil(names["decoy.txt"])
+  end)
+
+  test("a rar 4 header of type 2 is a file, as unrar reads it", function()
+    local names = names_of(rar4_start .. rar4_head(2, 0, "odd.exe", "MZ") .. rar4_payload .. rar4_end)
+    assert_equal("file", names["odd.exe"])
+    assert_equal("file", names["payload.exe"])
+  end)
+
+  test("files after rar 4 blocks that readers skip in different ways are listed", function()
+    -- Without 0x8000, unrar skips the data of these blocks, 7-Zip (and bsdtar for some)
+    -- reads the header after them: seven.exe, whose data hides payload.exe from them,
+    -- while unrar goes to payload.exe. The files of both are listed
+    local seven_data = "xx" .. rar4_payload .. "yy"
+    local seven = rar4_file("seven.exe", seven_data)
+    local skip = #seven - #seven_data + 2
+    for i, block in ipairs({
+      rar4_block(0x77, 0, rspamd_util.pack("<I4", skip) .. "\0\0\0"),
+      rar4_block(0x78, 0, rspamd_util.pack("<I4", skip) .. string.rep("\0", 9)),
+      -- A service header of that size of data
+      rar4_head(0x7a, 0, "CMT", string.rep("\0", skip)):sub(1, -skip - 1),
+    }) do
+      local names = names_of(rar4_start .. block .. seven .. rar4_end)
+      assert_equal("file", names["seven.exe"], "case " .. i)
+      assert_equal("file", names["payload.exe"], "case " .. i)
+    end
+    -- unrar reads the data size of a header too short for it as zero, 7-Zip reads it
+    -- from the bytes after the header
+    local names = names_of(rar4_start .. "\0\0\117" .. rspamd_util.pack("<I2", 0x8000) ..
+        rspamd_util.pack("<I2", 9) .. "\0\0" .. "\1\0" .. rar4_payload:sub(3) .. rar4_end)
+    assert_equal("file", names["payload.exe"])
+  end)
+
+  test("a rar 4 archive of encrypted headers is listed as encrypted", function()
+    local rar = "Rar!\26\7\0" .. rar4_block(0x73, 0x80, string.rep("\0", 6)) .. string.rep("\255", 64)
+    local msg = table.concat({
+      "Subject: rar", "MIME-Version: 1.0",
+      "Content-Type: application/x-rar; name=\"a.rar\"",
+      "Content-Disposition: attachment; filename=\"a.rar\"",
+      "Content-Transfer-Encoding: base64", "",
+      tostring(rspamd_util.encode_base64(rar, 76)), "",
+    }, "\r\n")
+    local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+    task:process_message()
+    assert_true(task:get_archives()[1]:is_encrypted())
+    task:destroy()
+  end)
+
+  test("files after a broken rar 4 header before the main one are listed, as unrar lists them", function()
+    -- unrar goes on 7 bytes after the start of a broken header
+    local names = names_of("Rar!\26\7\0" .. string.rep("\0", 7) .. rar4_payload .. rar4_end)
+    assert_equal("file", names["payload.exe"])
+    -- unrar looks for the main header past an end block
+    names = names_of("Rar!\26\7\0" .. rar4_end .. rar4_start:sub(8) .. rar4_payload .. rar4_end)
+    assert_equal("file", names["payload.exe"])
+  end)
+
+  test("files bsdtar reads past the end of a rar 4 volume are listed", function()
+    -- After a file split into the next volume, bsdtar takes the next file past the end
+    -- block as its rest, then lists the files after it, as in concatenated volumes
+    local vol_start = "Rar!\26\7\0" .. rar4_block(0x73, 0x1, string.rep("\0", 6))
+    local names = names_of(vol_start .. rar4_file("a.txt", "aa", 0x2) .. rar4_end ..
+        rar4_file("a.txt", "bb") .. rar4_payload .. rar4_end)
+    assert_equal("file", names["payload.exe"])
+    -- A name of the rest that bsdtar cannot convert stops the skip of its data, where
+    -- it reads headers
+    local inner = rar4_file("evil.exe", "MZ") .. rar4_end
+    names = names_of(vol_start .. rar4_file("a.txt", "aa", 0x2) .. rar4_file("b\255.txt", inner, 0x200) ..
+        rar4_end)
+    assert_equal("file", names["evil.exe"])
+  end)
+
+  test("a rar 4 file of a packed size over 2^63 is listed, as p7zip lists it", function()
+    -- unrar skips the data of the block, p7zip reads the file after its header
+    local fields = rspamd_util.pack("<I4", 2) .. rspamd_util.pack("<I4", 2) .. string.rep("\0", 11) ..
+        rspamd_util.pack("<I2", #"payload.exe") .. rspamd_util.pack("<I4", 0x20) ..
+        rspamd_util.pack("<I4", 0x80000000) .. rspamd_util.pack("<I4", 0)
+    local file = rar4_block(116, 0x8100, fields .. "payload.exe") .. "MZ"
+    local names = names_of(rar4_start .. rar4_block(0x77, 0, rspamd_util.pack("<I4", #file) .. "\0\0\0") ..
+        file .. rar4_end)
     assert_equal("file", names["payload.exe"])
   end)
 end)
