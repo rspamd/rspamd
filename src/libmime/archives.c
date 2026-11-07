@@ -266,25 +266,23 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 }
 
 /*
- * Readers that take the name of a file as a C string show it up to its first
- * NUL: that name is listed after the file as another name of it. FALSE when
- * no more files can be listed
+ * Another name of a file that readers show, listed after it. FALSE when no
+ * more files can be listed
  */
 static gboolean
-rspamd_archive_file_add_cstr_name(struct rspamd_task *task,
-								  struct rspamd_archive *arch,
-								  const struct rspamd_archive_file *f,
-								  const unsigned char *name, gsize len)
+rspamd_archive_file_add_name(struct rspamd_task *task,
+							 struct rspamd_archive *arch,
+							 const struct rspamd_archive_file *f,
+							 const char *name, gsize len)
 {
-	const unsigned char *nul = memchr(name, 0, len);
 	struct rspamd_archive_file *cf;
 
-	if (nul == NULL || nul == name || f->fname == NULL) {
+	if (len == 0 || f->fname == NULL) {
 		return TRUE;
 	}
 
 	cf = g_malloc0(sizeof(*cf));
-	rspamd_archive_file_try_utf(task, arch, cf, (const char *) name, nul - name);
+	rspamd_archive_file_try_utf(task, arch, cf, name, len);
 
 	if (cf->fname == NULL || g_string_equal(cf->fname, f->fname)) {
 		rspamd_archive_file_free(cf);
@@ -302,6 +300,288 @@ rspamd_archive_file_add_cstr_name(struct rspamd_task *task,
 	}
 
 	return rspamd_archive_file_add(task, arch, cf);
+}
+
+/*
+ * Readers that take the name of a file as a C string show it up to its first
+ * NUL: that name is listed after the file as another name of it. FALSE when
+ * no more files can be listed
+ */
+static gboolean
+rspamd_archive_file_add_cstr_name(struct rspamd_task *task,
+								  struct rspamd_archive *arch,
+								  const struct rspamd_archive_file *f,
+								  const unsigned char *name, gsize len)
+{
+	const unsigned char *nul = memchr(name, 0, len);
+
+	if (nul == NULL) {
+		return TRUE;
+	}
+
+	return rspamd_archive_file_add_name(task, arch, f, (const char *) name, nul - name);
+}
+
+/* Readers of the Unicode name of a rar 4 file, which stop at different points */
+enum rspamd_rar4_unicode_reader {
+	RSPAMD_RAR4_UNRAR = 0,
+	RSPAMD_RAR4_BSDTAR,
+	RSPAMD_RAR4_7ZIP,
+	/* unrar copies runs as signed char: bytes from 0x80 on differ */
+	RSPAMD_RAR4_UNRAR_WINDOWS, /* U+FF80..U+FFFF in a 16-bit wchar_t */
+	RSPAMD_RAR4_UNRAR_MACOS,   /* dropped from the name */
+	RSPAMD_RAR4_UNRAR_LINUX,   /* the name stops at them */
+	RSPAMD_RAR4_UNICODE_READERS,
+};
+
+/*
+ * Characters kept of a longer name, from its start and its end (where its
+ * extension is): runs over the zeros unrar reads past a header make names of
+ * up to 65535 characters of a few bytes
+ */
+#define RSPAMD_RAR4_NAME_HEAD 768
+#define RSPAMD_RAR4_NAME_TAIL 256
+
+/*
+ * The UTF-8 of a name in UTF-16 added to `names` unless it is empty or there;
+ * `capped` is set when only its start and end are kept
+ */
+static void
+rspamd_archive_rar4_add_unicode(const UChar *s, gsize len, GString **names, unsigned int *nnames,
+								gboolean *capped)
+{
+	UChar kept[RSPAMD_RAR4_NAME_HEAD + 1 + RSPAMD_RAR4_NAME_TAIL];
+	UErrorCode err = U_ZERO_ERROR;
+	int32_t u8_len;
+	GString *res;
+
+	if (len == 0) {
+		return;
+	}
+
+	if (len > G_N_ELEMENTS(kept)) {
+		memcpy(kept, s, RSPAMD_RAR4_NAME_HEAD * sizeof(UChar));
+		kept[RSPAMD_RAR4_NAME_HEAD] = 0x2026;
+		memcpy(kept + RSPAMD_RAR4_NAME_HEAD + 1, s + len - RSPAMD_RAR4_NAME_TAIL,
+			   RSPAMD_RAR4_NAME_TAIL * sizeof(UChar));
+		s = kept;
+		len = G_N_ELEMENTS(kept);
+		*capped = TRUE;
+	}
+
+	res = g_string_sized_new(3 * len + 1);
+	u_strToUTF8WithSub(res->str, res->allocated_len, &u8_len, s, len, 0xFFFD, NULL, &err);
+
+	if (U_FAILURE(err)) {
+		g_string_free(res, TRUE);
+
+		return;
+	}
+
+	res->len = u8_len;
+	res->str[u8_len] = '\0';
+
+	for (unsigned int i = 0; i < *nnames; i++) {
+		if (g_string_equal(names[i], res)) {
+			g_string_free(res, TRUE);
+
+			return;
+		}
+	}
+
+	names[(*nnames)++] = res;
+}
+
+/*
+ * The Unicode name of a rar 4 file follows the NUL of its name field of `len`
+ * bytes, after the name of `ascii_len` bytes; `avail` bytes of the field are
+ * in its header, and unrar reads zeros after them. It is encoded against that
+ * field: a high byte, then a byte of flags for each four characters, which
+ * take a byte, a byte under the high byte, two bytes, or a run of the bytes of
+ * the field at the same places (with a correction under the high byte).
+ * unrar, bsdtar and 7-Zip decode it alike (EncodeFileName::Decode of unrar 7)
+ * and stop at different points (checked with unrar 7.1, bsdtar 3.7, 7-Zip
+ * 17.05): unrar goes on to the end of the field; bsdtar and 7-Zip stop at two
+ * bytes cut by the end of the field, bsdtar at as many characters as the field
+ * has bytes, and 7-Zip one character short of that or of 1024. unrar copies a
+ * run without a correction as signed char, so its bytes from 0x80 on are
+ * shown otherwise on Windows, macOS and Linux. Each reader shows the name up
+ * to its first NUL character, where decoding stops, and unrar and 7-Zip the
+ * name before the NUL when nothing follows it. The names they show in UTF-8,
+ * distinct, unrar's first; `capped` is set when one is kept in part
+ */
+static unsigned int
+rspamd_archive_rar4_unicode_names(const unsigned char *name, gsize avail, gsize len, gsize ascii_len,
+								  GString *names[RSPAMD_RAR4_UNICODE_READERS], gboolean *capped)
+{
+#define RAR4_NAME_AT(i) ((i) < avail ? name[(i)] : 0)
+	gsize enc = ascii_len + 1, dec = 0, size, cut_len = G_MAXSIZE, sevenzip_max = MIN(len, 1024),
+		  lens[RSPAMD_RAR4_UNICODE_READERS], nsigned = 0;
+	unsigned char high, flags = 0;
+	unsigned int bits = 0, nnames = 0, i;
+	gboolean nul = FALSE;
+	UChar *out, *other;
+	unsigned char *as_signed;
+
+	if (enc >= len) {
+		return 0;
+	}
+
+	size = 2 * MIN(avail, len) + 16;
+	out = g_malloc_n(size, sizeof(UChar));
+	as_signed = g_malloc(size);
+	high = RAR4_NAME_AT(enc);
+	enc++;
+
+	/* Each step takes a byte at least, a run at most 129 characters */
+	while (enc < len && !nul) {
+		unsigned int n = 0, run = 0, step;
+		unsigned char correction = 0, run_high = 0;
+		gboolean is_run = FALSE, signed_run = FALSE;
+		UChar c = 0;
+
+		if (bits == 0) {
+			flags = RAR4_NAME_AT(enc);
+			enc++;
+			bits = 8;
+		}
+
+		switch (flags >> 6) {
+		case 0:
+			if (enc < len) {
+				c = RAR4_NAME_AT(enc);
+				enc++;
+				n = 1;
+			}
+			break;
+		case 1:
+			if (enc < len) {
+				c = RAR4_NAME_AT(enc) | (high << 8);
+				enc++;
+				n = 1;
+			}
+			break;
+		case 2:
+			if (enc + 1 < len) {
+				c = RAR4_NAME_AT(enc) | (RAR4_NAME_AT(enc + 1) << 8);
+				enc += 2;
+				n = 1;
+			}
+			else if (cut_len == G_MAXSIZE) {
+				/* bsdtar and 7-Zip stop, unrar goes on with the byte left */
+				cut_len = dec;
+			}
+			break;
+		default:
+			if (enc >= len) {
+				break;
+			}
+
+			run = RAR4_NAME_AT(enc);
+			enc++;
+
+			if (run & 0x80) {
+				if (enc >= len) {
+					break;
+				}
+
+				correction = RAR4_NAME_AT(enc);
+				enc++;
+				run_high = high;
+			}
+			else {
+				signed_run = TRUE;
+			}
+
+			is_run = TRUE;
+			n = (run & 0x7f) + 2;
+			break;
+		}
+
+		if (dec + n > size) {
+			size = MAX(size * 2, dec + n);
+			out = g_realloc_n(out, size, sizeof(UChar));
+			as_signed = g_realloc(as_signed, size);
+		}
+
+		for (step = 0; step < n && !nul; step++) {
+			if (is_run) {
+				unsigned char b;
+
+				if (dec >= len) {
+					break;
+				}
+
+				b = RAR4_NAME_AT(dec);
+				c = ((b + correction) & 0xff) | (run_high << 8);
+				as_signed[dec] = signed_run && b >= 0x80;
+			}
+			else {
+				as_signed[dec] = FALSE;
+			}
+
+			out[dec++] = c;
+			nul = c == 0;
+		}
+
+		flags <<= 2;
+		bits -= 2;
+	}
+
+	lens[RSPAMD_RAR4_UNRAR] = dec;
+	lens[RSPAMD_RAR4_BSDTAR] = MIN(MIN(dec, cut_len), len);
+	lens[RSPAMD_RAR4_7ZIP] = MIN(MIN(dec, cut_len), sevenzip_max);
+
+	if (lens[RSPAMD_RAR4_7ZIP] == sevenzip_max) {
+		/* Its NUL takes the place of the last character */
+		lens[RSPAMD_RAR4_7ZIP]--;
+	}
+
+	for (i = RSPAMD_RAR4_UNRAR; i <= RSPAMD_RAR4_7ZIP; i++) {
+		const UChar *first_nul = u_memchr(out, 0, lens[i]);
+
+		if (first_nul != NULL) {
+			lens[i] = first_nul - out;
+		}
+
+		rspamd_archive_rar4_add_unicode(out, lens[i], names, &nnames, capped);
+	}
+
+	for (gsize k = 0; k < lens[RSPAMD_RAR4_UNRAR]; k++) {
+		nsigned += as_signed[k];
+	}
+
+	if (nsigned > 0) {
+		gsize k, olen;
+
+		other = g_malloc_n(lens[RSPAMD_RAR4_UNRAR], sizeof(UChar));
+
+		for (k = 0; k < lens[RSPAMD_RAR4_UNRAR]; k++) {
+			other[k] = as_signed[k] ? (0xFF00 | out[k]) : out[k];
+		}
+
+		rspamd_archive_rar4_add_unicode(other, lens[RSPAMD_RAR4_UNRAR], names, &nnames, capped);
+
+		for (k = 0, olen = 0; k < lens[RSPAMD_RAR4_UNRAR]; k++) {
+			if (!as_signed[k]) {
+				other[olen++] = out[k];
+			}
+		}
+
+		rspamd_archive_rar4_add_unicode(other, olen, names, &nnames, capped);
+
+		for (k = 0; k < lens[RSPAMD_RAR4_UNRAR] && !as_signed[k]; k++) {
+		}
+
+		rspamd_archive_rar4_add_unicode(out, k, names, &nnames, capped);
+		g_free(other);
+	}
+
+	g_free(out);
+	g_free(as_signed);
+
+	return nnames;
+#undef RAR4_NAME_AT
 }
 
 enum rspamd_zip_eocd_check {
@@ -2178,16 +2458,39 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 
 			avail = MIN(avail, (gsize) (end - p));
 			f = g_malloc0(sizeof(*f));
+			/* Names of the Unicode version, and the length of the name before it */
+			GString *unicode_names[RSPAMD_RAR4_UNICODE_READERS];
+			unsigned int nunicode_names = 0;
+			gsize ascii_len = avail;
+			gboolean listed = TRUE, capped = FALSE;
 
 			if (flags & 0x200) {
 				/* We have unicode + normal version */
-				unsigned char *tmp;
+				const unsigned char *tmp;
 
 				tmp = memchr(p, '\0', avail);
 
-				if (tmp != NULL) {
+				if (tmp != NULL || avail < fname_len) {
+					ascii_len = tmp ? (gsize) (tmp - p) : avail;
+					nunicode_names = rspamd_archive_rar4_unicode_names(p, avail, fname_len, ascii_len,
+																	   unicode_names, &capped);
+				}
+
+				if (nunicode_names > 0) {
+					/* Readers show it instead of the name before the NUL */
+					rspamd_archive_file_try_utf(task, arch, f, unicode_names[0]->str,
+												unicode_names[0]->len);
+
+					if (capped) {
+						/* No file system takes such a name: only its ends are listed */
+						f->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+					}
+					msg_debug_archive("found unicode filename in rarv4 archive: %v",
+									  f->fname);
+				}
+				else if (ascii_len < avail || avail < fname_len) {
 					/* Just use ASCII version */
-					rspamd_archive_file_try_utf(task, arch, f, p, tmp - p);
+					rspamd_archive_file_try_utf(task, arch, f, p, ascii_len);
 					msg_debug_archive("found ascii filename in rarv4 archive: %v",
 									  f->fname);
 				}
@@ -2215,18 +2518,35 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 				}
-				if (!rspamd_archive_file_add(task, arch, f)) {
-					goto end;
-				}
 
-				/* A name with a NUL is shown up to it (a Unicode name follows its NUL) */
-				if (!(flags & 0x200) &&
-					!rspamd_archive_file_add_cstr_name(task, arch, f, p, avail)) {
-					goto end;
+				listed = rspamd_archive_file_add(task, arch, f);
+
+				if (listed && nunicode_names > 0) {
+					/* Where other readers stop, and the name older ones show */
+					for (unsigned int k = 1; k < nunicode_names && listed; k++) {
+						listed = rspamd_archive_file_add_name(task, arch, f, unicode_names[k]->str,
+															  unicode_names[k]->len);
+					}
+
+					if (listed) {
+						listed = rspamd_archive_file_add_name(task, arch, f, (const char *) p, ascii_len);
+					}
+				}
+				else if (listed && !(flags & 0x200)) {
+					/* A name with a NUL is shown up to it */
+					listed = rspamd_archive_file_add_cstr_name(task, arch, f, p, avail);
 				}
 			}
 			else {
 				g_free(f);
+			}
+
+			for (unsigned int k = 0; k < nunicode_names; k++) {
+				g_string_free(unicode_names[k], TRUE);
+			}
+
+			if (!listed) {
+				goto end;
 			}
 		}
 
