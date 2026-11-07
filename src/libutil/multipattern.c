@@ -383,8 +383,13 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 	g_assert(!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	/* Add to pats array for ACISM/regex fallback (needed for FALLBACK mode) */
-	if (mp->pats != NULL) {
+	/*
+	 * Add to pats array for ACISM/regex fallback (needed for FALLBACK mode).
+	 * Without usable hyperscan the path below adds the pattern: adding it
+	 * here too would put every pattern twice in pats, while cnt counts it
+	 * once, so the second half of the patterns would never be compiled
+	 */
+	if (rspamd_hs_check() && mp->pats != NULL) {
 		struct rspamd_acism_pat acism_pat;
 
 		acism_pat.pat.ptr = rspamd_multipattern_escape_acism(pattern, patlen, flags, &dlen);

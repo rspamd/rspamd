@@ -94,7 +94,57 @@ static auto call_lua_url_rewriter(struct rspamd_task *task, ::lua_State *L, int 
 	return result;
 }
 
-auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *task, int part_id)
+/*
+ * An unquoted value with a quote in it is stored up to the quote (see
+ * html_unquoted_value_length), while browsers go to the whole value, which
+ * the span covers and a replacement takes the place of. That whole value,
+ * as browsers read it: the part stored, then the rest from the quote on, read
+ * as the value was (NUL as U+FFFD, character references decoded, which none
+ * spans the quote). Nothing when the value was not cut there
+ */
+static auto whole_unquoted_value(const html_clickable_attr &clickable, std::string_view source)
+	-> std::optional<std::string>
+{
+	if (source.empty() || clickable.span.offset > source.size() ||
+		clickable.span.len > source.size() - clickable.span.offset) {
+		return std::nullopt;
+	}
+
+	auto raw = source.substr(clickable.span.offset, clickable.span.len);
+	auto quote = raw.find('"');
+
+	if (quote == std::string_view::npos) {
+		return std::nullopt;
+	}
+
+	auto read_value = [](std::string_view part) -> std::string {
+		std::string res;
+		res.reserve(part.size());
+
+		for (auto c: part) {
+			if (c == '\0') {
+				res.append((const char *) u8"\uFFFD");
+			}
+			else {
+				res.push_back(c);
+			}
+		}
+
+		res.resize(rspamd_html_decode_entitles_inplace(res.data(), res.size()));
+
+		return res;
+	};
+
+	/* A quoted value, or one kept whole, is not the part before the quote */
+	if (read_value(raw.substr(0, quote)) != clickable.value) {
+		return std::nullopt;
+	}
+
+	return std::string{clickable.value} + read_value(raw.substr(quote));
+}
+
+auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *task, int part_id,
+								  std::string_view source)
 	-> std::vector<rewrite_candidate>
 {
 	std::vector<rewrite_candidate> candidates;
@@ -104,18 +154,18 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 	}
 
 	// Enumerate all clickable attributes with spans
-	hc->for_each_clickable_attr([&](const html_tag *tag, std::string_view attr_name, const attr_span &span) -> bool {
-		// Get the href or src value
-		std::string_view url_value;
-		if (attr_name == "href") {
-			if (auto href = tag->find_href()) {
-				url_value = href.value();
-			}
+	hc->for_each_clickable_attr([&](const html_clickable_attr &clickable) -> bool {
+		/* The policy gets all of the destination, so a URL it returns keeps all of it */
+		auto whole = whole_unquoted_value(clickable, source);
+		std::string_view url_value = whole ? std::string_view{*whole} : clickable.value;
+
+		/* As browsers and URL extraction take it; the span still covers it all */
+		while (!url_value.empty() && (unsigned char) url_value.front() <= 0x20) {
+			url_value.remove_prefix(1);
 		}
-		else if (attr_name == "src") {
-			if (auto src_comp = tag->find_component<html_component_src>()) {
-				url_value = src_comp.value()->value;
-			}
+
+		while (!url_value.empty() && (unsigned char) url_value.back() <= 0x20) {
+			url_value.remove_suffix(1);
 		}
 
 		if (url_value.empty()) {
@@ -133,7 +183,8 @@ auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *ta
 		std::string absolute_url{url_value};
 
 		// Create candidate
-		candidates.push_back(rewrite_candidate{tag, attr_name, std::move(absolute_url), span.offset, span.len, part_id});
+		candidates.push_back(rewrite_candidate{clickable.tag_id, clickable.attr_name, std::move(absolute_url),
+											   clickable.span.offset, clickable.span.len, part_id});
 
 		return true;// Continue to next
 	});
@@ -251,7 +302,7 @@ auto process_html_url_rewrite(struct rspamd_task *task,
 	}
 
 	// Enumerate candidates
-	auto candidates = enumerate_rewrite_candidates(hc, task, part_id);
+	auto candidates = enumerate_rewrite_candidates(hc, task, part_id, original_html);
 	if (candidates.empty()) {
 		msg_debug_html_rewrite("no URL rewrite candidates found");
 		return std::nullopt;

@@ -21,6 +21,7 @@
 #include "rspamd.h"
 
 #include <algorithm>
+#include <string_view>
 #include <unicode/idna.h>
 
 namespace rspamd::html {
@@ -348,9 +349,34 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 
 	auto sz = input.length();
 	const auto *trimmed = rspamd_string_unicode_trim_inplace(input.data(), &sz);
+
+	/* Browsers also strip C0 controls around a link: `\x01https://...` works */
+	while (sz > 0 && (unsigned char) *trimmed <= 0x20) {
+		trimmed++;
+		sz--;
+	}
+
+	while (sz > 0 && (unsigned char) trimmed[sz - 1] <= 0x20) {
+		sz--;
+	}
+
 	input = {trimmed, sz};
 
 	const auto *start = input.data();
+
+	/*
+	 * Browsers remove tabs and line breaks anywhere in a link before they
+	 * read it: `mai<tab>lto:` is `mailto:` and `/<tab>/host` is `//host`.
+	 * The link as written stays in `input`
+	 */
+	auto is_tab_or_newline = [](char c) { return c == '\t' || c == '\n' || c == '\r'; };
+
+	if (std::any_of(input.begin(), input.end(), is_tab_or_newline)) {
+		auto *buf = rspamd_mempool_alloc_buffer(pool, sz);
+		sz = std::remove_copy_if(input.begin(), input.end(), buf, is_tab_or_newline) - buf;
+		start = buf;
+	}
+
 	s = start;
 	dlen = 0;
 
@@ -363,7 +389,16 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 		}
 	}
 
-	if (rspamd_substring_search(start, sz, "://", 3) == -1) {
+	if (sz > 2 && (s[0] == '/' || s[0] == '\\') && (s[1] == '/' || s[1] == '\\')) {
+		/*
+		 * Relative to the scheme, as `\\host` is in browsers too, whatever
+		 * follows: `//host/?next=https://...` is not absolute
+		 */
+		prefix = "http:";
+		dlen += sizeof("http:") - 1;
+		no_prefix = TRUE;
+	}
+	else if (rspamd_substring_search(start, sz, "://", 3) == -1) {
 		if (sz >= sizeof("mailto:") &&
 			(memcmp(start, "mailto:", sizeof("mailto:") - 1) == 0 ||
 			 memcmp(start, "tel:", sizeof("tel:") - 1) == 0 ||
@@ -395,12 +430,7 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 
 					structural_seen = true;
 
-					if (i == 0 && sz > 2 && s[i] == '/' && s[i + 1] == '/') {
-						prefix = "http:";
-						dlen += sizeof("http:") - 1;
-						no_prefix = TRUE;
-					}
-					else if (s[i] == '@') {
+					if (s[i] == '@') {
 						/* Likely email prefix */
 						/*
 						 * mailto: is non-hierarchical (RFC 6068); inject the
@@ -443,7 +473,8 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 		}
 	}
 
-	auto *decoded = rspamd_mempool_alloc_buffer(pool, dlen + 1);
+	/* One more for a slash added after a special scheme */
+	auto *decoded = rspamd_mempool_alloc_buffer(pool, dlen + 2);
 	d = decoded;
 
 	if (no_prefix) {
@@ -453,12 +484,85 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 	}
 
 	/*
+	 * Browsers do not decode the separators in the authority: the host of
+	 * http://a.com%2F@b.com/ is b.com, while a decoded slash would make it
+	 * a.com. Follow the output to know when it is in the authority.
+	 */
+	enum {
+		url_scheme,
+		url_scheme_end,
+		url_first_slash,
+		url_special_slashes,
+		url_authority,
+		url_rest,
+	} url_part = url_scheme;
+	/*
+	 * For these schemes the authority follows any number of '/' and '\\',
+	 * none included (http:a.com and http:///a.com are a.com), as in browsers
+	 * and in rspamd_url_parse
+	 */
+	auto is_special_scheme = [](std::string_view scheme) {
+		for (const auto *special: {"http", "https", "ftp", "ws", "wss"}) {
+			if (scheme.size() == strlen(special) &&
+				g_ascii_strncasecmp(scheme.data(), special, scheme.size()) == 0) {
+				return true;
+			}
+		}
+
+		return false;
+	};
+	auto follow_output = [&url_part, &is_special_scheme, decoded](const char *p, const char *end) {
+		for (; p < end && url_part != url_rest; p++) {
+			auto c = *p;
+
+			switch (url_part) {
+			case url_scheme:
+				if (c == ':') {
+					url_part = is_special_scheme({decoded, (std::size_t) (p - decoded)}) ? url_special_slashes : url_scheme_end;
+				}
+				else if (!g_ascii_isalnum(c) && c != '+' && c != '-' && c != '.') {
+					url_part = url_rest;
+				}
+				break;
+			case url_scheme_end:
+				url_part = (c == '/' || c == '\\') ? url_first_slash : url_rest;
+				break;
+			case url_first_slash:
+				url_part = (c == '/' || c == '\\') ? url_authority : url_rest;
+				break;
+			case url_special_slashes:
+				if (c == '/' || c == '\\') {
+					break;
+				}
+				/* The first character of the authority */
+				url_part = (c == '?' || c == '#') ? url_rest : url_authority;
+				break;
+			default:
+				if (c == '/' || c == '\\' || c == '?' || c == '#') {
+					url_part = url_rest;
+				}
+				break;
+			}
+		}
+	};
+
+	follow_output(decoded, d);
+	/* Slashes after a special scheme so far: `http:/host` is `http://host` */
+	auto special_slashes = 0u;
+
+	for (const auto *q = d; q > decoded && (q[-1] == '/' || q[-1] == '\\'); q--) {
+		special_slashes++;
+	}
+
+	/*
 	 * We also need to remove all internal newlines, spaces
 	 * and encode unsafe characters
 	 * Another obfuscation find in the wild was encoding of the SAFE url characters,
 	 * including essential ones
 	 */
 	for (auto i = 0; i < sz; i++) {
+		const auto *emitted = d;
+
 		if (G_UNLIKELY(g_ascii_isspace(s[i]))) {
 			continue;
 		}
@@ -492,8 +596,17 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 						codepoint += c2 - 'a' + 10;
 
 					/* Now check for 'interesting' codepoints */
-					if (codepoint == '@' || codepoint == ':' || codepoint == '|' ||
-						codepoint == '?' || codepoint == '\\' || codepoint == '/') {
+					if ((url_part == url_authority &&
+						 (codepoint == '/' || codepoint == '\\' || codepoint == '?')) ||
+						(url_part == url_special_slashes && codepoint == '?')) {
+						/*
+						 * Data in the authority, keep it encoded. Before its first
+						 * character, an encoded slash is still taken as a slash
+						 */
+						*d++ = s[i];
+					}
+					else if (codepoint == '@' || codepoint == ':' || codepoint == '|' ||
+							 codepoint == '?' || codepoint == '\\' || codepoint == '/') {
 						/* Replace it back */
 						*d++ = (char) (codepoint & 0xff);
 						i += 2;
@@ -513,6 +626,24 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 		else {
 			*d++ = s[i];
 		}
+
+		if (url_part == url_special_slashes && d > emitted) {
+			if (std::all_of(emitted, (const char *) d, [](char c) { return c == '/' || c == '\\'; })) {
+				special_slashes += d - emitted;
+			}
+			else if (special_slashes == 1 && *emitted != '?' && *emitted != '#') {
+				/*
+				 * The authority after a single slash, which URL parsers do
+				 * not read: browsers do, as after two
+				 */
+				memmove((char *) emitted + 1, emitted, d - emitted);
+				*(char *) emitted = '/';
+				d++;
+				special_slashes++;
+			}
+		}
+
+		follow_output(emitted, d);
 	}
 
 	*d = '\0';
@@ -549,13 +680,13 @@ auto html_process_url(rspamd_mempool_t *pool, std::string_view &input, lua_State
 		 * first) and get_raw() would return the decoded form (issue #5986).
 		 * The copy lives in the task mempool, matching the URL's lifetime.
 		 */
-		const auto raw_cap = std::min<gsize>(sz, G_MAXUINT16 / 2);
+		const auto raw_cap = std::min<gsize>(input.size(), G_MAXUINT16 / 2);
 		auto *original_raw = rspamd_mempool_alloc_buffer(pool, raw_cap + 1);
 		memcpy(original_raw, trimmed, raw_cap);
 		original_raw[raw_cap] = '\0';
 		url->raw = original_raw;
 		url->rawlen = (uint16_t) raw_cap;
-		if (raw_cap < sz) {
+		if (raw_cap < input.size()) {
 			url->flags |= RSPAMD_URL_FLAG_TRUNCATED;
 		}
 

@@ -12,6 +12,12 @@ Zip
   ...  Settings=${SETTINGS_MIMETYPES}
   Expect Symbol With Exact Options  MIME_BAD_EXTENSION  exe
 
+Zip Unicode Path
+  # One file, which 7-Zip and Python show under its Unicode Path name
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip-unicode-path.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol With Exact Options  MIME_BAD_EXTENSION  jar
+
 Zip Double Bad Extension
   Scan File  ${RSPAMD_TESTDIR}/messages/zip-doublebad.eml
   ...  Settings=${SETTINGS_MIMETYPES}

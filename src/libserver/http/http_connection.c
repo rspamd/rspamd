@@ -164,7 +164,7 @@ rspamd_http_parse_key(rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 {
 	unsigned char *decoded_id;
 	const char *eq_pos;
-	gsize id_len;
+	gsize id_len, pk_len;
 	struct rspamd_cryptobox_pubkey *pk;
 
 	if (priv->local_key == NULL) {
@@ -178,12 +178,26 @@ rspamd_http_parse_key(rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 			decoded_id = rspamd_decode_base32(data->begin, eq_pos - data->begin,
 											  &id_len, RSPAMD_BASE32_DEFAULT);
 
-			if (decoded_id != NULL && id_len >= RSPAMD_KEYPAIR_SHORT_ID_LEN) {
-				pk = rspamd_pubkey_from_base32(eq_pos + 1,
-											   data->begin + data->len - eq_pos - 1,
+			/*
+			 * The key is the rest of the value, and an empty one must not reach
+			 * rspamd_pubkey_from_base32: it takes a length of 0 for a
+			 * NUL-terminated string, which a header value is not.
+			 */
+			pk_len = data->begin + data->len - eq_pos - 1;
+
+			if (decoded_id != NULL && id_len >= RSPAMD_KEYPAIR_SHORT_ID_LEN &&
+				pk_len > 0) {
+				pk = rspamd_pubkey_from_base32(eq_pos + 1, pk_len,
 											   RSPAMD_KEYPAIR_KEX);
 				if (pk != NULL) {
-					if (memcmp(rspamd_keypair_get_id(priv->local_key),
+					/*
+					 * Keep a peer key that is already set: a client has
+					 * its server key moved in before the reply is read,
+					 * and an unauthenticated header must not replace it.
+					 * A repeated Key header is ignored the same way.
+					 */
+					if (priv->msg->peer_key == NULL &&
+						memcmp(rspamd_keypair_get_id(priv->local_key),
 							   decoded_id,
 							   RSPAMD_KEYPAIR_SHORT_ID_LEN) == 0) {
 						priv->msg->peer_key = pk;
@@ -274,6 +288,8 @@ rspamd_http_on_status(http_parser *parser, const char *at, size_t length)
 	return 0;
 }
 
+static void rspamd_http_drop_header(struct rspamd_http_connection_private *priv);
+
 static void
 rspamd_http_finish_header(struct rspamd_http_connection *conn,
 						  struct rspamd_http_connection_private *priv)
@@ -281,6 +297,17 @@ rspamd_http_finish_header(struct rspamd_http_connection *conn,
 	struct rspamd_http_header *hdr;
 	khiter_t k;
 	int r;
+
+	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_NEW_HEADER)) {
+		/*
+		 * The field never got a value. The parser refuses a line without
+		 * ':', but should a field still end this way, it is not a header,
+		 * and without the ": " separator the value length below would wrap
+		 */
+		rspamd_http_drop_header(priv);
+
+		return;
+	}
 
 	priv->header->combined = rspamd_fstring_append(priv->header->combined,
 												   "\r\n", 2);
@@ -2688,6 +2715,12 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 		}
 
 		encrypted = TRUE;
+		/*
+		 * The reply to an encrypted request must be encrypted as well. The
+		 * read path sets this for a reply read after the request is sent, but
+		 * a client also parses a reply that comes while it is still writing
+		 */
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 
 		if (priv->cache) {
 			rspamd_keypair_cache_process(priv->cache,

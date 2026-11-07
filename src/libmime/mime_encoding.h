@@ -57,6 +57,16 @@ char *rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
 							   gsize *olen, GError **err);
 
 /**
+ * Clients read UTF-16 without a byte order mark in either order, and rspamd
+ * reads it in the one its data looks like: for such data in `charset`, the
+ * other one, "UTF-16LE" or "UTF-16BE"; NULL for any other data
+ * @param charset canonical charset name (rspamd_mime_detect_charset)
+ * @param data
+ * @param len
+ */
+const char *rspamd_mime_utf16_other_order(const char *charset, const char *data, gsize len);
+
+/**
  * Converts data from `in` to `out`,
  * returns `FALSE` if `enc` is not a valid iconv charset
  *

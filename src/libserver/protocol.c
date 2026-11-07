@@ -112,7 +112,8 @@ rspamd_ucl_parser_new_untrusted(gsize inlen)
 }
 
 /*
- * Remove <> from the fixed string and copy it to the pool
+ * Remove <> from the fixed string and copy it to the pool, NULL for an empty
+ * string (the value comes from the client)
  */
 static char *
 rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
@@ -123,11 +124,14 @@ rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
 	gboolean has_obrace = FALSE;
 
 	g_assert(in != NULL);
-	g_assert(in->len > 0);
+
+	if (in->len == 0) {
+		return NULL;
+	}
 
 	p = in->begin;
 
-	while ((g_ascii_isspace(*p) || *p == '<') && nchars < in->len) {
+	while (nchars < in->len && (g_ascii_isspace(*p) || *p == '<')) {
 		if (*p == '<') {
 			has_obrace = TRUE;
 		}
@@ -521,6 +525,10 @@ rspamd_protocol_process_flags(struct rspamd_task *task, const rspamd_ftok_t *hdr
  * v3 (UCL metadata) request formats.
  */
 
+/*
+ * The setters below can run once per repeated header or query argument: the
+ * last value wins, and the value it replaces is released.
+ */
 static void
 rspamd_protocol_set_from_envelope(struct rspamd_task *task,
 								  const char *from_str, gsize from_len)
@@ -528,6 +536,10 @@ rspamd_protocol_set_from_envelope(struct rspamd_task *task,
 	if (from_len == 0) {
 		from_str = "<>";
 		from_len = 2;
+	}
+
+	if (task->from_envelope) {
+		rspamd_email_address_free(task->from_envelope);
 	}
 
 	task->from_envelope = rspamd_email_address_from_smtp(from_str, from_len);
@@ -543,13 +555,27 @@ rspamd_protocol_set_ip(struct rspamd_task *task,
 					   const char *ip_str, gsize ip_len,
 					   gboolean *has_ip)
 {
-	if (!rspamd_parse_inet_address(&task->from_addr,
+	rspamd_inet_addr_t *addr = NULL;
+
+	/*
+	 * The target is written on success only, a bad value keeps the old one.
+	 * A unix socket path (milter and proxy pass these for local clients) is
+	 * taken as is: the value comes from the client, so it must not trigger
+	 * the owner and group lookups of a listen socket definition
+	 */
+	if (!rspamd_parse_inet_address(&addr,
 								   ip_str, ip_len,
-								   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+								   RSPAMD_INET_ADDRESS_PARSE_REMOTE)) {
 		msg_err_protocol("bad ip value: '%*s'", (int) ip_len, ip_str);
 	}
 	else {
 		msg_debug_protocol("read IP value: %*s", (int) ip_len, ip_str);
+
+		if (task->from_addr) {
+			rspamd_inet_address_free(task->from_addr);
+		}
+
+		task->from_addr = addr;
 		*has_ip = TRUE;
 	}
 }
@@ -558,6 +584,11 @@ static void
 rspamd_protocol_set_settings_id(struct rspamd_task *task,
 								const char *id_str, gsize id_len)
 {
+	/* The task owns a reference to its settings element */
+	if (task->settings_elt) {
+		REF_RELEASE(task->settings_elt);
+	}
+
 	task->settings_elt = rspamd_config_find_settings_name_ref(
 		task->cfg, id_str, id_len);
 
@@ -602,6 +633,32 @@ rspamd_protocol_rcpt_esmtp_args_new(struct rspamd_task *task)
 	return args;
 }
 
+/*
+ * Splits an ESMTP argument into KEY and VALUE; a keyword without a value (e.g.
+ * SMTPUTF8, which milter passes without '=') gets an empty one
+ */
+static gboolean
+rspamd_protocol_split_esmtp_arg(const char *arg, gsize len,
+								rspamd_ftok_t *key, rspamd_ftok_t *val)
+{
+	const char *eq = memchr(arg, '=', len);
+
+	key->begin = arg;
+
+	if (eq == NULL) {
+		key->len = len;
+		val->begin = "";
+		val->len = 0;
+	}
+	else {
+		key->len = eq - arg;
+		val->begin = eq + 1;
+		val->len = len - key->len - 1;
+	}
+
+	return key->len > 0;
+}
+
 static void
 rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 								   const char *key, gsize key_len,
@@ -625,18 +682,50 @@ rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 	g_hash_table_replace(task->mail_esmtp_args, key_tok, val_tok);
 }
 
-static void
-rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
-								   int rcpt_idx,
-								   const char *key, gsize key_len,
-								   const char *val, gsize val_len)
+/*
+ * Recipient indexes come from the client and size the per-recipient array, so
+ * they are bounded by `max_recipients`, or by this when the config sets none.
+ */
+#define RSPAMD_PROTOCOL_MAX_RCPT_ESMTP_ARGS 1024
+
+static gulong
+rspamd_protocol_rcpt_esmtp_args_limit(struct rspamd_task *task)
 {
+	if (task->cfg && task->cfg->max_recipients > 0) {
+		return task->cfg->max_recipients;
+	}
+
+	return RSPAMD_PROTOCOL_MAX_RCPT_ESMTP_ARGS;
+}
+
+/* Creates the slot for `rcpt_idx` (NULL if new), FALSE if out of range */
+static gboolean
+rspamd_protocol_rcpt_esmtp_args_reserve(struct rspamd_task *task,
+										gulong rcpt_idx)
+{
+	if (rcpt_idx >= rspamd_protocol_rcpt_esmtp_args_limit(task)) {
+		return FALSE;
+	}
+
 	if (!task->rcpt_esmtp_args) {
 		task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
 	}
 
-	while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
-		g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+	if (task->rcpt_esmtp_args->len <= rcpt_idx) {
+		g_ptr_array_set_size(task->rcpt_esmtp_args, rcpt_idx + 1);
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
+								   gulong rcpt_idx,
+								   const char *key, gsize key_len,
+								   const char *val, gsize val_len)
+{
+	if (!rspamd_protocol_rcpt_esmtp_args_reserve(task, rcpt_idx)) {
+		return FALSE;
 	}
 
 	GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
@@ -655,6 +744,8 @@ rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
 	rspamd_ftok_t *val_tok = rspamd_ftok_map(fval);
 
 	g_hash_table_replace(rcpt_args, key_tok, val_tok);
+
+	return TRUE;
 }
 
 /*
@@ -749,9 +840,12 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'D':
 			IF_HEADER(DELIVER_TO_HEADER)
 			{
-				task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
-				msg_debug_protocol("read deliver-to header, value: %s",
-								   task->deliver_to);
+				/* An empty value keeps the previous one */
+				if (hv_tok->len > 0) {
+					task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
+					msg_debug_protocol("read deliver-to header, value: %s",
+									   task->deliver_to);
+				}
 			}
 			else
 			{
@@ -993,13 +1087,16 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'X':
 			IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
 			{
-				/* Parse KEY=VALUE format */
-				const char *eq = memchr(hv_tok->begin, '=', hv_tok->len);
+				/* No commas: this is a macro argument */
+				rspamd_ftok_t arg_key;
+				rspamd_ftok_t arg_val;
 
-				if (eq && eq > hv_tok->begin) {
+				/* Parse KEY=VALUE or KEY format */
+				if (rspamd_protocol_split_esmtp_arg(hv_tok->begin, hv_tok->len,
+													&arg_key, &arg_val)) {
 					rspamd_protocol_add_mail_esmtp_arg(task,
-													   hv_tok->begin, eq - hv_tok->begin,
-													   eq + 1, hv_tok->begin + hv_tok->len - eq - 1);
+													   arg_key.begin, arg_key.len,
+													   arg_val.begin, arg_val.len);
 					msg_debug_protocol("parsed mail ESMTP arg from header");
 				}
 			}
@@ -1011,19 +1108,33 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 				const char *colon = memchr(p, ':', hv_tok->len);
 
 				if (colon && colon > p) {
-					char *endptr;
-					int rcpt_idx = strtol(p, &endptr, 10);
+					gulong rcpt_idx;
 
-					if (endptr == colon) {
-						/* Parse KEY=VALUE */
+					/* Digits only: no sign, spaces or overflow */
+					if (!rspamd_strtoul(p, colon - p, &rcpt_idx)) {
+						msg_warn_protocol("bad recipient index in rcpt ESMTP arg: '%T'",
+										  hv_tok);
+					}
+					else {
+						rspamd_ftok_t arg_key;
+						rspamd_ftok_t arg_val;
+
+						/* Parse KEY=VALUE or KEY */
 						p = colon + 1;
-						const char *eq = memchr(p, '=', end - p);
 
-						if (eq && eq > p) {
-							rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
-															   p, eq - p,
-															   eq + 1, end - eq - 1);
-							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d", rcpt_idx);
+						if (rspamd_protocol_split_esmtp_arg(p, end - p,
+															&arg_key, &arg_val)) {
+							if (rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
+																   arg_key.begin, arg_key.len,
+																   arg_val.begin, arg_val.len)) {
+								msg_debug_protocol("parsed rcpt ESMTP arg for idx %ul", rcpt_idx);
+							}
+							else {
+								msg_warn_protocol("recipient index %ul in rcpt ESMTP arg is "
+												  "out of range, limit is %ul",
+												  rcpt_idx,
+												  rspamd_protocol_rcpt_esmtp_args_limit(task));
+							}
 						}
 					}
 				}
@@ -2728,9 +2839,18 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	elt = ucl_object_lookup(metadata, "rcpt_esmtp_args");
 	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
 		ucl_object_iter_t arr_it = NULL;
-		int rcpt_idx = 0;
+		gulong rcpt_idx = 0;
+		const gulong max_rcpts = rspamd_protocol_rcpt_esmtp_args_limit(task);
 
 		while ((cur = ucl_object_iterate(elt, &arr_it, true)) != NULL) {
+			/* Same bound as v2, so the index is always in range below */
+			if (rcpt_idx >= max_rcpts) {
+				msg_warn_protocol("rcpt_esmtp_args has more than %ul entries, "
+								  "ignore the rest",
+								  max_rcpts);
+				break;
+			}
+
 			if (ucl_object_type(cur) == UCL_OBJECT) {
 				ucl_object_iter_t obj_it = NULL;
 				const ucl_object_t *kv;
@@ -2746,12 +2866,7 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 			}
 			else {
 				/* Non-object entry: ensure array slot exists as NULL */
-				if (!task->rcpt_esmtp_args) {
-					task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
-				}
-				while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
-					g_ptr_array_add(task->rcpt_esmtp_args, NULL);
-				}
+				rspamd_protocol_rcpt_esmtp_args_reserve(task, rcpt_idx);
 			}
 			rcpt_idx++;
 		}

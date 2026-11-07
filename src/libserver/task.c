@@ -2233,21 +2233,21 @@ void rspamd_task_add_request_header(struct rspamd_task *task,
 	k = kh_put(rspamd_req_headers_hash, task->request_headers,
 			   name, &res);
 
-	if (res == 0) {
-		/* Existing name */
-		nchain = rspamd_mempool_alloc(task->task_pool, sizeof(*nchain));
-		nchain->hdr = value;
-		nchain->next = NULL;
-		chain = kh_value(task->request_headers, k);
+	nchain = rspamd_mempool_alloc(task->task_pool, sizeof(*nchain));
+	nchain->hdr = value;
+	nchain->next = NULL;
+	nchain->tail = nchain;
 
-		/* Slow but OK here */
-		LL_APPEND(chain, nchain);
+	if (res == 0) {
+		/*
+		 * Existing name: append in constant time, as v3 metadata can repeat
+		 * a name many times (it is not bound by the HTTP header size limit)
+		 */
+		chain = kh_value(task->request_headers, k);
+		chain->tail->next = nchain;
+		chain->tail = nchain;
 	}
 	else {
-		nchain = rspamd_mempool_alloc(task->task_pool, sizeof(*nchain));
-		nchain->hdr = value;
-		nchain->next = NULL;
-
 		kh_value(task->request_headers, k) = nchain;
 	}
 }

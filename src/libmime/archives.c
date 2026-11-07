@@ -19,13 +19,22 @@
 #include "task.h"
 #include "archives.h"
 #include "libmime/mime_encoding.h"
+#include "rspamd_simdutf.h"
 #include <unicode/uchar.h>
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
 #include <unicode/ucnv.h>
+#include <unicode/unorm2.h>
+#include <unicode/ustring.h>
 
 #include <archive.h>
 #include <archive_entry.h>
+#ifdef HAVE_USELOCALE
+#include <locale.h>
+#ifdef __APPLE__
+#include <xlocale.h>
+#endif
+#endif
 #include <zlib.h>
 #include "ottery.h"
 
@@ -124,6 +133,20 @@ rspamd_archive_files_reset(struct rspamd_task *task,
 	rspamd_archive_dtor(arch);
 	arch->files = g_ptr_array_new();
 	arch->flags &= ~RSPAMD_ARCHIVE_FILES_TRUNCATED;
+}
+
+/* Drops the files listed after the first `len` ones */
+static void
+rspamd_archive_files_truncate(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  unsigned int len)
+{
+	while (arch->files->len > len) {
+		rspamd_archive_file_free(g_ptr_array_index(arch->files, arch->files->len - 1));
+		g_ptr_array_set_size(arch->files, arch->files->len - 1);
+		g_assert(MESSAGE_FIELD(task, narchive_files) > 0);
+		MESSAGE_FIELD(task, narchive_files) -= 1;
+	}
 }
 
 
@@ -242,110 +265,1075 @@ rspamd_archive_file_try_utf(struct rspamd_task *task,
 	return true;
 }
 
-static void
-rspamd_archive_process_zip(struct rspamd_task *task,
-						   struct rspamd_mime_part *part)
+/*
+ * Another name of a file that readers show, listed after it. FALSE when no
+ * more files can be listed
+ */
+static gboolean
+rspamd_archive_file_add_name(struct rspamd_task *task,
+							 struct rspamd_archive *arch,
+							 const struct rspamd_archive_file *f,
+							 const char *name, gsize len)
 {
-	const unsigned char *p, *start, *end, *eocd = NULL, *cd;
-	const uint32_t eocd_magic = 0x06054b50, cd_basic_len = 46;
+	struct rspamd_archive_file *cf;
+
+	if (len == 0 || f->fname == NULL) {
+		return TRUE;
+	}
+
+	cf = g_malloc0(sizeof(*cf));
+	rspamd_archive_file_try_utf(task, arch, cf, name, len);
+
+	if (cf->fname == NULL || g_string_equal(cf->fname, f->fname)) {
+		rspamd_archive_file_free(cf);
+
+		return TRUE;
+	}
+
+	cf->compressed_size = f->compressed_size;
+	cf->uncompressed_size = f->uncompressed_size;
+	cf->flags |= (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) | RSPAMD_ARCHIVE_FILE_ALIAS |
+				 RSPAMD_ARCHIVE_FILE_SAME_ENTRY;
+
+	if (cf->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+		arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+	}
+
+	return rspamd_archive_file_add(task, arch, cf);
+}
+
+/*
+ * Readers that take the name of a file as a C string show it up to its first
+ * NUL: that name is listed after the file as another name of it. FALSE when
+ * no more files can be listed
+ */
+static gboolean
+rspamd_archive_file_add_cstr_name(struct rspamd_task *task,
+								  struct rspamd_archive *arch,
+								  const struct rspamd_archive_file *f,
+								  const unsigned char *name, gsize len)
+{
+	const unsigned char *nul = memchr(name, 0, len);
+
+	if (nul == NULL) {
+		return TRUE;
+	}
+
+	return rspamd_archive_file_add_name(task, arch, f, (const char *) name, nul - name);
+}
+
+/*
+ * A name as unrar decodes UTF-8, for every rar 5 name and for rar 4 names
+ * on macOS: up to the first NUL or the first byte it cannot read, overlong
+ * forms (0xC0 0xAE is '.') and surrogates decoded, code points past U+10FFFF
+ * dropped. Surrogates are listed as U+FFFD. This name is listed after the
+ * file as another name of it. FALSE when no more files can be listed
+ */
+static gboolean
+rspamd_archive_file_add_unrar_utf_name(struct rspamd_task *task,
+									   struct rspamd_archive *arch,
+									   const struct rspamd_archive_file *f,
+									   const unsigned char *name, gsize len)
+{
+	GString *res;
+	gboolean listed, changed = FALSE;
+	gsize i = 0;
+
+	res = g_string_sized_new(len);
+
+	while (i < len && name[i] != 0) {
+		unsigned int c = name[i], d, n, k;
+
+		if (c < 0x80) {
+			d = c;
+			n = 1;
+		}
+		else if ((c >> 5) == 6) {
+			d = c & 0x1f;
+			n = 2;
+		}
+		else if ((c >> 4) == 14) {
+			d = c & 0x0f;
+			n = 3;
+		}
+		else if ((c >> 3) == 30) {
+			d = c & 0x07;
+			n = 4;
+		}
+		else {
+			changed = TRUE;
+			break;
+		}
+
+		for (k = 1; k < n; k++) {
+			if (i + k >= len || (name[i + k] & 0xc0) != 0x80) {
+				break;
+			}
+
+			d = (d << 6) | (name[i + k] & 0x3f);
+		}
+
+		if (k < n) {
+			/* unrar stops at a sequence cut short */
+			changed = TRUE;
+			break;
+		}
+
+		if (d > 0x10ffff) {
+			changed = TRUE;
+		}
+		else if ((d >= 0xd800 && d <= 0xdfff) || (n > 1 && d < 0x80) ||
+				 (n > 2 && d < 0x800) || (n > 3 && d < 0x10000)) {
+			/* A surrogate or an overlong form, which UTF-8 does not allow */
+			changed = TRUE;
+
+			if (d >= 0xd800 && d <= 0xdfff) {
+				d = 0xfffd;
+			}
+		}
+
+		if (d <= 0x10ffff) {
+			char buf[4];
+			int blen = 0;
+
+			U8_APPEND_UNSAFE(buf, blen, d);
+			g_string_append_len(res, buf, blen);
+		}
+
+		i += n;
+	}
+
+	/* Only a name that differs from the bytes is listed */
+	listed = !changed || rspamd_archive_file_add_name(task, arch, f, res->str, res->len);
+	g_string_free(res, TRUE);
+
+	return listed;
+}
+
+/* Readers of the Unicode name of a rar 4 file, which stop at different points */
+enum rspamd_rar4_unicode_reader {
+	RSPAMD_RAR4_UNRAR = 0,
+	RSPAMD_RAR4_BSDTAR,
+	RSPAMD_RAR4_7ZIP,
+	/* unrar copies runs as signed char: bytes from 0x80 on differ */
+	RSPAMD_RAR4_UNRAR_WINDOWS, /* U+FF80..U+FFFF in a 16-bit wchar_t */
+	RSPAMD_RAR4_UNRAR_MACOS,   /* dropped from the name */
+	RSPAMD_RAR4_UNRAR_LINUX,   /* the name stops at them */
+	RSPAMD_RAR4_UNICODE_READERS,
+};
+
+/*
+ * Characters kept of a longer name, from its start and its end (where its
+ * extension is): runs over the zeros unrar reads past a header make names of
+ * up to 65535 characters of a few bytes
+ */
+#define RSPAMD_RAR4_NAME_HEAD 768
+#define RSPAMD_RAR4_NAME_TAIL 256
+
+/*
+ * The UTF-8 of a name in UTF-16 added to `names` unless it is empty or there;
+ * `capped` is set when only its start and end are kept
+ */
+static void
+rspamd_archive_rar4_add_unicode(const UChar *s, gsize len, GString **names, unsigned int *nnames,
+								gboolean *capped)
+{
+	UChar kept[RSPAMD_RAR4_NAME_HEAD + 1 + RSPAMD_RAR4_NAME_TAIL];
+	UErrorCode err = U_ZERO_ERROR;
+	int32_t u8_len;
+	GString *res;
+
+	if (len == 0) {
+		return;
+	}
+
+	if (len > G_N_ELEMENTS(kept)) {
+		memcpy(kept, s, RSPAMD_RAR4_NAME_HEAD * sizeof(UChar));
+		kept[RSPAMD_RAR4_NAME_HEAD] = 0x2026;
+		memcpy(kept + RSPAMD_RAR4_NAME_HEAD + 1, s + len - RSPAMD_RAR4_NAME_TAIL,
+			   RSPAMD_RAR4_NAME_TAIL * sizeof(UChar));
+		s = kept;
+		len = G_N_ELEMENTS(kept);
+		*capped = TRUE;
+	}
+
+	res = g_string_sized_new(3 * len + 1);
+	u_strToUTF8WithSub(res->str, res->allocated_len, &u8_len, s, len, 0xFFFD, NULL, &err);
+
+	if (U_FAILURE(err)) {
+		g_string_free(res, TRUE);
+
+		return;
+	}
+
+	res->len = u8_len;
+	res->str[u8_len] = '\0';
+
+	for (unsigned int i = 0; i < *nnames; i++) {
+		if (g_string_equal(names[i], res)) {
+			g_string_free(res, TRUE);
+
+			return;
+		}
+	}
+
+	names[(*nnames)++] = res;
+}
+
+/*
+ * The Unicode name of a rar 4 file follows the NUL of its name field of `len`
+ * bytes, after the name of `ascii_len` bytes; `avail` bytes of the field are
+ * in its header, and unrar reads zeros after them. It is encoded against that
+ * field: a high byte, then a byte of flags for each four characters, which
+ * take a byte, a byte under the high byte, two bytes, or a run of the bytes of
+ * the field at the same places (with a correction under the high byte).
+ * unrar, bsdtar and 7-Zip decode it alike (EncodeFileName::Decode of unrar 7)
+ * and stop at different points (checked with unrar 7.1, bsdtar 3.7, 7-Zip
+ * 17.05): unrar goes on to the end of the field; bsdtar and 7-Zip stop at two
+ * bytes cut by the end of the field, bsdtar at as many characters as the field
+ * has bytes, and 7-Zip one character short of that or of 1024. unrar copies a
+ * run without a correction as signed char, so its bytes from 0x80 on are
+ * shown otherwise on Windows, macOS and Linux. Each reader shows the name up
+ * to its first NUL character, where decoding stops, and unrar and 7-Zip the
+ * name before the NUL when nothing follows it. The names they show in UTF-8,
+ * distinct, unrar's first; `capped` is set when one is kept in part
+ */
+static unsigned int
+rspamd_archive_rar4_unicode_names(const unsigned char *name, gsize avail, gsize len, gsize ascii_len,
+								  GString *names[RSPAMD_RAR4_UNICODE_READERS], gboolean *capped)
+{
+#define RAR4_NAME_AT(i) ((i) < avail ? name[(i)] : 0)
+	gsize enc = ascii_len + 1, dec = 0, size, cut_len = G_MAXSIZE, sevenzip_max = MIN(len, 1024),
+		  lens[RSPAMD_RAR4_UNICODE_READERS], nsigned = 0;
+	unsigned char high, flags = 0;
+	unsigned int bits = 0, nnames = 0, i;
+	gboolean nul = FALSE;
+	UChar *out, *other;
+	unsigned char *as_signed;
+
+	if (enc >= len) {
+		return 0;
+	}
+
+	size = 2 * MIN(avail, len) + 16;
+	out = g_malloc_n(size, sizeof(UChar));
+	as_signed = g_malloc(size);
+	high = RAR4_NAME_AT(enc);
+	enc++;
+
+	/* Each step takes a byte at least, a run at most 129 characters */
+	while (enc < len && !nul) {
+		unsigned int n = 0, run = 0, step;
+		unsigned char correction = 0, run_high = 0;
+		gboolean is_run = FALSE, signed_run = FALSE;
+		UChar c = 0;
+
+		if (bits == 0) {
+			flags = RAR4_NAME_AT(enc);
+			enc++;
+			bits = 8;
+		}
+
+		switch (flags >> 6) {
+		case 0:
+			if (enc < len) {
+				c = RAR4_NAME_AT(enc);
+				enc++;
+				n = 1;
+			}
+			break;
+		case 1:
+			if (enc < len) {
+				c = RAR4_NAME_AT(enc) | (high << 8);
+				enc++;
+				n = 1;
+			}
+			break;
+		case 2:
+			if (enc + 1 < len) {
+				c = RAR4_NAME_AT(enc) | (RAR4_NAME_AT(enc + 1) << 8);
+				enc += 2;
+				n = 1;
+			}
+			else if (cut_len == G_MAXSIZE) {
+				/* bsdtar and 7-Zip stop, unrar goes on with the byte left */
+				cut_len = dec;
+			}
+			break;
+		default:
+			if (enc >= len) {
+				break;
+			}
+
+			run = RAR4_NAME_AT(enc);
+			enc++;
+
+			if (run & 0x80) {
+				if (enc >= len) {
+					break;
+				}
+
+				correction = RAR4_NAME_AT(enc);
+				enc++;
+				run_high = high;
+			}
+			else {
+				signed_run = TRUE;
+			}
+
+			is_run = TRUE;
+			n = (run & 0x7f) + 2;
+			break;
+		}
+
+		if (dec + n > size) {
+			size = MAX(size * 2, dec + n);
+			out = g_realloc_n(out, size, sizeof(UChar));
+			as_signed = g_realloc(as_signed, size);
+		}
+
+		for (step = 0; step < n && !nul; step++) {
+			if (is_run) {
+				unsigned char b;
+
+				if (dec >= len) {
+					break;
+				}
+
+				b = RAR4_NAME_AT(dec);
+				c = ((b + correction) & 0xff) | (run_high << 8);
+				as_signed[dec] = signed_run && b >= 0x80;
+			}
+			else {
+				as_signed[dec] = FALSE;
+			}
+
+			out[dec++] = c;
+			nul = c == 0;
+		}
+
+		flags <<= 2;
+		bits -= 2;
+	}
+
+	lens[RSPAMD_RAR4_UNRAR] = dec;
+	lens[RSPAMD_RAR4_BSDTAR] = MIN(MIN(dec, cut_len), len);
+	lens[RSPAMD_RAR4_7ZIP] = MIN(MIN(dec, cut_len), sevenzip_max);
+
+	if (lens[RSPAMD_RAR4_7ZIP] == sevenzip_max) {
+		/* Its NUL takes the place of the last character */
+		lens[RSPAMD_RAR4_7ZIP]--;
+	}
+
+	for (i = RSPAMD_RAR4_UNRAR; i <= RSPAMD_RAR4_7ZIP; i++) {
+		const UChar *first_nul = u_memchr(out, 0, lens[i]);
+
+		if (first_nul != NULL) {
+			lens[i] = first_nul - out;
+		}
+
+		rspamd_archive_rar4_add_unicode(out, lens[i], names, &nnames, capped);
+	}
+
+	for (gsize k = 0; k < lens[RSPAMD_RAR4_UNRAR]; k++) {
+		nsigned += as_signed[k];
+	}
+
+	if (nsigned > 0) {
+		gsize k, olen;
+
+		other = g_malloc_n(lens[RSPAMD_RAR4_UNRAR], sizeof(UChar));
+
+		for (k = 0; k < lens[RSPAMD_RAR4_UNRAR]; k++) {
+			other[k] = as_signed[k] ? (0xFF00 | out[k]) : out[k];
+		}
+
+		rspamd_archive_rar4_add_unicode(other, lens[RSPAMD_RAR4_UNRAR], names, &nnames, capped);
+
+		for (k = 0, olen = 0; k < lens[RSPAMD_RAR4_UNRAR]; k++) {
+			if (!as_signed[k]) {
+				other[olen++] = out[k];
+			}
+		}
+
+		rspamd_archive_rar4_add_unicode(other, olen, names, &nnames, capped);
+
+		for (k = 0; k < lens[RSPAMD_RAR4_UNRAR] && !as_signed[k]; k++) {
+		}
+
+		rspamd_archive_rar4_add_unicode(out, k, names, &nnames, capped);
+		g_free(other);
+	}
+
+	g_free(out);
+	g_free(as_signed);
+
+	return nnames;
+#undef RAR4_NAME_AT
+}
+
+enum rspamd_zip_eocd_check {
+	RSPAMD_ZIP_EOCD_USABLE = 0,
+	RSPAMD_ZIP_EOCD_SKIP,
+	RSPAMD_ZIP_EOCD_STOP,
+};
+
+/* A central directory that an end record describes */
+struct rspamd_zip_cd_set {
+	uint64_t offset;
+	/* Another one, where the record says, or G_MAXUINT64 */
+	uint64_t alt_offset;
+	uint64_t size;
+	/* The size is not known: the directory ends at the first other data */
+	gboolean open_end;
+	/* The offset the record holds, which counts from the start of its archive */
+	uint64_t declared_offset;
+	/* The size the record holds */
+	uint64_t declared_size;
+	/*
+	 * Where the archive of the record starts, when its directory is right
+	 * before the record (G_MAXUINT64 if not): data in front of it may be
+	 * another archive
+	 */
+	uint64_t front;
+};
+
+/*
+ * The directory where the record says, or right before the record (`limit`):
+ * the offsets of an archive with data in front of it (a self-extracting stub,
+ * another archive) count from the start of the archive, and readers such as
+ * Python's zipfile or unzip take the directory before the record whatever the
+ * offset says. When both are directories and they differ (two archives one
+ * after the other), readers do not agree on the files: both are listed then,
+ * the one right before the record first
+ */
+static gboolean
+rspamd_archive_zip_cd_set(const unsigned char *start, uint64_t limit,
+						  uint64_t cd_offset, uint64_t cd_size,
+						  struct rspamd_zip_cd_set *set)
+{
+	static const unsigned char cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
+
+	if (cd_size > limit) {
+		return FALSE;
+	}
+
+	gboolean declared = cd_offset <= limit - cd_size &&
+						(cd_size < sizeof(cd_magic) ||
+						 memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) == 0);
+	gboolean adjacent = cd_size >= sizeof(cd_magic) &&
+						memcmp(start + limit - cd_size, cd_magic, sizeof(cd_magic)) == 0;
+
+	set->alt_offset = G_MAXUINT64;
+	set->size = cd_size;
+	set->open_end = FALSE;
+	set->declared_offset = cd_offset;
+	set->declared_size = cd_size;
+	set->front = G_MAXUINT64;
+
+	if (declared && cd_size < sizeof(cd_magic) && limit - cd_offset >= sizeof(cd_magic) &&
+		memcmp(start + cd_offset, cd_magic, sizeof(cd_magic)) == 0) {
+		/*
+		 * An empty directory, according to the record, where a directory
+		 * is (a record appended to an archive): unzip and 7-Zip list it,
+		 * up to the record
+		 */
+		set->offset = cd_offset;
+		set->size = limit - cd_offset;
+		set->open_end = TRUE;
+
+		return TRUE;
+	}
+
+	if ((adjacent || cd_size < sizeof(cd_magic)) && limit - cd_size >= cd_offset) {
+		/* An empty directory is right before its record too */
+		set->front = limit - cd_size - cd_offset;
+	}
+
+	if (adjacent) {
+		set->offset = limit - cd_size;
+
+		if (declared && cd_offset != set->offset) {
+			set->alt_offset = cd_offset;
+		}
+	}
+	else if (declared) {
+		set->offset = cd_offset;
+	}
+	else {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Checks an end of central directory record: the central directory it
+ * describes must be within the data before it and start with its magic.
+ * With a zip64 locator right before the record, readers (Python, bsdtar)
+ * take the values of the zip64 record, whatever the 32-bit fields hold; when
+ * these fields are not maxed out, they are the next choice (base readers use
+ * them), and when they are, readers do not look any further back either.
+ * Without a zip64 record, a maxed offset alone (Info-ZIP `zip -fz` to a pipe)
+ * still leaves the directory right before the record, which readers take.
+ * Fills up to two sets of directories, in the order to read them.
+ */
+static enum rspamd_zip_eocd_check
+rspamd_archive_zip_check_eocd(const unsigned char *start,
+							  const unsigned char *eocd,
+							  struct rspamd_zip_cd_set *sets,
+							  unsigned int *nsets)
+{
+	const uint32_t zip64_locator_magic = 0x07064b50, zip64_eocd_magic = 0x06064b50;
+	/* Up to the cd size and offset fields, which are the last ones we read */
+	const uint64_t zip64_eocd_len = 56, zip64_locator_len = 20;
+	uint32_t cd_offset32, cd_size32;
+	uint64_t limit = eocd - start, z64_pos = G_MAXUINT64;
+
+	memcpy(&cd_size32, eocd + 12, sizeof(cd_size32));
+	cd_size32 = GUINT32_FROM_LE(cd_size32);
+	memcpy(&cd_offset32, eocd + 16, sizeof(cd_offset32));
+	cd_offset32 = GUINT32_FROM_LE(cd_offset32);
+
+	gboolean maxed = cd_size32 == G_MAXUINT32 || cd_offset32 == G_MAXUINT32;
+
+	/*
+	 * The zip64 record is where the locator says, or right before the
+	 * locator when the offsets count from an archive with data in front of it
+	 */
+	if (limit >= zip64_locator_len) {
+		const unsigned char *loc = eocd - zip64_locator_len;
+		uint64_t loc_off = loc - start, z64_offset;
+		uint32_t magic;
+
+		memcpy(&magic, loc, sizeof(magic));
+
+		if (GUINT32_FROM_LE(magic) == zip64_locator_magic) {
+			memcpy(&z64_offset, loc + 8, sizeof(z64_offset));
+			z64_offset = GUINT64_FROM_LE(z64_offset);
+
+			if (z64_offset <= loc_off && loc_off - z64_offset >= zip64_eocd_len) {
+				memcpy(&magic, start + z64_offset, sizeof(magic));
+
+				if (GUINT32_FROM_LE(magic) == zip64_eocd_magic) {
+					z64_pos = z64_offset;
+				}
+			}
+
+			if (z64_pos == G_MAXUINT64 && loc_off >= zip64_eocd_len) {
+				memcpy(&magic, loc - zip64_eocd_len, sizeof(magic));
+
+				if (GUINT32_FROM_LE(magic) == zip64_eocd_magic) {
+					z64_pos = loc_off - zip64_eocd_len;
+				}
+			}
+		}
+	}
+
+	*nsets = 0;
+
+	if (z64_pos != G_MAXUINT64) {
+		uint64_t cd_offset, cd_size;
+
+		memcpy(&cd_size, start + z64_pos + 40, sizeof(cd_size));
+		cd_size = GUINT64_FROM_LE(cd_size);
+		memcpy(&cd_offset, start + z64_pos + 48, sizeof(cd_offset));
+		cd_offset = GUINT64_FROM_LE(cd_offset);
+
+		if (rspamd_archive_zip_cd_set(start, z64_pos, cd_offset, cd_size, &sets[*nsets])) {
+			(*nsets)++;
+		}
+	}
+
+	if ((!maxed || (z64_pos == G_MAXUINT64 && cd_size32 != G_MAXUINT32)) &&
+		rspamd_archive_zip_cd_set(start, limit, cd_offset32, cd_size32, &sets[*nsets])) {
+		if (*nsets == 0 || sets[1].offset != sets[0].offset ||
+			sets[1].size != sets[0].size) {
+			(*nsets)++;
+		}
+	}
+
+	if (*nsets == 0) {
+		/* Without its zip64 record, readers look no further back either */
+		return maxed ? RSPAMD_ZIP_EOCD_STOP : RSPAMD_ZIP_EOCD_SKIP;
+	}
+
+	return RSPAMD_ZIP_EOCD_USABLE;
+}
+
+/*
+ * Where libarchive (bsdtar) shows a name: it compares the CRC of a Unicode
+ * Path with that of the name it shows so far only when that name converts to
+ * the locale, else it takes the next Unicode Path whatever its CRC. Names in
+ * UTF-8 (Unicode Paths, names with the UTF-8 flag) are normalized as they
+ * convert, and the CRC is that of the normalized name
+ */
+enum rspamd_zip_bsdtar_locale {
+	RSPAMD_ZIP_BSDTAR_ANY = 0,  /* Names compared as they are stored */
+	RSPAMD_ZIP_BSDTAR_UTF8_NFC, /* A UTF-8 locale: valid UTF-8 converts, to NFC */
+	RSPAMD_ZIP_BSDTAR_UTF8_NFD, /* The same on macOS, to NFD */
+	RSPAMD_ZIP_BSDTAR_ASCII,    /* The C locale: ASCII converts */
+	RSPAMD_ZIP_BSDTAR_LOCALES,
+};
+
+/* The length of a name up to its first NUL, as readers that take it as a C string do */
+static gsize
+rspamd_zip_cstr_len(const unsigned char *s, gsize len)
+{
+	const unsigned char *nul = memchr(s, 0, len);
+
+	return nul ? (gsize) (nul - s) : len;
+}
+
+static uint32_t
+rspamd_zip_cstr_crc(const unsigned char *s, gsize len)
+{
+	return crc32(0, (const Bytef *) s, rspamd_zip_cstr_len(s, len));
+}
+
+/* Buffers to normalize names, kept over the names of an entry */
+struct rspamd_zip_norm_bufs {
+	UChar *u16, *norm;
+	char *u8;
+	int32_t u16_size, norm_size, u8_size;
+};
+
+static void
+rspamd_zip_norm_bufs_free(struct rspamd_zip_norm_bufs *bufs)
+{
+	g_free(bufs->u16);
+	g_free(bufs->norm);
+	g_free(bufs->u8);
+}
+
+/*
+ * Combining marks in a row past which a name is not normalized, as ICU sorts
+ * them in quadratic time (30 is the limit of the stream-safe text format); a
+ * character that decomposes to marks counts as one
+ */
+#define rspamd_zip_norm_max_marks 30
+
+/*
+ * The CRC of a name, `u16_len` units of `bufs->u16` from `len` bytes of valid
+ * UTF-8 `s`, normalized to NFC or NFD; FALSE if it cannot be normalized.
+ * libarchive has normalizers of its own, which compose or decompose pairs by
+ * tables of Unicode 6.0 and differ from these on some names (singletons,
+ * composition exclusions, order of marks, later marks)
+ */
+static gboolean
+rspamd_zip_normalized_crc(const UNormalizer2 *norm, const char *s, int32_t len,
+						  struct rspamd_zip_norm_bufs *bufs, int32_t u16_len, uint32_t *crc)
+{
+	UErrorCode err = U_ZERO_ERROR;
+	int32_t norm_len, u8_len;
+
+	if (unorm2_spanQuickCheckYes(norm, bufs->u16, u16_len, &err) == u16_len && U_SUCCESS(err)) {
+		/* Already in that form */
+		*crc = crc32(0, (const Bytef *) s, len);
+
+		return TRUE;
+	}
+
+	err = U_ZERO_ERROR;
+	norm_len = unorm2_normalize(norm, bufs->u16, u16_len, bufs->norm, bufs->norm_size, &err);
+
+	if (err == U_BUFFER_OVERFLOW_ERROR) {
+		err = U_ZERO_ERROR;
+		bufs->norm_size = norm_len + 1;
+		bufs->norm = g_realloc_n(bufs->norm, bufs->norm_size, sizeof(UChar));
+		norm_len = unorm2_normalize(norm, bufs->u16, u16_len, bufs->norm, bufs->norm_size, &err);
+	}
+
+	if (U_FAILURE(err)) {
+		return FALSE;
+	}
+
+	u_strToUTF8(bufs->u8, bufs->u8_size, &u8_len, bufs->norm, norm_len, &err);
+
+	if (err == U_BUFFER_OVERFLOW_ERROR || err == U_STRING_NOT_TERMINATED_WARNING) {
+		err = U_ZERO_ERROR;
+		bufs->u8_size = u8_len + 1;
+		bufs->u8 = g_realloc(bufs->u8, bufs->u8_size);
+		u_strToUTF8(bufs->u8, bufs->u8_size, &u8_len, bufs->norm, norm_len, &err);
+	}
+
+	if (U_FAILURE(err)) {
+		return FALSE;
+	}
+
+	*crc = crc32(0, (const Bytef *) bufs->u8, u8_len);
+
+	return TRUE;
+}
+
+/*
+ * What bsdtar shows of a name in UTF-8 in each locale: whether it converts,
+ * and the CRC of what it shows (up to a NUL)
+ */
+struct rspamd_zip_bsdtar_name {
+	uint32_t crc;
+	gboolean converts;
+};
+
+static void
+rspamd_zip_bsdtar_utf8_names(const unsigned char *s, gsize len,
+							 struct rspamd_zip_norm_bufs *bufs,
+							 struct rspamd_zip_bsdtar_name names[RSPAMD_ZIP_BSDTAR_LOCALES])
+{
+	static const enum rspamd_zip_bsdtar_locale normalized[] = {
+		RSPAMD_ZIP_BSDTAR_UTF8_NFC,
+		RSPAMD_ZIP_BSDTAR_UTF8_NFD,
+	};
+	UErrorCode err = U_ZERO_ERROR;
+	const UNormalizer2 *norms[G_N_ELEMENTS(normalized)];
+	gsize clen = rspamd_zip_cstr_len(s, len);
+	uint32_t crc = crc32(0, (const Bytef *) s, clen);
+	int32_t u16_len, i, marks = 0, max_marks = 0;
+	unsigned int j;
+
+	names[RSPAMD_ZIP_BSDTAR_ANY].crc = crc;
+	names[RSPAMD_ZIP_BSDTAR_ANY].converts = TRUE;
+
+	if (!rspamd_str_has_8bit(s, clen)) {
+		/* ASCII is the same in all forms and converts to all locales */
+		for (j = RSPAMD_ZIP_BSDTAR_ANY + 1; j < RSPAMD_ZIP_BSDTAR_LOCALES; j++) {
+			names[j].crc = crc;
+			names[j].converts = TRUE;
+		}
+
+		return;
+	}
+
+	/*
+	 * What is not ASCII does not convert to the C locale: libarchive only
+	 * composes, which never gives ASCII (NFC of ICU may)
+	 */
+	for (j = RSPAMD_ZIP_BSDTAR_ANY + 1; j < RSPAMD_ZIP_BSDTAR_LOCALES; j++) {
+		names[j].crc = 0;
+		names[j].converts = FALSE;
+	}
+
+	if (rspamd_fast_utf8_validate(s, clen) != 0) {
+		return;
+	}
+
+	if (bufs->u16_size < (int32_t) clen + 1) {
+		bufs->u16_size = clen + 1;
+		bufs->u16 = g_realloc_n(bufs->u16, bufs->u16_size, sizeof(UChar));
+	}
+
+	u_strFromUTF8(bufs->u16, bufs->u16_size, &u16_len, (const char *) s, clen, &err);
+
+	if (U_FAILURE(err)) {
+		return;
+	}
+
+	for (i = 0; i < u16_len;) {
+		UChar32 uc;
+
+		U16_NEXT(bufs->u16, i, u16_len, uc);
+		/* Marks it decomposes to, at most two, go on with the run (U+0F73 is two) */
+		marks = u_getIntPropertyValue(uc, UCHAR_LEAD_CANONICAL_COMBINING_CLASS) != 0 ? marks + 1 : 0;
+		max_marks = MAX(max_marks, marks);
+	}
+
+	norms[0] = unorm2_getNFCInstance(&err);
+	norms[1] = unorm2_getNFDInstance(&err);
+
+	for (j = 0; j < G_N_ELEMENTS(normalized); j++) {
+		if (max_marks > rspamd_zip_norm_max_marks || U_FAILURE(err)) {
+			/* Taken as it is: libarchive does not sort such marks either */
+			names[normalized[j]].crc = crc;
+			names[normalized[j]].converts = TRUE;
+		}
+		else if (rspamd_zip_normalized_crc(norms[j], (const char *) s, clen, bufs, u16_len,
+										   &names[normalized[j]].crc)) {
+			names[normalized[j]].converts = TRUE;
+		}
+	}
+}
+
+/* Names that readers show of the Unicode Paths of an entry, each in its own way */
+#define rspamd_zip_unicode_readers (6 + RSPAMD_ZIP_BSDTAR_LOCALES)
+/* Those names and the name, each also up to its first NUL */
+#define rspamd_zip_entry_names (2 * (rspamd_zip_unicode_readers + 1))
+
+/*
+ * The names readers show in place of the name of an entry from its Info-ZIP
+ * Unicode Path fields (0x7075), which hold a version, the CRC of the name they
+ * replace, and a name. Readers do not take the same field (checked with 7-Zip
+ * 17, Python 3.13, bsdtar 3.7 and the sources of unzip 6.0, yauzl and
+ * libarchive):
+ * - 7-Zip: the first field, if it has the CRC of the name;
+ * - Info-ZIP unzip: the last of the fields from the first one on that have
+ *   the CRC of the name (as a C string) and version 1 at most;
+ * - Python: the last field with the CRC of the name, version 1 and a name;
+ * - yauzl: the first such field;
+ * - others may take the first or the last field with the CRC of the name;
+ * - bsdtar: each field with the CRC of the name it shows so far (as a C
+ *   string) replaces that name, any field when that name does not convert
+ *   to the locale; a name with the UTF-8 flag converts from UTF-8, and names
+ *   from UTF-8 are normalized (NFD on macOS, NFC elsewhere) before their CRC.
+ *   Its decoding of CESU-8 is not done here.
+ * Python, unzip and bsdtar show a name up to its first NUL, so the name and
+ * each of these names are also there up to it. Each name is in `paths` once,
+ * and not when it is the name. The CRC of the name is computed once, and what
+ * bsdtar shows of the name and of each field at most once
+ */
+static unsigned int
+rspamd_archive_zip_unicode_paths(const unsigned char *extra, gsize extra_len,
+								 const unsigned char *name, gsize name_len, gboolean utf8_name,
+								 rspamd_ftok_t paths[rspamd_zip_entry_names])
+{
+	enum {
+		pick_7zip = 0,
+		pick_unzip,
+		pick_python,
+		pick_yauzl,
+		pick_first,
+		pick_last,
+		pick_bsdtar,
+	};
+	rspamd_ftok_t picks[rspamd_zip_unicode_readers];
+	struct rspamd_zip_bsdtar_name shown[RSPAMD_ZIP_BSDTAR_LOCALES];
+	struct rspamd_zip_norm_bufs bufs;
+	uint32_t name_crc = crc32(0, (const Bytef *) name, name_len),
+			 name_cstr_crc = rspamd_zip_cstr_crc(name, name_len);
+	gboolean first = TRUE, in_run = TRUE, name_shown = FALSE;
+	unsigned int npaths = 0, i, j, k;
+	gsize pos = 0;
+
+	memset(picks, 0, sizeof(picks));
+	memset(&bufs, 0, sizeof(bufs));
+
+	while (extra_len - pos >= 4) {
+		const unsigned char *p = extra + pos;
+		uint16_t hid, hlen;
+		uint32_t crc;
+		unsigned int version;
+		gboolean of_name, path_shown = FALSE;
+		struct rspamd_zip_bsdtar_name path_names[RSPAMD_ZIP_BSDTAR_LOCALES];
+		rspamd_ftok_t path;
+
+		memcpy(&hid, p, sizeof(hid));
+		memcpy(&hlen, p + 2, sizeof(hlen));
+		hid = GUINT16_FROM_LE(hid);
+		hlen = GUINT16_FROM_LE(hlen);
+
+		if (hlen > extra_len - pos - 4) {
+			break;
+		}
+
+		pos += 4 + hlen;
+
+		if (hid != 0x7075) {
+			continue;
+		}
+
+		if (hlen < 5) {
+			/* No CRC: no reader takes it, and it ends the fields of unzip */
+			first = FALSE;
+			in_run = FALSE;
+			continue;
+		}
+
+		version = p[4];
+		memcpy(&crc, p + 5, sizeof(crc));
+		crc = GUINT32_FROM_LE(crc);
+		path.begin = (const char *) p + 9;
+		path.len = hlen - 5;
+		of_name = crc == name_crc;
+
+		if (first) {
+			first = FALSE;
+
+			if (of_name) {
+				picks[pick_7zip] = path;
+			}
+		}
+
+		if (in_run) {
+			if (crc == name_cstr_crc && version <= 1) {
+				picks[pick_unzip] = path;
+			}
+			else {
+				in_run = FALSE;
+			}
+		}
+
+		if (of_name && path.len > 0) {
+			if (version == 1) {
+				picks[pick_python] = path;
+
+				if (picks[pick_yauzl].len == 0) {
+					picks[pick_yauzl] = path;
+				}
+			}
+
+			if (picks[pick_first].len == 0) {
+				picks[pick_first] = path;
+			}
+
+			picks[pick_last] = path;
+		}
+
+		if (!name_shown) {
+			/* What bsdtar shows of the name, once a Unicode Path needs it */
+			if (utf8_name) {
+				rspamd_zip_bsdtar_utf8_names(name, name_len, &bufs, shown);
+			}
+			else {
+				/* Taken as it is, without a conversion */
+				for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
+					shown[i].crc = name_cstr_crc;
+					shown[i].converts = TRUE;
+				}
+			}
+
+			name_shown = TRUE;
+		}
+
+		for (i = 0; i < RSPAMD_ZIP_BSDTAR_LOCALES; i++) {
+			if (!shown[i].converts || crc == shown[i].crc) {
+				picks[pick_bsdtar + i] = path;
+
+				if (!path_shown) {
+					/* A Unicode Path is in UTF-8 */
+					rspamd_zip_bsdtar_utf8_names((const unsigned char *) path.begin, path.len,
+												 &bufs, path_names);
+					path_shown = TRUE;
+				}
+
+				shown[i] = path_names[i];
+			}
+		}
+	}
+
+	rspamd_zip_norm_bufs_free(&bufs);
+
+	/* The name, then each pick: each as it is, then up to its first NUL */
+	for (i = 0; i <= G_N_ELEMENTS(picks); i++) {
+		rspamd_ftok_t forms[2];
+
+		if (i == 0) {
+			forms[0].begin = (const char *) name;
+			forms[0].len = name_len;
+		}
+		else {
+			forms[0] = picks[i - 1];
+		}
+
+		forms[1].begin = forms[0].begin;
+		forms[1].len = 0;
+
+		if (forms[0].len > 0) {
+			forms[1].len = rspamd_zip_cstr_len((const unsigned char *) forms[0].begin, forms[0].len);
+		}
+
+		for (k = 0; k < G_N_ELEMENTS(forms); k++) {
+			if (forms[k].len == 0 ||
+				(forms[k].len == name_len && memcmp(forms[k].begin, name, name_len) == 0)) {
+				continue;
+			}
+
+			for (j = 0; j < npaths; j++) {
+				if (rspamd_ftok_cmp(&paths[j], &forms[k]) == 0) {
+					break;
+				}
+			}
+
+			if (j == npaths) {
+				g_assert(npaths < rspamd_zip_entry_names);
+				paths[npaths++] = forms[k];
+			}
+		}
+	}
+
+	return npaths;
+}
+
+enum rspamd_zip_cd_read {
+	RSPAMD_ZIP_CD_OK = 0,
+	/* Stopped at a record that runs past the end record, which is listed */
+	RSPAMD_ZIP_CD_PARTIAL,
+	RSPAMD_ZIP_CD_INVALID,
+	RSPAMD_ZIP_CD_LIMIT,
+};
+
+/*
+ * Directories read for several end records may be the same one, or run into
+ * one another: the records listed so far, one per file of the archive, so that
+ * no record is listed twice
+ */
+struct rspamd_zip_listed {
+	GArray *records; /* const unsigned char *, in the order of the files */
+	/* Records of the earlier reads, sorted, while a directory is read */
+	const unsigned char **prev;
+	gsize nprev;
+};
+
+static int
+rspamd_archive_zip_record_cmp(const void *a, const void *b)
+{
+	const unsigned char *ra = *(const unsigned char *const *) a,
+						*rb = *(const unsigned char *const *) b;
+
+	return ra < rb ? -1 : (ra > rb ? 1 : 0);
+}
+
+static void
+rspamd_archive_zip_unlist(struct rspamd_task *task,
+						  struct rspamd_archive *arch,
+						  struct rspamd_zip_listed *listed,
+						  unsigned int len)
+{
+	rspamd_archive_files_truncate(task, arch, len);
+	g_array_set_size(listed->records, len);
+}
+
+/*
+ * Lists the files of the central directory [cd, cd_end); with `open_end`, its
+ * size is not known and it ends at the first data that is not a record
+ */
+static enum rspamd_zip_cd_read
+rspamd_archive_zip_read_records(struct rspamd_task *task,
+								struct rspamd_archive *arch,
+								struct rspamd_zip_listed *listed,
+								const unsigned char *cd,
+								const unsigned char *cd_end,
+								const unsigned char *eocd,
+								gboolean open_end)
+{
+	const uint32_t cd_basic_len = 46;
 	const unsigned char cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
-	const unsigned int max_processed = 1024;
-	uint32_t cd_offset, cd_size, comp_size, uncomp_size, processed = 0;
+	uint32_t comp_size, uncomp_size;
 	uint16_t extra_len, fname_len, comment_len;
-	struct rspamd_archive *arch;
-	struct rspamd_archive_file *f = NULL;
+	struct rspamd_archive_file *f;
+	const unsigned char *p;
+	unsigned int nrecords = 0;
 
-	/*
-	 * Need at least 22 bytes for a minimal EOCD record; otherwise the
-	 * scan below would compute a pointer below parsed_data.begin (UB).
-	 */
-	if (part->parsed_data.len < 22) {
-		return;
-	}
-
-	/* Zip files have interesting data at the end of archive */
-	p = part->parsed_data.begin + part->parsed_data.len - 1;
-	start = part->parsed_data.begin;
-	end = p;
-
-	/* Search for EOCD:
-	 * 22 bytes is a typical size of eocd without a comment and
-	 * end points one byte after the last character
-	 */
-	p -= 21;
-
-	while (p > start + sizeof(uint32_t)) {
-		uint32_t t;
-
-		if (processed > max_processed) {
-			break;
-		}
-
-		/* XXX: not an efficient approach */
-		memcpy(&t, p, sizeof(t));
-
-		if (GUINT32_FROM_LE(t) == eocd_magic) {
-			eocd = p;
-			break;
-		}
-
-		p--;
-		processed++;
-	}
-
-
-	if (eocd == NULL) {
-		/* Not a zip file */
-		msg_info_task("zip archive is invalid (no EOCD)");
-
-		return;
-	}
-
-	if (end - eocd < 21) {
-		msg_info_task("zip archive is invalid (short EOCD)");
-
-		return;
-	}
-
-
-	memcpy(&cd_size, eocd + 12, sizeof(cd_size));
-	cd_size = GUINT32_FROM_LE(cd_size);
-	memcpy(&cd_offset, eocd + 16, sizeof(cd_offset));
-	cd_offset = GUINT32_FROM_LE(cd_offset);
-
-	/*
-	 * We need to check sanity as well. Use a 64-bit add to avoid
-	 * a 32-bit wrap that would let a malicious EOCD bypass the check.
-	 */
-	if ((uint64_t) cd_offset + (uint64_t) cd_size > (uint64_t) (eocd - start)) {
-		msg_info_task("zip archive is invalid (bad size/offset for CD)");
-
-		return;
-	}
-
-	cd = start + cd_offset;
-
-	arch = rspamd_mempool_alloc0(task->task_pool, sizeof(*arch));
-	arch->files = g_ptr_array_new();
-	arch->type = RSPAMD_ARCHIVE_ZIP;
-	if (part->cd) {
-		arch->archive_name = &part->cd->filename;
-	}
-	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
-								  arch);
-	if (!rspamd_archive_file_limit_check(task, arch)) {
-		goto set;
-	}
-
-	while (cd < start + cd_offset + cd_size) {
+	while (cd < cd_end) {
 		uint16_t flags;
+
+		/*
+		 * Listed by an earlier read, which may have stopped before the end of
+		 * this directory: skipped, and the next records are read
+		 */
+		gboolean listed_before = listed->nprev > 0 &&
+								 bsearch(&cd, listed->prev, listed->nprev, sizeof(*listed->prev),
+										 rspamd_archive_zip_record_cmp) != NULL;
 
 		/* Read central directory record */
 		if (eocd - cd < cd_basic_len ||
 			memcmp(cd, cd_magic, sizeof(cd_magic)) != 0) {
+			if (open_end && nrecords > 0) {
+				/* Its size is not known: it ends with the last record that reads */
+				return RSPAMD_ZIP_CD_OK;
+			}
+
 			msg_info_task("zip archive is invalid (bad cd record)");
 
-			return;
+			return RSPAMD_ZIP_CD_INVALID;
 		}
 
 		memcpy(&flags, cd + 8, sizeof(uint16_t));
@@ -361,65 +1349,994 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 		memcpy(&comment_len, cd + 32, sizeof(comment_len));
 		comment_len = GUINT16_FROM_LE(comment_len);
 
-		if (cd + fname_len + comment_len + extra_len + cd_basic_len > eocd) {
+		if (cd + cd_basic_len + fname_len > eocd) {
+			if (open_end && nrecords > 0) {
+				return RSPAMD_ZIP_CD_OK;
+			}
+
 			msg_info_task("zip archive is invalid (too large cd record)");
 
-			return;
+			return RSPAMD_ZIP_CD_INVALID;
 		}
 
-		f = g_malloc0(sizeof(*f));
-		rspamd_archive_file_try_utf(task, arch, f, cd + cd_basic_len, fname_len);
+		/*
+		 * The extra field or the comment may run past the end record: readers
+		 * (Python, unzip, 7-Zip) still list the file, and no record after it
+		 * can be found
+		 */
+		gboolean overrun = cd + cd_basic_len + fname_len + extra_len + comment_len > eocd;
 
-		f->compressed_size = comp_size;
-		f->uncompressed_size = uncomp_size;
+		if (!listed_before) {
+			f = g_malloc0(sizeof(*f));
+			rspamd_archive_file_try_utf(task, arch, f, cd + cd_basic_len, fname_len);
 
-		if (flags & 0x41u) {
-			f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+			f->compressed_size = comp_size;
+			f->uncompressed_size = uncomp_size;
+
+			if (flags & 0x41u) {
+				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+			}
+
+			if (f->fname) {
+				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+				}
+
+				if (!rspamd_archive_file_add(task, arch, f)) {
+					return RSPAMD_ZIP_CD_LIMIT;
+				}
+				g_array_append_val(listed->records, cd);
+				msg_debug_archive("found file in zip archive: %v", f->fname);
+			}
+			else {
+				g_free(f);
+
+				return RSPAMD_ZIP_CD_INVALID;
+			}
+
+			/* Process extra fields */
+			const unsigned char *extra = cd + fname_len + cd_basic_len,
+								*extra_end = MIN(extra + extra_len, eocd);
+			p = extra;
+
+			while (p + sizeof(uint16_t) * 2 < extra_end) {
+				uint16_t hid, hlen;
+
+				memcpy(&hid, p, sizeof(uint16_t));
+				hid = GUINT16_FROM_LE(hid);
+				memcpy(&hlen, p + sizeof(uint16_t), sizeof(uint16_t));
+				hlen = GUINT16_FROM_LE(hlen);
+
+				if (hid == 0x0017) {
+					f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+				}
+
+				if (hlen + sizeof(uint16_t) * 2 > (gsize) (extra_end - p)) {
+					/* Truncated or malformed extra field */
+					break;
+				}
+
+				p += hlen + sizeof(uint16_t) * 2;
+			}
+
+			rspamd_ftok_t upaths[rspamd_zip_entry_names];
+			unsigned int nupaths = rspamd_archive_zip_unicode_paths(extra, extra_end - extra,
+																	cd + cd_basic_len, fname_len,
+																	(flags & 0x800u) != 0, upaths);
+
+			for (unsigned int k = 0; k < nupaths; k++) {
+				/* The name these readers show, listed as well */
+				struct rspamd_archive_file *uf = g_malloc0(sizeof(*uf));
+
+				rspamd_archive_file_try_utf(task, arch, uf, upaths[k].begin, upaths[k].len);
+
+				if (uf->fname == NULL || g_string_equal(uf->fname, f->fname)) {
+					rspamd_archive_file_free(uf);
+				}
+				else {
+					uf->compressed_size = f->compressed_size;
+					uf->uncompressed_size = f->uncompressed_size;
+					uf->flags |= (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) | RSPAMD_ARCHIVE_FILE_ALIAS |
+								 RSPAMD_ARCHIVE_FILE_SAME_ENTRY;
+
+					if (uf->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+					}
+
+					if (!rspamd_archive_file_add(task, arch, uf)) {
+						return RSPAMD_ZIP_CD_LIMIT;
+					}
+
+					/* Its record, as for any file listed */
+					g_array_append_val(listed->records, cd);
+				}
+			}
 		}
+
+		nrecords++;
+
+		if (overrun) {
+			/*
+			 * Readers that keep it go no further, others refuse the
+			 * directory: the next choices are still tried
+			 */
+			return RSPAMD_ZIP_CD_PARTIAL;
+		}
+
+		cd += fname_len + comment_len + extra_len + cd_basic_len;
+
+		if (open_end && cd < cd_end && (cd_end - cd < sizeof(cd_magic) || memcmp(cd, cd_magic, sizeof(cd_magic)) != 0)) {
+			/* Its size is not known: the directory ends at the first other data */
+			break;
+		}
+	}
+
+	return RSPAMD_ZIP_CD_OK;
+}
+
+static enum rspamd_zip_cd_read
+rspamd_archive_zip_read_cd(struct rspamd_task *task,
+						   struct rspamd_archive *arch,
+						   struct rspamd_zip_listed *listed,
+						   const unsigned char *cd,
+						   const unsigned char *cd_end,
+						   const unsigned char *eocd,
+						   gboolean open_end)
+{
+	enum rspamd_zip_cd_read read;
+
+	listed->nprev = listed->records->len;
+
+	if (listed->nprev > 0) {
+		listed->prev = g_malloc(listed->nprev * sizeof(*listed->prev));
+		memcpy(listed->prev, listed->records->data, listed->nprev * sizeof(*listed->prev));
+		qsort(listed->prev, listed->nprev, sizeof(*listed->prev),
+			  rspamd_archive_zip_record_cmp);
+	}
+
+	read = rspamd_archive_zip_read_records(task, arch, listed, cd, cd_end, eocd, open_end);
+
+	g_free(listed->prev);
+	listed->prev = NULL;
+	listed->nprev = 0;
+
+	return read;
+}
+
+/*
+ * Lists the files of the sets of directories of an end record that read: the
+ * zip64 values and the 32-bit ones, when they differ, are what different
+ * readers take (Python and bsdtar the former, 7-Zip the latter). A directory
+ * that does not read leaves no files; one that stops at a record running past
+ * the end record keeps its files. Sets the set that read with the most data
+ * in front of its archive, which rspamd_archive_zip_read_first looks into
+ */
+static enum rspamd_zip_cd_read
+rspamd_archive_zip_read_sets(struct rspamd_task *task,
+							 struct rspamd_archive *arch,
+							 struct rspamd_zip_listed *listed,
+							 const unsigned char *start,
+							 const unsigned char *eocd,
+							 const struct rspamd_zip_cd_set *sets,
+							 unsigned int nsets,
+							 const struct rspamd_zip_cd_set **pread_set)
+{
+	enum rspamd_zip_cd_read read, res = RSPAMD_ZIP_CD_INVALID;
+	const struct rspamd_zip_cd_set *first_read = NULL;
+
+	for (unsigned int i = 0; i < nsets; i++) {
+		const struct rspamd_zip_cd_set *set = &sets[i];
+		unsigned int mark = arch->files->len;
+
+		read = rspamd_archive_zip_read_cd(task, arch, listed, start + set->offset,
+										  start + set->offset + set->size, eocd,
+										  set->open_end);
+
+		if (read == RSPAMD_ZIP_CD_INVALID) {
+			rspamd_archive_zip_unlist(task, arch, listed, mark);
+
+			if (set->open_end && set->declared_size == 0) {
+				/* Nothing there reads: the directory is empty, as the record says */
+				read = RSPAMD_ZIP_CD_OK;
+			}
+			else if (set->alt_offset != G_MAXUINT64) {
+				/* Only the directory where the record says can be read */
+				read = rspamd_archive_zip_read_cd(task, arch, listed, start + set->alt_offset,
+												  start + set->alt_offset + set->size,
+												  eocd, FALSE);
+
+				if (read == RSPAMD_ZIP_CD_INVALID) {
+					rspamd_archive_zip_unlist(task, arch, listed, mark);
+				}
+			}
+		}
+		else if (read != RSPAMD_ZIP_CD_LIMIT && set->alt_offset != G_MAXUINT64) {
+			/*
+			 * The other directory, as far as it reads, which some readers
+			 * list, also when the first one stops at a record running past
+			 * the end record. Its records that the first one has listed
+			 * are skipped
+			 */
+			rspamd_archive_zip_read_cd(task, arch, listed, start + set->alt_offset,
+									   start + set->alt_offset + set->size,
+									   eocd, FALSE);
+		}
+
+		if (read == RSPAMD_ZIP_CD_INVALID) {
+			continue;
+		}
+
+		if (first_read == NULL ||
+			(set->front != G_MAXUINT64 &&
+			 (first_read->front == G_MAXUINT64 || set->front > first_read->front))) {
+			first_read = set;
+		}
+
+		if (read == RSPAMD_ZIP_CD_LIMIT) {
+			res = read;
+			break;
+		}
+
+		if (read == RSPAMD_ZIP_CD_OK || res == RSPAMD_ZIP_CD_INVALID) {
+			res = read;
+		}
+	}
+
+	if (first_read != NULL) {
+		*pread_set = first_read;
+	}
+
+	return res;
+}
+
+/* Whether a local header or a directory record is at `pos` */
+static gboolean
+rspamd_archive_zip_entry_follows(const unsigned char *start, uint64_t limit, uint64_t pos)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
+							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
+
+	return pos <= limit && limit - pos >= sizeof(lh_magic) &&
+		   (memcmp(start + pos, lh_magic, sizeof(lh_magic)) == 0 ||
+			memcmp(start + pos, cd_magic, sizeof(cd_magic)) == 0);
+}
+
+/*
+ * The local headers a walk reached: one per name and extra field, which
+ * copies of a header do not hide another one behind
+ */
+struct rspamd_zip_locals {
+	GArray *lhs;        /* uint64_t offsets */
+	GHashTable *seen;   /* rspamd_ftok_t * over the name and extra field */
+	gboolean truncated; /* some were dropped at the files limit */
+};
+
+static unsigned int
+rspamd_archive_ftok_hash(gconstpointer key)
+{
+	return rspamd_ftok_hash((const rspamd_ftok_t *) key);
+}
+
+static gboolean
+rspamd_archive_ftok_equal(gconstpointer a, gconstpointer b)
+{
+	return rspamd_ftok_cmp((const rspamd_ftok_t *) a, (const rspamd_ftok_t *) b) == 0;
+}
+
+static rspamd_ftok_t *
+rspamd_archive_ftok_dup(const rspamd_ftok_t *tok)
+{
+	rspamd_ftok_t *res = g_new(rspamd_ftok_t, 1);
+
+	*res = *tok;
+
+	return res;
+}
+
+static void
+rspamd_archive_zip_locals_init(struct rspamd_zip_locals *locals)
+{
+	locals->lhs = g_array_new(FALSE, FALSE, sizeof(uint64_t));
+	locals->seen = g_hash_table_new_full(rspamd_archive_ftok_hash, rspamd_archive_ftok_equal,
+										 g_free, NULL);
+	locals->truncated = FALSE;
+}
+
+static void
+rspamd_archive_zip_locals_free(struct rspamd_zip_locals *locals)
+{
+	g_array_free(locals->lhs, TRUE);
+	g_hash_table_unref(locals->seen);
+}
+
+/*
+ * A data descriptor at `at` for the data from `data`: the size it holds is
+ * their distance and an entry follows it. With its signature or without
+ * (`signed_only` FALSE), 32 or 64-bit. Returns its end, or G_MAXUINT64
+ */
+static uint64_t
+rspamd_archive_zip_descriptor_at(const unsigned char *start, uint64_t limit,
+								 uint64_t data, uint64_t at, gboolean signed_only)
+{
+	static const unsigned char dd_magic[] = {0x50, 0x4b, 0x07, 0x08};
+	gboolean has_magic = at <= limit && limit - at >= sizeof(dd_magic) &&
+						 memcmp(start + at, dd_magic, sizeof(dd_magic)) == 0;
+
+	for (unsigned int with_magic = 0; with_magic < 2; with_magic++) {
+		/* The sizes follow the CRC, which follows the signature */
+		uint64_t size_off = with_magic ? 8 : 4;
+
+		if ((with_magic && !has_magic) || (!with_magic && signed_only)) {
+			continue;
+		}
+
+		for (unsigned int wide = 0; wide < 2; wide++) {
+			uint64_t len = size_off + (wide ? 16 : 8), dsize;
+
+			if (at > limit || limit - at < len) {
+				continue;
+			}
+
+			if (wide) {
+				memcpy(&dsize, start + at + size_off, sizeof(dsize));
+				dsize = GUINT64_FROM_LE(dsize);
+			}
+			else {
+				uint32_t dsize32;
+
+				memcpy(&dsize32, start + at + size_off, sizeof(dsize32));
+				dsize = GUINT32_FROM_LE(dsize32);
+			}
+
+			if (dsize == at - data && rspamd_archive_zip_entry_follows(start, limit, at + len)) {
+				return at + len;
+			}
+		}
+	}
+
+	return G_MAXUINT64;
+}
+
+/*
+ * Walks the archive at the start of the data as 7-Zip and streaming readers
+ * do: each local header, its data by the size it holds, its data descriptor,
+ * up to the central directory, whose records are walked by their lengths too.
+ * Data that looks like a directory and its end record, in a file or in a
+ * record, is passed this way. The local headers walked are kept in `locals`.
+ * Returns where the end record of that archive is: right after its
+ * directory, or, when the walk cannot go on, at the local header it stopped
+ * at
+ */
+static uint64_t
+rspamd_archive_zip_walk_first(const unsigned char *start, uint64_t limit,
+							  struct rspamd_zip_locals *locals)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
+							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02},
+							   dd_magic[] = {0x50, 0x4b, 0x07, 0x08},
+							   eocd_magic[] = {0x50, 0x4b, 0x05, 0x06},
+							   z64_eocd_magic[] = {0x50, 0x4b, 0x06, 0x06},
+							   z64_loc_magic[] = {0x50, 0x4b, 0x06, 0x07};
+	const uint64_t cd_basic_len = 46, lh_basic_len = 30;
+	uint64_t pos = 0, entry = 0;
+	/* A search for a descriptor read up to the limit: not done again, which would cost a square */
+	gboolean search_failed = FALSE;
+
+	while (limit - pos >= lh_basic_len && memcmp(start + pos, lh_magic, sizeof(lh_magic)) == 0) {
+		uint16_t flags, fname_len, extra_len;
+		uint32_t csize32;
+		uint64_t data, csize, next = G_MAXUINT64;
+
+		entry = pos;
+		memcpy(&flags, start + pos + 6, sizeof(flags));
+		flags = GUINT16_FROM_LE(flags);
+		memcpy(&csize32, start + pos + 18, sizeof(csize32));
+		csize = GUINT32_FROM_LE(csize32);
+		memcpy(&fname_len, start + pos + 26, sizeof(fname_len));
+		memcpy(&extra_len, start + pos + 28, sizeof(extra_len));
+		data = pos + lh_basic_len + GUINT16_FROM_LE(fname_len) + GUINT16_FROM_LE(extra_len);
+
+		if (data > limit) {
+			return entry;
+		}
+
+		if (data > pos + lh_basic_len) {
+			rspamd_ftok_t key = {.begin = (const char *) start + pos + lh_basic_len,
+								 .len = data - pos - lh_basic_len};
+
+			if (!g_hash_table_contains(locals->seen, &key)) {
+				if (locals->lhs->len < max_archive_files) {
+					g_hash_table_add(locals->seen, rspamd_archive_ftok_dup(&key));
+					g_array_append_val(locals->lhs, entry);
+				}
+				else {
+					locals->truncated = TRUE;
+				}
+			}
+		}
+
+		if (csize == G_MAXUINT32) {
+			/* The zip64 extra field: the uncompressed size, then the compressed one */
+			uint64_t extra = data - GUINT16_FROM_LE(extra_len);
+
+			csize = G_MAXUINT64;
+
+			while (data - extra >= 4) {
+				uint16_t id, len;
+
+				memcpy(&id, start + extra, sizeof(id));
+				memcpy(&len, start + extra + 2, sizeof(len));
+				len = GUINT16_FROM_LE(len);
+
+				if (data - extra - 4 < len) {
+					break;
+				}
+
+				if (GUINT16_FROM_LE(id) == 0x0001 && len >= 16) {
+					memcpy(&csize, start + extra + 4 + 8, sizeof(csize));
+					csize = GUINT64_FROM_LE(csize);
+					break;
+				}
+
+				extra += 4 + len;
+			}
+
+			if (csize == G_MAXUINT64) {
+				return entry;
+			}
+		}
+
+		if (flags & 0x8) {
+			/*
+			 * The sizes are in the descriptor after the data. 7-Zip takes the
+			 * first one whose size is its distance from the data, whatever
+			 * the header says, so a size in the header that leads inside the
+			 * data does not lead the walk; one at that size, unsigned too, is
+			 * the next choice
+			 */
+			if (!search_failed) {
+				const unsigned char *q = start + data, *end = start + limit;
+
+				while (end - q >= 16 && (q = memchr(q, dd_magic[0], end - q - 15)) != NULL) {
+					if (memcmp(q, dd_magic, sizeof(dd_magic)) == 0 &&
+						(next = rspamd_archive_zip_descriptor_at(start, limit, data, q - start,
+																 TRUE)) != G_MAXUINT64) {
+						break;
+					}
+
+					q++;
+				}
+
+				search_failed = next == G_MAXUINT64;
+			}
+
+			if (next == G_MAXUINT64 && csize != 0 && csize <= limit - data) {
+				next = rspamd_archive_zip_descriptor_at(start, limit, data, data + csize, FALSE);
+			}
+		}
+		else if (csize <= limit - data) {
+			next = data + csize;
+		}
+
+		if (next == G_MAXUINT64) {
+			return entry;
+		}
+
+		pos = next;
+	}
+
+	if (pos == 0 || limit - pos < sizeof(cd_magic) ||
+		memcmp(start + pos, cd_magic, sizeof(cd_magic)) != 0) {
+		return entry;
+	}
+
+	/* The directory */
+	uint64_t cd_start = pos;
+
+	while (limit - pos >= cd_basic_len && memcmp(start + pos, cd_magic, sizeof(cd_magic)) == 0) {
+		uint16_t fname_len, extra_len, comment_len;
+		uint64_t len;
+
+		memcpy(&fname_len, start + pos + 28, sizeof(fname_len));
+		memcpy(&extra_len, start + pos + 30, sizeof(extra_len));
+		memcpy(&comment_len, start + pos + 32, sizeof(comment_len));
+		len = cd_basic_len + GUINT16_FROM_LE(fname_len) + GUINT16_FROM_LE(extra_len) +
+			  GUINT16_FROM_LE(comment_len);
+
+		if (len > limit - pos) {
+			break;
+		}
+
+		pos += len;
+	}
+
+	/*
+	 * Records whose lengths run past others, or past the end record, are
+	 * not walked through: the end record is then looked for from the start
+	 * of the directory
+	 */
+	if (limit - pos >= 12 && memcmp(start + pos, z64_eocd_magic, sizeof(z64_eocd_magic)) == 0) {
+		/* The zip64 end record and its locator, by their sizes: data in them is passed too */
+		uint64_t z64_size, after;
+
+		memcpy(&z64_size, start + pos + 4, sizeof(z64_size));
+		z64_size = GUINT64_FROM_LE(z64_size);
+
+		if (z64_size <= limit - pos - 12) {
+			after = pos + 12 + z64_size;
+
+			if (limit - after >= 20 && memcmp(start + after, z64_loc_magic, sizeof(z64_loc_magic)) == 0) {
+				after += 20;
+			}
+
+			if (limit - after >= sizeof(eocd_magic) &&
+				memcmp(start + after, eocd_magic, sizeof(eocd_magic)) == 0) {
+				return after;
+			}
+		}
+
+		return pos;
+	}
+
+	if (limit - pos < sizeof(eocd_magic) ||
+		memcmp(start + pos, eocd_magic, sizeof(eocd_magic)) != 0) {
+		return cd_start;
+	}
+
+	return pos;
+}
+
+/*
+ * The files of the local headers walked that no directory listed: 7-Zip
+ * lists these entries too, and so do readers that go by local headers
+ * (bsdtar, macOS), so that a directory that names other files, or data that
+ * looks like a directory, does not hide them
+ */
+static void
+rspamd_archive_zip_list_local(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  struct rspamd_zip_listed *listed,
+							  const unsigned char *start,
+							  struct rspamd_zip_locals *locals)
+{
+	const uint64_t lh_basic_len = 30;
+	GHashTable *names, *raw_names;
+
+	if (locals->truncated) {
+		arch->flags |= RSPAMD_ARCHIVE_FILES_TRUNCATED;
+	}
+
+	if (locals->lhs->len == 0) {
+		return;
+	}
+
+	names = g_hash_table_new((GHashFunc) g_string_hash, (GEqualFunc) g_string_equal);
+	/* Names as they are, each converted once: a name of a record is not again */
+	raw_names = g_hash_table_new_full(rspamd_archive_ftok_hash, rspamd_archive_ftok_equal,
+									  g_free, NULL);
+
+	for (unsigned int i = 0; i < arch->files->len; i++) {
+		struct rspamd_archive_file *f = g_ptr_array_index(arch->files, i);
 
 		if (f->fname) {
+			g_hash_table_add(names, f->fname);
+		}
+	}
+
+	for (unsigned int i = 0; i < listed->records->len; i++) {
+		const unsigned char *cd = g_array_index(listed->records, const unsigned char *, i);
+		uint16_t fname_len;
+		rspamd_ftok_t key;
+
+		memcpy(&fname_len, cd + 28, sizeof(fname_len));
+		key.begin = (const char *) cd + 46;
+		key.len = GUINT16_FROM_LE(fname_len);
+		g_hash_table_add(raw_names, rspamd_archive_ftok_dup(&key));
+	}
+
+	for (unsigned int i = 0; i < locals->lhs->len; i++) {
+		const unsigned char *lh = start + g_array_index(locals->lhs, uint64_t, i);
+		uint16_t flags, fname_len, extra_len;
+		uint32_t csize, usize;
+		rspamd_ftok_t lh_names[1 + rspamd_zip_entry_names];
+		unsigned int nlh_names;
+		gboolean stop = FALSE, listed_one = FALSE;
+
+		memcpy(&fname_len, lh + 26, sizeof(fname_len));
+		fname_len = GUINT16_FROM_LE(fname_len);
+		memcpy(&extra_len, lh + 28, sizeof(extra_len));
+		extra_len = GUINT16_FROM_LE(extra_len);
+		memcpy(&flags, lh + 6, sizeof(flags));
+		memcpy(&csize, lh + 18, sizeof(csize));
+		memcpy(&usize, lh + 22, sizeof(usize));
+
+		/* Its name, then the other names readers show of it */
+		lh_names[0].begin = (const char *) lh + lh_basic_len;
+		lh_names[0].len = fname_len;
+		nlh_names = 1 + rspamd_archive_zip_unicode_paths(lh + lh_basic_len + fname_len, extra_len,
+														 lh + lh_basic_len, fname_len,
+														 (GUINT16_FROM_LE(flags) & 0x800u) != 0, lh_names + 1);
+
+		for (unsigned int k = 0; k < nlh_names; k++) {
+			struct rspamd_archive_file *f;
+			const rspamd_ftok_t *key = &lh_names[k];
+
+			if (key->len == 0 || g_hash_table_contains(raw_names, key)) {
+				continue;
+			}
+
+			g_hash_table_add(raw_names, rspamd_archive_ftok_dup(key));
+			f = g_malloc0(sizeof(*f));
+			rspamd_archive_file_try_utf(task, arch, f, key->begin, key->len);
+
+			if (f->fname == NULL || g_hash_table_contains(names, f->fname)) {
+				rspamd_archive_file_free(f);
+				continue;
+			}
+
+			f->compressed_size = GUINT32_FROM_LE(csize);
+			f->uncompressed_size = GUINT32_FROM_LE(usize);
+			/*
+			 * Mostly a file of the directory under another name: counts of
+			 * files go by the directory
+			 */
+			f->flags |= RSPAMD_ARCHIVE_FILE_ALIAS;
+
+			if (listed_one) {
+				/* Another name of this local header, listed after it */
+				f->flags |= RSPAMD_ARCHIVE_FILE_SAME_ENTRY;
+			}
+
+			if (GUINT16_FROM_LE(flags) & 0x41u) {
+				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+			}
+
 			if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 				arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 			}
 
 			if (!rspamd_archive_file_add(task, arch, f)) {
+				stop = TRUE;
 				break;
 			}
-			msg_debug_archive("found file in zip archive: %v", f->fname);
+
+			listed_one = TRUE;
+			g_hash_table_add(names, f->fname);
+			msg_debug_archive("found file in a local header of zip archive: %v", f->fname);
+		}
+
+		if (stop) {
+			break;
+		}
+	}
+
+	g_hash_table_unref(names);
+	g_hash_table_unref(raw_names);
+}
+
+/*
+ * The local headers of the archive that starts at `base`, up to its
+ * directory at `cd_offset`: the files that no directory listed
+ */
+static void
+rspamd_archive_zip_list_main(struct rspamd_task *task,
+							 struct rspamd_archive *arch,
+							 struct rspamd_zip_listed *listed,
+							 const unsigned char *start,
+							 uint64_t base,
+							 uint64_t cd_offset)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04};
+	struct rspamd_zip_locals locals;
+
+	if (base >= cd_offset || cd_offset - base < sizeof(lh_magic) ||
+		memcmp(start + base, lh_magic, sizeof(lh_magic)) != 0) {
+		return;
+	}
+
+	rspamd_archive_zip_locals_init(&locals);
+	rspamd_archive_zip_walk_first(start + base, cd_offset - base, &locals);
+	rspamd_archive_zip_list_local(task, arch, listed, start + base, &locals);
+	rspamd_archive_zip_locals_free(&locals);
+}
+
+/*
+ * End records in [p, end) of an archive at the start of the data, whose
+ * directory is right before them: the first one that lists files does.
+ * Returns whether one did
+ */
+static gboolean
+rspamd_archive_zip_scan_first(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  struct rspamd_zip_listed *listed,
+							  const unsigned char *start,
+							  const unsigned char *p,
+							  const unsigned char *end)
+{
+	static const unsigned char cd_magic[] = {0x50, 0x4b, 0x01, 0x02},
+							   eocd_magic[] = {0x50, 0x4b, 0x05, 0x06};
+	const uint64_t cd_basic_len = 46;
+	/* Records tried, each a directory read: not free */
+	const unsigned int max_candidates = 8;
+	unsigned int candidates = 0;
+
+	while (end - p >= 22 && candidates < max_candidates) {
+		p = memchr(p, eocd_magic[0], end - p - 21);
+
+		if (p == NULL) {
+			break;
+		}
+
+		if (memcmp(p, eocd_magic, sizeof(eocd_magic)) == 0) {
+			struct rspamd_zip_cd_set sets[2];
+			unsigned int nsets = 0, mark = arch->files->len;
+			gboolean read_any = FALSE;
+
+			if (rspamd_archive_zip_check_eocd(start, p, sets, &nsets) == RSPAMD_ZIP_EOCD_USABLE) {
+				/* An archive at the start, its directory right before its record */
+				for (unsigned int i = 0; i < nsets; i++) {
+					const unsigned char *cd = start + sets[i].offset;
+					uint16_t fname_len;
+
+					if (sets[i].open_end || sets[i].declared_size < sizeof(cd_magic) ||
+						sets[i].front != 0) {
+						continue;
+					}
+
+					/* Its first record must read, which the directory read checks again */
+					if ((uint64_t) (p - cd) < cd_basic_len || memcmp(cd, cd_magic, sizeof(cd_magic)) != 0) {
+						continue;
+					}
+
+					memcpy(&fname_len, cd + 28, sizeof(fname_len));
+
+					if ((uint64_t) (p - cd) < cd_basic_len + GUINT16_FROM_LE(fname_len)) {
+						continue;
+					}
+
+					candidates++;
+
+					/*
+					 * Both directories, as for the last archive; their records
+					 * are kept as far as they read
+					 */
+					if (rspamd_archive_zip_read_cd(task, arch, listed, cd, cd + sets[i].size,
+												   p, FALSE) != RSPAMD_ZIP_CD_INVALID) {
+						read_any = TRUE;
+					}
+				}
+			}
+
+			if (read_any || arch->files->len > mark) {
+				return TRUE;
+			}
+		}
+
+		p++;
+	}
+
+	return FALSE;
+}
+
+/*
+ * An archive with data in front of it may follow another archive (`cat a.zip
+ * b.zip`, the last one possibly empty): readers that take the record at the
+ * end list the last one, but 7-Zip and WinRAR read from the start and list
+ * the first one. That is the record after its entries, else the first one,
+ * zip64 or not, whose offsets count from the start of the data and describe
+ * the directory right before it; its files are listed too, and so are the
+ * local headers walked. Sets `*last_start` to where the last archive starts
+ * when its offsets count from the start of the data
+ */
+static void
+rspamd_archive_zip_read_first(struct rspamd_task *task,
+							  struct rspamd_archive *arch,
+							  struct rspamd_zip_listed *listed,
+							  const unsigned char *start,
+							  const unsigned char *last_eocd,
+							  const struct rspamd_zip_cd_set *last_set,
+							  uint64_t *last_start)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04},
+							   cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
+	const uint64_t cd_basic_len = 46, lh_basic_len = 30;
+	uint64_t front = last_set->front, limit = last_eocd - start, walked;
+	struct rspamd_zip_locals locals;
+
+	if (front == G_MAXUINT64 || limit < sizeof(lh_magic) ||
+		memcmp(start, lh_magic, sizeof(lh_magic)) != 0) {
+		return;
+	}
+
+	if (front == 0) {
+		/*
+		 * Offsets that count from the start of the data (`zip -A` after
+		 * `cat`): the last archive starts where its entries do (the local
+		 * headers its records point to, with their names), or at an empty
+		 * directory
+		 */
+		if (last_set->declared_size < sizeof(cd_magic)) {
+			front = last_set->declared_offset;
 		}
 		else {
-			g_free(f);
+			const unsigned char *cd = start + last_set->offset,
+								*cd_end = cd + last_set->size;
 
+			front = G_MAXUINT64;
+
+			while (cd < cd_end && (uint64_t) (cd_end - cd) >= cd_basic_len &&
+				   memcmp(cd, cd_magic, sizeof(cd_magic)) == 0) {
+				uint32_t lh_offset;
+				uint16_t fname_len, extra_len, comment_len, lh_fname_len;
+
+				memcpy(&lh_offset, cd + 42, sizeof(lh_offset));
+				lh_offset = GUINT32_FROM_LE(lh_offset);
+				memcpy(&fname_len, cd + 28, sizeof(fname_len));
+				fname_len = GUINT16_FROM_LE(fname_len);
+				memcpy(&extra_len, cd + 30, sizeof(extra_len));
+				memcpy(&comment_len, cd + 32, sizeof(comment_len));
+
+				if ((uint64_t) (cd_end - cd) >= cd_basic_len + fname_len &&
+					(uint64_t) lh_offset + lh_basic_len + fname_len <= limit &&
+					memcmp(start + lh_offset, lh_magic, sizeof(lh_magic)) == 0) {
+					memcpy(&lh_fname_len, start + lh_offset + 26, sizeof(lh_fname_len));
+
+					if (GUINT16_FROM_LE(lh_fname_len) == fname_len &&
+						memcmp(start + lh_offset + lh_basic_len, cd + cd_basic_len, fname_len) == 0) {
+						front = MIN(front, lh_offset);
+					}
+				}
+
+				cd += cd_basic_len + fname_len + GUINT16_FROM_LE(extra_len) +
+					  GUINT16_FROM_LE(comment_len);
+			}
+		}
+
+		if (front != G_MAXUINT64) {
+			*last_start = front;
+		}
+
+		if (front == G_MAXUINT64 || front == 0) {
 			return;
 		}
+	}
 
-		/* Process extra fields */
-		const unsigned char *extra = cd + fname_len + cd_basic_len;
-		p = extra;
+	if (front > limit) {
+		return;
+	}
 
-		while (p + sizeof(uint16_t) * 2 < extra + extra_len) {
-			uint16_t hid, hlen;
+	/*
+	 * The first archive ends where the last one starts, and its end record
+	 * is after its entries. When nothing is found there, the records in
+	 * front of that place are tried as well
+	 */
+	rspamd_archive_zip_locals_init(&locals);
+	walked = rspamd_archive_zip_walk_first(start, front, &locals);
 
-			memcpy(&hid, p, sizeof(uint16_t));
-			hid = GUINT16_FROM_LE(hid);
-			memcpy(&hlen, p + sizeof(uint16_t), sizeof(uint16_t));
-			hlen = GUINT16_FROM_LE(hlen);
+	if (!rspamd_archive_zip_scan_first(task, arch, listed, start, start + walked, start + front) &&
+		walked > 0) {
+		rspamd_archive_zip_scan_first(task, arch, listed, start, start,
+									  start + MIN(front, walked + 21));
+	}
 
-			if (hid == 0x0017) {
-				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+	rspamd_archive_zip_list_local(task, arch, listed, start, &locals);
+	rspamd_archive_zip_locals_free(&locals);
+}
+
+static void
+rspamd_archive_process_zip(struct rspamd_task *task,
+						   struct rspamd_mime_part *part)
+{
+	const unsigned char *p, *start;
+	const uint32_t eocd_magic = 0x06054b50;
+	/* The record is followed by a comment of up to 64 KB */
+	const unsigned int max_processed = G_MAXUINT16;
+	struct rspamd_zip_cd_set sets[2];
+	unsigned int nsets = 0;
+	uint32_t processed = 0;
+	/* Directories are read for a few records only: each read is not free */
+	unsigned int records_read = 0;
+	const unsigned int max_records_read = 4;
+	struct rspamd_archive *arch = NULL;
+	enum rspamd_zip_cd_read read = RSPAMD_ZIP_CD_INVALID;
+	const struct rspamd_zip_cd_set *read_set = NULL;
+	const unsigned char *read_eocd = NULL;
+	/* The sets of the record that was read, as `sets` changes with each record */
+	struct rspamd_zip_cd_set read_set_copy;
+	struct rspamd_zip_listed listed = {NULL, NULL, 0};
+
+	/*
+	 * Need at least 22 bytes for a minimal EOCD record; otherwise the
+	 * scan below would compute a pointer below parsed_data.begin (UB).
+	 */
+	if (part->parsed_data.len < 22) {
+		return;
+	}
+
+	/* Zip files have interesting data at the end of archive */
+	p = part->parsed_data.begin + part->parsed_data.len - 1;
+	start = part->parsed_data.begin;
+	listed.records = g_array_new(FALSE, FALSE, sizeof(const unsigned char *));
+
+	/*
+	 * Search for EOCD: it is 22 bytes followed by a comment of up to 64 KB,
+	 * as far back as zip readers look. They use the last record; the comment
+	 * may hold the magic as well, so skip records that describe no central
+	 * directory, or none that reads. `p` points to the last character.
+	 */
+	p -= 21;
+
+	while (p >= start && processed <= max_processed) {
+		uint32_t t;
+
+		memcpy(&t, p, sizeof(t));
+
+		if (GUINT32_FROM_LE(t) == eocd_magic) {
+			enum rspamd_zip_eocd_check check = rspamd_archive_zip_check_eocd(start, p,
+																			 sets, &nsets);
+
+			if (check == RSPAMD_ZIP_EOCD_USABLE) {
+				if (arch == NULL) {
+					arch = rspamd_mempool_alloc0(task->task_pool, sizeof(*arch));
+					arch->files = g_ptr_array_new();
+					arch->type = RSPAMD_ARCHIVE_ZIP;
+					if (part->cd) {
+						arch->archive_name = &part->cd->filename;
+					}
+					rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
+												  arch);
+					if (!rspamd_archive_file_limit_check(task, arch)) {
+						goto set;
+					}
+				}
+
+				enum rspamd_zip_cd_read record_read = rspamd_archive_zip_read_sets(task, arch, &listed,
+																				   start, p, sets, nsets, &read_set);
+
+				if (record_read != RSPAMD_ZIP_CD_INVALID) {
+					read_eocd = p;
+					read = record_read;
+					read_set_copy = *read_set;
+					read_set = &read_set_copy;
+				}
+
+				/*
+				 * A directory that stopped at a record running past the end
+				 * record keeps its files, and earlier records are looked at
+				 */
+				if ((record_read != RSPAMD_ZIP_CD_INVALID && record_read != RSPAMD_ZIP_CD_PARTIAL) ||
+					++records_read >= max_records_read) {
+					break;
+				}
 			}
-
-			if (hlen + sizeof(uint16_t) * 2 > (gsize) (extra + extra_len - p)) {
-				/* Truncated or malformed extra field */
+			else if (check == RSPAMD_ZIP_EOCD_STOP) {
 				break;
 			}
-			p += hlen + sizeof(uint16_t) * 2;
 		}
 
-		cd += fname_len + comment_len + extra_len + cd_basic_len;
+		p--;
+		processed++;
+	}
+
+	if (read == RSPAMD_ZIP_CD_INVALID) {
+		/* Not a zip file */
+		msg_info_task("zip archive is invalid (no usable EOCD)");
+		g_array_free(listed.records, TRUE);
+
+		return;
+	}
+
+	if (read != RSPAMD_ZIP_CD_LIMIT && read_set != NULL) {
+		/* Where the archive starts: offsets count from the start of the data when not known */
+		uint64_t last_start = read_set->front == G_MAXUINT64 ? 0 : read_set->front;
+
+		/* Data in front of the archive, which may be another archive */
+		rspamd_archive_zip_read_first(task, arch, &listed, start, read_eocd, read_set, &last_start);
+		rspamd_archive_zip_list_main(task, arch, &listed, start, last_start, read_set->offset);
 	}
 
 set:
+	g_array_free(listed.records, TRUE);
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 
@@ -466,72 +2383,558 @@ rspamd_archive_rar_read_vint(const unsigned char *start, gsize remain, uint64_t 
 	return p - start;
 }
 
-#define RAR_SKIP_BYTES(n)                                                 \
-	do {                                                                  \
-		if ((n) <= 0) {                                                   \
-			msg_debug_archive("rar archive is invalid (bad skip value)"); \
-			return;                                                       \
-		}                                                                 \
-		if ((gsize) (end - p) < (n)) {                                    \
-			msg_debug_archive("rar archive is invalid (truncated)");      \
-			return;                                                       \
-		}                                                                 \
-		p += (n);                                                         \
-	} while (0)
+/*
+ * Readers of rar 4 archives: each goes from a header to the next in its own
+ * way. libarchive is followed a second time where it can go two ways
+ */
+enum rspamd_rar4_walker {
+	RSPAMD_RAR4_WALK_UNRAR = 0,
+	RSPAMD_RAR4_WALK_7ZIP,
+	RSPAMD_RAR4_WALK_LIBARCHIVE,
+	RSPAMD_RAR4_WALK_LIBARCHIVE_FORK,
+	RSPAMD_RAR4_WALKERS,
+};
 
-#define RAR_READ_VINT()                                                    \
-	do {                                                                   \
-		r = rspamd_archive_rar_read_vint(p, end - p, &vint);               \
-		if (r == -1) {                                                     \
-			msg_debug_archive("rar archive is invalid (bad vint)");        \
-			return;                                                        \
-		}                                                                  \
-		else if (r == 0) {                                                 \
-			msg_debug_archive("rar archive is invalid (BAD vint offset)"); \
-			return;                                                        \
-		}                                                                  \
-	} while (0)
+/* Where a reader is, and what it keeps from a header to the next */
+struct rspamd_rar4_walk {
+	const unsigned char *at; /* NULL once it stops */
+	gboolean opening;        /* unrar looks for the main header */
+	gboolean volume;         /* libarchive: the last main header is of a volume */
+	unsigned int split_ends; /* libarchive: end blocks it crosses for the rest of a split file */
+};
 
-#define RAR_READ_VINT_SKIP()                                        \
-	do {                                                            \
-		r = rspamd_archive_rar_read_vint(p, end - p, &vint);        \
-		if (r == -1) {                                              \
-			msg_debug_archive("rar archive is invalid (bad vint)"); \
-			return;                                                 \
-		}                                                           \
-		p += r;                                                     \
-	} while (0)
+/*
+ * A header as unrar reads it: a field that runs past its end reads as zero,
+ * and the next field is read from where that one began
+ */
+struct rspamd_rar_raw {
+	const unsigned char *p;
+	gsize len; /* bytes there */
+	gsize pos;
+	gsize size; /* bytes unrar has: zeros past len */
+};
 
-#define RAR_READ_UINT16(n)                                           \
-	do {                                                             \
-		if (end - p < (glong) sizeof(uint16_t)) {                    \
-			msg_debug_archive("rar archive is invalid (bad int16)"); \
-			return;                                                  \
-		}                                                            \
-		n = p[0] + (p[1] << 8);                                      \
-		p += sizeof(uint16_t);                                       \
-	} while (0)
+static inline unsigned int
+rspamd_rar_raw_byte(const struct rspamd_rar_raw *raw, gsize i)
+{
+	return i < raw->len ? raw->p[i] : 0;
+}
 
-#define RAR_READ_UINT32(n)                                                                                                \
-	do {                                                                                                                  \
-		if (end - p < (glong) sizeof(uint32_t)) {                                                                         \
-			msg_debug_archive("rar archive is invalid (bad int32)");                                                      \
-			return;                                                                                                       \
-		}                                                                                                                 \
-		n = (unsigned int) p[0] + ((unsigned int) p[1] << 8) + ((unsigned int) p[2] << 16) + ((unsigned int) p[3] << 24); \
-		p += sizeof(uint32_t);                                                                                            \
-	} while (0)
+static inline unsigned int
+rspamd_rar_raw_get1(struct rspamd_rar_raw *raw)
+{
+	return raw->pos < raw->size ? rspamd_rar_raw_byte(raw, raw->pos++) : 0;
+}
+
+static inline unsigned int
+rspamd_rar_raw_get2(struct rspamd_rar_raw *raw)
+{
+	unsigned int v = 0;
+
+	if (raw->pos + 1 < raw->size) {
+		v = rspamd_rar_raw_byte(raw, raw->pos) | (rspamd_rar_raw_byte(raw, raw->pos + 1) << 8);
+		raw->pos += 2;
+	}
+
+	return v;
+}
+
+static inline uint32_t
+rspamd_rar_raw_get4(struct rspamd_rar_raw *raw)
+{
+	uint32_t v = 0;
+
+	if (raw->pos + 3 < raw->size) {
+		v = (uint32_t) rspamd_rar_raw_byte(raw, raw->pos) | ((uint32_t) rspamd_rar_raw_byte(raw, raw->pos + 1) << 8) |
+			((uint32_t) rspamd_rar_raw_byte(raw, raw->pos + 2) << 16) |
+			((uint32_t) rspamd_rar_raw_byte(raw, raw->pos + 3) << 24);
+		raw->pos += 4;
+	}
+
+	return v;
+}
+
+/* Fields of a file or service header */
+struct rspamd_rar4_file_head {
+	uint64_t pack_size;
+	uint64_t unp_size;
+	gsize name_off;
+	unsigned int name_size;
+};
+
+static void
+rspamd_rar4_read_file_head(struct rspamd_rar_raw *raw, unsigned int flags,
+						   struct rspamd_rar4_file_head *fh)
+{
+	uint32_t low_pack, low_unp, high_pack = 0, high_unp = 0;
+
+	low_pack = rspamd_rar_raw_get4(raw);
+	low_unp = rspamd_rar_raw_get4(raw);
+	/* Host OS, CRC, time, version and method */
+	(void) rspamd_rar_raw_get1(raw);
+	(void) rspamd_rar_raw_get4(raw);
+	(void) rspamd_rar_raw_get4(raw);
+	(void) rspamd_rar_raw_get1(raw);
+	(void) rspamd_rar_raw_get1(raw);
+	fh->name_size = rspamd_rar_raw_get2(raw);
+	/* Attributes */
+	(void) rspamd_rar_raw_get4(raw);
+
+	if (flags & 0x100) {
+		/* High 32 bits of the sizes */
+		high_pack = rspamd_rar_raw_get4(raw);
+		high_unp = rspamd_rar_raw_get4(raw);
+	}
+
+	fh->pack_size = ((uint64_t) high_pack << 32) | low_pack;
+	fh->unp_size = ((uint64_t) high_unp << 32) | low_unp;
+	fh->name_off = raw->pos;
+}
+
+/* A file header that 7-Zip and libarchive take: whole, with all its fields and its name */
+static inline gboolean
+rspamd_rar4_file_head_whole(const struct rspamd_rar4_file_head *fh, unsigned int flags,
+							uint64_t head_size, uint64_t avail, gboolean name_in_head)
+{
+	uint64_t fixed = 7 + 25 + ((flags & 0x100) ? 8 : 0);
+
+	return head_size <= avail && head_size >= fixed &&
+		   (!name_in_head || fh->name_size <= head_size - fixed);
+}
+
+/* The next header after a header and its data, NULL past the end */
+static inline const unsigned char *
+rspamd_rar_skip(const unsigned char *p, const unsigned char *end,
+				uint64_t head_size, uint64_t data)
+{
+	uint64_t avail = end - p;
+
+	if (head_size > avail || data > avail - head_size) {
+		return NULL;
+	}
+
+	return p + head_size + data;
+}
+
+static gboolean
+rspamd_archive_rar4_add_file(struct rspamd_task *task, struct rspamd_archive *arch,
+							 const unsigned char *p, gsize avail, unsigned int flags,
+							 const struct rspamd_rar4_file_head *fh)
+{
+	struct rspamd_archive_file *f;
+	unsigned int fname_len = fh->name_size;
+	/* Names of the Unicode version, and the length of the name before it */
+	GString *unicode_names[RSPAMD_RAR4_UNICODE_READERS];
+	unsigned int nunicode_names = 0;
+	gsize ascii_len = avail;
+	gboolean listed = TRUE, capped = FALSE;
+
+	f = g_malloc0(sizeof(*f));
+
+	if (flags & 0x200) {
+		/* We have unicode + normal version */
+		const unsigned char *tmp;
+
+		tmp = memchr(p, '\0', avail);
+
+		if (tmp != NULL || avail < fname_len) {
+			ascii_len = tmp ? (gsize) (tmp - p) : avail;
+			nunicode_names = rspamd_archive_rar4_unicode_names(p, avail, fname_len, ascii_len,
+															   unicode_names, &capped);
+		}
+
+		if (nunicode_names > 0) {
+			/* Readers show it instead of the name before the NUL */
+			rspamd_archive_file_try_utf(task, arch, f, unicode_names[0]->str,
+										unicode_names[0]->len);
+
+			if (capped) {
+				/* No file system takes such a name: only its ends are listed */
+				f->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+			}
+			msg_debug_archive("found unicode filename in rarv4 archive: %v",
+							  f->fname);
+		}
+		else if (ascii_len < avail || avail < fname_len) {
+			/* Just use ASCII version */
+			rspamd_archive_file_try_utf(task, arch, f, p, ascii_len);
+			msg_debug_archive("found ascii filename in rarv4 archive: %v",
+							  f->fname);
+		}
+		else {
+			/* We have UTF8 filename, use it as is */
+			rspamd_archive_file_try_utf(task, arch, f, p, avail);
+			msg_debug_archive("found utf filename in rarv4 archive: %v",
+							  f->fname);
+		}
+	}
+	else {
+		rspamd_archive_file_try_utf(task, arch, f, p, avail);
+		msg_debug_archive("found ascii (old) filename in rarv4 archive: %v",
+						  f->fname);
+	}
+
+	f->compressed_size = fh->pack_size;
+	f->uncompressed_size = fh->unp_size;
+
+	if (flags & 0x4) {
+		f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+	}
+
+	if (f->fname) {
+		if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+			arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+		}
+
+		listed = rspamd_archive_file_add(task, arch, f);
+
+		if (listed && nunicode_names > 0) {
+			/* Where other readers stop, and the name older ones show */
+			for (unsigned int k = 1; k < nunicode_names && listed; k++) {
+				listed = rspamd_archive_file_add_name(task, arch, f, unicode_names[k]->str,
+													  unicode_names[k]->len);
+			}
+
+			if (listed) {
+				listed = rspamd_archive_file_add_name(task, arch, f, (const char *) p, ascii_len);
+			}
+		}
+		else if (listed && !(flags & 0x200)) {
+			/* A name with a NUL is shown up to it */
+			listed = rspamd_archive_file_add_cstr_name(task, arch, f, p, avail);
+		}
+
+		if (listed && nunicode_names == 0) {
+			/* unrar on macOS decodes the name as UTF-8 */
+			listed = rspamd_archive_file_add_unrar_utf_name(task, arch, f, p, ascii_len);
+		}
+	}
+	else {
+		g_free(f);
+	}
+
+	for (unsigned int k = 0; k < nunicode_names; k++) {
+		g_string_free(unicode_names[k], TRUE);
+	}
+
+	return listed;
+}
+
+/*
+ * libarchive at a header. After a file split into the next volume, it reads
+ * the rest of it: the next file header, which it does not list, past up to
+ * two end blocks. When it cannot convert the name of that file, it reads the
+ * headers in its data instead: *fork is set to where it goes then
+ */
+static void
+rspamd_rar4_libarchive_step(struct rspamd_archive *arch, struct rspamd_rar4_walk *w,
+							const unsigned char *p, const unsigned char *end,
+							unsigned int type, unsigned int flags, uint64_t head_size,
+							uint64_t add_size, const struct rspamd_rar4_file_head *fh,
+							gboolean *lists, gboolean *ended, const unsigned char **fork)
+{
+	static const unsigned char rar4_marker[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
+	uint64_t avail = end - p;
+
+	switch (type) {
+	case 0x72:
+		/* A marker of another archive */
+		if (memcmp(p, rar4_marker, sizeof(rar4_marker)) == 0) {
+			w->at = p + sizeof(rar4_marker);
+		}
+		break;
+	case 0x73:
+		if (head_size >= 13) {
+			if (flags & 0x80) {
+				arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+				*ended = TRUE;
+			}
+			else {
+				w->volume = (flags & 0x1) != 0;
+				w->at = rspamd_rar_skip(p, end, head_size, 0);
+			}
+		}
+		break;
+	case 0x74:
+	case 0x7a:
+		/* A service header is read with its data, which can hold its name */
+		if (rspamd_rar4_file_head_whole(fh, flags, head_size, avail, type == 0x74) &&
+			fh->pack_size < (UINT64_C(1) << 63) && fh->unp_size < (UINT64_C(1) << 63)) {
+			w->at = rspamd_rar_skip(p, end, head_size, fh->pack_size);
+
+			if (type == 0x74) {
+				if (w->split_ends > 0) {
+					/*
+					 * The rest of a split file: a name it cannot convert to the
+					 * locale, which can be any name of other than ASCII, stops
+					 * the skip of its data
+					 */
+					gboolean ascii = !(flags & 0x200);
+
+					for (unsigned int i = 0; i < fh->name_size && ascii; i++) {
+						ascii = p[fh->name_off + i] < 0x80;
+					}
+
+					if (!ascii) {
+						*fork = p + head_size;
+					}
+				}
+				else {
+					*lists = TRUE;
+				}
+
+				w->split_ends = (w->volume && (flags & 0x2)) ? 2 : 0;
+			}
+		}
+		break;
+	case 0x7b:
+		if (w->split_ends == 0) {
+			*ended = TRUE;
+			break;
+		}
+
+		/* Looking for the rest of a split file */
+		w->split_ends--;
+		/* FALLTHROUGH */
+	case 0x75:
+	case 0x76:
+	case 0x77:
+	case 0x78:
+	case 0x79:
+		if (!(flags & 0x8000)) {
+			w->at = rspamd_rar_skip(p, end, head_size, 0);
+		}
+		else if (head_size >= 11 && head_size <= avail) {
+			w->at = rspamd_rar_skip(p, end, head_size, add_size);
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * The header at p for the readers there (a mask of walkers): where each of
+ * them goes next (NULL once it stops) and the file listed. FALSE once no
+ * more files fit. While unrar looks for the main header, it skips the end
+ * block, and goes on 7 bytes after the start of a broken header, from where
+ * it lists files
+ */
+static gboolean
+rspamd_archive_rar4_header(struct rspamd_task *task, struct rspamd_archive *arch,
+						   const unsigned char *start, const unsigned char *end,
+						   const unsigned char *p, unsigned int readers,
+						   struct rspamd_rar4_walk *w, gboolean *ended)
+{
+	struct rspamd_rar_raw raw;
+	struct rspamd_rar4_file_head fh;
+	struct rspamd_rar4_walk *u = &w[RSPAMD_RAR4_WALK_UNRAR], *z = &w[RSPAMD_RAR4_WALK_7ZIP];
+	uint64_t avail = end - p, head_size, add_size;
+	unsigned int type, flags, lists = 0, r;
+	gsize name_len;
+
+	for (r = 0; r < RSPAMD_RAR4_WALKERS; r++) {
+		if (readers & (1u << r)) {
+			w[r].at = NULL;
+		}
+	}
+
+	if (avail == 0) {
+		*ended = TRUE;
+
+		return TRUE;
+	}
+
+	if (avail < 7) {
+		msg_debug_archive("rar archive is invalid (truncated block header)");
+
+		return TRUE;
+	}
+
+	type = p[2];
+	flags = p[3] | (p[4] << 8);
+	head_size = p[5] | (p[6] << 8);
+
+	if (head_size < 7) {
+		/* Shorter than the fields above: readers stop there */
+		msg_debug_archive("rar archive is invalid (block of %L bytes)", head_size);
+
+		if ((readers & (1u << RSPAMD_RAR4_WALK_UNRAR)) && u->opening) {
+			u->opening = FALSE;
+			u->at = p + 7;
+		}
+
+		return TRUE;
+	}
+
+	raw.p = p;
+	raw.len = raw.size = MIN(head_size, avail);
+	raw.pos = 7;
+	memset(&fh, 0, sizeof(fh));
+
+	if (type == 0x74 || type == 0x7a || type == 0x02 || type == 0x03) {
+		rspamd_rar4_read_file_head(&raw, flags, &fh);
+	}
+
+	/* The size of the data after a block, read from its header */
+	add_size = raw.len >= 11 ? (uint64_t) p[7] | ((uint64_t) p[8] << 8) |
+								   ((uint64_t) p[9] << 16) | ((uint64_t) p[10] << 24)
+							 : 0;
+
+	if (readers & (1u << RSPAMD_RAR4_WALK_UNRAR)) {
+		/* unrar takes the types of rar 5 headers as the rar 4 ones */
+		switch (type) {
+		case 0x73:
+		case 0x01:
+			u->opening = FALSE;
+
+			if (flags & 0x80) {
+				/* Headers are encrypted */
+				arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+				*ended = TRUE;
+			}
+			else {
+				u->at = rspamd_rar_skip(p, end, head_size, 0);
+			}
+			break;
+		case 0x74:
+		case 0x02:
+			lists |= 1u << RSPAMD_RAR4_WALK_UNRAR;
+			/* FALLTHROUGH */
+		case 0x7a:
+		case 0x03:
+			if (u->opening && fh.pack_size > (uint64_t) G_MAXINT64 - (p - start) - head_size) {
+				/* Past the largest offset: a broken header, after which unrar lists files */
+				u->opening = FALSE;
+				u->at = rspamd_rar_skip(p, end, head_size, 0);
+			}
+			else {
+				/* Data of the size in the header, whatever the flags */
+				u->at = rspamd_rar_skip(p, end, head_size, fh.pack_size);
+			}
+			break;
+		case 0x7b:
+		case 0x05:
+			if (u->opening) {
+				u->at = rspamd_rar_skip(p, end, head_size, 0);
+			}
+			else {
+				*ended = TRUE;
+			}
+			break;
+		case 0x75:
+			/* A comment has no data */
+			u->at = rspamd_rar_skip(p, end, head_size, 0);
+			break;
+		case 0x77:
+		case 0x78:
+			u->at = rspamd_rar_skip(p, end, head_size, add_size);
+			break;
+		default:
+			u->at = rspamd_rar_skip(p, end, head_size, (flags & 0x8000) ? add_size : 0);
+			break;
+		}
+	}
+
+	if (readers & (1u << RSPAMD_RAR4_WALK_7ZIP)) {
+		if (p == start) {
+			/* 7-Zip takes an archive that starts with a main header */
+			if (type == 0x73 && head_size >= 13) {
+				if (flags & 0x80) {
+					arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+					*ended = TRUE;
+				}
+				else {
+					z->at = rspamd_rar_skip(p, end, head_size, 0);
+				}
+			}
+		}
+		else if (type == 0x74) {
+			/* p7zip 17 takes any packed size, later versions one under 2^63 */
+			if (rspamd_rar4_file_head_whole(&fh, flags, head_size, avail, TRUE)) {
+				lists |= 1u << RSPAMD_RAR4_WALK_7ZIP;
+				z->at = rspamd_rar_skip(p, end, head_size, fh.pack_size);
+			}
+		}
+		else if (type == 0x7b) {
+			*ended = TRUE;
+		}
+		else if (type >= 0x75 && type <= 0x7a) {
+			/* Data of the size after the base fields, read even past a short header */
+			if (!(flags & 0x8000)) {
+				z->at = rspamd_rar_skip(p, end, head_size, 0);
+			}
+			else if (avail >= 11) {
+				z->at = rspamd_rar_skip(p, end, head_size,
+										(uint64_t) p[7] | ((uint64_t) p[8] << 8) |
+											((uint64_t) p[9] << 16) | ((uint64_t) p[10] << 24));
+			}
+		}
+	}
+
+	for (r = RSPAMD_RAR4_WALK_LIBARCHIVE; r <= RSPAMD_RAR4_WALK_LIBARCHIVE_FORK; r++) {
+		struct rspamd_rar4_walk *fw = &w[RSPAMD_RAR4_WALK_LIBARCHIVE_FORK];
+		const unsigned char *fork = NULL;
+		gboolean la_lists = FALSE;
+
+		if (!(readers & (1u << r))) {
+			continue;
+		}
+
+		rspamd_rar4_libarchive_step(arch, &w[r], p, end, type, flags, head_size, add_size, &fh,
+									&la_lists, ended, &fork);
+
+		if (la_lists) {
+			lists |= 1u << r;
+		}
+
+		if (fork != NULL) {
+			if (fw->at == NULL && !(readers & (1u << RSPAMD_RAR4_WALK_LIBARCHIVE_FORK))) {
+				/* It lists the files from there */
+				fw->at = fork;
+				fw->volume = w[r].volume;
+				fw->split_ends = 0;
+			}
+			else {
+				msg_debug_archive("rar archive has more ways for libarchive than followed");
+			}
+		}
+	}
+
+	if (lists == 0) {
+		return TRUE;
+	}
+
+	/*
+	 * The name is read from the header only: unrar reads zeros after its
+	 * end (7-Zip and libarchive refuse such a name), and a name past it
+	 * would take bytes of the data or of the next headers
+	 */
+	name_len = raw.len > fh.name_off ? MIN(raw.len - fh.name_off, fh.name_size) : 0;
+
+	if (name_len == 0) {
+		/* unrar skips a file of no name and goes on */
+		msg_debug_archive("rar archive has a file of no name");
+
+		return TRUE;
+	}
+
+	return rspamd_archive_rar4_add_file(task, arch, p + fh.name_off, name_len, flags, &fh);
+}
 
 static void
 rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *start,
 							  const unsigned char *end, struct rspamd_mime_part *part)
 {
-	const unsigned char *p = start, *start_section;
-	uint8_t type;
-	unsigned int flags;
-	uint64_t sz, comp_sz = 0, uncomp_sz = 0;
+	/*
+	 * Each reader, NULL once it stops. Readers agree on the archives rar
+	 * writes, and part ways on blocks that only some of them skip with their
+	 * data: each is followed, so the files that any of them lists are listed
+	 */
+	struct rspamd_rar4_walk w[RSPAMD_RAR4_WALKERS];
 	struct rspamd_archive *arch;
-	struct rspamd_archive_file *f;
+	gboolean ended = FALSE;
+	unsigned int r;
 
 	arch = rspamd_mempool_alloc0(task->task_pool, sizeof(*arch));
 	arch->files = g_ptr_array_new();
@@ -545,139 +2948,43 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 		goto end;
 	}
 
-	while (p < end) {
-		/* Crc16 */
-		start_section = p;
-		RAR_SKIP_BYTES(sizeof(uint16_t));
+	memset(w, 0, sizeof(w));
 
-		if (p >= end) {
-			msg_debug_archive("rar archive is invalid (truncated block header)");
-			return;
-		}
+	for (r = 0; r < RSPAMD_RAR4_WALK_LIBARCHIVE_FORK; r++) {
+		w[r].at = start;
+	}
 
-		type = *p;
-		p++;
-		RAR_READ_UINT16(flags);
+	w[RSPAMD_RAR4_WALK_UNRAR].opening = TRUE;
 
-		if (type == 0x73) {
-			/* Main header, check for encryption */
-			if (flags & 0x80) {
-				arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-				goto end;
+	for (;;) {
+		const unsigned char *p = NULL;
+		unsigned int readers = 0;
+
+		/* Readers only go forward, so the first header one is at comes first */
+		for (r = 0; r < RSPAMD_RAR4_WALKERS; r++) {
+			if (w[r].at != NULL && (p == NULL || w[r].at < p)) {
+				p = w[r].at;
 			}
 		}
 
-		RAR_READ_UINT16(sz);
-
-		if (flags & 0x8000) {
-			/* We also need to read ADD_SIZE element */
-			uint32_t tmp;
-
-			RAR_READ_UINT32(tmp);
-			sz += tmp;
-			/* This is also used as PACK_SIZE */
-			comp_sz = tmp;
+		if (p == NULL) {
+			break;
 		}
 
-		if (sz == 0) {
-			/* Zero sized block - error */
-			msg_debug_archive("rar archive is invalid (zero size block)");
-
-			return;
-		}
-
-		if (type == 0x74) {
-			unsigned int fname_len;
-
-			/* File header */
-			/* Uncompressed size */
-			RAR_READ_UINT32(uncomp_sz);
-			/* Skip to NAME_SIZE element */
-			RAR_SKIP_BYTES(11);
-			RAR_READ_UINT16(fname_len);
-
-			if (fname_len == 0 || fname_len > (gsize) (end - p)) {
-				msg_debug_archive("rar archive is invalid (bad filename size: %d)",
-								  fname_len);
-
-				return;
-			}
-
-			/* Attrs */
-			RAR_SKIP_BYTES(4);
-
-			if (flags & 0x100) {
-				/* We also need to read HIGH_PACK_SIZE */
-				uint32_t tmp;
-
-				RAR_READ_UINT32(tmp);
-				sz += tmp;
-				comp_sz += tmp;
-				/* HIGH_UNP_SIZE  */
-				RAR_READ_UINT32(tmp);
-				uncomp_sz += tmp;
-			}
-
-			/*
-			 * p advanced past the attrs and optional HIGH_*_SIZE fields
-			 * after fname_len was validated above, so re-check it against
-			 * the remaining buffer before reading the filename.
-			 */
-			if (fname_len > (gsize) (end - p)) {
-				msg_debug_archive("rar archive is invalid (truncated filename)");
-
-				return;
-			}
-
-			f = g_malloc0(sizeof(*f));
-
-			if (flags & 0x200) {
-				/* We have unicode + normal version */
-				unsigned char *tmp;
-
-				tmp = memchr(p, '\0', fname_len);
-
-				if (tmp != NULL) {
-					/* Just use ASCII version */
-					rspamd_archive_file_try_utf(task, arch, f, p, tmp - p);
-					msg_debug_archive("found ascii filename in rarv4 archive: %v",
-									  f->fname);
-				}
-				else {
-					/* We have UTF8 filename, use it as is */
-					rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
-					msg_debug_archive("found utf filename in rarv4 archive: %v",
-									  f->fname);
-				}
-			}
-			else {
-				rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
-				msg_debug_archive("found ascii (old) filename in rarv4 archive: %v",
-								  f->fname);
-			}
-
-			f->compressed_size = comp_sz;
-			f->uncompressed_size = uncomp_sz;
-
-			if (flags & 0x4) {
-				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
-			}
-
-			if (f->fname) {
-				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
-					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
-				}
-				if (!rspamd_archive_file_add(task, arch, f)) {
-					goto end;
-				}
-			}
-			else {
-				g_free(f);
+		for (r = 0; r < RSPAMD_RAR4_WALKERS; r++) {
+			if (w[r].at == p) {
+				readers |= 1u << r;
 			}
 		}
 
-		p = start_section;
-		RAR_SKIP_BYTES(sz);
+		if (!rspamd_archive_rar4_header(task, arch, start, end, p, readers, w, &ended)) {
+			goto end;
+		}
+	}
+
+	if (!ended && arch->files->len == 0) {
+		/* Readers list the files before a broken or cut header, if any */
+		return;
 	}
 
 end:
@@ -686,20 +2993,1544 @@ end:
 	arch->size = part->parsed_data.len;
 }
 
+/* A number of the rar 5 format as unrar reads it in a header: zero past its end */
+static uint64_t
+rspamd_rar_raw_getv(struct rspamd_rar_raw *raw)
+{
+	uint64_t v = 0;
+
+	for (unsigned int shift = 0; raw->pos < raw->size && shift < 64; shift += 7) {
+		unsigned int c = rspamd_rar_raw_byte(raw, raw->pos++);
+
+		v += (uint64_t) (c & 0x7f) << shift;
+
+		if ((c & 0x80) == 0) {
+			return v;
+		}
+	}
+
+	return 0;
+}
+
+/* Whether extra records of a rar 5 file header hold an encryption record */
+static gboolean
+rspamd_rar5_extra_encrypted(const unsigned char *p, gsize len)
+{
+	struct rspamd_rar_raw raw = {p, len, 0, len};
+
+	while (raw.len - raw.pos >= 2) {
+		uint64_t field_size, field_end;
+
+		field_size = rspamd_rar_raw_getv(&raw);
+
+		if (field_size == 0 || field_size > raw.len - raw.pos) {
+			break;
+		}
+
+		field_end = raw.pos + field_size;
+
+		if (rspamd_rar_raw_getv(&raw) == 0x01) {
+			return TRUE;
+		}
+
+		if (raw.pos > field_end) {
+			break;
+		}
+
+		raw.pos = field_end;
+	}
+
+	return FALSE;
+}
+
+/*
+ * Readers of rar 5 archives: unrar, which 7-Zip follows where it does not
+ * stop first, and libarchive, which goes its own way
+ */
+enum rspamd_rar5_walker {
+	RSPAMD_RAR5_WALK_UNRAR = 0,
+	RSPAMD_RAR5_WALK_LIBARCHIVE,
+	RSPAMD_RAR5_WALKERS,
+};
+
+/* Where a reader is, and what it keeps from a header to the next */
+struct rspamd_rar5_walk {
+	const unsigned char *at; /* NULL once it stops */
+	gboolean opening;        /* unrar looks for the main header */
+	gboolean volume;         /* libarchive: flags of the last main header */
+	gboolean solid;
+	gboolean window; /* libarchive has decoded the data of a solid file */
+	uint64_t vol_no;
+	uint64_t expected_vol_no;
+};
+
+/*
+ * libarchive reads a header field after field from the stream, and never
+ * goes to its declared end: the next header starts where its reads end
+ */
+struct rspamd_rar5_la {
+	const unsigned char *p;
+	const unsigned char *end;
+};
+
+/*
+ * A number as libarchive reads it: 8 bytes from its start must be there, at
+ * most 8 bytes are read, and a 9th one is taken, whatever it is, after 8
+ * that go on
+ */
+static gboolean
+rspamd_rar5_la_peek(const struct rspamd_rar5_la *c, uint64_t *v, unsigned int *len)
+{
+	uint64_t r = 0;
+	unsigned int i;
+
+	if (c->end - c->p < 8) {
+		return FALSE;
+	}
+
+	for (i = 0; i < 8; i++) {
+		r += (uint64_t) (c->p[i] & 0x7f) << (7 * i);
+
+		if (!(c->p[i] & 0x80)) {
+			*v = r;
+			*len = i + 1;
+
+			return TRUE;
+		}
+	}
+
+	*v = r;
+	*len = 9;
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_rar5_la_skip(struct rspamd_rar5_la *c, uint64_t n)
+{
+	if (n > (uint64_t) (c->end - c->p)) {
+		c->p = c->end;
+
+		return FALSE;
+	}
+
+	c->p += n;
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_rar5_la_var(struct rspamd_rar5_la *c, uint64_t *v)
+{
+	unsigned int len;
+
+	return rspamd_rar5_la_peek(c, v, &len) && rspamd_rar5_la_skip(c, len);
+}
+
+/* A number that counts against the extra area, by the bytes it takes */
+static gboolean
+rspamd_rar5_la_extra_var(struct rspamd_rar5_la *c, int64_t *eds, uint64_t *v)
+{
+	unsigned int len;
+
+	if (!rspamd_rar5_la_peek(c, v, &len)) {
+		return FALSE;
+	}
+
+	*eds -= len;
+
+	return rspamd_rar5_la_skip(c, len);
+}
+
+/*
+ * The extra area of a file header, as libarchive 3.7 reads it: record sizes
+ * are not used, each record takes what its parser reads, the result of the
+ * last record counts, and an unknown record takes what is left of the area
+ */
+static gboolean
+rspamd_rar5_la_extra(struct rspamd_rar5_la *c, int64_t eds)
+{
+	gboolean ok = FALSE;
+	uint64_t v, id, n;
+	unsigned int bit;
+
+	while (eds > 0) {
+		/* The size of the record, then its type */
+		if (!rspamd_rar5_la_extra_var(c, &eds, &v) || !rspamd_rar5_la_extra_var(c, &eds, &id)) {
+			return FALSE;
+		}
+
+		switch (id) {
+		case 2:
+			/* Hash: its type, and 32 bytes of BLAKE2sp */
+			ok = FALSE;
+
+			if (rspamd_rar5_la_extra_var(c, &eds, &v) && v == 0 && c->end - c->p >= 32) {
+				c->p += 32;
+				eds -= 32;
+				ok = TRUE;
+			}
+			break;
+		case 3:
+			/* Times: four bytes each when unix, else eight, skipped when missing */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v);
+
+			if (ok) {
+				unsigned int sz = (v & 0x1) ? 4 : 8;
+
+				for (bit = 0x2; bit <= 0x8; bit <<= 1) {
+					if ((v & bit) && c->end - c->p >= sz) {
+						c->p += sz;
+						eds -= sz;
+					}
+				}
+
+				if (v & 0x10) {
+					/* A field that is not there does not move it */
+					ok = c->end - c->p >= 4;
+
+					if (ok) {
+						c->p += 4;
+						eds -= 4;
+					}
+				}
+			}
+			break;
+		case 5:
+			/* Link: its type, flags and target, which counts as a byte and its length */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v) && rspamd_rar5_la_extra_var(c, &eds, &v) &&
+				 rspamd_rar5_la_var(c, &n);
+
+			if (ok) {
+				eds -= n + 1;
+				ok = n <= (uint64_t) (c->end - c->p) && n > 0 && n < 2048;
+
+				if (ok) {
+					c->p += n;
+				}
+			}
+			break;
+		case 6:
+			/* Owner: names that count as a byte and their length, then ids */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v);
+
+			for (bit = 0x1; ok && bit <= 0x2; bit <<= 1) {
+				if (v & bit) {
+					ok = rspamd_rar5_la_var(c, &n);
+
+					if (ok) {
+						eds -= n + 1;
+						ok = n <= (uint64_t) (c->end - c->p);
+
+						if (ok) {
+							c->p += n;
+						}
+					}
+				}
+			}
+
+			for (bit = 0x4; ok && bit <= 0x8; bit <<= 1) {
+				if (v & bit) {
+					ok = rspamd_rar5_la_extra_var(c, &eds, &n);
+				}
+			}
+			break;
+		case 4:
+			/* Version: flags and the number */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v) && rspamd_rar5_la_extra_var(c, &eds, &v);
+			break;
+		default:
+			/* Encryption, service data and unknown records: the rest of the area */
+			return eds >= 0 && rspamd_rar5_la_skip(c, eds);
+		}
+	}
+
+	return ok;
+}
+
+/* The fields of a file or service header that libarchive reads, FALSE where it stops */
+struct rspamd_rar5_la_file {
+	uint64_t data_size;
+	uint64_t unp_size;
+	const unsigned char *name;
+	gsize name_len;
+	gboolean dir;
+	unsigned int method;
+};
+
+static gboolean
+rspamd_rar5_la_file_head(struct rspamd_rar5_la *c, const struct rspamd_rar5_walk *w,
+						 uint64_t hflags, struct rspamd_rar5_la_file *fh)
+{
+	uint64_t eds = 0, ff, ci, host, ns, v;
+
+	if ((hflags & 0x1) && !rspamd_rar5_la_var(c, &eds)) {
+		return FALSE;
+	}
+
+	if (!(hflags & 0x2) || !rspamd_rar5_la_var(c, &fh->data_size)) {
+		/* No data found in file/service block */
+		return FALSE;
+	}
+
+	if (!rspamd_rar5_la_var(c, &ff) || !rspamd_rar5_la_var(c, &fh->unp_size) || (ff & 0x8)) {
+		/* Files with unknown unpacked size are not supported */
+		return FALSE;
+	}
+
+	fh->dir = (ff & 0x1) != 0;
+
+	/* Attributes, then the mtime and the CRC */
+	if (!rspamd_rar5_la_var(c, &v) ||
+		((ff & 0x2) && !rspamd_rar5_la_skip(c, 4)) ||
+		((ff & 0x4) && !rspamd_rar5_la_skip(c, 4)) ||
+		!rspamd_rar5_la_var(c, &ci)) {
+		return FALSE;
+	}
+
+	fh->method = (ci >> 7) & 7;
+
+	if (((ci & 0x40) && !w->window) || (!fh->dir && ((ci >> 10) & 0xf) > 9)) {
+		/* A solid file before any decoded one, or a window over 64 MiB */
+		return FALSE;
+	}
+
+	if (!rspamd_rar5_la_var(c, &host) || host > 1 || !rspamd_rar5_la_var(c, &ns) ||
+		ns > (uint64_t) (c->end - c->p) || ns == 0 || ns > 2047) {
+		return FALSE;
+	}
+
+	fh->name = c->p;
+	fh->name_len = ns;
+	c->p += ns;
+
+	/* The extra area size is signed, but numbers read are under 2^56 */
+	return eds == 0 || rspamd_rar5_la_extra(c, (int64_t) eds);
+}
+
+/*
+ * The data of an entry, as libarchive skips it: in a solid archive, the data
+ * of a directory or of an unknown method stops it, and compressed data is
+ * decoded (which is taken as a skip here)
+ */
+static const unsigned char *
+rspamd_rar5_la_data(struct rspamd_rar5_la *c, struct rspamd_rar5_walk *w,
+					const struct rspamd_rar5_la_file *fh, gboolean service)
+{
+	if (w->solid && fh->data_size > 0) {
+		if (fh->dir || (!service && fh->method > 5)) {
+			return NULL;
+		}
+
+		if (!service && fh->method > 0) {
+			w->window = TRUE;
+		}
+	}
+
+	return rspamd_rar5_la_skip(c, fh->data_size) ? c->p : NULL;
+}
+
+/*
+ * libarchive 3.7 at the header at p: where it goes next (NULL once it
+ * stops), and the name of the file it lists there, or NULL
+ */
+static void
+rspamd_rar5_la_step(struct rspamd_archive *arch, struct rspamd_rar5_walk *w,
+					const unsigned char *p, const unsigned char *end,
+					struct rspamd_rar5_la_file *listed, gboolean *ended)
+{
+	static const unsigned char rar5_marker[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00};
+	struct rspamd_rar5_la c = {p, end};
+	struct rspamd_rar5_la_file fh;
+	uint64_t raw, hs, type, hflags, v, es;
+	unsigned int len;
+
+	w->at = NULL;
+	listed->name = NULL;
+
+	if (end - p < 4) {
+		return;
+	}
+
+	c.p += 4;
+
+	if (!rspamd_rar5_la_peek(&c, &raw, &len)) {
+		return;
+	}
+
+	hs = raw + len;
+
+	/*
+	 * Size limits and the whole header. Its CRC is not checked: libarchive
+	 * stops at a bad one, but a CRC over each header, which can be 2 MiB
+	 * long and start a few bytes after the one before, takes quadratic time,
+	 * and following it past a broken header only lists more
+	 */
+	if (hs > 2 * 1024 * 1024 || raw == 0 || hs < 3 || hs > (uint64_t) (end - c.p)) {
+		return;
+	}
+
+	c.p += len;
+
+	if (!rspamd_rar5_la_var(&c, &type) || !rspamd_rar5_la_var(&c, &hflags)) {
+		return;
+	}
+
+	memset(&fh, 0, sizeof(fh));
+
+	switch (type) {
+	case 1:
+		/* Main: fields from the stream, without its data, padding or other records */
+		es = 0;
+
+		if (((hflags & 0x1) && !rspamd_rar5_la_var(&c, &es)) || !rspamd_rar5_la_var(&c, &v)) {
+			return;
+		}
+
+		w->volume = (v & 0x1) != 0;
+		w->solid = (v & 0x4) != 0;
+		w->vol_no = 0;
+
+		if ((v & 0x2) && (!rspamd_rar5_la_var(&c, &w->vol_no) || w->vol_no > G_MAXUINT32)) {
+			return;
+		}
+
+		if (w->expected_vol_no > 0 && w->vol_no != w->expected_vol_no) {
+			return;
+		}
+
+		if (es > 0) {
+			uint64_t fs, id;
+
+			/* Only a locator record is taken */
+			if (!rspamd_rar5_la_var(&c, &fs) || !rspamd_rar5_la_var(&c, &id) || fs == 0 || id != 1 ||
+				!rspamd_rar5_la_var(&c, &v) ||
+				((v & 0x1) && !rspamd_rar5_la_var(&c, &fs)) ||
+				((v & 0x2) && !rspamd_rar5_la_var(&c, &fs))) {
+				return;
+			}
+		}
+
+		w->at = c.p;
+		break;
+	case 2:
+	case 3:
+		if (!rspamd_rar5_la_file_head(&c, w, hflags, &fh)) {
+			return;
+		}
+
+		if ((type == 2 && !(hflags & 0x8)) || (w->solid && fh.dir && fh.data_size > 0)) {
+			/*
+			 * A file that is not the rest of a split one is listed, and so is
+			 * any entry that stops a solid archive with the data of a directory
+			 */
+			*listed = fh;
+		}
+
+		/* The data of the rest of a split service is skipped as that of a file */
+		w->at = rspamd_rar5_la_data(&c, w, &fh, type == 3 && !(hflags & 0x8));
+		break;
+	case 4:
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		break;
+	case 5:
+		if (!w->volume) {
+			*ended = TRUE;
+		}
+		else {
+			const unsigned char *s = c.p;
+			gboolean found = FALSE;
+
+			/*
+			 * The next volume: the signature at the first 504 offsets of
+			 * each 512 bytes, else what is left after the last 512 bytes
+			 */
+			while (end - s >= 512 && !found) {
+				goffset off = rspamd_substring_search((const char *) s, 511,
+													  (const char *) rar5_marker, sizeof(rar5_marker));
+
+				if (off >= 0) {
+					s += off + sizeof(rar5_marker);
+					found = TRUE;
+				}
+				else {
+					s += 512;
+				}
+			}
+
+			if (w->expected_vol_no != G_MAXUINT32) {
+				w->expected_vol_no = (w->vol_no + 1) & G_MAXUINT32;
+				w->at = s;
+			}
+		}
+		break;
+	case 0:
+		break;
+	default:
+		if (hflags & 0x4) {
+			/* Skipped if unknown: the rest of the header is read as headers */
+			w->at = c.p;
+		}
+		break;
+	}
+}
+
+/* A name listed at a header, by any reader: readers reach a header at different times */
+struct rspamd_rar5_listed {
+	uint64_t pos;
+	const unsigned char *name;
+	gsize len;
+};
+
+static guint
+rspamd_rar5_listed_hash(gconstpointer k)
+{
+	const struct rspamd_rar5_listed *l = k;
+	guint h = (guint) (l->pos ^ (l->pos >> 32));
+
+	for (gsize i = 0; i < l->len; i++) {
+		h = h * 31 + l->name[i];
+	}
+
+	return h;
+}
+
+static gboolean
+rspamd_rar5_listed_equal(gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_rar5_listed *la = a, *lb = b;
+
+	return la->pos == lb->pos && la->len == lb->len && memcmp(la->name, lb->name, la->len) == 0;
+}
+
+/*
+ * Whether a name read at a header (up to its first NUL) is new there, and
+ * remembers it: another reader may have listed it before
+ */
+static gboolean
+rspamd_rar5_listed_new(struct rspamd_task *task, GHashTable *listed_at, uint64_t pos,
+					   const unsigned char *name, gsize len)
+{
+	struct rspamd_rar5_listed key, *l;
+	const unsigned char *nul = memchr(name, 0, len);
+
+	if (listed_at == NULL) {
+		return TRUE;
+	}
+
+	key.pos = pos;
+	key.name = name;
+	key.len = nul ? (gsize) (nul - name) : len;
+
+	if (g_hash_table_contains(listed_at, &key)) {
+		return FALSE;
+	}
+
+	l = rspamd_mempool_alloc(task->task_pool, sizeof(*l));
+	*l = key;
+	g_hash_table_add(listed_at, l);
+
+	return TRUE;
+}
+
+/*
+ * A file of a rar 5 archive. unrar_names adds the names unrar shows for its
+ * bytes, unique lists no name already listed. FALSE once no more files fit
+ */
+static gboolean
+rspamd_archive_rar5_add_file(struct rspamd_task *task, struct rspamd_archive *arch,
+							 const unsigned char *name, gsize len, uint64_t uncomp_sz,
+							 uint64_t comp_sz, gboolean encrypted, gboolean unrar_names,
+							 GHashTable *unique)
+{
+	struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
+
+	f->uncompressed_size = uncomp_sz;
+	f->compressed_size = comp_sz;
+	rspamd_archive_file_try_utf(task, arch, f, name, len);
+
+	if (f->fname == NULL) {
+		g_free(f);
+
+		return TRUE;
+	}
+
+	if (unique) {
+		if (g_hash_table_contains(unique, f->fname)) {
+			rspamd_archive_file_free(f);
+
+			return TRUE;
+		}
+
+		g_hash_table_add(unique, f->fname);
+	}
+
+	msg_debug_archive("added rarv5 file: %v", f->fname);
+
+	if (encrypted) {
+		f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+	}
+
+	if (!rspamd_archive_file_add(task, arch, f)) {
+		return FALSE;
+	}
+
+	if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+		arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+	}
+
+	/* A name with a NUL is shown up to it, and as unrar decodes it */
+	return !unrar_names ||
+		   (rspamd_archive_file_add_cstr_name(task, arch, f, name, len) &&
+			rspamd_archive_file_add_unrar_utf_name(task, arch, f, name, len));
+}
+
+/*
+ * unrar's quick open cache: a service header named QO, which a locator of
+ * the main header points to, holds copies of headers. unrar reads a header
+ * from a copy instead of the archive when the read is within one, so the
+ * copies can give other names and data sizes than the archive's headers.
+ * Its cache data are read in chunks of 64 KiB, which moves the position
+ * in the archive file that unrar falls back to in one case
+ */
+struct rspamd_rar5_qo {
+	const unsigned char *begin; /* the archive */
+	uint64_t file_len;
+	uint64_t qo_pos;     /* where the QO header is */
+	uint64_t data_start; /* its data, the cache, and their size */
+	uint64_t raw_size;
+	uint64_t raw_pos; /* unrar's buffer of the cache data */
+	uint64_t buf_size;
+	uint64_t buf_pos;
+	const unsigned char *last; /* the last copy read: its bytes, zeros past last_avail */
+	uint64_t last_avail;
+	uint64_t last_pos; /* where it is in the archive, and its size */
+	uint64_t last_len;
+	uint64_t phys; /* where the archive file is read next */
+	uint64_t work; /* copies and reads, and 64 bytes of copies checked */
+	gboolean loaded;
+	gboolean used; /* a cache has been loaded */
+};
+
+/* unrar's ReadBuffer: the next chunk of the cache data */
+static uint64_t
+rspamd_rar5_qo_fill(struct rspamd_rar5_qo *qo)
+{
+	uint64_t at = qo->data_start + qo->raw_pos, want, got;
+
+	want = MIN(qo->raw_size - qo->raw_pos, 0x10000 - qo->buf_size);
+	got = at < qo->file_len ? MIN(want, qo->file_len - at) : 0;
+	qo->raw_pos += got;
+	qo->buf_size += got;
+	qo->phys = qo->data_start + qo->raw_pos;
+
+	return got;
+}
+
+/* Back to the start of the cache data */
+static void
+rspamd_rar5_qo_rewind(struct rspamd_rar5_qo *qo)
+{
+	qo->raw_pos = qo->buf_size = qo->buf_pos = 0;
+	qo->last = NULL;
+	qo->last_avail = qo->last_pos = qo->last_len = 0;
+	rspamd_rar5_qo_fill(qo);
+}
+
+/* The next copy of a header: FALSE when there is none, or it is broken (a bad CRC) */
+static gboolean
+rspamd_rar5_qo_next(struct rspamd_rar5_qo *qo)
+{
+	const unsigned char *b;
+	struct rspamd_rar_raw raw;
+	unsigned int size_len = 0, i;
+	uint64_t block_size = 0, len, off, to_read, total;
+
+	if (0x10000 - qo->buf_pos < 0x100) {
+		/* Close to the end of the buffer: keep what is left and read more */
+		qo->buf_size -= qo->buf_pos;
+		qo->buf_pos = 0;
+		rspamd_rar5_qo_fill(qo);
+	}
+
+	if (qo->buf_pos + 7 > qo->buf_size) {
+		return FALSE;
+	}
+
+	b = qo->begin + qo->data_start + qo->raw_pos - qo->buf_size + qo->buf_pos;
+	qo->buf_pos += 7;
+
+	/* The size of the block takes 3 bytes at most */
+	for (i = 0; i < 3; i++) {
+		block_size |= (uint64_t) (b[4 + i] & 0x7f) << (7 * i);
+
+		if (!(b[4 + i] & 0x80)) {
+			size_len = i + 1;
+			break;
+		}
+	}
+
+	if (size_len == 0 || block_size == 0 || block_size + size_len < 3) {
+		qo->loaded = FALSE;
+
+		return FALSE;
+	}
+
+	to_read = block_size + size_len - 3;
+	total = 7 + to_read;
+
+	while (to_read > 0) {
+		uint64_t cur = MIN(qo->buf_size - qo->buf_pos, to_read);
+
+		qo->buf_pos += cur;
+		to_read -= cur;
+
+		if (to_read > 0) {
+			qo->buf_pos = qo->buf_size = 0;
+
+			if (rspamd_rar5_qo_fill(qo) == 0) {
+				/* Cut */
+				return FALSE;
+			}
+		}
+	}
+
+	qo->work += 1 + total / 64;
+
+	if (crc32(0, (const Bytef *) b + 4, total - 4) !=
+		((uint32_t) b[0] | ((uint32_t) b[1] << 8) | ((uint32_t) b[2] << 16) | ((uint32_t) b[3] << 24))) {
+		return FALSE;
+	}
+
+	raw.p = b;
+	raw.len = raw.size = total;
+	raw.pos = 4 + size_len;
+	/* Flags, then the offset back from the QO header, then the size of the copy */
+	(void) rspamd_rar_raw_getv(&raw);
+	off = rspamd_rar_raw_getv(&raw);
+	len = rspamd_rar_raw_getv(&raw);
+
+	if (len > 2 * 1024 * 1024) {
+		return FALSE;
+	}
+
+	qo->last_pos = qo->qo_pos - off;
+	qo->last = b + raw.pos;
+	qo->last_avail = MIN(total - raw.pos, len);
+	qo->last_len = len;
+
+	return TRUE;
+}
+
+/*
+ * A read of size bytes at pos: TRUE when the cache gives them (zeros past
+ * *avail); else they are read from the archive, which moves its file
+ */
+static gboolean
+rspamd_rar5_qo_read(struct rspamd_rar5_qo *qo, uint64_t pos, uint64_t size,
+					const unsigned char **src, uint64_t *avail)
+{
+	if (qo == NULL) {
+		return FALSE;
+	}
+
+	qo->work++;
+
+	if (qo->loaded) {
+		/* Copies only go forward */
+		while (qo->last_pos + qo->last_len <= pos) {
+			if (!rspamd_rar5_qo_next(qo)) {
+				break;
+			}
+		}
+
+		if (qo->loaded && pos >= qo->last_pos && pos + size <= qo->last_pos + qo->last_len) {
+			*src = qo->last + (pos - qo->last_pos);
+			*avail = pos - qo->last_pos < qo->last_avail ? MIN(qo->last_avail - (pos - qo->last_pos), size) : 0;
+
+			return TRUE;
+		}
+	}
+
+	qo->phys = pos + (pos < qo->file_len ? MIN(size, qo->file_len - pos) : 0);
+
+	return FALSE;
+}
+
+/* What unrar reads of a header: its bytes (zeros past len, up to vlen) and its declared size */
+struct rspamd_rar5_hdr {
+	const unsigned char *h;
+	gsize len;
+	gsize vlen;
+	uint64_t size;
+	unsigned int size_len;
+	gboolean cached;
+};
+
+enum rspamd_rar5_read_result {
+	RSPAMD_RAR5_READ_OK = 0,
+	RSPAMD_RAR5_READ_STOP,   /* cut or past the end */
+	RSPAMD_RAR5_READ_BROKEN, /* broken after the 7 bytes read first */
+};
+
+/*
+ * A header as unrar reads it at pos: 7 bytes, then the rest, each from a
+ * copy of the cache when one holds it, else from the archive
+ */
+static enum rspamd_rar5_read_result
+rspamd_rar5_unrar_read(const unsigned char *begin, uint64_t file_len, struct rspamd_rar5_qo *qo,
+					   uint64_t pos, GByteArray *scratch, struct rspamd_rar5_hdr *hdr)
+{
+	unsigned char first[7];
+	const unsigned char *src = NULL, *src2 = NULL;
+	uint64_t avail = 0, block_size = 0, head_size, to_read, got;
+	unsigned int size_len = 0, i;
+	gboolean c1, c2 = FALSE;
+
+	c1 = rspamd_rar5_qo_read(qo, pos, 7, &src, &avail);
+
+	if (c1) {
+		memset(first, 0, sizeof(first));
+		memcpy(first, src, avail);
+	}
+	else if (pos >= file_len || file_len - pos < 7) {
+		return RSPAMD_RAR5_READ_STOP;
+	}
+	else {
+		memcpy(first, begin + pos, sizeof(first));
+	}
+
+	/* A CRC, then the size of the rest in 3 bytes at most */
+	for (i = 0; i < 3; i++) {
+		block_size |= (uint64_t) (first[4 + i] & 0x7f) << (7 * i);
+
+		if (!(first[4 + i] & 0x80)) {
+			size_len = i + 1;
+			break;
+		}
+	}
+
+	head_size = 4 + size_len + block_size;
+
+	if (size_len == 0 || block_size == 0 || head_size < 7) {
+		return RSPAMD_RAR5_READ_BROKEN;
+	}
+
+	to_read = head_size - 7;
+	got = 0;
+
+	if (to_read > 0) {
+		c2 = rspamd_rar5_qo_read(qo, pos + 7, to_read, &src2, &got);
+
+		if (!c2) {
+			src2 = begin + pos + 7;
+			got = pos + 7 < file_len ? MIN(to_read, file_len - pos - 7) : 0;
+
+			if (got < to_read) {
+				/* Readers stop at a cut header */
+				return RSPAMD_RAR5_READ_STOP;
+			}
+		}
+	}
+
+	if (!c1 && !c2) {
+		hdr->h = begin + pos;
+		hdr->len = 7 + got;
+	}
+	else {
+		g_byte_array_set_size(scratch, 0);
+		g_byte_array_append(scratch, first, sizeof(first));
+
+		if (got > 0) {
+			g_byte_array_append(scratch, src2, got);
+		}
+
+		hdr->h = scratch->data;
+		hdr->len = scratch->len;
+	}
+
+	/* A copy holds zeros up to its size */
+	hdr->vlen = c2 ? head_size : hdr->len;
+	hdr->size = head_size;
+	hdr->size_len = size_len;
+	hdr->cached = c1 || c2;
+
+	return RSPAMD_RAR5_READ_OK;
+}
+
+/*
+ * Whether unrar takes a file or service header as encrypted: an encryption
+ * record of version 0 and at most 2^24 rounds, in an extra area at the end
+ * of the header that starts after the name
+ */
+static gboolean
+rspamd_rar5_unrar_encrypted(const struct rspamd_rar_raw *hraw, uint64_t extra_sz, gsize name_end)
+{
+	struct rspamd_rar_raw raw = *hraw;
+
+	if (extra_sz == 0 || raw.size - extra_sz < name_end) {
+		return FALSE;
+	}
+
+	raw.pos = raw.size - extra_sz;
+
+	while (raw.size - raw.pos >= 2) {
+		uint64_t field_size = rspamd_rar_raw_getv(&raw), field_end;
+
+		if (field_size == 0 || field_size > raw.size - raw.pos) {
+			break;
+		}
+
+		field_end = raw.pos + field_size;
+
+		field_size = rspamd_rar_raw_getv(&raw);
+
+		if (raw.pos > field_end) {
+			/* The type runs past the record */
+			break;
+		}
+
+		if (field_size == 0x01 && rspamd_rar_raw_getv(&raw) == 0) {
+			/* Flags, then the rounds */
+			(void) rspamd_rar_raw_getv(&raw);
+
+			if (rspamd_rar_raw_get1(&raw) <= 24) {
+				return TRUE;
+			}
+		}
+
+		raw.pos = field_end;
+	}
+
+	return FALSE;
+}
+
+/* Whether unrar reads a name as want: UTF-8 as it decodes it, up to a NUL or a byte it cannot read */
+static gboolean
+rspamd_rar5_unrar_name_is(const struct rspamd_rar_raw *hraw, gsize off, uint64_t len, const char *want)
+{
+	struct rspamd_rar_raw raw = *hraw;
+	gsize wlen = strlen(want), got = 0;
+	uint64_t n = MIN(len, 0x10000);
+
+	raw.size = MIN(raw.size, off + n);
+	raw.pos = off;
+
+	while (raw.pos < raw.size) {
+		unsigned int c = rspamd_rar_raw_get1(&raw), d, k, seq;
+
+		if (c == 0) {
+			break;
+		}
+		else if (c < 0x80) {
+			d = c;
+			seq = 1;
+		}
+		else if ((c >> 5) == 6) {
+			d = c & 0x1f;
+			seq = 2;
+		}
+		else if ((c >> 4) == 14) {
+			d = c & 0x0f;
+			seq = 3;
+		}
+		else if ((c >> 3) == 30) {
+			d = c & 0x07;
+			seq = 4;
+		}
+		else {
+			break;
+		}
+
+		for (k = 1; k < seq; k++) {
+			unsigned int cc = raw.pos < raw.size ? rspamd_rar_raw_get1(&raw) : 0;
+
+			if ((cc & 0xc0) != 0x80) {
+				break;
+			}
+
+			d = (d << 6) | (cc & 0x3f);
+		}
+
+		if (k < seq) {
+			break;
+		}
+
+		if (d > 0x10ffff) {
+			/* Dropped */
+			continue;
+		}
+
+		if (got >= wlen || d != (unsigned char) want[got]) {
+			return FALSE;
+		}
+
+		got++;
+	}
+
+	return got == wlen;
+}
+
+/*
+ * unrar at a header it has read at pos: where it goes next (G_MAXUINT64
+ * once it stops), the file it lists (when list is set), where the locator of
+ * a main header points (0 when none), whether a main header was read whole
+ * (main_ok) and, for a service header, whether unrar takes it as encrypted
+ * (service_enc, -1 for other headers). While unrar looks for the main
+ * header, it skips the end block and goes on after a broken header, from
+ * where it lists files. after_len is how much of the archive follows pos
+ * for 7-Zip, which reads extra records right after the name. unique holds
+ * the names listed, so none is listed twice (NULL to list them all). FALSE
+ * once no more files fit
+ */
+static gboolean
+rspamd_archive_rar5_unrar_parse(struct rspamd_task *task, struct rspamd_archive *arch,
+								const struct rspamd_rar5_hdr *hdr, uint64_t pos, gsize after_len,
+								struct rspamd_rar5_walk *u, gboolean list, GHashTable *unique,
+								GHashTable *listed_at, uint64_t *next, gboolean *ended, const unsigned char **listed,
+								gsize *listed_len, uint64_t *qo_offset, gboolean *main_ok,
+								int *service_enc)
+{
+	struct rspamd_rar_raw raw;
+	uint64_t type, flags, extra_sz = 0, data_sz = 0, head_size = hdr->size;
+	gboolean overflow;
+
+	*next = G_MAXUINT64;
+	*listed = NULL;
+	*qo_offset = 0;
+	*main_ok = FALSE;
+	*service_enc = -1;
+	raw.p = hdr->h;
+	raw.len = hdr->len;
+	raw.size = hdr->vlen;
+	raw.pos = 4 + hdr->size_len;
+	/* unrar keeps 32 bits of these */
+	type = (uint32_t) rspamd_rar_raw_getv(&raw);
+	flags = (uint32_t) rspamd_rar_raw_getv(&raw);
+
+	if (type == 4) {
+		/* We can't read any further information as headers are encrypted */
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		*ended = TRUE;
+
+		return TRUE;
+	}
+
+	if (flags & 0x1) {
+		/* Have extra zone */
+		extra_sz = rspamd_rar_raw_getv(&raw);
+
+		if (extra_sz >= head_size) {
+			msg_debug_archive("rar archive is invalid (bad extra size)");
+
+			if (u->opening) {
+				/* unrar goes on after this header */
+				u->opening = FALSE;
+				*next = pos + head_size;
+			}
+
+			return TRUE;
+		}
+	}
+
+	if (flags & 0x2) {
+		/* Data zone is presented */
+		data_sz = rspamd_rar_raw_getv(&raw);
+	}
+
+	/* Data past the largest offset: the header is broken, after unrar has read it */
+	overflow = pos + head_size > (uint64_t) G_MAXINT64 || data_sz > (uint64_t) G_MAXINT64 - pos - head_size;
+
+	if (type == 1) {
+		uint64_t arc_flags = rspamd_rar_raw_getv(&raw);
+
+		if (arc_flags & 0x2) {
+			/* Volume number */
+			(void) rspamd_rar_raw_getv(&raw);
+		}
+
+		/* Extra records at the end of the header: a locator of the quick open cache */
+		if (extra_sz > 0 && head_size - extra_sz >= raw.pos) {
+			raw.pos = head_size - extra_sz;
+
+			while (raw.pos + 2 <= head_size) {
+				uint64_t field_size = rspamd_rar_raw_getv(&raw), field_end;
+
+				if (field_size == 0 || field_size > head_size - raw.pos) {
+					break;
+				}
+
+				field_end = raw.pos + field_size;
+				field_size = rspamd_rar_raw_getv(&raw);
+
+				if (raw.pos > field_end) {
+					/* The type runs past the record */
+					break;
+				}
+
+				if (field_size == 0x01 && (rspamd_rar_raw_getv(&raw) & 0x1)) {
+					uint64_t off = rspamd_rar_raw_getv(&raw);
+
+					if (off != 0) {
+						*qo_offset = off + pos;
+					}
+				}
+
+				raw.pos = field_end;
+			}
+		}
+
+		*main_ok = !overflow;
+	}
+
+	if (overflow) {
+		/* unrar goes on after this header while it opens the archive */
+		if (u->opening) {
+			u->opening = FALSE;
+			*next = pos + head_size;
+		}
+
+		return TRUE;
+	}
+
+	if (type == 5 && !u->opening) {
+		/* The end of the archive */
+		*ended = TRUE;
+
+		return TRUE;
+	}
+
+	*next = pos + head_size + data_sz;
+
+	if (type == 1) {
+		u->opening = FALSE;
+	}
+	else if (type == 2 || type == 3) {
+		uint64_t file_flags, uncomp_sz, fname_len;
+		gsize name_off, avail;
+
+		file_flags = rspamd_rar_raw_getv(&raw);
+		uncomp_sz = rspamd_rar_raw_getv(&raw);
+		/* Attributes */
+		(void) rspamd_rar_raw_getv(&raw);
+
+		if (file_flags & 0x2) {
+			/* Unix mtime */
+			(void) rspamd_rar_raw_get4(&raw);
+		}
+		if (file_flags & 0x4) {
+			/* Crc32 */
+			(void) rspamd_rar_raw_get4(&raw);
+		}
+
+		/* Compression and host OS */
+		(void) rspamd_rar_raw_getv(&raw);
+		(void) rspamd_rar_raw_getv(&raw);
+		fname_len = rspamd_rar_raw_getv(&raw);
+		name_off = raw.pos;
+		/* The name is read from the header only: unrar reads zeros after its end */
+		avail = name_off < raw.len ? MIN(raw.len - name_off, fname_len) : 0;
+
+		if (type == 3) {
+			*service_enc = rspamd_rar5_unrar_encrypted(
+				&raw, extra_sz, name_off + (name_off < raw.size ? MIN(raw.size - name_off, MIN(fname_len, 0x10000)) : 0));
+		}
+		else if (file_flags & 0x1) {
+			/* Ignore directories for sanity purposes */
+			msg_debug_archive("skip directory record in a rar archive");
+		}
+		else if (avail == 0) {
+			/* unrar skips a file of no name and goes on */
+			msg_debug_archive("rar archive has a file of no name");
+		}
+		else if (list) {
+			gsize after_name = name_off + avail, ex = head_size - extra_sz;
+			/*
+			 * The extra records: unrar reads them at the end of the header,
+			 * past the name, 7-Zip right after the name
+			 */
+			gboolean encrypted = extra_sz > 0 &&
+								 ((ex >= after_name && ex < hdr->len &&
+								   rspamd_rar5_extra_encrypted(hdr->h + ex, MIN(extra_sz, hdr->len - ex))) ||
+								  (after_name < after_len &&
+								   rspamd_rar5_extra_encrypted(hdr->h + after_name,
+															   MIN(extra_sz, after_len - after_name))));
+
+			if (rspamd_rar5_listed_new(task, listed_at, pos, hdr->h + name_off, avail) &&
+				!rspamd_archive_rar5_add_file(task, arch, hdr->h + name_off, avail, uncomp_sz, data_sz,
+											  encrypted, TRUE, unique)) {
+				return FALSE;
+			}
+
+			*listed = hdr->h + name_off;
+			*listed_len = avail;
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * The quick open cache that a locator points to: a whole service header
+ * named QO, not encrypted, whose data are the copies. unrar reads that
+ * header from the archive, then goes back to save_pos. subhead_enc is
+ * whether the last service header read is encrypted
+ */
+static void
+rspamd_rar5_qo_load(struct rspamd_rar5_qo *qo, const unsigned char *begin, uint64_t file_len,
+					uint64_t qo_pos, uint64_t save_pos, gboolean *subhead_enc)
+{
+	struct rspamd_rar5_hdr hdr;
+	struct rspamd_rar_raw raw;
+	uint64_t flags, extra_sz = 0, data_sz = 0, file_flags, unp_size, name_len, start;
+	gsize name_off;
+
+	qo->loaded = FALSE;
+	qo->begin = begin;
+	qo->file_len = file_len;
+	qo->phys = save_pos;
+
+	if (rspamd_rar5_unrar_read(begin, file_len, NULL, qo_pos, NULL, &hdr) != RSPAMD_RAR5_READ_OK) {
+		return;
+	}
+
+	raw.p = hdr.h;
+	raw.len = hdr.len;
+	raw.size = hdr.vlen;
+	raw.pos = 4 + hdr.size_len;
+
+	if ((uint32_t) rspamd_rar_raw_getv(&raw) != 3) {
+		return;
+	}
+
+	flags = (uint32_t) rspamd_rar_raw_getv(&raw);
+
+	if (flags & 0x1) {
+		extra_sz = rspamd_rar_raw_getv(&raw);
+	}
+
+	if (flags & 0x2) {
+		data_sz = rspamd_rar_raw_getv(&raw);
+	}
+
+	if (extra_sz >= hdr.size) {
+		return;
+	}
+
+	file_flags = rspamd_rar_raw_getv(&raw);
+	unp_size = rspamd_rar_raw_getv(&raw);
+	/* Attributes, mtime, CRC, compression and host OS */
+	(void) rspamd_rar_raw_getv(&raw);
+
+	if (file_flags & 0x2) {
+		(void) rspamd_rar_raw_get4(&raw);
+	}
+	if (file_flags & 0x4) {
+		(void) rspamd_rar_raw_get4(&raw);
+	}
+
+	(void) rspamd_rar_raw_getv(&raw);
+	(void) rspamd_rar_raw_getv(&raw);
+	name_len = rspamd_rar_raw_getv(&raw);
+	name_off = raw.pos;
+	/* The last service header read: whether it is encrypted */
+	*subhead_enc = rspamd_rar5_unrar_encrypted(
+		&raw, extra_sz, name_off + (name_off < raw.size ? MIN(raw.size - name_off, MIN(name_len, 0x10000)) : 0));
+
+	if (data_sz > (uint64_t) G_MAXINT64 - qo_pos - hdr.size ||
+		!rspamd_rar5_unrar_name_is(&raw, name_off, name_len, "QO") || *subhead_enc) {
+		/* Broken, another service, or encrypted (unrar needs the password) */
+		return;
+	}
+
+	if (file_flags & 0x8) {
+		/* An unknown size: up to the end */
+		unp_size = G_MAXUINT64;
+	}
+
+	start = qo_pos + hdr.size;
+	qo->qo_pos = qo_pos;
+	qo->data_start = start;
+	qo->raw_size = unp_size;
+	qo->loaded = qo->used = TRUE;
+	rspamd_rar5_qo_rewind(qo);
+}
+
+/* Whether unrar walking without the cache read a header at pos, as it is in the archive */
+static gboolean
+rspamd_rar5_qo_seen(const GArray *seen, const unsigned char *begin, uint64_t file_len, uint64_t pos,
+					const struct rspamd_rar5_hdr *hdr)
+{
+	unsigned int lo = 0, hi = seen ? seen->len : 0;
+
+	while (lo < hi) {
+		unsigned int mid = (lo + hi) / 2;
+
+		if (g_array_index(seen, uint64_t, mid) < pos) {
+			lo = mid + 1;
+		}
+		else {
+			hi = mid;
+		}
+	}
+
+	if (lo == (seen ? seen->len : 0) || g_array_index(seen, uint64_t, lo) != pos) {
+		return FALSE;
+	}
+
+	/* The same bytes as the archive's, as unrar without the cache reads them */
+	return !hdr->cached ||
+		   (pos < file_len && hdr->len == MIN(hdr->size, file_len - pos) && hdr->vlen == hdr->len &&
+			memcmp(hdr->h, begin + pos, hdr->len) == 0);
+}
+
+/*
+ * unrar opening an archive reads the headers after the main one up to a
+ * file or the end, then goes back to start: it reads the copies of the
+ * cache from the first one again only when it goes back before the last
+ * one read, and then, when the last service header read is encrypted, it
+ * drops the cache and reads the archive where its file is. Returns where
+ * unrar goes on
+ */
+static uint64_t
+rspamd_rar5_qo_probe(struct rspamd_task *task, struct rspamd_archive *arch,
+					 const unsigned char *begin, uint64_t file_len, struct rspamd_rar5_qo *qo,
+					 uint64_t start, GByteArray *scratch, gboolean *subhead_enc, uint64_t max_work)
+{
+	struct rspamd_rar5_walk u;
+	uint64_t pos = start, seek = start;
+
+	memset(&u, 0, sizeof(u));
+
+	while (qo->work <= max_work) {
+		struct rspamd_rar5_hdr hdr;
+		struct rspamd_rar_raw raw;
+		const unsigned char *listed;
+		gsize listed_len;
+		uint64_t next, qo_offset, type;
+		gboolean ended = FALSE, main_ok;
+		int service_enc;
+
+		if (rspamd_rar5_unrar_read(begin, file_len, qo, pos, scratch, &hdr) != RSPAMD_RAR5_READ_OK) {
+			seek = pos + 7;
+			break;
+		}
+
+		seek = pos + hdr.size;
+		raw.p = hdr.h;
+		raw.len = hdr.len;
+		raw.size = hdr.vlen;
+		raw.pos = 4 + hdr.size_len;
+		type = (uint32_t) rspamd_rar_raw_getv(&raw);
+		(void) rspamd_archive_rar5_unrar_parse(task, arch, &hdr, pos, 0, &u, FALSE, NULL, NULL, &next, &ended,
+											   &listed, &listed_len, &qo_offset, &main_ok, &service_enc);
+
+		if (service_enc >= 0) {
+			*subhead_enc = service_enc;
+		}
+
+		if (qo_offset != 0) {
+			rspamd_rar5_qo_load(qo, begin, file_len, qo_offset, pos + hdr.size, subhead_enc);
+		}
+
+		if (type == 2 || type == 5 || next == G_MAXUINT64) {
+			break;
+		}
+
+		pos = next;
+	}
+
+	if (!qo->loaded) {
+		/* The archive file goes back */
+		qo->phys = start;
+
+		return start;
+	}
+
+	if (start < seek && start < qo->last_pos) {
+		if (*subhead_enc) {
+			/* The cache cannot be loaded again: the archive is read where its file is */
+			qo->loaded = FALSE;
+
+			return qo->phys;
+		}
+
+		rspamd_rar5_qo_rewind(qo);
+	}
+
+	return start;
+}
+
+/*
+ * unrar walking with its quick open cache, after the walk without it has
+ * seen a locator: the files it lists from copies, or from headers the walk
+ * without the cache did not read, are listed. The work it takes is bounded
+ * by the size of the archive (unrar reads the copies again each time it
+ * loads the cache): past that, the archive is marked as obfuscated. FALSE
+ * once no more files fit
+ */
+static gboolean
+rspamd_archive_rar5_unrar_qo(struct rspamd_task *task, struct rspamd_archive *arch,
+							 const unsigned char *begin, uint64_t file_len, uint64_t start,
+							 const GArray *seen)
+{
+	struct rspamd_rar5_qo qo;
+	struct rspamd_rar5_walk u;
+	GByteArray *scratch = g_byte_array_new();
+	GHashTable *unique = g_hash_table_new((GHashFunc) g_string_hash, (GEqualFunc) g_string_equal);
+	uint64_t pos = start, max_work = 8 * file_len + 65536;
+	gboolean ended = FALSE, fits = TRUE, subhead_enc = FALSE;
+
+	memset(&qo, 0, sizeof(qo));
+	qo.begin = begin;
+	qo.file_len = file_len;
+	memset(&u, 0, sizeof(u));
+	u.opening = TRUE;
+
+	for (unsigned int i = 0; i < arch->files->len; i++) {
+		struct rspamd_archive_file *f = g_ptr_array_index(arch->files, i);
+
+		if (f->fname) {
+			g_hash_table_add(unique, f->fname);
+		}
+	}
+
+	for (;;) {
+		struct rspamd_rar5_hdr hdr;
+		const unsigned char *listed;
+		gsize listed_len;
+		uint64_t next, qo_offset;
+		gboolean was_opening = u.opening, main_ok;
+		int service_enc;
+		enum rspamd_rar5_read_result r;
+
+		if (qo.work > max_work) {
+			msg_info_task("rar archive takes too long to read as unrar does with its quick open "
+						  "cache: marked as obfuscated");
+			arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+			break;
+		}
+
+		r = rspamd_rar5_unrar_read(begin, file_len, &qo, pos, scratch, &hdr);
+
+		if (r == RSPAMD_RAR5_READ_BROKEN && u.opening) {
+			u.opening = FALSE;
+			pos += 7;
+			continue;
+		}
+
+		if (r != RSPAMD_RAR5_READ_OK) {
+			break;
+		}
+
+		if (!rspamd_archive_rar5_unrar_parse(task, arch, &hdr, pos, hdr.cached ? 0 : file_len - pos, &u,
+											 qo.used && !rspamd_rar5_qo_seen(seen, begin, file_len, pos, &hdr),
+											 unique, NULL, &next, &ended, &listed, &listed_len, &qo_offset,
+											 &main_ok, &service_enc)) {
+			fits = FALSE;
+			break;
+		}
+
+		if (service_enc >= 0) {
+			subhead_enc = service_enc;
+		}
+
+		if (qo_offset != 0) {
+			rspamd_rar5_qo_load(&qo, begin, file_len, qo_offset, pos + hdr.size, &subhead_enc);
+		}
+
+		if (next == G_MAXUINT64) {
+			break;
+		}
+
+		if (was_opening && main_ok) {
+			/* The main header that opens the archive */
+			next = rspamd_rar5_qo_probe(task, arch, begin, file_len, &qo, next, scratch, &subhead_enc,
+										max_work);
+		}
+
+		pos = next;
+	}
+
+	g_hash_table_unref(unique);
+	g_byte_array_free(scratch, TRUE);
+
+	return fits;
+}
+
+/*
+ * unrar without its quick open cache at the header at p: sets where it goes
+ * next (NULL once it stops), the name listed, and where the locator of a
+ * main header points. FALSE once no more files fit
+ */
+static gboolean
+rspamd_archive_rar5_unrar_step(struct rspamd_task *task, struct rspamd_archive *arch,
+							   const unsigned char *begin, const unsigned char *end,
+							   const unsigned char *p, struct rspamd_rar5_walk *w,
+							   gboolean *ended, const unsigned char **listed, gsize *listed_len,
+							   uint64_t *qo_offset, GHashTable *listed_at)
+{
+	struct rspamd_rar5_hdr hdr;
+	uint64_t pos = p - begin, file_len = end - begin, next;
+	gboolean main_ok;
+	int service_enc;
+
+	w->at = NULL;
+	*listed = NULL;
+	*qo_offset = 0;
+
+	switch (rspamd_rar5_unrar_read(begin, file_len, NULL, pos, NULL, &hdr)) {
+	case RSPAMD_RAR5_READ_BROKEN:
+		/* No size, or too short for a type and flags */
+		msg_debug_archive("rar archive is invalid (bad block size)");
+
+		if (w->opening) {
+			/* unrar goes on after the 7 bytes it has read */
+			w->opening = FALSE;
+			w->at = p + 7;
+		}
+
+		return TRUE;
+	case RSPAMD_RAR5_READ_STOP:
+		/* Readers stop at a cut header */
+		msg_debug_archive("rar archive is invalid (truncated block)");
+
+		return TRUE;
+	default:
+		break;
+	}
+
+	if (!rspamd_archive_rar5_unrar_parse(task, arch, &hdr, pos, file_len - pos, w, TRUE, NULL, listed_at,
+										 &next, ended, listed, listed_len, qo_offset, &main_ok, &service_enc)) {
+		return FALSE;
+	}
+
+	if (next != G_MAXUINT64 && next <= file_len) {
+		w->at = begin + next;
+	}
+	else if (next != G_MAXUINT64) {
+		/* Readers stop where the data runs past the end */
+		msg_debug_archive("rar archive is invalid (truncated data)");
+	}
+
+	return TRUE;
+}
+
 static void
 rspamd_archive_process_rar(struct rspamd_task *task,
 						   struct rspamd_mime_part *part)
 {
-	const unsigned char *p, *end, *section_start;
+	const unsigned char *p, *end;
 	const unsigned char rar_v5_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00},
 						rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
-	const unsigned int rar_encrypted_header = 4, rar_main_header = 1,
-					   rar_file_header = 2;
-	uint64_t vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
-					   extra_sz = 0;
+	struct rspamd_rar5_walk w[RSPAMD_RAR5_WALKERS];
 	struct rspamd_archive *arch;
-	struct rspamd_archive_file *f;
-	int r;
+	/* Headers unrar read without the cache, once a locator points to one */
+	GArray *qo_seen = NULL;
+	GHashTable *listed_at = NULL;
+	gboolean ended = FALSE, fits = TRUE;
+	unsigned int r;
 
 	p = part->parsed_data.begin;
 	end = p + part->parsed_data.len;
@@ -738,202 +4569,104 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 		goto end;
 	}
 
-	/* Now we can have either encryption header or archive header */
-	/* Crc 32 */
-	RAR_SKIP_BYTES(sizeof(uint32_t));
-	/* Size */
-	RAR_READ_VINT_SKIP();
-	sz = vint;
-	/* Type */
-	section_start = p;
-	RAR_READ_VINT_SKIP();
-	type = vint;
-	/* Header flags */
-	RAR_READ_VINT_SKIP();
-	flags = vint;
+	/*
+	 * Each reader, NULL once it stops. They agree on the archives rar
+	 * writes; libarchive reads headers from the stream without going to
+	 * their declared end, so bytes that unrar skips can hold other headers
+	 * for it, and the files that either lists are listed
+	 */
+	memset(w, 0, sizeof(w));
+	w[RSPAMD_RAR5_WALK_UNRAR].at = p;
+	w[RSPAMD_RAR5_WALK_UNRAR].opening = TRUE;
+	w[RSPAMD_RAR5_WALK_LIBARCHIVE].at = p;
+	listed_at = g_hash_table_new(rspamd_rar5_listed_hash, rspamd_rar5_listed_equal);
 
-	if (flags & 0x1) {
-		/* Have extra zone */
-		RAR_READ_VINT_SKIP();
-	}
-	if (flags & 0x2) {
-		/* Data zone is presented */
-		RAR_READ_VINT_SKIP();
-		sz += vint;
+	for (;;) {
+		const unsigned char *cur = NULL, *listed = NULL;
+		gsize listed_len = 0;
+		unsigned int readers = 0;
+
+		/* Readers only go forward, so the first header one is at comes first */
+		for (r = 0; r < RSPAMD_RAR5_WALKERS; r++) {
+			if (w[r].at != NULL && (cur == NULL || w[r].at < cur)) {
+				cur = w[r].at;
+			}
+		}
+
+		if (cur == NULL) {
+			break;
+		}
+
+		for (r = 0; r < RSPAMD_RAR5_WALKERS; r++) {
+			if (w[r].at == cur) {
+				readers |= 1u << r;
+			}
+		}
+
+		if (readers & (1u << RSPAMD_RAR5_WALK_UNRAR)) {
+			uint64_t qo_offset, pos = cur - (const unsigned char *) part->parsed_data.begin;
+
+			if (qo_seen) {
+				g_array_append_val(qo_seen, pos);
+			}
+
+			if (!rspamd_archive_rar5_unrar_step(task, arch, part->parsed_data.begin, end, cur,
+												&w[RSPAMD_RAR5_WALK_UNRAR], &ended, &listed, &listed_len,
+												&qo_offset, listed_at)) {
+				fits = FALSE;
+				break;
+			}
+
+			if (qo_offset != 0 && qo_seen == NULL) {
+				qo_seen = g_array_new(FALSE, FALSE, sizeof(uint64_t));
+			}
+		}
+
+		if (readers & (1u << RSPAMD_RAR5_WALK_LIBARCHIVE)) {
+			struct rspamd_rar5_la_file lf;
+
+			rspamd_rar5_la_step(arch, &w[RSPAMD_RAR5_WALK_LIBARCHIVE], cur, end, &lf, &ended);
+
+			if (lf.name != NULL) {
+				/* libarchive shows a name up to its first NUL */
+				const unsigned char *nul = memchr(lf.name, 0, lf.name_len);
+				gsize len = nul ? (gsize) (nul - lf.name) : lf.name_len;
+
+				if (listed != NULL) {
+					const unsigned char *unul = memchr(listed, 0, listed_len);
+
+					if (unul) {
+						listed_len = unul - listed;
+					}
+				}
+
+				if (len > 0 && !(listed && listed_len == len && memcmp(listed, lf.name, len) == 0) &&
+					rspamd_rar5_listed_new(task, listed_at, cur - (const unsigned char *) part->parsed_data.begin,
+										   lf.name, len) &&
+					!rspamd_archive_rar5_add_file(task, arch, lf.name, len, lf.unp_size, lf.data_size,
+												  FALSE, FALSE, NULL)) {
+					fits = FALSE;
+					break;
+				}
+			}
+		}
 	}
 
-	if (type == rar_encrypted_header) {
-		/* We can't read any further information as archive is encrypted */
-		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-		goto end;
-	}
-	else if (type != rar_main_header) {
-		msg_debug_archive("rar archive is invalid (bad main header)");
+	g_hash_table_unref(listed_at);
 
+	if (qo_seen != NULL) {
+		/* unrar again, with its quick open cache */
+		if (fits) {
+			fits = rspamd_archive_rar5_unrar_qo(task, arch, part->parsed_data.begin, part->parsed_data.len,
+												p - (const unsigned char *) part->parsed_data.begin, qo_seen);
+		}
+
+		g_array_free(qo_seen, TRUE);
+	}
+
+	if (fits && !ended && arch->files->len == 0) {
+		/* Readers list the files before a broken or cut header, if any */
 		return;
-	}
-
-	/* Nothing useful in main header */
-	p = section_start;
-	RAR_SKIP_BYTES(sz);
-
-	while (p < end) {
-		gboolean has_extra = FALSE;
-		/* Read the next header */
-		/* Crc 32 */
-		RAR_SKIP_BYTES(sizeof(uint32_t));
-		/* Size */
-		RAR_READ_VINT_SKIP();
-
-		sz = vint;
-		if (sz == 0) {
-			/* Zero sized block - error */
-			msg_debug_archive("rar archive is invalid (zero size block)");
-
-			return;
-		}
-
-		section_start = p;
-		/* Type */
-		RAR_READ_VINT_SKIP();
-		type = vint;
-		/* Header flags */
-		RAR_READ_VINT_SKIP();
-		flags = vint;
-
-		if (flags & 0x1) {
-			/* Have extra zone */
-			RAR_READ_VINT_SKIP();
-			extra_sz = vint;
-			has_extra = TRUE;
-		}
-
-		if (flags & 0x2) {
-			/* Data zone is presented */
-			RAR_READ_VINT_SKIP();
-			sz += vint;
-			comp_sz = vint;
-		}
-
-		if (type != rar_file_header) {
-			p = section_start;
-			RAR_SKIP_BYTES(sz);
-		}
-		else {
-			/* We have a file header, go forward */
-			uint64_t fname_len;
-			bool is_directory = false;
-
-			/* File header specific flags */
-			RAR_READ_VINT_SKIP();
-			flags = vint;
-
-			/* Unpacked size */
-			RAR_READ_VINT_SKIP();
-			uncomp_sz = vint;
-			/* Attributes */
-			RAR_READ_VINT_SKIP();
-
-			if (flags & 0x2) {
-				/* Unix mtime */
-				RAR_SKIP_BYTES(sizeof(uint32_t));
-			}
-			if (flags & 0x4) {
-				/* Crc32 */
-				RAR_SKIP_BYTES(sizeof(uint32_t));
-			}
-			if (flags & 0x1) {
-				/* Ignore directories for sanity purposes */
-				is_directory = true;
-				msg_debug_archive("skip directory record in a rar archive");
-			}
-
-			if (!is_directory) {
-				/* Compression */
-				RAR_READ_VINT_SKIP();
-				/* Host OS */
-				RAR_READ_VINT_SKIP();
-				/* Filename length (finally!) */
-				RAR_READ_VINT_SKIP();
-				fname_len = vint;
-
-				if (fname_len == 0 || fname_len > (gsize) (end - p)) {
-					msg_debug_archive("rar archive is invalid (bad filename size)");
-
-					return;
-				}
-
-				f = g_malloc0(sizeof(*f));
-				f->uncompressed_size = uncomp_sz;
-				f->compressed_size = comp_sz;
-				rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
-
-				if (f->fname) {
-					msg_debug_archive("added rarv5 file: %v", f->fname);
-					if (!rspamd_archive_file_add(task, arch, f)) {
-						f = NULL;
-						goto end;
-					}
-					if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
-						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
-					}
-				}
-				else {
-					g_free(f);
-					f = NULL;
-				}
-
-				/*
-				 * Bound the extra-field block using sizes rather than
-				 * pointer arithmetic: extra_sz is a 64-bit varint and
-				 * "p + fname_len + extra_sz" could otherwise wrap.
-				 */
-				if (f && has_extra && extra_sz > 0 &&
-					fname_len <= (uint64_t) (end - p) &&
-					extra_sz <= (uint64_t) (end - p) - fname_len) {
-					/* Try to find encryption record in extra field */
-					const unsigned char *ex = p + fname_len;
-					const unsigned char *extra_end = ex + extra_sz;
-
-					while (ex < extra_end) {
-						const unsigned char *t;
-						int64_t cur_sz = 0, sec_type = 0;
-						int vint_len;
-
-						vint_len = rspamd_archive_rar_read_vint(ex, extra_end - ex, &cur_sz);
-						if (vint_len == -1) {
-							msg_debug_archive("rar archive is invalid (bad vint)");
-							return;
-						}
-
-						if (cur_sz <= 0 || ex + vint_len + cur_sz > extra_end) {
-							msg_debug_archive("rar archive is invalid (bad extra record size)");
-							break;
-						}
-
-						t = ex + vint_len;
-
-						r = rspamd_archive_rar_read_vint(t, cur_sz, &sec_type);
-						if (r == -1) {
-							msg_debug_archive("rar archive is invalid (bad vint)");
-							return;
-						}
-
-						if (sec_type == 0x01) {
-							f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
-							arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-							break;
-						}
-
-						ex += vint_len + cur_sz;
-					}
-				}
-			}
-
-			/* Restore p to the beginning of the header */
-			p = section_start;
-			RAR_SKIP_BYTES(sz);
-		}
 	}
 
 end:
@@ -1696,22 +5429,50 @@ rspamd_7zip_read_archive_props(struct rspamd_task *task,
 	return p;
 }
 
+/*
+ * 7z stores names as UTF-16LE at any offset of the header, so code units are
+ * assembled from bytes: a uint16_t load there is misaligned and host-endian
+ */
+static inline UChar32
+rspamd_7zip_utf16le_unit(const unsigned char *p, gsize idx)
+{
+	return (UChar32) p[idx * 2] | ((UChar32) p[idx * 2 + 1] << 8);
+}
+
+/*
+ * Converts a UTF-16LE name; an unpaired surrogate becomes U+FFFD and sets
+ * `obfuscated` rather than losing the whole name (and its extension)
+ */
 static GString *
 rspamd_7zip_ucs2_to_utf8(struct rspamd_task *task, const unsigned char *p,
-						 const unsigned char *end)
+						 const unsigned char *end, gboolean *obfuscated)
 {
 	GString *res;
-	goffset dest_pos = 0, src_pos = 0;
+	goffset dest_pos = 0;
+	gsize src_pos = 0;
 	const gsize len = (end - p) / sizeof(uint16_t);
-	uint16_t *up;
-	UChar32 wc;
+	UChar32 wc, trail;
 	UBool is_error = 0;
 
 	res = g_string_sized_new((end - p) * 3 / 2 + sizeof(wc) + 1);
-	up = (uint16_t *) p;
 
 	while (src_pos < len) {
-		U16_NEXT(up, src_pos, len, wc);
+		/* U16_NEXT on units read in little-endian order */
+		wc = rspamd_7zip_utf16le_unit(p, src_pos++);
+
+		if (U16_IS_LEAD(wc) && src_pos < len) {
+			trail = rspamd_7zip_utf16le_unit(p, src_pos);
+
+			if (U16_IS_TRAIL(trail)) {
+				src_pos++;
+				wc = U16_GET_SUPPLEMENTARY(wc, trail);
+			}
+		}
+
+		if (U_IS_SURROGATE(wc)) {
+			wc = 0xFFFD;
+			*obfuscated = TRUE;
+		}
 
 		if (wc > 0) {
 			U8_APPEND(res->str, dest_pos,
@@ -1812,11 +5573,19 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 						goto end;
 					}
 
-					res = rspamd_7zip_ucs2_to_utf8(task, p, fend);
+					gboolean obfuscated = FALSE;
+
+					res = rspamd_7zip_ucs2_to_utf8(task, p, fend, &obfuscated);
 
 					if (res != NULL) {
 						fentry = g_malloc0(sizeof(*fentry));
 						fentry->fname = res;
+
+						if (obfuscated) {
+							fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+							arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+						}
+
 						if (!rspamd_archive_file_add(task, arch, fentry)) {
 							p = NULL;
 							goto end;
@@ -1851,6 +5620,33 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 end:
 	return p;
 }
+
+#ifdef HAVE_USELOCALE
+/*
+ * libarchive converts 7z names (UTF-16LE) to the charset of the current
+ * locale, and rspamd runs in the C locale unless LANG is set: there every
+ * non-ASCII name fails to convert. The names are converted in a UTF-8 locale
+ * instead, created once; (locale_t) 0 if the system has none
+ */
+static locale_t
+rspamd_archive_utf8_locale(void)
+{
+	static locale_t utf8_locale = (locale_t) 0;
+	static gboolean initialized = FALSE;
+
+	if (!initialized) {
+		static const char *names[] = {"C.UTF-8", "en_US.UTF-8", "UTF-8"};
+
+		initialized = TRUE;
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(names) && utf8_locale == (locale_t) 0; i++) {
+			utf8_locale = newlocale(LC_CTYPE_MASK, names[i], (locale_t) 0);
+		}
+	}
+
+	return utf8_locale;
+}
+#endif
 
 static const unsigned char *
 rspamd_7zip_read_next_section(struct rspamd_task *task,
@@ -1892,19 +5688,58 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 			rspamd_archive_files_reset(task, arch);
 
 			struct archive_entry *ae;
+			/* Whether a name that fails to convert is not valid UTF-16 */
+			gboolean names_utf8 = FALSE;
+#ifdef HAVE_USELOCALE
+			locale_t utf8_locale = rspamd_archive_utf8_locale(), old_locale = (locale_t) 0;
 
-			while (archive_read_next_header(a, &ae) == ARCHIVE_OK) {
+			if (utf8_locale != (locale_t) 0) {
+				old_locale = uselocale(utf8_locale);
+				names_utf8 = TRUE;
+			}
+#endif
+
+			/*
+			 * A name that does not convert gives ARCHIVE_WARN: the entry is
+			 * still read, and the entries after it too
+			 */
+			while ((r = archive_read_next_header(a, &ae)) == ARCHIVE_OK || r == ARCHIVE_WARN) {
 				const char *name = archive_entry_pathname_utf8(ae);
+				struct rspamd_archive_file *f = NULL;
+
 				if (name) {
 					msg_debug_archive("7zip: found file %s", name);
-					struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
+					f = g_malloc0(sizeof(*f));
 					f->fname = g_string_new(name);
-					if (!rspamd_archive_file_add(task, arch, f)) {
-						break;
+				}
+				else if (r == ARCHIVE_WARN) {
+					/*
+					 * libarchive gives nothing of a name it cannot convert: the
+					 * file is kept with U+FFFD for a name, and flagged as a bad
+					 * name in a plain header is
+					 */
+					msg_debug_archive("7zip: found file with a name that cannot be converted");
+					f = g_malloc0(sizeof(*f));
+					f->fname = g_string_new("\xEF\xBF\xBD");
+
+					if (names_utf8) {
+						f->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 					}
 				}
+
+				if (f != NULL && !rspamd_archive_file_add(task, arch, f)) {
+					break;
+				}
+
 				archive_read_data_skip(a);
 			}
+
+#ifdef HAVE_USELOCALE
+			if (utf8_locale != (locale_t) 0) {
+				uselocale(old_locale);
+			}
+#endif
 
 			if (archive_read_has_encrypted_entries(a) > 0) {
 				msg_debug_archive("7zip: found encrypted stuff");
@@ -2055,7 +5890,13 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 			/* Optional section */
 			uint16_t optlen = 0;
 
-			RAR_READ_UINT16(optlen);
+			if (end - p < (glong) sizeof(uint16_t)) {
+				msg_debug_archive("gzip archive is invalid (bad int16)");
+				return;
+			}
+
+			optlen = p[0] + (p[1] << 8);
+			p += sizeof(uint16_t);
 
 			if (end <= p + optlen) {
 				msg_debug_archive("gzip archive is invalid, bad extra length: %d",
