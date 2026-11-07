@@ -121,7 +121,10 @@ local function init()
   end
 end
 
-exports.maybe_process_mime_part = function(part, task)
+-- `keep_text`: the part is text that only looks like some format (e.g. a
+-- text/plain part with "%PDF-1.4" in it); its content is read, but kept aside
+-- as for archives, so that the part stays text
+exports.maybe_process_mime_part = function(part, task, keep_text)
   if not modules_by_mime_type then
     init()
   end
@@ -154,7 +157,7 @@ exports.maybe_process_mime_part = function(part, task)
     if data then
       lua_util.debugm(N, task, "extracted content from %s: %s type",
           pair[1], type(data))
-      if part:is_archive() then
+      if part:is_archive() or keep_text then
         task:cache_set(cache_key(part), data)
       else
         part:set_specific(data)

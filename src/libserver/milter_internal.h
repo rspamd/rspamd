@@ -80,6 +80,7 @@ struct rspamd_milter_private {
 	gboolean quarantine_on_reject;
 	gboolean no_action;
 	gboolean hdr_leadspc; /* SMFIP_HDR_LEADSPC has been negotiated */
+	gboolean eob_pending; /* end of body is being processed, no reply yet */
 };
 
 enum rspamd_milter_io_cmd {

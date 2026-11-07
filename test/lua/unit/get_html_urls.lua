@@ -447,6 +447,13 @@ Content-Type: text/html
     { 'www.example.com/path', 'http://www.example.com/path' },
     { 'www.example.com?a=b', 'http://www.example.com?a=b' },
     { '//example.com/x', 'http://example.com/x' },
+    -- browsers drop tabs and line breaks and take backslashes as slashes
+    { '\\\\example.com/x', 'http://example.com/x' },
+    { '/\\example.com/x', 'http://example.com/x' },
+    { '/&#9;/example.com/x', 'http://example.com/x' },
+    { 'mai&#9;lto:x@y.com', 'mailto:x@y.com' },
+    -- `://` later in the link does not make it absolute
+    { '//example.com/#://', 'http://example.com/#://' },
     -- explicit schemes are not touched by the heuristic at all
     { 'http://user@host.com/', 'http://user@host.com/' },
     { 'mailto:x@y.com', 'mailto:x@y.com' },

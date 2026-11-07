@@ -26,6 +26,7 @@
 #include "contrib/libottery/ottery.h"
 #include "libcryptobox/cryptobox.h"
 #include "libserver/http/http_message.h"
+#include "libutil/str_util.h"
 
 #include <vector>
 #include <utility>
@@ -301,6 +302,48 @@ TEST_SUITE("rspamd_utils")
 
 		close(fd);
 		unlink(path.c_str());
+	}
+
+	TEST_CASE("rspamd_strto* reject an empty string, also as (NULL, 0)")
+	{
+		glong l = 42;
+		gulong ul = 42;
+		uint64_t u64 = 42;
+
+		/* An empty std::string_view is (nullptr, 0): no arithmetic on it (UBSan) */
+		CHECK_FALSE(rspamd_strtol(nullptr, 0, &l));
+		CHECK_FALSE(rspamd_strtoul(nullptr, 0, &ul));
+		CHECK_FALSE(rspamd_strtou64(nullptr, 0, &u64));
+		CHECK_FALSE(rspamd_xstrtoul(nullptr, 0, &ul));
+		/* An empty string is not zero */
+		CHECK_FALSE(rspamd_strtol("", 0, &l));
+		CHECK_FALSE(rspamd_strtoul("", 0, &ul));
+		CHECK_FALSE(rspamd_strtou64("", 0, &u64));
+		CHECK_FALSE(rspamd_xstrtoul("", 0, &ul));
+		CHECK(l == 42);
+		CHECK(ul == 42);
+		CHECK(u64 == 42);
+
+		CHECK(rspamd_strtol("-12", 3, &l));
+		CHECK(l == -12);
+		CHECK(rspamd_strtoul("12", 2, &ul));
+		CHECK(ul == 12);
+		CHECK(rspamd_strtou64("12", 2, &u64));
+		CHECK(u64 == 12);
+		CHECK(rspamd_xstrtoul("1f", 2, &ul));
+		CHECK(ul == 0x1f);
+	}
+
+	TEST_CASE("rspamd_xstrtoul detects an overflow")
+	{
+		/* All the hex digits a gulong holds, then one more */
+		std::string max(sizeof(gulong) * 2, 'f');
+		std::string over = "1" + std::string(sizeof(gulong) * 2, '0');
+		gulong ul = 42;
+
+		CHECK(rspamd_xstrtoul(max.data(), max.size(), &ul));
+		CHECK(ul == G_MAXULONG);
+		CHECK_FALSE(rspamd_xstrtoul(over.data(), over.size(), &ul));
 	}
 }
 

@@ -2655,13 +2655,16 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 	/* Leftover */
 	if (state == parser_state::ampersand && h > e) {
 		/* Unfinished entity, copy as is */
+		auto *t_before = t;
+
 		if (replace_entity()) {
 			/* To follow FSM semantics */
 			h++;
 		}
-		else {
+		else if (t == t_before) {
 			h = e; /* Include the last & */
 		}
+		/* Else it is copied undecoded already, which must not be copied again */
 
 		/* Leftover after replacement */
 		if (h < end && t + (end - h) <= end) {

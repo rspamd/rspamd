@@ -682,6 +682,12 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 			}
 			break;
 		case received_part_type::RSPAMD_RECEIVED_PART_FOR:
+			/* A header can repeat `for`: the last clause wins */
+			if (rh.for_addr) {
+				rspamd_email_address_free(rh.for_addr);
+				rh.for_addr = nullptr;
+			}
+
 			rh.for_mbox.assign_copy(part.data);
 			rh.for_addr = rspamd_email_address_from_smtp(rh.for_mbox.data(),
 														 rh.for_mbox.size());
@@ -1061,5 +1067,32 @@ TEST_SUITE("received")
 		auto parts = rspamd::mime::received_spill(input, date_pos);
 		REQUIRE(!parts.empty());
 		CHECK(parts.front().comments.size() <= rspamd::mime::max_received_comments);
+	}
+
+	TEST_CASE("received with several for clauses keeps one address")
+	{
+		/*
+		 * Every `for` clause used to overwrite for_addr without freeing the
+		 * previous address, so all but the last one leaked (LeakSanitizer
+		 * reports it at exit). The last clause wins, for_mbox and for_addr
+		 * must describe the same mailbox.
+		 */
+		using namespace std::string_view_literals;
+		rspamd_mempool_t *pool = rspamd_mempool_new_default("rcvd test", 0);
+
+		{
+			rspamd::mime::received_header_chain chain;
+			auto in = "from a by b for <a@b.c> for <d@e.f> for <g@h.i>; "
+					  "Tue, 3 Nov 2026 12:00:00 +0000"sv;
+			REQUIRE(rspamd::mime::received_header_parse(chain, pool, in, nullptr));
+			auto rh = chain.get_received(0);
+			REQUIRE(rh.has_value());
+			const auto &hdr = rh.value().get();
+			CHECK(hdr.for_mbox.as_view() == "<g@h.i>"sv);
+			REQUIRE(hdr.for_addr != nullptr);
+			CHECK(std::string_view{hdr.for_addr->addr, hdr.for_addr->addr_len} == "g@h.i"sv);
+		}
+
+		rspamd_mempool_delete(pool);
 	}
 }

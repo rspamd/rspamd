@@ -520,7 +520,14 @@ local function check_mime_type(task)
 
             local fl = arch:get_files_full(1000)
 
-            local nfiles = #fl
+            -- Other names of the same files do not count as files
+            local nfiles, first_file = 0, nil
+            for _, f in ipairs(fl) do
+              if not f.alias then
+                nfiles = nfiles + 1
+                first_file = first_file or f
+              end
+            end
 
             for _, f in ipairs(fl) do
               if f['encrypted'] then
@@ -540,20 +547,23 @@ local function check_mime_type(task)
               end
             end
 
-            if nfiles == 1 and fl[1].name then
+            if nfiles == 1 and first_file.name then
               -- We check that extension of the file inside archive is
-              -- the same as double extension of the file
+              -- the same as double extension of the file, by any name it has
               local _, ext2 = gen_extension(filename)
 
               if ext2 and #ext2 > 0 then
-                local enc_ext = gen_extension(fl[1].name)
+                for _, f in ipairs(fl) do
+                  local enc_ext = f.name and gen_extension(f.name)
 
-                if enc_ext
-                    and settings['bad_extensions'][enc_ext]
-                    and not tonumber(ext2)
-                    and enc_ext ~= ext2 then
-                  task:insert_result(settings['symbol_double_extension'], 2.0,
-                      string.format("%s!=%s", ext2, enc_ext))
+                  if enc_ext
+                      and settings['bad_extensions'][enc_ext]
+                      and not tonumber(ext2)
+                      and enc_ext ~= ext2 then
+                    task:insert_result(settings['symbol_double_extension'], 2.0,
+                        string.format("%s!=%s", ext2, enc_ext))
+                    break
+                  end
                 end
               end
             end

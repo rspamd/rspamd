@@ -25,6 +25,36 @@ context('ARC seal completion', function()
       headers['ARC-Authentication-Results'][#headers['ARC-Authentication-Results'] + 1] = {
         decoded = aar, value = aar }
     end
+    if opts.aar_from then
+      -- What each forwarder saw in From
+      for n, hdr in ipairs(headers['ARC-Authentication-Results']) do
+        local i = count - n + 1
+        if opts.aar_from[i] then
+          hdr.decoded = string.format('i=%d; forwarder%d.example; dmarc=pass header.from=%s',
+            i, i, opts.aar_from[i])
+          hdr.value = hdr.decoded
+        end
+      end
+    end
+    if opts.aar_text then
+      -- The results part of the AAR of an instance, as its forwarder wrote it
+      for n, hdr in ipairs(headers['ARC-Authentication-Results']) do
+        local i = count - n + 1
+        if opts.aar_text[i] then
+          hdr.decoded = string.format('i=%d; forwarder%d.example; %s', i, i, opts.aar_text[i])
+          hdr.value = hdr.decoded
+        end
+      end
+    end
+    if opts.aar_decoded then
+      -- What decoding encoded-words in an AAR gives, its raw value unchanged
+      for n, hdr in ipairs(headers['ARC-Authentication-Results']) do
+        local i = count - n + 1
+        if opts.aar_decoded[i] then
+          hdr.decoded = string.format('i=%d; forwarder%d.example; %s', i, i, opts.aar_decoded[i])
+        end
+      end
+    end
     if opts.drop_aar then
       table.remove(headers['ARC-Authentication-Results'], count - opts.drop_aar + 1)
     end
@@ -42,12 +72,14 @@ context('ARC seal completion', function()
       end,
     }
     local check
+    local registered = {}
     local config = {
       get_all_opt = function(_, name)
         if name == 'arc' then return opts end
       end,
       register_symbol = function(_, symbol)
         if symbol.name == 'ARC_CHECK' then check = symbol.callback end
+        if symbol.name then registered[symbol.name] = symbol.callback end
         return 1
       end,
       register_dependency = function() end,
@@ -71,6 +103,10 @@ context('ARC seal completion', function()
         verify = function(_, header, callback, kind)
           local index = tonumber(header:match('i=(%d+)'))
           local domain = 'forwarder' .. index .. '.example'
+          if kind == 'arc-seal' and opts.seal_domain then
+            -- The d= the C parser read, which verified the seal
+            domain = opts.seal_domain
+          end
           if kind == 'arc-sign' then
             if opts.signature_immediate then
               return false, 'cannot start verification'
@@ -97,7 +133,7 @@ context('ARC seal completion', function()
     assert(compat_env.loadfile(plugin, 't', env))()
     assert(check, 'ARC_CHECK must be registered')
     check(task)
-    return callbacks, symbols, cache, requested
+    return callbacks, symbols, cache, requested, registered
   end
 
   local function assert_pending(symbols, cache)
@@ -137,9 +173,9 @@ context('ARC seal completion', function()
     end)
   end
 
-  test('trusted AAR selection follows instance order', function()
+  test('trusted AARs are kept in instance order', function()
     local callbacks, symbols, cache = start_checks({ whitelisted_signers_map = {
-      ['forwarder1.example'] = true, ['forwarder3.example'] = true } })
+      ['forwarder2.example'] = true, ['forwarder3.example'] = true } })
     callbacks[3](true)
     assert_pending(symbols, cache)
     callbacks[2](true)
@@ -147,7 +183,40 @@ context('ARC seal completion', function()
     callbacks[1](true)
     assert_equal(1, #symbols.ARC_ALLOW)
     assert_equal(2, #symbols.ARC_ALLOW_TRUSTED)
-    assert_equal('3', cache.arc_trusted_aar.i)
+    assert_equal(2, #cache.arc_trusted_aar)
+    assert_equal('2', cache.arc_trusted_aar[1].i)
+    assert_equal('3', cache.arc_trusted_aar[2].i)
+  end)
+
+  -- Anyone can add their own ARC set after a genuine one of a trusted
+  -- forwarder, and change the message, From included
+  for name, signers in pairs({
+    ['an untrusted later hop'] = { ['forwarder1.example'] = true },
+    ['an untrusted hop between'] = { ['forwarder1.example'] = true, ['forwarder3.example'] = true },
+  }) do
+    test('a trusted forwarder before ' .. name .. ' is not trusted', function()
+      local _, symbols, cache = start_checks({ synchronous = true,
+        whitelisted_signers_map = signers })
+      assert_equal(1, #symbols.ARC_ALLOW)
+      if signers['forwarder3.example'] then
+        assert_equal(1, #symbols.ARC_ALLOW_TRUSTED)
+        assert_equal('forwarder3.example:s=arc:i=3', symbols.ARC_ALLOW_TRUSTED[1].option)
+        assert_equal(1, #cache.arc_trusted_aar)
+        assert_equal('3', cache.arc_trusted_aar[1].i)
+      else
+        assert_nil(symbols.ARC_ALLOW_TRUSTED)
+        assert_nil(cache.arc_trusted_aar)
+      end
+    end)
+  end
+
+  test('an unverified newest seal cuts the trust of earlier forwarders', function()
+    local _, symbols, cache = start_checks({ synchronous = true, failures = { [3] = true },
+      whitelist = { ['forwarder3.example'] = true },
+      whitelisted_signers_map = { ['forwarder2.example'] = true, ['forwarder3.example'] = true } })
+    assert_equal(1, #symbols.ARC_ALLOW)
+    assert_nil(symbols.ARC_ALLOW_TRUSTED)
+    assert_nil(cache.arc_trusted_aar)
   end)
 
   for _, immediate in ipairs({ { [1] = true }, { [3] = true }, { true, true, true } }) do
@@ -198,7 +267,8 @@ context('ARC seal completion', function()
       assert_nil(symbols.ARC_REJECT)
       assert_equal(1, #symbols.ARC_ALLOW_TRUSTED)
       assert_equal('forwarder3.example:s=arc:i=3', symbols.ARC_ALLOW_TRUSTED[1].option)
-      assert_equal('3', cache.arc_trusted_aar.i)
+      assert_equal(1, #cache.arc_trusted_aar)
+      assert_equal('3', cache.arc_trusted_aar[1].i)
     end)
   end
 
@@ -233,12 +303,13 @@ context('ARC seal completion', function()
 
   test('pending newest seal waits for cached earlier checks', function()
     local callbacks, symbols, cache = start_checks({ synchronous = { true, true },
-      whitelisted_signers_map = { ['forwarder1.example'] = true } })
+      whitelisted_signers_map = { ['forwarder1.example'] = true, ['forwarder2.example'] = true,
+        ['forwarder3.example'] = true } })
     assert_pending(symbols, cache)
     callbacks[3](true)
     assert_equal(1, #symbols.ARC_ALLOW)
-    assert_equal(1, #symbols.ARC_ALLOW_TRUSTED)
-    assert_equal('1', cache.arc_trusted_aar.i)
+    assert_equal(3, #symbols.ARC_ALLOW_TRUSTED)
+    assert_equal('1', cache.arc_trusted_aar[1].i)
   end)
 
   test('failed AMS starts no seal verification', function()
@@ -281,4 +352,250 @@ context('ARC seal completion', function()
       assert_pending(symbols, cache)
     end)
   end
+
+  test('trust follows the d= that verified the seal', function()
+    -- The C parser verified the seal with d=attacker.example, whatever d= our own split saw
+    local callbacks, symbols, cache = start_checks({ count = 1, seal_domain = 'attacker.example',
+      whitelisted_signers_map = { ['forwarder1.example'] = true } })
+    callbacks[1](true)
+    assert_equal(1, #symbols.ARC_ALLOW)
+    assert_nil(symbols.ARC_ALLOW_TRUSTED)
+    assert_nil(cache.arc_trusted_aar)
+  end)
+
+  -- Runs ARC_DMARC_ADJUSTMENT after a chain where forwarder3 is trusted
+  local function adjust_dmarc(opts)
+    local check_opts = { synchronous = true, aar_from = opts.aar_from, aar_text = opts.aar_text,
+      aar_decoded = opts.aar_decoded,
+      signature_failure = opts.signature_failure, whitelist = opts.whitelist,
+      whitelisted_signers_map = opts.signers or { ['forwarder3.example'] = true } }
+    local _, _, cache, _, registered = start_checks(check_opts)
+    local adjust = registered.ARC_DMARC_ADJUSTMENT
+    assert(adjust, 'ARC_DMARC_ADJUSTMENT must be registered')
+    local adjusted = {}
+    local task = {
+      cache_get = function(_, name) return cache[name] end,
+      has_symbol = function(_, name) return name == 'DMARC_POLICY_REJECT' end,
+      get_from = function(_, flavour)
+        -- What DMARC has checked
+        assert(flavour[1] == 'mime' and flavour[2] == 'orig', 'the original From is expected')
+        return opts.from
+      end,
+      adjust_result = function(_, name, weight)
+        table.insert(adjusted, { name = name, weight = weight })
+      end,
+      get_mempool = function() return nil end,
+      get_resolver = function()
+        return { idna_convert_utf8 = function(_, name)
+          -- What does not convert becomes U+FFFD, as with ICU
+          return (name:gsub('[bB]\195[\164\132]nk', 'xn--bnk-sna'):gsub('[\254\255]', '\239\191\189'))
+        end }
+      end,
+    }
+    adjust(task)
+    return adjusted
+  end
+
+  local function from(...)
+    local res = {}
+    for _, domain in ipairs({ ... }) do
+      table.insert(res, { addr = 'user@' .. domain, domain = domain })
+    end
+    return res
+  end
+
+  test('DMARC reject is adjusted for the From that a trusted forwarder saw', function()
+    local adjusted = adjust_dmarc({ from = from('Sender.Example') })
+    assert_equal(1, #adjusted)
+    assert_equal('DMARC_POLICY_REJECT', adjusted[1].name)
+    assert_equal(0.1, adjusted[1].weight)
+  end)
+
+  test('a comment before the DMARC result does not stop the adjustment', function()
+    local adjusted = adjust_dmarc({ from = from('sender.example'), aar_text = {
+      [3] = '(forwarder result) dmarc=pass header.from=sender.example' } })
+    assert_equal(1, #adjusted)
+  end)
+
+  test('a DMARC result in capitals or with a version adjusts the reject', function()
+    -- Methods, results and names of properties are case-insensitive (RFC 8601)
+    for _, text in ipairs({
+      'DMARC=PASS Header.From=sender.example',
+      'dmarc/1=pass header.from=sender.example',
+      'dmarc / 1 = pass (policy=none) header.from=sender.example',
+    }) do
+      assert_equal(1, #adjust_dmarc({ from = from('sender.example'), aar_text = { [3] = text } }), text)
+    end
+  end)
+
+  test('a pass after the DMARC result of an element is not its result', function()
+    -- Text that a comment failed to hide, after the result the forwarder wrote
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'dmarc=fail (x)dmarc=pass header.from=bank.example' } }))
+  end)
+
+  test('an encoded-word in an AAR comment adds no result', function()
+    -- The sender that a forwarder wrote into a comment; decoded, it would close
+    -- the comment and add a DMARC pass
+    local spf = 'dkim=none; spf=pass (fwd.example: domain of "%s@attacker.example" ' ..
+        'designates 192.0.2.1 as permitted sender) smtp.mailfrom=x'
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'),
+      aar_text = { [3] = string.format(spf,
+          '=?us-ascii?q?x=29=3B_dmarc=3Dpass_header=2Efrom=3Dbank=2Eexample_=28y?=') },
+      aar_decoded = { [3] = string.format(spf,
+          'x); dmarc=pass header.from=bank.example (y') } }))
+  end)
+
+  test('DMARC pass for another domain does not adjust the reject', function()
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example') }))
+  end)
+
+  test('a whole address in header.from is matched by its domain', function()
+    local adjusted = adjust_dmarc({ from = from('bank.example'),
+      aar_from = { [3] = 'someone@Bank.Example' } })
+    assert_equal(1, #adjusted)
+  end)
+
+  test('DMARC pass of a forwarder before an untrusted hop does not adjust', function()
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'),
+      aar_from = { [1] = 'bank.example', [3] = 'attacker.example' },
+      signers = { ['forwarder1.example'] = true } }))
+  end)
+
+  test('DMARC pass of any trusted forwarder adjusts the reject', function()
+    local adjusted = adjust_dmarc({ from = from('bank.example'),
+      aar_from = { [2] = 'bank.example', [3] = 'list.example' },
+      signers = { ['forwarder2.example'] = true, ['forwarder3.example'] = true } })
+    assert_equal(1, #adjusted)
+  end)
+
+  for name, f in pairs({
+    ['no From'] = false,
+    ['two From'] = from('sender.example', 'sender.example'),
+    ['From without a domain'] = { { addr = 'user', domain = '' } },
+  }) do
+    test('DMARC reject is not adjusted with ' .. name, function()
+      assert_equal(0, #adjust_dmarc({ from = f or nil }))
+    end)
+  end
+
+  -- Another implementation may not escape the sender in its comments
+  test('a DMARC result in the comment of an SPF result does not adjust', function()
+    local adjusted = adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=pass (x)dmarc=pass header.from=bank.example(y) smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail header.from=bank.example' } })
+    assert_equal(0, #adjusted)
+  end)
+
+  test('two DMARC results in one AAR do not adjust', function()
+    -- The sender split the comment, and the forwarder wrote its own result
+    local adjusted = adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=pass (x); dmarc=pass header.from=bank.example (y) smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail header.from=bank.example' } })
+    assert_equal(0, #adjusted)
+  end)
+
+  test('an empty element does not hide the DMARC result after it', function()
+    -- The sender ended its text with ";;", which ended the split there
+    local adjusted = adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=pass (x); dmarc=pass header.from=bank.example;; (y) smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail header.from=bank.example' } })
+    assert_equal(0, #adjusted)
+  end)
+
+  test('a quote or a comment of the sender does not hide the DMARC result after it', function()
+    -- The quote is closed by one the forwarder writes after its own result
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=fail (x); dmarc=pass header.from=bank.example ") smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail (p=reject) header.from=bank.example; dkim=none reason="no signature"' } }))
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = 'spf=fail (x); dmarc=pass header.from=bank.example (\\) smtp.mailfrom=a@attacker.example; '
+          .. 'dmarc=fail (p=reject) header.from=bank.example; x-note=none (closing))' } }))
+  end)
+
+  test('a comment in front of an injected pass does not hide it from the count', function()
+    for _, comment in ipairs({ '(;)', '(a\\))', '(\\()' }) do
+      assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+        [3] = 'spf=fail (x); ' .. comment .. ' dmarc=pass header.from=bank.example ") smtp.mailfrom=a@attacker.example; '
+            .. 'dmarc=fail (p=reject) header.from=bank.example; dkim=none reason="no signature"' } }), comment)
+    end
+  end)
+
+  test('an AAR too long to be read gives no DMARC result to trust', function()
+    local dkim = {}
+    for i = 1, 240 do
+      dkim[#dkim + 1] = string.format('dkim=pass header.d=sig%d.bank.example header.s=selector%d-long-selector-name', i, i)
+    end
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = table.concat(dkim, '; ') .. '; dmarc=pass header.from=bank.example' } }))
+  end)
+
+  test('a chain that fails before its seals are read is not sealed further', function()
+    local _, symbols, cache = start_checks({ synchronous = true, count = 51 })
+    assert_not_nil(symbols.ARC_INVALID)
+    assert_not_nil(cache['arc-failure'])
+    -- Comments nested deeper than the parser goes
+    _, symbols, cache = start_checks({ synchronous = true, aar_text = {
+      [3] = string.rep('(', 420) .. 'dmarc=pass' } })
+    assert_not_nil(symbols.ARC_INVALID)
+    assert_not_nil(cache['arc-failure'])
+  end)
+
+  test('a method property makes no DMARC result', function()
+    assert_equal(0, #adjust_dmarc({ from = from('bank.example'), aar_text = {
+      [3] = '"x" method=dmarc dmarc=pass header.from=bank.example' } }))
+  end)
+
+  test('a DMARC result in a comment does not lift the weight of trust', function()
+    local _, symbols = start_checks({ synchronous = true,
+      whitelisted_signers_map = { ['forwarder3.example'] = true }, aar_text = {
+        [3] = 'dmarc=fail header.from=bank.example; '
+            .. 'spf=pass (x)dmarc=pass header.from=bank.example(y) smtp.mailfrom=a@attacker.example' } })
+    assert_equal(1, #symbols.ARC_ALLOW_TRUSTED)
+    assert_equal(0.0, symbols.ARC_ALLOW_TRUSTED[1].weight)
+  end)
+
+  test('a DMARC result split off a comment does not lift the weight of trust', function()
+    -- The forwarder wrote its own result first, the sender split the comment
+    local _, symbols = start_checks({ synchronous = true,
+      whitelisted_signers_map = { ['forwarder3.example'] = true }, aar_text = {
+        [3] = 'dmarc=fail header.from=bank.example (policy=reject); spf=pass (x); '
+            .. 'dmarc=pass header.from=bank.example; (y) smtp.mailfrom=a@attacker.example' } })
+    assert_equal(1, #symbols.ARC_ALLOW_TRUSTED)
+    assert_equal(0.0, symbols.ARC_ALLOW_TRUSTED[1].weight)
+  end)
+
+  test('domains that do not convert to A-labels never match', function()
+    local adjusted = adjust_dmarc({ from = from('\255.example'), aar_text = {
+      [3] = 'dmarc=pass header.from=\254.example' } })
+    assert_equal(0, #adjusted)
+  end)
+
+  for name, hfrom in pairs({
+    quoted = '"bank.example"',
+    ['with a trailing dot'] = 'bank.example.',
+    ['in angle brackets'] = '<bank.example>',
+    ['as A-label of an IDN From'] = 'XN--BNK-SNA.example',
+  }) do
+    test('header.from ' .. name .. ' matches the From domain', function()
+      local f = name:find('IDN') and from('B\195\132nk.example') or from('bank.example')
+      local adjusted = adjust_dmarc({ from = f, aar_text = {
+        [3] = 'dmarc=pass header.from=' .. hfrom } })
+      assert_equal(1, #adjusted)
+    end)
+  end
+
+  test('a newest AMS forgiven by the whitelist earns no trust', function()
+    -- Nothing binds the sealed AARs to this message then: they can be
+    -- replayed with another body and From
+    local callbacks, symbols, cache = start_checks({ synchronous = true, signature_failure = true,
+      whitelist = { ['forwarder3.example'] = true },
+      whitelisted_signers_map = { ['forwarder3.example'] = true } })
+    assert_nil(next(callbacks))
+    assert_equal(1, #symbols.ARC_ALLOW)
+    assert_nil(symbols.ARC_ALLOW_TRUSTED)
+    assert_nil(cache.arc_trusted_aar)
+    assert_equal(0, #adjust_dmarc({ from = from('sender.example'), signature_failure = true,
+      whitelist = { ['forwarder3.example'] = true } }))
+  end)
 end)

@@ -25,6 +25,7 @@ local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local bit = require "bit"
 local rspamd_url = require "rspamd_url"
+local lua_content = require "lua_content"
 local url_flags_tab = rspamd_url.flags
 
 -- Different text parts
@@ -660,9 +661,12 @@ rspamd_config.R_BAD_CTE_7BIT = {
     local tp = task:get_text_parts() or {}
 
     for _, p in ipairs(tp) do
-      local cte = p:get_mimepart():get_cte() or ''
-      if cte ~= '8bit' and p:has_8bit_raw() then
-        local _, _, attrs = p:get_mimepart():get_type_full()
+      local mp = p:get_mimepart()
+      local cte = mp:get_cte() or ''
+      -- The 8-bit bytes of a document that a content module has read (e.g. a
+      -- PDF shown as text) are not text that lacks its encoding
+      if cte ~= '8bit' and p:has_8bit_raw() and not lua_content.get_specific(mp, task) then
+        local _, _, attrs = mp:get_type_full()
         local mul = 1.0
         local params = { cte }
         if attrs then

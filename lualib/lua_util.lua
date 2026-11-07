@@ -1846,8 +1846,14 @@ end
 local tspecial = lpeg.S "()<>,;:\\\"/[]?= \t\v"
 local special_match = lpeg.P((1 - tspecial) ^ 0 * tspecial ^ 1)
 exports.maybe_smtp_quote_value = function(str)
+  -- Control characters have no place in a header: a reader can end a quoted
+  -- string at CR or LF, and take what follows as the next element
+  str = str:gsub('%c', function(c)
+    return c == '\t' and c or '?'
+  end)
   if special_match:match(str) then
-    return string.format('"%s"', str:gsub('"', '\\"'))
+    -- A backslash is escaped too: one at the end would escape the closing quote
+    return string.format('"%s"', (str:gsub('[\\"]', '\\%0')))
   end
 
   return str

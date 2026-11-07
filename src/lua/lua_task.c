@@ -761,8 +761,13 @@ LUA_FUNCTION_DEF(task, get_images);
  * Returns list of all archives found in a task as a table of `rspamd_archive`.
  * Each archive has the following methods available:
  *
- * * `get_files` - return list of strings with filenames inside archive
- * * `get_files_full` - return list of tables with all information about files
+ * * `get_files` - return list of strings with filenames inside archive; with
+ *   a number `n`, those of the first `n` files of its directory and of its
+ *   local headers, each with the other names it is listed with (Unicode Path)
+ * * `get_files_full` - return list of tables with all information about files,
+ *   limited as `get_files`; `alias` is true for another name of a file listed
+ *   already (the name of its local header, its Unicode Path), which counts of
+ *   files skip
  * * `is_encrypted` - return true if an archive is encrypted
  * * `is_truncated` - return true if the archive file list hit the task limit
  * * `get_type` - return string representation of image's type (e.g. 'zip')
@@ -1413,6 +1418,10 @@ LUA_FUNCTION_DEF(task, add_timer);
  * @method task:rewrite_html_urls(callback)
  * Rewrites URLs in HTML parts using the specified Lua callback function.
  * The callback receives (task, url) and should return the replacement URL or nil.
+ * The url is the attribute value as browsers read it, the one the replacement
+ * takes the place of: it may differ from the text of task:get_urls(), e.g. an
+ * unquoted value with a quote in it (`href=http://x.example/a"b`), so compare
+ * hosts or parsed URLs rather than text.
  * @param {function} callback Lua function to call for each URL
  * @return {table|nil} table of rewritten HTML parts indexed by part number, or nil on error
  */
@@ -1422,6 +1431,7 @@ LUA_FUNCTION_DEF(task, rewrite_html_urls);
  * @method task:get_html_urls()
  * Extracts all URLs from HTML parts without rewriting.
  * Useful for async URL checking workflows where URLs need to be batched.
+ * Each url is the one task:rewrite_html_urls() gives to its callback.
  * @return {table|nil} table indexed by part number, each containing an array of URL info tables with keys: url, attr, tag
  */
 /* Implemented in lua_html_url_rewrite.cxx as C++ binding */
@@ -4215,7 +4225,8 @@ lua_import_email_address(lua_State *L, struct rspamd_task *task,
 	}
 	else {
 		/* Construct addr */
-		len = addr->domain_len + addr->user_len + 1;
+		/* '@' and the terminating zero written by rspamd_snprintf */
+		len = addr->domain_len + addr->user_len + 2;
 		addr->addr = (const char *) rspamd_mempool_alloc(task->task_pool, len);
 		addr->addr_len = rspamd_snprintf((char *) addr->addr, len, "%*s@%*s",
 										 (int) addr->user_len, addr->user,
@@ -4378,7 +4389,7 @@ lua_task_set_recipients(lua_State *L)
 				/* Clear old addresses */
 				PTR_ARRAY_FOREACH(ptrs, i, tmp)
 				{
-					rspamd_email_address_free(addr);
+					rspamd_email_address_free(tmp);
 				}
 
 				g_ptr_array_set_size(ptrs, 0);
@@ -4686,7 +4697,14 @@ lua_task_set_from(lua_State *L)
 		else if (paddr) {
 			/* SMTP from case */
 			if (lua_import_email_address(L, task, 3, &addr)) {
-				task->from_envelope_orig = *paddr;
+				if (task->from_envelope_orig) {
+					/* Keep the original sender, free the previous rewrite */
+					rspamd_email_address_free(*paddr);
+				}
+				else {
+					task->from_envelope_orig = *paddr;
+				}
+
 				task->from_envelope = addr;
 				lua_pushboolean(L, true);
 			}
@@ -8381,30 +8399,65 @@ lua_archive_get_type(lua_State *L)
 	return 1;
 }
 
+/*
+ * A read of the first files of an archive, entry after entry. Readers go by
+ * one of two listings, the directory or the local headers (whose names are
+ * aliases), so each listing is read up to its first `max_files` files. The
+ * other names of a file listed right after it come with it. So names cannot
+ * crowd the files after them out of a limited read, and the read is bounded
+ */
+struct lua_archive_files_read {
+	unsigned int max_files;
+	unsigned int nfiles[2]; /* Of the directory, of the local headers */
+	gboolean taking;
+};
+
+static void
+lua_archive_files_read_init(lua_State *L, int pos, struct lua_archive_files_read *rd)
+{
+	memset(rd, 0, sizeof(*rd));
+	/* As before: a negative limit reads all */
+	rd->max_files = lua_isnumber(L, pos) ? (unsigned int) lua_tointeger(L, pos) : G_MAXUINT;
+}
+
+static gboolean
+lua_archive_files_read_takes(struct lua_archive_files_read *rd, const struct rspamd_archive_file *f)
+{
+	if (!(f->flags & RSPAMD_ARCHIVE_FILE_SAME_ENTRY)) {
+		unsigned int listing = (f->flags & RSPAMD_ARCHIVE_FILE_ALIAS) ? 1 : 0;
+
+		rd->taking = rd->nfiles[listing] < rd->max_files;
+
+		if (rd->taking) {
+			rd->nfiles[listing]++;
+		}
+	}
+
+	return rd->taking;
+}
+
 static int
 lua_archive_get_files(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive(L);
-	unsigned int i, max_files = 0;
+	struct lua_archive_files_read rd;
+	unsigned int i, n = 0;
 	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
-		if (lua_isnumber(L, 2)) {
-			max_files = lua_tointeger(L, 2);
-			max_files = MIN(arch->files->len, max_files);
-		}
-		else {
-			max_files = arch->files->len;
-		}
+		lua_archive_files_read_init(L, 2, &rd);
+		lua_newtable(L);
 
-		lua_createtable(L, max_files, 0);
-
-		for (i = 0; i < max_files; i++) {
+		for (i = 0; i < arch->files->len; i++) {
 			f = g_ptr_array_index(arch->files, i);
 
+			if (!lua_archive_files_read_takes(&rd, f)) {
+				continue;
+			}
+
 			lua_pushlstring(L, f->fname->str, f->fname->len);
-			lua_rawseti(L, -2, i + 1);
+			lua_rawseti(L, -2, ++n);
 		}
 	}
 	else {
@@ -8419,24 +8472,22 @@ lua_archive_get_files_full(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive(L);
-	unsigned int i, max_files = 0;
+	struct lua_archive_files_read rd;
+	unsigned int i, n = 0;
 	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
-		if (lua_isnumber(L, 2)) {
-			max_files = lua_tointeger(L, 2);
-			max_files = MIN(arch->files->len, max_files);
-		}
-		else {
-			max_files = arch->files->len;
-		}
+		lua_archive_files_read_init(L, 2, &rd);
+		lua_newtable(L);
 
-		lua_createtable(L, max_files, 0);
-
-		for (i = 0; i < max_files; i++) {
+		for (i = 0; i < arch->files->len; i++) {
 			f = g_ptr_array_index(arch->files, i);
 
-			lua_createtable(L, 0, 4);
+			if (!lua_archive_files_read_takes(&rd, f)) {
+				continue;
+			}
+
+			lua_createtable(L, 0, 5);
 
 			lua_pushstring(L, "name");
 			lua_pushlstring(L, f->fname->str, f->fname->len);
@@ -8454,7 +8505,11 @@ lua_archive_get_files_full(lua_State *L)
 			lua_pushboolean(L, (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) ? true : false);
 			lua_settable(L, -3);
 
-			lua_rawseti(L, -2, i + 1);
+			lua_pushstring(L, "alias");
+			lua_pushboolean(L, (f->flags & RSPAMD_ARCHIVE_FILE_ALIAS) ? true : false);
+			lua_settable(L, -3);
+
+			lua_rawseti(L, -2, ++n);
 		}
 	}
 	else {

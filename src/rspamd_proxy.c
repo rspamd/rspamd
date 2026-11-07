@@ -3698,12 +3698,26 @@ proxy_milter_finish_handler(int fd,
 	session->master_conn->name = "master";
 	session->client_message = msg;
 
-	/* Store ESMTP arguments from milter session */
+	/*
+	 * Store ESMTP arguments from milter session. The milter session frees
+	 * them on abort or on the next MAIL, possibly before this message is
+	 * done, so keep references; arguments of a previous message must not
+	 * be kept either.
+	 */
+	session->mail_esmtp_args = NULL;
+	session->rcpt_esmtp_args = NULL;
+
 	if (rms->mail_esmtp_args) {
-		session->mail_esmtp_args = rms->mail_esmtp_args;
+		session->mail_esmtp_args = g_hash_table_ref(rms->mail_esmtp_args);
+		rspamd_mempool_add_destructor(session->pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref,
+									  session->mail_esmtp_args);
 	}
 	if (rms->rcpt_esmtp_args) {
-		session->rcpt_esmtp_args = rms->rcpt_esmtp_args;
+		session->rcpt_esmtp_args = proxy_rcpt_esmtp_args_dup(rms->rcpt_esmtp_args);
+		rspamd_mempool_add_destructor(session->pool,
+									  (rspamd_mempool_destruct_t) proxy_rcpt_esmtp_args_free,
+									  session->rcpt_esmtp_args);
 	}
 
 	proxy_open_mirror_connections(session);

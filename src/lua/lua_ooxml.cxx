@@ -162,54 +162,53 @@ auto resolve_part_name(std::string_view source_part, std::string_view target)
 		return tl::make_unexpected("invalid internal relationship target");
 	}
 
+	/*
+	 * Build the part name from the segments validated here: only "." and ".."
+	 * are dot segments, anything else ("...", "..x", ".x", "x.") is a name.
+	 * A URL path normaliser does not follow these rules.
+	 */
+	std::vector<std::string_view> segments;
 	auto source_directory_end = source_part.rfind('/');
-	std::size_t depth = 0;
 	if (source_directory_end != std::string_view::npos) {
-		for (std::size_t pos = 0; pos < source_directory_end;) {
-			auto slash = source_part.find('/', pos);
-			if (slash == std::string_view::npos || slash > source_directory_end) {
-				slash = source_directory_end;
-			}
-			if (slash > pos) depth++;
+		auto directory = source_part.substr(0, source_directory_end);
+		for (std::size_t pos = 0; pos < directory.size();) {
+			auto slash = directory.find('/', pos);
+			if (slash == std::string_view::npos) slash = directory.size();
+			if (slash > pos) segments.push_back(directory.substr(pos, slash - pos));
 			pos = slash + 1;
 		}
 	}
 
 	std::size_t start = 0;
+	std::string_view segment;
 	while (start < path.size()) {
 		auto slash = path.find('/', start);
 		if (slash == std::string_view::npos) slash = path.size();
-		auto segment = path.substr(start, slash - start);
+		segment = path.substr(start, slash - start);
 		if (segment == "..") {
-			if (depth == 0) {
+			if (segments.empty()) {
 				return tl::make_unexpected("relationship target escapes package root");
 			}
-			depth--;
+			segments.pop_back();
 		}
 		else if (segment != ".") {
 			if (!validate_segment(segment)) {
 				return tl::make_unexpected("invalid relationship path segment");
 			}
-			depth++;
+			segments.push_back(segment);
 		}
 		start = slash + 1;
 	}
-	if (depth == 0) {
+	/* A last "." or ".." names a directory, as a trailing "/" does */
+	if (segments.empty() || segment == "." || segment == "..") {
 		return tl::make_unexpected("relationship target does not name a part");
 	}
 
-	std::string result{"/"};
-	if (source_directory_end != std::string_view::npos) {
-		result.append(source_part.substr(0, source_directory_end + 1));
+	std::string result;
+	for (auto name: segments) {
+		if (!result.empty()) result.push_back('/');
+		result.append(name);
 	}
-	result.append(path);
-	if (result.size() > G_MAXUINT) {
-		return tl::make_unexpected("internal relationship target is too long");
-	}
-	gsize normalized_size;
-	rspamd_normalize_path_inplace(result.data(), result.size(), &normalized_size);
-	result.resize(normalized_size);
-	result.erase(0, 1);
 	return result;
 }
 

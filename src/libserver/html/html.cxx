@@ -42,12 +42,17 @@
 
 #include <functional>
 #include <algorithm>
+#include <array>
+#include <bitset>
+#include <limits>
+#include <optional>
 #include <string>
 #include <unicode/uversion.h>
 
 namespace rspamd::html {
 
 static const unsigned int max_tags = 8192;            /* Ignore tags if this maximum is reached */
+/* Budgets of attributes rspamd does not interpret; the ones it does are always kept, once each */
 static const unsigned int max_attrs_per_tag = 128;    /* Ignore attributes of a single tag if this maximum is reached */
 static const unsigned int max_attrs_per_task = 65536; /* Ignore attributes in all HTML parts of a task if this maximum is reached */
 
@@ -135,6 +140,7 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 		{"data-track", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_TRACK},
 		{"data-id", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_ID},
 		{"data-url", html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_URL},
+		{"xlink:href", html_component_enum_type::RSPAMD_HTML_COMPONENT_XLINK_HREF},
 	});
 
 #define msg_debug_html(...) rspamd_conditional_debug_fast(NULL, NULL,                                \
@@ -478,12 +484,67 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 			return html_component_data_id{value};
 		case html_component_enum_type::RSPAMD_HTML_COMPONENT_DATA_URL:
 			return html_component_data_url{value};
+		case html_component_enum_type::RSPAMD_HTML_COMPONENT_XLINK_HREF:
+			return html_component_xlink_href{value, offset, len};
 		default:
 			return html_component_unknown{name, value};
 		}
 	}
 	else {
 		return html_component_unknown{name, value};
+	}
+}
+
+/*
+ * The attribute that holds where a tag goes, as browsers read it: "action" of
+ * a form, "formaction" of a submit button or input, "src" of a frame or an
+ * embedded object, "href" of anything else
+ */
+static auto
+html_tag_destination_attr(std::int32_t id) -> std::string_view
+{
+	if (html_tag_goes_to_src(id)) {
+		return "src";
+	}
+
+	switch (id) {
+	case Tag_FORM:
+		return "action";
+	case Tag_BUTTON:
+	case Tag_INPUT:
+		return "formaction";
+	default:
+		return "href";
+	}
+}
+
+/*
+ * A button or an input with formaction is a link to where the form goes, if
+ * it submits the form: a button that is not of type "button" or "reset", an
+ * input of type "submit" or "image". Known once all its attributes are read
+ */
+static auto
+html_tag_mark_submit_link(html_tag *tag) -> void
+{
+	/* In svg or math, they are foreign elements that submit nothing */
+	if ((tag->id != Tag_BUTTON && tag->id != Tag_INPUT) || (tag->flags & FL_FOREIGN) ||
+		!tag->find_component<html_component_href>()) {
+		return;
+	}
+
+	std::optional<std::string_view> type;
+	if (auto comp = tag->find_component<html_component_type>()) {
+		type = comp.value()->value;
+	}
+	auto type_is = [&](std::string_view name) -> bool {
+		return type && type->size() == name.size() &&
+			   g_ascii_strncasecmp(type->data(), name.data(), name.size()) == 0;
+	};
+	bool submits = tag->id == Tag_BUTTON ? !(type_is("button") || type_is("reset"))
+										 : (type_is("submit") || type_is("image"));
+
+	if (submits) {
+		tag->flags |= FL_HREF;
 	}
 }
 
@@ -497,7 +558,23 @@ static const auto component_extractors = frozen::make_unordered_map<frozen::stri
 			 }
 			 return std::nullopt;
 		 }},
-		{"href", [](const html_tag *tag) { return tag->find_href(); }},
+		/* The destination of a tag is read under its own name, the others are plain attributes */
+		{"href", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (html_tag_destination_attr(tag->id) != "href") {
+				 return tag->find_unknown_component("href");
+			 }
+			 /* Not find_href, which falls back to xlink:href */
+			 if (auto comp = tag->find_component<html_component_href>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
+		{"action", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 return html_tag_destination_attr(tag->id) == "action" ? tag->find_href() : tag->find_unknown_component("action");
+		 }},
+		{"formaction", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 return html_tag_destination_attr(tag->id) == "formaction" ? tag->find_href() : tag->find_unknown_component("formaction");
+		 }},
 		{"src", [](const html_tag *tag) -> std::optional<std::string_view> {
 			 if (auto comp = tag->find_component<html_component_src>()) {
 				 return comp.value()->value;
@@ -892,6 +969,12 @@ static const auto component_extractors = frozen::make_unordered_map<frozen::stri
 			 }
 			 return std::nullopt;
 		 }},
+		{"xlink:href", [](const html_tag *tag) -> std::optional<std::string_view> {
+			 if (auto comp = tag->find_component<html_component_xlink_href>()) {
+				 return comp.value()->value;
+			 }
+			 return std::nullopt;
+		 }},
 	});
 
 
@@ -947,13 +1030,46 @@ enum tag_parser_state {
 	tag_end,
 	slash_after_value,
 };
+/*
+ * Attributes the parser reads by name although they have no component type of
+ * their own: they are kept like the typed ones, see store_component_value
+ */
+static constexpr std::array<std::string_view, 3> html_untyped_interpreted_attrs{
+	"face", "encoding", "aria-label"};
+/* Typed components first, then the attributes above */
+static constexpr std::size_t html_interpreted_attrs_count =
+	std::numeric_limits<std::uint8_t>::max() + 1 + html_untyped_interpreted_attrs.size();
+
+static inline auto
+html_interpreted_attr_index(std::string_view name) -> std::optional<std::size_t>
+{
+	auto known_it = html_components_map.find(name);
+
+	if (known_it != html_components_map.end()) {
+		return static_cast<std::size_t>(known_it->second);
+	}
+
+	for (std::size_t i = 0; i < html_untyped_interpreted_attrs.size(); i++) {
+		if (name == html_untyped_interpreted_attrs[i]) {
+			return std::numeric_limits<std::uint8_t>::max() + 1 + i;
+		}
+	}
+
+	return std::nullopt;
+}
+
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
 	std::string attr_name;              // Store current attribute name
 	const char *value_start = nullptr;  // Track where attribute value starts in input
+	/* Where the first quote is in an unquoted value, see html_unquoted_value_length */
+	std::size_t value_quote = std::string::npos;
 	const char *html_start = nullptr;   // Base pointer to HTML buffer start
-	unsigned int *attrs_count = nullptr;// Task-global attributes counter (task pool variable)
+	unsigned int *attrs_count = nullptr;// Task-global unknown attributes counter (task pool variable)
+	/* Of the current tag: attributes rspamd interprets that it has, and other attributes */
+	std::bitset<html_interpreted_attrs_count> known_attrs;
+	unsigned int unknown_attrs = 0;
 
 	void reset()
 	{
@@ -961,8 +1077,97 @@ struct tag_content_parser_state {
 		buf.clear();
 		attr_name.clear();
 		value_start = nullptr;
+		value_quote = std::string::npos;
+		known_attrs.reset();
+		unknown_attrs = 0;
 	}
 };
+
+/*
+ * Browsers read an unquoted attribute value on past a quote, rspamd up to it:
+ * `href=3D"https://...` of undecoded quoted-printable is a relative link,
+ * not one to that site, and `href=http://x.com/a"b` goes to x.com anyway.
+ * Unless the quote is in the authority of the link and an `@` follows there:
+ * browsers go to the host after it then (`https://www.paypal.com"@evil.com/`),
+ * so the whole value is kept. Its place in the source is the whole value in
+ * any case, which URL rewriting replaces, and gives to its policy whole (see
+ * whole_unquoted_value)
+ */
+static auto
+html_unquoted_value_length(std::string_view value, std::size_t quote) -> std::size_t
+{
+	/*
+	 * Character references are decoded in attribute values (none spans the
+	 * quote), and URL parsers drop tabs and line breaks anywhere in a link
+	 */
+	std::string prefix{value.substr(0, quote)}, rest{value.substr(quote)};
+	auto normalise = [](std::string &part) {
+		part.resize(decode_html_entitles_inplace(part.data(), part.size()));
+		std::erase_if(part, [](char c) { return c == '\t' || c == '\n' || c == '\r'; });
+	};
+	normalise(prefix);
+	normalise(rest);
+
+	std::string_view link{prefix};
+
+	/* Browsers skip leading C0 controls and spaces */
+	while (!link.empty() && (unsigned char) link.front() <= 0x20) {
+		link.remove_prefix(1);
+	}
+
+	auto is_slash = [](char c) { return c == '/' || c == '\\'; };
+	auto ends_authority = [&](char c) { return is_slash(c) || c == '?' || c == '#'; };
+	std::size_t authority = std::string_view::npos;
+
+	if (link.size() >= 2 && is_slash(link[0]) && is_slash(link[1])) {
+		authority = 2;
+	}
+	else if (auto colon = link.find(':'); colon != std::string_view::npos && colon > 0 &&
+										  g_ascii_isalpha(link[0])) {
+		auto scheme = link.substr(0, colon);
+		auto scheme_char = [](char c) { return g_ascii_isalnum(c) || c == '+' || c == '-' || c == '.'; };
+
+		if (std::all_of(scheme.begin(), scheme.end(), scheme_char)) {
+			auto is_scheme = [&](std::string_view name) {
+				return scheme.size() == name.size() &&
+					   g_ascii_strncasecmp(scheme.data(), name.data(), name.size()) == 0;
+			};
+
+			authority = colon + 1;
+
+			if (is_scheme("http") || is_scheme("https") || is_scheme("ftp") ||
+				is_scheme("ws") || is_scheme("wss")) {
+				/* Their authority comes after any slashes, or none */
+				while (authority < link.size() && is_slash(link[authority])) {
+					authority++;
+				}
+			}
+			else if (link.substr(authority, 2) == "//") {
+				authority += 2;
+			}
+			else {
+				authority = std::string_view::npos;
+			}
+		}
+	}
+
+	/* The quote must be in the authority, which an `@` after it ends */
+	if (authority == std::string_view::npos || authority > link.size() ||
+		std::any_of(link.begin() + authority, link.end(), ends_authority)) {
+		return quote;
+	}
+
+	for (auto c: rest) {
+		if (ends_authority(c)) {
+			break;
+		}
+		if (c == '@') {
+			return value.size();
+		}
+	}
+
+	return quote;
+}
 
 /* Unknown tags get a negative hash of their name, so closing tags match */
 static inline auto
@@ -987,27 +1192,69 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	 * Parser env is cleared after storing
 	 */
 	auto store_component_value = [&]() -> void {
-		if (!parser_env.attr_name.empty()) {
-			/*
-			 * Enforce both per-tag and task-global attribute budgets: a single
-			 * tag must not evade the tags limit by cramming everything into
-			 * attributes
-			 */
-			if (tag->components.size() >= max_attrs_per_tag ||
-				*parser_env.attrs_count >= max_attrs_per_task) {
-				if (!(hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS)) {
-					msg_warn_pool("too many attributes in HTML tags; ignoring the rest");
-					hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_ATTRS;
-				}
+		if (parser_env.value_quote != std::string::npos) {
+			parser_env.buf.resize(html_unquoted_value_length(parser_env.buf, parser_env.value_quote));
+			parser_env.value_quote = std::string::npos;
+		}
 
+		if (!parser_env.attr_name.empty()) {
+			auto drop_attribute = [&]() -> void {
 				parser_env.buf.clear();
 				parser_env.attr_name.clear();
 				parser_env.value_start = nullptr;
+			};
+			/*
+			 * "href" (links) and "action" (forms) are both read as the
+			 * destination of a tag, but a tag has only one: browsers follow
+			 * "href" of <a> and "action" of <form>. The other one is an
+			 * ordinary attribute, which must not take the place of the real
+			 * destination: <a action="good" href="evil"> goes to evil.
+			 */
+			bool destination_name = parser_env.attr_name == "href" ||
+									parser_env.attr_name == "action" ||
+									parser_env.attr_name == "formaction";
+			bool foreign_destination = destination_name &&
+									   parser_env.attr_name != html_tag_destination_attr(tag->id);
+			auto interpreted_idx = foreign_destination
+									   ? std::nullopt
+									   : html_interpreted_attr_index(destination_name ? "href" : parser_env.attr_name);
 
-				return;
+			if (interpreted_idx) {
+				/*
+				 * An attribute rspamd interprets (href, src, style...) is never
+				 * dropped for the budgets below, so junk attributes cannot push
+				 * it out. A repeated one is ignored, as browsers do (the first
+				 * one wins), which also bounds them per tag.
+				 */
+				if (parser_env.known_attrs.test(*interpreted_idx)) {
+					drop_attribute();
+
+					return;
+				}
+
+				parser_env.known_attrs.set(*interpreted_idx);
 			}
+			else {
+				/*
+				 * Other attributes have per-tag and task-global budgets: a single
+				 * tag must not evade the tags limit by cramming everything into
+				 * attributes
+				 */
+				if (parser_env.unknown_attrs >= max_attrs_per_tag ||
+					*parser_env.attrs_count >= max_attrs_per_task) {
+					if (!(hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_ATTRS)) {
+						msg_warn_pool("too many attributes in HTML tags; ignoring the rest");
+						hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_ATTRS;
+					}
 
-			(*parser_env.attrs_count)++;
+					drop_attribute();
+
+					return;
+				}
+
+				parser_env.unknown_attrs++;
+				(*parser_env.attrs_count)++;
+			}
 
 			std::string_view attr_name_view, value_view;
 
@@ -1041,9 +1288,18 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				value_view = {value_storage, sz};
 			}
 
-			// Create the appropriate component variant with span info
-			auto component = html_component_from_string(attr_name_view, value_view, value_offset, value_len);
-			tag->components.emplace_back(std::move(component));
+			if (foreign_destination) {
+				tag->components.emplace_back(html_component_unknown{attr_name_view, value_view});
+			}
+			else if (parser_env.attr_name == "formaction") {
+				/* Where a submit control sends its form, see html_tag_mark_submit_link */
+				tag->components.emplace_back(html_component_href{value_view, value_offset, value_len});
+			}
+			else {
+				// Create the appropriate component variant with span info
+				auto component = html_component_from_string(attr_name_view, value_view, value_offset, value_len);
+				tag->components.emplace_back(std::move(component));
+			}
 		}
 
 		parser_env.buf.clear();
@@ -1052,7 +1308,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	};
 
 	auto store_component_name = [&]() -> bool {
-		decode_html_entitles_inplace(parser_env.buf);
+		/*
+		 * Browsers do not decode character references in attribute names:
+		 * hr&#101;f is some other attribute, which must not be taken for the
+		 * href that follows it
+		 */
 		parser_env.attr_name = parser_env.buf;
 		parser_env.buf.clear();
 		return true;
@@ -1282,8 +1542,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 
 	case parse_value:
-		/* `/` is a part of an unquoted value, `<a href=/x/>` is not closed */
-		if (g_ascii_isspace(*in) || *in == '>' || *in == '"') {
+		/*
+		 * `/` and quotes are a part of an unquoted value, as in browsers:
+		 * `<a href=/x/>` is not closed, see html_unquoted_value_length
+		 */
+		if (g_ascii_isspace(*in) || *in == '>') {
 			store_component_value();
 			state = spaces_after_param;
 		}
@@ -1292,6 +1555,11 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			if (parser_env.value_start == nullptr) {
 				parser_env.value_start = in;
 			}
+
+			if (*in == '"' && parser_env.value_quote == std::string::npos) {
+				parser_env.value_quote = parser_env.buf.size();
+			}
+
 			store_value_character(false);
 		}
 		break;
@@ -1390,26 +1658,85 @@ html_process_url_tag(rspamd_mempool_t *pool,
 		/* Check base url */
 		auto &href_value = found_href_maybe.value();
 
+		/* Browsers strip C0 controls and spaces around a link before they resolve it */
+		while (!href_value.empty() && (unsigned char) href_value.front() <= 0x20) {
+			href_value.remove_prefix(1);
+		}
+
+		while (!href_value.empty() && (unsigned char) href_value.back() <= 0x20) {
+			href_value.remove_suffix(1);
+		}
+
+		/*
+		 * Browsers remove tabs and line breaks anywhere in a link before
+		 * they read it: `/<tab>/evil.com` is `//evil.com`, another host
+		 */
+		auto is_tab_or_newline = [](char c) { return c == '\t' || c == '\n' || c == '\r'; };
+
+		if (std::any_of(href_value.begin(), href_value.end(), is_tab_or_newline)) {
+			auto *buf = rspamd_mempool_alloc_buffer(pool, href_value.size());
+			auto *last = std::remove_copy_if(href_value.begin(), href_value.end(), buf,
+											 is_tab_or_newline);
+			href_value = {buf, (std::size_t) (last - buf)};
+		}
+
 		if (hc && hc->base_url) {
 			/*
-			 * Relative url cannot start from the following:
-			 * schema://
-			 * data:
-			 * slash
+			 * Resolved as browsers do: a link with a scheme of its own is not
+			 * relative (mailto:, or http:x.com under an https base), two
+			 * slashes take only the scheme of the base (//evil.com is another
+			 * host), one slash its host, anything else its path
 			 */
+			auto is_slash = [](char c) { return c == '/' || c == '\\'; };
+			auto scheme_char = [](char c) { return g_ascii_isalnum(c) || c == '+' || c == '-' || c == '.'; };
+			std::string_view scheme, rest = href_value;
+			std::string_view base_scheme{hc->base_url->string, hc->base_url->protocollen};
 
-			if (!html_is_absolute_url(href_value)) {
+			if (auto colon = href_value.find(':'); colon != std::string_view::npos && colon > 0 &&
+												   g_ascii_isalpha(href_value[0]) &&
+												   std::all_of(href_value.begin(), href_value.begin() + colon, scheme_char)) {
+				scheme = href_value.substr(0, colon);
+			}
 
-				if (href_value.size() >= sizeof("data:") &&
-					g_ascii_strncasecmp(href_value.data(), "data:", sizeof("data:") - 1) == 0) {
-					/* Image data url, never insert as url */
-					return std::nullopt;
-				}
+			if (!scheme.empty() && scheme.size() == sizeof("data") - 1 &&
+				g_ascii_strncasecmp(scheme.data(), "data", scheme.size()) == 0) {
+				/* Image data url, never insert as url */
+				return std::nullopt;
+			}
 
-				/* Assume relative url */
+			bool same_scheme = !scheme.empty() && scheme.size() == base_scheme.size() &&
+							   g_ascii_strncasecmp(scheme.data(), base_scheme.data(), scheme.size()) == 0;
+
+			if (same_scheme) {
+				rest = href_value.substr(scheme.size() + 1);
+			}
+
+			if (!scheme.empty() && !same_scheme) {
+				/* Not relative */
+			}
+			else if (rest.size() >= 2 && is_slash(rest[0]) && is_slash(rest[1])) {
+				/* Relative to the scheme */
+				auto len = base_scheme.size() + 1 + rest.size();
+				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s:%*s",
+														  (int) base_scheme.size(), base_scheme.data(),
+														  (int) rest.size(), rest.data());
+				href_value = {buf, nlen};
+			}
+			else if (!rest.empty() && is_slash(rest[0])) {
+				/* Relative to the host */
+				auto len = rest.size() + hc->base_url->hostlen + base_scheme.size() + 3 /* for :// */;
+				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s://%*s%*s",
+														  (int) base_scheme.size(), base_scheme.data(),
+														  (int) hc->base_url->hostlen, rspamd_url_host_unsafe(hc->base_url),
+														  (int) rest.size(), rest.data());
+				href_value = {buf, nlen};
+			}
+			else {
+				/* Relative to the path */
 				auto need_slash = false;
-
-				auto orig_len = href_value.size();
+				auto orig_len = rest.size();
 				auto len = orig_len + hc->base_url->urllen;
 
 				if (hc->base_url->datalen == 0) {
@@ -1422,19 +1749,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 														  "%*s%s%*s",
 														  (int) hc->base_url->urllen, hc->base_url->string,
 														  need_slash ? "/" : "",
-														  (int) orig_len, href_value.data());
-				href_value = {buf, nlen};
-			}
-			else if (href_value.size() > 2 && href_value[0] == '/' && href_value[1] != '/') {
-				/* Relative to the hostname */
-				auto orig_len = href_value.size();
-				auto len = orig_len + hc->base_url->hostlen + hc->base_url->protocollen +
-						   3 /* for :// */;
-				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
-				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s://%*s/%*s",
-														  (int) hc->base_url->protocollen, hc->base_url->string,
-														  (int) hc->base_url->hostlen, rspamd_url_host_unsafe(hc->base_url),
-														  (int) orig_len, href_value.data());
+														  (int) orig_len, rest.data());
 				href_value = {buf, nlen};
 			}
 		}
@@ -1620,6 +1935,15 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	// Fallback to HREF (for backward compatibility or non-standard usage)
 	else if (auto href_comp = tag->find_href()) {
 		href_value = href_comp;
+	}
+
+	/* Browsers strip C0 controls and spaces around a link before they resolve it */
+	while (href_value && !href_value->empty() && (unsigned char) href_value->front() <= 0x20) {
+		href_value->remove_prefix(1);
+	}
+
+	while (href_value && !href_value->empty() && (unsigned char) href_value->back() <= 0x20) {
+		href_value->remove_suffix(1);
 	}
 
 	if (href_value && href_value->size() > 0) {
@@ -2584,6 +2908,143 @@ auto html_process_input(struct rspamd_task *task,
 		return ntag;
 	};
 
+	/*
+	 * Registers the url of a tag with FL_HREF (a link, an area, a form...):
+	 * returns nothing if it has no valid url, or nullptr if there are too
+	 * many urls in the message to track it
+	 */
+	auto process_href_tag = [&](struct html_tag *tag) -> std::optional<struct rspamd_url *> {
+		auto maybe_url = html_process_url_tag(pool, tag, hc,
+											  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+
+		if (!maybe_url.has_value()) {
+			return std::nullopt;
+		}
+
+		struct rspamd_url *href_url = maybe_url.value();
+
+		if (url_set != NULL) {
+			struct rspamd_url *maybe_existing =
+				rspamd_url_set_add_or_return(url_set, maybe_url.value(), max_urls);
+			if (maybe_existing == nullptr) {
+				/* Too many urls in the message; do not track this one */
+				href_url = nullptr;
+			}
+			else if (maybe_existing == maybe_url.value()) {
+				if (cur_url_order) {
+					href_url->order = (*cur_url_order)++;
+				}
+				href_url->part_order = cur_url_part_order++;
+				html_process_query_url(pool, href_url, url_set,
+									   part_urls,
+									   task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
+									   max_urls);
+			}
+			else {
+				href_url = maybe_existing;
+				/* Replace extra as well */
+				tag->extra = maybe_existing;
+				/* Increase count to avoid odd checks failure */
+				href_url->count++;
+			}
+		}
+
+		if (href_url != nullptr) {
+			html_part_add_url(part_urls, href_url);
+
+			/* Minimal link features collection */
+			hc->features.links.total_links++;
+			if (href_url->flags & RSPAMD_URL_FLAG_IDN) {
+				hc->features.links.punycode_links++;
+			}
+			if (href_url->flags & RSPAMD_URL_FLAG_NUMERIC) {
+				hc->features.links.ip_links++;
+			}
+			if (href_url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+				hc->features.links.port_links++;
+			}
+			if (href_url->flags & RSPAMD_URL_FLAG_QUERY) {
+				/* Heuristic: long query length */
+				if (href_url->querylen > 64) {
+					hc->features.links.long_query_links++;
+				}
+			}
+			/* Scheme type */
+			if (href_url->protocol == PROTOCOL_MAILTO) {
+				hc->features.links.mailto_links++;
+			}
+			else if (href_url->protocol == PROTOCOL_HTTP || href_url->protocol == PROTOCOL_HTTPS) {
+				hc->features.links.http_links++;
+			}
+			/* data/javascript schemes can be detected by flags set during parsing */
+			if (href_url->protocol == PROTOCOL_UNKNOWN) {
+				/* We don't have explicit scheme enum for data/js; check raw prefix quickly */
+				if (href_url->raw && href_url->rawlen >= 5) {
+					if (g_ascii_strncasecmp(href_url->raw, "data:", 5) == 0) {
+						hc->features.links.data_scheme_links++;
+					}
+					else if (href_url->rawlen >= 11 && g_ascii_strncasecmp(href_url->raw, "javascript:", 11) == 0) {
+						hc->features.links.js_scheme_links++;
+					}
+				}
+			}
+			/* Domain counting + affiliation */
+			if (href_url->hostlen > 0) {
+				std::string host{rspamd_url_host_unsafe(href_url), href_url->hostlen};
+				auto &cnt = hc->link_domain_counts[host];
+				cnt++;
+				if (cnt > hc->features.links.max_links_single_domain) {
+					hc->features.links.max_links_single_domain = cnt;
+				}
+				/* same eTLD+1 as first-party? */
+				if (!hc->first_party_etld1.empty()) {
+					rspamd_ftok_t tld2;
+					if (rspamd_url_find_tld(host.c_str(), host.size(), &tld2)) {
+						const char *h = host.c_str();
+						const char *p2 = tld2.begin;
+						while (p2 > h && *(p2 - 1) != '.') {
+							p2--;
+						}
+						std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
+						if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
+							hc->features.links.same_etld1_links++;
+						}
+					}
+				}
+			}
+			/* Query presence */
+			if (href_url->querylen > 0) {
+				hc->features.links.query_links++;
+			}
+		}
+
+		return href_url;
+	};
+
+	/*
+	 * The namespace of an opening tag and what follows from it, once all its
+	 * attributes are read, also for a tag the input ends in
+	 */
+	auto finish_opening_tag = [&]() {
+		if (!(cur_tag->flags & FL_XML)) {
+			auto *node = html_current_node(parent_tag);
+			auto ns = html_start_tag_namespace(node, cur_tag);
+
+			if (ns != 0 && html_is_breakout_tag(cur_tag)) {
+				parent_tag = html_pop_foreign(node, cur_tag->tag_start);
+				ns = html_start_tag_namespace(parent_tag, cur_tag);
+			}
+
+			cur_tag->flags |= ns;
+			html_tag_mark_submit_link(cur_tag);
+
+			/* Browsers ignore `/>` on HTML elements except the void ones */
+			if (!(cur_tag->flags & (CM_EMPTY | FL_FOREIGN))) {
+				cur_tag->flags &= ~FL_CLOSED;
+			}
+		}
+	};
+
 	auto process_opening_tag = [&]() {
 		if (cur_tag->id > Tag_UNKNOWN) {
 			if (cur_tag->flags & CM_UNIQUE) {
@@ -2725,107 +3186,10 @@ auto html_process_input(struct rspamd_task *task,
 		}
 
 		if (cur_tag->flags & FL_HREF && html_document_state == html_document_state::body) {
-			auto maybe_url = html_process_url_tag(pool, cur_tag, hc,
-												  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+			auto maybe_url = process_href_tag(cur_tag);
 
 			if (maybe_url.has_value()) {
 				url = maybe_url.value();
-
-				if (url_set != NULL) {
-					struct rspamd_url *maybe_existing =
-						rspamd_url_set_add_or_return(url_set, maybe_url.value(), max_urls);
-					if (maybe_existing == nullptr) {
-						/* Too many urls in the message; do not track this one */
-						url = nullptr;
-					}
-					else if (maybe_existing == maybe_url.value()) {
-						if (cur_url_order) {
-							url->order = (*cur_url_order)++;
-						}
-						url->part_order = cur_url_part_order++;
-						html_process_query_url(pool, url, url_set,
-											   part_urls,
-											   task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
-											   max_urls);
-					}
-					else {
-						url = maybe_existing;
-						/* Replace extra as well */
-						cur_tag->extra = maybe_existing;
-						/* Increase count to avoid odd checks failure */
-						url->count++;
-					}
-				}
-
-				if (url != nullptr) {
-					html_part_add_url(part_urls, url);
-
-					/* Minimal link features collection */
-					hc->features.links.total_links++;
-					if (url->flags & RSPAMD_URL_FLAG_IDN) {
-						hc->features.links.punycode_links++;
-					}
-					if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
-						hc->features.links.ip_links++;
-					}
-					if (url->flags & RSPAMD_URL_FLAG_HAS_PORT) {
-						hc->features.links.port_links++;
-					}
-					if (url->flags & RSPAMD_URL_FLAG_QUERY) {
-						/* Heuristic: long query length */
-						if (url->querylen > 64) {
-							hc->features.links.long_query_links++;
-						}
-					}
-					/* Scheme type */
-					if (url->protocol == PROTOCOL_MAILTO) {
-						hc->features.links.mailto_links++;
-					}
-					else if (url->protocol == PROTOCOL_HTTP || url->protocol == PROTOCOL_HTTPS) {
-						hc->features.links.http_links++;
-					}
-					/* data/javascript schemes can be detected by flags set during parsing */
-					if (url->protocol == PROTOCOL_UNKNOWN) {
-						/* We don't have explicit scheme enum for data/js; check raw prefix quickly */
-						if (url->raw && url->rawlen >= 5) {
-							if (g_ascii_strncasecmp(url->raw, "data:", 5) == 0) {
-								hc->features.links.data_scheme_links++;
-							}
-							else if (url->rawlen >= 11 && g_ascii_strncasecmp(url->raw, "javascript:", 11) == 0) {
-								hc->features.links.js_scheme_links++;
-							}
-						}
-					}
-					/* Domain counting + affiliation */
-					if (url->hostlen > 0) {
-						std::string host{rspamd_url_host_unsafe(url), url->hostlen};
-						auto &cnt = hc->link_domain_counts[host];
-						cnt++;
-						if (cnt > hc->features.links.max_links_single_domain) {
-							hc->features.links.max_links_single_domain = cnt;
-						}
-						/* same eTLD+1 as first-party? */
-						if (!hc->first_party_etld1.empty()) {
-							rspamd_ftok_t tld2;
-							if (rspamd_url_find_tld(host.c_str(), host.size(), &tld2)) {
-								const char *h = host.c_str();
-								const char *p2 = tld2.begin;
-								while (p2 > h && *(p2 - 1) != '.') {
-									p2--;
-								}
-								std::string etld1_link{p2, static_cast<std::size_t>(h + host.size() - p2)};
-								if (!g_ascii_strcasecmp(etld1_link.c_str(), hc->first_party_etld1.c_str())) {
-									hc->features.links.same_etld1_links++;
-								}
-							}
-						}
-					}
-					/* Query presence */
-					if (url->querylen > 0) {
-						hc->features.links.query_links++;
-					}
-				}
-
 				href_offset = hc->parsed.size();
 			}
 		}
@@ -2949,8 +3313,9 @@ auto html_process_input(struct rspamd_task *task,
 				closing = FALSE;
 				break;
 			case '!':
-				cur_tag = new_tag(FL_XML | FL_CLOSED);
-				if (cur_tag) {
+				/* At the tags limit the open element stays current, see overflow */
+				if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
+					cur_tag = ntag;
 					state = sgml_tag;
 				}
 				else {
@@ -2959,8 +3324,8 @@ auto html_process_input(struct rspamd_task *task,
 				p++;
 				break;
 			case '?':
-				cur_tag = new_tag(FL_XML | FL_CLOSED);
-				if (cur_tag) {
+				if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
+					cur_tag = ntag;
 					state = xml_tag;
 				}
 				else {
@@ -2975,8 +3340,8 @@ auto html_process_input(struct rspamd_task *task,
 					 * `</` without a tag name: browsers drop `</>` and take
 					 * anything else as a bogus comment up to the first `>`
 					 */
-					cur_tag = new_tag(FL_XML | FL_CLOSED);
-					if (cur_tag) {
+					if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
+						cur_tag = ntag;
 						state = sgml_content;
 					}
 					else {
@@ -3039,11 +3404,8 @@ auto html_process_input(struct rspamd_task *task,
 					state = tag_content;
 					content_parser_env.reset();
 
-					if (!closing) {
-						cur_tag = new_tag();
-					}
-
-					if (cur_tag) {
+					if (auto *ntag = closing ? cur_tag : new_tag()) {
+						cur_tag = ntag;
 						state = tag_content;
 					}
 					else {
@@ -3308,22 +3670,7 @@ auto html_process_input(struct rspamd_task *task,
 			state = html_text_content;
 
 			if (cur_tag) {
-				if (!(cur_tag->flags & FL_XML)) {
-					auto *node = html_current_node(parent_tag);
-					auto ns = html_start_tag_namespace(node, cur_tag);
-
-					if (ns != 0 && html_is_breakout_tag(cur_tag)) {
-						parent_tag = html_pop_foreign(node, cur_tag->tag_start);
-						ns = html_start_tag_namespace(parent_tag, cur_tag);
-					}
-
-					cur_tag->flags |= ns;
-
-					/* Browsers ignore `/>` on HTML elements except the void ones */
-					if (!(cur_tag->flags & (CM_EMPTY | FL_FOREIGN))) {
-						cur_tag->flags &= ~FL_CLOSED;
-					}
-				}
+				finish_opening_tag();
 
 				if (html_is_raw_text_tag(cur_tag->id) && !(cur_tag->flags & FL_FOREIGN)) {
 					state = tag_raw_text;
@@ -3478,10 +3825,13 @@ auto html_process_input(struct rspamd_task *task,
 			break;
 		}
 		case tags_limit_overflow:
+			/*
+			 * `c` is the start of the markup that needed a tag: the rest is
+			 * read without creating tags, see scan_after_tags_limit
+			 */
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
-						  " ignoring the rest of the HTML content",
-						  (int) hc->all_tags.size(), (int) (p - start));
-			c = p;
+						  " reading the rest of the HTML content without tags",
+						  (int) hc->all_tags.size(), (int) (c - start));
 			p = end;
 			break;
 		}
@@ -3503,11 +3853,13 @@ auto html_process_input(struct rspamd_task *task,
 	case tag_content:
 		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
 			cur_tag->content_offset = end - start;
+			finish_opening_tag();
 			process_opening_tag();
 		}
 		break;
 	case tag_end_opening:
 		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+			finish_opening_tag();
 			process_opening_tag();
 		}
 		break;
@@ -3517,14 +3869,53 @@ auto html_process_input(struct rspamd_task *task,
 
 	goffset content_end = end - start;
 
-	if (cur_tag == &cur_closing_tag) {
-		/* The partial closing tag is not text either */
+	if (state == tags_limit_overflow || cur_tag == &cur_closing_tag) {
+		/*
+		 * Past the tags limit the rest is not in the tree, and a partial
+		 * closing tag is not text either: open elements end there
+		 */
 		content_end = c - start;
-		cur_tag = cur_closing_tag.parent;
+
+		if (cur_tag == &cur_closing_tag) {
+			cur_tag = cur_closing_tag.parent;
+		}
 	}
 
 	while (cur_tag && (cur_tag->flags & FL_CLOSED)) {
 		cur_tag = cur_tag->parent;
+	}
+
+	/* A link open where the tags end goes on past them */
+	struct rspamd_url *link_at_limit = nullptr;
+	/*
+	 * And so does an svg element, before the open elements are closed: a link
+	 * in it goes to xlink:href. Only while the current element is in it, as
+	 * in the tree: an HTML element in a foreignObject is HTML content. CDATA
+	 * past the limit is not text for these, as reading it as text where it is
+	 * none would hide the markup in it
+	 */
+	unsigned int svg_at_limit = 0;
+
+	if (state == tags_limit_overflow) {
+		bool in_link = false, in_foreign = cur_tag && (cur_tag->flags & FL_FOREIGN);
+
+		for (auto *t = cur_tag; t != nullptr; t = t->parent) {
+			if (t->id == Tag_A && !in_link) {
+				/* The innermost link only */
+				in_link = true;
+
+				if (std::holds_alternative<struct rspamd_url *>(t->extra)) {
+					link_at_limit = std::get<struct rspamd_url *>(t->extra);
+				}
+			}
+
+			if (!(t->flags & FL_FOREIGN)) {
+				in_foreign = false;
+			}
+			else if (in_foreign && t->id == Tag_SVG) {
+				svg_at_limit++;
+			}
+		}
 	}
 
 	if (cur_tag && cur_tag != &cur_closing_tag) {
@@ -3618,11 +4009,352 @@ auto html_process_input(struct rspamd_task *task,
 								max_urls);
 	}
 
+	/*
+	 * Past the tags limit no tags are created, but the rest of the input is
+	 * still read as a browser does instead of being taken as text: markup is
+	 * dropped, links are registered and their displayed text is checked (for
+	 * phishing), and image urls are registered. Styles cannot be applied
+	 * without the tree, so all text there is visible.
+	 */
+	auto scan_after_tags_limit = [&](const char *from, struct rspamd_url *link_at_limit) -> void {
+		html_tag scratch;
+		const char *pos = from, *text_start = from, *quote_lookahead = nullptr;
+		char quote_lookahead_char = 0;
+		/* The text of a link open where the tags end continues here */
+		struct rspamd_url *open_link = link_at_limit;
+		std::size_t open_link_offset = hc->parsed.size();
+		/* Open svg and math elements: CDATA is text in them */
+		unsigned int foreign_depth = 0;
+		/* Open svg elements: a link in them may go to xlink:href */
+		unsigned int svg_depth = svg_at_limit;
+		auto *L = task->cfg ? (lua_State *) task->cfg->lua_state : nullptr;
+
+		auto append_text = [&](const char *upto, bool literal = false) -> void {
+			if (upto > text_start) {
+				html_append_parsed(hc, {text_start, (std::size_t) (upto - text_start)},
+								   false, end - start, hc->parsed, literal);
+			}
+		};
+		/* As the default display of a tag in html_append_tag_content */
+		auto append_separator = [&](int id, unsigned int flags) -> void {
+			char sep = 0;
+
+			if (id == Tag_BR || id == Tag_HR || (flags & (CM_BLOCK | CM_TABLE))) {
+				sep = '\n';
+			}
+			else if (flags & CM_ROW) {
+				sep = ' ';
+			}
+
+			if (sep && !hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
+				hc->parsed.push_back(sep);
+			}
+		};
+		/* Comments end at `-->` or `--!>`, or right away as `<!-->` and `<!--->` */
+		auto skip_comment = [&](const char *body) -> const char * {
+			if (body < end && *body == '>') {
+				return body + 1;
+			}
+
+			if (end - body >= 2 && body[0] == '-' && body[1] == '>') {
+				return body + 2;
+			}
+
+			for (const char *dashes = body; dashes < end;) {
+				auto found = rspamd_substring_search(dashes, end - dashes, "--", 2);
+
+				if (found == -1) {
+					break;
+				}
+
+				const char *after = dashes + found + 2;
+
+				if (after < end && *after == '>') {
+					return after + 1;
+				}
+
+				if (end - after >= 2 && after[0] == '!' && after[1] == '>') {
+					return after + 2;
+				}
+
+				dashes = dashes + found + 1;
+			}
+
+			return end;
+		};
+		auto close_link = [&]() -> void {
+			if (open_link != nullptr) {
+				std::string_view displayed{hc->parsed.data() + open_link_offset,
+										   hc->parsed.size() - open_link_offset};
+
+				html_check_displayed_url(pool, exceptions, url_set, displayed,
+										 open_link_offset, open_link, L, max_urls);
+				open_link = nullptr;
+			}
+		};
+		/* Position after `what` (case insensitive) starting at `from`, or end */
+		auto skip_past = [&](const char *search_from, std::string_view what) -> const char * {
+			if (search_from >= end) {
+				return end;
+			}
+
+			auto found = rspamd_substring_search_caseless(search_from, end - search_from,
+														  what.data(), what.size());
+
+			return found == -1 ? end : search_from + found + what.size();
+		};
+		auto register_image = [&](std::string_view src) -> void {
+			auto has_prefix = [&](std::string_view prefix) -> bool {
+				return src.size() > prefix.size() &&
+					   g_ascii_strncasecmp(src.data(), prefix.data(), prefix.size()) == 0;
+			};
+
+			/* Embedded images have no url */
+			if (src.empty() || has_prefix("cid:") || has_prefix("data:")) {
+				return;
+			}
+
+			auto maybe_url = html_process_url(pool, src, L);
+
+			if (maybe_url) {
+				auto *img_url = maybe_url.value();
+				img_url->flags |= RSPAMD_URL_FLAG_IMAGE;
+
+				if (url_set != nullptr) {
+					auto *existing = rspamd_url_set_add_or_return(url_set, img_url, max_urls);
+
+					if (existing == nullptr) {
+						return;
+					}
+					else if (existing != img_url) {
+						existing->flags |= img_url->flags;
+						existing->count++;
+						img_url = existing;
+					}
+				}
+
+				html_part_add_url(part_urls, img_url);
+			}
+		};
+
+		while (pos < end) {
+			if (*pos != '<') {
+				pos++;
+				continue;
+			}
+
+			const char *next = pos + 1;
+
+			if (next < end && (*next == '!' || *next == '?')) {
+				/* Comments, declarations and processing instructions */
+				append_text(pos);
+
+				if (end - pos >= 4 && memcmp(pos, "<!--", 4) == 0) {
+					pos = skip_comment(pos + 4);
+				}
+				else if (foreign_depth > 0 && end - pos >= 9 && memcmp(pos, "<![CDATA[", 9) == 0) {
+					/* Text in svg and math */
+					text_start = pos + 9;
+					pos = skip_past(text_start, "]]>");
+					append_text(pos == end ? end : pos - 3, true);
+				}
+				else {
+					pos = skip_past(next, ">");
+				}
+
+				text_start = pos;
+				continue;
+			}
+
+			if (next < end && *next == '/' && next + 1 < end && g_ascii_isalpha(next[1])) {
+				/* Closing tag */
+				const char *name = next + 1, *name_end = name;
+
+				while (name_end < end && g_ascii_isalnum(*name_end)) {
+					name_end++;
+				}
+
+				append_text(pos);
+				std::string lc_name{name, (std::size_t) (name_end - name)};
+				rspamd_str_lc(lc_name.data(), lc_name.size());
+				const auto *def = html_tags_defs.by_name(lc_name);
+
+				if (def != nullptr) {
+					if (def->id == Tag_A) {
+						close_link();
+					}
+					else if (def->id == Tag_SVG || def->id == Tag_MATH) {
+						if (foreign_depth > 0) {
+							foreign_depth--;
+						}
+
+						/* An svg open where the tags end is counted here only */
+						if (def->id == Tag_SVG && svg_depth > 0) {
+							svg_depth--;
+						}
+					}
+
+					append_separator(def->id, def->flags);
+				}
+
+				pos = skip_past(name_end, ">");
+				text_start = pos;
+				continue;
+			}
+
+			if (next >= end || !g_ascii_isalpha(*next)) {
+				/* Not markup, `<` is text then */
+				pos++;
+				continue;
+			}
+
+			/* Opening tag: parse it with the tag content parser */
+			append_text(pos);
+			scratch.clear();
+			content_parser_env.reset();
+			const char *tag_end = end;
+
+			for (const char *t = next; t < end; t++) {
+				html_parse_tag_content(pool, hc, &scratch, t, content_parser_env);
+
+				if (*t == '>') {
+					auto quoted = content_parser_env.cur_state == parse_dqvalue ||
+								  content_parser_env.cur_state == parse_sqvalue;
+
+					if (quoted) {
+						/* `>` in a quoted value, unless the value is never closed */
+						auto end_quote = content_parser_env.cur_state == parse_sqvalue ? '\'' : '"';
+
+						if (quote_lookahead == nullptr || quote_lookahead_char != end_quote ||
+							quote_lookahead < t) {
+							quote_lookahead = (const char *) memchr(t, end_quote, end - t);
+							quote_lookahead_char = end_quote;
+
+							if (quote_lookahead == nullptr) {
+								quote_lookahead = end;
+							}
+						}
+
+						if (quote_lookahead != end) {
+							continue;
+						}
+					}
+
+					tag_end = t + 1;
+					break;
+				}
+			}
+
+			content_parser_env.reset();
+			pos = tag_end;
+			text_start = pos;
+
+			/*
+			 * Namespaces are not tracked here: a link in svg reads xlink:href,
+			 * and controls are taken as HTML ones, not to miss a destination
+			 */
+			if (scratch.id == Tag_A && svg_depth > 0) {
+				scratch.flags |= FL_SVG;
+			}
+
+			html_tag_mark_submit_link(&scratch);
+
+			if (auto clickable = scratch.clickable_attr()) {
+				/* Not in the tree, but URL rewriting replaces it as well */
+				hc->add_clickable_past_limit(clickable.value());
+			}
+
+			/* FL_BROKEN is set on markup browsers still take, such as <a/href=...> */
+			if (scratch.flags & FL_HREF) {
+				auto maybe_url = process_href_tag(&scratch);
+
+				if (scratch.id == Tag_A) {
+					/* A link ends the previous one */
+					close_link();
+
+					if (maybe_url.has_value() && maybe_url.value() != nullptr) {
+						open_link = maybe_url.value();
+						open_link_offset = hc->parsed.size();
+					}
+				}
+			}
+			else if (scratch.id == Tag_BASE) {
+				auto maybe_base = html_process_url_tag(pool, &scratch, hc, L);
+
+				if (maybe_base && hc->base_url == nullptr) {
+					hc->base_url = maybe_base.value();
+				}
+			}
+			else if (scratch.id == Tag_IMG) {
+				if (auto src = scratch.find_component<html_component_src>()) {
+					register_image(src.value()->value);
+				}
+
+				/* Alt text is shown instead of the image, as in the tree */
+				if (auto alt = scratch.find_alt(); alt && !alt->empty()) {
+					if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
+						hc->parsed += ' ';
+					}
+
+					hc->parsed.append(alt.value());
+					hc->parsed += ' ';
+				}
+			}
+			else if ((scratch.id == Tag_SVG || scratch.id == Tag_MATH) &&
+					 !(scratch.flags & FL_CLOSED)) {
+				foreign_depth++;
+
+				if (scratch.id == Tag_SVG) {
+					svg_depth++;
+				}
+			}
+
+			append_separator(scratch.id, scratch.flags);
+
+			if (html_is_raw_text_tag(scratch.id) && !(scratch.flags & CM_EMPTY)) {
+				/* Its content is raw text up to its end tag; nothing ends plaintext */
+				const char *raw_end = end;
+
+				if (scratch.id != Tag_PLAINTEXT) {
+					auto close_name = fmt::format("</{}", html_tags_defs.name_by_id_safe(scratch.id));
+
+					for (const char *search = pos; search < end;) {
+						auto found = rspamd_substring_search_caseless(search, end - search,
+																	  close_name.data(), close_name.size());
+
+						if (found == -1) {
+							break;
+						}
+
+						if (html_is_raw_text_end_tag({search + found, (std::size_t) (end - search - found)},
+													 scratch.id)) {
+							raw_end = search + found;
+							break;
+						}
+
+						search += found + 1;
+					}
+				}
+
+				if (scratch.id == Tag_TEXTAREA || scratch.id == Tag_XMP ||
+					scratch.id == Tag_PLAINTEXT) {
+					/* Shown; only textarea decodes character references */
+					append_text(raw_end, scratch.id != Tag_TEXTAREA);
+				}
+
+				pos = raw_end;
+				text_start = pos;
+			}
+		}
+
+		append_text(end);
+		close_link();
+	};
+
 	/* Leftover after content */
 	switch (state) {
 	case tags_limit_overflow:
-		html_append_parsed(hc, {c, (std::size_t) (end - c)},
-						   false, end - start, hc->parsed);
+		scan_after_tags_limit(c, link_at_limit);
 		break;
 	default:
 		/* Do nothing */
