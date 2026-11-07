@@ -348,4 +348,22 @@ context("Rar archive listing", function()
         rar5_file("payload.exe", "MZ") .. rar5_end)
     assert_equal("file", names["payload.exe"])
   end)
+
+  test("a rar name is listed as unrar decodes its UTF-8", function()
+    -- unrar decodes overlong forms (WinRAR extracts invoice.exe) and stops at a byte it
+    -- cannot read, for every rar 5 name and for rar 4 names on macOS
+    for i, rar in ipairs({
+      rar5("invoice\192\174exe", "MZ"),
+      rar5("invoice.exe\255.txt", "MZ"),
+      rar4("invoice\192\174exe", "MZ"),
+    }) do
+      assert_equal("alias", names_of(rar)["invoice.exe"], "case " .. i)
+    end
+    -- A name in UTF-8 has no other name
+    local n = 0
+    for _ in pairs(names_of(rar5("\209\129\209\135\208\181\209\130.exe", "MZ"))) do
+      n = n + 1
+    end
+    assert_equal(1, n)
+  end)
 end)

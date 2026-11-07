@@ -322,6 +322,94 @@ rspamd_archive_file_add_cstr_name(struct rspamd_task *task,
 	return rspamd_archive_file_add_name(task, arch, f, (const char *) name, nul - name);
 }
 
+/*
+ * A name as unrar decodes UTF-8, for every rar 5 name and for rar 4 names
+ * on macOS: up to the first NUL or the first byte it cannot read, overlong
+ * forms (0xC0 0xAE is '.') and surrogates decoded, code points past U+10FFFF
+ * dropped. Surrogates are listed as U+FFFD. This name is listed after the
+ * file as another name of it. FALSE when no more files can be listed
+ */
+static gboolean
+rspamd_archive_file_add_unrar_utf_name(struct rspamd_task *task,
+									   struct rspamd_archive *arch,
+									   const struct rspamd_archive_file *f,
+									   const unsigned char *name, gsize len)
+{
+	GString *res;
+	gboolean listed, changed = FALSE;
+	gsize i = 0;
+
+	res = g_string_sized_new(len);
+
+	while (i < len && name[i] != 0) {
+		unsigned int c = name[i], d, n, k;
+
+		if (c < 0x80) {
+			d = c;
+			n = 1;
+		}
+		else if ((c >> 5) == 6) {
+			d = c & 0x1f;
+			n = 2;
+		}
+		else if ((c >> 4) == 14) {
+			d = c & 0x0f;
+			n = 3;
+		}
+		else if ((c >> 3) == 30) {
+			d = c & 0x07;
+			n = 4;
+		}
+		else {
+			changed = TRUE;
+			break;
+		}
+
+		for (k = 1; k < n; k++) {
+			if (i + k >= len || (name[i + k] & 0xc0) != 0x80) {
+				break;
+			}
+
+			d = (d << 6) | (name[i + k] & 0x3f);
+		}
+
+		if (k < n) {
+			/* unrar stops at a sequence cut short */
+			changed = TRUE;
+			break;
+		}
+
+		if (d > 0x10ffff) {
+			changed = TRUE;
+		}
+		else if ((d >= 0xd800 && d <= 0xdfff) || (n > 1 && d < 0x80) ||
+				 (n > 2 && d < 0x800) || (n > 3 && d < 0x10000)) {
+			/* A surrogate or an overlong form, which UTF-8 does not allow */
+			changed = TRUE;
+
+			if (d >= 0xd800 && d <= 0xdfff) {
+				d = 0xfffd;
+			}
+		}
+
+		if (d <= 0x10ffff) {
+			char buf[4];
+			int blen = 0;
+
+			U8_APPEND_UNSAFE(buf, blen, d);
+			g_string_append_len(res, buf, blen);
+		}
+
+		i += n;
+	}
+
+	/* Only a name that differs from the bytes is listed */
+	listed = !changed || rspamd_archive_file_add_name(task, arch, f, res->str, res->len);
+	g_string_free(res, TRUE);
+
+	return listed;
+}
+
 /* Readers of the Unicode name of a rar 4 file, which stop at different points */
 enum rspamd_rar4_unicode_reader {
 	RSPAMD_RAR4_UNRAR = 0,
@@ -2507,6 +2595,11 @@ rspamd_archive_rar4_add_file(struct rspamd_task *task, struct rspamd_archive *ar
 			/* A name with a NUL is shown up to it */
 			listed = rspamd_archive_file_add_cstr_name(task, arch, f, p, avail);
 		}
+
+		if (listed && nunicode_names == 0) {
+			/* unrar on macOS decodes the name as UTF-8 */
+			listed = rspamd_archive_file_add_unrar_utf_name(task, arch, f, p, ascii_len);
+		}
 	}
 	else {
 		g_free(f);
@@ -3181,8 +3274,9 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 					}
 
-					/* A name with a NUL is shown up to it */
-					if (!rspamd_archive_file_add_cstr_name(task, arch, f, p + name_off, avail)) {
+					/* A name with a NUL is shown up to it, and as unrar decodes it */
+					if (!rspamd_archive_file_add_cstr_name(task, arch, f, p + name_off, avail) ||
+						!rspamd_archive_file_add_unrar_utf_name(task, arch, f, p + name_off, avail)) {
 						goto end;
 					}
 				}
