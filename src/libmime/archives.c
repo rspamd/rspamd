@@ -3035,6 +3035,657 @@ rspamd_rar5_extra_encrypted(const unsigned char *p, gsize len)
 	return FALSE;
 }
 
+/*
+ * Readers of rar 5 archives: unrar, which 7-Zip follows where it does not
+ * stop first, and libarchive, which goes its own way
+ */
+enum rspamd_rar5_walker {
+	RSPAMD_RAR5_WALK_UNRAR = 0,
+	RSPAMD_RAR5_WALK_LIBARCHIVE,
+	RSPAMD_RAR5_WALKERS,
+};
+
+/* Where a reader is, and what it keeps from a header to the next */
+struct rspamd_rar5_walk {
+	const unsigned char *at; /* NULL once it stops */
+	gboolean opening;        /* unrar looks for the main header */
+	gboolean volume;         /* libarchive: flags of the last main header */
+	gboolean solid;
+	gboolean window; /* libarchive has decoded the data of a solid file */
+	uint64_t vol_no;
+	uint64_t expected_vol_no;
+};
+
+/*
+ * libarchive reads a header field after field from the stream, and never
+ * goes to its declared end: the next header starts where its reads end
+ */
+struct rspamd_rar5_la {
+	const unsigned char *p;
+	const unsigned char *end;
+};
+
+/*
+ * A number as libarchive reads it: 8 bytes from its start must be there, at
+ * most 8 bytes are read, and a 9th one is taken, whatever it is, after 8
+ * that go on
+ */
+static gboolean
+rspamd_rar5_la_peek(const struct rspamd_rar5_la *c, uint64_t *v, unsigned int *len)
+{
+	uint64_t r = 0;
+	unsigned int i;
+
+	if (c->end - c->p < 8) {
+		return FALSE;
+	}
+
+	for (i = 0; i < 8; i++) {
+		r += (uint64_t) (c->p[i] & 0x7f) << (7 * i);
+
+		if (!(c->p[i] & 0x80)) {
+			*v = r;
+			*len = i + 1;
+
+			return TRUE;
+		}
+	}
+
+	*v = r;
+	*len = 9;
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_rar5_la_skip(struct rspamd_rar5_la *c, uint64_t n)
+{
+	if (n > (uint64_t) (c->end - c->p)) {
+		c->p = c->end;
+
+		return FALSE;
+	}
+
+	c->p += n;
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_rar5_la_var(struct rspamd_rar5_la *c, uint64_t *v)
+{
+	unsigned int len;
+
+	return rspamd_rar5_la_peek(c, v, &len) && rspamd_rar5_la_skip(c, len);
+}
+
+/* A number that counts against the extra area, by the bytes it takes */
+static gboolean
+rspamd_rar5_la_extra_var(struct rspamd_rar5_la *c, int64_t *eds, uint64_t *v)
+{
+	unsigned int len;
+
+	if (!rspamd_rar5_la_peek(c, v, &len)) {
+		return FALSE;
+	}
+
+	*eds -= len;
+
+	return rspamd_rar5_la_skip(c, len);
+}
+
+/*
+ * The extra area of a file header, as libarchive 3.7 reads it: record sizes
+ * are not used, each record takes what its parser reads, the result of the
+ * last record counts, and an unknown record takes what is left of the area
+ */
+static gboolean
+rspamd_rar5_la_extra(struct rspamd_rar5_la *c, int64_t eds)
+{
+	gboolean ok = FALSE;
+	uint64_t v, id, n;
+	unsigned int bit;
+
+	while (eds > 0) {
+		/* The size of the record, then its type */
+		if (!rspamd_rar5_la_extra_var(c, &eds, &v) || !rspamd_rar5_la_extra_var(c, &eds, &id)) {
+			return FALSE;
+		}
+
+		switch (id) {
+		case 2:
+			/* Hash: its type, and 32 bytes of BLAKE2sp */
+			ok = FALSE;
+
+			if (rspamd_rar5_la_extra_var(c, &eds, &v) && v == 0 && c->end - c->p >= 32) {
+				c->p += 32;
+				eds -= 32;
+				ok = TRUE;
+			}
+			break;
+		case 3:
+			/* Times: four bytes each when unix, else eight, skipped when missing */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v);
+
+			if (ok) {
+				unsigned int sz = (v & 0x1) ? 4 : 8;
+
+				for (bit = 0x2; bit <= 0x8; bit <<= 1) {
+					if ((v & bit) && c->end - c->p >= sz) {
+						c->p += sz;
+						eds -= sz;
+					}
+				}
+
+				if (v & 0x10) {
+					/* A field that is not there does not move it */
+					ok = c->end - c->p >= 4;
+
+					if (ok) {
+						c->p += 4;
+						eds -= 4;
+					}
+				}
+			}
+			break;
+		case 5:
+			/* Link: its type, flags and target, which counts as a byte and its length */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v) && rspamd_rar5_la_extra_var(c, &eds, &v) &&
+				 rspamd_rar5_la_var(c, &n);
+
+			if (ok) {
+				eds -= n + 1;
+				ok = n <= (uint64_t) (c->end - c->p) && n > 0 && n < 2048;
+
+				if (ok) {
+					c->p += n;
+				}
+			}
+			break;
+		case 6:
+			/* Owner: names that count as a byte and their length, then ids */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v);
+
+			for (bit = 0x1; ok && bit <= 0x2; bit <<= 1) {
+				if (v & bit) {
+					ok = rspamd_rar5_la_var(c, &n);
+
+					if (ok) {
+						eds -= n + 1;
+						ok = n <= (uint64_t) (c->end - c->p);
+
+						if (ok) {
+							c->p += n;
+						}
+					}
+				}
+			}
+
+			for (bit = 0x4; ok && bit <= 0x8; bit <<= 1) {
+				if (v & bit) {
+					ok = rspamd_rar5_la_extra_var(c, &eds, &n);
+				}
+			}
+			break;
+		case 4:
+			/* Version: flags and the number */
+			ok = rspamd_rar5_la_extra_var(c, &eds, &v) && rspamd_rar5_la_extra_var(c, &eds, &v);
+			break;
+		default:
+			/* Encryption, service data and unknown records: the rest of the area */
+			return eds >= 0 && rspamd_rar5_la_skip(c, eds);
+		}
+	}
+
+	return ok;
+}
+
+/* The fields of a file or service header that libarchive reads, FALSE where it stops */
+struct rspamd_rar5_la_file {
+	uint64_t data_size;
+	uint64_t unp_size;
+	const unsigned char *name;
+	gsize name_len;
+	gboolean dir;
+	unsigned int method;
+};
+
+static gboolean
+rspamd_rar5_la_file_head(struct rspamd_rar5_la *c, const struct rspamd_rar5_walk *w,
+						 uint64_t hflags, struct rspamd_rar5_la_file *fh)
+{
+	uint64_t eds = 0, ff, ci, host, ns, v;
+
+	if ((hflags & 0x1) && !rspamd_rar5_la_var(c, &eds)) {
+		return FALSE;
+	}
+
+	if (!(hflags & 0x2) || !rspamd_rar5_la_var(c, &fh->data_size)) {
+		/* No data found in file/service block */
+		return FALSE;
+	}
+
+	if (!rspamd_rar5_la_var(c, &ff) || !rspamd_rar5_la_var(c, &fh->unp_size) || (ff & 0x8)) {
+		/* Files with unknown unpacked size are not supported */
+		return FALSE;
+	}
+
+	fh->dir = (ff & 0x1) != 0;
+
+	/* Attributes, then the mtime and the CRC */
+	if (!rspamd_rar5_la_var(c, &v) ||
+		((ff & 0x2) && !rspamd_rar5_la_skip(c, 4)) ||
+		((ff & 0x4) && !rspamd_rar5_la_skip(c, 4)) ||
+		!rspamd_rar5_la_var(c, &ci)) {
+		return FALSE;
+	}
+
+	fh->method = (ci >> 7) & 7;
+
+	if (((ci & 0x40) && !w->window) || (!fh->dir && ((ci >> 10) & 0xf) > 9)) {
+		/* A solid file before any decoded one, or a window over 64 MiB */
+		return FALSE;
+	}
+
+	if (!rspamd_rar5_la_var(c, &host) || host > 1 || !rspamd_rar5_la_var(c, &ns) ||
+		ns > (uint64_t) (c->end - c->p) || ns == 0 || ns > 2047) {
+		return FALSE;
+	}
+
+	fh->name = c->p;
+	fh->name_len = ns;
+	c->p += ns;
+
+	/* The extra area size is signed, but numbers read are under 2^56 */
+	return eds == 0 || rspamd_rar5_la_extra(c, (int64_t) eds);
+}
+
+/*
+ * The data of an entry, as libarchive skips it: in a solid archive, the data
+ * of a directory or of an unknown method stops it, and compressed data is
+ * decoded (which is taken as a skip here)
+ */
+static const unsigned char *
+rspamd_rar5_la_data(struct rspamd_rar5_la *c, struct rspamd_rar5_walk *w,
+					const struct rspamd_rar5_la_file *fh, gboolean service)
+{
+	if (w->solid && fh->data_size > 0) {
+		if (fh->dir || (!service && fh->method > 5)) {
+			return NULL;
+		}
+
+		if (!service && fh->method > 0) {
+			w->window = TRUE;
+		}
+	}
+
+	return rspamd_rar5_la_skip(c, fh->data_size) ? c->p : NULL;
+}
+
+/*
+ * libarchive 3.7 at the header at p: where it goes next (NULL once it
+ * stops), and the name of the file it lists there, or NULL
+ */
+static void
+rspamd_rar5_la_step(struct rspamd_archive *arch, struct rspamd_rar5_walk *w,
+					const unsigned char *p, const unsigned char *end,
+					struct rspamd_rar5_la_file *listed, gboolean *ended)
+{
+	static const unsigned char rar5_marker[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00};
+	struct rspamd_rar5_la c = {p, end};
+	struct rspamd_rar5_la_file fh;
+	uint64_t raw, hs, type, hflags, v, es;
+	unsigned int len;
+
+	w->at = NULL;
+	listed->name = NULL;
+
+	if (end - p < 4) {
+		return;
+	}
+
+	c.p += 4;
+
+	if (!rspamd_rar5_la_peek(&c, &raw, &len)) {
+		return;
+	}
+
+	hs = raw + len;
+
+	/*
+	 * Size limits and the whole header. Its CRC is not checked: libarchive
+	 * stops at a bad one, but a CRC over each header, which can be 2 MiB
+	 * long and start a few bytes after the one before, takes quadratic time,
+	 * and following it past a broken header only lists more
+	 */
+	if (hs > 2 * 1024 * 1024 || raw == 0 || hs < 3 || hs > (uint64_t) (end - c.p)) {
+		return;
+	}
+
+	c.p += len;
+
+	if (!rspamd_rar5_la_var(&c, &type) || !rspamd_rar5_la_var(&c, &hflags)) {
+		return;
+	}
+
+	memset(&fh, 0, sizeof(fh));
+
+	switch (type) {
+	case 1:
+		/* Main: fields from the stream, without its data, padding or other records */
+		es = 0;
+
+		if (((hflags & 0x1) && !rspamd_rar5_la_var(&c, &es)) || !rspamd_rar5_la_var(&c, &v)) {
+			return;
+		}
+
+		w->volume = (v & 0x1) != 0;
+		w->solid = (v & 0x4) != 0;
+		w->vol_no = 0;
+
+		if ((v & 0x2) && (!rspamd_rar5_la_var(&c, &w->vol_no) || w->vol_no > G_MAXUINT32)) {
+			return;
+		}
+
+		if (w->expected_vol_no > 0 && w->vol_no != w->expected_vol_no) {
+			return;
+		}
+
+		if (es > 0) {
+			uint64_t fs, id;
+
+			/* Only a locator record is taken */
+			if (!rspamd_rar5_la_var(&c, &fs) || !rspamd_rar5_la_var(&c, &id) || fs == 0 || id != 1 ||
+				!rspamd_rar5_la_var(&c, &v) ||
+				((v & 0x1) && !rspamd_rar5_la_var(&c, &fs)) ||
+				((v & 0x2) && !rspamd_rar5_la_var(&c, &fs))) {
+				return;
+			}
+		}
+
+		w->at = c.p;
+		break;
+	case 2:
+	case 3:
+		if (!rspamd_rar5_la_file_head(&c, w, hflags, &fh)) {
+			return;
+		}
+
+		if ((type == 2 && !(hflags & 0x8)) || (w->solid && fh.dir && fh.data_size > 0)) {
+			/*
+			 * A file that is not the rest of a split one is listed, and so is
+			 * any entry that stops a solid archive with the data of a directory
+			 */
+			*listed = fh;
+		}
+
+		/* The data of the rest of a split service is skipped as that of a file */
+		w->at = rspamd_rar5_la_data(&c, w, &fh, type == 3 && !(hflags & 0x8));
+		break;
+	case 4:
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		break;
+	case 5:
+		if (!w->volume) {
+			*ended = TRUE;
+		}
+		else {
+			const unsigned char *s = c.p;
+			gboolean found = FALSE;
+
+			/*
+			 * The next volume: the signature at the first 504 offsets of
+			 * each 512 bytes, else what is left after the last 512 bytes
+			 */
+			while (end - s >= 512 && !found) {
+				goffset off = rspamd_substring_search((const char *) s, 511,
+													  (const char *) rar5_marker, sizeof(rar5_marker));
+
+				if (off >= 0) {
+					s += off + sizeof(rar5_marker);
+					found = TRUE;
+				}
+				else {
+					s += 512;
+				}
+			}
+
+			if (w->expected_vol_no != G_MAXUINT32) {
+				w->expected_vol_no = (w->vol_no + 1) & G_MAXUINT32;
+				w->at = s;
+			}
+		}
+		break;
+	case 0:
+		break;
+	default:
+		if (hflags & 0x4) {
+			/* Skipped if unknown: the rest of the header is read as headers */
+			w->at = c.p;
+		}
+		break;
+	}
+}
+
+/*
+ * A file of a rar 5 archive. unrar_names adds the names unrar shows for its
+ * bytes. FALSE once no more files fit
+ */
+static gboolean
+rspamd_archive_rar5_add_file(struct rspamd_task *task, struct rspamd_archive *arch,
+							 const unsigned char *name, gsize len, uint64_t uncomp_sz,
+							 uint64_t comp_sz, gboolean encrypted, gboolean unrar_names)
+{
+	struct rspamd_archive_file *f = g_malloc0(sizeof(*f));
+
+	f->uncompressed_size = uncomp_sz;
+	f->compressed_size = comp_sz;
+	rspamd_archive_file_try_utf(task, arch, f, name, len);
+
+	if (f->fname == NULL) {
+		g_free(f);
+
+		return TRUE;
+	}
+
+	msg_debug_archive("added rarv5 file: %v", f->fname);
+
+	if (encrypted) {
+		f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+	}
+
+	if (!rspamd_archive_file_add(task, arch, f)) {
+		return FALSE;
+	}
+
+	if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+		arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+	}
+
+	/* A name with a NUL is shown up to it, and as unrar decodes it */
+	return !unrar_names ||
+		   (rspamd_archive_file_add_cstr_name(task, arch, f, name, len) &&
+			rspamd_archive_file_add_unrar_utf_name(task, arch, f, name, len));
+}
+
+/*
+ * unrar at the header at p: headers are whole, and fields past their end
+ * read as zero. While it looks for the main header, it skips the end block
+ * and goes on after a broken header, from where it lists files. Sets where
+ * it goes next (NULL once it stops) and the name listed. FALSE once no more
+ * files fit
+ */
+static gboolean
+rspamd_archive_rar5_unrar_step(struct rspamd_task *task, struct rspamd_archive *arch,
+							   const unsigned char *arc_start, const unsigned char *end,
+							   const unsigned char *p, struct rspamd_rar5_walk *w,
+							   gboolean *ended, const unsigned char **listed, gsize *listed_len)
+{
+	struct rspamd_rar_raw raw;
+	uint64_t block_size, head_size = 0, type, flags, extra_sz = 0, data_sz = 0;
+	const unsigned char *next;
+	int size_len;
+
+	w->at = NULL;
+	*listed = NULL;
+
+	if (end - p < 7) {
+		msg_debug_archive("rar archive is invalid (truncated block header)");
+
+		return TRUE;
+	}
+
+	/* A CRC, then the size of the rest */
+	size_len = rspamd_archive_rar_read_vint(p + 4, end - p - 4, &block_size);
+
+	if (size_len > 0 && block_size > (uint64_t) (end - p) - 4 - size_len) {
+		/* Readers stop at a cut header */
+		msg_debug_archive("rar archive is invalid (truncated block)");
+
+		return TRUE;
+	}
+
+	if (size_len > 0) {
+		head_size = 4 + size_len + block_size;
+	}
+
+	if (head_size < 7) {
+		/* No size, or too short for a type and flags */
+		msg_debug_archive("rar archive is invalid (block of %L bytes)", head_size);
+
+		if (w->opening) {
+			/* unrar goes on after the 7 bytes it has read */
+			w->opening = FALSE;
+			w->at = p + 7;
+		}
+
+		return TRUE;
+	}
+
+	raw.p = p;
+	raw.len = head_size;
+	raw.pos = 4 + size_len;
+	/* unrar keeps 32 bits of these */
+	type = (uint32_t) rspamd_rar_raw_getv(&raw);
+	flags = (uint32_t) rspamd_rar_raw_getv(&raw);
+
+	if (type == 4) {
+		/* We can't read any further information as headers are encrypted */
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		*ended = TRUE;
+
+		return TRUE;
+	}
+
+	if (flags & 0x1) {
+		/* Have extra zone */
+		extra_sz = rspamd_rar_raw_getv(&raw);
+
+		if (extra_sz >= head_size) {
+			msg_debug_archive("rar archive is invalid (bad extra size)");
+
+			if (w->opening) {
+				/* unrar goes on after this header */
+				w->opening = FALSE;
+				w->at = p + head_size;
+			}
+
+			return TRUE;
+		}
+	}
+
+	if (flags & 0x2) {
+		/* Data zone is presented */
+		data_sz = rspamd_rar_raw_getv(&raw);
+	}
+
+	if (w->opening && data_sz > (uint64_t) G_MAXINT64 - (p - arc_start) - head_size) {
+		/* Data past the largest offset: unrar goes on after this header */
+		w->opening = FALSE;
+		w->at = p + head_size;
+
+		return TRUE;
+	}
+
+	next = rspamd_rar_skip(p, end, head_size, data_sz);
+
+	if (type == 5 && !w->opening) {
+		/* The end of the archive */
+		*ended = TRUE;
+
+		return TRUE;
+	}
+
+	if (type == 1) {
+		w->opening = FALSE;
+	}
+	else if (type == 2) {
+		uint64_t file_flags, uncomp_sz, fname_len;
+		gsize name_off, avail;
+
+		file_flags = rspamd_rar_raw_getv(&raw);
+		uncomp_sz = rspamd_rar_raw_getv(&raw);
+		/* Attributes */
+		(void) rspamd_rar_raw_getv(&raw);
+
+		if (file_flags & 0x2) {
+			/* Unix mtime */
+			(void) rspamd_rar_raw_get4(&raw);
+		}
+		if (file_flags & 0x4) {
+			/* Crc32 */
+			(void) rspamd_rar_raw_get4(&raw);
+		}
+
+		/* Compression and host OS */
+		(void) rspamd_rar_raw_getv(&raw);
+		(void) rspamd_rar_raw_getv(&raw);
+		fname_len = rspamd_rar_raw_getv(&raw);
+		name_off = raw.pos;
+		/* The name is read from the header only: unrar reads zeros after its end */
+		avail = MIN(raw.len - name_off, fname_len);
+
+		if (file_flags & 0x1) {
+			/* Ignore directories for sanity purposes */
+			msg_debug_archive("skip directory record in a rar archive");
+		}
+		else if (avail == 0) {
+			/* unrar skips a file of no name and goes on */
+			msg_debug_archive("rar archive has a file of no name");
+		}
+		else {
+			gsize after_name = name_off + avail;
+			/*
+			 * The extra records: unrar reads them at the end of the header,
+			 * past the name, 7-Zip right after the name
+			 */
+			gboolean encrypted = extra_sz > 0 &&
+								 ((head_size - extra_sz >= after_name &&
+								   rspamd_rar5_extra_encrypted(p + head_size - extra_sz, extra_sz)) ||
+								  rspamd_rar5_extra_encrypted(p + after_name,
+															  MIN(extra_sz, (uint64_t) (end - p) - after_name)));
+
+			if (!rspamd_archive_rar5_add_file(task, arch, p + name_off, avail, uncomp_sz, data_sz,
+											  encrypted, TRUE)) {
+				return FALSE;
+			}
+
+			*listed = p + name_off;
+			*listed_len = avail;
+		}
+	}
+
+	if (next == NULL) {
+		/* Readers stop where the data runs past the end */
+		msg_debug_archive("rar archive is invalid (truncated data)");
+	}
+
+	w->at = next;
+
+	return TRUE;
+}
+
 static void
 rspamd_archive_process_rar(struct rspamd_task *task,
 						   struct rspamd_mime_part *part)
@@ -3042,11 +3693,10 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 	const unsigned char *p, *end;
 	const unsigned char rar_v5_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00},
 						rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
-	const unsigned int rar_encrypted_header = 4, rar_main_header = 1,
-					   rar_file_header = 2, rar_end_header = 5;
+	struct rspamd_rar5_walk w[RSPAMD_RAR5_WALKERS];
 	struct rspamd_archive *arch;
-	struct rspamd_archive_file *f;
-	gboolean volume = FALSE, unrar_opening = TRUE;
+	gboolean ended = FALSE;
+	unsigned int r;
 
 	p = part->parsed_data.begin;
 	end = p + part->parsed_data.len;
@@ -3086,218 +3736,73 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 	}
 
 	/*
-	 * Headers as unrar reads them: whole, and fields past their end read as
-	 * zero. bsdtar also takes an archive that does not start with its main
-	 * header, whose files unrar does not list, so all headers are read alike.
-	 * While unrar looks for the main header, it skips the end block, and goes
-	 * on after a broken header, from where it lists files
+	 * Each reader, NULL once it stops. They agree on the archives rar
+	 * writes; libarchive reads headers from the stream without going to
+	 * their declared end, so bytes that unrar skips can hold other headers
+	 * for it, and the files that either lists are listed
 	 */
-	while (p < end) {
-		struct rspamd_rar_raw raw;
-		uint64_t block_size, head_size = 0, type, flags, extra_sz = 0, data_sz = 0;
-		const unsigned char *next;
-		gsize after_flags;
-		int size_len;
+	memset(w, 0, sizeof(w));
+	w[RSPAMD_RAR5_WALK_UNRAR].at = p;
+	w[RSPAMD_RAR5_WALK_UNRAR].opening = TRUE;
+	w[RSPAMD_RAR5_WALK_LIBARCHIVE].at = p;
 
-		if (end - p < 7) {
-			msg_debug_archive("rar archive is invalid (truncated block header)");
+	for (;;) {
+		const unsigned char *cur = NULL, *listed = NULL;
+		gsize listed_len = 0;
+		unsigned int readers = 0;
 
-			goto broken;
-		}
-
-		/* A CRC, then the size of the rest */
-		size_len = rspamd_archive_rar_read_vint(p + 4, end - p - 4, &block_size);
-
-		if (size_len > 0 && block_size > (uint64_t) (end - p) - 4 - size_len) {
-			/* Readers stop at a cut header */
-			msg_debug_archive("rar archive is invalid (truncated block)");
-
-			goto broken;
-		}
-
-		if (size_len > 0) {
-			head_size = 4 + size_len + block_size;
-		}
-
-		if (head_size < 7) {
-			/* No size, or too short for a type and flags: readers stop there */
-			msg_debug_archive("rar archive is invalid (block of %L bytes)", head_size);
-
-			if (unrar_opening) {
-				/* unrar goes on after the 7 bytes it has read */
-				unrar_opening = FALSE;
-				p += 7;
-				continue;
+		/* Readers only go forward, so the first header one is at comes first */
+		for (r = 0; r < RSPAMD_RAR5_WALKERS; r++) {
+			if (w[r].at != NULL && (cur == NULL || w[r].at < cur)) {
+				cur = w[r].at;
 			}
-
-			goto broken;
 		}
 
-		raw.p = p;
-		raw.len = head_size;
-		raw.pos = 4 + size_len;
-		type = rspamd_rar_raw_getv(&raw);
-		flags = rspamd_rar_raw_getv(&raw);
-		after_flags = raw.pos;
+		if (cur == NULL) {
+			break;
+		}
 
-		if (type == rar_encrypted_header) {
-			/* We can't read any further information as headers are encrypted */
-			arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		for (r = 0; r < RSPAMD_RAR5_WALKERS; r++) {
+			if (w[r].at == cur) {
+				readers |= 1u << r;
+			}
+		}
+
+		if ((readers & (1u << RSPAMD_RAR5_WALK_UNRAR)) &&
+			!rspamd_archive_rar5_unrar_step(task, arch, part->parsed_data.begin, end, cur,
+											&w[RSPAMD_RAR5_WALK_UNRAR], &ended, &listed, &listed_len)) {
 			goto end;
 		}
 
-		if (flags & 0x1) {
-			/* Have extra zone */
-			extra_sz = rspamd_rar_raw_getv(&raw);
+		if (readers & (1u << RSPAMD_RAR5_WALK_LIBARCHIVE)) {
+			struct rspamd_rar5_la_file lf;
 
-			if (extra_sz >= head_size) {
-				msg_debug_archive("rar archive is invalid (bad extra size)");
+			rspamd_rar5_la_step(arch, &w[RSPAMD_RAR5_WALK_LIBARCHIVE], cur, end, &lf, &ended);
 
-				if (unrar_opening) {
-					/* unrar goes on after this header */
-					unrar_opening = FALSE;
-					p += head_size;
-					continue;
+			if (lf.name != NULL) {
+				/* libarchive shows a name up to its first NUL */
+				const unsigned char *nul = memchr(lf.name, 0, lf.name_len);
+				gsize len = nul ? (gsize) (nul - lf.name) : lf.name_len;
+
+				if (listed != NULL) {
+					const unsigned char *unul = memchr(listed, 0, listed_len);
+
+					if (unul) {
+						listed_len = unul - listed;
+					}
 				}
 
-				goto broken;
-			}
-		}
-
-		if (flags & 0x2) {
-			/* Data zone is presented */
-			data_sz = rspamd_rar_raw_getv(&raw);
-		}
-
-		if (unrar_opening &&
-			data_sz > (uint64_t) G_MAXINT64 - (p - (const unsigned char *) part->parsed_data.begin) - head_size) {
-			/* Data past the largest offset: unrar goes on after this header */
-			unrar_opening = FALSE;
-			p += head_size;
-			continue;
-		}
-
-		next = rspamd_rar_skip(p, end, head_size, data_sz);
-
-		if (type == rar_end_header && !unrar_opening) {
-			goffset sig = -1;
-
-			/* Readers stop at the end of the archive, bsdtar goes on with the next volume */
-			if (volume) {
-				sig = rspamd_substring_search((const char *) p + after_flags, end - p - after_flags,
-											  (const char *) rar_v5_magic, sizeof(rar_v5_magic));
-			}
-
-			if (sig == -1) {
-				goto end;
-			}
-
-			p += after_flags + sig + sizeof(rar_v5_magic);
-			continue;
-		}
-
-		if (type == rar_main_header) {
-			unrar_opening = FALSE;
-
-			/* Archive flags: bsdtar goes on after the end of a volume */
-			if (rspamd_rar_raw_getv(&raw) & 0x1) {
-				volume = TRUE;
-			}
-		}
-		else if (type == rar_file_header) {
-			uint64_t file_flags, uncomp_sz, fname_len;
-			gsize name_off, avail;
-
-			file_flags = rspamd_rar_raw_getv(&raw);
-			uncomp_sz = rspamd_rar_raw_getv(&raw);
-			/* Attributes */
-			(void) rspamd_rar_raw_getv(&raw);
-
-			if (file_flags & 0x2) {
-				/* Unix mtime */
-				(void) rspamd_rar_raw_get4(&raw);
-			}
-			if (file_flags & 0x4) {
-				/* Crc32 */
-				(void) rspamd_rar_raw_get4(&raw);
-			}
-
-			/* Compression and host OS */
-			(void) rspamd_rar_raw_getv(&raw);
-			(void) rspamd_rar_raw_getv(&raw);
-			fname_len = rspamd_rar_raw_getv(&raw);
-			name_off = raw.pos;
-			/* The name is read from the header only: unrar reads zeros after its end */
-			avail = MIN(raw.len - name_off, fname_len);
-
-			if (file_flags & 0x1) {
-				/* Ignore directories for sanity purposes */
-				msg_debug_archive("skip directory record in a rar archive");
-			}
-			else if (avail == 0) {
-				/* unrar skips a file of no name and goes on */
-				msg_debug_archive("rar archive has a file of no name");
-			}
-			else {
-				f = g_malloc0(sizeof(*f));
-				f->uncompressed_size = uncomp_sz;
-				f->compressed_size = data_sz;
-				rspamd_archive_file_try_utf(task, arch, f, p + name_off, avail);
-
-				if (f->fname == NULL) {
-					g_free(f);
-				}
-				else {
-					gsize after_name = name_off + avail;
-
-					msg_debug_archive("added rarv5 file: %v", f->fname);
-
-					/*
-					 * The extra records: unrar reads them at the end of the
-					 * header, past the name, libarchive and 7-Zip right after
-					 * the name, from the data if they run past the header
-					 */
-					if (extra_sz > 0 &&
-						((head_size - extra_sz >= after_name &&
-						  rspamd_rar5_extra_encrypted(p + head_size - extra_sz, extra_sz)) ||
-						 rspamd_rar5_extra_encrypted(p + after_name,
-													 MIN(extra_sz, (uint64_t) (end - p) - after_name)))) {
-						f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
-						arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-					}
-
-					if (!rspamd_archive_file_add(task, arch, f)) {
-						goto end;
-					}
-
-					if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
-						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
-					}
-
-					/* A name with a NUL is shown up to it, and as unrar decodes it */
-					if (!rspamd_archive_file_add_cstr_name(task, arch, f, p + name_off, avail) ||
-						!rspamd_archive_file_add_unrar_utf_name(task, arch, f, p + name_off, avail)) {
-						goto end;
-					}
+				if (len > 0 && !(listed && listed_len == len && memcmp(listed, lf.name, len) == 0) &&
+					!rspamd_archive_rar5_add_file(task, arch, lf.name, len, lf.unp_size, lf.data_size,
+												  FALSE, FALSE)) {
+					goto end;
 				}
 			}
 		}
-
-		if (next == NULL) {
-			/* Readers stop where the data runs past the end */
-			msg_debug_archive("rar archive is invalid (truncated data)");
-
-			goto broken;
-		}
-
-		p = next;
 	}
 
-	goto end;
-
-broken:
-	/* Readers list the files before a broken or cut header */
-	if (arch->files->len == 0) {
+	if (!ended && arch->files->len == 0) {
+		/* Readers list the files before a broken or cut header, if any */
 		return;
 	}
 

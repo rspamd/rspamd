@@ -5,6 +5,7 @@ Names of files in rar archives, as readers (unrar, 7-Zip, bsdtar) show them.
 context("Rar archive listing", function()
   local rspamd_task = require "rspamd_task"
   local rspamd_util = require "rspamd_util"
+  local rspamd_text = require "rspamd_text"
 
   local function names_of(rar)
     local msg = table.concat({
@@ -30,10 +31,11 @@ context("Rar archive listing", function()
     return names
   end
 
-  -- Rar 5: headers of a CRC, a size, then fields as small numbers (one byte each here);
-  -- the name may have a size other than its own (but less than 128)
+  -- Rar 5: headers of a CRC (which bsdtar checks), a size, then fields as small numbers
+  -- (one byte each here); the name may have a size other than its own (but less than 128)
   local function rar5_block(body)
-    return "\0\0\0\0" .. string.char(#body) .. body
+    local sized = string.char(#body) .. body
+    return rspamd_util.pack("<I4", rspamd_text.fromstring(sized):crc32()) .. sized
   end
 
   -- File header with data: no time, no CRC, stored, then the name
@@ -202,9 +204,11 @@ context("Rar archive listing", function()
         "Rar!\26\7\1\0" .. rar5_file("fake.scr", "MZ") .. rar5_end)
     assert_equal("file", names["invoice.exe"])
     assert_nil(names["fake.scr"])
-    -- bsdtar goes on with the next volume of a rar 5 volume, after its signature
+    -- bsdtar goes on with the next volume of a rar 5 volume, at a signature in the next
+    -- 512 bytes, when that many are left
     names = names_of("Rar!\26\7\1\0" .. rar5_block("\1\0\1") .. rar5_file("invoice.txt", "MZ") ..
-        rar5_end .. "junk" .. "Rar!\26\7\1\0" .. rar5_file("payload.exe", "MZ") .. rar5_end)
+        rar5_end .. "junk" .. "Rar!\26\7\1\0" .. rar5_file("payload.exe", "MZ") .. rar5_end ..
+        string.rep("\0", 512))
     assert_equal("file", names["invoice.txt"])
     assert_equal("file", names["payload.exe"])
   end)
@@ -365,5 +369,44 @@ context("Rar archive listing", function()
       n = n + 1
     end
     assert_equal(1, n)
+  end)
+
+  test("files bsdtar reads in the bytes of a rar 5 header are listed", function()
+    -- libarchive reads fields from the stream and never goes to the declared end of a
+    -- header: padding in it, or the body of a header of an unknown type that may be
+    -- skipped, is read as headers
+    local hidden = rar5_file("hidden.exe", "MZ")
+    local visible = rar5_file("visible.txt", "hi") .. rar5_end
+    for i, rar in ipairs({
+      "Rar!\26\7\1\0" .. rar5_block("\1\0\0" .. hidden) .. visible,
+      rar5_start .. rar5_block("\9\4" .. hidden) .. visible,
+      rar5_start .. rar5_block("\2\2\0\0\0\32\0\0\5a.txt" .. hidden) .. visible,
+    }) do
+      local names = names_of(rar)
+      assert_equal("file", names["hidden.exe"], "case " .. i)
+      assert_equal("file", names["visible.txt"], "case " .. i)
+    end
+  end)
+
+  test("files bsdtar lists in odd places of a rar 5 archive are listed", function()
+    -- Archives made for libarchive 3.7, with real CRCs: a solid archive whose service
+    -- header marked as a directory has data (bsdtar prints its name, then stops); a file
+    -- in header padding whose owner record runs past the end (libarchive goes on with the
+    -- next record); a split service whose compressed data lets a later solid file be read
+    local archives = {
+      -- svc_dir_solid
+      "Rar!\26\7\1\0\220\222^5\3\1\0\4a7\169\134\14\2\2\2\0\2 \0\0\5a.txthi\224\255\1694\17\3\2" ..
+          "\2\1\2 \0\0\8evil.exeMZ\1di\252\14\2\2\2\0\2 \0\0\5c.txthi\025\178:5\3\5\0\0",
+      -- owner_eof
+      "Rar!\26\7\1\0\197\02632\3\1\0\0}\29^p,\2\2\0\0\0 \0\0\5a.txt\224\15\2437\18\2\3\19\0\0\0" ..
+          " \0\0\8evil.exe\3\6\1\12\2\3\0\025\178:5\3\5\0\0",
+      -- split_window
+      "Rar!\26\7\1\0\220\222^5\3\1\0\4\251\131\149*\13\3\10\19\0\15 \128\1\0\3CMT\199\141\16\1" ..
+          "\0\0\0\0\0\0\0\0\1\182\127\255\230\128\0\5\210$\23%\2\2\0\0\0 \0\0\5a.txt\18\217\223E\18" ..
+          "\2\2\0\0\0 \192\1\0\8evil.exe\1di\252\14\2\2\2\0\2 \0\0\5c.txthi\025\178:5\3\5\0\0",
+    }
+    for i, rar in ipairs(archives) do
+      assert_equal("file", names_of(rar)["evil.exe"], "case " .. i)
+    end
   end)
 end)
