@@ -2295,62 +2295,6 @@ rspamd_archive_rar_read_vint(const unsigned char *start, gsize remain, uint64_t 
 	return p - start;
 }
 
-#define RAR_SKIP_BYTES(n)                                                 \
-	do {                                                                  \
-		if ((n) <= 0) {                                                   \
-			msg_debug_archive("rar archive is invalid (bad skip value)"); \
-			goto broken;                                                  \
-		}                                                                 \
-		if ((gsize) (end - p) < (n)) {                                    \
-			msg_debug_archive("rar archive is invalid (truncated)");      \
-			goto broken;                                                  \
-		}                                                                 \
-		p += (n);                                                         \
-	} while (0)
-
-#define RAR_READ_VINT()                                                    \
-	do {                                                                   \
-		r = rspamd_archive_rar_read_vint(p, end - p, &vint);               \
-		if (r == -1) {                                                     \
-			msg_debug_archive("rar archive is invalid (bad vint)");        \
-			goto broken;                                                   \
-		}                                                                  \
-		else if (r == 0) {                                                 \
-			msg_debug_archive("rar archive is invalid (BAD vint offset)"); \
-			goto broken;                                                   \
-		}                                                                  \
-	} while (0)
-
-#define RAR_READ_VINT_SKIP()                                        \
-	do {                                                            \
-		r = rspamd_archive_rar_read_vint(p, end - p, &vint);        \
-		if (r == -1) {                                              \
-			msg_debug_archive("rar archive is invalid (bad vint)"); \
-			goto broken;                                            \
-		}                                                           \
-		p += r;                                                     \
-	} while (0)
-
-#define RAR_READ_UINT16(n)                                           \
-	do {                                                             \
-		if (end - p < (glong) sizeof(uint16_t)) {                    \
-			msg_debug_archive("rar archive is invalid (bad int16)"); \
-			goto broken;                                             \
-		}                                                            \
-		n = p[0] + (p[1] << 8);                                      \
-		p += sizeof(uint16_t);                                       \
-	} while (0)
-
-#define RAR_READ_UINT32(n)                                                                                                \
-	do {                                                                                                                  \
-		if (end - p < (glong) sizeof(uint32_t)) {                                                                         \
-			msg_debug_archive("rar archive is invalid (bad int32)");                                                      \
-			goto broken;                                                                                                  \
-		}                                                                                                                 \
-		n = (unsigned int) p[0] + ((unsigned int) p[1] << 8) + ((unsigned int) p[2] << 16) + ((unsigned int) p[3] << 24); \
-		p += sizeof(uint32_t);                                                                                            \
-	} while (0)
-
 /*
  * Readers of rar 4 archives: each goes from a header to the next in its own
  * way. libarchive is followed a second time where it can go two ways
@@ -2948,21 +2892,68 @@ end:
 	arch->size = part->parsed_data.len;
 }
 
+/* A number of the rar 5 format as unrar reads it in a header: zero past its end */
+static uint64_t
+rspamd_rar_raw_getv(struct rspamd_rar_raw *raw)
+{
+	uint64_t v = 0;
+
+	for (unsigned int shift = 0; raw->pos < raw->len && shift < 64; shift += 7) {
+		unsigned int c = raw->p[raw->pos++];
+
+		v += (uint64_t) (c & 0x7f) << shift;
+
+		if ((c & 0x80) == 0) {
+			return v;
+		}
+	}
+
+	return 0;
+}
+
+/* Whether extra records of a rar 5 file header hold an encryption record */
+static gboolean
+rspamd_rar5_extra_encrypted(const unsigned char *p, gsize len)
+{
+	struct rspamd_rar_raw raw = {p, len, 0};
+
+	while (raw.len - raw.pos >= 2) {
+		uint64_t field_size, field_end;
+
+		field_size = rspamd_rar_raw_getv(&raw);
+
+		if (field_size == 0 || field_size > raw.len - raw.pos) {
+			break;
+		}
+
+		field_end = raw.pos + field_size;
+
+		if (rspamd_rar_raw_getv(&raw) == 0x01) {
+			return TRUE;
+		}
+
+		if (raw.pos > field_end) {
+			break;
+		}
+
+		raw.pos = field_end;
+	}
+
+	return FALSE;
+}
+
 static void
 rspamd_archive_process_rar(struct rspamd_task *task,
 						   struct rspamd_mime_part *part)
 {
-	const unsigned char *p, *end, *section_start;
+	const unsigned char *p, *end;
 	const unsigned char rar_v5_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00},
 						rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const unsigned int rar_encrypted_header = 4, rar_main_header = 1,
 					   rar_file_header = 2, rar_end_header = 5;
-	uint64_t vint, sz, head_size = 0, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
-					   extra_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
-	gboolean volume = FALSE;
-	int r;
+	gboolean volume = FALSE, unrar_opening = TRUE;
 
 	p = part->parsed_data.begin;
 	end = p + part->parsed_data.len;
@@ -3001,243 +2992,211 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 		goto end;
 	}
 
-	/* Now we can have either encryption header or archive header */
-	/* Crc 32 */
-	RAR_SKIP_BYTES(sizeof(uint32_t));
-	/* Size */
-	RAR_READ_VINT_SKIP();
-	sz = vint;
-	/* Type */
-	section_start = p;
-	RAR_READ_VINT_SKIP();
-	type = vint;
-	/* Header flags */
-	RAR_READ_VINT_SKIP();
-	flags = vint;
-
-	if (flags & 0x1) {
-		/* Have extra zone */
-		RAR_READ_VINT_SKIP();
-	}
-	if (flags & 0x2) {
-		/* Data zone is presented */
-		RAR_READ_VINT_SKIP();
-		sz += vint;
-	}
-
-	if (type == rar_encrypted_header) {
-		/* We can't read any further information as archive is encrypted */
-		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-		goto end;
-	}
-	else if (type != rar_main_header) {
-		msg_debug_archive("rar archive is invalid (bad main header)");
-
-		goto broken;
-	}
-
-	/* Archive flags: bsdtar goes on after the end of a volume */
-	if (rspamd_archive_rar_read_vint(p, end - p, &vint) > 0 && (vint & 0x1)) {
-		volume = TRUE;
-	}
-
-	p = section_start;
-	RAR_SKIP_BYTES(sz);
-
+	/*
+	 * Headers as unrar reads them: whole, and fields past their end read as
+	 * zero. bsdtar also takes an archive that does not start with its main
+	 * header, whose files unrar does not list, so all headers are read alike.
+	 * While unrar looks for the main header, it skips the end block, and goes
+	 * on after a broken header, from where it lists files
+	 */
 	while (p < end) {
-		gboolean has_extra = FALSE;
-		/* Read the next header */
-		/* Crc 32 */
-		RAR_SKIP_BYTES(sizeof(uint32_t));
-		/* Size */
-		RAR_READ_VINT_SKIP();
+		struct rspamd_rar_raw raw;
+		uint64_t block_size, head_size = 0, type, flags, extra_sz = 0, data_sz = 0;
+		const unsigned char *next;
+		gsize after_flags;
+		int size_len;
 
-		sz = vint;
-		if (sz == 0) {
-			/* Zero sized block - error */
-			msg_debug_archive("rar archive is invalid (zero size block)");
+		if (end - p < 7) {
+			msg_debug_archive("rar archive is invalid (truncated block header)");
 
 			goto broken;
 		}
 
-		head_size = sz;
-		section_start = p;
-		/* Type */
-		RAR_READ_VINT_SKIP();
-		type = vint;
+		/* A CRC, then the size of the rest */
+		size_len = rspamd_archive_rar_read_vint(p + 4, end - p - 4, &block_size);
 
-		if (type == rar_end_header) {
-			goffset next = -1;
+		if (size_len > 0 && block_size > (uint64_t) (end - p) - 4 - size_len) {
+			/* Readers stop at a cut header */
+			msg_debug_archive("rar archive is invalid (truncated block)");
 
-			/* Readers stop at the end of the archive, bsdtar goes on with the next volume */
-			if (volume) {
-				next = rspamd_substring_search((const char *) p, end - p,
-											   (const char *) rar_v5_magic, sizeof(rar_v5_magic));
-			}
-
-			if (next == -1) {
-				goto end;
-			}
-
-			p += next + sizeof(rar_v5_magic);
-			continue;
+			goto broken;
 		}
 
-		/* Header flags */
-		RAR_READ_VINT_SKIP();
-		flags = vint;
+		if (size_len > 0) {
+			head_size = 4 + size_len + block_size;
+		}
+
+		if (head_size < 7) {
+			/* No size, or too short for a type and flags: readers stop there */
+			msg_debug_archive("rar archive is invalid (block of %L bytes)", head_size);
+
+			if (unrar_opening) {
+				/* unrar goes on after the 7 bytes it has read */
+				unrar_opening = FALSE;
+				p += 7;
+				continue;
+			}
+
+			goto broken;
+		}
+
+		raw.p = p;
+		raw.len = head_size;
+		raw.pos = 4 + size_len;
+		type = rspamd_rar_raw_getv(&raw);
+		flags = rspamd_rar_raw_getv(&raw);
+		after_flags = raw.pos;
+
+		if (type == rar_encrypted_header) {
+			/* We can't read any further information as headers are encrypted */
+			arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+			goto end;
+		}
 
 		if (flags & 0x1) {
 			/* Have extra zone */
-			RAR_READ_VINT_SKIP();
-			extra_sz = vint;
-			has_extra = TRUE;
+			extra_sz = rspamd_rar_raw_getv(&raw);
+
+			if (extra_sz >= head_size) {
+				msg_debug_archive("rar archive is invalid (bad extra size)");
+
+				if (unrar_opening) {
+					/* unrar goes on after this header */
+					unrar_opening = FALSE;
+					p += head_size;
+					continue;
+				}
+
+				goto broken;
+			}
 		}
 
 		if (flags & 0x2) {
 			/* Data zone is presented */
-			RAR_READ_VINT_SKIP();
-			sz += vint;
-			comp_sz = vint;
+			data_sz = rspamd_rar_raw_getv(&raw);
 		}
 
-		if (type != rar_file_header) {
-			if (type == rar_main_header &&
-				rspamd_archive_rar_read_vint(p, end - p, &vint) > 0 && (vint & 0x1)) {
+		if (unrar_opening &&
+			data_sz > (uint64_t) G_MAXINT64 - (p - (const unsigned char *) part->parsed_data.begin) - head_size) {
+			/* Data past the largest offset: unrar goes on after this header */
+			unrar_opening = FALSE;
+			p += head_size;
+			continue;
+		}
+
+		next = rspamd_rar_skip(p, end, head_size, data_sz);
+
+		if (type == rar_end_header && !unrar_opening) {
+			goffset sig = -1;
+
+			/* Readers stop at the end of the archive, bsdtar goes on with the next volume */
+			if (volume) {
+				sig = rspamd_substring_search((const char *) p + after_flags, end - p - after_flags,
+											  (const char *) rar_v5_magic, sizeof(rar_v5_magic));
+			}
+
+			if (sig == -1) {
+				goto end;
+			}
+
+			p += after_flags + sig + sizeof(rar_v5_magic);
+			continue;
+		}
+
+		if (type == rar_main_header) {
+			unrar_opening = FALSE;
+
+			/* Archive flags: bsdtar goes on after the end of a volume */
+			if (rspamd_rar_raw_getv(&raw) & 0x1) {
 				volume = TRUE;
 			}
-
-			p = section_start;
-			RAR_SKIP_BYTES(sz);
 		}
-		else {
-			/* We have a file header, go forward */
-			uint64_t fname_len;
-			bool is_directory = false;
+		else if (type == rar_file_header) {
+			uint64_t file_flags, uncomp_sz, fname_len;
+			gsize name_off, avail;
 
-			/* File header specific flags */
-			RAR_READ_VINT_SKIP();
-			flags = vint;
-
-			/* Unpacked size */
-			RAR_READ_VINT_SKIP();
-			uncomp_sz = vint;
+			file_flags = rspamd_rar_raw_getv(&raw);
+			uncomp_sz = rspamd_rar_raw_getv(&raw);
 			/* Attributes */
-			RAR_READ_VINT_SKIP();
+			(void) rspamd_rar_raw_getv(&raw);
 
-			if (flags & 0x2) {
+			if (file_flags & 0x2) {
 				/* Unix mtime */
-				RAR_SKIP_BYTES(sizeof(uint32_t));
+				(void) rspamd_rar_raw_get4(&raw);
 			}
-			if (flags & 0x4) {
+			if (file_flags & 0x4) {
 				/* Crc32 */
-				RAR_SKIP_BYTES(sizeof(uint32_t));
+				(void) rspamd_rar_raw_get4(&raw);
 			}
-			if (flags & 0x1) {
+
+			/* Compression and host OS */
+			(void) rspamd_rar_raw_getv(&raw);
+			(void) rspamd_rar_raw_getv(&raw);
+			fname_len = rspamd_rar_raw_getv(&raw);
+			name_off = raw.pos;
+			/* The name is read from the header only: unrar reads zeros after its end */
+			avail = MIN(raw.len - name_off, fname_len);
+
+			if (file_flags & 0x1) {
 				/* Ignore directories for sanity purposes */
-				is_directory = true;
 				msg_debug_archive("skip directory record in a rar archive");
 			}
-
-			if (!is_directory) {
-				/* Compression */
-				RAR_READ_VINT_SKIP();
-				/* Host OS */
-				RAR_READ_VINT_SKIP();
-				/* Filename length (finally!) */
-				RAR_READ_VINT_SKIP();
-				fname_len = vint;
-
-				if (fname_len == 0) {
-					/* unrar skips a file of no name and goes on */
-					msg_debug_archive("rar archive has a file of no name");
-
-					goto next;
-				}
-
-				/* The name is read from the header only: unrar reads zeros after its end */
-				gsize name_off = p - section_start,
-					  avail = head_size > name_off ? MIN(head_size - name_off, fname_len) : 0;
-
-				avail = MIN(avail, (gsize) (end - p));
+			else if (avail == 0) {
+				/* unrar skips a file of no name and goes on */
+				msg_debug_archive("rar archive has a file of no name");
+			}
+			else {
 				f = g_malloc0(sizeof(*f));
 				f->uncompressed_size = uncomp_sz;
-				f->compressed_size = comp_sz;
-				rspamd_archive_file_try_utf(task, arch, f, p, avail);
+				f->compressed_size = data_sz;
+				rspamd_archive_file_try_utf(task, arch, f, p + name_off, avail);
 
-				if (f->fname) {
+				if (f->fname == NULL) {
+					g_free(f);
+				}
+				else {
+					gsize after_name = name_off + avail;
+
 					msg_debug_archive("added rarv5 file: %v", f->fname);
+
+					/*
+					 * The extra records: unrar reads them at the end of the
+					 * header, past the name, libarchive and 7-Zip right after
+					 * the name, from the data if they run past the header
+					 */
+					if (extra_sz > 0 &&
+						((head_size - extra_sz >= after_name &&
+						  rspamd_rar5_extra_encrypted(p + head_size - extra_sz, extra_sz)) ||
+						 rspamd_rar5_extra_encrypted(p + after_name,
+													 MIN(extra_sz, (uint64_t) (end - p) - after_name)))) {
+						f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+						arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+					}
+
 					if (!rspamd_archive_file_add(task, arch, f)) {
-						f = NULL;
 						goto end;
 					}
+
 					if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
 						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 					}
-				}
-				else {
-					g_free(f);
-					f = NULL;
-				}
 
-				/*
-				 * Bound the extra-field block using sizes rather than
-				 * pointer arithmetic: extra_sz is a 64-bit varint and
-				 * "p + fname_len + extra_sz" could otherwise wrap.
-				 */
-				if (f && has_extra && extra_sz > 0 &&
-					fname_len <= (uint64_t) (end - p) &&
-					extra_sz <= (uint64_t) (end - p) - fname_len) {
-					/* Try to find encryption record in extra field */
-					const unsigned char *ex = p + fname_len;
-					const unsigned char *extra_end = ex + extra_sz;
-
-					while (ex < extra_end) {
-						const unsigned char *t;
-						int64_t cur_sz = 0, sec_type = 0;
-						int vint_len;
-
-						vint_len = rspamd_archive_rar_read_vint(ex, extra_end - ex, &cur_sz);
-						if (vint_len == -1) {
-							/* Readers list the file, as they do past a bad record */
-							msg_debug_archive("rar archive is invalid (bad vint)");
-							break;
-						}
-
-						if (cur_sz <= 0 || ex + vint_len + cur_sz > extra_end) {
-							msg_debug_archive("rar archive is invalid (bad extra record size)");
-							break;
-						}
-
-						t = ex + vint_len;
-
-						r = rspamd_archive_rar_read_vint(t, cur_sz, &sec_type);
-						if (r == -1) {
-							msg_debug_archive("rar archive is invalid (bad vint)");
-							break;
-						}
-
-						if (sec_type == 0x01) {
-							f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
-							arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-							break;
-						}
-
-						ex += vint_len + cur_sz;
+					/* A name with a NUL is shown up to it */
+					if (!rspamd_archive_file_add_cstr_name(task, arch, f, p + name_off, avail)) {
+						goto end;
 					}
 				}
-
-				/* A name with a NUL is shown up to it */
-				if (f && !rspamd_archive_file_add_cstr_name(task, arch, f, p, avail)) {
-					goto end;
-				}
 			}
-
-		next:
-			/* Restore p to the beginning of the header */
-			p = section_start;
-			RAR_SKIP_BYTES(sz);
 		}
+
+		if (next == NULL) {
+			/* Readers stop where the data runs past the end */
+			msg_debug_archive("rar archive is invalid (truncated data)");
+
+			goto broken;
+		}
+
+		p = next;
 	}
 
 	goto end;

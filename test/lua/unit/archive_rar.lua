@@ -299,4 +299,53 @@ context("Rar archive listing", function()
         file .. rar4_end)
     assert_equal("file", names["payload.exe"])
   end)
+
+  local function archive_task(rar)
+    local msg = table.concat({
+      "Subject: rar", "MIME-Version: 1.0",
+      "Content-Type: application/x-rar; name=\"a.rar\"",
+      "Content-Disposition: attachment; filename=\"a.rar\"",
+      "Content-Transfer-Encoding: base64", "",
+      tostring(rspamd_util.encode_base64(rar, 76)), "",
+    }, "\r\n")
+    local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+    task:process_message()
+    return task
+  end
+
+  test("a rar 5 header is read as unrar reads it, with zeros past its end", function()
+    -- unrar reads a data size past the end of a header as zero and lists the next file
+    local names = names_of(rar5_start .. rar5_block("\3\2") .. "\5\0\0\0" ..
+        rar5_file("payload.exe", "MZ"):sub(5) .. rar5_end)
+    assert_equal("file", names["payload.exe"])
+  end)
+
+  test("files of a rar 5 archive without a main header are listed, as bsdtar lists them", function()
+    local names = names_of("Rar!\26\7\1\0" .. rar5_file("payload.exe", "MZ") .. rar5_end)
+    assert_equal("file", names["payload.exe"])
+  end)
+
+  test("a rar 5 file is encrypted by a record at the end of its header, as unrar reads it", function()
+    -- An encryption record, and bytes between the name and the extra area
+    local crypt = "\36\1\0\0\15" .. string.rep("S", 16) .. string.rep("I", 16)
+    for _, pad in ipairs({ "", string.rep("\0", 8) }) do
+      local rar = rar5_start .. rar5_block("\2\3" .. string.char(#crypt) .. "\2\0\2\32\0\0" ..
+          string.char(#"invoice.exe") .. "invoice.exe" .. pad .. crypt) .. "MZ" .. rar5_end
+      local task = archive_task(rar)
+      local arch = task:get_archives()[1]
+      assert_true(arch:is_encrypted(), "padding of " .. #pad)
+      assert_true(arch:get_files_full()[1].encrypted, "padding of " .. #pad)
+      task:destroy()
+    end
+  end)
+
+  test("files after a broken rar 5 header before the main one are listed, as unrar lists them", function()
+    -- unrar goes on 7 bytes after the start of a broken header
+    local names = names_of("Rar!\26\7\1\0" .. "\0\0\0\0\1\0\0" .. rar5_file("payload.exe", "MZ") .. rar5_end)
+    assert_equal("file", names["payload.exe"])
+    -- unrar looks for the main header past an end block
+    names = names_of("Rar!\26\7\1\0" .. rar5_end .. rar5_block("\1\0\0") ..
+        rar5_file("payload.exe", "MZ") .. rar5_end)
+    assert_equal("file", names["payload.exe"])
+  end)
 end)
