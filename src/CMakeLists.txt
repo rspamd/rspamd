@@ -92,6 +92,7 @@ add_subdirectory(rspamadm)
 # Define source files
 set(RSPAMD_SOURCES
         controller.c
+        file_helper.c
         fuzzy_storage.c
         rspamd.c
         sanitizer_conf.c
@@ -107,7 +108,7 @@ set(PLUGIN_SOURCES
 
 # Define module and worker lists
 set(MODULES_LIST regexp chartable fuzzy_check dkim)
-set(WORKERS_LIST normal controller fuzzy rspamd_proxy)
+set(WORKERS_LIST normal controller fuzzy rspamd_proxy file_helper)
 
 # Add hyperscan worker if enabled
 if (ENABLE_HYPERSCAN)
