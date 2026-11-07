@@ -409,4 +409,95 @@ context("Rar archive listing", function()
       assert_equal("file", names_of(rar)["evil.exe"], "case " .. i)
     end
   end)
+
+  test("files unrar reads from its quick open cache are listed", function()
+    -- A locator of the main header points to a service header named QO, whose data hold
+    -- copies of headers: unrar reads a header from its copy, which can name another file
+    -- or give another size of data
+    local function vint4(n)
+      return string.char(n % 128 + 128, math.floor(n / 128) % 128 + 128,
+          math.floor(n / 16384) % 128 + 128, math.floor(n / 2097152) % 128)
+    end
+    local function file_head(name, size)
+      return rar5_block("\2\2" .. string.char(size) .. "\0" .. string.char(size) .. "\32\0\0" ..
+          string.char(#name) .. name)
+    end
+    -- files: {header, data}; copies: {index of a file, the copy of its header}
+    local function with_cache(files, copies)
+      local main = function(off)
+        return rar5_block("\1\1\7\0" .. "\6\1\1" .. vint4(off))
+      end
+      local pos, at, body, data = 8 + #main(0), {}, {}, {}
+      for i, f in ipairs(files) do
+        at[i] = pos
+        body[#body + 1] = f[1] .. f[2]
+        pos = pos + #f[1] + #f[2]
+      end
+      for _, c in ipairs(copies) do
+        data[#data + 1] = rar5_block("\0" .. string.char(pos - at[c[1]]) .. string.char(#c[2]) .. c[2])
+      end
+      data = table.concat(data)
+      return "Rar!\26\7\1\0" .. main(pos - 8) .. table.concat(body) ..
+          rar5_block("\3\2" .. string.char(#data) .. "\0" .. string.char(#data) .. "\32\0\0\2QO") ..
+          data .. rar5_end
+    end
+    local invoice, payload = { file_head("invoice.pdf", 4), "%PDF" }, { file_head("payload.exe", 2), "MZ" }
+    -- Another name
+    local names = names_of(with_cache({ invoice, payload }, { { 1, file_head("invoice.js", 4) } }))
+    assert_equal("file", names["invoice.js"])
+    -- No data: unrar reads a header in the data of the file
+    local hidden = rar5_file("hidden.exe", "MZ")
+    names = names_of(with_cache({ { file_head("invoice.pdf", #hidden), hidden }, payload },
+        { { 1, file_head("invoice.pdf", 0) } }))
+    assert_equal("file", names["hidden.exe"])
+    -- Copies as the headers are: the files are listed once
+    local task = archive_task(with_cache({ invoice, payload }, { { 1, invoice[1] }, { 2, payload[1] } }))
+    assert_equal(2, #task:get_archives()[1]:get_files_full())
+    task:destroy()
+  end)
+
+  test("files unrar reads from its quick open cache in odd ways are listed", function()
+    -- Archives made for unrar 7, each listing payload.exe with its cache
+    local archives = {
+      -- a main header whose data size overflows still loads the cache
+      "Rar!\26\7\1\0W\2069<\21\1\3\7\128\128\128\128\128\128\128\128\128\1\0\6\1\1\183\128\128" ..
+          "\0\234`\168\158\20\2\2\4\0\4 \0\0\11invoice.pdf%PDF\217\145\251*\11\3\2!\0! \0\0\2QO\167" ..
+          "5\199(\28\0\29\25\230\217\197\157\20\2\2\4\0\4 \0\0\11payload.exe\025\178:5\3\5\0\0",
+      -- a field cut at the end of a copy reads the zeros after it
+      "Rar!\26\7\1\0|\217\6\166\11\1\1\7\0\6\1\1\212\128\128\0\245`D\172\20\2\2+\0+ \0\0\11invo" ..
+          "ice.pdf\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\135\12(\192\20\2\2\2\0\2 \0\0\11payload.exeMZ" ..
+          "\174\235\165\29\11\3\2\16\0\16 \0\0\2QO\241\212\179\131\11\0D\25\0\0\0\0\20\2\2\144\025" ..
+          "\178:5\3\5\0\0",
+      -- the headers read ahead after a main header without a locator
+      "Rar!\26\7\1\0\197\02632\3\1\0\0&\182\140{\20\3\2\0\0\0 \0\0\11ZZZZZZZZZZZj61\176\11\1\1" ..
+          "\7\0\6\1\1\173\128\128\0\234`\168\158\20\2\2\4\0\4 \0\0\11invoice.pdf%PDF\217\145\251*" ..
+          "\11\3\2!\0! \0\0\2QO\132\198\29\171\28\0F\25gB\92B\20\2\2\0\0\0 \0\0\11payload.exe\025" ..
+          "\178:5\3\5\0\0",
+      -- QO followed by a byte unrar cannot decode
+      "Rar!\26\7\1\0j61\176\11\1\1\7\0\6\1\1\173\128\128\0\234`\168\158\20\2\2\4\0\4 \0\0\11inv" ..
+          "oice.pdf%PDFq\156P\5\12\3\2!\0! \0\0\3QO\128\1675\199(\28\0\29\25\230\217\197\157\20\2\2" ..
+          "\4\0\4 \0\0\11payload.exe\025\178:5\3\5\0\0",
+      -- QO in overlong UTF-8
+      "Rar!\26\7\1\0j61\176\11\1\1\7\0\6\1\1\173\128\128\0\234`\168\158\20\2\2\4\0\4 \0\0\11inv" ..
+          "oice.pdf%PDF\182\218\24t\13\3\2!\0! \0\0\4\193\145\193\143\1675\199(\28\0\29\25\230\217" ..
+          "\197\157\20\2\2\4\0\4 \0\0\11payload.exe\025\178:5\3\5\0\0",
+      -- an encrypted service header read ahead: unrar reads where its file is
+      "Rar!\26\7\1\0\173^\128\195\11\1\1\7\0\6\1\1\252\128\128\0\27\34\29Q1\3\3%\25\0\25 \0\0\2" ..
+          "ZZ$\1\0\0\15SSSSSSSSSSSSSSSSIIIIIIIIIIIIIIIIgB\92B\20\2\2\0\0\0 \0\0\11payload.exe\234`" ..
+          "\168\158\20\2\2\4\0\4 \0\0\11invoice.pdf%PDF\217\145\251*\11\3\2!\0! \0\0\2QO\218\200" ..
+          "\241\198\28\0\29\25\234`\168\158\20\2\2\4\0\4 \0\0\11invoice.pdf\025\178:5\3\5\0\0",
+      -- copies that end: unrar goes on where they led it
+      "Rar!\26\7\1\0\227\142\31\246\11\1\1\7\0\6\1\1\196\128\128\0>\193\185.\20\2\2\27\0\27 \0" ..
+          "\0\11invoice.pdf\135\12(\192\20\2\2\2\0\2 \0\0\11payload.exeMZQb\192\19\11\3\2(\0( \0\0" ..
+          "\2QO\145[\13\216\28\0004\25k\2511A\20\2\2\0\0\0 \0\0\11invoice.pdf\0\0\0\0\0\0\0\025\178" ..
+          ":5\3\5\0\0",
+      -- an encryption record unrar does not take
+      "Rar!\26\7\1\0j61\176\11\1\1\7\0\6\1\1\173\128\128\0\234`\168\158\20\2\2\4\0\4 \0\0\11inv" ..
+          "oice.pdf%PDFU\237\0\0231\3\3%!\0! \0\0\2QO$\1\1\0\15SSSSSSSSSSSSSSSSIIIIIIIIIIIIIIII\167" ..
+          "5\199(\28\0\29\25\230\217\197\157\20\2\2\4\0\4 \0\0\11payload.exe\025\178:5\3\5\0\0",
+    }
+    for i, rar in ipairs(archives) do
+      assert_equal("file", names_of(rar)["payload.exe"], "case " .. i)
+    end
+  end)
 end)
