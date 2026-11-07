@@ -2078,7 +2078,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 	const unsigned char *p = start, *start_section;
 	uint8_t type;
 	unsigned int flags;
-	uint64_t sz, comp_sz = 0, uncomp_sz = 0;
+	uint64_t sz, head_size, comp_sz = 0, uncomp_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 
@@ -2117,6 +2117,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 		}
 
 		RAR_READ_UINT16(sz);
+		head_size = sz;
 
 		if (flags & 0x8000) {
 			/* We also need to read ADD_SIZE element */
@@ -2145,7 +2146,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 			RAR_SKIP_BYTES(11);
 			RAR_READ_UINT16(fname_len);
 
-			if (fname_len == 0 || fname_len > (gsize) (end - p)) {
+			if (fname_len == 0) {
 				msg_debug_archive("rar archive is invalid (bad filename size: %d)",
 								  fname_len);
 
@@ -2168,23 +2169,21 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 			}
 
 			/*
-			 * p advanced past the attrs and optional HIGH_*_SIZE fields
-			 * after fname_len was validated above, so re-check it against
-			 * the remaining buffer before reading the filename.
+			 * The name is read from the header only: unrar reads zeros after
+			 * its end (bsdtar and 7-Zip refuse such a name), and a name past
+			 * it would take bytes of the data or of the next headers
 			 */
-			if (fname_len > (gsize) (end - p)) {
-				msg_debug_archive("rar archive is invalid (truncated filename)");
+			gsize name_off = p - start_section,
+				  avail = head_size > name_off ? MIN(head_size - name_off, fname_len) : 0;
 
-				return;
-			}
-
+			avail = MIN(avail, (gsize) (end - p));
 			f = g_malloc0(sizeof(*f));
 
 			if (flags & 0x200) {
 				/* We have unicode + normal version */
 				unsigned char *tmp;
 
-				tmp = memchr(p, '\0', fname_len);
+				tmp = memchr(p, '\0', avail);
 
 				if (tmp != NULL) {
 					/* Just use ASCII version */
@@ -2194,13 +2193,13 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 				}
 				else {
 					/* We have UTF8 filename, use it as is */
-					rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
+					rspamd_archive_file_try_utf(task, arch, f, p, avail);
 					msg_debug_archive("found utf filename in rarv4 archive: %v",
 									  f->fname);
 				}
 			}
 			else {
-				rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
+				rspamd_archive_file_try_utf(task, arch, f, p, avail);
 				msg_debug_archive("found ascii (old) filename in rarv4 archive: %v",
 								  f->fname);
 			}
@@ -2222,7 +2221,7 @@ rspamd_archive_process_rar_v4(struct rspamd_task *task, const unsigned char *sta
 
 				/* A name with a NUL is shown up to it (a Unicode name follows its NUL) */
 				if (!(flags & 0x200) &&
-					!rspamd_archive_file_add_cstr_name(task, arch, f, p, fname_len)) {
+					!rspamd_archive_file_add_cstr_name(task, arch, f, p, avail)) {
 					goto end;
 				}
 			}
@@ -2250,7 +2249,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 						rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const unsigned int rar_encrypted_header = 4, rar_main_header = 1,
 					   rar_file_header = 2;
-	uint64_t vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
+	uint64_t vint, sz, head_size = 0, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
 					   extra_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
@@ -2348,6 +2347,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 			return;
 		}
 
+		head_size = sz;
 		section_start = p;
 		/* Type */
 		RAR_READ_VINT_SKIP();
@@ -2412,16 +2412,21 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 				RAR_READ_VINT_SKIP();
 				fname_len = vint;
 
-				if (fname_len == 0 || fname_len > (gsize) (end - p)) {
+				if (fname_len == 0) {
 					msg_debug_archive("rar archive is invalid (bad filename size)");
 
 					return;
 				}
 
+				/* The name is read from the header only: unrar reads zeros after its end */
+				gsize name_off = p - section_start,
+					  avail = head_size > name_off ? MIN(head_size - name_off, fname_len) : 0;
+
+				avail = MIN(avail, (gsize) (end - p));
 				f = g_malloc0(sizeof(*f));
 				f->uncompressed_size = uncomp_sz;
 				f->compressed_size = comp_sz;
-				rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
+				rspamd_archive_file_try_utf(task, arch, f, p, avail);
 
 				if (f->fname) {
 					msg_debug_archive("added rarv5 file: %v", f->fname);
@@ -2485,7 +2490,7 @@ rspamd_archive_process_rar(struct rspamd_task *task,
 				}
 
 				/* A name with a NUL is shown up to it */
-				if (f && !rspamd_archive_file_add_cstr_name(task, arch, f, p, fname_len)) {
+				if (f && !rspamd_archive_file_add_cstr_name(task, arch, f, p, avail)) {
 					goto end;
 				}
 			}
