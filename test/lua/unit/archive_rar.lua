@@ -32,14 +32,21 @@ context("Rar archive listing", function()
 
   -- Rar 5: headers of a CRC, a size, then fields as small numbers (one byte each here);
   -- the name may have a size other than its own (but less than 128)
+  local function rar5_block(body)
+    return "\0\0\0\0" .. string.char(#body) .. body
+  end
+
+  -- File header with data: no time, no CRC, stored, then the name
+  local function rar5_file(name, data, name_size)
+    return rar5_block("\2\2" .. string.char(#data) .. "\0" .. string.char(#data) .. "\32\0\0" ..
+        string.char(name_size or #name) .. name) .. data
+  end
+
+  local rar5_start = "Rar!\26\7\1\0" .. rar5_block("\1\0\0")
+  local rar5_end = rar5_block("\5\0\0")
+
   local function rar5(name, data, name_size)
-    local function block(body)
-      return "\0\0\0\0" .. string.char(#body) .. body
-    end
-    -- File header with data: no time, no CRC, stored, then the name
-    local file = "\2\2" .. string.char(#data) .. "\0" .. string.char(#data) .. "\32\0\0" ..
-        string.char(name_size or #name) .. name
-    return "Rar!\26\7\1\0" .. block("\1\0\0") .. block(file) .. data .. block("\5\0\0")
+    return rar5_start .. rar5_file(name, data, name_size) .. rar5_end
   end
 
   -- Rar 4: headers of a CRC, a type, flags and a size
@@ -53,6 +60,8 @@ context("Rar archive listing", function()
 
   local rar4_start = "Rar!\26\7\0" .. "\0\0\115" .. rspamd_util.pack("<I2", 0) ..
       rspamd_util.pack("<I2", 13) .. string.rep("\0", 6)
+
+  local rar4_end = "\0\0\123" .. rspamd_util.pack("<I2", 0x4000) .. rspamd_util.pack("<I2", 7)
 
   local function rar4(name, data, flags, name_size)
     return rar4_start .. rar4_file(name, data, flags, name_size)
@@ -143,5 +152,51 @@ context("Rar archive listing", function()
     assert_equal("aaaa.exe", main.name:sub(-8))
     assert_true(arch:is_obfuscated())
     task:destroy()
+  end)
+
+  test("files before a broken or cut rar header are listed, as readers list them", function()
+    local a4, b4 = rar4_file("invoice.exe", "MZ"), rar4_file("readme.txt", "hello")
+    local a5, b5 = rar5_file("invoice.exe", "MZ"), rar5_file("readme.txt", "hello")
+    for i, rar in ipairs({
+      -- A byte after the files, the next header cut, a block of no size
+      rar4_start .. a4 .. "\0",
+      rar4_start .. a4 .. b4:sub(1, 12),
+      rar4_start .. a4 .. "\0\0\116\0\0\0\0" .. b4 .. rar4_end,
+      rar5_start .. a5 .. "\0",
+      rar5_start .. a5 .. b5:sub(1, 9),
+      rar5_start .. a5 .. "\0\0\0\0\0" .. b5 .. rar5_end,
+    }) do
+      assert_equal("file", names_of(rar)["invoice.exe"], "case " .. i)
+    end
+    -- The data of the last file cut: the file is listed
+    assert_equal("file", names_of(rar4_start .. a4 .. b4:sub(1, -3))["readme.txt"])
+    assert_equal("file", names_of(rar5_start .. a5 .. b5:sub(1, -3))["readme.txt"])
+    -- unrar skips a file of no name and goes on
+    assert_equal("file", names_of(rar4_start .. a4 .. rar4_file("", "xx") .. b4 .. rar4_end)["readme.txt"])
+    assert_equal("file", names_of(rar5_start .. a5 .. rar5_file("", "xx") .. b5 .. rar5_end)["readme.txt"])
+    -- Readers stop at a file of no name whose data (with HIGH_PACK_SIZE) runs past the end
+    local fields = rspamd_util.pack("<I4", 2) .. rspamd_util.pack("<I4", 2) .. string.rep("\0", 11) ..
+        rspamd_util.pack("<I2", 0) .. rspamd_util.pack("<I4", 0x20) ..
+        rspamd_util.pack("<I4", 1) .. rspamd_util.pack("<I4", 0)
+    local names = names_of(rar4_start .. a4 .. "\0\0\116" .. rspamd_util.pack("<I2", 0x8100) ..
+        rspamd_util.pack("<I2", 7 + #fields) .. fields .. "xx" .. rar4_file("fake.scr", "MZ") .. rar4_end)
+    assert_equal("file", names["invoice.exe"])
+    assert_nil(names["fake.scr"])
+  end)
+
+  test("files after the end of a rar archive are listed as readers list them", function()
+    local names = names_of(rar4_start .. rar4_file("invoice.exe", "MZ") .. rar4_end ..
+        rar4_file("fake.scr", "MZ"))
+    assert_equal("file", names["invoice.exe"])
+    assert_nil(names["fake.scr"])
+    names = names_of(rar5_start .. rar5_file("invoice.exe", "MZ") .. rar5_end ..
+        "Rar!\26\7\1\0" .. rar5_file("fake.scr", "MZ") .. rar5_end)
+    assert_equal("file", names["invoice.exe"])
+    assert_nil(names["fake.scr"])
+    -- bsdtar goes on with the next volume of a rar 5 volume, after its signature
+    names = names_of("Rar!\26\7\1\0" .. rar5_block("\1\0\1") .. rar5_file("invoice.txt", "MZ") ..
+        rar5_end .. "junk" .. "Rar!\26\7\1\0" .. rar5_file("payload.exe", "MZ") .. rar5_end)
+    assert_equal("file", names["invoice.txt"])
+    assert_equal("file", names["payload.exe"])
   end)
 end)
