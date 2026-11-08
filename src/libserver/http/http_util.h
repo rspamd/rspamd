@@ -25,8 +25,8 @@ extern "C" {
 
 /**
  * Parse HTTP date header and return it as time_t
- * @param header HTTP date header
- * @param len length of header
+ * @param header HTTP date header, does not need to be NUL-terminated
+ * @param len length of header, an empty value (0) is not a valid date
  * @return time_t or (time_t)-1 in case of error
  */
 time_t rspamd_http_parse_date(const char *header, gsize len);

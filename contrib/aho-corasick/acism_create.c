@@ -231,16 +231,34 @@ add_backlinks(TNODE *troot, TNODE **v1, TNODE **v2)
                 //  for the child (dstp).
                 // Note that backlinks do not point at the suffix match;
                 //  they point at the PARENT of that match.
+                //
+                // That is true for leaves only: an inner node needs a
+                //  state to continue from, so its backlink is the longest
+                //  suffix that has children. A leaf suffix has no
+                //  transitions and no state of its own: the lookup would
+                //  restart from the root and miss the matches that the
+                //  shorter suffixes lead to ("cd" in "abcd" for
+                //  {abcd, bc, cd}). A leaf suffix still marks a match,
+                //  so (sp), the longest suffix, sets is_suffix.
+                TNODE *sp = NULL;
 
-                for (tp = srcp->back; tp; tp = tp->back)
-                    if ((bp = find_child(tp, dstp->sym)))
-                        break;
+                for (tp = srcp->back; tp; tp = tp->back) {
+                    if ((bp = find_child(tp, dstp->sym))) {
+                        if (!sp)
+                            sp = bp;
+                        if (bp->child || !dstp->child)
+                            break;
+                        bp = NULL;
+                    }
+                }
                 if (!bp)
                     bp = troot;
+                if (!sp)
+                    sp = troot;
 
                 dstp->back = dstp->child ? bp : tp ? tp : troot;
                 dstp->back->nrefs++;
-                dstp->is_suffix = bp->match || bp->is_suffix;
+                dstp->is_suffix = sp->match || sp->is_suffix;
             }
         }
         *dpp = 0;
@@ -253,7 +271,7 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
 {
     unsigned usev_size = nnodes + nsyms;
     char *usev = g_malloc0(usev_size * sizeof(*usev));
-    STATE last_trans = 0, startv[257][2];
+    STATE last_trans = 0, last_base = 0, startv[257][2];
     TNODE *cp, **tmp;
 
     memset(startv, 0, nsyms * sizeof*startv);
@@ -295,6 +313,7 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
                 if (!cp) break;
             }
             tp->state = pos;
+            if (last_base < pos) last_base = pos;
 
             // Mark node's base and children as used:
             usev[pos] |= need;
@@ -320,7 +339,11 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
     }
 
     g_free(usev);
-    return last_trans + 1;
+    // acism_lookup reads tranv[state + sym] for every symbol of the
+    //  alphabet, not only for the children of (state), so the table must
+    //  extend a whole alphabet past the highest base. The extra slots
+    //  stay zero, which decodes as an invalid transition.
+    return last_base + nsyms;
 }
 
 static void

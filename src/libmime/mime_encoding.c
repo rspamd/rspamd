@@ -72,6 +72,25 @@ static const UChar iso_8859_16_map[] = {
 	0x0111, 0x0144, 0x00F2, 0x00F3, 0x00F4, 0x0151, 0x00F6, 0x015B,
 	0x0171, 0x00F9, 0x00FA, 0x00FB, 0x00FC, 0x0119, 0x021B, 0x00FF};
 
+/* WHATWG x-user-defined: the bytes past ASCII are U+F780 to U+F7FF */
+static const UChar x_user_defined_map[] = {
+	0xF780, 0xF781, 0xF782, 0xF783, 0xF784, 0xF785, 0xF786, 0xF787,
+	0xF788, 0xF789, 0xF78A, 0xF78B, 0xF78C, 0xF78D, 0xF78E, 0xF78F,
+	0xF790, 0xF791, 0xF792, 0xF793, 0xF794, 0xF795, 0xF796, 0xF797,
+	0xF798, 0xF799, 0xF79A, 0xF79B, 0xF79C, 0xF79D, 0xF79E, 0xF79F,
+	0xF7A0, 0xF7A1, 0xF7A2, 0xF7A3, 0xF7A4, 0xF7A5, 0xF7A6, 0xF7A7,
+	0xF7A8, 0xF7A9, 0xF7AA, 0xF7AB, 0xF7AC, 0xF7AD, 0xF7AE, 0xF7AF,
+	0xF7B0, 0xF7B1, 0xF7B2, 0xF7B3, 0xF7B4, 0xF7B5, 0xF7B6, 0xF7B7,
+	0xF7B8, 0xF7B9, 0xF7BA, 0xF7BB, 0xF7BC, 0xF7BD, 0xF7BE, 0xF7BF,
+	0xF7C0, 0xF7C1, 0xF7C2, 0xF7C3, 0xF7C4, 0xF7C5, 0xF7C6, 0xF7C7,
+	0xF7C8, 0xF7C9, 0xF7CA, 0xF7CB, 0xF7CC, 0xF7CD, 0xF7CE, 0xF7CF,
+	0xF7D0, 0xF7D1, 0xF7D2, 0xF7D3, 0xF7D4, 0xF7D5, 0xF7D6, 0xF7D7,
+	0xF7D8, 0xF7D9, 0xF7DA, 0xF7DB, 0xF7DC, 0xF7DD, 0xF7DE, 0xF7DF,
+	0xF7E0, 0xF7E1, 0xF7E2, 0xF7E3, 0xF7E4, 0xF7E5, 0xF7E6, 0xF7E7,
+	0xF7E8, 0xF7E9, 0xF7EA, 0xF7EB, 0xF7EC, 0xF7ED, 0xF7EE, 0xF7EF,
+	0xF7F0, 0xF7F1, 0xF7F2, 0xF7F3, 0xF7F4, 0xF7F5, 0xF7F6, 0xF7F7,
+	0xF7F8, 0xF7F9, 0xF7FA, 0xF7FB, 0xF7FC, 0xF7FD, 0xF7FE, 0xF7FF};
+
 struct rspamd_charset_converter {
 	char *canon_name;
 	union {
@@ -100,6 +119,47 @@ rspamd_converter_dtor(gpointer p)
 	g_free(c);
 }
 
+/* Whether `charset` is UTF-16 without an order and the data has no byte order mark */
+static gboolean
+rspamd_mime_utf16_unmarked(const char *charset, const char *data, gsize len)
+{
+	const unsigned char *bom = (const unsigned char *) data;
+
+	return charset != NULL && g_ascii_strcasecmp(charset, "UTF-16") == 0 &&
+		   !(len >= 2 && ((bom[0] == 0xfe && bom[1] == 0xff) || (bom[0] == 0xff && bom[1] == 0xfe)));
+}
+
+/*
+ * UTF-16 without a byte order mark: clients do not agree on it (big-endian in
+ * Apple Mail and ICU, little-endian in browsers and Thunderbird), so it is
+ * read in the order of the data, where ASCII has its zero bytes;
+ * little-endian when that says nothing. The data chooses this order, so the
+ * links of the other one are read too (rspamd_mime_utf16_other_order)
+ */
+static gboolean
+rspamd_mime_utf16_data_is_be(const char *data, gsize len)
+{
+	gsize zeros[2] = {0, 0};
+
+	for (gsize i = 0; i < len; i++) {
+		if (data[i] == 0) {
+			zeros[i & 1]++;
+		}
+	}
+
+	return zeros[0] > zeros[1];
+}
+
+const char *
+rspamd_mime_utf16_other_order(const char *charset, const char *data, gsize len)
+{
+	if (!rspamd_mime_utf16_unmarked(charset, data, len)) {
+		return NULL;
+	}
+
+	return rspamd_mime_utf16_data_is_be(data, len) ? "UTF-16LE" : "UTF-16BE";
+}
+
 int32_t
 rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 						   UChar *dest,
@@ -109,7 +169,22 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 						   UErrorCode *pErrorCode)
 {
 	if (!cnv->is_internal) {
-		return ucnv_toUChars(cnv->d.conv,
+		UConverter *conv = cnv->d.conv;
+
+		if (srcLength > 0 && rspamd_mime_utf16_unmarked(cnv->canon_name, src, srcLength)) {
+			/* In the order of the data, see rspamd_mime_utf16_data_is_be */
+			UErrorCode order_err = U_ZERO_ERROR;
+			struct rspamd_charset_converter *ordered;
+
+			ordered = rspamd_mime_get_converter_cached(rspamd_mime_utf16_data_is_be(src, srcLength) ? "UTF-16BE" : "UTF-16LE",
+													   NULL, TRUE, &order_err);
+
+			if (ordered != NULL && !ordered->is_internal) {
+				conv = ordered->d.conv;
+			}
+		}
+
+		return ucnv_toUChars(conv,
 							 dest, destCapacity,
 							 src, srcLength,
 							 pErrorCode);
@@ -133,6 +208,40 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 	}
 }
 
+/*
+ * ICU's alias table knows ISO-8859-16, but its default data has no converter
+ * for it: every alias resolves to "iso-8859_16-2001", for which ucnv_open
+ * fails, so any name of this charset is served by the internal table
+ */
+static gboolean
+rspamd_charset_is_iso_8859_16(const char *name)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	const char *conv_name = ucnv_getAlias(name, 0, &uc_err);
+
+	if (conv_name != NULL && U_SUCCESS(uc_err)) {
+		return strcmp(conv_name, "iso-8859_16-2001") == 0;
+	}
+
+	return g_ascii_strcasecmp(name, "ISO-8859-16") == 0 ||
+		   g_ascii_strcasecmp(name, "latin10") == 0 ||
+		   g_ascii_strcasecmp(name, "iso-ir-226") == 0;
+}
+
+/* The table of a charset that ICU has no converter for, or NULL */
+static const UChar *
+rspamd_charset_internal_table(const char *name)
+{
+	if (rspamd_charset_is_iso_8859_16(name)) {
+		return iso_8859_16_map;
+	}
+
+	if (g_ascii_strcasecmp(name, "x-user-defined") == 0) {
+		return x_user_defined_map;
+	}
+
+	return NULL;
+}
 
 struct rspamd_charset_converter *
 rspamd_mime_get_converter_cached(const char *enc,
@@ -171,14 +280,14 @@ rspamd_mime_get_converter_cached(const char *enc,
 	conv = rspamd_lru_hash_lookup(cache, (gpointer) canon_name, 0);
 
 	if (conv == NULL) {
-		if (!(strcmp(canon_name, "ISO-8859-16") == 0 ||
-			  strcmp(canon_name, "latin10") == 0 ||
-			  strcmp(canon_name, "iso-ir-226") == 0)) {
+		const UChar *table = rspamd_charset_internal_table(canon_name);
+
+		if (table == NULL) {
 			conv = g_malloc0(sizeof(*conv));
 			conv->d.conv = ucnv_open(canon_name, err);
-			conv->canon_name = g_strdup(canon_name);
 
 			if (conv->d.conv != NULL) {
+				conv->canon_name = g_strdup(canon_name);
 				ucnv_setToUCallBack(conv->d.conv,
 									UCNV_TO_U_CALLBACK_SUBSTITUTE,
 									NULL,
@@ -193,10 +302,10 @@ rspamd_mime_get_converter_cached(const char *enc,
 			}
 		}
 		else {
-			/* ISO-8859-16 */
+			/* ISO-8859-16, x-user-defined */
 			conv = g_malloc0(sizeof(*conv));
 			conv->is_internal = TRUE;
-			conv->d.cnv_table = iso_8859_16_map;
+			conv->d.cnv_table = table;
 			conv->canon_name = g_strdup(canon_name);
 
 			rspamd_lru_hash_insert(cache, conv->canon_name, conv, 0, 0);
@@ -589,7 +698,8 @@ void rspamd_mime_charset_utf_enforce(char *in, gsize len)
 
 			U8_NEXT(p, cur_offset, len, uc);
 
-			if (uc > 0) {
+			/* NUL is valid too: bad bytes followed by NULs must be replaced */
+			if (uc >= 0) {
 				/* Fill string between err_offset and tmp with `?` character */
 				memset(p + err_offset, '?', tmp - err_offset);
 				break;
@@ -752,6 +862,11 @@ rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
 					if (rspamd_regexp_match(utf_compatible_re,
 											real_charset, strlen(real_charset), TRUE)) {
 						RSPAMD_FTOK_ASSIGN(charset, UTF8_CHARSET);
+						/*
+						 * CED only tells that the bytes are meant as UTF-8,
+						 * it does not make the broken sequences valid
+						 */
+						rspamd_mime_charset_utf_enforce(in, len);
 
 						return TRUE;
 					}
@@ -913,6 +1028,16 @@ void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
 
 		if (rspamd_mime_charset_utf_check(&charset_tok, part_content->data,
 										  part_content->len, !checked)) {
+			if (checked) {
+				/*
+				 * The check above has not looked at the content: CED has
+				 * already guessed a UTF-8 compatible charset for a part with
+				 * no charset or an unknown one, which does not make its bytes
+				 * valid UTF-8, or the part is labelled with an ASCII charset
+				 */
+				rspamd_mime_charset_utf_enforce((char *) part_content->data,
+												part_content->len);
+			}
 			SET_PART_UTF(text_part);
 			text_part->utf_raw_content = part_content;
 			text_part->real_charset = UTF8_CHARSET;
