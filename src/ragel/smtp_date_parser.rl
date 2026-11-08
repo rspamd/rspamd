@@ -13,6 +13,18 @@
 
 %% write data;
 
+static int
+rspamd_smtp_date_days_in_month (int mon, int year)
+{
+  static const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+  if (mon == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) {
+    return 29;
+  }
+
+  return days[mon];
+}
+
 uint64_t
 rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
 {
@@ -40,6 +52,13 @@ rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
   if ( cs < %%{ write first_final; }%% ) {
     g_set_error (err, g_quark_from_static_string ("smtp_date"), cs, "invalid date at offset %d (%c), state %d",
 			(int)(p - data), (*p > 0 && *p < 128) ? *p : '?', cs);
+    return (uint64_t)(-1);
+  }
+
+  /* The grammar takes any day from 1 to 31, whatever the month */
+  if (tm.tm_mday > rspamd_smtp_date_days_in_month (tm.tm_mon, tm.tm_year + 1900)) {
+    g_set_error (err, g_quark_from_static_string ("smtp_date"), cs,
+        "invalid date: day %d is past the end of the month", tm.tm_mday);
     return (uint64_t)(-1);
   }
 

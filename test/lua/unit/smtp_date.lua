@@ -53,6 +53,13 @@ context("SMTP date functions", function()
     { 'Mon Oct  5 20:29:23 BST 2020', nil },
     -- Wrong date
     { '32 Jan 2020 00:00 GMT', nil },
+    -- Day past the end of the month
+    { '31 Apr 2020 00:00 GMT', nil },
+    { '30 Apr 2020 00:00 GMT', 1588204800 },
+    { '29 Feb 2021 00:00 GMT', nil },
+    { '29 Feb 2020 00:00 GMT', 1582934400 },
+    { '29 Feb 2100 00:00 GMT', nil },
+    { '29 Feb 2000 00:00 GMT', 951782400 },
     -- Wrong time
     { '1 Jan 2020 25:00 GMT', nil },
     -- Missing zone: invalid, DATE_FAR_FUTURE_NO_TZ reparses it as UTC+14

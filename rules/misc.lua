@@ -81,7 +81,7 @@ local date_id = rspamd_config:register_symbol({
       -- instant any sender could have meant, so if even that is far ahead of
       -- receipt, the date is in the future whatever the sender's zone.
       -- Appending a zone fixes nothing else the parser rejects; as for zoned
-      -- dates, the weekday and the length of the month are not checked.
+      -- dates, the weekday is not checked.
       local earliest = rspamd_parsers.parse_smtp_date(date_time .. ' +1400')
       if earliest and earliest - dt > 172800 then
         -- More than 48 hours in the future
