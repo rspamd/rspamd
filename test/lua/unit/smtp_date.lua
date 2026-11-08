@@ -17,6 +17,9 @@ context("SMTP date functions", function()
     -- extra comment
     { 'Thu, 18 May 2006 16:08:11 +0400 (MSD)', 1147954091 },
     { 'Thu, 18 May 2006 16:08:11 +0400', 1147954091 },
+    -- quoted pairs in a comment
+    { 'Thu, 18 May 2006 16:08:11 +0400 (a \\) b)', 1147954091 },
+    { 'Thu, 18 May 2006 16:08:11 +0400 (a \\( b)', 1147954091 },
     -- obs_zone
     { 'Sat, 26 Sep 2020 17:36:21 GMT', 1601141781 },
     { 'Sat, 26 Sep 2020 17:36:21 UT', 1601141781 },

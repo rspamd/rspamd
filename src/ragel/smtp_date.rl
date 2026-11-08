@@ -215,7 +215,9 @@
       stack = st_storage.data;
     }
   }
-  ccontent = ctext | FWS | '(' @{ fcall balanced_ccontent; };
+  # RFC 5322 quoted-pair: an escaped character, e.g. "\)" inside a comment
+  quoted_pair = "\\" (32..126 | "\t");
+  ccontent = ctext | FWS | quoted_pair | '(' @{ fcall balanced_ccontent; };
   balanced_ccontent := ccontent* ')' @{ fret; };
   comment         =   "(" (FWS? ccontent)* FWS? ")";
   CFWS            =   ((FWS? comment)+ FWS?) | FWS;
