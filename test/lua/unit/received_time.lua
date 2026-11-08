@@ -1,6 +1,7 @@
--- Received header timestamps
+-- Received header timestamps and the nreceived_bad_time metatoken
 context("Received timestamps", function()
   local rspamd_task = require "rspamd_task"
+  local lua_meta = require "lua_meta"
   local cfg = rspamd_config
 
   local function load(received)
@@ -18,6 +19,8 @@ context("Received timestamps", function()
         from, from, by, date and ('; ' .. date) or '')
   end
 
+  -- Most recent first, 10 seconds apart
+  local top = hop('relay.example.org', 'mx.example.org', 'Mon, 26 Aug 2002 10:00:10 +0000')
   local bottom = hop('client.example.com', 'relay.example.org', 'Mon, 26 Aug 2002 10:00:00 +0000')
   local invalid = hop('a.example.net', 'b.example.net', '31 Apr 2002 10:00:05 +0000')
   local nodate = hop('c.example.net', 'd.example.net')
@@ -42,5 +45,29 @@ context("Received timestamps", function()
     assert_rspamd_eq({ expect = 0, actual = timestamp_of(task, 'b.example.net') })
     assert_rspamd_eq({ expect = 0, actual = timestamp_of(task, 'd.example.net') })
     task:destroy()
+  end)
+
+  local function bad_time(received)
+    local task = load(received)
+    local tok = lua_meta.rspamd_gen_metatokens(task, { 'nreceived_bad_time' })[1]
+    task:destroy()
+    return tok
+  end
+
+  test("nreceived_bad_time is 1 / the sum of hop delays", function()
+    assert_rspamd_eq({ expect = 0.1, actual = bad_time({ top, bottom }) })
+  end)
+
+  -- A hop without a usable date used to add its distance from 1970
+  test("nreceived_bad_time skips a hop without a date", function()
+    assert_rspamd_eq({ expect = 0.1, actual = bad_time({ top, nodate, bottom }) })
+  end)
+
+  test("nreceived_bad_time skips a hop with an invalid date", function()
+    assert_rspamd_eq({ expect = 0.1, actual = bad_time({ top, invalid, bottom }) })
+  end)
+
+  test("nreceived_bad_time is 0 without dates", function()
+    assert_rspamd_eq({ expect = 0, actual = bad_time({ nodate, invalid }) })
   end)
 end)
