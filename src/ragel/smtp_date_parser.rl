@@ -50,8 +50,9 @@ rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
     }
 
   if ( cs < %%{ write first_final; }%% ) {
+    /* p may equal pe (input ended, or fbreak on the last byte): no char */
     g_set_error (err, g_quark_from_static_string ("smtp_date"), cs, "invalid date at offset %d (%c), state %d",
-			(int)(p - data), (*p > 0 && *p < 128) ? *p : '?', cs);
+			(int)(p - data), (p < pe && *p > 0 && *p < 128) ? *p : '?', cs);
     return (uint64_t)(-1);
   }
 
