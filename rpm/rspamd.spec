@@ -6,7 +6,7 @@ Name:             rspamd
 Conflicts:        rspamd-asan
 %endif
 Provides:         rspamd
-Version:          3.2
+Version:          4.2.3
 Release:          1
 Summary:          Rapid spam filtering system
 Group:            System Environment/Daemons
