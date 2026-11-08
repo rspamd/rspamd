@@ -86,6 +86,12 @@ Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd
 
+%if 0%{?fedora} > 43
+%{add_sysuser u _rspamd - "RSpamd user" %{_localstatedir}/lib/rspamd /bin/false}
+%{add_sysuser g _rspamd -}
+%{add_sysuser m _rspamd _rspamd}
+%endif
+
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
 with big amount of mail and can be easily extended with own filters written in
@@ -195,8 +201,10 @@ make %{?_smp_mflags}
 rm -rf %{buildroot}
 
 %pre
+%if !0%{?fedora} > 43
 %{_sbindir}/groupadd -r _rspamd 2>/dev/null || :
 %{_sbindir}/useradd -g _rspamd -c "Rspamd user" -s /bin/false -r -d %{_localstatedir}/lib/rspamd _rspamd 2>/dev/null || :
+%endif
 
 %post
 %{__chown} -R _rspamd:_rspamd %{_localstatedir}/lib/rspamd
