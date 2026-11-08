@@ -36,6 +36,16 @@ context("SMTP date functions", function()
     { 'Sat, 26 Sep 2020 17:36:21 UTC', 1601141781 },
     { 'Sat, 26 Sep 2020 17:36:21 UTC (Coordinated Universal Time)', 1601141781 },
     { 'Sat, 26 Sep 2020 17:36:21 UTCX', nil },
+    -- names are case-insensitive, as in RFC 5322
+    { 'mon, 05 oct 2020 19:05:57 -0000', 1601924757 },
+    { 'MON, 05 OCT 2020 19:05:57 -0000', 1601924757 },
+    { 'Sat, 26 Sep 2020 17:36:21 gmt', 1601141781 },
+    { 'Sat, 26 Sep 2020 17:36:21 Utc', 1601141781 },
+    { 'Wed, 30 Sep 2020 20:32:31 edt', 1601512351 },
+    { 'Wed, 30 Sep 2020 17:32:31 pDt', 1601512351 },
+    -- ... but only in their three letter forms
+    { 'Monday, 05 Oct 2020 19:05:57 -0000', nil },
+    { 'Mon, 05 October 2020 19:05:57 -0000', nil },
     -- 2 digit year < 50
     { 'Mon, 05 Oct 20 06:35:38 GMT', 1601879738 },
     { 'Mon, 05 Oct 2020 06:35:38 GMT', 1601879738 },

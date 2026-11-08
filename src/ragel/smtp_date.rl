@@ -223,13 +223,14 @@
   CFWS            =   ((FWS? comment)+ FWS?) | FWS;
   digit_2         =   digit{2};
   digit_4         =   digit{4};
-  day_name        =    "Mon" | "Tue" | "Wed" | "Thu" |
-                       "Fri" | "Sat" | "Sun";
+  # Names are case-insensitive, as are all literals in RFC 5322's ABNF
+  day_name        =    "Mon"i | "Tue"i | "Wed"i | "Thu"i |
+                       "Fri"i | "Sat"i | "Sun"i;
   day_of_week     =   FWS? day_name;
   day             =   FWS? digit{1,2} >Day_Start %Day_End FWS;
-  month           =    "Jan" %Month_Jan | "Feb" %Month_Feb | "Mar" %Month_Mar | "Apr" %Month_Apr |
-                       "May" %Month_May | "Jun" %Month_Jun | "Jul" %Month_Jul | "Aug" %Month_Aug |
-                       "Sep" %Month_Sep | "Oct" %Month_Oct | "Nov" %Month_Nov | "Dec" %Month_Dec;
+  month           =    "Jan"i %Month_Jan | "Feb"i %Month_Feb | "Mar"i %Month_Mar | "Apr"i %Month_Apr |
+                       "May"i %Month_May | "Jun"i %Month_Jun | "Jul"i %Month_Jul | "Aug"i %Month_Aug |
+                       "Sep"i %Month_Sep | "Oct"i %Month_Oct | "Nov"i %Month_Nov | "Dec"i %Month_Dec;
   year            =   FWS digit{2,4} >Year_Start %Year_End FWS;
   date            =   day month %Month_End year;
   hour            =   digit_2;
@@ -238,11 +239,11 @@
   time_of_day     =   hour >Hour_Start %Hour_End ":" minute >Minute_Start %Minute_End (":" second >Second_Start %Second_End )?;
   zone            =   ("+" | "-") %TZ_Sign digit_4 >TZ_Offset_Start %TZ_Offset_End;
   # "UTC" is not an RFC 5322 obs-zone, but some mailers write it
-  obs_zone        =   "UT" %TZ_UT | "UTC" %TZ_UT | "GMT" %TZ_GMT |
-                     "EST" %TZ_EST | "EDT" %TZ_EDT |
-                     "CST" %TZ_CST | "CDT" %TZ_CDT |
-                     "MST" %TZ_MST | "MDT" %TZ_MDT |
-                     "PST" %TZ_PST | "PDT" %TZ_PDT |
+  obs_zone        =   "UT"i %TZ_UT | "UTC"i %TZ_UT | "GMT"i %TZ_GMT |
+                     "EST"i %TZ_EST | "EDT"i %TZ_EDT |
+                     "CST"i %TZ_CST | "CDT"i %TZ_CDT |
+                     "MST"i %TZ_MST | "MDT"i %TZ_MDT |
+                     "PST"i %TZ_PST | "PDT"i %TZ_PDT |
                      [a-iA-I] | [k-zK-Z];
   time            =   time_of_day %DT_End FWS (zone | obs_zone %Obs_Zone_End) FWS*;
   date_time       =   (day_of_week ",")? date time CFWS?;
