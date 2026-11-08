@@ -20,6 +20,10 @@ context("SMTP date functions", function()
     -- quoted pairs in a comment
     { 'Thu, 18 May 2006 16:08:11 +0400 (a \\) b)', 1147954091 },
     { 'Thu, 18 May 2006 16:08:11 +0400 (a \\( b)', 1147954091 },
+    -- zone minutes go up to 59
+    { 'Sat, 26 Sep 2020 17:36:21 +0059', 1601138241 },
+    { 'Sat, 26 Sep 2020 17:36:21 +0060', nil },
+    { 'Sat, 26 Sep 2020 17:36:21 -0099', nil },
     -- obs_zone
     { 'Sat, 26 Sep 2020 17:36:21 GMT', 1601141781 },
     { 'Sat, 26 Sep 2020 17:36:21 UT', 1601141781 },
