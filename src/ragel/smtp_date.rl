@@ -235,7 +235,8 @@
   second          =   digit_2;
   time_of_day     =   hour >Hour_Start %Hour_End ":" minute >Minute_Start %Minute_End (":" second >Second_Start %Second_End )?;
   zone            =   ("+" | "-") %TZ_Sign digit_4 >TZ_Offset_Start %TZ_Offset_End;
-  obs_zone        =   "UT" %TZ_UT | "GMT" %TZ_GMT |
+  # "UTC" is not an RFC 5322 obs-zone, but some mailers write it
+  obs_zone        =   "UT" %TZ_UT | "UTC" %TZ_UT | "GMT" %TZ_GMT |
                      "EST" %TZ_EST | "EDT" %TZ_EDT |
                      "CST" %TZ_CST | "CDT" %TZ_CDT |
                      "MST" %TZ_MST | "MDT" %TZ_MDT |

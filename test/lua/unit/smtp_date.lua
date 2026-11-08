@@ -25,6 +25,10 @@ context("SMTP date functions", function()
     { 'Wed, 30 Sep 2020 20:32:31 -0400', 1601512351 },
     { 'Wed, 30 Sep 2020 17:32:31 PDT', 1601512351 },
     { 'Wed, 30 Sep 2020 17:32:31 -0700', 1601512351 },
+    -- UTC is not an RFC 5322 zone, but some mailers write it
+    { 'Sat, 26 Sep 2020 17:36:21 UTC', 1601141781 },
+    { 'Sat, 26 Sep 2020 17:36:21 UTC (Coordinated Universal Time)', 1601141781 },
+    { 'Sat, 26 Sep 2020 17:36:21 UTCX', nil },
     -- 2 digit year < 50
     { 'Mon, 05 Oct 20 06:35:38 GMT', 1601879738 },
     { 'Mon, 05 Oct 2020 06:35:38 GMT', 1601879738 },
