@@ -31,6 +31,12 @@ context("SMTP date functions", function()
     -- 2 digit year >= 50
     { '26 Aug 76 14:30 EDT', 209932200 },
     { '26 Aug 1976 14:30 EDT', 209932200 },
+    -- 3 digit years add 1900, even below 50, and so do zero-padded
+    -- 4 digit ones: tm_year printed with %04d gives 0102 for 2002
+    { '05 Oct 120 06:35:38 GMT', 1601879738 },
+    { '05 Oct 049 06:35:38 GMT', -638731462 },
+    { '05 Oct 0049 06:35:38 GMT', -638731462 },
+    { 'Mon, 26 Aug 0102 23:12:40 -0700', 1030428760 },
     -- Year 2038 problem (broken on 32-bit systems, see #4754)
     --{ 'Tue, 19 Jan 2038 03:14:07 GMT', 2 ^ 31 - 1 },
     --{ 'Tue, 19 Jan 2038 03:14:09 GMT', 2 ^ 31 + 1 },

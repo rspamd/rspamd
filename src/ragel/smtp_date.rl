@@ -31,13 +31,17 @@
     if (p > tmp) {
       gulong n;
       if (rspamd_strtoul (tmp, p - tmp, &n)) {
-        if (n < 1000) {
-          if (n < 50) {
-            tm.tm_year = n - 1900 + 2000;
-          }
-          else {
-            tm.tm_year = n;
-          }
+        /*
+         * RFC 5322, 4.3: only two digit years 00-49 are 20xx; other two and
+         * three digit years add 1900 ("049" is 1949). Zero-padded four digit
+         * years are read the same way: mailers printing tm_year with %04d
+         * write 2002 as "0102"
+         */
+        if (p - tmp == 2 && n < 50) {
+          tm.tm_year = n + 100;
+        }
+        else if (n < 1000) {
+          tm.tm_year = n;
         }
         else {
           tm.tm_year = n - 1900;
