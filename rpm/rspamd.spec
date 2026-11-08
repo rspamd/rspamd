@@ -129,6 +129,7 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
 %{cmake} \
 %endif
 	-B . \
+	-G "Unix Makefiles" \
 %if 0%{getenv:ASAN}
         -DCMAKE_BUILD_TYPE=Debug \
         -DSANITIZE=address \
