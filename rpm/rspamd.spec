@@ -55,8 +55,12 @@ BuildRequires:    gcc-toolset-12-libasan-devel
 %endif
 
 %ifarch x86_64 amd64
-%if 0%{?el8} || 0%{?fedora} > 10
+%if 0%{?el8} || ( 0%{?fedora} > 10 && 0%{?fedora} < 40 )
 BuildRequires:    hyperscan-devel
+%else
+%if 0%{?fedora} > 39
+BuildRequires:    vectorscan-devel
+%endif
 %endif
 %if !0%{?el10}
 BuildRequires:    jemalloc-devel
