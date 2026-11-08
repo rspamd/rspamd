@@ -1,0 +1,9 @@
+From: Sender <sender@example.com>
+To: Receiver <receiver@example.com>
+Subject: Date header test
+Date: Thu, 12 Nov 2099 19:47:48 +0000
+Message-Id: <date_tz_future@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Date header test.
