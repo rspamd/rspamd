@@ -43,7 +43,13 @@ context("SMTP date functions", function()
     -- Wrong date
     { '32 Jan 2020 00:00 GMT', nil },
     -- Wrong time
-    { '1 Jan 2020 25:00 GMT', nil }
+    { '1 Jan 2020 25:00 GMT', nil },
+    -- Missing zone: invalid, DATE_FAR_FUTURE_NO_TZ reparses it as UTC+14
+    { 'Thu, 12 Nov 2026 19:47:48', nil },
+    { 'Thu, 12 Nov 2026 19:47:48 +1400', 1794462468 },
+    -- ... and appending a zone must not repair any other defect
+    { 'Thu, 12 Nov 2026 19:47:48 bogus +1400', nil },
+    { 'Thu, 12 Nov 2026 19:47:48 +0300 xyz +1400', nil },
   }
 
   for _, case in ipairs(cases) do
