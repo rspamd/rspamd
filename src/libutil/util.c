@@ -2203,6 +2203,11 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 	if (tm->tm_year - 2ULL <= 136) {
 		leaps = (y - 68) / 4;
 
+		if ((y - 68) % 4 < 0) {
+			/* musl shifts: round down, not towards zero, before 1968 */
+			leaps--;
+		}
+
 		if (!((y - 68) & 3)) {
 			leaps--;
 			is_leap = 1;
@@ -2245,7 +2250,8 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 			}
 
 			if (!rem) {
-				is_leap = 1;
+				/* A century year not divisible by 400 is not a leap year */
+				is_leap = 0;
 				leaps = 0;
 			}
 			else {

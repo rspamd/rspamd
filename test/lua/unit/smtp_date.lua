@@ -36,8 +36,6 @@ context("SMTP date functions", function()
     --{ 'Tue, 19 Jan 2038 03:14:09 GMT', 2 ^ 31 + 1 },
     -- double space before TZ
     { 'Sat, 29 Aug 2020 08:25:15  +0700', 1598664315 },
-    -- XXX timestamp corresponding to Sat Dec 30 00:00:00 GMT 1899 returned on error
-    --{'Sat, Dec 30 1899 00:00:00 GMT', -2209161600},
     -- Invalid format
     { 'Mon Oct  5 20:29:23 BST 2020', nil },
     -- Wrong date

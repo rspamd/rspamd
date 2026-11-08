@@ -302,6 +302,36 @@ TEST_SUITE("rspamd_utils")
 		close(fd);
 		unlink(path.c_str());
 	}
+
+	TEST_CASE("rspamd_tm_to_time")
+	{
+		/* Compared as int64_t, so dates outside 32-bit time_t work everywhere */
+		auto to_time = [](int year, int mon, int mday, glong tz) -> int64_t {
+			struct tm tm;
+
+			memset(&tm, 0, sizeof(tm));
+			tm.tm_year = year - 1900;
+			tm.tm_mon = mon - 1;
+			tm.tm_mday = mday;
+
+			return (int64_t) rspamd_tm_to_time(&tm, tz);
+		};
+
+		/* Expected values are Python's calendar.timegm */
+		CHECK(to_time(1970, 1, 1, 0) == 0);
+		CHECK(to_time(1970, 1, 1, 130) == -5400);
+		/* Years 1902-2038: leap days before 1968 round down */
+		CHECK(to_time(1967, 1, 1, 0) == -94694400);
+		CHECK(to_time(1964, 2, 29, 0) == -184291200);
+		CHECK(to_time(1964, 3, 1, 0) == -184204800);
+		CHECK(to_time(1902, 1, 1, 0) == -2145916800);
+		CHECK(to_time(2000, 2, 29, 0) == 951782400);
+		/* Other years: centuries are leap years only when divisible by 400 */
+		CHECK(to_time(1900, 1, 1, 0) == -2208988800LL);
+		CHECK(to_time(2100, 1, 1, 0) == 4102444800LL);
+		CHECK(to_time(2100, 3, 1, 0) == 4107542400LL);
+		CHECK(to_time(2400, 2, 29, 0) == 13574563200LL);
+	}
 }
 
 #endif
