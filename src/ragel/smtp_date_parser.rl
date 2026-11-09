@@ -13,6 +13,10 @@
 
 %% write data;
 
+/*
+ * The input must be NUL-terminated: the error path may read data[len]
+ * when the input ends early.
+ */
 uint64_t
 rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err)
 {
