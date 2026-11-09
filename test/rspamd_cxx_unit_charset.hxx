@@ -43,8 +43,11 @@
 #include "libserver/task.h"
 #include "libutil/mem_pool.h"
 
+#include <unicode/ucnv.h>
+
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace rspamd_charset_test {
 
@@ -292,6 +295,57 @@ TEST_SUITE("mime charset converter")
 			g_byte_array_free(in, TRUE);
 			g_byte_array_free(out, TRUE);
 		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("converters survive more distinct charsets than one cache holds")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"charset_cache_test", 0);
+		std::vector<std::string> names;
+		int32_t total = ucnv_countAvailable();
+
+		for (int32_t i = 0; i < total && names.size() < 100; i++) {
+			names.emplace_back(ucnv_getAvailableName(i));
+		}
+
+		REQUIRE(names.size() > 40);
+
+		auto run = [&]() {
+			std::vector<std::string> out;
+
+			for (const auto &name: names) {
+				char input[] = "Hello, world 123";
+				GError *err = nullptr;
+				gsize olen = 0;
+				auto *res = rspamd_mime_text_to_utf8(pool, input, sizeof(input) - 1,
+													 name.c_str(), &olen, &err);
+
+				out.emplace_back(res ? std::string(res, olen) : std::string("<failed>"));
+
+				if (err) {
+					g_error_free(err);
+				}
+			}
+
+			return out;
+		};
+
+		auto first = run();
+		auto second = run();
+
+		CHECK(first == second);
+
+		/* Spellings of one charset are served by one converter */
+		UErrorCode uc_err = U_ZERO_ERROR;
+		auto *a = rspamd_mime_get_converter_cached("ISO-8859-1", pool, TRUE, &uc_err);
+		auto *b = rspamd_mime_get_converter_cached("iso-8859-1", pool, TRUE, &uc_err);
+		auto *c = rspamd_mime_get_converter_cached("latin1", pool, TRUE, &uc_err);
+
+		REQUIRE(a != nullptr);
+		CHECK(a == b);
+		CHECK(a == c);
 
 		rspamd_mempool_delete(pool);
 	}

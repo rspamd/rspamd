@@ -36,7 +36,12 @@
 #define RSPAMD_CHARSET_FLAG_UTF (1 << 0)
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
 
-#define RSPAMD_CHARSET_CACHE_SIZE 32
+/*
+ * The cache is keyed by ICU canonical names (a couple of hundred converters)
+ * plus the internal tables, so every converter stays cached once opened.
+ * A slot costs about 40 bytes of the table, and the table grows on demand.
+ */
+#define RSPAMD_CHARSET_CACHE_SIZE 512
 #define RSPAMD_CHARSET_MAX_CONTENT 512
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -176,6 +181,11 @@ rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
 			UErrorCode order_err = U_ZERO_ERROR;
 			struct rspamd_charset_converter *ordered;
 
+			/*
+			 * A cache insertion may evict and close any other converter, so
+			 * `cnv` is not touched after this call; a failed lookup inserts
+			 * nothing and evicts nothing
+			 */
 			ordered = rspamd_mime_get_converter_cached(rspamd_mime_utf16_data_is_be(src, srcLength) ? "UTF-16BE" : "UTF-16LE",
 													   NULL, TRUE, &order_err);
 
@@ -243,6 +253,30 @@ rspamd_charset_internal_table(const char *name)
 	return NULL;
 }
 
+/*
+ * The cache key of a charset name: the name ICU resolves it to, so that
+ * spellings of one charset share an entry, or the name itself when ICU has
+ * no such alias
+ */
+static const char *
+rspamd_charset_cache_key(const char *name)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	const char *conv_name;
+
+	if (g_ascii_strcasecmp(name, "x-user-defined") == 0) {
+		return "x-user-defined";
+	}
+
+	conv_name = ucnv_getAlias(name, 0, &uc_err);
+
+	if (conv_name != NULL && U_SUCCESS(uc_err)) {
+		return conv_name;
+	}
+
+	return name;
+}
+
 struct rspamd_charset_converter *
 rspamd_mime_get_converter_cached(const char *enc,
 								 rspamd_mempool_t *pool,
@@ -280,6 +314,18 @@ rspamd_mime_get_converter_cached(const char *enc,
 	conv = rspamd_lru_hash_lookup(cache, (gpointer) canon_name, 0);
 
 	if (conv == NULL) {
+		/* Other spellings of a cached charset are served by its entry */
+		const char *key = rspamd_charset_cache_key(canon_name);
+
+		if (key != canon_name) {
+			canon_name = key;
+			conv = rspamd_lru_hash_lookup(cache, (gpointer) canon_name, 0);
+
+			if (conv != NULL) {
+				return conv;
+			}
+		}
+
 		const UChar *table = rspamd_charset_internal_table(canon_name);
 
 		if (table == NULL) {
