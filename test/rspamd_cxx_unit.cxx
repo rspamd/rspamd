@@ -72,6 +72,7 @@
 #include "rspamd_cxx_unit_scan_result.hxx"
 #include "rspamd_cxx_unit_acism.hxx"
 #include "rspamd_cxx_unit_url_find.hxx"
+#include "rspamd_cxx_unit_email_addr.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

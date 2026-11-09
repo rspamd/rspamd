@@ -171,6 +171,14 @@ rspamd_mime_header_check_special(struct rspamd_task *task,
 		if (task->from_envelope == NULL) {
 			task->from_envelope = rspamd_email_address_from_smtp(rh->decoded,
 																 strlen(rh->decoded));
+
+			if (task->from_envelope == NULL && strchr(rh->decoded, '(') != NULL) {
+				/* A path followed by a comment: the address points to the copy */
+				char *path = rspamd_mempool_strdup(task->task_pool, rh->decoded);
+				gsize path_len = rspamd_strip_smtp_comments_inplace(path, strlen(path));
+
+				task->from_envelope = rspamd_email_address_from_smtp(path, path_len);
+			}
 		}
 		rh->flags = RSPAMD_HEADER_RETURN_PATH | RSPAMD_HEADER_UNIQUE;
 		break;
