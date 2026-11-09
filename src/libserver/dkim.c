@@ -28,6 +28,11 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <openssl/ec.h>
+#include <openssl/obj_mac.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+#include <openssl/core_names.h>
+#endif
 
 /* special DNS tokens */
 #define DKIM_DNSKEYNAME "_domainkey"
@@ -1378,6 +1383,43 @@ struct rspamd_dkim_key_cbdata {
 	void *ud;
 };
 
+/* True if the EC key is on a named P-256, P-384 or P-521 curve */
+static bool
+rspamd_dkim_ec_curve_allowed(EVP_PKEY *pkey)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+	char name[64];
+	size_t len = 0;
+
+	/* Fails for curves that are not named, so explicit parameters are rejected */
+	if (EVP_PKEY_get_utf8_string_param(pkey, OSSL_PKEY_PARAM_GROUP_NAME,
+									   name, sizeof(name), &len) != 1) {
+		return false;
+	}
+
+	return strcmp(name, "prime256v1") == 0 ||
+		   strcmp(name, "secp384r1") == 0 ||
+		   strcmp(name, "secp521r1") == 0;
+#else
+	EC_KEY *ec = EVP_PKEY_get1_EC_KEY(pkey);
+	int nid = NID_undef;
+
+	if (ec == NULL) {
+		return false;
+	}
+
+	if (EC_KEY_get0_group(ec) != NULL) {
+		/* NID_undef for explicit parameters */
+		nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
+	}
+
+	EC_KEY_free(ec);
+
+	return nid == NID_X9_62_prime256v1 || nid == NID_secp384r1 ||
+		   nid == NID_secp521r1;
+#endif
+}
+
 rspamd_dkim_key_t *
 rspamd_dkim_make_key(const char *keydata,
 					 unsigned int keylen, enum rspamd_dkim_key_type type, GError **err)
@@ -1394,6 +1436,8 @@ rspamd_dkim_make_key(const char *keydata,
 	 */
 	static const unsigned int max_dkim_key_len = 4096;
 	static const int max_dkim_key_bits = 8192;
+	/* RFC 8301 section 3.2: RSA keys shorter than 1024 bits are not valid */
+	static const int min_dkim_rsa_key_bits = 1024;
 
 	if (keylen < 3) {
 		g_set_error(err,
@@ -1459,6 +1503,9 @@ rspamd_dkim_make_key(const char *keydata,
 		EVP_DigestUpdate(mdctx, key->keydata, key->decoded_len);
 		EVP_DigestFinal_ex(mdctx, key->key_id, &dlen);
 	}
+	else {
+		ERR_clear_error();
+	}
 
 	EVP_MD_CTX_destroy(mdctx);
 
@@ -1497,9 +1544,49 @@ rspamd_dkim_make_key(const char *keydata,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
 						"cannot extract pubkey from bio");
+			ERR_clear_error();
 			REF_RELEASE(key);
 
 			return NULL;
+		}
+
+		/* d2i_PUBKEY_bio accepts any key type, so check it against k= */
+		EVP_PKEY *evp = key->specific.key_ssl.key_evp;
+
+		if (key->type == RSPAMD_DKIM_KEY_RSA) {
+			if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA) {
+				g_set_error(err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_KEYFAIL,
+							"DKIM key is not an RSA key");
+				ERR_clear_error();
+				REF_RELEASE(key);
+
+				return NULL;
+			}
+		}
+		else if (key->type == RSPAMD_DKIM_KEY_ECDSA) {
+			if (EVP_PKEY_base_id(evp) != EVP_PKEY_EC) {
+				g_set_error(err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_KEYFAIL,
+							"DKIM key is not an ECDSA key");
+				ERR_clear_error();
+				REF_RELEASE(key);
+
+				return NULL;
+			}
+
+			if (!rspamd_dkim_ec_curve_allowed(evp)) {
+				g_set_error(err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_KEYFAIL,
+							"DKIM key is not on a named P-256, P-384 or P-521 curve");
+				ERR_clear_error();
+				REF_RELEASE(key);
+
+				return NULL;
+			}
 		}
 
 		/*
@@ -1517,6 +1604,19 @@ rspamd_dkim_make_key(const char *keydata,
 						DKIM_SIGERROR_KEYFAIL,
 						"DKIM key has too many bits: %d, maximum is %d",
 						key_bits, max_dkim_key_bits);
+			ERR_clear_error();
+			REF_RELEASE(key);
+
+			return NULL;
+		}
+
+		if (key->type == RSPAMD_DKIM_KEY_RSA && key_bits < min_dkim_rsa_key_bits) {
+			g_set_error(err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_KEYFAIL,
+						"DKIM RSA key is too short: %d bits, minimum is %d",
+						key_bits, min_dkim_rsa_key_bits);
+			ERR_clear_error();
 			REF_RELEASE(key);
 
 			return NULL;
@@ -1590,7 +1690,8 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 		skip_spaces,
 	} state = read_tag,
 	  next_state;
-	char tag = '\0';
+	const char *tag_start = NULL;
+	size_t tag_len = 0;
 	size_t klen = 0, alglen = 0;
 
 	c = txt;
@@ -1603,10 +1704,14 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 			if (*p == '=') {
 				state = read_eqsign;
 			}
+			else if (*p == ';') {
+				/* Empty tag or a tag without value */
+				tag_len = 0;
+			}
 			else if (g_ascii_isspace(*p)) {
 				state = skip_spaces;
 
-				if (tag != '\0') {
+				if (tag_len > 0) {
 					/* We had tag letter */
 					next_state = read_tag_before_eqsign;
 				}
@@ -1616,7 +1721,10 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				}
 			}
 			else {
-				tag = *p;
+				if (tag_len == 0) {
+					tag_start = p;
+				}
+				tag_len++;
 			}
 			p++;
 			break;
@@ -1628,8 +1736,15 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 			if (*p == '=') {
 				state = read_eqsign;
 			}
+			else if (*p == ';') {
+				/* The previous tag had no value */
+				tag_len = 0;
+				state = read_tag;
+			}
 			else {
-				tag = *p;
+				/* The previous tag had no value, this is the start of a new one */
+				tag_start = p;
+				tag_len = 1;
 				state = read_tag;
 			}
 			p++;
@@ -1638,16 +1753,16 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 			/* Always switch to skip spaces state and do not advance p */
 			state = skip_spaces;
 
-			if (tag == 'p') {
+			if (tag_len == 1 && *tag_start == 'p') {
 				next_state = read_p_tag;
 			}
-			else if (tag == 'k') {
+			else if (tag_len == 1 && *tag_start == 'k') {
 				next_state = read_k_tag;
 			}
 			else {
 				/* Unknown tag, ignore */
 				next_state = ignore_value;
-				tag = '\0';
+				tag_len = 0;
 			}
 			break;
 		case read_p_tag:
@@ -1655,7 +1770,7 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				klen = p - c;
 				key = c;
 				state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 				p++;
 			}
 			else {
@@ -1667,7 +1782,7 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				alglen = p - c;
 				alg = c;
 				state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 				p++;
 			}
 			else if (g_ascii_isspace(*p)) {
@@ -1675,7 +1790,7 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				alg = c;
 				state = skip_spaces;
 				next_state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 			}
 			else {
 				p++;
@@ -1684,13 +1799,13 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 		case ignore_value:
 			if (*p == ';') {
 				state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 				p++;
 			}
 			else if (g_ascii_isspace(*p)) {
 				state = skip_spaces;
 				next_state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 			}
 			else {
 				p++;
