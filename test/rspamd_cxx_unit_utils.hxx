@@ -353,6 +353,114 @@ TEST_SUITE("rspamd_utils")
 		CHECK(ul == G_MAXULONG);
 		CHECK_FALSE(rspamd_xstrtoul(over.data(), over.size(), &ul));
 	}
+
+	TEST_CASE("rspamd_tm_to_time")
+	{
+		/* Compared as int64_t, so dates outside 32-bit time_t work everywhere */
+		auto to_time = [](int year, int mon, int mday, glong tz) -> int64_t {
+			struct tm tm;
+
+			memset(&tm, 0, sizeof(tm));
+			tm.tm_year = year - 1900;
+			tm.tm_mon = mon - 1;
+			tm.tm_mday = mday;
+
+			return (int64_t) rspamd_tm_to_time(&tm, tz);
+		};
+
+		/* Expected values are Python's calendar.timegm */
+		CHECK(to_time(1970, 1, 1, 0) == 0);
+		CHECK(to_time(1970, 1, 1, 130) == -5400);
+		/* Years 1902-2038: leap days before 1968 round down */
+		CHECK(to_time(1967, 1, 1, 0) == -94694400);
+		CHECK(to_time(1964, 2, 29, 0) == -184291200);
+		CHECK(to_time(1964, 3, 1, 0) == -184204800);
+		CHECK(to_time(1902, 1, 1, 0) == -2145916800);
+		CHECK(to_time(2000, 2, 29, 0) == 951782400);
+		/* Other years: centuries are leap years only when divisible by 400 */
+		CHECK(to_time(1900, 1, 1, 0) == -2208988800LL);
+		CHECK(to_time(2100, 1, 1, 0) == 4102444800LL);
+		CHECK(to_time(2100, 3, 1, 0) == 4107542400LL);
+		CHECK(to_time(2400, 2, 29, 0) == 13574563200LL);
+	}
+
+	TEST_CASE("rspamd_gmtime")
+	{
+		struct tm tm;
+
+		/* Times before 2000-03-01 have negative days */
+		rspamd_gmtime(0, &tm);
+		CHECK(tm.tm_year == 70);
+		CHECK(tm.tm_mon == 0);
+		CHECK(tm.tm_mday == 1);
+		CHECK(tm.tm_hour == 0);
+		CHECK(tm.tm_wday == 4);
+		CHECK(tm.tm_yday == 0);
+
+		rspamd_gmtime(-1, &tm);
+		CHECK(tm.tm_year == 69);
+		CHECK(tm.tm_mon == 11);
+		CHECK(tm.tm_mday == 31);
+		CHECK(tm.tm_hour == 23);
+		CHECK(tm.tm_min == 59);
+		CHECK(tm.tm_sec == 59);
+		CHECK(tm.tm_wday == 3);
+		CHECK(tm.tm_yday == 364);
+
+		rspamd_gmtime(951868799, &tm);
+		CHECK(tm.tm_year == 100);
+		CHECK(tm.tm_mon == 1);
+		CHECK(tm.tm_mday == 29);
+		CHECK(tm.tm_wday == 2);
+		CHECK(tm.tm_yday == 59);
+
+		/* Out of range times are clamped to the years an int can hold */
+		rspamd_gmtime(INT64_MAX, &tm);
+		CHECK(tm.tm_year == INT_MAX - 1900);
+		CHECK(tm.tm_mon == 11);
+		CHECK(tm.tm_mday == 31);
+		CHECK(tm.tm_hour == 23);
+		CHECK(tm.tm_sec == 59);
+
+		rspamd_gmtime(INT64_MIN, &tm);
+		CHECK(tm.tm_year == INT_MIN);
+		CHECK(tm.tm_mon == 0);
+		CHECK(tm.tm_mday == 1);
+		CHECK(tm.tm_hour == 0);
+		CHECK(tm.tm_sec == 0);
+
+		/* 1900-2100 in steps of a week and an hour or so */
+		int mismatches = 0;
+		int64_t first_bad = 0;
+
+		for (int64_t ts = -2208988800LL; ts < 4102444800LL; ts += 7 * 86400 + 3601) {
+			struct tm ours;
+
+			rspamd_gmtime(ts, &ours);
+			/* Days since the epoch, rounded down; 1970-01-01 was a Thursday */
+			int64_t days = ts / 86400 - (ts % 86400 < 0);
+			int wday = (int) (((days + 4) % 7 + 7) % 7);
+			auto bad = (int64_t) rspamd_tm_to_time(&ours, 0) != ts || ours.tm_wday != wday;
+
+			if constexpr (sizeof(time_t) >= 8) {
+				struct tm libc;
+				time_t tt = ts;
+
+				gmtime_r(&tt, &libc);
+				bad = bad || ours.tm_year != libc.tm_year || ours.tm_mon != libc.tm_mon ||
+					  ours.tm_mday != libc.tm_mday || ours.tm_hour != libc.tm_hour ||
+					  ours.tm_min != libc.tm_min || ours.tm_sec != libc.tm_sec ||
+					  ours.tm_wday != libc.tm_wday || ours.tm_yday != libc.tm_yday;
+			}
+
+			if (bad && mismatches++ == 0) {
+				first_bad = ts;
+			}
+		}
+
+		INFO("first mismatch at " << first_bad);
+		CHECK(mismatches == 0);
+	}
 }
 
 #endif

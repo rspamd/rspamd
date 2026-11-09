@@ -1022,9 +1022,10 @@ reconf['APPLE_MAILER'] = {
 }
 
 -- Detect Apple iPhone/iPad Mail
--- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c
+-- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c,
+-- 24B91016 (iPhone Duo)
 -- https://en.wikipedia.org/wiki/IOS_version_history
-local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \(\d{1,2}[A-Z]\d{1,4}[a-z]?\)]]
+local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \(\d{1,2}[A-Z]\d{1,5}[a-z]?\)]]
 reconf['APPLE_IOS_MAILER'] = {
   description = 'Sent with Apple iPhone/iPad Mail',
   re = string.format('X-Mailer=/^%s/{header}', apple_ios_x_mailer),

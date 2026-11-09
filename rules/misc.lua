@@ -72,12 +72,26 @@ local date_id = rspamd_config:register_symbol({
     end
 
     local dm, err = rspamd_parsers.parse_smtp_date(date_time)
+    local dt = task:get_date({ format = 'connect', gmt = true })
+
     if err then
       task:insert_result('INVALID_DATE', 1.0)
+
+      -- RFC 5322 requires a zone, so a Date without one fails above. Read it
+      -- again as UTC+14, the easternmost zone in use: that is the earliest
+      -- instant any sender could have meant, so if even that is far ahead of
+      -- receipt, the date is in the future whatever the sender's zone.
+      -- Appending a zone fixes nothing else the parser rejects; as for zoned
+      -- dates, the weekday is not checked.
+      local earliest = rspamd_parsers.parse_smtp_date(date_time .. ' +1400')
+      if earliest and earliest - dt > 172800 then
+        -- More than 48 hours in the future
+        task:insert_result('DATE_FAR_FUTURE_NO_TZ', 1.0,
+            tostring(math.floor((earliest - dt) / 3600)))
+      end
       return
     end
 
-    local dt = task:get_date({ format = 'connect', gmt = true })
     local date_diff = dt - dm
 
     if date_diff > 86400 then
@@ -112,6 +126,15 @@ rspamd_config:register_symbol({
   name = 'DATE_IN_FUTURE',
   score = 4.0,
   description = 'Message date is in the future',
+  group = 'headers',
+  type = 'virtual',
+  parent = date_id,
+})
+
+rspamd_config:register_symbol({
+  name = 'DATE_FAR_FUTURE_NO_TZ',
+  score = 0.0, -- observation only until production false-positive review
+  description = 'Date without timezone is more than 48h in future for any timezone',
   group = 'headers',
   type = 'virtual',
   parent = date_id,

@@ -732,8 +732,17 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 
 	if (date_pos > 0 && date_pos < in.size()) {
 		auto date_sub = in.substr(date_pos);
-		rh.timestamp = rspamd_parse_smtp_date((const unsigned char *) date_sub.data(),
-											  date_sub.size(), nullptr);
+		GError *err = nullptr;
+		auto ts = rspamd_parse_smtp_date((const unsigned char *) date_sub.data(),
+										 date_sub.size(), &err);
+
+		if (err == nullptr) {
+			rh.timestamp = ts;
+		}
+		else {
+			/* Keep 0, as for no date at all: the parser returns -1 on errors */
+			g_error_free(err);
+		}
 	}
 
 	return true;
