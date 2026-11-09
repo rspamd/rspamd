@@ -55,6 +55,16 @@ local exports = {
 
 local local_hostname = rspamd_util.get_hostname()
 
+-- The text of a comment, which ends at the first unescaped ')': the sender
+-- or a reason in it must not close it and add results of its own
+-- ("x)dmarc=pass header.from=bank.example(y"@attacker.example)
+local function escape_comment(s)
+  s = tostring(s):gsub('%c', function(c)
+    return c == '\t' and c or '?'
+  end)
+  return (s:gsub('[\\()]', '\\%0'))
+end
+
 local function gen_auth_results(task, settings)
   local auth_results, hdr_parts = {}, {}
 
@@ -127,7 +137,8 @@ local function gen_auth_results(task, settings)
     hdr[1] = string.format('dkim=%s', ar_string)
 
     if dres.fail_reason then
-      hdr[#hdr + 1] = string.format('(%s)', lua_util.maybe_smtp_quote_value(dres.fail_reason))
+      hdr[#hdr + 1] = string.format('(%s)',
+          escape_comment(lua_util.maybe_smtp_quote_value(dres.fail_reason)))
     end
 
     if dres.domain then
@@ -164,7 +175,7 @@ local function gen_auth_results(task, settings)
           hdr = hdr .. lua_util.maybe_smtp_quote_value(key)
         end
         if key == 'pass' then
-          hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(opts[2]) .. ')'
+          hdr = hdr .. ' (policy=' .. escape_comment(lua_util.maybe_smtp_quote_value(opts[2])) .. ')'
           hdr = hdr .. ' header.from=' .. lua_util.maybe_smtp_quote_value(opts[1])
         elseif key ~= 'none' then
           local t = { opts[1]:match('^([^%s]+) : (.*)$') }
@@ -179,7 +190,7 @@ local function gen_auth_results(task, settings)
           if key == 'softfail' then
             hdr = hdr .. ' (policy=none)'
           else
-            hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(key) .. ')'
+            hdr = hdr .. ' (policy=' .. escape_comment(lua_util.maybe_smtp_quote_value(key)) .. ')'
           end
         end
         table.insert(hdr_parts, hdr)
@@ -188,7 +199,8 @@ local function gen_auth_results(task, settings)
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
           for _, v in ipairs(opts) do
             hdr = string.format('%s%s=%s (%s)', hdr, auth_type,
-                lua_util.maybe_smtp_quote_value(key), lua_util.maybe_smtp_quote_value(v))
+                lua_util.maybe_smtp_quote_value(key),
+                escape_comment(lua_util.maybe_smtp_quote_value(v)))
             table.insert(hdr_parts, hdr)
           end
         end
@@ -235,7 +247,7 @@ local function gen_auth_results(task, settings)
                 mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
           end
           hdr = string.format('%s=%s (%s) %s=%s', auth_type, key,
-              comment, sender_type, sender)
+              escape_comment(comment), sender_type, sender)
         else
           hdr = string.format('%s=%s', auth_type, key)
         end
@@ -282,58 +294,192 @@ local function get_ar_lpeg_atoms()
   end
 
   local lpeg = require "lpeg"
-  local P, S, V, C, Ct, Cg, Cf = lpeg.P, lpeg.S, lpeg.V, lpeg.C, lpeg.Ct, lpeg.Cg, lpeg.Cf
+  local P, R, S, V, C, Cs, Ct, Cg, Cf = lpeg.P, lpeg.R, lpeg.S, lpeg.V, lpeg.C, lpeg.Cs, lpeg.Ct, lpeg.Cg, lpeg.Cf
 
   local space = S(" \t") ^ 0
-  local doublequoted = space * P '"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1)) ^ 0 * '"' * space
-  local comment = space * P { "(" * ((1 - S "()") + V(1)) ^ 0 * ")" } * space
+  -- As in `quoted_value`, so both agree on where a quoted value ends
+  local doublequoted = space * P '"' * ((1 - S '"\\') + (P '\\' * 1)) ^ 0 * '"' * space
+  -- A quoted-pair does not close or open a comment (RFC 5322)
+  local comment = space * P { "(" * ((P '\\' * 1) + (1 - S "()\\") + V(1)) ^ 0 * ")" } * space
   local name = C((1 - S('=(" \t')) ^ 1) * space
-  local pair = Cg(name * "=" * space * name) * space
+  -- Names of properties are case-insensitive (RFC 8601): lowercase
+  local key = (C((1 - S('=(" \t')) ^ 1) / string.lower) * space
+  -- A value may be a quoted-string (RFC 8601): its content, unescaped
+  local quoted_value = P '"' * Cs(((P '\\' / '') * 1 + (1 - S '"\\')) ^ 0) * P '"' * space
+  local pair = Cg(key * "=" * space * (quoted_value + name)) * space
 
   -- Single AR element grammar: "dkim=pass (comment) header.d=example.com" → table
   local elt_grammar = Cf(Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
-
-  -- AAR header split grammar: splits on ";" while respecting comments and quotes.
-  -- Each captured element is the raw text between semicolons (trimmed).
-  local safe_char = (comment + doublequoted + (1 - S ";")) -- consume one "safe" token
-  local element = C(safe_char ^ 1) -- capture the raw text of one element
-  local sep = P ";" * space
-  local aar_split_grammar = Ct(space * element * (sep * element) ^ 0)
+  -- The properties of an element, after its result
+  local props_grammar = Cf(Ct("") * space * (pair + comment + doublequoted) ^ 0, rawset)
+  -- The method and the result of an element, e.g. "dkim" and "pass" of
+  -- "dkim/1=pass" (RFC 8601 2.2: methodspec), and where its properties start.
+  -- Comments may come anywhere, spaces around "/" and "=" too
+  local keyword = (R("az", "AZ", "09") + S "_-") ^ 1
+  local methodspec_grammar = (space * comment) ^ 0 * space * C(keyword) * space *
+      (P "/" * space * R("09") ^ 1 * space) ^ -1 * P "=" * space * comment ^ 0 * space *
+      C(keyword) * lpeg.Cp()
 
   ar_lpeg_atoms = {
     elt_grammar = elt_grammar,
-    aar_split_grammar = aar_split_grammar,
+    props_grammar = props_grammar,
+    methodspec_grammar = methodspec_grammar,
   }
   return ar_lpeg_atoms
 end
 
--- Parse a single AR element (e.g. "dkim=pass header.d=example.com") into a kv table
+-- Parse a single AR element (e.g. "dkim=pass header.d=example.com") into a kv table.
+-- The table also has `method`: the method of the element, e.g. "dkim". Only the
+-- result of that method is a result of the element, other `key=value` pairs
+-- are properties, or text that a comment failed to hide. The result is under
+-- the method, lowercased as names of properties are, whatever case or version
+-- the element has ("DMARC=Pass", "dmarc/1=pass" give dmarc = "pass").
 local function parse_ar_element(elt)
-  return get_ar_lpeg_atoms().elt_grammar:match(elt)
+  local atoms = get_ar_lpeg_atoms()
+  local method, result, props_start = atoms.methodspec_grammar:match(elt)
+  if not method then
+    -- No method, whatever its properties say
+    local res = atoms.elt_grammar:match(elt)
+    if res then
+      res.method = nil
+    end
+    return res
+  end
+  local res = atoms.props_grammar:match(elt, props_start) or {}
+  method = method:lower()
+  -- The result of the method, not a pair after it that looks like one
+  res[method] = result:lower()
+  -- Last, so no property (or a method named "method") takes its place
+  res.method = method
+  return res
 end
 exports.parse_ar_element = parse_ar_element
 
+-- Splits an AAR value into the raw text of its elements, on each ';' that is
+-- not in a comment or a quoted string, each element without the blanks in
+-- front of it; an empty element (";;") does not end the split. A comment or a
+-- quoted string that does not close is none: its '(' or '"' is text then.
+-- In linear time. A comment or a quoted string that starts at a '(' or a '"'
+-- reads quoted-pairs ('\' and the byte after it) from the next byte, as any
+-- of them read before it does once past that '(' or '"'. So one read of the
+-- quoted-pairs from the first of them finds where each of them closes: a
+-- quoted string at the next '"' that is no quoted-pair, a comment where the
+-- depth of the parentheses falls below the one it starts at. Comments nested
+-- deeper than max_comment_depth give nil: the element grammars cannot read
+-- them, and no real AAR has them
+local max_comment_depth = 200
+
+local function split_aar_header(s)
+  local byte = string.byte
+  local n = #s
+  local closes = {}
+  local first = s:find('[("]')
+
+  if first then
+    local depth, nopen, nquotes = 0, 0, 0
+    local open_pos, open_target, quote_pos = {}, {}, {}
+    local escaped = false
+
+    for i = first, n do
+      local c = byte(s, i)
+      if c == 40 then
+        -- '(': its comment closes when the depth falls below its own
+        nopen = nopen + 1
+        open_pos[nopen] = i
+        if escaped then
+          open_target[nopen] = depth - 1
+        else
+          open_target[nopen] = depth
+          depth = depth + 1
+          if depth > max_comment_depth then
+            return nil
+          end
+        end
+      elseif c == 41 and not escaped then
+        depth = depth - 1
+        while nopen > 0 and open_target[nopen] >= depth do
+          closes[open_pos[nopen]] = i
+          nopen = nopen - 1
+        end
+      elseif c == 34 then
+        -- '"': closes the quoted strings before it, unless it is a quoted-pair
+        if not escaped then
+          for k = 1, nquotes do
+            closes[quote_pos[k]] = i
+          end
+          nquotes = 0
+        end
+        nquotes = nquotes + 1
+        quote_pos[nquotes] = i
+      end
+      escaped = not escaped and c == 92 and i > first
+    end
+  end
+
+  local function skip_blanks(pos)
+    while pos <= n do
+      local c = byte(s, pos)
+      if c ~= 32 and c ~= 9 then
+        break
+      end
+      pos = pos + 1
+    end
+    return pos
+  end
+
+  local elts = {}
+  local i = skip_blanks(1)
+  local start = i
+
+  while i <= n do
+    local c = byte(s, i)
+    if (c == 40 or c == 34) and closes[i] then
+      i = closes[i] + 1
+    elseif c == 59 then
+      elts[#elts + 1] = s:sub(start, i - 1)
+      i = skip_blanks(i + 1)
+      start = i
+    else
+      i = i + 1
+    end
+  end
+  elts[#elts + 1] = s:sub(start, n)
+
+  return elts
+end
+exports.split_aar_header = split_aar_header
+
+-- Longer AARs are not read: real ones are a few hundred bytes
+local max_aar_len = 16384
+
 -- Split an AAR header value into elements by ";" while respecting comments and
 -- quoted strings, then parse each element.  Returns { i = <number>,
--- ar = { {method=result, ...}, ... } } or nil on failure.
+-- ar = { {method=result, ...}, ... } } or nil on failure. An AAR longer than
+-- max_aar_len gives its i= only, with no results and truncated = true.
 local function parse_aar_header(decoded)
-  local atoms = get_ar_lpeg_atoms()
-  local elts = atoms.aar_split_grammar:match(decoded)
-  if not elts or #elts == 0 then
+  if decoded:match("^[%s;]*$") then
+    return nil
+  end
+  if #decoded > max_aar_len then
+    local i = decoded:match("^%s*i%s*=%s*(%d+)%s*;")
+    return i and { i = i, truncated = true } or nil
+  end
+  local elts = split_aar_header(decoded)
+  if not elts then
     return nil
   end
 
   local result = {}
 
   for _, raw_elt in ipairs(elts) do
-    local trimmed = raw_elt:match("^%s*(.-)%s*$")
+    local trimmed = lua_util.rspamd_str_trim(raw_elt)
     if trimmed and #trimmed > 0 and trimmed:match("^i%s*=%s*%d+$") then
       -- ARC instance tag
       local v = trimmed:match("^i%s*=%s*(%d+)$")
       result.i = v
     else
       -- Try to parse as an AR element (method=result prop=value ...)
-      local ar_elt = atoms.elt_grammar:match(trimmed)
+      local ar_elt = parse_ar_element(trimmed)
       if ar_elt then
         if not result.ar then
           result.ar = {}

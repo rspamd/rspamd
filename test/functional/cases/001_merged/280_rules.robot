@@ -387,6 +387,37 @@ SUBJECT_HAS_CURRENCY
   ...  Settings={symbols_enabled = [SUBJECT_HAS_CURRENCY]}
   Expect Symbol  SUBJECT_HAS_CURRENCY
 
+DATE_FAR_FUTURE_NO_TZ
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_no_tz_future.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_FUTURE]}
+  Expect Symbol  INVALID_DATE
+  Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+  Do Not Expect Symbol  DATE_IN_FUTURE
+
+DATE_FAR_FUTURE_NO_TZ past date
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_no_tz_past.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_PAST]}
+  Expect Symbol  INVALID_DATE
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+  Do Not Expect Symbol  DATE_IN_PAST
+
+DATE_FAR_FUTURE_NO_TZ zoned date
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_tz_future.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_FUTURE]}
+  Expect Symbol  DATE_IN_FUTURE
+  Do Not Expect Symbol  INVALID_DATE
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+DATE_FAR_FUTURE_NO_TZ under threshold
+  # Read as UTC+14, 56 hours ahead is only 42 hours for sure
+  Scan Zone-less Date Ahead  56
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+DATE_FAR_FUTURE_NO_TZ over threshold
+  # Read as UTC+14, 64 hours ahead is still 50 hours for sure
+  Scan Zone-less Date Ahead  64
+  Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
 APPLE_IOS_MAILER FIVE DIGIT BUILD
   # iOS 27.2 on iPhone Duo: five digits after the build letter (#6349)
   Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_duo.eml
@@ -399,3 +430,17 @@ FORGED_X_MAILER NOT IOS BUILD
   ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
   Expect Symbol  FORGED_X_MAILER
   Do Not Expect Symbol  APPLE_IOS_MAILER
+
+*** Keywords ***
+Scan Zone-less Date Ahead
+  [Arguments]  ${hours}
+  # formatdate gives a locale-independent date in UTC; cutting ' -0000'
+  # leaves it without a zone
+  ${date} =  Evaluate  email.utils.formatdate(time.time() + ${hours} * 3600)[:-6]
+  ...  modules=email.utils,time
+  ${file} =  Set Variable  ${RSPAMD_TMPDIR}/date-no-tz-${hours}.eml
+  Create File  ${file}  From: sender@example.com\r\nSubject: test\r\nDate: ${date}\r\n\r\nbody\r\n
+  Scan File  ${file}
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ]}
+  Remove File  ${file}
+  Expect Symbol  INVALID_DATE

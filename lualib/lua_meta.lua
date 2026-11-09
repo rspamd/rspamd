@@ -174,11 +174,16 @@ local function meta_received_function(task)
         if not rc.by_hostname then
           invalid_factor = invalid_factor + 1.0
         end
-        if init_time == 0 and rc.timestamp then
-          init_time = rc.timestamp
-        elseif rc.timestamp then
-          time_factor = time_factor + math.abs(init_time - rc.timestamp)
-          init_time = rc.timestamp
+        -- Skip hops without a usable date (timestamp 0) or dated before
+        -- 1970, rather than count their distance from 1970
+        local ts = rc.timestamp
+        if ts and ts > 0 then
+          if init_time == 0 then
+            init_time = ts
+          else
+            time_factor = time_factor + math.abs(init_time - ts)
+            init_time = ts
+          end
         end
         if rc.flags and (rc.flags['ssl'] or rc.flags['authenticated']) then
           secure_factor = secure_factor + 1.0

@@ -1124,7 +1124,26 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 						st = parse_user;
 						break;
 					}
-					else if (*tp == '/' || *tp == '#' || *tp == '?') {
+					else if (*tp == '/' || *tp == '\\' || *tp == '#' || *tp == '?' ||
+							 !g_ascii_isgraph(*tp)) {
+						/*
+						 * The authority ends at the first slash, and browsers take
+						 * a backslash for a slash: the host of http://a.com\@b.com/
+						 * is a.com and @b.com/ is the path. Only a parser that
+						 * does not do so sees b.com, so such an url is obscured.
+						 * The userinfo cannot have a space either, so an `@` after
+						 * it belongs to some other text.
+						 */
+						if (*tp == '\\') {
+							while (++tp < last && g_ascii_isgraph(*tp) &&
+								   *tp != '/' && *tp != '#' && *tp != '?') {
+								if (*tp == '@') {
+									*flags |= RSPAMD_URL_FLAG_OBSCURED;
+									break;
+								}
+							}
+						}
+
 						st = parse_domain_start;
 						break;
 					}
@@ -1495,7 +1514,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 				while (tmp < last) {
 					if (!g_ascii_isdigit(*tmp)) {
-						if (*tmp == '/' || *tmp == '#' || *tmp == '?' ||
+						if (*tmp == '/' || *tmp == '\\' || *tmp == '#' || *tmp == '?' ||
 							is_url_end(*tmp) || g_ascii_isspace(*tmp)) {
 							/* Port + something */
 							st = parse_port;
@@ -2782,7 +2801,15 @@ rspamd_url_parse(struct rspamd_url *uri,
 			char *pos = &uri->string[uri->protocollen],
 				 *host_start = rspamd_url_host_unsafe(uri);
 
-			while (pos < host_start) {
+			/*
+			 * Only the slashes after the schema: a slash in the userinfo
+			 * (or the password) would move the host of the normalised url
+			 */
+			if (pos < host_start && *pos == ':') {
+				pos++;
+			}
+
+			while (pos < host_start && (*pos == '/' || *pos == '\\')) {
 				if (*pos == '\\') {
 					*pos = '/';
 					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
@@ -2870,12 +2897,18 @@ url_file_end(struct url_callback_data *cb,
 	unsigned int i;
 
 	p = pos + strlen(match->pattern);
+
+	/* The text is not NUL-terminated: a bare scheme at its end is no url */
+	if (p >= cb->end) {
+		return FALSE;
+	}
+
 	stop = *p;
 	if (*p == '/') {
 		p++;
 	}
 
-	for (i = 0; i < G_N_ELEMENTS(url_braces) / 2; i += 2) {
+	for (i = 0; p < cb->end && i < G_N_ELEMENTS(url_braces) / 2; i += 2) {
 		if (*p == url_braces[i]) {
 			stop = url_braces[i + 1];
 			break;

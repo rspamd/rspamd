@@ -23,7 +23,7 @@
 #include "zstd_errors.h"
 #else
 #include "contrib/zstd/zstd.h"
-#include "contrib/zstd/error_public.h"
+#include "contrib/zstd/zstd_errors.h"
 #endif
 
 /***
@@ -516,14 +516,15 @@ lua_zstd_compress_stream(lua_State *L)
 
 			dlen = onb.size;
 
-			int res = ZSTD_compressStream2(ctx, &onb, &inb, op);
+			gsize res = ZSTD_compressStream2(ctx, &onb, &inb, op);
 
 			if (res == 0) {
 				/* All done */
 				break;
 			}
 
-			if ((err = ZSTD_getErrorCode(res))) {
+			if (ZSTD_isError(res)) {
+				err = ZSTD_getErrorCode(res);
 				break;
 			}
 
@@ -541,6 +542,10 @@ lua_zstd_compress_stream(lua_State *L)
 	}
 
 	if (err) {
+		g_free(onb.dst);
+		/* The frame cannot be continued after an error */
+		ZSTD_CCtx_reset(ctx, ZSTD_reset_session_only);
+
 		return lua_zstd_push_error(L, err);
 	}
 
@@ -590,8 +595,6 @@ lua_zstd_decompress_stream(lua_State *L)
 	ZSTD_outBuffer onb;
 
 	if (ctx && t) {
-		gsize dlen = 0;
-
 		if (t->len == 0) {
 			return lua_zstd_push_error(L, ZSTD_error_init_missing);
 		}
@@ -602,32 +605,30 @@ lua_zstd_decompress_stream(lua_State *L)
 
 		onb.pos = 0;
 		onb.size = ZSTD_DStreamInSize(); /* Initial guess */
-		onb.dst = NULL;
+		onb.dst = g_malloc(onb.size);
 
 		for (;;) {
-			if ((onb.dst = g_realloc(onb.dst, onb.size)) == NULL) {
-				return lua_zstd_push_error(L, ZSTD_error_memory_allocation);
-			}
-
-			dlen = onb.size;
-
-			int res = ZSTD_decompressStream(ctx, &onb, &inb);
+			gsize res = ZSTD_decompressStream(ctx, &onb, &inb);
 
 			if (res == 0) {
 				/* All done */
 				break;
 			}
 
-			if ((err = ZSTD_getErrorCode(res))) {
+			if (ZSTD_isError(res)) {
+				err = ZSTD_getErrorCode(res);
 				break;
 			}
 
-			onb.size *= 2;
-			res += dlen; /* Hint returned by compression routine */
-
-			/* Either double the buffer, or use the hint provided */
-			if (onb.size < res) {
-				onb.size = res;
+			if (onb.pos == onb.size) {
+				/* Output is full, the decoder may hold more data */
+				onb.size *= 2;
+				onb.dst = g_realloc(onb.dst, onb.size);
+			}
+			else if (inb.pos == inb.size) {
+				/* All output is flushed and input is over: truncated frame */
+				err = ZSTD_error_srcSize_wrong;
+				break;
 			}
 		}
 	}
@@ -636,6 +637,10 @@ lua_zstd_decompress_stream(lua_State *L)
 	}
 
 	if (err) {
+		g_free(onb.dst);
+		/* Drop the partial frame, so the context can be reused */
+		ZSTD_DCtx_reset(ctx, ZSTD_reset_session_only);
+
 		return lua_zstd_push_error(L, err);
 	}
 

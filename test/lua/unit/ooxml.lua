@@ -261,4 +261,53 @@ context("OOXML package reader", function()
     assert_not_nil(err:find("invalid OOXML story entry", 1, true))
     assert_true(tokens > 0)
   end)
+
+  test("resolves dot-led and dot-ended segments as plain segments", function()
+    local cases = {
+      { '', './..././mg', '.../mg' },
+      { '', './..m/"e#frag', '..m/"e' },
+      { '', '.)c././.../u/mg', '.)c./.../u/mg' },
+      { '', '%4c../../..././mg', '.../mg' },
+      { '', '.word/document.xml', '.word/document.xml' },
+      { '', 'x./y', 'x./y' },
+      { 'word/document.xml', './..../x', 'word/..../x' },
+      { 'word/document.xml', 'a.../x', 'word/a.../x' },
+      { 'word/document.xml', '.../../x', 'word/x' },
+      { 'word/document.xml', '../docProps/core.xml', 'docProps/core.xml' },
+    }
+    for _, case in ipairs(cases) do
+      local name, err = ooxml.resolve_part_name(case[1], case[2])
+      assert_nil(err, case[2])
+      assert_equal(name, case[3], case[2])
+    end
+  end)
+
+  test("rejects targets that name a directory", function()
+    for _, target in ipairs({ 'a/.', 'a/b/..', 'a/' }) do
+      assert_nil(ooxml.resolve_part_name('', target), target)
+    end
+  end)
+
+  test("opens the main part a dot-led relationship target names", function()
+    local package, err = ooxml.open(archive.zip({
+      { name = "[Content_Types].xml", content = [[
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Override PartName="/.word/document.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+        </Types>]] },
+      { name = "_rels/.rels", content = [[
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="main"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+            Target=".word/document.xml"/>
+        </Relationships>]] },
+      { name = ".word/document.xml", content = "<document/>" },
+      { name = "word/document.xml", content = "<decoy/>" },
+    }))
+    assert_not_nil(package, err)
+    assert_equal(package.main_part, ".word/document.xml")
+    assert_not_nil(package.parts[".word/document.xml"])
+    assert_nil(package.parts["word/document.xml"])
+  end)
 end)
