@@ -258,6 +258,35 @@ rspamd_rfc2231_piece_number(const char *p, const char *end, unsigned int *num)
 	return TRUE;
 }
 
+/*
+ * Quoted pairs of a quoted value in place, as readers take them (Thunderbird):
+ * a backslash is dropped and the next character stays, a lone one at the end
+ * stays too. Returns the new end
+ */
+static char *
+rspamd_content_param_unquote_pairs(char *start, char *end)
+{
+	char *s, *d;
+
+	s = memchr(start, '\\', end - start);
+
+	if (s == NULL) {
+		return end;
+	}
+
+	d = s;
+
+	while (s < end) {
+		if (*s == '\\' && s + 1 < end) {
+			s++;
+		}
+
+		*d++ = *s++;
+	}
+
+	return d;
+}
+
 static gboolean
 rspamd_param_maybe_rfc2231_process(rspamd_mempool_t *pool,
 								   struct rspamd_content_type_param *param,
@@ -536,6 +565,32 @@ rspamd_content_param_join(rspamd_mempool_t *pool, struct rspamd_content_type_par
 }
 
 /*
+ * A chain of values up to this long keeps its pieces in a short list, so the
+ * work of resolving a name does not depend on max_rfc2231_pieces
+ */
+#define RSPAMD_RFC2231_SMALL_CHAIN 16
+
+struct rspamd_rfc2231_small_piece {
+	unsigned int num;
+	struct rspamd_content_type_param *param;
+};
+
+static struct rspamd_content_type_param *
+rspamd_rfc2231_small_find(const struct rspamd_rfc2231_small_piece *small, unsigned int nsmall,
+						  unsigned int num)
+{
+	unsigned int i;
+
+	for (i = 0; i < nsmall; i++) {
+		if (small[i].num == num) {
+			return small[i].param;
+		}
+	}
+
+	return NULL;
+}
+
+/*
  * The value of a name whose first value is name*= (RFC 2231) or a piece
  * (name*0, name*1*...), as Thunderbird takes it: name*= if it is valid, else
  * the pieces joined from 0 up to a missing one, else the first plain value. A plain value is never a
@@ -551,14 +606,28 @@ static struct rspamd_content_type_param *
 rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_param *head,
 							 const struct rspamd_rfc2231_walk *whole)
 {
+	/* Direct-indexed by the number of a piece: zeroed only for a long chain */
 	struct rspamd_content_type_param *by_num[max_rfc2231_pieces];
+	/* The pieces of a short chain, with no array to zero */
+	struct rspamd_rfc2231_small_piece small[RSPAMD_RFC2231_SMALL_CHAIN];
+	struct rspamd_content_type_param *pieces_buf[RSPAMD_RFC2231_SMALL_CHAIN];
+	struct rspamd_content_type_param **pieces = by_num, *piece0 = NULL;
 	struct rspamd_content_type_param *plain = NULL, *ext = NULL, *cur, *sorted, **all;
 	struct rspamd_rfc2231_walk walk = {.accept = TRUE};
 	rspamd_ftok_t ext_data = {0, NULL}, label_b, label_cd, first = {0, NULL}, data, bytes, out;
-	gboolean have_first = FALSE;
-	unsigned int n, nall = 0;
+	gboolean have_first = FALSE, have_piece, big;
+	unsigned int n, nall = 0, nsmall = 0, chain = 0;
 
-	memset(by_num, 0, sizeof(by_num));
+	DL_FOREACH(head, cur)
+	{
+		chain++;
+	}
+
+	big = chain > RSPAMD_RFC2231_SMALL_CHAIN;
+
+	if (big) {
+		memset(by_num, 0, sizeof(by_num));
+	}
 
 	DL_FOREACH(head, cur)
 	{
@@ -576,13 +645,23 @@ rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_
 
 		n = rspamd_rfc2231_walk_piece(cur);
 
-		switch (rspamd_rfc2231_walk_step(&walk, cur, n < max_rfc2231_pieces && by_num[n] != NULL, &data)) {
+		have_piece = big ? (n < max_rfc2231_pieces && by_num[n] != NULL) : rspamd_rfc2231_small_find(small, nsmall, n) != NULL;
+
+		switch (rspamd_rfc2231_walk_step(&walk, cur, have_piece, &data)) {
 		case RSPAMD_RFC2231_STEP_EXT:
 			ext = cur;
 			ext_data = data;
 			break;
 		case RSPAMD_RFC2231_STEP_PIECE:
-			by_num[n] = cur;
+			if (big) {
+				by_num[n] = cur;
+			}
+			else {
+				/* A piece is taken once, so there is room: one per value of the chain */
+				small[nsmall].num = n;
+				small[nsmall].param = cur;
+				nsmall++;
+			}
 
 			if (n == 0 && (cur->flags & RSPAMD_CONTENT_PARAM_RFC2231)) {
 				first = data;
@@ -613,15 +692,37 @@ rspamd_content_param_resolve(rspamd_mempool_t *pool, struct rspamd_content_type_
 		}
 	}
 
-	if (by_num[0] != NULL) {
-		for (n = 0; n < max_rfc2231_pieces && by_num[n] != NULL; n++) {}
+	if (big) {
+		piece0 = by_num[0];
 
-		bytes = rspamd_content_param_join(pool, by_num, n, have_first ? &first : NULL, TRUE);
+		if (piece0 != NULL) {
+			for (n = 0; n < max_rfc2231_pieces && by_num[n] != NULL; n++) {}
+		}
+	}
+	else {
+		/* The run of pieces from 0 up to a missing one, in order */
+		pieces = pieces_buf;
+
+		for (n = 0; n < nsmall; n++) {
+			struct rspamd_content_type_param *piece = rspamd_rfc2231_small_find(small, nsmall, n);
+
+			if (piece == NULL) {
+				break;
+			}
+
+			pieces[n] = piece;
+		}
+
+		piece0 = n > 0 ? pieces[0] : NULL;
+	}
+
+	if (piece0 != NULL) {
+		bytes = rspamd_content_param_join(pool, pieces, n, have_first ? &first : NULL, TRUE);
 
 		if (bytes.len > 0 && rspamd_rfc2231_convert(pool, &bytes, &label_cd, &out)) {
-			by_num[0]->value = out;
+			piece0->value = out;
 
-			return by_num[0];
+			return piece0;
 		}
 	}
 
@@ -768,8 +869,10 @@ rspamd_content_type_postprocess(rspamd_mempool_t *pool,
 	if (!found) {
 		RSPAMD_FTOK_ASSIGN(&srch, "name");
 		if (!rspamd_ftok_icase_equal(&param->name, &srch)) {
-			/* Just lowercase */
-			rspamd_str_lc_utf8((char *) param->value.begin, param->value.len);
+			/* Just lowercase: the result can be shorter than the value */
+			if (param->value.begin != NULL && param->value.len > 0) {
+				param->value.len = rspamd_str_lc_utf8((char *) param->value.begin, param->value.len);
+			}
 		}
 	}
 }
@@ -1239,7 +1342,8 @@ rspamd_content_type_parser(char *in, gsize len, rspamd_mempool_t *pool)
 				}
 			}
 			else if (*p == '"') {
-				qlen = p - c;
+				/* The value is what is left of the range, p is still at the quote */
+				qlen = rspamd_content_param_unquote_pairs(c, p) - c;
 				state = next_state;
 			}
 			else {
@@ -1480,6 +1584,10 @@ void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
 	value_cpy = rspamd_mempool_alloc(pool, value_end - value_start);
 	memcpy(value_cpy, value_start, value_end - value_start);
 	value_cpy_end = value_cpy + (value_end - value_start);
+
+	if (value_start > name_end && *(value_start - 1) == '"') {
+		value_cpy_end = rspamd_content_param_unquote_pairs(value_cpy, value_cpy_end);
+	}
 
 	nparam = rspamd_mempool_alloc0(pool, sizeof(*nparam));
 	rspamd_str_lc(name_cpy, name_cpy_end - name_cpy);
