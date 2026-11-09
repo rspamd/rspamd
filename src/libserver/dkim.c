@@ -2676,6 +2676,86 @@ rspamd_dkim_canonize_header_relaxed(struct rspamd_dkim_common_ctx *ctx,
 }
 
 
+/*
+ * True if the header value is a tag list with the tag i= equal to the given
+ * instance. Tags are checked in order; parsing stops quietly at the first
+ * element that is not name=value, as the payload after i= may be free-form.
+ */
+static bool
+rspamd_dkim_header_has_instance(const char *value, int instance)
+{
+	const char *p = value, *name_start, *name_end, *val_start, *val_end;
+	const char *end = value + strlen(value);
+	char *numend;
+	char numbuf[16];
+	size_t vlen;
+	long v;
+
+	while (p < end) {
+		while (p < end && g_ascii_isspace(*p)) {
+			p++;
+		}
+
+		name_start = p;
+
+		while (p < end && *p != '=' && *p != ';') {
+			p++;
+		}
+
+		if (p >= end || *p != '=') {
+			return false;
+		}
+
+		name_end = p;
+
+		while (name_end > name_start && g_ascii_isspace(name_end[-1])) {
+			name_end--;
+		}
+
+		p++;
+		val_start = p;
+
+		while (p < end && *p != ';') {
+			p++;
+		}
+
+		if (name_end - name_start == 1 && *name_start == 'i') {
+			val_end = p;
+
+			while (val_start < val_end && g_ascii_isspace(*val_start)) {
+				val_start++;
+			}
+
+			while (val_end > val_start && g_ascii_isspace(val_end[-1])) {
+				val_end--;
+			}
+
+			vlen = val_end - val_start;
+
+			if (vlen == 0 || vlen >= sizeof(numbuf)) {
+				return false;
+			}
+
+			memcpy(numbuf, val_start, vlen);
+			numbuf[vlen] = '\0';
+
+			if (!g_ascii_isdigit(numbuf[0])) {
+				return false;
+			}
+
+			v = strtol(numbuf, &numend, 10);
+
+			return *numend == '\0' && v == (long) instance;
+		}
+
+		if (p < end) {
+			p++;
+		}
+	}
+
+	return false;
+}
+
 static bool
 rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 							struct rspamd_task *task,
@@ -2748,16 +2828,11 @@ rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 				* This branch is used for ARC headers, and it orders them based on
 				* i=<number> string and not their real order in the list of headers
 				*/
-				char idx_buf[16];
-				int id_len, i;
-
-				id_len = rspamd_snprintf(idx_buf, sizeof(idx_buf), "i=%d;",
-										 count);
+				int i;
 
 				for (cur = rh->prev, i = 0; i < max_list_iters; cur = cur->prev, i++) {
 					if (cur->decoded &&
-						rspamd_substring_search(cur->decoded, strlen(cur->decoded),
-												idx_buf, id_len) != -1) {
+						rspamd_dkim_header_has_instance(cur->decoded, count)) {
 						sel = cur;
 						break;
 					}
