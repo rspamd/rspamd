@@ -46,7 +46,15 @@ TEST_SUITE("rspamd_utils")
 		std::vector<std::pair<std::string, std::string>> cases{
 			{"abc", "abc"},
 			{"abc(foo)", "abc"},
-			{"abc(foo()", "abc"},
+			/* Unbalanced comments are no comments */
+			{"abc(foo()", "abc(foo()"},
+			{"a((b)", "a((b)"},
+			{"(a)b(c", "(a)b(c"},
+			{"a(b\\)", "a(b\\)"},
+			{"a(b(c)d)e", "ae"},
+			{"(())x", "x"},
+			{"a)b", "a)b"},
+			{"a\\(b", "a(b"},
 			{"abc(foo))", "abc)"},
 			{"abc(foo(bar))", "abc"},
 			{"(bar)abc(foo)", "abc"},

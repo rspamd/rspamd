@@ -1925,87 +1925,53 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 
 gsize rspamd_strip_smtp_comments_inplace(char *input, gsize len)
 {
-	enum parser_state {
-		parse_normal,
-		parse_obrace,
-		parse_comment,
-		parse_quoted_copy,
-		parse_quoted_ignore,
-	} state = parse_normal,
-	  next_state = parse_normal;
-	char *d = input, *end = input + len, *start = input;
-	char t;
-	int obraces = 0, ebraces = 0;
+	const char *p, *end = input + len;
+	char *d = input;
+	unsigned int depth = 0;
 
-	while (input < end) {
-		t = *input;
-		switch (state) {
-		case parse_normal:
-			if (t == '(') {
-				state = parse_obrace;
+	/* Read-only pass: comments must be balanced, otherwise nothing is stripped */
+	for (p = input; p < end; p++) {
+		if (*p == '\\') {
+			/* Quoted char never changes the depth */
+			if (p + 1 < end) {
+				p++;
 			}
-			else if (t == '\\') {
-				state = parse_quoted_copy;
-				next_state = parse_normal;
-			}
-			else {
-				*d++ = t;
-			}
-			input++;
-			break;
-		case parse_obrace:
-			obraces++;
-			if (t == '(') {
-				obraces++;
-			}
-			else if (t == ')') {
-				ebraces++;
-
-				if (obraces == ebraces) {
-					obraces = 0;
-					ebraces = 0;
-					state = parse_normal;
-				}
-			}
-			else if (t == '\\') {
-				state = parse_quoted_ignore;
-				next_state = parse_comment;
-			}
-			else {
-				state = parse_comment;
-			}
-			input++;
-			break;
-		case parse_comment:
-			if (t == '(') {
-				state = parse_obrace;
-			}
-			else if (t == ')') {
-				ebraces++;
-
-				if (obraces == ebraces) {
-					obraces = 0;
-					ebraces = 0;
-					state = parse_normal;
-				}
-			}
-			else if (t == '\\') {
-				state = parse_quoted_ignore;
-				next_state = parse_comment;
-			}
-			input++;
-			break;
-		case parse_quoted_copy:
-			*d++ = t;
-			state = next_state;
-			input++;
-			break;
-		case parse_quoted_ignore:
-			state = next_state;
-			input++;
-			break;
+		}
+		else if (*p == '(') {
+			depth++;
+		}
+		else if (*p == ')' && depth > 0) {
+			depth--;
 		}
 	}
 
-	return (d - start);
+	if (depth != 0) {
+		return len;
+	}
+
+	depth = 0;
+
+	for (p = input; p < end; p++) {
+		if (*p == '\\') {
+			/* Outside of comments the quoted char is copied, the backslash is dropped */
+			if (p + 1 < end) {
+				p++;
+
+				if (depth == 0) {
+					*d++ = *p;
+				}
+			}
+		}
+		else if (*p == '(') {
+			depth++;
+		}
+		else if (*p == ')' && depth > 0) {
+			depth--;
+		}
+		else if (depth == 0) {
+			*d++ = *p;
+		}
+	}
+
+	return (d - input);
 }
