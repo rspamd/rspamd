@@ -545,8 +545,10 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 		}
 	}
 
-	/* Since we have prepended headers, we need to reverse the list to get the actual order */
-	LL_REVERSE(*order_ptr);
+	/*
+	 * The order list is built by prepending (via ord_next), so it is left in
+	 * reverse order; callers reverse it with LL_REVERSE2 on ord_next.
+	 */
 
 	if (check_newlines) {
 		unsigned int max_cnt = 0;
