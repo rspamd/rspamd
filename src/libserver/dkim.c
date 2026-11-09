@@ -1960,7 +1960,7 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 				}
 				continue;
 			}
-			else if (g_ascii_isspace(*p)) {
+			else if (*p == ' ' || *p == '\t') {
 				/* Process any chunk before the spaces */
 				if (!got_sp && p > chunk_start) {
 					size_t chunk_len = p - chunk_start;
@@ -1984,7 +1984,7 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 				/* Skip all spaces and look ahead */
 				const char *space_start = p;
 				int space_count = 0;
-				while (len > 0 && g_ascii_isspace(*p) && *p != '\r' && *p != '\n') {
+				while (len > 0 && (*p == ' ' || *p == '\t')) {
 					p++;
 					len--;
 					space_count++;
@@ -2473,56 +2473,94 @@ rspamd_dkim_hash_update(EVP_MD_CTX *ck, const char *begin, size_t len)
 	}
 }
 
-/* Update hash by signature value (ignoring b= tag) */
+/* Folding whitespace in a header: WSP and the line breaks of folding */
+#define RSPAMD_DKIM_IS_FWS(c) ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
+
+static void
+rspamd_dkim_signature_hash_part(struct rspamd_dkim_common_ctx *ctx,
+								const char *from, const char *to)
+{
+	if (to > from) {
+		msg_debug_dkim("update hash with signature part: %*s",
+					   (int) (to - from), from);
+		ctx->headers_canonicalised += to - from;
+		rspamd_dkim_hash_update(ctx->headers_hash, from, to - from);
+	}
+}
+
+/*
+ * Update hash by the signature header: everything but the value of the b= tag.
+ * The tag name, whitespace before '=' and '=' itself are hashed, the value up
+ * to the next ';' (or the end) is not, and the trailing line break is not.
+ */
 static void
 rspamd_dkim_signature_update(struct rspamd_dkim_common_ctx *ctx,
 							 const char *begin,
 							 unsigned int len)
 {
-	const char *p, *c, *end;
-	bool tag, skip;
+	const char *p, *c, *end, *colon, *name_start, *name_end;
 
 	end = begin + len;
-	p = begin;
+	/* Skip \r\n at the end */
+	while (end > begin && (end[-1] == '\r' || end[-1] == '\n')) {
+		end--;
+	}
+
+	/* c is the start of the part that is not hashed yet */
 	c = begin;
-	tag = true;
-	skip = false;
+	colon = memchr(begin, ':', end - begin);
+
+	if (colon == NULL) {
+		rspamd_dkim_signature_hash_part(ctx, c, end);
+		return;
+	}
+
+	p = colon + 1;
 
 	while (p < end) {
-		if (tag && p[0] == 'b' && p[1] == '=') {
-			/* Add to signature */
-			msg_debug_dkim("initial update hash with signature part: %*s",
-						   (int) (p - c + 2),
-						   c);
-			ctx->headers_canonicalised += p - c + 2;
-			rspamd_dkim_hash_update(ctx->headers_hash, c, p - c + 2);
-			skip = true;
+		/* Tag name */
+		while (p < end && RSPAMD_DKIM_IS_FWS(*p)) {
+			p++;
 		}
-		else if (skip && (*p == ';' || p == end - 1)) {
-			skip = false;
-			c = p;
+
+		name_start = p;
+
+		while (p < end && *p != '=' && *p != ';') {
+			p++;
 		}
-		else if (!tag && *p == ';') {
-			tag = true;
+
+		if (p < end && *p == '=') {
+			name_end = p;
+
+			while (name_end > name_start && RSPAMD_DKIM_IS_FWS(name_end[-1])) {
+				name_end--;
+			}
+
+			if (name_end - name_start == 1 && *name_start == 'b') {
+				/* Hash up to and including '=' and skip the value */
+				rspamd_dkim_signature_hash_part(ctx, c, p + 1);
+
+				while (p < end && *p != ';') {
+					p++;
+				}
+
+				c = p;
+			}
+			else {
+				/* Tag value */
+				while (p < end && *p != ';') {
+					p++;
+				}
+			}
 		}
-		else if (tag && *p == '=') {
-			tag = false;
+
+		if (p < end) {
+			/* Skip ';' */
+			p++;
 		}
-		p++;
 	}
 
-	p--;
-	/* Skip \r\n at the end */
-	while ((*p == '\r' || *p == '\n') && p >= c) {
-		p--;
-	}
-
-	if (p - c + 1 > 0) {
-		msg_debug_dkim("final update hash with signature part: %*s",
-					   (int) (p - c + 1), c);
-		ctx->headers_canonicalised += p - c + 1;
-		rspamd_dkim_hash_update(ctx->headers_hash, c, p - c + 1);
-	}
+	rspamd_dkim_signature_hash_part(ctx, c, end);
 }
 
 off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
@@ -2551,14 +2589,14 @@ off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
 	/* Value part */
 	h = hvalue;
 	/* Skip spaces at the beginning */
-	while (g_ascii_isspace(*h)) {
+	while (RSPAMD_DKIM_IS_FWS(*h)) {
 		h++;
 	}
 
 	got_sp = false;
 
 	while (*h && (t - out < outlen)) {
-		if (g_ascii_isspace(*h)) {
+		if (RSPAMD_DKIM_IS_FWS(*h)) {
 			if (got_sp) {
 				h++;
 				continue;
@@ -2577,7 +2615,7 @@ off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
 		*t++ = *h++;
 	}
 
-	if (g_ascii_isspace(*(t - 1))) {
+	if (RSPAMD_DKIM_IS_FWS(*(t - 1))) {
 		t--;
 	}
 
