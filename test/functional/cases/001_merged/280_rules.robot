@@ -418,6 +418,19 @@ DATE_FAR_FUTURE_NO_TZ over threshold
   Scan Zone-less Date Ahead  64
   Expect Symbol  DATE_FAR_FUTURE_NO_TZ
 
+APPLE_IOS_MAILER FIVE DIGIT BUILD
+  # iOS 27.2 on iPhone Duo: five digits after the build letter (#6349)
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_duo.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  APPLE_IOS_MAILER
+  Do Not Expect Symbol  FORGED_X_MAILER
+
+FORGED_X_MAILER NOT IOS BUILD
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_forged.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  FORGED_X_MAILER
+  Do Not Expect Symbol  APPLE_IOS_MAILER
+
 *** Keywords ***
 Scan Zone-less Date Ahead
   [Arguments]  ${hours}
