@@ -22,13 +22,26 @@
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/cfg_file.h"
 #include "libutil/util.h"
+#include "contrib/libottery/ottery.h"
 #include <unicode/utf8.h>
 
 static const unsigned int max_mime_headers = 100000;
 
+/*
+ * Header names are chosen by the sender, so the table hash is seeded with a
+ * value that the sender cannot know
+ */
+static inline khint_t
+rspamd_mime_headers_name_hash(const char *name)
+{
+	uint64_t h = rspamd_icase_hash(name, strlen(name), rspamd_hash_seed_secure());
+
+	return (khint_t) (h ^ (h >> 32));
+}
+
 KHASH_INIT(rspamd_mime_headers_htb, char *,
 		   struct rspamd_mime_header *, 1,
-		   rspamd_strcase_hash, rspamd_strcase_equal);
+		   rspamd_mime_headers_name_hash, rspamd_strcase_equal);
 
 struct rspamd_mime_headers_table {
 	khash_t(rspamd_mime_headers_htb) htb;
