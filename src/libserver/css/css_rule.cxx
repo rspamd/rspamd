@@ -550,6 +550,24 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 
 auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -> void
 {
+	/*
+	 * Normal declarations first, then the important ones over them: the
+	 * fields they set are marked, so that a block merged later can tell them
+	 */
+	compile_layer(out, false, rspamd::html::html_block::set);
+
+	rspamd::html::html_block important{};
+	compile_layer(important, true, rspamd::html::html_block::important);
+	out.set_block(important);
+
+	if (important.offscreen) {
+		out.offscreen = true;
+	}
+}
+
+/* Compiles the declarations that are important, or the ones that are not */
+auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool important, int how) const -> void
+{
 	auto *block = &out;
 	auto opacity = -1.0f;
 	std::optional<css_dimension> height, width, max_height, max_width;
@@ -561,24 +579,18 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 
 	/*
 	 * Declarations are applied in the source order, so that a shorthand and a
-	 * longhand override each other as they do in a browser; important ones
-	 * go after all the normal ones
+	 * longhand override each other as they do in a browser
 	 */
 	std::vector<const css_rule *> ordered;
 	ordered.reserve(rules.size());
 
 	for (const auto &rule: rules) {
-		ordered.push_back(rule.get());
+		if ((rule->get_prop().flag == css_property_flag::FLAG_IMPORTANT) == important) {
+			ordered.push_back(rule.get());
+		}
 	}
 
 	std::sort(ordered.begin(), ordered.end(), [](const css_rule *a, const css_rule *b) {
-		auto ia = a->get_prop().flag == css_property_flag::FLAG_IMPORTANT;
-		auto ib = b->get_prop().flag == css_property_flag::FLAG_IMPORTANT;
-
-		if (ia != ib) {
-			return ib;
-		}
-
 		return a->get_order() < b->get_order();
 	});
 
@@ -602,7 +614,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		case css_property_type::PROPERTY_FONT_SIZE: {
 			auto fs = vals.back().to_dimension();
 			if (fs) {
-				block->set_font_size(fs.value().dim, fs.value().is_percent);
+				block->set_font_size(fs.value().dim, fs.value().is_percent, how);
 			}
 			break;
 		}
@@ -614,14 +626,14 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		case css_property_type::PROPERTY_COLOR: {
 			auto color = vals.back().to_color();
 			if (color) {
-				block->set_fgcolor(color.value());
+				block->set_fgcolor(color.value(), how);
 			}
 			break;
 		}
 		case css_property_type::PROPERTY_BGCOLOR: {
 			auto color = vals.back().to_color();
 			if (color) {
-				block->set_bgcolor(color.value());
+				block->set_bgcolor(color.value(), how);
 			}
 			break;
 		}
@@ -644,7 +656,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		case css_property_type::PROPERTY_OVERFLOW: {
 			auto disp = vals.back().to_display();
 			if (disp) {
-				block->set_overflow(disp.value() == css_display_value::DISPLAY_HIDDEN);
+				block->set_overflow(disp.value() == css_display_value::DISPLAY_HIDDEN, how);
 			}
 			break;
 		}
@@ -678,7 +690,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 					auto maybe_color = val.to_color();
 
 					if (maybe_color) {
-						block->set_fgcolor(maybe_color.value());
+						block->set_fgcolor(maybe_color.value(), how);
 					}
 				}
 			}
@@ -688,7 +700,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 
 				if (maybe_dim) {
 					/* The size is the first length of the shorthand */
-					block->set_font_size(maybe_dim.value().dim, maybe_dim.value().is_percent);
+					block->set_font_size(maybe_dim.value().dim, maybe_dim.value().is_percent, how);
 					break;
 				}
 			}
@@ -699,7 +711,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 				auto maybe_color = val.to_color();
 
 				if (maybe_color) {
-					block->set_bgcolor(maybe_color.value());
+					block->set_bgcolor(maybe_color.value(), how);
 				}
 			}
 			break;
@@ -719,10 +731,10 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 					  (visibility && *visibility == css_display_value::DISPLAY_HIDDEN);
 
 		if (hidden) {
-			block->set_display(css_display_value::DISPLAY_HIDDEN);
+			block->set_display(css_display_value::DISPLAY_HIDDEN, how);
 		}
 		else {
-			block->set_display(display ? *display : *visibility);
+			block->set_display(display ? *display : *visibility, how);
 		}
 	}
 
@@ -746,10 +758,10 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 	};
 
 	if (auto h = clamp_dim(height, max_height); h) {
-		block->set_height(h->dim, h->is_percent);
+		block->set_height(h->dim, h->is_percent, how);
 	}
 	if (auto w = clamp_dim(width, max_width); w) {
-		block->set_width(w->dim, w->is_percent);
+		block->set_width(w->dim, w->is_percent, how);
 	}
 
 	if (opacity >= 0 && opacity < 0.1) {
@@ -758,7 +770,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		 * display, it cannot be reset by descendants; reuse the display
 		 * value as it has the desired inheritance semantics
 		 */
-		block->set_display(css_display_value::DISPLAY_HIDDEN);
+		block->set_display(css_display_value::DISPLAY_HIDDEN, how);
 	}
 
 	/*
@@ -777,7 +789,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 
 	if ((positioned && (is_offscreen(left) || is_offscreen(top))) ||
 		is_offscreen(text_indent) || clip_hidden) {
-		block->set_display(css_display_value::DISPLAY_HIDDEN);
+		block->set_display(css_display_value::DISPLAY_HIDDEN, how);
 		block->offscreen = true;
 	}
 }

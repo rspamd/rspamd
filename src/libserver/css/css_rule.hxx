@@ -161,6 +161,8 @@ public:
 	 * @param block block to fill
 	 */
 	auto compile_into(rspamd::html::html_block &block) const -> void;
+	/* Compiles the declarations that are important, or the ones that are not */
+	auto compile_layer(rspamd::html::html_block &block, bool important, int how) const -> void;
 
 private:
 	ankerl::unordered_dense::set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;

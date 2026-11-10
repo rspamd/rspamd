@@ -47,9 +47,18 @@ struct html_block {
 	constexpr static const auto unset = 0;
 	constexpr static const auto inherited = 1;
 	constexpr static const auto implicit = 1;
-	constexpr static const auto set = 3;
+	constexpr static const auto set = 2;
+	/* Set by an !important declaration */
+	constexpr static const auto important = 3;
 	constexpr static const auto invisible_flag = 1;
 	constexpr static const auto transparent_flag = 2;
+
+	/* A parent's important value is inherited as any other value it sets */
+	template<typename MT>
+	static constexpr auto inherit_strength(MT mask_val) -> MT
+	{
+		return mask_val > html_block::set ? static_cast<MT>(html_block::set) : mask_val;
+	}
 
 	/* Helpers to set mask when setting the elements */
 	auto set_fgcolor(const rspamd::css::css_color &c, int how = html_block::set) -> void
@@ -137,7 +146,7 @@ private:
 	static constexpr auto simple_prop(MT mask_val, MT other_mask, T &our_val,
 									  T other_val) -> MT
 	{
-		if (other_mask && other_mask > mask_val) {
+		if (other_mask && html_block::inherit_strength(other_mask) > mask_val) {
 			our_val = other_val;
 			mask_val = html_block::inherited;
 		}
@@ -173,14 +182,14 @@ private:
 					our_val = default_val * (-our_val / 100.0);
 				}
 			}
-			else if (other_mask && other_mask > mask_val) {
+			else if (other_mask && html_block::inherit_strength(other_mask) > mask_val) {
 				our_val = other_val;
 				mask_val = html_block::inherited;
 			}
 		}
 		else {
 			/* We propagate parent if defined */
-			if (other_mask && other_mask > mask_val) {
+			if (other_mask && html_block::inherit_strength(other_mask) > mask_val) {
 				our_val = other_val;
 				mask_val = html_block::inherited;
 			}
@@ -249,7 +258,9 @@ public:
 	{
 		constexpr auto set_value = [](auto mask_val, auto other_mask, auto &our_val,
 									  auto other_val) constexpr -> int {
-			if (other_mask && mask_val != html_block::set) {
+			/* An important value replaces a normal one, the others only fill in */
+			if (other_mask && (mask_val < html_block::set ||
+							   (other_mask == html_block::important && mask_val != html_block::important))) {
 				our_val = other_val;
 				mask_val = other_mask;
 			}
