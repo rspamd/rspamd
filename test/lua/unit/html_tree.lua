@@ -134,12 +134,17 @@ context("HTML tree building", function()
     for _, u in ipairs(task:get_urls() or {}) do
       seen[u:get_host()] = u
     end
+    -- The urls belong to the task: read them before it is destroyed
+    local first, second = seen['example.com'], seen['example.net']
+    local first_phished = first and first:is_phished()
+    local first_visible = first and first:get_visible()
+    local second_phished = second and second:is_phished()
     task:destroy()
-    assert_not_nil(seen['example.com'])
-    assert_true(seen['example.com']:is_phished())
-    assert_equal('https://example.org/', seen['example.com']:get_visible())
-    assert_not_nil(seen['example.net'])
-    assert_false(seen['example.net']:is_phished())
+    assert_not_nil(first)
+    assert_true(first_phished)
+    assert_equal('https://example.org/', first_visible)
+    assert_not_nil(second)
+    assert_false(second_phished)
     assert_equal(
         'onetwothree',
         visible('<a href="http://a.example/">one<a href="http://b.example/">two</a></a>three'))
