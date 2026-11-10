@@ -215,8 +215,29 @@ private:
 	auto simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 							   css_parser_token::token_type expected_end,
 							   bool consume_current) -> bool;
-	auto qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
-	auto at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
+	/*
+	 * Rules and at-rules; `nested` is set inside the block of an applied @media,
+	 * where a stray `}` closes that block
+	 */
+	auto qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top,
+								 bool nested = false) -> bool;
+	auto at_rule_consumer(std::unique_ptr<css_consumed_block> &top,
+						  bool nested = false) -> bool;
+	/* Reads the rules inside of `@media`, as if they were at the top level */
+	auto media_block_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
+
+	enum class skip_mode {
+		rule,        /* up to the end of the rule at the top level */
+		nested_rule, /* the same, but a stray `}` ends the enclosing block */
+		declaration, /* up to the `;` that ends a declaration, which is not consumed */
+	};
+	/*
+	 * Skips the tokens of a rule (or a declaration) that starts at the given
+	 * input position, tracking the nesting with a stack of expected closers
+	 */
+	auto skip_tokens(std::size_t start, skip_mode mode) -> void;
+	/* Whether the rules of this at-rule apply to every mail client */
+	static auto is_applied_media(const css_consumed_block &at_rule) -> bool;
 };
 
 auto css_parser::next_token() -> css_parser_token
@@ -241,30 +262,7 @@ auto css_parser::next_token() -> css_parser_token
  */
 bool css_parser::need_unescape(const std::string_view &sv)
 {
-	bool in_quote = false;
-	char quote_char, prev_c = 0;
-
-	for (const auto c: sv) {
-		if (!in_quote) {
-			if (c == '"' || c == '\'') {
-				in_quote = true;
-				quote_char = c;
-			}
-			else if (c == '\\') {
-				return true;
-			}
-		}
-		else {
-			if (c == quote_char) {
-				if (prev_c != '\\') {
-					in_quote = false;
-				}
-			}
-			prev_c = c;
-		}
-	}
-
-	return false;
+	return css_has_escape(sv);
 }
 
 auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
@@ -370,7 +368,8 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 	return ret;
 }
 
-auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
+auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top,
+										 bool nested) -> bool
 {
 	msg_debug_css("consume qualified block; top block: %s, recursion level %d",
 				  top->token_type_str(), rec_level);
@@ -382,7 +381,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 		return false;
 	}
 
-	auto ret = true, want_more = true;
+	auto ret = true, want_more = true, abandoned = false;
 	auto block = std::make_unique<css_consumed_block>(
 		css_consumed_block::parser_tag_type::css_qualified_rule);
 
@@ -406,6 +405,18 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 										css_parser_token::token_type::ecurlbrace_token, false);
 			want_more = false;
 			break;
+		case css_parser_token::token_type::ecurlbrace_token:
+			tokeniser->pushback_token(next_token);
+
+			if (nested) {
+				/* The enclosing block ends here, so the rule has no body */
+				abandoned = true;
+				want_more = false;
+				break;
+			}
+
+			ret = component_value_consumer(block);
+			break;
 		case css_parser_token::token_type::whitespace_token:
 			/*
 			 * Whitespace between the components of a prelude is significant:
@@ -426,7 +437,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 		};
 	}
 
-	if (ret) {
+	if (ret && !abandoned) {
 		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
 			msg_debug_css("attached node qualified rule %s; length=%d",
 						  block->token_type_str(), (int) block->size());
@@ -439,7 +450,86 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 	return ret;
 }
 
-auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
+auto css_parser::is_applied_media(const css_consumed_block &at_rule) -> bool
+{
+	const auto &parts = at_rule.get_blocks_or_empty();
+
+	if (parts.empty() || !parts[0]->is_token()) {
+		return false;
+	}
+
+	const auto &kw = parts[0]->get_token_or_empty();
+
+	if (kw.type != css_parser_token::token_type::at_keyword_token ||
+		g_ascii_strcasecmp(std::string(kw.get_string_or_default("")).c_str(), "media") != 0) {
+		return false;
+	}
+
+	/* Only the plain media types that every client matches: all, screen, only screen */
+	std::vector<std::string> words;
+
+	for (auto i = 1u; i < parts.size(); i++) {
+		if (!parts[i]->is_token()) {
+			return false;
+		}
+
+		const auto &tok = parts[i]->get_token_or_empty();
+
+		if (tok.type != css_parser_token::token_type::ident_token || words.size() >= 2) {
+			return false;
+		}
+
+		words.emplace_back(tok.get_string_or_default(""));
+		for (auto &c: words.back()) {
+			c = g_ascii_tolower(c);
+		}
+	}
+
+	return (words.size() == 1 && (words[0] == "all" || words[0] == "screen")) ||
+		   (words.size() == 2 && words[0] == "only" && words[1] == "screen");
+}
+
+auto css_parser::media_block_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
+{
+	const auto saved_level = rec_level;
+
+	while (!eof) {
+		auto start = tokeniser->get_offset();
+		auto next_token = this->next_token();
+		auto ret = true;
+
+		switch (next_token.type) {
+		case css_parser_token::token_type::eof_token:
+			eof = true;
+			break;
+		case css_parser_token::token_type::whitespace_token:
+		case css_parser_token::token_type::cdo_token:
+		case css_parser_token::token_type::cdc_token:
+			break;
+		case css_parser_token::token_type::ecurlbrace_token:
+			return true;
+		case css_parser_token::token_type::at_keyword_token:
+			tokeniser->pushback_token(next_token);
+			ret = at_rule_consumer(top, true);
+			break;
+		default:
+			tokeniser->pushback_token(next_token);
+			ret = qualified_rule_consumer(top, true);
+			break;
+		}
+
+		if (!ret) {
+			/* Drop only the offending rule */
+			rec_level = saved_level;
+			skip_tokens(start, skip_mode::nested_rule);
+		}
+	}
+
+	return true;
+}
+
+auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top,
+								  bool nested) -> bool
 {
 	msg_debug_css("consume at-rule block; top block: %s, recursion level %d",
 				  top->token_type_str(), rec_level);
@@ -451,7 +541,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 		return false;
 	}
 
-	auto ret = true, want_more = true;
+	auto ret = true, want_more = true, consumed_inline = false;
 	auto block = std::make_unique<css_consumed_block>(
 		css_consumed_block::parser_tag_type::css_at_rule);
 
@@ -471,9 +561,29 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 			}
 			break;
 		case css_parser_token::token_type::ocurlbrace_token:
-			ret = simple_block_consumer(block,
-										css_parser_token::token_type::ecurlbrace_token, false);
+			if (top->tag == css_consumed_block::parser_tag_type::css_top_block &&
+				is_applied_media(*block)) {
+				/* The nested rules are attached to the top block */
+				ret = media_block_consumer(top);
+				consumed_inline = true;
+			}
+			else {
+				ret = simple_block_consumer(block,
+											css_parser_token::token_type::ecurlbrace_token, false);
+			}
 			want_more = false;
+			break;
+		case css_parser_token::token_type::ecurlbrace_token:
+			tokeniser->pushback_token(next_token);
+
+			if (nested) {
+				/* The enclosing block ends here */
+				want_more = false;
+				consumed_inline = true;
+				break;
+			}
+
+			ret = component_value_consumer(block);
 			break;
 		case css_parser_token::token_type::whitespace_token:
 			/* Ignore whitespaces */
@@ -488,7 +598,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 		};
 	}
 
-	if (ret) {
+	if (ret && !consumed_inline) {
 		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
 			msg_debug_css("attached node qualified rule %s; length=%d",
 						  block->token_type_str(), (int) block->size());
@@ -579,6 +689,79 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	return ret;
 }
 
+auto css_parser::skip_tokens(std::size_t start, skip_mode mode) -> void
+{
+	using tt = css_parser_token::token_type;
+	std::vector<tt> closers;
+	auto first = true, at_rule = false;
+
+	tokeniser->seek(start);
+
+	for (;;) {
+		auto pos = tokeniser->get_offset();
+		auto tok = tokeniser->next_token();
+
+		if (tok.type == tt::eof_token) {
+			return;
+		}
+
+		if (tok.type == tt::whitespace_token) {
+			continue;
+		}
+
+		if (first) {
+			at_rule = tok.type == tt::at_keyword_token;
+			first = false;
+		}
+
+		switch (tok.type) {
+		case tt::function_token:
+		case tt::obrace_token:
+			closers.push_back(tt::ebrace_token);
+			break;
+		case tt::osqbrace_token:
+			closers.push_back(tt::esqbrace_token);
+			break;
+		case tt::ocurlbrace_token:
+			closers.push_back(tt::ecurlbrace_token);
+			break;
+		case tt::ebrace_token:
+		case tt::esqbrace_token:
+		case tt::ecurlbrace_token:
+			if (!closers.empty()) {
+				if (closers.back() == tok.type) {
+					closers.pop_back();
+
+					if (closers.empty() && tok.type == tt::ecurlbrace_token &&
+						mode != skip_mode::declaration) {
+						/* The body of the rule is complete */
+						return;
+					}
+				}
+			}
+			else if (tok.type == tt::ecurlbrace_token && mode == skip_mode::nested_rule) {
+				/* Closes the enclosing block, which is not ours to consume */
+				tokeniser->seek(pos);
+				return;
+			}
+			break;
+		case tt::semicolon_token:
+			if (closers.empty()) {
+				if (mode == skip_mode::declaration) {
+					tokeniser->seek(pos);
+					return;
+				}
+				else if (at_rule) {
+					return;
+				}
+			}
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 auto css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
 {
 	tokeniser = std::make_unique<css_tokeniser>(pool, sv);
@@ -588,6 +771,7 @@ auto css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_p
 		std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_top_block);
 
 	while (!eof && ret) {
+		auto start = tokeniser->get_offset();
 		auto next_token = this->next_token();
 
 		switch (next_token.type) {
@@ -606,6 +790,13 @@ auto css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_p
 			ret = qualified_rule_consumer(consumed_blocks);
 			break;
 		}
+
+		if (!ret) {
+			/* A bad rule is dropped, the rules after it are still read */
+			rec_level = 0;
+			skip_tokens(start, skip_mode::rule);
+			ret = true;
+		}
 	}
 
 	tokeniser.reset(nullptr); /* No longer needed */
@@ -622,6 +813,7 @@ auto css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr
 		std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_simple_block);
 
 	while (!eof && ret) {
+		auto start = tokeniser->get_offset();
 		auto next_token = this->next_token();
 
 		switch (next_token.type) {
@@ -635,6 +827,18 @@ auto css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr
 			tokeniser->pushback_token(next_token);
 			ret = component_value_consumer(rule_block);
 			break;
+		}
+
+		if (!ret) {
+			/*
+			 * Drop the declaration that holds the offending value: an empty
+			 * block in its place makes the declarations parser skip it
+			 */
+			rec_level = 0;
+			skip_tokens(start, skip_mode::declaration);
+			rule_block->attach_block(std::make_unique<css_consumed_block>(
+				css_consumed_block::parser_tag_type::css_simple_block));
+			ret = true;
 		}
 	}
 
@@ -668,6 +872,10 @@ css_parser::consume_input(const std::string_view &sv)
 		 * For now, we do not need any of the at rules, so we can safely ignore them
 		 */
 		auto &&children = rule->get_blocks_or_empty();
+
+		if (rule->tag != css_consumed_block::parser_tag_type::css_qualified_rule) {
+			continue;
+		}
 
 		if (children.size() > 1 &&
 			children[0]->tag == css_consumed_block::parser_tag_type::css_component) {
@@ -940,6 +1148,115 @@ TEST_SUITE("css")
 			}
 
 			CHECK(merged.get() != nullptr);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	/* Number of the qualified rules that the parser delivers for a sheet */
+	static auto count_rules(rspamd_mempool_t * pool, const std::string &sheet) -> std::size_t
+	{
+		css_parser parser(pool);
+		auto blocks = parser.consume_css_blocks(sheet);
+		std::size_t n = 0;
+
+		for (const auto &b: blocks->get_blocks_or_empty()) {
+			if (b->tag != css_consumed_block::parser_tag_type::css_qualified_rule) {
+				continue;
+			}
+
+			/* Only the rules with a body are of any use */
+			for (const auto &child: b->get_blocks_or_empty()) {
+				if (child->tag == css_consumed_block::parser_tag_type::css_simple_block) {
+					n++;
+					break;
+				}
+			}
+		}
+
+		return n;
+	}
+
+	TEST_CASE("a bad rule does not drop the rest of the sheet")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		const auto deep_open = std::string(30, '[');
+		const auto deep_close = std::string(30, ']');
+		const auto deep_paren = std::string(30, '(');
+
+		/* The rule that exceeds the nesting limit is the only one that is lost */
+		CHECK(count_rules(pool, "a" + deep_open + "x" + deep_close + "{} .h{display:none}") == 1);
+		CHECK(count_rules(pool, ".k{} a" + deep_open + "x" + deep_close + "{} .h{}") == 2);
+		CHECK(count_rules(pool, "a{x:" + deep_open + deep_close + "} .h{display:none}") == 1);
+		CHECK(count_rules(pool, "a{x:" + deep_paren + "} .h{display:none}") == 0);
+		CHECK(count_rules(pool, "a{x:" + deep_paren + std::string(30, ')') + "} .h{display:none}") == 1);
+		/* Braces of the dropped rule are balanced, so its body is not read as rules */
+		CHECK(count_rules(pool, "a" + deep_open + "x" + deep_close + "{ .h{display:none} } .k{}") == 1);
+		CHECK(count_rules(pool, "a" + deep_open + "x" + deep_close + "{ b[c]{d:(e)} } .k{}") == 1);
+		/* Mismatched closers do not end the block early */
+		CHECK(count_rules(pool, "a" + deep_open + "x" + deep_close + "{ ( } ) } .h{}") == 1);
+		/* Nothing else is affected */
+		CHECK(count_rules(pool, ".a{} .b{} .c{}") == 3);
+		CHECK(count_rules(pool, "a[b][c]{d:e} .h{}") == 2);
+
+		/* The bad rule inside of an applied media block is the only one dropped there */
+		CHECK(count_rules(pool, "@media all{ .a{} a" + deep_open + "x" + deep_close + "{} .b{} } .c{}") == 3);
+		CHECK(count_rules(pool, "@media all{ a" + deep_open + "x" + deep_close + "{ .z{} } .b{} } .c{}") == 2);
+
+		/* A bad at-rule ends at its semicolon */
+		CHECK(count_rules(pool, "@foo a" + deep_open + deep_close + "; .h{}") == 1);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("media rules are read only for queries that every client matches")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		const std::vector<std::pair<std::string, std::size_t>> cases{
+			{"@media all{.a{}}", 1},
+			{"@media screen{.a{}}", 1},
+			{"@media only screen{.a{}}", 1},
+			{"@media  ONLY   Screen {.a{}}", 1},
+			{"@media/**/all/**/{.a{}}", 1},
+			{"@MEDIA ALL{.a{}}", 1},
+			{"@media all{.a{} .b{}} .c{}", 3},
+			{".c{} @media all{.a{}} .d{}", 3},
+			/* Nested media follows the same test */
+			{"@media all{@media screen{.a{}}}", 1},
+			{"@media all{@media only screen{.a{}} .b{}}", 2},
+			{"@media all{@media print{.a{}} .b{}}", 1},
+			{"@media all{@media (min-width:1px){.a{}}}", 0},
+			/* Other queries and other at-rules are ignored */
+			{"@media print{.a{}}", 0},
+			{"@media (min-width:1px){.a{}}", 0},
+			{"@media (max-width:1px){.a{}} .b{}", 1},
+			{"@media screen and (min-width:1px){.a{}}", 0},
+			{"@media only screen and (max-width:600px){.a{}}", 0},
+			{"@media screen,print{.a{}}", 0},
+			{"@media all,print{.a{}}", 0},
+			{"@media not all{.a{}}", 0},
+			{"@media not screen{.a{}}", 0},
+			{"@media only{.a{}}", 0},
+			{"@media screen print{.a{}}", 0},
+			{"@media{.a{}}", 0},
+			{"@media all and (x){.a{}}", 0},
+			{"@supports (display:grid){.a{}}", 0},
+			{"@font-face{font-size:0} .a{}", 1},
+			{"@import url(x.css); .a{}", 1},
+			{"@page{.a{}} .b{}", 1},
+			/* The end of the block and of the input */
+			{"@media all{.a{}", 1},
+			{"@media all{.a{} .b", 1},
+			{"@media all{ .a } .b{}", 1},
+			{"@media all{ .a ; } .b{}", 1},
+			{"@media all{ @foo bar; .a{} } .b{}", 2},
+			{"@media all{ @foo{x} .a{} } .b{}", 2},
+			{"@media all{ @foo } .b{}", 1},
+		};
+
+		for (const auto &c: cases) {
+			CHECK_MESSAGE(count_rules(pool, c.first) == c.second, c.first);
 		}
 
 		rspamd_mempool_delete(pool);

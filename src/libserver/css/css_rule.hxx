@@ -38,6 +38,8 @@ class css_rule {
 	css_property prop;
 	using css_values_vec = std::vector<css_value>;
 	css_values_vec values;
+	/* Position of the declaration in its block, 0 if it is not placed yet */
+	std::uint32_t order = 0;
 
 public:
 	/* We must create css rule explicitly from a property and values */
@@ -73,6 +75,21 @@ public:
 	{
 		return prop;
 	}
+	constexpr auto get_order(void) const -> std::uint32_t
+	{
+		return order;
+	}
+	void set_order(std::uint32_t o)
+	{
+		order = o;
+	}
+	/* Marks the rule as `!important` (or resets it) */
+	void set_flag(css_property_flag flag)
+	{
+		prop.flag = flag;
+	}
+	/* Takes the values, importance and position of another rule of the same property */
+	void replace_with(const css_rule &other);
 
 	/* Import values from another rules according to the importance */
 	void override_values(const css_rule &other);
@@ -147,6 +164,8 @@ public:
 
 private:
 	ankerl::unordered_dense::set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
+	/* Source order of the next declaration */
+	std::uint32_t next_order = 1;
 };
 
 using css_declarations_block_ptr = std::shared_ptr<css_declarations_block>;
