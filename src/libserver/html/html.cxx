@@ -4005,7 +4005,11 @@ auto html_process_input(struct rspamd_task *task,
 
 	/* Propagate styles */
 	hc->traverse_block_tags([&hc, &pool](const html_tag *tag) -> bool {
-		if (hc->css_style && tag->id > Tag_UNKNOWN && tag->id < Tag_MAX) {
+		/*
+		 * Unknown elements have negative ids and are inline elements to
+		 * a browser: class, id and universal rules apply to them
+		 */
+		if (hc->css_style && tag->id != Tag_UNKNOWN && tag->id < Tag_MAX) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
 
 			if (css_block) {

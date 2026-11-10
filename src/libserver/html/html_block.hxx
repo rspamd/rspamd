@@ -259,7 +259,11 @@ public:
 
 		fg_color_mask = set_value(fg_color_mask, other.fg_color_mask, fg_color, other.fg_color);
 		bg_color_mask = set_value(bg_color_mask, other.bg_color_mask, bg_color, other.bg_color);
-		display_mask = set_value(display_mask, other.display_mask, display, other.display);
+		if (!(display_mask == html_block::inherited &&
+			  display == css::css_display_value::DISPLAY_HIDDEN)) {
+			/* Display hidden by an ancestor cannot be reset by own rules */
+			display_mask = set_value(display_mask, other.display_mask, display, other.display);
+		}
 		height_mask = set_value(height_mask, other.height_mask, height, other.height);
 		width_mask = set_value(width_mask, other.width_mask, width, other.width);
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
