@@ -38,7 +38,7 @@ public:
 		css_declarations_block_ptr decls;
 		/* Source order: at equal specificity a later rule wins */
 		unsigned order;
-		unsigned specificity;
+		std::uint64_t specificity;
 	};
 	using selectors_bucket = std::vector<selector_entry>;
 	/*
