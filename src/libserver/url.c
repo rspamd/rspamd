@@ -2740,7 +2740,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
 		for (int i = 0; i < G_N_ELEMENTS(rspamd_url_protocols); i++) {
-			if (uri->protocollen == rspamd_url_protocols[i].len) {
+			if (uri->protocollen > 0 && uri->protocollen == rspamd_url_protocols[i].len) {
 				if (memcmp(uri->string,
 						   rspamd_url_protocols[i].name, uri->protocollen) == 0) {
 					uri->protocol = rspamd_url_protocols[i].proto;
