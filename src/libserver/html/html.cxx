@@ -2129,6 +2129,43 @@ html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 }
 
+/*
+ * Value of the legacy color and bgcolor attributes: browsers ignore
+ * surrounding whitespace and case, and take 3 or 6 hex digits without `#`.
+ * Other garbage is not recognised
+ */
+static auto
+html_legacy_color_value(std::string_view input) -> std::optional<css::css_value>
+{
+	auto is_ws = [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; };
+
+	while (!input.empty() && is_ws(input.front())) {
+		input.remove_prefix(1);
+	}
+	while (!input.empty() && is_ws(input.back())) {
+		input.remove_suffix(1);
+	}
+
+	if (input.empty() || input.size() > 32) {
+		return std::nullopt;
+	}
+
+	char lowered[32];
+
+	for (std::size_t i = 0; i < input.size(); i++) {
+		lowered[i] = g_ascii_tolower(input[i]);
+	}
+
+	std::string_view name{lowered, input.size()};
+
+	if (name.front() != '#' && (name.size() == 3 || name.size() == 6) &&
+		std::all_of(name.begin(), name.end(), [](char c) { return g_ascii_isxdigit(c); })) {
+		return css::css_value::maybe_color_from_hex(name);
+	}
+
+	return css::css_value::maybe_color_from_string(name);
+}
+
 static auto
 html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 					   struct html_content *hc) -> void
@@ -2138,11 +2175,11 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 
 	// Process color components
 	if (auto color_comp = tag->find_component<html_component_color>()) {
-		maybe_fgcolor = css::css_value::maybe_color_from_string(color_comp.value()->value);
+		maybe_fgcolor = html_legacy_color_value(color_comp.value()->value);
 	}
 
 	if (auto bgcolor_comp = tag->find_component<html_component_bgcolor>()) {
-		maybe_bgcolor = css::css_value::maybe_color_from_string(bgcolor_comp.value()->value);
+		maybe_bgcolor = html_legacy_color_value(bgcolor_comp.value()->value);
 	}
 
 	// Process style component
