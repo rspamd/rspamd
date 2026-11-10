@@ -1353,7 +1353,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				state = ignore_bad_tag;
 			}
 			else {
-				decode_html_entitles_inplace(parser_env.buf);
+				/* The tokenizer decodes no character references in tag names */
 				const auto *tag_def = rspamd::html::html_tags_defs.by_name(parser_env.buf);
 
 				if (tag_def == nullptr) {
