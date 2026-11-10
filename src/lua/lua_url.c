@@ -416,6 +416,51 @@ lua_url_tostring(lua_State *L)
 	return 1;
 }
 
+/*
+ * Pushes an url for a request line: the parts of an url are stored decoded,
+ * so `%0d%0a` in a path is a raw line break there, and a control character
+ * or a space must not reach a request
+ */
+static void
+lua_url_push_request_safe(lua_State *L, const char *in, gsize len)
+{
+	static const char hexdigits[] = "0123456789ABCDEF";
+	gsize nunsafe = 0;
+
+	for (gsize i = 0; i < len; i++) {
+		unsigned char c = in[i];
+
+		if (c <= 0x20 || c == 0x7f) {
+			nunsafe++;
+		}
+	}
+
+	if (nunsafe == 0) {
+		lua_pushlstring(L, in, len);
+
+		return;
+	}
+
+	luaL_Buffer b;
+
+	luaL_buffinit(L, &b);
+
+	for (gsize i = 0; i < len; i++) {
+		unsigned char c = in[i];
+
+		if (c <= 0x20 || c == 0x7f) {
+			luaL_addchar(&b, '%');
+			luaL_addchar(&b, hexdigits[c >> 4]);
+			luaL_addchar(&b, hexdigits[c & 0xf]);
+		}
+		else {
+			luaL_addchar(&b, c);
+		}
+	}
+
+	luaL_pushresult(&b);
+}
+
 /***
  * @method url:to_http()
  * Get URL suitable for HTTP request (e.g. by trimming fragment and user parts)
@@ -436,14 +481,10 @@ lua_url_to_http(lua_State *L)
 
 			if (url->url->userlen > 0) {
 				/* We need to reconstruct url :( */
-				gsize len = url->url->urllen - url->url->fragmentlen + 1;
-
-				/* Strip the # character */
-				if (url->url->fragmentlen > 0 && len > 0) {
-					while (url->url->string[len - 1] == '#' && len > 0) {
-						len--;
-					}
-				}
+				/* Sized by what is written below, whatever the source looks like */
+				gsize len = url->url->protocollen + sizeof("://") +
+							url->url->hostlen + sizeof(":65535/") +
+							url->url->datalen + 1 + url->url->querylen;
 				char *nstr = g_malloc(len);
 				char *d = nstr, *end = nstr + len;
 				memcpy(nstr, url->url->string, url->url->protocollen);
@@ -453,8 +494,10 @@ lua_url_to_http(lua_State *L)
 				*d++ = '/';
 
 				/* Host part */
-				memcpy(d, rspamd_url_host(url->url), url->url->hostlen);
-				d += url->url->hostlen;
+				if (url->url->hostlen > 0) {
+					memcpy(d, rspamd_url_host_unsafe(url->url), url->url->hostlen);
+					d += url->url->hostlen;
+				}
 
 				int port = rspamd_url_get_port_if_special(url->url);
 
@@ -477,7 +520,8 @@ lua_url_to_http(lua_State *L)
 				}
 
 				g_assert(d < end);
-				lua_pushlstring(L, nstr, d - nstr);
+				lua_url_push_request_safe(L, nstr, d - nstr);
+				g_free(nstr);
 			}
 			else {
 				gsize len = url->url->urllen - url->url->fragmentlen;
@@ -488,7 +532,7 @@ lua_url_to_http(lua_State *L)
 						len--;
 					}
 				}
-				lua_pushlstring(L, url->url->string, len);
+				lua_url_push_request_safe(L, url->url->string, len);
 			}
 		}
 	}
