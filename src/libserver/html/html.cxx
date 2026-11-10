@@ -1408,6 +1408,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 
 	case spaces_before_eq:
+		/* After attribute name state of the HTML standard tokeniser */
 		if (*in == '=') {
 			state = parse_equal;
 		}
@@ -1415,9 +1416,6 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			/*
 			 * HTML defines that crap could still be restored and
 			 * calculated somehow... So we have to follow this stupid behaviour
-			 */
-			/*
-			 * TODO: estimate what insane things do email clients in each case
 			 */
 			if (*in == '>') {
 				/*
@@ -1428,19 +1426,21 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				store_component_value();
 				state = tag_end;
 			}
-			else if (*in == '"' || *in == '\'' || *in == '<') {
-				/* Attribute followed by quote... Missing '=' ? Dunno, need to test */
-				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				tag->flags |= FL_BROKEN;
+			else if (*in == '/') {
+				/* A valueless attribute, then the self-closing start tag state */
 				store_component_value();
-				store_value_character(true);
-				state = spaces_after_param;
+				state = slash_after_value;
 			}
 			else {
-				/* Empty attribute */
+				/* A valueless attribute, a new attribute name starts here */
+				if (*in == '"' || *in == '\'' || *in == '<') {
+					/* Missing '=' ? Browsers make it a part of the name */
+					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					tag->flags |= FL_BROKEN;
+				}
 				store_component_value();
 				store_value_character(true);
-				state = spaces_after_param;
+				state = parse_attr_name;
 			}
 		}
 		break;
