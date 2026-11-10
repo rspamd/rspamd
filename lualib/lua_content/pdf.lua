@@ -111,6 +111,9 @@ local config = {
   max_total_pdf_objects = 50000, -- Hard ceiling on stored objects, including ObjStm members
   max_pattern_matches = 50000, -- Hard ceiling on marker occurrences collected per processor
   max_extracted_text_size = 2 * 1024 * 1024, -- Cumulative budget for text taken out of content streams
+  max_stream_filters = 4, -- Maximum number of filters applied to a single stream
+  max_decoded_size = 32 * 1024 * 1024, -- Cumulative budget for the output of stream filters
+  max_cmap_size = 4 * 1024 * 1024, -- Cumulative budget for the ToUnicode cmaps that are parsed
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
   max_pdf_trailer_line = 16 * 1024, -- Maximum bytes examined in a single trailer line
@@ -170,6 +173,10 @@ local function compile_tries()
   end
 end
 
+-- Marks a table that is an indirect reference. It is a value that no content
+-- of a file can produce: a string would be forged by an array of strings
+local pdf_ref_marker = {}
+
 local function generic_grammar_elts()
   local P = lpeg.P
   local R = lpeg.R
@@ -210,7 +217,9 @@ local function generic_grammar_elts()
     -- unescape octal
     local function ue_octal(cc)
       -- Replace unknown stuff with '?'
-      return string.char(tonumber(cc:sub(2), 8) or 63)
+      -- A value over 255 loses its high order bits, as in a reader
+      local code = tonumber(cc:sub(2), 8)
+      return string.char(code and code % 256 or 63)
     end
     s = s:gsub('\\%d%d?%d?', ue_octal)
 
@@ -248,7 +257,7 @@ local function generic_grammar_elts()
   grammar_elts.boolean = C(P("true") + P("false"))
 
   -- Stupid references
-  grammar_elts.ref = lpeg.Ct { lpeg.Cc("%REF%") * C(D ^ 1) * " " * C(D ^ 1) * " " * "R" }
+  grammar_elts.ref = lpeg.Ct { lpeg.Cc(pdf_ref_marker) * C(D ^ 1) * " " * C(D ^ 1) * " " * "R" }
 
   return grammar_elts
 end
@@ -516,7 +525,7 @@ end
 
 -- Return indirect object reference (if needed)
 local function maybe_dereference_object(elt, pdf, task)
-  if type(elt) == 'table' and elt[1] == '%REF%' then
+  if type(elt) == 'table' and elt[1] == pdf_ref_marker then
     local ref = obj_ref(elt[2], elt[3])
 
     if pdf.ref[ref] then
@@ -532,26 +541,53 @@ local function maybe_dereference_object(elt, pdf, task)
   return elt
 end
 
+-- Returns true if the deadline of this pdf has passed and remembers that
+local function pdf_deadline_exceeded(pdf)
+  if not pdf.end_timestamp then
+    return false
+  end
+
+  local now = rspamd_util.get_ticks()
+
+  if now >= pdf.end_timestamp then
+    pdf.timeout_processing = now - pdf.start_timestamp
+
+    return true
+  end
+
+  return false
+end
+
 -- Apply PDF stream filter
 local function apply_pdf_filter(input, filt)
   -- Validate input before processing
-  if not input or (type(input) == 'string' and #input == 0) then
+  if not input or #input == 0 then
     return nil
   end
 
   if filt == 'FlateDecode' or filt == 'Fl' then
     return rspamd_util.inflate(input, config.max_extraction_size)
   elseif filt == 'ASCIIHexDecode' or filt == 'AHx' then
-    -- Strip > at the end if present (should be stripped by parser but safety check)
-    -- Also strip whitespaces
-    local to_decode = input:gsub('%s', '')
-    if to_decode:sub(-1) == '>' then
-      to_decode = to_decode:sub(1, -2)
+    if #input > config.max_extraction_size * 2 + 1024 then
+      -- Cannot decode into what a stream is allowed to be
+      return nil
+    end
+    -- The input is a text or a string, and only a string has `gsub`
+    local to_decode = tostring(input)
+    -- The data ends at `>`, and whatever is not a hex digit is skipped
+    local eod = to_decode:find('>', 1, true)
+    if eod then
+      to_decode = to_decode:sub(1, eod - 1)
+    end
+    to_decode = to_decode:gsub('%X', '')
+    if #to_decode % 2 == 1 then
+      -- The last digit of an odd run stands for a high nibble
+      to_decode = to_decode .. '0'
     end
     if #to_decode == 0 then
       return nil
     end
-    return lua_util.unhex(to_decode)
+    return (lua_util.unhex(to_decode))
   elseif filt == 'ASCII85Decode' or filt == 'A85' then
     return rspamd_util.decode_ascii85(input)
   end
@@ -573,6 +609,15 @@ local function maybe_apply_filter(dict, data, pdf, task)
       filts = filt
     end
 
+    -- Each filter of a chain is a full pass that allocates its output outside
+    -- of what the collector accounts for, and a chain of stored deflate blocks
+    -- costs a sender nothing: real files use one filter, or two for text
+    -- armour over compression
+    if #filts > config.max_stream_filters then
+      pdf.flags.decode_limit = true
+      return nil, string.format('too many filters: %d', #filts)
+    end
+
     if dict.DecodeParms then
       local decode_params = maybe_dereference_object(dict.DecodeParms, pdf, task)
 
@@ -587,10 +632,17 @@ local function maybe_apply_filter(dict, data, pdf, task)
     end
 
     for _, f in ipairs(filts) do
+      if pdf.decoded_size >= config.max_decoded_size then
+        pdf.flags.decode_limit = true
+        return nil, 'decoded data limit is reached'
+      end
+
       local next_uncompressed = apply_pdf_filter(uncompressed, f)
 
       if next_uncompressed then
         uncompressed = next_uncompressed
+        -- Every stage is charged: the output of each one is allocated
+        pdf.decoded_size = pdf.decoded_size + #next_uncompressed
       else
         return nil, 'filter failed: ' .. tostring(f)
       end
@@ -617,6 +669,12 @@ local function maybe_extract_object_stream(obj, pdf, task)
     return obj.uncompressed
   end
   if obj.stream_undecodable then
+    return nil
+  end
+  -- Decoding is where the time goes, and the loops that lead here look at the
+  -- clock once per many objects. A stream that is skipped for the lack of time
+  -- is not marked as undecodable: that is not what it is
+  if pdf_deadline_exceeded(pdf) then
     return nil
   end
   -- Defensive checks for stream structure
@@ -898,7 +956,7 @@ process_dict = function(task, pdf, obj, dict)
         obj.major, obj.minor, obj.type)
     local contents = dict.Contents
     if contents and type(contents) == 'table' then
-      if contents[1] == '%REF%' then
+      if contents[1] == pdf_ref_marker then
         -- Single reference
         contents = { contents }
       end
@@ -1023,12 +1081,28 @@ local function compound_obj_grammar_gen()
 
   return compound_obj_grammar
 end
-local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first)
+local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first, nobjs)
   -- First, we need to parse data line by line likely to find a line
   -- that consists of pairs of numbers
   compound_obj_grammar_gen()
+
+  local stored = #pdf.objects
+
+  -- The pairs are the /N first things of the stream and end before /First.
+  -- The grammar builds a table per pair, so it is given no more than the
+  -- members that can be stored need: a stream of digits alone would otherwise
+  -- cost a quarter of a million tables, whatever /N says
+  nobjs = math.min(nobjs, config.max_total_pdf_objects - stored)
+  if nobjs < 1 or first < 1 then
+    return
+  end
+  local header_len = math.min(first, #uncompressed, nobjs * 32)
+  local header_ok, header = pcall(uncompressed.span, uncompressed, 1, header_len)
+  if not header_ok or not header then
+    return
+  end
   -- Wrap grammar match in pcall for safety
-  local match_ok, elts = pcall(compound_obj_grammar.match, compound_obj_grammar, uncompressed)
+  local match_ok, elts = pcall(compound_obj_grammar.match, compound_obj_grammar, header)
   if not match_ok then
     lua_util.debugm(N, task, 'compound object grammar match failed: %s', elts)
     return
@@ -1037,7 +1111,9 @@ local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first)
     lua_util.debugm(N, task, 'compound elts (chunk length %s): %s',
         #uncompressed, elts)
 
-    local stored = #pdf.objects
+    for i = #elts, nobjs + 1, -1 do
+      elts[i] = nil
+    end
 
     for i, pair in ipairs(elts) do
       -- An ObjStm is the cheapest way to manufacture objects: a small
@@ -1116,24 +1192,28 @@ end
 -- PDF 1.5 ObjStmt
 local function extract_pdf_compound_objects(task, pdf)
   for i, obj in ipairs(pdf.objects or {}) do
-    if i > 0 and i % 100 == 0 then
-      local now = rspamd_util.get_ticks()
-
-      if now >= pdf.end_timestamp then
-        pdf.timeout_processing = now - pdf.start_timestamp
-
-        lua_util.debugm(N, task, 'pdf: timeout processing compound objects after spending %s seconds, ' ..
-            '%s elements processed',
-            pdf.timeout_processing, i)
-        break
-      end
-    end
     if obj.stream and obj.dict and type(obj.dict) == 'table' then
       local t = obj.dict.Type
       if t and t == 'ObjStm' and #pdf.objects < config.max_total_pdf_objects then
+        -- Each of these is a stream to decode and to unpack, so the clock is
+        -- looked at for every one of them and not once per hundred objects
+        if pdf_deadline_exceeded(pdf) then
+          lua_util.debugm(N, task, 'pdf: timeout processing compound objects after spending %s seconds, ' ..
+              '%s elements processed',
+              pdf.timeout_processing, i)
+          break
+        end
         -- We are in troubles sir...
-        local nobjs = tonumber(maybe_dereference_object(obj.dict.N, pdf, task))
-        local first = tonumber(maybe_dereference_object(obj.dict.First, pdf, task))
+        -- The values come from the file: anything can be there
+        local function dict_number(v)
+          v = maybe_dereference_object(v, pdf, task)
+          if type(v) == 'number' or type(v) == 'string' then
+            return tonumber(v)
+          end
+          return nil
+        end
+        local nobjs = dict_number(obj.dict.N)
+        local first = dict_number(obj.dict.First)
 
         if nobjs and first then
           --local extend = maybe_dereference_object(obj.dict.Extends, pdf, task)
@@ -1142,8 +1222,14 @@ local function extract_pdf_compound_objects(task, pdf)
 
           local uncompressed = maybe_extract_object_stream(obj, pdf, task)
 
-          if uncompressed then
-            pdf_compound_object_unpack(obj, uncompressed, pdf, task, first)
+          if type(uncompressed) == 'userdata' then
+            -- An error in one object must not hide the objects after it
+            local ok, err = pcall(pdf_compound_object_unpack, obj, uncompressed, pdf, task, first, nobjs)
+            if not ok then
+              pdf.flags.object_errors = (pdf.flags.object_errors or 0) + 1
+              lua_util.debugm(N, task, 'pdf: cannot unpack ObjStm %s:%s: %s',
+                  obj.major, obj.minor, err)
+            end
           end
         else
           lua_util.debugm(N, task, 'ObjStm object %s:%s has bad dict: %s',
@@ -1346,7 +1432,13 @@ local function postprocess_pdf_objects(task, input, pdf)
 
       -- Special early handling
       if obj.dict and obj.dict.Type and obj.dict.Type == 'XRef' then
-        process_xref(task, pdf, obj)
+        -- An error in one object must not hide the objects after it
+        local ok, err = pcall(process_xref, task, pdf, obj)
+        if not ok then
+          pdf.flags.object_errors = (pdf.flags.object_errors or 0) + 1
+          lua_util.debugm(N, task, 'pdf: cannot process xref object %s:%s: %s',
+              obj.major, obj.minor, err)
+        end
       end
     end
   end
@@ -1374,7 +1466,13 @@ local function postprocess_pdf_objects(task, input, pdf)
           break
         end
       end
-      process_dict(task, pdf, obj, obj.dict)
+      -- An error in one object must not hide the objects after it
+      local ok, err = pcall(process_dict, task, pdf, obj, obj.dict)
+      if not ok then
+        pdf.flags.object_errors = (pdf.flags.object_errors or 0) + 1
+        lua_util.debugm(N, task, 'pdf: cannot process object %s:%s: %s',
+            obj.major, obj.minor, err)
+      end
     end
   end
 end
@@ -1541,8 +1639,17 @@ local function font_decoder_of(font, pdf, task)
 
       if type(tu_dict) == 'table' and tu_dict.UseCMap then
         lua_util.debugm(N, task, 'ignoring ToUnicode cmap that inherits via /UseCMap')
-      elseif tounicode.uncompressed then
+      elseif type(tounicode.uncompressed) ~= 'userdata' then
+        lua_util.debugm(N, task, 'ToUnicode is not a stream')
+      elseif pdf.cmap_size + #tounicode.uncompressed > config.max_cmap_size then
+        -- A parsed cmap is several times its source and lives outside of what
+        -- the collector accounts for, and a file can carry any number of them
+        pdf.flags.decode_limit = true
+        lua_util.debugm(N, task, 'ignoring ToUnicode cmap of %s bytes: %s bytes are already parsed',
+            #tounicode.uncompressed, pdf.cmap_size)
+      else
         local err
+        pdf.cmap_size = pdf.cmap_size + #tounicode.uncompressed
         cmap, err = rspamd_pdf_text.cmap(tounicode.uncompressed)
 
         if cmap then
@@ -1617,10 +1724,21 @@ local function search_text(task, pdf, mpart)
   -- pages can produce, and the only thing that bounds a file whose pages all
   -- point at one huge stream
   local text_size = 0
+  -- Bytes of text that the pages have produced. A cmap can turn two bytes of
+  -- content into over a hundred, and every page that shares a stream decodes
+  -- it again, so the content read does not bound the text written
+  local text_out = 0
 
   for _, obj in ipairs(pdf.objects) do
     if obj.type == 'Page' and obj.contents then
+      if text_out >= config.max_extracted_text_size then
+        pdf.flags.text_truncated = true
+        lua_util.debugm(N, task, 'pdf: produced %s bytes of text, stop extracting', text_out)
+        break
+      end
+
       if text_size >= config.max_extracted_text_size then
+        pdf.flags.text_truncated = true
         lua_util.debugm(N, task, 'pdf: extracted %s bytes of text, stop extracting', text_size)
         break
       end
@@ -1796,6 +1914,24 @@ local function search_text(task, pdf, mpart)
 
         local res = tostring(builder:finish())
 
+        if text_out + #res > config.max_extracted_text_size then
+          -- Keep what fits, cut between characters
+          local keep = config.max_extracted_text_size - text_out
+
+          while keep > 0 do
+            local b = res:byte(keep + 1)
+            if not b or b < 0x80 or b >= 0xc0 then
+              break
+            end
+            keep = keep - 1
+          end
+
+          res = res:sub(1, keep)
+          pdf.flags.text_truncated = true
+        end
+
+        text_out = text_out + #res
+
         -- Page-level confidence check before storing text
         if config.text_quality_enabled and #res >= config.text_quality_min_length then
           local page_confidence = calculate_text_confidence(res)
@@ -1909,6 +2045,12 @@ local function process_pdf(input, mpart, task)
       extract_text = extract_text_data,
       start_timestamp = start_ts,
       end_timestamp = start_ts + config.pdf_process_timeout,
+      -- Bytes that the stream filters have produced, and those of them that
+      -- went into the cmaps
+      decoded_size = 0,
+      cmap_size = 0,
+      -- Shared with the output object
+      flags = {},
     }
     -- Output object that excludes all internal stuff
     local pdf_output = lua_util.shallowcopy(pdf_object)
@@ -1970,8 +2112,6 @@ local function process_pdf(input, mpart, task)
         lua_util.debugm(N, task, "pdf: processor %s failed: %s", name, proc_err)
       end
     end
-
-    pdf_output.flags = {}
 
     if pdf_object.start_objects and pdf_object.end_objects then
       if #pdf_object.start_objects > config.max_pdf_objects then
