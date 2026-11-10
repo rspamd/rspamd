@@ -274,6 +274,8 @@ local function extract_selected(data, names, options, state)
 
   local ok, files, truncated, entries_seen = pcall(archive.unpack, data, 'zip', nil, {
     files = names,
+    -- A package is a plain zip, never a compressed stream with a zip inside
+    filters = false,
     max_entries = remaining_entries,
     max_files = remaining_parts,
     max_file_size = options.max_file_size,

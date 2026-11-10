@@ -691,6 +691,7 @@ struct rspamd_archive_limits {
 	double max_ratio;      /* per-member uncompressed/compressed ratio cap */
 	double end_timestamp;  /* absolute processing deadline */
 	GHashTable *files;     /* exact member names selected for extraction */
+	gboolean no_filters;   /* the archive is not wrapped into a compressed stream */
 };
 
 /*
@@ -708,6 +709,12 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
 	if (opts_idx <= 0 || !lua_istable(L, opts_idx)) {
 		return;
 	}
+
+	lua_getfield(L, opts_idx, "filters");
+	if (lua_isboolean(L, -1) && !lua_toboolean(L, -1)) {
+		lim->no_filters = TRUE;
+	}
+	lua_pop(L, 1);
 
 	lua_getfield(L, opts_idx, "max_output");
 	if (lua_isnumber(L, -1)) {
@@ -806,6 +813,8 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  *  - max_ratio: per-member max uncompressed/compressed ratio (members exceeding it are dropped)
  *  - end_timestamp: absolute rspamd_get_ticks() deadline
  *  - files: array or set of exact member names to extract (unselected members are skipped)
+ *  - filters: `false` to refuse an archive that is wrapped into a compressed stream
+ *    (gzip, xz and so on), whose members cannot be skipped without decompressing all of it
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  * @return {boolean} truncated: true if any limit stopped, truncated, or dropped content
  * @return {number} entries_seen: number of archive headers inspected
@@ -849,7 +858,19 @@ lua_archive_unpack(lua_State *L)
 		return luaL_error(L, "cannot create libarchive reader");
 	}
 
-	archive_read_support_filter_all(a);
+	if (lim.no_filters) {
+		/*
+		 * The caller expects the archive itself. With the filters on, an
+		 * archive wrapped into a compressed stream is read as well, and such
+		 * a stream cannot be seeked: all of it is decompressed to walk over
+		 * the members, the skipped ones included, which none of the limits
+		 * on the members can account for
+		 */
+		archive_read_support_filter_none(a);
+	}
+	else {
+		archive_read_support_filter_all(a);
+	}
 	if (format) {
 		/* Enable a specific format by known name mapping */
 		lua_archive_enable_read_format_by_name(a, format);
