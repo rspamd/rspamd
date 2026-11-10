@@ -2286,8 +2286,11 @@ html_append_parsed(struct html_content *hc,
 {
 	auto cur_offset = dest.size();
 
-	if (dest.size() > input_len) {
-		/* Impossible case, refuse to append */
+	/*
+	 * Text never grows over its source but for a NUL, which becomes a three
+	 * byte replacement character: anything over that is refused
+	 */
+	if (dest.size() / 3 > input_len) {
 		return 0;
 	}
 
@@ -2316,7 +2319,7 @@ html_append_parsed(struct html_content *hc,
 				}
 			};
 
-			dest.reserve(dest.size() + data.size() + sizeof(u8"\uFFFD"));
+			/* No reserve to the exact size: it would reallocate for each piece */
 			replace_zero_func(data, dest);
 			hc->flags |= RSPAMD_HTML_FLAG_HAS_ZEROS;
 		}
