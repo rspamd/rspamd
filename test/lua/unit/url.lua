@@ -368,10 +368,10 @@ context("URL check functions", function()
     assert_equal("evil.com", u:get_host())
     assert_true(u:get_flags().zw_spaces)
 
-    -- Stripped characters leave nameprep its room to expand the host
+    -- A sharp s is kept, as browsers do (UTS #46 non-transitional processing)
     u = url.create(pool, "http://stra\239\184\143\195\159e.com/ text")
     assert_not_nil(u, "cannot parse url with sharp s")
-    assert_equal("strasse.com", u:get_host())
+    assert_equal("stra\195\159e.com", u:get_host())
 
     -- A host made of invisible characters only is not a host
     assert_nil(url.create(pool, "http://%E2%81%A0/path text"))

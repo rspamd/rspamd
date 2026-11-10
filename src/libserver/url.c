@@ -27,7 +27,7 @@
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
 #include <unicode/uchar.h>
-#include <unicode/usprep.h>
+#include <unicode/uidna.h>
 #include <unicode/ucnv.h>
 
 /*
@@ -258,6 +258,14 @@ struct rspamd_url_lookahead {
 	const char *bs_end;
 	gboolean bs_end_is_stop;
 	gboolean bs_obscured;
+	/*
+	 * The last `@` of an authority: the scan went on from `at_from` (right after
+	 * the first `@`) up to `at_end` and `at_last` is the last `@` it saw
+	 */
+	const char *at_from;
+	const char *at_last;
+	const char *at_end;
+	gboolean at_end_is_stop;
 };
 
 struct url_callback_data {
@@ -625,14 +633,14 @@ is_domain_start(int p)
 /*
  * Invisible code points (zero width spaces, word joiner, variation selectors,
  * tags...) that obfuscate a hostname: they are stripped from the host before
- * nameprep and the url is flagged if they are inside the hostname. Bidi
+ * the IDNA mapping and the url is flagged if they are inside the hostname. Bidi
  * controls are excluded, as they are legitimate URL delimiters in RTL text
  * and IDNA rejects them anyway.
  */
 static inline bool
 is_invisible_host_char(UChar32 uc)
 {
-	/* U+1806 is mapped to nothing by nameprep, like the soft hyphen */
+	/* U+1806 is invisible like the soft hyphen */
 	return uc == 0x1806 ||
 		   (u_hasBinaryProperty(uc, UCHAR_DEFAULT_IGNORABLE_CODE_POINT) &&
 			!u_hasBinaryProperty(uc, UCHAR_BIDI_CONTROL));
@@ -1030,6 +1038,81 @@ rspamd_url_lua_consult(const char *url_str,
 					   unsigned int flags,
 					   lua_State *L);
 
+/*
+ * Finds the last `@` of an authority, searching from `from` that is right after
+ * a `@` of it. Browsers end the userinfo at that one, so an earlier `@` is a
+ * part of the userinfo. The search stops where the authority ends: the lookahead
+ * for the first `@` ends it at the same places. A text has more terminators
+ * than a link, as the url there cannot go past a quote or a list separator.
+ * Returns NULL if there is no `@` after `from`.
+ */
+static const char *
+rspamd_url_find_last_at(const char *from, const char *last,
+						enum rspamd_url_parse_flags parse_flags,
+						struct rspamd_url_lookahead *la)
+{
+	const char *tp = from, *found = NULL;
+	gboolean text = !(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM));
+
+	/*
+	 * [at_from, at_end) has been scanned and its last `@` is at_last: a search
+	 * that starts inside of it ends at the same place with the same `@`, if
+	 * that one is still after its start. Candidates of one token start at
+	 * different places of it, so the start is not required to be the same
+	 */
+	if (la != NULL && la->at_from != NULL &&
+		la->at_from <= from && from <= la->at_end &&
+		(last <= la->at_end || la->at_end_is_stop) &&
+		(la->at_last == NULL || la->at_last < last)) {
+		return (la->at_last != NULL && la->at_last >= from) ? la->at_last : NULL;
+	}
+
+	while (tp < last) {
+		unsigned char c = *tp;
+
+		if (c == '@') {
+			found = tp;
+		}
+		else if (c == '/' || c == '\\' || c == '#' || c == '?' ||
+				 (c < 0x80 && !g_ascii_isgraph(c))) {
+			break;
+		}
+		else if (text && (is_url_end(c) || is_url_start(c) || c == ',' || c == ';')) {
+			break;
+		}
+
+		tp++;
+	}
+
+	if (la != NULL) {
+		la->at_from = from;
+		la->at_last = found;
+		la->at_end = tp;
+		la->at_end_is_stop = tp < last;
+	}
+
+	return found;
+}
+
+/*
+ * Tells whether the `@` at `p` is followed by another `@` of the same
+ * authority, i.e. whether it still belongs to the userinfo. The last `@` is
+ * searched for once, when the first one is met.
+ */
+static gboolean
+rspamd_url_userinfo_goes_on(const char *p, const char *last,
+							enum rspamd_url_parse_flags parse_flags,
+							struct rspamd_url_lookahead *la,
+							const char **last_at, gboolean *known)
+{
+	if (!*known) {
+		*last_at = rspamd_url_find_last_at(p + 1, last, parse_flags, la);
+		*known = TRUE;
+	}
+
+	return *last_at != NULL && p < *last_at;
+}
+
 static int
 rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
@@ -1046,6 +1129,9 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 	int ret = 1;
 	gboolean user_seen = FALSE;
 	gboolean user_oversized = FALSE;
+	/* The last `@` of the authority, known once the first `@` has been met */
+	const char *authority_last_at = NULL;
+	gboolean authority_at_known = FALSE;
 	enum {
 		parse_protocol,
 		parse_slash,
@@ -1153,14 +1239,15 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 						break;
 					}
 					else if (*tp == '/' || *tp == '\\' || *tp == '#' || *tp == '?' ||
-							 !g_ascii_isgraph(*tp)) {
+							 ((unsigned char) *tp < 0x80 && !g_ascii_isgraph(*tp))) {
 						/*
 						 * The authority ends at the first slash, and browsers take
 						 * a backslash for a slash: the host of http://a.com\@b.com/
 						 * is a.com and @b.com/ is the path. Only a parser that
 						 * does not do so sees b.com, so such an url is obscured.
-						 * The userinfo cannot have a space either, so an `@` after
-						 * it belongs to some other text.
+						 * The userinfo cannot have a space or a control character
+						 * either, so an `@` after it belongs to some other text.
+						 * Bytes above 0x7f are opaque to it and do not end it.
 						 */
 						if (*tp == '\\') {
 							const char *bp = tp;
@@ -1279,6 +1366,13 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				user_start = c;
 				st = parse_password_start;
 			}
+			else if (t == '@' && p - c > 0 &&
+					 rspamd_url_userinfo_goes_on(p, last, parse_flags, la,
+												 &authority_last_at,
+												 &authority_at_known)) {
+				/* Not the last `@` of the authority: it is a part of the userinfo */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+			}
 			else if (t == '@') {
 				/* No password */
 				if (p - c == 0) {
@@ -1302,7 +1396,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 				st = parse_at;
 			}
-			else if (!g_ascii_isgraph(t)) {
+			else if ((unsigned char) t < 0x80 && !g_ascii_isgraph(t)) {
 				goto out;
 			}
 			else if (!(parse_flags & RSPAMD_URL_PARSE_UPSTREAM) &&
@@ -1350,6 +1444,16 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					goto out;
 				}
 				/* ACCEPT or SUSPICIOUS: Continue but mark as obscured */
+
+				authority_last_at = rspamd_url_find_last_at(p, last, parse_flags, la);
+				authority_at_known = TRUE;
+
+				if (authority_last_at != NULL) {
+					/* The userinfo goes on up to the last `@` */
+					st = parse_user;
+					break;
+				}
+
 				/* Off by one */
 				p--;
 				SET_U(u, UF_USERINFO);
@@ -1362,7 +1466,16 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			}
 			break;
 		case parse_password_start:
-			if (t == '@') {
+			if (t == '@' &&
+				rspamd_url_userinfo_goes_on(p, last, parse_flags, la,
+											&authority_last_at, &authority_at_known)) {
+				/* The `@` is a part of the password */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+				c = p;
+				password_start = p;
+				st = parse_password;
+			}
+			else if (t == '@') {
 				/* Empty password */
 				SET_U(u, UF_USERINFO);
 				if (u != NULL && u->field_data[UF_USERINFO].len > 0) {
@@ -1380,7 +1493,13 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			p++;
 			break;
 		case parse_password:
-			if (t == '@') {
+			if (t == '@' &&
+				rspamd_url_userinfo_goes_on(p, last, parse_flags, la,
+											&authority_last_at, &authority_at_known)) {
+				/* Not the last `@` of the authority */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+			}
+			else if (t == '@') {
 				/* XXX: password is not stored */
 				if (u != NULL) {
 					if (u->field_data[UF_USERINFO].len == 0 && password_start && user_start && password_start > user_start + 1) {
@@ -1394,7 +1513,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				}
 				st = parse_at;
 			}
-			else if (!g_ascii_isgraph(t)) {
+			else if ((unsigned char) t < 0x80 && !g_ascii_isgraph(t)) {
 				goto out;
 			}
 			else if (p - c > max_domain_length) {
@@ -2362,6 +2481,382 @@ rspamd_url_lua_consult(const char *url_str,
 	return result;
 }
 
+/*
+ * Replaces a host, path, query or fragment of the url with new data of any
+ * length. The url string is rebuilt if its size changes and the offsets of
+ * the parts that follow are moved. Returns FALSE if the result would not fit
+ * into the 16 bit lengths and offsets of the url, the url is left untouched
+ * then.
+ */
+static gboolean
+rspamd_url_replace_field(rspamd_mempool_t *pool, struct rspamd_url *uri,
+						 enum http_parser_url_fields field,
+						 const char *data, gsize nlen)
+{
+	uint16_t *shift, *len;
+
+	switch (field) {
+	case UF_HOST:
+		shift = &uri->hostshift;
+		len = &uri->hostlen;
+		break;
+	case UF_PATH:
+		shift = &uri->datashift;
+		len = &uri->datalen;
+		break;
+	case UF_QUERY:
+		shift = &uri->queryshift;
+		len = &uri->querylen;
+		break;
+	case UF_FRAGMENT:
+		shift = &uri->fragmentshift;
+		len = &uri->fragmentlen;
+		break;
+	default:
+		return FALSE;
+	}
+
+	gsize off = *shift, olen = *len;
+	gsize new_urllen = (gsize) uri->urllen - olen + nlen;
+
+	if (nlen >= G_MAXUINT16 || new_urllen >= G_MAXUINT16) {
+		return FALSE;
+	}
+
+	if (nlen != olen) {
+		char *nstr = rspamd_mempool_alloc(pool, new_urllen + 1);
+		gsize delta_plus = nlen, delta_minus = olen;
+
+		memcpy(nstr, uri->string, off);
+		memcpy(nstr + off, data, nlen);
+		memcpy(nstr + off + nlen, uri->string + off + olen,
+			   uri->urllen - off - olen);
+		nstr[new_urllen] = '\0';
+		uri->string = nstr;
+
+		/* The parts that follow the field move with its tail */
+#define SHIFT_PART(shiftf, lenf)                              \
+	if (uri->lenf > 0 && uri->shiftf > off) {                 \
+		uri->shiftf = uri->shiftf + delta_plus - delta_minus; \
+	}
+		SHIFT_PART(usershift, userlen)
+		SHIFT_PART(hostshift, hostlen)
+		SHIFT_PART(datashift, datalen)
+		SHIFT_PART(queryshift, querylen)
+		SHIFT_PART(fragmentshift, fragmentlen)
+		SHIFT_PART(tldshift, tldlen)
+#undef SHIFT_PART
+
+		*len = nlen;
+		uri->urllen = new_urllen;
+
+		if (nlen < olen) {
+			switch (field) {
+			case UF_HOST:
+				uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
+				break;
+			case UF_PATH:
+				uri->flags |= RSPAMD_URL_FLAG_PATHENCODED;
+				break;
+			case UF_QUERY:
+				uri->flags |= RSPAMD_URL_FLAG_QUERYENCODED;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	else {
+		memcpy(uri->string + off, data, nlen);
+	}
+
+	return TRUE;
+}
+
+/*
+ * NFKC-normalises a host, path, query or fragment of the url, whatever the
+ * length of the result is. If the result cannot be stored, the part is kept
+ * as it is and the url is flagged.
+ */
+static void
+rspamd_url_normalise_field(rspamd_mempool_t *pool, struct rspamd_url *uri,
+						   enum http_parser_url_fields field)
+{
+	const char *data;
+	gsize len;
+
+	switch (field) {
+	case UF_HOST:
+		data = rspamd_url_host_unsafe(uri);
+		len = uri->hostlen;
+		break;
+	case UF_PATH:
+		data = rspamd_url_data_unsafe(uri);
+		len = uri->datalen;
+		break;
+	case UF_QUERY:
+		data = rspamd_url_query_unsafe(uri);
+		len = uri->querylen;
+		break;
+	case UF_FRAGMENT:
+		data = rspamd_url_fragment_unsafe(uri);
+		len = uri->fragmentlen;
+		break;
+	default:
+		return;
+	}
+
+	/* ASCII is normal already */
+	gsize i;
+
+	for (i = 0; i < len; i++) {
+		if ((unsigned char) data[i] >= 0x80) {
+			break;
+		}
+	}
+
+	if (i == len) {
+		return;
+	}
+
+	gsize out_len, needed;
+	char *out = rspamd_mempool_alloc(pool, len);
+	enum rspamd_utf8_normalise_result res;
+
+	res = rspamd_normalise_unicode_to(data, len, out, len, &out_len, &needed);
+
+	if (!(res & RSPAMD_UNICODE_NORM_ERROR) && needed > len) {
+		if (needed >= G_MAXUINT16) {
+			/* Would not fit into the url */
+			uri->flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_UNNORMALISED;
+			return;
+		}
+
+		out = rspamd_mempool_alloc(pool, needed);
+		res = rspamd_normalise_unicode_to(data, len, out, needed, &out_len, &needed);
+	}
+
+	if (res & RSPAMD_UNICODE_NORM_UNNORMAL) {
+		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
+	if (res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
+		uri->flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+	}
+	if (res & RSPAMD_UNICODE_NORM_ERROR) {
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		return;
+	}
+
+	if (!rspamd_url_replace_field(pool, uri, field, out, out_len)) {
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+	}
+}
+
+/*
+ * A code point that cannot be in a host (WHATWG forbidden host code points).
+ * The host of a percent-encoded url is checked after decoding, as a browser
+ * refuses such a host.
+ */
+static inline bool
+is_forbidden_host_char(unsigned char c)
+{
+	switch (c) {
+	case '#':
+	case '/':
+	case ':':
+	case '<':
+	case '>':
+	case '?':
+	case '@':
+	case '[':
+	case '\\':
+	case ']':
+	case '^':
+	case '|':
+	case '%':
+		return true;
+	default:
+		return c <= 0x20 || c == 0x7f;
+	}
+}
+
+/*
+ * Cuts the host at its first forbidden code point: a lenient client resolves
+ * only what is before it. Returns FALSE if nothing is left.
+ */
+static bool
+rspamd_url_cut_forbidden_host(struct rspamd_url *uri)
+{
+	const char *host = rspamd_url_host_unsafe(uri);
+
+	if (uri->protocol == PROTOCOL_TELEPHONE ||
+		(uri->hostshift > 0 && uri->string[uri->hostshift - 1] == '[')) {
+		/* A phone number or a bracketed IPv6 literal */
+		return uri->hostlen > 0;
+	}
+
+	for (unsigned int i = 0; i < uri->hostlen; i++) {
+		if (is_forbidden_host_char(host[i])) {
+			uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+
+			if (i == 0) {
+				return false;
+			}
+
+			rspamd_url_shift(uri, i, UF_HOST);
+			break;
+		}
+	}
+
+	return uri->hostlen > 0;
+}
+
+/*
+ * Maps the host to the form a browser resolves (UTS #46 non-transitional
+ * processing, so `ß` and `ς` are kept) and strips the invisible characters.
+ * Labels without non-ASCII characters are left as they are, including the
+ * punycode ones.
+ */
+static enum uri_errno
+rspamd_url_idna_host(rspamd_mempool_t *pool, struct rspamd_url *uri)
+{
+	static UIDNA *uts46 = NULL;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (uts46 == NULL) {
+		uts46 = uidna_openUTS46(UIDNA_NONTRANSITIONAL_TO_ASCII |
+									UIDNA_NONTRANSITIONAL_TO_UNICODE,
+								&uc_err);
+
+		g_assert(U_SUCCESS(uc_err));
+	}
+
+	const char *host = rspamd_url_host_unsafe(uri);
+	gsize hostlen = uri->hostlen;
+	char *stripped = rspamd_mempool_alloc(pool, hostlen + 1);
+	gsize slen = 0;
+	int32_t pos = 0;
+	UChar32 prev_uc = 0;
+	bool pending_invisible = false, non_ascii = false;
+
+	/*
+	 * Strip invisible characters: the mapping drops only some of them and
+	 * rejects the rest, losing the whole URL
+	 */
+	while (pos < (int32_t) hostlen) {
+		int32_t cur = pos;
+		UChar32 uc;
+
+		U8_NEXT((const uint8_t *) host, pos, (int32_t) hostlen, uc);
+
+		if (uc >= 0x80 && is_invisible_host_char(uc)) {
+			if (is_suspicious_invisible_host_char(uc, prev_uc >= 0x80)) {
+				pending_invisible = true;
+			}
+			continue;
+		}
+
+		if (pending_invisible && uc != '.') {
+			/* Invisible characters inside the hostname, not before its final dot */
+			uri->flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+			pending_invisible = false;
+		}
+
+		prev_uc = uc;
+
+		if (uc < 0 || uc >= 0x80) {
+			non_ascii = true;
+		}
+
+		memcpy(stripped + slen, host + cur, pos - cur);
+		slen += pos - cur;
+	}
+
+	if (slen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
+
+	GString *res = g_string_sized_new(slen * 2 + 16);
+	const char *lab = stripped, *send = stripped + slen;
+
+	if (!non_ascii) {
+		g_string_append_len(res, stripped, slen);
+	}
+
+	while (non_ascii && lab <= send) {
+		const char *dot = memchr(lab, '.', send - lab);
+		const char *lend = dot ? dot : send;
+		bool ascii = true;
+
+		for (const char *q = lab; q < lend; q++) {
+			if ((unsigned char) *q >= 0x80) {
+				ascii = false;
+				break;
+			}
+		}
+
+		if (ascii) {
+			g_string_append_len(res, lab, lend - lab);
+		}
+		else {
+			UIDNAInfo info = UIDNA_INFO_INITIALIZER;
+			gsize start = res->len;
+			int32_t cap = (lend - lab) * 2 + 16, ret = 0;
+
+			for (int attempt = 0; attempt < 2; attempt++) {
+				g_string_set_size(res, start + cap);
+				uc_err = U_ZERO_ERROR;
+				info = (UIDNAInfo) UIDNA_INFO_INITIALIZER;
+				ret = uidna_labelToUnicodeUTF8(uts46, lab, lend - lab,
+											   res->str + start, cap, &info, &uc_err);
+
+				if (uc_err == U_BUFFER_OVERFLOW_ERROR) {
+					/* ICU tells the size it needs */
+					cap = ret + 1;
+					continue;
+				}
+
+				break;
+			}
+
+			if (U_FAILURE(uc_err) || ret < 0 || ret > cap ||
+				(info.errors & (UIDNA_ERROR_DISALLOWED | UIDNA_ERROR_PUNYCODE |
+								UIDNA_ERROR_INVALID_ACE_LABEL))) {
+				/* A browser refuses this label: keep it and flag the url */
+				uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				g_string_truncate(res, start);
+				g_string_append_len(res, lab, lend - lab);
+			}
+			else {
+				g_string_set_size(res, start + ret);
+			}
+		}
+
+		if (res->len >= G_MAXUINT16 || dot == NULL) {
+			break;
+		}
+
+		g_string_append_c(res, '.');
+		lab = dot + 1;
+	}
+
+	enum uri_errno rc = URI_ERRNO_OK;
+
+	if (res->len >= G_MAXUINT16 ||
+		!rspamd_url_replace_field(pool, uri, UF_HOST, res->str, res->len)) {
+		/* The mapped host does not fit, keep the stripped one */
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+
+		if (!rspamd_url_replace_field(pool, uri, UF_HOST, stripped, slen)) {
+			rc = URI_ERRNO_BAD_FORMAT;
+		}
+	}
+
+	g_string_free(res, TRUE);
+
+	return rc;
+}
+
 enum uri_errno
 rspamd_url_parse(struct rspamd_url *uri,
 				 char *uristring, gsize len,
@@ -2524,10 +3019,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 	unquoted_len = rspamd_url_decode(rspamd_url_host_unsafe(uri),
 									 rspamd_url_host_unsafe(uri), uri->hostlen);
 
-	rspamd_url_normalise_propagate_flags(pool, rspamd_url_host_unsafe(uri),
-										 &unquoted_len, uri->flags);
-
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+	rspamd_url_normalise_field(pool, uri, UF_HOST);
 
 	/*
 	 * URL-decoding the host can collapse it to nothing (e.g. a host that
@@ -2536,6 +3029,10 @@ rspamd_url_parse(struct rspamd_url *uri,
 	 * host out of the downstream host parsing.
 	 */
 	if (uri->hostlen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
+
+	if (!rspamd_url_cut_forbidden_host(uri)) {
 		return URI_ERRNO_HOST_MISSING;
 	}
 
@@ -2610,104 +3107,24 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 	}
 
-	/* Apply nameprep algorithm */
-	static UStringPrepProfile *nameprep = NULL;
-	UErrorCode uc_err = U_ZERO_ERROR;
+	/* Map the host to the name a browser resolves */
+	enum uri_errno idna_rc = rspamd_url_idna_host(pool, uri);
 
-	if (nameprep == NULL) {
-		/* Open and cache profile */
-		nameprep = usprep_openByType(USPREP_RFC3491_NAMEPREP, &uc_err);
-
-		g_assert(U_SUCCESS(uc_err));
+	if (idna_rc != URI_ERRNO_OK) {
+		return idna_rc;
 	}
 
-	UChar *utf16_hostname, *norm_utf16;
-	int32_t utf16_len, norm_utf16_len, norm_utf8_len;
-	UParseError parse_error;
-
-	utf16_hostname = rspamd_mempool_alloc(pool, uri->hostlen * sizeof(UChar));
-	struct UConverter *utf8_conv = rspamd_get_utf8_converter();
-
-	utf16_len = ucnv_toUChars(utf8_conv, utf16_hostname, uri->hostlen,
-							  rspamd_url_host_unsafe(uri), uri->hostlen, &uc_err);
-
-	if (!U_SUCCESS(uc_err)) {
-
-		return URI_ERRNO_BAD_FORMAT;
-	}
-
-	/*
-	 * Strip invisible characters: nameprep maps only some of them to nothing
-	 * and rejects the rest (e.g. U+2061 or tags), losing the whole URL.
-	 * The output capacity is kept, as nameprep can also expand a host.
-	 */
-	int32_t norm_capacity = utf16_len, src_pos = 0, dst_pos = 0;
-	UChar32 prev_uc = 0;
-	bool pending_invisible = false;
-
-	while (src_pos < utf16_len) {
-		int32_t cur_pos = src_pos;
-		UChar32 uc;
-
-		U16_NEXT(utf16_hostname, src_pos, utf16_len, uc);
-
-		if (uc >= 0x80 && is_invisible_host_char(uc)) {
-			if (is_suspicious_invisible_host_char(uc, prev_uc >= 0x80)) {
-				pending_invisible = true;
-			}
-			continue;
-		}
-
-		if (pending_invisible && uc != '.') {
-			/* Invisible characters inside the hostname, not before its final dot */
-			uri->flags |= RSPAMD_URL_FLAG_ZW_SPACES;
-			pending_invisible = false;
-		}
-
-		prev_uc = uc;
-
-		while (cur_pos < src_pos) {
-			utf16_hostname[dst_pos++] = utf16_hostname[cur_pos++];
-		}
-	}
-
-	utf16_len = dst_pos;
-
-	if (utf16_len == 0) {
+	if (!rspamd_url_cut_forbidden_host(uri)) {
 		return URI_ERRNO_HOST_MISSING;
 	}
-
-	norm_utf16 = rspamd_mempool_alloc(pool, norm_capacity * sizeof(UChar));
-	norm_utf16_len = usprep_prepare(nameprep, utf16_hostname, utf16_len,
-									norm_utf16, norm_capacity, USPREP_DEFAULT, &parse_error, &uc_err);
-
-	if (!U_SUCCESS(uc_err)) {
-
-		return URI_ERRNO_BAD_FORMAT;
-	}
-
-	/* Convert back to utf8, sigh... */
-	norm_utf8_len = ucnv_fromUChars(utf8_conv,
-									rspamd_url_host_unsafe(uri), uri->hostlen,
-									norm_utf16, norm_utf16_len, &uc_err);
-
-	if (!U_SUCCESS(uc_err)) {
-
-		return URI_ERRNO_BAD_FORMAT;
-	}
-
-	/* Final shift of lengths */
-	rspamd_url_shift(uri, norm_utf8_len, UF_HOST);
 
 	/* Process data part */
 	if (uri->datalen) {
 		unquoted_len = rspamd_url_decode(rspamd_url_data_unsafe(uri),
 										 rspamd_url_data_unsafe(uri), uri->datalen);
 
-		rspamd_url_normalise_propagate_flags(pool, rspamd_url_data_unsafe(uri),
-											 &unquoted_len, uri->flags);
-
 		rspamd_url_shift(uri, unquoted_len, UF_PATH);
+		rspamd_url_normalise_field(pool, uri, UF_PATH);
 		/* We now normalize path */
 		rspamd_normalize_path_inplace(rspamd_url_data_unsafe(uri),
 									  uri->datalen, &unquoted_len);
@@ -2719,9 +3136,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 rspamd_url_query_unsafe(uri),
 										 uri->querylen);
 
-		rspamd_url_normalise_propagate_flags(pool, rspamd_url_query_unsafe(uri),
-											 &unquoted_len, uri->flags);
 		rspamd_url_shift(uri, unquoted_len, UF_QUERY);
+		rspamd_url_normalise_field(pool, uri, UF_QUERY);
 	}
 
 	if (uri->fragmentlen) {
@@ -2729,9 +3145,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 rspamd_url_fragment_unsafe(uri),
 										 uri->fragmentlen);
 
-		rspamd_url_normalise_propagate_flags(pool, rspamd_url_fragment_unsafe(uri),
-											 &unquoted_len, uri->flags);
 		rspamd_url_shift(uri, unquoted_len, UF_FRAGMENT);
+		rspamd_url_normalise_field(pool, uri, UF_FRAGMENT);
 	}
 
 	rspamd_str_lc(uri->string, uri->protocollen);
