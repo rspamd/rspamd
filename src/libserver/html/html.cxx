@@ -2181,11 +2181,12 @@ html_process_img_tag(rspamd_mempool_t *pool,
 							}
 							else if (existing != img->url) {
 								/*
-								 * We have some other URL that could be
-								 * found, e.g. from another part. However,
-								 * we still want to set an image flag on it
+								 * The url is already known, e.g. as a link or
+								 * found in another part. The image flag means
+								 * that the url is seen only as an image source,
+								 * so it is not added to a known url
 								 */
-								existing->flags |= img->url->flags;
+								existing->flags |= img->url->flags & ~RSPAMD_URL_FLAG_IMAGE;
 								existing->count++;
 							}
 							else {
@@ -3754,6 +3755,8 @@ auto html_process_input(struct rspamd_task *task,
 			}
 			else {
 				href_url = maybe_existing;
+				/* A link is not an image-only url, whatever came first */
+				href_url->flags &= ~RSPAMD_URL_FLAG_IMAGE;
 				/* Replace extra as well */
 				tag->extra = maybe_existing;
 				/* Increase count to avoid odd checks failure */
@@ -5182,7 +5185,8 @@ auto html_process_input(struct rspamd_task *task,
 						return;
 					}
 					else if (existing != img_url) {
-						existing->flags |= img_url->flags;
+						/* A known url does not become an image-only one */
+						existing->flags |= img_url->flags & ~RSPAMD_URL_FLAG_IMAGE;
 						existing->count++;
 						img_url = existing;
 					}
