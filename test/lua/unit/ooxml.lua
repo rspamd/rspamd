@@ -70,7 +70,9 @@ context("OOXML package reader", function()
   test("rejects unsafe internal relationship targets", function()
     local invalid = {
       "../../outside.xml",
-      "/word/document.xml",
+      "//host/word/document.xml",
+      "/",
+      "/../outside.xml",
       "https://example.test/document.xml",
       "mailto:document.xml",
       "custom+scheme:document.xml",
@@ -88,6 +90,11 @@ context("OOXML package reader", function()
     end
   end)
 
+  test("resolves a target that is a part name from the package root", function()
+    assert_equal("word/document.xml", ooxml.resolve_part_name('', "/word/document.xml"))
+    assert_equal("word/media/a.png", ooxml.resolve_part_name('xl/worksheets/sheet1.xml', "/word/media/a.png"))
+  end)
+
   test("discovers the main and related Word story parts", function()
     local package, err = ooxml.open(make_package())
     assert_not_nil(package, err)
@@ -103,7 +110,8 @@ context("OOXML package reader", function()
         "https://example.test/login")
     assert_equal(package.relationships["word/header1.xml"].by_id["header-link"].target,
         "https://header.example.test/")
-    assert_equal(package.archive_entries, 21)
+    -- Every pass over the archive sees its seven entries: they count once
+    assert_equal(package.archive_entries, 7)
     assert_equal(package.relationship_count, 4)
     assert_equal(package.content_type_count, 4)
     assert_not_nil(package.xml_tokens)
@@ -118,17 +126,17 @@ context("OOXML package reader", function()
     assert_equal(package, nil)
     assert_not_nil(err:find("content type limit", 1, true))
 
-    package, err = ooxml.open(make_package(), { max_entries = 20 })
+    package, err = ooxml.open(make_package(), { max_entries = 6 })
     assert_equal(package, nil)
     assert_not_nil(err:find("archive extraction limit", 1, true))
   end)
 
   test("shares extraction budgets across packages", function()
     local state = {}
-    local package, err = ooxml.open(make_package(), { max_entries = 41 }, state)
+    local package, err = ooxml.open(make_package(), { max_entries = 13 }, state)
     assert_not_nil(package, err)
 
-    package, err = ooxml.open(make_package(), { max_entries = 41 }, state)
+    package, err = ooxml.open(make_package(), { max_entries = 13 }, state)
     assert_equal(package, nil)
     assert_not_nil(err:find("archive extraction limit", 1, true))
   end)

@@ -221,12 +221,14 @@ context("XLSX content extraction", function()
     local package, err = ooxml.open(make_package(), { max_parts = 8 })
     assert_not_nil(package, err)
     assert_equal(package.truncated, true)
-    assert_not_nil(package.parts["xl/worksheets/sheet1.xml"])
-    assert_equal(package.parts["xl/sharedStrings.xml"], nil)
+    -- The shared strings hold the text of all the cells, so they are picked
+    -- before the sheets
+    assert_not_nil(package.parts["xl/sharedStrings.xml"])
+    assert_equal(package.parts["xl/worksheets/sheet1.xml"], nil)
     local extracted
     extracted, err = xlsx.extract(package)
     assert_not_nil(extracted, err)
-    assert_not_nil(tostring(extracted.text):find("Inline cell", 1, true))
+    assert_not_nil(tostring(extracted.text):find("Invoice total", 1, true))
   end)
 
   test("keeps relationship-only indicator parts ahead of truncation", function()
