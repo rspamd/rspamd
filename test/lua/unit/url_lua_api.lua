@@ -237,4 +237,26 @@ context("Url lua api: sampling, options, link vs image", function()
       assert_true(r.images, "image url missing with images=true")
     end)
   end
+
+  test("a message over the urls limit says so", function()
+    local function limit_reached(body)
+      local msg = "From: a@example.com\r\nSubject: t\r\nMIME-Version: 1.0\r\n" ..
+          "Content-Type: text/plain; charset=utf-8\r\n\r\n" .. body .. "\r\n"
+      local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+      assert_true(res, "failed to load message")
+      task:process_message()
+      local var = task:get_mempool():get_variable("urls_limit_reached")
+      task:destroy()
+
+      return var
+    end
+
+    local junk = {}
+    for i = 1, 11000 do
+      junk[i] = "http://junk" .. i .. ".example.net/"
+    end
+
+    assert_equal("1", limit_reached(table.concat(junk, "\n")))
+    assert_nil(limit_reached("http://one.example.org/ http://two.example.org/"))
+  end)
 end)

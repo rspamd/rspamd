@@ -420,6 +420,14 @@ KHASH_DECLARE(rspamd_url_host_hash, struct rspamd_url *, char);
  * url is silently rejected when the set is already full
  * @return true if a new url has been added
  */
+/**
+ * Notes in the pool of a task that an url has not been taken, as the message
+ * has max_urls of them already: rules can read the variable
+ * `urls_limit_reached` to know that they do not see all the urls
+ * @return true if it is noted for the first time
+ */
+bool rspamd_url_note_limit_reached(rspamd_mempool_t *pool);
+
 bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
 									bool enforce_replace,

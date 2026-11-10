@@ -2178,6 +2178,7 @@ html_process_img_tag(rspamd_mempool_t *pool,
 
 							if (existing == nullptr) {
 								/* Too many urls in the set; do not track this one */
+								rspamd_url_note_limit_reached(pool);
 							}
 							else if (existing != img->url) {
 								/*
@@ -3741,6 +3742,7 @@ auto html_process_input(struct rspamd_task *task,
 				rspamd_url_set_add_or_return(url_set, maybe_url.value(), max_urls);
 			if (maybe_existing == nullptr) {
 				/* Too many urls in the message; do not track this one */
+				rspamd_url_note_limit_reached(pool);
 				href_url = nullptr;
 			}
 			else if (maybe_existing == maybe_url.value()) {
@@ -3791,6 +3793,8 @@ auto html_process_input(struct rspamd_task *task,
 
 			if (url_set != NULL && max_urls > 0 && kh_size(url_set) >= max_urls) {
 				/* Too many urls in the message: a new one would not be tracked */
+				rspamd_url_note_limit_reached(pool);
+
 				return nullptr;
 			}
 		}

@@ -4637,9 +4637,12 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	/* Also check max urls */
 	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
 		if (kh_size(MESSAGE_FIELD(task, urls)) >= cbd->task->cfg->max_urls) {
-			msg_err_task("part has too many URLs, we cannot process more: "
-						 "%d urls extracted ",
-						 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+			/* Once for a message: each of its remaining urls gets here */
+			if (rspamd_url_note_limit_reached(task->task_pool)) {
+				msg_err_task("message has too many URLs, we cannot process more: "
+							 "%d urls extracted ",
+							 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+			}
 
 			return FALSE;
 		}
@@ -4702,9 +4705,12 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 	/* Also check max urls */
 	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
 		if (kh_size(MESSAGE_FIELD(task, urls)) >= cbd->task->cfg->max_urls) {
-			msg_err_task("part has too many URLs, we cannot process more: "
-						 "%d urls extracted ",
-						 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+			/* Once for a message: each of its remaining urls gets here */
+			if (rspamd_url_note_limit_reached(task->task_pool)) {
+				msg_err_task("message has too many URLs, we cannot process more: "
+							 "%d urls extracted ",
+							 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+			}
 
 			return FALSE;
 		}
@@ -5494,6 +5500,19 @@ rspamd_url_protocol_from_string(const char *str)
 	return ret;
 }
 
+
+bool rspamd_url_note_limit_reached(rspamd_mempool_t *pool)
+{
+	if (pool == NULL ||
+		rspamd_mempool_get_variable(pool, RSPAMD_MEMPOOL_URLS_LIMIT_REACHED) != NULL) {
+		return false;
+	}
+
+	rspamd_mempool_set_variable(pool, RSPAMD_MEMPOOL_URLS_LIMIT_REACHED,
+								(gpointer) "1", NULL);
+
+	return true;
+}
 
 bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
