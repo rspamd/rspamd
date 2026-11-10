@@ -1387,55 +1387,84 @@ lua_url_get_part_order(lua_State *L)
 	return 1;
 }
 
-void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
+gboolean
+lua_url_cbdata_match(const struct lua_tree_cb_data *cb,
+					 const struct rspamd_url *url)
+{
+	if ((url->protocol & cb->protocols_mask) != url->protocol) {
+		return FALSE;
+	}
+
+	/* Handle different flags application logic */
+	switch (cb->flags_mode) {
+	case url_flags_mode_include_any:
+		if (url->flags != (url->flags & cb->flags_mask)) {
+			return FALSE;
+		}
+		break;
+	case url_flags_mode_include_explicit:
+		if ((url->flags & cb->flags_mask) != cb->flags_mask) {
+			return FALSE;
+		}
+		break;
+	case url_flags_mode_exclude_include:
+		if ((url->flags & cb->flags_exclude_mask) != 0) {
+			return FALSE;
+		}
+		/*
+		 * `flags_mask` is set to ~0U when no include list has been given,
+		 * meaning "include everything". A plain bitwise test would still
+		 * drop urls that carry no flags at all (e.g. urls found in html
+		 * parts), so only apply the include filter when one was requested.
+		 */
+		if (cb->flags_mask != ~0U && (url->flags & cb->flags_mask) == 0) {
+			return FALSE;
+		}
+		break;
+	}
+
+	return TRUE;
+}
+
+gboolean
+lua_url_cbdata_sample_take(struct lua_tree_cb_data *cb)
+{
+	if (cb->sample_total == 0) {
+		/* Sampling is off */
+		return TRUE;
+	}
+
+	/* Selection sampling: exactly `sample_pick` urls are taken */
+	double coin = rspamd_random_double_fast_seed(&cb->random_seed);
+	gboolean take = coin * (double) cb->sample_total < (double) cb->sample_pick;
+
+	cb->sample_total--;
+
+	if (take) {
+		cb->sample_pick--;
+	}
+
+	return take;
+}
+
+void lua_url_cbdata_push(struct lua_tree_cb_data *cb, struct rspamd_url *url)
 {
 	struct rspamd_lua_url *lua_url;
+
+	lua_url = lua_newuserdata(cb->L, sizeof(struct rspamd_lua_url));
+	lua_pushvalue(cb->L, cb->metatable_pos);
+	lua_setmetatable(cb->L, -2);
+	lua_url->url = url;
+	lua_rawseti(cb->L, -2, cb->i++);
+}
+
+void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
+{
 	struct rspamd_url *url = (struct rspamd_url *) value;
 	struct lua_tree_cb_data *cb = ud;
 
-	if ((url->protocol & cb->protocols_mask) == url->protocol) {
-
-		/* Handle different flags application logic */
-		switch (cb->flags_mode) {
-		case url_flags_mode_include_any:
-			if (url->flags != (url->flags & cb->flags_mask)) {
-				return;
-			}
-			break;
-		case url_flags_mode_include_explicit:
-			if ((url->flags & cb->flags_mask) != cb->flags_mask) {
-				return;
-			}
-			break;
-		case url_flags_mode_exclude_include:
-			if ((url->flags & cb->flags_exclude_mask) != 0) {
-				return;
-			}
-			/*
-			 * `flags_mask` is set to ~0U when no include list has been given,
-			 * meaning "include everything". A plain bitwise test would still
-			 * drop urls that carry no flags at all (e.g. urls found in html
-			 * parts), so only apply the include filter when one was requested.
-			 */
-			if (cb->flags_mask != ~0U && (url->flags & cb->flags_mask) == 0) {
-				return;
-			}
-			break;
-		}
-
-		if (cb->skip_prob > 0) {
-			double coin = rspamd_random_double_fast_seed(&cb->random_seed);
-
-			if (coin < cb->skip_prob) {
-				return;
-			}
-		}
-
-		lua_url = lua_newuserdata(cb->L, sizeof(struct rspamd_lua_url));
-		lua_pushvalue(cb->L, cb->metatable_pos);
-		lua_setmetatable(cb->L, -2);
-		lua_url->url = url;
-		lua_rawseti(cb->L, -2, cb->i++);
+	if (lua_url_cbdata_match(cb, url) && lua_url_cbdata_sample_take(cb)) {
+		lua_url_cbdata_push(cb, url);
 	}
 }
 
@@ -1463,7 +1492,7 @@ lua_url_cbdata_fill(lua_State *L,
 		}
 	}
 	else if (pos_arg_type == LUA_TTABLE) {
-		if (rspamd_lua_geti(L, 1, pos) == LUA_TNIL) {
+		if (rspamd_lua_geti(L, pos, 1) == LUA_TNIL) {
 			/* New method: indexed table */
 
 			lua_getfield(L, pos, "flags");
@@ -1587,7 +1616,7 @@ lua_url_cbdata_fill(lua_State *L,
 
 			lua_getfield(L, pos, "sort");
 			if (lua_isboolean(L, -1)) {
-				cbd->sort = TRUE;
+				cbd->sort = lua_toboolean(L, -1);
 			}
 			lua_pop(L, 1);
 		}
@@ -1798,22 +1827,30 @@ void lua_url_cbdata_dtor(struct lua_tree_cb_data *cbd)
 gsize lua_url_adjust_skip_prob(float timestamp,
 							   unsigned char digest[16],
 							   struct lua_tree_cb_data *cb,
-							   gsize sz)
+							   gsize matched)
 {
-	if (cb->max_urls > 0 && sz > cb->max_urls) {
-		cb->skip_prob = 1.0 - ((double) cb->max_urls) / (double) sz;
+	cb->sample_total = 0;
+	cb->sample_pick = 0;
+
+	if (cb->max_urls > 0 && matched > cb->max_urls) {
+		unsigned char buf[16 + sizeof(float)];
+
 		/*
-		 * Use task dependent probabilistic seed to ensure that
-		 * consequent task:get_urls return the same list of urls
-		 * We use both digest and timestamp here to avoid attack surface
-		 * based just on digest.
+		 * The seed depends on the task (digest and timestamp), so that
+		 * consequent calls with the same options return the same list of
+		 * urls, and on a per process secret, so that a sender cannot compute
+		 * which urls are going to be dropped.
 		 */
-		memcpy(&cb->random_seed, digest, 4);
-		memcpy(((unsigned char *) &cb->random_seed) + 4, &timestamp, 4);
-		sz = cb->max_urls;
+		memcpy(buf, digest, 16);
+		memcpy(buf + 16, &timestamp, sizeof(float));
+		cb->random_seed = rspamd_cryptobox_fast_hash(buf, sizeof(buf),
+													 rspamd_hash_seed_secure());
+		cb->sample_total = matched;
+		cb->sample_pick = cb->max_urls;
+		matched = cb->max_urls;
 	}
 
-	return sz;
+	return matched;
 }
 
 static int
@@ -1841,7 +1878,7 @@ lua_url_lt(lua_State *L)
 						  *u2 = lua_check_url(L, 2);
 
 	if (u1 && u2) {
-		lua_pushinteger(L, rspamd_url_cmp(u1->url, u2->url));
+		lua_pushboolean(L, rspamd_url_cmp(u1->url, u2->url) < 0);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
