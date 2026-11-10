@@ -758,9 +758,21 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
 	}
 	lua_pop(L, 1);
 
+	gboolean ignore_case = FALSE;
+
+	lua_getfield(L, opts_idx, "ignore_case");
+	ignore_case = lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
 	lua_getfield(L, opts_idx, "files");
 	if (lua_istable(L, -1)) {
-		lim->files = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+		if (ignore_case) {
+			lim->files = g_hash_table_new_full(rspamd_strcase_hash, rspamd_strcase_equal,
+											   g_free, NULL);
+		}
+		else {
+			lim->files = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+		}
 		lua_pushnil(L);
 		while (lua_next(L, -2) != 0) {
 			const char *name = NULL;
@@ -813,6 +825,7 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  *  - max_ratio: per-member max uncompressed/compressed ratio (members exceeding it are dropped)
  *  - end_timestamp: absolute rspamd_get_ticks() deadline
  *  - files: array or set of exact member names to extract (unselected members are skipped)
+ *  - ignore_case: `true` to match the names in `files` without regard to the case of ASCII letters
  *  - filters: `false` to refuse an archive that is wrapped into a compressed stream
  *    (gzip, xz and so on), whose members cannot be skipped without decompressing all of it
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
