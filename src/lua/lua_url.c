@@ -66,6 +66,7 @@ LUA_FUNCTION_DEF(url, is_obscured);
 LUA_FUNCTION_DEF(url, is_html_displayed);
 LUA_FUNCTION_DEF(url, is_subject);
 LUA_FUNCTION_DEF(url, get_phished);
+LUA_FUNCTION_DEF(url, get_redirected);
 LUA_FUNCTION_DEF(url, set_redirected);
 LUA_FUNCTION_DEF(url, get_count);
 LUA_FUNCTION_DEF(url, get_query_embedded_urls);
@@ -113,7 +114,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_order),
 	LUA_INTERFACE_DEF(url, get_part_order),
 	LUA_INTERFACE_DEF(url, to_http),
-	{"get_redirected", lua_url_get_phished},
+	LUA_INTERFACE_DEF(url, get_redirected),
 	LUA_INTERFACE_DEF(url, set_redirected),
 	{"__tostring", lua_url_tostring},
 	{"__eq", lua_url_eq},
@@ -671,33 +672,56 @@ lua_url_is_subject(lua_State *L)
 	return 1;
 }
 
-/***
- * @method url:get_phished()
- * Get another URL that pretends to be this URL (e.g. used in phishing)
- * @return {url} phished URL
+/*
+ * The url shown for a link and the target of a redirect share one slot of
+ * an url, and the flags tell what it holds; a redirect set later replaces
+ * the shown url
  */
 static int
-lua_url_get_phished(lua_State *L)
+lua_url_push_linked(lua_State *L, struct rspamd_lua_url *url, bool redirected)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_lua_url *purl, *url = lua_check_url(L, 1);
+	if (url && url->url && url->url->ext && url->url->ext->linked_url != NULL) {
+		bool is_redirected = !!(url->url->flags & RSPAMD_URL_FLAG_REDIRECTED);
+		bool is_phished = !!(url->url->flags & RSPAMD_URL_FLAG_PHISHED);
 
-	if (url) {
-		if (url->url->ext && url->url->ext->linked_url != NULL) {
-			/* XXX: in fact, this is the only possible combination of flags, so this check is redundant */
-			if (url->url->flags &
-				(RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_REDIRECTED)) {
-				purl = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-				rspamd_lua_setclass(L, rspamd_url_classname, -1);
-				purl->url = url->url->ext->linked_url;
+		if (redirected ? is_redirected : (is_phished && !is_redirected)) {
+			struct rspamd_lua_url *purl = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
 
-				return 1;
-			}
+			rspamd_lua_setclass(L, rspamd_url_classname, -1);
+			purl->url = url->url->ext->linked_url;
+
+			return 1;
 		}
 	}
 
 	lua_pushnil(L);
 	return 1;
+}
+
+/***
+ * @method url:get_phished()
+ * Get another URL that pretends to be this URL (e.g. used in phishing)
+ * @return {url} phished URL, or nil if the url is not phished or is redirected
+ */
+static int
+lua_url_get_phished(lua_State *L)
+{
+	LUA_TRACE_POINT;
+
+	return lua_url_push_linked(L, lua_check_url(L, 1), false);
+}
+
+/***
+ * @method url:get_redirected()
+ * Get the URL that this URL redirects to
+ * @return {url} target of the redirect, or nil if the url is not redirected
+ */
+static int
+lua_url_get_redirected(lua_State *L)
+{
+	LUA_TRACE_POINT;
+
+	return lua_url_push_linked(L, lua_check_url(L, 1), true);
 }
 
 /***
