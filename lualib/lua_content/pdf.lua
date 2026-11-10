@@ -32,34 +32,39 @@ local lpeg = require "lpeg"
 local pdf_patterns = {
   trailer = {
     patterns = {
-      [[\ntrailer\r?\n]]
+      [=[[\r\n]trailer[\s<]]=]
     }
   },
   suspicious = {
     patterns = {
       [[netsh\s]],
       [[echo\s]],
-      [=[\/[A-Za-z]*#\d\d[#A-Za-z<>/\s]]=], -- Hex encode obfuscation
+      [=[\/[A-Za-z]*#[0-9A-Fa-f]{2}[#A-Za-z<>/\s]]=], -- Hex encode obfuscation
     }
   },
   start_object = {
     patterns = {
-      [=[[\r\n\0]\s*\d+\s+\d+\s+obj[\s<]]=]
+      -- Objects are separated by any white space, not only by a line end, and
+      -- whatever starts the object can follow the keyword at once
+      -- The CRLF alternative is for the regexp fallback of the matcher, which
+      -- never starts a match between the two bytes of a line end
+      [=[(?:\r\n|[\s\0>\]])\d+\s+\d+\s+obj\b]=]
     }
   },
   end_object = {
     patterns = {
-      [=[endobj[\r\n]]=]
+      [=[endobj\b]=]
     }
   },
   start_stream = {
     patterns = {
-      [=[>\s*stream[\r\n]]=],
+      -- Blanks before the line end are skipped by readers
+      [=[>\s*stream[ \t\f\0]*[\r\n]]=],
     }
   },
   end_stream = {
     patterns = {
-      [=[endstream[\r\n]]=]
+      [=[endstream\b]=]
     }
   }
 }
@@ -99,7 +104,9 @@ local config = {
   -- binding enforces the limit exactly now, so the knob states the ceiling that
   -- streams have been decoded under for years
   max_extraction_size = 1024 * 1024,
-  max_processing_size = 32 * 1024,
+  -- What a grammar is run over. The work is linear, so this bounds a single
+  -- object and not the file: a dictionary padded past it is not looked at
+  max_processing_size = 256 * 1024,
   text_extraction = true,
   url_extraction = true,
   enabled = true,
@@ -189,46 +196,53 @@ local function generic_grammar_elts()
 
   -- Helper functions
   local function pdf_hexstring_unescape(s)
-    local res
-    if #s % 2 == 0 then
-      -- Sane hex string
-      res = lua_util.unhex(s)
-    else
-      -- WTF hex string
-      -- Append '0' to it and unescape...
-      res = lua_util.unhex(s:sub(1, #s - 1)) .. lua_util.unhex((s:sub(#s) .. '0'))
+    -- White space is allowed between the digits
+    if s:find('%s') or s:find('%z') then
+      s = s:gsub('[%s%z]', '')
+    end
+    if #s % 2 == 1 then
+      -- The last digit of an odd run stands for a high nibble
+      s = s .. '0'
     end
 
-    return res
+    return (lua_util.unhex(s))
   end
 
-  local function pdf_string_unescape(s)
-    local function ue_single(cc)
-      if cc == '\\r' then
-        return '\r'
-      elseif cc == '\\n' then
-        return '\n'
-      else
-        return cc:gsub(2, 2)
-      end
-    end
-    -- simple unescape \char
-    s = s:gsub('\\[^%d]', ue_single)
-    -- unescape octal
-    local function ue_octal(cc)
-      -- Replace unknown stuff with '?'
-      -- A value over 255 loses its high order bits, as in a reader
-      local code = tonumber(cc:sub(2), 8)
-      return string.char(code and code % 256 or 63)
-    end
-    s = s:gsub('\\%d%d?%d?', ue_octal)
+  local simple_escapes = {
+    n = '\n', r = '\r', t = '\t', b = '\b', f = '\f',
+    -- A backslash at the end of a line continues the string
+    ['\n'] = '', ['\r'] = '',
+  }
 
-    return s
+  local function pdf_string_unescape(s)
+    if not s:find('\\', 1, true) then
+      return s
+    end
+
+    if s:find('\\\r\n', 1, true) then
+      s = s:gsub('\\\r\n', '')
+    end
+
+    -- One pass, so that an escaped backslash is not read again: a backslash,
+    -- the character after it and up to two more digits of an octal code
+    return (s:gsub('\\(.?)([0-7]?[0-7]?)', function(c, more)
+      if c:find('^[0-7]$') then
+        -- A value over 255 loses its high order bits, as in a reader
+        return string.char(tonumber(c .. more, 8) % 256)
+      end
+
+      -- A backslash before any other character is dropped
+      return (simple_escapes[c] or c) .. more
+    end))
   end
 
   local function pdf_id_unescape(s)
-    return (s:gsub('#%d%d', function(cc)
-      return string.char(tonumber(cc:sub(2), 16))
+    if not s:find('#', 1, true) then
+      return s
+    end
+
+    return (s:gsub('#(%x%x)', function(cc)
+      return string.char(tonumber(cc, 16))
     end))
   end
 
@@ -248,16 +262,22 @@ local function generic_grammar_elts()
 
   -- String
   grammar_elts.str = P { "(" * C(((1 - S "()\\") + (P '\\' * 1) + V(1)) ^ 0) / pdf_string_unescape * ")" }
-  grammar_elts.hexstr = P { "<" * C(hex ^ 0) / pdf_hexstring_unescape * ">" }
+  grammar_elts.hexstr = P { "<" * C((hex + grammar_elts.ws) ^ 0) / pdf_hexstring_unescape * ">" }
 
   -- Identifier
-  grammar_elts.id = P { '/' * C((1 - (delim + grammar_elts.ws)) ^ 1) / pdf_id_unescape }
+  local regular = 1 - (delim + grammar_elts.ws)
+  -- The empty name is a valid one
+  grammar_elts.id = P { '/' * C(regular ^ 0) / pdf_id_unescape }
 
-  -- Booleans (who care about them?)
-  grammar_elts.boolean = C(P("true") + P("false"))
+  -- Booleans (who care about them?) and null. Any other bare word is not a
+  -- part of the syntax, but it must not cost the dictionary around it
+  grammar_elts.regular = regular
+  grammar_elts.boolean = C((P("true") + P("false") + P("null")) * -regular)
+  grammar_elts.keyword = C(regular ^ 1)
 
-  -- Stupid references
-  grammar_elts.ref = lpeg.Ct { lpeg.Cc(pdf_ref_marker) * C(D ^ 1) * " " * C(D ^ 1) * " " * "R" }
+  -- Stupid references: any white space separates the parts
+  grammar_elts.ref = lpeg.Ct { lpeg.Cc(pdf_ref_marker) * C(D ^ 1) * grammar_elts.ws ^ 1 *
+      C(D ^ 1) * grammar_elts.ws ^ 1 * "R" * -regular }
 
   return grammar_elts
 end
@@ -267,15 +287,18 @@ end
 local function gen_outer_grammar()
   local V = lpeg.V
   local gen = generic_grammar_elts()
+  -- A comment is white space wherever it stands, between a key and its value
+  -- as well
+  local sp = (gen.ws + gen.comment) ^ 0
 
   return lpeg.P {
     "EXPR";
     EXPR = gen.ws ^ 0 * V("ELT") ^ 0 * gen.ws ^ 0,
     ELT = V("ARRAY") + V("DICT") + V("ATOM"),
     ATOM = gen.ws ^ 0 * (gen.comment + gen.boolean + gen.ref +
-        gen.number + V("STRING") + gen.id) * gen.ws ^ 0,
-    DICT = "<<" * gen.ws ^ 0 * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR") ^ 0, rawset) * gen.ws ^ 0 * ">>",
-    KV_PAIR = lpeg.Cg(gen.id * gen.ws ^ 0 * V("ELT") * gen.ws ^ 0),
+        gen.number * -gen.regular + V("STRING") + gen.id + gen.keyword) * gen.ws ^ 0,
+    DICT = "<<" * sp * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR") ^ 0, rawset) * sp * ">>",
+    KV_PAIR = lpeg.Cg(gen.id * sp * V("ELT") * sp),
     ARRAY = "[" * gen.ws ^ 0 * lpeg.Ct(V("ELT") ^ 0) * gen.ws ^ 0 * "]",
     STRING = lpeg.P { gen.str + gen.hexstr },
   }
@@ -566,7 +589,8 @@ local function apply_pdf_filter(input, filt)
   end
 
   if filt == 'FlateDecode' or filt == 'Fl' then
-    return rspamd_util.inflate(input, config.max_extraction_size)
+    -- The second value tells what is wrong with the data
+    return (rspamd_util.inflate(input, config.max_extraction_size))
   elseif filt == 'ASCIIHexDecode' or filt == 'AHx' then
     if #input > config.max_extraction_size * 2 + 1024 then
       -- Cannot decode into what a stream is allowed to be
@@ -589,7 +613,7 @@ local function apply_pdf_filter(input, filt)
     end
     return (lua_util.unhex(to_decode))
   elseif filt == 'ASCII85Decode' or filt == 'A85' then
-    return rspamd_util.decode_ascii85(input)
+    return rspamd_util.decode_ascii85(input, config.max_extraction_size)
   end
 
   return nil
@@ -625,6 +649,7 @@ local function maybe_apply_filter(dict, data, pdf, task)
         if decode_params.Predictor then
           local predictor = tonumber(decode_params.Predictor) or 1
           if predictor > 1 then
+            pdf.flags.undecoded_streams = (pdf.flags.undecoded_streams or 0) + 1
             return nil, 'predictor exists: ' .. tostring(predictor)
           end
         end
@@ -644,6 +669,7 @@ local function maybe_apply_filter(dict, data, pdf, task)
         -- Every stage is charged: the output of each one is allocated
         pdf.decoded_size = pdf.decoded_size + #next_uncompressed
       else
+        pdf.flags.undecoded_streams = (pdf.flags.undecoded_streams or 0) + 1
         return nil, 'filter failed: ' .. tostring(f)
       end
     end
@@ -689,9 +715,31 @@ local function maybe_extract_object_stream(obj, pdf, task)
   if dict.Length then
     local decl_len = maybe_dereference_object(dict.Length, pdf, task)
     if decl_len then
-      local nlen = tonumber(decl_len)
-      if nlen then
-        len = math.min(len, nlen)
+      local nlen = type(decl_len) ~= 'table' and tonumber(decl_len)
+      if nlen and nlen > 0 and nlen < len then
+        -- The stream ends at `endstream`. A declared length is taken only if
+        -- it ends there too, give or take the line end before the keyword:
+        -- a reader that finds no keyword at the declared length looks for
+        -- the keyword, so a short length would hide the rest of the data
+        local honest = len - nlen <= 2
+
+        if honest then
+          for i = nlen + 1, len do
+            local b = obj.stream.data:byte(i)
+
+            if b ~= 13 and b ~= 10 then
+              honest = false
+              break
+            end
+          end
+        end
+
+        if honest then
+          len = nlen
+        else
+          lua_util.debugm(N, task, 'object %s:%s declares a stream of %s bytes, but it has %s',
+              obj.major, obj.minor, nlen, len)
+        end
       end
     end
   end
@@ -766,10 +814,12 @@ local function parse_object_grammar(obj, task, pdf)
         end
       end
     else
+      pdf.flags.unparsed_objects = (pdf.flags.unparsed_objects or 0) + 1
       lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
           obj.major, obj.minor, obj_or_err)
     end
   else
+    pdf.flags.unparsed_objects = (pdf.flags.unparsed_objects or 0) + 1
     lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
         obj.major, obj.minor, obj_dict_span:len())
   end
@@ -796,8 +846,9 @@ local function process_font(task, pdf, font, fname)
 end
 --]]
 
--- Forward declaration
+-- Forward declarations
 local process_dict
+local process_inline_action
 
 -- This function processes javascript string and returns JS hash and JS rspamd_text
 local function process_javascript(task, pdf, js, obj)
@@ -837,8 +888,8 @@ end
 
 -- Extract interesting stuff from /Action, e.g. javascript
 local function process_action(task, pdf, obj)
-  if not (obj.js or obj.launch) and (obj.dict and obj.dict.JS) then
-    local js = maybe_dereference_object(obj.dict.JS, pdf, task)
+  if not (obj.js or obj.launch) and (obj.dict and (obj.dict.JS or obj.dict.F)) then
+    local js = obj.dict.JS and maybe_dereference_object(obj.dict.JS, pdf, task)
 
     if js then
       if type(js) == 'table' then
@@ -861,8 +912,17 @@ local function process_action(task, pdf, obj)
         lua_util.debugm(N, task, 'invalid type for JavaScript from %s:%s: %s',
             obj.major, obj.minor, js)
       end
-    elseif obj.dict.F then
-      local launch = maybe_dereference_object(obj.dict.F, pdf, task)
+    elseif obj.dict.S == 'Launch' and (obj.dict.F or obj.dict.Win) then
+      -- The application is a file specification: a string, or a dictionary
+      -- that names the file, also inside of the parameters for Windows
+      local launch = maybe_dereference_object(obj.dict.F or obj.dict.Win, pdf, task)
+
+      for _ = 1, 2 do
+        if type(launch) == 'table' and launch[1] ~= pdf_ref_marker then
+          local spec = launch.dict or launch
+          launch = maybe_dereference_object(spec.F or spec.UF, pdf, task)
+        end
+      end
 
       if launch then
         if type(launch) == 'string' then
@@ -894,6 +954,11 @@ local function process_catalog(task, pdf, obj)
     if obj.dict.OpenAction then
       local action = maybe_dereference_object(obj.dict.OpenAction, pdf, task)
 
+      if action and type(action) == 'table' and not action.dict and not action.major then
+        -- Written in place: a dictionary, or an array for a destination
+        action = process_inline_action(task, pdf, obj, action, 1)
+      end
+
       if action and type(action) == 'table' then
         -- This also processes action js (if not already processed)
         process_dict(task, pdf, action, action.dict)
@@ -901,11 +966,13 @@ local function process_catalog(task, pdf, obj)
           lua_util.debugm(N, task, 'found openaction JS in %s:%s: %s',
               obj.major, obj.minor, action.js)
           pdf.openaction = action.js
+          pdf.has_openaction = true
           action.js.object = obj
         elseif action.launch then
           lua_util.debugm(N, task, 'found openaction launch in %s:%s: %s',
               obj.major, obj.minor, action.launch)
           pdf.launch = action.launch
+          pdf.has_openaction = true
         else
           lua_util.debugm(N, task, 'no JS in openaction %s:%s: %s',
               obj.major, obj.minor, action)
@@ -932,8 +999,82 @@ local function process_xref(task, pdf, obj)
   end
 end
 
+-- An action can be written in place, as a dictionary inside of the object
+-- that triggers it, and not only as an object of its own: the catalog
+-- (/OpenAction), a page or an annotation (/A), and the additional actions of
+-- any of them (/AA, a dictionary of actions by event)
+process_inline_action = function(task, pdf, obj, value, depth)
+  local action = maybe_dereference_object(value, pdf, task)
+
+  if type(action) ~= 'table' or action[1] == pdf_ref_marker then
+    return nil
+  end
+
+  if action.dict or action.major then
+    -- An object: the loop over the objects deals with it
+    return action
+  end
+
+  if not action.S then
+    return nil
+  end
+
+  -- Looks like an object for the code that processes actions
+  local wrapper = {
+    major = obj.major,
+    minor = obj.minor,
+    dict = action,
+  }
+
+  process_dict(task, pdf, wrapper, action)
+
+  if action.Next and depth < 4 then
+    -- A chain of actions: one or an array of them
+    local next_action = maybe_dereference_object(action.Next, pdf, task)
+
+    if type(next_action) == 'table' and not next_action.dict and not next_action.major then
+      if next_action.S then
+        process_inline_action(task, pdf, obj, next_action, depth + 1)
+      else
+        for i = 1, math.min(#next_action, 16) do
+          process_inline_action(task, pdf, obj, next_action[i], depth + 1)
+        end
+      end
+    end
+  end
+
+  return wrapper
+end
+
+local function process_inline_actions(task, pdf, obj, dict)
+  if dict.A then
+    process_inline_action(task, pdf, obj, dict.A, 1)
+  end
+
+  local additional = dict.AA and maybe_dereference_object(dict.AA, pdf, task)
+
+  if type(additional) == 'table' then
+    additional = additional.dict or additional
+
+    local n = 0
+
+    for _, v in pairs(additional) do
+      n = n + 1
+      if n > 32 then
+        break
+      end
+      process_inline_action(task, pdf, obj, v, 1)
+    end
+  end
+end
+
 process_dict = function(task, pdf, obj, dict)
   if not obj.type and type(dict) == 'table' then
+    if (dict.A or dict.AA) and not obj.inline_actions_done then
+      obj.inline_actions_done = true
+      process_inline_actions(task, pdf, obj, dict)
+    end
+
     if dict.Type and type(dict.Type) == 'string' then
       -- Common stuff
       obj.type = dict.Type
@@ -941,7 +1082,10 @@ process_dict = function(task, pdf, obj, dict)
 
     if not obj.type then
       -- Defensive: check obj.dict exists before accessing its fields
-      if obj.dict and type(obj.dict) == 'table' and obj.dict.S and obj.dict.JS then
+      if obj.dict and type(obj.dict) == 'table' and obj.dict.S == 'Launch' and obj.dict.F then
+        -- An action without a type of its own, as the ones written in place
+        obj.type = 'Action'
+      elseif obj.dict and type(obj.dict) == 'table' and obj.dict.S and obj.dict.JS then
         obj.type = 'Javascript'
         lua_util.debugm(N, task, 'implicit type for JavaScript object %s:%s',
             obj.major, obj.minor)
@@ -966,8 +1110,15 @@ process_dict = function(task, pdf, obj, dict)
         local cobj = maybe_dereference_object(c, pdf, task)
         if cobj and type(cobj) == 'table' then
           obj.contents[#obj.contents + 1] = cobj
-          cobj.parent = obj
-          cobj.type = 'content'
+          -- Only a stream without a type of its own is content and nothing
+          -- else. A reader takes no content from an object that is not a
+          -- stream, so a page that names an action or a catalog here must not
+          -- stop that object from being looked at
+          if cobj.stream and not cobj.type and
+              not (type(cobj.dict) == 'table' and cobj.dict.Type) then
+            cobj.parent = obj
+            cobj.type = 'content'
+          end
         end
       end
 
@@ -1240,6 +1391,115 @@ local function extract_pdf_compound_objects(task, pdf)
   end
 end
 
+-- The data of a stream is opaque, and whatever looks like a marker in it is
+-- not one. A stream whose dictionary gives its length as a number, with
+-- `endstream` found right where that length ends, is known for certain, so the
+-- markers inside of it are dropped before the objects are paired: a line with
+-- `endobj` in the data would otherwise end the object in the middle of its
+-- stream, and one with `1 0 obj` would start an object that is not there.
+-- A length given by a reference is not resolved at this point, and such a
+-- stream is left to the pairing of the markers, as before
+local stream_length_re = rspamd_regexp.create_cached([=[/\/Length\s+(\d+)\b(?!\s+\d+\s+R\b)/]=])
+
+local function drop_markers_in_streams(task, input, pdf)
+  local starts = pdf.start_streams
+
+  if not starts or #starts == 0 then
+    return
+  end
+
+  local ranges = {}
+  local nranges = 0
+  local prev_end = 0
+  local input_len = #input
+
+  for i, sp in ipairs(starts) do
+    if i % 256 == 0 and pdf_deadline_exceeded(pdf) then
+      return
+    end
+
+    -- A `stream` keyword inside of a known stream is data as well
+    if sp > prev_end then
+      local window_start = math.max(1, sp - 1024, prev_end + 1)
+      local matches = stream_length_re:search(input:span(window_start, sp - window_start + 1), true, true)
+
+      if matches and matches[1] then
+        local declared = tonumber(tostring(matches[#matches][2]))
+        -- The keyword is followed by CRLF or by LF, and the pattern ends at
+        -- the first byte of that
+        local data_start = sp + 1
+
+        if input:byte(sp) == 13 and input:byte(sp + 1) == 10 then
+          data_start = sp + 2
+        end
+
+        if declared and declared > 0 and data_start + declared + 8 <= input_len then
+          local after = data_start + declared
+
+          -- An end of line may stand before the keyword
+          for _ = 1, 2 do
+            local b = input:byte(after)
+
+            if b ~= 13 and b ~= 10 then
+              break
+            end
+
+            after = after + 1
+          end
+
+          if after + 8 <= input_len and tostring(input:span(after, 9)) == 'endstream' then
+            nranges = nranges + 1
+            ranges[nranges] = { data_start, data_start + declared - 1 }
+            prev_end = data_start + declared - 1
+          end
+        end
+      end
+    end
+  end
+
+  if nranges == 0 then
+    return
+  end
+
+  local dropped = 0
+
+  local function filter(key)
+    local positions = pdf[key]
+
+    if not positions then
+      return
+    end
+
+    local out = {}
+    local nout = 0
+    local r = 1
+
+    for _, pos in ipairs(positions) do
+      while r <= nranges and ranges[r][2] < pos do
+        r = r + 1
+      end
+
+      if r <= nranges and pos >= ranges[r][1] then
+        dropped = dropped + 1
+      else
+        nout = nout + 1
+        out[nout] = pos
+      end
+    end
+
+    pdf[key] = out
+  end
+
+  filter('start_objects')
+  filter('end_objects')
+  filter('start_streams')
+  filter('end_streams')
+
+  if dropped > 0 then
+    lua_util.debugm(N, task, 'pdf: dropped %s markers found inside of %s streams', dropped, nranges)
+  end
+end
+
 -- This function arranges starts and ends of all objects and process them into initial
 -- set of objects
 local function extract_outer_objects(task, input, pdf)
@@ -1268,9 +1528,22 @@ local function extract_outer_objects(task, input, pdf)
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
 
+    local next_first = pdf.start_objects[start_pos + 1]
+    local implied_end = false
+
     -- 7 is length of `endobj\n`
     if first + 6 < last then
       local len = last - first - 6
+
+      if next_first and next_first < last and next_first > first + 7 then
+        -- Another object starts before this one ends: this one has no
+        -- `endobj`, and it ends where the next one starts. Taking the end of
+        -- the next object instead shifts every pair after it, and the last
+        -- objects of the file are lost. The shortest header, `1 0 obj`, is
+        -- left out; what is left of a longer one is a number after the object
+        len = next_first - first - 7
+        implied_end = true
+      end
 
       -- The budget below deliberately ignores tiny objects, so on its own it
       -- bounds nothing: a file made of padding stores as many as it can fit
@@ -1290,7 +1563,8 @@ local function extract_outer_objects(task, input, pdf)
       end
 
       -- Also get the starting span and try to match it versus obj re to get numbers
-      local obj_line_potential = first - 32
+      -- Any amount of white space can stand between the parts of the header
+      local obj_line_potential = first - 256
       if obj_line_potential < 1 then
         obj_line_potential = 1
       end
@@ -1303,13 +1577,15 @@ local function extract_outer_objects(task, input, pdf)
       local matches = object_re:search(obj_line_span, true, true)
 
       if matches and matches[1] then
+        -- The header of this object is the last one in the window
+        local header = matches[#matches]
         stored = stored + 1
         local nobj = {
           start = first,
           len = len,
           data = input:span(first, len),
-          major = tonumber(matches[1][2]),
-          minor = tonumber(matches[1][3]),
+          major = tonumber(header[2]),
+          minor = tonumber(header[3]),
         }
         pdf.objects[stored] = nobj
         if nobj.major and nobj.minor then
@@ -1321,7 +1597,9 @@ local function extract_outer_objects(task, input, pdf)
       end
 
       start_pos = start_pos + 1
-      end_pos = end_pos + 1
+      if not implied_end then
+        end_pos = end_pos + 1
+      end
     elseif first > last then
       end_pos = end_pos + 1
     else
@@ -1365,7 +1643,7 @@ local function attach_pdf_streams(task, input, pdf)
           -- In case if we have fake endstream :(
           while pdf.end_streams[end_pos + 1] and pdf.end_streams[end_pos + 1] < obj.start + obj.len do
             end_pos = end_pos + 1
-            last = pdf.end_streams[end_pos]
+            last = pdf.end_streams[end_pos] - 10
           end
           -- Strip the first \n
           while first < last do
@@ -1410,13 +1688,15 @@ end
 local function postprocess_pdf_objects(task, input, pdf)
   pdf.objects = {} -- objects table
   pdf.ref = {} -- references table
+  drop_markers_in_streams(task, input, pdf)
   extract_outer_objects(task, input, pdf)
 
   -- Now we have objects and we need to attach streams that are in bounds
   attach_pdf_streams(task, input, pdf)
   -- Parse grammar for outer objects
   for i, obj in ipairs(pdf.objects) do
-    if i > 0 and i % 100 == 0 then
+    -- The clock is looked at once in a while, and before every large object
+    if i > 0 and (i % 100 == 0 or obj.len > 32768) then
       local now = rspamd_util.get_ticks()
 
       if now >= pdf.end_timestamp then
@@ -2185,6 +2465,13 @@ local function process_pdf(input, mpart, task)
     if pdf_object.scripts then
       pdf_output.scripts = true
     end
+    -- The same goes for what the document does when it is opened
+    if pdf_object.has_openaction then
+      pdf_output.openaction = true
+    end
+    if pdf_object.launch then
+      pdf_output.launch = true
+    end
     -- The output object is copied from the processing one before any work
     -- starts, so a deadline that trips during processing only ever lands on the
     -- processing object; without this PDF_TIMEOUT can never fire
@@ -2197,10 +2484,34 @@ local function process_pdf(input, mpart, task)
 end
 
 -- Processes the PDF trailer
+-- The key of a trailer that tells that the file is encrypted, followed by
+-- whatever can start its value
+local encrypt_re = rspamd_regexp.create_cached([=[/\/Encrypt(?:[\s\x00<\[\(\/]|$)/]=])
+
 processors.trailer = function(input, task, positions, pdf_object, pdf_output)
   -- Defensive checks
   if not positions or #positions == 0 then
     return
+  end
+
+  -- A file has a trailer per update, and a reader starts from the one that
+  -- `startxref` leads to, which is not always the last one in the file: a few
+  -- bytes after the end of the file that look like a trailer must not hide
+  -- the real one. The dictionary follows the keyword at once
+  for i = math.max(1, #positions - 16), #positions - 1 do
+    local pos = positions[i]
+
+    if type(pos) == 'table' and pos[1] then
+      local span_ok, head = pcall(input.span, input, pos[1],
+          math.min(4096, #input - pos[1] + 1))
+
+      if span_ok and head and encrypt_re:match(head) then
+        lua_util.debugm(N, task, "pdf: found encrypted trailer at %s", pos[1])
+        pdf_output.encrypted = true
+        pdf_object.encrypted = true
+        break
+      end
+    end
   end
   local last_pos = positions[#positions]
   if not last_pos or type(last_pos) ~= 'table' or not last_pos[1] then
@@ -2239,7 +2550,7 @@ processors.trailer = function(input, task, positions, pdf_object, pdf_output)
         head = line:span(1, config.max_pdf_trailer_line)
       end
 
-      if head:find('/Encrypt ') then
+      if encrypt_re:match(head) then
         lua_util.debugm(N, task, "pdf: found encrypted line in trailer: %s",
             head)
         pdf_output.encrypted = true
@@ -2288,8 +2599,8 @@ processors.suspicious = function(input, task, positions, pdf_object, pdf_output)
       local legal_escape = false
 
       if sub_ok and enc_data then
-        local strtoul_ok, strtoul_result = pcall(enc_data.strtoul, enc_data)
-        enc_data = strtoul_ok and strtoul_result or nil
+        -- Two hex digits
+        enc_data = tonumber(tostring(enc_data), 16)
 
         if enc_data then
           -- Legit encode cases are non printable characters (e.g. spaces)
@@ -2337,7 +2648,7 @@ processors.suspicious = function(input, task, positions, pdf_object, pdf_output)
   pdf_output.suspicious = suspicious_factor
 end
 
-local function generic_table_inserter(positions, pdf_object, output_key)
+local function generic_table_inserter(positions, pdf_object, output_key, delta)
   -- Defensive checks
   if not positions or type(positions) ~= 'table' then
     return
@@ -2352,17 +2663,19 @@ local function generic_table_inserter(positions, pdf_object, output_key)
   for i, pos in ipairs(positions) do
     -- Check pos is a table with valid first element
     if type(pos) == 'table' and pos[1] then
-      pdf_object[output_key][i + shift] = pos[1]
+      pdf_object[output_key][i + shift] = pos[1] + (delta or 0)
     end
   end
 end
 
 processors.start_object = function(_, task, positions, pdf_object)
-  generic_table_inserter(positions, pdf_object, 'start_objects')
+  -- The pattern ends at the last letter of the keyword, and the users of the
+  -- positions count from the byte after it
+  generic_table_inserter(positions, pdf_object, 'start_objects', 1)
 end
 
 processors.end_object = function(_, task, positions, pdf_object)
-  generic_table_inserter(positions, pdf_object, 'end_objects')
+  generic_table_inserter(positions, pdf_object, 'end_objects', 1)
 end
 
 processors.start_stream = function(_, task, positions, pdf_object)
@@ -2370,7 +2683,7 @@ processors.start_stream = function(_, task, positions, pdf_object)
 end
 
 processors.end_stream = function(_, task, positions, pdf_object)
-  generic_table_inserter(positions, pdf_object, 'end_streams')
+  generic_table_inserter(positions, pdf_object, 'end_streams', 1)
 end
 
 exports.process = process_pdf
