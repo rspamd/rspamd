@@ -2194,16 +2194,21 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 		tag->block = html_block::undefined_html_block_pool(pool);
 	}
 
-	if (hidden) {
-		tag->block->set_display(false);
+	/*
+	 * The attributes are presentational hints: they apply only where no
+	 * author declaration (inline or from a stylesheet) sets the property,
+	 * and a stylesheet block merged later replaces them
+	 */
+	if (hidden && tag->block->display_mask < html_block::hint) {
+		tag->block->set_display(false, html_block::hint);
 	}
 
-	if (maybe_fgcolor) {
-		tag->block->set_fgcolor(maybe_fgcolor->to_color().value());
+	if (maybe_fgcolor && tag->block->fg_color_mask < html_block::hint) {
+		tag->block->set_fgcolor(maybe_fgcolor->to_color().value(), html_block::hint);
 	}
 
-	if (maybe_bgcolor) {
-		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
+	if (maybe_bgcolor && tag->block->bg_color_mask < html_block::hint) {
+		tag->block->set_bgcolor(maybe_bgcolor->to_color().value(), html_block::hint);
 	}
 
 	/*
@@ -4037,7 +4042,7 @@ auto html_process_input(struct rspamd_task *task,
 		}
 		if (tag->block) {
 			/* Preserve inherited display:none when assigning tag defaults. */
-			if (!tag->block->has_display() &&
+			if (!tag->block->has_display(html_block::hint) &&
 				!(tag->block->has_display(html_block::inherited) &&
 				  tag->block->display == css::css_display_value::DISPLAY_HIDDEN)) {
 				/* If we have no display field, we can check it by tag */

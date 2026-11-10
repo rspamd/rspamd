@@ -33,31 +33,45 @@ struct html_block {
 	rspamd::css::css_display_value display;
 	std::int16_t font_size;
 	bool overflow_hidden;
-	bool offscreen; /* hidden via off-screen positioning / clipping */
+	/* Hidden via off-screen positioning / clipping */
+	bool offscreen;
+	/* The `visibility` property: hidden or collapse */
+	bool visibility_hidden;
 
-	unsigned fg_color_mask : 2;
-	unsigned bg_color_mask : 2;
-	unsigned height_mask : 2;
-	unsigned width_mask : 2;
-	unsigned font_mask : 2;
-	unsigned display_mask : 2;
+	unsigned fg_color_mask : 3;
+	unsigned bg_color_mask : 3;
+	unsigned height_mask : 3;
+	unsigned width_mask : 3;
+	unsigned font_mask : 3;
+	unsigned display_mask : 3;
+	/* Not a source mask: the invisible and transparent flags of the block */
 	unsigned visibility_mask : 2;
-	unsigned overflow_mask : 2;
+	unsigned overflow_mask : 3;
+	/* Source mask of `visibility_hidden` */
+	unsigned visibility_prop_mask : 3;
 
+	/*
+	 * Where a value comes from, from the weakest to the strongest: a hint of
+	 * a presentational attribute loses to any author declaration, and an
+	 * !important declaration wins over a normal one
+	 */
 	constexpr static const auto unset = 0;
 	constexpr static const auto inherited = 1;
 	constexpr static const auto implicit = 1;
-	constexpr static const auto set = 2;
-	/* Set by an !important declaration */
-	constexpr static const auto important = 3;
+	constexpr static const auto hint = 2;
+	constexpr static const auto set = 3;
+	constexpr static const auto important = 4;
 	constexpr static const auto invisible_flag = 1;
 	constexpr static const auto transparent_flag = 2;
 
-	/* A parent's important value is inherited as any other value it sets */
+	/*
+	 * A value of a parent, whatever its source, replaces only what the child
+	 * has not got itself: nothing or an inherited value
+	 */
 	template<typename MT>
 	static constexpr auto inherit_strength(MT mask_val) -> MT
 	{
-		return mask_val > html_block::set ? static_cast<MT>(html_block::set) : mask_val;
+		return mask_val > html_block::hint ? static_cast<MT>(html_block::hint) : mask_val;
 	}
 
 	/* Helpers to set mask when setting the elements */
@@ -117,6 +131,12 @@ struct html_block {
 	{
 		display = v;
 		display_mask = how;
+	}
+
+	auto set_visibility(bool hidden, int how = html_block::set) -> void
+	{
+		visibility_hidden = hidden;
+		visibility_prop_mask = how;
 	}
 
 	auto set_overflow(bool hidden, int how = html_block::set) -> void
@@ -227,6 +247,11 @@ public:
 												   display, other.display);
 		}
 
+		/* Visibility is inherited, and a descendant can reset it */
+		visibility_prop_mask = html_block::simple_prop(visibility_prop_mask,
+													   other.visibility_prop_mask,
+													   visibility_hidden, other.visibility_hidden);
+
 		resolve_sizes(other, bounded);
 	}
 
@@ -275,6 +300,8 @@ public:
 			/* Display hidden by an ancestor cannot be reset by own rules */
 			display_mask = set_value(display_mask, other.display_mask, display, other.display);
 		}
+		visibility_prop_mask = set_value(visibility_prop_mask, other.visibility_prop_mask,
+										 visibility_hidden, other.visibility_hidden);
 		height_mask = set_value(height_mask, other.height_mask, height, other.height);
 		width_mask = set_value(width_mask, other.width_mask, width, other.width);
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
@@ -289,6 +316,12 @@ public:
 
 				return;
 			}
+		}
+
+		if (visibility_prop_mask && visibility_hidden) {
+			visibility_mask = html_block::invisible_flag;
+
+			return;
 		}
 
 		if (font_mask) {
@@ -409,6 +442,7 @@ public:
 						  .font_size = 12,
 						  .overflow_hidden = false,
 						  .offscreen = false,
+						  .visibility_hidden = false,
 						  .fg_color_mask = html_block::inherited,
 						  .bg_color_mask = html_block::inherited,
 						  .height_mask = html_block::unset,
@@ -416,7 +450,8 @@ public:
 						  .font_mask = html_block::unset,
 						  .display_mask = html_block::inherited,
 						  .visibility_mask = html_block::unset,
-						  .overflow_mask = html_block::unset};
+						  .overflow_mask = html_block::unset,
+						  .visibility_prop_mask = html_block::unset};
 	}
 	/**
 	 * Produces html block with no defined values allocated from the pool

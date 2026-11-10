@@ -723,19 +723,15 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 	}
 
 	/*
-	 * Display and visibility are independent properties, but both hide the
-	 * content: the block is hidden if either of them is
+	 * Display and visibility are independent properties: a descendant cannot
+	 * undo a hidden display, but it can reset an inherited visibility
 	 */
-	if (display || visibility) {
-		auto hidden = (display && *display == css_display_value::DISPLAY_HIDDEN) ||
-					  (visibility && *visibility == css_display_value::DISPLAY_HIDDEN);
+	if (display) {
+		block->set_display(*display, how);
+	}
 
-		if (hidden) {
-			block->set_display(css_display_value::DISPLAY_HIDDEN, how);
-		}
-		else {
-			block->set_display(display ? *display : *visibility, how);
-		}
+	if (visibility) {
+		block->set_visibility(*visibility == css_display_value::DISPLAY_HIDDEN, how);
 	}
 
 	/*
@@ -1339,6 +1335,40 @@ TEST_SUITE("css")
 		for (const auto *style: {"display:none; display:block", "visibility:hidden; visibility:visible",
 								 "display:block; visibility:visible", "visibility:visible; display:block"}) {
 			CHECK_MESSAGE(!style_is_hidden(pool, style), std::string{style});
+		}
+
+		/* Visibility is a property of its own, display is not touched by it */
+		CHECK(compile("visibility:hidden")->visibility_hidden);
+		CHECK(compile("visibility:collapse")->visibility_hidden);
+		CHECK(!compile("visibility:visible")->visibility_hidden);
+		CHECK(static_cast<int>(compile("visibility:hidden")->visibility_prop_mask) == rspamd::html::html_block::set);
+		CHECK(static_cast<int>(compile("visibility:hidden")->display_mask) == rspamd::html::html_block::unset);
+		CHECK(static_cast<int>(compile("visibility:hidden !important")->visibility_prop_mask) == rspamd::html::html_block::important);
+		CHECK(static_cast<int>(compile("display:none")->visibility_prop_mask) == rspamd::html::html_block::unset);
+
+		/* A child resets an inherited visibility */
+		{
+			auto *parent = compile("visibility:hidden; display:block");
+			auto *child = compile("visibility:visible; display:block");
+			auto *plain = compile("");
+			child->propagate_block(*parent);
+			plain->propagate_block(*parent);
+			CHECK(!child->visibility_hidden);
+			CHECK(plain->visibility_hidden);
+			CHECK(static_cast<int>(plain->visibility_prop_mask) == rspamd::html::html_block::inherited);
+		}
+
+		/* An attribute hint is replaced by an author value and beats an inherited one */
+		{
+			auto *parent = compile("color:#333333");
+			rspamd::html::html_block hinted{};
+			hinted.set_fgcolor(css_color::white(), rspamd::html::html_block::hint);
+			hinted.propagate_block(*parent);
+			CHECK(hinted.fg_color.r == 0xff);
+			CHECK(static_cast<int>(hinted.fg_color_mask) == rspamd::html::html_block::hint);
+			hinted.set_block(*compile("color:#111111"));
+			CHECK(hinted.fg_color.r == 0x11);
+			CHECK(static_cast<int>(hinted.fg_color_mask) == rspamd::html::html_block::set);
 		}
 
 		rspamd_mempool_delete(pool);
