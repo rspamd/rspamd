@@ -170,11 +170,31 @@ html_tag_alloc(struct html_content *hc, int flags = 0) -> html_tag *
 	return ntag;
 }
 
+/*
+ * Where the nearest scope boundaries of every kind are on the open elements
+ * from the root down to an element: the depth of the nearest boundary that
+ * is the element itself or its ancestor, or -1 if there is none
+ */
+struct html_scope_depths {
+	std::int32_t button = -1;  /* "has a p element in button scope" */
+	std::int32_t special = -1; /* the loop for li, dd and dt */
+	std::int32_t table = -1;   /* "in table scope" */
+	std::int32_t marker = -1;  /* markers of the formatting elements list */
+};
+
 struct html_balance_state {
 	std::size_t indexed_tags = 0;
 	ankerl::unordered_dense::map<std::int32_t, std::vector<html_tag *>> open_tags;
+	/* The scope depths of the open element at each depth of the stack */
+	std::vector<html_scope_depths> scopes;
 
-	auto has_open_tag(const html_content &hc, std::int32_t id) -> bool
+	html_balance_state()
+	{
+		/* The root is a boundary of every kind */
+		scopes.push_back({0, 0, 0, -1});
+	}
+
+	auto index_tags(const html_content &hc) -> void
 	{
 		/* Index each opening once, including hashed IDs of unknown tags. */
 		while (indexed_tags < hc.all_tags.size()) {
@@ -183,16 +203,50 @@ struct html_balance_state {
 				open_tags[tag->id].push_back(tag);
 			}
 		}
+	}
+
+	auto has_open_tag(const html_content &hc, std::int32_t id) -> bool
+	{
+		return innermost_open(hc, id, nullptr) != nullptr;
+	}
+
+	/*
+	 * The innermost open element with the id, except `skip`: the open elements
+	 * of an id are nested in the order of their creation
+	 */
+	auto innermost_open(const html_content &hc, std::int32_t id, const html_tag *skip) -> html_tag *
+	{
+		index_tags(hc);
 
 		auto it = open_tags.find(id);
 		if (it == open_tags.end()) {
-			return false;
+			return nullptr;
 		}
 		auto &candidates = it->second;
-		while (!candidates.empty() && (candidates.back()->flags & FL_CLOSED)) {
-			candidates.pop_back();
+		html_tag *skipped = nullptr;
+
+		while (!candidates.empty()) {
+			auto *back = candidates.back();
+
+			if (back->flags & FL_CLOSED) {
+				candidates.pop_back();
+			}
+			else if (back == skip && skipped == nullptr) {
+				skipped = back;
+				candidates.pop_back();
+			}
+			else {
+				break;
+			}
 		}
-		return !candidates.empty();
+
+		auto *ret = candidates.empty() ? nullptr : candidates.back();
+
+		if (skipped) {
+			candidates.push_back(skipped);
+		}
+
+		return ret;
 	}
 };
 
@@ -2803,6 +2857,442 @@ html_is_raw_text_tag(int id) -> bool
 }
 
 /*
+ * Scope boundaries of the HTML Standard (13.2.4.2): the elements that stop
+ * the search for an open element in the insertion mode rules. Elements in
+ * SVG/MathML are boundaries only as integration points
+ */
+static auto
+html_is_foreign_scope_boundary(const html_tag *tag) -> bool
+{
+	static const auto annotation_xml_id = html_unknown_tag_id("annotation-xml");
+
+	return html_is_html_integration_point(tag) ||
+		   html_is_mathml_text_integration_point(tag) ||
+		   ((tag->flags & FL_MATHML) && tag->id == annotation_xml_id);
+}
+
+static auto
+html_is_default_scope_boundary(const html_tag *tag) -> bool
+{
+	static const auto marquee_id = html_unknown_tag_id("marquee");
+
+	if (tag->flags & FL_FOREIGN) {
+		return html_is_foreign_scope_boundary(tag);
+	}
+
+	switch (tag->id) {
+	case Tag_APPLET:
+	case Tag_CAPTION:
+	case Tag_HTML:
+	case Tag_TABLE:
+	case Tag_TD:
+	case Tag_TH:
+	case Tag_OBJECT:
+	case Tag_TEMPLATE:
+		return true;
+	default:
+		return tag->id == marquee_id;
+	}
+}
+
+/* The special elements but address, div and p: they stop the li/dd/dt loop */
+static auto
+html_is_special_scope_boundary(const html_tag *tag) -> bool
+{
+	static const auto marquee_id = html_unknown_tag_id("marquee");
+
+	if (tag->flags & FL_FOREIGN) {
+		return html_is_foreign_scope_boundary(tag);
+	}
+
+	switch (tag->id) {
+	case Tag_ADDRESS:
+	case Tag_DIV:
+	case Tag_P:
+		return false;
+	case Tag_APPLET:
+	case Tag_AREA:
+	case Tag_ARTICLE:
+	case Tag_ASIDE:
+	case Tag_BASE:
+	case Tag_BASEFONT:
+	case Tag_BLOCKQUOTE:
+	case Tag_BODY:
+	case Tag_BR:
+	case Tag_BUTTON:
+	case Tag_CAPTION:
+	case Tag_CENTER:
+	case Tag_COL:
+	case Tag_COLGROUP:
+	case Tag_DD:
+	case Tag_DETAILS:
+	case Tag_DIR:
+	case Tag_DL:
+	case Tag_DT:
+	case Tag_EMBED:
+	case Tag_FIELDSET:
+	case Tag_FIGCAPTION:
+	case Tag_FIGURE:
+	case Tag_FOOTER:
+	case Tag_FORM:
+	case Tag_FRAME:
+	case Tag_FRAMESET:
+	case Tag_H1:
+	case Tag_H2:
+	case Tag_H3:
+	case Tag_H4:
+	case Tag_H5:
+	case Tag_H6:
+	case Tag_HEAD:
+	case Tag_HEADER:
+	case Tag_HGROUP:
+	case Tag_HR:
+	case Tag_HTML:
+	case Tag_IFRAME:
+	case Tag_IMG:
+	case Tag_INPUT:
+	case Tag_KEYGEN:
+	case Tag_LI:
+	case Tag_LINK:
+	case Tag_LISTING:
+	case Tag_MAIN:
+	case Tag_MENU:
+	case Tag_META:
+	case Tag_NAV:
+	case Tag_NOEMBED:
+	case Tag_NOFRAMES:
+	case Tag_NOSCRIPT:
+	case Tag_OBJECT:
+	case Tag_OL:
+	case Tag_PARAM:
+	case Tag_PLAINTEXT:
+	case Tag_PRE:
+	case Tag_SCRIPT:
+	case Tag_SECTION:
+	case Tag_SELECT:
+	case Tag_SOURCE:
+	case Tag_STYLE:
+	case Tag_SUMMARY:
+	case Tag_TABLE:
+	case Tag_TBODY:
+	case Tag_TD:
+	case Tag_TEMPLATE:
+	case Tag_TEXTAREA:
+	case Tag_TFOOT:
+	case Tag_TH:
+	case Tag_THEAD:
+	case Tag_TITLE:
+	case Tag_TR:
+	case Tag_TRACK:
+	case Tag_UL:
+	case Tag_WBR:
+	case Tag_XMP:
+		return true;
+	default:
+		return tag->id == marquee_id;
+	}
+}
+
+/* The scope depths of an open element, from those of its parent */
+static auto
+html_scope_depths_of(const html_tag *tag, const html_scope_depths &parent) -> html_scope_depths
+{
+	static const auto marquee_id = html_unknown_tag_id("marquee");
+	auto ret = parent;
+	auto depth = static_cast<std::int32_t>(tag->depth);
+	auto in_html = !(tag->flags & FL_FOREIGN);
+
+	if (html_is_default_scope_boundary(tag) || (in_html && tag->id == Tag_BUTTON)) {
+		ret.button = depth;
+	}
+
+	if (html_is_special_scope_boundary(tag)) {
+		ret.special = depth;
+	}
+
+	if (in_html && (tag->id == Tag_HTML || tag->id == Tag_TABLE || tag->id == Tag_TEMPLATE)) {
+		ret.table = depth;
+	}
+
+	if (in_html) {
+		switch (tag->id) {
+		case Tag_APPLET:
+		case Tag_OBJECT:
+		case Tag_TEMPLATE:
+		case Tag_TD:
+		case Tag_TH:
+		case Tag_CAPTION:
+			ret.marker = depth;
+			break;
+		default:
+			if (tag->id == marquee_id) {
+				ret.marker = depth;
+			}
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * Ends the open elements that the start tag `tag` ends in browsers (the
+ * "in body" and table insertion mode rules), at the start of `tag`. Elements
+ * are found through the index of the open ones, and the scope depths kept for
+ * the open elements tell if a boundary is in between, so the cost is constant
+ * for a start tag, plus one step for each element that is closed
+ */
+static auto
+html_close_implied_end_tags(html_content *hc,
+							html_balance_state &balance,
+							const html_tag *tag,
+							html_tag *parent_tag) -> void
+{
+	if (tag->flags & (FL_FOREIGN | FL_XML | FL_COMMENT | FL_BROKEN)) {
+		return;
+	}
+
+	enum class kind {
+		none,
+		paragraph,
+		heading,
+		list_item,
+		definition,
+		option,
+		optgroup,
+		row_group,
+		row,
+		cell,
+		caption,
+		anchor,
+	} what = kind::none;
+
+	switch (tag->id) {
+	case Tag_ADDRESS:
+	case Tag_ARTICLE:
+	case Tag_ASIDE:
+	case Tag_BLOCKQUOTE:
+	case Tag_CENTER:
+	case Tag_DETAILS:
+	case Tag_DIALOG:
+	case Tag_DIR:
+	case Tag_DIV:
+	case Tag_DL:
+	case Tag_FIELDSET:
+	case Tag_FIGCAPTION:
+	case Tag_FIGURE:
+	case Tag_FOOTER:
+	case Tag_HEADER:
+	case Tag_HGROUP:
+	case Tag_MAIN:
+	case Tag_MENU:
+	case Tag_NAV:
+	case Tag_OL:
+	case Tag_P:
+	case Tag_SECTION:
+	case Tag_SUMMARY:
+	case Tag_UL:
+	case Tag_PRE:
+	case Tag_LISTING:
+	case Tag_FORM:
+	case Tag_TABLE:
+	case Tag_HR:
+	case Tag_XMP:
+		what = kind::paragraph;
+		break;
+	case Tag_H1:
+	case Tag_H2:
+	case Tag_H3:
+	case Tag_H4:
+	case Tag_H5:
+	case Tag_H6:
+		what = kind::heading;
+		break;
+	case Tag_LI:
+		what = kind::list_item;
+		break;
+	case Tag_DD:
+	case Tag_DT:
+		what = kind::definition;
+		break;
+	case Tag_OPTION:
+		what = kind::option;
+		break;
+	case Tag_OPTGROUP:
+		what = kind::optgroup;
+		break;
+	case Tag_THEAD:
+	case Tag_TBODY:
+	case Tag_TFOOT:
+		what = kind::row_group;
+		break;
+	case Tag_CAPTION:
+	case Tag_COLGROUP:
+		what = kind::caption;
+		break;
+	case Tag_TR:
+		what = kind::row;
+		break;
+	case Tag_TD:
+	case Tag_TH:
+		what = kind::cell;
+		break;
+	case Tag_A:
+		what = kind::anchor;
+		break;
+	default:
+		return;
+	}
+
+	const auto offset = static_cast<goffset>(tag->tag_start);
+	auto current = [&]() -> html_tag * {
+		return html_current_node(parent_tag);
+	};
+	auto scopes_of = [&](const html_tag *node) -> const html_scope_depths & {
+		static const html_scope_depths none{};
+
+		return node->depth < balance.scopes.size() ? balance.scopes[node->depth] : none;
+	};
+	/* Ends the open elements from the current one up to `target` */
+	auto close_through = [&](html_tag *target) -> void {
+		for (auto *it = current(); it != nullptr; it = it->parent) {
+			if (!(it->flags & FL_CLOSED)) {
+				it->flags |= FL_CLOSED;
+				it->closing.start = std::max(offset, static_cast<goffset>(it->content_offset));
+				it->closing.end = it->closing.start;
+			}
+
+			if (it == target) {
+				break;
+			}
+		}
+	};
+	/* An open element of the id between the current one and the boundary */
+	auto find_open = [&](std::int32_t id, std::int32_t boundary, const html_tag *node) -> html_tag * {
+		auto *found = balance.innermost_open(*hc, id, tag);
+
+		if (found && !(found->flags & FL_FOREIGN) &&
+			static_cast<std::int32_t>(found->depth) >= boundary &&
+			found->depth <= node->depth) {
+			return found;
+		}
+
+		return nullptr;
+	};
+	auto close_paragraph = [&]() -> void {
+		if (auto *node = current()) {
+			if (auto *p = find_open(Tag_P, scopes_of(node).button, node)) {
+				close_through(p);
+			}
+		}
+	};
+	auto close_current_if = [&](auto pred) -> void {
+		if (auto *node = current()) {
+			if (!(node->flags & FL_FOREIGN) && pred(node->id)) {
+				close_through(node);
+			}
+		}
+	};
+	/* Table parts end all those of the same or a lower level, up to the table */
+	auto close_table_parts = [&](int level) -> void {
+		struct part {
+			std::int32_t id;
+			int level;
+		};
+		static const part parts[] = {
+			{Tag_TBODY, 1},
+			{Tag_THEAD, 1},
+			{Tag_TFOOT, 1},
+			{Tag_TR, 2},
+			{Tag_TD, 3},
+			{Tag_TH, 3},
+			{Tag_CAPTION, 4},
+			{Tag_COLGROUP, 4}};
+		auto *node = current();
+
+		if (!node) {
+			return;
+		}
+
+		html_tag *outermost = nullptr;
+
+		for (const auto &pt: parts) {
+			if (pt.level >= level) {
+				auto *found = find_open(pt.id, scopes_of(node).table, node);
+
+				if (found && (outermost == nullptr || found->depth < outermost->depth)) {
+					outermost = found;
+				}
+			}
+		}
+
+		if (outermost) {
+			close_through(outermost);
+		}
+	};
+
+	switch (what) {
+	case kind::paragraph:
+		close_paragraph();
+		break;
+	case kind::heading:
+		close_paragraph();
+		close_current_if([](auto id) { return id >= Tag_H1 && id <= Tag_H6; });
+		break;
+	case kind::list_item:
+	case kind::definition: {
+		if (auto *node = current()) {
+			auto boundary = scopes_of(node).special;
+			html_tag *found = nullptr;
+
+			if (what == kind::list_item) {
+				found = find_open(Tag_LI, boundary, node);
+			}
+			else {
+				auto *dd = find_open(Tag_DD, boundary, node);
+				auto *dt = find_open(Tag_DT, boundary, node);
+
+				found = dd && dt ? (dd->depth > dt->depth ? dd : dt) : (dd ? dd : dt);
+			}
+
+			if (found) {
+				close_through(found);
+			}
+		}
+
+		close_paragraph();
+		break;
+	}
+	case kind::option:
+		close_current_if([](auto id) { return id == Tag_OPTION; });
+		break;
+	case kind::optgroup:
+		close_current_if([](auto id) { return id == Tag_OPTION; });
+		close_current_if([](auto id) { return id == Tag_OPTGROUP; });
+		break;
+	case kind::row_group:
+	case kind::caption:
+		close_table_parts(1);
+		break;
+	case kind::row:
+		close_table_parts(2);
+		break;
+	case kind::cell:
+		close_table_parts(3);
+		break;
+	case kind::anchor:
+		if (auto *node = current()) {
+			if (auto *a = find_open(Tag_A, scopes_of(node).marker, node)) {
+				close_through(a);
+			}
+		}
+		break;
+	case kind::none:
+		break;
+	}
+}
+
+/*
  * Whether `in` starts with the end tag of a raw text element: `</` and its
  * name in any case, followed by a character that ends a tag name
  */
@@ -3223,6 +3713,9 @@ auto html_process_input(struct rspamd_task *task,
 			break;
 		}
 
+		/* Browsers end some open elements at this start tag */
+		html_close_implied_end_tags(hc, balance, cur_tag, parent_tag);
+
 		/* Shift to the first unclosed tag */
 		auto *pt = parent_tag;
 		while (pt && (pt->flags & FL_CLOSED)) {
@@ -3319,6 +3812,15 @@ auto html_process_input(struct rspamd_task *task,
 			hc->features.max_dom_depth = cur_tag->depth;
 		}
 
+		if (!(cur_tag->flags & CM_EMPTY) && cur_tag->depth > 0) {
+			/* The scope depths of the elements above are those of the parent */
+			if (balance.scopes.size() <= cur_tag->depth) {
+				balance.scopes.resize(cur_tag->depth + 1);
+			}
+			balance.scopes[cur_tag->depth] =
+				html_scope_depths_of(cur_tag, balance.scopes[cur_tag->depth - 1]);
+		}
+
 		if (!(cur_tag->flags & CM_EMPTY)) {
 			html_process_block_tag(pool, cur_tag, hc);
 		}
@@ -3333,6 +3835,41 @@ auto html_process_input(struct rspamd_task *task,
 
 			cur_tag = parent_tag;
 		}
+	};
+
+	/*
+	 * In the head, a character other than whitespace ends it and starts the
+	 * body (the "in head" insertion mode): the text from `c` to `text_end`
+	 * then goes into the element around the head
+	 */
+	auto end_head_for_text = [&](const char *text_end) -> void {
+		if (html_document_state != html_document_state::head || cur_tag == &cur_closing_tag) {
+			return;
+		}
+
+		auto *head = html_current_node(cur_tag);
+
+		if (head == nullptr || head->id != Tag_HEAD || (head->flags & FL_FOREIGN)) {
+			return;
+		}
+
+		const char *text = c;
+
+		while (text < text_end && (*text == ' ' || *text == '\t' || *text == '\n' ||
+								   *text == '\r' || *text == '\f')) {
+			text++;
+		}
+
+		if (text == text_end) {
+			return;
+		}
+
+		head->flags |= FL_CLOSED;
+		head->closing.start = std::max((goffset) (text - start), (goffset) head->content_offset);
+		head->closing.end = head->closing.start;
+		html_document_state = html_document_state::body;
+		cur_tag = html_current_node(head->parent);
+		parent_tag = cur_tag;
 	};
 
 	p = (const char *) in->data;
@@ -3634,6 +4171,7 @@ auto html_process_input(struct rspamd_task *task,
 				p++;
 			}
 			else {
+				end_head_for_text(p);
 				state = tag_begin;
 			}
 			break;
@@ -3778,7 +4316,15 @@ auto html_process_input(struct rspamd_task *task,
 				}
 				else if (html_document_state == html_document_state::head) {
 					if (!(cur_tag->flags & (CM_EMPTY | CM_HEAD))) {
-						if (parent_tag && (parent_tag->id == Tag_HEAD || !(parent_tag->flags & CM_HEAD))) {
+						if (parent_tag && parent_tag->id == Tag_HTML) {
+							/*
+							 * The head is implied by head elements without
+							 * a `<head>`: it ends here, and the html element
+							 * stays open
+							 */
+							html_document_state = html_document_state::body;
+						}
+						else if (parent_tag && (parent_tag->id == Tag_HEAD || !(parent_tag->flags & CM_HEAD))) {
 							/*
 							 * As by standard, we have to close the HEAD tag
 							 * and switch to the body state
@@ -3833,8 +4379,15 @@ auto html_process_input(struct rspamd_task *task,
 				}
 
 				/* cur_tag here is a closing tag */
-				auto *next_cur_tag = html_check_balance(hc, balance, cur_tag,
-														c - start, p - start + 1);
+				/*
+				 * `</body>` and `</html>` do not end the elements in browsers:
+				 * what follows them still goes into the open element
+				 */
+				auto *next_cur_tag = (hc->root_tag &&
+									  (cur_tag->id == Tag_BODY || cur_tag->id == Tag_HTML))
+										 ? nullptr
+										 : html_check_balance(hc, balance, cur_tag,
+															  c - start, p - start + 1);
 
 				if (cur_tag->id == Tag_STYLE && allow_css) {
 					auto *opening_tag = cur_tag->parent;
@@ -3926,6 +4479,9 @@ auto html_process_input(struct rspamd_task *task,
 	 * then be closed at the end, or the text after its last child is lost
 	 */
 	switch (state) {
+	case html_text_content:
+		end_head_for_text(end);
+		break;
 	case sgml_tag:
 	case sgml_content:
 	case comment_tag:

@@ -42,7 +42,8 @@ TEST_SUITE("html")
 			{"<html><div><div></div></div></html>", "+html;++div;+++div;"},
 			{"<html><div><div></div></html>", "+html;++div;+++div;"},
 			{"<html><div><div></div></html></div>", "+html;++div;+++div;"},
-			{"<p><p><a></p></a></a>", "+p;++p;+++a;"},
+			/* A start tag of p ends the open p */
+			{"<p><p><a></p></a></a>", "+p;+p;++a;"},
 			{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
 			/* Broken, as I don't know how the hell this should be really parsed */
 			//{"<html><!DOCTYPE html><body><head><body></body></html></body></html>",
@@ -612,6 +613,145 @@ TEST_SUITE("html")
 				CHECK(((hc->flags & RSPAMD_HTML_FLAG_CDATA_IN_HTML) != 0) == c.cdata_in_html);
 				g_byte_array_free(tmp, TRUE);
 				g_ptr_array_free(purls, TRUE);
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("html tree building as in browsers")
+	{
+		/* The structure: elements that browsers end implicitly */
+		const std::vector<std::pair<std::string, std::string>> tree_cases{
+			{"<p>a<p>b", "+p;+p;"},
+			{"<p>a<div>b</div>", "+p;+div;"},
+			{"<p>a<span>b<ul><li>c", "+p;++span;+ul;++li;"},
+			{"<div><p>a</div><p>b", "+div;++p;+p;"},
+			/* A boundary stops the search for the open p */
+			{"<p>a<button><div>b", "+p;++button;+++div;"},
+			{"<p>a<marquee><p>b", "+p;++unknown;+++p;"},
+			{"<p>a<object><div>b", "+p;++object;+++div;"},
+			{"<table><tr><td><p>a<td><p>b",
+			 "+table;++tr;+++td;++++p;+++td;++++p;"},
+			{"<div><p>a<table><tr><td><div>b", "+div;++p;++table;+++tr;++++td;+++++div;"},
+			{"<h1>a<h2>b", "+h1;+h2;"},
+			{"<h1>a<b><h2>b", "+h1;++b;+++h2;"},
+			{"<p>a<h3>b", "+p;+h3;"},
+			{"<ul><li>a<li>b", "+ul;++li;++li;"},
+			{"<li><ul><li>a", "+li;++ul;+++li;"},
+			{"<li>a<span>b<li>c", "+li;++span;+li;"},
+			{"<li>a<div>b<li>c", "+li;++div;+li;"},
+			{"<li>a<section>b<li>c", "+li;++section;+++li;"},
+			{"<li><p>a<li>b", "+li;++p;+li;"},
+			{"<dl><dt>a<dd>b<dt>c", "+dl;++dt;++dd;++dt;"},
+			{"<dl><dd>a<span>b<dd>c", "+dl;++dd;+++span;++dd;"},
+			{"<select><option>a<option>b", "+select;++option;++option;"},
+			{"<select><optgroup><option>a<optgroup><option>b",
+			 "+select;++optgroup;+++option;++optgroup;+++option;"},
+			{"<table><tr><td>a<td>b<tr><td>c",
+			 "+table;++tr;+++td;+++td;++tr;+++td;"},
+			{"<table><tr><th>a<td>b", "+table;++tr;+++th;+++td;"},
+			{"<table><tbody><tr><td>a<tbody><tr><td>b",
+			 "+table;++tbody;+++tr;++++td;++tbody;+++tr;++++td;"},
+			{"<table><caption>a<tr><td>b", "+table;++caption;++tr;+++td;"},
+			{"<table><tr><td><table><tr><td>a<td>b",
+			 "+table;++tr;+++td;++++table;+++++tr;++++++td;++++++td;"},
+			{"<a href=x>a<a href=y>b", "+a;+a;"},
+			{"<a href=x>a<b>b<a href=y>c", "+a;++b;+a;"},
+			{"<a href=x>a<object><a href=y>b", "+a;++object;+++a;"},
+			/* Names are not decoded: this is an unknown element */
+			{"<scr&#105;pt><p>a", "+unknown;++p;"},
+		};
+
+		rspamd_url_init(NULL);
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"html", 0);
+		struct rspamd_task fake_task;
+		memset(&fake_task, 0, sizeof(fake_task));
+		fake_task.task_pool = pool;
+
+		for (const auto &c: tree_cases) {
+			SUBCASE((std::string("tree of: ") + c.first).c_str())
+			{
+				GByteArray *tmp = g_byte_array_sized_new(c.first.size());
+				g_byte_array_append(tmp, (const uint8_t *) c.first.data(), c.first.size());
+				auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
+				CHECK(hc != nullptr);
+				CHECK(html_debug_structure(*hc) == c.second);
+				g_byte_array_free(tmp, TRUE);
+			}
+		}
+
+		/* The text that is shown, as a browser renders it */
+		const std::vector<std::pair<std::string, std::string>> text_cases{
+			/* Text after the last tag goes to the body */
+			{"<html><body><p>one</p></body></html>TAIL", "one\nTAIL"},
+			{"<html><body><p>one</p></body>TAIL</html>", "one\nTAIL"},
+			{"<html><body><p>one</p></body></html>\nTAIL\n", "one\nTAIL"},
+			{"<style></style><p>one</p>TAIL", "one\nTAIL"},
+			{"<meta charset=\"utf-8\"><div>one</div>TAIL", "one\nTAIL"},
+			{"<html><meta charset=\"utf-8\"><div>one</div>TAIL", "one\nTAIL"},
+			{"<html><head><style></style></head><body><div>one</div></body></html>TAIL", "one\nTAIL"},
+			{"<body style=\"display:none\">HID</body>TAIL", ""},
+			{"<div>one</div></html>TAIL<p>two</p>", "one\nTAIL\ntwo\n"},
+			/* An open element is not ended by the end tag of the body */
+			{"<body><div style=\"display:none\">HID</body>TAIL", ""},
+			/* Text in the head */
+			{"<html><head>HEADTXT</head><body>body</body></html>", "HEADTXTbody"},
+			{"<html><head>  <title>T</title> HEADTXT</head>", "HEADTXT"},
+			{"<html><head><!-- c -->HEADTXT", "HEADTXT"},
+			{"<html><head><title>T</title></head><body>body</body></html>", "body"},
+			{"<html><head> \n <title>T</title>\n</head>\n<body>body</body></html>", "body"},
+			{"<html><head><script>SCR</script><style>STY</style></head><body>body</body></html>", "body"},
+			/* Implied end tags */
+			{"<p style=\"display:none\">HID<p>SHOWN", "SHOWN\n"},
+			{"<p style=\"display:none\">HID<div>SHOWN</div>", "SHOWN\n"},
+			{"<p style=\"display:none\"><span>HID</span><h2>SHOWN</h2>", "SHOWN\n"},
+			{"<p style=\"display:none\">HID<ul><li>SHOWN</ul>", "SHOWN\n"},
+			{"<p style=\"display:none\">HID<table><tr><td>SHOWN", "SHOWN\n"},
+			{"<ul><li style=\"display:none\">HID<li>SHOWN", "SHOWN\n"},
+			{"<dl><dt style=\"display:none\">HID<dd>SHOWN", "SHOWN\n"},
+			{"<h1 style=\"display:none\">HID<h2>SHOWN", "SHOWN\n"},
+			{"<select><option style=\"display:none\">HID<option>SHOWN</select>", "SHOWN"},
+			{"<table><tr><td style=\"display:none\">HID<td>SHOWN", "SHOWN\n"},
+			{"<table><tr style=\"display:none\"><td>HID<tr><td>SHOWN", "SHOWN\n"},
+			{"<table><tbody style=\"display:none\"><tr><td>HID<tbody><tr><td>SHOWN", "SHOWN\n"},
+			/* And what stays nested keeps its style */
+			{"<div style=\"display:none\">HID<p>STILL HIDDEN</p></div>", ""},
+			{"<p style=\"display:none\"><span>HID</span><b>HID2</b></p>", ""},
+			{"<p style=\"display:none\">HID<button><div>HID2</div></button>", ""},
+			{"<p style=\"display:none\">HID<marquee><p>HID2</marquee>", ""},
+			{"<p style=\"display:none\">HID<span><a>HID2</a></span>", ""},
+			{"<p style=\"display:none\">HID<table><tr><td><div>SHOWN?</div></td></tr></table>", "SHOWN?\n"},
+			{"<table style=\"display:none\"><tr><td>HID<td>HID2<tr><td>HID3</table>", ""},
+			{"<ul style=\"display:none\"><li>HID<ul><li>HID2<li>HID3</ul><li>HID4</ul>", ""},
+			{"<li style=\"display:none\">HID<ul><li>HID2</ul>", ""},
+			{"<span style=\"display:none\">HID<li>HID2</span>", ""},
+			{"<select style=\"display:none\"><option>HID<option>HID2</select>", ""},
+			/* An end tag of a p that was ended implicitly makes an empty one */
+			{"<p>a<p>b</p></p>c", "a\nb\nc"},
+			{"<span>a<p>b<p>c</span>d", "a\nb\nc\nd"},
+			/* Links are not nested */
+			{"<a href=\"http://a.example/\">one<a href=\"http://b.example/\">two</a></a>three", "onetwothree"},
+			/* Tag names are not decoded */
+			{"x<scr&#105;pt>INSIDE</scr&#105;pt>y", "xINSIDEy"},
+			{"x<scr&#105;pt>INSIDE</script>y", "xINSIDEy"},
+			{"x<script>INSIDE</script>y", "xy"},
+			{"x<style>INSIDE</style>y", "xy"},
+			{"x<sty&#108;e>INSIDE</sty&#108;e>y", "xINSIDEy"},
+			{"<div style=\"display:none\">x<d&#105;v>HID</d&#105;v></div>y", "y"},
+			{"x<title>T</title>y", "xy"},
+		};
+
+		for (const auto &c: text_cases) {
+			SUBCASE((std::string("text of: ") + c.first).c_str())
+			{
+				GByteArray *tmp = g_byte_array_sized_new(c.first.size());
+				g_byte_array_append(tmp, (const uint8_t *) c.first.data(), c.first.size());
+				auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
+				CHECK(hc != nullptr);
+				CHECK(hc->parsed == c.second);
+				g_byte_array_free(tmp, TRUE);
 			}
 		}
 
