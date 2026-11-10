@@ -144,6 +144,18 @@ local function process_ooxml_specific(task, part, specific)
   end
 
   task:insert_result(prefix .. '_CONTENT', 1.0, filename)
+  if specific.truncated or specific.failed_stories then
+    -- Not all of the document was read: more parts than are processed, or
+    -- parts that could not be parsed
+    local options = {}
+    if specific.truncated then
+      options[#options + 1] = string.format('%s:truncated', filename)
+    end
+    if specific.failed_stories then
+      options[#options + 1] = string.format('%s:failed=%d', filename, specific.failed_stories)
+    end
+    task:insert_result('OOXML_INCOMPLETE', 1.0, options)
+  end
   if specific.urls and #specific.urls > 0 then
     task:insert_result(prefix .. '_EXTERNAL_LINKS', 1.0,
         string.format('%s:%s', filename, #specific.urls))
@@ -291,6 +303,7 @@ end
 
 for _, name in ipairs({
   'OOXML_MACROS', 'OOXML_OLE_OBJECT', 'OOXML_REMOTE_TEMPLATE', 'OOXML_EXTERNAL_DATA',
+  'OOXML_INCOMPLETE',
 }) do
   rspamd_config:register_symbol {
     type = 'virtual',

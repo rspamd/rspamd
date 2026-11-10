@@ -83,6 +83,13 @@ PDF that is fully processed
   Do Not Expect Symbol  PDF_PARSE_ERRORS
   Do Not Expect Symbol  PDF_TEXT_TRUNCATED
 
+DOCX with a part that cannot be parsed
+  Scan File  ${RSPAMD_TESTDIR}/messages/docx_incomplete.eml
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_SUSPICIOUS, OOXML_INCOMPLETE]}
+  Expect Symbol With Exact Options  DOCX_CONTENT  report.docx
+  Expect Symbol With Exact Options  OOXML_INCOMPLETE  report.docx:failed=1
+  Do Not Expect Symbol  DOCX_SUSPICIOUS
+
 DOCX content
   Scan File  ${MESSAGE9}
   ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS, DOCX_SUSPICIOUS]}
