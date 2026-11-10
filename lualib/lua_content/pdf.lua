@@ -93,7 +93,6 @@ local pdf_indexes = {}
 local pdf_cmap_indexes = {}
 
 local pdf_trie
-local pdf_text_trie
 local pdf_cmap_trie
 
 local exports = {}
@@ -168,12 +167,6 @@ local function compile_tries()
 
   if not pdf_trie then
     pdf_trie = compile_pats(pdf_patterns, pdf_indexes)
-  end
-  if not pdf_text_trie then
-    pdf_text_trie = rspamd_trie.create({
-      [[\sBT\s]],
-      [[\sET\b]]
-    }, default_compile_flags)
   end
   if not pdf_cmap_trie then
     pdf_cmap_trie = compile_pats(pdf_cmap_patterns, pdf_cmap_indexes)
@@ -304,37 +297,6 @@ local function gen_outer_grammar()
   }
 end
 
--- Graphic state in PDF
-local function gen_graphics_unary()
-  local P = lpeg.P
-  local S = lpeg.S
-
-  return P("q") + P("Q") + P("h")
-      + S("WSsFfBb") * P("*") ^ 0 + P("n")
-
-end
-local function gen_graphics_binary()
-  local P = lpeg.P
-  local S = lpeg.S
-
-  return S("gGwJjMi") +
-      P("M") + P("ri") + P("gs") +
-      P("CS") + P("cs") + P("sh")
-end
-local function gen_graphics_ternary()
-  local P = lpeg.P
-  local S = lpeg.S
-
-  return P("d") + P("m") + S("lm")
-end
-local function gen_graphics_nary()
-  local P = lpeg.P
-  local S = lpeg.S
-
-  return P("SC") + P("sc") + P("SCN") + P("scn") + P("k") + P("K") + P("re") + S("cvy") +
-      P("RG") + P("rg")
-end
-
 -- Calculate text quality confidence score using UTF-8 aware analysis
 -- Returns a score between 0.0 (garbage) and 1.0 (high quality text)
 local function calculate_text_confidence(text)
@@ -402,42 +364,82 @@ local function calculate_text_confidence(text)
   return score
 end
 
--- Generates a grammar to parse text blocks (between BT and ET)
+-- Marks the start of a text object in the instructions of a content stream
+local text_object_start = { '%bt%' }
+
+-- Generates a grammar that reads a content stream as a whole.
+--
+-- A content stream is a flat sequence of operands followed by an operator.
+-- The operators that draw or place text are turned into instructions, and
+-- everything else is walked over: an operator that is not known here, the
+-- operands of a graphics operator, an inline image, marked content. Nothing
+-- of that may stop the reading, as the text after it is as visible as the
+-- text before it.
+--
+-- The match ends early only at a string, an array, a dictionary or an inline
+-- image that is never closed, which is where a reader loses the rest of the
+-- stream too.
+-- The position where it ends is the last value returned.
 local function gen_text_grammar()
   local V = lpeg.V
   local P = lpeg.P
+  local R = lpeg.R
+  local S = lpeg.S
   local C = lpeg.C
+  local Cc = lpeg.Cc
+  local Ct = lpeg.Ct
   local gen = generic_grammar_elts()
+  local regular = gen.regular
+  -- A comment is white space
+  local sp = (gen.ws + gen.comment) ^ 0
+  local sp1 = (gen.ws + gen.comment) ^ 1
+  local op_end = -regular
+
+  -- Tokens that are walked over without a capture
+  local num = S '+-' ^ -1 * (R '09' ^ 1 * (P '.' * R '09' ^ 0) ^ -1 + P '.' * R '09' ^ 1) * op_end
+  local name = P '/' * regular ^ 0
+  local literal = P { '(' * ((1 - S '()\\') + P '\\' * 1 + V(1)) ^ 0 * ')' }
+  local hexstring = P '<' * (R '09' + R 'af' + R 'AF' + gen.ws) ^ 0 * P '>'
+  local keyword = regular ^ 1
+  local operand = P {
+    'ARG';
+    ARG = num + literal + V 'DICT' + hexstring + name + V 'ARRAY',
+    ELT = V 'ARG' + keyword,
+    ARRAY = '[' * sp * (V 'ELT' * sp) ^ 0 * ']',
+    -- Keys and values alike: there is no need to pair them to walk over
+    DICT = '<<' * sp * (V 'ELT' * sp) ^ 0 * '>>',
+  }
+  -- The data of an inline image is binary and ends at `EI` between white space
+  local image_start = P 'BI' * op_end
+  local inline_image = image_start *
+      (1 - (gen.ws * P 'EI' * (gen.ws + -P(1)))) ^ 0 * gen.ws * P 'EI'
+  local operator = (R 'az' + R 'AZ' + S '*\'"') ^ 1 - image_start
 
   -- Text operators cannot be decoded here: the meaning of a character code
-  -- depends on the font that is current at this point in the stream, which only
-  -- the replay in process_text_object knows. So emit an instruction and let the
-  -- decoder run once per page, over one buffer.
-  local function text_op_handler(...)
-    local args = { ... }
-    local op = args[#args]
-    local t = args[#args - 1]
-
+  -- depends on the font that is current at this point in the stream, which
+  -- only the replay knows. So emit an instruction and let the decoder run
+  -- once per page, over one buffer.
+  local function text_op_handler(t, op)
     -- The pieces of a TJ array stay apart: its numbers are positioning
     -- adjustments, not character codes, so a word gap must not be spliced into
     -- the code stream. A multi byte code would lose its framing from that
     -- point on. `false` marks a gap for the replay to add structurally.
     local pieces = {}
 
-    if type(t) == 'table' then
-      for _, chunk in ipairs(t) do
-        if type(chunk) == 'string' and #chunk > 0 then
-          pieces[#pieces + 1] = chunk
-        elseif type(chunk) == 'number' and chunk < -200 then
-          pieces[#pieces + 1] = false
-        end
+    for _, chunk in ipairs(t) do
+      if type(chunk) == 'string' and #chunk > 0 then
+        pieces[#pieces + 1] = chunk
+      elseif type(chunk) == 'number' and chunk < -200 then
+        pieces[#pieces + 1] = false
       end
-    elseif type(t) == 'string' and #t > 0 then
-      pieces[1] = t
     end
 
     if #pieces == 0 then
-      return ''
+      if op == "'" or op == '"' then
+        return '\n'
+      end
+
+      return
     end
 
     return {
@@ -447,76 +449,59 @@ local function gen_text_grammar()
     }
   end
 
-  local function nary_op_handler(...)
-    local args = { ... }
-    local op = args[#args]
+  -- The operators that take numbers only: where the text goes and how it is
+  -- painted. The operands are the last numbers before the operator
+  local function number_op_handler(t)
+    local n = #t - 1
+    local op = t[n + 1]
 
-    if op == 'Tm' then
-      return '\n'
+    if op == 'Td' or op == 'TD' then
+      if n >= 2 then
+        return { '%move%', t[n - 1], t[n] }
+      end
+    elseif op == 'Tm' then
+      if n >= 6 then
+        return { '%matrix%', t[n - 5], t[n - 4], t[n - 1], t[n] }
+      end
+    elseif op == 'Tr' then
+      if n >= 1 then
+        return { '%mode%', t[n] }
+      end
     end
-
-    return ''
   end
 
-  local function ternary_op_handler(...)
-    -- Called for the text positioning operators `tx ty Td` and `tx ty TD`.
-    -- Captures arrive as { tx, ty, op }: a non-zero vertical displacement (ty)
-    -- moves to a new text line, so it must be rendered as a newline. Note that
-    -- the operator name has to be captured explicitly, otherwise it cannot be
-    -- distinguished from the numeric operands.
-    local args = { ... }
-    local op = args[#args]
-    local ty = args[#args - 1]
+  local text_arg = Ct(gen.str + gen.hexstr) +
+      '[' * sp * Ct(((gen.number + gen.str + gen.hexstr) * sp) ^ 0) * ']'
+  local text = (text_arg * sp * C(P 'Tj' + P 'TJ' + S '\'"') * op_end) / text_op_handler
+  -- The font name is kept: it selects the encoding for the text that follows,
+  -- and the size is the measure of the moves between the pieces of text
+  local font = Ct(Cc '%font%' * gen.id * sp1 * gen.number) * sp1 * P 'Tf' * op_end
+  local form = Ct(Cc '%do%' * gen.id) * sp1 * P 'Do' * op_end
+  local number_op = Ct((gen.number * sp1) ^ 1 * C(P 'Td' + P 'TD' + P 'Tm' + P 'Tr') * op_end) /
+      number_op_handler
+  local numbers = (num * sp) ^ 1
+  -- Anything that starts no token. A bracket that is not closed ends the
+  -- match, and so does an image without an end: looking for the end of each
+  -- of a run of those would read the rest of the stream every time
+  local junk = 1 - S '([<' - image_start
 
-    if (op == 'Td' or op == 'TD') and type(ty) == 'number' and ty ~= 0 then
-      return '\n'
-    end
+  local command = text + font + form + number_op + numbers +
+      P 'BT' * op_end * Cc(text_object_start) +
+      P 'ET' * op_end * Cc '\n' +
+      P 'T*' * op_end * Cc '\n' +
+      inline_image + operand + operator + junk
 
-    return ''
-  end
-
-  local empty = ""
-  local unary_ops = C("T*") / "\n" +
-      C(gen_graphics_unary()) / empty
-  local binary_ops = P("Tc") + P("Tw") + P("Tz") + P("TL") + P("Tr") + P("Ts") +
-      gen_graphics_binary()
-  -- Text line positioning operators must be captured so the handler can tell
-  -- them apart from the graphics ternary operators (d/m/l) which are dropped.
-  local text_ternary_op = C(P("TD") + P("Td"))
-  local graphics_ternary_op = gen_graphics_ternary()
-  local nary_op = P("Tm") + gen_graphics_nary()
-  local text_binary_op = C(P("Tj") + P("TJ") + P("'"))
-  local text_quote_op = C(P('"'))
-  local font_op = P("Tf")
-
-  return lpeg.P {
-    "EXPR";
-    EXPR = gen.ws ^ 0 * lpeg.Ct(V("COMMAND") ^ 0),
-    COMMAND = (V("UNARY") + V("BINARY") + V("TERNARY") + V("NARY") + V("TEXT") +
-        V("FONT") + gen.comment) * gen.ws ^ 0,
-    UNARY = unary_ops,
-    BINARY = V("ARG") / empty * gen.ws ^ 1 * binary_ops,
-    TERNARY = ((V("ARG") * gen.ws ^ 1 * V("ARG") * gen.ws ^ 1 * text_ternary_op) / ternary_op_handler) +
-        ((V("ARG") / empty * gen.ws ^ 1 * V("ARG") / empty * gen.ws ^ 1 * graphics_ternary_op) / empty),
-    NARY = lpeg.Ct((V("ARG") * gen.ws ^ 1) ^ 1) * (gen.id / empty * gen.ws ^ 0) ^ -1 * nary_op / nary_op_handler,
-    ARG = V("ARRAY") + V("DICT") + V("ATOM"),
-    ATOM = (gen.comment + gen.boolean + gen.ref +
-        gen.number + V("STRING") + gen.id),
-    DICT = "<<" * gen.ws ^ 0 * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR") ^ 0, rawset) * gen.ws ^ 0 * ">>",
-    KV_PAIR = lpeg.Cg(gen.id * gen.ws ^ 0 * V("ARG") * gen.ws ^ 0),
-    ARRAY = "[" * gen.ws ^ 0 * lpeg.Ct(V("ARG") ^ 0) * gen.ws ^ 0 * "]",
-    STRING = lpeg.P { gen.str + gen.hexstr },
-    TEXT = ((V("TEXT_ARG") * gen.ws ^ 0 * text_binary_op) / text_op_handler) +
-        ((V("ARG") / empty * gen.ws ^ 1 * V("ARG") / empty * gen.ws ^ 1 * V("TEXT_ARG") * gen.ws ^ 0 * text_quote_op) / text_op_handler),
-    -- The font name is kept: it selects the encoding for the text that follows
-    FONT = V("FONT_ARG") * gen.ws ^ 1 * (gen.number / empty) * gen.ws ^ 1 * font_op,
-    FONT_ARG = lpeg.Ct(lpeg.Cc("%font%") * gen.id),
-    TEXT_ARG = lpeg.Ct(V("STRING")) + V("TEXT_ARRAY"),
-    TEXT_ARRAY = "[" * gen.ws ^ 0 * lpeg.Ct((V("TEXT_ARRAY_ELT") * gen.ws ^ 0) ^ 0) * "]",
-    TEXT_ARRAY_ELT = gen.number + gen.str + gen.hexstr,
-  }
+  return sp * Ct((command * sp) ^ 0) * lpeg.Cp()
 end
 
+
+-- Arrays, dictionaries and the brackets of a string nest, and the matcher
+-- gives up with an error at its default depth of a few hundred, which loses
+-- what was read before it. Real files nest a few levels; this is the depth
+-- that a file made to hit the limit has to reach
+if lpeg.setmaxstack then
+  lpeg.setmaxstack(8192)
+end
 
 -- Call immediately on require
 compile_tries()
@@ -526,15 +511,11 @@ pdf_text_grammar = gen_text_grammar()
 
 local function extract_text_data(specific)
   local res = {}
-  if specific.objects then
-    for _, obj in ipairs(specific.objects) do
-      if obj.text then
-        if type(obj.text) == 'userdata' then
-          res[#res + 1] = tostring(obj.text)
-        else
-          res[#res + 1] = obj.text
-        end
-      end
+
+  -- In the order of the pages, which is not the order of the objects
+  if specific.text_pages then
+    for i, text in ipairs(specific.text_pages) do
+      res[i] = tostring(text)
     end
   end
 
@@ -1765,30 +1746,6 @@ local function postprocess_pdf_objects(task, input, pdf)
   end
 end
 
-local function offsets_to_blocks(starts, ends, out)
-  local start_pos, end_pos = 1, 1
-
-  while start_pos <= #starts and end_pos <= #ends do
-    local first = starts[start_pos]
-    local last = ends[end_pos]
-
-    if first < last then
-      local len = last - first
-      out[#out + 1] = {
-        start = first,
-        len = len,
-      }
-      start_pos = start_pos + 1
-      end_pos = end_pos + 1
-    elseif first > last then
-      end_pos = end_pos + 1
-    else
-      -- Not ordered properly!
-      break
-    end
-  end
-end
-
 -- Returns the text and whether it is already UTF-8. A UTF-16 string is
 -- decoded here; anything else is left as raw character codes for the font
 -- encoding to interpret.
@@ -1888,7 +1845,8 @@ end
 -- built-in encoding of the font, which for Latin text fonts is
 -- StandardEncoding.
 --
--- Returns an encoding or a cmap, never both, and caches the answer on the font.
+-- Returns an encoding and a cmap, both only for a simple font that has a
+-- cmap, and whether the font is a simple one; caches the answer on the font.
 local function font_decoder_of(font, pdf, task)
   if type(font) ~= 'table' then
     return nil, nil
@@ -1900,7 +1858,7 @@ local function font_decoder_of(font, pdf, task)
       return nil, nil
     end
 
-    return font.rspamd_decoder.encoding, font.rspamd_decoder.cmap
+    return font.rspamd_decoder.encoding, font.rspamd_decoder.cmap, font.rspamd_decoder.simple
   end
 
   local dict = font.dict or font
@@ -1952,7 +1910,12 @@ local function font_decoder_of(font, pdf, task)
     end
   end
 
-  if not cmap then
+  -- The codes of a composite font are what its cmap says. Any other font is
+  -- a simple one: a code is a byte, whatever the codespace of the cmap, and
+  -- its encoding stands for the codes that the cmap leaves out
+  local simple = dict.Subtype ~= 'Type0'
+
+  if not cmap or simple then
     local spec = maybe_dereference_object(dict.Encoding, pdf, task)
     local base, diffs
 
@@ -1984,206 +1947,325 @@ local function font_decoder_of(font, pdf, task)
   end
 
   if enc or cmap then
-    font.rspamd_decoder = { encoding = enc, cmap = cmap }
+    font.rspamd_decoder = { encoding = enc, cmap = cmap, simple = simple }
   else
     font.rspamd_decoder = false
   end
 
-  return enc, cmap
+  return enc, cmap, simple
+end
+
+-- Characters that take no space and leave no mark: they tell nothing about
+-- the quality of a text, and enough of them would sink the score of any page
+local function strip_invisible_chars(text)
+  text = text:gsub('\226\128[\139-\143\170-\174]', '') -- U+200B..200F, U+202A..202E
+  text = text:gsub('\226\129[\160-\164]', '') -- U+2060..2064
+  text = text:gsub('\239\187\191', '') -- U+FEFF
+  text = text:gsub('\194\173', '') -- U+00AD
+
+  return text
+end
+
+-- Reads a content stream into instructions, once per stream: pages share
+-- streams, and so do the forms that pages draw
+local function content_stream_ops(task, pdf, tobj)
+  if tobj.rspamd_ops ~= nil then
+    return tobj.rspamd_ops or nil
+  end
+
+  -- Not known yet, or not to be known: a stream that is skipped for the lack
+  -- of time or budget is not marked, and a later page does not retry it
+  -- either, as both conditions only get worse
+  tobj.rspamd_ops = false
+
+  if pdf.text_size >= config.max_extracted_text_size then
+    pdf.flags.text_truncated = true
+    return nil
+  end
+
+  local uncompressed = maybe_extract_object_stream(tobj, pdf, task)
+
+  if type(uncompressed) ~= 'userdata' and type(uncompressed) ~= 'string' then
+    return nil
+  end
+
+  local len = #uncompressed
+  pdf.text_size = pdf.text_size + len
+
+  local ops = {}
+  local pos = 1
+  -- The grammar stops at a bracket that is never closed. The byte is skipped
+  -- and the reading goes on, a few times only: every attempt may walk to the
+  -- end of the stream to learn that the bracket is not closed
+  for _ = 1, 8 do
+    local ok, chunk, stopped = pcall(pdf_text_grammar.match, pdf_text_grammar, uncompressed, pos)
+
+    if not ok or type(chunk) ~= 'table' then
+      -- Brackets nested deeper than the matcher goes
+      pdf.flags.object_errors = (pdf.flags.object_errors or 0) + 1
+      lua_util.debugm(N, task, 'content of %s:%s cannot be parsed: %s',
+          tobj.major, tobj.minor, chunk)
+      break
+    end
+
+    if #ops == 0 then
+      ops = chunk
+    else
+      local n = #ops
+      for i, op in ipairs(chunk) do
+        ops[n + i] = op
+      end
+    end
+
+    if type(stopped) ~= 'number' or stopped > len then
+      break
+    end
+
+    pos = stopped + 1
+  end
+
+  tobj.rspamd_ops = ops
+
+  return ops
+end
+
+-- Fonts of a resources dictionary by their names
+local function resources_fonts(task, pdf, resources)
+  if type(resources) ~= 'table' then
+    return nil
+  end
+
+  local fonts = maybe_dereference_object(resources.Font, pdf, task)
+
+  if type(fonts) ~= 'table' then
+    return nil
+  end
+
+  if fonts.rspamd_fonts then
+    return fonts.rspamd_fonts
+  end
+
+  local res = {}
+
+  for k, v in pairs(fonts.dict or fonts) do
+    local font = maybe_dereference_object(v, pdf, task)
+
+    if type(font) == 'table' then
+      res[k] = font
+    end
+  end
+
+  fonts.rspamd_fonts = res
+
+  return res
+end
+
+local function own_resources(task, pdf, dict)
+  local resources = maybe_dereference_object(dict.Resources, pdf, task)
+
+  if type(resources) == 'table' and resources[1] ~= pdf_ref_marker then
+    return resources.dict or resources
+  end
+
+  return nil
+end
+
+-- Pages in the order of the document.
+--
+-- The pages of a document are the leaves of the tree that its catalog points
+-- to. An object that says it is a page and hangs on no tree is not shown by
+-- any reader, and a file may carry any number of those before the real pages:
+-- taking the pages in the order of the objects lets them use up the budget
+-- of the text. Resources are inherited down the tree.
+local function collect_pages(task, pdf)
+  local pages = {}
+  local seen = {}
+  local nnodes = 0
+
+  local function walk(node, resources, depth)
+    if type(node) ~= 'table' or seen[node] or depth > 32 or nnodes >= 100000 then
+      return
+    end
+
+    local dict = node.dict
+
+    if type(dict) ~= 'table' then
+      return
+    end
+
+    seen[node] = true
+    nnodes = nnodes + 1
+    resources = own_resources(task, pdf, dict) or resources
+
+    local kids = maybe_dereference_object(dict.Kids, pdf, task)
+
+    if type(kids) == 'table' and dict.Type ~= 'Page' then
+      kids = kids.dict or kids
+
+      for i = 1, #kids do
+        walk(maybe_dereference_object(kids[i], pdf, task), resources, depth + 1)
+      end
+    elseif node.contents then
+      pages[#pages + 1] = { obj = node, resources = resources }
+    end
+  end
+
+  -- The catalog is what the last trailer or cross reference stream names
+  local roots = {}
+
+  for _, obj in ipairs(pdf.objects) do
+    if obj.type == 'XRef' and type(obj.dict) == 'table' and obj.dict.Root then
+      roots[#roots + 1] = { obj.start or 0, obj.dict.Root }
+    end
+  end
+
+  for _, r in ipairs(pdf.trailer_roots or {}) do
+    roots[#roots + 1] = r
+  end
+
+  table.sort(roots, function(a, b)
+    return a[1] > b[1]
+  end)
+
+  for _, r in ipairs(roots) do
+    local catalog = maybe_dereference_object(r[2], pdf, task)
+
+    if type(catalog) == 'table' and type(catalog.dict) == 'table' then
+      walk(maybe_dereference_object(catalog.dict.Pages, pdf, task), nil, 1)
+
+      if #pages > 0 then
+        return pages
+      end
+    end
+  end
+
+  -- No usable trailer: any catalog, the last one first
+  for i = #pdf.objects, 1, -1 do
+    local obj = pdf.objects[i]
+
+    if obj.type == 'Catalog' and type(obj.dict) == 'table' then
+      walk(maybe_dereference_object(obj.dict.Pages, pdf, task), nil, 1)
+
+      if #pages > 0 then
+        return pages
+      end
+    end
+  end
+
+  -- No tree at all, as in a file that is cut or damaged: whatever says it
+  -- is a page
+  for _, obj in ipairs(pdf.objects) do
+    if obj.type == 'Page' and obj.contents and type(obj.dict) == 'table' then
+      pages[#pages + 1] = { obj = obj, resources = own_resources(task, pdf, obj.dict) or obj.resources }
+    end
+  end
+
+  return pages
 end
 
 local function search_text(task, pdf, mpart)
-  -- Text extraction inflates and reparses content streams, which is as
-  -- expensive as anything the object phases do, so it observes the same
-  -- deadline instead of running until it happens to finish
-  local function deadline_exceeded()
-    local now = rspamd_util.get_ticks()
-
-    if now >= pdf.end_timestamp then
-      pdf.timeout_processing = now - pdf.start_timestamp
-
-      return true
-    end
-
-    return false
-  end
-
-  -- Bytes of content taken out of streams so far: an upper bound on what the
-  -- pages can produce, and the only thing that bounds a file whose pages all
-  -- point at one huge stream
-  local text_size = 0
+  -- Bytes of content read out of streams so far, each stream counted once
+  pdf.text_size = 0
   -- Bytes of text that the pages have produced. A cmap can turn two bytes of
   -- content into over a hundred, and every page that shares a stream decodes
   -- it again, so the content read does not bound the text written
   local text_out = 0
+  local text_pages = {}
+  local invisible = 0
 
-  for _, obj in ipairs(pdf.objects) do
-    if obj.type == 'Page' and obj.contents then
-      if text_out >= config.max_extracted_text_size then
-        pdf.flags.text_truncated = true
-        lua_util.debugm(N, task, 'pdf: produced %s bytes of text, stop extracting', text_out)
-        break
+  for _, page in ipairs(collect_pages(task, pdf)) do
+    local obj = page.obj
+
+    if text_out >= config.max_extracted_text_size then
+      pdf.flags.text_truncated = true
+      lua_util.debugm(N, task, 'pdf: produced %s bytes of text, stop extracting', text_out)
+      break
+    end
+
+    -- Text extraction inflates and reparses content streams, which is as
+    -- expensive as anything the object phases do, so it observes the same
+    -- deadline instead of running until it happens to finish
+    if pdf_deadline_exceeded(pdf) then
+      lua_util.debugm(N, task, 'pdf: timeout extracting text after spending %s seconds',
+          pdf.timeout_processing)
+      break
+    end
+
+    local builder = rspamd_pdf_text.builder(1024)
+    local timed_out = false
+    local nops = 0
+    local nforms = 0
+    -- The state of the text as the instructions change it
+    local st = {
+      size = 0, -- font size
+      scale = 1, -- of the text matrix
+      drawn = 0, -- character codes drawn since the last move
+      have_pos = false,
+      invisible = false,
+    }
+    local use_cmap = false
+
+    local function select_font(fonts, fname)
+      local font = fonts and fname and fonts[fname]
+      local enc, cmap, simple = font_decoder_of(font, pdf, task)
+
+      if cmap and simple then
+        builder:set_cmap(cmap, enc or true)
+        use_cmap = false
+      elseif cmap then
+        builder:set_cmap(cmap)
+        use_cmap = true
+      else
+        builder:set_encoding(enc)
+        use_cmap = false
       end
+    end
 
-      if text_size >= config.max_extracted_text_size then
-        pdf.flags.text_truncated = true
-        lua_util.debugm(N, task, 'pdf: extracted %s bytes of text, stop extracting', text_size)
-        break
-      end
+    -- Replays instructions into the buffer, decoding each run with the
+    -- encoding of the font that was current when it was drawn
+    local function replay(ops, resources, depth)
+      local fonts = resources_fonts(task, pdf, resources)
+      local font_name
 
-      if deadline_exceeded() then
-        lua_util.debugm(N, task, 'pdf: timeout extracting text after spending %s seconds',
-            pdf.timeout_processing)
-        break
-      end
+      for _, chunk in ipairs(ops) do
+        nops = nops + 1
 
-      local text = {}
-      local timed_out = false
-
-      for _, tobj in ipairs(obj.contents) do
-        if text_size >= config.max_extracted_text_size then
-          break
+        if nops % 4096 == 0 and (pdf_deadline_exceeded(pdf) or builder:len() > config.max_extracted_text_size) then
+          timed_out = pdf.timeout_processing ~= nil
+          return false
         end
 
-        if deadline_exceeded() then
-          lua_util.debugm(N, task, 'pdf: timeout extracting content of %s:%s after spending %s seconds',
-              obj.major, obj.minor, pdf.timeout_processing)
-          timed_out = true
-          break
-        end
+        if chunk == '\n' then
+          -- Structural text produced by an operator, not by a glyph
+          builder:add_char('\n')
+          st.drawn = 0
+        elseif chunk == text_object_start then
+          st.have_pos = false
+          st.scale = 1
+          st.drawn = 0
+        else
+          local kind = chunk[1]
 
-        maybe_extract_object_stream(tobj, pdf, task)
-        -- Defensive: ensure uncompressed data is usable
-        local uncompressed = tobj.uncompressed
-        if not uncompressed then
-          uncompressed = ''
-        end
-        -- Wrap trie match in pcall to handle unexpected input
-        local match_ok, matches = pcall(pdf_text_trie.match, pdf_text_trie, uncompressed)
-        if not match_ok then
-          lua_util.debugm(N, task, 'trie match failed for object %s:%s: %s',
-              tobj.major, tobj.minor, matches)
-          matches = nil
-        end
-        if matches and type(matches) == 'table' then
-          local text_blocks = {}
-          local starts = {}
-          local ends = {}
-
-          for npat, matched_positions in pairs(matches) do
-            if type(matched_positions) ~= 'table' then
-              -- Skip malformed match results
-              lua_util.debugm(N, task, 'skipping malformed trie match result: %s', type(matched_positions))
-            elseif npat == 1 then
-              for _, pos in ipairs(matched_positions) do
-                starts[#starts + 1] = pos
-              end
-            else
-              for _, pos in ipairs(matched_positions) do
-                ends[#ends + 1] = pos
-              end
-            end
-          end
-
-          table.sort(starts)
-          table.sort(ends)
-
-          offsets_to_blocks(starts, ends, text_blocks)
-          for _, bl in ipairs(text_blocks) do
-            if text_size >= config.max_extracted_text_size then
-              break
+          if kind == '%text%' then
+            if chunk[3] then
+              builder:add_char('\n')
+              st.drawn = 0
             end
 
-            if bl.len and bl.len > 2 then
-              -- To remove \s+ET\b pattern (it can leave trailing space or not but it doesn't matter)
-              bl.len = bl.len - 2
-            end
-            -- Defensive: wrap span extraction in pcall
-            local span_ok, span_data = pcall(function()
-              if type(uncompressed) == 'userdata' or type(uncompressed) == 'string' then
-                return uncompressed:span(bl.start, bl.len)
-              end
-              return nil
-            end)
-            if not span_ok or not span_data then
-              lua_util.debugm(N, task, 'cannot extract text span from object %s:%s',
-                  tobj.major, tobj.minor)
-            else
-              bl.data = span_data
-              if bl.len <= 256 then
-                lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-                    tobj.major, tobj.minor, bl.data)
+            for _, piece in ipairs(chunk[2]) do
+              if piece == false then
+                -- A word gap from a TJ offset, not a character
+                builder:add_char(' ')
               else
-                lua_util.debugm(N, task, 'extracted text from object %s:%s (%d bytes)',
-                    tobj.major, tobj.minor, bl.len)
-              end
-
-              if bl.len < config.max_processing_size then
-                local ret, obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
-                    bl.data)
-                text_size = text_size + bl.len
-
-                if ret and type(obj_or_err) == 'table' then
-                  if #obj_or_err == 0 then
-                    lua_util.debugm(N, task, 'empty text match from block: %s', bl.data)
-                  end
-                  for _, chunk in ipairs(obj_or_err) do
-                    text[#text + 1] = chunk
-                  end
-                  text[#text + 1] = '\n'
-                  lua_util.debugm(N, task, 'attached %s from content object %s:%s to %s:%s',
-                      obj_or_err, tobj.major, tobj.minor, obj.major, obj.minor)
-                else
-                  lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
-                      obj.major, obj.minor, obj_or_err)
+                if st.invisible then
+                  invisible = invisible + #piece
                 end
-              end
-            end
-          end
-        end
-      end
 
-      -- Replay the instructions into one buffer, decoding each run with the
-      -- encoding of the font that was current when it was drawn.
-      -- A page whose content ran out of time is dropped instead: half of the
-      -- instructions decode into text that was never on the page
-      if #text > 0 and not timed_out then
-        local builder = rspamd_pdf_text.builder(1024)
-        local use_cmap = false
-
-        for _, chunk in ipairs(text) do
-          local ctype = type(chunk)
-
-          if ctype == 'string' then
-            -- Structural text produced by an operator, not by a glyph
-            builder:add_utf8(chunk)
-          elseif ctype == 'userdata' then
-            builder:add_utf8(tostring(chunk))
-          elseif ctype == 'table' then
-            if chunk[1] == '%font%' then
-              local font = obj.fonts and obj.fonts[chunk[2]]
-              local enc, cmap = font_decoder_of(font, pdf, task)
-
-              if cmap then
-                builder:set_cmap(cmap)
-                use_cmap = true
-              else
-                builder:set_encoding(enc)
-                use_cmap = false
-              end
-            elseif chunk[1] == '%text%' then
-              if chunk[3] then
-                builder:add_char('\n')
-              end
-
-              for _, piece in ipairs(chunk[2]) do
-                if piece == false then
-                  -- A word gap from a TJ offset, not a character
-                  builder:add_char(' ')
-                elseif use_cmap then
+                if use_cmap then
                   -- A composite font emits multi byte codes, which look like
                   -- UTF-16 to a byte level heuristic; the cmap is authoritative
                   builder:add_encoded(piece)
+                  st.drawn = st.drawn + builder:count_codes(piece)
                 else
                   local decoded, is_utf8 = sanitize_pdf_text(piece)
 
@@ -2194,69 +2276,187 @@ local function search_text(task, pdf, mpart)
                       builder:add_encoded(decoded)
                     end
                   end
+
+                  st.drawn = st.drawn + #piece
+                end
+              end
+            end
+          elseif kind == '%font%' then
+            font_name = chunk[2]
+            st.size = math.abs(tonumber(chunk[3]) or 0)
+            select_font(fonts, font_name)
+          elseif kind == '%move%' then
+            -- An offset from the start of the current line, in the units that
+            -- the font size is in. A move down or up is a new line. A move
+            -- along the line is a gap between words if it goes further than
+            -- what was drawn takes, by the measure of an average glyph of half
+            -- the font size: producers place words, parts of words and single
+            -- glyphs this way, and only the first of these is a space
+            local tx, ty = chunk[2], chunk[3]
+
+            if ty ~= 0 then
+              builder:add_char('\n')
+            elseif tx > st.size * (0.5 * st.drawn + 0.3) or tx < -0.3 * st.size then
+              if st.drawn > 0 then
+                builder:add_char(' ')
+              end
+            end
+
+            if st.have_pos then
+              st.px = st.px + tx * st.scale
+              st.py = st.py + ty * st.scale
+            end
+
+            st.drawn = 0
+          elseif kind == '%matrix%' then
+            -- An absolute position; the same reasoning, by the distance from
+            -- the previous position, in the units of the page
+            local a, b, e, f = chunk[2], chunk[3], chunk[4], chunk[5]
+            local scale = math.sqrt(a * a + b * b)
+
+            if scale == 0 then
+              scale = 1
+            end
+
+            local size = st.size * scale
+
+            if st.have_pos then
+              local dx, dy = e - st.px, f - st.py
+
+              if math.abs(dy) > 0.4 * size then
+                builder:add_char('\n')
+              elseif dx > size * (0.5 * st.drawn + 0.3) or dx < -0.3 * size then
+                if st.drawn > 0 then
+                  builder:add_char(' ')
+                end
+              end
+            end
+
+            st.px, st.py, st.scale = e, f, scale
+            st.have_pos = true
+            st.drawn = 0
+          elseif kind == '%mode%' then
+            -- Neither filled nor stroked: the text is there for a search or
+            -- for a selection, and is not seen
+            st.invisible = chunk[2] == 3 or chunk[2] == 7
+          elseif kind == '%do%' and depth < 4 and nforms < 256 then
+            -- A form is a content stream of its own that a page draws
+            local xobjects = type(resources) == 'table' and
+                maybe_dereference_object(resources.XObject, pdf, task)
+
+            if type(xobjects) == 'table' then
+              local form = maybe_dereference_object((xobjects.dict or xobjects)[chunk[2]], pdf, task)
+
+              if type(form) == 'table' and form.stream and type(form.dict) == 'table' and
+                  form.dict.Subtype == 'Form' then
+                local form_ops = content_stream_ops(task, pdf, form)
+
+                if form_ops and #form_ops > 0 then
+                  nforms = nforms + 1
+
+                  if not replay(form_ops, own_resources(task, pdf, form.dict) or resources, depth + 1) then
+                    return false
+                  end
+
+                  -- Back to the font of this stream
+                  select_font(fonts, font_name)
                 end
               end
             end
           end
         end
-
-        local res = tostring(builder:finish())
-
-        if text_out + #res > config.max_extracted_text_size then
-          -- Keep what fits, cut between characters
-          local keep = config.max_extracted_text_size - text_out
-
-          while keep > 0 do
-            local b = res:byte(keep + 1)
-            if not b or b < 0x80 or b >= 0xc0 then
-              break
-            end
-            keep = keep - 1
-          end
-
-          res = res:sub(1, keep)
-          pdf.flags.text_truncated = true
-        end
-
-        text_out = text_out + #res
-
-        -- Page-level confidence check before storing text
-        if config.text_quality_enabled and #res >= config.text_quality_min_length then
-          local page_confidence = calculate_text_confidence(res)
-          if page_confidence < config.text_quality_threshold then
-            lua_util.debugm(N, task, 'skipping low confidence page text for %s:%s (%.2f)',
-                obj.major, obj.minor, page_confidence)
-            -- Don't store this page's text
-          else
-            obj.text = rspamd_text.fromstring(res)
-            lua_util.debugm(N, task, 'object %s:%s is parsed (confidence: %.2f): %s',
-                obj.major, obj.minor, page_confidence, obj.text)
-          end
-        else
-          obj.text = rspamd_text.fromstring(res)
-          lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
-              obj.major, obj.minor, obj.text)
-        end
       end
 
-      if timed_out then
+      return true
+    end
+
+    for _, tobj in ipairs(obj.contents) do
+      local ops = content_stream_ops(task, pdf, tobj)
+
+      if pdf.timeout_processing then
+        timed_out = true
+        break
+      end
+
+      if ops and not replay(ops, page.resources, 1) then
         break
       end
     end
-  end
 
-  if task.inject_part then
-    local all_text = {}
+    -- A page whose content ran out of time is dropped: half of the
+    -- instructions decode into text that was never on the page
+    if timed_out then
+      lua_util.debugm(N, task, 'pdf: timeout extracting content of %s:%s after spending %s seconds',
+          obj.major, obj.minor, pdf.timeout_processing)
+      break
+    end
 
-    for _, obj in ipairs(pdf.objects) do
-      if obj.text and obj.text:len() > 0 then
-        table.insert(all_text, obj.text)
+    local res = tostring(builder:finish())
+
+    if #res > 0 and config.text_quality_enabled and #res >= config.text_quality_min_length then
+      -- Page-level confidence check before storing text
+      local page_confidence = calculate_text_confidence(strip_invisible_chars(res))
+
+      if page_confidence < config.text_quality_threshold then
+        -- The page as a whole reads as garbage, which is what a font that
+        -- cannot be decoded gives. The lines that read as text are kept
+        -- nevertheless: garbage added to a page must not take its text away
+        local kept = {}
+
+        for line in res:gmatch('[^\n]+') do
+          if #line >= config.text_quality_min_length and
+              calculate_text_confidence(strip_invisible_chars(line)) >= config.text_quality_threshold then
+            kept[#kept + 1] = line
+          end
+        end
+
+        lua_util.debugm(N, task, 'low confidence page text for %s:%s (%.2f), %s lines are kept',
+            obj.major, obj.minor, page_confidence, #kept)
+
+        if #kept > 0 then
+          kept[#kept + 1] = ''
+          res = table.concat(kept, '\n')
+        else
+          res = ''
+        end
       end
     end
 
-    if #all_text > 0 then
-      task:inject_part('text', all_text, mpart)
+    if text_out + #res > config.max_extracted_text_size then
+      -- Keep what fits, cut between characters
+      local keep = config.max_extracted_text_size - text_out
+
+      while keep > 0 do
+        local b = res:byte(keep + 1)
+        if not b or b < 0x80 or b >= 0xc0 then
+          break
+        end
+        keep = keep - 1
+      end
+
+      res = res:sub(1, keep)
+      pdf.flags.text_truncated = true
     end
+
+    text_out = text_out + #res
+
+    if #res > 0 then
+      obj.text = rspamd_text.fromstring(res)
+      text_pages[#text_pages + 1] = obj.text
+      lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
+          obj.major, obj.minor, obj.text)
+    end
+  end
+
+  pdf.text_pages = text_pages
+
+  if invisible > 0 then
+    -- Bytes of the strings drawn in the invisible mode
+    pdf.flags.invisible_text = invisible
+  end
+
+  if task.inject_part and #text_pages > 0 then
+    task:inject_part('text', text_pages, mpart)
   end
 end
 
@@ -2474,6 +2674,7 @@ local function process_pdf(input, mpart, task)
       pdf_output.scripts = true
     end
     -- The same goes for what the document does when it is opened
+    pdf_output.text_pages = pdf_object.text_pages
     if pdf_object.has_openaction then
       pdf_output.openaction = true
     end
@@ -2496,6 +2697,8 @@ end
 -- whatever can start its value
 local encrypt_re = rspamd_regexp.create_cached([=[/\/Encrypt(?:[\s\x00<\[\(\/]|$)/]=])
 
+local root_re = rspamd_regexp.create_cached([=[/\/Root\s+(\d+)\s+(\d+)\s+R\b/]=])
+
 processors.trailer = function(input, task, positions, pdf_object, pdf_output)
   -- Defensive checks
   if not positions or #positions == 0 then
@@ -2506,14 +2709,25 @@ processors.trailer = function(input, task, positions, pdf_object, pdf_output)
   -- `startxref` leads to, which is not always the last one in the file: a few
   -- bytes after the end of the file that look like a trailer must not hide
   -- the real one. The dictionary follows the keyword at once
-  for i = math.max(1, #positions - 16), #positions - 1 do
+  for i = math.max(1, #positions - 16), #positions do
     local pos = positions[i]
 
     if type(pos) == 'table' and pos[1] then
       local span_ok, head = pcall(input.span, input, pos[1],
           math.min(4096, #input - pos[1] + 1))
 
-      if span_ok and head and encrypt_re:match(head) then
+      if span_ok and head then
+        -- The catalog that this trailer names
+        local root = root_re:search(head, true, true)
+
+        if root and root[1] then
+          pdf_object.trailer_roots = pdf_object.trailer_roots or {}
+          table.insert(pdf_object.trailer_roots, { pos[1],
+                                                   { pdf_ref_marker, tostring(root[1][2]), tostring(root[1][3]) } })
+        end
+      end
+
+      if i < #positions and span_ok and head and encrypt_re:match(head) then
         lua_util.debugm(N, task, "pdf: found encrypted trailer at %s", pos[1])
         pdf_output.encrypted = true
         pdf_object.encrypted = true
