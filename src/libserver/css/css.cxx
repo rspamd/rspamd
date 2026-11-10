@@ -190,8 +190,8 @@ auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspa
 		}
 	}
 
-	/* Tags part */
-	if (!pimpl->tags_selectors.empty()) {
+	/* Tags part: no type selector names an unknown element, whose id is no tag_id_t */
+	if (!pimpl->tags_selectors.empty() && tag->id > Tag_UNKNOWN && tag->id < Tag_MAX) {
 		collect_hash(pimpl->tags_selectors,
 					 css_simple_selector{static_cast<tag_id_t>(tag->id)});
 	}

@@ -1225,11 +1225,12 @@ html_unquoted_value_length(std::string_view value, std::size_t quote) -> std::si
 
 /* Unknown tags get a negative hash of their name, so closing tags match */
 static inline auto
-html_unknown_tag_id(std::string_view name) -> tag_id_t
+html_unknown_tag_id(std::string_view name) -> std::int32_t
 {
 	auto nhash = static_cast<std::int32_t>(std::hash<std::string_view>{}(name));
 
-	return static_cast<tag_id_t>(nhash | G_MININT32);
+	/* Not a tag_id_t: the value is outside of that enumeration */
+	return nhash | G_MININT32;
 }
 
 static inline void
@@ -2686,7 +2687,7 @@ html_current_node(html_tag *tag) -> html_tag *
 static auto
 html_is_mathml_text_integration_point(const html_tag *tag) -> bool
 {
-	static const tag_id_t ids[] = {
+	static const std::int32_t ids[] = {
 		html_unknown_tag_id("mi"),
 		html_unknown_tag_id("mo"),
 		html_unknown_tag_id("mn"),
@@ -2877,7 +2878,7 @@ html_is_foreign_scope_boundary(const html_tag *tag) -> bool
 static auto
 html_is_default_scope_boundary(const html_tag *tag) -> bool
 {
-	static const auto marquee_id = html_unknown_tag_id("marquee");
+	static const std::int32_t marquee_id = html_unknown_tag_id("marquee");
 
 	if (tag->flags & FL_FOREIGN) {
 		return html_is_foreign_scope_boundary(tag);
@@ -2902,7 +2903,7 @@ html_is_default_scope_boundary(const html_tag *tag) -> bool
 static auto
 html_is_special_scope_boundary(const html_tag *tag) -> bool
 {
-	static const auto marquee_id = html_unknown_tag_id("marquee");
+	static const std::int32_t marquee_id = html_unknown_tag_id("marquee");
 
 	if (tag->flags & FL_FOREIGN) {
 		return html_is_foreign_scope_boundary(tag);
@@ -3000,7 +3001,7 @@ html_is_special_scope_boundary(const html_tag *tag) -> bool
 static auto
 html_scope_depths_of(const html_tag *tag, const html_scope_depths &parent) -> html_scope_depths
 {
-	static const auto marquee_id = html_unknown_tag_id("marquee");
+	static const std::int32_t marquee_id = html_unknown_tag_id("marquee");
 	auto ret = parent;
 	auto depth = static_cast<std::int32_t>(tag->depth);
 	auto in_html = !(tag->flags & FL_FOREIGN);
