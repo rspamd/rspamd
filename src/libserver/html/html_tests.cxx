@@ -803,6 +803,131 @@ TEST_SUITE("html")
 		rspamd_mempool_delete(pool);
 	}
 
+	TEST_CASE("html tags limit and its relief")
+	{
+		rspamd_url_init(NULL);
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"html", 0);
+		struct rspamd_task fake_task;
+		memset(&fake_task, 0, sizeof(fake_task));
+		fake_task.task_pool = pool;
+
+		auto repeat = [](const std::string &what, unsigned int n) -> std::string {
+			std::string ret;
+			ret.reserve(what.size() * n);
+			for (unsigned int i = 0; i < n; i++) {
+				ret += what;
+			}
+			return ret;
+		};
+		auto process = [&](const std::string &input) -> html_content * {
+			GByteArray *tmp = g_byte_array_sized_new(input.size());
+			g_byte_array_append(tmp, (const uint8_t *) input.data(), input.size());
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
+			g_byte_array_free(tmp, TRUE);
+			return hc;
+		};
+		auto count_tags = [](html_content *hc, tag_id_t id) -> unsigned int {
+			unsigned int n = 0;
+			hc->traverse_all_tags([&](const html_tag *t) -> bool {
+				n += t->id == id;
+				return true;
+			});
+			return n;
+		};
+
+		SUBCASE("comments are kept up to their budget and do not use up the elements")
+		{
+			auto *hc = process("<html><body>" + repeat("<!-- c -->", 8192) + repeat("<b>x</b> ", 8000) +
+							   "<p>SHOWN</p></body></html>");
+
+			CHECK(hc != nullptr);
+			CHECK(hc->special_tags == 8192);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_TAGS) == 0);
+			CHECK(count_tags(hc, Tag_P) == 1);
+			CHECK(hc->parsed.find("SHOWN") != std::string::npos);
+			CHECK(hc->parsed.find("<!--") == std::string::npos);
+		}
+
+		SUBCASE("a comment over the budget joins the one before it")
+		{
+			const std::string input = "<html><body>" + repeat("<!--a-->", 8192) + "<!--b--> \n<?pi?>\n<!DOCTYPE x>" +
+									  "t<!--c--><p>SHOWN</p></body></html>";
+			auto *hc = process(input);
+
+			CHECK(hc != nullptr);
+			/* The text ends the run: the last comment is read without tags */
+			CHECK(hc->special_tags == 8192);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_TAGS) != 0);
+			CHECK(hc->parsed.find("SHOWN") != std::string::npos);
+			CHECK(hc->parsed.find("<") == std::string::npos);
+			CHECK(hc->parsed.find("a--") == std::string::npos);
+
+			hc = process("<html><body>" + repeat("<!--a-->", 8192) + repeat("<!--b--> \n", 5000) +
+						 "<p>SHOWN</p></body></html>");
+			CHECK(hc != nullptr);
+			CHECK(hc->special_tags == 8192);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_TAGS) == 0);
+			CHECK(count_tags(hc, Tag_P) == 1);
+			CHECK(hc->parsed == "SHOWN\n");
+
+			/* Not closed, as without the budget */
+			hc = process("<html><body>" + repeat("<!--a-->", 8192) + "t<!--b-->u<!--unclosed <p>x");
+			CHECK(hc != nullptr);
+			CHECK(hc->parsed.find("unclosed") == std::string::npos);
+			CHECK(hc->parsed.find("<") == std::string::npos);
+		}
+
+		SUBCASE("a run of empty elements is one element")
+		{
+			auto *hc = process("<html><body>a" + repeat("<b></b>", 9000) + "c<i></i><i></i><i>x</i><i></i>" +
+							   "<p>SHOWN</p></body></html>");
+
+			CHECK(hc != nullptr);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_TAGS) == 0);
+			CHECK(count_tags(hc, Tag_B) == 1);
+			CHECK(count_tags(hc, Tag_I) == 3);
+			CHECK(hc->all_tags.size() < 20);
+			CHECK(hc->parsed == "acx\nSHOWN\n");
+
+			/* The balance index and the tree hold no removed element */
+			hc = process("<html><body><b></b><b></b><b></b>text</b></i><b></b><b></b></body></html>");
+			CHECK(hc != nullptr);
+			CHECK(hc->parsed == "text");
+		}
+
+		SUBCASE("elements that are not alike are not folded")
+		{
+			auto *hc = process("<html><body>" + repeat("<b></b> ", 20) + repeat("<b x=1></b>", 20) +
+							   repeat("<b></b><i></i>", 20) + repeat("<div></div>", 20) +
+							   repeat("<b><i></i></b>", 20) + "</body></html>");
+
+			CHECK(hc != nullptr);
+			CHECK(count_tags(hc, Tag_B) == 20 + 20 + 20 + 20);
+			CHECK(count_tags(hc, Tag_DIV) == 20);
+		}
+
+		SUBCASE("text hidden by a style is hidden past the limit")
+		{
+			auto *hc = process("<html><body>" + repeat("<i>", 8200) +
+							   "<div style=\"display:none\">HIDONE</div><span hidden>HIDTWO</span>"
+							   "<div style=\"visibility:hidden\">HIDTHREE<b style=\"visibility:visible\">SHOWNTWO</b></div>"
+							   "<p>SHOWN</p>");
+
+			CHECK(hc != nullptr);
+			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_TAGS) != 0);
+			CHECK(hc->parsed.find("HID") == std::string::npos);
+			CHECK(hc->parsed.find("SHOWNTWO") != std::string::npos);
+			CHECK(hc->parsed.find("SHOWN") != std::string::npos);
+			CHECK(hc->invisible.find("HIDONE") != std::string::npos);
+			CHECK(hc->invisible.find("HIDTWO") != std::string::npos);
+			CHECK(hc->invisible.find("HIDTHREE") != std::string::npos);
+			CHECK(hc->features.text_hidden > 0);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("html entities decoding in place")
 	{
 		const std::vector<std::pair<std::string, std::string>> cases{

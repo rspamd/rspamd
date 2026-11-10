@@ -151,13 +151,34 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 INIT_LOG_MODULE(html)
 
 /*
+ * Comments, declarations, processing instructions and bogus comments are
+ * kept in the tree, but have a budget of their own: any number of them must
+ * neither use up the limit of elements nor make the tree grow without bound
+ */
+static const unsigned int max_special_tags = 8192;
+
+static inline auto
+html_tag_is_special(int flags) -> bool
+{
+	return !(flags & FL_VIRTUAL) && (flags & (FL_XML | FL_COMMENT));
+}
+
+/*
  * The only way to create a tag: all insertions into hc->all_tags must go
- * through this function to enforce the max_tags limit
+ * through this function to enforce the limits. A comment over its budget is
+ * refused without the tags limit flag: the caller skips it
  */
 static auto
 html_tag_alloc(struct html_content *hc, int flags = 0) -> html_tag *
 {
-	if (hc->all_tags.size() >= max_tags) {
+	const auto special = html_tag_is_special(flags);
+
+	if (special) {
+		if (hc->special_tags >= max_special_tags) {
+			return nullptr;
+		}
+	}
+	else if (hc->all_tags.size() - hc->special_tags >= max_tags) {
 		hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
 
 		return nullptr;
@@ -166,6 +187,10 @@ html_tag_alloc(struct html_content *hc, int flags = 0) -> html_tag *
 	hc->all_tags.emplace_back(std::make_unique<html_tag>());
 	auto *ntag = hc->all_tags.back().get();
 	ntag->flags = flags;
+
+	if (special) {
+		hc->special_tags++;
+	}
 
 	return ntag;
 }
@@ -201,6 +226,22 @@ struct html_balance_state {
 			auto *tag = hc.all_tags[indexed_tags++].get();
 			if (!(tag->flags & FL_CLOSED)) {
 				open_tags[tag->id].push_back(tag);
+			}
+		}
+	}
+
+	/*
+	 * Forgets the newest tag of `hc.all_tags`, which is about to be removed
+	 * from it: no pointer to it may stay in the index
+	 */
+	auto forget_last(const html_content &hc, const html_tag *tag) -> void
+	{
+		if (indexed_tags == hc.all_tags.size()) {
+			indexed_tags--;
+
+			if (auto it = open_tags.find(tag->id); it != open_tags.end() &&
+												   !it->second.empty() && it->second.back() == tag) {
+				it->second.pop_back();
 			}
 		}
 	}
@@ -383,6 +424,101 @@ html_check_balance(struct html_content *hc,
 	}
 
 	return nullptr;
+}
+
+/*
+ * Inline elements that show nothing when they are empty and have no
+ * attributes: removing one of them does not change the text. Void elements,
+ * blocks and anything that adds line breaks or text of its own are not here
+ */
+static auto
+html_is_foldable_inline(int id) -> bool
+{
+	switch (id) {
+	case Tag_B:
+	case Tag_BIG:
+	case Tag_CODE:
+	case Tag_EM:
+	case Tag_FONT:
+	case Tag_I:
+	case Tag_S:
+	case Tag_SMALL:
+	case Tag_SPAN:
+	case Tag_STRIKE:
+	case Tag_STRONG:
+	case Tag_SUB:
+	case Tag_SUP:
+	case Tag_TT:
+	case Tag_U:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* A closed element with no attributes, children and content between its tags */
+static auto
+html_is_empty_plain_element(const html_tag *tag) -> bool
+{
+	constexpr unsigned int not_plain = FL_VIRTUAL | FL_XML | FL_COMMENT | FL_IGNORE |
+									   FL_BROKEN | FL_FOREIGN | FL_HREF | FL_LITERAL_TEXT |
+									   FL_CONTENT_INVISIBLE | CM_HEAD | CM_EMPTY;
+
+	return html_is_foldable_inline(tag->id) &&
+		   (tag->flags & FL_CLOSED) && !(tag->flags & not_plain) &&
+		   tag->components.empty() && tag->children.empty() &&
+		   std::holds_alternative<std::monostate>(tag->extra) &&
+		   tag->content_offset == (unsigned int) tag->closing.start;
+}
+
+/*
+ * A closed empty element that follows an identical one right away adds
+ * nothing to the tree: `<b></b><b></b>` is `<b></b>`. The first element of
+ * the run stays and takes over the source range of the others, so that the
+ * text around them is cut at the same places and their markup is not text.
+ * Sibling selectors still see an element between what comes before and
+ * after the run (`b + b` matches one element less than in the source).
+ *
+ * The element is removed from the tree and from `all_tags`, which gives its
+ * slot back to the tags limit. It is the newest tag and the last child of its
+ * parent, so nothing else points to it but the balance index. The block of
+ * the element is kept for the next element without attributes, so that
+ * a long run does not take pool memory for each element.
+ */
+static auto
+html_fold_empty_element(struct html_content *hc,
+						html_balance_state &balance,
+						struct html_tag *tag,
+						goffset tag_end_offset,
+						struct html_block **spare_block) -> bool
+{
+	auto *parent = tag->parent;
+
+	if (parent == nullptr || hc->all_tags.empty() || hc->all_tags.back().get() != tag ||
+		parent->children.size() < 2 || parent->children.back() != tag ||
+		!html_is_empty_plain_element(tag)) {
+		return false;
+	}
+
+	auto *prev = parent->children[parent->children.size() - 2];
+
+	if (prev->id != tag->id || prev->flags != tag->flags || !html_is_empty_plain_element(prev) ||
+		prev->parent != parent || prev->closing.end < 0 ||
+		(unsigned int) prev->closing.end != tag->tag_start) {
+		return false;
+	}
+
+	prev->closing.end = tag_end_offset;
+	parent->children.pop_back();
+	balance.forget_last(*hc, tag);
+
+	if (spare_block && *spare_block == nullptr && tag->block) {
+		*spare_block = tag->block;
+	}
+
+	hc->all_tags.pop_back();
+
+	return true;
 }
 
 auto html_component_from_string(std::string_view name, std::string_view value, std::size_t offset, std::size_t len) -> html_tag_component
@@ -2223,7 +2359,8 @@ html_legacy_color_value(std::string_view input) -> std::optional<css::css_value>
 
 static auto
 html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
-					   struct html_content *hc) -> void
+					   struct html_content *hc,
+					   struct html_block **spare_block = nullptr) -> void
 {
 	std::optional<css::css_value> maybe_fgcolor, maybe_bgcolor;
 	bool hidden = false;
@@ -2246,7 +2383,15 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	hidden = tag->is_hidden();
 
 	if (!tag->block) {
-		tag->block = html_block::undefined_html_block_pool(pool);
+		if (spare_block && *spare_block) {
+			/* The block of a removed element, see html_fold_empty_element */
+			tag->block = *spare_block;
+			*spare_block = nullptr;
+			memset(tag->block, 0, sizeof(html_block));
+		}
+		else {
+			tag->block = html_block::undefined_html_block_pool(pool);
+		}
 	}
 
 	/*
@@ -3351,6 +3496,15 @@ auto html_process_input(struct rspamd_task *task,
 	struct html_tag *cur_tag = nullptr, *parent_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
 	html_balance_state balance;
+	/* The block of a folded element, for the next element without attributes */
+	struct html_block *spare_block = nullptr;
+	/*
+	 * A comment over the budget of comments is not a tag: it extends the
+	 * comment before it (merge_target), as the text between them is only
+	 * whitespace. `special_scratch` stands for it while it is read
+	 */
+	struct html_tag special_scratch;
+	struct html_tag *merge_target = nullptr, *merge_saved_cur = nullptr;
 	/*
 	 * Result of the last quote lookahead for `>` inside a quoted attribute:
 	 * the position of the next such quote or `end` if there is none. It stays
@@ -3442,6 +3596,56 @@ auto html_process_input(struct rspamd_task *task,
 		}
 
 		return ntag;
+	};
+
+	/*
+	 * Starts a comment, a declaration, a processing instruction or a bogus
+	 * comment. Over their budget it is not given a tag: it is read into
+	 * `special_scratch` and joins the comment that ends where the whitespace
+	 * before it begins. If there is no such comment (text stands between), the
+	 * rest is read without tags, as at the tags limit
+	 */
+	auto start_special_tag = [&](decltype(state) next_state) -> void {
+		if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
+			cur_tag = ntag;
+			state = next_state;
+
+			return;
+		}
+
+		auto *last = hc->all_tags.empty() ? nullptr : hc->all_tags.back().get();
+		bool joins = last != nullptr &&
+					 (last->flags & (FL_XML | FL_CLOSED | FL_VIRTUAL | FL_LITERAL_TEXT)) == (FL_XML | FL_CLOSED) &&
+					 last->closing.end >= 0 && last->closing.end <= c - start;
+
+		for (auto *q = joins ? start + last->closing.end : c; q < c; q++) {
+			if (!g_ascii_isspace(*q)) {
+				joins = false;
+				break;
+			}
+		}
+
+		if (!joins) {
+			hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+			state = tags_limit_overflow;
+
+			return;
+		}
+
+		special_scratch.clear();
+		special_scratch.flags = FL_XML | FL_CLOSED;
+		special_scratch.tag_start = c - start;
+		merge_target = last;
+		merge_saved_cur = cur_tag;
+		cur_tag = &special_scratch;
+		state = next_state;
+	};
+	/* The comment read into `special_scratch` ends at `upto` */
+	auto finish_special_merge = [&](goffset upto) -> void {
+		merge_target->content_offset = upto;
+		merge_target->closing.end = upto;
+		merge_target = nullptr;
+		cur_tag = merge_saved_cur;
 	};
 
 	/* Counts a registered link of the part, and takes its features */
@@ -3826,7 +4030,7 @@ auto html_process_input(struct rspamd_task *task,
 		}
 
 		if (!(cur_tag->flags & CM_EMPTY)) {
-			html_process_block_tag(pool, cur_tag, hc);
+			html_process_block_tag(pool, cur_tag, hc, &spare_block);
 		}
 		else {
 			/* Implicitly close */
@@ -3937,23 +4141,11 @@ auto html_process_input(struct rspamd_task *task,
 				break;
 			case '!':
 				/* At the tags limit the open element stays current, see overflow */
-				if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
-					cur_tag = ntag;
-					state = sgml_tag;
-				}
-				else {
-					state = tags_limit_overflow;
-				}
+				start_special_tag(sgml_tag);
 				p++;
 				break;
 			case '?':
-				if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
-					cur_tag = ntag;
-					state = xml_tag;
-				}
-				else {
-					state = tags_limit_overflow;
-				}
+				start_special_tag(xml_tag);
 				hc->flags |= RSPAMD_HTML_FLAG_XML;
 				p++;
 				break;
@@ -3963,13 +4155,7 @@ auto html_process_input(struct rspamd_task *task,
 					 * `</` without a tag name: browsers drop `</>` and take
 					 * anything else as a bogus comment up to the first `>`
 					 */
-					if (auto *ntag = new_tag(FL_XML | FL_CLOSED)) {
-						cur_tag = ntag;
-						state = sgml_content;
-					}
-					else {
-						state = tags_limit_overflow;
-					}
+					start_special_tag(sgml_content);
 					p++;
 					break;
 				}
@@ -4057,6 +4243,15 @@ auto html_process_input(struct rspamd_task *task,
 				if (end - p >= (goffset) sizeof("[CDATA[") - 1 &&
 					memcmp(p, "[CDATA[", sizeof("[CDATA[") - 1) == 0) {
 					auto *node = html_current_node(parent_tag);
+
+					if (node && (node->flags & FL_FOREIGN) && merge_target != nullptr) {
+						/* Text in svg and math is not skipped as a comment */
+						merge_target = nullptr;
+						cur_tag = merge_saved_cur;
+						hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+						state = tags_limit_overflow;
+						break;
+					}
 
 					if (node && (node->flags & FL_FOREIGN)) {
 						/* An element holding the section as literal text */
@@ -4293,6 +4488,13 @@ auto html_process_input(struct rspamd_task *task,
 			content_parser_env.reset();
 			state = html_text_content;
 
+			if (merge_target != nullptr) {
+				finish_special_merge(cur_tag->content_offset);
+				p++;
+				c = p;
+				break;
+			}
+
 			if (cur_tag) {
 				finish_opening_tag();
 
@@ -4387,6 +4589,14 @@ auto html_process_input(struct rspamd_task *task,
 				 * `</body>` and `</html>` do not end the elements in browsers:
 				 * what follows them still goes into the open element
 				 */
+				/* The element this tag closes, if it is the innermost open one */
+				auto *closed_directly = cur_tag->parent;
+
+				if (closed_directly && (closed_directly->id != cur_tag->id ||
+										(closed_directly->flags & FL_CLOSED))) {
+					closed_directly = nullptr;
+				}
+
 				auto *next_cur_tag = (hc->root_tag &&
 									  (cur_tag->id == Tag_BODY || cur_tag->id == Tag_HTML))
 										 ? nullptr
@@ -4419,6 +4629,13 @@ auto html_process_input(struct rspamd_task *task,
 				}
 
 				if (next_cur_tag != nullptr) {
+					if (closed_directly != nullptr && next_cur_tag == closed_directly->parent) {
+						if (html_fold_empty_element(hc, balance, closed_directly, p - start + 1,
+													&spare_block)) {
+							cur_closing_tag.parent = nullptr;
+						}
+					}
+
 					cur_tag = next_cur_tag;
 				}
 				else {
@@ -4482,31 +4699,37 @@ auto html_process_input(struct rspamd_task *task,
 	 * the tree; a partial closing tag closes nothing. The open element must
 	 * then be closed at the end, or the text after its last child is lost
 	 */
-	switch (state) {
-	case html_text_content:
-		end_head_for_text(end);
-		break;
-	case sgml_tag:
-	case sgml_content:
-	case comment_tag:
-	case comment_content:
-	case xml_tag:
-	case xml_tag_end:
-	case tag_content:
-		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
-			cur_tag->content_offset = end - start;
-			finish_opening_tag();
-			process_opening_tag();
+	if (merge_target != nullptr) {
+		/* A comment over the budget goes to the end of the input */
+		finish_special_merge(state == tag_end_opening ? special_scratch.content_offset : end - start);
+	}
+	else {
+		switch (state) {
+		case html_text_content:
+			end_head_for_text(end);
+			break;
+		case sgml_tag:
+		case sgml_content:
+		case comment_tag:
+		case comment_content:
+		case xml_tag:
+		case xml_tag_end:
+		case tag_content:
+			if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+				cur_tag->content_offset = end - start;
+				finish_opening_tag();
+				process_opening_tag();
+			}
+			break;
+		case tag_end_opening:
+			if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
+				finish_opening_tag();
+				process_opening_tag();
+			}
+			break;
+		default:
+			break;
 		}
-		break;
-	case tag_end_opening:
-		if (cur_tag != nullptr && cur_tag != &cur_closing_tag) {
-			finish_opening_tag();
-			process_opening_tag();
-		}
-		break;
-	default:
-		break;
 	}
 
 	goffset content_end = end - start;
@@ -4537,11 +4760,18 @@ auto html_process_input(struct rspamd_task *task,
 	 * none would hide the markup in it
 	 */
 	unsigned int svg_at_limit = 0;
+	/*
+	 * The open elements where the tags end, the innermost first: they are
+	 * the ancestors of everything past the limit
+	 */
+	std::vector<const html_tag *> open_chain;
 
 	if (state == tags_limit_overflow) {
 		bool in_link = false, in_foreign = cur_tag && (cur_tag->flags & FL_FOREIGN);
 
 		for (auto *t = cur_tag; t != nullptr; t = t->parent) {
+			open_chain.push_back(t);
+
 			if (t->id == Tag_A && !in_link) {
 				/* The innermost link only */
 				in_link = true;
@@ -4659,8 +4889,21 @@ auto html_process_input(struct rspamd_task *task,
 	 * Past the tags limit no tags are created, but the rest of the input is
 	 * still read as a browser does instead of being taken as text: markup is
 	 * dropped, links are registered and their displayed text is checked (for
-	 * phishing), and image urls are registered. Styles cannot be applied
-	 * without the tree, so all text there is visible.
+	 * phishing), and image urls are registered.
+	 *
+	 * Text hidden by the inline style or the `hidden` attribute of the element
+	 * it is in is not visible text, as in the tree: it goes to `hc->invisible`,
+	 * and a link in such an element is flagged as invisible. The open elements
+	 * are kept as small records (a tag id and what the element hides), pushed
+	 * by a start tag and popped by the end tag that matches. The records are
+	 * limited in number; an element past the limit is not tracked and shows
+	 * its text, as everything else does when something is not known.
+	 *
+	 * What this does not know: colours (text of the colour of its background
+	 * is read as visible), stylesheet rules with combinators (the elements
+	 * have no ancestors here), implied end tags other than the common ones among
+	 * the innermost elements, and the stylesheet rules of the elements open where the tags
+	 * end are known only through the tree, which has applied them by then.
 	 */
 	auto scan_after_tags_limit = [&](const char *from, struct rspamd_url *link_at_limit) -> void {
 		html_tag scratch;
@@ -4675,15 +4918,181 @@ auto html_process_input(struct rspamd_task *task,
 		unsigned int svg_depth = svg_at_limit;
 		auto *L = task->cfg ? (lua_State *) task->cfg->lua_state : nullptr;
 
+		/* What an open element hides, and how many are tracked or built */
+		struct open_record {
+			std::int32_t id;
+			/* display:none, a tiny font or a clip: nothing shows it again */
+			bool hard;
+			/* visibility:hidden: a descendant with visibility:visible shows it */
+			bool vis_hidden;
+		};
+		/* The elements open past the limit that are tracked, besides those open at it */
+		constexpr std::size_t max_open_records = 4096;
+		std::size_t record_limit = max_open_records + open_chain.size();
+		constexpr unsigned int max_past_limit_blocks = 131072;
+		std::vector<open_record> open_records;
+		std::array<std::uint32_t, Tag_MAX> known_open{};
+		ankerl::unordered_dense::map<std::int32_t, std::uint32_t> unknown_open;
+		unsigned int styles_compiled = 0, rules_matched = 0;
+
+		auto is_tracked_id = [](std::int32_t id) -> bool {
+			return (id > Tag_UNKNOWN && id < Tag_MAX) || (id < 0 && id != N_TAGS);
+		};
+		auto open_count = [&](std::int32_t id) -> std::uint32_t {
+			if (id > Tag_UNKNOWN && id < Tag_MAX) {
+				return known_open[id];
+			}
+
+			auto it = unknown_open.find(id);
+
+			return it == unknown_open.end() ? 0 : it->second;
+		};
+		auto count_open = [&](std::int32_t id, bool opened) -> void {
+			if (id > Tag_UNKNOWN && id < Tag_MAX) {
+				known_open[id] += opened ? 1 : -1;
+			}
+			else if (opened) {
+				unknown_open[id]++;
+			}
+			else if (auto it = unknown_open.find(id); it != unknown_open.end() && --it->second == 0) {
+				unknown_open.erase(it);
+			}
+		};
+		auto push_record = [&](const open_record &rec) -> void {
+			if (open_records.size() < record_limit && is_tracked_id(rec.id)) {
+				open_records.push_back(rec);
+				count_open(rec.id, true);
+			}
+		};
+		/* Pops down to the nearest open element with the id; false if none is open */
+		auto pop_record = [&](std::int32_t id, bool &was_hidden) -> bool {
+			if (!is_tracked_id(id) || open_count(id) == 0) {
+				return false;
+			}
+
+			while (!open_records.empty()) {
+				auto rec = open_records.back();
+
+				open_records.pop_back();
+				count_open(rec.id, false);
+
+				if (rec.id == id) {
+					was_hidden = rec.hard || rec.vis_hidden;
+					break;
+				}
+			}
+
+			return true;
+		};
+		auto top_hidden = [&]() -> bool {
+			return !open_records.empty() &&
+				   (open_records.back().hard || open_records.back().vis_hidden);
+		};
+		/* The criteria of html_block::compute_visibility for a block alone, but colours */
+		auto hides_by_itself = [](const html_block &b) -> bool {
+			if (b.display_mask && b.display == css::css_display_value::DISPLAY_HIDDEN) {
+				return true;
+			}
+
+			if (b.font_mask && b.font_size >= 0 && b.font_size <= 3) {
+				return true;
+			}
+
+			return b.overflow_mask && b.overflow_hidden &&
+				   ((b.height_mask && b.height == 0) || (b.width_mask && b.width == 0));
+		};
+		/* Whether the start tag `id` ends the open element `open_id`, which has no end tag then */
+		auto implies_end_of = [](std::int32_t open_id, std::int32_t id, unsigned int flags) -> bool {
+			switch (open_id) {
+			case Tag_P:
+				return id == Tag_P || (flags & (CM_BLOCK | CM_TABLE));
+			case Tag_LI:
+				return id == Tag_LI;
+			case Tag_DT:
+			case Tag_DD:
+				return id == Tag_DT || id == Tag_DD;
+			case Tag_TD:
+			case Tag_TH:
+				return id == Tag_TD || id == Tag_TH || id == Tag_TR || id == Tag_TBODY ||
+					   id == Tag_THEAD || id == Tag_TFOOT;
+			case Tag_TR:
+				return id == Tag_TR || id == Tag_TBODY || id == Tag_THEAD || id == Tag_TFOOT;
+			case Tag_OPTION:
+				return id == Tag_OPTION || id == Tag_OPTGROUP;
+			default:
+				return false;
+			}
+		};
+		/* The element is what its parent on the stack makes it, and what its block says */
+		auto record_for = [&](std::int32_t id, const html_block *own) -> open_record {
+			open_record rec{id, false, false};
+
+			if (!open_records.empty()) {
+				rec.hard = open_records.back().hard;
+				rec.vis_hidden = open_records.back().vis_hidden;
+			}
+
+			if (own) {
+				rec.hard = rec.hard || hides_by_itself(*own);
+
+				if (own->visibility_prop_mask) {
+					rec.vis_hidden = own->visibility_hidden;
+				}
+			}
+
+			return rec;
+		};
+		/*
+		 * The block of the tag in `scratch` from its inline style and `hidden`
+		 * attribute, and from the stylesheet rules of a single compound
+		 * (`.cls`, `#id`, `tag.cls`): check_tag_block finds no ancestors or
+		 * siblings of a tag that is not in the tree, so the others do not
+		 * match. Both allocate from the pool only for a tag that has a style
+		 * or matches a rule, and are limited in number
+		 */
+		auto block_of = [&](html_tag &tag) -> const html_block * {
+			if (styles_compiled < max_past_limit_blocks && (tag.find_style() || tag.is_hidden())) {
+				styles_compiled++;
+				html_process_block_tag(pool, &tag, hc);
+			}
+
+			if (hc->css_style && rules_matched < max_past_limit_blocks &&
+				tag.id != Tag_UNKNOWN && tag.id < Tag_MAX) {
+				if (auto *css_block = hc->css_style->check_tag_block(&tag)) {
+					rules_matched++;
+
+					if (tag.block) {
+						tag.block->set_block(*css_block);
+					}
+					else {
+						tag.block = css_block;
+					}
+				}
+			}
+
+			if (tag.block) {
+				static const html_block undefined_parent{};
+
+				tag.block->resolve_sizes(undefined_parent);
+			}
+
+			return tag.block;
+		};
+
 		auto append_text = [&](const char *upto, bool literal = false) -> void {
 			if (upto > text_start) {
 				html_append_parsed(hc, {text_start, (std::size_t) (upto - text_start)},
-								   false, end - start, hc->parsed, literal);
+								   false, end - start,
+								   top_hidden() ? hc->invisible : hc->parsed, literal);
 			}
 		};
 		/* As the default display of a tag in html_append_tag_content */
-		auto append_separator = [&](int id, unsigned int flags) -> void {
+		auto append_separator = [&](int id, unsigned int flags, bool hidden) -> void {
 			char sep = 0;
+
+			if (hidden) {
+				return;
+			}
 
 			if (id == Tag_BR || id == Tag_HR || (flags & (CM_BLOCK | CM_TABLE))) {
 				sep = '\n';
@@ -4783,6 +5192,65 @@ auto html_process_input(struct rspamd_task *task,
 			}
 		};
 
+		/*
+		 * The elements open where the tags end hide the text that follows as
+		 * the tree has settled it (their blocks have been through the
+		 * propagation, stylesheet rules included). Nothing is tracked while
+		 * none of them hides anything. The head is not tracked: a body tag
+		 * past the limit would have to end it
+		 */
+		{
+			std::vector<open_record> seeds;
+			bool any_hidden = false, in_head = false, link_hidden = false;
+			const html_tag *link_tag = nullptr;
+
+			for (const auto *t: open_chain) {
+				if (t->id == Tag_A) {
+					link_tag = t;
+					break;
+				}
+			}
+
+			for (auto it = open_chain.rbegin(); it != open_chain.rend(); ++it) {
+				const auto *t = *it;
+
+				if (t->flags & (CM_HEAD | FL_IGNORE)) {
+					in_head = true;
+				}
+
+				if (t->flags & FL_VIRTUAL) {
+					continue;
+				}
+
+				open_record rec{t->id, false, false};
+
+				if (!in_head && t->block) {
+					rec.hard = hides_by_itself(*t->block);
+					rec.vis_hidden = t->block->visibility_prop_mask && t->block->visibility_hidden;
+				}
+
+				any_hidden = any_hidden || rec.hard || rec.vis_hidden;
+				seeds.push_back(rec);
+
+				if (t == link_tag) {
+					link_hidden = rec.hard || rec.vis_hidden;
+				}
+			}
+
+			if (any_hidden) {
+				for (const auto &seed: seeds) {
+					push_record(seed);
+				}
+			}
+
+			record_limit = open_records.size() + max_open_records;
+
+			/* Its text is not in the visible text to check against */
+			if (link_hidden) {
+				open_link = nullptr;
+			}
+		}
+
 		while (pos < end) {
 			if (*pos != '<') {
 				pos++;
@@ -4825,6 +5293,28 @@ auto html_process_input(struct rspamd_task *task,
 				rspamd_str_lc(lc_name.data(), lc_name.size());
 				const auto *def = html_tags_defs.by_name(lc_name);
 
+				bool end_hidden = top_hidden();
+
+				if (!open_records.empty()) {
+					/* The name of a tag is read up to a space, `>` or `/` */
+					auto full_end = name;
+
+					while (full_end < end && !g_ascii_isspace(*full_end) && *full_end != '>' &&
+						   *full_end != '/') {
+						full_end++;
+					}
+
+					std::string full_name{name, (std::size_t) (full_end - name)};
+					rspamd_str_lc(full_name.data(), full_name.size());
+					const auto *known = html_tags_defs.by_name(full_name);
+					std::int32_t closed_id = known ? (std::int32_t) known->id : html_unknown_tag_id(full_name);
+
+					/* Browsers do not end elements by these two */
+					if (closed_id != Tag_BODY && closed_id != Tag_HTML) {
+						pop_record(closed_id, end_hidden);
+					}
+				}
+
 				if (def != nullptr) {
 					if (def->id == Tag_A) {
 						close_link();
@@ -4840,7 +5330,7 @@ auto html_process_input(struct rspamd_task *task,
 						}
 					}
 
-					append_separator(def->id, def->flags);
+					append_separator(def->id, def->flags, end_hidden);
 				}
 
 				pos = skip_past(name_end, ">");
@@ -4903,6 +5393,46 @@ auto html_process_input(struct rspamd_task *task,
 				scratch.flags |= FL_SVG;
 			}
 
+			/*
+			 * A start tag ends an open element whose end tag is optional, also
+			 * with inline elements open in it (`<p hidden><b>x<p>y` shows y).
+			 * It is looked for among the innermost records only, up to an
+			 * element that bounds a scope; done again for a cell in a row
+			 */
+			for (auto round = 0; round < 3; round++) {
+				constexpr std::size_t max_implied_steps = 64;
+				const auto nrecords = open_records.size();
+				std::int32_t implied_id = Tag_UNKNOWN;
+
+				for (std::size_t i = 0; i < nrecords && i < max_implied_steps; i++) {
+					const auto rec_id = open_records[nrecords - 1 - i].id;
+
+					if (implies_end_of(rec_id, scratch.id, scratch.flags)) {
+						implied_id = rec_id;
+						break;
+					}
+
+					if (rec_id == Tag_TABLE || rec_id == Tag_CAPTION || rec_id == Tag_HTML ||
+						rec_id == Tag_BUTTON || rec_id == Tag_OBJECT || rec_id == Tag_TD ||
+						rec_id == Tag_TH || rec_id == Tag_UL || rec_id == Tag_OL) {
+						break;
+					}
+				}
+
+				if (implied_id == Tag_UNKNOWN) {
+					break;
+				}
+
+				bool popped_hidden = false;
+
+				pop_record(implied_id, popped_hidden);
+			}
+
+			const bool self_closed = (scratch.flags & FL_CLOSED) &&
+									 (foreign_depth > 0 || scratch.id == Tag_SVG || scratch.id == Tag_MATH);
+			const auto own_rec = record_for(scratch.id, block_of(scratch));
+			const bool tag_hidden = own_rec.hard || own_rec.vis_hidden;
+
 			html_tag_mark_submit_link(&scratch);
 
 			if (auto clickable = scratch.clickable_attr()) {
@@ -4914,11 +5444,16 @@ auto html_process_input(struct rspamd_task *task,
 			if (scratch.flags & FL_HREF) {
 				auto maybe_url = process_href_tag_past_limit(&scratch);
 
+				if (tag_hidden && maybe_url.has_value() && maybe_url.value() != nullptr) {
+					maybe_url.value()->flags |= RSPAMD_URL_FLAG_INVISIBLE;
+				}
+
 				if (scratch.id == Tag_A) {
 					/* A link ends the previous one */
 					close_link();
 
-					if (maybe_url.has_value() && maybe_url.value() != nullptr) {
+					/* The text of a hidden link is not visible text to check */
+					if (!tag_hidden && maybe_url.has_value() && maybe_url.value() != nullptr) {
 						open_link = maybe_url.value();
 						open_link_offset = hc->parsed.size();
 					}
@@ -4939,7 +5474,7 @@ auto html_process_input(struct rspamd_task *task,
 				}
 
 				/* Alt text is shown instead of the image, as in the tree */
-				if (auto alt = scratch.find_alt(); alt && !alt->empty()) {
+				if (auto alt = scratch.find_alt(); alt && !alt->empty() && !tag_hidden) {
 					if (!hc->parsed.empty() && !g_ascii_isspace(hc->parsed.back())) {
 						hc->parsed += ' ';
 					}
@@ -4957,7 +5492,11 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 
-			append_separator(scratch.id, scratch.flags);
+			append_separator(scratch.id, scratch.flags, tag_hidden);
+
+			if (!(scratch.flags & CM_EMPTY) && !self_closed) {
+				push_record(own_rec);
+			}
 
 			if (html_is_raw_text_tag(scratch.id) && !(scratch.flags & CM_EMPTY)) {
 				/* Its content is raw text up to its end tag; nothing ends plaintext */

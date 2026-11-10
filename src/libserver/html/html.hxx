@@ -51,6 +51,11 @@ struct html_content {
 	std::vector<html_image *> images;
 	std::vector<std::unique_ptr<struct html_tag>> all_tags;
 	/*
+	 * Comments, declarations and processing instructions in `all_tags`: they
+	 * have a budget of their own, so they do not use up the one of elements
+	 */
+	std::size_t special_tags = 0;
+	/*
 	 * Links of the tags past the tags limit, which are not kept: one per tag,
 	 * so they are kept small
 	 */
