@@ -297,15 +297,23 @@ int lua_compress_zlib_decompress(lua_State *L, bool is_gzip)
 				break;
 			}
 			else {
-				if (rc != Z_NEED_DICT) {
+				/*
+				 * A raw deflate stream comes from a file that is being
+				 * parsed, a pdf has thousands of them, and a broken one is
+				 * the business of the caller, who is told what is wrong:
+				 * it is not an error of this process to log each time
+				 */
+				if (rc != Z_NEED_DICT && is_gzip) {
 					msg_err("cannot decompress data: %s (last error: %s)",
 							zError(rc), strm.msg);
 				}
 				lua_pop(L, 1); /* Text will be freed here */
 				lua_pushnil(L);
+				lua_pushfstring(L, "%s (%s)", zError(rc),
+								strm.msg ? strm.msg : "no details");
 				inflateEnd(&strm);
 
-				return 1;
+				return 2;
 			}
 		}
 
