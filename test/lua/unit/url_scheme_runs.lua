@@ -41,7 +41,8 @@ context("URL candidates in one token", function()
       "http://x\\y@b.example.com/p {nil|x|true} ; http://z\\w.example.com/q {nil|z|false}" },
     -- A quote before a candidate ends its input before the `@` of the token
     { "http:aaa\"http:bbb\"ccc@d.example.com/x", nil },
-    { "sip:sip:sip:alice@example.com", "" },
+    -- The rejected candidates do not hide the address after them
+    { "sip:sip:sip:alice@example.com", "alice@example.com {alice|example.com|false}" },
   }
 
   test("urls are the same as when each candidate scans the token", function()
