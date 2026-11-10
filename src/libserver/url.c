@@ -5509,6 +5509,11 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 		/* Existing url */
 		struct rspamd_url *ex = kh_key(set, k);
 #define SUSPICIOUS_URL_FLAGS (RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_ZW_SPACES)
+		if (!(u->flags & RSPAMD_URL_FLAG_IMAGE)) {
+			/* Seen not only as an image source: it is no image url any more */
+			ex->flags &= ~RSPAMD_URL_FLAG_IMAGE;
+		}
+
 		if (enforce_replace) {
 			kh_key(set, k) = u;
 			u->count++;
