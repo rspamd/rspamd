@@ -1,0 +1,22 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: pdf without objects
+Date: Tue, 10 Nov 2026 10:00:00 +0000
+Message-ID: <pdf_no_objects@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_pdf_limits"
+
+------=_pdf_limits
+Content-Type: text/plain; charset=us-ascii
+
+Please see the attached file.
+
+------=_pdf_limits
+Content-Type: application/pdf; name="empty.pdf"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="empty.pdf"
+
+JVBERi0xLjQKJW5vdGhpbmcgaGVyZQp0cmFpbGVyCjw8IC9TaXplIDEgPj4Kc3RhcnR4cmVmCjAK
+JSVFT0YK
+
+------=_pdf_limits--

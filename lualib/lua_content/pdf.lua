@@ -775,6 +775,8 @@ local function maybe_extract_object_stream(obj, pdf, task)
   end
 end
 
+local dict_start_patt = lpeg.S('\0 \r\n\t\f') ^ 0 * lpeg.P('<<')
+
 local function parse_object_grammar(obj, task, pdf)
   -- Parse grammar
   local obj_dict_span
@@ -788,6 +790,12 @@ local function parse_object_grammar(obj, task, pdf)
     local ret, obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
 
     if ret then
+      if type(obj_or_err) ~= 'table' and dict_start_patt:match(obj_dict_span) then
+        -- An object may be a number or a string, but this one starts as a
+        -- dictionary that the grammar could not read to its end
+        pdf.flags.unparsed_objects = (pdf.flags.unparsed_objects or 0) + 1
+      end
+
       if obj.stream then
         if type(obj_or_err) == 'table' then
           obj.dict = obj_or_err

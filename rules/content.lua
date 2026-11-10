@@ -54,6 +54,31 @@ local function process_pdf_specific(task, part, specific)
     task:insert_result('PDF_TIMEOUT', 1.0, string.format('%s:%.3f',
         part:get_filename() or 'unknown', specific.timeout_processing))
   end
+
+  -- What the parser could not or did not look at: none of that is a proof of
+  -- anything on its own, but a file that is not fully seen is not a clean one
+  local flags = specific.flags
+  if type(flags) == 'table' then
+    local fname = part:get_filename() or 'unknown'
+
+    if flags.no_objects then
+      task:insert_result('PDF_NO_OBJECTS', 1.0, fname)
+    end
+    if flags.decode_limit then
+      task:insert_result('PDF_DECODE_LIMIT', 1.0, fname)
+    end
+    if flags.undecoded_streams then
+      task:insert_result('PDF_UNDECODED_STREAMS', 1.0, string.format('%s:%d',
+          fname, flags.undecoded_streams))
+    end
+    if flags.unparsed_objects or flags.object_errors then
+      task:insert_result('PDF_PARSE_ERRORS', 1.0, string.format('%s:%d',
+          fname, (flags.unparsed_objects or 0) + (flags.object_errors or 0)))
+    end
+    if flags.text_truncated then
+      task:insert_result('PDF_TEXT_TRUNCATED', 1.0, fname)
+    end
+  end
 end
 
 local ooxml_prefixes = {
@@ -316,3 +341,14 @@ rspamd_config:register_symbol {
   parent = id,
   groups = { "content", "pdf" },
 }
+for _, name in ipairs({
+  'PDF_NO_OBJECTS', 'PDF_DECODE_LIMIT', 'PDF_UNDECODED_STREAMS', 'PDF_PARSE_ERRORS',
+  'PDF_TEXT_TRUNCATED',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "pdf" },
+  }
+end
