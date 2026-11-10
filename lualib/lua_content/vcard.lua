@@ -40,10 +40,23 @@ end
 
 local exports = {}
 
+-- What is read of one file: real ones are a few kilobytes
+local max_input_size = 1024 * 1024
+local max_elts = 10000
+
 local function process_vcard(input, mpart, task)
   local control = { n = '\n', r = '' }
   local rspamd_url = require "rspamd_url"
-  local escaper = l.Ct((gen_grammar() / function(key, value)
+  local nelts = 0
+  local truncated = false
+
+  if #input > max_input_size then
+    -- A property that is cut in the middle is still a property
+    input = input:sub(1, max_input_size)
+    truncated = true
+  end
+
+  local function process_property(key, value)
     value = value:gsub("\\(.)", control)
     key = key:lower()
     local local_urls = rspamd_url.all(task:get_mempool(), value)
@@ -58,11 +71,33 @@ local function process_vcard(input, mpart, task)
     lua_util.debugm(N, task, 'vcard: vcard key %s = "%s"',
         key, value)
     return { key, value }
-  end) ^ 1)
+  end
 
-  local elts = escaper:match(input)
+  -- Each property becomes a table that lives as long as the task does, so
+  -- their number is bounded. They are matched one by one: a single match
+  -- over the input would also keep a capture per property on the stack
+  local property = gen_grammar() * l.Cp()
+  local elts = {}
+  local pos = 1
 
-  if not elts then
+  while true do
+    local key, value, next_pos = property:match(input, pos)
+
+    if not next_pos then
+      break
+    end
+
+    if nelts >= max_elts then
+      truncated = true
+      break
+    end
+
+    nelts = nelts + 1
+    elts[nelts] = process_property(key, value)
+    pos = next_pos
+  end
+
+  if nelts == 0 then
     return nil
   end
 
@@ -71,7 +106,8 @@ local function process_vcard(input, mpart, task)
     extract_text = function()
       return nil
     end, -- NYI
-    elts = elts
+    elts = elts,
+    truncated = truncated or nil,
   }
 end
 

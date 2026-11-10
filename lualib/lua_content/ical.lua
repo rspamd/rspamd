@@ -39,6 +39,10 @@ end
 
 local exports = {}
 
+-- What is read of one file: real ones are a few kilobytes
+local max_input_size = 1024 * 1024
+local max_elts = 10000
+
 local function extract_text_data(specific)
   local fun = require "fun"
 
@@ -63,7 +67,16 @@ local url_keys = lua_util.list_to_hash {
 local function process_ical(input, mpart, task)
   local control = { n = '\n', r = '' }
   local rspamd_url = require "rspamd_url"
-  local escaper = l.Ct((gen_grammar() / function(key, value)
+  local nelts = 0
+  local truncated = false
+
+  if #input > max_input_size then
+    -- A property that is cut in the middle is still a property
+    input = input:sub(1, max_input_size)
+    truncated = true
+  end
+
+  local function process_property(key, value)
     value = value:gsub("\\(.)", control)
     key = key:lower():match('^([^;]+)')
 
@@ -81,18 +94,41 @@ local function process_ical(input, mpart, task)
     lua_util.debugm(N, task, 'ical: ical key %s = "%s"',
         key, value)
     return { key, value }
-  end) ^ 1)
+  end
 
-  local elts = escaper:match(input)
+  -- Each property becomes a table that lives as long as the task does, so
+  -- their number is bounded. They are matched one by one: a single match
+  -- over the input would also keep a capture per property on the stack
+  local property = gen_grammar() * l.Cp()
+  local elts = {}
+  local pos = 1
 
-  if not elts then
+  while true do
+    local key, value, next_pos = property:match(input, pos)
+
+    if not next_pos then
+      break
+    end
+
+    if nelts >= max_elts then
+      truncated = true
+      break
+    end
+
+    nelts = nelts + 1
+    elts[nelts] = process_property(key, value)
+    pos = next_pos
+  end
+
+  if nelts == 0 then
     return nil
   end
 
   return {
     tag = 'ical',
     extract_text = extract_text_data,
-    elts = elts
+    elts = elts,
+    truncated = truncated or nil,
   }
 end
 
