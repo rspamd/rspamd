@@ -2005,19 +2005,42 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 								rspamd_mempool_t *pool)
 {
 	char *strbuf, *p;
-	const char *start_offset;
+	const char *start_offset, *after_host, *url_end;
 	gsize slen = uri->urllen - uri->hostlen;
 	goffset r = 0;
+	gboolean has_slash = FALSE;
 
 	if (af == AF_INET) {
 		slen += INET_ADDRSTRLEN;
 	}
 	else {
-		slen += INET6_ADDRSTRLEN;
+		/* And the brackets */
+		slen += INET6_ADDRSTRLEN + 2;
 	}
 
 	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT) {
 		slen += sizeof("65535") - 1;
+	}
+
+	/*
+	 * Learn what follows the authority before the host is replaced: the
+	 * closing bracket, the port and the slash of an empty path
+	 */
+	url_end = uri->string + uri->urllen;
+	after_host = rspamd_url_host_unsafe(uri) + uri->hostlen;
+
+	if (after_host < url_end && *after_host == ']') {
+		after_host++;
+	}
+	if (after_host < url_end && *after_host == ':') {
+		after_host++;
+
+		while (after_host < url_end && g_ascii_isdigit(*after_host)) {
+			after_host++;
+		}
+	}
+	if (after_host < url_end && (*after_host == '/' || *after_host == '\\')) {
+		has_slash = TRUE;
 	}
 
 	/* Allocate new string to build it from IP */
@@ -2025,6 +2048,11 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	r += rspamd_snprintf(strbuf + r, slen - r, "%*s",
 						 (int) (uri->hostshift),
 						 uri->string);
+
+	if (af == AF_INET6 && (r == 0 || strbuf[r - 1] != '[')) {
+		/* An address in an url is always in the brackets */
+		strbuf[r++] = '[';
+	}
 
 	uri->hostshift = r;
 	uri->tldshift = r;
@@ -2034,6 +2062,10 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	r += uri->hostlen;
 	uri->tldlen = uri->hostlen;
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
+
+	if (af == AF_INET6) {
+		strbuf[r++] = ']';
+	}
 
 	/* Reconstruct URL */
 	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT && uri->ext) {
@@ -2050,12 +2082,8 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 							 rspamd_url_data_unsafe(uri));
 		uri->datashift = start_offset - strbuf;
 	}
-	else {
-		/* Add trailing slash if needed */
-		if (uri->hostlen + uri->hostshift < uri->urllen &&
-			*(rspamd_url_host_unsafe(uri) + uri->hostlen) == '/') {
-			r += rspamd_snprintf(strbuf + r, slen - r, "/");
-		}
+	else if (has_slash) {
+		r += rspamd_snprintf(strbuf + r, slen - r, "/");
 	}
 
 	if (uri->querylen > 0) {
@@ -2079,15 +2107,106 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	uri->urllen = r;
 }
 
+/*
+ * Reads a host as an IPv4 address the way a browser does (the IPv4 parser
+ * of the URL standard): one to four numbers, each of them decimal, octal
+ * with a leading zero or hexadecimal with `0x`; the last number fills all
+ * the remaining bytes of the address. Unlike a browser, a number with a
+ * leading zero and the digits 8 or 9 is read as decimal and not refused.
+ * A number of any length is accepted, as leading zeroes are free.
+ */
+static gboolean
+rspamd_url_parse_ip4_number(const char *p, const char *end, struct in_addr *in4)
+{
+	uint64_t parts[4];
+	unsigned int nparts = 0;
+
+	while (p < end) {
+		const char *dot = memchr(p, '.', end - p), *c = p;
+		const char *part_end = dot ? dot : end;
+		unsigned int base = 10;
+		uint64_t v = 0;
+
+		if (nparts == G_N_ELEMENTS(parts) || part_end == p) {
+			return FALSE;
+		}
+
+		if (part_end - c >= 2 && c[0] == '0' && (c[1] == 'x' || c[1] == 'X')) {
+			base = 16;
+			c += 2;
+		}
+		else if (part_end - c >= 2 && c[0] == '0') {
+			base = 8;
+
+			for (const char *t = c; t < part_end; t++) {
+				if (*t == '8' || *t == '9') {
+					base = 10;
+					break;
+				}
+			}
+		}
+
+		for (; c < part_end; c++) {
+			unsigned int d;
+
+			if (g_ascii_isdigit(*c)) {
+				d = *c - '0';
+			}
+			else if (base == 16 && g_ascii_isxdigit(*c)) {
+				d = g_ascii_tolower(*c) - 'a' + 10;
+			}
+			else {
+				return FALSE;
+			}
+
+			v = v * base + d;
+
+			if (v > G_MAXUINT32) {
+				/* No number of an address is that large */
+				return FALSE;
+			}
+		}
+
+		parts[nparts++] = v;
+		p = dot ? dot + 1 : end;
+
+		if (dot && p == end) {
+			/* Ends with an empty number */
+			return FALSE;
+		}
+	}
+
+	if (nparts == 0) {
+		return FALSE;
+	}
+
+	uint32_t addr = 0;
+
+	for (unsigned int i = 0; i + 1 < nparts; i++) {
+		if (parts[i] > 255) {
+			return FALSE;
+		}
+
+		addr |= (uint32_t) parts[i] << (8 * (3 - i));
+	}
+
+	if (parts[nparts - 1] >= (1ULL << (8 * (5 - nparts)))) {
+		return FALSE;
+	}
+
+	addr |= (uint32_t) parts[nparts - 1];
+	in4->s_addr = htonl(addr);
+
+	return TRUE;
+}
+
 static gboolean
 rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *pool)
 {
-	const char *p, *end, *c;
-	char *errstr;
+	const char *p, *end;
 	struct in_addr in4;
 	struct in6_addr in6;
-	gboolean ret = FALSE, check_num = TRUE;
-	uint32_t n, dots, t = 0, i = 0, shift, nshift;
+	gboolean ret = FALSE;
 
 	if (uri->hostlen == 0) {
 		return FALSE;
@@ -2106,133 +2225,27 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 		end--;
 	}
 
-	if (end - p == 0 || end - p > INET6_ADDRSTRLEN) {
+	if (end - p == 0) {
 		return FALSE;
 	}
 
-	if (rspamd_str_has_8bit(p, end - p)) {
-		return FALSE;
-	}
+	if (rspamd_url_parse_ip4_number(p, end, &in4)) {
+		char canon[INET_ADDRSTRLEN];
 
-	if (rspamd_parse_inet_address_ip4(p, end - p, &in4)) {
+		inet_ntop(AF_INET, &in4, canon, sizeof(canon));
+
+		if (strlen(canon) != (gsize) (end - p) || memcmp(canon, p, end - p) != 0) {
+			/* Not what the address looks like: octal, hex, short or padded */
+			uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
+
 		rspamd_url_regen_from_inet_addr(uri, &in4, AF_INET, pool);
 		ret = TRUE;
 	}
-	else if (rspamd_parse_inet_address_ip6(p, end - p, &in6)) {
+	else if (end - p <= INET6_ADDRSTRLEN &&
+			 rspamd_parse_inet_address_ip6(p, end - p, &in6)) {
 		rspamd_url_regen_from_inet_addr(uri, &in6, AF_INET6, pool);
 		ret = TRUE;
-	}
-	else {
-		/* Heuristics for broken urls */
-		char buf[INET6_ADDRSTRLEN + 1];
-		/* Try also numeric notation */
-		c = p;
-		n = 0;
-		dots = 0;
-		shift = 0;
-
-		while (p <= end && check_num) {
-			if (shift < 32 &&
-				((*p == '.' && dots < 3) || (p == end && dots <= 3))) {
-				if (p - c + 1 >= (int) sizeof(buf)) {
-					msg_debug_pool("invalid numeric url %*.s...: too long",
-								   INET6_ADDRSTRLEN, c);
-					return FALSE;
-				}
-
-				rspamd_strlcpy(buf, c, p - c + 1);
-				c = p + 1;
-
-				if (p < end && *p == '.') {
-					dots++;
-				}
-
-				glong long_n = strtol(buf, &errstr, 0);
-
-				if ((errstr == NULL || *errstr == '\0') && long_n >= 0) {
-
-					t = long_n; /* Truncate as windows does */
-					/*
-					 * Even if we have zero, we need to shift by 1 octet
-					 */
-					nshift = (t == 0 ? shift + 8 : shift);
-
-					/*
-					 * Here we count number of octets encoded in this element
-					 */
-					for (i = 0; i < 4; i++) {
-						if ((t >> (8 * i)) > 0) {
-							nshift += 8;
-						}
-						else {
-							break;
-						}
-					}
-					/*
-					 * Here we need to find the proper shift of the previous
-					 * components, so we check possible cases:
-					 * 1) 1 octet - just use it applying shift
-					 * 2) 2 octets - convert to big endian 16 bit number
-					 * 3) 3 octets - convert to big endian 24 bit number
-					 * 4) 4 octets - convert to big endian 32 bit number
-					 */
-					switch (i) {
-					case 4:
-						t = GUINT32_TO_BE(t);
-						break;
-					case 3:
-						t = (GUINT32_TO_BE(t & 0xFFFFFFU)) >> 8;
-						break;
-					case 2:
-						t = GUINT16_TO_BE(t & 0xFFFFU);
-						break;
-					default:
-						t = t & 0xFF;
-						break;
-					}
-
-					if (p != end) {
-						n |= t << shift;
-
-						shift = nshift;
-					}
-				}
-				else {
-					check_num = FALSE;
-				}
-			}
-
-			p++;
-		}
-
-		/* The last component should be last according to url normalization:
-		 * 192.168.1 -> 192.168.0.1
-		 * 192 -> 0.0.0.192
-		 * 192.168 -> 192.0.0.168
-		 */
-		shift = 8 * (4 - i);
-
-		if (shift < 32) {
-			n |= t << shift;
-		}
-
-		if (check_num) {
-			if (dots <= 4) {
-				memcpy(&in4, &n, sizeof(in4));
-				rspamd_url_regen_from_inet_addr(uri, &in4, AF_INET, pool);
-				uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
-				ret = TRUE;
-			}
-			else if (end - c > (int) sizeof(buf) - 1) {
-				rspamd_strlcpy(buf, c, end - c + 1);
-
-				if (inet_pton(AF_INET6, buf, &in6) == 1) {
-					rspamd_url_regen_from_inet_addr(uri, &in6, AF_INET6, pool);
-					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
-					ret = TRUE;
-				}
-			}
-		}
 	}
 
 	return ret;
@@ -3293,13 +3306,13 @@ rspamd_url_parse(struct rspamd_url *uri,
 					/* Additionally check for a numeric IP as we can have some number here */
 					/* Skip for mailto: as email domains cannot be numeric IPs (see #5823) */
 					if (uri->protocol != PROTOCOL_MAILTO) {
-						rspamd_url_maybe_regenerate_from_ip(uri, pool);
-
-						if (last_c == '.' && uri->hostlen > 1) {
+						if (!rspamd_url_maybe_regenerate_from_ip(uri, pool) &&
+							last_c == '.' && uri->hostlen > 1) {
 							/* Skip the last dot */
 							uri->tldlen = uri->hostlen - 1;
 						}
 						else {
+							/* An address has no trailing dot any longer */
 							uri->tldlen = uri->hostlen;
 						}
 
