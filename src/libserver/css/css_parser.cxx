@@ -205,9 +205,19 @@ private:
 	 */
 	std::size_t ntokens = 0;
 	static constexpr std::size_t max_tokens = 1u << 17;
+	bool tokens_exhausted = false;
 	bool eof = false;
 
 	auto next_token() -> css_parser_token;
+	/* Gives a token back: it is counted once, when it is read again */
+	auto unread_token(const css_parser_token &tok) -> void
+	{
+		tokeniser->pushback_token(tok);
+
+		if (ntokens > 0) {
+			ntokens--;
+		}
+	}
 
 	/* Consumers */
 	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
@@ -242,11 +252,13 @@ private:
 
 auto css_parser::next_token() -> css_parser_token
 {
-	if (++ntokens > max_tokens) {
-		if (ntokens == max_tokens + 1) {
+	if (tokens_exhausted || ++ntokens > max_tokens) {
+		if (!tokens_exhausted) {
 			msg_debug_css("too many css tokens, ignore the rest of the style");
 			error = css_parse_error(css_parse_error_type::PARSE_ERROR_TOO_LARGE,
 									"too many tokens");
+			/* It stays so, also when a token is given back */
+			tokens_exhausted = true;
 		}
 
 		/* Pretend the input ends here, so all consumers unwind */
@@ -349,7 +361,7 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 			/* Ignore whitespaces */
 			break;
 		default:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = component_value_consumer(consume_current ? top : block);
 			break;
 		}
@@ -406,7 +418,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 			want_more = false;
 			break;
 		case css_parser_token::token_type::ecurlbrace_token:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 
 			if (nested) {
 				/* The enclosing block ends here, so the rule has no body */
@@ -431,7 +443,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 			}
 			break;
 		default:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = component_value_consumer(block);
 			break;
 		};
@@ -509,11 +521,11 @@ auto css_parser::media_block_consumer(std::unique_ptr<css_consumed_block> &top) 
 		case css_parser_token::token_type::ecurlbrace_token:
 			return true;
 		case css_parser_token::token_type::at_keyword_token:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = at_rule_consumer(top, true);
 			break;
 		default:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = qualified_rule_consumer(top, true);
 			break;
 		}
@@ -574,7 +586,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top,
 			want_more = false;
 			break;
 		case css_parser_token::token_type::ecurlbrace_token:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 
 			if (nested) {
 				/* The enclosing block ends here */
@@ -592,7 +604,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top,
 			want_more = false;
 			break;
 		default:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = component_value_consumer(block);
 			break;
 		};
@@ -782,11 +794,11 @@ auto css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_p
 			eof = true;
 			break;
 		case css_parser_token::token_type::at_keyword_token:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = at_rule_consumer(consumed_blocks);
 			break;
 		default:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = qualified_rule_consumer(consumed_blocks);
 			break;
 		}
@@ -824,7 +836,7 @@ auto css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr
 			/* Ignore whitespaces */
 			break;
 		default:
-			tokeniser->pushback_token(next_token);
+			unread_token(next_token);
 			ret = component_value_consumer(rule_block);
 			break;
 		}
