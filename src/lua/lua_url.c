@@ -756,12 +756,13 @@ lua_url_set_redirected(lua_State *L)
 
 		gsize len;
 		const char *urlstr = lua_tolstring(L, 2, &len);
+		int top = lua_gettop(L);
 
 		rspamd_url_find_single(pool, urlstr, len, RSPAMD_URL_FIND_ALL,
 							   lua_url_single_inserter, L);
 
-		if (lua_type(L, -1) != LUA_TUSERDATA) {
-			/* URL is actually not found */
+		if (lua_gettop(L) == top) {
+			/* URL is actually not found: the top is still an argument */
 			lua_pushnil(L);
 		}
 		else {
@@ -1168,11 +1169,16 @@ lua_url_create(lua_State *L)
 		return luaL_error(L, "invalid arguments: mempool is expected as the first argument");
 	}
 
+	int top = lua_gettop(L);
+
 	rspamd_url_find_single(pool, t->start, t->len, RSPAMD_URL_FIND_ALL,
 						   lua_url_single_inserter, L);
 
-	if (lua_type(L, -1) != LUA_TUSERDATA) {
-		/* URL is actually not found */
+	if (lua_gettop(L) == top) {
+		/*
+		 * URL is actually not found; the top of the stack is an argument,
+		 * that can be userdata as well (a text or a pool)
+		 */
 		lua_pushnil(L);
 
 		return 1;

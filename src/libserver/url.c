@@ -91,7 +91,7 @@ static const struct {
 	 .len = 3},
 	{.proto = PROTOCOL_TELEPHONE,
 	 .name = "callto",
-	 .len = 3},
+	 .len = 6},
 	{.proto = PROTOCOL_UNKNOWN,
 	 .name = NULL,
 	 .len = 0}};
