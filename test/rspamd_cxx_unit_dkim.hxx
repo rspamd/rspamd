@@ -323,6 +323,60 @@ TEST_SUITE("rspamd_dkim")
 		rspamd_mempool_delete(pool);
 	}
 
+	TEST_CASE("rspamd_dkim_duplicate_tags")
+	{
+		const std::string base = "v=1; a=rsa-sha256; c=relaxed/relaxed; d=example.com; s=sel; "
+								 "h=from:to; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=; "
+								 "b=dGVzdA==";
+		/* A known tag given twice makes the signature invalid */
+		std::vector<std::string> bad{
+			base + "; d=other.example",
+			base + "; b=dGVzdA==",
+			base + "; h=from",
+			base + "; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+			base + "; s=sel",
+			"v=1; " + base,
+			base + "; l=10; l=20",
+		};
+		/* Tags that are not known are ignored, repeated or not */
+		std::vector<std::string> good{
+			base,
+			base + "; zz=1; zz=2",
+			base + "; l=10",
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "dkim", 0);
+
+		for (const auto &sig: bad) {
+			SUBCASE(sig.c_str())
+			{
+				GError *err = nullptr;
+				auto *ctx = rspamd_create_dkim_context(sig.c_str(), pool, nullptr, 0,
+													   RSPAMD_DKIM_NORMAL, &err);
+				CHECK(ctx == nullptr);
+				REQUIRE(err != nullptr);
+				CHECK(std::string{err->message}.find("duplicate") != std::string::npos);
+				g_error_free(err);
+			}
+		}
+
+		for (const auto &sig: good) {
+			SUBCASE(sig.c_str())
+			{
+				GError *err = nullptr;
+				auto *ctx = rspamd_create_dkim_context(sig.c_str(), pool, nullptr, 0,
+													   RSPAMD_DKIM_NORMAL, &err);
+				CHECK_MESSAGE(ctx != nullptr, (err ? err->message : "unknown error"));
+
+				if (err) {
+					g_error_free(err);
+				}
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("rspamd_dkim_arc_seal_instance")
 	{
 		/* The ARC-Seal header list is sized from i=, which must be validated first */
@@ -377,8 +431,9 @@ TEST_SUITE("rspamd_dkim")
 			{"cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;i=1", true, "example.com"},
 			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;i=0", false, ""},
 			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==; x;i=0", false, ""},
+			/* A duplicated tag is no way to pick a domain: the seal is not valid */
 			{"i=1; cv=none; a=rsa-sha256; d=attacker.example; s=sel; b=dGVzdA==;;d=trusted.example",
-			 true, "trusted.example"},
+			 false, ""},
 			{";i=1; ; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;", true, "example.com"},
 		};
 

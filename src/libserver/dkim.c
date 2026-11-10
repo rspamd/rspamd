@@ -152,6 +152,10 @@ struct rspamd_dkim_context_s {
 	char *dns_key;
 	enum rspamd_arc_seal_cv cv;
 	const char *dkim_header;
+	/* Tags seen so far, by enum rspamd_dkim_param_type */
+	unsigned int seen_params;
+	/* l=0: the signature covers no body at all */
+	bool zero_len;
 };
 
 #define RSPAMD_DKIM_KEY_ID_LEN 16
@@ -725,6 +729,7 @@ rspamd_dkim_parse_bodylength(rspamd_dkim_context_t *ctx,
 		return false;
 	}
 	ctx->common.len = val;
+	ctx->zero_len = (val == 0);
 
 	return true;
 }
@@ -787,6 +792,27 @@ rspamd_dkim_parse_cv(rspamd_dkim_context_t *ctx,
 	return false;
 }
 
+
+/*
+ * Parses the value of a known tag. A tag must not be duplicated (RFC 6376
+ * section 3.2): a signature that has one is not valid
+ */
+static bool
+rspamd_dkim_parse_param(rspamd_dkim_context_t *ctx, int param,
+						const char *value, size_t len, GError **err)
+{
+	if (ctx->seen_params & (1u << param)) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"duplicate dkim tag");
+		return false;
+	}
+
+	ctx->seen_params |= 1u << param;
+
+	return parser_funcs[param](ctx, value, len, err);
+}
 
 static void
 rspamd_dkim_add_arc_seal_headers(rspamd_mempool_t *pool,
@@ -1105,7 +1131,7 @@ rspamd_create_dkim_context(const char *sig,
 					}
 
 					if (param != DKIM_PARAM_UNKNOWN) {
-						if (!parser_funcs[param](ctx, c, tlen, err)) {
+						if (!rspamd_dkim_parse_param(ctx, param, c, tlen, err)) {
 							state = DKIM_STATE_ERROR;
 						}
 						else {
@@ -1140,7 +1166,7 @@ rspamd_create_dkim_context(const char *sig,
 				}
 
 				if (param != DKIM_PARAM_UNKNOWN) {
-					if (!parser_funcs[param](ctx, c, tlen, err)) {
+					if (!rspamd_dkim_parse_param(ctx, param, c, tlen, err)) {
 						state = DKIM_STATE_ERROR;
 					}
 				}
@@ -3151,6 +3177,21 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	if (!body_start) {
 		res->rcode = DKIM_ERROR;
 		return res;
+	}
+
+	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL && ctx->zero_len) {
+		/* Any content of the body would be outside of the signature */
+		for (const char *p = body_start; p < body_end; p++) {
+			if (*p != '\r' && *p != '\n' && *p != ' ' && *p != '\t') {
+				msg_info_dkim("%s: l=0 for a message with a body; d=%s; s=%s",
+							  rspamd_dkim_type_to_string(ctx->common.type),
+							  ctx->domain, ctx->selector);
+				res->fail_reason = "l=0 does not cover the body";
+				res->rcode = DKIM_RECORD_ERROR;
+
+				return res;
+			}
+		}
 	}
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
