@@ -140,6 +140,18 @@ exports.maybe_process_mime_part = function(part, task, keep_text)
     if ext then
       pair = modules_by_extension[ext]
     end
+
+    if not pair and ext == 'zip' and not keep_text then
+      -- The content tells nothing more than "an archive". The application
+      -- that opens the file goes by its name, so the name picks the handler,
+      -- which then says if the content is what the name claims
+      local fname = part:get_filename()
+      local fext = fname and fname:match('%.([%w]+)$')
+
+      if fext then
+        pair = modules_by_extension[fext:lower()]
+      end
+    end
   end
 
   if pair then

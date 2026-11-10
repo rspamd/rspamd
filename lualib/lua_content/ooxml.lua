@@ -130,7 +130,9 @@ local config = {
   max_documents = 8,
   processing_timeout = 2.0,
   max_entries = 10000,
-  max_parts = 128,
+  -- Parts read of all the documents of a message. A part of a story costs
+  -- little, and what it may hold is bounded by the limits below
+  max_parts = 1024,
   max_file_size = 4 * 1024 * 1024,
   max_output = 16 * 1024 * 1024,
   max_ratio = 200,
@@ -267,13 +269,24 @@ local function extract_selected(data, names, options, state)
   if remaining_output == 0 then
     return nil, "OOXML output limit exceeded"
   end
-  local remaining_entries = remaining(options.max_entries, state.entries)
+  -- A package is walked over several times, and every time all of its entries
+  -- are seen. They are the same entries: a package is charged for them once
+  local document_entries = state.document_entries or 0
+  local remaining_entries = remaining(options.max_entries, state.entries - document_entries)
   if remaining_entries == 0 then
     return nil, "OOXML archive entry limit exceeded"
   end
 
+  -- Part names are compared without regard to the case, as the applications
+  -- do: `Word/Document.xml` is the part that `word/document.xml` names
+  local requested = {}
+  for _, name in ipairs(names) do
+    requested[name:lower()] = name
+  end
+
   local ok, files, truncated, entries_seen = pcall(archive.unpack, data, 'zip', nil, {
     files = names,
+    ignore_case = true,
     -- A package is a plain zip, never a compressed stream with a zip inside
     filters = false,
     max_entries = remaining_entries,
@@ -286,16 +299,22 @@ local function extract_selected(data, names, options, state)
   if not ok then
     return nil, string.format("cannot unpack OOXML package: %s", files)
   end
-  state.entries = state.entries + (entries_seen or 0)
+  entries_seen = entries_seen or 0
+  if entries_seen > document_entries then
+    state.entries = state.entries + (entries_seen - document_entries)
+    state.document_entries = entries_seen
+  end
 
   local result = {}
   for _, file in ipairs(files) do
     state.output = state.output + content_length(file.content)
     state.parts = state.parts + 1
-    if result[file.name] then
+    -- The name that was asked for, whatever the case of the member
+    local name = requested[file.name:lower()] or file.name
+    if result[name] then
       return nil, string.format("duplicate OOXML part: %s", file.name)
     end
-    result[file.name] = file.content
+    result[name] = file.content
   end
 
   if truncated then
@@ -310,6 +329,7 @@ local empty_relationships = { list = {}, by_id = {} }
 exports.open = function(data, requested_options, requested_state)
   local options = lua_util.override_defaults(config, requested_options or {})
   local state = ensure_state(requested_state)
+  state.document_entries = 0
   local initial = {
     entries = state.entries,
     output = state.output,
@@ -358,29 +378,41 @@ exports.open = function(data, requested_options, requested_state)
         main_content_type or 'unknown')
   end
 
+  -- What is known of the package when it cannot be opened in full: the
+  -- relationships read so far name the macros, the objects and the remote
+  -- targets, and a failure further on must not take them away
+  local part_relationships = {
+    [''] = package_relationships,
+  }
+  local function failed(reason)
+    return nil, reason, {
+      format = format.tag,
+      relationships = part_relationships,
+    }
+  end
+
   local main_relationship_part = relationship_part_name(main_part)
   local main_files
   main_files, err = extract_selected(data, {
     main_part,
     main_relationship_part,
   }, options, state)
-  if not main_files then return nil, err end
-  if not main_files[main_part] then
-    return nil, "missing OOXML main document part"
-  end
+  if not main_files then return failed(err) end
 
   local relationships = empty_relationships
   if main_files[main_relationship_part] then
     relationships, err = parse_relationships_bounded(
         main_files[main_relationship_part], main_part, options, state)
-    if not relationships then return nil, err end
+    if not relationships then return failed(err) end
+  end
+  part_relationships[main_part] = relationships
+
+  if not main_files[main_part] then
+    return failed("missing OOXML main document part")
   end
 
   local parts = {
     [main_part] = main_files[main_part],
-  }
-  local part_relationships = {
-    [main_part] = relationships,
   }
   local kinds = {}
   if format.main_kind then
@@ -394,12 +426,16 @@ exports.open = function(data, requested_options, requested_state)
   -- Relationship-only entries (external links, attached templates) go first:
   -- they are cheap and carry the risk indicators, so a package that front-loads
   -- many content stories cannot push them past the truncation point.
+  -- Of the content, the shared strings of a workbook go before its sheets:
+  -- that one part holds the text of all the cells.
   local function select_stories(parent_relationships, selectors, selection)
-    for _, want_content in ipairs({ false, true }) do
-      for _, relationship in ipairs(parent_relationships.list) do
+    for pass = 1, 3 do
+      local want_content = pass > 1
+      for order, relationship in ipairs(parent_relationships.list) do
         if not relationship.external then
           local story = selectors[relationship.type]
           if story and (story.kind ~= nil) == want_content
+              and (not want_content or (story.kind == 'shared_strings') == (pass == 2))
               and not seen[relationship.part_name] then
             local needed = story.kind and 2 or 1
             if #selection.names + needed > remaining(options.max_parts, state.parts) then
@@ -407,7 +443,7 @@ exports.open = function(data, requested_options, requested_state)
               break
             end
             seen[relationship.part_name] = true
-            local entry = { name = relationship.part_name, story = story, children = {} }
+            local entry = { name = relationship.part_name, story = story, children = {}, order = order }
             selection.entries[#selection.entries + 1] = entry
             if story.kind then
               selection.names[#selection.names + 1] = relationship.part_name
@@ -446,9 +482,13 @@ exports.open = function(data, requested_options, requested_state)
 
   local level1 = { entries = {}, names = {} }
   select_stories(relationships, format.stories, level1)
+  -- The text keeps the order of the relationships, whatever was picked first
+  table.sort(level1.entries, function(a, b)
+    return a.order < b.order
+  end)
   local ok
   ok, err = load_stories(level1)
-  if not ok then return nil, err end
+  if not ok then return failed(err) end
 
   local level2 = { entries = {}, names = {} }
   for _, entry in ipairs(level1.entries) do
@@ -459,7 +499,7 @@ exports.open = function(data, requested_options, requested_state)
   end
   level2.parent = nil
   ok, err = load_stories(level2)
-  if not ok then return nil, err end
+  if not ok then return failed(err) end
 
   local story_names = {}
   for _, entry in ipairs(level1.entries) do
@@ -636,10 +676,10 @@ exports.process_document = function(input, mpart, task, hint)
 
   local options = options_for_state(config, state)
 
-  local package, err = exports.open(input, options, state)
+  local package, err, partial = exports.open(input, options, state)
   if not package then
     lua_util.debugm(N, task, 'cannot open %s package: %s', hint, err)
-    return suspicious_result(hint, 'package')
+    return suspicious_result(partial and partial.format or hint, 'package', partial)
   end
   local tag = package.format
 
@@ -686,6 +726,8 @@ exports.process_document = function(input, mpart, task, hint)
     main_part = package.main_part,
     story_parts = package.story_parts,
     truncated = package.truncated,
+    -- Stories that could not be read to their end
+    failed_stories = extracted.failed_stories,
     extracted_bytes = package.extracted_bytes,
     extracted_parts = package.extracted_parts,
   }

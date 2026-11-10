@@ -291,8 +291,13 @@ local function detect_archive_flaw(part, arch, log_obj, _)
 
   if arch_type == 'zip' then
     -- Find specific files/folders in zip file
-    local files = arch:get_files(100) or {}
+    -- The parts that tell what a package is may stand after any number of
+    -- other members, so a look at the first few of them is not enough
+    local files = arch:get_files(10000) or {}
     for _, file in ipairs(files) do
+      if res.docx >= 100 or res.xlsx >= 100 or res.pptx >= 100 then
+        break
+      end
       if has_control_or_zw(file) then
         lua_util.debugm(N, log_obj, "archive filename has control/zw chars: %s", file)
       end
