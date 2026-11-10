@@ -225,4 +225,34 @@ context("HTML past the tags limit", function()
     assert_nil(r.text:find("b\"", 1, true), "the rest of the tag is taken as text")
     assert_true(r.phished, "the link is not checked against its displayed text")
   end)
+
+  test("a link repeated after the limit is counted and checked each time", function()
+    local link = "<a href=\"http://rep.example.net/path\">text</a> "
+    local msg = table.concat({
+      "From: sender@example.com",
+      "Subject: limit",
+      "MIME-Version: 1.0",
+      "Content-Type: text/html",
+      "",
+      "<html><body>" .. string.rep("<b>", 8200) .. string.rep(link, 3) ..
+          "<a href=\"http://rep.example.net/path\">https://www.paypal.com/signin</a>" ..
+          " <a href=\"http://other.example.net/\">other</a></body></html>",
+      "",
+    }, "\r\n")
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local urls = {}
+    for _, u in ipairs(task:get_urls(true) or {}) do
+      urls[u:get_host()] = u
+    end
+
+    assert_not_nil(urls["rep.example.net"], "the repeated link is missing")
+    assert_not_nil(urls["other.example.net"], "the link after the repeated ones is missing")
+    assert_equal(4, urls["rep.example.net"]:get_count())
+    assert_true(urls["rep.example.net"]:is_phished(),
+        "a repeated link is not checked against its displayed text")
+    task:destroy()
+  end)
 end)

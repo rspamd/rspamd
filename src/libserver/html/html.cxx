@@ -51,7 +51,7 @@
 
 namespace rspamd::html {
 
-static const unsigned int max_tags = 8192;            /* Ignore tags if this maximum is reached */
+static const unsigned int max_tags = 8192; /* Ignore tags if this maximum is reached */
 /* Budgets of attributes rspamd does not interpret; the ones it does are always kept, once each */
 static const unsigned int max_attrs_per_tag = 128;    /* Ignore attributes of a single tag if this maximum is reached */
 static const unsigned int max_attrs_per_task = 65536; /* Ignore attributes in all HTML parts of a task if this maximum is reached */
@@ -1061,8 +1061,8 @@ html_interpreted_attr_index(std::string_view name) -> std::optional<std::size_t>
 struct tag_content_parser_state {
 	tag_parser_state cur_state = parse_start;
 	std::string buf;
-	std::string attr_name;              // Store current attribute name
-	const char *value_start = nullptr;  // Track where attribute value starts in input
+	std::string attr_name;            // Store current attribute name
+	const char *value_start = nullptr;// Track where attribute value starts in input
 	/* Where the first quote is in an unquoted value, see html_unquoted_value_length */
 	std::size_t value_quote = std::string::npos;
 	const char *html_start = nullptr;   // Base pointer to HTML buffer start
@@ -2908,47 +2908,8 @@ auto html_process_input(struct rspamd_task *task,
 		return ntag;
 	};
 
-	/*
-	 * Registers the url of a tag with FL_HREF (a link, an area, a form...):
-	 * returns nothing if it has no valid url, or nullptr if there are too
-	 * many urls in the message to track it
-	 */
-	auto process_href_tag = [&](struct html_tag *tag) -> std::optional<struct rspamd_url *> {
-		auto maybe_url = html_process_url_tag(pool, tag, hc,
-											  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
-
-		if (!maybe_url.has_value()) {
-			return std::nullopt;
-		}
-
-		struct rspamd_url *href_url = maybe_url.value();
-
-		if (url_set != NULL) {
-			struct rspamd_url *maybe_existing =
-				rspamd_url_set_add_or_return(url_set, maybe_url.value(), max_urls);
-			if (maybe_existing == nullptr) {
-				/* Too many urls in the message; do not track this one */
-				href_url = nullptr;
-			}
-			else if (maybe_existing == maybe_url.value()) {
-				if (cur_url_order) {
-					href_url->order = (*cur_url_order)++;
-				}
-				href_url->part_order = cur_url_part_order++;
-				html_process_query_url(pool, href_url, url_set,
-									   part_urls,
-									   task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
-									   max_urls);
-			}
-			else {
-				href_url = maybe_existing;
-				/* Replace extra as well */
-				tag->extra = maybe_existing;
-				/* Increase count to avoid odd checks failure */
-				href_url->count++;
-			}
-		}
-
+	/* Counts a registered link of the part, and takes its features */
+	auto account_href_url = [&](struct rspamd_url *href_url) -> void {
 		if (href_url != nullptr) {
 			html_part_add_url(part_urls, href_url);
 
@@ -3017,8 +2978,87 @@ auto html_process_input(struct rspamd_task *task,
 				hc->features.links.query_links++;
 			}
 		}
+	};
+
+	/*
+	 * Registers the url of a tag with FL_HREF (a link, an area, a form...):
+	 * returns nothing if it has no valid url, or nullptr if there are too
+	 * many urls in the message to track it
+	 */
+	auto process_href_tag = [&](struct html_tag *tag) -> std::optional<struct rspamd_url *> {
+		auto maybe_url = html_process_url_tag(pool, tag, hc,
+											  task->cfg ? (lua_State *) task->cfg->lua_state : NULL);
+
+		if (!maybe_url.has_value()) {
+			return std::nullopt;
+		}
+
+		struct rspamd_url *href_url = maybe_url.value();
+
+		if (url_set != NULL) {
+			struct rspamd_url *maybe_existing =
+				rspamd_url_set_add_or_return(url_set, maybe_url.value(), max_urls);
+			if (maybe_existing == nullptr) {
+				/* Too many urls in the message; do not track this one */
+				href_url = nullptr;
+			}
+			else if (maybe_existing == maybe_url.value()) {
+				if (cur_url_order) {
+					href_url->order = (*cur_url_order)++;
+				}
+				href_url->part_order = cur_url_part_order++;
+				html_process_query_url(pool, href_url, url_set,
+									   part_urls,
+									   task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
+									   max_urls);
+			}
+			else {
+				href_url = maybe_existing;
+				/* Replace extra as well */
+				tag->extra = maybe_existing;
+				/* Increase count to avoid odd checks failure */
+				href_url->count++;
+			}
+		}
+
+		account_href_url(href_url);
 
 		return href_url;
+	};
+
+	/*
+	 * Past the tags limit a part can hold any number of links, so one that
+	 * repeats an earlier one is taken from here without parsing it again
+	 */
+	ankerl::unordered_dense::map<std::string_view, struct rspamd_url *> past_limit_hrefs;
+
+	auto process_href_tag_past_limit = [&](struct html_tag *tag) -> std::optional<struct rspamd_url *> {
+		auto raw_href = tag->find_href();
+
+		if (raw_href) {
+			if (auto it = past_limit_hrefs.find(raw_href.value()); it != past_limit_hrefs.end()) {
+				auto *href_url = it->second;
+
+				tag->extra = href_url;
+				href_url->count++;
+				account_href_url(href_url);
+
+				return href_url;
+			}
+
+			if (url_set != NULL && max_urls > 0 && kh_size(url_set) >= max_urls) {
+				/* Too many urls in the message: a new one would not be tracked */
+				return nullptr;
+			}
+		}
+
+		auto maybe_url = process_href_tag(tag);
+
+		if (raw_href && maybe_url.has_value() && maybe_url.value() != nullptr) {
+			past_limit_hrefs.emplace(raw_href.value(), maybe_url.value());
+		}
+
+		return maybe_url;
 	};
 
 	/*
@@ -4266,7 +4306,7 @@ auto html_process_input(struct rspamd_task *task,
 
 			/* FL_BROKEN is set on markup browsers still take, such as <a/href=...> */
 			if (scratch.flags & FL_HREF) {
-				auto maybe_url = process_href_tag(&scratch);
+				auto maybe_url = process_href_tag_past_limit(&scratch);
 
 				if (scratch.id == Tag_A) {
 					/* A link ends the previous one */
@@ -4283,6 +4323,8 @@ auto html_process_input(struct rspamd_task *task,
 
 				if (maybe_base && hc->base_url == nullptr) {
 					hc->base_url = maybe_base.value();
+					/* Links are resolved against it from now on */
+					past_limit_hrefs.clear();
 				}
 			}
 			else if (scratch.id == Tag_IMG) {
