@@ -749,8 +749,11 @@ css_parser::consume_input(const std::string_view &sv)
 		}
 	}
 
-	auto debug_str = consumed_blocks->debug_str();
-	msg_debug_css("consumed css: {%*s}", (int) debug_str.size(), debug_str.data());
+	if (rspamd_logger_need_log(rspamd_log_default_logger(), G_LOG_LEVEL_DEBUG, rspamd_css_log_id)) {
+		/* The whole tree as a string: only when it is going to be logged */
+		auto debug_str = consumed_blocks->debug_str();
+		msg_debug_css("consumed css: {%*s}", (int) debug_str.size(), debug_str.data());
+	}
 
 	return std::nullopt;
 }

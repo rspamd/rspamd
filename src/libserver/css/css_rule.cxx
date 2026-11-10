@@ -18,6 +18,7 @@
 #include "css.hxx"
 #include "libserver/html/html_block.hxx"
 #include <limits>
+#include <array>
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
@@ -36,21 +37,19 @@ void css_rule::override_values(const css_rule &other)
 		bits |= static_cast<int>(1 << v.value.index());
 	}
 
+	/*
+	 * Each value we have takes the last value of its type in `other`: one pass
+	 * over each list, as a declaration may carry any number of values
+	 */
+	std::array<const css_value *, std::variant_size_v<decltype(css_value::value)>> last{};
+
 	for (const auto &ov: other.values) {
-		if (bits & (1 << ov.value.index())) {
-			/* We need to override the existing value */
-			/*
-			 * The algorithm is not very efficient,
-			 * so we need to sort the values first and have a O(N) algorithm
-			 * On the other hand, values vectors are usually limited to the
-			 * number of elements about less then 10, so this O(N^2) algorithm
-			 * is probably ok here
-			 */
-			for (auto &v: values) {
-				if (v.value.index() == ov.value.index()) {
-					v = ov;
-				}
-			}
+		last[ov.value.index()] = &ov;
+	}
+
+	for (auto &v: values) {
+		if (const auto *ov = last[v.value.index()]; ov != nullptr) {
+			v = *ov;
 		}
 	}
 
