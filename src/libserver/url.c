@@ -242,6 +242,24 @@ __KHASH_IMPL(rspamd_url_hash, kh_inline, struct rspamd_url *, char, false,
 __KHASH_IMPL(rspamd_url_host_hash, kh_inline, struct rspamd_url *, char, false,
 			 rspamd_url_host_hash, rspamd_urls_host_cmp);
 
+/*
+ * What the lookahead for the userinfo of an url has learnt about a text:
+ * [begin, end) holds no `@` and nothing that ends an authority. Candidates
+ * that start in the same token (`sip:sip:sip:...`) share it, so the token is
+ * scanned once and not once for each of them
+ */
+struct rspamd_url_lookahead {
+	const char *begin;
+	const char *end;
+	/* The scan stopped at a character at `end`, not at the end of its input */
+	gboolean end_is_stop;
+	/* The same for the scan after a backslash at `bs_at` */
+	const char *bs_at;
+	const char *bs_end;
+	gboolean bs_end_is_stop;
+	gboolean bs_obscured;
+};
+
 struct url_callback_data {
 	const char *begin;
 	char *url_str;
@@ -257,6 +275,7 @@ struct url_callback_data {
 	const char *fin;
 	const char *end;
 	const char *last_at;
+	struct rspamd_url_lookahead lookahead;
 	url_insert_function func;
 	void *funcd;
 };
@@ -1016,7 +1035,8 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
 				 enum rspamd_url_parse_flags parse_flags,
 				 unsigned int *flags,
-				 void *lua_state)
+				 void *lua_state,
+				 struct rspamd_url_lookahead *la)
 {
 	const char *p = str, *c = str, *last = str + len, *slash = NULL,
 			   *password_start = NULL, *user_start = NULL;
@@ -1118,6 +1138,14 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 */
 
 				const char *tp = p;
+				gboolean la_known = la != NULL && la->begin != NULL &&
+									la->begin <= p && p <= la->end;
+
+				if (la_known) {
+					/* Nothing to find before la->end, go on from there */
+					tp = MIN(la->end, last);
+				}
+
 				while (tp < last) {
 					if (*tp == '@') {
 						user_seen = TRUE;
@@ -1135,12 +1163,33 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 						 * it belongs to some other text.
 						 */
 						if (*tp == '\\') {
-							while (++tp < last && g_ascii_isgraph(*tp) &&
-								   *tp != '/' && *tp != '#' && *tp != '?') {
-								if (*tp == '@') {
-									*flags |= RSPAMD_URL_FLAG_OBSCURED;
-									break;
+							const char *bp = tp;
+							gboolean obscured = FALSE;
+
+							if (la != NULL && la->bs_at == tp &&
+								(last <= la->bs_end || la->bs_end_is_stop)) {
+								/* Known: an `@` at bs_end counts if it is in this input */
+								obscured = la->bs_obscured && la->bs_end < last;
+							}
+							else {
+								while (++bp < last && g_ascii_isgraph(*bp) &&
+									   *bp != '/' && *bp != '#' && *bp != '?') {
+									if (*bp == '@') {
+										obscured = TRUE;
+										break;
+									}
 								}
+
+								if (la != NULL) {
+									la->bs_at = tp;
+									la->bs_end = bp;
+									la->bs_end_is_stop = bp < last;
+									la->bs_obscured = obscured;
+								}
+							}
+
+							if (obscured) {
+								*flags |= RSPAMD_URL_FLAG_OBSCURED;
 							}
 						}
 
@@ -1149,6 +1198,16 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					}
 
 					tp++;
+				}
+
+				if (la != NULL && !(la_known && last <= la->end)) {
+					/* A shorter input than the known range tells nothing new */
+					if (!la_known) {
+						la->begin = p;
+					}
+
+					la->end = tp;
+					la->end_is_stop = tp < last;
 				}
 
 				if (st == parse_domain_start && *p == '[') {
@@ -2357,11 +2416,11 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 		else {
 			ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags,
-								   &flags, lua_state);
+								   &flags, lua_state, NULL);
 		}
 	}
 	else {
-		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state);
+		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state, NULL);
 	}
 
 	if (ret != 0) {
@@ -3110,7 +3169,7 @@ url_web_end(struct url_callback_data *cb,
 	}
 
 	if (rspamd_web_parse(NULL, pos, len, &last,
-						 RSPAMD_URL_PARSE_CHECK, &flags, NULL) != 0) {
+						 RSPAMD_URL_PARSE_CHECK, &flags, NULL, &cb->lookahead) != 0) {
 		return FALSE;
 	}
 
