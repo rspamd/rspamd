@@ -175,6 +175,25 @@ local function process_svg_specific(task, part, specific)
 
   task:insert_result('SVG_CONTENT', 1.0, filename)
 
+  -- Parts of the image that were not read: text, links or embedded documents
+  -- over the limits, or an embedded document that could not be read
+  local incomplete = {}
+  if specific.text_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:text', filename)
+  end
+  if specific.urls_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:urls', filename)
+  end
+  if specific.payloads_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:payloads', filename)
+  end
+  if specific.nested_suspicious then
+    incomplete[#incomplete + 1] = string.format('%s:nested=%s', filename, specific.nested_suspicious)
+  end
+  if #incomplete > 0 then
+    task:insert_result('SVG_INCOMPLETE', 1.0, incomplete)
+  end
+
   local scripts = specific.scripts or 0
   local handlers = specific.event_handlers or 0
   local javascript_urls = specific.javascript_urls or 0
@@ -316,6 +335,7 @@ end
 for _, name in ipairs({
   'SVG_CONTENT', 'SVG_SUSPICIOUS', 'SVG_SCRIPT', 'SVG_FOREIGN_OBJECT', 'SVG_DATA_URI',
   'SVG_EXTERNAL_LINKS', 'SVG_EXTERNAL_RESOURCES', 'SVG_FORM', 'SVG_REDIRECT',
+  'SVG_INCOMPLETE',
 }) do
   rspamd_config:register_symbol {
     type = 'virtual',

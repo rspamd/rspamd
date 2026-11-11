@@ -83,6 +83,13 @@ PDF that is fully processed
   Do Not Expect Symbol  PDF_PARSE_ERRORS
   Do Not Expect Symbol  PDF_TEXT_TRUNCATED
 
+SVG with an image inside that cannot be read
+  Scan File  ${RSPAMD_TESTDIR}/messages/svg_incomplete.eml
+  ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_INCOMPLETE]}
+  Expect Symbol With Exact Options  SVG_CONTENT  logo.svg
+  Expect Symbol With Exact Options  SVG_INCOMPLETE  logo.svg:nested=xml
+  Do Not Expect Symbol  SVG_SUSPICIOUS
+
 DOCX with a part that cannot be parsed
   Scan File  ${RSPAMD_TESTDIR}/messages/docx_incomplete.eml
   ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_SUSPICIOUS, OOXML_INCOMPLETE]}
