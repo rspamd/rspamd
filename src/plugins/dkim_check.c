@@ -1599,9 +1599,11 @@ dkim2_module_verify_cb(struct rspamd_task *task,
 		const struct rspamd_dkim2_hop_result *last = &res->hops[res->nhops - 1];
 
 		if (res->fail_reason != NULL) {
-			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:m=%ud/%ud:%s",
+			/* A provisional pass is what Section 13.2 of the draft describes */
+			rspamd_snprintf(optbuf, sizeof(optbuf), "%s:i=%ud:m=%ud/%ud%s:%s",
 							last->domain, last->idx,
 							res->verified_instances, res->ninstances,
+							res->provisional ? ":provisional" : "",
 							res->fail_reason);
 		}
 		else {
@@ -1659,9 +1661,15 @@ dkim2_symbol_callback(struct rspamd_task *task,
 	}
 
 	memset(&params, 0, sizeof(params));
-	params.time_jitter = dkim_module_ctx->time_jitter;
-	params.max_age = 0; /* Use the default (14 days) */
-	params.check_envelope = task->from_envelope != NULL;
+	/* Use the limits of the draft: 14 days old, 1 day ahead */
+	params.time_jitter = 0;
+	params.max_age = 0;
+	/*
+	 * Only what the MTA has sent counts as the envelope: the task may have
+	 * a sender taken from the Return-Path header, which anyone can write
+	 */
+	params.have_mail_from = rspamd_task_get_request_header(task, "From") != NULL;
+	params.have_rcpt = rspamd_task_get_request_header(task, "Rcpt") != NULL;
 
 	rspamd_symcache_item_async_inc(task, item, M);
 

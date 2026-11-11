@@ -15,15 +15,18 @@
  */
 
 /*
- * DKIM2 verification, see draft-ietf-dkim-dkim2-spec.
+ * DKIM2 verification, see draft-ietf-dkim-dkim2-spec-09.
  *
  * Unlike DKIM (RFC 6376), a DKIM2 signature covers only the Message-Instance
  * and DKIM2-Signature header fields; the message content is bound indirectly
- * via the hashes in the Message-Instance h= tag. Therefore all hop signatures
- * can be verified cryptographically even if the message was modified in
- * transit; only the hashes of the *current* instance are checked against the
- * message itself. Reconstruction of previous instances from r= recipes is not
- * implemented in this draft.
+ * via the hashes in the Message-Instance h= tag. A message is a Fully Verified
+ * DKIM2 Message when every signature verifies, the hashes of every instance
+ * match the message recreated with the r= recipes, the Chain of Custody is
+ * unbroken and matches the SMTP envelope, the timestamps are sane and the
+ * From header fields are Authentic.
+ *
+ * Not implemented: verification of the messages returned in DSNs
+ * (Section 16.4) and reporting of the result in Authentication-Results.
  */
 
 #include "config.h"
@@ -34,15 +37,27 @@
 #include "dkim2.h"
 #include "dkim2.hxx"
 #include "utlist.h"
+#include "libmime/email_addr.h"
 #include "libutil/cxx/util.hxx"
 
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/fmt/include/fmt/core.h"
 
 #include <openssl/err.h>
+#include <openssl/bn.h>
 #include <openssl/evp.h>
+#include <openssl/opensslv.h>
+#include <openssl/rsa.h>
+
+/* Pure ML-DSA and its context string need OpenSSL 3.5 */
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L && !defined(LIBRESSL_VERSION_NUMBER)
+#define DKIM2_HAVE_MLDSA 1
+#include <openssl/core_names.h>
+#include <openssl/params.h>
+#endif
 
 #include <algorithm>
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -74,17 +89,34 @@ dkim2_error_quark(void)
 namespace rspamd::dkim2 {
 
 constexpr std::string_view sha256_alg_name = "sha256";
+constexpr std::string_view sha512_alg_name = "sha512";
 constexpr std::string_view rsa_alg_name = "rsa-sha256";
 constexpr std::string_view ed25519_alg_name = "ed25519-sha256";
+constexpr std::string_view mldsa44_alg_name = "mldsa44";
+
+/* A tag-list cannot reasonably have more tags; bounds the duplicate check */
+constexpr std::size_t DKIM2_MAX_TAGS = 64;
+/* RFC 5321 limits a path to 256 octets */
+constexpr std::size_t DKIM2_MAX_SMTP_PATH = 256;
+/* How much of an invalid recipe step is quoted in an error */
+constexpr std::size_t DKIM2_MAX_QUOTED_STEP = 64;
+/* Nesting of a valid recipe: object, "h" object, steps, step, values */
+constexpr unsigned int DKIM2_MAX_JSON_DEPTH = 8;
+
+/* WSP as in the specification: SP and HTAB, nothing else */
+static constexpr auto
+is_wsp(char c) -> bool
+{
+	return c == ' ' || c == '\t';
+}
 
 static auto
 trim(std::string_view in) -> std::string_view
 {
-	/* Values are unfolded by the caller, g_ascii_isspace covers CR/LF remnants */
-	while (!in.empty() && g_ascii_isspace(in.front())) {
+	while (!in.empty() && is_wsp(in.front())) {
 		in.remove_prefix(1);
 	}
-	while (!in.empty() && g_ascii_isspace(in.back())) {
+	while (!in.empty() && is_wsp(in.back())) {
 		in.remove_suffix(1);
 	}
 
@@ -98,7 +130,7 @@ strip_wsp(std::string_view in) -> std::string
 	out.reserve(in.size());
 
 	for (auto c: in) {
-		if (!g_ascii_isspace(c)) {
+		if (!is_wsp(c)) {
 			out.push_back(c);
 		}
 	}
@@ -123,386 +155,750 @@ eq_icase(std::string_view a, std::string_view b) -> bool
 }
 
 static auto
-parse_uint(std::string_view in) -> std::optional<unsigned long>
+starts_with_icase(std::string_view in, std::string_view prefix) -> bool
 {
-	gulong res;
+	return in.size() >= prefix.size() &&
+		   rspamd_lc_cmp(in.data(), prefix.data(), prefix.size()) == 0;
+}
 
-	if (!rspamd_strtoul(in.data(), in.size(), &res)) {
+/* 1*DIGIT that fits into 64 bits */
+static auto
+parse_uint(std::string_view in) -> std::optional<std::uint64_t>
+{
+	if (in.empty() || in.size() > 20) {
 		return std::nullopt;
+	}
+
+	std::uint64_t res = 0;
+
+	for (auto c: in) {
+		if (c < '0' || c > '9') {
+			return std::nullopt;
+		}
+
+		auto digit = static_cast<std::uint64_t>(c - '0');
+
+		if (res > (UINT64_MAX - digit) / 10) {
+			return std::nullopt;
+		}
+
+		res = res * 10 + digit;
 	}
 
 	return res;
 }
 
+/* textstring without the surrounding FWS: 1*(ALPHA / DIGIT / "-" / "_") */
 static auto
-b64_decode(std::string_view in) -> std::optional<std::string>
+is_textstring(std::string_view in) -> bool
 {
-	/* rspamd_cryptobox_base64_decode skips whitespace internally */
-	std::string out;
-	out.resize(in.size() / 4 * 3 + 3);
-	std::size_t outlen = out.size();
-
-	in = trim(in);
-
-	if (!in.empty() &&
-		!rspamd_cryptobox_base64_decode(in.data(), in.size(),
-										reinterpret_cast<unsigned char *>(out.data()), &outlen)) {
-		return std::nullopt;
+	if (in.empty()) {
+		return false;
 	}
 
-	out.resize(in.empty() ? 0 : outlen);
+	return std::all_of(in.begin(), in.end(), [](char c) {
+		return g_ascii_isalnum(c) || c == '-' || c == '_';
+	});
+}
+
+/*
+ * Decode a base64string (Section 2.14). The decoder is strict on purpose: a
+ * lenient one skips stray characters, so the same octets get many spellings,
+ * and what verifies here would not verify elsewhere. The alphabet is the
+ * standard one, FWS is ignored if allowed, the padding is mandatory and the
+ * unused bits MUST be zero.
+ */
+static auto
+b64_decode(std::string_view in, bool allow_fws = true) -> std::optional<std::string>
+{
+	static constexpr auto table = []() {
+		std::array<std::int8_t, 256> t{};
+
+		for (auto &v: t) {
+			v = -1;
+		}
+
+		const char *alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+		for (int i = 0; i < 64; i++) {
+			t[static_cast<unsigned char>(alphabet[i])] = static_cast<std::int8_t>(i);
+		}
+
+		return t;
+	}();
+
+	std::string out;
+	out.reserve(in.size() / 4 * 3);
+
+	std::uint32_t acc = 0;
+	unsigned int nchars = 0, npad = 0;
+
+	for (auto c: in) {
+		if (is_wsp(c)) {
+			if (!allow_fws) {
+				return std::nullopt;
+			}
+
+			continue;
+		}
+
+		if (c == '=') {
+			if (++npad > 2) {
+				return std::nullopt;
+			}
+
+			continue;
+		}
+
+		auto v = table[static_cast<unsigned char>(c)];
+
+		if (v < 0 || npad > 0) {
+			/* Not in the alphabet, or data after the padding */
+			return std::nullopt;
+		}
+
+		acc = (acc << 6) | static_cast<std::uint32_t>(v);
+
+		if (++nchars == 4) {
+			out.push_back(static_cast<char>(acc >> 16));
+			out.push_back(static_cast<char>(acc >> 8));
+			out.push_back(static_cast<char>(acc));
+			acc = 0;
+			nchars = 0;
+		}
+	}
+
+	switch (nchars) {
+	case 0:
+		if (npad != 0) {
+			return std::nullopt;
+		}
+		break;
+	case 2:
+		if (npad != 2 || (acc & 0xF) != 0) {
+			return std::nullopt;
+		}
+		out.push_back(static_cast<char>(acc >> 4));
+		break;
+	case 3:
+		if (npad != 1 || (acc & 0x3) != 0) {
+			return std::nullopt;
+		}
+		out.push_back(static_cast<char>(acc >> 10));
+		out.push_back(static_cast<char>(acc >> 2));
+		break;
+	default:
+		return std::nullopt;
+	}
 
 	return out;
 }
 
-auto parse_tag_list(std::string_view input) -> tl::expected<std::vector<tag_t>, std::string>
+/* Split on a single character, keeping empty elements */
+template<typename Func>
+static void
+split_keep_empty(std::string_view in, char delim, Func &&func)
 {
-	std::vector<tag_t> res;
-	std::string err;
+	std::size_t first = 0;
 
-	rspamd::string_foreach_delim(input, ";", [&](std::string_view seg) {
-		if (!err.empty()) {
-			return;
+	for (;;) {
+		auto second = in.find(delim, first);
+
+		func(in.substr(first, second == std::string_view::npos ? second : second - first));
+
+		if (second == std::string_view::npos) {
+			break;
 		}
 
-		seg = trim(seg);
+		first = second + 1;
+	}
+}
+
+auto combine_all(std::span<const result_t> results) -> result_t
+{
+	bool all_pass = true, any_fail = false, only_temp = true;
+
+	for (auto r: results) {
+		if (r == result_t::pass) {
+			continue;
+		}
+
+		all_pass = false;
+
+		if (r == result_t::fail) {
+			any_fail = true;
+		}
+		if (r != result_t::temperror) {
+			only_temp = false;
+		}
+	}
+
+	if (all_pass) {
+		return results.empty() ? result_t::permerror : result_t::pass;
+	}
+	if (only_temp) {
+		return result_t::temperror;
+	}
+
+	return any_fail ? result_t::fail : result_t::permerror;
+}
+
+auto combine_any(std::span<const result_t> results) -> result_t
+{
+	bool any_temp = false, any_fail = false;
+
+	for (auto r: results) {
+		switch (r) {
+		case result_t::pass:
+			return result_t::pass;
+		case result_t::temperror:
+			any_temp = true;
+			break;
+		case result_t::fail:
+			any_fail = true;
+			break;
+		case result_t::permerror:
+			break;
+		}
+	}
+
+	if (any_temp) {
+		return result_t::temperror;
+	}
+
+	return any_fail ? result_t::fail : result_t::permerror;
+}
+
+auto parse_tag_list(std::string_view input, bool strict)
+	-> tl::expected<std::vector<tag_t>, std::string>
+{
+	std::vector<tag_t> res;
+	std::size_t first = 0;
+
+	/* One pass and nothing is kept but the tags: the input can be huge */
+	for (bool last = false; !last;) {
+		auto second = input.find(';', first);
+
+		last = second == std::string_view::npos;
+
+		auto seg = trim(input.substr(first, last ? second : second - first));
+		auto is_first = first == 0;
+
+		first = second + 1;
 
 		if (seg.empty()) {
-			/* Empty segment, e.g. a trailing `;` */
-			return;
+			/* Only the optional trailing `;` yields an empty tag-spec */
+			if (!strict || (last && !is_first)) {
+				continue;
+			}
+
+			return tl::make_unexpected(std::string{"empty tag"});
 		}
 
 		auto eq_pos = seg.find('=');
 
 		if (eq_pos == std::string_view::npos || eq_pos == 0) {
-			err = fmt::format("invalid tag: '{}'", seg);
-			return;
+			return tl::make_unexpected(std::string{"tag without a name or a value"});
 		}
 
 		auto name = trim(seg.substr(0, eq_pos));
 		auto value = trim(seg.substr(eq_pos + 1));
 
-		for (auto c: name) {
-			if (!g_ascii_isalnum(c) && c != '-') {
-				err = fmt::format("invalid tag name: '{}'", name);
-				return;
+		if (name.empty() || !g_ascii_isalpha(name.front()) ||
+			!std::all_of(name.begin(), name.end(), [](char c) {
+				return g_ascii_isalnum(c) || c == '_';
+			})) {
+			return tl::make_unexpected(std::string{"invalid tag name"});
+		}
+
+		if (strict && std::any_of(name.begin(), name.end(), [](char c) { return g_ascii_isupper(c); })) {
+			/* All tag-names MUST be in lower case (Sections 9 and 10) */
+			return tl::make_unexpected(std::string{"tag name is not in lower case"});
+		}
+
+		if (strict) {
+			for (auto c: value) {
+				if (!is_wsp(c) && (c < 0x21 || c > 0x7e)) {
+					return tl::make_unexpected(fmt::format("invalid character in tag {}", name));
+				}
+			}
+		}
+
+		if (res.size() >= DKIM2_MAX_TAGS) {
+			return tl::make_unexpected(std::string{"too many tags"});
+		}
+
+		for (const auto &seen: res) {
+			if (seen.name == name) {
+				return tl::make_unexpected(fmt::format("duplicate tag {}", name));
 			}
 		}
 
 		res.emplace_back(tag_t{name, value});
-	});
-
-	if (!err.empty()) {
-		return tl::make_unexpected(std::move(err));
 	}
 
 	return res;
 }
 
 static auto
-parse_hash_sets(std::string_view value) -> tl::expected<std::vector<hash_set_t>, std::string>
+find_tag(const std::vector<tag_t> &tags, std::string_view name) -> const tag_t *
 {
-	std::vector<hash_set_t> res;
-	std::string err;
+	for (const auto &tag: tags) {
+		if (tag.name == name) {
+			return &tag;
+		}
+	}
 
-	rspamd::string_foreach_delim(value, ",", [&](std::string_view set_str) {
-		if (!err.empty()) {
+	return nullptr;
+}
+
+auto valid_domain(std::string_view in) -> bool
+{
+	if (in.empty() || in.size() > 253) {
+		return false;
+	}
+
+	std::size_t label_len = 0;
+
+	for (auto c: in) {
+		if (c == '.') {
+			if (label_len == 0) {
+				return false;
+			}
+			label_len = 0;
+		}
+		else if (g_ascii_isalnum(c) || c == '-' || c == '_') {
+			if (++label_len > 63) {
+				return false;
+			}
+		}
+		else {
+			return false;
+		}
+	}
+
+	return label_len > 0;
+}
+
+auto is_unsigned_header(std::string_view name) -> bool
+{
+	static constexpr std::string_view exact[] = {
+		"apparently-to",
+		"arc-authentication-results",
+		"arc-message-signature",
+		"arc-seal",
+		"authentication-results",
+		"delivered-to",
+		"dkim-signature",
+		"dl-expansion-history",
+		"original-recipient",
+		"received",
+		"return-path",
+		"sio-label-history",
+		"x400-received",
+		"x400-trace",
+		/* Signed by the DKIM2-Signature fields, not by the header hash */
+		"message-instance",
+		"dkim2-signature",
+	};
+
+	for (auto ex: exact) {
+		if (eq_icase(name, ex)) {
+			return true;
+		}
+	}
+
+	return starts_with_icase(name, "x-") || starts_with_icase(name, "received-");
+}
+
+/*
+ * Parse the h= value: `|` separated groups of `,` separated hash-sets.
+ * Returns the error text on failure.
+ */
+static auto
+parse_hash_groups(std::string_view value, std::vector<std::vector<hash_set_t>> &out)
+	-> std::optional<std::string>
+{
+	std::optional<std::string> err;
+	std::size_t nsets = 0;
+
+	split_keep_empty(value, '|', [&](std::string_view group_str) {
+		if (err) {
 			return;
 		}
 
-		/* hash-set = hash-name ":" header-hash ":" body-hash */
-		std::vector<std::string_view> parts;
-		rspamd::string_foreach_delim(
-			set_str, ":", [&](std::string_view part) {
+		auto &group = out.emplace_back();
+
+		split_keep_empty(group_str, ',', [&](std::string_view set_str) {
+			if (err) {
+				return;
+			}
+
+			if (++nsets > DKIM2_MAX_HASH_SETS) {
+				err = fmt::format("syntax error: too many hash-sets (max {})",
+								  DKIM2_MAX_HASH_SETS);
+				return;
+			}
+
+			/* hash-set = hash-name ":" header-hash ":" body-hash */
+			std::vector<std::string_view> parts;
+			split_keep_empty(set_str, ':', [&](std::string_view part) {
 				parts.push_back(part);
-			},
-			false);
+			});
 
-		if (parts.size() != 3) {
-			err = fmt::format("invalid hash-set: '{}'", set_str);
-			return;
-		}
+			if (parts.size() != 3) {
+				err = "syntax error: invalid hash-set";
+				return;
+			}
 
-		auto hh = b64_decode(parts[1]);
-		auto bh = b64_decode(parts[2]);
+			auto alg = trim(parts[0]);
+			auto hh = b64_decode(parts[1]);
+			auto bh = b64_decode(parts[2]);
 
-		if (!hh || !bh || hh->empty() || bh->empty()) {
-			err = fmt::format("invalid base64 in hash-set: '{}'", set_str);
-			return;
-		}
+			if (!is_textstring(alg) || !hh || !bh || hh->empty() || bh->empty()) {
+				err = "syntax error: invalid hash-set";
+				return;
+			}
 
-		res.emplace_back(hash_set_t{
-			std::string{trim(parts[0])},
-			std::move(*hh),
-			std::move(*bh),
+			for (const auto &other_group: out) {
+				for (const auto &hs: other_group) {
+					if (hs.alg == alg) {
+						err = "has a duplicate hash algorithm";
+						return;
+					}
+				}
+			}
+
+			group.emplace_back(hash_set_t{
+				std::string{alg},
+				std::move(*hh),
+				std::move(*bh),
+			});
 		});
 	});
 
-	if (!err.empty()) {
-		return tl::make_unexpected(std::move(err));
-	}
-
-	if (res.empty()) {
-		return tl::make_unexpected(std::string{"empty h= tag"});
-	}
-
-	return res;
+	return err;
 }
 
-auto parse_mi(std::string_view value) -> tl::expected<mi_header_t, std::string>
+auto parse_mi(std::string_view value) -> tl::expected<mi_header_t, parse_error_t>
 {
 	auto tags = parse_tag_list(value);
 
 	if (!tags) {
-		return tl::make_unexpected(tags.error());
+		return tl::make_unexpected(parse_error_t{0, "syntax error: " + tags.error()});
 	}
 
 	mi_header_t res;
-	bool seen_m = false, seen_h = false;
+	const auto *m_tag = find_tag(*tags, "m");
 
-	for (const auto &tag: *tags) {
-		if (tag.name == "m") {
-			if (seen_m) {
-				return tl::make_unexpected(std::string{"duplicate m= tag"});
-			}
-			auto m = parse_uint(tag.value);
-			if (!m || *m == 0 || *m > RSPAMD_DKIM2_MAX_HOPS) {
-				return tl::make_unexpected(fmt::format("invalid m= tag: '{}'", tag.value));
-			}
-			res.m = *m;
-			seen_m = true;
-		}
-		else if (tag.name == "h") {
-			if (seen_h) {
-				return tl::make_unexpected(std::string{"duplicate h= tag"});
-			}
-			auto hashes = parse_hash_sets(tag.value);
-			if (!hashes) {
-				return tl::make_unexpected(hashes.error());
-			}
-			res.hashes = std::move(*hashes);
-			seen_h = true;
-		}
-		else if (tag.name == "r") {
-			res.has_recipe = true;
-			res.recipe_b64 = strip_wsp(tag.value);
-		}
-		/* Unknown tags are ignored, but covered by the signature input */
+	if (m_tag == nullptr) {
+		return tl::make_unexpected(parse_error_t{0, "tag=m missing"});
 	}
 
-	if (!seen_m) {
-		return tl::make_unexpected(std::string{"missing mandatory m= tag"});
+	auto m = parse_uint(m_tag->value);
+
+	if (!m || *m == 0 || *m > RSPAMD_DKIM2_MAX_HOPS) {
+		return tl::make_unexpected(parse_error_t{0, "syntax error: invalid m= tag"});
 	}
-	if (!seen_h) {
-		return tl::make_unexpected(std::string{"missing mandatory h= tag"});
+
+	res.m = static_cast<unsigned int>(*m);
+
+	const auto *h_tag = find_tag(*tags, "h");
+
+	if (h_tag == nullptr) {
+		return tl::make_unexpected(parse_error_t{res.m, "tag=h missing"});
 	}
+
+	if (auto err = parse_hash_groups(h_tag->value, res.hash_groups)) {
+		return tl::make_unexpected(parse_error_t{res.m, std::move(*err)});
+	}
+
+	if (const auto *r_tag = find_tag(*tags, "r")) {
+		res.has_recipe = true;
+		res.recipe_b64 = strip_wsp(r_tag->value);
+	}
+
+	/* Unknown tags are ignored, but covered by the signature input */
 
 	return res;
 }
 
+/*
+ * Parse the s= value: `|` separated groups of `,` separated signatures.
+ * Returns the error text on failure.
+ */
 static auto
-parse_sig_sets(std::string_view value) -> tl::expected<std::vector<sig_set_t>, std::string>
+parse_sig_groups(std::string_view value, std::vector<std::vector<sig_set_t>> &out)
+	-> std::optional<std::string>
 {
-	std::vector<sig_set_t> res;
-	std::string err;
+	std::optional<std::string> err;
+	std::size_t nsets = 0;
 
-	rspamd::string_foreach_delim(value, ",", [&](std::string_view set_str) {
-		if (!err.empty()) {
-			return;
-		}
-		if (res.size() >= DKIM2_MAX_SIG_SETS_PER_HOP) {
-			err = fmt::format("too many signature sets (max {})",
-							  DKIM2_MAX_SIG_SETS_PER_HOP);
+	split_keep_empty(value, '|', [&](std::string_view group_str) {
+		if (err) {
 			return;
 		}
 
-		/* sig-set = selector ":" sig-name ":" message-sig */
-		std::vector<std::string_view> parts;
-		rspamd::string_foreach_delim(
-			set_str, ":", [&](std::string_view part) {
+		auto &group = out.emplace_back();
+
+		split_keep_empty(group_str, ',', [&](std::string_view set_str) {
+			if (err) {
+				return;
+			}
+
+			if (++nsets > DKIM2_MAX_SIG_SETS_PER_HOP) {
+				err = fmt::format("syntax error: too many signatures (max {})",
+								  DKIM2_MAX_SIG_SETS_PER_HOP);
+				return;
+			}
+
+			/* sig-set = selector ":" sig-name ":" message-sig */
+			std::vector<std::string_view> parts;
+			split_keep_empty(set_str, ':', [&](std::string_view part) {
 				parts.push_back(part);
-			},
-			false);
+			});
 
-		if (parts.size() != 3) {
-			err = fmt::format("invalid sig-set: '{}'", set_str);
-			return;
-		}
+			if (parts.size() != 3) {
+				err = "syntax error: invalid signature in s= tag";
+				return;
+			}
 
-		auto selector = trim(parts[0]);
-		auto alg = trim(parts[1]);
-		auto sig = b64_decode(parts[2]);
+			auto selector = trim(parts[0]);
+			auto alg = trim(parts[1]);
+			auto sig = b64_decode(parts[2]);
 
-		if (selector.empty() || alg.empty()) {
-			err = fmt::format("invalid sig-set: '{}'", set_str);
-			return;
-		}
+			if (!valid_domain(selector) || !is_textstring(alg) || !sig || sig->empty()) {
+				err = "syntax error: invalid signature in s= tag";
+				return;
+			}
 
-		if (!sig || sig->empty()) {
-			err = fmt::format("invalid base64 signature in sig-set for selector '{}'",
-							  selector);
-			return;
-		}
+			for (const auto &other_group: out) {
+				for (const auto &ss: other_group) {
+					if (eq_icase(ss.selector, selector)) {
+						err = "has a duplicate selector";
+						return;
+					}
+				}
+			}
 
-		res.emplace_back(sig_set_t{
-			std::string{selector},
-			std::string{alg},
-			std::move(*sig),
+			group.emplace_back(sig_set_t{
+				std::string{selector},
+				std::string{alg},
+				std::move(*sig),
+			});
 		});
 	});
 
-	if (!err.empty()) {
-		return tl::make_unexpected(std::move(err));
-	}
-
-	if (res.empty()) {
-		return tl::make_unexpected(std::string{"empty s= tag"});
-	}
-
-	return res;
+	return err;
 }
 
-auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, std::string>
+/* Decode an mf=/rt= element: an SMTP path with the angle brackets */
+static auto
+decode_smtp_path(std::string_view b64) -> std::optional<std::string>
+{
+	if (b64.size() > DKIM2_MAX_SMTP_PATH * 2) {
+		/* Do not even decode it */
+		return std::nullopt;
+	}
+
+	auto path = b64_decode(b64);
+
+	if (!path || path->size() < 2 || path->size() > DKIM2_MAX_SMTP_PATH ||
+		path->front() != '<' || path->back() != '>') {
+		return std::nullopt;
+	}
+
+	for (auto c: *path) {
+		/* 8bit octets are fine: local parts are recorded unchanged (Section 18) */
+		if (static_cast<unsigned char>(c) < 0x20 || c == 0x7f) {
+			return std::nullopt;
+		}
+	}
+
+	if (path->size() > 2 && smtp_addr_is_null(*path)) {
+		/* A source route to nowhere is not the null path */
+		return std::nullopt;
+	}
+
+	/* Domains are recorded as A-labels (Section 18) or are domain literals */
+	auto domain = smtp_addr_domain(*path);
+
+	if (!domain.empty() && domain.front() != '[' && !valid_domain(domain)) {
+		return std::nullopt;
+	}
+
+	return path;
+}
+
+auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, parse_error_t>
 {
 	auto tags = parse_tag_list(value);
 
 	if (!tags) {
-		return tl::make_unexpected(tags.error());
+		return tl::make_unexpected(parse_error_t{0, "syntax error: " + tags.error()});
 	}
 
 	sig_header_t res;
-	bool seen_i = false, seen_m = false, seen_mf = false, seen_rt = false,
-		 seen_d = false, seen_s = false;
+	const auto *i_tag = find_tag(*tags, "i");
 
-	for (const auto &tag: *tags) {
-		if (tag.name == "i") {
-			if (seen_i) {
-				return tl::make_unexpected(std::string{"duplicate i= tag"});
-			}
-			auto i = parse_uint(tag.value);
-			if (!i || *i == 0 || *i > RSPAMD_DKIM2_MAX_HOPS) {
-				return tl::make_unexpected(fmt::format("invalid i= tag: '{}'", tag.value));
-			}
-			res.i = *i;
-			seen_i = true;
-		}
-		else if (tag.name == "m") {
-			if (seen_m) {
-				return tl::make_unexpected(std::string{"duplicate m= tag"});
-			}
-			auto m = parse_uint(tag.value);
-			if (!m || *m == 0 || *m > RSPAMD_DKIM2_MAX_HOPS) {
-				return tl::make_unexpected(fmt::format("invalid m= tag: '{}'", tag.value));
-			}
-			res.m = *m;
-			seen_m = true;
-		}
-		else if (tag.name == "t") {
-			auto t = parse_uint(tag.value);
-			if (!t || *t > (gulong) G_MAXINT64) {
-				return tl::make_unexpected(fmt::format("invalid t= tag: '{}'", tag.value));
-			}
-			res.t = static_cast<std::time_t>(*t);
-		}
-		else if (tag.name == "mf") {
-			if (seen_mf) {
-				return tl::make_unexpected(std::string{"duplicate mf= tag"});
-			}
-			auto mf = b64_decode(tag.value);
-			if (!mf) {
-				return tl::make_unexpected(std::string{"invalid base64 in mf= tag"});
-			}
-			res.mf = std::move(*mf);
-			seen_mf = true;
-		}
-		else if (tag.name == "rt") {
-			if (seen_rt) {
-				return tl::make_unexpected(std::string{"duplicate rt= tag"});
-			}
-			std::string err;
-			rspamd::string_foreach_delim(tag.value, ",", [&](std::string_view rcpt_b64) {
-				if (!err.empty()) {
-					return;
-				}
-				if (res.rt.size() >= DKIM2_MAX_RT_ENTRIES) {
-					err = fmt::format("too many rt= entries (max {})",
-									  DKIM2_MAX_RT_ENTRIES);
-					return;
-				}
-				auto rcpt = b64_decode(rcpt_b64);
-				if (!rcpt) {
-					err = "invalid base64 in rt= tag";
-					return;
-				}
-				res.rt.emplace_back(std::move(*rcpt));
-			});
-			if (!err.empty()) {
-				return tl::make_unexpected(std::move(err));
-			}
-			seen_rt = true;
-		}
-		else if (tag.name == "d") {
-			if (seen_d) {
-				return tl::make_unexpected(std::string{"duplicate d= tag"});
-			}
-			if (tag.value.empty()) {
-				return tl::make_unexpected(std::string{"empty d= tag"});
-			}
-			res.domain = strip_wsp(tag.value);
-			seen_d = true;
-		}
-		else if (tag.name == "s") {
-			if (seen_s) {
-				return tl::make_unexpected(std::string{"duplicate s= tag"});
-			}
-			auto sigs = parse_sig_sets(tag.value);
-			if (!sigs) {
-				return tl::make_unexpected(sigs.error());
-			}
-			res.sigs = std::move(*sigs);
-			seen_s = true;
-		}
-		else if (tag.name == "f") {
-			rspamd::string_foreach_delim(tag.value, ",", [&](std::string_view flag) {
-				flag = trim(flag);
-				if (flag == "donotmodify") {
-					res.flags |= DKIM2_SIG_FLAG_DONOTMODIFY;
-				}
-				else if (flag == "donotexplode") {
-					res.flags |= DKIM2_SIG_FLAG_DONOTEXPLODE;
-				}
-				else if (flag == "feedback") {
-					res.flags |= DKIM2_SIG_FLAG_FEEDBACK;
-				}
-				else if (flag == "exploded") {
-					res.flags |= DKIM2_SIG_FLAG_EXPLODED;
-				}
-				/* Unknown flags are ignored */
-			});
-		}
-		/* n= and unknown tags are ignored, but covered by the signature input */
+	if (i_tag == nullptr) {
+		return tl::make_unexpected(parse_error_t{0, "tag=i missing"});
 	}
 
-	if (!seen_i || !seen_m || !seen_mf || !seen_rt || !seen_d || !seen_s) {
-		return tl::make_unexpected(fmt::format(
-			"missing mandatory tag(s):{}{}{}{}{}{}",
-			seen_i ? "" : " i=", seen_m ? "" : " m=", seen_mf ? "" : " mf=",
-			seen_rt ? "" : " rt=", seen_d ? "" : " d=", seen_s ? "" : " s="));
+	auto i = parse_uint(i_tag->value);
+
+	if (!i || *i == 0 || *i > RSPAMD_DKIM2_MAX_HOPS) {
+		return tl::make_unexpected(parse_error_t{0, "syntax error: invalid i= tag"});
 	}
+
+	res.i = static_cast<unsigned int>(*i);
+
+	auto fail = [&](std::string what) {
+		return tl::make_unexpected(parse_error_t{res.i, std::move(what)});
+	};
+
+	const auto *m_tag = find_tag(*tags, "m");
+	const auto *t_tag = find_tag(*tags, "t");
+	const auto *d_tag = find_tag(*tags, "d");
+	const auto *s_tag = find_tag(*tags, "s");
+	const auto *mf_tag = find_tag(*tags, "mf");
+	const auto *rt_tag = find_tag(*tags, "rt");
+	const auto *nd_tag = find_tag(*tags, "nd");
+
+	/* i=, m=, t=, d= and s= MUST be present (Section 10) */
+	for (auto [tag, name]: {std::pair{m_tag, "m"}, std::pair{t_tag, "t"},
+							std::pair{d_tag, "d"}, std::pair{s_tag, "s"}}) {
+		if (tag == nullptr) {
+			return fail(fmt::format("tag={} missing", name));
+		}
+	}
+
+	/* There MUST be either an nd= tag or both mf= and rt= tags */
+	if (nd_tag != nullptr) {
+		if (mf_tag != nullptr || rt_tag != nullptr) {
+			return fail(fmt::format("tag={} was unexpected", mf_tag ? "mf" : "rt"));
+		}
+	}
+	else if (mf_tag == nullptr || rt_tag == nullptr) {
+		return fail(fmt::format("tag={} missing", mf_tag ? "rt" : "mf"));
+	}
+
+	auto m = parse_uint(m_tag->value);
+
+	if (!m || *m == 0 || *m > RSPAMD_DKIM2_MAX_HOPS) {
+		return fail("syntax error: invalid m= tag");
+	}
+
+	res.m = static_cast<unsigned int>(*m);
+
+	auto t = parse_uint(t_tag->value);
+
+	if (!t) {
+		return fail("syntax error: invalid t= tag");
+	}
+
+	res.t = *t;
+
+	if (!valid_domain(d_tag->value)) {
+		return fail("syntax error: invalid d= tag");
+	}
+
+	res.domain = std::string{d_tag->value};
+
+	if (nd_tag != nullptr) {
+		if (!valid_domain(nd_tag->value)) {
+			return fail("syntax error: invalid nd= tag");
+		}
+
+		res.has_nd = true;
+		res.nd = std::string{nd_tag->value};
+	}
+	else {
+		auto mf = decode_smtp_path(mf_tag->value);
+
+		if (!mf) {
+			return fail("syntax error: invalid mf= tag");
+		}
+
+		res.mf = std::move(*mf);
+
+		bool rt_ok = true;
+
+		split_keep_empty(rt_tag->value, ',', [&](std::string_view rcpt_b64) {
+			if (!rt_ok) {
+				return;
+			}
+
+			auto rcpt = res.rt.size() < DKIM2_MAX_RT_ENTRIES ? decode_smtp_path(rcpt_b64) : std::nullopt;
+
+			if (!rcpt || rcpt->size() == 2) {
+				/* Over the limit, undecodable or a null forward-path */
+				rt_ok = false;
+				return;
+			}
+
+			res.rt.emplace_back(std::move(*rcpt));
+		});
+
+		if (!rt_ok) {
+			return fail("syntax error: invalid rt= tag");
+		}
+	}
+
+	if (auto err = parse_sig_groups(s_tag->value, res.sig_groups)) {
+		return fail(std::move(*err));
+	}
+
+	if (const auto *f_tag = find_tag(*tags, "f")) {
+		bool flags_ok = true;
+
+		split_keep_empty(f_tag->value, ',', [&](std::string_view flag) {
+			flag = trim(flag);
+
+			if (!is_textstring(flag)) {
+				flags_ok = false;
+			}
+			else if (flag == "exploded") {
+				res.flags |= DKIM2_SIG_FLAG_EXPLODED;
+			}
+			else if (flag == "feedback") {
+				res.flags |= DKIM2_SIG_FLAG_FEEDBACK;
+			}
+			else if (flag == "feedhere") {
+				res.flags |= DKIM2_SIG_FLAG_FEEDHERE;
+			}
+			/* A flag that is not recognized has no effect */
+		});
+
+		if (!flags_ok) {
+			return fail("syntax error: invalid f= tag");
+		}
+	}
+
+	if (const auto *n_tag = find_tag(*tags, "n")) {
+		if (n_tag->value.size() > DKIM2_MAX_NONCE_LEN ||
+			std::any_of(n_tag->value.begin(), n_tag->value.end(), is_wsp)) {
+			return fail("syntax error: invalid n= tag");
+		}
+
+		res.nonce = std::string{n_tag->value};
+	}
+
+	/* Unknown tags are ignored, but covered by the signature input */
 
 	return res;
 }
 
 auto canon_hash_line(std::string_view name, std::string_view unfolded_value) -> std::string
 {
-	auto out = lc_string(name);
+	auto out = lc_string(trim(name));
 	out.push_back(':');
 
 	auto value = trim(unfolded_value);
 	bool got_sp = false;
 
 	for (auto c: value) {
-		if (g_ascii_isspace(c)) {
+		if (is_wsp(c)) {
 			got_sp = true;
 		}
 		else {
@@ -521,11 +917,11 @@ auto canon_hash_line(std::string_view name, std::string_view unfolded_value) -> 
 
 auto canon_sig_line(std::string_view name, std::string_view unfolded_value) -> std::string
 {
-	auto out = lc_string(name);
+	auto out = lc_string(trim(name));
 	out.push_back(':');
 
 	for (auto c: unfolded_value) {
-		if (!g_ascii_isspace(c)) {
+		if (!is_wsp(c)) {
 			out.push_back(c);
 		}
 	}
@@ -549,55 +945,43 @@ auto blank_sig_values(std::string_view canon_line) -> std::string
 		return std::string{canon_line};
 	}
 
-	std::string out{line.substr(0, colon_pos + 1)};
-	auto tag_list = line.substr(colon_pos + 1);
+	std::string out;
+	out.reserve(line.size() + 2);
+	out.append(line.substr(0, colon_pos + 1));
 
-	/*
-	 * string_foreach_delim does not emit a trailing empty element, so trailing
-	 * separators are restored explicitly to keep the canonical form byte-exact
-	 */
 	bool first_tag = true;
-	rspamd::string_foreach_delim(
-		tag_list, ";", [&](std::string_view seg) {
-			if (!first_tag) {
-				out.push_back(';');
+
+	split_keep_empty(line.substr(colon_pos + 1), ';', [&](std::string_view seg) {
+		if (!first_tag) {
+			out.push_back(';');
+		}
+		first_tag = false;
+
+		if (!seg.starts_with("s=")) {
+			out.append(seg);
+			return;
+		}
+
+		/*
+		 * sig-set = selector ":" sig-name ":" message-sig, sets are separated
+		 * by `,` and `|`: drop everything from the second colon of a set up to
+		 * the next separator
+		 */
+		unsigned int ncolons = 0;
+
+		for (auto c: seg) {
+			if (c == ',' || c == '|') {
+				ncolons = 0;
+				out.push_back(c);
 			}
-			first_tag = false;
-
-			if (seg.starts_with("s=")) {
-				out.append("s=");
-				auto sets = seg.substr(2);
-				bool first_set = true;
-				rspamd::string_foreach_delim(
-					sets, ",", [&](std::string_view set_str) {
-						if (!first_set) {
-							out.push_back(',');
-						}
-						first_set = false;
-						/* selector ":" sig-name ":" message-sig -> blank the sig */
-						auto last_colon = set_str.rfind(':');
-						if (last_colon != std::string_view::npos) {
-							out.append(set_str.substr(0, last_colon + 1));
-						}
-						else {
-							out.append(set_str);
-						}
-					},
-					false);
-
-				if (sets.ends_with(',')) {
-					out.push_back(',');
+			else if (ncolons < 2) {
+				if (c == ':') {
+					ncolons++;
 				}
+				out.push_back(c);
 			}
-			else {
-				out.append(seg);
-			}
-		},
-		false);
-
-	if (tag_list.ends_with(';')) {
-		out.push_back(';');
-	}
+		}
+	});
 
 	out.append("\r\n");
 
@@ -632,24 +1016,29 @@ auto build_sig_input(std::span<const std::string> mi_lines,
 	return out;
 }
 
-auto relaxed_domain_match(std::string_view child, std::string_view base) -> bool
+auto relaxed_domain_match(std::string_view param1, std::string_view param2) -> bool
 {
-	if (base.empty() || child.empty()) {
+	if (param1.empty() || param2.empty() ||
+		param1.front() == '[' || param2.front() == '[') {
 		return false;
 	}
 
 	for (;;) {
-		if (eq_icase(child, base)) {
+		if (eq_icase(param1, param2)) {
 			return true;
 		}
 
-		auto dot_pos = child.find('.');
+		auto dot_pos = param1.find('.');
 
 		if (dot_pos == std::string_view::npos) {
 			return false;
 		}
 
-		child.remove_prefix(dot_pos + 1);
+		param1.remove_prefix(dot_pos + 1);
+
+		if (param1.empty()) {
+			return false;
+		}
 	}
 }
 
@@ -661,6 +1050,15 @@ strip_angle(std::string_view addr) -> std::string_view
 	if (addr.size() >= 2 && addr.front() == '<' && addr.back() == '>') {
 		addr.remove_prefix(1);
 		addr.remove_suffix(1);
+	}
+
+	/* An obsolete source route: `@a,@b:local@domain` */
+	if (!addr.empty() && addr.front() == '@') {
+		auto colon_pos = addr.find(':');
+
+		if (colon_pos != std::string_view::npos) {
+			addr.remove_prefix(colon_pos + 1);
+		}
 	}
 
 	return addr;
@@ -678,8 +1076,12 @@ auto smtp_addr_domain(std::string_view addr) -> std::string_view
 	return addr.substr(at_pos + 1);
 }
 
-static auto
-smtp_addr_key(std::string_view addr) -> std::string
+auto smtp_addr_is_null(std::string_view addr) -> bool
+{
+	return strip_angle(addr).empty();
+}
+
+auto smtp_addr_key(std::string_view addr) -> std::string
 {
 	addr = strip_angle(addr);
 	std::string key{addr};
@@ -697,246 +1099,1123 @@ auto smtp_addr_equal(std::string_view a, std::string_view b) -> bool
 	return smtp_addr_key(a) == smtp_addr_key(b);
 }
 
-auto split_body_lines(std::string_view body, std::size_t max_lines)
-	-> tl::expected<std::vector<std::string_view>, std::string>
+auto check_custody(std::span<const sig_header_t> sigs) -> std::optional<std::string>
 {
-	std::vector<std::string_view> lines;
-	std::size_t run_start = 0;
+	for (std::size_t k = 0; k < sigs.size(); k++) {
+		const auto &sig = sigs[k];
 
-	auto push_line = [&](std::string_view line) -> bool {
-		if (lines.size() >= max_lines) {
-			return false;
+		/* Section 7.1 item 2: d= against the mf= domain of the same field */
+		if (!sig.has_nd && !smtp_addr_is_null(sig.mf) &&
+			!relaxed_domain_match(smtp_addr_domain(sig.mf), sig.domain)) {
+			return fmt::format("DKIM2-Signature i={} mf= and d= do not match", sig.i);
 		}
 
-		lines.emplace_back(line);
+		if (k == 0) {
+			/* The i=1 field has nothing to be linked with */
+			continue;
+		}
 
-		return true;
-	};
+		/* Section 7.1 item 1: the link with the previous field */
+		const auto &prev = sigs[k - 1];
 
-	for (std::size_t pos = 0; pos < body.size(); pos++) {
-		auto c = body[pos];
-
-		if (c == '\r' || c == '\n') {
-			if (!push_line(body.substr(run_start, pos - run_start))) {
-				return tl::make_unexpected(fmt::format("too many body lines (max {})",
-													   max_lines));
+		if (prev.has_nd) {
+			/* An imaginary hop: this field must be signed by the announced domain */
+			if (!eq_icase(sig.domain, prev.nd)) {
+				return fmt::format("DKIM2-Signature i={} nd= does not match", prev.i);
 			}
 
-			if (c == '\r' && pos + 1 < body.size() && body[pos + 1] == '\n') {
-				pos++;
-			}
-
-			run_start = pos + 1;
-		}
-	}
-
-	if (run_start < body.size()) {
-		if (!push_line(body.substr(run_start))) {
-			return tl::make_unexpected(fmt::format("too many body lines (max {})",
-												   max_lines));
-		}
-	}
-
-	return lines;
-}
-
-/*
- * Parse one recipe part (an "h" entry or the "b" value): an array of steps,
- * or null meaning that the prior state cannot be recreated.
- * Returns an error message or nullopt on success.
- */
-static auto
-parse_recipe_steps(const ucl_object_t *obj, const recipe_limits_t &limits,
-				   recipe_part_t &part) -> std::optional<std::string>
-{
-	if (ucl_object_type(obj) == UCL_NULL) {
-		part.unrecoverable = true;
-
-		return std::nullopt;
-	}
-
-	if (ucl_object_type(obj) != UCL_ARRAY) {
-		return "recipe part is not an array";
-	}
-
-	ucl_object_iter_t it = nullptr;
-	const ucl_object_t *cur;
-
-	while ((cur = ucl_object_iterate(obj, &it, true)) != nullptr) {
-		if (part.steps.size() >= limits.max_steps) {
-			return fmt::format("too many recipe steps (max {})", limits.max_steps);
+			continue;
 		}
 
-		if (ucl_object_type(cur) != UCL_OBJECT) {
-			return "recipe step is not an object";
-		}
+		if (sig.has_nd || smtp_addr_is_null(sig.mf)) {
+			/* No usable MAIL FROM: the signing domain must be a recipient one */
+			auto found = std::any_of(prev.rt.begin(), prev.rt.end(), [&](const std::string &rt) {
+				return relaxed_domain_match(smtp_addr_domain(rt), sig.domain);
+			});
 
-		const auto *c_obj = ucl_object_lookup(cur, "c");
-		const auto *d_obj = ucl_object_lookup(cur, "d");
-		recipe_step_t step;
-
-		if (c_obj != nullptr && d_obj == nullptr) {
-			/* Copy step: {"c": [start, end]} */
-			const auto *start_obj = ucl_array_find_index(c_obj, 0);
-			const auto *end_obj = ucl_array_find_index(c_obj, 1);
-
-			if (ucl_object_type(c_obj) != UCL_ARRAY ||
-				start_obj == nullptr || end_obj == nullptr ||
-				ucl_object_type(start_obj) != UCL_INT ||
-				ucl_object_type(end_obj) != UCL_INT) {
-				return "invalid copy step";
-			}
-
-			auto start = ucl_object_toint(start_obj);
-			auto end = ucl_object_toint(end_obj);
-
-			if (start < 1 || end < start) {
-				return fmt::format("invalid copy range [{}, {}]", start, end);
-			}
-
-			step.is_copy = true;
-			step.start = start;
-			step.end = end;
-		}
-		else if (d_obj != nullptr && c_obj == nullptr) {
-			/* Data step: {"d": ["elt", ...]} */
-			if (ucl_object_type(d_obj) != UCL_ARRAY) {
-				return "data step is not an array";
-			}
-
-			ucl_object_iter_t dit = nullptr;
-			const ucl_object_t *delt;
-
-			while ((delt = ucl_object_iterate(d_obj, &dit, true)) != nullptr) {
-				if (ucl_object_type(delt) != UCL_STRING) {
-					return "data step element is not a string";
-				}
-
-				std::size_t dlen = 0;
-				const auto *dstr = ucl_object_tolstring(delt, &dlen);
-				std::string_view dsv{dstr, dlen};
-
-				if (dsv.find_first_of("\r\n") != std::string_view::npos) {
-					return "data step element contains CR or LF";
-				}
-
-				step.data.emplace_back(dsv);
+			if (!found) {
+				return fmt::format("DKIM2-Signature i={} d= does not match the rt= of i={}",
+								   sig.i, prev.i);
 			}
 		}
 		else {
-			return "recipe step must have exactly one of c= or d=";
-		}
+			auto mf_dom = smtp_addr_domain(sig.mf);
+			auto found = std::any_of(prev.rt.begin(), prev.rt.end(), [&](const std::string &rt) {
+				return relaxed_domain_match(mf_dom, smtp_addr_domain(rt));
+			});
 
-		part.steps.emplace_back(std::move(step));
+			if (!found) {
+				return fmt::format("DKIM2-Signature i={} mf= does not match the rt= of i={}",
+								   sig.i, prev.i);
+			}
+		}
+	}
+
+	if (!sigs.empty() && sigs.back().has_nd) {
+		/*
+		 * Sending a message whose last field has nd= needs out-of-band
+		 * arrangements (Section 12.3) that we cannot know about
+		 */
+		return fmt::format("DKIM2-Signature i={} unexpected nd= tag", sigs.back().i);
 	}
 
 	return std::nullopt;
 }
 
-auto parse_recipe(std::string_view json, const recipe_limits_t &limits)
-	-> tl::expected<recipe_t, std::string>
+/*
+ * Check how a TXT record begins: the value of its first tag if that is v=.
+ * It tells a DKIM record from everything else that lives at the same name
+ * without parsing the rest, which may be not a tag-list at all.
+ */
+static auto
+record_version(std::string_view txt) -> std::optional<std::string_view>
 {
-	if (json.size() > limits.max_recipe_len) {
-		return tl::make_unexpected(fmt::format("recipe is too large: {} bytes (max {})",
-											   json.size(), limits.max_recipe_len));
+	auto first = txt.substr(0, txt.find(';'));
+	auto eq_pos = first.find('=');
+
+	if (eq_pos == std::string_view::npos || trim(first.substr(0, eq_pos)) != "v") {
+		return std::nullopt;
 	}
 
-	auto *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+	return trim(first.substr(eq_pos + 1));
+}
 
-	if (!ucl_parser_add_chunk(parser,
-							  reinterpret_cast<const unsigned char *>(json.data()),
-							  json.size())) {
-		auto err = fmt::format("cannot parse recipe JSON: {}",
-							   ucl_parser_get_error(parser));
-		ucl_parser_free(parser);
+auto parse_key_record(std::string_view txt, key_record_t &out) -> record_status
+{
+	auto version = record_version(txt);
 
-		return tl::make_unexpected(std::move(err));
+	if (version && *version != "DKIM1") {
+		/* Records that begin with another v= are ignored (Section 3.7) */
+		return record_status::ignored;
 	}
 
-	auto *top = ucl_parser_get_object(parser);
-	ucl_parser_free(parser);
+	auto tags = parse_tag_list(txt, false);
 
-	if (top == nullptr || ucl_object_type(top) != UCL_OBJECT) {
-		if (top != nullptr) {
-			ucl_object_unref(top);
-		}
-
-		return tl::make_unexpected(std::string{"recipe is not a JSON object"});
+	if (!tags) {
+		return record_status::syntax_error;
 	}
 
-	recipe_t res;
-	std::string err;
-	const auto *h_obj = ucl_object_lookup(top, "h");
-	const auto *b_obj = ucl_object_lookup(top, "b");
+	const tag_t *p_tag = nullptr;
 
-	if (h_obj == nullptr && b_obj == nullptr) {
-		err = "recipe has neither h nor b";
-	}
+	for (std::size_t idx = 0; idx < tags->size(); idx++) {
+		const auto &tag = (*tags)[idx];
 
-	if (err.empty() && h_obj != nullptr) {
-		res.has_headers = true;
-
-		if (ucl_object_type(h_obj) == UCL_NULL) {
-			res.headers_unrecoverable = true;
-		}
-		else if (ucl_object_type(h_obj) == UCL_OBJECT) {
-			ucl_object_iter_t it = nullptr;
-			const ucl_object_t *cur;
-
-			while (err.empty() &&
-				   (cur = ucl_object_iterate(h_obj, &it, true)) != nullptr) {
-				if (res.headers.size() >= limits.max_names) {
-					err = fmt::format("too many header names in recipe (max {})",
-									  limits.max_names);
-					break;
-				}
-
-				const auto *key = ucl_object_key(cur);
-
-				if (key == nullptr || *key == '\0') {
-					err = "empty header name in recipe";
-					break;
-				}
-
-				recipe_part_t part;
-				auto part_err = parse_recipe_steps(cur, limits, part);
-
-				if (part_err) {
-					err = fmt::format("header '{}': {}", key, *part_err);
-					break;
-				}
-
-				res.headers.emplace_back(lc_string(key), std::move(part));
+		if (tag.name == "v") {
+			/* v= MUST be the first tag and MUST be DKIM1 */
+			if (idx != 0 || tag.value != "DKIM1") {
+				return record_status::syntax_error;
 			}
 		}
+		else if (tag.name == "k") {
+			out.k = std::string{tag.value};
+		}
+		else if (tag.name == "p") {
+			p_tag = &tag;
+		}
+		/* h=, n=, s=, t= are retired and ignored, as well as unknown tags */
+	}
+
+	if (p_tag == nullptr) {
+		return record_status::syntax_error;
+	}
+
+	out.p = strip_wsp(p_tag->value);
+	out.revoked = out.p.empty();
+
+	return record_status::ok;
+}
+
+auto parse_policy_record(std::string_view txt, policy_record_t &out) -> record_status
+{
+	auto version = record_version(txt);
+
+	if (!version || *version != "DKIM1") {
+		/* Purported records that do not begin with v=DKIM1 are ignored */
+		return record_status::ignored;
+	}
+
+	auto tags = parse_tag_list(txt, false);
+
+	if (!tags) {
+		/* A policy that cannot be read must not become a permissive one */
+		return record_status::syntax_error;
+	}
+
+	if (const auto *f_tag = find_tag(*tags, "f")) {
+		split_keep_empty(f_tag->value, ':', [&](std::string_view flag) {
+			if (trim(flag) == "strict") {
+				out.strict = true;
+			}
+			/* Unrecognized flags are ignored */
+		});
+	}
+
+	return record_status::ok;
+}
+
+auto sig_alg_key_type(std::string_view sig_alg) -> std::string_view
+{
+	if (sig_alg == rsa_alg_name) {
+		return "rsa";
+	}
+	if (sig_alg == ed25519_alg_name) {
+		return "ed25519";
+	}
+	if (sig_alg == mldsa44_alg_name) {
+		return "mldsa44";
+	}
+
+	return {};
+}
+
+auto split_body_lines(std::string_view body, std::size_t max_lines)
+	-> tl::expected<std::vector<std::string_view>, std::string>
+{
+	std::vector<std::string_view> lines;
+
+	/* The same notion of a line as in body_canon_foreach */
+	while (!body.empty()) {
+		auto nl_pos = body.find('\n');
+		auto line = body.substr(0, nl_pos);
+
+		if (nl_pos != std::string_view::npos && !line.empty() && line.back() == '\r') {
+			line.remove_suffix(1);
+		}
+
+		if (lines.size() >= max_lines) {
+			return tl::make_unexpected(fmt::format("too many body lines (max {})",
+												   max_lines));
+		}
+
+		lines.emplace_back(line);
+
+		if (nl_pos == std::string_view::npos) {
+			break;
+		}
+
+		body.remove_prefix(nl_pos + 1);
+	}
+
+	return lines;
+}
+
+auto scan_headers(std::string_view block)
+	-> tl::expected<std::vector<raw_header_t>, std::string>
+{
+	std::vector<raw_header_t> res;
+	/* The field being collected: its first line and all of its lines */
+	std::string_view name, first_line;
+	const char *field_start = nullptr, *field_end = nullptr;
+	bool folded = false;
+
+	auto flush = [&]() {
+		if (field_start == nullptr) {
+			return;
+		}
+
+		auto &hdr = res.emplace_back();
+
+		hdr.name = name;
+
+		if (!folded) {
+			hdr.value = first_line;
+		}
 		else {
-			err = "recipe h element is not an object";
+			/* Unfold: drop the terminators of all lines, keep everything else */
+			std::string_view raw{field_start, static_cast<std::size_t>(field_end - field_start)};
+
+			raw.remove_prefix(first_line.data() - field_start);
+			hdr.unfolded.reserve(raw.size());
+
+			while (!raw.empty()) {
+				auto nl_pos = raw.find('\n');
+				auto line = raw.substr(0, nl_pos);
+
+				if (nl_pos != std::string_view::npos && !line.empty() && line.back() == '\r') {
+					line.remove_suffix(1);
+				}
+
+				hdr.unfolded.append(line);
+
+				if (nl_pos == std::string_view::npos) {
+					break;
+				}
+
+				raw.remove_prefix(nl_pos + 1);
+			}
 		}
+
+		field_start = nullptr;
+	};
+
+	while (!block.empty()) {
+		auto nl_pos = block.find('\n');
+		auto line = block.substr(0, nl_pos);
+
+		if (nl_pos != std::string_view::npos && !line.empty() && line.back() == '\r') {
+			line.remove_suffix(1);
+		}
+
+		auto line_end = line.data() + line.size();
+
+		if (line.empty()) {
+			/* The end of the header */
+			break;
+		}
+
+		if (is_wsp(line.front())) {
+			if (field_start == nullptr) {
+				return tl::make_unexpected(std::string{"a continuation line without a header field"});
+			}
+
+			folded = true;
+			field_end = line_end;
+		}
+		else {
+			flush();
+
+			auto colon_pos = line.find(':');
+
+			if (colon_pos == std::string_view::npos) {
+				return tl::make_unexpected(std::string{"a line that is not a header field"});
+			}
+
+			name = line.substr(0, colon_pos);
+
+			while (!name.empty() && is_wsp(name.back())) {
+				name.remove_suffix(1);
+			}
+
+			if (name.empty() || !std::all_of(name.begin(), name.end(), [](char c) {
+					return c > 0x20 && c < 0x7f;
+				})) {
+				return tl::make_unexpected(std::string{"an invalid header field name"});
+			}
+
+			if (res.size() >= DKIM2_MAX_HEADER_FIELDS) {
+				return tl::make_unexpected(std::string{"too many header fields"});
+			}
+
+			first_line = line.substr(colon_pos + 1);
+			field_start = line.data();
+			field_end = line_end;
+			folded = false;
+		}
+
+		if (nl_pos == std::string_view::npos) {
+			break;
+		}
+
+		block.remove_prefix(nl_pos + 1);
 	}
 
-	if (err.empty() && b_obj != nullptr) {
-		res.has_body = true;
-		auto part_err = parse_recipe_steps(b_obj, limits, res.body);
+	flush();
 
-		if (part_err) {
-			err = fmt::format("body recipe: {}", *part_err);
+	/* Vector growth moves the strings, so the views are set at the end */
+	for (auto &hdr: res) {
+		if (!hdr.unfolded.empty()) {
+			hdr.value = hdr.unfolded;
 		}
-	}
-
-	ucl_object_unref(top);
-
-	if (!err.empty()) {
-		return tl::make_unexpected(std::move(err));
 	}
 
 	return res;
+}
+
+auto from_is_single_mailbox(std::string_view value) -> bool
+{
+	unsigned int nat = 0, comment_depth = 0;
+	bool in_quotes = false;
+
+	for (std::size_t pos = 0; pos < value.size(); pos++) {
+		auto c = value[pos];
+
+		if (c == '\\' && (in_quotes || comment_depth > 0)) {
+			/* A quoted pair */
+			pos++;
+		}
+		else if (in_quotes) {
+			in_quotes = c != '"';
+		}
+		else if (comment_depth > 0) {
+			if (c == '(') {
+				comment_depth++;
+			}
+			else if (c == ')') {
+				comment_depth--;
+			}
+		}
+		else if (c == '"') {
+			in_quotes = true;
+		}
+		else if (c == '(') {
+			comment_depth++;
+		}
+		else if (c == '@') {
+			nat++;
+		}
+		else if (c == ',' || c == ';') {
+			return false;
+		}
+	}
+
+	return nat == 1 && !in_quotes && comment_depth == 0;
+}
+
+/*
+ * A strict JSON (RFC 8259) reader for recipes. A general purpose parser is
+ * deliberately not used here: recipes MUST have unique keys, which lenient
+ * parsers silently merge or overwrite, and any syntax accepted here but not
+ * by other Verifiers (comments, unquoted keys and so on) would make the
+ * verdict depend on the implementation.
+ */
+class recipe_reader {
+public:
+	recipe_reader(std::string_view json, const recipe_limits_t &limits)
+		: in(json), limits(limits)
+	{
+	}
+
+	auto parse() -> tl::expected<recipe_t, recipe_error_t>
+	{
+		recipe_t res;
+
+		skip_ws();
+
+		if (!parse_top(res)) {
+			return tl::make_unexpected(std::move(err));
+		}
+
+		skip_ws();
+
+		if (pos != in.size()) {
+			return tl::make_unexpected(recipe_error_t{recipe_error_kind::invalid_json,
+													  "trailing data"});
+		}
+
+		if (!res.has_headers && !res.has_body) {
+			return tl::make_unexpected(recipe_error_t{recipe_error_kind::invalid_recipe,
+													  "{}"});
+		}
+
+		return res;
+	}
+
+private:
+	std::string_view in;
+	const recipe_limits_t &limits;
+	std::size_t pos = 0;
+	std::size_t ndata = 0; /* strings of all "d" and "u" steps */
+	recipe_error_t err{recipe_error_kind::invalid_json, {}};
+
+	auto bad_json(std::string what) -> bool
+	{
+		err = recipe_error_t{recipe_error_kind::invalid_json, std::move(what)};
+		return false;
+	}
+
+	/* `from` is where the offending text starts, it is quoted in the error */
+	auto bad_recipe(std::size_t from) -> bool
+	{
+		auto end = pos;
+
+		/* An error is usually found just before the step is closed */
+		while (end < in.size() && (in[end] == ' ' || in[end] == '\t')) {
+			end++;
+		}
+		if (end < in.size() && in[end] == '}') {
+			end++;
+		}
+
+		auto quoted = in.substr(from, std::min(end > from ? end - from : in.size() - from,
+											   DKIM2_MAX_QUOTED_STEP));
+		std::string what;
+
+		for (auto c: quoted) {
+			/* It ends up in logs and in the symbol options */
+			what.push_back(static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) >= 0x7f ? '?' : c);
+		}
+
+		err = recipe_error_t{recipe_error_kind::invalid_recipe, std::move(what)};
+		return false;
+	}
+
+	auto too_complex(std::string what) -> bool
+	{
+		err = recipe_error_t{recipe_error_kind::too_complex, std::move(what)};
+		return false;
+	}
+
+	void skip_ws()
+	{
+		while (pos < in.size() &&
+			   (in[pos] == ' ' || in[pos] == '\t' || in[pos] == '\r' || in[pos] == '\n')) {
+			pos++;
+		}
+	}
+
+	auto peek() const -> char
+	{
+		return pos < in.size() ? in[pos] : '\0';
+	}
+
+	auto expect(char c) -> bool
+	{
+		skip_ws();
+
+		if (peek() != c) {
+			return bad_json(fmt::format("'{}' expected at offset {}", c, pos));
+		}
+
+		pos++;
+
+		return true;
+	}
+
+	auto parse_hex4(unsigned int &out) -> bool
+	{
+		if (in.size() - pos < 4) {
+			return false;
+		}
+
+		out = 0;
+
+		for (int k = 0; k < 4; k++) {
+			auto c = in[pos++];
+			out <<= 4;
+
+			if (c >= '0' && c <= '9') {
+				out |= c - '0';
+			}
+			else if (c >= 'a' && c <= 'f') {
+				out |= c - 'a' + 10;
+			}
+			else if (c >= 'A' && c <= 'F') {
+				out |= c - 'A' + 10;
+			}
+			else {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	static void append_utf8(std::string &out, unsigned int cp)
+	{
+		if (cp < 0x80) {
+			out.push_back(static_cast<char>(cp));
+		}
+		else if (cp < 0x800) {
+			out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+			out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+		}
+		else if (cp < 0x10000) {
+			out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+			out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+			out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+		}
+		else {
+			out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+			out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+			out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+			out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+		}
+	}
+
+	auto parse_string(std::string &out) -> bool
+	{
+		skip_ws();
+
+		if (peek() != '"') {
+			return bad_json(fmt::format("string expected at offset {}", pos));
+		}
+
+		pos++;
+
+		for (;;) {
+			if (pos >= in.size()) {
+				return bad_json("unterminated string");
+			}
+
+			auto c = in[pos++];
+
+			if (c == '"') {
+				return true;
+			}
+
+			if (static_cast<unsigned char>(c) < 0x20) {
+				return bad_json("control character in a string");
+			}
+
+			if (c != '\\') {
+				out.push_back(c);
+				continue;
+			}
+
+			if (pos >= in.size()) {
+				return bad_json("unterminated string");
+			}
+
+			switch (in[pos++]) {
+			case '"':
+				out.push_back('"');
+				break;
+			case '\\':
+				out.push_back('\\');
+				break;
+			case '/':
+				out.push_back('/');
+				break;
+			case 'b':
+				out.push_back('\b');
+				break;
+			case 'f':
+				out.push_back('\f');
+				break;
+			case 'n':
+				out.push_back('\n');
+				break;
+			case 'r':
+				out.push_back('\r');
+				break;
+			case 't':
+				out.push_back('\t');
+				break;
+			case 'u': {
+				unsigned int cp = 0;
+
+				if (!parse_hex4(cp)) {
+					return bad_json("invalid \\u escape");
+				}
+
+				if (cp >= 0xD800 && cp <= 0xDBFF) {
+					/* A high surrogate must be followed by a low one */
+					unsigned int low = 0;
+
+					if (in.size() - pos < 6 || in[pos] != '\\' || in[pos + 1] != 'u') {
+						return bad_json("unpaired surrogate");
+					}
+
+					pos += 2;
+
+					if (!parse_hex4(low) || low < 0xDC00 || low > 0xDFFF) {
+						return bad_json("unpaired surrogate");
+					}
+
+					cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+				}
+				else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+					return bad_json("unpaired surrogate");
+				}
+
+				append_utf8(out, cp);
+				break;
+			}
+			default:
+				return bad_json("invalid escape");
+			}
+		}
+	}
+
+	/* An integer of the schema: digits only, at least 1 */
+	auto parse_index(std::size_t &out) -> bool
+	{
+		skip_ws();
+
+		auto start = pos;
+
+		while (pos < in.size() && in[pos] >= '0' && in[pos] <= '9') {
+			pos++;
+		}
+
+		auto digits = in.substr(start, pos - start);
+		auto c = peek();
+
+		if (digits.empty() || c == '.' || c == 'e' || c == 'E' ||
+			(digits.size() > 1 && digits.front() == '0')) {
+			/* Not an integer in the plain form; minus is not a digit either */
+			return bad_recipe(start);
+		}
+
+		auto val = parse_uint(digits);
+
+		if (!val || *val == 0 || *val > G_MAXUINT32) {
+			return bad_recipe(start);
+		}
+
+		out = static_cast<std::size_t>(*val);
+
+		return true;
+	}
+
+	/*
+	 * Iterate over `"key": value` members of an object, checking that the
+	 * keys are unique and in lower case. `func(key, key_pos)` must consume
+	 * the value.
+	 */
+	template<typename Func>
+	auto parse_object(Func &&func) -> bool
+	{
+		if (!expect('{')) {
+			return false;
+		}
+
+		std::vector<std::string> seen;
+
+		skip_ws();
+
+		if (peek() == '}') {
+			pos++;
+			return true;
+		}
+
+		for (;;) {
+			std::string key;
+
+			skip_ws();
+			auto key_pos = pos;
+
+			if (!parse_string(key)) {
+				return false;
+			}
+
+			if (std::any_of(key.begin(), key.end(), [](char c) { return g_ascii_isupper(c); }) ||
+				std::find(seen.begin(), seen.end(), key) != seen.end()) {
+				/* Keys MUST be in lower case and MUST be unique */
+				return bad_recipe(key_pos);
+			}
+
+			if (seen.size() >= limits.max_names) {
+				return too_complex("too many keys in an object");
+			}
+
+			if (!expect(':') || !func(key, key_pos)) {
+				return false;
+			}
+
+			seen.emplace_back(std::move(key));
+			skip_ws();
+
+			if (peek() == ',') {
+				pos++;
+				continue;
+			}
+
+			return expect('}');
+		}
+	}
+
+	/* Iterate over the elements of an array; `func()` must consume one */
+	template<typename Func>
+	auto parse_array(Func &&func) -> bool
+	{
+		if (!expect('[')) {
+			return false;
+		}
+
+		skip_ws();
+
+		if (peek() == ']') {
+			pos++;
+			return true;
+		}
+
+		for (;;) {
+			if (!func()) {
+				return false;
+			}
+
+			skip_ws();
+
+			if (peek() == ',') {
+				pos++;
+				continue;
+			}
+
+			return expect(']');
+		}
+	}
+
+	/* Skip any JSON value: used for the keys that the schema does not define */
+	auto skip_value(unsigned int depth) -> bool
+	{
+		if (depth > DKIM2_MAX_JSON_DEPTH) {
+			return too_complex("JSON is nested too deeply");
+		}
+
+		skip_ws();
+
+		auto c = peek();
+
+		if (c == '{') {
+			return parse_object([&](const std::string &, std::size_t) {
+				return skip_value(depth + 1);
+			});
+		}
+		if (c == '[') {
+			return parse_array([&]() {
+				return skip_value(depth + 1);
+			});
+		}
+		if (c == '"') {
+			std::string unused;
+			return parse_string(unused);
+		}
+
+		for (std::string_view lit: {"true", "false", "null"}) {
+			if (in.substr(pos).starts_with(lit)) {
+				pos += lit.size();
+				return true;
+			}
+		}
+
+		/* A number: -?int frac? exp? */
+		auto start = pos;
+
+		if (peek() == '-') {
+			pos++;
+		}
+
+		auto digits = [&]() -> bool {
+			auto from = pos;
+
+			while (pos < in.size() && in[pos] >= '0' && in[pos] <= '9') {
+				pos++;
+			}
+
+			return pos > from;
+		};
+
+		auto int_start = pos;
+
+		if (!digits() || (pos - int_start > 1 && in[int_start] == '0')) {
+			pos = start;
+			return bad_json(fmt::format("value expected at offset {}", start));
+		}
+
+		if (peek() == '.') {
+			pos++;
+
+			if (!digits()) {
+				return bad_json("invalid number");
+			}
+		}
+
+		if (peek() == 'e' || peek() == 'E') {
+			pos++;
+
+			if (peek() == '+' || peek() == '-') {
+				pos++;
+			}
+
+			if (!digits()) {
+				return bad_json("invalid number");
+			}
+		}
+
+		return true;
+	}
+
+	/* An array of strings of a "d" or a "u" step */
+	auto parse_data(recipe_step_t &step, bool is_base64, std::size_t step_pos) -> bool
+	{
+		skip_ws();
+
+		if (peek() != '[') {
+			return skip_value(0) && bad_recipe(step_pos);
+		}
+
+		auto ok = parse_array([&]() {
+			std::string line;
+
+			skip_ws();
+
+			if (peek() != '"') {
+				return skip_value(0) && bad_recipe(step_pos);
+			}
+
+			if (!parse_string(line)) {
+				return false;
+			}
+
+			if (is_base64) {
+				/* No whitespace is allowed inside (Section 5) */
+				auto decoded = b64_decode(line, false);
+
+				if (!decoded) {
+					return bad_recipe(step_pos);
+				}
+
+				line = std::move(*decoded);
+			}
+
+			if (line.find_first_of("\r\n") != std::string::npos) {
+				return bad_recipe(step_pos);
+			}
+
+			if (++ndata > limits.max_data_lines) {
+				return too_complex("too many data lines in a recipe");
+			}
+
+			step.data.emplace_back(std::move(line));
+
+			return true;
+		});
+
+		if (ok && step.data.empty()) {
+			/* minItems is 1 */
+			return bad_recipe(step_pos);
+		}
+
+		return ok;
+	}
+
+	/* recipe-steps: an array of objects with exactly one of "c", "d", "u" */
+	auto parse_steps(std::vector<recipe_step_t> &steps) -> bool
+	{
+		skip_ws();
+
+		auto steps_pos = pos;
+
+		if (peek() != '[') {
+			return skip_value(0) && bad_recipe(steps_pos);
+		}
+
+		/* The end of the last copy range: they must ascend without overlaps */
+		std::size_t prev_end = 0;
+
+		return parse_array([&]() {
+			skip_ws();
+
+			auto step_pos = pos;
+
+			if (peek() != '{') {
+				return skip_value(0) && bad_recipe(step_pos);
+			}
+
+			if (steps.size() >= limits.max_steps) {
+				return too_complex("too many recipe steps");
+			}
+
+			recipe_step_t step;
+			unsigned int nkeys = 0;
+
+			auto ok = parse_object([&](const std::string &key, std::size_t) {
+				if (++nkeys > 1) {
+					return skip_value(0) && bad_recipe(step_pos);
+				}
+
+				if (key == "c") {
+					std::size_t nvals = 0;
+
+					skip_ws();
+
+					if (peek() != '[') {
+						return skip_value(0) && bad_recipe(step_pos);
+					}
+
+					auto arr_ok = parse_array([&]() {
+						if (nvals >= 2) {
+							return skip_value(0) && bad_recipe(step_pos);
+						}
+
+						return parse_index(nvals++ == 0 ? step.start : step.end);
+					});
+
+					if (!arr_ok) {
+						return false;
+					}
+
+					if (nvals != 2 || step.end < step.start || step.start <= prev_end) {
+						return bad_recipe(step_pos);
+					}
+
+					step.is_copy = true;
+					prev_end = step.end;
+
+					return true;
+				}
+				if (key == "d") {
+					return parse_data(step, false, step_pos);
+				}
+				if (key == "u") {
+					return parse_data(step, true, step_pos);
+				}
+
+				return skip_value(0) && bad_recipe(step_pos);
+			});
+
+			if (!ok) {
+				return false;
+			}
+
+			if (nkeys != 1) {
+				return bad_recipe(step_pos);
+			}
+
+			steps.emplace_back(std::move(step));
+
+			return true;
+		});
+	}
+
+	auto parse_top(recipe_t &res) -> bool
+	{
+		skip_ws();
+
+		if (peek() != '{') {
+			/* Something else, check that it is JSON to report it properly */
+			return skip_value(0) && bad_recipe(0);
+		}
+
+		return parse_object([&](const std::string &key, std::size_t key_pos) {
+			if (key == "h") {
+				skip_ws();
+
+				if (peek() != '{') {
+					return skip_value(0) && bad_recipe(key_pos);
+				}
+
+				res.has_headers = true;
+
+				auto ok = parse_object([&](const std::string &name, std::size_t name_pos) {
+					auto is_ftext = [](char c) {
+						return c > 0x20 && c < 0x7f && c != ':';
+					};
+
+					if (name.empty() || !std::all_of(name.begin(), name.end(), is_ftext) ||
+						is_unsigned_header(name)) {
+						/* Not a field name at all, or */
+						/* Recipes MUST NOT be specified for unsigned header fields */
+						return skip_value(0) && bad_recipe(name_pos);
+					}
+
+					auto &entry = res.headers.emplace_back();
+					entry.first = name;
+
+					return parse_steps(entry.second);
+				});
+
+				if (ok && res.headers.empty()) {
+					/* minProperties is 1 */
+					return bad_recipe(key_pos);
+				}
+
+				return ok;
+			}
+			if (key == "b") {
+				skip_ws();
+				res.has_body = true;
+
+				if (in.substr(pos).starts_with("null")) {
+					pos += 4;
+					res.body_null = true;
+
+					return true;
+				}
+
+				return parse_steps(res.body);
+			}
+
+			/* Not in the schema, which does not forbid additional properties */
+			return skip_value(0);
+		});
+	}
+};
+
+/* Well-formed UTF-8: no overlong forms, no surrogates, nothing above U+10FFFF */
+static auto
+is_valid_utf8(std::string_view in) -> bool
+{
+	std::size_t pos = 0;
+
+	while (pos < in.size()) {
+		auto c = static_cast<unsigned char>(in[pos]);
+		std::size_t ntail;
+		unsigned int cp, min_cp;
+
+		if (c < 0x80) {
+			pos++;
+			continue;
+		}
+		else if ((c & 0xE0) == 0xC0) {
+			ntail = 1;
+			cp = c & 0x1F;
+			min_cp = 0x80;
+		}
+		else if ((c & 0xF0) == 0xE0) {
+			ntail = 2;
+			cp = c & 0x0F;
+			min_cp = 0x800;
+		}
+		else if ((c & 0xF8) == 0xF0) {
+			ntail = 3;
+			cp = c & 0x07;
+			min_cp = 0x10000;
+		}
+		else {
+			return false;
+		}
+
+		if (in.size() - pos <= ntail) {
+			return false;
+		}
+
+		for (std::size_t k = 1; k <= ntail; k++) {
+			auto t = static_cast<unsigned char>(in[pos + k]);
+
+			if ((t & 0xC0) != 0x80) {
+				return false;
+			}
+
+			cp = (cp << 6) | (t & 0x3F);
+		}
+
+		if (cp < min_cp || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+			return false;
+		}
+
+		pos += ntail + 1;
+	}
+
+	return true;
+}
+
+auto recipe_t::find_header(std::string_view lc_name) const -> const std::vector<recipe_step_t> *
+{
+	for (const auto &[name, steps]: headers) {
+		if (name == lc_name) {
+			return &steps;
+		}
+	}
+
+	return nullptr;
+}
+
+auto parse_recipe(std::string_view json, const recipe_limits_t &limits)
+	-> tl::expected<recipe_t, recipe_error_t>
+{
+	if (json.size() > limits.max_recipe_len) {
+		return tl::make_unexpected(recipe_error_t{
+			recipe_error_kind::too_complex,
+			fmt::format("recipe is too large: {} bytes (max {})",
+						json.size(), limits.max_recipe_len)});
+	}
+
+	if (!is_valid_utf8(json)) {
+		/* JSON text is UTF-8 by definition; other octets need "u" steps */
+		return tl::make_unexpected(recipe_error_t{recipe_error_kind::invalid_json,
+												  "not valid UTF-8"});
+	}
+
+	return recipe_reader{json, limits}.parse();
 }
 
 auto apply_recipe_steps(const std::vector<std::string_view> &current,
 						const std::vector<recipe_step_t> &steps,
 						std::size_t max_elements,
 						std::size_t &budget)
-	-> tl::expected<std::vector<std::string_view>, std::string>
+	-> tl::expected<std::vector<std::string_view>, recipe_error_t>
 {
 	std::vector<std::string_view> out;
 
@@ -954,24 +2233,29 @@ auto apply_recipe_steps(const std::vector<std::string_view> &current,
 		return true;
 	};
 
+	auto over_limits = []() {
+		return tl::make_unexpected(recipe_error_t{recipe_error_kind::too_complex,
+												  "recipe output limits exceeded"});
+	};
+
 	for (const auto &step: steps) {
 		if (step.is_copy) {
-			if (step.end > current.size()) {
-				return tl::make_unexpected(fmt::format(
-					"copy range [{}, {}] is out of bounds ({} elements)",
-					step.start, step.end, current.size()));
+			if (step.start < 1 || step.end < step.start || step.end > current.size()) {
+				return tl::make_unexpected(recipe_error_t{
+					recipe_error_kind::invalid_recipe,
+					fmt::format("{{\"c\":[{},{}]}}", step.start, step.end)});
 			}
 
 			for (auto k = step.start; k <= step.end; k++) {
 				if (!emit(current[k - 1])) {
-					return tl::make_unexpected(std::string{"recipe output limits exceeded"});
+					return over_limits();
 				}
 			}
 		}
 		else {
 			for (const auto &d: step.data) {
 				if (!emit(d)) {
-					return tl::make_unexpected(std::string{"recipe output limits exceeded"});
+					return over_limits();
 				}
 			}
 		}
@@ -1000,13 +2284,42 @@ struct sig_entry_t {
 	std::string canon_line;
 };
 
+/* A public key record, shared by all signatures that use it */
 struct dkim2_key_slot {
-	rspamd_dkim_key_t *key = nullptr;
+	rspamd_dkim_key_t *key = nullptr; /* rsa and ed25519 keys */
+	std::string raw_pk;               /* mldsa44 key */
+	std::string k;                    /* key type of the record */
 	enum rspamd_dkim2_result_code rcode = RSPAMD_DKIM2_TEMPERROR;
-	std::string reason = "key not yet fetched";
+	/* What follows `public key <s1>` in the error (Section 14.5) */
+	const char *problem = "could not be fetched";
 };
 
-constexpr unsigned int DKIM2_DEFAULT_MAX_AGE = 14 * 24 * 3600;
+/* A Domain Policy Record (Section 3.8) */
+struct dkim2_policy_slot {
+	enum rspamd_dkim2_result_code rcode = RSPAMD_DKIM2_TEMPERROR;
+	bool strict = false;
+	const char *problem = "unavailable";
+};
+
+/* A From that is Authentic only if its domain allows subdomains to sign */
+struct dkim2_from_check {
+	unsigned int sig_i;
+	std::string from_domain;
+	std::string policy_name;
+};
+
+constexpr std::uint64_t DKIM2_DEFAULT_MAX_AGE = 14 * 24 * 3600;
+constexpr std::uint64_t DKIM2_DEFAULT_MAX_FUTURE = 24 * 3600;
+constexpr std::size_t DKIM2_MAX_DNS_NAME = 253;
+/*
+ * Size limit of a Message-Instance or a DKIM2-Signature field: it fits the
+ * largest recipe that is accepted, in base64, and a full list of recipients
+ */
+constexpr std::size_t DKIM2_MAX_FIELD_LEN = 512 * 1024;
+/* Octets charged to the work budget for every hashed element on top of its size */
+constexpr std::size_t DKIM2_ELEMENT_COST = 16;
+/* How much of an untrusted value is quoted in an error */
+constexpr std::size_t DKIM2_MAX_QUOTED_VALUE = 64;
 
 /*
  * Shared work budget for recipe application and reconstructed-state hashing
@@ -1046,17 +2359,98 @@ struct dkim2_msg_state {
 	std::vector<std::string_view> body_lines;
 };
 
-static auto
-dkim2_find_sha256_set(const mi_header_t &mi) -> const hash_set_t *
-{
-	auto found = std::find_if(mi.hashes.begin(), mi.hashes.end(),
-							  [](const hash_set_t &hs) {
-								  return hs.alg == sha256_alg_name &&
-										 hs.header_hash.size() == 32 &&
-										 hs.body_hash.size() == 32;
-							  });
+/* Header and body digests of one message state for one hash algorithm */
+struct dkim2_digests {
+	std::string hdr;
+	std::string body;
+};
 
-	return found == mi.hashes.end() ? nullptr : &*found;
+/*
+ * A digest fed through a buffer: canonical forms come in tiny pieces (a line,
+ * a CRLF), and a call into the crypto library for each one costs far more
+ * than hashing the bytes
+ */
+class dkim2_digest {
+public:
+	explicit dkim2_digest(const EVP_MD *md)
+		: md(md), ctx(EVP_MD_CTX_new())
+	{
+		ok = ctx != nullptr && EVP_DigestInit_ex(ctx, md, nullptr) == 1;
+	}
+
+	~dkim2_digest()
+	{
+		EVP_MD_CTX_free(ctx);
+		ERR_clear_error();
+	}
+
+	dkim2_digest(const dkim2_digest &) = delete;
+	dkim2_digest &operator=(const dkim2_digest &) = delete;
+
+	void update(const char *data, std::size_t len)
+	{
+		if (len >= sizeof(buf)) {
+			flush();
+			ok = ok && EVP_DigestUpdate(ctx, data, len) == 1;
+			return;
+		}
+
+		if (len > sizeof(buf) - fill) {
+			flush();
+		}
+
+		memcpy(buf + fill, data, len);
+		fill += len;
+	}
+
+	void update(std::string_view data)
+	{
+		update(data.data(), data.size());
+	}
+
+	/* Returns the digest and restarts; an empty string means a failure */
+	auto finish() -> std::string
+	{
+		unsigned char digest[EVP_MAX_MD_SIZE];
+		unsigned int dlen = 0;
+
+		flush();
+		ok = ok && EVP_DigestFinal_ex(ctx, digest, &dlen) == 1;
+
+		std::string res{reinterpret_cast<const char *>(digest), ok ? dlen : 0};
+
+		ok = ok && EVP_DigestInit_ex(ctx, md, nullptr) == 1;
+
+		return res;
+	}
+
+private:
+	const EVP_MD *md;
+	EVP_MD_CTX *ctx;
+	bool ok = false;
+	std::size_t fill = 0;
+	char buf[8192];
+
+	void flush()
+	{
+		if (fill > 0) {
+			ok = ok && EVP_DigestUpdate(ctx, buf, fill) == 1;
+			fill = 0;
+		}
+	}
+};
+
+static auto
+dkim2_hash_md(std::string_view alg) -> const EVP_MD *
+{
+	if (alg == sha256_alg_name) {
+		return EVP_sha256();
+	}
+	if (alg == sha512_alg_name) {
+		return EVP_sha512();
+	}
+
+	return nullptr;
 }
 
 static auto
@@ -1077,13 +2471,72 @@ severity(enum rspamd_dkim2_result_code rcode) -> int
 	return 0;
 }
 
+static auto
+to_rcode(result_t res) -> enum rspamd_dkim2_result_code
+{
+	switch (res) {
+	case result_t::pass:
+		return RSPAMD_DKIM2_PASS;
+	case result_t::fail:
+		return RSPAMD_DKIM2_FAIL;
+	case result_t::temperror:
+		return RSPAMD_DKIM2_TEMPERROR;
+	case result_t::permerror:
+		break;
+	}
+
+	return RSPAMD_DKIM2_PERMERROR;
+}
+
+static auto
+from_rcode(enum rspamd_dkim2_result_code rcode) -> result_t
+{
+	switch (rcode) {
+	case RSPAMD_DKIM2_PASS:
+		return result_t::pass;
+	case RSPAMD_DKIM2_FAIL:
+		return result_t::fail;
+	case RSPAMD_DKIM2_TEMPERROR:
+		return result_t::temperror;
+	default:
+		break;
+	}
+
+	return result_t::permerror;
+}
+
+/* An untrusted value as it can be shown in logs and symbol options */
+static auto
+dkim2_quote(std::string_view in) -> std::string
+{
+	std::string out;
+
+	for (auto c: in.substr(0, DKIM2_MAX_QUOTED_VALUE)) {
+		auto uc = static_cast<unsigned char>(c);
+		out.push_back(uc < 0x21 || uc >= 0x7f ? '?' : c);
+	}
+
+	return out;
+}
+
+/* A header or a sequence number for an error message */
+static auto
+dkim2_num(unsigned int num) -> std::string
+{
+	return num ? fmt::format("{}", num) : std::string{"?"};
+}
+
 }// anonymous namespace
 
 struct rspamd_dkim2_chain_s {
 	struct rspamd_task *task = nullptr;
-	std::vector<mi_entry_t> mis;   /* sorted by m=, mis[k] has m == k + 1 */
-	std::vector<sig_entry_t> sigs; /* sorted by i=, sigs[k] has i == k + 1 */
+	std::vector<raw_header_t> headers;  /* all header fields, from the top */
+	std::vector<mi_entry_t> mis;        /* sorted by m=, mis[k] has m == k + 1 */
+	std::vector<sig_header_t> sigs;     /* sorted by i=, sigs[k] has i == k + 1 */
+	std::vector<std::string> sig_lines; /* canonical lines of sigs */
 	ankerl::unordered_dense::map<std::string, dkim2_key_slot> keys;
+	ankerl::unordered_dense::map<std::string, dkim2_policy_slot> policies;
+	std::vector<dkim2_from_check> from_checks;
 	struct rspamd_dkim2_verify_params params{};
 	rspamd_dkim2_verify_cb cb = nullptr;
 	void *ud = nullptr;
@@ -1091,7 +2544,11 @@ struct rspamd_dkim2_chain_s {
 	unsigned int ninstances = 0;
 	unsigned int verified_instances = 0;
 	std::size_t signature_work_budget = 0;
-	/* Results of the synchronous (hash, envelope, timestamp) checks */
+	bool latest_hashes_ok = false;
+	bool envelope_ok = false;
+	bool last_hop_only = false;
+	bool finalized = false;
+	/* Results of the synchronous (hash, envelope, timestamp, custody) checks */
 	enum rspamd_dkim2_result_code prelim_rcode = RSPAMD_DKIM2_PASS;
 	std::string prelim_reason;
 
@@ -1116,6 +2573,7 @@ struct rspamd_dkim2_chain_s {
 struct dkim2_dns_cbdata {
 	rspamd_dkim2_chain_t *chain;
 	char *dns_name;
+	bool is_policy;
 };
 
 static void
@@ -1124,81 +2582,83 @@ dkim2_chain_dtor(void *p)
 	delete static_cast<rspamd_dkim2_chain_s *>(p);
 }
 
+/*
+ * Structural validation of the chain (Section 14.2); both vectors are sorted.
+ * Returns the human-readable error.
+ */
 static auto
-dkim2_validate_chain(rspamd_dkim2_chain_s *chain) -> tl::expected<void, std::string>
+dkim2_validate_chain(const std::vector<mi_entry_t> &mis,
+					 const std::vector<sig_entry_t> &sigs) -> std::optional<std::string>
 {
-	if (chain->mis.empty()) {
-		return tl::make_unexpected(std::string{"no Message-Instance headers"});
+	if (mis.empty()) {
+		return "Message-Instance m=1 missing";
 	}
-	if (chain->sigs.empty()) {
-		return tl::make_unexpected(std::string{"no DKIM2-Signature headers"});
+	if (sigs.empty()) {
+		return "DKIM2-Signature i=1 missing";
 	}
 
-	for (std::size_t k = 0; k < chain->mis.size(); k++) {
-		if (chain->mis[k].parsed.m != k + 1) {
-			return tl::make_unexpected(fmt::format(
-				"Message-Instance m= sequence broken: expected {}, got {}",
-				k + 1, chain->mis[k].parsed.m));
+	for (std::size_t k = 0; k < mis.size(); k++) {
+		auto m = mis[k].parsed.m;
+
+		if (k > 0 && m == mis[k - 1].parsed.m) {
+			return fmt::format("Message-Instance m={} is duplicated", m);
+		}
+		if (m != k + 1) {
+			return fmt::format("Message-Instance m={} missing", k + 1);
 		}
 	}
 
 	unsigned int prev_m = 0;
 	std::size_t nsig_sets = 0;
 
-	for (std::size_t k = 0; k < chain->sigs.size(); k++) {
-		const auto &sig = chain->sigs[k].parsed;
-		nsig_sets += sig.sigs.size();
+	for (std::size_t k = 0; k < sigs.size(); k++) {
+		const auto &sig = sigs[k].parsed;
+
+		if (k > 0 && sig.i == sigs[k - 1].parsed.i) {
+			return fmt::format("DKIM2-Signature i={} is duplicated", sig.i);
+		}
+		if (sig.i != k + 1) {
+			return fmt::format("DKIM2-Signature i={} missing", k + 1);
+		}
+
+		for (const auto &group: sig.sig_groups) {
+			nsig_sets += group.size();
+		}
 
 		if (nsig_sets > DKIM2_MAX_SIG_SETS_TOTAL) {
-			return tl::make_unexpected(fmt::format(
-				"too many signature sets in DKIM2 chain (max {})",
-				DKIM2_MAX_SIG_SETS_TOTAL));
+			return fmt::format("DKIM2-Signature i={} syntax error: too many signatures "
+							   "in the chain (max {})",
+							   sig.i, DKIM2_MAX_SIG_SETS_TOTAL);
 		}
 
-		if (sig.i != k + 1) {
-			return tl::make_unexpected(fmt::format(
-				"DKIM2-Signature i= sequence broken: expected {}, got {}",
-				k + 1, sig.i));
-		}
-		if (sig.m > chain->mis.size()) {
-			return tl::make_unexpected(fmt::format(
-				"DKIM2-Signature i={} references unknown Message-Instance m={}",
-				sig.i, sig.m));
+		if (sig.m > mis.size()) {
+			return fmt::format("Message-Instance m={} missing", sig.m);
 		}
 		if (sig.m < prev_m) {
-			return tl::make_unexpected(fmt::format(
-				"DKIM2-Signature i={} references older Message-Instance m={} than the previous hop",
-				sig.i, sig.m));
+			return fmt::format("DKIM2-Signature i={} syntax error: m= is lower than "
+							   "in the previous field",
+							   sig.i);
 		}
+
 		prev_m = sig.m;
 	}
 
-	if (chain->sigs.back().parsed.m != chain->mis.size()) {
-		return tl::make_unexpected(std::string{
-			"the last DKIM2-Signature does not reference the latest Message-Instance"});
+	if (sigs.back().parsed.m != mis.size()) {
+		/* No signature covers the instances above its m= */
+		return fmt::format("Message-Instance m={} is not signed", sigs.back().parsed.m + 1);
 	}
 
-	/* The latest instance must have a usable sha256 hash set */
-	const auto &latest = chain->mis.back().parsed;
-	auto found = std::find_if(latest.hashes.begin(), latest.hashes.end(),
-							  [](const hash_set_t &hs) {
-								  return hs.alg == sha256_alg_name &&
-										 hs.header_hash.size() == 32 &&
-										 hs.body_hash.size() == 32;
-							  });
-
-	if (found == latest.hashes.end()) {
-		return tl::make_unexpected(std::string{
-			"no valid sha256 hash-set in the latest Message-Instance"});
+	if (sigs.front().parsed.flags & DKIM2_SIG_FLAG_EXPLODED) {
+		return "DKIM2-Signature i=1 has an exploded flag";
 	}
 
-	return {};
+	return std::nullopt;
 }
 
 rspamd_dkim2_chain_t *
 rspamd_dkim2_chain_parse(struct rspamd_task *task, GError **err)
 {
-	struct rspamd_mime_header *mi_hdrs, *sig_hdrs, *cur;
+	struct rspamd_mime_header *mi_hdrs, *sig_hdrs;
 
 	if (task->message == nullptr) {
 		return nullptr;
@@ -1212,91 +2672,111 @@ rspamd_dkim2_chain_parse(struct rspamd_task *task, GError **err)
 		return nullptr;
 	}
 
-	if (mi_hdrs == nullptr || sig_hdrs == nullptr) {
-		g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR,
-					"%s headers without %s headers",
-					mi_hdrs ? RSPAMD_DKIM2_MIHEADER : RSPAMD_DKIM2_SIGNHEADER,
-					mi_hdrs ? RSPAMD_DKIM2_SIGNHEADER : RSPAMD_DKIM2_MIHEADER);
+	auto set_err = [&](const std::string &what) -> rspamd_dkim2_chain_t * {
+		g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR, "%s", what.c_str());
 		return nullptr;
+	};
+
+	/*
+	 * The MIME parser is tolerant: it skips what it cannot understand, cuts
+	 * values at stray characters and stops after a number of fields. Whatever
+	 * it drops would not be covered by the header hash, so the header is
+	 * read again here, strictly, and a message whose header is not a
+	 * sequence of RFC 5322 fields cannot be verified.
+	 */
+	const auto &raw = MESSAGE_FIELD(task, raw_headers_content);
+	auto headers = scan_headers(raw.begin != nullptr ? std::string_view{raw.begin, raw.len} : std::string_view{});
+
+	if (!headers) {
+		return set_err(fmt::format("message header cannot be verified: {}", headers.error()));
+	}
+
+	std::vector<mi_entry_t> mis;
+	std::vector<sig_entry_t> sigs;
+
+	for (const auto &hdr: *headers) {
+		if (eq_icase(hdr.name, RSPAMD_DKIM2_MIHEADER)) {
+			if (mis.size() >= RSPAMD_DKIM2_MAX_HOPS) {
+				return set_err(fmt::format("too many Message-Instance header fields (max {})",
+										   RSPAMD_DKIM2_MAX_HOPS));
+			}
+
+			if (hdr.value.size() > DKIM2_MAX_FIELD_LEN) {
+				return set_err("Message-Instance m=? JSON is unacceptably complex");
+			}
+
+			auto parsed = parse_mi(hdr.value);
+
+			if (!parsed) {
+				return set_err(fmt::format("Message-Instance m={} {}",
+										   dkim2_num(parsed.error().num), parsed.error().what));
+			}
+
+			mis.emplace_back(mi_entry_t{
+				std::move(*parsed),
+				canon_sig_line(RSPAMD_DKIM2_MIHEADER, hdr.value),
+			});
+		}
+		else if (eq_icase(hdr.name, RSPAMD_DKIM2_SIGNHEADER)) {
+			if (sigs.size() >= RSPAMD_DKIM2_MAX_HOPS) {
+				return set_err(fmt::format("too many DKIM2-Signature header fields (max {})",
+										   RSPAMD_DKIM2_MAX_HOPS));
+			}
+
+			if (hdr.value.size() > DKIM2_MAX_FIELD_LEN) {
+				return set_err("DKIM2-Signature i=? syntax error: the field is too large");
+			}
+
+			auto parsed = parse_sig(hdr.value);
+
+			if (!parsed) {
+				return set_err(fmt::format("DKIM2-Signature i={} {}",
+										   dkim2_num(parsed.error().num), parsed.error().what));
+			}
+
+			sigs.emplace_back(sig_entry_t{
+				std::move(*parsed),
+				canon_sig_line(RSPAMD_DKIM2_SIGNHEADER, hdr.value),
+			});
+		}
+	}
+
+	std::stable_sort(mis.begin(), mis.end(),
+					 [](const mi_entry_t &a, const mi_entry_t &b) {
+						 return a.parsed.m < b.parsed.m;
+					 });
+	std::stable_sort(sigs.begin(), sigs.end(),
+					 [](const sig_entry_t &a, const sig_entry_t &b) {
+						 return a.parsed.i < b.parsed.i;
+					 });
+
+	if (auto invalid = dkim2_validate_chain(mis, sigs)) {
+		return set_err(*invalid);
 	}
 
 	auto *chain = new rspamd_dkim2_chain_s;
 	rspamd_mempool_add_destructor(task->task_pool, dkim2_chain_dtor, chain);
 
-	DL_FOREACH(mi_hdrs, cur)
-	{
-		if (cur->value == nullptr) {
-			continue;
-		}
-
-		auto parsed = parse_mi(cur->value);
-
-		if (!parsed) {
-			g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR,
-						"invalid Message-Instance header: %s", parsed.error().c_str());
-			return nullptr;
-		}
-
-		chain->mis.emplace_back(mi_entry_t{
-			std::move(*parsed),
-			canon_sig_line(RSPAMD_DKIM2_MIHEADER, cur->value),
-		});
-
-		if (chain->mis.size() > RSPAMD_DKIM2_MAX_HOPS) {
-			g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR,
-						"too many Message-Instance headers (max %d)",
-						RSPAMD_DKIM2_MAX_HOPS);
-			return nullptr;
+	chain->headers = std::move(*headers);
+	/* Moving the vector keeps the strings in place, but be explicit about it */
+	for (auto &hdr: chain->headers) {
+		if (!hdr.unfolded.empty()) {
+			hdr.value = hdr.unfolded;
 		}
 	}
 
-	DL_FOREACH(sig_hdrs, cur)
-	{
-		if (cur->value == nullptr) {
-			continue;
-		}
+	chain->mis = std::move(mis);
+	chain->sigs.reserve(sigs.size());
+	chain->sig_lines.reserve(sigs.size());
 
-		auto parsed = parse_sig(cur->value);
-
-		if (!parsed) {
-			g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR,
-						"invalid DKIM2-Signature header: %s", parsed.error().c_str());
-			return nullptr;
-		}
-
-		chain->sigs.emplace_back(sig_entry_t{
-			std::move(*parsed),
-			canon_sig_line(RSPAMD_DKIM2_SIGNHEADER, cur->value),
-		});
-
-		if (chain->sigs.size() > RSPAMD_DKIM2_MAX_HOPS) {
-			g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR,
-						"too many DKIM2-Signature headers (max %d)",
-						RSPAMD_DKIM2_MAX_HOPS);
-			return nullptr;
-		}
-	}
-
-	std::sort(chain->mis.begin(), chain->mis.end(),
-			  [](const mi_entry_t &a, const mi_entry_t &b) {
-				  return a.parsed.m < b.parsed.m;
-			  });
-	std::sort(chain->sigs.begin(), chain->sigs.end(),
-			  [](const sig_entry_t &a, const sig_entry_t &b) {
-				  return a.parsed.i < b.parsed.i;
-			  });
-
-	auto valid = dkim2_validate_chain(chain);
-
-	if (!valid) {
-		g_set_error(err, DKIM2_ERROR, RSPAMD_DKIM2_PERMERROR,
-					"invalid DKIM2 chain: %s", valid.error().c_str());
-		return nullptr;
+	for (auto &entry: sigs) {
+		chain->sigs.emplace_back(std::move(entry.parsed));
+		chain->sig_lines.emplace_back(std::move(entry.canon_line));
 	}
 
 	msg_debug_dkim2("parsed DKIM2 chain: %z instances, %z signatures, last domain %s",
 					chain->mis.size(), chain->sigs.size(),
-					chain->sigs.back().parsed.domain.c_str());
+					chain->sigs.back().domain.c_str());
 
 	return chain;
 }
@@ -1308,114 +2788,73 @@ rspamd_dkim2_chain_len(const rspamd_dkim2_chain_t *chain)
 }
 
 static auto
-dkim2_ignored_header(const char *name) -> bool
+dkim2_message_body(struct rspamd_task *task) -> std::string_view
 {
-	static const char *exact[] = {
-		"Received",
-		"Return-Path",
-		"Authentication-Results",
-		"DKIM-Signature",
-		RSPAMD_DKIM2_MIHEADER,
-		RSPAMD_DKIM2_SIGNHEADER,
-	};
-
-	for (auto *ex: exact) {
-		if (g_ascii_strcasecmp(name, ex) == 0) {
-			return true;
-		}
-	}
-
-	return g_ascii_strncasecmp(name, "X-", 2) == 0 ||
-		   g_ascii_strncasecmp(name, "ARC-", 4) == 0;
-}
-
-static bool
-dkim2_check_hashes(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
-{
-	unsigned char digest[EVP_MAX_MD_SIZE];
-	bool ok = true;
-
-	/* Body hash (Section 5.1) */
 	const char *body_start = MESSAGE_FIELD(task, raw_headers_content).body_start;
 	const char *msg_end = task->msg.begin + task->msg.len;
-	std::string_view body;
 
 	if (body_start != nullptr && msg_end > body_start) {
-		body = std::string_view{body_start, static_cast<std::size_t>(msg_end - body_start)};
+		return std::string_view{body_start, static_cast<std::size_t>(msg_end - body_start)};
 	}
 
-	auto *md_ctx = EVP_MD_CTX_new();
-	EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr);
-	body_canon_foreach(body, [&](const char *p, std::size_t len) {
-		EVP_DigestUpdate(md_ctx, p, len);
+	return {};
+}
+
+/*
+ * Compute the header and body hashes (Sections 6.1, 6.2) of the message as it
+ * was received
+ */
+static auto
+dkim2_hash_current(const rspamd_dkim2_chain_t *chain, struct rspamd_task *task,
+				   const EVP_MD *md) -> std::optional<dkim2_digests>
+{
+	dkim2_digests res;
+	dkim2_digest digest{md};
+
+	/* Body hash */
+	body_canon_foreach(dkim2_message_body(task), [&](const char *p, std::size_t len) {
+		digest.update(p, len);
 	});
-	EVP_DigestFinal_ex(md_ctx, digest, nullptr);
+	res.body = digest.finish();
 
-	/* Guaranteed to exist by the chain validation */
-	const auto &latest = chain->mis.back().parsed;
-	const auto *hs = dkim2_find_sha256_set(latest);
-
-	if (memcmp(hs->body_hash.data(), digest, 32) != 0) {
-		msg_info_dkim2("body hash mismatch for the current message instance m=%d",
-					   latest.m);
-		chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-							fmt::format("body hash mismatch for instance m={}", latest.m));
-		ok = false;
-	}
-
-	/* Header hash (Section 5.2) */
+	/* Header hash */
 	struct hdr_row {
 		std::string lc_name;
-		unsigned int order;
-		std::string canon;
+		std::size_t order;
+		const raw_header_t *hdr;
 	};
 	std::vector<hdr_row> rows;
-	unsigned int order = 0;
 
-	for (auto *cur = MESSAGE_FIELD(task, headers_order); cur != nullptr;
-		 cur = cur->ord_next, order++) {
-		if (cur->name == nullptr || cur->value == nullptr) {
-			continue;
-		}
-		if (dkim2_ignored_header(cur->name)) {
-			continue;
-		}
+	for (std::size_t k = 0; k < chain->headers.size(); k++) {
+		const auto &hdr = chain->headers[k];
 
-		rows.emplace_back(hdr_row{
-			lc_string(cur->name),
-			order,
-			canon_hash_line(cur->name, cur->value),
-		});
+		if (!is_unsigned_header(hdr.name)) {
+			rows.emplace_back(hdr_row{lc_string(hdr.name), k, &hdr});
+		}
 	}
 
 	/*
-	 * Sort alphabetically; header fields with the same name are emitted in
-	 * the order they were likely inserted, i.e. from the bottom of the
-	 * header block (oldest) to the top (newest)
+	 * Ascending order of the names; header fields with the same name go in
+	 * the order they were placed into the message, that is from the bottom of
+	 * the header (oldest) to the top (newest)
 	 */
 	std::sort(rows.begin(), rows.end(), [](const hdr_row &a, const hdr_row &b) {
-		if (a.lc_name != b.lc_name) {
-			return a.lc_name < b.lc_name;
-		}
-		return a.order > b.order;
+		auto cmp = a.lc_name.compare(b.lc_name);
+
+		return cmp != 0 ? cmp < 0 : a.order > b.order;
 	});
 
-	EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr);
 	for (const auto &row: rows) {
-		EVP_DigestUpdate(md_ctx, row.canon.data(), row.canon.size());
-	}
-	EVP_DigestFinal_ex(md_ctx, digest, nullptr);
-	EVP_MD_CTX_free(md_ctx);
-
-	if (memcmp(hs->header_hash.data(), digest, 32) != 0) {
-		msg_info_dkim2("header hash mismatch for the current message instance m=%d",
-					   latest.m);
-		chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-							fmt::format("header hash mismatch for instance m={}", latest.m));
-		ok = false;
+		digest.update(canon_hash_line(row.lc_name, row.hdr->value));
 	}
 
-	return ok;
+	res.hdr = digest.finish();
+
+	if (res.hdr.empty() || res.body.empty()) {
+		return std::nullopt;
+	}
+
+	return res;
 }
 
 /*
@@ -1424,24 +2863,23 @@ dkim2_check_hashes(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
  * the message exceeds the reconstruction limits.
  */
 static bool
-dkim2_build_current_state(struct rspamd_task *task,
+dkim2_build_current_state(const rspamd_dkim2_chain_t *chain,
+						  struct rspamd_task *task,
 						  const recipe_limits_t &limits,
 						  dkim2_msg_state &state)
 {
-	for (auto *cur = MESSAGE_FIELD(task, headers_order); cur != nullptr;
-		 cur = cur->ord_next) {
-		if (cur->name == nullptr || cur->value == nullptr ||
-			dkim2_ignored_header(cur->name)) {
+	for (const auto &hdr: chain->headers) {
+		if (is_unsigned_header(hdr.name)) {
 			continue;
 		}
 
-		auto &vec = state.headers[lc_string(cur->name)];
+		auto &vec = state.headers[lc_string(hdr.name)];
 
 		if (vec.size() >= limits.max_header_instances) {
 			return false;
 		}
 
-		vec.emplace_back(cur->value);
+		vec.emplace_back(hdr.value);
 	}
 
 	/* Recipe numbering is bottom-up: index 0 must be the bottom-most instance */
@@ -1449,15 +2887,7 @@ dkim2_build_current_state(struct rspamd_task *task,
 		std::reverse(kv.second.begin(), kv.second.end());
 	}
 
-	const char *body_start = MESSAGE_FIELD(task, raw_headers_content).body_start;
-	const char *msg_end = task->msg.begin + task->msg.len;
-	std::string_view body;
-
-	if (body_start != nullptr && msg_end > body_start) {
-		body = std::string_view{body_start, static_cast<std::size_t>(msg_end - body_start)};
-	}
-
-	auto lines = split_body_lines(body, limits.max_body_lines);
+	auto lines = split_body_lines(dkim2_message_body(task), limits.max_body_lines);
 
 	if (!lines) {
 		return false;
@@ -1469,26 +2899,33 @@ dkim2_build_current_state(struct rspamd_task *task,
 }
 
 /*
- * Compute the header and body hashes (Sections 5.1, 5.2) of a reconstructed
- * message state; both digests are SHA256 (32 bytes)
+ * Compute the header and body hashes of a reconstructed message state,
+ * charging the hashed octets to the work budget; nullopt if it is exhausted
  */
-static bool
+static auto
 dkim2_hash_state(const dkim2_msg_state &state,
-				 unsigned char *hdr_digest,
-				 unsigned char *body_digest,
-				 std::size_t &work_budget)
+				 const EVP_MD *md,
+				 std::size_t &work_budget) -> std::optional<dkim2_digests>
 {
-	auto *md_ctx = EVP_MD_CTX_new();
-	auto consume_work = [&](std::size_t amount) -> bool {
-		if (amount > work_budget) {
+	dkim2_digests res;
+	dkim2_digest digest{md};
+	bool in_budget = true;
+
+	/* Every element costs something, whatever its size is */
+	auto charge = [&](std::size_t len) -> bool {
+		auto cost = len + DKIM2_ELEMENT_COST;
+
+		if (cost > work_budget) {
+			in_budget = false;
 			return false;
 		}
 
-		work_budget -= amount;
+		work_budget -= cost;
+
 		return true;
 	};
 
-	/* Header hash: names alphabetically, instances bottom-up within a name */
+	/* Header hash: names in ascending order, instances bottom-up within a name */
 	using hdr_entry_t = std::pair<std::string, std::vector<std::string_view>>;
 	std::vector<const hdr_entry_t *> entries;
 	entries.reserve(state.headers.size());
@@ -1499,27 +2936,26 @@ dkim2_hash_state(const dkim2_msg_state &state,
 		}
 	}
 
+	if (!charge(entries.size() * DKIM2_ELEMENT_COST)) {
+		return std::nullopt;
+	}
+
 	std::sort(entries.begin(), entries.end(),
 			  [](const hdr_entry_t *a, const hdr_entry_t *b) {
 				  return a->first < b->first;
 			  });
 
-	EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr);
-
 	for (const auto *entry: entries) {
 		for (auto value: entry->second) {
-			auto line = canon_hash_line(entry->first, value);
-
-			if (!consume_work(line.size())) {
-				EVP_MD_CTX_free(md_ctx);
-				return false;
+			if (!charge(entry->first.size() + value.size())) {
+				return std::nullopt;
 			}
 
-			EVP_DigestUpdate(md_ctx, line.data(), line.size());
+			digest.update(canon_hash_line(entry->first, value));
 		}
 	}
 
-	EVP_DigestFinal_ex(md_ctx, hdr_digest, nullptr);
+	res.hdr = digest.finish();
 
 	/* Body hash: lines joined with CRLF, trailing empty lines ignored */
 	auto nlines = state.body_lines.size();
@@ -1528,43 +2964,229 @@ dkim2_hash_state(const dkim2_msg_state &state,
 		nlines--;
 	}
 
-	EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr);
-
 	if (nlines == 0) {
-		if (!consume_work(2)) {
-			EVP_MD_CTX_free(md_ctx);
-			return false;
-		}
-
-		EVP_DigestUpdate(md_ctx, "\r\n", 2);
-	}
-	else {
-		for (std::size_t k = 0; k < nlines; k++) {
-			const auto &line = state.body_lines[k];
-			if (!consume_work(line.size()) || !consume_work(2)) {
-				EVP_MD_CTX_free(md_ctx);
-				return false;
-			}
-
-			if (!line.empty()) {
-				EVP_DigestUpdate(md_ctx, line.data(), line.size());
-			}
-
-			EVP_DigestUpdate(md_ctx, "\r\n", 2);
-		}
+		digest.update("\r\n", 2);
 	}
 
-	EVP_DigestFinal_ex(md_ctx, body_digest, nullptr);
-	EVP_MD_CTX_free(md_ctx);
+	for (std::size_t k = 0; k < nlines; k++) {
+		const auto &line = state.body_lines[k];
 
-	return true;
+		if (!charge(line.size())) {
+			return std::nullopt;
+		}
+
+		digest.update(line);
+		digest.update("\r\n", 2);
+	}
+
+	res.body = digest.finish();
+
+	if (!in_budget || res.hdr.empty() || res.body.empty()) {
+		return std::nullopt;
+	}
+
+	return res;
 }
 
 /*
- * Verify the hashes of the older message instances by applying recipes from
- * the latest instance backwards. A missing/unparseable recipe or an exceeded
- * limit leaves the remaining instances unverified (this is not an error);
- * a hash mismatch of a successfully reconstructed instance is a failure.
+ * Evaluate the h= tag of an instance against a message state (Section 14.7).
+ * `compute(md)` returns the digests of the state, or nullopt if they cannot
+ * be computed (then `no_digests` is set). Returns the result and, unless it is
+ * a pass, the human-readable reason.
+ */
+template<typename Compute>
+static auto
+dkim2_eval_hashes(const mi_header_t &mi, Compute &&compute, bool &no_digests)
+	-> std::pair<result_t, std::string>
+{
+	std::vector<result_t> group_results;
+	std::vector<std::pair<result_t, std::string>> set_results;
+
+	for (const auto &group: mi.hash_groups) {
+		std::vector<result_t> results;
+
+		for (const auto &hs: group) {
+			const auto *md = dkim2_hash_md(hs.alg);
+			auto res = result_t::pass;
+			std::string reason;
+
+			if (md == nullptr) {
+				res = result_t::permerror;
+				reason = fmt::format("Message-Instance m={} algorithm {} unknown", mi.m, hs.alg);
+			}
+			else {
+				/* An algorithm cannot repeat in a field, so nothing to cache */
+				auto digests = compute(md);
+
+				if (!digests) {
+					no_digests = true;
+					res = result_t::permerror;
+					reason = fmt::format("Message-Instance m={} hashes cannot be computed", mi.m);
+				}
+				else if (digests->hdr != hs.header_hash) {
+					res = result_t::fail;
+					reason = fmt::format("Message-Instance m={} header hash {} mismatch",
+										 mi.m, hs.alg);
+				}
+				else if (digests->body != hs.body_hash) {
+					res = result_t::fail;
+					reason = fmt::format("Message-Instance m={} body hash {} mismatch",
+										 mi.m, hs.alg);
+				}
+			}
+
+			results.push_back(res);
+			set_results.emplace_back(res, std::move(reason));
+		}
+
+		group_results.push_back(combine_all(results));
+	}
+
+	auto overall = combine_any(group_results);
+
+	if (overall == result_t::pass) {
+		return {overall, {}};
+	}
+
+	if (overall == result_t::fail && group_results.size() > 1) {
+		return {overall, fmt::format("Message-Instance m={} no group of hashes passed", mi.m)};
+	}
+
+	for (auto &[res, reason]: set_results) {
+		if (res == overall) {
+			return {overall, std::move(reason)};
+		}
+	}
+
+	return {overall, fmt::format("Message-Instance m={} no group of hashes passed", mi.m)};
+}
+
+/* Lowercase ASCII form (A-labels) of a domain, nullopt if it has none */
+static auto
+dkim2_alabel(struct rspamd_task *task, std::string_view domain) -> std::optional<std::string>
+{
+	auto is_ascii = std::all_of(domain.begin(), domain.end(), [](char c) {
+		return static_cast<unsigned char>(c) < 0x80;
+	});
+
+	if (is_ascii) {
+		return lc_string(domain);
+	}
+
+	unsigned int outlen = 0;
+	const char *converted = rspamd_dns_resolver_idna_convert_utf8(task->resolver,
+																  task->task_pool,
+																  domain.data(), domain.size(),
+																  &outlen);
+
+	if (converted == nullptr) {
+		return std::nullopt;
+	}
+
+	return lc_string(std::string_view{converted, outlen});
+}
+
+/*
+ * Check that a From header field is Authentic for a signature (Sections 11,
+ * 14.8). `values` are the unfolded values of all From header fields of the
+ * message state that the signature is responsible for.
+ */
+static void
+dkim2_check_from(rspamd_dkim2_chain_t *chain, struct rspamd_task *task,
+				 std::span<const std::string_view> values, const sig_header_t &sig)
+{
+	auto not_authentic = [&](const char *what) {
+		msg_info_dkim2("DKIM2 From header is not authentic for d=%s (i=%d): %s",
+					   sig.domain.c_str(), sig.i, what);
+		chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+							fmt::format("DKIM2-Signature i={} {}", sig.i, what));
+	};
+
+	if (values.empty()) {
+		return not_authentic("matching From is not authentic");
+	}
+	if (values.size() > 1) {
+		return not_authentic("From has more than one address");
+	}
+
+	auto value = values.front();
+
+	if (!from_is_single_mailbox(value)) {
+		/* Nothing or several things that look like addresses */
+		return not_authentic(value.find('@') == std::string_view::npos ? "matching From is not authentic" : "From has more than one address");
+	}
+
+	auto *addrs = rspamd_email_address_from_mime(task->task_pool, value.data(),
+												 value.size(), nullptr, -1);
+
+	if (addrs == nullptr || addrs->len == 0) {
+		return not_authentic("matching From is not authentic");
+	}
+	if (addrs->len > 1) {
+		return not_authentic("From has more than one address");
+	}
+
+	const auto *addr = static_cast<const struct rspamd_email_address *>(g_ptr_array_index(addrs, 0));
+
+	if (addr->domain == nullptr || addr->domain_len == 0) {
+		return not_authentic("matching From is not authentic");
+	}
+
+	std::string_view raw_domain{addr->domain, addr->domain_len};
+
+	if ((addr->flags & RSPAMD_EMAIL_ADDR_IP) || raw_domain.front() == '[') {
+		return not_authentic("From uses a domain literal");
+	}
+
+	auto from_domain = dkim2_alabel(task, raw_domain);
+
+	if (!from_domain || !valid_domain(*from_domain)) {
+		return not_authentic("matching From is not authentic");
+	}
+
+	if (relaxed_domain_match(*from_domain, sig.domain)) {
+		/* The signing domain is the From domain or its parent */
+		return;
+	}
+
+	if (!relaxed_domain_match(sig.domain, *from_domain)) {
+		return not_authentic("matching From is not authentic");
+	}
+
+	/* A subdomain signs for its parent: needs the Domain Policy Record */
+	auto policy_name = fmt::format("_domainkey.{}", *from_domain);
+
+	if (policy_name.size() > DKIM2_MAX_DNS_NAME) {
+		return not_authentic("matching From is not authentic");
+	}
+
+	chain->policies.try_emplace(policy_name);
+	chain->from_checks.emplace_back(dkim2_from_check{
+		sig.i,
+		std::move(*from_domain),
+		std::move(policy_name),
+	});
+}
+
+/* The lowest numbered signature whose m= covers the instance */
+static auto
+dkim2_sig_for_instance(const rspamd_dkim2_chain_t *chain, std::size_t m) -> const sig_header_t &
+{
+	for (const auto &sig: chain->sigs) {
+		if (sig.m >= m) {
+			return sig;
+		}
+	}
+
+	/* Not reachable: the last signature covers the latest instance */
+	return chain->sigs.back();
+}
+
+/*
+ * Verify the hashes of the older message instances by recreating them with
+ * the recipes, from the latest instance backwards (Section 13), and check
+ * that the From header fields seen on the way are Authentic. A message with
+ * an instance that cannot be recreated is not a Fully Verified DKIM2 Message.
  */
 static void
 dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
@@ -1572,19 +3194,84 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 	recipe_limits_t limits;
 	auto nmis = chain->mis.size();
 
+	/*
+	 * The first instance MAY have a recipe for what was done to the message
+	 * before it was signed (Section 12.1). There is nothing to recreate with
+	 * it, but it is still required to be a valid one (Section 14.2).
+	 */
+	if (const auto &first = chain->mis.front().parsed; first.has_recipe) {
+		auto decoded = first.recipe_b64.size() > limits.max_recipe_len / 3 * 4 + 4 ? std::nullopt : b64_decode(first.recipe_b64);
+		auto recipe = decoded ? parse_recipe(*decoded, limits) : tl::make_unexpected(recipe_error_t{recipe_error_kind::invalid_json, "invalid base64"});
+
+		if (!recipe) {
+			auto reason = recipe.error().kind == recipe_error_kind::invalid_recipe
+							  ? fmt::format("Message-Instance m=1 recipe {} is invalid",
+											dkim2_quote(recipe.error().what))
+							  : std::string{"Message-Instance m=1 contains invalid JSON"};
+
+			msg_info_dkim2("DKIM2 instances are not verified: %s", reason.c_str());
+			chain->merge_prelim(RSPAMD_DKIM2_PERMERROR, std::move(reason));
+
+			return;
+		}
+	}
+
+	if (nmis == 1) {
+		/* Nothing to recreate; the only From was placed by the Originator */
+		std::vector<std::string_view> from_values;
+
+		for (const auto &hdr: chain->headers) {
+			if (eq_icase(hdr.name, "from")) {
+				from_values.emplace_back(hdr.value);
+			}
+		}
+
+		dkim2_check_from(chain, task, from_values, chain->sigs.front());
+
+		return;
+	}
+
 	auto work_budget = dkim2_bounded_budget(task->msg.len,
 											DKIM2_RECIPE_BUDGET_FACTOR,
 											DKIM2_RECIPE_MIN_BUDGET,
 											DKIM2_RECIPE_MAX_BUDGET);
 
+	auto stop = [&](enum rspamd_dkim2_result_code rcode, std::string reason) {
+		msg_info_dkim2("DKIM2 instances are not verified: %s", reason.c_str());
+		chain->merge_prelim(rcode, std::move(reason));
+	};
+
+	auto recipe_error = [&](std::size_t m, const recipe_error_t &rerr) {
+		switch (rerr.kind) {
+		case recipe_error_kind::invalid_json:
+			msg_info_dkim2("invalid JSON in the recipe of instance m=%z: %s",
+						   m, rerr.what.c_str());
+			return fmt::format("Message-Instance m={} contains invalid JSON", m);
+		case recipe_error_kind::invalid_recipe:
+			return fmt::format("Message-Instance m={} recipe {} is invalid",
+							   m, dkim2_quote(rerr.what));
+		case recipe_error_kind::too_complex:
+			break;
+		}
+
+		msg_info_dkim2("recipe of instance m=%z is over the limits: %s",
+					   m, rerr.what.c_str());
+
+		return fmt::format("Message-Instance m={} JSON is unacceptably complex", m);
+	};
+
 	dkim2_msg_state state;
 
-	if (!dkim2_build_current_state(task, limits, state)) {
-		msg_info_dkim2("message is too large for DKIM2 instance reconstruction; "
-					   "%d older instances left unverified",
-					   (int) (nmis - 1));
-		return;
+	if (!dkim2_build_current_state(chain, task, limits, state)) {
+		return stop(RSPAMD_DKIM2_PERMERROR,
+					fmt::format("Message-Instance m={} JSON is unacceptably complex", nmis));
 	}
+
+	auto state_from = [&]() -> std::vector<std::string_view> {
+		auto it = state.headers.find("from");
+
+		return it == state.headers.end() ? std::vector<std::string_view>{} : it->second;
+	};
 
 	/* Reconstructed states reference recipe data, keep all recipes alive */
 	std::vector<recipe_t> recipes;
@@ -1592,430 +3279,544 @@ dkim2_check_instances(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 
 	for (auto m = nmis; m >= 2; m--) {
 		const auto &mi = chain->mis[m - 1].parsed;
+		const recipe_t *r = nullptr;
 
-		if (!mi.has_recipe) {
-			msg_debug_dkim2("Message-Instance m=%z has no recipe; "
-							"older instances left unverified",
-							m);
-			return;
+		if (mi.has_recipe) {
+			if (mi.recipe_b64.size() > limits.max_recipe_len / 3 * 4 + 4) {
+				return stop(RSPAMD_DKIM2_PERMERROR,
+							fmt::format("Message-Instance m={} JSON is unacceptably complex", m));
+			}
+
+			auto decoded = b64_decode(mi.recipe_b64);
+
+			if (!decoded) {
+				return stop(RSPAMD_DKIM2_PERMERROR,
+							fmt::format("Message-Instance m={} contains invalid JSON", m));
+			}
+
+			auto recipe = parse_recipe(*decoded, limits);
+
+			if (!recipe) {
+				return stop(RSPAMD_DKIM2_PERMERROR, recipe_error(m, recipe.error()));
+			}
+
+			recipes.emplace_back(std::move(*recipe));
+			r = &recipes.back();
 		}
 
-		if (mi.recipe_b64.size() > limits.max_recipe_len / 3 * 4 + 4) {
-			msg_info_dkim2("recipe of instance m=%z is too large", m);
-			return;
+		if (r != nullptr && r->find_header("from") != nullptr) {
+			/* This instance has a From that its Reviser has placed */
+			auto from_values = state_from();
+			dkim2_check_from(chain, task, from_values, dkim2_sig_for_instance(chain, m));
 		}
 
-		auto decoded = b64_decode(mi.recipe_b64);
+		/* Without a recipe the instance has changed nothing */
+		if (r != nullptr) {
+			if (r->body_null) {
+				return stop(RSPAMD_DKIM2_PERMERROR,
+							fmt::format("Message-Instance m={} has a null recipe", m));
+			}
 
-		if (!decoded || decoded->empty()) {
-			msg_info_dkim2("invalid base64 in recipe of instance m=%z", m);
-			return;
-		}
-
-		auto recipe = parse_recipe(*decoded, limits);
-
-		if (!recipe) {
-			msg_info_dkim2("cannot parse recipe of instance m=%z: %s",
-						   m, recipe.error().c_str());
-			return;
-		}
-
-		recipes.emplace_back(std::move(*recipe));
-		const auto &r = recipes.back();
-
-		if ((r.has_headers && r.headers_unrecoverable) ||
-			(r.has_body && r.body.unrecoverable)) {
-			msg_debug_dkim2("instance m=%z is marked as unrecoverable", m - 1);
-			return;
-		}
-
-		if (r.has_headers) {
-			for (const auto &[name, part]: r.headers) {
-				if (dkim2_ignored_header(name.c_str())) {
-					/* Does not participate in the hash */
-					continue;
-				}
-
-				if (part.unrecoverable) {
-					msg_debug_dkim2("header %s of instance m=%z is unrecoverable",
-									name.c_str(), m - 1);
-					return;
-				}
-
+			for (const auto &[name, steps]: r->headers) {
 				auto &vec = state.headers[name];
-				auto out = apply_recipe_steps(vec, part.steps,
+				auto out = apply_recipe_steps(vec, steps,
 											  limits.max_header_instances, work_budget);
 
 				if (!out) {
-					msg_info_dkim2("cannot apply header recipe of instance m=%z: %s",
-								   m, out.error().c_str());
-					return;
+					return stop(RSPAMD_DKIM2_PERMERROR, recipe_error(m, out.error()));
 				}
 
 				vec = std::move(*out);
 			}
-		}
 
-		if (r.has_body) {
-			auto out = apply_recipe_steps(state.body_lines, r.body.steps,
-										  limits.max_body_lines, work_budget);
+			if (r->has_body) {
+				auto out = apply_recipe_steps(state.body_lines, r->body,
+											  limits.max_body_lines, work_budget);
 
-			if (!out) {
-				msg_info_dkim2("cannot apply body recipe of instance m=%z: %s",
-							   m, out.error().c_str());
-				return;
+				if (!out) {
+					return stop(RSPAMD_DKIM2_PERMERROR, recipe_error(m, out.error()));
+				}
+
+				state.body_lines = std::move(*out);
 			}
-
-			state.body_lines = std::move(*out);
 		}
 
 		/* The state is now instance m-1; verify its hashes */
 		const auto &prev_mi = chain->mis[m - 2].parsed;
-		const auto *hs = dkim2_find_sha256_set(prev_mi);
+		bool no_digests = false;
+		auto [res, reason] = dkim2_eval_hashes(
+			prev_mi,
+			[&](const EVP_MD *md) {
+				return dkim2_hash_state(state, md, work_budget);
+			},
+			no_digests);
 
-		if (hs == nullptr) {
-			msg_info_dkim2("instance m=%z has no usable sha256 hash set", m - 1);
-			return;
+		if (no_digests) {
+			return stop(RSPAMD_DKIM2_PERMERROR,
+						fmt::format("Message-Instance m={} JSON is unacceptably complex", m));
 		}
 
-		unsigned char hdr_digest[EVP_MAX_MD_SIZE], body_digest[EVP_MAX_MD_SIZE];
-		if (!dkim2_hash_state(state, hdr_digest, body_digest, work_budget)) {
-			msg_info_dkim2("cannot hash reconstructed instance m=%z: "
-						   "recipe work budget exceeded",
-						   m - 1);
-			return;
-		}
-
-		if (memcmp(hs->header_hash.data(), hdr_digest, 32) != 0) {
-			msg_info_dkim2("header hash mismatch for reconstructed instance m=%z", m - 1);
-			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-								fmt::format("header hash mismatch for reconstructed instance m={}",
-											m - 1));
-			return;
-		}
-
-		if (memcmp(hs->body_hash.data(), body_digest, 32) != 0) {
-			msg_info_dkim2("body hash mismatch for reconstructed instance m=%z", m - 1);
-			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-								fmt::format("body hash mismatch for reconstructed instance m={}",
-											m - 1));
-			return;
+		if (res != result_t::pass) {
+			return stop(to_rcode(res), std::move(reason));
 		}
 
 		chain->verified_instances++;
 		msg_debug_dkim2("verified reconstructed instance m=%z, work budget left %z",
 						m - 1, work_budget);
 	}
+
+	/* The state is the original message: its From was placed by the Originator */
+	auto from_values = state_from();
+	dkim2_check_from(chain, task, from_values, chain->sigs.front());
+}
+
+/* Comparison key of an SMTP envelope address: domains go as A-labels (Section 18) */
+static auto
+dkim2_envelope_key(struct rspamd_task *task, std::string_view addr) -> std::string
+{
+	auto key = smtp_addr_key(addr);
+	auto at_pos = key.rfind('@');
+
+	if (at_pos != std::string::npos) {
+		auto alabel = dkim2_alabel(task, std::string_view{key}.substr(at_pos + 1));
+
+		if (alabel) {
+			key.replace(at_pos + 1, std::string::npos, *alabel);
+		}
+	}
+
+	return key;
 }
 
 /*
- * Flag compliance (Section 10.8): donotmodify and donotexplode
+ * The SMTP envelope against the highest numbered signature (Section 14.4):
+ * an exact match of MAIL FROM, and every RCPT TO must be listed in rt=
  */
-static void
-dkim2_check_flags(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
-{
-	auto nmis = (unsigned int) chain->mis.size();
-
-	for (std::size_t k = 0; k < chain->sigs.size(); k++) {
-		const auto &sig = chain->sigs[k].parsed;
-
-		if ((sig.flags & DKIM2_SIG_FLAG_DONOTMODIFY) && nmis > sig.m) {
-			msg_info_dkim2("message was modified despite the donotmodify request "
-						   "of hop i=%d",
-						   sig.i);
-			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-								fmt::format("message was modified despite a donotmodify "
-											"request (hop i={})",
-											sig.i));
-		}
-
-		if (sig.flags & DKIM2_SIG_FLAG_DONOTEXPLODE) {
-			for (auto j = k + 1; j < chain->sigs.size(); j++) {
-				if (chain->sigs[j].parsed.flags & DKIM2_SIG_FLAG_EXPLODED) {
-					msg_info_dkim2("message was exploded despite the donotexplode "
-								   "request of hop i=%d",
-								   sig.i);
-					chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-										fmt::format("message was exploded despite a "
-													"donotexplode request (hop i={})",
-													sig.i));
-					break;
-				}
-			}
-		}
-	}
-}
-
 static void
 dkim2_check_envelope(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
 {
-	const auto &last = chain->sigs.back().parsed;
+	const auto &last = chain->sigs.back();
+	const auto &params = chain->params;
 
-	if (chain->params.check_envelope) {
-		if (task->from_envelope != nullptr) {
-			std::string_view smtp_from;
+	if (last.has_nd) {
+		/* A trailing nd= is reported by the Chain of Custody check */
+		return;
+	}
 
-			if (task->from_envelope->addr_len > 0) {
-				smtp_from = std::string_view{task->from_envelope->addr,
-											 task->from_envelope->addr_len};
-			}
+	bool mail_from_ok = false, rcpt_ok = false;
 
-			if (!smtp_addr_equal(last.mf, smtp_from)) {
-				msg_info_dkim2("MAIL FROM does not match mf= of the last hop");
-				chain->merge_prelim(RSPAMD_DKIM2_PERMERROR,
-									"MAIL FROM did not match mf= of the last hop");
-			}
+	/*
+	 * The two halves are checked independently, each one only if the MTA has
+	 * told us that value: an address that we could not parse is known, and
+	 * it does not match anything.
+	 */
+	if (params.have_mail_from) {
+		/* The sender as it was on the wire, before any alias rewriting */
+		const auto *from = task->from_envelope_orig ? task->from_envelope_orig : task->from_envelope;
+		std::string_view smtp_from;
+
+		if (from != nullptr && from->addr != nullptr && from->addr_len > 0) {
+			smtp_from = std::string_view{from->addr, from->addr_len};
 		}
 
+		if (from == nullptr ||
+			dkim2_envelope_key(task, smtp_from) != smtp_addr_key(last.mf)) {
+			msg_info_dkim2("MAIL FROM does not match mf= of the last DKIM2 signature");
+			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+								fmt::format("DKIM2-Signature i={} MAIL FROM {} did not match",
+											last.i, from ? dkim2_quote(smtp_from) : "?"));
+		}
+		else {
+			mail_from_ok = true;
+		}
+	}
+
+	if (params.have_rcpt) {
+		ankerl::unordered_dense::set<std::string> rt_index;
+		rt_index.reserve(last.rt.size());
+
+		for (const auto &rt: last.rt) {
+			rt_index.emplace(smtp_addr_key(rt));
+		}
+
+		unsigned int i, nchecked = 0;
+		struct rspamd_email_address *rcpt;
+		bool has_original = false;
+
+		rcpt_ok = true;
+
 		if (task->rcpt_envelope != nullptr) {
-			ankerl::unordered_dense::set<std::string> rt_index;
-			rt_index.reserve(last.rt.size());
-
-			for (const auto &rt: last.rt) {
-				rt_index.emplace(smtp_addr_key(rt));
+			/* Recipients as they were on the wire, if aliases have added more */
+			PTR_ARRAY_FOREACH(task->rcpt_envelope, i, rcpt)
+			{
+				has_original = has_original || (rcpt->flags & RSPAMD_EMAIL_ADDR_ORIGINAL);
 			}
-
-			unsigned int i;
-			struct rspamd_email_address *rcpt;
 
 			PTR_ARRAY_FOREACH(task->rcpt_envelope, i, rcpt)
 			{
-				if (rcpt->addr == nullptr) {
+				if (rcpt->addr == nullptr ||
+					(has_original && !(rcpt->flags & RSPAMD_EMAIL_ADDR_ORIGINAL))) {
 					continue;
 				}
 
 				std::string_view rcpt_sv{rcpt->addr, rcpt->addr_len};
-				auto found = rt_index.contains(smtp_addr_key(rcpt_sv));
 
-				if (!found) {
-					msg_info_dkim2("RCPT TO <%*s> not found in rt= of the last hop",
+				nchecked++;
+
+				if (!rt_index.contains(dkim2_envelope_key(task, rcpt_sv))) {
+					msg_info_dkim2("RCPT TO <%*s> not found in rt= of the last DKIM2 signature",
 								   (int) rcpt->addr_len, rcpt->addr);
-					chain->merge_prelim(RSPAMD_DKIM2_PERMERROR,
-										"RCPT TO did not match rt= of the last hop");
+					chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+										fmt::format("DKIM2-Signature i={} RCPT TO {} did not match",
+													last.i, dkim2_quote(rcpt_sv)));
+					rcpt_ok = false;
 					break;
 				}
 			}
 		}
+
+		if (rcpt_ok && nchecked == 0) {
+			/*
+			 * There were recipients, but none of them could be parsed and
+			 * all were dropped: they cannot be in rt= either
+			 */
+			msg_info_dkim2("RCPT TO values of the message cannot be matched with rt=");
+			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+								fmt::format("DKIM2-Signature i={} RCPT TO ? did not match",
+											last.i));
+			rcpt_ok = false;
+		}
 	}
 
-	/* Per-hop alignment of d= with the mf= domain (Section 8.3) */
-	for (const auto &sig_entry: chain->sigs) {
-		const auto &sig = sig_entry.parsed;
-		auto mf_dom = smtp_addr_domain(sig.mf);
+	chain->envelope_ok = mail_from_ok && rcpt_ok;
+}
 
-		if (mf_dom.empty()) {
-			/* Null reverse-path (bounce), nothing to align */
-			continue;
-		}
+/*
+ * Section 14.3: no signature may be older than 14 days or come from more
+ * than a day ahead of the moment the message was accepted
+ */
+static void
+dkim2_check_timestamps(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
+{
+	auto now = static_cast<std::uint64_t>(task->task_timestamp > 0 ? task->task_timestamp : time(nullptr));
+	std::uint64_t max_age = chain->params.max_age ? chain->params.max_age : DKIM2_DEFAULT_MAX_AGE;
+	std::uint64_t max_future = chain->params.time_jitter ? chain->params.time_jitter : DKIM2_DEFAULT_MAX_FUTURE;
 
-		if (!relaxed_domain_match(mf_dom, sig.domain)) {
-			msg_info_dkim2("hop i=%d: mf= domain does not align with d=%s",
-						   sig.i, sig.domain.c_str());
-			chain->merge_prelim(RSPAMD_DKIM2_PERMERROR,
-								fmt::format("mf= domain is not aligned with d= for hop i={}",
+	for (const auto &sig: chain->sigs) {
+		if (sig.t > now && sig.t - now > max_future) {
+			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+								fmt::format("DKIM2-Signature i={} signature is from the future",
 											sig.i));
+			break;
+		}
+		if (sig.t < now && now - sig.t > max_age) {
+			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+								fmt::format("DKIM2-Signature i={} signature expired", sig.i));
 			break;
 		}
 	}
 }
 
-static void
-dkim2_check_timestamps(rspamd_dkim2_chain_t *chain, struct rspamd_task *task)
+#ifdef DKIM2_HAVE_MLDSA
+/* Pure ML-DSA-44 over the signature input with the "DKIM2" context (Section 3.4) */
+static auto
+dkim2_verify_mldsa44(std::string_view pk, std::string_view sig, std::string_view input) -> result_t
 {
-	/*
-	 * The last hop has the most recent timestamp, so it is the only one
-	 * checked against the maximum age in this draft implementation
-	 */
-	const auto &last = chain->sigs.back().parsed;
+	static const unsigned char ctx_string[] = {'D', 'K', 'I', 'M', '2'};
+	auto res = result_t::permerror;
+	auto *pkey = EVP_PKEY_new_raw_public_key_ex(nullptr, "ML-DSA-44", nullptr,
+												reinterpret_cast<const unsigned char *>(pk.data()),
+												pk.size());
+	auto *md_ctx = EVP_MD_CTX_new();
 
-	if (last.t == 0) {
-		return;
+	if (pkey != nullptr && md_ctx != nullptr) {
+		OSSL_PARAM params[] = {
+			OSSL_PARAM_construct_octet_string(OSSL_SIGNATURE_PARAM_CONTEXT_STRING,
+											  const_cast<unsigned char *>(ctx_string),
+											  sizeof(ctx_string)),
+			OSSL_PARAM_construct_end(),
+		};
+
+		if (EVP_DigestVerifyInit_ex(md_ctx, nullptr, nullptr, nullptr, nullptr,
+									pkey, params) == 1) {
+			auto rc = EVP_DigestVerify(md_ctx,
+									   reinterpret_cast<const unsigned char *>(sig.data()),
+									   sig.size(),
+									   reinterpret_cast<const unsigned char *>(input.data()),
+									   input.size());
+			res = rc == 1 ? result_t::pass : result_t::fail;
+		}
 	}
 
-	auto now = time(nullptr);
-	auto max_age = chain->params.max_age ? chain->params.max_age : DKIM2_DEFAULT_MAX_AGE;
+	EVP_MD_CTX_free(md_ctx);
+	EVP_PKEY_free(pkey);
+	ERR_clear_error();
 
-	if (last.t > now + chain->params.time_jitter) {
-		/* Implementations MAY ignore future timestamps; just log it */
-		msg_info_dkim2("DKIM2 signature i=%d has a future timestamp %ud",
-					   last.i, (unsigned int) last.t);
+	return res;
+}
+#endif
+
+/*
+ * Check one signature of a hop (Section 14.6 steps 3 and 4): the result and,
+ * unless it is a pass, the human-readable reason
+ */
+static auto
+dkim2_verify_sig_set(rspamd_dkim2_chain_t *chain,
+					 const sig_header_t &sig,
+					 const sig_set_t &ss,
+					 const unsigned char *sha256_digest,
+					 std::string_view raw_input) -> std::pair<result_t, std::string>
+{
+	struct rspamd_task *task = chain->task;
+	auto key_type = sig_alg_key_type(ss.alg);
+
+#ifndef DKIM2_HAVE_MLDSA
+	if (ss.alg == mldsa44_alg_name) {
+		/* Not implemented by the crypto library in use */
+		key_type = {};
 	}
-	else if (now - last.t > (time_t) max_age) {
-		chain->merge_prelim(RSPAMD_DKIM2_FAIL,
-							fmt::format("signature is too old: {} seconds", now - last.t));
+#endif
+
+	if (key_type.empty()) {
+		return {result_t::permerror,
+				fmt::format("DKIM2-Signature i={} selector {} algorithm unknown",
+							sig.i, ss.selector)};
 	}
+
+	auto slot_it = chain->keys.find(lc_string(fmt::format("{}._domainkey.{}",
+														  ss.selector, sig.domain)));
+
+	if (slot_it == chain->keys.end()) {
+		/* Should not happen: all names are inserted in chain_verify */
+		return {result_t::permerror,
+				fmt::format("DKIM2-Signature i={} public key {} does not exist",
+							sig.i, ss.selector)};
+	}
+
+	const auto &slot = slot_it->second;
+
+	if (slot.rcode != RSPAMD_DKIM2_PASS) {
+		return {from_rcode(slot.rcode),
+				fmt::format("DKIM2-Signature i={} public key {} {}",
+							sig.i, ss.selector, slot.problem)};
+	}
+
+	if (slot.k != key_type) {
+		return {result_t::permerror,
+				fmt::format("DKIM2-Signature i={} public key {} algorithm mismatch",
+							sig.i, ss.selector)};
+	}
+
+	auto incorrect = [&]() -> std::pair<result_t, std::string> {
+		msg_info_dkim2("DKIM2 signature i=%d did not verify; d=%s, selector=%s, alg=%s",
+					   sig.i, sig.domain.c_str(), ss.selector.c_str(), ss.alg.c_str());
+
+		return {result_t::fail,
+				fmt::format("DKIM2-Signature i={} selector {} incorrect signature",
+							sig.i, ss.selector)};
+	};
+
+	if (ss.alg == rsa_alg_name) {
+		GError *err = nullptr;
+
+		if (!rspamd_cryptobox_verify_evp_rsa(NID_sha256,
+											 reinterpret_cast<const unsigned char *>(ss.sig.data()),
+											 ss.sig.size(),
+											 sha256_digest, 32,
+											 static_cast<EVP_PKEY *>(rspamd_dkim_key_evp(slot.key)),
+											 &err)) {
+			ERR_clear_error();
+
+			if (err != nullptr) {
+				auto reason = fmt::format("DKIM2-Signature i={} selector {} cannot be verified: {}",
+										  sig.i, ss.selector, err->message);
+				g_error_free(err);
+
+				return {result_t::permerror, std::move(reason)};
+			}
+
+			return incorrect();
+		}
+	}
+	else if (ss.alg == ed25519_alg_name) {
+		gsize pklen = 0;
+		const unsigned char *pk = rspamd_dkim_key_eddsa(slot.key, &pklen);
+
+		if (pk == nullptr || pklen != crypto_sign_publickeybytes()) {
+			return {result_t::permerror,
+					fmt::format("DKIM2-Signature i={} public key {} is malformed",
+								sig.i, ss.selector)};
+		}
+
+		if (ss.sig.size() != crypto_sign_bytes() ||
+			!rspamd_cryptobox_verify(reinterpret_cast<const unsigned char *>(ss.sig.data()),
+									 ss.sig.size(),
+									 sha256_digest, 32,
+									 pk)) {
+			return incorrect();
+		}
+	}
+	else {
+#ifdef DKIM2_HAVE_MLDSA
+		if (ss.sig.size() != DKIM2_MLDSA44_SIG_LEN) {
+			return incorrect();
+		}
+
+		/* The whole input is hashed again for every such signature */
+		if (raw_input.size() > chain->signature_work_budget) {
+			return {result_t::permerror,
+					fmt::format("DKIM2-Signature i={} signature input is too large", sig.i)};
+		}
+
+		chain->signature_work_budget -= raw_input.size();
+
+		auto res = dkim2_verify_mldsa44(slot.raw_pk, ss.sig, raw_input);
+
+		if (res == result_t::fail) {
+			return incorrect();
+		}
+		if (res != result_t::pass) {
+			return {res,
+					fmt::format("DKIM2-Signature i={} public key {} is malformed",
+								sig.i, ss.selector)};
+		}
+#else
+		(void) raw_input;
+#endif
+	}
+
+	return {result_t::pass, {}};
 }
 
 static void
 dkim2_verify_one_hop(rspamd_dkim2_chain_t *chain,
-					 const sig_entry_t &entry,
 					 std::size_t hop_idx,
 					 struct rspamd_dkim2_hop_result *hop)
 {
 	struct rspamd_task *task = chain->task;
-	const auto &sig = entry.parsed;
+	const auto &sig = chain->sigs[hop_idx];
 	unsigned char digest[EVP_MAX_MD_SIZE];
 
-	auto merge_hop = [&](enum rspamd_dkim2_result_code rcode, std::string_view reason) {
-		if (severity(rcode) > severity(hop->rcode)) {
-			hop->rcode = rcode;
-			hop->fail_reason = rspamd_mempool_strdup(task->task_pool,
-													 std::string{reason}.c_str());
-		}
+	auto set_hop = [&](result_t res, std::string_view reason) {
+		hop->rcode = to_rcode(res);
+		hop->fail_reason = res == result_t::pass ? nullptr : rspamd_mempool_strdup(task->task_pool, std::string{reason}.c_str());
 	};
 
 	hop->rcode = RSPAMD_DKIM2_PASS;
 	hop->fail_reason = nullptr;
 	hop->idx = sig.i;
 	hop->domain = rspamd_mempool_strdup(task->task_pool, sig.domain.c_str());
-	hop->selector = rspamd_mempool_strdup(task->task_pool, sig.sigs[0].selector.c_str());
+	hop->selector = rspamd_mempool_strdup(task->task_pool,
+										  sig.sig_groups.front().front().selector.c_str());
 
-	/* Stream the signature input and charge repeated input across all hops */
-	auto md_ctx = EVP_MD_CTX_new();
+	/*
+	 * The signature input: the instances up to m=, the signatures below i=
+	 * and this field with the signature values blanked (Section 14.6). The
+	 * input of every hop repeats the previous ones, so the octets are charged
+	 * to a budget shared by the whole chain.
+	 */
+	bool need_raw = false;
+
+#ifdef DKIM2_HAVE_MLDSA
+	/* ML-DSA signs the input itself, not its hash */
+	for (const auto &group: sig.sig_groups) {
+		for (const auto &ss: group) {
+			need_raw = need_raw || ss.alg == mldsa44_alg_name;
+		}
+	}
+#endif
+
+	auto *md_ctx = EVP_MD_CTX_new();
+	std::string raw_input;
 	std::size_t input_size = 0;
 	bool budget_exceeded = false;
+	bool digest_ok = md_ctx != nullptr &&
+					 EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr) == 1;
 
-	if (md_ctx == nullptr || EVP_DigestInit_ex(md_ctx, EVP_sha256(), nullptr) != 1) {
-		EVP_MD_CTX_free(md_ctx);
-		merge_hop(RSPAMD_DKIM2_PERMERROR, "cannot initialize signature digest");
-		return;
-	}
+	auto update_digest = [&](std::string_view data) {
+		if (!digest_ok) {
+			return;
+		}
 
-	auto update_digest = [&](std::string_view data) -> bool {
 		if (data.size() > chain->signature_work_budget) {
 			budget_exceeded = true;
-			return false;
+			digest_ok = false;
+			return;
 		}
 
 		chain->signature_work_budget -= data.size();
 		input_size += data.size();
 
-		return EVP_DigestUpdate(md_ctx, data.data(), data.size()) == 1;
+		if (need_raw) {
+			raw_input.append(data);
+		}
+
+		digest_ok = EVP_DigestUpdate(md_ctx, data.data(), data.size()) == 1;
 	};
 
-	bool digest_ok = true;
-
-	for (std::size_t k = 0; k < sig.m && digest_ok; k++) {
-		digest_ok = update_digest(chain->mis[k].canon_line);
+	for (std::size_t k = 0; k < sig.m; k++) {
+		update_digest(chain->mis[k].canon_line);
 	}
-	for (std::size_t k = 0; k < hop_idx && digest_ok; k++) {
-		digest_ok = update_digest(chain->sigs[k].canon_line);
+	for (std::size_t k = 0; k < hop_idx; k++) {
+		update_digest(chain->sig_lines[k]);
 	}
 
-	auto blanked_line = blank_sig_values(entry.canon_line);
-	if (digest_ok) {
-		digest_ok = update_digest(blanked_line);
-	}
+	update_digest(blank_sig_values(chain->sig_lines[hop_idx]));
 
 	unsigned int digest_len = 0;
-	if (digest_ok) {
-		digest_ok = EVP_DigestFinal_ex(md_ctx, digest, &digest_len) == 1 &&
-					digest_len == 32;
-	}
+
+	digest_ok = digest_ok && EVP_DigestFinal_ex(md_ctx, digest, &digest_len) == 1 &&
+				digest_len == 32;
 	EVP_MD_CTX_free(md_ctx);
 
 	if (!digest_ok) {
-		merge_hop(RSPAMD_DKIM2_PERMERROR,
-				  budget_exceeded
-					  ? "signature input work budget exceeded"
-					  : "cannot compute signature digest");
+		ERR_clear_error();
+		set_hop(result_t::permerror,
+				budget_exceeded
+					? fmt::format("DKIM2-Signature i={} signature input is too large", sig.i)
+					: fmt::format("DKIM2-Signature i={} signature input cannot be hashed", sig.i));
 		return;
 	}
 
 	msg_debug_dkim2("hop i=%d: signature input is %z bytes; work budget left %z",
 					sig.i, input_size, chain->signature_work_budget);
 
-	auto supported_algs = 0;
+	/* Section 14.6 steps 5-7: `,` lists first, then the `|` groups */
+	std::vector<result_t> group_results;
+	std::vector<std::pair<result_t, std::string>> set_results;
 
-	for (const auto &ss: sig.sigs) {
-		auto dns_name = fmt::format("{}._domainkey.{}", ss.selector, sig.domain);
-		auto slot_it = chain->keys.find(dns_name);
+	for (const auto &group: sig.sig_groups) {
+		std::vector<result_t> results;
 
-		if (slot_it == chain->keys.end()) {
-			/* Should not happen: all names are inserted in chain_verify */
-			merge_hop(RSPAMD_DKIM2_PERMERROR, "internal error: no key slot");
-			continue;
+		for (const auto &ss: group) {
+			auto set_res = dkim2_verify_sig_set(chain, sig, ss, digest, raw_input);
+
+			results.push_back(set_res.first);
+			set_results.emplace_back(std::move(set_res));
 		}
 
-		const auto &slot = slot_it->second;
-
-		if (ss.alg == rsa_alg_name) {
-			supported_algs++;
-
-			if (slot.key == nullptr) {
-				merge_hop(slot.rcode, slot.reason);
-				continue;
-			}
-
-			if (rspamd_dkim_key_get_type(slot.key) != RSPAMD_DKIM_KEY_RSA) {
-				merge_hop(RSPAMD_DKIM2_PERMERROR,
-						  fmt::format("key type mismatch for rsa-sha256, selector {}",
-									  ss.selector));
-				continue;
-			}
-
-			GError *err = nullptr;
-
-			if (!rspamd_cryptobox_verify_evp_rsa(NID_sha256,
-												 reinterpret_cast<const unsigned char *>(ss.sig.data()),
-												 ss.sig.size(),
-												 digest, 32,
-												 static_cast<EVP_PKEY *>(rspamd_dkim_key_evp(slot.key)),
-												 &err)) {
-				if (err != nullptr) {
-					merge_hop(RSPAMD_DKIM2_PERMERROR,
-							  fmt::format("openssl error: {}", err->message));
-					g_error_free(err);
-					ERR_clear_error();
-				}
-				else {
-					msg_info_dkim2("hop i=%d: rsa-sha256 signature did not verify; "
-								   "d=%s, selector=%s",
-								   sig.i, sig.domain.c_str(), ss.selector.c_str());
-					merge_hop(RSPAMD_DKIM2_FAIL, "rsa-sha256 signature did not verify");
-				}
-			}
-		}
-		else if (ss.alg == ed25519_alg_name) {
-			supported_algs++;
-
-			if (slot.key == nullptr) {
-				merge_hop(slot.rcode, slot.reason);
-				continue;
-			}
-
-			if (rspamd_dkim_key_get_type(slot.key) != RSPAMD_DKIM_KEY_EDDSA) {
-				merge_hop(RSPAMD_DKIM2_PERMERROR,
-						  fmt::format("key type mismatch for ed25519-sha256, selector {}",
-									  ss.selector));
-				continue;
-			}
-
-			gsize pklen = 0;
-			const unsigned char *pk = rspamd_dkim_key_eddsa(slot.key, &pklen);
-
-			if (pk == nullptr || pklen != crypto_sign_publickeybytes() ||
-				ss.sig.size() != crypto_sign_bytes()) {
-				merge_hop(RSPAMD_DKIM2_PERMERROR, "invalid ed25519 key or signature size");
-				continue;
-			}
-
-			if (!rspamd_cryptobox_verify(reinterpret_cast<const unsigned char *>(ss.sig.data()),
-										 ss.sig.size(),
-										 digest, 32,
-										 pk)) {
-				msg_info_dkim2("hop i=%d: ed25519-sha256 signature did not verify; "
-							   "d=%s, selector=%s",
-							   sig.i, sig.domain.c_str(), ss.selector.c_str());
-				merge_hop(RSPAMD_DKIM2_FAIL, "ed25519-sha256 signature did not verify");
-			}
-		}
-		/* Unknown algorithms are skipped */
+		group_results.push_back(combine_all(results));
 	}
 
-	if (supported_algs == 0) {
-		merge_hop(RSPAMD_DKIM2_PERMERROR, "no supported signature algorithms");
+	auto overall = combine_any(group_results);
+
+	if (overall == result_t::pass) {
+		return;
 	}
+
+	if (overall == result_t::fail && group_results.size() > 1) {
+		set_hop(overall, fmt::format("DKIM2-Signature i={} no group of signatures passed", sig.i));
+		return;
+	}
+
+	for (const auto &[res, reason]: set_results) {
+		if (res == overall) {
+			set_hop(overall, reason);
+			return;
+		}
+	}
+
+	set_hop(overall, fmt::format("DKIM2-Signature i={} no group of signatures passed", sig.i));
 }
 
 static void
@@ -2024,10 +3825,69 @@ dkim2_finalize(rspamd_dkim2_chain_t *chain)
 	struct rspamd_task *task = chain->task;
 	auto nhops = chain->sigs.size();
 
+	if (chain->finalized) {
+		return;
+	}
+
+	chain->finalized = true;
+
 	auto *hops = rspamd_mempool_alloc_array_type(task->task_pool, nhops,
 												 struct rspamd_dkim2_hop_result);
 	auto *res = rspamd_mempool_alloc0_type(task->task_pool,
 										   struct rspamd_dkim2_verify_result);
+
+	for (std::size_t k = 0; k < nhops; k++) {
+		if (chain->last_hop_only && k + 1 != nhops) {
+			/* The outcome is known already, see rspamd_dkim2_chain_verify */
+			hops[k].rcode = RSPAMD_DKIM2_NONE;
+			hops[k].fail_reason = nullptr;
+			hops[k].idx = chain->sigs[k].i;
+			hops[k].domain = rspamd_mempool_strdup(task->task_pool,
+												   chain->sigs[k].domain.c_str());
+			hops[k].selector = nullptr;
+			continue;
+		}
+
+		dkim2_verify_one_hop(chain, k, &hops[k]);
+
+		if (hops[k].rcode != RSPAMD_DKIM2_PASS) {
+			chain->merge_prelim(hops[k].rcode,
+								hops[k].fail_reason ? hops[k].fail_reason : "");
+		}
+	}
+
+	/* The From fields that depend on the Domain Policy Records (Section 14.8) */
+	for (const auto &check: chain->from_checks) {
+		auto slot_it = chain->policies.find(check.policy_name);
+
+		if (slot_it == chain->policies.end()) {
+			/* Cannot happen, but must never mean that the From is fine */
+			chain->merge_prelim(RSPAMD_DKIM2_TEMPERROR,
+								fmt::format("DKIM2-Signature i={} policy for {} unavailable",
+											check.sig_i, check.from_domain));
+			continue;
+		}
+
+		const auto &slot = slot_it->second;
+
+		if (slot.rcode == RSPAMD_DKIM2_TEMPERROR) {
+			chain->merge_prelim(RSPAMD_DKIM2_TEMPERROR,
+								fmt::format("DKIM2-Signature i={} policy for {} {}",
+											check.sig_i, check.from_domain, slot.problem));
+		}
+		else if (slot.rcode != RSPAMD_DKIM2_PASS) {
+			chain->merge_prelim(RSPAMD_DKIM2_PERMERROR,
+								fmt::format("DKIM2-Signature i={} {} for {} policy",
+											check.sig_i, slot.problem, check.from_domain));
+		}
+		else if (slot.strict) {
+			chain->merge_prelim(RSPAMD_DKIM2_FAIL,
+								fmt::format("DKIM2-Signature i={} From {} forbids subdomain signing",
+											check.sig_i, check.from_domain));
+		}
+	}
+
+	const auto &last = chain->sigs.back();
 
 	res->rcode = chain->prelim_rcode;
 	res->fail_reason = chain->prelim_reason.empty() ? nullptr : rspamd_mempool_strdup(task->task_pool, chain->prelim_reason.c_str());
@@ -2035,15 +3895,11 @@ dkim2_finalize(rspamd_dkim2_chain_t *chain)
 	res->hops = hops;
 	res->ninstances = chain->ninstances;
 	res->verified_instances = chain->verified_instances;
-
-	for (std::size_t k = 0; k < nhops; k++) {
-		dkim2_verify_one_hop(chain, chain->sigs[k], k, &hops[k]);
-
-		if (severity(hops[k].rcode) > severity(res->rcode)) {
-			res->rcode = hops[k].rcode;
-			res->fail_reason = hops[k].fail_reason != nullptr ? rspamd_mempool_strdup(task->task_pool, fmt::format("hop i={}: {}", hops[k].idx, hops[k].fail_reason).c_str()) : nullptr;
-		}
-	}
+	/* Section 13.2 */
+	res->provisional = chain->latest_hashes_ok && chain->envelope_ok &&
+					   hops[nhops - 1].rcode == RSPAMD_DKIM2_PASS && !last.has_nd &&
+					   (smtp_addr_is_null(last.mf) ||
+						relaxed_domain_match(smtp_addr_domain(last.mf), last.domain));
 
 	msg_debug_dkim2("DKIM2 chain verification finished: rcode=%d, %z hops",
 					(int) res->rcode, nhops);
@@ -2051,73 +3907,230 @@ dkim2_finalize(rspamd_dkim2_chain_t *chain)
 	chain->cb(task, res, chain->ud);
 }
 
+/*
+ * Signers MUST use the public exponent 65537 (Section 3.2); a key with
+ * another one is not a DKIM2 key, and a huge exponent makes a verification
+ * as expensive as signing
+ */
+static auto
+dkim2_rsa_exponent_ok(EVP_PKEY *pkey) -> bool
+{
+	bool ok = false;
+
+	if (pkey == nullptr) {
+		return false;
+	}
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	BIGNUM *e = nullptr;
+
+	if (EVP_PKEY_get_bn_param(pkey, "e", &e) == 1 && e != nullptr) {
+		ok = BN_is_word(e, RSA_F4);
+	}
+
+	BN_free(e);
+#else
+	const RSA *rsa = EVP_PKEY_get0_RSA(pkey);
+	const BIGNUM *e = nullptr;
+
+	if (rsa != nullptr) {
+		RSA_get0_key(rsa, nullptr, &e, nullptr);
+		ok = e != nullptr && BN_is_word(e, RSA_F4);
+	}
+#endif
+
+	ERR_clear_error();
+
+	return ok;
+}
+
 static void
-dkim2_dns_key_cb(struct rdns_reply *reply, void *arg)
+dkim2_key_reply(struct rdns_reply *reply, dkim2_key_slot &slot)
+{
+	if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
+		slot.rcode = RSPAMD_DKIM2_PERMERROR;
+		slot.problem = "does not exist";
+		return;
+	}
+
+	if (reply->code != RDNS_RC_NOERROR) {
+		slot.rcode = RSPAMD_DKIM2_TEMPERROR;
+		slot.problem = "could not be fetched";
+		return;
+	}
+
+	/* Records that are not DKIM1 ones are ignored; just one may remain (Section 3.7) */
+	struct rdns_reply_entry *elt;
+	const char *txt = nullptr;
+	key_record_t record;
+	auto status = record_status::ok;
+	unsigned int nrecords = 0;
+
+	slot.rcode = RSPAMD_DKIM2_PERMERROR;
+
+	LL_FOREACH(reply->entries, elt)
+	{
+		if (elt->type != RDNS_REQUEST_TXT || elt->content.txt.data == nullptr) {
+			continue;
+		}
+
+		if (txt != nullptr && strcmp(txt, elt->content.txt.data) == 0) {
+			/* An RRset has no duplicates, but a test resolver can give them */
+			continue;
+		}
+
+		key_record_t cur_record;
+		auto cur_status = parse_key_record(elt->content.txt.data, cur_record);
+
+		if (cur_status == record_status::ignored) {
+			continue;
+		}
+
+		if (++nrecords > 1) {
+			slot.problem = "has multiple records";
+			return;
+		}
+
+		txt = elt->content.txt.data;
+		record = std::move(cur_record);
+		status = cur_status;
+	}
+
+	if (nrecords == 0) {
+		slot.problem = "does not exist";
+		return;
+	}
+	if (status != record_status::ok) {
+		slot.problem = "has a syntax error";
+		return;
+	}
+	if (record.revoked) {
+		slot.problem = "has been revoked";
+		return;
+	}
+
+	slot.k = record.k;
+	slot.problem = "is malformed";
+
+	if (record.k == "rsa" || record.k == "ed25519") {
+		GError *err = nullptr;
+		std::size_t keylen = 0;
+
+		slot.key = rspamd_dkim_parse_key(txt, &keylen, &err);
+
+		if (err != nullptr) {
+			g_error_free(err);
+		}
+
+		auto expected = record.k == "rsa" ? RSPAMD_DKIM_KEY_RSA : RSPAMD_DKIM_KEY_EDDSA;
+
+		if (slot.key == nullptr || rspamd_dkim_key_get_type(slot.key) != expected) {
+			return;
+		}
+
+		if (expected == RSPAMD_DKIM_KEY_RSA &&
+			!dkim2_rsa_exponent_ok(static_cast<EVP_PKEY *>(rspamd_dkim_key_evp(slot.key)))) {
+			return;
+		}
+	}
+	else if (record.k == "mldsa44") {
+		auto pk = b64_decode(record.p);
+
+		if (!pk || pk->size() != DKIM2_MLDSA44_PK_LEN) {
+			return;
+		}
+
+		slot.raw_pk = std::move(*pk);
+	}
+	/* Any other key type cannot match a signature algorithm that we know */
+
+	slot.rcode = RSPAMD_DKIM2_PASS;
+	slot.problem = "";
+}
+
+static void
+dkim2_policy_reply(struct rdns_reply *reply, dkim2_policy_slot &slot)
+{
+	if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
+		/* No Domain Policy Record: subdomains are authorized */
+		slot.rcode = RSPAMD_DKIM2_PASS;
+		return;
+	}
+
+	if (reply->code != RDNS_RC_NOERROR) {
+		slot.rcode = RSPAMD_DKIM2_TEMPERROR;
+		slot.problem = "unavailable";
+		return;
+	}
+
+	struct rdns_reply_entry *elt;
+	const char *txt = nullptr;
+	unsigned int nrecords = 0;
+
+	slot.rcode = RSPAMD_DKIM2_PASS;
+
+	LL_FOREACH(reply->entries, elt)
+	{
+		if (elt->type != RDNS_REQUEST_TXT || elt->content.txt.data == nullptr) {
+			continue;
+		}
+
+		if (txt != nullptr && strcmp(txt, elt->content.txt.data) == 0) {
+			/* See dkim2_key_reply */
+			continue;
+		}
+
+		policy_record_t record;
+		auto status = parse_policy_record(elt->content.txt.data, record);
+
+		if (status == record_status::ignored) {
+			continue;
+		}
+
+		txt = elt->content.txt.data;
+
+		if (++nrecords > 1) {
+			slot.rcode = RSPAMD_DKIM2_PERMERROR;
+			slot.problem = "multiple records";
+			return;
+		}
+
+		if (status != record_status::ok) {
+			slot.rcode = RSPAMD_DKIM2_PERMERROR;
+			slot.problem = "invalid record";
+		}
+
+		slot.strict = record.strict;
+	}
+}
+
+static void
+dkim2_dns_cb(struct rdns_reply *reply, void *arg)
 {
 	auto *cbd = static_cast<dkim2_dns_cbdata *>(arg);
 	auto *chain = cbd->chain;
 	struct rspamd_task *task = chain->task;
 
-	auto slot_it = chain->keys.find(cbd->dns_name);
+	if (cbd->is_policy) {
+		auto slot_it = chain->policies.find(cbd->dns_name);
 
-	if (slot_it != chain->keys.end()) {
-		auto &slot = slot_it->second;
-
-		if (reply->code == RDNS_RC_NOERROR) {
-			struct rdns_reply_entry *elt;
-			GError *err = nullptr;
-
-			slot.rcode = RSPAMD_DKIM2_PERMERROR;
-			slot.reason = "no DKIM2 key record";
-
-			LL_FOREACH(reply->entries, elt)
-			{
-				if (elt->type != RDNS_REQUEST_TXT) {
-					continue;
-				}
-
-				if (err != nullptr) {
-					g_error_free(err);
-					err = nullptr;
-				}
-
-				std::size_t keylen = 0;
-				auto *key = rspamd_dkim_parse_key(elt->content.txt.data, &keylen, &err);
-
-				if (key != nullptr) {
-					slot.key = key;
-					slot.rcode = RSPAMD_DKIM2_PASS;
-					slot.reason.clear();
-					break;
-				}
-			}
-
-			if (slot.key == nullptr && err != nullptr) {
-				slot.reason = fmt::format("invalid key record for {}: {}",
-										  cbd->dns_name, err->message);
-			}
-
-			if (err != nullptr) {
-				g_error_free(err);
-			}
+		if (slot_it != chain->policies.end()) {
+			dkim2_policy_reply(reply, slot_it->second);
+			msg_debug_dkim2("DKIM2 policy %s: rcode=%d, strict=%d", cbd->dns_name,
+							(int) slot_it->second.rcode, (int) slot_it->second.strict);
 		}
-		else if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
-			slot.rcode = RSPAMD_DKIM2_PERMERROR;
-			slot.reason = fmt::format("no DKIM2 key record for {}", cbd->dns_name);
-		}
-		else {
-			slot.rcode = RSPAMD_DKIM2_TEMPERROR;
-			slot.reason = fmt::format("DNS request for {} failed: {}",
-									  cbd->dns_name, rdns_strerror(reply->code));
-		}
+	}
+	else {
+		auto slot_it = chain->keys.find(cbd->dns_name);
 
-		msg_debug_dkim2("DKIM2 key %s: %s", cbd->dns_name,
-						slot.key ? "fetched" : slot.reason.c_str());
+		if (slot_it != chain->keys.end()) {
+			dkim2_key_reply(reply, slot_it->second);
+			msg_debug_dkim2("DKIM2 key %s: %s", cbd->dns_name,
+							slot_it->second.rcode == RSPAMD_DKIM2_PASS ? "fetched" : slot_it->second.problem);
+		}
 	}
 
-	chain->pending--;
-
-	if (chain->pending == 0) {
+	if (chain->pending > 0 && --chain->pending == 0) {
 		dkim2_finalize(chain);
 	}
 }
@@ -2128,7 +4141,9 @@ bool rspamd_dkim2_chain_verify(rspamd_dkim2_chain_t *chain,
 							   rspamd_dkim2_verify_cb cb,
 							   void *ud)
 {
-	if (chain == nullptr || cb == nullptr || task->message == nullptr) {
+	if (chain == nullptr || cb == nullptr || task->message == nullptr ||
+		chain->cb != nullptr) {
+		/* Nothing to verify, or the chain has been already used */
 		return false;
 	}
 
@@ -2147,58 +4162,116 @@ bool rspamd_dkim2_chain_verify(rspamd_dkim2_chain_t *chain,
 	/* Synchronous checks first */
 	chain->ninstances = chain->mis.size();
 
-	if (dkim2_check_hashes(chain, task)) {
-		chain->verified_instances = 1;
+	bool no_digests = false;
+	auto [latest_res, latest_reason] = dkim2_eval_hashes(
+		chain->mis.back().parsed,
+		[&](const EVP_MD *md) {
+			return dkim2_hash_current(chain, task, md);
+		},
+		no_digests);
 
-		if (chain->mis.size() > 1) {
-			/* Reconstruct and verify the older instances using recipes */
-			dkim2_check_instances(chain, task);
-		}
+	if (latest_res == result_t::pass) {
+		chain->latest_hashes_ok = true;
+		chain->verified_instances = 1;
+		/* Recreate and verify the older instances, check the From fields */
+		dkim2_check_instances(chain, task);
+	}
+	else {
+		msg_info_dkim2("DKIM2 hashes of the message do not verify: %s",
+					   latest_reason.c_str());
+		chain->merge_prelim(to_rcode(latest_res), std::move(latest_reason));
 	}
 
-	dkim2_check_flags(chain, task);
-	dkim2_check_envelope(chain, task);
 	dkim2_check_timestamps(chain, task);
+	dkim2_check_envelope(chain, task);
+
+	if (auto broken = check_custody(chain->sigs)) {
+		msg_info_dkim2("DKIM2 chain of custody is broken: %s", broken->c_str());
+		chain->merge_prelim(RSPAMD_DKIM2_FAIL, std::move(*broken));
+	}
+
+	if (chain->prelim_rcode == RSPAMD_DKIM2_FAIL) {
+		/*
+		 * Nothing can turn a FAIL into another result, and a Verifier MAY
+		 * cease verifying once the outcome is known (Section 14.1): do not
+		 * spend DNS requests and signature checks on such a message. Only the
+		 * last signature is still verified, as it tells if the message is
+		 * Provisionally Verified.
+		 */
+		chain->last_hop_only = true;
+		chain->policies.clear();
+		chain->from_checks.clear();
+	}
 
 	/* Collect all unique key names */
-	for (const auto &sig_entry: chain->sigs) {
-		for (const auto &ss: sig_entry.parsed.sigs) {
-			if (ss.alg != rsa_alg_name && ss.alg != ed25519_alg_name) {
-				/* Do not fetch keys for unsupported algorithms */
-				continue;
-			}
+	for (const auto &sig: chain->sigs) {
+		if (chain->last_hop_only && &sig != &chain->sigs.back()) {
+			continue;
+		}
 
-			auto dns_name = fmt::format("{}._domainkey.{}", ss.selector,
-										sig_entry.parsed.domain);
-			chain->keys.try_emplace(std::move(dns_name));
+		for (const auto &group: sig.sig_groups) {
+			for (const auto &ss: group) {
+				if (sig_alg_key_type(ss.alg).empty()) {
+					/* Do not fetch keys for unknown algorithms */
+					continue;
+				}
+
+				auto dns_name = lc_string(fmt::format("{}._domainkey.{}",
+													  ss.selector, sig.domain));
+				auto [slot_it, inserted] = chain->keys.try_emplace(std::move(dns_name));
+
+				if (inserted && slot_it->first.size() > DKIM2_MAX_DNS_NAME) {
+					/* Not a name that can exist in DNS */
+					slot_it->second.rcode = RSPAMD_DKIM2_PERMERROR;
+					slot_it->second.problem = "does not exist";
+				}
+			}
 		}
 	}
 
-	unsigned int scheduled = 0;
+	/*
+	 * The extra reference keeps the chain from being finalized by a reply
+	 * that arrives while the requests are still being made
+	 */
+	chain->pending = 1;
 
-	for (auto &kv: chain->keys) {
+	auto make_request = [&](const std::string &name, bool is_policy) -> bool {
 		auto *cbd = rspamd_mempool_alloc_type(task->task_pool, struct dkim2_dns_cbdata);
 
 		cbd->chain = chain;
-		cbd->dns_name = rspamd_mempool_strdup(task->task_pool, kv.first.c_str());
+		cbd->dns_name = rspamd_mempool_strdup(task->task_pool, name.c_str());
+		cbd->is_policy = is_policy;
+		chain->pending++;
 
-		if (rspamd_dns_resolver_request_task(task,
-											 dkim2_dns_key_cb,
-											 cbd,
-											 RDNS_REQUEST_TXT,
-											 cbd->dns_name)) {
-			scheduled++;
+		if (!rspamd_dns_resolver_request_task(task, dkim2_dns_cb, cbd,
+											  RDNS_REQUEST_TXT, cbd->dns_name)) {
+			chain->pending--;
+			return false;
 		}
-		else {
+
+		return true;
+	};
+
+	for (auto &kv: chain->keys) {
+		if (kv.second.rcode == RSPAMD_DKIM2_PERMERROR) {
+			continue;
+		}
+
+		if (!make_request(kv.first, false)) {
 			kv.second.rcode = RSPAMD_DKIM2_TEMPERROR;
-			kv.second.reason = "cannot schedule DNS request";
+			kv.second.problem = "could not be fetched";
 		}
 	}
 
-	chain->pending = scheduled;
+	for (auto &kv: chain->policies) {
+		if (!make_request(kv.first, true)) {
+			kv.second.rcode = RSPAMD_DKIM2_TEMPERROR;
+			kv.second.problem = "unavailable";
+		}
+	}
 
-	if (scheduled == 0) {
-		/* No DNS requests could be scheduled: finalize synchronously */
+	if (--chain->pending == 0) {
+		/* No DNS requests are in flight: finalize synchronously */
 		dkim2_finalize(chain);
 	}
 
