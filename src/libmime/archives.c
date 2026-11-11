@@ -2509,46 +2509,6 @@ set:
 	arch->size = part->parsed_data.len;
 }
 
-static inline int
-rspamd_archive_rar_read_vint(const unsigned char *start, gsize remain, uint64_t *res)
-{
-	/*
-	 * From http://www.rarlab.com/technote.htm:
-	 * Variable length integer. Can include one or more bytes, where
-	 * lower 7 bits of every byte contain integer data and highest bit
-	 * in every byte is the continuation flag.
-	 * If highest bit is 0, this is the last byte in sequence.
-	 * So first byte contains 7 least significant bits of integer and
-	 * continuation flag. Second byte, if present, contains next 7 bits and so on.
-	 */
-	uint64_t t = 0;
-	unsigned int shift = 0;
-	const unsigned char *p = start;
-
-	while (remain > 0 && shift <= 57) {
-		if (*p & 0x80) {
-			t |= ((uint64_t) (*p & 0x7f)) << shift;
-		}
-		else {
-			t |= ((uint64_t) (*p & 0x7f)) << shift;
-			p++;
-			break;
-		}
-
-		shift += 7;
-		p++;
-		remain--;
-	}
-
-	if (remain == 0 || shift > 64) {
-		return -1;
-	}
-
-	*res = GUINT64_FROM_LE(t);
-
-	return p - start;
-}
-
 /*
  * Readers of rar 4 archives: each goes from a header to the next in its own
  * way. libarchive is followed a second time where it can go two ways
@@ -5634,6 +5594,10 @@ rspamd_7zip_ucs2_to_utf8(struct rspamd_task *task, const unsigned char *p,
 			wc = 0xFFFD;
 			*obfuscated = TRUE;
 		}
+		else if (IS_ZERO_WIDTH_SPACE(wc) || u_iscntrl(wc)) {
+			/* As in the names of a zip file */
+			*obfuscated = TRUE;
+		}
 
 		if (wc > 0) {
 			U8_APPEND(res->str, dest_pos,
@@ -5728,10 +5692,16 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 						tp += 2;
 					}
 
-					if (fend == NULL || fend - p == 0) {
+					if (fend == NULL) {
 						/* Crap instead of fname */
 						msg_debug_archive("bad 7zip name; %s", G_STRLOC);
 						goto end;
+					}
+
+					if (fend == p) {
+						/* An empty name, which 7-Zip takes: the names after it are read */
+						p = fend + 2;
+						continue;
 					}
 
 					gboolean obfuscated = FALSE;
@@ -5771,9 +5741,19 @@ rspamd_7zip_read_files_info(struct rspamd_task *task,
 			}
 			break;
 		default:
-			p = NULL;
-			msg_debug_archive("bad 7zip type: %xd; %s", t, G_STRLOC);
-			goto end;
+			/*
+			 * A property that is not known (a start position, a comment, one
+			 * of a later version): 7-Zip skips it by its size, and the names
+			 * may stand after it
+			 */
+			msg_debug_archive("skip 7zip property %xd of %L bytes", t, (int64_t) sz);
+
+			if (sz > (uint64_t) (end - p)) {
+				p = NULL;
+				goto end;
+			}
+
+			p += sz;
 			break;
 		}
 	}
@@ -5842,6 +5822,7 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 			if (r != ARCHIVE_OK) {
 				msg_debug_archive("7zip: cannot open memory archive: %s", archive_error_string(a));
 				archive_read_free(a);
+				arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
 				return NULL;
 			}
 
@@ -5869,9 +5850,24 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 				struct rspamd_archive_file *f = NULL;
 
 				if (name) {
+					gsize nlen = strlen(name);
+					int32_t off = 0;
+
 					msg_debug_archive("7zip: found file %s", name);
 					f = g_malloc0(sizeof(*f));
-					f->fname = g_string_new(name);
+					f->fname = g_string_new_len(name, nlen);
+
+					while (off < (int32_t) nlen) {
+						UChar32 uc;
+
+						U8_NEXT(name, off, (int32_t) nlen, uc);
+
+						if (uc >= 0 && (IS_ZERO_WIDTH_SPACE(uc) || u_iscntrl(uc))) {
+							f->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+							arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+							break;
+						}
+					}
 				}
 				else if (r == ARCHIVE_WARN) {
 					/*
@@ -5905,6 +5901,12 @@ rspamd_7zip_read_next_section(struct rspamd_task *task,
 			if (archive_read_has_encrypted_entries(a) > 0) {
 				msg_debug_archive("7zip: found encrypted stuff");
 				arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+			}
+			else if (r == ARCHIVE_FATAL || r == ARCHIVE_FAILED) {
+				/* A header packed in a way that is not read here: files may be missing */
+				msg_info_task("7zip: cannot read the packed header: %s",
+							  archive_error_string(a) ? archive_error_string(a) : "unknown error");
+				arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
 			}
 
 			archive_read_free(a);
@@ -5976,8 +5978,8 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 	}
 	else {
 		msg_debug_archive("7z archive is invalid (truncated crc)");
-
-		return;
+		arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+		goto end;
 	}
 
 	if (end - p > section_offset) {
@@ -5985,11 +5987,17 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 	}
 	else {
 		msg_debug_archive("7z archive is invalid (incorrect section offset)");
-
-		return;
+		arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+		goto end;
 	}
 
 	while ((p = rspamd_7zip_read_next_section(task, p, end, arch, part)) != NULL);
+
+	if (section_length > 0 && arch->files->len == 0 &&
+		!(arch->flags & (RSPAMD_ARCHIVE_ENCRYPTED | RSPAMD_ARCHIVE_FILES_TRUNCATED))) {
+		/* It has a header, and no name was read from it */
+		arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+	}
 
 end:
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
@@ -6037,77 +6045,66 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
 	}
 
+	/* The fixed part, then the optional ones in their order (RFC 1952) */
+	p += 10;
+
+	if (flags & (1u << 2)) {
+		/* FEXTRA */
+		uint16_t optlen = 0;
+
+		if (end - p < (glong) sizeof(uint16_t)) {
+			msg_debug_archive("gzip archive is invalid (bad int16)");
+			arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+			goto set;
+		}
+
+		optlen = p[0] + (p[1] << 8);
+		p += sizeof(uint16_t);
+
+		if (end - p <= optlen) {
+			msg_debug_archive("gzip archive is invalid, bad extra length: %d",
+							  (int) optlen);
+			arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+			goto set;
+		}
+
+		p += optlen;
+	}
+
 	if (flags & (1u << 3)) {
-		/* We have file name presented in archive, try to use it */
-		if (flags & (1u << 1)) {
-			/* Multipart */
-			p += 12;
-		}
-		else {
-			p += 10;
-		}
+		/* FNAME: the name of the file, which may be empty */
+		const unsigned char *fname_start = p, *fname_end = memchr(p, '\0', end - p);
 
-		if (flags & (1u << 2)) {
-			/* Optional section */
-			uint16_t optlen = 0;
-
-			if (end - p < (glong) sizeof(uint16_t)) {
-				msg_debug_archive("gzip archive is invalid (bad int16)");
-				return;
-			}
-
-			optlen = p[0] + (p[1] << 8);
-			p += sizeof(uint16_t);
-
-			if (end <= p + optlen) {
-				msg_debug_archive("gzip archive is invalid, bad extra length: %d",
-								  (int) optlen);
-
-				return;
-			}
-
-			p += optlen;
+		if (fname_end == NULL) {
+			/* Wrong filename, not zero terminated */
+			msg_debug_archive("gzip archive is invalid, bad filename at pos %d",
+							  (int) (p - start));
+			arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+			goto set;
 		}
 
-		/* Read file name */
-		const unsigned char *fname_start = p;
+		if (fname_end > fname_start) {
+			struct rspamd_archive_file *f;
 
-		while (p < end) {
-			if (*p == '\0') {
-				if (p > fname_start) {
-					struct rspamd_archive_file *f;
+			f = g_malloc0(sizeof(*f));
 
-					f = g_malloc0(sizeof(*f));
+			rspamd_archive_file_try_utf(task, arch, f,
+										fname_start, fname_end - fname_start);
 
-					rspamd_archive_file_try_utf(task, arch, f,
-												fname_start, p - fname_start);
-
-					if (f->fname) {
-						if (!rspamd_archive_file_add(task, arch, f)) {
-							goto set;
-						}
-
-						if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
-							arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
-						}
-					}
-					else {
-						/* Invalid filename, skip */
-						g_free(f);
-					}
-
-					goto set;
+			if (f->fname) {
+				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 				}
+
+				rspamd_archive_file_add(task, arch, f);
+			}
+			else {
+				/* Invalid filename, skip */
+				g_free(f);
 			}
 
-			p++;
+			goto set;
 		}
-
-		/* Wrong filename, not zero terminated */
-		msg_debug_archive("gzip archive is invalid, bad filename at pos %d",
-						  (int) (p - start));
-
-		return;
 	}
 
 	/* Fallback, we need to extract file name from archive name if possible */
@@ -6168,85 +6165,13 @@ rspamd_archive_process_gzip(struct rspamd_task *task,
 		}
 	}
 
-	return;
+	/* No name at all: a compressed file all the same */
 
 set:
 	/* Set archive data */
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 	arch->size = part->parsed_data.len;
-}
-
-static gboolean
-rspamd_archive_cheat_detect(struct rspamd_mime_part *part, const char *str,
-							const unsigned char *magic_start, gsize magic_len)
-{
-	struct rspamd_content_type *ct;
-	const char *p;
-	rspamd_ftok_t srch, *fname;
-
-	ct = part->ct;
-	RSPAMD_FTOK_ASSIGN(&srch, "application");
-
-	if (ct && ct->type.len && ct->subtype.len > 0 && rspamd_ftok_cmp(&ct->type, &srch) == 0) {
-		if (rspamd_substring_search_caseless(ct->subtype.begin, ct->subtype.len,
-											 str, strlen(str)) != -1) {
-			/* We still need to check magic, see #1848 */
-			if (magic_start != NULL) {
-				if (part->parsed_data.len > magic_len &&
-					memcmp(part->parsed_data.begin,
-						   magic_start, magic_len) == 0) {
-					return TRUE;
-				}
-				/* No magic, refuse this type of archive */
-				return FALSE;
-			}
-			else {
-				return TRUE;
-			}
-		}
-	}
-
-	if (part->cd) {
-		fname = &part->cd->filename;
-
-		if (fname && fname->len > strlen(str)) {
-			p = fname->begin + fname->len - strlen(str);
-
-			if (rspamd_lc_cmp(p, str, strlen(str)) == 0) {
-				if (*(p - 1) == '.') {
-					if (magic_start != NULL) {
-						if (part->parsed_data.len > magic_len &&
-							memcmp(part->parsed_data.begin,
-								   magic_start, magic_len) == 0) {
-							return TRUE;
-						}
-						/* No magic, refuse this type of archive */
-						return FALSE;
-					}
-
-					return TRUE;
-				}
-			}
-		}
-
-		if (magic_start != NULL) {
-			if (part->parsed_data.len > magic_len &&
-				memcmp(part->parsed_data.begin, magic_start, magic_len) == 0) {
-				return TRUE;
-			}
-		}
-	}
-	else {
-		if (magic_start != NULL) {
-			if (part->parsed_data.len > magic_len &&
-				memcmp(part->parsed_data.begin, magic_start, magic_len) == 0) {
-				return TRUE;
-			}
-		}
-	}
-
-	return FALSE;
 }
 
 /*
@@ -6295,7 +6220,8 @@ rspamd_archive_process_at(struct rspamd_task *task, struct rspamd_mime_part *par
 	if (part->part_type == RSPAMD_MIME_PART_ARCHIVE) {
 		struct rspamd_archive *arch = part->specific.arch;
 
-		if (arch->files->len == 0 && !(arch->flags & RSPAMD_ARCHIVE_ENCRYPTED)) {
+		if ((arch->files->len == 0 && !(arch->flags & RSPAMD_ARCHIVE_ENCRYPTED)) ||
+			(arch->flags & RSPAMD_ARCHIVE_CANNOT_READ)) {
 			/* These bytes in a file do not make it an archive */
 			part->part_type = RSPAMD_MIME_PART_UNDEFINED;
 			part->specific.arch = NULL;
@@ -6355,6 +6281,43 @@ rspamd_archive_sniff(struct rspamd_task *task, struct rspamd_mime_part *part)
 	}
 }
 
+/*
+ * The part starts as an archive of a known format, and its parser took
+ * nothing from it: it is an archive with no files that are known, which is
+ * told, as an unpacker may be less strict
+ */
+static void
+rspamd_archive_unreadable(struct rspamd_task *task, struct rspamd_mime_part *part, const char *ext)
+{
+	struct rspamd_archive *arch = rspamd_mempool_alloc0(task->task_pool, sizeof(*arch));
+
+	arch->files = g_ptr_array_new();
+	arch->flags = RSPAMD_ARCHIVE_CANNOT_READ;
+	arch->size = part->parsed_data.len;
+
+	if (g_ascii_strcasecmp(ext, "zip") == 0) {
+		arch->type = RSPAMD_ARCHIVE_ZIP;
+	}
+	else if (g_ascii_strcasecmp(ext, "rar") == 0) {
+		arch->type = RSPAMD_ARCHIVE_RAR;
+	}
+	else if (g_ascii_strcasecmp(ext, "7z") == 0) {
+		arch->type = RSPAMD_ARCHIVE_7ZIP;
+	}
+	else {
+		arch->type = RSPAMD_ARCHIVE_GZIP;
+	}
+
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
+
+	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor, arch);
+	msg_info_task("%s archive cannot be read", rspamd_archive_type_str(arch->type));
+	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
+	part->specific.arch = arch;
+}
+
 void rspamd_archives_process(struct rspamd_task *task)
 {
 	unsigned int i;
@@ -6364,6 +6327,8 @@ void rspamd_archives_process(struct rspamd_task *task)
 	{
 		if (part->parsed_data.len > 0 && part->part_type != RSPAMD_MIME_PART_ARCHIVE) {
 			const char *ext = part->detected_ext;
+			gboolean known = TRUE;
+
 			if (ext) {
 				if (g_ascii_strcasecmp(ext, "zip") == 0) {
 					rspamd_archive_process_zip(task, part, FALSE);
@@ -6376,6 +6341,13 @@ void rspamd_archives_process(struct rspamd_task *task)
 				}
 				else if (g_ascii_strcasecmp(ext, "gz") == 0) {
 					rspamd_archive_process_gzip(task, part);
+				}
+				else {
+					known = FALSE;
+				}
+
+				if (known && part->part_type != RSPAMD_MIME_PART_ARCHIVE) {
+					rspamd_archive_unreadable(task, part, ext);
 				}
 			}
 
