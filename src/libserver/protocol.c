@@ -35,11 +35,7 @@
 #include "libmime/content_type.h"
 #include <math.h>
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 INIT_LOG_MODULE(protocol)
 
@@ -67,7 +63,57 @@ rspamd_protocol_quark(void)
 }
 
 /*
- * Remove <> from the fixed string and copy it to the pool
+ * Budgets for UCL/JSON that arrived from the network.
+ *
+ * A tree element costs roughly 128 bytes (the object itself plus hash
+ * bookkeeping), while the densest legitimate JSON that can describe one is two
+ * bytes - "1," inside an array. Parsing therefore amplifies by up to ~64x, so
+ * the proportional budget sits above that and never rejects real input; it
+ * only stops a small request from claiming a large tree. The absolute cap is
+ * what matters for big bodies: without it, max_message worth of "[1,1,1,...]"
+ * turns into gigabytes of objects.
+ *
+ * Depth is kept far tighter than libucl's own default because every recursive
+ * walk over the result - emitting it, copying it, handing it to Lua - is
+ * proportional to it, and nothing legitimate comes close.
+ */
+#define RSPAMD_UNTRUSTED_UCL_MAX_DEPTH 64
+#define RSPAMD_UNTRUSTED_UCL_MAX_NODES 1000000
+#define RSPAMD_UNTRUSTED_UCL_MAX_KEY 1024
+#define RSPAMD_UNTRUSTED_UCL_MAX_STRING (16 * 1024 * 1024)
+#define RSPAMD_UNTRUSTED_UCL_ALLOC_FACTOR 96
+#define RSPAMD_UNTRUSTED_UCL_ALLOC_FLOOR (256 * 1024)
+#define RSPAMD_UNTRUSTED_UCL_MAX_ALLOC (64 * 1024 * 1024)
+
+struct ucl_parser *
+rspamd_ucl_parser_new_untrusted(gsize inlen)
+{
+	struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+	struct ucl_parser_limits limits;
+	uint64_t proportional;
+
+	if (parser == NULL) {
+		return NULL;
+	}
+
+	proportional = (uint64_t) inlen * RSPAMD_UNTRUSTED_UCL_ALLOC_FACTOR +
+				   RSPAMD_UNTRUSTED_UCL_ALLOC_FLOOR;
+
+	memset(&limits, 0, sizeof(limits));
+	limits.max_depth = RSPAMD_UNTRUSTED_UCL_MAX_DEPTH;
+	limits.max_nodes = RSPAMD_UNTRUSTED_UCL_MAX_NODES;
+	limits.max_key_length = RSPAMD_UNTRUSTED_UCL_MAX_KEY;
+	limits.max_string_length = RSPAMD_UNTRUSTED_UCL_MAX_STRING;
+	limits.max_alloc = MIN(proportional, RSPAMD_UNTRUSTED_UCL_MAX_ALLOC);
+
+	ucl_parser_set_limits(parser, &limits);
+
+	return parser;
+}
+
+/*
+ * Remove <> from the fixed string and copy it to the pool, NULL for an empty
+ * string (the value comes from the client)
  */
 static char *
 rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
@@ -78,11 +124,14 @@ rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
 	gboolean has_obrace = FALSE;
 
 	g_assert(in != NULL);
-	g_assert(in->len > 0);
+
+	if (in->len == 0) {
+		return NULL;
+	}
 
 	p = in->begin;
 
-	while ((g_ascii_isspace(*p) || *p == '<') && nchars < in->len) {
+	while (nchars < in->len && (g_ascii_isspace(*p) || *p == '<')) {
 		if (*p == '<') {
 			has_obrace = TRUE;
 		}
@@ -476,6 +525,10 @@ rspamd_protocol_process_flags(struct rspamd_task *task, const rspamd_ftok_t *hdr
  * v3 (UCL metadata) request formats.
  */
 
+/*
+ * The setters below can run once per repeated header or query argument: the
+ * last value wins, and the value it replaces is released.
+ */
 static void
 rspamd_protocol_set_from_envelope(struct rspamd_task *task,
 								  const char *from_str, gsize from_len)
@@ -483,6 +536,10 @@ rspamd_protocol_set_from_envelope(struct rspamd_task *task,
 	if (from_len == 0) {
 		from_str = "<>";
 		from_len = 2;
+	}
+
+	if (task->from_envelope) {
+		rspamd_email_address_free(task->from_envelope);
 	}
 
 	task->from_envelope = rspamd_email_address_from_smtp(from_str, from_len);
@@ -498,13 +555,27 @@ rspamd_protocol_set_ip(struct rspamd_task *task,
 					   const char *ip_str, gsize ip_len,
 					   gboolean *has_ip)
 {
-	if (!rspamd_parse_inet_address(&task->from_addr,
+	rspamd_inet_addr_t *addr = NULL;
+
+	/*
+	 * The target is written on success only, a bad value keeps the old one.
+	 * A unix socket path (milter and proxy pass these for local clients) is
+	 * taken as is: the value comes from the client, so it must not trigger
+	 * the owner and group lookups of a listen socket definition
+	 */
+	if (!rspamd_parse_inet_address(&addr,
 								   ip_str, ip_len,
-								   RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+								   RSPAMD_INET_ADDRESS_PARSE_REMOTE)) {
 		msg_err_protocol("bad ip value: '%*s'", (int) ip_len, ip_str);
 	}
 	else {
 		msg_debug_protocol("read IP value: %*s", (int) ip_len, ip_str);
+
+		if (task->from_addr) {
+			rspamd_inet_address_free(task->from_addr);
+		}
+
+		task->from_addr = addr;
 		*has_ip = TRUE;
 	}
 }
@@ -513,6 +584,11 @@ static void
 rspamd_protocol_set_settings_id(struct rspamd_task *task,
 								const char *id_str, gsize id_len)
 {
+	/* The task owns a reference to its settings element */
+	if (task->settings_elt) {
+		REF_RELEASE(task->settings_elt);
+	}
+
 	task->settings_elt = rspamd_config_find_settings_name_ref(
 		task->cfg, id_str, id_len);
 
@@ -534,6 +610,55 @@ rspamd_protocol_set_log_tag(struct rspamd_task *task,
 	}
 }
 
+/* Only protocol-created containers belong to task_pool. The task setters
+ * can also install borrowed milter/proxy containers, so task_free must not
+ * unconditionally unref the pointers stored in the task. */
+static void
+rspamd_protocol_esmtp_args_unref(gpointer data)
+{
+	if (data != NULL) {
+		g_hash_table_unref(data);
+	}
+}
+
+static GPtrArray *
+rspamd_protocol_rcpt_esmtp_args_new(struct rspamd_task *task)
+{
+	GPtrArray *args = g_ptr_array_new_with_free_func(
+		rspamd_protocol_esmtp_args_unref);
+
+	rspamd_mempool_add_destructor(task->task_pool,
+		(rspamd_mempool_destruct_t) g_ptr_array_unref, args);
+
+	return args;
+}
+
+/*
+ * Splits an ESMTP argument into KEY and VALUE; a keyword without a value (e.g.
+ * SMTPUTF8, which milter passes without '=') gets an empty one
+ */
+static gboolean
+rspamd_protocol_split_esmtp_arg(const char *arg, gsize len,
+								rspamd_ftok_t *key, rspamd_ftok_t *val)
+{
+	const char *eq = memchr(arg, '=', len);
+
+	key->begin = arg;
+
+	if (eq == NULL) {
+		key->len = len;
+		val->begin = "";
+		val->len = 0;
+	}
+	else {
+		key->len = eq - arg;
+		val->begin = eq + 1;
+		val->len = len - key->len - 1;
+	}
+
+	return key->len > 0;
+}
+
 static void
 rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 								   const char *key, gsize key_len,
@@ -545,6 +670,8 @@ rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 			rspamd_ftok_icase_equal,
 			rspamd_fstring_mapped_ftok_free,
 			rspamd_fstring_mapped_ftok_free);
+		rspamd_mempool_add_destructor(task->task_pool,
+			rspamd_protocol_esmtp_args_unref, task->mail_esmtp_args);
 	}
 
 	rspamd_fstring_t *fkey = rspamd_fstring_new_init(key, key_len);
@@ -555,18 +682,50 @@ rspamd_protocol_add_mail_esmtp_arg(struct rspamd_task *task,
 	g_hash_table_replace(task->mail_esmtp_args, key_tok, val_tok);
 }
 
-static void
+/*
+ * Recipient indexes come from the client and size the per-recipient array, so
+ * they are bounded by `max_recipients`, or by this when the config sets none.
+ */
+#define RSPAMD_PROTOCOL_MAX_RCPT_ESMTP_ARGS 1024
+
+static gulong
+rspamd_protocol_rcpt_esmtp_args_limit(struct rspamd_task *task)
+{
+	if (task->cfg && task->cfg->max_recipients > 0) {
+		return task->cfg->max_recipients;
+	}
+
+	return RSPAMD_PROTOCOL_MAX_RCPT_ESMTP_ARGS;
+}
+
+/* Creates the slot for `rcpt_idx` (NULL if new), FALSE if out of range */
+static gboolean
+rspamd_protocol_rcpt_esmtp_args_reserve(struct rspamd_task *task,
+										gulong rcpt_idx)
+{
+	if (rcpt_idx >= rspamd_protocol_rcpt_esmtp_args_limit(task)) {
+		return FALSE;
+	}
+
+	if (!task->rcpt_esmtp_args) {
+		task->rcpt_esmtp_args = rspamd_protocol_rcpt_esmtp_args_new(task);
+	}
+
+	if (task->rcpt_esmtp_args->len <= rcpt_idx) {
+		g_ptr_array_set_size(task->rcpt_esmtp_args, rcpt_idx + 1);
+	}
+
+	return TRUE;
+}
+
+static gboolean
 rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
-								   int rcpt_idx,
+								   gulong rcpt_idx,
 								   const char *key, gsize key_len,
 								   const char *val, gsize val_len)
 {
-	if (!task->rcpt_esmtp_args) {
-		task->rcpt_esmtp_args = g_ptr_array_new();
-	}
-
-	while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
-		g_ptr_array_add(task->rcpt_esmtp_args, NULL);
+	if (!rspamd_protocol_rcpt_esmtp_args_reserve(task, rcpt_idx)) {
+		return FALSE;
 	}
 
 	GHashTable *rcpt_args = g_ptr_array_index(task->rcpt_esmtp_args, rcpt_idx);
@@ -585,6 +744,68 @@ rspamd_protocol_add_rcpt_esmtp_arg(struct rspamd_task *task,
 	rspamd_ftok_t *val_tok = rspamd_ftok_map(fval);
 
 	g_hash_table_replace(rcpt_args, key_tok, val_tok);
+
+	return TRUE;
+}
+
+/*
+ * TRUE if `hn_tok` names one of the privileged message source controls
+ * (File/Path/Shm/Shm-Offset/Shm-Length), which make rspamd read the message
+ * from a local object named by the client.
+ *
+ * `Filename` is intentionally not matched here: it is descriptive metadata and
+ * it never selects a message source.
+ */
+static gboolean
+rspamd_protocol_is_privileged_header(const rspamd_ftok_t *hn_tok)
+{
+	static const rspamd_ftok_t privileged_headers[] = {
+		{sizeof(FILE_HEADER) - 1, FILE_HEADER},
+		{sizeof(PATH_HEADER) - 1, PATH_HEADER},
+		{sizeof(SHM_HEADER) - 1, SHM_HEADER},
+		{sizeof(SHM_OFFSET_HEADER) - 1, SHM_OFFSET_HEADER},
+		{sizeof(SHM_LENGTH_HEADER) - 1, SHM_LENGTH_HEADER},
+	};
+	unsigned int i;
+
+	for (i = 0; i < G_N_ELEMENTS(privileged_headers); i++) {
+		if (rspamd_ftok_casecmp(hn_tok, &privileged_headers[i]) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+/*
+ * Vet a request header before it is recorded in task->request_headers.
+ *
+ * Returns TRUE when the header may be stored. Returns FALSE, with task->err set
+ * to a 400 protocol error, when it is a privileged message source control and
+ * this connection is not allowed to use one: such a header is never stored, so
+ * nothing downstream can act on it.
+ */
+static gboolean
+rspamd_protocol_check_privileged_header(struct rspamd_task *task,
+										const rspamd_ftok_t *hn_tok)
+{
+	if (!rspamd_protocol_is_privileged_header(hn_tok) ||
+		rspamd_task_allow_file_shm_input(task)) {
+		return TRUE;
+	}
+
+	msg_info_protocol("deny privileged message source header %T from %s: this "
+					  "connection is not permitted to use file/shm inputs; set "
+					  "`allow_file_and_shm_inputs = true` for this worker if all "
+					  "of its clients are trusted",
+					  hn_tok,
+					  rspamd_inet_address_to_string_pretty(task->client_addr));
+	g_set_error(&task->err, rspamd_protocol_quark(), 400,
+				"file and shm message sources are not allowed on this connection");
+	/* This is a client error, so report it as a genuine 400 */
+	task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+	return FALSE;
 }
 
 #define IF_HEADER(name)          \
@@ -619,9 +840,12 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'D':
 			IF_HEADER(DELIVER_TO_HEADER)
 			{
-				task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
-				msg_debug_protocol("read deliver-to header, value: %s",
-								   task->deliver_to);
+				/* An empty value keeps the previous one */
+				if (hv_tok->len > 0) {
+					task->deliver_to = rspamd_protocol_escape_braces(task, hv_tok);
+					msg_debug_protocol("read deliver-to header, value: %s",
+									   task->deliver_to);
+				}
 			}
 			else
 			{
@@ -795,10 +1019,16 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 			{
 				msg_debug_protocol("read user-agent header, value: %T", hv_tok);
 
-				if (hv_tok->len == 6 &&
-					rspamd_lc_cmp(hv_tok->begin, "rspamc", 6) == 0) {
-					task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
-				}
+				/*
+				 * The value is recorded as a plain request header (below) and
+				 * nothing else is derived from it on purpose.
+				 *
+				 * In particular RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT is
+				 * transport derived: it is set by the accepting worker from the
+				 * actual socket and peer identity and it MUST NEVER be inferred
+				 * from `User-Agent` or from any other client controlled value,
+				 * otherwise any remote client can claim to be a local rspamc.
+				 */
 			}
 			break;
 		case 'l':
@@ -857,13 +1087,16 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		case 'X':
 			IF_HEADER("X-Rspamd-Mail-Esmtp-Args")
 			{
-				/* Parse KEY=VALUE format */
-				const char *eq = memchr(hv_tok->begin, '=', hv_tok->len);
+				/* No commas: this is a macro argument */
+				rspamd_ftok_t arg_key;
+				rspamd_ftok_t arg_val;
 
-				if (eq && eq > hv_tok->begin) {
+				/* Parse KEY=VALUE or KEY format */
+				if (rspamd_protocol_split_esmtp_arg(hv_tok->begin, hv_tok->len,
+													&arg_key, &arg_val)) {
 					rspamd_protocol_add_mail_esmtp_arg(task,
-													   hv_tok->begin, eq - hv_tok->begin,
-													   eq + 1, hv_tok->begin + hv_tok->len - eq - 1);
+													   arg_key.begin, arg_key.len,
+													   arg_val.begin, arg_val.len);
 					msg_debug_protocol("parsed mail ESMTP arg from header");
 				}
 			}
@@ -875,19 +1108,33 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 				const char *colon = memchr(p, ':', hv_tok->len);
 
 				if (colon && colon > p) {
-					char *endptr;
-					int rcpt_idx = strtol(p, &endptr, 10);
+					gulong rcpt_idx;
 
-					if (endptr == colon) {
-						/* Parse KEY=VALUE */
+					/* Digits only: no sign, spaces or overflow */
+					if (!rspamd_strtoul(p, colon - p, &rcpt_idx)) {
+						msg_warn_protocol("bad recipient index in rcpt ESMTP arg: '%T'",
+										  hv_tok);
+					}
+					else {
+						rspamd_ftok_t arg_key;
+						rspamd_ftok_t arg_val;
+
+						/* Parse KEY=VALUE or KEY */
 						p = colon + 1;
-						const char *eq = memchr(p, '=', end - p);
 
-						if (eq && eq > p) {
-							rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
-															   p, eq - p,
-															   eq + 1, end - eq - 1);
-							msg_debug_protocol("parsed rcpt ESMTP arg for idx %d", rcpt_idx);
+						if (rspamd_protocol_split_esmtp_arg(p, end - p,
+															&arg_key, &arg_val)) {
+							if (rspamd_protocol_add_rcpt_esmtp_arg(task, rcpt_idx,
+																   arg_key.begin, arg_key.len,
+																   arg_val.begin, arg_val.len)) {
+								msg_debug_protocol("parsed rcpt ESMTP arg for idx %ul", rcpt_idx);
+							}
+							else {
+								msg_warn_protocol("recipient index %ul in rcpt ESMTP arg is "
+												  "out of range, limit is %ul",
+												  rcpt_idx,
+												  rspamd_protocol_rcpt_esmtp_args_limit(task));
+							}
 						}
 					}
 				}
@@ -896,6 +1143,15 @@ rspamd_protocol_handle_headers(struct rspamd_task *task,
 		default:
 			msg_debug_protocol("generic header: %T", hn_tok);
 			break;
+				}
+
+				/*
+				 * Defence in depth: File/Path/Shm/Shm-Offset/Shm-Length have no
+				 * case arm of their own, so this unconditional store is the only
+				 * way they reach rspamd_task_load_message
+				 */
+				if (!rspamd_protocol_check_privileged_header (task, hn_tok)) {
+		return FALSE;
 				}
 
 				rspamd_task_add_request_header (task, hn_tok, hv_tok);
@@ -2583,9 +2839,18 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	elt = ucl_object_lookup(metadata, "rcpt_esmtp_args");
 	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
 		ucl_object_iter_t arr_it = NULL;
-		int rcpt_idx = 0;
+		gulong rcpt_idx = 0;
+		const gulong max_rcpts = rspamd_protocol_rcpt_esmtp_args_limit(task);
 
 		while ((cur = ucl_object_iterate(elt, &arr_it, true)) != NULL) {
+			/* Same bound as v2, so the index is always in range below */
+			if (rcpt_idx >= max_rcpts) {
+				msg_warn_protocol("rcpt_esmtp_args has more than %ul entries, "
+								  "ignore the rest",
+								  max_rcpts);
+				break;
+			}
+
 			if (ucl_object_type(cur) == UCL_OBJECT) {
 				ucl_object_iter_t obj_it = NULL;
 				const ucl_object_t *kv;
@@ -2601,12 +2866,7 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 			}
 			else {
 				/* Non-object entry: ensure array slot exists as NULL */
-				if (!task->rcpt_esmtp_args) {
-					task->rcpt_esmtp_args = g_ptr_array_new();
-				}
-				while ((int) task->rcpt_esmtp_args->len <= rcpt_idx) {
-					g_ptr_array_add(task->rcpt_esmtp_args, NULL);
-				}
+				rspamd_protocol_rcpt_esmtp_args_reserve(task, rcpt_idx);
 			}
 			rcpt_idx++;
 		}
@@ -2681,21 +2941,6 @@ rspamd_protocol_handle_metadata(struct rspamd_task *task,
 	return TRUE;
 }
 
-/* Shared memory mapping cleanup for v3 request body */
-struct rspamd_v3_shm_map {
-	gpointer begin;
-	gulong len;
-	int fd;
-};
-
-static void
-rspamd_v3_shm_unmapper(gpointer ud)
-{
-	struct rspamd_v3_shm_map *m = ud;
-	munmap(m->begin, m->len);
-	close(m->fd);
-}
-
 /*
  * Handle v3 multipart/form-data request.
  */
@@ -2766,88 +3011,54 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 		const rspamd_ftok_t *shm_tok = rspamd_http_message_find_header(msg, "Shm");
 
 		if (shm_tok) {
-			char filepath[PATH_MAX], *fp;
-			int fd;
-			struct stat st;
-			gulong offset = 0, shmem_size = 0;
+			const rspamd_ftok_t *off_tok, *len_tok;
+			struct rspamd_shmem_segment *seg;
+			GError *shm_err = NULL;
 
-			rspamd_strlcpy(filepath, shm_tok->begin,
-						   MIN(sizeof(filepath), shm_tok->len + 1));
-			rspamd_url_decode(filepath, filepath, strlen(filepath) + 1);
+			/*
+			 * The named shared memory object is chosen by the client, so this
+			 * transfer mode is only available on transports that the accepting
+			 * worker has marked as privileged. Checked before the name is even
+			 * looked at, so no shm_open/fstat/mmap happens otherwise.
+			 */
+			if (!rspamd_task_allow_file_shm_input(task)) {
+				msg_info_protocol("deny v3 shm request body from %s: this "
+								  "connection is not permitted to use file/shm "
+								  "inputs; set `allow_file_and_shm_inputs = true` "
+								  "for this worker if all of its clients are trusted",
+								  rspamd_inet_address_to_string_pretty(task->client_addr));
+				g_set_error(&task->err, rspamd_protocol_quark(), 400,
+							"file and shm message sources are not allowed "
+							"on this connection");
+				/* This is a client error, so report it as a genuine 400 */
+				task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
 
-			int flen = strlen(filepath);
-			if (filepath[0] == '"' && flen > 2) {
-				fp = &filepath[1];
-				fp[flen - 2] = '\0';
-			}
-			else {
-				fp = &filepath[0];
-			}
-
-#ifdef HAVE_SANE_SHMEM
-			fd = shm_open(fp, O_RDONLY, 00600);
-#else
-			fd = open(fp, O_RDONLY, 00600);
-#endif
-			if (fd == -1) {
-				g_set_error(&task->err, rspamd_protocol_quark(), 500,
-							"cannot open shm segment (%s): %s", fp, strerror(errno));
 				return FALSE;
 			}
 
-			if (fstat(fd, &st) == -1) {
-				g_set_error(&task->err, rspamd_protocol_quark(), 500,
-							"cannot stat shm segment (%s): %s", fp, strerror(errno));
-				close(fd);
+			off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
+			len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
+
+			seg = rspamd_shmem_segment_map(task->task_pool, shm_tok,
+										   off_tok, len_tok,
+										   task->cfg ? task->cfg->max_message : 0,
+										   &shm_err);
+
+			if (seg == NULL) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 400,
+							"%s",
+							shm_err ? shm_err->message : "cannot map shm segment");
+				g_clear_error(&shm_err);
+
 				return FALSE;
 			}
 
-			gpointer map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-			if (map == MAP_FAILED) {
-				g_set_error(&task->err, rspamd_protocol_quark(), 500,
-							"cannot mmap shm segment (%s): %s", fp, strerror(errno));
-				close(fd);
-				return FALSE;
-			}
+			body_data = seg->data;
+			body_len = seg->data_len;
 
-			const rspamd_ftok_t *off_tok = rspamd_http_message_find_header(msg, "Shm-Offset");
-			if (off_tok) {
-				rspamd_strtoul(off_tok->begin, off_tok->len, &offset);
-				if (offset > (gulong) st.st_size) {
-					munmap(map, st.st_size);
-					close(fd);
-					g_set_error(&task->err, rspamd_protocol_quark(), 500,
-								"invalid shm offset");
-					return FALSE;
-				}
-			}
-
-			shmem_size = st.st_size;
-			const rspamd_ftok_t *len_tok = rspamd_http_message_find_header(msg, "Shm-Length");
-			if (len_tok) {
-				rspamd_strtoul(len_tok->begin, len_tok->len, &shmem_size);
-				if (shmem_size > (gulong) st.st_size) {
-					munmap(map, st.st_size);
-					close(fd);
-					g_set_error(&task->err, rspamd_protocol_quark(), 500,
-								"invalid shm length");
-					return FALSE;
-				}
-			}
-
-			body_data = ((const char *) map) + offset;
-			body_len = shmem_size;
-
-			/* Register cleanup for the mapping */
-			struct rspamd_v3_shm_map *m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
-			m->begin = map;
-			m->len = st.st_size;
-			m->fd = fd;
-			rspamd_mempool_add_destructor(task->task_pool,
-										  rspamd_v3_shm_unmapper, m);
-
-			msg_info_task("v3 request: loaded body from shm %s (%ul size, %ul offset)",
-						  fp, (unsigned long) shmem_size, (unsigned long) offset);
+			msg_info_task("v3 request: loaded body from shm %s "
+						  "(%uz size, %uz offset)",
+						  seg->name, seg->data_len, seg->offset);
 		}
 		else if (msg->body_buf.len > 0) {
 			/* Fallback: use the HTTP message body buffer directly */
@@ -2868,14 +3079,18 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	struct rspamd_content_type *ct = rspamd_content_type_parse(
 		ct_hdr->begin, ct_hdr->len, task->task_pool);
 
-	if (!ct || ct->boundary.len == 0) {
+	if (!ct || ct->orig_boundary.len == 0) {
 		g_set_error(&task->err, rspamd_protocol_quark(), 400,
 					"cannot extract boundary from Content-Type");
 		return FALSE;
 	}
 
-	boundary = ct->boundary.begin;
-	boundary_len = ct->boundary.len;
+	/*
+	 * Use the original (case preserving) boundary: RFC 2046 boundaries are
+	 * case sensitive; ct->boundary is lowercased for MIME clients quirks
+	 */
+	boundary = ct->orig_boundary.begin;
+	boundary_len = ct->orig_boundary.len;
 
 	/* Parse multipart body */
 	struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
@@ -2922,7 +3137,7 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 										 sizeof("msgpack") - 1) != -1) {
 		/* Remember the input serialization so the reply can mirror it */
 		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_V3_MSGPACK;
-		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		parser = rspamd_ucl_parser_new_untrusted(metadata_part->data_len);
 		ucl_parser_add_chunk_full(parser, (const unsigned char *) metadata_part->data,
 								  metadata_part->data_len,
 								  ucl_parser_get_default_priority(parser),
@@ -2931,7 +3146,7 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	}
 	else {
 		/* Strict mode: disable UCL macros/includes, treat as plain JSON */
-		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		parser = rspamd_ucl_parser_new_untrusted(metadata_part->data_len);
 		ucl_parser_add_chunk(parser, (const unsigned char *) metadata_part->data,
 							 metadata_part->data_len);
 	}
@@ -2968,56 +3183,110 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 	const ucl_object_t *file_elt = ucl_object_lookup(metadata_obj, "file");
 	const ucl_object_t *shm_elt = ucl_object_lookup(metadata_obj, "shm");
 
+	/*
+	 * These are the metadata equivalents of the File/Shm request headers: they
+	 * make rspamd read the message from a local object named by the client, so
+	 * they are only honoured on privileged transports. rspamd_task_load_message
+	 * checks this again, but rejecting here guarantees that nothing is even
+	 * inspected (no fpath is recorded, no header is synthesized) and gives the
+	 * client a message that points at the actual metadata keys.
+	 */
+	if (!rspamd_task_allow_file_shm_input(task) &&
+		(file_elt != NULL || shm_elt != NULL ||
+		 ucl_object_lookup(metadata_obj, "shm_offset") != NULL ||
+		 ucl_object_lookup(metadata_obj, "shm_length") != NULL)) {
+		msg_info_protocol("deny v3 metadata file/shm message source from %s: this "
+						  "connection is not permitted to use file/shm inputs; set "
+						  "`allow_file_and_shm_inputs = true` for this worker if all "
+						  "of its clients are trusted",
+						  rspamd_inet_address_to_string_pretty(task->client_addr));
+		g_set_error(&task->err, rspamd_protocol_quark(), 400,
+					"'file' and 'shm' metadata message sources are not allowed "
+					"on this connection");
+		/* This is a client error, so report it as a genuine 400 */
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+		return FALSE;
+	}
+
 	if (file_elt && ucl_object_type(file_elt) == UCL_STRING) {
 		/* Set file path and let rspamd_task_load_message handle it via task header */
-		const char *fpath = ucl_object_tostring(file_elt);
+		gsize fplen;
+		const char *fpath = ucl_object_tolstring(file_elt, &fplen);
+
+		if (fpath == NULL || fplen == 0) {
+			g_set_error(&task->err, rspamd_protocol_quark(), 400,
+						"empty 'file' in metadata");
+			return FALSE;
+		}
+
 		task->msg.fpath = rspamd_mempool_strdup(task->task_pool, fpath);
 
 		/* Synthesize a request header so rspamd_task_load_message's file path works */
-		rspamd_fstring_t *fhdr = rspamd_fstring_new_init(fpath, strlen(fpath));
-		rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
-		rspamd_ftok_t *val_tok = rspamd_ftok_map(fhdr);
-
-		RSPAMD_FTOK_ASSIGN(name_tok, "file");
-		rspamd_task_add_request_header(task, name_tok, val_tok);
+		rspamd_protocol_metadata_add_header(task, "file", sizeof("file") - 1,
+											file_elt);
 
 		/* Now load the message from file */
 		return rspamd_task_load_message(task, NULL, NULL, 0);
 	}
 	else if (shm_elt && ucl_object_type(shm_elt) == UCL_STRING) {
 		/* Synthesize shm headers */
-		const char *shm_name = ucl_object_tostring(shm_elt);
-		rspamd_fstring_t *fhdr = rspamd_fstring_new_init(shm_name, strlen(shm_name));
-		rspamd_ftok_t *name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
-		rspamd_ftok_t *val_tok = rspamd_ftok_map(fhdr);
+		gsize shmlen;
 
-		RSPAMD_FTOK_ASSIGN(name_tok, "shm");
-		rspamd_task_add_request_header(task, name_tok, val_tok);
-
-		const ucl_object_t *off_elt = ucl_object_lookup(metadata_obj, "shm_offset");
-		if (off_elt) {
-			char buf[32];
-			int blen = rspamd_snprintf(buf, sizeof(buf), "%L",
-									   ucl_object_toint(off_elt));
-			rspamd_fstring_t *foff = rspamd_fstring_new_init(buf, blen);
-			rspamd_ftok_t *off_name = rspamd_mempool_alloc(task->task_pool, sizeof(*off_name));
-			rspamd_ftok_t *off_val = rspamd_ftok_map(foff);
-
-			RSPAMD_FTOK_ASSIGN(off_name, "shm-offset");
-			rspamd_task_add_request_header(task, off_name, off_val);
+		if (ucl_object_tolstring(shm_elt, &shmlen) == NULL || shmlen == 0) {
+			g_set_error(&task->err, rspamd_protocol_quark(), 400,
+						"empty 'shm' in metadata");
+			return FALSE;
 		}
 
-		const ucl_object_t *len_elt = ucl_object_lookup(metadata_obj, "shm_length");
-		if (len_elt) {
-			char buf[32];
-			int blen = rspamd_snprintf(buf, sizeof(buf), "%L",
-									   ucl_object_toint(len_elt));
-			rspamd_fstring_t *flen = rspamd_fstring_new_init(buf, blen);
-			rspamd_ftok_t *len_name = rspamd_mempool_alloc(task->task_pool, sizeof(*len_name));
-			rspamd_ftok_t *len_val = rspamd_ftok_map(flen);
+		rspamd_protocol_metadata_add_header(task, "shm", sizeof("shm") - 1,
+											shm_elt);
 
-			RSPAMD_FTOK_ASSIGN(len_name, "shm-length");
-			rspamd_task_add_request_header(task, len_name, len_val);
+		/*
+		 * Offset and length are validated by rspamd_shmem_segment_map, but a
+		 * negative value would be printed as a huge unsigned one there, so
+		 * reject those already here where the actual type is known
+		 */
+		static const struct {
+			const char *meta_name;
+			const char *hdr_name;
+			gsize hdr_len;
+		} shm_num_fields[] = {
+			{"shm_offset", "shm-offset", sizeof("shm-offset") - 1},
+			{"shm_length", "shm-length", sizeof("shm-length") - 1},
+		};
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(shm_num_fields); i++) {
+			const ucl_object_t *num_elt = ucl_object_lookup(metadata_obj,
+															shm_num_fields[i].meta_name);
+			int64_t num;
+			char *buf;
+			rspamd_ftok_t *name_tok, *val_tok;
+
+			if (num_elt == NULL) {
+				continue;
+			}
+
+			num = ucl_object_toint(num_elt);
+
+			if (num < 0) {
+				g_set_error(&task->err, rspamd_protocol_quark(), 400,
+							"negative '%s' in metadata: %lld",
+							shm_num_fields[i].meta_name, (long long) num);
+				return FALSE;
+			}
+
+			buf = rspamd_mempool_alloc(task->task_pool, sizeof("18446744073709551615"));
+			name_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*name_tok));
+			val_tok = rspamd_mempool_alloc(task->task_pool, sizeof(*val_tok));
+
+			val_tok->begin = buf;
+			val_tok->len = rspamd_snprintf(buf, sizeof("18446744073709551615"),
+										   "%L", num);
+			name_tok->begin = shm_num_fields[i].hdr_name;
+			name_tok->len = shm_num_fields[i].hdr_len;
+
+			rspamd_task_add_request_header(task, name_tok, val_tok);
 		}
 
 		return rspamd_task_load_message(task, NULL, NULL, 0);
@@ -3039,10 +3308,8 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 											 msg_part->content_encoding_len,
 											 "zstd", 4) != -1) {
 			/* Decompress message */
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			gsize outlen, r;
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
 			if (!rspamd_libs_reset_decompression(task->cfg->libs_ctx)) {
 				g_set_error(&task->err, rspamd_protocol_quark(), 500,
@@ -3050,54 +3317,34 @@ rspamd_protocol_handle_v3_request(struct rspamd_task *task,
 				return FALSE;
 			}
 
-			zstream = task->cfg->libs_ctx->in_zstream;
-			zin.src = msg_part->data;
-			zin.size = msg_part->data_len;
-			zin.pos = 0;
+			decompressed = rspamd_zstd_decompress_bounded(task->cfg->libs_ctx->in_zstream,
+														  msg_part->data, msg_part->data_len,
+														  task->cfg->max_message, &derr);
 
-			outlen = ZSTD_getDecompressedSize(msg_part->data, msg_part->data_len);
-			if (outlen == 0) {
-				outlen = ZSTD_DStreamOutSize();
-			}
+			if (decompressed == NULL) {
+				int http_code = 400;
 
-			unsigned char *out = (unsigned char *) g_malloc(outlen);
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					g_set_error(&task->err, rspamd_protocol_quark(), 400,
-								"message decompression error: %s",
-								ZSTD_getErrorName(r));
-					g_free(out);
-					return FALSE;
+				if (derr != NULL && derr->code == RSPAMD_DECOMPRESS_ERROR_TOO_LARGE) {
+					http_code = 413;
 				}
 
-				if (zout.pos == zout.size) {
-					if (zout.size > task->cfg->max_message) {
-						g_set_error(&task->err, rspamd_protocol_quark(), 413,
-									"decompressed message exceeds max_message limit: %lu > %lu",
-									(unsigned long) zout.size, (unsigned long) task->cfg->max_message);
-						g_free(out);
-						return FALSE;
-					}
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
+				g_set_error(&task->err, rspamd_protocol_quark(), http_code,
+							"message decompression error: %s",
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				return FALSE;
 			}
 
-			rspamd_mempool_add_destructor(task->task_pool, g_free, zout.dst);
-			task->msg.begin = (const char *) zout.dst;
-			task->msg.len = zout.pos;
+			rspamd_mempool_add_destructor(task->task_pool,
+										  (rspamd_mempool_destruct_t) rspamd_fstring_free,
+										  decompressed);
+			task->msg.begin = decompressed->str;
+			task->msg.len = decompressed->len;
 			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED;
 
 			msg_info_protocol("v3: loaded message from zstd compressed part; "
 							  "compressed: %ul; uncompressed: %ul",
-							  (gulong) zin.size, (gulong) zout.pos);
+							  (gulong) msg_part->data_len, (gulong) decompressed->len);
 		}
 		else {
 			/* Zero-copy: point directly into the multipart buffer */
@@ -3305,7 +3552,22 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 		ucl_object_t *top = NULL;
 
 		top = ucl_object_typed_new(UCL_OBJECT);
-		msg->code = 500 + task->err->code % 100;
+
+		/*
+		 * Historically every protocol error was folded into the 5xx range, and
+		 * clients (and tests) rely on that for the pre-existing error paths.
+		 * Sites that deliberately want to report a genuine client error set
+		 * RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE and their code is used
+		 * as is; everything else keeps the legacy mapping.
+		 */
+		if ((task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE) &&
+			task->err->code >= 100 && task->err->code < 600) {
+			msg->code = task->err->code;
+		}
+		else {
+			msg->code = 500 + task->err->code % 100;
+		}
+
 		msg->status = rspamd_fstring_new_init(task->err->message,
 											  strlen(task->err->message));
 		ucl_object_insert_key(top, ucl_object_fromstring(task->err->message),

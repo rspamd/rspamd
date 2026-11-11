@@ -45,8 +45,12 @@ struct rspamd_worker_ctx {
 	gboolean is_mime;
 	/* Allow encrypted requests only using network */
 	gboolean encrypted_only;
+	/* Allow privileged File/Path/Shm inputs over non unix sockets */
+	gboolean allow_file_and_shm_inputs;
 	/* Limit of tasks */
 	uint32_t max_tasks;
+	/* Rate limiting for the overload log messages */
+	ev_tstamp last_overload_log;
 	/* Maximum time for task processing */
 	ev_tstamp task_timeout;
 	/* Encryption key */

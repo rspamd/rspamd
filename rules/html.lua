@@ -179,6 +179,10 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
   description = 'Message has high image to text ratio'
 }
 
+-- Ignore layout whitespace and invisible characters used to pad inbox previews.
+local hidden_text_re = rspamd_regexp.create_cached(
+    '/[^\\s\\p{Z}\\x{00ad}\\x{034f}\\x{200b}-\\x{200d}\\x{2060}\\x{feff}]/u')
+
 local vis_check_id = rspamd_config:register_symbol {
   name = 'HTML_VISIBLE_CHECKS',
   type = 'callback',
@@ -190,6 +194,7 @@ local vis_check_id = rspamd_config:register_symbol {
     local transp_rate = 0
     local invisible_blocks = 0
     local zero_size_blocks = 0
+    local hidden_chars = 0
     local arg
 
     local normal_len = 0
@@ -202,20 +207,29 @@ local vis_check_id = rspamd_config:register_symbol {
         -- if the current part is html part
         local hc = p:get_html() -- we get HTML context
 
+        -- Count decoded hidden content once, including non-leaf elements. Stop
+        -- at the full-score limit and exclude spacing/preheader padding.
+        if hidden_chars < 500 then
+          hidden_chars = hidden_chars + hidden_text_re:matchn(
+              hc:get_invisible(), 500 - hidden_chars)
+        end
+
         hc:foreach_tag({ 'font', 'span', 'div', 'p', 'td' }, function(tag, clen, is_leaf)
           local bl = tag:get_style()
-          if bl then
-            if not bl.visible and clen > 0 and is_leaf then
+          -- Transparent text is replaced with spaces by the HTML parser.
+          if bl and is_leaf and (bl.transparent or
+              (clen > 0 and (not bl.visible or bl.font_size == 0) and
+                  hidden_text_re:match(tag:get_content()))) then
+            if not bl.visible or bl.transparent then
               invisible_blocks = invisible_blocks + 1
             end
 
-            if (bl.font_size or 12) == 0 and clen > 0 and is_leaf then
+            if (bl.font_size or 12) == 0 and clen > 0 then
               zero_size_blocks = zero_size_blocks + 1
             end
 
-            if bl.transparent and is_leaf then
+            if bl.transparent then
               ret = true
-              invisible_blocks = invisible_blocks + 1 -- This block is invisible
               transp_len = transp_len + clen
               normal_len = normal_len - clen
               local tr = transp_len / (normal_len + transp_len)
@@ -251,6 +265,10 @@ local vis_check_id = rspamd_config:register_symbol {
 
         task:insert_result('R_WHITE_ON_WHITE', (transp_rate * 2.0), arg)
       end
+    end
+
+    if hidden_chars >= 200 then
+      task:insert_result('HIDDEN_TEXT', hidden_chars / 500, tostring(hidden_chars))
     end
 
     if invisible_blocks > 0 then
@@ -297,6 +315,16 @@ local vis_check_id = rspamd_config:register_symbol {
       end
     end
   end,
+}
+
+rspamd_config:register_symbol {
+  type = 'virtual',
+  parent = vis_check_id,
+  name = 'HIDDEN_TEXT',
+  description = 'Significant amount of hidden text',
+  score = 5.0,
+  group = 'html',
+  one_shot = true,
 }
 
 rspamd_config:register_symbol {

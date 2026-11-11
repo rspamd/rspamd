@@ -22,10 +22,12 @@
 #include "composites.h"
 #include "contrib/libev/ev.h"
 #include "libutil/util.h"
+#include "lua/lua_common.h"
 
 #include <cmath>
 #include <vector>
 #include <variant>
+#include <optional>
 #include "libutil/cxx/util.hxx"
 #include "contrib/ankerl/unordered_dense.h"
 
@@ -589,6 +591,65 @@ process_symbol_removal(rspamd_expression_atom_t *atom,
 	}
 }
 
+/*
+ * Call a per-symbol Lua condition: f(task, symbol) where symbol is a table
+ * in the task:get_symbol() layout. Must be synchronous (no yields/coroutines).
+ *
+ * Returns std::nullopt when the condition returned `true` (the atom keeps its
+ * score-based weight) or an explicit weight: a number returned by the
+ * condition, or 0.0 for `false`/nil/error (the atom is treated as unmatched).
+ */
+static auto
+check_lua_condition(struct composites_data *cd,
+					std::string_view sym,
+					struct rspamd_symbol_result *ms,
+					int cbref) -> std::optional<double>
+{
+	struct rspamd_task *task = cd->task;
+	auto *L = (lua_State *) task->cfg->lua_state;
+	std::optional<double> ret = 0.0;
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	auto err_idx = lua_gettop(L);
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
+	rspamd_lua_task_push(L, task);
+
+	if (!rspamd_lua_push_symbol_result(L, task, sym.data(), ms,
+									   cd->metric_res, FALSE, TRUE)) {
+		lua_pushnil(L);
+	}
+
+	if (lua_pcall(L, 2, 1, err_idx) != 0) {
+		msg_err_task("cannot execute lua condition for symbol %s in composite %s: %s",
+					 sym.data(), cd->composite->sym.c_str(), lua_tostring(L, -1));
+	}
+	else {
+		switch (lua_type(L, -1)) {
+		case LUA_TBOOLEAN:
+			if (lua_toboolean(L, -1)) {
+				ret = std::nullopt;
+			}
+			break;
+		case LUA_TNUMBER:
+			ret = lua_tonumber(L, -1);
+			break;
+		case LUA_TNIL:
+			break;
+		default:
+			msg_err_task("lua condition for symbol %s in composite %s returned %s; "
+						 "boolean or number expected",
+						 sym.data(), cd->composite->sym.c_str(),
+						 lua_typename(L, lua_type(L, -1)));
+			break;
+		}
+	}
+
+	lua_settop(L, err_idx - 1);
+
+	return ret;
+}
+
 static auto
 process_single_symbol(struct composites_data *cd,
 					  std::string_view sym,
@@ -674,11 +735,32 @@ process_single_symbol(struct composites_data *cd,
 		}
 
 		if (ms) {
-			if (ms->score == 0) {
-				rc = epsilon * 16.0; /* Distinguish from 0 */
+			/* A Lua condition is ANDed with option filters; a failed
+			 * condition is treated exactly as a missing symbol */
+			std::optional<double> cond_weight;
+			auto cbref = cd->composite->find_condition(sym);
+
+			if (cbref != -1) {
+				cond_weight = check_lua_condition(cd, sym, ms, cbref);
+
+				if (cond_weight && *cond_weight == 0) {
+					msg_debug_composites("symbol %s in composite %s failed lua condition",
+										 sym.data(), cd->composite->sym.c_str());
+					ms = nullptr;
+				}
 			}
-			else {
-				rc = ms->score;
+
+			if (ms) {
+				if (cond_weight) {
+					/* Explicit atom weight returned by the condition */
+					rc = *cond_weight;
+				}
+				else if (ms->score == 0) {
+					rc = epsilon * 16.0; /* Distinguish from 0 */
+				}
+				else {
+					rc = ms->score;
+				}
 			}
 		}
 	}

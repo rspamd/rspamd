@@ -1,0 +1,27 @@
+From: sender@example.com
+To: recipient@example.com
+Subject: =?UTF-8?B?UHLDrWxpxaEgxb5sdMO9IGvDtMWIIMO6cGVubGl2byBlcmTFvsOt?=
+Date: Fri, 4 Sep 2026 12:00:00 +0000
+Message-ID: <chartable-multipart@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="chartable-boundary"
+
+--chartable-boundary
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is an English alternative about the work that people do after they arrive.
+You can see where they are and how they should help each other during the day.
+There are many ordinary words between these sentences because the language
+detector needs a clear and reliable sample of normal written English.
+
+--chartable-boundary
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Slovenčina je západoslovanský jazyk, ktorým hovoria najmä obyvatelia Slovenska.
+Má bohatý systém skloňovania a časovania. Ľudia čítajú noviny, píšu správy,
+navštevujú školy a rozprávajú sa o práci, rodine, počasí aj kultúre. Každý
+región má vlastné nárečie, ale spisovný jazyk umožňuje jednoduchú komunikáciu.
+
+--chartable-boundary--

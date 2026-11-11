@@ -76,3 +76,19 @@ Composites - Opts RE Hit 3
   Expect Symbol With Score  SYMOPTS4  6.00
   Do Not Expect Symbol  SYMOPTS2
   Do Not Expect Symbol  SYMOPTS1
+
+Composites - Lua conditions
+  Scan File  ${MESSAGE}  opts=b-opt1
+  Expect Symbol With Score  COND_TRUE  5.00
+  Expect Symbol  COND_JOIN
+  Expect Symbol  COND_WEIGHT
+  Expect Symbol  COND_DEPENDS
+  Do Not Expect Symbol  COND_FALSE
+  Do Not Expect Symbol  COND_WEIGHT_MISS
+
+Composites - Lua condition join miss
+  Scan File  ${MESSAGE}  opts=zzz-no-match
+  Expect Symbol  COND_TRUE
+  Expect Symbol  COND_DEPENDS
+  Do Not Expect Symbol  COND_JOIN
+  Do Not Expect Symbol  COND_FALSE

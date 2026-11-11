@@ -532,14 +532,11 @@ lua_map_line_fin(struct map_cb_data *data, void **target)
 	struct lua_map_callback_data *cbdata;
 
 	if (data->errored) {
-		if (data->cur_data) {
-			cbdata = (struct lua_map_callback_data *) data->cur_data;
-			if (cbdata->ref != -1) {
-				luaL_unref(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
-			}
-
-			data->cur_data = NULL;
-		}
+		/*
+		 * The reload reuses the live callback object, which stays the map
+		 * target: it keeps its callback reference, released in the dtor
+		 */
+		data->cur_data = NULL;
 	}
 	else {
 		if (target) {
@@ -594,14 +591,16 @@ lua_map_fin(struct map_cb_data *data, void **target)
 	map = data->map;
 
 	if (data->errored) {
+		/*
+		 * The reload reuses the live callback object, which stays the map
+		 * target: drop only the data read so far, the callback reference
+		 * and the buffer belong to the object and are released in the dtor
+		 */
 		if (data->cur_data) {
 			cbdata = (struct lua_map_callback_data *) data->cur_data;
-			if (cbdata->ref != -1) {
-				luaL_unref(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
-			}
 
 			if (cbdata->data) {
-				rspamd_fstring_free(cbdata->data);
+				cbdata->data = rspamd_fstring_assign(cbdata->data, "", 0);
 			}
 
 			data->cur_data = NULL;

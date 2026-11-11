@@ -139,6 +139,160 @@ context("Lua archive bindings", function()
     assert_rspamd_eq({ actual = out[1].content, expect = rspamd_text.fromstring("Z") })
   end)
 
+  test("a damaged header reports truncation", function()
+    local files = {
+      { name = "x.txt", content = "X" },
+      { name = "y.txt", content = "YY" },
+    }
+    local blob = tostring(archive.tar(files))
+    -- Break the checksum of the second header: one header and one data block
+    -- of 512 bytes each precede it
+    local pos = 1024 + 1
+    local damaged = blob:sub(1, pos - 1) .. "\255" .. blob:sub(pos + 1)
+    local out, truncated = archive.unpack(damaged, "tar")
+    assert_equal(#out, 1)
+    assert_equal(out[1].name, "x.txt")
+    assert_equal(truncated, true)
+  end)
+
+  test("unpack without opts reports no truncation", function()
+    local files = {
+      { name = "a.txt", content = "Hello" },
+      { name = "b.txt", content = "World" },
+    }
+    local blob = archive.pack("zip", files)
+    local out, truncated = archive.unpack(blob)
+    assert_equal(#out, 2)
+    assert_equal(truncated, false)
+  end)
+
+  test("files selects exact archive members", function()
+    local files = {
+      { name = "[Content_Types].xml", content = "types" },
+      { name = "_rels/.rels",         content = "relationships" },
+      { name = "word/document.xml",  content = "document" },
+      { name = "word/media/image.png", content = "image" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, {
+      files = {
+        "[Content_Types].xml",
+        "word/document.xml",
+      },
+    })
+
+    assert_equal(truncated, false)
+    assert_equal(#out, 2)
+    assert_equal(out[1].name, "[Content_Types].xml")
+    assert_equal(out[2].name, "word/document.xml")
+  end)
+
+  test("unselected members do not consume extraction limits", function()
+    local files = {
+      { name = "word/media/image.bin", content = string.rep("X", 256 * 1024) },
+      { name = "word/document.xml", content = "document" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, {
+      files = { "word/document.xml" },
+      max_output = 32,
+      max_file_size = 32,
+      max_files = 1,
+    })
+
+    assert_equal(truncated, false)
+    assert_equal(#out, 1)
+    assert_equal(out[1].name, "word/document.xml")
+    assert_rspamd_eq({ actual = out[1].content, expect = rspamd_text.fromstring("document") })
+  end)
+
+  test("max_entries caps archive header scanning", function()
+    local files = {
+      { name = "a.bin", content = "A" },
+      { name = "b.bin", content = "B" },
+      { name = "word/document.xml", content = "document" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated, entries_seen = archive.unzip(blob, {
+      files = { "word/document.xml" },
+      max_entries = 2,
+    })
+
+    assert_equal(#out, 0)
+    assert_equal(truncated, true)
+    assert_equal(entries_seen, 3)
+  end)
+
+  test("max_files caps the number of extracted members", function()
+    local files = {
+      { name = "a.txt", content = "AAA" },
+      { name = "b.txt", content = "BBB" },
+      { name = "c.txt", content = "CCC" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, { max_files = 2 })
+    assert_equal(#out, 2)
+    assert_equal(truncated, true)
+  end)
+
+  test("max_file_size truncates an oversized member", function()
+    local big = string.rep("A", 200 * 1024)
+    local blob = archive.zip({ { name = "big.txt", content = big } })
+    local cap = 50 * 1024
+    local out, truncated = archive.unzip(blob, { max_file_size = cap })
+    assert_equal(#out, 1)
+    assert_equal(out[1].content:len(), cap)
+    assert_equal(truncated, true)
+  end)
+
+  test("max_output caps total uncompressed bytes across members", function()
+    local part = string.rep("X", 100 * 1024)
+    local files = {
+      { name = "a.txt", content = part },
+      { name = "b.txt", content = part },
+    }
+    local blob = archive.zip(files)
+    local cap = 150 * 1024
+    local out, truncated = archive.unzip(blob, { max_output = cap })
+    assert_equal(truncated, true)
+    local total = 0
+    for _, f in ipairs(out) do total = total + f.content:len() end
+    assert_equal(total, cap)
+  end)
+
+  test("max_ratio drops a decompression-bomb member but keeps normal ones", function()
+    -- 1 MiB of a single byte compresses to a few KiB => huge ratio
+    local bomb = string.rep("A", 1024 * 1024)
+    local files = {
+      { name = "normal.txt", content = "just some normal text content here" },
+      { name = "bomb.txt",   content = bomb },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, { max_ratio = 10 })
+    assert_equal(truncated, true)
+    -- The bomb member must not be exposed
+    local names = {}
+    for _, f in ipairs(out) do names[f.name] = true end
+    assert_equal(names["bomb.txt"], nil)
+    assert_equal(names["normal.txt"], true)
+  end)
+
+  test("limits do not truncate an archive within bounds", function()
+    local files = {
+      { name = "a.txt", content = "small" },
+      { name = "b.txt", content = "also small" },
+    }
+    local blob = archive.zip(files)
+    local out, truncated = archive.unzip(blob, {
+      max_files = 10,
+      max_file_size = 1024,
+      max_output = 1024 * 1024,
+      max_ratio = 1000,
+    })
+    assert_equal(#out, 2)
+    assert_equal(truncated, false)
+  end)
+
   test("supported_formats contains some read/write entries", function()
     local caps = archive.supported_formats()
     assert_equal(type(caps), "table")

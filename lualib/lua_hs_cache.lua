@@ -425,6 +425,14 @@ end
 local redis_backend = {}
 redis_backend.__index = redis_backend
 
+local redis_default_ttl = 86400 * 30
+
+-- Redis expects an integer expire value, whilst ttl comes from the configuration
+-- as a floating point number (e.g. `2592000.0`)
+local function ttl_to_str(ttl)
+  return tostring(math.floor(ttl))
+end
+
 function redis_backend.new(config)
   local self = setmetatable({}, redis_backend)
 
@@ -455,7 +463,14 @@ function redis_backend.new(config)
 
   -- Config options can be in redis sub-section or at top level
   local opts = config.redis or config
-  self.default_ttl = opts.ttl or config.ttl or (86400 * 30) -- 30 days default
+  -- A non-positive ttl would mean `EXPIRE key 0`, i.e. dropping the cached
+  -- database, so refuse to use anything but a sane positive number here
+  self.default_ttl = tonumber(opts.ttl or config.ttl) or redis_default_ttl
+  if self.default_ttl < 1 then
+    logger.warnx(N, "invalid ttl %s configured for the redis hyperscan cache, use %s instead",
+        opts.ttl or config.ttl, redis_default_ttl)
+    self.default_ttl = redis_default_ttl
+  end
   self.refresh_ttl = (opts.refresh_ttl ~= false) and (config.refresh_ttl ~= false)
   self.use_compression = (opts.compression ~= false) and (config.compression ~= false)
   -- Use different default prefix for compressed (rspamd_zhs) vs uncompressed (rspamd_hs)
@@ -470,6 +485,38 @@ end
 
 function redis_backend:_get_key(cache_key, platform_id)
   return string.format("%s:%s:%s", self.prefix, platform_id, cache_key)
+end
+
+-- Upstream lists can be updated in runtime (e.g. by sentinels), so writability
+-- is checked for each request and not once on backend creation
+function redis_backend:_can_write()
+  return self.redis_params ~= nil and self.redis_params.write_servers ~= nil
+end
+
+-- True when reads are served by dedicated replicas: write commands must then be
+-- issued as separate requests to the write servers
+function redis_backend:_split_servers()
+  return self:_can_write() and
+      self.redis_params.read_servers_str ~= self.redis_params.write_servers_str
+end
+
+-- Best effort TTL refresh performed on the write servers: EXPIRE is a write
+-- command, so it cannot be issued as a part of a replica read
+function redis_backend:_refresh_ttl(key)
+  local attrs = {
+    ev_base = self.redis_params.ev_base,
+    config = self.config,
+    is_write = true,
+    callback = function(err)
+      if err then
+        lua_util.debugm(N, self.config, "redis EXPIRE failed for key %s: %s", key, err)
+      else
+        lua_util.debugm(N, self.config, "redis refreshed TTL %s for key %s", self.default_ttl, key)
+      end
+    end
+  }
+
+  lua_redis.request(self.redis_params, attrs, {'EXPIRE', key, ttl_to_str(self.default_ttl)})
 end
 
 function redis_backend:exists(cache_key, platform_id, callback)
@@ -508,20 +555,35 @@ function redis_backend:load(cache_key, platform_id, callback)
     return
   end
 
-  -- Use GETEX to refresh TTL on read if enabled
-  local req
-  if self.refresh_ttl then
-    lua_util.debugm(N, self.config, "redis GETEX (with TTL refresh %d) for key: %s", self.default_ttl, key)
-    req = {'GETEX', key, 'EX', tostring(self.default_ttl)}
+  -- GETEX mutates the key expiry, so it is a write command and must never be
+  -- sent to a read replica (it replies with `READONLY ...`). Use it only when
+  -- reads and writes go to the same servers, otherwise GET from the replicas
+  -- and refresh the TTL separately on the master.
+  local req, is_write
+  local refresh_separately = false
+
+  if self.refresh_ttl and not self:_split_servers() then
+    lua_util.debugm(N, self.config, "redis GETEX (with TTL refresh %s) for key: %s", self.default_ttl, key)
+    req = {'GETEX', key, 'EX', ttl_to_str(self.default_ttl)}
+    is_write = true
   else
     lua_util.debugm(N, self.config, "redis GET for key: %s", key)
     req = {'GET', key}
+    refresh_separately = self.refresh_ttl and self:_can_write()
   end
 
   local attrs = {
     ev_base = self.redis_params.ev_base,
     config = self.config,
+    is_write = is_write,
     callback = function(err, data)
+      if lua_redis.is_null(data) then
+        data = nil
+      end
+
+      if not err and data and refresh_separately then
+        self:_refresh_ttl(key)
+      end
       if err then
         lua_util.debugm(N, self.config, "redis GET failed for key %s: %s", key, err)
         callback(err, nil)
@@ -575,6 +637,11 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
     return
   end
 
+  if not self:_can_write() then
+    callback("redis is configured for reading only")
+    return
+  end
+
   lua_util.debugm(N, self.config, "redis SETEX for key: %s, original size: %d bytes, TTL: %d, compression: %s",
       key, #data, actual_ttl, self.use_compression and "enabled" or "disabled")
 
@@ -607,7 +674,7 @@ function redis_backend:store(cache_key, platform_id, data, ttl, callback)
     end
   }
 
-  local req = {'SETEX', key, tostring(actual_ttl), store_data}
+  local req = {'SETEX', key, ttl_to_str(actual_ttl), store_data}
   lua_redis.request(self.redis_params, attrs, req)
 end
 
@@ -616,6 +683,11 @@ function redis_backend:delete(cache_key, platform_id, callback)
 
   if not self.redis_params then
     callback("redis not configured")
+    return
+  end
+
+  if not self:_can_write() then
+    callback("redis is configured for reading only")
     return
   end
 

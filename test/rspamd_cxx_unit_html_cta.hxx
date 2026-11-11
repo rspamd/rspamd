@@ -107,6 +107,41 @@ TEST_SUITE("html_cta_scoring")
 		CHECK(fx.weight_for("https://shop.example.com/privacy") < 0.2f);
 		CHECK(fx.weight_for("https://shop.example.com/hidden") == doctest::Approx(0.0f));
 	}
+
+	TEST_CASE("deep visible links and hidden subtrees retain CTA semantics")
+	{
+		std::string html;
+		for (unsigned int i = 0; i < 4000; ++i) {
+			html += "<div>";
+		}
+		html += "<a class=btn href=https://example.com/visible>Buy now</a>";
+		html += "<div style=display:none><a style=display:block href=https://example.com/hidden>Buy now</a></div>";
+		html_fixture fx{html};
+		CHECK(fx.weight_for("https://example.com/visible") > 0.6f);
+		CHECK(fx.weight_for("https://example.com/hidden") == doctest::Approx(0.0f));
+	}
+
+	TEST_CASE("missing closing tags do not prevent later valid pairs")
+	{
+		for (const auto *name: {"b", "custom-tag"}) {
+			std::string html = std::string{"<"} + name + "><span>before</" + name + ">";
+			for (unsigned int i = 0; i < 2000; ++i) {
+				html += std::string{"<div></"} + name + ">";
+			}
+			html += std::string{"<"} + name + ">inside</" + name + ">after";
+			html_fixture fx{html};
+			unsigned int found = 0;
+			for (const auto &tag: fx.hc->all_tags) {
+				if ((tag->id == Tag_B || tag->id < 0) && !(tag->flags & FL_VIRTUAL)) {
+					found++;
+					auto content = tag->get_content(fx.hc);
+					CHECK((content == "inside" || content == "before"));
+				}
+			}
+			CHECK(found == 2);
+			CHECK(fx.hc->parsed.find("insideafter") != std::string::npos);
+		}
+	}
 }
 
 #endif

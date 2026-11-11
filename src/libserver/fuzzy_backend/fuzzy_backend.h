@@ -51,6 +51,10 @@ typedef void (*rspamd_fuzzy_update_cb)(gboolean success,
 typedef void (*rspamd_fuzzy_version_cb)(uint64_t rev, void *ud);
 
 typedef void (*rspamd_fuzzy_count_cb)(uint64_t count, void *ud);
+/* Called with an ucl object describing the hash (ownership transferred) or NULL */
+typedef void (*rspamd_fuzzy_inspect_cb)(ucl_object_t *res, void *ud);
+/* Called with an ucl object of storage-wide statistics (ownership transferred) or NULL */
+typedef void (*rspamd_fuzzy_stats_cb)(ucl_object_t *stats, void *ud);
 
 typedef gboolean (*rspamd_fuzzy_periodic_cb)(void *ud);
 
@@ -93,8 +97,24 @@ void rspamd_fuzzy_backend_process_updates(struct rspamd_fuzzy_backend *bk,
  * @param cb
  * @param ud
  */
+/**
+ * Get diagnostic information about a specific hash: flags, values, creation
+ * time, ttl and shingle slot ownership (where the backend supports it)
+ */
+void rspamd_fuzzy_backend_inspect(struct rspamd_fuzzy_backend *bk,
+								  const unsigned char *digest,
+								  rspamd_fuzzy_inspect_cb cb, void *ud);
+
 void rspamd_fuzzy_backend_count(struct rspamd_fuzzy_backend *bk,
 								rspamd_fuzzy_count_cb cb, void *ud);
+
+/**
+ * Fetches the storage-wide statistics published by the last count scan pass
+ * (per flag counts and weights, shingled hashes, age buckets); the callback
+ * gets NULL where the backend has none
+ */
+void rspamd_fuzzy_backend_storage_stats(struct rspamd_fuzzy_backend *bk,
+										rspamd_fuzzy_stats_cb cb, void *ud);
 
 /**
  * Returns number of revision for a specific source
@@ -122,6 +142,14 @@ void rspamd_fuzzy_backend_start_update(struct rspamd_fuzzy_backend *backend,
 									   double timeout,
 									   rspamd_fuzzy_periodic_cb cb,
 									   void *ud);
+
+/**
+ * Starts the periodic recount of stored hashes for backends that cannot keep
+ * the count on updates (redis); must be called from a single worker, repeated
+ * calls are ignored
+ * @param backend
+ */
+void rspamd_fuzzy_backend_start_count_scan(struct rspamd_fuzzy_backend *backend);
 
 struct ev_loop *rspamd_fuzzy_backend_event_base(struct rspamd_fuzzy_backend *backend);
 

@@ -1,0 +1,6 @@
+From: sender@example.com
+To: recipient@example.net
+Subject: Chartable regression
+Content-Type: text/html; charset=UTF-8
+
+<html><body>The Russian word for sugar is сахар. <a href="https://сахар.com/news">Read the article</a>.</body></html>

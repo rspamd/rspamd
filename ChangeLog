@@ -1,3 +1,422 @@
+Unreleased
+
+  * [Fix] Escape symbol option delimiters in X-Spamd-Result and ClickHouse output: an option containing `[`, `]`, `{`, `}`, `;` or `,` is percent-encoded (together with `%`) when options are joined in X-Spamd-Result, X-Virus, metadata_exporter, ClickHouse and the symbols log line, so a crafted attachment name can no longer appear as an extra symbol; options without delimiters are emitted as is. Stored options are unchanged apart from the existing U+FFFD replacement of invalid characters.
+  * [Fix] asn, reputation, rbl, dmarc, content rules and MULTIPLE_UNIQUE_HEADERS insert multi-value results as separate symbol options instead of one comma-joined option
+
+  ** Bug fixes **
+  * [Fix] lua_aliases: Reject external maps for equivalent domains instead of accepting them and failing every synchronous lookup (custom equivalent domains never folded)
+
+4.2.3: 21 Oct 2026
+
+  ** Incompatible changes **
+  * [Conf] phishing: Disable phishtank.rspamd.com by default (the zone no longer carries data)
+  * [Feature] rbl: Merge duplicate DNS queries from several checks into one request and one symbol insertion (a rule now scores once per matched value; set merge_checks = false to keep one insertion per check)
+  * [Fix] rbl: Fix the inverted dkim_domainonly test under dkim_match_from (eSLDs were compared when dkim_domainonly was off)
+
+  ** Features **
+  * [Feature] force_actions: Promote rules that depend on composites to postfilters
+  * [Feature] force_actions: Add a priority setting to arbitrate between matching rules, shown as a priority:N symbol option
+  * [Feature] lua_task: Return the action name instead of its type from has_pre_result, plus its flags
+  * [Feature] metadata_exporter: Add unix_time to general metadata
+
+  ** Bug fixes **
+  * [Fix] arc: Do not trust ARC forwarders whose seal failed verification (a whitelisted d= with a broken seal gave ARC_ALLOW_TRUSTED and its AAR could lower DMARC)
+  * [Fix] arc: Require exactly one ARC-Authentication-Results per instance and wait for all seal checks before publishing results
+  * [Fix] dkim: Report a key request that cannot be scheduled as a failure (ARC chains with such a seal published no result)
+  * [Fix] milter: Fix a session use-after-free on connection close
+  * [Fix] maps: Do not crash on a regexp map that repeats an invalid regexp
+  * [Fix] lua_task: Do not crash in get_stat_tokens without a classifier
+  * [Fix] hyperscan: Recompile cached map and multipattern databases that fail to deserialize (stale blobs kept maps on the PCRE fallback)
+  * [Fix] http: Drain pending TLS data (HTTPS reads stalled on records over 8 KiB)
+  * [Fix] librdns: Reconnect the UDP channel after the kernel drops it
+  * [Fix] lua_util: Resolve HTTP upstreams for hosts without a public suffix (gpt failed on every message after a reload)
+  * [Fix] html: End declarations, comments and raw text like browsers (content after them was hidden from the scan)
+  * [Fix] html: Track SVG/MathML elements and honour `/>` only on void and foreign elements, as browsers do
+  * [Fix] html: Run SVG CDATA sections to `]]>` and close tags only on a slash right before `>`
+  * [Fix] html: Keep character references undecoded in CDATA and raw text elements
+  * [Fix] url: End text URLs at quotes and find schemeless URLs after a double quote
+  * [Fix] bayes: Deduplicate plain and HTML alternatives by parts_distance, including HTML inside multipart/related (the body was counted twice)
+  * [Fix] mime: Correct inverted substitution costs in parts distance
+  * [Fix] stat: Finalize statistical words in late-injected parts
+  * [Fix] mime: Accept obsolete whitespace before header colons
+  * [Fix] rbl: Query eSLDs in RSPAMD_URIBL and skip IP literal hosts
+  * [Fix] rbl: Fix require_symbols (rules using it never ran) and luapattern matching for return_codes
+  * [Fix] rbl: Normalise From and DKIM domains consistently
+  * [Fix] monitored: Load every element of an ipnet array
+  * [Fix] lua_task: Retry short writes in store_in_file and save_in_file, keep the default 0600 mode and do not close a caller-supplied descriptor
+  * [Fix] lua_task: Use normal priority by default in table set_pre_result and accept several flags
+  * [Fix] lua_config: Report the composite flag in get_symbol_flags
+  * [Fix] symcache: Fix persistence and file descriptor ownership
+  * [Fix] worker: Fix DNS resolver leaks on shutdown
+  * [Fix] Fix memory leaks of ESMTP argument containers
+
+4.2.2: 10 Oct 2026
+
+  ** Incompatible changes **
+  * [Fix] mime: Exclude the CRLF preceding a boundary delimiter from parts (message and non-base64 part digests change for multipart messages)
+
+  ** Features **
+  * [Feature] crypto: Detect wallet addresses for Bitcoin and forks, Litecoin, Dogecoin, Tron, XRP, Zcash, Cardano, Cosmos, Stellar, TON, Ethereum and Monero, replacing bitcoin.lua with one independent symbol per currency
+  * [Feature] lua_crypto_addresses: Add a bounded wallet address scanner that catches split addresses, plus add_from_string for text recovered from attachments
+  * [Feature] lua_selectors: Add the crypto_addresses() extractor
+  * [Feature] metadata_exporter: Add custom variables and selector expansion for mail_from, mail_to, helo, channel, stream_key and the email template
+  * [Feature] metadata_exporter: Build multipart email alerts from email_parts, grouping plain and html parts into multipart/alternative
+  * [Feature] metadata_exporter: Encode non-ASCII headers in email alerts automatically
+  * [Feature] metadata_exporter: Validate rules against a schema, so configtest fails on invalid rules
+  * [Feature] lua_smtp: Negotiate EHLO and 8BITMIME with a HELO fallback, and downgrade 8-bit messages to 7-bit when 8BITMIME is not advertised
+  * [Feature] str_util: Add RFC 5322 folding for unstructured headers (util.fold_header_unstructured)
+  * [Feature] lua_text: Add the smtp newline normalization mode
+
+  ** Bug fixes **
+  * [CritFix] lua_util: Fix a heap overflow in lower_utf8 (U+023A and U+023E grow when lowercased)
+  * [Fix] http: Guard connection-finished checks around keepalive reset (crash on a late error handler when the peer closes the connection)
+  * [Fix] html: Do not inherit box sizes into table elements (HIDDEN_TEXT and MANY_INVISIBLE_PARTS on tables pasted from Google Sheets)
+  * [Fix] html: Terminate the visible link text after normalisation (stale trailing bytes broke phishing checks)
+  * [Fix] url: Accept invisible characters in hostnames and flag them instead of truncating the URL
+  * [Fix] utf8: Strip U+FEFF in unicode normalisation
+  * [Fix] url_suspect: Anchor obfuscated URL extraction to the matched URL and make URL_OBFUSCATED_TEXT one-shot (plain-sight domains were reported as obfuscated)
+  * [Fix] crypto: Gate LEAKED_PASSWORD_SCAM only on checksum-verified addresses and drop "wallet" as a scam signal
+  * [Fix] mime_headers: Emit valid RFC 2047 encoded-words and keep addresses intact in structured mode
+  * [Fix] lua_smtp: Dot-stuff DATA (a bare '.' line truncated messages), turn bare CR into CRLF, accept a bare reply code and read multi-line greetings
+  * [Fix] lua_util: Retry deferred DNS for HTTP upstreams (gpt, aws_s3, http maps and dkim vault were stuck after a failed startup lookup)
+  * [Fix] lua_util: Let callback_from_string compile whole-chunk callbacks
+  * [Fix] lua_task: Fix get_symbol() with a table of names when the symbols are present
+  * [Fix] lua_parsers: Keep boundary and charset as strings in parse_content_type
+  * [Fix] known_senders: Expire senders after max_ttl in zset mode
+  * [Fix] replies, known_senders: Honour reply_sender_privacy
+  * [Fix] milter_headers: Apply header skipping to x-spamd-bar and fix the x-virus fail branch
+  * [Fix] fuzzy_check: Parse top-level html_ignore_domains
+  * [Fix] metadata_exporter: Always emit an integer redis_stream MAXLEN
+  * [Fix] cfg_transform: Do not warn about scored custom actions
+  * [Fix] rspamadm: Fix epoch labels in fuzzy_stat
+
+4.2.1: 01 Oct 2026
+
+  ** Bug fixes **
+  * [CritFix] http: Do not size the body from a chunk size or Content-Length sent by the peer (a huge chunk size caused a heap overflow)
+  * [CritFix] http: Keep zero-copy reads inside the body (use-after-free when a finish handler replaces the body)
+  * [CritFix] fstring: Refuse a length that cannot be allocated (the size wrapped and later writes went out of bounds)
+  * [CritFix] cryptobox: Fail closed on low order public keys (an uninitialised shared secret was cached and used to decrypt fuzzy requests)
+  * [CritFix] hiredis: Keep the socket until async cleanup (assertion abort when redis is down)
+  * [Fix] http_parser: Refuse a message framed by both Content-Length and Transfer-Encoding
+  * [Fix] http_parser: Check Content-Length and chunk sizes before they overflow
+  * [Fix] http: Finish the last trailer of a chunked message and keep chunk framing out of encrypted inner bodies
+  * [Fix] http: Apply timeouts at the correct I/O stage
+  * [Fix] maps: Use the HTTP body length instead of the shared memory size (garbage in large chunked maps and their cache)
+  * [Fix] maps: Keep the previous map on failed reloads, reject truncated zstd frames and write the whole map on /savemap
+  * [Fix] maps: Skip the HTTP cache header when reading cdb maps
+  * [Fix] maps: Do not leak the shared memory mapping on errors
+  * [Fix] fuzzy_storage: Bound the TCP backlog, meter unauthenticated error replies and enforce key expiry for writes and deletes
+  * [Fix] fuzzy_backend: Saturate deduplicated weights and reject short redis shingle digests
+  * [Fix] fuzzy: Preserve address userdata in Redis count scans
+  * [Fix] rdns: Fix TCP queue accounting, a dropped last byte of TCP packets, malformed reply handling and the retransmit channel lifetime
+  * [Fix] lua_tcp: Stop after a fatal TLS read and bound the data buffered for a stop pattern
+  * [Fix] lua_http/lua_redis: Fix request tuning after DNS, coroutine cleanup on cancellation and freed redis replies read from Lua
+  * [Fix] re_cache: Verify hyperscan prefiltered regexps per input and saturate hit counts instead of wrapping
+  * [Fix] regexp: Validate UTF-8 once per search instead of on every remaining suffix
+  * [Fix] spf: Match a and mx without a prefix length per address family, and apply the macro digit transformer
+  * [Fix] dkim: Fix a header table leak and the l= body check with relaxed canonicalisation
+  * [Fix] url: Do not read past an IPv6 host at the end of the input, and treat mapped loopback as local
+  * [Fix] url_redirector: Key by the raw URL, cap the whole chain and resolve relative Location headers
+  * [Fix] rbl: Fix whitelists for IPv6 addresses
+  * [Fix] multimap: Support IPv6 ULA prefixes in Redis maps
+  * [Fix] avast: Keep the cached virus verdict for archives
+  * [Fix] archives: Harden rar, 7z and libarchive parsing
+  * [Fix] 7z: Read substreams sizes and digests per stream (archives with an unpacked header listed no files)
+  * [Fix] html: Bound the text inspected per link and do not sniff JSON attachments as HTML
+  * [Fix] html: Bound nested HTML processing and structure exports without losing phishing checks
+  * [Fix] html: Stop rescanning quoted attributes for '>' and keep entity replacements within the consumed input
+  * [Fix] css: Bound the token count while building the block tree and do not swallow the byte after a hex escape
+  * [Fix] mime: Decode adjacent encoded words with their own charsets
+  * [Fix] ucl: Let binary msgpack strings own their value (use-after-free once the input buffer is released)
+  * [Fix] ucl: Keep the key when a msgpack map ends in an empty value
+  * [Fix] Rules: Exempt Mailchimp from SUBJ_EXCESS_QP and REPLYTO_EXCESS_QP
+
+4.2.0: 18 Sep 2026
+
+  ** Incompatible changes **
+  * [Rework] symcache: One scheduler over the dependency graph: every item gets a stage and a level at init, and a dependency edge moves its target instead of being executed from the wrong stage
+  * [Rework] url: Resolve host TLDs through the new public suffix lookup ('!' exception rules are honoured, and a host that is itself a public suffix resolves to the whole host)
+  * [Rework] url: Discover URLs in free text with two passes (static matcher plus dot-anchored suffix labels) and drop the 10.5k-pattern TLD hyperscan database from the scanner
+  * [Rework] multimap: Return the full public suffix from the 'top' filter, so maps must list full suffixes ('com.au' instead of 'au')
+  * [Rework] rbl: Match URL composition maps with the suffix lookup instead of per-TLD regexes
+  * [Rework] fuzzy: Count redis hashes with a periodic SCAN instead of a counter maintained by the update script (negative counters left by older versions are reported as 0)
+
+  ** Major features **
+  * [Feature] mime: Extract content and smuggling indicators from SVG attachments (SVG_CONTENT, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_FORM and friends)
+  * [Feature] mime: Extract content from XLSX and PPTX attachments with relationship-level facts (OOXML_MACROS, OOXML_OLE_OBJECT, OOXML_REMOTE_TEMPLATE, OOXML_EXTERNAL_DATA)
+  * [Feature] mime: Add bounded DOCX content extraction
+  * [Feature] mime: Flag unprocessable DOCX attachments
+  * [Feature] lua_task: Inject HTML parts from Lua, so decoded payloads go through the regular HTML parser
+  * [Feature] url: Add a public suffix lookup component with full public suffix list semantics (wildcards, exceptions, ICANN/private split)
+  * [Feature] lua: Expose the suffix lookup and custom suffix-like rule sets as rspamd_tld_lookup
+  * [Feature] lua_url: Add url:get_public_suffix() with the suffix match flags
+  * [Feature] lua_selectors: Add the get_public_suffix transform
+  * [Feature] lua_selectors: Extractors declare the symbols they need, and ratelimit, multimap, rbl and reputation register them as dependencies
+  * [Feature] symcache: Let prefilters depend on filters, hoisting the filter and its own dependencies to the prefilter stage
+  * [Feature] css: Evaluate compound selectors and combinators ('div.mainbox', 'div p', 'div > p', 'h1 + p', 'h1 ~ p')
+  * [Feature] dkim: Decide From alignment in the module that knows and report it as R_DKIM_ALIGNED (R_DKIM_ALLOW goes from -0.2 to -0.1, the rest to R_DKIM_ALIGNED)
+  * [Feature] lua_aliases: Mailbox identity and equivalent domain classes for comparing addresses
+  * [Feature] fuzzy: Sampled storage statistics from the count scan (count_scan.stats_sample), published in /fuzzystat and printed by rspamadm fuzzystat
+  * [Feature] fuzzy: Lazy per-source stats for keys with a configurable cap (max_ips_per_key, per-key max_ips) and an overflow guard
+  * [Feature] libucl: Add ucl.untrusted_parser() to the Lua API, plus parser:set_limits() and parser:get_limits()
+  * [Feature] protocol: Bound UCL parsing of untrusted network input (controller and proxy bodies, checkv3 metadata in JSON and msgpack)
+  * [Feature] clickhouse: Data-skipping indexes for point lookups (schema 12)
+  * [Feature] metadata_exporter: Add the redis_list pusher
+  * [Feature] lua_redis: Pin a request to a specific upstream
+  * [Feature] WebUI: Ping fuzzy storages (fuzzy_check.ping_storage_all, /plugins/fuzzy/status), per-server liveness marks, down badges and an on-demand Check button
+  * [Feature] WebUI: Enrich the fuzzy storage table and show unavailable storages
+  * [Feature] WebUI: Bayes learns balance bar and min_learns status badge
+  * [Feature] WebUI: Richer Status servers table (three-state health, per-server details row, load and latency, version and config drift, Writable badge)
+  * [Feature] WebUI: Informative All SERVERS cluster row derived from cluster data
+  * [Feature] WebUI: Show the git build id in the cluster table
+
+  ** Bug fixes **
+  * [CritFix] libucl: Bound container nesting for every parse type and free trees iteratively (a deeply nested document crashed while being freed)
+  * [CritFix] rdns: Harden the DNS reply parser against malformed packets (out of bounds name and RDATA reads, a wrapping TXT counter, recursion on TCP reads)
+  * [Fix] pdf: Bound resource amplification in parsing and text extraction (CMap bytes, object totals, deadlines, memoised streams)
+  * [Fix] lua_compress: Bound decompression output and memory (zstd passed the attacker-controlled frame size straight to g_malloc)
+  * [Fix] maps: Drop destroyed regexp helpers from the hyperscan compilation queue (worker crash on a freed helper)
+  * [Fix] maps: Defer the reread of a map file that has just been truncated
+  * [Fix] maps: Converge cold passive workers on HTTP maps quickly instead of sleeping a full poll interval with no data
+  * [Fix] symcache: Break dependency cycles at init (stack overflow in rspamd_symcache_get_max_timeout)
+  * [Fix] symcache: Forbid connfilter and prefilter dependencies on filter symbols, and actually drop every rejected edge
+  * [Fix] symcache: Plan symbols registered after the cache init and never spin on leaked async counters
+  * [Fix] symcache: Run ignore_passthrough symbols after a pre-result from a prefilter
+  * [Fix] settings: Keep custom apply keys when merging layers, and apply actions the same way as on the single-layer path
+  * [Fix] settings: Re-enable actions from higher layers
+  * [Fix] settings: Make ip_map and client_ip_map actually match
+  * [Fix] css: Bound selector matching with a document-wide budget and stop the combinatorial backtracking on deep nesting
+  * [Fix] css: Keep a repeated selector as its own cascade entry and allocate only the winning rule
+  * [Fix] css: Drop a grouped selector that cannot be evaluated instead of registering its first part
+  * [Fix] css: Fix relative and shorthand font sizes hiding visible text (line-height taken as the size, misspelled vw/vh units, unresolved percent sizes)
+  * [Fix] css: Accept a unitless zero as the font shorthand size
+  * [Fix] html: Read a transparent tag's content from the buffer it was written to (R_WHITE_ON_WHITE on messages that also carry hidden text)
+  * [Fix] html: Ignore layout padding in hidden text checks and penalise substantial hidden content
+  * [Fix] chartable: Handle language diacritics correctly, including non-Latin ones, and harden the Unicode spoof detection
+  * [Fix] mime: Charge nested SVG payloads to the shared payload budget
+  * [Fix] mime: Give injected HTML parts the regular URL pipeline
+  * [Fix] mime: Keep OOXML relationship-only parts ahead of story truncation and parse xlIntlMacrosheet
+  * [Fix] mime: Bound OOXML processing resources
+  * [Fix] mime: Register the DOCX content symbol scores
+  * [Fix] fuzzy: Give customer keys precedence over IP bans by applying the source policy after decryption
+  * [Fix] fuzzy: Initialize the key expiry time fields before mktime and reject failed date parses
+  * [Fix] fuzzy: Keep the unkeyed aggregate stats when per-IP tracking is disabled
+  * [Fix] fuzzy: Ping write servers with the write keypair, and only override the keypair when the server lists are actually shared
+  * [Fix] fuzzy: Report empty storages in /stat
+  * [Fix] dkim: Require a single author before reporting alignment
+  * [Fix] spf: Return permerror when a domain publishes multiple SPF records
+  * [Fix] spf: Match the version section as RFC 7208 4.5 defines it, without reading past a short TXT string
+  * [Fix] forged_recipients: Compare addresses by mailbox identity instead of as raw strings
+  * [Fix] greylist: Use the lowest passthrough priority for its pre-result
+  * [Fix] milter: Do not insert a bogus space after the header colon (negotiate SMFIP_HDR_LEADSPC)
+  * [Fix] url_redirector: Honour redirectors_only, which followed every redirect target
+  * [Fix] url_suspect: Restrict the html_entities obfuscation pattern to ASCII
+  * [Fix] url_suspect: Derive the public suffix through the suffix lookup instead of stripping a label from the eSLD
+  * [Fix] lua_maps: Key url-list maps by their effective type, so a glob map is no longer served as a hash map
+  * [Fix] WebUI: Order stat refresh cycles by start rather than completion
+  * [Fix] WebUI: Raise the stale-rate threshold above the largest auto-refresh preset
+  * [Fix] rspamadm: Fix the -n description in the fuzzy_ping help
+
+4.1.5: 14 Aug 2026
+
+  ** Incompatible changes **
+  * [Rework] gpt: Return only a boolean from the condition callback (request content generation moved into gpt_check)
+  * [Conf] Ship explicit allow_file_and_shm_inputs = true defaults for the normal, controller and proxy workers (the default becomes false in the next major release)
+
+  ** Features **
+  * [Feature] fuzzy: Share sender facts (SPF, DKIM, DMARC, PTR state, recipient bucket, TLS) with storages over encrypted rules
+  * [Feature] mime: Decode PDF simple font text via the font's /Encoding (Annex D base encodings and /Differences overrides)
+  * [Feature] mime: Parse PDF /ToUnicode CMaps and decode composite (Type0) fonts
+  * [Feature] elastic: Structured fuzzy match results and message size in the schema
+
+  ** Bug fixes **
+  * [CritFix] protocol: Gate File/Path/Shm message sources behind allow_file_and_shm_inputs (any TCP client could have arbitrary files parsed)
+  * [Fix] controller: Rate limit authentication failures per source (max_auth_failures)
+  * [Fix] fuzzy: Per-key forbidden_ids replaces the default set instead of adding to it
+  * [Fix] fuzzy: Apply the per-key ACL to delayed v1 replies
+  * [Fix] fuzzy: Skip unknown wire extension types instead of rejecting the whole command
+  * [Fix] fuzzy: Do not share extensions for authenticated senders, own networks or plain text rules
+  * [Fix] neural: Bound static_embed word extraction with max_words and drop the quadratic subject prepend
+  * [Fix] neural: Fuse over the provider slot range, so one missing provider does not discard the rest
+  * [Fix] symcache: Stamp slow-rule start under the same condition it is measured (phantom slow-rule warnings)
+  * [Fix] hfilter: Compare HELO addresses against the connecting IP, ignoring transient lookup failures
+  * [Fix] html: Treat a schemeless email href as mailto, not http userinfo (spurious URL_USER_PASSWORD)
+  * [Fix] lua_url: Do not drop flagless URLs when all flags are included
+  * [Fix] lua_mime: Unwind every boundary level when returning from nested parts in all rewriters
+  * [Fix] lua_content/pdf: Keep TJ positioning gaps out of the character code stream
+  * [Fix] lua_content/pdf: Keep inline /Resources dictionaries, so page fonts are visible
+  * [Fix] lua_content/pdf: Drop the font-blind ligature substitution
+  * [Fix] mime: Store CMap codes with their byte width to avoid collisions
+  * [Fix] mime: Refuse a CMap that inherits from another instead of returning partial text
+  * [Fix] mime: Keep computed text parts raw and resolve CED charset names through the alias table
+  * [Fix] mime: Restrict the EUC-TW misnomer aliases to CED output
+  * [Fix] hyperscan: Make the cache usable with a Redis backend (replica reads, null replies, maps read after fork)
+  * [Fix] hyperscan: Do not fetch a database that is already installed
+  * [Fix] arc: Score ARC_ALLOW_TRUSTED at most once
+  * [Fix] history: Clear all rows on reset in both the legacy ring buffer and the Redis backend
+  * [Fix] WebUI: Search symbol option values
+  * [Fix] lua: Fix logger format string and argument mismatches
+
+4.1.4: 29 Jul 2026
+
+  ** Incompatible changes **
+  * [Rework] cmake: Link one shared jemalloc instance per process and refuse static-only jemalloc (duplicated allocators segfaulted at startup)
+
+  ** Features **
+  * [Feature] WebUI: Read-only access to the selectors tab
+  * [Feature] WebUI: Expose the Errors history to read-only users
+
+  ** Bug fixes **
+  * [CritFix] controller: Fail closed on a malformed password hash (any password was accepted)
+  * [CritFix] regexp: Do not leak PCRE2 match data on invalid UTF input
+  * [Fix] regexp: Bound the heap used by a single match (PCRE2 heap limit, PCRE1 match limits)
+  * [Fix] regexp: Stop re:matchn() from looping forever on empty matches
+  * [Fix] regexp: Do not read past the end of a bounded pattern when generating ids
+  * [Fix] re_cache: Propagate the regexp data limit to named scopes
+  * [Fix] url: Consult the Lua URL filter at most twice per user field, not per byte
+  * [Fix] tokenizer: Bound the words retained for a message with a message-wide budget
+  * [Fix] css: Skip comments iteratively in the tokeniser (stack overflow on many sequential comments)
+  * [Fix] actrie: Release GLib allocations with g_free (startup segfault with jemalloc)
+  * [Fix] rspamadm: Resolve SRV based upstreams and wait for storages in fuzzy_ping and fuzzy_hash
+
+4.1.3: 25 Jul 2026
+
+  ** Incompatible changes **
+  * [Rework] WebUI: Drop jQuery dependency (all modules migrated to native DOM and XMLHttpRequest)
+  * [Rework] WebUI: Drop the Font Awesome framework in favour of a local subset SVG sprite
+  * [Rework] dkim: Scope HAVE_ED25519 to OpenSSL key parsing, so ed25519 verification works on OpenSSL builds without it
+
+  ** Features **
+  * [Feature] fuzzy_check: Structured match results, diagnostics API and task:get_fuzzy_results()
+  * [Feature] fuzzy_check: Anchor the probability weight curve at the match threshold (prob_bias, prob_power)
+  * [Feature] fuzzy: Persist shingle sets with digests in redis, fixing orphaned slots on DEL and decay on REFRESH
+  * [Feature] fuzzy: Per-hash introspection via rspamadm control fuzzyhash
+  * [Feature] fuzzy: Track unkeyed clients in fuzzystat
+  * [Feature] rspamadm: Add fuzzy_hash command
+  * [Feature] clickhouse: Export fuzzy match details (schema version 11)
+  * [Feature] milter_headers: Annotate the X-Rspamd-Fuzzy header with rule, flag, probability and timestamp
+  * [Feature] lua_http: Add forbid_local option to block requests to local networks, enabled by default in url_redirector
+  * [Feature] lua_feedback_parsers: Enrich sparse ARF reports from the original message headers
+
+  ** Bug fixes **
+  * [CritFix] dkim: Bound bh= length before the body hash comparison (out-of-bounds read via ed25519 signatures)
+  * [CritFix] fuzzy: Release TCP session ownership exactly once (use-after-free on aborted connections)
+  * [CritFix] protocol: Validate shared memory segment bounds and reject non-regular segments
+  * [CritFix] http: Fix shared body storage lifecycle (double free, descriptor 0 leak and closing an unrelated socket)
+  * [Fix] dkim: Bound public key size and modulus width from DNS
+  * [Fix] dkim: Stop reading before the body slice in empty line skipping
+  * [Fix] dkim: Apply max_sigs before any work and count every signature header
+  * [Fix] dkim: Bound the number of h= header list items
+  * [Fix] spf: Return permerror when a DNS limit is hit
+  * [Fix] spf: Enforce the include/redirect nesting limit
+  * [Fix] spf: Bound address lookups spawned by mx/ptr expansion (max_dns_expansions)
+  * [Fix] spf: Use the enclosing element for exists
+  * [Fix] fuzzy: Check admission before parsing UDP commands, and rate limit PING and STAT
+  * [Fix] fuzzy: Fix stack overread in the sqlite backend id
+  * [Fix] fuzzy_check: Log the rule and the server for error replies
+  * [Fix] ragel: Bound nested comment depth in the header parsers
+  * [Fix] mime_parser: Bound parser resource usage
+  * [Fix] mime_headers: Bound parser resource usage
+  * [Fix] content_type: Bound parameters per header and fix RFC 2231 continuation ordering
+  * [Fix] message: Bound per-part newline metadata and make the budget task-global
+  * [Fix] message: Link plain text parts to their HTML alternative
+  * [Fix] message: Bound alt-part linking and fasttext langdet cost
+  * [Fix] html: Eliminate DOM recursion to survive deeply nested messages
+  * [Fix] html: Bound attributes per tag and per task
+  * [Fix] html: Cap synthetic tags and fix the balance loop
+  * [Fix] html: Correct image style dimension parsing
+  * [Fix] images: Avoid quadratic Content-ID linking
+  * [Fix] archives: Bound metadata resource usage
+  * [Fix] 7zip: Bound folder count and guarantee parser progress
+  * [Fix] url: Enforce max_urls at the central insertion boundary
+  * [Fix] url_suspect: Drop dead branch in the user field check and skip mailto URLs
+  * [Fix] task: Bound zstd decompression by max_message and plug an error-path leak
+  * [Fix] zstd: Share one bounded decompression helper across HTTP, proxy and maps
+  * [Fix] http: Bound request bodies on the controller, proxy and control sockets
+  * [Fix] http: Enforce the read deadline when data is pending at timer expiry
+  * [Fix] map: Bound remote HTTP map sizes, compressed and decompressed (max_map_size)
+  * [Fix] maps: Map the signature file as a file, not as shmem
+  * [Fix] maps: Redact credentials from map error logs
+  * [Fix] util: Harden the shared memory mapping helpers
+  * [Fix] lua_http: Bound HTTP responses by default (max_lua_http_response)
+  * [Fix] lua_http: Deliver errors to coroutine callers
+  * [Fix] lua_tcp: Make the connection ref release one-shot to avoid a double free
+  * [Fix] lua_content/pdf: Emit newlines for Td/TD line breaks
+  * [Fix] cfg: Warn when a module section is defined multiple times
+  * [Fix] WebUI: Route a malformed /stat response to the login dialog
+  * [Fix] WebUI: Restore smooth scroll on the Scan tab
+  * [Fix] WebUI: Stop the refresh spinner restarting mid fan-out
+  * [Fix] WebUI: Guard the optional fuzzy_hashes key and other jQuery-removal regressions
+
+4.1.2: 21 Jul 2026
+
+  ** Incompatible changes **
+  * [Rework] lua_task: Make the 'orig' address flavour return only the wire addresses when a rewrite preserved the originals
+  * [Rework] WebUI: Migrate all tables from FooTable to Tabulator (per-column filters, global history/scan search) and remove FooTable
+
+  ** Features **
+  * [Feature] composites: Add per-symbol Lua conditions and explicit dependencies
+  * [Feature] configdump: Show symcache flags in --symbol-details
+  * [Feature] neural: Add static_embed provider (WordPiece subword tokenizer over a static embedding matrix, with per-token vector access)
+  * [Feature] neural: Add forced-learn minimal-scan fast path and train.frozen control to stop automatic training
+  * [Feature] rspamadm: Discover command modules from external directories (rspamadm.d and RSPAMADM_COMMAND_PATH)
+  * [Feature] rspamadm: Allow reading the password from the environment for automation
+  * [Feature] settings: Add apply policy option (implicit_allow) with additive symbols_enabled and strict explicit_enable gating
+
+  ** Bug fixes **
+  * [CritFix] mime_parser: Bound message/rfc822 recursion depth (remote DoS via deeply nested messages)
+  * [Fix] aliases: Refuse to rewrite From address domains (SPF, DKIM and DMARC key on the sender identity)
+  * [Fix] aliases: Never rewrite the googlemail.com domain to gmail.com
+  * [Fix] dmarc: Evaluate the From and envelope domains as seen in the message, not after alias rewriting
+  * [Fix] spf: Check the original envelope sender even if it was rewritten
+  * [Fix] forged_recipients: Compare envelope and header addresses as they were transmitted
+  * [Fix] mime: Split address lists on semicolons as well as commas (Outlook-style recipient lists)
+  * [Fix] fuzzy: Skip injected (computed) parts on learn and check
+  * [Fix] phishing: Don't penalise the same label under another TLD (brand.co.uk displayed over brand.com)
+  * [Fix] maps: Anchor glob map patterns to match the whole subject; entries relying on substring matching need explicit wildcards
+  * [Fix] lua_selectors: Reject selectors that parse only as a prefix instead of silently evaluating the truncated part
+  * [Fix] lua_selectors: Don't crash the scan on a method call missing on the extracted value
+  * [Fix] lua_cryptobox: Pass the padded nonce to secretbox encrypt/decrypt (out-of-bounds read with short nonces)
+  * [Fix] lua_kann: Fix load({filename}) argument index and save() return value
+  * [Fix] gpt: Don't send a duplicate request when context_augment invokes its callback synchronously
+  * [Fix] icap: Fix insertion of HTTP header in get_http_headers
+  * [Fix] dmarc_report: Don't call blocking sleep from an async callback when throttling batches
+  * [Fix] Lua 5.5 compatibility: do not assign to for-loop variables (fixes startup error in Jinja templates via lupa)
+
+4.1.1: 19 Jun 2026
+
+  ** Features **
+  * [Feature] checkv3: Negotiate representation and compression via Accept/Accept-Encoding
+  * [Feature] css: Detect more text-hiding tricks (off-screen positioning, clip, negative text-indent, tiny fonts)
+  * [Feature] lua_archive: Add opt-in extraction limits (size, count, ratio) to bound zip-bomb expansion
+  * [Feature] lua_text: Add byte-distribution statistics methods (entropy, byte mean/deviation, serial correlation, Monte-Carlo Pi)
+  * [Feature] lua: Add zlib/YARA-compatible crc32 for rspamd_text, rspamd_util, and cryptobox hash
+  * [Feature] multipattern: Add explicit SOM (start-of-match) flag and fix regex-fallback offsets
+  * [Feature] neural: Add pluggable feature-provider and ANN-architecture registries
+  * [Feature] neural: Add sequence output mode and SIF word selection to fasttext_embed
+  * [Feature] kann: Add multi-head attention pooling operator
+  * [Feature] lua_kann: Expose slice and concat graph transforms
+
+  ** Bug fixes **
+  * [Fix] dns: Do not defer resolver nameservers (fixes SIGSEGV at worker startup, regression in 4.1.0)
+  * [Fix] lua: Add state/generation guards and refcounting to the coroutine thread pool to prevent use-after-free on async completion
+  * [Fix] lua_worker: Avoid deadlock when a spawned subprocess returns an invalid value
+  * [Fix] milter: Send QUARANTINE even with a caller-supplied reply (regression from 3.10.0)
+  * [Fix] neural: Stabilise training on dense embedding inputs (funnel architecture, input-typed learning rate, single-class quality gate)
+  * [Fix] neural: Don't strand trained ANNs behind stale high-version tombstones
+  * [Fix] mx_check: Classify loopback-only MX as MX_LOCAL_ONLY instead of MX_BOGON_ONLY
+  * [Fix] monitored: Use alphanumeric-only random DNS prefixes for random_monitored RBL checks
+  * [Fix] protocol: Use case-preserving boundary for v3 HTTP multipart parsing
+  * [Fix] controller: Register the /checkv3 endpoint
+  * [Fix] symcache: Fix timeout inflation in pre/postfilter priority grouping
+  * [Fix] url: Scan bare query-embedded URLs containing '=' as a whole
+  * [Fix] url: Do not multiply URLs with multiple '@' signs and backslashes
+  * [Fix] css: Detect text hidden via overflow clipping, opacity, and max-width/height
+  * [Fix] mime: Fix build with OpenSSL 4.0 opaque ASN1_STRING
+  * [Fix] mime_string: Make iterator const to fix doctest 2.5.0 build
+  * [Fix] Prioritise bundled simdutf headers over system ones
+
 4.1.0: 05 Jun 2026
 
   ** Incompatible changes **

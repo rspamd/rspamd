@@ -29,6 +29,7 @@ static gboolean show_comments = FALSE;
 static gboolean modules_state = FALSE;
 static gboolean symbol_groups_only = FALSE;
 static gboolean symbol_full_details = FALSE;
+static gboolean symbols_exec_plan = FALSE;
 static gboolean skip_template = FALSE;
 static char *config = NULL;
 static gboolean local_conf_only = FALSE;
@@ -66,6 +67,8 @@ static GOptionEntry entries[] = {
 	 "Show symbols groups only", NULL},
 	{"symbol-details", 'd', 0, G_OPTION_ARG_NONE, &symbol_full_details,
 	 "Show full symbol details only", NULL},
+	{"exec-plan", 'e', 0, G_OPTION_ARG_NONE, &symbols_exec_plan,
+	 "Show symbols execution plan only (stages, levels and dependencies)", NULL},
 	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 	 "Do not apply Jinja templates", NULL},
 	{"local", 0, 0, G_OPTION_ARG_NONE, &local_conf_only, "Show only local and override configuration", NULL},
@@ -386,6 +389,16 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 										  "plugins_stats",
 										  FALSE);
 
+			exit(EXIT_SUCCESS);
+		}
+
+		if (symbols_exec_plan) {
+			/* Dump the execution plan of the symbols cache in the execution order */
+			ucl_object_t *out = ucl_object_typed_new(UCL_OBJECT);
+
+			ucl_object_insert_key(out, rspamd_symcache_dump_exec_plan(cfg->cache),
+								  "exec_plan", strlen("exec_plan"), false);
+			rspamadm_dump_section_obj(cfg, out, NULL);
 			exit(EXIT_SUCCESS);
 		}
 

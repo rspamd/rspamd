@@ -683,6 +683,13 @@ static int __redisAsyncHandleConnect(redisAsyncContext *ac) {
         /* connected! */
         if (c->connection_type == REDIS_CONN_TCP &&
             redisSetTcpNoDelay(c) == REDIS_ERR) {
+            /*
+             * A connection that looked complete may still have failed (e.g.
+             * refused on macOS): report the socket error, if there is one,
+             * rather than the setsockopt one
+             */
+            if (redisCheckSocketError(c) == REDIS_ERR)
+                __redisAsyncCopyError(ac);
             __redisAsyncHandleConnectFailure(ac);
             return REDIS_ERR;
         }

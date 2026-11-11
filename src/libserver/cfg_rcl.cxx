@@ -787,9 +787,27 @@ rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 	g_assert(key != nullptr);
 	const auto *worker_type = key;
 
+#ifndef WITH_HYPERSCAN
+	if (strcmp(worker_type, "hs_helper") == 0) {
+		/*
+		 * This worker exists only in a build with hyperscan. Its section is
+		 * part of the stock configuration, which can be read from a source
+		 * tree or shared with a build that has it, so it is not an error
+		 */
+		msg_info_config("worker %s is not available without hyperscan support, "
+						"skip its configuration",
+						worker_type);
+		return TRUE;
+	}
+#endif
+
 	auto qtype = g_quark_try_string(worker_type);
 	if (qtype == 0) {
-		msg_err_config("unknown worker type: %s", worker_type);
+		g_set_error(err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"unknown worker type: %s",
+					worker_type);
 		return FALSE;
 	}
 
@@ -2075,6 +2093,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Directory to save maps cached data (default: $DBDIR)");
 		rspamd_rcl_add_default_handler(sub,
+									   "max_map_size",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, max_map_size),
+									   RSPAMD_CL_FLAG_INT_SIZE,
+									   "Maximum size of a map, compressed or expanded (256Mb by default, 0 to disable the limit)");
+		rspamd_rcl_add_default_handler(sub,
 									   "monitoring_watch_interval",
 									   rspamd_rcl_parse_struct_time,
 									   G_STRUCT_OFFSET(struct rspamd_config, monitored_interval),
@@ -2210,7 +2234,7 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 		rspamd_rcl_add_default_handler(sub,
 									   "max_html_len",
 									   rspamd_rcl_parse_struct_integer,
-									   G_STRUCT_OFFSET(struct rspamd_config, max_word_len),
+									   G_STRUCT_OFFSET(struct rspamd_config, max_html_len),
 									   RSPAMD_CL_FLAG_INT_SIZE,
 									   "Maximum length of the html part to be parsed");
 		rspamd_rcl_add_default_handler(sub,
@@ -2327,6 +2351,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, max_pic_size),
 									   RSPAMD_CL_FLAG_INT_SIZE,
 									   "Maximum size of the picture to be normalized (1Mb by default)");
+		rspamd_rcl_add_default_handler(sub,
+									   "max_lua_http_response",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, max_lua_http_response),
+									   RSPAMD_CL_FLAG_INT_SIZE,
+									   "Maximum size of an HTTP reply in the Lua HTTP client when no explicit max_size is set (256Mb by default, 0 to disable the limit)");
 		rspamd_rcl_add_default_handler(sub,
 									   "images_cache",
 									   rspamd_rcl_parse_struct_integer,

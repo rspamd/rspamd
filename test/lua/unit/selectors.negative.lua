@@ -53,6 +53,18 @@ context("Selectors test", function()
 
       ["unknown transformation"] = {
                 selector = "urls.somethingnew"},
+
+      ["second method"] = {
+                selector = "from('smtp'):domain:lower"},
+
+      ["second method after transform-less method"] = {
+                selector = "urls:get_host:lower"},
+
+      ["stray paren"] = {
+                selector = "header('Subject').lower)"},
+
+      ["junk after list element"] = {
+                selector = "ip;from:addr garbage"},
   }
 
   for case_name, case in pairs(cases) do
@@ -60,6 +72,34 @@ context("Selectors test", function()
       local sels = lua_selectors.parse_selector(cfg, case.selector)
       print(logger.slog("%1", sels))
       assert_nil(sels)
+    end)
+  end
+
+  -- Selectors which must be parsed in whole
+  local valid_cases = {
+      ["method then transform"] = {
+                selector = "from('smtp'):domain.lower"},
+
+      ["method then transform chain"] = {
+                selector = "urls:get_host.lower.uniq"},
+
+      ["transform with arguments"] = {
+                selector = "header('Subject').lower.digest('hex')"},
+
+      ["list of selectors"] = {
+                selector = "from:addr;ip"},
+
+      ["method then transform with tld"] = {
+                selector = "from('smtp'):domain.get_tld"},
+
+      ["trailing whitespace"] = {
+                selector = "from('smtp'):domain.lower "},
+  }
+
+  for case_name, case in pairs(valid_cases) do
+    test("valid case " .. case_name, function()
+      local sels = lua_selectors.parse_selector(cfg, case.selector)
+      assert_not_nil(sels)
     end)
   end
 end)

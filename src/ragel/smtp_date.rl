@@ -31,13 +31,17 @@
     if (p > tmp) {
       gulong n;
       if (rspamd_strtoul (tmp, p - tmp, &n)) {
-        if (n < 1000) {
-          if (n < 50) {
-            tm.tm_year = n - 1900 + 2000;
-          }
-          else {
-            tm.tm_year = n;
-          }
+        /*
+         * RFC 5322, 4.3: only two digit years 00-49 are 20xx; other two and
+         * three digit years add 1900 ("049" is 1949). Zero-padded four digit
+         * years are read the same way: mailers printing tm_year with %04d
+         * write 2002 as "0102"
+         */
+        if (p - tmp == 2 && n < 50) {
+          tm.tm_year = n + 100;
+        }
+        else if (n < 1000) {
+          tm.tm_year = n;
         }
         else {
           tm.tm_year = n - 1900;
@@ -192,26 +196,41 @@
     tz = -700;
   }
   prepush {
+    if (top >= RSPAMD_RAGEL_MAX_COMMENT_NESTING) {
+      /* Too deeply nested comments, bail out instead of growing the stack */
+      fbreak;
+    }
+
     if (top >= st_storage.size) {
-      st_storage.size = (top + 1) * 2;
-      st_storage.data = realloc (st_storage.data, st_storage.size * sizeof (int));
-      g_assert (st_storage.data != NULL);
+      gsize _new_size = (top + 1) * 2;
+      int *_new_data = realloc (st_storage.data, _new_size * sizeof (int));
+
+      if (_new_data == NULL) {
+        /* Keep the old allocation so that it can still be freed */
+        fbreak;
+      }
+
+      st_storage.size = _new_size;
+      st_storage.data = _new_data;
       stack = st_storage.data;
     }
   }
-  ccontent = ctext | FWS | '(' @{ fcall balanced_ccontent; };
+  # RFC 5322 quoted-pair: an escaped character, e.g. "\)" inside a comment
+  quoted_pair = "\\" (32..126 | "\t");
+  ccontent = ctext | FWS | quoted_pair | '(' @{ fcall balanced_ccontent; };
   balanced_ccontent := ccontent* ')' @{ fret; };
   comment         =   "(" (FWS? ccontent)* FWS? ")";
   CFWS            =   ((FWS? comment)+ FWS?) | FWS;
   digit_2         =   digit{2};
   digit_4         =   digit{4};
-  day_name        =    "Mon" | "Tue" | "Wed" | "Thu" |
-                       "Fri" | "Sat" | "Sun";
+  # Names are case-insensitive, as are all literals in RFC 5322's ABNF
+  day_name        =    "Mon"i | "Tue"i | "Wed"i | "Thu"i |
+                       "Fri"i | "Sat"i | "Sun"i;
   day_of_week     =   FWS? day_name;
   day             =   FWS? digit{1,2} >Day_Start %Day_End FWS;
-  month           =    "Jan" %Month_Jan | "Feb" %Month_Feb | "Mar" %Month_Mar | "Apr" %Month_Apr |
-                       "May" %Month_May | "Jun" %Month_Jun | "Jul" %Month_Jul | "Aug" %Month_Aug |
-                       "Sep" %Month_Sep | "Oct" %Month_Oct | "Nov" %Month_Nov | "Dec" %Month_Dec;
+  month           =    "Jan"i %Month_Jan | "Feb"i %Month_Feb | "Mar"i %Month_Mar | "Apr"i %Month_Apr |
+                       "May"i %Month_May | "Jun"i %Month_Jun | "Jul"i %Month_Jul | "Aug"i %Month_Aug |
+                       "Sep"i %Month_Sep | "Oct"i %Month_Oct | "Nov"i %Month_Nov | "Dec"i %Month_Dec;
   year            =   FWS digit{2,4} >Year_Start %Year_End FWS;
   date            =   day month %Month_End year;
   hour            =   digit_2;
@@ -219,11 +238,12 @@
   second          =   digit_2;
   time_of_day     =   hour >Hour_Start %Hour_End ":" minute >Minute_Start %Minute_End (":" second >Second_Start %Second_End )?;
   zone            =   ("+" | "-") %TZ_Sign digit_4 >TZ_Offset_Start %TZ_Offset_End;
-  obs_zone        =   "UT" %TZ_UT | "GMT" %TZ_GMT |
-                     "EST" %TZ_EST | "EDT" %TZ_EDT |
-                     "CST" %TZ_CST | "CDT" %TZ_CDT |
-                     "MST" %TZ_MST | "MDT" %TZ_MDT |
-                     "PST" %TZ_PST | "PDT" %TZ_PDT |
+  # "UTC" is not an RFC 5322 obs-zone, but some mailers write it
+  obs_zone        =   "UT"i %TZ_UT | "UTC"i %TZ_UT | "GMT"i %TZ_GMT |
+                     "EST"i %TZ_EST | "EDT"i %TZ_EDT |
+                     "CST"i %TZ_CST | "CDT"i %TZ_CDT |
+                     "MST"i %TZ_MST | "MDT"i %TZ_MDT |
+                     "PST"i %TZ_PST | "PDT"i %TZ_PDT |
                      [a-iA-I] | [k-zK-Z];
   time            =   time_of_day %DT_End FWS (zone | obs_zone %Obs_Zone_End) FWS*;
   date_time       =   (day_of_week ",")? date time CFWS?;

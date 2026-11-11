@@ -123,84 +123,61 @@ auto cache_item::process_deps(const symcache &cache) -> void
 		}
 
 		if (dit != nullptr) {
-			if (!dit->is_filter()) {
-				/*
-				 * Check sanity:
-				 * - same stage deps are OK (prefilter -> prefilter, etc.)
-				 * - natural order deps are OK (postfilter -> filter, filter -> prefilter)
-				 *
-				 * Otherwise, emit error
-				 */
-				auto ok_dep = false;
-				auto same_stage = false;
+			/*
+			 * The dependency is attached to the executed item: the parent for a
+			 * virtual symbol. `dit` is already resolved to the parent.
+			 */
+			auto *real_source = this;
 
-				if (dit->get_type() == type) {
-					ok_dep = true;
-					same_stage = true;
-				}
-				else if (type < dit->get_type()) {
-					ok_dep = true;
-				}
+			if (is_virtual()) {
+				real_source = get_parent_mut(cache);
 
-				if (!ok_dep) {
-					msg_err_cache("cannot add dependency from %s on %s: invalid symbol types",
-								  dep.sym.c_str(), symbol.c_str());
-
+				if (real_source == nullptr) {
+					msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
+								  symbol.c_str(), dep.sym.c_str());
+					dep.item = nullptr;
 					continue;
 				}
+			}
 
-				dep.item = dit;
+			const auto src_type = real_source->get_type();
+			const auto dst_type = dit->get_type();
 
-				/* Create reverse deps for same-stage deps to enable eager processing */
-				if (same_stage) {
-					if (!dit->rdeps.contains(id)) {
-						dit->rdeps.emplace(id, cache_dependency{this, symbol, -1, dep.hard});
-						msg_debug_cache("added reverse dependency from %d on %d (same stage)",
-										id, dit->id);
-					}
-				}
+			if (dit->id == real_source->id) {
+				msg_err_cache("cannot add dependency on self: %s -> %s "
+							  "(resolved to %s)",
+							  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+				dep.item = nullptr;
+				continue;
+			}
+
+			if (!edge_allowed(src_type, dst_type)) {
+				msg_err_cache("cannot add dependency from %s (%s) on %s (%s): "
+							  "a %s cannot depend on a symbol from a later stage",
+							  symbol.c_str(), item_type_to_str(src_type),
+							  dit->symbol.c_str(), item_type_to_str(dst_type),
+							  item_type_to_str(src_type));
+				/* Drop the edge, so it is removed below and never reaches the runtime */
+				dep.item = nullptr;
+				continue;
+			}
+
+			dep.item = dit;
+
+			/*
+			 * The reverse dependency lets the runtime start the dependent as soon as
+			 * the dependency is finished; the runtime itself checks that the
+			 * dependent may run at that moment (its stage and level)
+			 */
+			if (!dit->rdeps.contains(real_source->id)) {
+				dit->rdeps.emplace(real_source->id,
+								   cache_dependency{real_source, real_source->symbol, -1, dep.hard});
+				msg_debug_cache("added reverse dependency from %d on %d", real_source->id,
+								dit->id);
 			}
 			else {
-				if (dit->id == id) {
-					msg_err_cache("cannot add dependency on self: %s -> %s "
-								  "(resolved to %s)",
-								  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
-				}
-				else {
-					/* Create a reverse dep */
-					if (is_virtual()) {
-						auto *parent = get_parent_mut(cache);
-
-						if (parent) {
-							if (!dit->rdeps.contains(parent->id)) {
-								dit->rdeps.emplace(parent->id, cache_dependency{parent, parent->symbol, -1});
-								msg_debug_cache("added reverse dependency from %d on %d", parent->id,
-												dit->id);
-							}
-							else {
-								msg_debug_cache("reverse dependency from %d on %d already exists",
-												parent->id, dit->id);
-							}
-							dep.item = dit;
-						}
-						else {
-							msg_err_cache("cannot find parent for virtual symbol %s, when resolving dependency %s",
-										  symbol.c_str(), dep.sym.c_str());
-						}
-					}
-					else {
-						dep.item = dit;
-						if (!dit->rdeps.contains(id)) {
-							dit->rdeps.emplace(id, cache_dependency{this, symbol, -1});
-							msg_debug_cache("added reverse dependency from %d on %d", id,
-											dit->id);
-						}
-						else {
-							msg_debug_cache("reverse dependency from %d on %d already exists",
-											id, dit->id);
-						}
-					}
-				}
+				msg_debug_cache("reverse dependency from %d on %d already exists",
+								real_source->id, dit->id);
 			}
 		}
 		else {
@@ -393,10 +370,24 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 			if (!allowed_ids.check_id(task->settings_elt->id)) {
 
 				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
-					msg_debug_cache_task("allow execution of %s settings id %ud "
-										 "allows implicit execution of the symbols;",
+					if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+						auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
+
+						if (!(runtime && runtime->is_force_enabled(id))) {
+							msg_debug_cache_task("deny %s of %s as it must be explicitly enabled, "
+												 "but settings id %ud merely allows implicit execution",
+												 what,
+												 symbol.c_str(),
+												 task->settings_elt->id);
+
+							return false;
+						}
+					}
+
+					msg_debug_cache_task("allow execution of %s as settings id %ud "
+										 "allows implicit execution of the symbols",
 										 symbol.c_str(),
-										 id);
+										 task->settings_elt->id);
 
 					return true;
 				}
@@ -426,11 +417,15 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 								 task->settings_elt->id);
 		}
 	}
-	else if ((flags & SYMBOL_TYPE_EXPLICIT_ENABLE) && !task->settings) {
-		msg_debug_cache_task("deny %s of %s as it must be explicitly enabled",
-							 what,
-							 symbol.c_str());
-		return false;
+	else if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+		auto *runtime = static_cast<symcache_runtime *>(task->symcache_runtime);
+
+		if (!(runtime && runtime->is_force_enabled(id))) {
+			msg_debug_cache_task("deny %s of %s as it must be explicitly enabled",
+								 what,
+								 symbol.c_str());
+			return false;
+		}
 	}
 
 	/* Allow all symbols with no settings id */
@@ -584,12 +579,13 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 
 	if (type & trivial_types) {
 		auto check_trivial = [&](auto flag,
-								 symcache_item_type ty) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
+								 symcache_item_type ty,
+								 bool keep_flag = false) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
 			if (all_but_one_ty(type, flag)) {
 				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", (int) type));
 			}
 
-			return std::make_pair(ty, type & ~flag);
+			return std::make_pair(ty, keep_flag ? type : type & ~flag);
 		};
 		if (type & SYMBOL_TYPE_CONNFILTER) {
 			return check_trivial(SYMBOL_TYPE_CONNFILTER, symcache_item_type::CONNFILTER);
@@ -604,7 +600,8 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 			return check_trivial(SYMBOL_TYPE_IDEMPOTENT, symcache_item_type::IDEMPOTENT);
 		}
 		else if (type & SYMBOL_TYPE_COMPOSITE) {
-			return check_trivial(SYMBOL_TYPE_COMPOSITE, symcache_item_type::COMPOSITE);
+			/* Composites keep their flag, it is what the flag lists report */
+			return check_trivial(SYMBOL_TYPE_COMPOSITE, symcache_item_type::COMPOSITE, true);
 		}
 		else if (type & SYMBOL_TYPE_CLASSIFIER) {
 			return check_trivial(SYMBOL_TYPE_CLASSIFIER, symcache_item_type::CLASSIFIER);
@@ -620,33 +617,57 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 	return std::make_pair(symcache_item_type::FILTER, type);
 }
 
-bool operator<(symcache_item_type lhs, symcache_item_type rhs)
+auto edge_allowed(symcache_item_type src, symcache_item_type dst) -> bool
 {
-	auto ret = false;
-	switch (lhs) {
-	case symcache_item_type::CONNFILTER:
-		break;
-	case symcache_item_type::PREFILTER:
-		if (rhs == symcache_item_type::CONNFILTER) {
-			ret = true;
-		}
-		break;
-	case symcache_item_type::FILTER:
-		if (rhs == symcache_item_type::CONNFILTER || rhs == symcache_item_type::PREFILTER) {
-			ret = true;
-		}
-		break;
-	case symcache_item_type::POSTFILTER:
-		if (rhs != symcache_item_type::IDEMPOTENT) {
-			ret = true;
-		}
-		break;
-	case symcache_item_type::IDEMPOTENT:
-	default:
-		break;
+	if (dst == symcache_item_type::COMPOSITE || dst == symcache_item_type::CLASSIFIER) {
+		/*
+		 * Composites and classifiers are resolved by the task stages between
+		 * filters and postfilters, so only later stages (and other composites)
+		 * can wait for them
+		 */
+		return src == symcache_item_type::POSTFILTER || src == symcache_item_type::IDEMPOTENT ||
+			   src == dst;
 	}
 
-	return ret;
+	if (src == symcache_item_type::COMPOSITE || src == symcache_item_type::CLASSIFIER) {
+		/*
+		 * Composites and classifiers are not scheduled by the symcache, so such
+		 * an edge is merely descriptive (e.g. a composite on its atoms)
+		 */
+		return true;
+	}
+
+	const auto src_stage = declared_exec_stage(src);
+	const auto dst_stage = declared_exec_stage(dst);
+
+	if (src_stage == exec_stage::none || dst_stage == exec_stage::none) {
+		return false;
+	}
+
+	if (src_stage >= dst_stage) {
+		/* Same stage, or a later stage depending on an earlier one */
+		return true;
+	}
+
+	/*
+	 * An earlier stage depending on a later one: merely a prefilter may depend
+	 * on a filter, which hoists the filter (and its dependencies) to the
+	 * prefilter stage at the level of that prefilter
+	 */
+	return src == symcache_item_type::PREFILTER && dst == symcache_item_type::FILTER;
+}
+
+auto cache_item::get_exec_type(const symcache &cache) const -> symcache_item_type
+{
+	if (is_virtual()) {
+		const auto *parent = get_parent(cache);
+
+		if (parent != nullptr) {
+			return parent->get_type();
+		}
+	}
+
+	return type;
 }
 
 item_condition::~item_condition()

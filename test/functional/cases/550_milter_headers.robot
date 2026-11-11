@@ -38,6 +38,13 @@ CHECK HEADERS WITHOUT TEST SYMBOL
   Do Not Expect Added Header  X-Spam-Level
   Expect Removed Header  X-Spam-Level
 
+CHECK HEADERS FROM LOCAL IP
+  # Only the routines listed in local_headers run for local connections
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Settings=${SETTINGS_TEST}
+  Expect Added Header  My-Spamd-Bar  ++
+  Do Not Expect Added Header  X-Virus
+  Do Not Expect Added Header  X-Spam-Level
+
 CHECK HEADERS WITH OVERRIDE SETTINGS
   # id_milter_headers_override setting enables only authentication-results and x-spam-level routines
   Scan File  ${MESSAGE}  Settings-Id=id_milter_headers_override
@@ -48,3 +55,28 @@ CHECK HEADERS WITH OVERRIDE SETTINGS
   # Verify other headers are not added since only authentication-results and x-spam-level routines run
   Do Not Expect Added Header  X-Virus
   Do Not Expect Added Header  My-Spamd-Bar
+
+ESCAPE SYMBOL OPTIONS IN X-SPAMD-RESULT
+  Scan File  ${RSPAMD_TESTDIR}/messages/svg_symbol_option.eml
+  ...  Settings={symbols_enabled = [SVG_CONTENT]}
+  Expect Symbol With Exact Options  SVG_CONTENT  a](0.00)[]; BAYES_HAM(-9.00)[b,%5D.svg  logo.svg
+  Do Not Expect Symbol  BAYES_HAM
+  Expect Header Is Present  X-Spamd-Result
+  ${header} =  Set Variable  ${SCAN_RESULT}[milter][add_headers][X-Spamd-Result][value]
+  ${header} =  Evaluate  ' '.join($header.split())
+  Should Contain  ${header}  SVG_CONTENT(2.00)[a%5D(0.00)%5B%5D%3B BAYES_HAM(-9.00)%5Bb%2C%255D.svg,logo.svg]
+  Should Not Contain  ${header}  ; BAYES_HAM(-9.00)[
+
+PRESERVE PERCENTAGES IN X-SPAMD-RESULT
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [HEADER_OPTIONS_TEST]}
+  Expect Symbol With Exact Options  HEADER_OPTIONS_TEST  95.33%  literal%2C  first,second
+  ${header} =  Set Variable  ${SCAN_RESULT}[milter][add_headers][X-Spamd-Result][value]
+  ${header} =  Evaluate  ' '.join($header.split())
+  Should Contain  ${header}  HEADER_OPTIONS_TEST(0.00)[95.33%,literal%2C,first%2Csecond]
+
+KEEP ASN FIELDS AS SEPARATE OPTIONS
+  Scan File  ${MESSAGE}  IP=8.8.8.8  Settings={symbols_enabled = [ASN_CHECK]}
+  Expect Symbol With Exact Options  ASN  asn:15169  ipnet:8.8.8.0/24  country:US
+  ${header} =  Set Variable  ${SCAN_RESULT}[milter][add_headers][X-Spamd-Result][value]
+  ${header} =  Evaluate  ' '.join($header.split())
+  Should Contain  ${header}  ASN(0.00)[asn:15169,ipnet:8.8.8.0/24,country:US]

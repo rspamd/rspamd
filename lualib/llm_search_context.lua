@@ -196,7 +196,7 @@ local function query_search_api(task, domain, opts, callback, debug_module)
     lua_util.debugm(Np, task, "search API success for domain '%s', url: %s", domain, full_url)
 
     -- Parse Leta Mullvad JSON response
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local ok, parse_err = parser:parse_string(body)
     if not ok then
       rspamd_logger.errx(task, "%s: failed to parse search API response for %s: %s",

@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Plain domain followed by encoded apostrophes
+Content-Type: text/plain; charset=utf-8
+
+Visit lists.example.org&#39;s archive&#39; for details

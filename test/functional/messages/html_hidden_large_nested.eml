@@ -1,0 +1,8 @@
+From: sender@example.com
+To: recipient@example.net
+Subject: Hidden content amount
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Visible text.</p><div style="display:none">Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden Hidden <strong>内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 内容 </strong> text text text text text text text text text text text text text text text text text text text text text text text text text text text text text text</div></body></html>

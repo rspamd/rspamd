@@ -33,6 +33,7 @@ import os
 import os.path
 import psutil
 import pwd
+import select
 import shutil
 import signal
 import socket
@@ -71,27 +72,84 @@ def cleanup_temporary_directory(directory):
     shutil.rmtree(directory)
 
 
+def _pabot_slice_id():
+    """Return this process' pabot queue index, or None under plain robot.
+
+    pabot passes `--variable PABOTQUEUEINDEX:<n>` to every suite slice it
+    executes and prints the same index next to the suite name in its own
+    log (`[ID:<n>] EXECUTING Cases.001 Merged.100 General`), so the index
+    maps a saved directory back to the sub-suite that produced it. pabot
+    uses -1 when there is no slice, plain robot defines nothing at all.
+    """
+    idx = BuiltIn().get_variable_value("${PABOTQUEUEINDEX}")
+    if idx is None:
+        return None
+    idx = str(idx).strip()
+    if not idx.lstrip('-').isdigit() or int(idx) < 0:
+        return None
+    return idx
+
+
+def _save_file(source_file, destination_file):
+    """Copy source_file to destination_file atomically, best effort.
+
+    Several processes can aim at the same destination: pabot slices of a
+    split directory suite share the suite-level directory, and the `*.last`
+    copies are global to the whole run. Copy into a unique temporary in the
+    destination directory and rename it into place so no reader ever sees a
+    half-written log, and only warn on failure -- saving diagnostics must
+    never turn a green suite red.
+    """
+    destination_directory = os.path.dirname(destination_file)
+    try:
+        fd, tmp_file = tempfile.mkstemp(dir=destination_directory, prefix='.saving-')
+        os.close(fd)
+    except OSError as e:
+        logger.warn('cannot create a temporary file in %s: %s' % (destination_directory, e))
+        return
+    try:
+        shutil.copyfile(source_file, tmp_file)
+        os.chmod(tmp_file, 0o644)
+        os.replace(tmp_file, destination_file)
+    except OSError as e:
+        logger.warn('cannot save %s as %s: %s' % (source_file, destination_file, e))
+        try:
+            os.unlink(tmp_file)
+        except OSError:
+            pass
+
+
 def save_run_results(directory, filenames):
     current_directory = os.getcwd()
+    save_root = "%s/robot-save" % current_directory
     suite_name = BuiltIn().get_variable_value("${SUITE_NAME}")
     test_name = BuiltIn().get_variable_value("${TEST NAME}")
     if os.path.exists(directory):
         onlyfiles = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
         logger.debug('%s content before cleanup: %s' % (directory, onlyfiles))
         if test_name is None:
-            # this is suite-level tear down
-            destination_directory = "%s/robot-save/%s" % (current_directory, suite_name)
+            # This is suite-level tear down. A directory suite whose
+            # __init__.robot owns rspamd (001_merged) is split by pabot into
+            # one slice per sub-suite, and every slice runs this very
+            # teardown with the same ${SUITE_NAME}: without a per-slice
+            # directory they race on the mkdir below and then overwrite each
+            # other's logs. Leaf (.robot) suites run whole in one process, so
+            # they keep the historical flat layout.
+            destination_directory = "%s/%s" % (save_root, suite_name)
+            slice_id = _pabot_slice_id()
+            suite_source = BuiltIn().get_variable_value("${SUITE_SOURCE}")
+            if slice_id is not None and suite_source is not None and os.path.isdir(suite_source):
+                destination_directory = "%s/pabot-%s" % (destination_directory, slice_id)
         else:
-            destination_directory = "%s/robot-save/%s/%s" % (current_directory, suite_name, test_name)
-        if not os.path.isdir(destination_directory):
-            os.makedirs(destination_directory)
+            destination_directory = "%s/%s/%s" % (save_root, suite_name, test_name)
+        os.makedirs(destination_directory, exist_ok=True)
         for file in filenames.split(' '):
             source_file = "%s/%s" % (directory, file)
             logger.debug('check if we can save %s' % source_file)
             if os.path.isfile(source_file):
                 logger.debug('found %s, save it' % file)
-                shutil.copy(source_file, "%s/%s" % (destination_directory, file))
-                shutil.copy(source_file, "%s/robot-save/%s.last" % (current_directory, file))
+                _save_file(source_file, "%s/%s" % (destination_directory, file))
+                _save_file(source_file, "%s/%s.last" % (save_root, file))
 
 
 def encode_filename(filename):
@@ -167,6 +225,23 @@ def HTTP_With_Headers(method, host, port, path, data=None, headers={}):
     return [s, t, h]
 
 
+def HTTP_Status_And_Reason(method, host, port, path, data=None, headers={}):
+    """HTTP request that returns [status, reason, body].
+
+    rspamd_proxy reports a refused request in the status line only -- that
+    path writes no body at all -- so the reason phrase is the only assertable
+    text.
+    """
+    c = http.client.HTTPConnection("%s:%s" % (host, port))
+    c.request(method, path, data, headers)
+    r = c.getresponse()
+    t = r.read()
+    s = r.status
+    reason = r.reason
+    c.close()
+    return [s, reason, t]
+
+
 def HTTPS(method, host, port, path, data=None, headers={}):
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -195,6 +270,32 @@ def HTTPS_With_Headers(method, host, port, path, data=None, headers={}):
     h = dict(r.getheaders())
     c.close()
     return [s, t, h]
+
+
+def HTTPS_Post_Single_Record(host, port, path, body_size, timeout=5):
+    """POST over TLS with the headers and the body in a single write.
+
+    http.client sends the headers and the body separately, so each TLS record
+    fits into the 8 KiB buffer Rspamd reads the headers into. One write of up
+    to 16 KiB goes out as one record instead: Rspamd has to take the part it
+    could not read at once from OpenSSL rather than wait for the socket to
+    become readable again. Returns the status code.
+    """
+    body = b"x" * int(body_size)
+    req = ("POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n"
+           "Connection: close\r\n\r\n" % (path, host, len(body))).encode() + body
+    assert 8192 < len(req) <= 16384, \
+        "request must exceed 8 KiB and fit into one TLS record"
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host, int(port)), timeout=float(timeout)) as raw:
+        with ctx.wrap_socket(raw) as s:
+            s.sendall(req)
+            r = http.client.HTTPResponse(s)
+            r.begin()
+            r.read()
+            return r.status
 
 
 def generate_ssl_cert(tmpdir):
@@ -279,6 +380,276 @@ def Scan_File(filename, **headers):
     c.close()
     BuiltIn().set_test_variable("${SCAN_RESULT}", d)
     return
+
+
+def Scan_File_Expect_Error(filename, expected_status, port=None, **headers):
+    """POST /checkv2 and require a specific HTTP status; return the body.
+
+    Scan_File asserts 200, so a request that must be refused needs its own
+    entry point. The body is returned so the caller can assert on the
+    protocol error text rather than on the status alone.
+
+    Example:
+    | ${body} = | Scan File Expect Error | /dev/null | 400 | File=/tmp/x |
+    """
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    if port is None:
+        port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv2", open(filename, "rb"), headers)
+    r = c.getresponse()
+    status = r.status
+    body = r.read().decode('utf-8', errors='replace')
+    c.close()
+    assert status == int(expected_status), \
+        "Expected HTTP %s but got %d: %s" % (expected_status, status, body)
+    return body
+
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    """http.client speaking to an AF_UNIX listener.
+
+    http.client has no unix transport and every other test config binds
+    host:port, so this exists only for the file/shm suites: the whole point
+    of the hardening is that a unix socket peer keeps the privileged
+    File/Path/Shm inputs that a TCP peer is denied, and that cannot be
+    exercised over TCP by definition.
+    """
+
+    def __init__(self, socket_path, timeout=30):
+        super().__init__("localhost", timeout=timeout)
+        self.socket_path = socket_path
+
+    def connect(self):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(self.timeout)
+        s.connect(self.socket_path)
+        self.sock = s
+
+
+def unix_socket_connect(socket_path):
+    """Connect to a unix socket and close it again, raising if it is not there.
+
+    Readiness probe: Rspamd Startup Check only pings a TCP port, so a worker
+    that also binds a unix socket needs its own barrier.
+
+    Example:
+    | Wait Until Keyword Succeeds | 10x | 0.2s | Unix Socket Connect | /tmp/x.sock |
+    """
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(5)
+    try:
+        s.connect(socket_path)
+    finally:
+        s.close()
+
+
+def Scan_File_Over_Unix_Socket(socket_path, filename, **headers):
+    """Like Scan_File but over a unix socket; sets ${SCAN_RESULT}.
+
+    Example:
+    | Scan File Over Unix Socket | ${sock} | /dev/null | File=${msg} |
+    """
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    c = _UnixHTTPConnection(socket_path)
+    try:
+        c.request("POST", "/checkv2", open(filename, "rb"), headers)
+        r = c.getresponse()
+        status = r.status
+        body = r.read().decode('utf-8', errors='replace')
+    finally:
+        c.close()
+    assert status == 200, "Expected HTTP 200 but got %d: %s" % (status, body)
+    d = json.JSONDecoder(strict=True).decode(body)
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
+
+
+def _shm_object_dir():
+    """Directory backing POSIX shared memory names, or None.
+
+    rspamd resolves an `Shm` value with shm_open() only where cmake found
+    POSIX shared memory to be sane, which is Linux (see HAVE_SANE_SHMEM);
+    everywhere else the value is an ordinary path handed to open(2). glibc
+    maps a shm name onto /dev/shm/<name>, so the object can be created as a
+    plain file there without any third party module.
+    """
+    if sys.platform.startswith('linux'):
+        for d in ('/dev/shm', '/run/shm'):
+            if os.path.isdir(d):
+                return d
+    return None
+
+
+def create_shm_payload(content=None, size=None):
+    """Create an object that an `Shm` request header can name.
+
+    Returns [name, path]: `name` goes into the header, `path` is what
+    Remove Shm Payload has to unlink. Give either the exact `content` or a
+    `size` in bytes of filler text.
+
+    Example:
+    | ${name} | ${path} = | Create Shm Payload | size=200000 |
+    """
+    if content is None:
+        nbytes = int(size)
+        content = (("X" * 63 + "\n") * (nbytes // 64 + 1))[:nbytes]
+    data = content if isinstance(content, bytes) else content.encode('utf-8')
+    uniq = "rspamd-fshm-%016x" % random.getrandbits(64)
+    shmdir = _shm_object_dir()
+    if shmdir:
+        path = os.path.join(shmdir, uniq)
+        name = "/" + uniq
+    else:
+        path = os.path.join(tempfile.gettempdir(), uniq)
+        name = path
+    with open(path, "wb") as f:
+        f.write(data)
+    # The daemon may run as another user (nobody in CI)
+    os.chmod(path, 0o644)
+    return [name, path]
+
+
+def remove_shm_payload(path):
+    """Unlink an object made by Create Shm Payload; never fails."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def write_readable_file(path, content):
+    """Write `content` to `path` and make it world readable; return the path.
+
+    Robot's Create File obeys the umask and the daemon may run as another
+    user (nobody in CI), so the mode is set explicitly here.
+    """
+    with open(path, "w") as f:
+        f.write(content)
+    os.chmod(path, 0o644)
+    return path
+
+
+def write_filler_file(path, size):
+    """Write `size` bytes of printable filler to `path` and return the path.
+
+    Used where the content is irrelevant and only the size matters, e.g. for
+    the max_message limit on file inputs. Robot's Create File would need the
+    whole payload as a variable first.
+    """
+    nbytes = int(size)
+    with open(path, "wb") as f:
+        chunk = (b"X" * 63 + b"\n") * 1024
+        written = 0
+        while written < nbytes:
+            piece = chunk[:min(len(chunk), nbytes - written)]
+            f.write(piece)
+            written += len(piece)
+    os.chmod(path, 0o644)
+    return path
+
+
+_PENDING_SOCKETS = []
+
+
+def open_pending_connections(addr, port, count, path="/checkv2"):
+    """Open connections that are accepted but whose body never arrives.
+
+    A complete request head announcing a body is sent and the body is then
+    withheld, which is exactly the "accepted and body-pending" state the
+    admission limits are meant to count. The sockets are kept in a module
+    level list so Close Pending Connections can release them from a teardown
+    even after a failure.
+
+    A worker that is already at its limit accepts and closes the connection at
+    once, so a socket opened here does not necessarily hold a slot: use Pending
+    Connections Alive to tell the two apart.
+
+    Example:
+    | Open Pending Connections | 127.0.0.1 | ${port} | 2 |
+    """
+    head = ("POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: 4096\r\n"
+            "Connection: close\r\n\r\n" % (path, addr)).encode()
+    opened = 0
+    for _ in range(int(count)):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(10)
+        s.connect((addr, int(port)))
+        s.sendall(head)
+        _PENDING_SOCKETS.append(s)
+        opened += 1
+    return opened
+
+
+def pending_connections_alive():
+    """How many pending connections the worker has not closed on us.
+
+    A connection that arrives when the worker is already at its limit is
+    accepted and closed at once, which the client sees as nothing more than a
+    socket that has become readable at EOF -- so opening a connection is not
+    proof that it occupies a slot. Call this once a probe connection sent after
+    the batch has been answered: the listen queue is FIFO, so by then the worker
+    has decided about every socket opened before that probe.
+    """
+    alive = 0
+    for s in _PENDING_SOCKETS:
+        readable, _, _ = select.select([s], [], [], 0)
+        if not readable:
+            alive += 1
+    return alive
+
+
+def close_one_pending_connection():
+    """Close a single socket opened by Open Pending Connections.
+
+    Frees exactly one admission slot, which is what the counting tests need:
+    the worker must admit again as soon as one client goes away.
+    """
+    if not _PENDING_SOCKETS:
+        raise AssertionError("no pending connection to close")
+    _PENDING_SOCKETS.pop().close()
+    return len(_PENDING_SOCKETS)
+
+
+def close_pending_connections():
+    """Close every socket opened by Open Pending Connections."""
+    closed = 0
+    while _PENDING_SOCKETS:
+        s = _PENDING_SOCKETS.pop()
+        try:
+            s.close()
+            closed += 1
+        except OSError:
+            pass
+    return closed
+
+
+def connection_admitted(addr, port, timeout=5):
+    """True when addr:port serves a request, False when the limit refuses it.
+
+    Over its admission limit rspamd still accepts the connection -- the
+    listen watcher is level triggered, so merely leaving it in the backlog
+    would spin the worker -- and closes it at once. From the client side that
+    is a successful connect followed by an immediate EOF or reset.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(float(timeout))
+    req = ("GET /ping HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n"
+           % addr).encode()
+    try:
+        s.connect((addr, int(port)))
+        s.sendall(req)
+        data = s.recv(64)
+    except socket.timeout:
+        # Admitted but not answered in time: not a refusal, and the caller's
+        # own retry loop is the right place to deal with it.
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+    return data != b""
 
 
 def _build_multipart(boundary, metadata_json, message_bytes):
@@ -765,6 +1136,46 @@ def ping_rspamd(addr, port):
     return str(urlopen("http://%s:%s/ping" % (addr, port)).read())
 
 
+def controller_auth_status(addr, port, password):
+    """Sends a controller /auth request and returns its HTTP status code.
+
+    Unlike rspamc, this distinguishes a rejected password (401) from a
+    throttled source (429).
+
+    Example:
+    | ${code} = | Controller Auth Status | ${RSPAMD_LOCAL_ADDR} | ${RSPAMD_PORT_CONTROLLER} | q1 |
+    """
+    conn = http.client.HTTPConnection(addr, int(port), timeout=10)
+    try:
+        conn.request("GET", "/auth", headers={"Password": password})
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
+def controller_fuzzy_status(addr, port):
+    """Sends a GET /plugins/fuzzy/status request and returns the parsed JSON.
+
+    The probe pings every configured storage server, so it may take up to
+    the fuzzy ping timeout to answer.
+
+    Example:
+    | ${json} = | Controller Fuzzy Status | ${RSPAMD_LOCAL_ADDR} | ${RSPAMD_PORT_CONTROLLER} |
+    """
+    conn = http.client.HTTPConnection(addr, int(port), timeout=30)
+    try:
+        conn.request("GET", "/plugins/fuzzy/status")
+        resp = conn.getresponse()
+        body = resp.read()
+
+        if resp.status != 200:
+            raise AssertionError("fuzzy status request failed: HTTP {}, {}"
+                                 .format(resp.status, body))
+        return json.loads(body)
+    finally:
+        conn.close()
+
+
 def redis_check(addr, port):
     """Attempts to open a TCP connection to specified address:port
 
@@ -1054,3 +1465,116 @@ def validate_attachments_have_content_type(data):
         if 'content_type' in att and att['content_type']:
             count += 1
     return count
+
+
+def _smtp_status_message(status_text):
+    lines = status_text.splitlines()
+    try:
+        idx = lines.index('MESSAGE')
+    except ValueError:
+        raise Exception('No MESSAGE marker found in SMTP status file')
+    return '\n'.join(lines[idx + 1:])
+
+
+def decode_email_header(status_text, name):
+    """Return the RFC 2047-decoded value of a top-level header of the message
+    captured in a dummy_smtp 'sink' status file, or None if it is absent.
+
+    Example:
+    | ${subject} = | Decode Email Header | ${smtp_status} | Subject |
+    """
+    import email
+    import email.policy
+    from email.header import decode_header, make_header
+
+    msg = email.message_from_bytes(
+        _smtp_status_message(status_text).encode('utf-8'),
+        policy=email.policy.compat32)
+    value = msg.get(name)
+    if value is None:
+        return None
+    # RFC 5322 unfolding removes the line breaks only, keeping whitespace
+    value = value.replace('\r\n', '').replace('\n', '')
+    return str(make_header(decode_header(value)))
+
+
+def validate_multipart_email(status_text):
+    """Parse the DATA portion of a dummy_smtp 'sink' status file as a MIME
+    message and summarize its top-level multipart structure for assertions.
+
+    Returns a dict: is_multipart, content_type, subtype, part_count,
+    mime_version, message_id, and parts (list of dicts with content_type,
+    cte, disposition, filename - RFC 2231 parameters are decoded by email).
+    A nested multipart part (e.g. a multipart/alternative group inside a
+    multipart/mixed message) is summarized as {content_type, subtype,
+    subparts: [...]} instead of decoded_text/decoded_length/decoded_sha256.
+    For a single-part message, cte and decoded_text describe its body;
+    has_8bit/headers_8bit tell whether any 8-bit data was transmitted at all
+    or within the top-level header block.
+
+    Example:
+    | ${info} = | Validate Multipart Email | ${smtp_status} |
+    """
+    import email
+    import email.policy
+    import hashlib
+
+    def summarize_part(part):
+        if part.is_multipart():
+            subparts = [summarize_part(p) for p in part.get_payload()]
+            return {
+                'content_type': part.get_content_type(),
+                'subtype': part.get_content_subtype(),
+                'part_count': len(subparts),
+                'subparts': subparts,
+            }
+        decoded = part.get_payload(decode=True) or b''
+        decoded_text = ''
+        if part.get_content_maintype() == 'text':
+            decoded_text = decoded.decode(part.get_content_charset() or 'utf-8')
+        return {
+            'content_type': part.get_content_type(),
+            'cte': part.get('Content-Transfer-Encoding', ''),
+            'disposition': part.get('Content-Disposition', ''),
+            'filename': part.get_filename(),
+            'decoded_text': decoded_text,
+            'decoded_length': len(decoded),
+            'decoded_sha256': hashlib.sha256(decoded).hexdigest(),
+        }
+
+    raw_message = _smtp_status_message(status_text)
+    msg = email.message_from_bytes(
+        raw_message.encode('utf-8'), policy=email.policy.compat32)
+
+    parts = []
+    if msg.is_multipart():
+        for part in msg.get_payload():
+            parts.append(summarize_part(part))
+    top = summarize_part(msg)
+    header_block = raw_message.split('\n\n', 1)[0]
+
+    return {
+        'is_multipart': msg.is_multipart(),
+        'content_type': msg.get_content_type(),
+        'subtype': msg.get_content_subtype(),
+        'part_count': len(parts),
+        'parts': parts,
+        # Single-part messages only; a multipart summary has no body of its own
+        'cte': top.get('cte', ''),
+        'decoded_text': top.get('decoded_text', ''),
+        # The sink decodes DATA as UTF-8, so any 8-bit octet sent shows up as
+        # a non-ASCII character (raw UTF-8 or a replacement character)
+        'has_8bit': any(ord(ch) > 127 for ch in raw_message),
+        'headers_8bit': any(ord(ch) > 127 for ch in header_block),
+        'mime_version': msg.get('MIME-Version'),
+        'message_id': msg.get('Message-Id'),
+        # Only the wrapper's own Content-Type belongs at top level; the
+        # template's Content-Type, if any, moves onto its own part instead
+        'content_type_header_count': len(msg.get_all('Content-Type') or []),
+        'cte_header_count': len(
+            msg.get_all('Content-Transfer-Encoding') or []),
+        # RFC 5322 caps a line at 998 octets; long parameters must be folded
+        'max_line_length': max(
+            (len(line.encode('utf-8')) for line in raw_message.splitlines()),
+            default=0),
+    }

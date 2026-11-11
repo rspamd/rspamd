@@ -196,6 +196,7 @@ kad_node_t *kann_layer_input(int n1);
 kad_node_t *kann_layer_dense(kad_node_t *in, int n1);
 kad_node_t *kann_layer_dropout(kad_node_t *t, float r);
 kad_node_t *kann_layer_layernorm(kad_node_t *in);
+kad_node_t *kann_layer_attn_pool(kad_node_t *in, int n_words, int n_heads);
 kad_node_t *kann_layer_rnn(kad_node_t *in, int n1, int rnn_flag);
 kad_node_t *kann_layer_lstm(kad_node_t *in, int n1, int rnn_flag);
 kad_node_t *kann_layer_gru(kad_node_t *in, int n1, int rnn_flag);

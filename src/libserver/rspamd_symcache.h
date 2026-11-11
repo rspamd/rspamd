@@ -21,7 +21,16 @@
 #include "cfg_file.h"
 #include "contrib/libev/ev.h"
 
+/* Lua headers do not have __cplusplus guards, so keep their C linkage
+ * explicitly; including lua_common.h here is not an option as it creates
+ * an include cycle via rspamd.h -> cfg_file.h -> rspamd_symcache.h */
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <lua.h>
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -282,6 +291,35 @@ unsigned int rspamd_symcache_get_symbol_stage(struct rspamd_symcache *cache,
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 										const char *symbol,
 										ucl_object_t *this_sym_ucl);
+
+/**
+ * Execution plan of a symbol: the stage that runs it, its level within the
+ * stage (a higher level runs earlier) and the symbol that hoisted it, if any
+ */
+struct rspamd_symcache_exec_info {
+	const char *stage;
+	int level;
+	const char *hoisted_by;
+};
+
+/**
+ * Fills the execution plan of a symbol (virtual symbols are resolved to their parents)
+ * @param cache
+ * @param symbol
+ * @param info
+ * @return FALSE if the symbol is unknown or is not executed by the cache
+ */
+gboolean rspamd_symcache_get_symbol_exec_info(struct rspamd_symcache *cache,
+											  const char *symbol,
+											  struct rspamd_symcache_exec_info *info);
+
+/**
+ * Dumps the execution plan: an array of buckets (stage, level, symbols with
+ * their dependencies) in the execution order
+ * @param cache
+ * @return newly allocated ucl object
+ */
+ucl_object_t *rspamd_symcache_dump_exec_plan(struct rspamd_symcache *cache);
 
 
 /**

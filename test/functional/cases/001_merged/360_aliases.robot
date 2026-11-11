@@ -154,3 +154,46 @@ FROM AND RCPT TAGGED
   ...  Rcpt=user+tag@example.com
   Expect Symbol  TAGGED_FROM
   Expect Symbol  TAGGED_RCPT
+
+# From identity protection tests (issue 6137)
+
+GOOGLEMAIL FROM - DOMAIN PRESERVED
+  [Documentation]  Gmail user-part rules apply to googlemail.com, but the
+  ...  domain must not be rewritten to gmail.com: the two are DNS-distinct
+  ...  and publish different SPF/DMARC records.
+  ...  Note: each test needs a unique envelope From/Rcpt pair, otherwise the
+  ...  greylist module soft-rejects the repeated pair and skips the filters
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_googlemail.eml
+  ...  From=sender-gm@external.com
+  ...  Rcpt=user@example.com
+  Expect Symbol  ALIAS_RESOLVED
+  Expect Symbol With Exact Options  GET_FROM  First Last,firstlast@googlemail.com,firstlast,googlemail.com
+
+FROM CROSS-DOMAIN ALIAS - NOT APPLIED
+  [Documentation]  Alias resolution that would change the From domain must be
+  ...  discarded: the From domain is an authentication identifier
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_from_virtual.eml
+  ...  From=sender-vx@external.com
+  ...  Rcpt=user@example.com
+  Do Not Expect Symbol  ALIAS_RESOLVED
+  Expect Symbol With Exact Options  GET_FROM  Virtual Sender,virtual@example.com,virtual,example.com
+
+FROM SAME-DOMAIN ALIAS - APPLIED
+  [Documentation]  Same-domain alias resolution of the From local part is
+  ...  still allowed
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_from_unix.eml
+  ...  From=sender-ux@external.com
+  ...  Rcpt=user@example.com
+  Expect Symbol  ALIAS_RESOLVED
+  Expect Symbol With Exact Options  GET_FROM  Abuse Desk,admin@example.com,admin,example.com
+
+RCPT CROSS-DOMAIN ALIAS - NOT FORGED
+  [Documentation]  A recipient rewritten to another domain (allowed for
+  ...  recipients) must not make the matching wire To header look forged:
+  ...  forged_recipients compares the addresses as transmitted
+  Scan File  ${RSPAMD_TESTDIR}/messages/aliases_rcpt_virtual.eml
+  ...  From=sender@external.com
+  ...  Rcpt=virtual@example.com
+  Expect Symbol  ALIAS_RESOLVED
+  Do Not Expect Symbol  FORGED_RECIPIENTS
+  Do Not Expect Symbol  FORGED_SENDER

@@ -12,7 +12,7 @@ on:
 
 concurrency:
   group: webui-e2e-playwright-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   e2e:
@@ -34,7 +34,7 @@ jobs:
             label: latest
     steps:
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: src
 
@@ -42,7 +42,7 @@ jobs:
         run: echo "PREFIX=${GITHUB_WORKSPACE}/install" >> "$GITHUB_ENV"
 
       - name: Download rspamd binary from build job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rspamd-binary-${{ inputs.name }}
           path: ${{ env.PREFIX }}
@@ -98,15 +98,32 @@ jobs:
           fi
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version || 'lts/*' }}
 
+      - name: Determine browser cache key
+        id: browsers-key
+        run: |
+          # 'latest' is a moving target: roll the key weekly (ISO year-week) so the
+          # newest Playwright/browser revisions are re-fetched regularly, while still
+          # benefiting from the cache within a week. 'legacy' is pinned => stable key.
+          if [ "${{ matrix.label }}" = "latest" ]; then
+            echo "key=browsers-latest-${{ runner.os }}-$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+          else
+            echo "key=browsers-legacy-${{ matrix.version }}-${{ runner.os }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        id: playwright-cache
+        uses: actions/cache@v6
         with:
           path: .cache/ms-playwright-${{ matrix.label }}
-          key: browsers-${{ matrix.label }}-${{ runner.os }}
+          key: ${{ steps.browsers-key.outputs.key }}
+          # Warm-restore the most recent matching cache when the key rolls (esp. 'latest'
+          # across weeks), so only changed browser revisions are re-downloaded.
+          restore-keys: |
+            browsers-${{ matrix.label }}-${{ runner.os }}-
 
       - id: run-playwright
         name: Run Playwright tests (${{ matrix.label }})
@@ -144,7 +161,7 @@ jobs:
 
       - name: Upload Playwright reports (${{ matrix.label }})
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.label }}
           path: ${{ github.workspace }}/playwright-report-${{ matrix.label }}
@@ -152,7 +169,7 @@ jobs:
 
       - name: Upload Playwright artifacts on failure (${{ matrix.label }})
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-artifacts-${{ matrix.label }}
           path: ${{ github.workspace }}/playwright-artifacts-${{ matrix.label }}

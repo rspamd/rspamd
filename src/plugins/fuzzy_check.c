@@ -39,6 +39,7 @@
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/dkim.h"
 #include "libserver/html/html_features.h"
 #include "khash.h"
 #include "fuzzy_wire.h"
@@ -110,14 +111,16 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_pubkey *write_peer_key;
 	double hits_limit;
 	double weight_threshold;
+	double prob_bias;   /* Anchor of the probability weight curve (default 0.5, the shingle match threshold) */
+	double prob_power;  /* Exponent of the curve (default 1.0) */
 	double html_weight; /* Weight multiplier for HTML hashes (default 1.0) */
 	enum fuzzy_rule_mode mode;
 	gboolean skip_unknown;
 	gboolean no_share;
 	gboolean no_subject;
-	gboolean html_shingles;     /* Enable HTML fuzzy hashing */
-	gboolean text_hashes;       /* Enable/disable generation of text hashes */
-	unsigned int min_html_tags; /* Minimum tags for HTML hash */
+	gboolean html_shingles;       /* Enable HTML fuzzy hashing */
+	gboolean text_hashes;         /* Enable/disable generation of text hashes */
+	unsigned int min_html_tags;   /* Minimum tags for HTML hash */
 	gboolean html_ignore_domains; /* Ignore link domains in HTML structural tokens */
 	int learn_condition_cb;
 	uint32_t retransmits;
@@ -325,6 +328,8 @@ static int fuzzy_lua_gen_hashes_handler(lua_State *L);
 static int fuzzy_lua_hex_hashes_handler(lua_State *L);
 static int fuzzy_lua_list_storages(lua_State *L);
 static int fuzzy_lua_ping_storage(lua_State *L);
+static int fuzzy_lua_ping_storage_all(lua_State *L);
+static int fuzzy_lua_check_storage(lua_State *L);
 
 module_t fuzzy_check_module = {
 	"fuzzy_check",
@@ -532,6 +537,27 @@ fuzzy_normalize(int32_t in, double weight)
 #endif
 }
 
+/*
+ * Convert the reply probability into a weight multiplier.
+ *
+ * The server never replies with prob below the shingle match threshold
+ * (0.5), so a curve anchored at zero (like the old sqrt(prob)) collapses
+ * the whole reachable range into (~0.73 .. 1.0] and barely depends on the
+ * match quality: a marginal 17/32 shingle overlap yields almost the same
+ * score as an exact match. Anchor at prob_bias instead:
+ * ((prob - bias) / (1 - bias)) ^ prob_power, which spreads match quality
+ * over the full 0..1 range.
+ */
+static double
+fuzzy_weight_from_prob(struct fuzzy_rule *rule, double prob)
+{
+	double norm = (prob - rule->prob_bias) / (1.0 - rule->prob_bias);
+
+	norm = MIN(1.0, MAX(0.0, norm));
+
+	return pow(norm, rule->prob_power);
+}
+
 static struct fuzzy_rule *
 fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 {
@@ -546,6 +572,8 @@ fuzzy_rule_new(const char *default_symbol, rspamd_mempool_t *pool)
 								  rule->mappings);
 	rule->mode = fuzzy_rule_read_write;
 	rule->weight_threshold = NAN;
+	rule->prob_bias = 0.5;
+	rule->prob_power = 1.0;
 	rule->html_weight = 1.0;
 	rule->html_shingles = FALSE;
 	rule->text_hashes = TRUE;
@@ -1446,6 +1474,7 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 			synthetic_rep.v1 = rep_v2->v1;
 			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
 			synthetic_rep.ts = rep_v2->ts;
+			synthetic_rep.reserved[0] = rep_v2->reserved[0];
 			rep = &synthetic_rep;
 		}
 		else {
@@ -1471,6 +1500,7 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 			synthetic_rep.v1 = rep_v2->v1;
 			memcpy(synthetic_rep.digest, rep_v2->digest, sizeof(synthetic_rep.digest));
 			synthetic_rep.ts = rep_v2->ts;
+			synthetic_rep.reserved[0] = rep_v2->reserved[0];
 			rep = &synthetic_rep;
 		}
 		else {
@@ -1498,7 +1528,10 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	struct rspamd_task *task = pending->task;
 
 	/* Process the reply - similar to UDP code in fuzzy_check_try_read */
-	if (rep->v1.prob > 0.5) {
+	/* See the UDP reply handler: a legacy empty-storage STAT reply comes
+	 * with prob = 0 and zero value/flag */
+	if (rep->v1.prob > 0.5 ||
+		(pending->io->cmd.cmd == FUZZY_STAT && rep->v1.value == 0 && rep->v1.flag == 0)) {
 		if (pending->io->cmd.cmd == FUZZY_CHECK) {
 			/* Insert result for primary flag */
 			fuzzy_insert_result(pending->session, rep, &pending->io->cmd,
@@ -1554,14 +1587,24 @@ fuzzy_tcp_process_reply(struct fuzzy_tcp_connection *conn,
 	}
 	else if (rep->v1.value == 403) {
 		/* In fact, it should be 429, but we preserve compatibility */
+		msg_info_task("fuzzy rule %s: rate limit reached on %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 503) {
+		msg_info_task("fuzzy rule %s: access denied by %s",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 								  rule->name);
 	}
 	else if (rep->v1.value == 415) {
+		msg_info_task("fuzzy rule %s: encryption is required by %s; "
+					  "add encryption_key option to the rule",
+					  rule->name,
+					  rspamd_upstream_name(conn->server));
 		rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 								  rule->name);
 	}
@@ -2223,6 +2266,28 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->weight_threshold = ucl_object_todouble(value);
 	}
 
+	if ((value = ucl_object_lookup(obj, "prob_power")) != NULL) {
+		rule->prob_power = ucl_object_todouble(value);
+
+		if (!(rule->prob_power > 0)) {
+			msg_warn_config("prob_power must be positive in rule %s, "
+							"using the default 1.0",
+							rule->name);
+			rule->prob_power = 1.0;
+		}
+	}
+
+	if ((value = ucl_object_lookup(obj, "prob_bias")) != NULL) {
+		rule->prob_bias = ucl_object_todouble(value);
+
+		if (rule->prob_bias < 0 || rule->prob_bias >= 1.0) {
+			msg_warn_config("prob_bias must be in [0, 1) in rule %s, "
+							"using the default 0.5",
+							rule->name);
+			rule->prob_bias = 0.5;
+		}
+	}
+
 	if ((value = ucl_object_lookup(obj, "text_hashes")) != NULL) {
 		rule->text_hashes = ucl_obj_toboolean(value);
 	}
@@ -2237,6 +2302,10 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "html_weight")) != NULL) {
 		rule->html_weight = ucl_object_todouble(value);
+	}
+
+	if ((value = ucl_object_lookup(obj, "html_ignore_domains")) != NULL) {
+		rule->html_ignore_domains = ucl_object_toboolean(value);
 	}
 
 	if ((value = ucl_object_lookup(obj, "checks")) != NULL) {
@@ -2490,6 +2559,27 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   "Legacy name: max_score",
 							   "hits_limit",
 							   UCL_INT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Exponent of the probability weight curve: score multiplier is "
+							   "((prob - prob_bias) / (1 - prob_bias)) ^ prob_power, so weak shingle "
+							   "matches score much lower than exact ones (default: 1.0)",
+							   "prob_power",
+							   UCL_FLOAT,
+							   NULL,
+							   0,
+							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "fuzzy_check.rule",
+							   "Anchor of the probability weight curve, normally the shingle match "
+							   "threshold (default: 0.5)",
+							   "prob_bias",
+							   UCL_FLOAT,
 							   NULL,
 							   0,
 							   NULL,
@@ -2971,6 +3061,32 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		/* We want that to check bad mime attachments */
 		rspamd_symcache_add_delayed_dependency(cfg->cache,
 											   "FUZZY_CALLBACK", "MIME_TYPES_CALLBACK", FALSE);
+
+		/*
+		 * If at least one rule can share the extensions then we need the
+		 * results of the authentication checks to be there by the time the
+		 * commands are built, otherwise the sender facts would always be sent
+		 * as absent. These are ordering dependencies only (hard = FALSE): a
+		 * check that is disabled or that has not concluded merely means the
+		 * corresponding field is reported as absent.
+		 */
+		struct fuzzy_rule *rule;
+		unsigned int i;
+
+		PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+		{
+			if (!rule->no_share && fuzzy_rule_has_encryption(rule)) {
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "SPF_CHECK", FALSE);
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "DKIM_CHECK", FALSE);
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "DMARC_CHECK", FALSE);
+				rspamd_symcache_add_delayed_dependency(cfg->cache,
+													   "FUZZY_CALLBACK", "HFILTER_CHECK", FALSE);
+				break;
+			}
+		}
 	}
 
 	if (fuzzy_module_ctx->fuzzy_rules == NULL) {
@@ -3004,6 +3120,12 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		lua_settable(L, -3);
 		lua_pushstring(L, "ping_storage");
 		lua_pushcfunction(L, fuzzy_lua_ping_storage);
+		lua_settable(L, -3);
+		lua_pushstring(L, "ping_storage_all");
+		lua_pushcfunction(L, fuzzy_lua_ping_storage_all);
+		lua_settable(L, -3);
+		lua_pushstring(L, "check");
+		lua_pushcfunction(L, fuzzy_lua_check_storage);
 		lua_settable(L, -3);
 		/* Finish fuzzy_check key */
 		lua_settable(L, -3);
@@ -3247,7 +3369,7 @@ fuzzy_milliseconds_since_midnight(void)
 
 static struct fuzzy_cmd_io *
 fuzzy_cmd_ping(struct fuzzy_rule *rule,
-			   rspamd_mempool_t *pool)
+			   rspamd_mempool_t *pool, gboolean is_write)
 {
 	struct rspamd_fuzzy_cmd *cmd;
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
@@ -3279,7 +3401,11 @@ fuzzy_cmd_ping(struct fuzzy_rule *rule,
 		struct rspamd_cryptobox_keypair *local_key;
 		struct rspamd_cryptobox_pubkey *peer_key;
 
-		fuzzy_select_encryption_keys(rule, cmd->cmd, &local_key, &peer_key);
+		/* A write server is pinged with the write keypair: that is the
+		 * key its storage is configured with */
+		fuzzy_select_encryption_keys(rule,
+									 is_write ? FUZZY_WRITE : cmd->cmd,
+									 &local_key, &peer_key);
 		fuzzy_encrypt_cmd(rule, &enccmd->hdr, (unsigned char *) cmd, sizeof(*cmd),
 						  local_key, peer_key);
 		io->io.iov_base = enccmd;
@@ -3469,13 +3595,219 @@ fuzzy_rule_check_mimepart(struct rspamd_task *task,
 
 #define MAX_FUZZY_DOMAIN 64
 
+/*
+ * Extensions describe the sender: a third party that has chosen to send mail
+ * into the world. They must never describe the recipient, our own users or our
+ * own policy, hence they are omitted when:
+ *
+ * - the rule opts out of sharing;
+ * - the storage is talked to in plain text, as the extensions would then
+ *   travel in the clear (for sanity + privacy);
+ * - the message has been submitted by an authenticated user or comes from one
+ *   of our own networks. On outbound or submission traffic the source address
+ *   is our own user rather than a third party; such addresses are also noise
+ *   in an IP reputation model, so nothing of value is lost;
+ * - we have no source address at all, which makes the rest of the telemetry
+ *   useless anyway (e.g. a message scanned from a file).
+ */
+static gboolean
+fuzzy_rule_shares_extensions(struct rspamd_task *task,
+							 struct fuzzy_rule *rule)
+{
+	if (rule->no_share || !fuzzy_rule_has_encryption(rule)) {
+		return FALSE;
+	}
+
+	if (task->auth_user != NULL) {
+		return FALSE;
+	}
+
+	if (task->from_addr == NULL ||
+		rspamd_inet_address_get_af(task->from_addr) == AF_UNIX ||
+		rspamd_ip_is_local_cfg(task->cfg, task->from_addr)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Map a policy result published by the spf/dmarc modules back to its wire
+ * value using the very same table the storage decodes it with
+ */
+static unsigned int
+fuzzy_sf_from_str(const char *str, const char *(*to_str)(unsigned int),
+				  unsigned int max)
+{
+	if (str != NULL) {
+		for (unsigned int i = 1; i <= max; i++) {
+			const char *known = to_str(i);
+
+			if (known != NULL && strcmp(str, known) == 0) {
+				return i;
+			}
+		}
+	}
+
+	/* Absent or something we do not know about */
+	return 0;
+}
+
+static unsigned int
+fuzzy_sf_dkim(struct rspamd_task *task)
+{
+	struct rspamd_dkim_check_result **pres, **cur;
+	gboolean has_fail = FALSE, has_permerror = FALSE, has_temperror = FALSE;
+
+	pres = rspamd_mempool_get_variable(task->task_pool,
+									   RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS);
+
+	if (pres == NULL) {
+		/*
+		 * Either there was nothing to check or the dkim module has not run
+		 * (or has not finished): only the former is a definite `none`
+		 */
+		if (rspamd_message_get_header_array(task, "DKIM-Signature",
+											FALSE) == NULL) {
+			return RSPAMD_FUZZY_SF_DKIM_NONE;
+		}
+
+		return RSPAMD_FUZZY_SF_DKIM_ABSENT;
+	}
+
+	for (cur = pres; *cur != NULL; cur++) {
+		switch ((*cur)->rcode) {
+		case DKIM_CONTINUE:
+			/* A single valid signature is enough */
+			return RSPAMD_FUZZY_SF_DKIM_PASS;
+		case DKIM_REJECT:
+			has_fail = TRUE;
+			break;
+		case DKIM_TRYAGAIN:
+			has_temperror = TRUE;
+			break;
+		default:
+			has_permerror = TRUE;
+			break;
+		}
+	}
+
+	/* A broken signature says more about the sender than a broken record */
+	if (has_fail) {
+		return RSPAMD_FUZZY_SF_DKIM_FAIL;
+	}
+	else if (has_permerror) {
+		return RSPAMD_FUZZY_SF_DKIM_PERMERROR;
+	}
+	else if (has_temperror) {
+		return RSPAMD_FUZZY_SF_DKIM_TEMPERROR;
+	}
+
+	return RSPAMD_FUZZY_SF_DKIM_NONE;
+}
+
+static unsigned int
+fuzzy_sf_ptr(struct rspamd_task *task)
+{
+	struct in6_addr addr_storage;
+	gsize len;
+
+	if (task->hostname == NULL || *task->hostname == '\0') {
+		/* The MTA has told us nothing about the PTR record */
+		return RSPAMD_FUZZY_SF_PTR_UNKNOWN;
+	}
+
+	len = strlen(task->hostname);
+
+	if (*task->hostname == '[' || strcmp(task->hostname, "unknown") == 0 ||
+		rspamd_parse_inet_address_ip4((const unsigned char *) task->hostname,
+									  len, &addr_storage) ||
+		rspamd_parse_inet_address_ip6((const unsigned char *) task->hostname,
+									  len, &addr_storage)) {
+		/* This is how MTAs spell out `there is no usable PTR record` */
+		return RSPAMD_FUZZY_SF_PTR_NONE;
+	}
+
+	/*
+	 * An MTA only hands us a name (Postfix client_name, Exim
+	 * sender_host_name, Sendmail connect hostname) once it has checked that
+	 * the name resolves back to the connecting address; if that check fails it
+	 * reports one of the forms handled above instead. So a plain name here
+	 * means forward confirmed.
+	 *
+	 * RSPAMD_FUZZY_SF_PTR_PRESENT is therefore not produced yet: it is for the
+	 * day rspamd resolves the PTR record on its own.
+	 */
+	return RSPAMD_FUZZY_SF_PTR_CONFIRMED;
+}
+
+/*
+ * hfilter owns the generic/dynamic naming pattern set and publishes its
+ * verdict, so we do not have to carry a second copy of those patterns here
+ */
+static gboolean
+fuzzy_sf_ptr_generic(struct rspamd_task *task)
+{
+	gboolean *generic = rspamd_mempool_get_variable(task->task_pool,
+													RSPAMD_MEMPOOL_HOSTNAME_GENERIC);
+
+	return generic != NULL && *generic;
+}
+
+static unsigned int
+fuzzy_sf_rcpts(struct rspamd_task *task)
+{
+	unsigned int nrcpt = 0;
+
+	if (task->rcpt_envelope != NULL) {
+		nrcpt = task->rcpt_envelope->len;
+	}
+
+	if (MESSAGE_FIELD_CHECK(task, rcpt_mime) != NULL &&
+		MESSAGE_FIELD(task, rcpt_mime)->len > nrcpt) {
+		nrcpt = MESSAGE_FIELD(task, rcpt_mime)->len;
+	}
+
+	/* Buckets only: an exact count would leak the size of the organisation */
+	if (nrcpt <= 1) {
+		return RSPAMD_FUZZY_SF_RCPTS_ONE;
+	}
+	else if (nrcpt <= 5) {
+		return RSPAMD_FUZZY_SF_RCPTS_FEW;
+	}
+	else if (nrcpt <= 20) {
+		return RSPAMD_FUZZY_SF_RCPTS_MANY;
+	}
+
+	return RSPAMD_FUZZY_SF_RCPTS_BULK;
+}
+
+static uint32_t
+fuzzy_cmd_sender_facts(struct rspamd_task *task)
+{
+	return rspamd_fuzzy_sf_pack(
+		fuzzy_sf_from_str(rspamd_mempool_get_variable(task->task_pool,
+													  RSPAMD_MEMPOOL_SPF_RESULT),
+						  rspamd_fuzzy_sf_spf_str,
+						  RSPAMD_FUZZY_SF_SPF_TEMPERROR),
+		fuzzy_sf_dkim(task),
+		fuzzy_sf_from_str(rspamd_mempool_get_variable(task->task_pool,
+													  RSPAMD_MEMPOOL_DMARC_RESULT),
+						  rspamd_fuzzy_sf_dmarc_str,
+						  RSPAMD_FUZZY_SF_DMARC_TEMPERROR),
+		fuzzy_sf_ptr(task),
+		fuzzy_sf_ptr_generic(task),
+		fuzzy_sf_rcpts(task),
+		(task->flags & RSPAMD_TASK_FLAG_SSL) != 0);
+}
+
 static unsigned int
 fuzzy_cmd_extension_length(struct rspamd_task *task,
 						   struct fuzzy_rule *rule)
 {
 	unsigned int total = 0;
 
-	if (rule->no_share) {
+	if (!fuzzy_rule_shares_extensions(task, rule)) {
 		return 0;
 	}
 
@@ -3498,6 +3830,9 @@ fuzzy_cmd_extension_length(struct rspamd_task *task,
 		total += sizeof(struct in6_addr) + 1;
 	}
 
+	/* Sender facts: type + length + payload */
+	total += 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN;
+
 	return total;
 }
 
@@ -3509,7 +3844,7 @@ fuzzy_cmd_write_extensions(struct rspamd_task *task,
 {
 	unsigned int written = 0;
 
-	if (rule->no_share) {
+	if (!fuzzy_rule_shares_extensions(task, rule)) {
 		return 0;
 	}
 
@@ -3571,6 +3906,18 @@ fuzzy_cmd_write_extensions(struct rspamd_task *task,
 			available -= klen + 1;
 			written += klen + 1;
 		}
+	}
+
+	if (available >= 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN) {
+		uint32_t facts = GUINT32_TO_BE(fuzzy_cmd_sender_facts(task));
+
+		*dest++ = RSPAMD_FUZZY_EXT_SENDER_FACTS;
+		*dest++ = RSPAMD_FUZZY_SENDER_FACTS_LEN;
+		memcpy(dest, &facts, sizeof(facts));
+		dest += sizeof(facts);
+
+		available -= 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN;
+		written += 2 + RSPAMD_FUZZY_SENDER_FACTS_LEN;
 	}
 
 	return written;
@@ -4418,6 +4765,7 @@ fuzzy_process_reply(unsigned char **pos, int *r, GPtrArray *req,
 		synthetic_rep.v1 = rv2->v1;
 		memcpy(synthetic_rep.digest, rv2->digest, sizeof(synthetic_rep.digest));
 		synthetic_rep.ts = rv2->ts;
+		synthetic_rep.reserved[0] = rv2->reserved[0];
 		rep = &synthetic_rep;
 		if (p_rep_v2) {
 			*p_rep_v2 = rv2;
@@ -4515,7 +4863,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS)) {
 			/* HTML domain-sensitive hash (structure + domains) */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 			nval *= session->rule->html_weight;
 
 			type = "htmld";
@@ -4523,7 +4871,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else if ((io->flags & FUZZY_CMD_FLAG_HTML)) {
 			/* HTML structural hash (template mode, domains ignored) */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 			/* Apply HTML weight multiplier from rule config */
 			nval *= session->rule->html_weight;
 
@@ -4532,7 +4880,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 		}
 		else {
 			/* Calc real probability */
-			nval *= sqrtf(rep->v1.prob);
+			nval *= fuzzy_weight_from_prob(session->rule, rep->v1.prob);
 
 			if (cmd->shingles_count > 0) {
 				type = "txt";
@@ -4576,6 +4924,13 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 							  hexbuf, sizeof(hexbuf) - 1);
 		hexbuf[sizeof(hexbuf) - 1] = '\0';
 
+		char qhexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		gboolean confirmed = (rep->reserved[0] & RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST) != 0;
+
+		rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
+							  qhexbuf, sizeof(qhexbuf) - 1);
+		qhexbuf[sizeof(qhexbuf) - 1] = '\0';
+
 		rspamd_gmtime(rep->ts, &tm_split);
 		rspamd_snprintf(timebuf, sizeof(timebuf), "%02d.%02d.%4d %02d:%02d:%02d GMT",
 						tm_split.tm_mday,
@@ -4611,15 +4966,60 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 				timebuf);
 		}
 
-		rspamd_snprintf(buf,
-						sizeof(buf),
-						"%d:%*s:%.2f:%s",
-						rep->v1.flag,
-						(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(rep->digest) * 2), hexbuf,
-						rep->v1.prob,
-						type);
+		if (is_fuzzy) {
+			/* Non-exact match: append the queried hash to make the option self-contained */
+			rspamd_snprintf(buf,
+							sizeof(buf),
+							"%d:%*s:%.2f:%s:%*s",
+							rep->v1.flag,
+							(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(rep->digest) * 2), hexbuf,
+							rep->v1.prob,
+							type,
+							(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(cmd->digest) * 2), qhexbuf);
+		}
+		else {
+			rspamd_snprintf(buf,
+							sizeof(buf),
+							"%d:%*s:%.2f:%s",
+							rep->v1.flag,
+							(int) MIN(rspamd_fuzzy_hash_len * 2, sizeof(rep->digest) * 2), hexbuf,
+							rep->v1.prob,
+							type);
+		}
 		res->option = rspamd_mempool_strdup(task->task_pool, buf);
 		g_ptr_array_add(session->results, res);
+
+		/* Store a structured match record for log/export consumers */
+		{
+			ucl_object_t *matches = (ucl_object_t *) rspamd_mempool_get_variable(
+				task->task_pool, RSPAMD_MEMPOOL_FUZZY_MATCHES);
+
+			if (matches == NULL) {
+				matches = ucl_object_typed_new(UCL_ARRAY);
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_FUZZY_MATCHES, matches,
+											(rspamd_mempool_destruct_t) ucl_object_unref);
+			}
+
+			ucl_object_t *m = ucl_object_typed_new(UCL_OBJECT);
+			ucl_object_insert_key(m, ucl_object_fromstring(session->rule->name),
+								  "rule", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(symbol), "symbol", 0, false);
+			ucl_object_insert_key(m,
+								  ucl_object_fromstring(session->server ? rspamd_upstream_name(session->server) : "unknown"),
+								  "server", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(hexbuf), "found", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(qhexbuf), "queried", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromstring(type), "type", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromdouble(rep->v1.prob), "prob", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromdouble(nval), "score", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromint(rep->v1.flag), "flag", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromint(rep->v1.value), "value", 0, false);
+			ucl_object_insert_key(m, ucl_object_fromint(rep->ts), "added", 0, false);
+			ucl_object_insert_key(m, ucl_object_frombool(!is_fuzzy), "exact", 0, false);
+			ucl_object_insert_key(m, ucl_object_frombool(confirmed), "confirmed", 0, false);
+			ucl_array_append(matches, m);
+		}
 
 		/* Store hex string in pool variable */
 		hex_result = rspamd_mempool_alloc(task->task_pool,
@@ -4675,7 +5075,11 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 			if (rep_v2) {
 				session->rule->server_supports_v2 = TRUE;
 			}
-			if (rep->v1.prob > 0.5) {
+			/* A legacy storage encodes an empty fuzzy storage (count 0) as
+			 * prob = 0 with both count qwords zero; error replies carry a
+			 * nonzero code in value, so accept that shape for STAT too */
+			if (rep->v1.prob > 0.5 ||
+				(cmd->cmd == FUZZY_STAT && rep->v1.value == 0 && rep->v1.flag == 0)) {
 				if (cmd->cmd == FUZZY_CHECK) {
 					fuzzy_insert_result(session, rep, cmd, io, rep->v1.flag);
 
@@ -4730,14 +5134,24 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 			}
 			else if (rep->v1.value == 403) {
 				/* In fact, it should be 429, but we preserve compatibility */
+				msg_info_task("fuzzy rule %s: rate limit reached on %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_RATELIMITED, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 503) {
+				msg_info_task("fuzzy rule %s: access denied by %s",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_FORBIDDEN, 1.0,
 										  session->rule->name);
 			}
 			else if (rep->v1.value == 415) {
+				msg_info_task("fuzzy rule %s: encryption is required by %s; "
+							  "add encryption_key option to the rule",
+							  session->rule->name,
+							  rspamd_upstream_name(session->server));
 				rspamd_task_insert_result(task, RSPAMD_FUZZY_SYMBOL_ENCRYPTION_REQUIRED, 1.0,
 										  session->rule->name);
 			}
@@ -4792,6 +5206,11 @@ fuzzy_insert_metric_results(struct rspamd_task *task, struct fuzzy_rule *rule,
 	if (task->message) {
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
 		{
+			if (tp->mime_part && (tp->mime_part->flags & RSPAMD_MIME_PART_COMPUTED)) {
+				/* Injected parts do not affect hashes weights */
+				continue;
+			}
+
 			if (!IS_TEXT_PART_EMPTY(tp) && kv_size(tp->utf_words) > 0) {
 				seen_text_part = TRUE;
 
@@ -5469,6 +5888,28 @@ cleanup:
 	}
 }
 
+static const char *
+fuzzy_cmd_type_string(struct fuzzy_cmd_io *io)
+{
+	if (io->flags & FUZZY_CMD_FLAG_IMAGE) {
+		return "img";
+	}
+	if (io->flags & FUZZY_CMD_FLAG_HTML_DOMAINS) {
+		return "htmld";
+	}
+	if (io->flags & FUZZY_CMD_FLAG_HTML) {
+		return "html";
+	}
+	if (io->flags & FUZZY_CMD_FLAG_CONTENT) {
+		return "content";
+	}
+	if (io->cmd.shingles_count > 0) {
+		return "txt";
+	}
+
+	return "bin";
+}
+
 static GPtrArray *
 fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 						int c, int flag, uint32_t value, unsigned int flags)
@@ -5494,7 +5935,7 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 	else if (c == FUZZY_PING) {
 		res = g_ptr_array_sized_new(1);
 
-		io = fuzzy_cmd_ping(rule, task->task_pool);
+		io = fuzzy_cmd_ping(rule, task->task_pool, FALSE);
 		if (io) {
 			g_ptr_array_add(res, io);
 		}
@@ -5512,6 +5953,12 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 	{
 		check_part = FALSE;
 		fuzzy_check = FALSE;
+
+		if (mime_part->flags & RSPAMD_MIME_PART_COMPUTED) {
+			/* Never learn or check injected (computed) parts */
+			msg_debug_fuzzy_check("skip injected part %ud", mime_part->part_number);
+			continue;
+		}
 
 		if (fuzzy_rule_check_mimepart(task, rule, mime_part, &check_part,
 									  &fuzzy_check)) {
@@ -5667,6 +6114,44 @@ fuzzy_generate_commands(struct rspamd_task *task, struct fuzzy_rule *rule,
 		g_ptr_array_free(res, TRUE);
 
 		return NULL;
+	}
+
+	if (c == FUZZY_CHECK && res != NULL) {
+		/* Record all queried hashes for post-hoc correlation, misses included */
+		GList *checked_var;
+		unsigned int ck_i;
+		struct fuzzy_cmd_io *ck_io;
+
+		checked_var = rspamd_mempool_get_variable(task->task_pool,
+												  RSPAMD_MEMPOOL_FUZZY_CHECKED);
+
+		PTR_ARRAY_FOREACH(res, ck_i, ck_io)
+		{
+			char ckbuf[rspamd_cryptobox_HASHBYTES * 2 + 128];
+			rspamd_fstring_t *ck_res;
+			int r;
+
+			r = rspamd_snprintf(ckbuf, sizeof(ckbuf), "%s:%s:%*xs",
+								rule->name,
+								fuzzy_cmd_type_string(ck_io),
+								(int) sizeof(ck_io->cmd.digest), ck_io->cmd.digest);
+
+			ck_res = rspamd_mempool_alloc(task->task_pool,
+										  sizeof(rspamd_fstring_t) + r + 1);
+			memcpy(ck_res->str, ckbuf, r + 1);
+			ck_res->len = r;
+			ck_res->allocated = (gsize) -1;
+
+			if (checked_var == NULL) {
+				checked_var = g_list_prepend(NULL, ck_res);
+				rspamd_mempool_set_variable(task->task_pool,
+											RSPAMD_MEMPOOL_FUZZY_CHECKED, checked_var,
+											(rspamd_mempool_destruct_t) g_list_free);
+			}
+			else {
+				checked_var = g_list_append(checked_var, ck_res);
+			}
+		}
 	}
 
 	return res;
@@ -5993,6 +6478,17 @@ fuzzy_modify_handler(struct rspamd_http_connection_entry *conn_ent,
 	task = rspamd_task_new(session->wrk, session->cfg, NULL,
 						   session->lang_det, conn_ent->rt->event_loop, FALSE);
 	task->cfg = ctx->cfg;
+
+	/*
+	 * This task loads its message straight from the request below, so it has to
+	 * inherit the transport's privileged input capability just like the tasks
+	 * that controller.c creates itself. Otherwise /fuzzyadd and /fuzzydel would
+	 * keep honouring a client supplied File/Shm source on a connection where
+	 * every other endpoint refuses it.
+	 */
+	if (!session->allow_file_shm_input) {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
+	}
 	saved = rspamd_mempool_alloc0(session->pool, sizeof(int));
 	fuzzy_module_ctx = fuzzy_get_context(ctx->cfg);
 
@@ -6784,6 +7280,10 @@ fuzzy_lua_hex_hashes_handler(lua_State *L)
 			{
 				struct rspamd_cached_shingles *cached;
 
+				if (mp->flags & RSPAMD_MIME_PART_COMPUTED) {
+					continue;
+				}
+
 				cached = fuzzy_cmd_get_cached(rule, task, mp);
 
 				if (cached) {
@@ -6935,6 +7435,11 @@ fuzzy_lua_list_storages(lua_State *L)
 	return 1;
 }
 
+enum fuzzy_lua_session_mode {
+	FUZZY_LUA_SESSION_PING = 0,
+	FUZZY_LUA_SESSION_CHECK,
+};
+
 struct fuzzy_lua_session {
 	struct rspamd_task *task;
 	lua_State *L;
@@ -6942,8 +7447,11 @@ struct fuzzy_lua_session {
 	GPtrArray *commands;
 	struct fuzzy_rule *rule;
 	struct rspamd_io_ev ev;
+	enum fuzzy_lua_session_mode mode;
 	int cbref;
 	int fd;
+	/* Borrowed from the upstream; NULL unless set by ping_storage_all */
+	const char *server_name;
 };
 
 static void
@@ -6956,6 +7464,9 @@ fuzzy_lua_session_fin(void *ud)
 	}
 
 	rspamd_ev_watcher_stop(session->task->event_loop, &session->ev);
+	if (session->fd != -1) {
+		close(session->fd);
+	}
 	luaL_unref(session->L, LUA_REGISTRYINDEX, session->cbref);
 }
 
@@ -6987,13 +7498,23 @@ fuzzy_lua_session_is_completed(struct fuzzy_lua_session *session)
 static void
 fuzzy_lua_push_result(struct fuzzy_lua_session *session, double latency)
 {
+	int nargs = 3;
+
 	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
 	lua_pushboolean(session->L, TRUE);
 	rspamd_lua_ip_push(session->L, session->addr);
 	lua_pushnumber(session->L, latency);
 
+	if (session->server_name != NULL) {
+		lua_pushstring(session->L, session->server_name);
+		nargs = 4;
+	}
+
 	/* TODO: check results maybe? */
-	lua_pcall(session->L, 3, 0, 0);
+	if (lua_pcall(session->L, nargs, 0, 0) != 0) {
+		msg_info("fuzzy lua result callback error: %s", lua_tostring(session->L, -1));
+		lua_pop(session->L, 1);
+	}
 }
 
 #ifdef __GNUC__
@@ -7005,6 +7526,7 @@ static void
 fuzzy_lua_push_error(struct fuzzy_lua_session *session, const char *err_fmt, ...)
 {
 	va_list v;
+	int nargs = 3;
 
 	va_start(v, err_fmt);
 	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
@@ -7013,7 +7535,71 @@ fuzzy_lua_push_error(struct fuzzy_lua_session *session, const char *err_fmt, ...
 	lua_pushvfstring(session->L, err_fmt, v);
 	va_end(v);
 
+	if (session->server_name != NULL) {
+		lua_pushstring(session->L, session->server_name);
+		nargs = 4;
+	}
+
 	/* TODO: check results maybe? */
+	if (lua_pcall(session->L, nargs, 0, 0) != 0) {
+		msg_info("fuzzy lua error callback error: %s", lua_tostring(session->L, -1));
+		lua_pop(session->L, 1);
+	}
+}
+
+static void
+fuzzy_lua_push_check_result(struct fuzzy_lua_session *session,
+							const struct rspamd_fuzzy_reply *rep,
+							struct rspamd_fuzzy_cmd *cmd,
+							struct fuzzy_cmd_io *io)
+{
+	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	int r;
+
+	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(session->L, TRUE);
+	rspamd_lua_ip_push(session->L, session->addr);
+
+	lua_createtable(session->L, 0, 9);
+
+	r = rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
+							  hexbuf, sizeof(hexbuf) - 1);
+	lua_pushlstring(session->L, hexbuf, r);
+	lua_setfield(session->L, -2, "queried");
+
+	lua_pushstring(session->L, fuzzy_cmd_type_string(io));
+	lua_setfield(session->L, -2, "type");
+
+	lua_pushnumber(session->L, rep->v1.prob);
+	lua_setfield(session->L, -2, "prob");
+
+	lua_pushinteger(session->L, rep->v1.value);
+	lua_setfield(session->L, -2, "value");
+
+	lua_pushinteger(session->L, rep->v1.flag);
+	lua_setfield(session->L, -2, "flag");
+
+	if (rep->v1.prob > 0.5) {
+		lua_pushboolean(session->L, TRUE);
+		lua_setfield(session->L, -2, "found");
+
+		r = rspamd_encode_hex_buf(rep->digest, sizeof(rep->digest),
+								  hexbuf, sizeof(hexbuf) - 1);
+		lua_pushlstring(session->L, hexbuf, r);
+		lua_setfield(session->L, -2, "digest");
+
+		lua_pushinteger(session->L, rep->ts);
+		lua_setfield(session->L, -2, "added");
+
+		lua_pushboolean(session->L,
+						(rep->reserved[0] & RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST) != 0);
+		lua_setfield(session->L, -2, "confirmed");
+	}
+	else {
+		lua_pushboolean(session->L, FALSE);
+		lua_setfield(session->L, -2, "found");
+	}
+
 	lua_pcall(session->L, 3, 0, 0);
 }
 
@@ -7043,7 +7629,11 @@ fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 		while ((rep = fuzzy_process_reply(&p, &r,
 										  session->commands, session->rule, &cmd, &io, NULL)) != NULL) {
 
-			if (rep->v1.prob > 0.5) {
+			if (session->mode == FUZZY_LUA_SESSION_CHECK && cmd->cmd == FUZZY_CHECK) {
+				/* Misses and error codes are valid results for the check mode */
+				fuzzy_lua_push_check_result(session, rep, cmd, io);
+			}
+			else if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_PING) {
 					fuzzy_lua_push_result(session, fuzzy_milliseconds_since_midnight() - rep->v1.value);
 				}
@@ -7138,6 +7728,22 @@ fuzzy_lua_io_callback(int fd, short what, void *arg)
 	}
 }
 
+static struct fuzzy_rule *
+fuzzy_lua_find_rule(struct fuzzy_ctx *fuzzy_module_ctx, const char *rule_name)
+{
+	struct fuzzy_rule *rule;
+	int i;
+
+	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+	{
+		if (strcmp(rule->name, rule_name) == 0) {
+			return rule;
+		}
+	}
+
+	return NULL;
+}
+
 /***
  * @function fuzzy_check.ping_storage(task, callback, rule, timeout[, server_override])
  * @return
@@ -7156,18 +7762,8 @@ fuzzy_lua_ping_storage(lua_State *L)
 		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
 	}
 
-	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context(task->cfg);
-	struct fuzzy_rule *rule, *rule_found = NULL;
-	int i;
-	const char *rule_name = lua_tostring(L, 3);
-
-	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
-	{
-		if (strcmp(rule->name, rule_name) == 0) {
-			rule_found = rule;
-			break;
-		}
-	}
+	struct fuzzy_rule *rule_found =
+		fuzzy_lua_find_rule(fuzzy_get_context(task->cfg), lua_tostring(L, 3));
 
 	if (rule_found == NULL) {
 		return luaL_error(L, "invalid arguments: no such rule defined");
@@ -7230,7 +7826,7 @@ fuzzy_lua_ping_storage(lua_State *L)
 									  sizeof(struct fuzzy_lua_session));
 			session->task = task;
 			session->fd = sock;
-			session->addr = addr;
+			session->addr = rspamd_inet_address_copy(addr, task->task_pool);
 			session->commands = commands;
 			session->L = L;
 			session->rule = rule_found;
@@ -7248,6 +7844,338 @@ fuzzy_lua_ping_storage(lua_State *L)
 			rspamd_ev_watcher_start(session->task->event_loop, &session->ev,
 									lua_tonumber(L, 4));
 		}
+	}
+
+	lua_pushboolean(L, TRUE);
+	return 1;
+}
+
+/*
+ * PING commands for the liveness probe of a server list. The wire command
+ * stays FUZZY_PING, but a write server must be pinged with the write
+ * keypair: that is the key its storage is configured with
+ */
+static GPtrArray *
+fuzzy_generate_ping_commands(struct rspamd_task *task,
+							 struct fuzzy_rule *rule,
+							 gboolean is_write_server)
+{
+	GPtrArray *res = g_ptr_array_sized_new(1);
+	struct fuzzy_cmd_io *io = fuzzy_cmd_ping(rule,
+											 task->task_pool, is_write_server);
+
+	if (io) {
+		g_ptr_array_add(res, io);
+	}
+
+	return res;
+}
+
+struct fuzzy_lua_pingall_ctx {
+	struct rspamd_task *task;
+	lua_State *L;
+	struct fuzzy_rule *rule;
+	double timeout;
+	gboolean is_write_server;
+	GPtrArray *seen;
+	unsigned int nresults;
+	gboolean kicked_resolve;
+};
+
+static void
+fuzzy_lua_pingall_upstream(struct upstream *up, unsigned int idx, void *ud)
+{
+	struct fuzzy_lua_pingall_ctx *ctx = ud;
+	const char *name = rspamd_upstream_name(up);
+	rspamd_inet_addr_t *addr;
+	GPtrArray *commands;
+	struct fuzzy_lua_session *session;
+	unsigned int i;
+	int sock;
+
+	(void) idx;
+
+	for (i = 0; i < ctx->seen->len; i++) {
+		if (strcmp(g_ptr_array_index(ctx->seen, i), name) == 0) {
+			/* Already pinged via the other servers list */
+			return;
+		}
+	}
+
+	g_ptr_array_add(ctx->seen, name);
+	/* The current address: no DNS and no rotation side effects; dead
+	 * upstreams are probed as well, showing them failing is the point */
+	addr = rspamd_upstream_addr_cur(up);
+
+	if (addr == NULL) {
+		/* e.g. a DNS name or an SRV member not resolved yet: kick the
+		 * asynchronous resolution once so the next probe can succeed */
+		if (!ctx->kicked_resolve) {
+			rspamd_upstream_reresolve(ctx->task->cfg->ups_ctx);
+			ctx->kicked_resolve = TRUE;
+		}
+		lua_pushvalue(ctx->L, 2);
+		lua_pushboolean(ctx->L, FALSE);
+		rspamd_lua_ip_push(ctx->L, NULL);
+		lua_pushfstring(ctx->L, "address not resolved for %s", name);
+		lua_pushstring(ctx->L, name);
+		if (lua_pcall(ctx->L, 4, 0, 0) != 0) {
+			msg_info("fuzzy lua unresolved callback error: %s", lua_tostring(ctx->L, -1));
+			lua_pop(ctx->L, 1);
+		}
+		ctx->nresults++;
+
+		return;
+	}
+
+	commands = fuzzy_generate_ping_commands(ctx->task, ctx->rule,
+											ctx->is_write_server);
+
+	if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
+		lua_pushvalue(ctx->L, 2);
+		lua_pushboolean(ctx->L, FALSE);
+		rspamd_lua_ip_push(ctx->L, addr);
+		lua_pushfstring(ctx->L, "cannot connect to %s, %s",
+						rspamd_inet_address_to_string_pretty(addr), strerror(errno));
+		lua_pushstring(ctx->L, name);
+		if (lua_pcall(ctx->L, 4, 0, 0) != 0) {
+			msg_info("fuzzy lua connect callback error: %s", lua_tostring(ctx->L, -1));
+			lua_pop(ctx->L, 1);
+		}
+		g_ptr_array_free(commands, TRUE);
+		ctx->nresults++;
+
+		return;
+	}
+
+	/* A dedicated ping session per server, as in fuzzy_lua_ping_storage.
+	 * Like there, the session tracks the address directly and not the
+	 * upstream, so the aliveness bookkeeping stays untouched */
+	session = rspamd_mempool_alloc0(ctx->task->task_pool, sizeof(struct fuzzy_lua_session));
+	session->task = ctx->task;
+	session->fd = sock;
+	/* Own copy: an upstream TTL refresh may replace the borrowed address */
+	session->addr = rspamd_inet_address_copy(addr, ctx->task->task_pool);
+	session->commands = commands;
+	session->L = ctx->L;
+	session->rule = ctx->rule;
+	session->server_name = name;
+	/* The absolute index 2 (the callback) stays valid while the stack grows */
+	lua_pushvalue(ctx->L, 2);
+	session->cbref = luaL_ref(ctx->L, LUA_REGISTRYINDEX);
+
+	rspamd_session_add_event_full(ctx->task->s, fuzzy_lua_session_fin, session, M,
+								  ctx->rule->name);
+	rspamd_ev_watcher_init(&session->ev, sock, EV_WRITE, fuzzy_lua_io_callback, session);
+	rspamd_ev_watcher_start(session->task->event_loop, &session->ev, ctx->timeout);
+	ctx->nresults++;
+}
+
+/***
+ * @function fuzzy_check.ping_storage_all(task, callback, rule, timeout)
+ * Pings every configured server of the rule (the deduplicated union of the
+ * read and write lists; a write-only rule's shared list is the write one)
+ * using each upstream's current address; write servers are pinged with the
+ * write keypair. The callback
+ * is invoked exactly once per server as (success, server_ip,
+ * latency_or_error, server_name); server_ip is nil when no address is
+ * resolved. Returns (true, n) where n is the number of results to expect.
+ */
+static int
+fuzzy_lua_ping_storage_all(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments: task");
+	}
+
+	if (lua_type(L, 2) != LUA_TFUNCTION || lua_type(L, 3) != LUA_TSTRING || lua_type(L, 4) != LUA_TNUMBER) {
+		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
+	}
+
+	struct fuzzy_rule *rule_found =
+		fuzzy_lua_find_rule(fuzzy_get_context(task->cfg), lua_tostring(L, 3));
+
+	if (rule_found == NULL) {
+		return luaL_error(L, "invalid arguments: no such rule defined");
+	}
+
+	struct fuzzy_lua_pingall_ctx ctx;
+
+	ctx.task = task;
+	ctx.L = L;
+	ctx.rule = rule_found;
+	ctx.timeout = lua_tonumber(L, 4);
+	/* A write-only rule aliases read_servers to write_servers during
+	 * configuration parsing, so its shared list must use the write
+	 * keypair; with both lists configured separately the read list keeps
+	 * the read keypair */
+	ctx.is_write_server =
+		rule_found->mode == fuzzy_rule_write_only &&
+		rule_found->read_servers == rule_found->write_servers;
+	ctx.seen = g_ptr_array_new();
+	ctx.nresults = 0;
+	ctx.kicked_resolve = FALSE;
+
+	rspamd_upstreams_foreach(rule_found->read_servers, fuzzy_lua_pingall_upstream, &ctx);
+
+	if (rule_found->write_servers != rule_found->read_servers) {
+		ctx.is_write_server = TRUE;
+		rspamd_upstreams_foreach(rule_found->write_servers, fuzzy_lua_pingall_upstream, &ctx);
+	}
+
+	/* Borrows const char * only: without a free function installed the
+	 * pointees are not touched */
+	g_ptr_array_free(ctx.seen, TRUE);
+	lua_pushboolean(L, TRUE);
+	lua_pushinteger(L, ctx.nresults);
+
+	return 2;
+}
+
+/***
+ * @function fuzzy_check.check(task, callback, rule, timeout[, hashes][, server_override])
+ * Sends fuzzy check requests either for the hashes generated from the task
+ * message (the default) or for an explicit list of hex digests. The callback
+ * is invoked per reply as (success, server, result) where result is a table:
+ * queried, type, prob, value, flag, found; when found is true it also
+ * contains digest (the stored hash), added (timestamp) and confirmed (the
+ * storage explicitly marked the digest as the matched one).
+ */
+static int
+fuzzy_lua_check_storage(lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task(L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments: task");
+	}
+
+	if (lua_type(L, 2) != LUA_TFUNCTION || lua_type(L, 3) != LUA_TSTRING || lua_type(L, 4) != LUA_TNUMBER) {
+		return luaL_error(L, "invalid arguments: callback/rule/timeout argument");
+	}
+
+	struct fuzzy_rule *rule_found =
+		fuzzy_lua_find_rule(fuzzy_get_context(task->cfg), lua_tostring(L, 3));
+
+	if (rule_found == NULL) {
+		return luaL_error(L, "invalid arguments: no such rule defined");
+	}
+
+	GPtrArray *commands = NULL;
+
+	if (lua_type(L, 5) == LUA_TTABLE) {
+		/* Explicit list of hex digests to query */
+		commands = g_ptr_array_new();
+
+		for (lua_pushnil(L); lua_next(L, 5); lua_pop(L, 1)) {
+			gsize hlen = 0;
+			const char *hex = lua_tolstring(L, -1, &hlen);
+			rspamd_ftok_t tok = {.begin = hex, .len = hlen};
+			struct fuzzy_cmd_io *io = fuzzy_cmd_hash(rule_found, FUZZY_CHECK, &tok,
+													 0, 0, task->task_pool);
+
+			if (io == NULL) {
+				lua_pop(L, 2);
+				g_ptr_array_free(commands, TRUE);
+				lua_pushboolean(L, FALSE);
+				lua_pushstring(L, "invalid hash in the list (must be 128 hex characters)");
+				return 2;
+			}
+
+			g_ptr_array_add(commands, io);
+		}
+
+		if (commands->len == 0) {
+			g_ptr_array_free(commands, TRUE);
+			lua_pushboolean(L, FALSE);
+			lua_pushstring(L, "empty hashes list");
+			return 2;
+		}
+	}
+	else {
+		commands = fuzzy_generate_commands(task, rule_found, FUZZY_CHECK, 0, 0, 0);
+
+		if (commands == NULL) {
+			lua_pushboolean(L, FALSE);
+			lua_pushstring(L, "cannot generate fuzzy hashes from the task message");
+			return 2;
+		}
+	}
+
+	rspamd_inet_addr_t *addr = NULL;
+
+	if (lua_type(L, 6) == LUA_TSTRING) {
+		const char *server_name = lua_tostring(L, 6);
+		enum rspamd_parse_host_port_result res;
+		GPtrArray *addrs = g_ptr_array_new();
+
+		/* We resolve address synchronously here as it is an explicit override */
+		res = rspamd_parse_host_port_priority(server_name, &addrs, 0, NULL,
+											  11335, FALSE, task->task_pool);
+
+		if (res == RSPAMD_PARSE_ADDR_FAIL) {
+			g_ptr_array_free(commands, TRUE);
+			lua_pushboolean(L, FALSE);
+			lua_pushfstring(L, "invalid arguments: cannot resolve %s", server_name);
+			return 2;
+		}
+
+		addr = rspamd_inet_address_copy(g_ptr_array_index(addrs, rspamd_random_uint64_fast() % addrs->len),
+										task->task_pool);
+		rspamd_mempool_add_destructor(task->task_pool,
+									  rspamd_ptr_array_free_hard, addrs);
+	}
+	else {
+		struct upstream *selected = rspamd_upstream_get(rule_found->read_servers,
+														RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+		if (selected == NULL) {
+			g_ptr_array_free(commands, TRUE);
+			lua_pushboolean(L, FALSE);
+			lua_pushfstring(L, "no fuzzy storage upstream available for rule %s",
+							rule_found->name);
+			return 2;
+		}
+		addr = rspamd_upstream_addr_next(selected);
+		/* The session tracks the address directly, not the upstream */
+		rspamd_upstream_release(selected);
+	}
+
+	int sock;
+
+	if ((sock = rspamd_inet_address_connect(addr, SOCK_DGRAM, TRUE)) == -1) {
+		g_ptr_array_free(commands, TRUE);
+		lua_pushboolean(L, FALSE);
+		lua_pushfstring(L, "cannot connect to %s, %s",
+						rspamd_inet_address_to_string_pretty(addr),
+						strerror(errno));
+		return 2;
+	}
+	else {
+		struct fuzzy_lua_session *session =
+			rspamd_mempool_alloc0(task->task_pool,
+								  sizeof(struct fuzzy_lua_session));
+		session->task = task;
+		session->fd = sock;
+		session->addr = rspamd_inet_address_copy(addr, task->task_pool);
+		session->commands = commands;
+		session->L = L;
+		session->rule = rule_found;
+		session->mode = FUZZY_LUA_SESSION_CHECK;
+		/* Store callback */
+		lua_pushvalue(L, 2);
+		session->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		rspamd_session_add_event_full(task->s, fuzzy_lua_session_fin, session, M,
+									  rule_found->name);
+		rspamd_ev_watcher_init(&session->ev,
+							   sock,
+							   EV_WRITE,
+							   fuzzy_lua_io_callback,
+							   session);
+		rspamd_ev_watcher_start(session->task->event_loop, &session->ev,
+								lua_tonumber(L, 4));
 	}
 
 	lua_pushboolean(L, TRUE);

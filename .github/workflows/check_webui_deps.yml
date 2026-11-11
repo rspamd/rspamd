@@ -1,0 +1,43 @@
+name: check_webui_deps
+
+# Informational weekly check: writes the report to the job summary only.
+# Must never fail and must not notify anyone (no issues, no PRs).
+on:
+  schedule:
+    # Weekly, Mondays at 04:15 UTC (off the hour to avoid cron congestion)
+    - cron: '15 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.repository == 'rspamd/rspamd'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Not required by the checker itself (only by npm-check-updates):
+      # failures must not prevent the report.
+      - name: Install packages
+        run: npm ci
+        continue-on-error: true
+
+      - name: Check WebUI dependencies
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '## WebUI dependency check'
+            echo '```'
+            node webui-deps-check.mjs
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

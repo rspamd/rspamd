@@ -1689,9 +1689,11 @@ void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len)
 
 int rspamd_shmem_mkstemp(char *pattern)
 {
+	static const unsigned int max_attempts = 1024;
 	int fd = -1;
 	char *nbuf, *xpos;
 	gsize blen;
+	unsigned int i;
 
 	xpos = strchr(pattern, 'X');
 
@@ -1705,14 +1707,20 @@ int rspamd_shmem_mkstemp(char *pattern)
 	rspamd_strlcpy(nbuf, pattern, blen + 1);
 	xpos = nbuf + (xpos - pattern);
 
-	for (;;) {
+	/*
+	 * Bounded retry: a permanently colliding namespace (or a hostile
+	 * neighbour recreating our names) must not spin here forever
+	 */
+	for (i = 0; i < max_attempts; i++) {
 		rspamd_random_hex(xpos, blen - (xpos - nbuf));
 
 		fd = shm_open(nbuf, O_RDWR | O_EXCL | O_CREAT, 0600);
 
 		if (fd != -1) {
 			rspamd_strlcpy(pattern, nbuf, blen + 1);
-			break;
+			g_free(nbuf);
+
+			return fd;
 		}
 		else if (errno != EEXIST) {
 			g_free(nbuf);
@@ -1722,8 +1730,9 @@ int rspamd_shmem_mkstemp(char *pattern)
 	}
 
 	g_free(nbuf);
+	errno = EEXIST;
 
-	return fd;
+	return -1;
 }
 
 void rspamd_ptr_array_free_hard(gpointer p)
@@ -1799,6 +1808,18 @@ rspamd_hash_seed(void)
 	 * siphash1-3 or other slow cooker function...
 	 */
 	return 0xabf9727ba290690bULL;
+}
+
+uint64_t
+rspamd_hash_seed_secure(void)
+{
+	static uint64_t seed;
+
+	while (G_UNLIKELY(seed == 0)) {
+		seed = ottery_rand_uint64();
+	}
+
+	return seed;
 }
 
 static inline double
@@ -1993,6 +2014,36 @@ int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 	return (fd);
 }
 
+gboolean
+rspamd_write_all(int fd, const void *buf, gsize len)
+{
+	const char *p = buf;
+
+	while (len > 0) {
+		gssize r = write(fd, p, len);
+
+		if (r == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+
+			return FALSE;
+		}
+
+		if (r == 0) {
+			/* Should not happen for len > 0, avoid looping forever */
+			errno = EIO;
+
+			return FALSE;
+		}
+
+		p += r;
+		len -= r;
+	}
+
+	return TRUE;
+}
+
 gpointer
 rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
 				 gboolean allow_symlink)
@@ -2046,12 +2097,14 @@ gpointer
 rspamd_shmem_xmap(const char *fname, unsigned int mode,
 				  gsize *size)
 {
-	int fd;
+	int fd, serrno;
 	struct stat sb;
 	gpointer map;
 
 	g_assert(fname != NULL);
 	g_assert(size != NULL);
+
+	*size = (gsize) -1;
 
 #ifdef HAVE_SANE_SHMEM
 	if (mode & PROT_WRITE) {
@@ -2074,15 +2127,44 @@ rspamd_shmem_xmap(const char *fname, unsigned int mode,
 	}
 
 	if (fstat(fd, &sb) == -1) {
+		serrno = errno;
 		close(fd);
+		errno = serrno;
+
+		return NULL;
+	}
+
+	/* Only mappable objects are allowed here: no fifos, devices or dirs */
+	if (!S_ISREG(sb.st_mode)) {
+		close(fd);
+		errno = EINVAL;
+
+		return NULL;
+	}
+
+	if (sb.st_size <= 0) {
+		close(fd);
+		*size = 0;
+		errno = EINVAL;
+
+		return NULL;
+	}
+
+	if ((uint64_t) sb.st_size > (uint64_t) G_MAXSIZE) {
+		/* Cannot be mapped on this platform (32 bits address space) */
+		close(fd);
+		errno = EFBIG;
 
 		return NULL;
 	}
 
 	map = mmap(NULL, sb.st_size, mode, MAP_SHARED, fd, 0);
+	serrno = errno;
 	close(fd);
 
 	if (map == MAP_FAILED) {
+		errno = serrno;
+
 		return NULL;
 	}
 
@@ -2133,6 +2215,11 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 	if (tm->tm_year - 2ULL <= 136) {
 		leaps = (y - 68) / 4;
 
+		if ((y - 68) % 4 < 0) {
+			/* musl shifts: round down, not towards zero, before 1968 */
+			leaps--;
+		}
+
 		if (!((y - 68) & 3)) {
 			leaps--;
 			is_leap = 1;
@@ -2175,7 +2262,8 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 			}
 
 			if (!rem) {
-				is_leap = 1;
+				/* A century year not divisible by 400 is not a leap year */
+				is_leap = 0;
 				leaps = 0;
 			}
 			else {
@@ -2210,17 +2298,32 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 
 void rspamd_gmtime(int64_t ts, struct tm *dest)
 {
-	uint64_t days, secs, years;
+	/* Signed, as in musl: times before 2000-03-01 have negative days */
+	int64_t days, secs, years;
 	int remdays, remsecs, remyears;
 	int leap_400_cycles, leap_100_cycles, leap_4_cycles;
 	int months;
 	int wday, yday, leap;
 	/* From March */
 	static const uint8_t days_in_month[] = {31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29};
-	static const uint64_t leap_epoch = 946684800ULL + 86400 * (31 + 29);
-	static const uint64_t days_per_400y = 365 * 400 + 97;
-	static const uint64_t days_per_100y = 365 * 100 + 24;
-	static const uint64_t days_per_4y = 365 * 4 + 1;
+	static const int64_t leap_epoch = 946684800LL + 86400 * (31 + 29);
+	static const int64_t days_per_400y = 365 * 400 + 97;
+	static const int64_t days_per_100y = 365 * 100 + 24;
+	static const int64_t days_per_4y = 365 * 4 + 1;
+
+	/*
+	 * musl fails when the year does not fit in an int; clamp instead, to
+	 * years INT_MIN + 1900 .. INT_MAX, so that both tm_year and the
+	 * tm_year + 1900 that callers print fit in an int
+	 */
+	if (ts < -67768040609740800LL) {
+		/* -2147481748-01-01 00:00:00 */
+		ts = -67768040609740800LL;
+	}
+	else if (ts > 67767976233532799LL) {
+		/* 2147483647-12-31 23:59:59 */
+		ts = 67767976233532799LL;
+	}
 
 	secs = ts - leap_epoch;
 	days = secs / 86400;
@@ -2275,7 +2378,7 @@ void rspamd_gmtime(int64_t ts, struct tm *dest)
 	}
 
 	years = remyears + 4 * leap_4_cycles + 100 * leap_100_cycles +
-			400ULL * leap_400_cycles;
+			400LL * leap_400_cycles;
 
 	for (months = 0; days_in_month[months] <= remdays; months++) {
 		remdays -= days_in_month[months];

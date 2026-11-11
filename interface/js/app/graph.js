@@ -3,10 +3,8 @@
  * Copyright (C) 2017 Alexander Moisseev
  */
 
-/* global FooTable */
-
-define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
-    ($, common, D3Evolution, D3Pie, d3) => {
+define(["app/common", "app/tab-utils", "d3evolution", "d3pie", "d3", "tabulator"],
+    (common, tabUtils, D3Evolution, D3Pie, d3, Tabulator) => {
         "use strict";
 
         const rrd_pie_config = {
@@ -39,6 +37,13 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
         const ui = {};
         let prevUnit = "msg/s";
 
+        const rrdUnitColumns = ["min", "avg", "max", "last"];
+        function rrdColumnTitle(field, unit) {
+            const titles = {min: "Minimum", avg: "Average", max: "Maximum", last: "Last"};
+            const label = titles[field];
+            return label ? label + ", <span class=\"unit\">" + unit + "</span>" : "";
+        }
+
         ui.draw = function (graphs, neighbours, checked_server, type) {
             const graph_options = {
                 title: "Rspamd throughput",
@@ -53,23 +58,24 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
             };
 
             function initGraph() {
-                const graph = new D3Evolution("graph", $.extend({}, graph_options, {
+                const graph = new D3Evolution("graph", {
+                    ...graph_options,
                     yScale: common.getSelector("selYScale"),
                     type: common.getSelector("selType"),
                     interpolate: common.getSelector("selInterpolate"),
                     convert: common.getSelector("selConvert"),
-                }));
-                $("#selYScale").change(function () {
-                    graph.yScale(this.value);
                 });
-                $("#selConvert").change(function () {
-                    graph.convert(this.value);
+                document.getElementById("selYScale").addEventListener("change", (e) => {
+                    graph.yScale(e.currentTarget.value);
                 });
-                $("#selType").change(function () {
-                    graph.type(this.value);
+                document.getElementById("selConvert").addEventListener("change", (e) => {
+                    graph.convert(e.currentTarget.value);
                 });
-                $("#selInterpolate").change(function () {
-                    graph.interpolate(this.value);
+                document.getElementById("selType").addEventListener("change", (e) => {
+                    graph.type(e.currentTarget.value);
+                });
+                document.getElementById("selInterpolate").addEventListener("change", (e) => {
+                    graph.interpolate(e.currentTarget.value);
                 });
 
                 return graph;
@@ -107,36 +113,38 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function initSummaryTable(rows, unit) {
-                common.tables.rrd_summary = FooTable.init("#rrd-table", {
-                    breakpoints: common.breakpoints,
-                    cascade: true,
-                    sorting: {
-                        enabled: true
-                    },
+                common.tables.rrd_summary = new Tabulator("#rrd-table", {
+                    layout: "fitColumns",
+                    selectable: false,
+                    index: "label",
+                    data: rows,
                     columns: [
-                        {name: "label", title: "Action"},
-                        {name: "value", title: "Messages", defaultContent: ""},
-                        {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                        {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                        {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                        {name: "last", title: "Last, " + unit},
+                        {title: "Action", field: "label", minWidth: 90},
+                        {title: "Messages", field: "value", minWidth: 100},
+                        {title: rrdColumnTitle("min", unit), field: "min", minWidth: 149},
+                        {title: rrdColumnTitle("avg", unit), field: "avg", minWidth: 143},
+                        {title: rrdColumnTitle("max", unit), field: "max", minWidth: 151},
+                        {title: rrdColumnTitle("last", unit), field: "last", minWidth: 121},
                     ],
-                    rows: rows.map((curr, i) => ({
-                        options: {
-                            style: {
-                                color: graph_options.legend.entries[i].color
-                            }
-                        },
-                        value: curr
-                    }), [])
+                    rowFormatter: function (row) {
+                        const c = row.getData().color;
+                        if (c) row.getElement().style.setProperty("--rrd-row-color", c);
+                    },
                 });
+                tabUtils.patchScrollIntoViewOnce();
+                tabUtils.stripTableholderTabindex("rrd_summary");
             }
 
             function drawRrdTable(rows, unit) {
                 if (Object.prototype.hasOwnProperty.call(common.tables, "rrd_summary")) {
-                    $.each(common.tables.rrd_summary.rows.all, (i, row) => {
-                        row.val(rows[i], false, true);
-                    });
+                    common.tables.rrd_summary.updateData(rows);
+                    if (unit !== prevUnit) {
+                        rrdUnitColumns.forEach((field) => {
+                            common.tables.rrd_summary.updateColumnDefinition(field, {
+                                title: rrdColumnTitle(field, unit),
+                            });
+                        });
+                    }
                 } else {
                     initSummaryTable(rows, unit);
                 }
@@ -169,7 +177,9 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
                 graphs.graph.data(data);
                 if (unit !== prevUnit) {
                     graphs.graph.yAxisLabel("Message rate, " + unit);
-                    $(".unit").text(unit);
+                    document.querySelectorAll(".unit").forEach((el) => {
+                        el.textContent = unit;
+                    });
                     prevUnit = unit;
                 }
                 drawRrdTable(rrd_summary.rows, unit);
@@ -217,7 +227,11 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
                     }
                     updateWidgets(data);
                 },
-                complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
+                complete: function () {
+                    const refreshBtn = document.getElementById("refresh");
+                    refreshBtn.disabled = false;
+                    refreshBtn.classList.remove("disabled");
+                },
                 errorMessage: "Cannot receive throughput data",
                 errorOnceId: "alerted_graph_",
                 data: {type: type}
@@ -226,13 +240,17 @@ define(["jquery", "app/common", "d3evolution", "d3pie", "d3", "footable"],
 
 
         // Handling mouse events on overlapping elements
-        $("#rrd-pie").mouseover(() => {
-            $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "200");
-            $("#rrd-table_toggle").css("z-index", "300");
+        function setZIndex(selector, value) {
+            document.querySelectorAll(selector).forEach((el) => {
+                el.style.zIndex = value;
+            });
+        }
+        document.getElementById("rrd-pie").addEventListener("mouseover", () => {
+            setZIndex("#rrd-pie, #rrd-pie-tooltip", "200");
+            setZIndex("#rrd-table_toggle", "300");
         });
-        $("#rrd-table_toggle").mouseover(() => {
-            $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "0");
-            $("#rrd-table_toggle").css("z-index", "0");
+        document.getElementById("rrd-table_toggle").addEventListener("mouseover", () => {
+            setZIndex("#rrd-pie, #rrd-pie-tooltip, #rrd-table_toggle", "0");
         });
 
         return ui;

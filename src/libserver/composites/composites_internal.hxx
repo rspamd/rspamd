@@ -54,6 +54,27 @@ struct rspamd_composite {
 	bool second_pass;        /**< true if this composite needs second pass evaluation */
 	bool has_positive_atoms; /**< true if composite has at least one non-negated atom */
 	bool disabled;           /**< true if composite is a placeholder stub (evaluates to false) */
+
+	/* Per-symbol Lua conditions (registry refs owned by the config UCL tree),
+	 * keyed by symbol name as written in the expression (no prefixes/brackets).
+	 * A condition is ANDed with option filters of the matching atom. */
+	ankerl::unordered_dense::map<std::string, int,
+								 rspamd::smart_str_hash, rspamd::smart_str_equal>
+		conditions;
+	/* Symbols consulted by conditions beyond the expression atoms; feed
+	 * first/second pass placement in process_dependencies() */
+	std::vector<std::string> depends_on;
+
+	auto find_condition(std::string_view sym_name) const -> int
+	{
+		if (conditions.empty()) {
+			return -1;
+		}
+
+		auto it = conditions.find(sym_name);
+
+		return it != conditions.end() ? it->second : -1;
+	}
 };
 
 /**

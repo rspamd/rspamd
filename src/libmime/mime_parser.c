@@ -112,6 +112,8 @@ int rspamd_mime_parser_get_lua_magic_cbref(const struct rspamd_mime_parser_confi
 
 static const unsigned int max_nested = 64;
 static const unsigned int max_key_usages = 10000;
+static const unsigned int max_mime_parts = 10000;
+static const unsigned int max_boundary_candidates = 100000;
 
 #define msg_debug_mime(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                \
 														  rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
@@ -121,6 +123,8 @@ static const unsigned int max_key_usages = 10000;
 INIT_LOG_MODULE_PUBLIC(mime)
 
 #define RSPAMD_MIME_BOUNDARY_FLAG_CLOSED (1 << 0)
+/* The line ended with "--" when found; it stays set when CLOSED is cleared */
+#define RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED (1 << 1)
 #define RSPAMD_BOUNDARY_IS_CLOSED(b) ((b)->flags & RSPAMD_MIME_BOUNDARY_FLAG_CLOSED)
 
 struct rspamd_mime_boundary {
@@ -128,17 +132,54 @@ struct rspamd_mime_boundary {
 	goffset start;
 	uint64_t hash;
 	uint64_t closed_hash;
+	uint64_t found_hash; /* the hash as it was found, see rspamd_multipart_boundaries_filter */
 	int flags;
 };
 
+/*
+ * Boundary candidates ordered by hash and then by position, so a part can find
+ * its boundary after its own end without scanning the rest of the message
+ */
+struct rspamd_mime_boundary_ref {
+	uint64_t hash;
+	unsigned int idx; /* in the boundaries array */
+};
+
+struct rspamd_mime_boundary_index {
+	struct rspamd_mime_boundary_ref *refs;
+	/* refs[i] is not checked again if next[i] != i, see the find function */
+	unsigned int *next;
+	unsigned int nrefs;
+	unsigned int nboundaries; /* the array length it was built for */
+};
+
+struct rspamd_mime_range {
+	goffset begin;
+	goffset end;
+};
+
 struct rspamd_mime_parser_runtime {
-	GPtrArray *stack;   /* Stack of parts */
-	GArray *boundaries; /* Boundaries found in the whole message */
+	GArray *boundaries;                        /* Boundaries found in the whole message */
+	struct rspamd_mime_boundary_index *bindex; /* built on demand */
+	/*
+	 * Bodies of parts parsed by runtimes of their own (embedded messages,
+	 * S/MIME content), as offsets from start: see the leftovers pass
+	 */
+	GArray *nested_bodies;
+	struct rspamd_mime_parser_runtime *root;
+	/* The runtime whose buffer contains this one, if there is such */
+	struct rspamd_mime_parser_runtime *parent;
 	const char *start;
 	const char *pos;
 	const char *end;
+	/* The range that boundaries have been collected from, NULL if none */
+	const char *scanned_begin;
+	const char *scanned_end;
 	struct rspamd_task *task;
 	unsigned int nesting;
+	unsigned int boundary_candidates;
+	gboolean boundary_limit_reached;
+	gboolean nesting_limit_reached;
 };
 
 static enum rspamd_mime_parse_error
@@ -168,6 +209,12 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 								   gboolean is_finished,
 								   GError **err);
 
+static enum rspamd_mime_parse_error
+rspamd_mime_parse_detached(struct rspamd_task *task,
+						   struct rspamd_mime_parser_runtime *st,
+						   const char *begin, gsize len,
+						   GError **err);
+
 
 #define RSPAMD_MIME_QUARK (rspamd_mime_parser_quark())
 
@@ -175,6 +222,120 @@ static GQuark
 rspamd_mime_parser_quark(void)
 {
 	return g_quark_from_static_string("mime-parser");
+}
+
+static gboolean
+rspamd_mime_parser_check_part_limit(struct rspamd_task *task, GError **err)
+{
+	if (MESSAGE_FIELD(task, parts)->len >= max_mime_parts) {
+		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
+					"MIME parts limit is reached: %u", max_mime_parts);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Parts deeper than the limit are not parsed, but their siblings still are:
+ * one deep branch must not hide the rest of the message
+ */
+static gboolean
+rspamd_mime_parser_too_deep(struct rspamd_task *task,
+							struct rspamd_mime_parser_runtime *st)
+{
+	if (st->nesting <= max_nested) {
+		return FALSE;
+	}
+
+	if (!st->root->nesting_limit_reached) {
+		msg_warn_task("MIME nesting limit of %ud is reached; "
+					  "do not parse the parts below it",
+					  max_nested);
+		st->root->nesting_limit_reached = TRUE;
+		task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+	}
+
+	return TRUE;
+}
+
+/*
+ * A part whose content has been parsed by a runtime of its own (an embedded
+ * message, S/MIME content) had its orphan boundaries looked for there, so the
+ * leftovers pass of st skips its body: otherwise each level of embedded
+ * messages parses the next one twice. Called once that runtime is done.
+ *
+ * That holds only if the other runtime saw the same lines: not for a base64
+ * or uuencoded body (valid ones have no boundaries in the raw text, so st
+ * loses nothing by looking), and not once boundary candidates have run out.
+ */
+static void
+rspamd_mime_parser_add_nested_body(struct rspamd_mime_parser_runtime *st,
+								   const struct rspamd_mime_part *part)
+{
+	const char *begin = part->raw_data.begin;
+	struct rspamd_mime_range r;
+
+	if (part->cte == RSPAMD_CTE_B64 || part->cte == RSPAMD_CTE_UUE ||
+		st->root->boundary_limit_reached) {
+		return;
+	}
+
+	if (begin == NULL || begin < st->start || begin > st->end ||
+		part->raw_data.len > (gsize) (st->end - begin)) {
+		return;
+	}
+
+	if (st->nested_bodies == NULL) {
+		st->nested_bodies = g_array_new(FALSE, FALSE, sizeof(struct rspamd_mime_range));
+	}
+
+	r.begin = begin - st->start;
+	r.end = r.begin + part->raw_data.len;
+	g_array_append_val(st->nested_bodies, r);
+}
+
+static int
+rspamd_mime_range_cmp(const void *a, const void *b)
+{
+	const struct rspamd_mime_range *ra = a, *rb = b;
+
+	if (ra->begin != rb->begin) {
+		return ra->begin < rb->begin ? -1 : 1;
+	}
+
+	return 0;
+}
+
+/*
+ * Parser-created parts get their headers table with a reference owned by the
+ * task pool, so a part that is rejected before it gets here does not leak it.
+ * The message parts array owns the extra reference taken here.
+ */
+static void
+rspamd_mime_parser_register_part(struct rspamd_task *task,
+								 struct rspamd_mime_part *part)
+{
+	part->part_number = MESSAGE_FIELD(task, parts)->len;
+	part->urls = g_ptr_array_new();
+
+	if (part->raw_headers) {
+		rspamd_message_headers_ref(part->raw_headers);
+	}
+
+	g_ptr_array_add(MESSAGE_FIELD(task, parts), part);
+}
+
+static struct rspamd_mime_headers_table *
+rspamd_mime_parser_new_headers(struct rspamd_task *task)
+{
+	struct rspamd_mime_headers_table *hdrs = rspamd_message_headers_new();
+
+	rspamd_mempool_add_destructor(task->task_pool,
+								  (rspamd_mempool_destruct_t) rspamd_message_headers_unref,
+								  hdrs);
+
+	return hdrs;
 }
 
 const char *
@@ -470,6 +631,92 @@ rspamd_mime_part_get_cte_heuristic(struct rspamd_task *task,
 	return ret;
 }
 
+/*
+ * Whether data has the form of base64: lines of base64 characters only, with
+ * no space inside a line, as words of text have
+ */
+static gboolean
+rspamd_mime_data_looks_base64(const char *begin, gsize len)
+{
+	const unsigned char *p = (const unsigned char *) begin, *end = p + len;
+	gboolean line_data = FALSE, line_gap = FALSE;
+	gsize nchars = 0;
+
+	for (; p < end; p++) {
+		unsigned char c = *p;
+
+		if (c == '\r' || c == '\n') {
+			line_data = FALSE;
+			line_gap = FALSE;
+		}
+		else if (c == ' ' || c == '\t') {
+			line_gap = line_data;
+		}
+		else if (g_ascii_isalnum(c) || c == '+' || c == '/' || c == '=') {
+			if (line_gap) {
+				return FALSE;
+			}
+
+			line_data = TRUE;
+			nchars++;
+		}
+		else {
+			return FALSE;
+		}
+	}
+
+	return nchars > 0;
+}
+
+/*
+ * Whether a part without Content-Transfer-Encoding takes the one of its
+ * parent
+ */
+static gboolean
+rspamd_mime_part_takes_parent_cte(const struct rspamd_mime_part *part)
+{
+	const struct rspamd_mime_part *parent = part->parent_part;
+
+	if (parent == NULL || parent->cte == RSPAMD_CTE_UNKNOWN ||
+		(parent->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
+		return FALSE;
+	}
+
+	if (parent->cte == RSPAMD_CTE_7BIT || parent->cte == RSPAMD_CTE_8BIT) {
+		/* These leave the data as it is */
+		return TRUE;
+	}
+
+	if (parent->part_type != RSPAMD_MIME_PART_MULTIPART) {
+		/*
+		 * An embedded message is read from the data of its part once
+		 * decoded: decoding it again turns it into garbage
+		 */
+		return FALSE;
+	}
+
+	if (part->part_type == RSPAMD_MIME_PART_MULTIPART) {
+		/* Its own data is never decoded: it only passes the CTE on */
+		return TRUE;
+	}
+
+	/*
+	 * The children of a multipart are slices of its raw data. RFC 2045 6.4
+	 * allows only 7bit, 8bit and binary on a multipart, and mail clients
+	 * show its children as they are: decoding them can hide what they show
+	 * (base64 turns text into garbage, quoted-printable "=2D=2D" can open
+	 * an HTML comment). Broken mailers may still encode the children with
+	 * the base64 of the multipart: only data that is all base64 is decoded
+	 * then, as a client would show nothing readable of it anyway (base64
+	 * followed by a footer is left as it is)
+	 */
+	if (parent->cte == RSPAMD_CTE_B64) {
+		return rspamd_mime_data_looks_base64(part->raw_data.begin, part->raw_data.len);
+	}
+
+	return FALSE;
+}
+
 static void
 rspamd_mime_part_get_cte(struct rspamd_task *task, struct rspamd_mime_part *part,
 						 struct rspamd_mime_headers_table *hdrs,
@@ -483,8 +730,7 @@ rspamd_mime_part_get_cte(struct rspamd_task *task, struct rspamd_mime_part *part
 											  "Content-Transfer-Encoding", FALSE);
 
 	if (hdr == NULL) {
-		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
-			!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
+		if (rspamd_mime_part_takes_parent_cte(part)) {
 			part->cte = part->parent_part->cte;
 			parent_propagated = TRUE;
 
@@ -598,8 +844,20 @@ rspamd_mime_part_get_cd(struct rspamd_task *task, struct rspamd_mime_part *part)
 			}
 
 			if (cd) {
-				/* We still need to check filename */
-				if (cd->filename.len == 0) {
+				/*
+				 * We still need to check filename: also when it is no value
+				 * readers take (pieces without a first one...), for which they
+				 * show the name of Content-Type
+				 */
+				struct rspamd_content_type_param *cd_fname = NULL;
+
+				if (cd->attrs) {
+					RSPAMD_FTOK_ASSIGN(&srch, "filename");
+					cd_fname = g_hash_table_lookup(cd->attrs, &srch);
+				}
+
+				if (cd->filename.len == 0 ||
+					(cd_fname && (cd_fname->flags & RSPAMD_CONTENT_PARAM_NO_VALUE))) {
 					if (part->ct && part->ct->attrs) {
 						RSPAMD_FTOK_ASSIGN(&srch, "name");
 						found = g_hash_table_lookup(part->ct->attrs, &srch);
@@ -609,7 +867,8 @@ rspamd_mime_part_get_cd(struct rspamd_task *task, struct rspamd_mime_part *part)
 							found = g_hash_table_lookup(part->ct->attrs, &srch);
 						}
 
-						if (found) {
+						if (found && (cd->filename.len == 0 ||
+									  !(found->flags & RSPAMD_CONTENT_PARAM_NO_VALUE))) {
 							cd->type = RSPAMD_CT_ATTACHMENT;
 							memcpy(&cd->filename, &found->value,
 								   sizeof(cd->filename));
@@ -739,6 +998,9 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	gssize r;
 
 	g_assert(part != NULL);
+	if (!rspamd_mime_parser_check_part_limit(task, err)) {
+		return RSPAMD_MIME_PARSE_LIMIT;
+	}
 
 	rspamd_mime_part_get_cte(task, part, part->raw_headers, FALSE);
 	rspamd_mime_part_get_cd(task, part);
@@ -747,31 +1009,6 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	case RSPAMD_CTE_7BIT:
 	case RSPAMD_CTE_8BIT:
 	case RSPAMD_CTE_UNKNOWN:
-		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
-			if (part->cte != RSPAMD_CTE_7BIT) {
-				/* We have something that has a missing content-type,
-				 * but it has non-7bit characters.
-				 *
-				 * In theory, it is very unsafe to process it as a text part
-				 * as we unlikely get some sane result
-				 */
-
-				/*
-				 * On the other hand, there is an evidence that some
-				 * emails actually rely on that.
-				 * So we apply an expensive hack here:
-				 * if there are no 8bit characters -OR- the content is valid
-				 * UTF8, we can still imply Content-Type == text/plain
-				 */
-
-				if (rspamd_str_has_8bit(part->raw_data.begin, part->raw_data.len) &&
-					!rspamd_fast_utf8_validate(part->raw_data.begin, part->raw_data.len)) {
-					part->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
-					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
-				}
-			}
-		}
-
 		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) {
 			/* Need to copy text as we have couple of in-place change functions */
 			parsed = rspamd_fstring_sized_new(part->raw_data.len);
@@ -827,16 +1064,15 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 									  (rspamd_mempool_destruct_t) rspamd_fstring_free, parsed);
 		break;
 	case RSPAMD_CTE_UUE:
-		parsed = rspamd_fstring_sized_new(part->raw_data.len / 4 * 3 + 12);
+		/* Room for the raw data too: data that does not decode is kept whole */
+		parsed = rspamd_fstring_sized_new(MAX(part->raw_data.len,
+											  part->raw_data.len / 4 * 3 + 12));
 		r = rspamd_decode_uue_buf(part->raw_data.begin, part->raw_data.len,
 								  parsed->str, parsed->allocated);
-		rspamd_mempool_notify_alloc(task->task_pool, parsed->len);
 		rspamd_mempool_add_destructor(task->task_pool,
 									  (rspamd_mempool_destruct_t) rspamd_fstring_free, parsed);
 		if (r != -1) {
 			parsed->len = r;
-			part->parsed_data.begin = parsed->str;
-			part->parsed_data.len = parsed->len;
 		}
 		else {
 			msg_err_task("invalid uuencoding in encoded part, assume 8bit");
@@ -844,20 +1080,18 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 				part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 			}
 			part->cte = RSPAMD_CTE_8BIT;
-			parsed->len = MIN(part->raw_data.len, parsed->allocated);
+			parsed->len = part->raw_data.len;
 			memcpy(parsed->str, part->raw_data.begin, parsed->len);
-			rspamd_mempool_notify_alloc(task->task_pool, parsed->len);
-			part->parsed_data.begin = parsed->str;
-			part->parsed_data.len = parsed->len;
 		}
+		rspamd_mempool_notify_alloc(task->task_pool, parsed->len);
+		part->parsed_data.begin = parsed->str;
+		part->parsed_data.len = parsed->len;
 		break;
 	default:
 		g_assert_not_reached();
 	}
 
-	part->part_number = MESSAGE_FIELD(task, parts)->len;
-	part->urls = g_ptr_array_new();
-	g_ptr_array_add(MESSAGE_FIELD(task, parts), part);
+	rspamd_mime_parser_register_part(task, part);
 	msg_debug_mime("parsed data part %T/%T of length %z (%z orig), %s cte",
 				   &part->ct->type, &part->ct->subtype, part->parsed_data.len,
 				   part->raw_data.len, rspamd_cte_to_string(part->cte));
@@ -889,48 +1123,51 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 
 						ct_nid = OBJ_obj2nid(p7_signed_content->type);
 
+						/* ASN1_STRING is opaque since OpenSSL 4.0, use accessors */
 						if (ct_nid == NID_pkcs7_data && p7_signed_content->d.data &&
-							p7_signed_content->d.data->length > 0 &&
-							p7_signed_content->d.data->data) {
+							ASN1_STRING_length(p7_signed_content->d.data) > 0 &&
+							ASN1_STRING_get0_data(p7_signed_content->d.data)) {
 							int ret;
+							int p7_data_len = ASN1_STRING_length(p7_signed_content->d.data);
+							const unsigned char *p7_data = ASN1_STRING_get0_data(p7_signed_content->d.data);
 
 							msg_debug_mime("found an additional part inside of "
 										   "smime structure of type %T/%T; length=%d",
-										   &ct->type, &ct->subtype, p7_signed_content->d.data->length);
+										   &ct->type, &ct->subtype, p7_data_len);
 							/*
 							 * Since ASN.1 structures are freed, we need to copy
 							 * the content
 							 */
 							char *cpy = rspamd_mempool_alloc(task->task_pool,
-															 p7_signed_content->d.data->length);
-							memcpy(cpy, p7_signed_content->d.data->data,
-								   p7_signed_content->d.data->length);
+															 p7_data_len);
+							memcpy(cpy, p7_data, p7_data_len);
+
+							/*
+							 * The copy is all that is needed now: do not keep the
+							 * decoded structures of every level of nested S/MIME
+							 * while the inner levels are parsed
+							 */
+							PKCS7_free(p7);
+							BIO_free(bio);
+							CMS_ContentInfo_free(cms);
 
 							/*
 							 * S/MIME re-enters the parser here without going through
 							 * the multipart/message nesting checks, so account for it
 							 * explicitly to bound recursion on deeply nested S/MIME.
 							 */
-							if (st->nesting > max_nested) {
-								g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
-											"S/MIME nesting level is too high: %d",
-											st->nesting);
-								PKCS7_free(p7);
-								BIO_free(bio);
-								CMS_ContentInfo_free(cms);
-								return RSPAMD_MIME_PARSE_NESTING;
+							if (rspamd_mime_parser_too_deep(task, st)) {
+								return RSPAMD_MIME_PARSE_OK;
 							}
 
+							/*
+							 * Not a nested body for the leftovers of st: the
+							 * detached runtime has no leftovers pass of its own
+							 */
 							st->nesting++;
-							ret = rspamd_mime_process_multipart_node(task,
-																	 st, NULL,
-																	 cpy, cpy + p7_signed_content->d.data->length,
-																	 TRUE, err);
+							ret = rspamd_mime_parse_detached(task, st,
+															 cpy, p7_data_len, err);
 							st->nesting--;
-
-							PKCS7_free(p7);
-							BIO_free(bio);
-							CMS_ContentInfo_free(cms);
 
 							return ret;
 						}
@@ -947,6 +1184,83 @@ rspamd_mime_parse_normal_part(struct rspamd_task *task,
 	}
 
 	return RSPAMD_MIME_PARSE_OK;
+}
+
+/*
+ * Whether the decoded data of a part is binary: more than 1/32 of its first
+ * `limit` bytes are control characters that text does not use. 8bit bytes do
+ * not count, so text in any charset passes, valid or not
+ */
+static gboolean
+rspamd_mime_part_data_is_binary(const struct rspamd_mime_part *part, gsize limit)
+{
+	const unsigned char *p = (const unsigned char *) part->parsed_data.begin;
+	gsize len = MIN(part->parsed_data.len, limit), nctrl = 0;
+
+	for (gsize i = 0; i < len; i++) {
+		unsigned char c = p[i];
+
+		/* Tab, line breaks, and ESC/SO/SI that ISO-2022 charsets use */
+		if ((c < 0x20 && c != '\t' && c != '\n' && c != '\v' && c != '\f' &&
+			 c != '\r' && c != 0x0e && c != 0x0f && c != 0x1b) ||
+			c == 0x7f) {
+			nctrl++;
+		}
+	}
+
+	return nctrl * 32 > len;
+}
+
+/*
+ * Whether a part is a file whose name has the extension `ext`: a part with
+ * "Content-Disposition: attachment" (a name= parameter alone does not keep a
+ * text part from being shown inline), or a part without Content-Type, where
+ * the name is all a mail client has
+ */
+static gboolean
+rspamd_mime_part_attached_as(const struct rspamd_mime_part *part, const char *ext)
+{
+	const rspamd_ftok_t *fn;
+	gsize ext_len;
+
+	if (ext == NULL || part->cd == NULL) {
+		return FALSE;
+	}
+
+	if (!(part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) &&
+		(part->cd->type != RSPAMD_CT_ATTACHMENT ||
+		 rspamd_message_get_header_from_hash(part->raw_headers,
+											 "Content-Disposition", FALSE) == NULL)) {
+		return FALSE;
+	}
+
+	fn = &part->cd->filename;
+	ext_len = strlen(ext);
+	/* Trailing dots and spaces, which Windows drops from file names */
+	gsize fn_len = fn->len;
+
+	while (fn_len > 0 && (fn->begin[fn_len - 1] == '.' || fn->begin[fn_len - 1] == ' ')) {
+		fn_len--;
+	}
+
+	if (ext_len == 0 || fn_len <= ext_len) {
+		return FALSE;
+	}
+
+	return fn->begin[fn_len - ext_len - 1] == '.' &&
+		   g_ascii_strncasecmp(fn->begin + fn_len - ext_len, ext, ext_len) == 0;
+}
+
+/*
+ * Whether clients show a part in the message, not as a file attached with
+ * "Content-Disposition: attachment" (an image that the HTML shows by its
+ * Content-ID is known only once the HTML is read)
+ */
+static gboolean
+rspamd_mime_part_shown_inline(const struct rspamd_mime_part *part)
+{
+	return !(part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT &&
+			 rspamd_message_get_header_from_hash(part->raw_headers, "Content-Disposition", FALSE));
 }
 
 /* Run lua_magic.detect_mime_part for a decoded normal part and maybe promote to message */
@@ -1066,6 +1380,70 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 					   npart->part_number, (void *) L, cbref);
 	}
 
+	/* A format that lua_magic recognised, other than text */
+	gboolean known_format = npart->detected_type &&
+							strcmp(npart->detected_type, "text") != 0;
+
+	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
+		(npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+		!promote_to_message && !known_format &&
+		(npart->cte == RSPAMD_CTE_8BIT || npart->cte == RSPAMD_CTE_UNKNOWN) &&
+		rspamd_str_has_8bit(npart->raw_data.begin, npart->raw_data.len) &&
+		rspamd_fast_utf8_validate(npart->raw_data.begin, npart->raw_data.len) != 0) {
+		/*
+		 * Text without a charset: only ASCII and UTF-8 can be read as they
+		 * are, anything else is broken. It is still processed as text, with
+		 * a guessed charset, as one bad byte must not hide the text from the
+		 * checks. A file of a known format (x.pdf) has no charset to miss.
+		 */
+		npart->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+	}
+
+	if (npart->ct && (npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+		!promote_to_message &&
+		(known_format || (npart->flags & RSPAMD_MIME_PART_NO_TEXT_EXTRACTION))) {
+		rspamd_ftok_t plain_tok, html_tok;
+
+		RSPAMD_FTOK_ASSIGN(&plain_tok, "plain");
+		RSPAMD_FTOK_ASSIGN(&html_tok, "html");
+
+		/*
+		 * Readable text/plain or text/html, declared or by default, is shown
+		 * as text by mail clients. A signature that lua_magic finds in it
+		 * ("GIF89a", "%PDF-1.4" in the first KB, "<?xml", "BEGIN:VCALENDAR")
+		 * must not make it an image, a document or data without text: that
+		 * would hide its text and URLs. The content modules still read such a
+		 * part, without taking it over, and what lua_magic found is kept for
+		 * the other checks. Binary data (a real image or PDF sent as text,
+		 * checked over 64 KB, as images often start with readable metadata)
+		 * and an attachment named as what was found (x.pdf holding a PDF)
+		 * are files of that type, as before. Formats that are text (XML, SVG,
+		 * CSV, iCalendar, vCard) have no binary form: control bytes added to
+		 * them do not make them a file. A binary part still read as a file
+		 * is shown as text by clients, so the URLs in it are read.
+		 */
+		if ((rspamd_ftok_casecmp(&npart->ct->subtype, &plain_tok) == 0 ||
+			 rspamd_ftok_casecmp(&npart->ct->subtype, &html_tok) == 0) &&
+			!rspamd_mime_part_attached_as(npart, npart->detected_ext)) {
+			gboolean text_format = (npart->detected_type &&
+									strcmp(npart->detected_type, "text") == 0) ||
+								   (npart->detected_ext &&
+									g_ascii_strcasecmp(npart->detected_ext, "svg") == 0);
+
+			if (text_format || !rspamd_mime_part_data_is_binary(npart, 65536)) {
+				msg_debug_mime("part #%ud is text, not %s",
+							   npart->part_number,
+							   npart->detected_ext ? npart->detected_ext : "(unknown)");
+				npart->detected_type = rspamd_mempool_strdup(task->task_pool, "text");
+				npart->flags &= ~RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+				npart->flags |= RSPAMD_MIME_PART_TEXT_CONTENT;
+			}
+			else if (rspamd_mime_part_shown_inline(npart)) {
+				npart->flags |= RSPAMD_MIME_PART_SHOWN_AS_TEXT;
+			}
+		}
+	}
+
 	/* Fallback: if nothing detected but declared CT is text, set detected_type to text */
 	if (npart->detected_type == NULL && npart->ct &&
 		(npart->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) {
@@ -1073,11 +1451,15 @@ rspamd_mime_maybe_detect_type(struct rspamd_task *task,
 	}
 
 	if (promote_to_message) {
+		enum rspamd_mime_parse_error ret;
+
 		msg_debug_mime("treat part as embedded message (lua_magic)");
-		st->nesting++;
-		g_ptr_array_add(st->stack, npart);
 		npart->part_type = RSPAMD_MIME_PART_MESSAGE;
-		return rspamd_mime_parse_message(task, npart, st, err);
+		st->nesting++;
+		ret = rspamd_mime_parse_message(task, npart, st, err);
+		st->nesting--;
+
+		return ret;
 	}
 
 	return RSPAMD_MIME_PARSE_OK;
@@ -1106,6 +1488,8 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	struct rspamd_mime_part *npart;
 	GString str;
 	goffset hdr_pos, body_pos;
+	/* The empty line that ends no headers is not a part of the body */
+	gsize empty_hdrs_len = 0;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_FATAL;
 
 	if (start == NULL || end == NULL || start >= end) {
@@ -1123,6 +1507,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 		 */
 		hdr_pos = 0;
 		body_pos = 0;
+		empty_hdrs_len = (*start == '\r' && start + 1 < end && start[1] == '\n') ? 2 : 1;
 
 		if (!is_finished) {
 			/* Ignore garbage */
@@ -1149,7 +1534,7 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	npart = rspamd_mempool_alloc0(task->task_pool,
 								  sizeof(struct rspamd_mime_part));
 	npart->parent_part = multipart;
-	npart->raw_headers = rspamd_message_headers_new();
+	npart->raw_headers = rspamd_mime_parser_new_headers(task);
 	npart->headers_order = NULL;
 
 	if (multipart) {
@@ -1185,8 +1570,8 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	else {
 		npart->raw_headers_str = 0;
 		npart->raw_headers_len = 0;
-		npart->raw_data.begin = start;
-		npart->raw_data.len = end - start;
+		npart->raw_data.begin = start + empty_hdrs_len;
+		npart->raw_data.len = (end - start) - empty_hdrs_len;
 	}
 
 
@@ -1213,39 +1598,85 @@ rspamd_mime_process_multipart_node(struct rspamd_task *task,
 	}
 
 	if (sel == NULL) {
+		rspamd_ftok_t digest_tok;
+
+		RSPAMD_FTOK_ASSIGN(&digest_tok, "digest");
 		sel = rspamd_mempool_alloc0(task->task_pool, sizeof(*sel));
-		RSPAMD_FTOK_ASSIGN(&sel->type, "text");
-		RSPAMD_FTOK_ASSIGN(&sel->subtype, "plain");
+
+		if (multipart && multipart->ct &&
+			rspamd_ftok_casecmp(&multipart->ct->subtype, &digest_tok) == 0) {
+			/* RFC 2046 5.1.5: the default in a digest is an embedded message */
+			RSPAMD_FTOK_ASSIGN(&sel->type, "message");
+			RSPAMD_FTOK_ASSIGN(&sel->subtype, "rfc822");
+			sel->flags = RSPAMD_CONTENT_TYPE_MESSAGE;
+		}
+		else {
+			/*
+			 * RFC 2046 5.1: the default is text/plain, as for a message
+			 * without Content-Type, and it is text the same way: a few
+			 * bytes that do not look like text must not hide it
+			 */
+			RSPAMD_FTOK_ASSIGN(&sel->type, "text");
+			RSPAMD_FTOK_ASSIGN(&sel->subtype, "plain");
+			sel->flags = RSPAMD_CONTENT_TYPE_TEXT | RSPAMD_CONTENT_TYPE_MISSING;
+		}
 	}
 
 	npart->ct = sel;
 
+	/*
+	 * Nesting is the depth of the current container: it must be restored once
+	 * the child is done, or every sibling container adds to it
+	 */
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-		st->nesting++;
-		g_ptr_array_add(st->stack, npart);
 		npart->part_type = RSPAMD_MIME_PART_MULTIPART;
 		npart->specific.mp = rspamd_mempool_alloc0(task->task_pool,
 												   sizeof(struct rspamd_mime_multipart));
 		memcpy(&npart->specific.mp->boundary, &sel->orig_boundary,
 			   sizeof(rspamd_ftok_t));
+		st->nesting++;
 		ret = rspamd_mime_parse_multipart_part(task, npart, st, err);
+		st->nesting--;
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
-		st->nesting++;
-		g_ptr_array_add(st->stack, npart);
 		npart->part_type = RSPAMD_MIME_PART_MESSAGE;
+		st->nesting++;
 
 		if ((ret = rspamd_mime_parse_normal_part(task, npart, st, sel, err)) == RSPAMD_MIME_PARSE_OK) {
 			ret = rspamd_mime_parse_message(task, npart, st, err);
 		}
+
+		st->nesting--;
 	}
 	else {
 		/* First, decode the part normally */
 		ret = rspamd_mime_parse_normal_part(task, npart, st, sel, err);
 
 		if (ret == RSPAMD_MIME_PARSE_OK) {
+			gboolean binary_start = (sel->flags & RSPAMD_CONTENT_TYPE_MISSING) &&
+									rspamd_mime_part_data_is_binary(npart, 4096);
+
+			if (binary_start) {
+				/*
+				 * The text/plain default of a child does not hold for data
+				 * that starts as binary (an attachment without Content-Type).
+				 * Only the start counts: junk after the text a client shows
+				 * first must not hide that text. A whole message without
+				 * Content-Type is always read as text, as before
+				 */
+				sel->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
+			}
+
 			/* Always try to detect type after normal parse */
 			ret = rspamd_mime_maybe_detect_type(task, npart, st, err);
+
+			if (binary_start && ret == RSPAMD_MIME_PARSE_OK &&
+				npart->part_type != RSPAMD_MIME_PART_MESSAGE &&
+				!rspamd_mime_part_attached_as(npart, npart->detected_ext) &&
+				rspamd_mime_part_shown_inline(npart)) {
+				/* Clients still show it as text, so its links are read */
+				npart->flags |= RSPAMD_MIME_PART_SHOWN_AS_TEXT;
+			}
 		}
 	}
 
@@ -1266,6 +1697,17 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 
 	/* Now check boundary */
 	if (!cb->part_start) {
+		if (b->start < 0) {
+			/*
+			 * Closed before any part has started: nothing to parse. The
+			 * leftovers pass looks at the whole buffer then (no boundary
+			 * starts at offset 0), without pointing before it
+			 */
+			st->pos = st->start;
+
+			return RSPAMD_MIME_PARSE_OK;
+		}
+
 		cb->part_start = st->start + b->start;
 		st->pos = cb->part_start;
 	}
@@ -1275,8 +1717,29 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 		 * but it might be unsuitable (e.g. in broken headers)
 		 */
 		if (cb->part_start < pos && cb->cur_boundary) {
-			if ((ret = rspamd_mime_process_multipart_node(task, cb->st,
-														  cb->multipart, cb->part_start, pos, TRUE, cb->err)) != RSPAMD_MIME_PARSE_OK) {
+			const char *part_end = pos;
+
+			if (b->start >= 0) {
+				/*
+				 * RFC 2046, 5.1.1: the CRLF preceding the boundary delimiter
+				 * belongs to the delimiter, not to the encapsulated part
+				 */
+				if (part_end > cb->part_start && *(part_end - 1) == '\n') {
+					part_end--;
+				}
+				if (part_end > cb->part_start && *(part_end - 1) == '\r') {
+					part_end--;
+				}
+			}
+
+			ret = rspamd_mime_process_multipart_node(task, cb->st,
+													 cb->multipart, cb->part_start, part_end, TRUE, cb->err);
+
+			/*
+			 * An empty part (two delimiters separated by a line break only)
+			 * has nothing to parse, but the parts after it must still be parsed
+			 */
+			if (ret != RSPAMD_MIME_PARSE_OK && ret != RSPAMD_MIME_PARSE_NO_PART) {
 				return ret;
 			}
 
@@ -1294,6 +1757,142 @@ rspamd_mime_parse_multipart_cb(struct rspamd_task *task,
 	return RSPAMD_MIME_PARSE_OK;
 }
 
+static int
+rspamd_mime_boundary_ref_cmp(const void *a, const void *b)
+{
+	const struct rspamd_mime_boundary_ref *ra = a, *rb = b;
+
+	if (ra->hash != rb->hash) {
+		return ra->hash < rb->hash ? -1 : 1;
+	}
+
+	if (ra->idx != rb->idx) {
+		return ra->idx < rb->idx ? -1 : 1;
+	}
+
+	return 0;
+}
+
+static void
+rspamd_mime_boundary_index_free(struct rspamd_mime_boundary_index *bi)
+{
+	if (bi) {
+		g_free(bi->refs);
+		g_free(bi->next);
+		g_free(bi);
+	}
+}
+
+static struct rspamd_mime_boundary_index *
+rspamd_mime_boundary_index_new(GArray *boundaries)
+{
+	struct rspamd_mime_boundary_index *bi = g_malloc(sizeof(*bi));
+	unsigned int i, n = 0;
+
+	/* A candidate matches both its hash and its closed hash */
+	bi->refs = g_malloc_n(boundaries->len * 2 + 1, sizeof(*bi->refs));
+
+	for (i = 0; i < boundaries->len; i++) {
+		const struct rspamd_mime_boundary *b = &g_array_index(boundaries,
+															  struct rspamd_mime_boundary, i);
+
+		bi->refs[n].hash = b->hash;
+		bi->refs[n].idx = i;
+		n++;
+
+		if (b->closed_hash != 0 && b->closed_hash != b->hash) {
+			bi->refs[n].hash = b->closed_hash;
+			bi->refs[n].idx = i;
+			n++;
+		}
+	}
+
+	qsort(bi->refs, n, sizeof(*bi->refs), rspamd_mime_boundary_ref_cmp);
+	bi->next = g_malloc_n(n + 1, sizeof(*bi->next));
+
+	for (i = 0; i <= n; i++) {
+		bi->next[i] = i;
+	}
+
+	bi->nrefs = n;
+	bi->nboundaries = boundaries->len;
+
+	return bi;
+}
+
+/* The first ref at or after k that is still worth checking */
+static unsigned int
+rspamd_mime_boundary_index_next(struct rspamd_mime_boundary_index *bi,
+								unsigned int k)
+{
+	unsigned int root = k, t;
+
+	while (bi->next[root] != root) {
+		root = bi->next[root];
+	}
+
+	/* Point every ref on the way to the result, so the walk is not repeated */
+	while (bi->next[k] != root) {
+		t = bi->next[k];
+		bi->next[k] = root;
+		k = t;
+	}
+
+	return root;
+}
+
+/*
+ * Returns the first candidate at or after `from` that matches `hash` either as
+ * its hash or as its closed hash (like the linear scan does), or the number of
+ * candidates if there is none
+ */
+static unsigned int
+rspamd_mime_boundary_index_find(struct rspamd_mime_parser_runtime *st,
+								uint64_t hash, unsigned int from)
+{
+	struct rspamd_mime_boundary_index *bi = st->bindex;
+	unsigned int left = 0, right, k;
+
+	if (bi == NULL || bi->nboundaries != st->boundaries->len) {
+		rspamd_mime_boundary_index_free(bi);
+		bi = rspamd_mime_boundary_index_new(st->boundaries);
+		st->bindex = bi;
+	}
+
+	right = bi->nrefs;
+
+	while (left < right) {
+		unsigned int mid = left + (right - left) / 2;
+		const struct rspamd_mime_boundary_ref *r = &bi->refs[mid];
+
+		if (r->hash < hash || (r->hash == hash && r->idx < from)) {
+			left = mid + 1;
+		}
+		else {
+			right = mid;
+		}
+	}
+
+	for (k = rspamd_mime_boundary_index_next(bi, left);
+		 k < bi->nrefs && bi->refs[k].hash == hash;
+		 k = rspamd_mime_boundary_index_next(bi, k + 1)) {
+		const struct rspamd_mime_boundary *b = &g_array_index(st->boundaries,
+															  struct rspamd_mime_boundary, bi->refs[k].idx);
+
+		if (b->hash == hash || b->closed_hash == hash) {
+			return bi->refs[k].idx;
+		}
+
+		/*
+		 * Another part has un-closed this candidate since (its hash is now its
+		 * closed hash), so it never matches this hash again
+		 */
+		bi->next[k] = k + 1;
+	}
+
+	return st->boundaries->len;
+}
+
 static enum rspamd_mime_parse_error
 rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 								   struct rspamd_mime_part *multipart,
@@ -1302,19 +1901,54 @@ rspamd_multipart_boundaries_filter(struct rspamd_task *task,
 {
 	struct rspamd_mime_boundary *cur;
 	goffset last_offset;
-	unsigned int i, sel = 0;
+	unsigned int i, sel, left, right;
 	enum rspamd_mime_parse_error ret;
 	bool enforce_closing = false;
+	goffset part_offset;
 
-	last_offset = (multipart->raw_data.begin - st->start) +
+	part_offset = multipart->raw_data.begin - st->start;
+	last_offset = part_offset +
 				  multipart->raw_data.len;
 
-	/* Find the first offset suitable for this part */
-	for (i = 0; i < st->boundaries->len; i++) {
+	/* Boundaries are ordered by offset: skip all candidates before this part. */
+	left = 0;
+	right = st->boundaries->len;
+	while (left < right) {
+		unsigned int mid = left + (right - left) / 2;
+		cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, mid);
+
+		if (cur->start < part_offset) {
+			left = mid + 1;
+		}
+		else {
+			right = mid;
+		}
+	}
+
+	sel = st->boundaries->len;
+	/* Find the first boundary suitable for this part. */
+	for (i = left; i < st->boundaries->len; i++) {
 		cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, i);
 
-		if (cur->start >= multipart->raw_data.begin - st->start) {
+		if (cur->start >= part_offset) {
 			if (cb->cur_boundary) {
+				if (cur->boundary > last_offset) {
+					/*
+					 * The declared boundary is not inside this part. A match
+					 * further on still helps to recover a broken structure
+					 * (see the closed hash case below); look it up by hash, as
+					 * scanning the rest of the message for every such part
+					 * is quadratic
+					 */
+					i = rspamd_mime_boundary_index_find(st, cb->bhash, i);
+
+					if (i == st->boundaries->len) {
+						break;
+					}
+
+					cur = &g_array_index(st->boundaries, struct rspamd_mime_boundary, i);
+				}
+
 				/* Check boundary */
 				msg_debug_mime("compare %L and %L (and %L)",
 							   cb->bhash, cur->hash, cur->closed_hash);
@@ -1417,15 +2051,17 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	struct rspamd_mime_multipart_cbdata cbdata;
 	enum rspamd_mime_parse_error ret;
 
-	if (st->nesting > max_nested) {
-		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
-					st->nesting);
-		return RSPAMD_MIME_PARSE_NESTING;
+	if (!rspamd_mime_parser_check_part_limit(task, err)) {
+		return RSPAMD_MIME_PARSE_LIMIT;
 	}
 
-	part->part_number = MESSAGE_FIELD(task, parts)->len;
-	part->urls = g_ptr_array_new();
-	g_ptr_array_add(MESSAGE_FIELD(task, parts), part);
+	rspamd_mime_parser_register_part(task, part);
+
+	if (rspamd_mime_parser_too_deep(task, st)) {
+		/* Keep it as an empty multipart */
+		return RSPAMD_MIME_PARSE_OK;
+	}
+
 	st->nesting++;
 	rspamd_mime_part_get_cte(task, part, part->raw_headers, FALSE);
 
@@ -1437,10 +2073,19 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	cbdata.err = err;
 
 	if (part->ct->boundary.len > 0) {
+		gsize blen = part->ct->boundary.len;
+
 		/* We know our boundary */
 		cbdata.cur_boundary = &part->ct->boundary;
+
+		/* Delimiter lines are hashed without trailing spaces, see preprocess */
+		while (blen > 1 && (cbdata.cur_boundary->begin[blen - 1] == ' ' ||
+							cbdata.cur_boundary->begin[blen - 1] == '\t')) {
+			blen--;
+		}
+
 		rspamd_cryptobox_siphash((unsigned char *) &cbdata.bhash,
-								 cbdata.cur_boundary->begin, cbdata.cur_boundary->len,
+								 cbdata.cur_boundary->begin, blen,
 								 task->cfg->mime_parser_cfg->hkey);
 		msg_debug_mime("hash: %T -> %L", cbdata.cur_boundary, cbdata.bhash);
 	}
@@ -1451,11 +2096,7 @@ rspamd_mime_parse_multipart_part(struct rspamd_task *task,
 	}
 
 	ret = rspamd_multipart_boundaries_filter(task, part, st, &cbdata);
-	/* Cleanup stack */
 	st->nesting--;
-	if (st->stack->len > 0) {
-		g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
-	}
 
 	return ret;
 }
@@ -1491,9 +2132,18 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 			p++;
 		}
 
+		/*
+		 * Transport padding may follow a delimiter (RFC 2046, 5.1.1): it is
+		 * not a part of the boundary, which cannot end with a space
+		 */
+		p = text + match_pos;
+
+		while (blen > 0 && (p[blen - 1] == ' ' || p[blen - 1] == '\t')) {
+			blen--;
+		}
+
 		if (blen > 0) {
 			/* We have found something like boundary */
-			p = text + match_pos;
 			bend = p + blen - 1;
 
 			if (*bend == '-') {
@@ -1562,7 +2212,8 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 						   (int) blen, lc_copy, b.hash, (int) b.boundary, (int) b.start);
 
 			if (closing) {
-				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
+				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED |
+						  RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED;
 				rspamd_cryptobox_siphash((unsigned char *) &b.closed_hash, lc_copy,
 										 blen + 2,
 										 task->cfg->mime_parser_cfg->hkey);
@@ -1576,10 +2227,27 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 				b.closed_hash = 0;
 			}
 
+			b.found_hash = b.hash;
+
 			/* Check if a string has been allocated on the heap */
 			if (blen + 2 >= sizeof(lc_copy_buf)) {
 				g_free(lc_copy);
 			}
+			struct rspamd_mime_parser_runtime *root = st->root;
+
+			if (root->boundary_candidates >= max_boundary_candidates) {
+				if (!root->boundary_limit_reached) {
+					msg_warn_task("MIME boundary candidate limit of %ud is reached; "
+								  "ignoring the remaining candidates",
+								  max_boundary_candidates);
+					root->boundary_limit_reached = TRUE;
+					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				}
+
+				return 1;
+			}
+
+			root->boundary_candidates++;
 			g_array_append_val(st->boundaries, b);
 		}
 	}
@@ -1595,6 +2263,7 @@ rspamd_mime_parser_headers_heuristic(GString *input, goffset *body_start)
 	const char *p, *end;
 	enum {
 		st_before_colon = 0,
+		st_spaces_before_colon,
 		st_colon,
 		st_spaces_after_colon,
 		st_value,
@@ -1610,10 +2279,23 @@ rspamd_mime_parser_headers_heuristic(GString *input, goffset *body_start)
 			if (G_UNLIKELY(*p == ':')) {
 				state = st_colon;
 			}
+			else if (*p == ' ' || *p == '\t') {
+				state = st_spaces_before_colon;
+			}
 			else if (G_UNLIKELY(!g_ascii_isgraph(*p))) {
 				state = st_error;
 			}
 
+			p++;
+			break;
+		case st_spaces_before_colon:
+			/* Only an uninterrupted SP/HTAB run immediately before ':'. */
+			if (*p == ':') {
+				state = st_colon;
+			}
+			else if (*p != ' ' && *p != '\t') {
+				state = st_error;
+			}
 			p++;
 			break;
 		case st_colon:
@@ -1654,6 +2336,124 @@ end:
 }
 
 static void
+rspamd_mime_preprocess_range(struct rspamd_task *task,
+							 struct rspamd_mime_parser_runtime *st,
+							 const char *start, gsize len)
+{
+	st->scanned_begin = start;
+	st->scanned_end = start + len;
+
+	if (start == st->start && len > 2 && start[0] == '-' && start[1] == '-') {
+		/*
+		 * The patterns include the line break before the dashes, and there
+		 * is none at the start of the buffer (e.g. of an embedded message)
+		 */
+		rspamd_mime_preprocess_cb(NULL, 0, 0, 2, start, len, st);
+	}
+
+	rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
+							   start, len,
+							   rspamd_mime_preprocess_cb, st, NULL);
+}
+
+/*
+ * Fills the candidates of st, whose buffer is a part of the buffer of its
+ * parent, from the ones the parent has found in the range [begin, begin + len),
+ * so the same lines are neither scanned nor counted against the limit twice.
+ * Returns FALSE (with nothing added) if the result would differ from scanning
+ * the range, then the caller scans it.
+ */
+static gboolean
+rspamd_mime_reuse_candidates(struct rspamd_mime_parser_runtime *st,
+							 const char *begin, gsize len)
+{
+	struct rspamd_mime_parser_runtime *parent = st->parent;
+	const char *end = begin + len;
+	goffset begin_off, end_off, shift;
+	unsigned int left, right, i;
+	gboolean special, found_special = FALSE;
+
+	if (parent == NULL || parent->scanned_end == NULL ||
+		st->start < parent->start || st->end > parent->end ||
+		begin < parent->scanned_begin || end > parent->scanned_end) {
+		return FALSE;
+	}
+
+	/*
+	 * A line that goes on after the end of this buffer is cut here, but not in
+	 * the parent: its hash and its data offset would differ
+	 */
+	if (end < parent->scanned_end && *end != '\r' && *end != '\n') {
+		return FALSE;
+	}
+
+	begin_off = begin - parent->start;
+	end_off = end - parent->start;
+	shift = st->start - parent->start;
+	/* A line at the very start of the buffer needs no line break before it */
+	special = (begin == st->start && len > 2 && begin[0] == '-' && begin[1] == '-');
+
+	left = 0;
+	right = parent->boundaries->len;
+	while (left < right) {
+		unsigned int mid = left + (right - left) / 2;
+		const struct rspamd_mime_boundary *cur = &g_array_index(parent->boundaries,
+																struct rspamd_mime_boundary, mid);
+
+		if (cur->boundary < begin_off) {
+			left = mid + 1;
+		}
+		else {
+			right = mid;
+		}
+	}
+
+	for (i = left; i < parent->boundaries->len; i++) {
+		const struct rspamd_mime_boundary *cur = &g_array_index(parent->boundaries,
+																struct rspamd_mime_boundary, i);
+		struct rspamd_mime_boundary b;
+
+		/* The line must have something after the dashes in this range */
+		if (cur->boundary + 2 >= end_off) {
+			break;
+		}
+
+		if (cur->boundary == begin_off) {
+			/* Only the start of the buffer can be a candidate without a line break */
+			if (!special) {
+				continue;
+			}
+
+			found_special = TRUE;
+		}
+
+		/* Undo what the boundaries filter has done to the parent's candidate */
+		b.hash = cur->found_hash;
+		b.found_hash = cur->found_hash;
+		b.closed_hash = cur->closed_hash;
+		b.flags = (cur->flags & RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED) ? (RSPAMD_MIME_BOUNDARY_FLAG_CLOSED |
+																		   RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED)
+																		: 0;
+		b.boundary = cur->boundary - shift;
+		/* The scan does not look for the line break after the end of its buffer */
+		b.start = MIN(cur->start, end_off) - shift;
+		g_array_append_val(st->boundaries, b);
+	}
+
+	if (special && !found_special) {
+		/* The parent does not see this line, as nothing is before it there */
+		g_array_set_size(st->boundaries, 0);
+
+		return FALSE;
+	}
+
+	st->scanned_begin = begin;
+	st->scanned_end = end;
+
+	return TRUE;
+}
+
+static void
 rspamd_mime_preprocess_message(struct rspamd_task *task,
 							   struct rspamd_mime_part *top,
 							   struct rspamd_mime_parser_runtime *st)
@@ -1671,16 +2471,12 @@ rspamd_mime_preprocess_message(struct rspamd_task *task,
 			lookup_len++;
 		}
 
-		rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
-								   lookup_start,
-								   lookup_len,
-								   rspamd_mime_preprocess_cb, st, NULL);
+		if (!rspamd_mime_reuse_candidates(st, lookup_start, lookup_len)) {
+			rspamd_mime_preprocess_range(task, st, lookup_start, lookup_len);
+		}
 	}
 	else {
-		rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
-								   st->pos,
-								   st->end - st->pos,
-								   rspamd_mime_preprocess_cb, st, NULL);
+		rspamd_mime_preprocess_range(task, st, st->pos, st->end - st->pos);
 	}
 }
 
@@ -1688,10 +2484,46 @@ static void
 rspamd_mime_parse_stack_free(struct rspamd_mime_parser_runtime *st)
 {
 	if (st) {
-		g_ptr_array_free(st->stack, TRUE);
+		rspamd_mime_boundary_index_free(st->bindex);
 		g_array_free(st->boundaries, TRUE);
+
+		if (st->nested_bodies) {
+			g_array_free(st->nested_bodies, TRUE);
+		}
+
 		g_free(st);
 	}
+}
+
+/*
+ * Parses an entity that is not in the buffer of st, e.g. the content of an
+ * S/MIME part: its boundaries must be looked for in its own buffer
+ */
+static enum rspamd_mime_parse_error
+rspamd_mime_parse_detached(struct rspamd_task *task,
+						   struct rspamd_mime_parser_runtime *st,
+						   const char *begin, gsize len,
+						   GError **err)
+{
+	struct rspamd_mime_parser_runtime *nst;
+	enum rspamd_mime_parse_error ret;
+
+	nst = g_malloc0(sizeof(*nst));
+	nst->boundaries = g_array_sized_new(FALSE, FALSE,
+										sizeof(struct rspamd_mime_boundary), 8);
+	nst->start = begin;
+	nst->end = begin + len;
+	nst->pos = begin;
+	nst->task = st->task;
+	nst->nesting = st->nesting;
+	nst->root = st->root;
+
+	rspamd_mime_preprocess_range(task, nst, begin, len);
+	ret = rspamd_mime_process_multipart_node(task, nst, NULL,
+											 begin, begin + len, TRUE, err);
+	rspamd_mime_parse_stack_free(nst);
+
+	return ret;
 }
 
 static enum rspamd_mime_parse_error
@@ -1710,11 +2542,11 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 	GString str;
 	struct rspamd_mime_parser_runtime *nst = st;
+	gboolean preprocessed = FALSE;
 
-	if (st->nesting > max_nested) {
-		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
-					st->nesting);
-		return RSPAMD_MIME_PARSE_NESTING;
+	if (rspamd_mime_parser_too_deep(task, st)) {
+		/* The embedded message is not parsed */
+		return RSPAMD_MIME_PARSE_OK;
 	}
 
 	/* Allocate real part */
@@ -1743,8 +2575,8 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 											MESSAGE_FIELD(task, raw_headers_content).begin,
 											MESSAGE_FIELD(task, raw_headers_content).len,
 											TRUE);
-				npart->raw_headers = rspamd_message_headers_ref(
-					MESSAGE_FIELD(task, raw_headers));
+				/* Owned by the message, registering the part takes a ref */
+				npart->raw_headers = MESSAGE_FIELD(task, raw_headers);
 
 				/* Preserve the natural order */
 				if (MESSAGE_FIELD(task, headers_order)) {
@@ -1773,8 +2605,8 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 												MESSAGE_FIELD(task, raw_headers_content).begin,
 												MESSAGE_FIELD(task, raw_headers_content).len,
 												TRUE);
-					npart->raw_headers = rspamd_message_headers_ref(
-						MESSAGE_FIELD(task, raw_headers));
+					/* Owned by the message, registering the part takes a ref */
+					npart->raw_headers = MESSAGE_FIELD(task, raw_headers);
 
 					/* Preserve the natural order */
 					if (MESSAGE_FIELD(task, headers_order)) {
@@ -1802,7 +2634,6 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		 * We allocate new parser context as we need to shift pointers
 		 */
 		nst = g_malloc0(sizeof(*st));
-		nst->stack = g_ptr_array_sized_new(4);
 		nst->boundaries = g_array_sized_new(FALSE, FALSE,
 											sizeof(struct rspamd_mime_boundary), 8);
 		nst->start = part->parsed_data.begin;
@@ -1810,13 +2641,14 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		nst->pos = nst->start;
 		nst->task = st->task;
 		nst->nesting = st->nesting;
-		st->nesting++;
+		nst->root = st->root;
+		nst->parent = st;
 
 		str.str = (char *) part->parsed_data.begin;
 		str.len = part->parsed_data.len;
 
 		hdr_pos = rspamd_string_find_eoh(&str, &body_pos);
-		npart->raw_headers = rspamd_message_headers_new();
+		npart->raw_headers = rspamd_mime_parser_new_headers(task);
 		npart->headers_order = NULL;
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
@@ -1893,23 +2725,35 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		(sel->flags & (RSPAMD_CONTENT_TYPE_MULTIPART | RSPAMD_CONTENT_TYPE_MESSAGE))) {
 		/* Not a trivial message, need to preprocess */
 		rspamd_mime_preprocess_message(task, npart, nst);
+		preprocessed = TRUE;
 	}
 
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-		g_ptr_array_add(nst->stack, npart);
-		nst->nesting++;
 		npart->part_type = RSPAMD_MIME_PART_MULTIPART;
 		npart->specific.mp = rspamd_mempool_alloc0(task->task_pool,
 												   sizeof(struct rspamd_mime_multipart));
 		memcpy(&npart->specific.mp->boundary, &sel->orig_boundary,
 			   sizeof(rspamd_ftok_t));
+		nst->nesting++;
 		ret = rspamd_mime_parse_multipart_part(task, npart, nst, err);
+		nst->nesting--;
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
+		/*
+		 * We descend into an embedded message through nst, so the nesting
+		 * limit must be accounted against nst (the runtime that is carried
+		 * into the recursion), not st. Without this a chain of message/rfc822
+		 * parts recurses unbounded because max_nested is never reached, which
+		 * exhausts the worker stack.
+		 */
+		nst->nesting++;
+
 		if ((ret = rspamd_mime_parse_normal_part(task, npart, nst, sel, err)) == RSPAMD_MIME_PARSE_OK) {
 			npart->part_type = RSPAMD_MIME_PART_MESSAGE;
 			ret = rspamd_mime_parse_message(task, npart, nst, err);
 		}
+
+		nst->nesting--;
 	}
 	else {
 		ret = rspamd_mime_parse_normal_part(task, npart, nst, sel, err);
@@ -1926,19 +2770,19 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		return ret;
 	}
 
-	if (part && st->stack->len > 0) {
-		/* Remove message part from the parent stack */
-		g_ptr_array_remove_index_fast(st->stack, st->stack->len - 1);
-		st->nesting--;
-	}
-
 	/* Process leftovers for boundaries */
 	if (nst->boundaries) {
 		struct rspamd_mime_boundary *boundary, *start_boundary = NULL,
 											   *end_boundary = NULL;
 		goffset cur_offset = nst->pos - nst->start,
 				end_offset = st->end - st->start;
-		unsigned int sel_idx = 0;
+		unsigned int sel_idx = 0, body_idx = 0, nbodies = 0;
+
+		if (nst->nested_bodies) {
+			/* Leftovers come in order, so one pass over sorted bodies is enough */
+			g_array_sort(nst->nested_bodies, rspamd_mime_range_cmp);
+			nbodies = nst->nested_bodies->len;
+		}
 
 		for (;;) {
 			start_boundary = NULL;
@@ -1972,15 +2816,29 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 
 				start = nst->start + start_boundary->start;
 
+				while (body_idx < nbodies &&
+					   g_array_index(nst->nested_bodies, struct rspamd_mime_range, body_idx).end <=
+						   start_boundary->start) {
+					body_idx++;
+				}
+
+				if (body_idx < nbodies &&
+					g_array_index(nst->nested_bodies, struct rspamd_mime_range, body_idx).begin <
+						end - nst->start) {
+					/* Another runtime has looked for leftovers in this content */
+					continue;
+				}
+
 				if (end > start &&
 					(ret = rspamd_mime_process_multipart_node(task, nst,
 															  NULL, start, end, FALSE, err)) != RSPAMD_MIME_PARSE_OK) {
-					if (nst != st) {
-						rspamd_mime_parse_stack_free(nst);
+					if (ret == RSPAMD_MIME_PARSE_NO_PART) {
+						/* Garbage between two boundaries, look further */
+						continue;
 					}
 
-					if (ret == RSPAMD_MIME_PARSE_NO_PART) {
-						return RSPAMD_MIME_PARSE_OK;
+					if (nst != st) {
+						rspamd_mime_parse_stack_free(nst);
 					}
 
 					return ret;
@@ -1993,6 +2851,16 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 	}
 
 	if (nst != st) {
+		/*
+		 * nst has looked for orphan boundaries in this message if it has
+		 * collected candidates, or if a part in it (e.g. one promoted to a
+		 * message) has done so. A text body is left to st as before: a
+		 * signature line ("-- ") must not start a part of its own.
+		 */
+		if (preprocessed || (nst->nested_bodies && nst->nested_bodies->len > 0)) {
+			rspamd_mime_parser_add_nested_body(st, part);
+		}
+
 		rspamd_mime_parse_stack_free(nst);
 	}
 
@@ -2005,6 +2873,14 @@ rspamd_mime_parse_task(struct rspamd_task *task, GError **err)
 	struct rspamd_mime_parser_runtime *st;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_OK;
 
+	if (task->cfg->max_message > 0 && task->msg.len > task->cfg->max_message) {
+		g_set_error(err, RSPAMD_MIME_QUARK, E2BIG,
+					"Message size exceeds configured maximum: %" G_GSIZE_FORMAT
+					" > %" G_GSIZE_FORMAT,
+					task->msg.len, task->cfg->max_message);
+		return RSPAMD_MIME_PARSE_LIMIT;
+	}
+
 	rspamd_mime_parser_init_shared(task->cfg);
 
 	if (++task->cfg->mime_parser_cfg->key_usages > max_key_usages) {
@@ -2014,12 +2890,12 @@ rspamd_mime_parse_task(struct rspamd_task *task, GError **err)
 	}
 
 	st = g_malloc0(sizeof(*st));
-	st->stack = g_ptr_array_sized_new(4);
 	st->pos = MESSAGE_FIELD(task, raw_headers_content).body_start;
 	st->end = task->msg.begin + task->msg.len;
 	st->boundaries = g_array_sized_new(FALSE, FALSE,
 									   sizeof(struct rspamd_mime_boundary), 8);
 	st->task = task;
+	st->root = st;
 
 	if (st->pos == NULL) {
 		st->pos = task->msg.begin;

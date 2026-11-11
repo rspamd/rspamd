@@ -32,13 +32,25 @@ context("HTML processing", function()
     <script src="script.js"></script>
     <style><!--
 - -a -a -a -- --- -
-  --></head>
+  --></style></head>
   <body>
     <!-- page content -->
     Hello, world!
   </body>
 </html>
       ]], 'Hello, world!' },
+    -- Only its own end tag ends a style, so browsers show nothing here
+    { [[
+<html>
+  <head>
+    <style><!--
+- -a -a -a -- --- -
+  --></head>
+  <body>
+    Hello, world!
+  </body>
+</html>
+      ]], '' },
     { [[
 <html lang="en">
   <head>
@@ -125,6 +137,411 @@ context("HTML processing", function()
 
     return parsed, tags
   end
+
+  test("Hidden display survives descendant tag defaults", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed, tags = parse_html_and_extract_tags(
+        '<div style="display:none">one<strong>two<em style="display:block">three</em></strong>four</div>', pool)
+
+    assert_equal('onetwothreefour', tostring(parsed:get_invisible()))
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'strong' or tag:get_type() == 'em' then
+        assert_false(tag:get_style().visible)
+      end
+    end
+    pool:destroy()
+  end)
+
+  test("A child can restore font size inside a zero-font parent", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed, tags = parse_html_and_extract_tags(
+        '<div style="font-size:0">hidden<strong style="font-size:16px">visible</strong></div>', pool)
+
+    assert_equal('hidden', tostring(parsed:get_invisible()))
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'strong' then
+        assert_true(tag:get_style().visible)
+      end
+    end
+    pool:destroy()
+  end)
+
+  -- Table layout sizes a table by its content, so a zero width on it (as in
+  -- tables pasted from Google Sheets) must not reach cells with overflow:hidden
+  test("Zero table width does not clip its cells", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed, tags = parse_html_and_extract_tags(
+        '<table style="table-layout:fixed;font-size:10pt;width:0px">' ..
+        '<colgroup><col width="160"><col width="420"></colgroup>' ..
+        '<tbody><tr style="height:21px"><td style="overflow:hidden">Item</td>' ..
+        '<td style="overflow:hidden">Description</td></tr></tbody></table>', pool)
+
+    assert_equal('', tostring(parsed:get_invisible()))
+    local cells = 0
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'td' then
+        assert_true(tag:get_style().visible)
+        cells = cells + 1
+      end
+    end
+    assert_equal(2, cells)
+    pool:destroy()
+  end)
+
+  test("Zero width box does not clip table cells", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed = parse_html_and_extract_tags(
+        '<div style="width:0"><table><tr><td style="overflow:hidden">cell</td></tr></table></div>', pool)
+
+    assert_equal('', tostring(parsed:get_invisible()))
+    pool:destroy()
+  end)
+
+  test("Zero width with overflow:hidden still hides blocks and cells", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed = parse_html_and_extract_tags(
+        '<div style="width:0"><div style="overflow:hidden">one</div></div>' ..
+        '<table><tr><td style="width:0;overflow:hidden">two</td></tr></table>', pool)
+
+    assert_equal('onetwo', tostring(parsed:get_invisible()))
+    pool:destroy()
+  end)
+
+  -- Transparent text is written to the visible buffer as spaces and a block
+  -- margin may trim those spaces away afterwards, so the length reported for
+  -- a transparent tag must come from the recorded offsets, not from whatever
+  -- part of the content survived in the buffer
+  local function transparent_tag_lengths(html, pool)
+    local rspamd_parsers = require("rspamd_parsers")
+    local parsed = rspamd_parsers.parse_html_content(html, pool)
+    local lengths = {}
+
+    parsed:foreach_tag({ 'p', 'span', 'div' }, function(tag, clen, is_leaf)
+      local bl = tag:get_style()
+      local content = tag:get_content()
+      table.insert(lengths, {
+        type = tag:get_type(),
+        clen = clen,
+        len = tag:get_content_length(),
+        transparent = bl and bl.transparent or false,
+        content = content and tostring(content) or nil,
+      })
+      return false
+    end)
+
+    return parsed, lengths
+  end
+
+  local white = 'color:#ffffff;background-color:#ffffff'
+
+  test("Transparent block at the end of the body keeps its length", function()
+    local pool = require("rspamd_mempool").create()
+    local _, lengths = transparent_tag_lengths(
+        '<html><body><p>Claim your discount.</p>' ..
+            '<p style="' .. white .. '">white on white text</p></body></html>', pool)
+
+    assert_equal(2, #lengths)
+    assert_true(lengths[2].transparent)
+    assert_equal(19, lengths[2].clen)
+    assert_equal(19, lengths[2].len)
+    pool:destroy()
+  end)
+
+  test("Transparent tag never reads the hidden buffer", function()
+    local pool = require("rspamd_mempool").create()
+    local hidden = 'Hidden preheader text that is never displayed to anyone'
+    local parsed, lengths = transparent_tag_lengths(
+        '<html><body><div style="display:none">' .. hidden .. '</div>' ..
+            '<p>Claim your discount.</p>' ..
+            '<p style="' .. white .. '">white on white text</p></body></html>', pool)
+
+    assert_equal(hidden, tostring(parsed:get_invisible()))
+    assert_equal(3, #lengths)
+    assert_equal('div', lengths[1].type)
+    assert_equal(hidden, lengths[1].content)
+    assert_true(lengths[3].transparent)
+    assert_equal(19, lengths[3].clen)
+    -- Either nothing or spaces, but never a slice of the hidden div
+    if lengths[3].content then
+      assert_nil(lengths[3].content:find('%S'))
+    end
+    pool:destroy()
+  end)
+
+  test("Transparent inline text followed by visible text is spaces", function()
+    local pool = require("rspamd_mempool").create()
+    local _, lengths = transparent_tag_lengths(
+        '<html><body><p>Claim <span style="' .. white .. '">white span text</span> discount.</p></body></html>',
+        pool)
+
+    assert_equal(2, #lengths)
+    assert_equal('span', lengths[2].type)
+    assert_true(lengths[2].transparent)
+    assert_equal(15, lengths[2].clen)
+    assert_equal(string.rep(' ', 15), lengths[2].content)
+    pool:destroy()
+  end)
+
+  test("Transparent inline text at the end of a paragraph keeps its length", function()
+    local pool = require("rspamd_mempool").create()
+    local _, lengths = transparent_tag_lengths(
+        '<html><body><p>Claim discount. <span style="' .. white .. '">white span text</span></p></body></html>',
+        pool)
+
+    assert_equal(2, #lengths)
+    assert_equal('span', lengths[2].type)
+    assert_true(lengths[2].transparent)
+    assert_equal(15, lengths[2].clen)
+    pool:destroy()
+  end)
+
+  test("Hidden text inside a transparent block goes to the hidden buffer", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed, lengths = transparent_tag_lengths(
+        '<html><body><p style="' .. white .. '">white outer <span style="display:none">hidden inner</span> end</p>' ..
+            '<p>Visible.</p></body></html>', pool)
+
+    assert_equal('hidden inner', tostring(parsed:get_invisible()))
+    assert_equal(3, #lengths)
+    assert_true(lengths[1].transparent)
+    assert_equal(string.rep(' ', 15), lengths[1].content)
+    assert_equal('span', lengths[2].type)
+    assert_equal('hidden inner', lengths[2].content)
+    pool:destroy()
+  end)
+
+  -- The standalone parser never applies stylesheets, so cases that need a
+  -- <style> block go through a real task, where the CSS parser is enabled
+  local function parse_html_message(body)
+    local rspamd_task = require("rspamd_task")
+    local msg = "From: test@example.com\r\nTo: nobody@example.com\r\nSubject: test\r\n" ..
+        "Content-Type: text/html\r\n\r\n" .. body
+    -- no assertions here: telescope only exposes them inside test bodies
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    if not res then return nil end
+    task:process_message()
+    local html = task:get_text_parts()[1]:get_html()
+    if not html then return nil end
+    local tags = {}
+    html:foreach_tag("any", function(tag)
+      table.insert(tags, tag)
+      return false
+    end)
+    return html, tags, task
+  end
+
+  -- Block-level tags get their own block while parsing; inline tags without
+  -- a style attribute only receive the parent's block on propagation, which
+  -- is the path where a copied `set` mask used to shadow stylesheet rules
+  test("A stylesheet rule overrides a size the parent set inline", function()
+    local html, tags = parse_html_message(
+        '<html><head><style>.fine { font-size: 0 }</style></head>' ..
+        '<body style="font-size:12px"><p><span class="fine">hidden</span>' ..
+        '<span>shown</span></p></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+
+    assert_equal('hidden', tostring(html:get_invisible()))
+    local checked = 0
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'span' then
+        local style = tag:get_style()
+        if tag:get_attribute('class') == 'fine' then
+          assert_false(style.visible)
+        else
+          assert_true(style.visible)
+          assert_equal(style.font_size, 12)
+        end
+        checked = checked + 1
+      end
+    end
+    assert_equal(checked, 2)
+  end)
+
+  test("Inherited values keep their inherited mask on children", function()
+    local html, tags = parse_html_message(
+        '<html><head><style>.tiny { font-size: 1px } .big { font-size: 200% }</style></head>' ..
+        '<body style="font-size:12px"><p><span class="tiny">hidden</span>' ..
+        '<span class="big">large</span><span>plain</span></p></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+
+    assert_equal('hidden', tostring(html:get_invisible()))
+    local checked = 0
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'span' then
+        local class = tag:get_attribute('class')
+        local style = tag:get_style()
+        if class == 'tiny' then
+          assert_false(style.visible)
+        elseif class == 'big' then
+          assert_true(style.visible)
+          assert_equal(style.font_size, 24)
+        else
+          assert_true(style.visible)
+          assert_equal(style.font_size, 12)
+        end
+        checked = checked + 1
+      end
+    end
+    assert_equal(checked, 3)
+  end)
+
+  -- A grouped selector list used to be truncated to the first simple selector
+  -- of its first part, so a rule meant for a spacer blanked every such element
+  test("A grouped descendant selector is not applied by its first part", function()
+    local html = parse_html_message(
+        '<html><head><style>div.mainbox ul li.spacer, div.mainbox ol li.spacer ' ..
+        '{ font-size: 0; color: transparent; opacity: 0 }</style></head>' ..
+        '<body><div class="mainbox"><div>kept visible</div></div></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+    assert_equal('', tostring(html:get_invisible()))
+
+    -- The same declarations on a selector we can evaluate still hide
+    local hidden = parse_html_message(
+        '<html><head><style>.spacer { font-size: 0 }</style></head>' ..
+        '<body><div class="spacer">gone</div></body></html>')
+    assert_not_nil(hidden, 'html part not parsed')
+    assert_equal('gone', tostring(hidden:get_invisible()))
+  end)
+
+  -- Sizes from a stylesheet are resolved against the parent once more after
+  -- the merge, which must not bring the table width back into the cells
+  test("Zero table width from a stylesheet does not clip its cells", function()
+    local html = parse_html_message(
+        '<html><head><style>.sheet { width: 0 } .cell { overflow: hidden } ' ..
+        '.half { width: 50%; overflow: hidden }</style></head>' ..
+        '<body><table class="sheet"><tr><td class="cell">cell</td>' ..
+        '<td class="half">half</td></tr></table></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+    assert_equal('', tostring(html:get_invisible()))
+  end)
+
+  local function invisible_of(css, body)
+    local html = parse_html_message(
+        '<html><head><style>' .. css .. '</style></head><body>' .. body .. '</body></html>')
+    if not html then
+      return nil
+    end
+    return tostring(html:get_invisible())
+  end
+
+  test("Compound selectors match all parts on the same element", function()
+    local css = 'p.x { display: none }'
+    assert_equal('gone', invisible_of(css,
+        '<p class="x">gone</p><p class="y">kept</p><div class="x">kept</div>'))
+    assert_equal('gone', invisible_of('.a.b { display: none }',
+        '<p class="b a">gone</p><p class="a">kept</p><p class="b">kept</p>'))
+    assert_equal('gone', invisible_of('div#top.x { display: none }',
+        '<div id="top" class="x">gone</div><div id="top">kept</div><div class="x">kept</div>'))
+  end)
+
+  test("Descendant combinator matches any ancestor", function()
+    local css = 'div.mainbox li.spacer { font-size: 0 }'
+    assert_equal('gone', invisible_of(css,
+        '<div class="mainbox"><ul><li class="spacer">gone</li><li>kept</li></ul></div>' ..
+        '<div class="other"><ul><li class="spacer">kept</li></ul></div>' ..
+        '<ul><li class="spacer">kept</li></ul>'))
+    -- The nearest matching ancestor is not the only candidate
+    assert_equal('gone', invisible_of('.a .b .c { display: none }',
+        '<div class="a"><div class="b"><div class="b"><span class="c">gone</span></div></div></div>' ..
+        '<div class="b"><div class="a"><span class="c">kept</span></div></div>'))
+  end)
+
+  test("Child combinator matches the parent only", function()
+    local css = 'div > p { display: none }'
+    assert_equal('gone', invisible_of(css,
+        '<div><p>gone</p><span><p>kept</p></span></div><p>kept</p>'))
+  end)
+
+  test("Sibling combinators match preceding siblings", function()
+    assert_equal('gone', invisible_of('h1 + p { display: none }',
+        '<div><h1>title</h1><p>gone</p><p>kept</p></div><div><p>kept</p><h1>title</h1></div>'))
+    assert_equal('gonegone', invisible_of('h1 ~ p { display: none }',
+        '<div><p>kept</p><h1>title</h1><p>gone</p><span>x</span><p>gone</p></div>' ..
+        '<div><p>kept</p></div>'))
+  end)
+
+  test("Grouped complex selectors are applied to every member", function()
+    local css = 'div.mainbox ul li.spacer, div.mainbox ol li.spacer { font-size: 0 }'
+    assert_equal('gonegone', invisible_of(css,
+        '<div class="mainbox"><ul><li class="spacer">gone</li></ul>' ..
+        '<ol><li class="spacer">gone</li></ol><p>Visible content.</p></div>'))
+  end)
+
+  test("Selectors that cannot be evaluated do not hide anything", function()
+    assert_equal('', invisible_of('a:hover { display: none }', '<a href="http://example.com/">kept</a>'))
+    assert_equal('', invisible_of('a[href] { display: none }', '<a href="http://example.com/">kept</a>'))
+    -- But the members of the list that can be evaluated still apply
+    assert_equal('gone', invisible_of('a:hover, p.x { display: none }',
+        '<a href="http://example.com/">kept</a><p class="x">gone</p>'))
+  end)
+
+  test("A more specific selector wins regardless of the order", function()
+    assert_equal('gone', invisible_of(
+        'div.mainbox .spacer { font-size: 0 } .spacer { font-size: 14px }',
+        '<div class="mainbox"><span class="spacer">gone</span></div><span class="spacer">kept</span>'))
+    assert_equal('gone', invisible_of(
+        '.spacer { font-size: 14px } div.mainbox .spacer { font-size: 0 }',
+        '<div class="mainbox"><span class="spacer">gone</span></div><span class="spacer">kept</span>'))
+    -- At equal specificity the later rule wins
+    assert_equal('gone', invisible_of(
+        '.a { font-size: 14px } .b { font-size: 0 }',
+        '<span class="a b">gone</span>'))
+    assert_equal('', invisible_of(
+        '.b { font-size: 0 } .a { font-size: 14px }',
+        '<span class="a b">kept</span>'))
+    -- A less specific display:none does not leak through a more specific display:block
+    assert_equal('', invisible_of(
+        'p { display: none } .show { display: block }',
+        '<p class="show">kept</p>'))
+  end)
+
+  -- A repeated selector is a new rule in the cascade: only the declarations
+  -- of the later rule move past the rules written in between
+  test("A repeated selector does not carry its earlier declarations forward", function()
+    assert_equal('', invisible_of(
+        '.a { font-size: 0 } .b { font-size: 14px } .a { color: red }',
+        '<span class="b a">kept</span>'))
+    assert_equal('gone', invisible_of(
+        '.a { color: red } .b { font-size: 14px } .a { font-size: 0 }',
+        '<span class="b a">gone</span>'))
+  end)
+
+  test("Deep nesting with long chains is matched in bounded time", function()
+    local nested = string.rep('<div class="a">', 28) .. '<span class="b">text</span>' ..
+        string.rep('</div>', 28)
+    -- Descendant-only chains are matched greedily, no backtracking
+    local chain = string.rep('.a ', 16) .. '.b'
+    assert_equal('text', invisible_of(chain .. ' { display: none }', nested))
+    -- A mismatch at the far end of the chain fails fast as well
+    assert_equal('', invisible_of('.z ' .. string.rep('.a ', 15) .. '.b { display: none }', nested))
+    -- Alternating child/descendant links need backtracking; the budget bounds it
+    local mixed = '#nope > ' .. string.rep('.a > .a ', 7) .. '.a .b'
+    assert_equal('', invisible_of(mixed .. ' { display: none }', nested))
+  end)
+
+  test("Repeated class names do not multiply the cascade", function()
+    local css = string.rep('.x { font-size: 0 }', 512)
+    assert_equal('gone', invisible_of(css,
+        '<span class="' .. string.rep('x ', 1024) .. '">gone</span>'))
+    assert_equal('gone', invisible_of(css, '<span class="x">gone</span>'))
+  end)
+
+  test("Oversized compounds are dropped whole", function()
+    local compound = string.rep('.x', 65)
+    assert_equal('', invisible_of(compound .. ' { display: none }',
+        '<span class="x">kept</span>'))
+    assert_equal('gone', invisible_of(compound .. ', .y { display: none }',
+        '<span class="x">kept</span><span class="y">gone</span>'))
+  end)
+
+  test("Matching work is bounded across rules and elements", function()
+    local rule = '#missing > ' .. string.rep('div ', 8) .. 'span { color: red }'
+    local body = string.rep('<div>', 28) .. string.rep('<span>kept</span>', 256) ..
+        string.rep('</div>', 28) .. '<p class="end">tail</p>'
+    -- Once exhausted, later elements must not receive stylesheet declarations.
+    assert_equal('', invisible_of(string.rep(rule, 128) .. '.end { display: none }', body))
+    assert_equal('tail', invisible_of(rule .. '.end { display: none }', body))
+  end)
 
   test("HTML tag get_all_attributes basic test", function()
     local rspamd_mempool = require("rspamd_mempool")

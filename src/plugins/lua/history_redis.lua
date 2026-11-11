@@ -198,7 +198,7 @@ local function handle_history_request(task, conn, from, to, reset)
   local prefix = lua_util.jinja_template(settings.key_prefix, template_env, false, true)
 
   if reset then
-    local function redis_ltrim_cb(err, _)
+    local function redis_del_cb(err, _)
       if err then
         rspamd_logger.errx(task, 'got error %s when resetting history',
             err)
@@ -211,9 +211,9 @@ local function handle_history_request(task, conn, from, to, reset)
         redis_params, -- connect params
         nil, -- hash key
         true, -- is write
-        redis_ltrim_cb, --callback
-        'LTRIM', -- command
-        { prefix, '0', '0' } -- arguments
+        redis_del_cb, --callback
+        'DEL', -- command
+        { prefix } -- arguments
     )
   else
     local function redis_lrange_cb(err, data)

@@ -7,7 +7,9 @@ test("Logs page displays recent errors and allows refresh", async ({page}, testI
 
     await page.locator("#history_nav").click();
     await expect(page.locator("#errorsLog")).toBeVisible();
-    const rowCount = await page.locator("#errorsLog tbody tr").count();
+    // Ensure table data has been loaded before counting rows
+    await expect(page.locator("#errorsLog .tabulator-table .tabulator-row").first()).toBeVisible();
+    const rowCount = await page.locator("#errorsLog .tabulator-table .tabulator-row").count();
     expect(rowCount).toBeGreaterThan(0);
     await page.locator("#updateErrors").click();
     await expect(page.locator("#errorsLog")).toBeVisible();

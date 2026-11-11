@@ -22,6 +22,7 @@
 
 #include "libserver/multipart_form.hxx"
 #include "libserver/multipart_response.hxx"
+#include "libmime/content_type.h"
 
 #include <string>
 #include <string_view>
@@ -400,6 +401,40 @@ TEST_SUITE("multipart_form")
 		CHECK(result->parts[0].name == "lower");
 		CHECK(result->parts[0].content_type == "text/plain");
 		CHECK(result->parts[0].content_encoding == "gzip");
+	}
+
+	TEST_CASE("uppercase boundary via content-type parser")
+	{
+		/* HTTP boundaries are case sensitive (RFC 2046); ct->boundary is
+		 * lowercased for MIME clients quirks, so HTTP callers must use
+		 * ct->orig_boundary to match the body. */
+		std::string ct_hdr = "multipart/form-data; boundary=\"BoundaryABC123\"";
+		std::string body =
+			"--BoundaryABC123\r\n"
+			"Content-Disposition: form-data; name=\"metadata\"\r\n"
+			"\r\n"
+			"{}\r\n"
+			"--BoundaryABC123--\r\n";
+
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "multipart", 0);
+		auto *ct = rspamd_content_type_parse(ct_hdr.data(), ct_hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		REQUIRE(ct->orig_boundary.len > 0);
+
+		std::string_view orig_boundary{ct->orig_boundary.begin, ct->orig_boundary.len};
+		CHECK(orig_boundary == "BoundaryABC123");
+
+		auto result = rspamd::http::parse_multipart_form(body, orig_boundary);
+		REQUIRE(result.has_value());
+		CHECK(result->parts.size() == 1);
+		CHECK(result->parts[0].name == "metadata");
+
+		/* The lowercased boundary must not match the body */
+		std::string_view lc_boundary{ct->boundary.begin, ct->boundary.len};
+		CHECK(lc_boundary == "boundaryabc123");
+		CHECK(!rspamd::http::parse_multipart_form(body, lc_boundary).has_value());
+
+		rspamd_mempool_delete(pool);
 	}
 }
 

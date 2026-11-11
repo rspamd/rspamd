@@ -1,0 +1,28 @@
+*** Settings ***
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
+Test Tags       miltertest
+Library         Process
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
+
+*** Variables ***
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/milter_dead_upstream.conf
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+
+*** Test Cases ***
+DEAD UPSTREAM RETURNS TEMPFAIL AND WORKER SURVIVES
+  Milter Test  dead_upstream.lua
+
+*** Keywords ***
+Milter Test
+  [Arguments]  ${mtlua}
+  Skip If  not ${HAVE_MILTERTEST}  msg=miltertest not installed
+  ${result} =  Run Process  miltertest  -Dport\=${RSPAMD_PORT_PROXY}  -Dhost\=${RSPAMD_LOCAL_ADDR}  -s  ${RSPAMD_TESTDIR}/lua/miltertest/${mtlua}
+  ...  cwd=${RSPAMD_TESTDIR}/lua/miltertest
+  Should Match Regexp  ${result.stderr}  ^$
+  Log  ${result.rc}
+  Log  ${result.stdout}
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stdout}  values=false

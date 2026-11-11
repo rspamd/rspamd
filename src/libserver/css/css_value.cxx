@@ -25,6 +25,9 @@
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
 
+#include <algorithm>
+#include <cmath>
+
 /* Helper for unit test stringification */
 namespace doctest {
 template<>
@@ -59,54 +62,52 @@ auto css_value::maybe_color_from_string(const std::string_view &input)
 	return std::nullopt;
 }
 
-constexpr static inline auto hexpair_decode(char c1, char c2) -> std::uint8_t
+/* Value of a hex digit, or -1 if the character is not one */
+constexpr static inline auto hex_digit_value(char c) -> int
 {
-	std::uint8_t ret = 0;
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
 
-	if (c1 >= '0' && c1 <= '9') ret = c1 - '0';
-	else if (c1 >= 'A' && c1 <= 'F')
-		ret = c1 - 'A' + 10;
-	else if (c1 >= 'a' && c1 <= 'f')
-		ret = c1 - 'a' + 10;
-
-	ret *= 16;
-
-	if (c2 >= '0' && c2 <= '9') ret += c2 - '0';
-	else if (c2 >= 'A' && c2 <= 'F')
-		ret += c2 - 'A' + 10;
-	else if (c2 >= 'a' && c2 <= 'f')
-		ret += c2 - 'a' + 10;
-
-	return ret;
+	return -1;
 }
 
 auto css_value::maybe_color_from_hex(const std::string_view &input)
 	-> std::optional<css_value>
 {
-	if (input.length() == 6) {
-		/* Plain RGB */
-		css_color col(hexpair_decode(input[0], input[1]),
-					  hexpair_decode(input[2], input[3]),
-					  hexpair_decode(input[4], input[5]));
-		return css_value(col);
-	}
-	else if (input.length() == 3) {
-		/* Rgb as 3 hex digests */
-		css_color col(hexpair_decode(input[0], input[0]),
-					  hexpair_decode(input[1], input[1]),
-					  hexpair_decode(input[2], input[2]));
-		return css_value(col);
-	}
-	else if (input.length() == 8) {
-		/* RGBA */
-		css_color col(hexpair_decode(input[0], input[1]),
-					  hexpair_decode(input[2], input[3]),
-					  hexpair_decode(input[4], input[5]),
-					  hexpair_decode(input[6], input[7]));
-		return css_value(col);
+	const auto len = input.length();
+
+	if (len != 3 && len != 4 && len != 6 && len != 8) {
+		return std::nullopt;
 	}
 
-	return std::nullopt;
+	int digits[8];
+
+	for (std::size_t i = 0; i < len; i++) {
+		digits[i] = hex_digit_value(input[i]);
+
+		if (digits[i] < 0) {
+			/* A browser drops the whole declaration */
+			return std::nullopt;
+		}
+	}
+
+	if (len <= 4) {
+		/* #rgb and #rgba: every digit is doubled */
+		auto dbl = [&](std::size_t i) { return (std::uint8_t) (digits[i] * 17); };
+
+		return css_value(css_color(dbl(0), dbl(1), dbl(2), len == 4 ? dbl(3) : 255));
+	}
+
+	auto pair = [&](std::size_t i) { return (std::uint8_t) (digits[i] * 16 + digits[i + 1]); };
+
+	return css_value(css_color(pair(0), pair(2), pair(4), len == 8 ? pair(6) : 255));
 }
 
 constexpr static inline auto rgb_color_component_convert(const css_parser_token &tok)
@@ -124,7 +125,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 			else if (dbl < 0) {
 				dbl = 0;
 			}
-			ret = (std::uint8_t)(dbl / 100.0 * 255.0);
+			ret = (std::uint8_t) (dbl / 100.0 * 255.0);
 		}
 		else {
 			if (dbl > 255) {
@@ -134,7 +135,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 				dbl = 0;
 			}
 
-			ret = (std::uint8_t)(dbl);
+			ret = (std::uint8_t) (dbl);
 		}
 	}
 
@@ -170,7 +171,7 @@ constexpr static inline auto alpha_component_convert(const css_parser_token &tok
 		}
 	}
 
-	return (std::uint8_t)(ret * 255.0);
+	return (std::uint8_t) (ret * 255.0);
 }
 
 constexpr static inline auto h_component_convert(const css_parser_token &tok)
@@ -191,8 +192,15 @@ constexpr static inline auto h_component_convert(const css_parser_token &tok)
 			ret = (dbl / 100.0);
 		}
 		else {
-			dbl = ((((int) dbl % 360) + 360) % 360); /* Deal with rotations */
-			ret = dbl / 360.0;                       /* Normalize to 0..1 */
+			if (!std::isfinite(dbl)) {
+				dbl = 0;
+			}
+			/* Deal with rotations, a negative hue wraps around */
+			auto hue = std::fmod((double) dbl, 360.0);
+			if (hue < 0) {
+				hue += 360.0;
+			}
+			ret = hue / 360.0; /* Normalize to 0..1 */
 		}
 	}
 
@@ -237,16 +245,17 @@ static inline auto hsl_to_rgb(double h, double s, double l)
 
 	if (s == 0) {
 		/* Achromatic */
-		ret.r = l;
-		ret.g = l;
-		ret.b = l;
+		auto grey = (std::uint8_t) (std::clamp(l, 0.0, 1.0) * 255.0 + 0.5);
+		ret.r = grey;
+		ret.g = grey;
+		ret.b = grey;
 	}
 	else {
 		auto q = l <= 0.5 ? l * (1.0 + s) : l + s - l * s;
 		auto p = 2.0 * l - q;
-		ret.r = (std::uint8_t)(hue2rgb(p, q, h + 1.0 / 3.0) * 255);
-		ret.g = (std::uint8_t)(hue2rgb(p, q, h) * 255);
-		ret.b = (std::uint8_t)(hue2rgb(p, q, h - 1.0 / 3.0) * 255);
+		ret.r = (std::uint8_t) (hue2rgb(p, q, h + 1.0 / 3.0) * 255);
+		ret.g = (std::uint8_t) (hue2rgb(p, q, h) * 255);
+		ret.b = (std::uint8_t) (hue2rgb(p, q, h - 1.0 / 3.0) * 255);
 	}
 
 	ret.alpha = 255;
@@ -320,6 +329,7 @@ auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 
 constexpr const auto display_names_map = frozen::make_unordered_map<frozen::string, css_display_value>({
 	{"hidden", css_display_value::DISPLAY_HIDDEN},
+	{"collapse", css_display_value::DISPLAY_HIDDEN},
 	{"none", css_display_value::DISPLAY_HIDDEN},
 	{"inline", css_display_value::DISPLAY_INLINE},
 	{"block", css_display_value::DISPLAY_BLOCK},
@@ -443,6 +453,27 @@ TEST_CASE("css colors strings")
 			}
 		}
 	}
+}
+TEST_CASE("css hex colors are validated")
+{
+	CHECK(!css_value::maybe_color_from_hex("12345g").has_value());
+	CHECK(!css_value::maybe_color_from_hex("zzz").has_value());
+	CHECK(!css_value::maybe_color_from_hex("0000000g").has_value());
+	CHECK(!css_value::maybe_color_from_hex("12345").has_value());
+	CHECK(!css_value::maybe_color_from_hex("").has_value());
+	CHECK(css_value::maybe_color_from_hex("1234").value().to_color().value() ==
+		  css_color(17, 34, 51, 68));
+	CHECK(css_value::maybe_color_from_hex("11223344").value().to_color().value() ==
+		  css_color(17, 34, 51, 68));
+	CHECK(css_value::maybe_color_from_hex("ABC").value().to_color().value() ==
+		  css_color(170, 187, 204));
+}
+TEST_CASE("hsl greys and hue")
+{
+	CHECK(hsl_to_rgb(0.0, 0.0, 1.0) == css_color(255, 255, 255));
+	CHECK(hsl_to_rgb(0.5, 0.0, 0.0) == css_color(0, 0, 0));
+	CHECK(hsl_to_rgb(0.0, 0.0, 0.5) == css_color(128, 128, 128));
+	CHECK(hsl_to_rgb(0.0, 1.0, 0.5) == css_color(255, 0, 0));
 }
 }
 ;

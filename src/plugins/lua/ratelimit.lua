@@ -652,6 +652,7 @@ if opts then
           end
 
           settings.limits[t].selector = selector
+          settings.limits[t].selector_str = lim.selector
         end
       else
         rspamd_logger.warnx(rspamd_config, 'old syntax for ratelimits: %s', lim)
@@ -749,6 +750,15 @@ if opts then
     }
 
     local id = rspamd_config:register_symbol(s)
+
+    -- Symbols used by the selectors (e.g. `symbol(DKIM_CHECK)`) are checked
+    -- before the ratelimit check; when it is a prefilter, they are hoisted to
+    -- the prefilter stage
+    for _, lim in pairs(settings.limits) do
+      if lim.selector_str then
+        lua_selectors.register_dependencies(rspamd_config, 'RATELIMIT_CHECK', lim.selector_str)
+      end
+    end
 
     -- Register per bucket symbols
     -- Display what's enabled

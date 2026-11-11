@@ -70,11 +70,17 @@ public:
 			seconds = 0.0;
 		}
 		now_ += seconds;
+		if (loop_) {
+			ev_now_resync(loop_);
+		}
 	}
 
 	void set(double t)
 	{
 		now_ = t;
+		if (loop_) {
+			ev_now_resync(loop_);
+		}
 	}
 
 	double now() const

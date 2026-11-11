@@ -167,7 +167,7 @@ local function replies_check(task)
     -- making params out of recipients list for replies set
     local task_time_str = tostring(task_time)
 
-    local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, settings.sender_prefix)
+    local sender_string = lua_util.maybe_obfuscate_string(tostring(sender), settings, 'reply_sender')
     local sender_key = make_key(sender_string:lower(), 8)
 
     local params = recipients

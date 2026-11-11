@@ -22,6 +22,8 @@
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
 #include "libutil/str_util.h"
+#include "libutil/cxx/utf8_util.h"
+#include <zlib.h> /* for crc32() */
 #include "libserver/html/html.h"
 #include "libserver/hyperscan_tools.h"
 #include "libserver/async_session.h"
@@ -119,9 +121,10 @@ LUA_FUNCTION_DEF(util, decode_html_entities);
 LUA_FUNCTION_DEF(util, decode_base64);
 
 /***
- * @function util.decode_ascii85(input)
+ * @function util.decode_ascii85(input[, size_limit])
  * Decodes data from ASCII85 (Base85) encoding used in PDF files
  * @param {text or string} input data to decode
+ * @param {integer} size_limit optional maximum size of the decoded data; decoding fails over it
  * @return {rspamd_text} decoded data chunk or nil on error
  */
 LUA_FUNCTION_DEF(util, decode_ascii85);
@@ -196,6 +199,20 @@ LUA_FUNCTION_DEF(util, levenshtein_distance);
  * @return {string} Folded value of the header
  */
 LUA_FUNCTION_DEF(util, fold_header);
+
+/***
+ * @function util.fold_header_unstructured(name, value, [how])
+ * Fold an unstructured header value (Subject, free text) the RFC 5322 way:
+ * line breaks go only before existing whitespace, which is kept, so unfolding
+ * gives the value back unchanged. Unlike `fold_header`, it never folds after
+ * ',' or ';' and never turns the folding whitespace into a tab.
+ *
+ * @param {string} name name of the header
+ * @param {string} value value of the header
+ * @param {string} how "cr" for \r, "lf" for \n and "crlf" for \r\n (default)
+ * @return {string} Folded value of the header
+ */
+LUA_FUNCTION_DEF(util, fold_header_unstructured);
 
 /***
  * @function util.is_uppercase(str)
@@ -483,7 +500,7 @@ LUA_FUNCTION_DEF(util, gzip_decompress);
  *
  * @param {string/rspamd_text} data compressed data
  * @param {integer} size_limit optional size limit
- * @return {rspamd_text} decompressed text
+ * @return {rspamd_text} decompressed text, or nil and a description of the error
  */
 LUA_FUNCTION_DEF(util, inflate);
 
@@ -511,6 +528,13 @@ LUA_FUNCTION_DEF(util, normalize_prob);
  * @return {boolean} true if a string is spoofed
  */
 LUA_FUNCTION_DEF(util, is_utf_spoofed);
+
+/***
+ * @function util.utf8_confusable_skeleton(str)
+ * Returns the UTS #39 confusable skeleton for a UTF-8 string.
+ * @return {string} confusable skeleton
+ */
+LUA_FUNCTION_DEF(util, utf8_confusable_skeleton);
 
 /**
 * @function util.is_utf_mixed_script(str)
@@ -715,6 +739,20 @@ LUA_FUNCTION_DEF(util, caseless_hash);
 LUA_FUNCTION_DEF(util, caseless_hash_fast);
 
 /***
+ *  @function util.crc32(input[, start[, len]])
+ * Calculates the CRC-32 checksum of a string or rspamd_text, optionally over the
+ * byte range starting at `start` (1-indexed, default 1) and spanning `len` bytes
+ * (default: to the end). The range is read in place (no copy). This is the
+ * standard CRC-32 (zlib crc32 / YARA hash.crc32, polynomial 0xEDB88320) and the
+ * result is a Lua integer suitable for numeric comparison.
+ * @param {string|text} input data to checksum
+ * @param {integer} start 1-based start index
+ * @param {integer} len number of bytes
+ * @return {integer} crc32 value as an unsigned 32-bit integer
+ */
+LUA_FUNCTION_DEF(util, crc32);
+
+/***
  *  @function util.get_hostname()
  * Returns hostname for this machine
  * @return {string} hostname
@@ -759,9 +797,11 @@ LUA_FUNCTION_DEF(util, parse_content_type);
 
 /***
  *  @function util.mime_header_encode(hdr[, is_structured])
- * Encodes header if needed
+ * RFC 2047-encodes a header value if it carries 8-bit data
  * @param {string} hdr input header
- * @param {boolean} is_structured if true, then we encode as structured header (e.g. encode all non alpha-numeric characters)
+ * @param {boolean} is_structured if true, the value is an address list: only
+ * display names, group names and comments are encoded, addresses (which have
+ * no RFC 2047 form) are kept as they are; otherwise it is unstructured text
  * @return encoded header
  */
 LUA_FUNCTION_DEF(util, mime_header_encode);
@@ -803,6 +843,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, parse_html),
 	LUA_INTERFACE_DEF(util, levenshtein_distance),
 	LUA_INTERFACE_DEF(util, fold_header),
+	LUA_INTERFACE_DEF(util, fold_header_unstructured),
 	LUA_INTERFACE_DEF(util, is_uppercase),
 	LUA_INTERFACE_DEF(util, humanize_number),
 	LUA_INTERFACE_DEF(util, get_tld),
@@ -836,7 +877,9 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, normalize_prob),
 	LUA_INTERFACE_DEF(util, caseless_hash),
 	LUA_INTERFACE_DEF(util, caseless_hash_fast),
+	LUA_INTERFACE_DEF(util, crc32),
 	LUA_INTERFACE_DEF(util, is_utf_spoofed),
+	LUA_INTERFACE_DEF(util, utf8_confusable_skeleton),
 	LUA_INTERFACE_DEF(util, is_utf_mixed_script),
 	LUA_INTERFACE_DEF(util, is_utf_outside_range),
 	LUA_INTERFACE_DEF(util, get_string_stats),
@@ -1382,8 +1425,33 @@ lua_util_decode_ascii85(lua_State *L)
 	}
 
 	if (s != NULL && inlen > 0) {
-		/* ASCII85 expands 5 chars to 4 bytes, so output is at most (inlen * 4 / 5) + 4 */
-		gsize max_outlen = (inlen * 4 / 5) + 4;
+		/*
+		 * ASCII85 expands 5 chars to 4 bytes, and a `z` stands for 4 zero
+		 * bytes on its own
+		 */
+		gsize nz = 0;
+		const char *zp = s, *zend = s + inlen;
+
+		while ((zp = memchr(zp, 'z', zend - zp)) != NULL) {
+			nz++;
+			zp++;
+		}
+
+		gsize max_outlen = ((inlen - nz) * 4 / 5) + 4 + nz * 4;
+
+		if (lua_type(L, 2) == LUA_TNUMBER) {
+			lua_Integer size_limit = lua_tointeger(L, 2);
+
+			if (size_limit <= 0) {
+				return luaL_error(L, "invalid arguments (size_limit)");
+			}
+
+			/* More than that does not fit and fails the decoding */
+			if ((gsize) size_limit < max_outlen) {
+				max_outlen = size_limit;
+			}
+		}
+
 		unsigned char *buf = g_malloc(max_outlen);
 
 		outlen = rspamd_decode_ascii85_buf(s, inlen, buf, max_outlen);
@@ -1640,6 +1708,40 @@ lua_util_fold_header(lua_State *L)
 }
 
 static int
+lua_util_fold_header_unstructured(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *name, *value;
+	enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
+	GString *folded;
+
+	name = lua_check_text_or_string(L, 1);
+	value = lua_check_text_or_string(L, 2);
+
+	if (!name || !value) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (lua_isstring(L, 3)) {
+		const char *how_str = lua_tostring(L, 3);
+
+		if (strcmp(how_str, "cr") == 0) {
+			how = RSPAMD_TASK_NEWLINES_CR;
+		}
+		else if (strcmp(how_str, "lf") == 0) {
+			how = RSPAMD_TASK_NEWLINES_LF;
+		}
+	}
+
+	folded = rspamd_header_value_fold_unstructured(name->start, name->len,
+												   value->start, value->len, 0, how);
+	lua_pushlstring(L, folded->str, folded->len);
+	g_string_free(folded, TRUE);
+
+	return 1;
+}
+
+static int
 lua_util_is_uppercase(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1803,12 +1905,17 @@ lua_util_lower_utf8(lua_State *L)
 	t = lua_check_text_or_string(L, 1);
 
 	if (t) {
-		dst = g_malloc(t->len);
+		/*
+		 * U+023A and U+023E grow from 2 to 3 bytes when lowercased, and
+		 * U8_APPEND does not check the capacity for ASCII characters
+		 */
+		int32_t dst_len = t->len + t->len / 2;
+		dst = g_malloc(dst_len);
 
 		while (i < t->len && err == 0) {
 			U8_NEXT((uint8_t *) t->start, i, t->len, uc);
 			uc = u_tolower(uc);
-			U8_APPEND(dst, j, t->len, uc, err);
+			U8_APPEND(dst, j, dst_len, uc, err);
 		}
 
 		if (lua_isstring(L, 1)) {
@@ -2440,6 +2547,57 @@ lua_util_caseless_hash_fast(lua_State *L)
 }
 
 static int
+lua_util_crc32(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = NULL;
+	int64_t start = 1, len = -1;
+
+	t = lua_check_text_or_string(L, 1);
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (lua_isnumber(L, 2)) {
+		start = lua_tointeger(L, 2);
+	}
+	if (lua_isnumber(L, 3)) {
+		len = lua_tointeger(L, 3);
+	}
+
+	if (start < 1 || (start - 1) > t->len) {
+		return luaL_error(L, "invalid start offset %d (input len %d)",
+						  (int) start, (int) t->len);
+	}
+
+	if (len == -1) {
+		len = t->len - (start - 1);
+	}
+
+	if (len < 0 || len > (t->len - (start - 1))) {
+		return luaL_error(L, "invalid length");
+	}
+
+	/* Standard CRC-32 (poly 0xEDB88320), bit-exact with zlib/YARA hash.crc32 */
+	const unsigned char *p = (const unsigned char *) t->start + (start - 1);
+	gsize remain = (gsize) len;
+	uLong crc = crc32(0L, Z_NULL, 0);
+
+	/* zlib crc32() takes a uInt length, so feed the slice in chunks */
+	while (remain > 0) {
+		uInt chunk = remain > G_MAXUINT ? G_MAXUINT : (uInt) remain;
+		crc = crc32(crc, p, chunk);
+		p += chunk;
+		remain -= chunk;
+	}
+
+	lua_pushinteger(L, (lua_Integer) (uint32_t) crc);
+
+	return 1;
+}
+
+static int
 lua_util_is_utf_spoofed(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2525,6 +2683,49 @@ lua_util_is_utf_spoofed(lua_State *L)
 	}
 
 	return nres;
+}
+
+static int
+lua_util_utf8_confusable_skeleton(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
+	static struct rspamd_unicode_spoof_checker *checker;
+	gssize skeleton_len;
+	char *skeleton;
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (checker == NULL) {
+		checker = rspamd_unicode_spoof_checker_create();
+		if (checker == NULL) {
+			return luaL_error(L, "cannot init spoof checker");
+		}
+	}
+
+	skeleton_len = rspamd_unicode_spoof_skeleton(checker, t->start, t->len,
+												 NULL, 0);
+	if (skeleton_len < 0) {
+		return luaL_error(L, "cannot create confusable skeleton");
+	}
+	if (skeleton_len == 0) {
+		lua_pushliteral(L, "");
+		return 1;
+	}
+
+	skeleton = g_malloc(skeleton_len);
+	if (rspamd_unicode_spoof_skeleton(checker, t->start, t->len,
+									  skeleton, skeleton_len) != skeleton_len) {
+		g_free(skeleton);
+		return luaL_error(L, "cannot create confusable skeleton");
+	}
+
+	lua_pushlstring(L, skeleton, skeleton_len);
+	g_free(skeleton);
+
+	return 1;
 }
 
 static int
@@ -4475,6 +4676,7 @@ struct rspamd_ev_base_sleep_cbdata {
 	lua_State *L;
 	int cbref;
 	struct thread_entry *thread;
+	guint64 thread_generation;
 	struct rspamd_async_session *session;
 	ev_timer ev;
 };
@@ -4517,7 +4719,13 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 	}
 	else if (cbdata->thread) {
 		/* Sync mode: resume the coroutine */
-		lua_thread_resume(cbdata->thread, 0);
+		lua_thread_resume_checked(cbdata->thread, cbdata->thread_generation, 0);
+	}
+
+	if (cbdata->thread) {
+		/* Balances the retain taken when the coroutine went to sleep */
+		lua_thread_pool_release_entry(cbdata->thread);
+		cbdata->thread = NULL;
 	}
 
 	g_free(cbdata);
@@ -4600,6 +4808,9 @@ lua_ev_base_sleep(lua_State *L)
 
 			if (cfg && cfg->lua_thread_pool) {
 				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+				cbdata->thread_generation = cbdata->thread->generation;
+				/* Held until the timer fires, released in lua_ev_base_sleep_cb() */
+				lua_thread_pool_retain_entry(cbdata->thread);
 
 				/* Register session event if available so wait_session_events waits for us */
 				if (session) {

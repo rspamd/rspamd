@@ -495,6 +495,19 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['description'] = 'Returns effective second-level domain (eSLD) using the Public Suffix List',
     ['args_schema'] = {}
   },
+  -- Extracts the public suffix from a hostname
+  ['get_public_suffix'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, _)
+      local tld_lookup = require "rspamd_tld_lookup"
+      return (tld_lookup.suffix(inp)), 'string'
+    end,
+    ['description'] = 'Returns the public suffix of a hostname using the Public Suffix List',
+    ['args_schema'] = {}
+  },
   -- Converts list of strings to numbers and returns a packed string
   ['pack_numbers'] = {
     ['types'] = {

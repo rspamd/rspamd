@@ -95,6 +95,11 @@ rspamd_log_default_logger(void)
 	return default_logger;
 }
 
+void rspamd_log_set_default_logger(rspamd_logger_t *logger)
+{
+	default_logger = logger;
+}
+
 rspamd_logger_t *
 rspamd_log_emergency_logger(void)
 {
@@ -138,6 +143,7 @@ void rspamd_log_close(rspamd_logger_t *logger)
 
 	if (logger->debug_ip) {
 		rspamd_map_helper_destroy_radix(logger->debug_ip);
+		logger->debug_ip = NULL;
 	}
 
 	if (logger->pk) {
@@ -1113,8 +1119,7 @@ log_time(double now, rspamd_logger_t *rspamd_log, char *timebuf,
  * @param processed_id buffer to store processed ID (should be at least max_log_tag_len + 1)
  * @return effective length of processed ID
  */
-static inline int
-rspamd_log_process_id(rspamd_logger_t *logger, const char *id, char *processed_id)
+int rspamd_log_process_id(rspamd_logger_t *logger, const char *id, char *processed_id)
 {
 	if (id == NULL) {
 		return 0;

@@ -126,6 +126,29 @@ void rspamd_hs_cache_set_lua_backend(lua_State *L, int ref, const char *platform
 gboolean rspamd_hs_cache_has_lua_backend(void);
 
 /**
+ * Get the name of the configured cache backend: `file`, `redis` or `http`
+ * @return backend name (never NULL, defaults to `file`)
+ */
+const char *rspamd_hs_cache_backend_name(void);
+
+/**
+ * Check if the configured backend stores hyperscan databases as local files,
+ * i.e. if reading them directly from `hs_cache_dir` makes any sense
+ * @return TRUE for the file backend
+ */
+gboolean rspamd_hs_cache_backend_is_file(void);
+
+/**
+ * Check if a load error merely means that nothing is cached yet, which is a
+ * normal condition: the database might not have been compiled so far, or a read
+ * replica might not have caught up with the master. Backends indicate this by
+ * returning `not found` (or `file not found` for the file one).
+ * @param error error message from a load callback (NULL means no data at all)
+ * @return TRUE if this is a cache miss rather than a backend failure
+ */
+gboolean rspamd_hs_cache_error_is_miss(const char *error);
+
+/**
  * Initialize Lua HS cache backend in the current process using hs_helper worker
  * configuration (if configured and Lua is available).
  *

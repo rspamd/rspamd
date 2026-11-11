@@ -1,0 +1,10 @@
+From: John Doe <johndoe@googlemail.com>
+To: rcpt@forged.example.test
+Subject: forged_recipients mailbox identity probe
+Message-ID: <forged_from_googlemail.eml@forged.example.test>
+Date: Wed, 02 Sep 2026 22:58:27 -0400
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Envelope and header addresses that reach the same mailbox must not be
+reported as forged.

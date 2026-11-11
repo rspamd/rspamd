@@ -18,6 +18,7 @@
 #include "libcryptobox/cryptobox.h"
 #include "rspamd_simdutf.h"
 #include "unix-std.h"
+#include <zlib.h> /* for crc32() */
 
 /***
  * @module rspamd_text
@@ -207,12 +208,14 @@ LUA_FUNCTION_DEF(text, oneline);
  * Normalizes line endings in text to the specified format.
  * - If mode is "lf" or "unix": converts CRLF to LF
  * - If mode is "crlf" or "windows" (default): converts bare LF to CRLF
+ * - If mode is "smtp": converts every bare CR and bare LF to CRLF, as SMTP
+ *   allows CR and LF only as a CRLF pair (RFC 5321 2.3.8)
  *
  * If the text is owned, it may be modified in-place.
  * If a mempool is provided, new memory is allocated from it.
  * Otherwise, g_malloc is used and OWN flag is set.
  *
- * @param {string} mode target newline mode: "lf" or "crlf" (default: "crlf")
+ * @param {string} mode target newline mode: "lf", "crlf" or "smtp" (default: "crlf")
  * @param {mempool} pool optional mempool for allocation
  * @return {rspamd_text} normalized text (may be same as input if no changes)
  */
@@ -242,6 +245,18 @@ LUA_FUNCTION_DEF(text, base64);
  * @return {rspamd_text} new text encoded in hex
  */
 LUA_FUNCTION_DEF(text, hex);
+/***
+ * @method rspamd_text:crc32([start[, len]])
+ * Returns the CRC-32 checksum of the byte range starting at `start`
+ * (1-indexed, default 1) and spanning `len` bytes (default: to the end of the
+ * text). The range is read in place (no copy). This is the standard CRC-32
+ * (zlib crc32 / YARA hash.crc32, polynomial 0xEDB88320) and the result is a Lua
+ * integer suitable for numeric comparison (e.g. `t:crc32() == 0xCBF43926`).
+ * @param {integer} start 1-based start index
+ * @param {integer} len number of bytes
+ * @return {integer} crc32 value as an unsigned 32-bit integer
+ */
+LUA_FUNCTION_DEF(text, crc32);
 /***
  * @method rspamd_text:find(pattern [, init])
  * Looks for the first match of pattern in the string s.
@@ -295,6 +310,7 @@ static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF(text, base32),
 	LUA_INTERFACE_DEF(text, base64),
 	LUA_INTERFACE_DEF(text, hex),
+	LUA_INTERFACE_DEF(text, crc32),
 	LUA_INTERFACE_DEF(text, find),
 	LUA_INTERFACE_DEF(text, strtoul),
 	{"write", lua_text_save_in_file},
@@ -496,6 +512,72 @@ rspamd_lua_text_normalize_newlines(struct rspamd_lua_text *t,
 					*out++ = '\r'; /* Insert CR */
 				}
 				*out++ = *p++; /* Copy LF */
+			}
+		}
+
+		/* Free old memory if owned */
+		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			g_free((void *) t->start);
+		}
+
+		t->start = new_start;
+		t->len = new_len;
+		t->flags = pool ? 0 : RSPAMD_TEXT_FLAG_OWN;
+	}
+	else if (mode == RSPAMD_TEXT_NEWLINES_SMTP) {
+		/*
+		 * SMTP allows CR and LF only as CRLF: a bare CR is as much a line end as a
+		 * bare LF, and leaving it would let "<CR>.<CR><LF>" pass dot-stuffing
+		 */
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\r\n", 2);
+			p += span;
+
+			if (p < end) {
+				if (*p == '\r' && p + 1 < end && *(p + 1) == '\n') {
+					p += 2;
+				}
+				else {
+					count++;
+					p++;
+				}
+			}
+		}
+
+		if (count == 0) {
+			return t; /* Already normalized */
+		}
+
+		/* Every bare CR or LF grows into a CRLF pair */
+		size_t new_len = t->len + count;
+		char *new_start;
+
+		if (pool) {
+			new_start = rspamd_mempool_alloc(pool, new_len);
+		}
+		else {
+			new_start = g_malloc(new_len);
+		}
+
+		char *out = new_start;
+		p = t->start;
+
+		while (p < end) {
+			size_t span = rspamd_memcspn(p, end - p, "\r\n", 2);
+			memcpy(out, p, span);
+			out += span;
+			p += span;
+
+			if (p < end) {
+				if (*p == '\r' && p + 1 < end && *(p + 1) == '\n') {
+					*out++ = *p++;
+					*out++ = *p++;
+				}
+				else {
+					*out++ = '\r';
+					*out++ = '\n';
+					p++;
+				}
 			}
 		}
 
@@ -1353,13 +1435,18 @@ lua_text_save_in_file(lua_State *L)
 			}
 		}
 
-		if (write(fd, t->start, t->len) == -1) {
-			if (fd != STDOUT_FILENO) {
+		if (!rspamd_write_all(fd, t->start, t->len)) {
+			int saved_errno = errno;
+
+			/* A caller-supplied fd is owned (and closed) by the caller */
+			if (need_close) {
 				close(fd);
+				/* Do not leave a truncated file behind */
+				unlink(fname);
 			}
 
 			lua_pushboolean(L, false);
-			lua_pushstring(L, strerror(errno));
+			lua_pushstring(L, strerror(saved_errno));
 
 			return 2;
 		}
@@ -1578,6 +1665,55 @@ lua_text_hex(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static int
+lua_text_crc32(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text(L, 1);
+	int64_t start = 1, len = -1;
+
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments, text required");
+	}
+
+	if (lua_isnumber(L, 2)) {
+		start = lua_tointeger(L, 2);
+	}
+	if (lua_isnumber(L, 3)) {
+		len = lua_tointeger(L, 3);
+	}
+
+	if (start < 1 || (start - 1) > t->len) {
+		return luaL_error(L, "invalid start offset %d (text len %d)",
+						  (int) start, (int) t->len);
+	}
+
+	if (len == -1) {
+		len = t->len - (start - 1);
+	}
+
+	if (len < 0 || len > (t->len - (start - 1))) {
+		return luaL_error(L, "invalid length");
+	}
+
+	/* Standard CRC-32 (poly 0xEDB88320), bit-exact with zlib/YARA hash.crc32 */
+	const unsigned char *p = (const unsigned char *) t->start + (start - 1);
+	gsize remain = (gsize) len;
+	uLong crc = crc32(0L, Z_NULL, 0);
+
+	/* zlib crc32() takes a uInt length, so feed the slice in chunks */
+	while (remain > 0) {
+		uInt chunk = remain > G_MAXUINT ? G_MAXUINT : (uInt) remain;
+		crc = crc32(crc, p, chunk);
+		p += chunk;
+		remain -= chunk;
+	}
+
+	lua_pushinteger(L, (lua_Integer) (uint32_t) crc);
 
 	return 1;
 }
@@ -1927,8 +2063,11 @@ lua_text_normalize_newlines(lua_State *L)
 				 g_ascii_strcasecmp(mode_str, "windows") == 0) {
 			mode = RSPAMD_TEXT_NEWLINES_CRLF;
 		}
+		else if (g_ascii_strcasecmp(mode_str, "smtp") == 0) {
+			mode = RSPAMD_TEXT_NEWLINES_SMTP;
+		}
 		else {
-			return luaL_error(L, "invalid mode: %s (expected 'lf' or 'crlf')", mode_str);
+			return luaL_error(L, "invalid mode: %s (expected 'lf', 'crlf' or 'smtp')", mode_str);
 		}
 	}
 

@@ -25,6 +25,25 @@
 #define RSPAMD_MEMPOOL_MTA_NAME "MTA-Name"
 #define RSPAMD_MEMPOOL_SPF_DOMAIN "spf_domain"
 #define RSPAMD_MEMPOOL_SPF_RECORD "spf_record"
+/*
+ * Policy results published by the spf and dmarc modules so that other modules
+ * do not have to reimplement them by matching the (configurable) symbol names.
+ *
+ * spf_result: none, pass, fail, softfail, neutral, permerror, temperror
+ * dmarc_result: no_record, pass, fail_none, fail_quarantine, fail_reject,
+ *               permerror, temperror
+ *
+ * Both are plain NUL terminated strings and are simply absent if the
+ * corresponding check has not been performed.
+ */
+#define RSPAMD_MEMPOOL_SPF_RESULT "spf_result"
+#define RSPAMD_MEMPOOL_DMARC_RESULT "dmarc_result"
+/*
+ * Set by the hfilter module to a gboolean telling whether the PTR name of the
+ * sender matches one of its generic/dynamic naming patterns. Absent when
+ * hfilter or its hostname checks are disabled, or when there is no PTR name.
+ */
+#define RSPAMD_MEMPOOL_HOSTNAME_GENERIC "hostname_generic"
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
 #define RSPAMD_MEMPOOL_PROFILE "profile"
 #define RSPAMD_MEMPOOL_MILTER_REPLY "milter_reply"
@@ -32,16 +51,22 @@
 #define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
 #define RSPAMD_MEMPOOL_DKIM_BH_CACHE "dkim_bh_cache"
 #define RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS "dkim_results"
+#define RSPAMD_MEMPOOL_DKIM_ALIGNMENT "dkim_alignment"
+#define RSPAMD_MEMPOOL_DKIM_ALIGNMENT_TEMPFAIL "dkim_alignment_tempfail"
 #define RSPAMD_MEMPOOL_DKIM_SIGN_KEY "dkim_key"
 #define RSPAMD_MEMPOOL_DKIM_SIGN_SELECTOR "dkim_selector"
 #define RSPAMD_MEMPOOL_ARC_SIGN_KEY "arc_key"
 #define RSPAMD_MEMPOOL_ARC_SIGN_SELECTOR "arc_selector"
 #define RSPAMD_MEMPOOL_STAT_SIGNATURE "stat_signature"
 #define RSPAMD_MEMPOOL_FUZZY_RESULT "fuzzy_hashes"
+#define RSPAMD_MEMPOOL_FUZZY_MATCHES "fuzzy_matches"
+#define RSPAMD_MEMPOOL_FUZZY_CHECKED "fuzzy_checked"
 #define RSPAMD_MEMPOOL_SPAM_LEARNS "spam_learns"
 #define RSPAMD_MEMPOOL_HAM_LEARNS "ham_learns"
 #define RSPAMD_MEMPOOL_RE_MAPS_CACHE "re_maps_cache"
 #define RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME "stat_http_runtime"
 #define RSPAMD_MEMPOOL_FUZZY_STAT "fuzzy_stat"
+/* Set once an url of the message is not taken, as it has max_urls of them */
+#define RSPAMD_MEMPOOL_URLS_LIMIT_REACHED "urls_limit_reached"
 
 #endif

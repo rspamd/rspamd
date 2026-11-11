@@ -10,7 +10,9 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}          ${RSPAMD_TESTDIR}/configs/url_redirector.conf
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/redir.eml
+${UNLISTED_TARGET_MESSAGE}    ${RSPAMD_TESTDIR}/messages/redir_unlisted_target.eml
 ${CHAIN_MESSAGE}   ${RSPAMD_TESTDIR}/messages/chain_redirect.eml
+${RELATIVE_MESSAGE}    ${RSPAMD_TESTDIR}/messages/redir_relative.eml
 ${REDIS_SCOPE}     Suite
 ${RSPAMD_SCOPE}    Suite
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
@@ -24,6 +26,19 @@ RESOLVE URLS
 RESOLVE URLS CACHED
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
   Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
+
+DO NOT FETCH UNLISTED REDIRECT TARGET
+  Scan File  ${UNLISTED_TARGET_MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
+  Expect Extended URL  http://unlisted-redirector-target.example.net:${RSPAMD_PORT_DUMMY_HTTP}/hello
+  ${log} =  Get File  ${DUMMY_HTTP_LOG}
+  Should Not Contain  ${log}  Host=unlisted-redirector-target.example.net:${RSPAMD_PORT_DUMMY_HTTP}
+
+RESOLVE RELATIVE REDIRECTS
+  # Locations relative to the redirecting URL: a relative path, then an
+  # absolute path. The URL in the first one's query is not the target
+  Scan File  ${RELATIVE_MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
+  Expect Extended URL  http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/hello
+  Do Not Expect Extended URL  http://decoy.example.net/
 
 STEALTH FINGERPRINT HEADERS
   # The live HEAD requests issued by RESOLVE URLS are logged by the dummy
@@ -43,8 +58,12 @@ Urlredirector Setup
   # offset is baked into the message the scanner reads.
   ${MESSAGE} =  Render Message Template  ${MESSAGE}
   Set Suite Variable  ${MESSAGE}
+  ${UNLISTED_TARGET_MESSAGE} =  Render Message Template  ${UNLISTED_TARGET_MESSAGE}
+  Set Suite Variable  ${UNLISTED_TARGET_MESSAGE}
   ${CHAIN_MESSAGE} =  Render Message Template  ${CHAIN_MESSAGE}
   Set Suite Variable  ${CHAIN_MESSAGE}
+  ${RELATIVE_MESSAGE} =  Render Message Template  ${RELATIVE_MESSAGE}
+  Set Suite Variable  ${RELATIVE_MESSAGE}
 
 Urlredirector Teardown
   Rspamd Redis Teardown

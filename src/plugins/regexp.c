@@ -199,7 +199,10 @@ int regexp_module_config(struct rspamd_config *cfg, bool validate)
 		if (g_ascii_strncasecmp(ucl_object_key(value), "max_size",
 								sizeof("max_size") - 1) == 0) {
 			regexp_module_ctx->max_size = ucl_obj_toint(value);
-			rspamd_re_cache_set_limit(cfg->re_cache, regexp_module_ctx->max_size);
+			/* Apply to all scopes registered so far, the ones added later
+			 * inherit this limit from the default scope */
+			rspamd_re_cache_set_limit_all_scopes(cfg->re_cache,
+												 regexp_module_ctx->max_size);
 		}
 		else if (g_ascii_strncasecmp(ucl_object_key(value), "max_threads",
 									 sizeof("max_threads") - 1) == 0) {

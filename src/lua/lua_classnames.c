@@ -60,6 +60,7 @@ const char *rspamd_tcp_classname = "rspamd{tcp}";
 const char *rspamd_tensor_classname = "rspamd{tensor}";
 const char *rspamd_textpart_classname = "rspamd{textpart}";
 const char *rspamd_text_classname = "rspamd{text}";
+const char *rspamd_tld_lookup_classname = "rspamd{tld_lookup}";
 const char *rspamd_trie_classname = "rspamd{trie}";
 const char *rspamd_upstream_list_classname = "rspamd{upstream_list}";
 const char *rspamd_upstream_classname = "rspamd{upstream}";
@@ -70,6 +71,10 @@ const char *rspamd_zstd_decompress_classname = "rspamd{zstd_decompress}";
 const char *rspamd_shingle_classname = "rspamd{shingle}";
 const char *rspamd_fasttext_classname = "rspamd{fasttext}";
 const char *rspamd_caseless_table_classname = "rspamd{caseless_table}";
+const char *rspamd_static_embed_classname = "rspamd{static_embed}";
+const char *rspamd_pdf_encoding_classname = "rspamd{pdf_encoding}";
+const char *rspamd_pdf_text_builder_classname = "rspamd{pdf_text_builder}";
+const char *rspamd_pdf_cmap_classname = "rspamd{pdf_cmap}";
 
 KHASH_INIT(rspamd_lua_static_classes, const char *, const char *, 1, rspamd_str_hash, rspamd_str_equal);
 
@@ -129,6 +134,7 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 	CLASS_PUT_STR(tensor);
 	CLASS_PUT_STR(textpart);
 	CLASS_PUT_STR(text);
+	CLASS_PUT_STR(tld_lookup);
 	CLASS_PUT_STR(trie);
 	CLASS_PUT_STR(upstream_list);
 	CLASS_PUT_STR(upstream);
@@ -139,6 +145,10 @@ RSPAMD_CONSTRUCTOR(rspamd_lua_init_classnames)
 	CLASS_PUT_STR(shingle);
 	CLASS_PUT_STR(fasttext);
 	CLASS_PUT_STR(caseless_table);
+	CLASS_PUT_STR(static_embed);
+	CLASS_PUT_STR(pdf_encoding);
+	CLASS_PUT_STR(pdf_text_builder);
+	CLASS_PUT_STR(pdf_cmap);
 
 	/* Check consistency */
 	g_assert(kh_size(lua_static_classes) == RSPAMD_MAX_LUA_CLASSES);

@@ -503,7 +503,7 @@ local function ip_reputation_filter(task, rule)
     end
 
     if math.abs(score) > 0.001 then
-      add_symbol_score(task, rule, score, table.concat(description_t, ', '))
+      add_symbol_score(task, rule, score, description_t)
     end
   end
 
@@ -1492,6 +1492,11 @@ local function parse_rule(name, tbl)
     callback = callback_gen(reputation_filter_cb, rule),
     augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) },
   }
+
+  if sel_type == 'generic' and rule.selector.config.selector then
+    -- Symbols used by the selector must be checked before this one
+    lua_selectors.register_dependencies(rspamd_config, rule.symbol, rule.selector.config.selector)
+  end
 
   if rule.selector.config.split_symbols then
     rspamd_config:register_symbol {

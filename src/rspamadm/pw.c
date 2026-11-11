@@ -269,8 +269,14 @@ rspamadm_pw_check(void)
 			exit(EXIT_FAILURE);
 		}
 
-		plen = rspamd_read_passphrase(test_password, sizeof(test_password),
-									  0, NULL);
+		const char *env_password = getenv("RSPAMADM_PASSWORD");
+		if (env_password != NULL && env_password[0] != '\0') {
+			plen = rspamd_strlcpy(test_password, env_password, sizeof(test_password));
+		}
+		else {
+			plen = rspamd_read_passphrase(test_password, sizeof(test_password),
+										  0, NULL);
+		}
 		if (plen == 0) {
 			rspamd_explicit_memzero(encrypted_password, sizeof(encrypted_password));
 			fprintf(stderr, "Invalid password\n");

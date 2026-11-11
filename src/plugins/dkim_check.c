@@ -17,6 +17,7 @@
  * rspamd module that checks dkim records of incoming email
  *
  * Allowed options:
+ * - symbol_aligned (string): symbol to insert when DKIM d= aligns with From (default: 'R_DKIM_ALIGNED')
  * - symbol_allow (string): symbol to insert in case of allow (default: 'R_DKIM_ALLOW')
  * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
  * - symbol_tempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
@@ -34,6 +35,7 @@
 #include "libmime/message.h"
 #include "libserver/dkim.h"
 #include "libserver/dkim2.h"
+#include "libserver/url.h"
 #include "libutil/hash.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
@@ -43,6 +45,7 @@
 #include "lua/lua_common.h"
 #include "libserver/mempool_vars_internal.h"
 
+#define DEFAULT_SYMBOL_ALIGNED "R_DKIM_ALIGNED"
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"
 #define DEFAULT_SYMBOL_ALLOW "R_DKIM_ALLOW"
@@ -75,6 +78,7 @@ static const char default_arc_sign_headers[] = ""
 
 struct dkim_ctx {
 	struct module_ctx ctx;
+	const char *symbol_aligned;
 	const char *symbol_reject;
 	const char *symbol_tempfail;
 	const char *symbol_allow;
@@ -207,6 +211,15 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   NULL,
 							   0,
 							   NULL,
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "dkim",
+							   "Symbol that is added when DKIM d= aligns with the From header domain",
+							   "symbol_aligned",
+							   UCL_STRING,
+							   NULL,
+							   0,
+							   DEFAULT_SYMBOL_ALIGNED,
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
@@ -435,6 +448,13 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 	}
 	else {
 		dkim_module_ctx->symbol_tempfail = DEFAULT_SYMBOL_TEMPFAIL;
+	}
+	if ((value =
+			 rspamd_config_get_module_opt(cfg, "dkim", "symbol_aligned")) != NULL) {
+		dkim_module_ctx->symbol_aligned = ucl_object_tostring(value);
+	}
+	else {
+		dkim_module_ctx->symbol_aligned = DEFAULT_SYMBOL_ALIGNED;
 	}
 	if ((value =
 			 rspamd_config_get_module_opt(cfg, "dkim", "symbol_allow")) != NULL) {
@@ -668,6 +688,12 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 								   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
 								   cb_id);
 		rspamd_symcache_add_symbol(cfg->cache,
+								   dkim_module_ctx->symbol_aligned,
+								   0,
+								   NULL, NULL,
+								   SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
+								   cb_id);
+		rspamd_symcache_add_symbol(cfg->cache,
 								   dkim_module_ctx->symbol_allow,
 								   0,
 								   NULL, NULL,
@@ -833,6 +859,12 @@ dkim_module_load_key_format(struct rspamd_task *task,
 	else if (dkim_module_ctx->dkim_sign_hash) {
 		rspamd_lru_hash_insert(dkim_module_ctx->dkim_sign_hash,
 							   g_strdup(hex_hash), ret, time(NULL), 0);
+	}
+	else {
+		/* No cache: the task owns the reference from loading */
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) rspamd_dkim_sign_key_unref,
+									  ret);
 	}
 
 	return ret;
@@ -1296,6 +1328,48 @@ dkim_module_check(struct dkim_check_result *res)
 		/* Create zero terminated array of results */
 		struct rspamd_dkim_check_result **pres;
 		unsigned int nres = 0, i = 0;
+		/* 0 = none, 1 = relaxed, 2 = strict */
+		int best_align = 0, best_align_tempfail = 0;
+		const char *from_domain = NULL;
+		gsize from_domain_len = 0;
+		rspamd_ftok_t from_tld = {0};
+
+		/*
+		 * Alignment needs an unambiguous author, the same precondition DMARC
+		 * applies when it refuses a message carrying more than one From. A
+		 * rewrite appends its address and flags the ones already there, so it
+		 * is the originals that are counted where any exist.
+		 */
+		if (MESSAGE_FIELD_CHECK(task, from_mime) &&
+			MESSAGE_FIELD(task, from_mime)->len > 0) {
+			GPtrArray *from_mime = MESSAGE_FIELD(task, from_mime);
+			struct rspamd_email_address *from_addr = NULL, *addr;
+			unsigned int noriginal = 0, j;
+
+			PTR_ARRAY_FOREACH(from_mime, j, addr)
+			{
+				if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+					noriginal++;
+
+					if (from_addr == NULL) {
+						from_addr = addr;
+					}
+				}
+			}
+
+			if (noriginal == 0 && from_mime->len == 1) {
+				from_addr = g_ptr_array_index(from_mime, 0);
+			}
+			else if (noriginal != 1) {
+				from_addr = NULL;
+			}
+
+			if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
+				from_domain = from_addr->domain;
+				from_domain_len = from_addr->domain_len;
+				(void) rspamd_url_find_tld(from_domain, from_domain_len, &from_tld);
+			}
+		}
 
 		DL_FOREACH(first, cur)
 		{
@@ -1360,7 +1434,63 @@ dkim_module_check(struct dkim_check_result *res)
 										  symbol,
 										  symbol_weight,
 										  tracebuf);
+
+				/*
+				 * Alignment is tracked separately for the signatures that
+				 * verified and for those that could not be checked yet: a
+				 * consumer that must not report a definitive failure while an
+				 * aligned signature is still unresolved needs to tell the two
+				 * apart
+				 */
+				if (from_domain != NULL &&
+					(cur->res->rcode == DKIM_CONTINUE ||
+					 cur->res->rcode == DKIM_TRYAGAIN)) {
+					int *align = (cur->res->rcode == DKIM_CONTINUE) ? &best_align : &best_align_tempfail;
+
+					if (*align < 2) {
+						gsize domain_len = strlen(domain);
+
+						if (domain_len == from_domain_len &&
+							g_ascii_strncasecmp(domain, from_domain, domain_len) == 0) {
+							*align = 2;
+						}
+						else if (*align < 1 && from_tld.len > 0) {
+							rspamd_ftok_t sig_tld = {0};
+							if (rspamd_url_find_tld(domain, domain_len, &sig_tld) &&
+								sig_tld.len == from_tld.len &&
+								g_ascii_strncasecmp(sig_tld.begin, from_tld.begin,
+													sig_tld.len) == 0) {
+								*align = 1;
+							}
+						}
+					}
+				}
 			}
+		}
+
+		if (best_align > 0) {
+			rspamd_task_insert_result(task,
+									  dkim_module_ctx->symbol_aligned,
+									  1.0,
+									  best_align == 2 ? "strict" : "relaxed");
+		}
+
+		/*
+		 * Publish the verdict so that policy modules consume it instead of
+		 * repeating the comparison: this module is the one that knows both the
+		 * signing domain and whether the signature verified
+		 */
+		if (best_align > 0) {
+			rspamd_mempool_set_variable(task->task_pool,
+										RSPAMD_MEMPOOL_DKIM_ALIGNMENT,
+										(gpointer) (best_align == 2 ? "strict" : "relaxed"),
+										NULL);
+		}
+		if (best_align_tempfail > 0) {
+			rspamd_mempool_set_variable(task->task_pool,
+										RSPAMD_MEMPOOL_DKIM_ALIGNMENT_TEMPFAIL,
+										(gpointer) (best_align_tempfail == 2 ? "strict" : "relaxed"),
+										NULL);
 		}
 
 		rspamd_mempool_set_variable(task->task_pool,
@@ -1387,8 +1517,8 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 		/* Another ref belongs to the check context */
 		res->key = rspamd_dkim_key_ref(key);
 		/*
-		 * We actually receive key with refcount = 1, so we just assume that
-		 * lru hash owns this object now
+		 * We receive the key with refcount = 1: that reference goes to
+		 * the lru hash, or is dropped when there is no cache
 		 */
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor(res->task->task_pool,
@@ -1405,6 +1535,9 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 						  rspamd_dkim_key_get_ttl(key),
 						  rspamd_lru_hash_size(dkim_module_ctx->dkim_hash),
 						  rspamd_lru_hash_capacity(dkim_module_ctx->dkim_hash));
+		}
+		else {
+			rspamd_dkim_key_unref(key);
 		}
 	}
 	else {
@@ -1597,6 +1730,24 @@ dkim_symbol_callback(struct rspamd_task *task,
 
 		DL_FOREACH(rh, rh_cur)
 		{
+			/*
+			 * The limit is checked before any work is done for this header and
+			 * counts every signature header we look at, not just the ones that
+			 * reach a key lookup. Signatures that fail to parse or are skipped
+			 * by trusted_only still cost a pool allocation, a parse and a log
+			 * line each, and a message may carry up to the global MIME header
+			 * limit of them.
+			 */
+			if (checked >= dkim_module_ctx->max_sigs) {
+				msg_info_task("message has multiple signatures but we"
+							  " stopped after %ud checked signatures as limit"
+							  " is reached",
+							  checked);
+				break;
+			}
+
+			checked++;
+
 			if (rh_cur->decoded == NULL || rh_cur->decoded[0] == '\0') {
 				msg_info_task("cannot load empty DKIM signature");
 				continue;
@@ -1678,16 +1829,6 @@ dkim_symbol_callback(struct rspamd_task *task,
 						continue;
 					}
 				}
-			}
-
-			checked++;
-
-			if (checked > dkim_module_ctx->max_sigs) {
-				msg_info_task("message has multiple signatures but we"
-							  " stopped after %d checked signatures as limit"
-							  " is reached",
-							  checked);
-				break;
 			}
 		}
 	}
@@ -1848,14 +1989,17 @@ dkim_module_lua_on_key(rspamd_dkim_key_t *key,
 		/* Another ref belongs to the check context */
 		cbd->key = rspamd_dkim_key_ref(key);
 		/*
-		 * We actually receive key with refcount = 1, so we just assume that
-		 * lru hash owns this object now
+		 * We receive the key with refcount = 1: that reference goes to
+		 * the lru hash, or is dropped when there is no cache
 		 */
 
 		if (dkim_module_ctx->dkim_hash) {
 			rspamd_lru_hash_insert(dkim_module_ctx->dkim_hash,
 								   g_strdup(rspamd_dkim_get_dns_key(ctx)),
 								   key, cbd->task->task_timestamp, rspamd_dkim_key_get_ttl(key));
+		}
+		else {
+			rspamd_dkim_key_unref(key);
 		}
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor(cbd->task->task_pool,
@@ -1978,11 +2122,17 @@ lua_dkim_verify_handler(lua_State *L)
 			ret = rspamd_dkim_check(cbd->ctx, cbd->key, cbd->task);
 			dkim_module_lua_push_verify_result(cbd, ret, NULL);
 		}
-		else {
-			rspamd_get_dkim_key(ctx,
-								task,
-								dkim_module_lua_on_key,
-								cbd);
+		else if (!rspamd_get_dkim_key(ctx,
+									  task,
+									  dkim_module_lua_on_key,
+									  cbd)) {
+			/* No DNS request means no callback, so report an immediate failure */
+			luaL_unref(L, LUA_REGISTRYINDEX, cbd->cbref);
+			lua_pushboolean(L, false);
+			lua_pushfstring(L, "cannot request DKIM key %s",
+							rspamd_dkim_get_dns_key(ctx));
+
+			return 2;
 		}
 	}
 	else {

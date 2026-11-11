@@ -56,6 +56,17 @@ struct fuzzy_global_stat {
 	uint64_t fuzzy_hashes_found[RSPAMD_FUZZY_EPOCH_MAX];
 	uint64_t invalid_requests;
 	uint64_t delayed_hashes;
+	/*
+	 * Requests dropped before parsing because the source is blocklisted,
+	 * and requests whose encrypted header failed key lookup or MAC check.
+	 * Both are logged at debug level only (a spoofed-source flood would
+	 * otherwise turn into one error line per datagram), so these counters
+	 * are the sole operational signal that either is happening.
+	 */
+	uint64_t blocked_requests;
+	uint64_t decrypt_errors;
+	/* PING/STAT dropped by the per-source rate limit rather than answered */
+	uint64_t ratelimited_requests;
 };
 
 struct fuzzy_key_stat {
@@ -70,10 +81,39 @@ struct fuzzy_key_stat {
 	uint64_t last_checked_count;
 	uint64_t last_matched_count;
 	struct rspamd_cryptobox_keypair *keypair;
+	/*
+	 * Per-source breakdown, keyed by client address. Allocated on the first
+	 * request that uses the owning key and grown from a handful of buckets,
+	 * since most keys only ever see one or two addresses; NULL when the key
+	 * has per-IP stats disabled or has not been used yet
+	 */
 	rspamd_lru_hash_t *last_ips;
+	/*
+	 * Overflow guard for last_ips: a table that keeps evicting means the
+	 * key has far more sources than the cap can represent, so the per-IP
+	 * breakdown is noise and every request pays allocations for it. Once
+	 * ips_inserted_window passes the overflow threshold inside one window
+	 * the table is dropped and ips_overflow stays set for the key's lifetime
+	 */
+	uint64_t ips_inserted;        /* sources inserted in total */
+	uint64_t ips_inserted_window; /* sources inserted while full, current window */
+	double ips_window_start;
+	bool ips_overflow;
 
 	ref_entry_t ref;
 };
+
+/* Default cap on the per-source stats kept for one key */
+#define FUZZY_KEY_DEFAULT_MAX_IPS 1024
+/* Buckets to start a per-source table with; grows on demand */
+#define FUZZY_KEY_IPS_INITIAL_SIZE 4
+/*
+ * A full table that takes more than FACTOR * cap new sources within one
+ * WINDOW seconds cannot represent its population; per-IP stats are then
+ * disabled for that key
+ */
+#define FUZZY_KEY_IPS_OVERFLOW_FACTOR 8
+#define FUZZY_KEY_IPS_OVERFLOW_WINDOW 3600.0
 
 struct rspamd_leaky_bucket_elt {
 	rspamd_inet_addr_t *addr;
@@ -82,7 +122,7 @@ struct rspamd_leaky_bucket_elt {
 };
 
 struct rspamd_fuzzy_dynamic_ban {
-	double expire_ts; /* monotonic clock; 0.0 = never expires */
+	double expire_ts;      /* monotonic clock; 0.0 = never expires */
 	int32_t response_code; /* fuzzy reply code; 0 = use default (503) */
 	char reason[64];
 };
@@ -99,7 +139,8 @@ fuzzy_kp_hash(const unsigned char *p)
 static inline bool
 fuzzy_kp_equal(gconstpointer a, gconstpointer b)
 {
-	const unsigned char *pa = a, *pb = b;
+	const unsigned char *pa = (const unsigned char *) a,
+						*pb = (const unsigned char *) b;
 
 	return (memcmp(pa, pb, RSPAMD_FUZZY_KEYLEN) == 0);
 }
@@ -128,6 +169,10 @@ struct fuzzy_key {
 	ev_tstamp expire;
 	bool expired;
 	int flags; /* enum fuzzy_key_op */
+	/* Cap on per-source stats for this key; -1 = worker default, 0 = off */
+	int max_ips;
+	/* -1: exempt non-default keys; 0: apply IP policy; 1: bypass IP policy */
+	int skip_ip_checks;
 	ref_entry_t ref;
 };
 
@@ -148,6 +193,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
 	struct fuzzy_global_stat stat;
+	/* Sampled storage-wide statistics published by the count scan, may be NULL */
+	ucl_object_t *storage_stats;
 	double expire;
 	double sync_timeout;
 	double delay;
@@ -167,6 +214,7 @@ struct rspamd_fuzzy_storage_ctx {
 	const ucl_object_t *dynamic_keys_map;
 
 	unsigned int keypair_cache_size;
+	unsigned int max_ips_per_key;
 	ev_timer stat_ev;
 	ev_io peer_ev;
 
@@ -182,6 +230,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_http_context *http_ctx;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
+	/* Aggregate + per-IP stats for unkeyed clients (allowed by allow_update etc) */
+	struct fuzzy_key_stat *unkeyed_stat;
 	struct rspamd_fuzzy_backend *backend;
 	GArray *updates_pending;
 	unsigned int updates_failed;
@@ -222,7 +272,7 @@ struct fuzzy_session {
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
-	struct rspamd_fuzzy_shingle_cmd cmd;       /* Can handle both shingles and non-shingles */
+	struct rspamd_fuzzy_shingle_cmd cmd; /* Can handle both shingles and non-shingles */
 	union {
 		struct rspamd_fuzzy_encrypted_reply v1;
 		struct rspamd_fuzzy_encrypted_reply_v2 v2;
@@ -284,6 +334,24 @@ void ucl_keymap_dtor_cb(struct map_cb_data *data);
 
 void fuzzy_key_stat_dtor(gpointer p);
 void fuzzy_key_stat_unref(gpointer p);
+/*
+ * Find or create the per-source stats for `addr` under `st`, creating the
+ * address table itself on first use. Returns NULL (and allocates nothing)
+ * when max_ips is 0. The result is owned by the table; callers that keep
+ * it must retain it.
+ */
+struct fuzzy_key_stat *fuzzy_key_stat_get_ip(struct fuzzy_key_stat *st,
+											 unsigned int max_ips,
+											 const rspamd_inet_addr_t *addr,
+											 double now);
+/*
+ * Effective per-source cap for a key: its own max_ips extension when set,
+ * otherwise 0 for the default key (it is the one key that can see a
+ * practically unbounded set of sources, where a bounded table is noise)
+ * and the worker default for everything else
+ */
+unsigned int fuzzy_key_max_ips(const struct rspamd_fuzzy_storage_ctx *ctx,
+							   const struct fuzzy_key *key);
 void fuzzy_key_dtor(gpointer p);
 void fuzzy_hash_table_dtor(khash_t(rspamd_fuzzy_keys_hash) * hash);
 
@@ -291,6 +359,8 @@ gboolean fuzzy_parse_ids(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						 gpointer ud, struct rspamd_rcl_section *section, GError **err);
 struct fuzzy_key *fuzzy_add_keypair_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 											 khash_t(rspamd_fuzzy_keys_hash) * target);
+bool fuzzy_key_is_ip_exempt(const struct rspamd_fuzzy_storage_ctx *ctx,
+							const struct fuzzy_key *key);
 gboolean fuzzy_parse_keypair(rspamd_mempool_t *pool, const ucl_object_t *obj,
 							 gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
@@ -348,5 +418,11 @@ gboolean rspamd_fuzzy_storage_stat(struct rspamd_main *rspamd_main,
 								   int attached_fd,
 								   struct rspamd_control_command *cmd,
 								   gpointer ud);
+
+gboolean rspamd_fuzzy_storage_hash_info(struct rspamd_main *rspamd_main,
+										struct rspamd_worker *worker, int fd,
+										int attached_fd,
+										struct rspamd_control_command *cmd,
+										gpointer ud);
 
 #endif

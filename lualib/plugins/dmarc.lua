@@ -231,38 +231,56 @@ exports.gen_munging_callback = function(munging_opts, settings)
   end
 end
 
-local function gen_dmarc_grammar()
-  local lpeg = require "lpeg"
-  lpeg.locale(lpeg)
-  local space = lpeg.space ^ 0
-  local name = lpeg.C(lpeg.alpha ^ 1)
-  local sep = space * lpeg.S("\\;") * space
-  local value = lpeg.C(((lpeg.space ^ 1 * lpeg.graph + lpeg.graph) - sep) ^ 1)
-  local pair = lpeg.Cg(name * "=" * space * value) * sep ^ -1
-  local list = lpeg.Cf(lpeg.Ct("") * pair ^ 0, rawset)
-  local version = "v" * space * "=" * space * "DMARC1"
-  local record = version * sep * list
+-- The longest `rua` of a record that is used: a few addresses fit, and what
+-- is longer is not kept in the storage of reports for every message
+local max_rua_length = 1024
 
-  return record
-end
-
-local dmarc_grammar = gen_dmarc_grammar()
-
-local function dmarc_key_value_case(elts)
-  if type(elts) ~= "table" then
-    return elts
+-- Reads a record into its tags.
+--
+-- A record is `v=DMARC1` followed by tags separated by semicolons. What a
+-- record publishes must not depend on a tag that this code does not know or
+-- cannot read: such a tag is passed over and the ones after it are still
+-- read (RFC 7489, 6.3: unknown tags are ignored). White space is allowed
+-- around the name, the equals sign and the value. A tag given twice has no
+-- defined meaning; the first one is taken, so that the result does not
+-- depend on the order in which a table is walked. Names are compared without
+-- regard to the case, and the values are lowered as well.
+--
+-- Returns nil if this is not a DMARC record at all.
+local function dmarc_parse_record(record)
+  if type(record) ~= 'string' then
+    return nil
   end
-  local result = {}
-  for k, v in pairs(elts) do
-    k = k:lower()
-    if k ~= "v" then
-      v = v:lower()
+
+  local rest = record:match('^%s*[vV]%s*=%s*DMARC1%s*(.*)$')
+
+  if not rest then
+    return nil
+  end
+
+  if #rest > 0 then
+    -- The version is a tag as any other: a separator follows it. A backslash
+    -- is taken for one too, as it has always been here
+    if not rest:find('^[;\\]') then
+      return nil
     end
-
-    result[k] = v
   end
 
-  return result
+  local elts = {}
+
+  for part in rest:gmatch('[^;\\]+') do
+    local key, value = part:match('^%s*([%w_%-]+)%s*=%s*(.-)%s*$')
+
+    if key and #value > 0 then
+      key = key:lower()
+
+      if elts[key] == nil then
+        elts[key] = value:lower()
+      end
+    end
+  end
+
+  return elts
 end
 
 --[[
@@ -279,12 +297,11 @@ local function dmarc_check_record(log_obj, record, is_tld)
     dmarc_policy = 'none'
   }
 
-  local elts = dmarc_grammar:match(record)
+  local elts = dmarc_parse_record(record)
   lua_util.debugm(N, log_obj, "got DMARC record: %s, tld_flag=%s, processed=%s",
     record, is_tld, elts)
 
   if elts then
-    elts = dmarc_key_value_case(elts)
 
     local dkim_pol = elts['adkim']
     if dkim_pol then
@@ -334,13 +351,21 @@ local function dmarc_check_record(log_obj, record, is_tld)
         return false, failed_policy
       end
     end
-    result.pct = elts['pct']
-    if result.pct then
-      result.pct = tonumber(result.pct)
+    -- A percentage is a whole number from 0 to 100; anything else is not a
+    -- value of the tag, and the default of 100 stands
+    local pct = elts['pct']
+    if pct and pct:find('^%d%d?%d?$') then
+      pct = tonumber(pct)
+      if pct <= 100 then
+        result.pct = pct
+      end
     end
 
-    if elts.rua then
-      result.rua = elts['rua']
+    -- Where the reports go. This string is stored and used as a part of a
+    -- key, so it is bounded and has no control characters in it
+    local rua = elts['rua']
+    if rua and #rua <= max_rua_length and not rua:find('%c') then
+      result.rua = rua
     end
     result.raw_elts = elts
   else

@@ -267,12 +267,16 @@ reconf['REPLYTO_EXCESS_BASE64'] = {
   group = 'excessb64'
 }
 
+-- Mailchimp's composer RFC 2047 Q-encodes the Subject and the Reply-To display
+-- name unconditionally, pure-ASCII text included; the encoding is the
+-- platform's, not the sender's, so it carries no signal for that mail.
+local mailchimp_mailer = 'X-Mailer=/^Mailchimp Mailer\\b/iH'
 -- Reply-To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
 -- Regexp that checks that Reply-To header is encoded with quoted-printable (search in raw headers)
 local replyto_encoded_qp = 'Reply-To=/\\=\\?\\S+\\?Q\\?/iX'
 -- Final rule
 reconf['REPLYTO_EXCESS_QP'] = {
-  re = string.format('%s & !%s', replyto_encoded_qp, replyto_needs_mime),
+  re = string.format('%s & !%s & !%s', replyto_encoded_qp, replyto_needs_mime, mailchimp_mailer),
   score = 1.2,
   description = 'Reply-To header is unnecessarily encoded in quoted-printable',
   group = 'excessqp'
@@ -313,7 +317,7 @@ reconf['SUBJ_EXCESS_BASE64'] = {
 
 local subj_encoded_qp = 'Subject=/\\=\\?\\S+\\?Q\\?/iX'
 reconf['SUBJ_EXCESS_QP'] = {
-  re = string.format('%s & !%s', subj_encoded_qp, subj_needs_mime),
+  re = string.format('%s & !%s & !%s', subj_encoded_qp, subj_needs_mime, mailchimp_mailer),
   score = 1.2,
   description = 'Subject header is unnecessarily encoded in quoted-printable',
   group = 'excessqp'
@@ -1018,9 +1022,10 @@ reconf['APPLE_MAILER'] = {
 }
 
 -- Detect Apple iPhone/iPad Mail
--- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c
+-- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c,
+-- 24B91016 (iPhone Duo)
 -- https://en.wikipedia.org/wiki/IOS_version_history
-local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \(\d{1,2}[A-Z]\d{1,4}[a-z]?\)]]
+local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \(\d{1,2}[A-Z]\d{1,5}[a-z]?\)]]
 reconf['APPLE_IOS_MAILER'] = {
   description = 'Sent with Apple iPhone/iPad Mail',
   re = string.format('X-Mailer=/^%s/{header}', apple_ios_x_mailer),

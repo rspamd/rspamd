@@ -431,6 +431,43 @@ rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
 }
 
 void
+rdns_reply_entry_free (struct rdns_reply_entry *entry)
+{
+	switch (entry->type) {
+	case RDNS_REQUEST_PTR:
+		free (entry->content.ptr.name);
+		break;
+	case RDNS_REQUEST_NS:
+		free (entry->content.ns.name);
+		break;
+	case RDNS_REQUEST_MX:
+		free (entry->content.mx.name);
+		break;
+	case RDNS_REQUEST_TXT:
+	case RDNS_REQUEST_SPF:
+		free (entry->content.txt.data);
+		break;
+	case RDNS_REQUEST_SRV:
+		free (entry->content.srv.target);
+		break;
+	case RDNS_REQUEST_TLSA:
+		free (entry->content.tlsa.data);
+		break;
+	case RDNS_REQUEST_SOA:
+		free (entry->content.soa.mname);
+		free (entry->content.soa.admin);
+		break;
+	case RDNS_REQUEST_CNAME:
+		free (entry->content.cname.name);
+		break;
+	default:
+		break;
+	}
+
+	free (entry);
+}
+
+void
 rdns_reply_free (struct rdns_reply *rep)
 {
 	struct rdns_reply_entry *entry, *tmp;
@@ -438,37 +475,7 @@ rdns_reply_free (struct rdns_reply *rep)
 	/* We don't need to free data for faked replies */
 	if (!rep->request || rep->request->state != RDNS_REQUEST_FAKE) {
 		LL_FOREACH_SAFE (rep->entries, entry, tmp) {
-			switch (entry->type) {
-			case RDNS_REQUEST_PTR:
-				free (entry->content.ptr.name);
-				break;
-			case RDNS_REQUEST_NS:
-				free (entry->content.ns.name);
-				break;
-			case RDNS_REQUEST_MX:
-				free (entry->content.mx.name);
-				break;
-			case RDNS_REQUEST_TXT:
-			case RDNS_REQUEST_SPF:
-				free (entry->content.txt.data);
-				break;
-			case RDNS_REQUEST_SRV:
-				free (entry->content.srv.target);
-				break;
-			case RDNS_REQUEST_TLSA:
-				free (entry->content.tlsa.data);
-				break;
-			case RDNS_REQUEST_SOA:
-				free (entry->content.soa.mname);
-				free (entry->content.soa.admin);
-				break;
-			case RDNS_REQUEST_CNAME:
-				free(entry->content.cname.name);
-				break;
-			default:
-				break;
-			}
-			free (entry);
+			rdns_reply_entry_free (entry);
 		}
 	}
 
@@ -481,6 +488,9 @@ rdns_request_free (struct rdns_request *req)
 	unsigned int i;
 
 	if (req != NULL) {
+		/* Whatever the state, a queued packet must not outlive its request */
+		rdns_request_drop_tcp_output (req);
+
 		if (req->packet != NULL) {
 			free (req->packet);
 		}
@@ -603,17 +613,19 @@ rdns_ioc_new (struct rdns_server *serv,
 	if (is_tcp) {
 		/* We also need to connect a TCP channel and set a TCP buffer */
 		nioc->tcp = (struct rdns_tcp_channel *)(((unsigned char *)nioc) + sizeof(*nioc));
+		nioc->flags |= RDNS_CHANNEL_TCP;
 
 		if (!rdns_ioc_tcp_connect(nioc)) {
-			rdns_err ("cannot connect TCP socket to %s: %s", serv->name,
-					strerror (errno));
-			close (nioc->sock);
-			free (nioc);
-
-			return NULL;
+			/*
+			 * Keep the channel: the socket is already closed and
+			 * rdns_ioc_tcp_connect() opens a new one when a truncated reply
+			 * is rescheduled over TCP. Nothing creates TCP channels after
+			 * rdns_resolver_init(), so dropping it here would leave the
+			 * server without TCP for the lifetime of the process.
+			 */
+			rdns_warn ("TCP channel to %s is not connected, will retry on demand",
+					serv->name);
 		}
-
-		nioc->flags |= RDNS_CHANNEL_TCP;
 	}
 	else {
 		nioc->flags |= RDNS_CHANNEL_ACTIVE;
@@ -638,6 +650,25 @@ rdns_request_retain (struct rdns_request *req)
 {
 	REF_RETAIN (req);
 	return req;
+}
+
+void
+rdns_request_drop_tcp_output (struct rdns_request *req)
+{
+	struct rdns_tcp_output_chain *oc = req->tcp_oc;
+
+	if (oc == NULL) {
+		return;
+	}
+
+	req->tcp_oc = NULL;
+	oc->req = NULL;
+
+	if (oc->cur_write == 0 && req->io != NULL && req->io->tcp != NULL) {
+		DL_DELETE (req->io->tcp->output_chain, oc);
+		req->io->tcp->cur_output_chains --;
+		free (oc);
+	}
 }
 
 void
@@ -670,6 +701,8 @@ rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 		}
 		break;
 	case RDNS_REQUEST_TCP:
+		/* The packet is not needed anymore */
+		rdns_request_drop_tcp_output (req);
 		/* We also have a timer */
 		if (req->async_event) {
 			if (remove_from_hash) {
@@ -713,18 +746,29 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 			ioc->tcp->async_read = NULL;
 		}
 
-		/* Clean all buffers and temporaries */
+		/*
+		 * Clean all buffers and temporaries. The read state is reset whether
+		 * or not a buffer is there: a frame that announces no data leaves no
+		 * buffer and still leaves the state in the middle of a frame, where
+		 * the next connection would start from
+		 */
 		if (ioc->tcp->cur_read_buf) {
 			free (ioc->tcp->cur_read_buf);
-			ioc->tcp->read_buf_allocated = 0;
-			ioc->tcp->next_read_size = 0;
-			ioc->tcp->cur_read = 0;
 			ioc->tcp->cur_read_buf = NULL;
 		}
+
+		ioc->tcp->read_buf_allocated = 0;
+		ioc->tcp->next_read_size = 0;
+		ioc->tcp->cur_read = 0;
 
 		struct rdns_tcp_output_chain *oc, *tmp;
 		DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {
 			DL_DELETE (ioc->tcp->output_chain, oc);
+
+			if (oc->req) {
+				oc->req->tcp_oc = NULL;
+			}
+
 			free (oc);
 		}
 

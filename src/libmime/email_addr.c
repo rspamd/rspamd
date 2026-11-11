@@ -376,7 +376,14 @@ rspamd_email_address_from_mime(rspamd_mempool_t *pool, const char *hdr,
 				c = p;
 				state = parse_addr;
 			}
-			else if (*p == ',') {
+			else if (*p == ',' || *p == ';') {
+				/*
+				 * Semicolon is not an RFC 5322 list separator (it merely
+				 * terminates a group construct), but Outlook-style
+				 * `;'-separated address lists are pervasive in real mail and
+				 * are split by most MTAs, so treat it exactly like a comma;
+				 * a `;' inside a quoted string is handled by parse_quoted
+				 */
 				if (p > c && seen_at) {
 					/*
 					 * Last token must be the address:

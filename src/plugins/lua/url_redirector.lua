@@ -144,6 +144,14 @@ local redis_params
 
 local settings = {
   expire = 86400, -- 1 day by default
+  -- How long a chain that ended on a failure is remembered: an error of the
+  -- network, a refused request, a status that is neither 200 nor a redirect,
+  -- or a redirect without a usable Location. Such an end tells nothing
+  -- about where the url leads, and may not be there on the next request
+  error_expire = 600,
+  -- How long a scan waits for another scan that is resolving the same url,
+  -- before it resolves the url on its own. 0 gives the url up at once
+  lock_wait = 3,
   timeout = 8, -- total timeout of module
   -- HTTP HEAD timeout per redirect hop. Either a number (whole-request
   -- duration) or a table with .connect_timeout, .ssl_timeout,
@@ -151,9 +159,17 @@ local settings = {
   http_timeout = 4,
   redis_timeout = 2, -- redis timeout for cache operations  (redis.conf module has higher priority)
   nested_limit = 2, -- how many redirects to follow
+  -- Hops in a whole chain, cached ones included: cached hops cost no HTTP
+  -- request, and ^nested lets every scan extend a chain further
+  max_chain_length = 16,
   --proxy = "http://example.com:3128", -- send request through proxy, not yet implemented
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
+  -- SSRF protection: message URLs and their redirect targets are attacker
+  -- controlled, so never follow them into loopback, link-local or
+  -- local_addrs networks (e.g. cloud metadata services). Disable only if
+  -- internal redirectors must be resolved.
+  forbid_local = true,
   max_urls = 5, -- how many urls to check (CTA checked in first place)
   max_size = 10 * 1024, -- maximum body to process
   -- Optional operator override. When set (a string, or a list of
@@ -166,6 +182,8 @@ local settings = {
   redirector_symbol = nil, -- insert symbol if redirected url has been found
   redirector_symbol_nested = "URL_REDIRECTOR_NESTED", -- insert symbol if nested limit has been reached
   redirector_symbol_non_http = "URL_REDIRECTOR_NON_HTTP", -- HTTP -> non-HTTP(S) redirect detected
+  -- insert symbol if a message has more redirector urls than max_urls
+  redirector_symbol_limit = "URL_REDIRECTOR_LIMIT",
   redirectors_only = true, -- follow merely redirectors
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
@@ -218,6 +236,58 @@ local function encode_url_for_redirect(url_str)
   return encoded
 end
 
+-- What goes into the option of a symbol from a server: a Location header is
+-- as long as the server wishes
+local max_option_length = 128
+local function short_option(str)
+  if #str > max_option_length then
+    return str:sub(1, max_option_length) .. '...'
+  end
+  return str
+end
+
+-- The value of a Location header as a browser reads it.
+--
+-- White space and control characters around the value are dropped, tabs and
+-- line ends inside of it are removed, and for a http(s) or a relative target
+-- a backslash is a slash up to the query: `/\\host/path` leads to another
+-- host, not to a path on the same one.
+local function clean_location(task, loc)
+  if type(loc) == 'table' then
+    -- Several headers. A browser refuses such a response unless they are
+    -- all the same; the first one is as good a guess as any
+    lua_util.debugm(N, task, 'got %s Location headers, use the first one', #loc)
+    loc = loc[1]
+  end
+
+  if type(loc) ~= 'string' then
+    return nil
+  end
+
+  loc = loc:gsub('^[%z\1-\32]+', '')
+  loc = loc:gsub('[%z\1-\32]+$', '')
+  loc = loc:gsub('[\t\r\n]', '')
+
+  local scheme = loc:match('^(%a[%w+.-]*):')
+  if scheme then
+    scheme = scheme:lower()
+  end
+
+  if not scheme or scheme == 'http' or scheme == 'https' then
+    local head, tail = loc:match('^([^?#]*)(.*)$')
+
+    if head and head:find('\\', 1, true) then
+      loc = head:gsub('\\', '/') .. tail
+    end
+  end
+
+  if #loc == 0 then
+    return nil
+  end
+
+  return loc
+end
+
 -- Build a 'host1->host2->...' string from a chain of URL objects.
 -- Includes scheme for non-HTTP(S) URLs to distinguish them.
 local function chain_hosts_string(chain)
@@ -225,7 +295,7 @@ local function chain_hosts_string(chain)
   for i = 1, #chain do
     local proto = chain[i]:get_protocol()
     if proto ~= 'http' and proto ~= 'https' then
-      hosts[i] = chain[i]:get_text()
+      hosts[i] = short_option(chain[i]:get_text())
     else
       hosts[i] = chain[i]:get_host()
     end
@@ -236,10 +306,51 @@ end
 -- Mixed into the hashed cache key; bump on incompatible value-format changes
 -- so old-format entries hash elsewhere and get re-resolved, not misread.
 -- v1: value is the raw (percent-encoded) URL, not the decoded text.
-local cache_format_version = 'v1:'
+-- v2: keyed by the raw URL too, see url_identity.
+local cache_format_version = 'v2:'
 
--- Per-URL Redis cache key: hash the URL (fixed-length, URL-safe). tostring()
--- (not get_raw) keeps the hash stable across the write-then-read round-trip.
+-- A URL as it is requested. The decoded form (tostring) merges URLs that
+-- differ in percent-encoded delimiters, e.g. /a%3Fb and /a?b, which are
+-- different requests with possibly different redirects. Cached values are
+-- raw URLs too, so a hop re-parsed from the cache keeps its identity.
+local function url_identity(url)
+  return url:get_raw()
+end
+
+-- Resolves a redirect Location against the URL that returned it
+-- (RFC 3986 section 5.2, dot segments are left to the server). Without it a
+-- relative location either fails to parse, ending the chain early, or has a
+-- URL-looking substring picked out of it as the target.
+local function resolve_location(base_raw, loc)
+  if loc:match('^%a[%w+.-]*:') then
+    -- Absolute, any scheme
+    return loc
+  end
+
+  local scheme, authority, path = base_raw:match('^(%a[%w+.-]*:)//([^/?#]*)([^?#]*)')
+  if not scheme then
+    return loc
+  end
+
+  local first = loc:sub(1, 1)
+
+  if loc:sub(1, 2) == '//' then
+    return scheme .. loc
+  elseif first == '/' then
+    return scheme .. '//' .. authority .. loc
+  elseif first == '?' then
+    return scheme .. '//' .. authority .. path .. loc
+  elseif first == '#' or loc == '' then
+    -- The same resource again
+    return base_raw:match('^[^#]*')
+  end
+
+  -- A relative path replaces the last segment of the base path
+  local dir = path:match('^(.*/)') or '/'
+  return scheme .. '//' .. authority .. dir .. loc
+end
+
+-- Per-URL Redis cache key: hash the URL identity (fixed-length, URL-safe).
 local function cache_key_for_url(url_str)
   return settings.key_prefix ..
       hash.create(cache_format_version .. url_str):base32():sub(1, 32)
@@ -266,6 +377,22 @@ local function should_save_hop(hop_url)
   return cfg.non_redirectors and true or false
 end
 
+-- Whether we may issue an HTTP request for this URL under redirectors_only.
+-- Cached chains can end on hops that are not (or are no longer) redirectors,
+-- so the bridges out of the cache walk must re-check the map too, not just
+-- the live 30x path.
+local function may_fetch(task, hop_url)
+  if not settings.redirectors_only then
+    return true
+  end
+  local host = hop_url:get_host()
+  -- get_key() returns false (not nil) on a miss, so test truthiness.
+  local matched = host and settings.redirector_hosts_map:get_key(host)
+  lua_util.debugm(N, task, 'redirector map lookup for %s: %s',
+      host, matched)
+  return matched and true or false
+end
+
 -- Append hop to chain unless it equals the current tail. String
 -- comparison (not identity): on cache-hit walks the parsed URL is a
 -- fresh Lua object for the same string, and identity (==) would
@@ -275,7 +402,7 @@ local function chain_append(chain, hop_url)
     return
   end
   local tail = chain[#chain]
-  if tail == nil or tostring(hop_url) ~= tostring(tail) then
+  if tail == nil or url_identity(hop_url) ~= url_identity(tail) then
     table.insert(chain, hop_url)
   end
 end
@@ -312,10 +439,12 @@ end
 -- top_urls zset stays a meaningful popularity counter.
 -- A length-1 chain caches a self-loop so future scans of a direct-200
 -- URL fast-path through the cache walk instead of re-issuing HEAD.
-local function cache_chain_to_redis(task, chain, terminal_prefix)
+local function cache_chain_to_redis(task, chain, terminal_prefix, ttl)
   if #chain == 0 then
     return
   end
+
+  ttl = ttl or settings.expire
 
   local function trim_cb(err, _)
     if err then
@@ -350,7 +479,7 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
   end
 
   local function write_link(prev_url, next_url, marker)
-    local link_key = cache_key_for_url(tostring(prev_url))
+    local link_key = cache_key_for_url(url_identity(prev_url))
     -- Cache the raw (percent-encoded) form: keeps query boundaries intact so
     -- cached hops re-parse identically to live ones, and it is already URL-safe.
     local next_str = next_url:get_raw()
@@ -362,7 +491,7 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
     end
     local ret, conn, _ = lua_redis.redis_make_request(task,
         redis_params, link_key, true, set_cb,
-        'SETEX', { link_key, tostring(settings.expire), cache_value })
+        'SETEX', { link_key, tostring(ttl), cache_value })
     if not ret then
       rspamd_logger.errx(task, 'cannot cache redirect link for %s', prev_url)
     elseif conn then
@@ -394,9 +523,14 @@ local function cache_chain_to_redis(task, chain, terminal_prefix)
 end
 
 -- Apply chain to task and persist it to Redis.
-local function finalize_chain(task, chain, terminal_prefix)
+local function finalize_chain(task, chain, terminal_prefix, ttl)
   apply_redirect_chain(task, chain)
-  cache_chain_to_redis(task, chain, terminal_prefix)
+  cache_chain_to_redis(task, chain, terminal_prefix, ttl)
+end
+
+-- The chain ends on something that is not an answer
+local function finalize_failed_chain(task, chain)
+  finalize_chain(task, chain, nil, math.max(1, math.floor(settings.error_expire)))
 end
 
 -- HTTP redirect status codes that we follow.
@@ -449,7 +583,7 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
 
   if data == nil then
     local last = chain[#chain]
-    local last_str = tostring(last)
+    local last_str = url_identity(last)
     local next_key = cache_key_for_url(last_str)
     local ret = lua_redis.redis_make_request(task,
         redis_params, next_key, false,
@@ -470,6 +604,12 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
             -- URL whose own cache entry is gone (TTL expired or evicted).
             -- Resume live HTTP from this dead end so the chain rebuilds and
             -- gets re-cached, instead of giving up with a truncated chain.
+            if not may_fetch(task, last) then
+              lua_util.debugm(N, task,
+                  'cache miss for %s mid-walk, but it is not a redirector', last_str)
+              step_finish(task, chain, http_extended)
+              return
+            end
             lua_util.debugm(N, task,
                 'cache miss for %s mid-walk, extending with live HTTP', last_str)
             -- The prior ^hop iteration that appended `last` to the chain
@@ -504,6 +644,13 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
     return
   end
 
+  if #chain >= settings.max_chain_length then
+    lua_util.debugm(N, task, 'chain is %s hops long, stop at %s',
+        #chain, val)
+    step_finish(task, chain, http_extended)
+    return
+  end
+
   local hop = rspamd_url.create(task:get_mempool(), val,
       { 'redirect_target' })
   if not hop then
@@ -526,8 +673,17 @@ step = function(task, orig_url, chain, seen, data, ntries, http_extended)
     -- nested_limit. If the extension finalizes successfully, the
     -- upstream ^nested marker is rewritten as ^hop and the chain
     -- grows in cache.
+    if not may_fetch(task, hop) then
+      lua_util.debugm(N, task,
+          'cached ^nested:%s is not a redirector, not extending', val)
+      step_finish(task, chain, http_extended)
+      return
+    end
     lua_util.debugm(N, task,
         'extending past cached ^nested:%s with live HTTP', val)
+    -- seen was marked for this hop above and http_walk marks it again on
+    -- entry, so clear it or its cycle guard fires immediately.
+    seen[url_identity(hop)] = nil
     http_walk(task, orig_url, hop, ntries + 1, chain, seen)
     return
   end
@@ -571,9 +727,8 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
   -- Mirror the cache walk's cycle guard: a redirector loop A->B->A->B
   -- (e.g. login redirector flapping between two hosts) would otherwise
   -- chew through nested_limit and bloat the chain with alternating
-  -- entries. tostring() (not get_raw): the cycle guard, cache key and
-  -- GET-map match need a stable identity that collapses encoding variants;
-  local url_str = tostring(url)
+  -- entries.
+  local url_str = url_identity(url)
   if seen[url_str] then
     lua_util.debugm(N, task, 'cycle in http walk at %s', url_str)
     finalize_chain(task, chain, nil)
@@ -591,7 +746,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
             'redirect error: %s -> %s: %s', orig_url, url, err)
       end
       chain_append(chain, url)
-      finalize_chain(task, chain, nil)
+      finalize_failed_chain(task, chain)
       return
     end
 
@@ -608,13 +763,17 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     end
 
     if redirection_codes[code] then
-      local loc = headers['location']
+      local loc = clean_location(task, headers['location'])
       local redir_url
       if loc then
         -- Encode problematic characters (spaces, etc.) that
         -- http_parser doesn't accept. Fixes issue #5525.
-        local encoded_loc = encode_url_for_redirect(loc)
-        redir_url = rspamd_url.create(task:get_mempool(), encoded_loc)
+        local encoded_loc = resolve_location(url:get_raw(),
+            encode_url_for_redirect(loc))
+        -- The whole of the value is the target. Only if it does not parse
+        -- as one is an url looked for inside of it
+        redir_url = rspamd_url.parse(task:get_mempool(), encoded_loc) or
+            rspamd_url.create(task:get_mempool(), encoded_loc)
         if not redir_url and encoded_loc ~= loc then
           rspamd_logger.infox(task,
               'failed to parse redirect location even after encoding: %s', loc)
@@ -642,21 +801,14 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           return
         end
 
-        local should_follow
-        if settings.redirectors_only then
-          should_follow = settings.redirector_hosts_map:get_key(redir_url:get_host()) ~= nil
-        else
-          should_follow = true
-        end
-
-        if should_follow then
+        if may_fetch(task, redir_url) then
           -- Probe cache for redir_url before HEADing it. If a chain is
           -- already cached at hash(redir_url) (typical when many
           -- shortlinks share a redirector intermediate, or when a prior
           -- scan resolved redir_url as its own orig), splice into step
           -- and let the cache walk continue from there. Cache miss/lock:
           -- fall back to live HEAD as before.
-          local k = cache_key_for_url(tostring(redir_url))
+          local k = cache_key_for_url(url_identity(redir_url))
           local ret = lua_redis.redis_make_request(task,
               redis_params, k, false,
               function(probe_err, probe_data)
@@ -667,7 +819,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
                       'cache hit on redirect target %s, splicing into cache walk',
                       redir_url)
                   chain_append(chain, redir_url)
-                  seen[tostring(redir_url)] = true
+                  seen[url_identity(redir_url)] = true
                   -- Pass current ntries so any onward ^nested-bridge
                   -- inside step counts HEADs already done in this
                   -- scan toward nested_limit, instead of resetting.
@@ -701,17 +853,17 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
           -- chain or cached with a ^non_http marker. Emit the symbol now and cache
           -- as a normal terminal; future scans within the TTL won't re-emit it.
           task:insert_result(settings.redirector_symbol_non_http, 1.0,
-              string.format('%s=%s->%s', raw_scheme, chain_hosts_string(chain), loc))
+              string.format('%s=%s->%s', raw_scheme, chain_hosts_string(chain), short_option(loc)))
           finalize_chain(task, chain, nil)
         else
           lua_util.debugm(N, task, 'failed to parse location %s, headers: %s', loc, headers)
           chain_append(chain, url)
-          finalize_chain(task, chain, nil)
+          finalize_failed_chain(task, chain)
         end
       else
         lua_util.debugm(N, task, 'no location, headers: %s', headers)
         chain_append(chain, url)
-        finalize_chain(task, chain, nil)
+        finalize_failed_chain(task, chain)
       end
       return
     end
@@ -721,12 +873,12 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
         'found redirect error from %s to %s, err code: %s',
         orig_url, url, code)
     chain_append(chain, url)
-    finalize_chain(task, chain, nil)
+    finalize_failed_chain(task, chain)
   end
 
   local method = 'head'
   if settings.redirector_get_urls_map
-      and settings.redirector_get_urls_map:get_key(url_str) then
+      and settings.redirector_get_urls_map:get_key(tostring(url)) then
     method = 'get'
   end
 
@@ -741,8 +893,11 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     max_size = settings.max_size,
     opaque_body = true,
     no_ssl_verify = not settings.check_ssl,
+    forbid_local = settings.forbid_local,
     callback = http_callback,
   }
+
+  local identity
 
   if settings.user_agent then
     -- Operator override: a single User-Agent header, no fingerprint.
@@ -751,8 +906,7 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
       ua = ua[math.random(#ua)]
     end
     http_params.headers = { ['User-Agent'] = ua }
-    lua_util.debugm(N, task, 'query %s %s with user agent %s',
-        method, url_str, ua)
+    identity = string.format('user agent %s', ua)
   else
     -- Stealth: one coherent browser fingerprint per task, reused by
     -- every hop of every chain so the identity stays consistent.
@@ -766,16 +920,24 @@ http_walk = function(task, orig_url, url, ntries, chain, seen)
     end
     if profile then
       http_params.headers = profile.headers
-      lua_util.debugm(N, task, 'query %s %s with %s fingerprint',
-          method, url_str, profile.name)
+      identity = string.format('%s fingerprint', profile.name)
     else
-      lua_util.debugm(N, task, 'query %s %s (no fingerprint profile)',
-          method, url_str)
+      identity = 'no fingerprint profile'
     end
   end
 
   apply_http_timeout(http_params)
-  rspamd_http.request(http_params)
+  -- Single grep anchor for "did we actually go on the wire": every
+  -- rspamd_http.request in this module is preceded by exactly this line.
+  lua_util.debugm(N, task, 'http request %s %s (orig %s, hop %s/%s, %s)',
+      method, request_url, orig_url, ntries, settings.nested_limit, identity)
+  if not rspamd_http.request(http_params) then
+    -- Synchronous refusal (e.g. forbid_local blocked a numeric-IP URL):
+    -- the callback will never fire, so terminate the walk here
+    rspamd_logger.infox(task, 'cannot start HTTP request for %s', url)
+    chain_append(chain, url)
+    finalize_failed_chain(task, chain)
+  end
 end
 
 -- Top-level entry: walk the cached chain from orig_url, then either
@@ -786,11 +948,11 @@ end
 -- Cycle protection is a per-walk seen-set keyed by URL string that
 -- both step and http_walk share, so cycles spanning the two are caught.
 local function resolve_cached(task, orig_url)
-  local key = cache_key_for_url(tostring(orig_url))
+  local key = cache_key_for_url(url_identity(orig_url))
   local chain = { orig_url }
   -- seen grows as we walk forward; we do not pre-seed it with orig_url
   -- because the writer caches direct-200 URLs as a length-1 self-loop
-  -- (hash(orig) = tostring(orig)), and a pre-seed would false-fire the
+  -- (hash(orig) = raw orig), and a pre-seed would false-fire the
   -- cycle check on legitimate terminals. chain_append's tostring-eq
   -- dedup keeps us from double-appending orig in that case.
   local seen = {}
@@ -805,6 +967,41 @@ local function resolve_cached(task, orig_url)
       return
     end
 
+    -- Looks at the cache again in a while, until the scan that holds the
+    -- lock has written the chain. When the wait is over the url is resolved
+    -- here: the holder may be gone, and its lock with it
+    local poll_interval = 0.25
+    local function wait_for_holder(waited)
+      if waited >= settings.lock_wait then
+        if settings.lock_wait > 0 then
+          lua_util.debugm(N, task, 'no result for %s after %s seconds, resolve it here',
+              orig_url, waited)
+          http_walk(task, orig_url, orig_url, 1, chain, seen)
+        end
+        return
+      end
+
+      task:add_timer(poll_interval, function()
+        local ret = lua_redis.redis_make_request(task,
+            redis_params, key, false,
+            function(werr, wdata)
+              if not werr and type(wdata) == 'string' and wdata ~= 'processing' then
+                lua_util.debugm(N, task, 'got the result of another scan for %s: %s',
+                    orig_url, wdata)
+                step(task, orig_url, chain, seen, wdata, 0)
+              elseif werr then
+                rspamd_logger.errx(task, 'got error while waiting for %s: %s', orig_url, werr)
+              else
+                wait_for_holder(waited + poll_interval)
+              end
+            end,
+            'GET', { key })
+        if not ret then
+          rspamd_logger.errx(task, 'cannot make redis request to wait for %s', orig_url)
+        end
+      end)
+    end
+
     -- Cache miss or 'processing': try to claim the lock and live-resolve.
     -- If SET NX fails (another scan holds the lock or a stale 'processing'
     -- marker survives a crash), ndata != 'OK' and we drop this scan -- the
@@ -817,9 +1014,13 @@ local function resolve_cached(task, orig_url)
       elseif ndata == 'OK' then
         http_walk(task, orig_url, orig_url, 1, chain, seen)
       else
+        -- Another scan is resolving this url right now. Messages of one
+        -- mailing come together, so giving the url up here leaves all of
+        -- them but the first without the target: wait for the result
         lua_util.debugm(N, task,
-            'failed to claim lock for %s (held by another worker or stale processing marker, ndata=%s); skipping this scan',
+            'lock for %s is held by another scan (ndata=%s), wait for its result',
             orig_url, ndata)
+        wait_for_holder(0)
       end
     end
 
@@ -929,6 +1130,26 @@ local function url_redirector_handler(task)
     lua_util.debugm(N, task,
         'no URLs matched redirector_hosts_map (out of %d task URLs)',
         n_urls)
+  elseif #selected >= settings.max_urls and settings.redirector_symbol_limit then
+    -- Redirector urls that are not looked at: a message can carry any
+    -- number of them, and the one that matters need not be among the first
+    local left_out = 0
+    local counted = {}
+
+    for _, url in ipairs(task:get_urls({ 'http', 'https' }) or {}) do
+      local host = url:get_host()
+      local key = tostring(url)
+
+      if host and not seen[key] and not counted[key]
+          and settings.redirector_hosts_map:get_key(host) then
+        counted[key] = true
+        left_out = left_out + 1
+      end
+    end
+
+    if left_out > 0 then
+      task:insert_result(settings.redirector_symbol_limit, 1.0, tostring(left_out))
+    end
   end
 
   for _, u in ipairs(selected) do
@@ -1004,6 +1225,15 @@ if opts then
         parent = id,
         score = 0,
       }
+
+      if settings.redirector_symbol_limit then
+        rspamd_config:register_symbol {
+          name = settings.redirector_symbol_limit,
+          type = 'virtual',
+          parent = id,
+          score = 0,
+        }
+      end
 
       if settings.redirector_symbol then
         rspamd_config:register_symbol {

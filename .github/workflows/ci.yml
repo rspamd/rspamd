@@ -4,69 +4,119 @@ on:
   pull_request:
     branches:
       - master
+  # In rspamd/rspamd push only triggers on master -- feature branches are
+  # covered by the `pull_request` event once a PR is open, so we never fire
+  # both `push` (refs/heads/<branch>) and `pull_request` (refs/pull/<n>/merge)
+  # for the same commit, which previously left a spurious *cancelled* run that
+  # reads like a CI failure.
+  # In forks push triggers on all branches so that CI runs without opening a PR.
   push:
     branches:
       - '**'
 
-# A commit pushed to a branch that also has an open PR fires two runs at
-# once: one for `push` (ref refs/heads/<branch>) and one for `pull_request`
-# (ref refs/pull/<n>/merge). They duplicate each other's work and, sharing
-# the hosted runners, double CPU load -- which is enough to push the heavy
-# 001_merged rspamd's controller startup past the functional suites' fixed
-# readiness timeouts and flake (e.g. 440_ssl_server). The only identifier
-# the two events share is the head commit SHA (their refs differ), so key
-# the concurrency group on it: both events for one commit collapse to a
-# single run, and cancel-in-progress reaps the loser instead of racing it.
+# A commit pushed to a branch that also has an open PR fires two runs at once:
+# one for `push` (refs/heads/<branch>) and one for `pull_request`
+# (refs/pull/<n>/merge). Key the concurrency group on the head SHA so both
+# events for the same commit share a group: cancel-in-progress reaps the older
+# run. In rspamd/rspamd the push trigger is restricted to master so the
+# duplicate never occurs there; the SHA key is a no-op for that repo but keeps
+# the behaviour correct in forks where push fires on all branches.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   linters:
+    # In rspamd/rspamd skip push runs on feature branches: pull_request already
+    # covers them. In forks run on every push so CI works without an open PR.
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_linters.yml
 
   fedora:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
       name: fedora-ci
       enable_luajit: 'OFF'
+      # rpm/rspamd.spec builds with jemalloc, but the fedora-ci image installs
+      # neither jemalloc nor jemalloc-devel. Flip this on once the image carries
+      # jemalloc-devel (rspamd/rspamd-build-docker).
+      enable_jemalloc: 'OFF'
 
   ubuntu_amd64:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci-amd64
+      # The shipped configuration: debian/rules enables jemalloc everywhere
+      # except arm64, and the amd64 image carries libjemalloc-dev. This is the
+      # only job that runs the functional suite against it.
+      enable_jemalloc: 'ON'
 
   ubuntu_arm64:
-    if: ${{ !vars.NO_ARM }}
+    if: |
+      !vars.NO_ARM && (
+        github.event_name == 'pull_request' ||
+        github.ref == 'refs/heads/master' ||
+        github.repository != 'rspamd/rspamd'
+      )
     uses: ./.github/workflows/ci_rspamd.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
       name: ubuntu-ci-arm64
       runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
+      # Deliberately off: debian/rules also disables jemalloc on arm64, and the
+      # arm64 image takes the vectorscan branch which skips libjemalloc-dev.
+      enable_jemalloc: 'OFF'
 
-  ubuntu-focal:
+  ubuntu-noble:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
-      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-focal
-      name: ubuntu-focal
+      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-noble
+      name: ubuntu-noble
+      # The .deb packaging image, not the CI one: it builds against a
+      # self-compiled static LuaJIT 2.1 (-DLUA_ROOT=/luajit-build) and drives
+      # the Makefile generator, so it covers a configuration ubuntu_amd64
+      # (system libluajit + Ninja) does not. amd64 runner, and the image
+      # carries libjemalloc-dev, so this also covers the jemalloc build.
+      enable_jemalloc: 'ON'
 
   centos-8:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:centos-8
       name: centos-8
+      # rpm/rspamd.spec builds with jemalloc, but the image installs only the
+      # runtime `jemalloc`, not `jemalloc-devel`. Flip on once the image has it.
+      enable_jemalloc: 'OFF'
 
   centos-9:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
     uses: ./.github/workflows/ci_rspamd_build.yml
     with:
       image: ghcr.io/rspamd/rspamd-build-docker:centos-9
       name: centos-9
-
-  webui-e2e-playwright:
-    needs: ubuntu_amd64
-    uses: ./.github/workflows/ci_webui_e2e_playwright.yml
-    with:
-      image: ghcr.io/rspamd/rspamd-build-docker:ubuntu-ci
-      name: ubuntu-ci-amd64
+      # As centos-8: image has runtime `jemalloc` only, no `jemalloc-devel`.
+      enable_jemalloc: 'OFF'

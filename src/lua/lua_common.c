@@ -957,6 +957,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_mempool(L);
 	luaopen_config(L);
 	luaopen_map(L);
+	luaopen_tld_lookup(L);
 	luaopen_trie(L);
 	luaopen_task(L);
 	luaopen_textpart(L);
@@ -977,6 +978,7 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_ip(L);
 	luaopen_expression(L);
 	luaopen_text(L);
+	rspamd_lua_text_stats_init(L);
 	luaopen_util(L);
 	luaopen_tcp(L);
 	luaopen_html(L);
@@ -993,6 +995,10 @@ rspamd_lua_init(bool wipe_mem)
 	luaopen_libarchive(L);
 	luaopen_shingle(L);
 	luaopen_fasttext(L);
+	luaopen_static_embed(L);
+	luaopen_pdf_text(L);
+	luaopen_ooxml(L);
+	luaopen_svg(L);
 	luaopen_caseless_table(L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload(L, "bit", luaopen_bit);
@@ -1579,6 +1585,9 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg(ap, gboolean *)) = 0;
 					}
+					else {
+						(void) va_arg(ap, gboolean *);
+					}
 				}
 				else {
 					g_set_error(err,
@@ -2005,6 +2014,32 @@ unsigned int rspamd_lua_table_size(lua_State *L, int tbl_pos)
 	return tbl_size;
 }
 
+/*
+ * Get a class name of an object for diagnostics purposes. `__index` is not
+ * necessarily a table: e.g. `redis{null}` has a function there, and indexing a
+ * function would raise an error instead of reporting the type mismatch we are
+ * about to complain about. Values are left on the stack to keep the returned
+ * string alive, a caller is expected to restore the stack afterwards.
+ */
+static const char *
+rspamd_lua_class_name_diag(lua_State *L, int pos)
+{
+	const char *ret = NULL;
+
+	if (lua_getmetatable(L, pos)) {
+		lua_pushstring(L, "__index");
+		lua_rawget(L, -2);
+
+		if (lua_istable(L, -1)) {
+			lua_pushstring(L, "class");
+			lua_rawget(L, -2);
+			ret = lua_tostring(L, -1);
+		}
+	}
+
+	return ret ? ret : "unknown";
+}
+
 static void *
 rspamd_lua_check_udata_common(lua_State *L, int pos, const char *classname,
 							  gboolean fatal)
@@ -2046,12 +2081,8 @@ err:
 	if (fatal) {
 		const char *actual_classname = NULL;
 
-		if (lua_type(L, pos) == LUA_TUSERDATA && lua_getmetatable(L, pos)) {
-			lua_pushstring(L, "__index");
-			lua_gettable(L, -2);
-			lua_pushstring(L, "class");
-			lua_gettable(L, -2);
-			actual_classname = lua_tostring(L, -1);
+		if (lua_type(L, pos) == LUA_TUSERDATA) {
+			actual_classname = rspamd_lua_class_name_diag(L, pos);
 		}
 		else {
 			actual_classname = lua_typename(L, lua_type(L, pos));
@@ -2060,6 +2091,22 @@ err:
 		luaL_Buffer buf;
 		char tmp[512];
 		int r;
+		int nstack = MIN(top, 10);
+		const char *stack_classnames[10] = {NULL};
+
+		/*
+		 * Resolve class names before the buffer is initialised: pushing anything
+		 * on the stack whilst luaL_Buffer is in use would break it. Each lookup
+		 * needs a few slots, and running out of them here would raise an error
+		 * on top of the one we are reporting
+		 */
+		if (lua_checkstack(L, nstack * 3 + 8)) {
+			for (i = 1; i <= nstack; i++) {
+				if (lua_type(L, i) == LUA_TUSERDATA) {
+					stack_classnames[i - 1] = rspamd_lua_class_name_diag(L, i);
+				}
+			}
+		}
 
 		luaL_buffinit(L, &buf);
 		r = rspamd_snprintf(tmp, sizeof(tmp),
@@ -2071,23 +2118,12 @@ err:
 		r = rspamd_snprintf(tmp, sizeof(tmp), " stack(%d): ", top);
 		luaL_addlstring(&buf, tmp, r);
 
-		for (i = 1; i <= MIN(top, 10); i++) {
+		for (i = 1; i <= nstack; i++) {
 			if (lua_type(L, i) == LUA_TUSERDATA) {
-				const char *clsname;
-
-				if (lua_getmetatable(L, i)) {
-					lua_pushstring(L, "__index");
-					lua_gettable(L, -2);
-					lua_pushstring(L, "class");
-					lua_gettable(L, -2);
-					clsname = lua_tostring(L, -1);
-				}
-				else {
-					clsname = lua_typename(L, lua_type(L, i));
-				}
-
 				r = rspamd_snprintf(tmp, sizeof(tmp), "[%d: ud=%s] ", i,
-									clsname);
+									stack_classnames[i - 1] ?
+										stack_classnames[i - 1] :
+										"unknown");
 				luaL_addlstring(&buf, tmp, r);
 			}
 			else {
@@ -2507,6 +2543,26 @@ void rspamd_lua_push_full_word(lua_State *L, rspamd_word_t *w)
 	}
 	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_STEMMED) {
 		lua_pushstring(L, "stemmed");
+		lua_rawseti(L, -2, fl_cnt++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_MIXED_SCRIPT) {
+		lua_pushstring(L, "mixed_script");
+		lua_rawseti(L, -2, fl_cnt++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_UNICODE_SPOOF) {
+		lua_pushstring(L, "unicode_spoof");
+		lua_rawseti(L, -2, fl_cnt++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_CONFUSABLE_CANDIDATE) {
+		lua_pushstring(L, "confusable_candidate");
+		lua_rawseti(L, -2, fl_cnt++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_INVISIBLE) {
+		lua_pushstring(L, "invisible");
+		lua_rawseti(L, -2, fl_cnt++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_MIXED_NUMBERS) {
+		lua_pushstring(L, "mixed_numbers");
 		lua_rawseti(L, -2, fl_cnt++);
 	}
 

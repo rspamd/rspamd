@@ -72,6 +72,13 @@ HTTP Early Keepalive Stress
   ...  Settings={symbols_enabled = [HTTP_EARLY_KEEPALIVE_STRESS_TEST]}
   Expect Symbol  HTTP_EARLY_KEEPALIVE_STRESS
 
+HTTP Keepalive Replies Not To Follow
+  [Documentation]  Garbage after a reply, a reply that ends at EOF, an interim reply
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [HTTP_KEEPALIVE_HYGIENE_TEST]}
+  Expect Symbol  HTTP_KEEPALIVE_HYGIENE_OK
+  Do Not Expect Symbol  HTTP_KEEPALIVE_HYGIENE_FAIL
+
 HTTP Immediate Close Large Body
   [Documentation]  Test server immediately closing connection during large body send
   [Tags]  aggressive

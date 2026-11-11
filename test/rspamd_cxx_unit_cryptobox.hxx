@@ -19,10 +19,19 @@
 #ifndef RSPAMD_RSPAMD_CXX_UNIT_CRYPTOBOX_HXX
 #define RSPAMD_RSPAMD_CXX_UNIT_CRYPTOBOX_HXX
 #include "libcryptobox/cryptobox.h"
+#include "libcryptobox/keypair.h"
+#include "libcryptobox/keypairs_cache.h"
 #include <string>
 #include <string_view>
 #include <vector>
+#include <cstring>
 #include <iosfwd>
+#ifdef HAVE_OPENSSL
+#include <openssl/evp.h>
+#include <openssl/err.h>
+#include <openssl/obj_mac.h>
+#include <openssl/rsa.h>
+#endif
 
 namespace std// NOLINT(cert-dcl58-cpp)
 {
@@ -48,6 +57,64 @@ TEST_SUITE("rspamd_cryptobox")
 		rspamd_pk_t pk;
 
 		rspamd_cryptobox_keypair(pk, sk);
+	}
+
+	TEST_CASE("rspamd_cryptobox_nm fails closed on low order keys")
+	{
+		rspamd_sk_t sk, peer_sk;
+		rspamd_pk_t pk, peer_pk;
+		rspamd_nm_t nm1, nm2, peer_nm;
+
+		rspamd_cryptobox_keypair(pk, sk);
+		rspamd_cryptobox_keypair(peer_pk, peer_sk);
+
+		/* A proper key agrees on the same secret from both sides */
+		CHECK(rspamd_cryptobox_nm(nm1, peer_pk, sk));
+		CHECK(rspamd_cryptobox_nm(peer_nm, pk, peer_sk));
+		CHECK(memcmp(nm1, peer_nm, sizeof(nm1)) == 0);
+
+		/* Zero and one are small order points: no secret, a random one */
+		for (unsigned char point: {0, 1}) {
+			rspamd_pk_t bad_pk{};
+			bad_pk[0] = point;
+
+			memset(nm1, 0, sizeof(nm1));
+			memset(nm2, 0, sizeof(nm2));
+			CHECK_FALSE(rspamd_cryptobox_nm(nm1, bad_pk, sk));
+			CHECK_FALSE(rspamd_cryptobox_nm(nm2, bad_pk, sk));
+			CHECK(memcmp(nm1, nm2, sizeof(nm1)) != 0);
+		}
+	}
+
+	TEST_CASE("rspamd_keypair_cache_process rejects low order keys")
+	{
+		auto *kp = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+		auto *peer = rspamd_keypair_new(RSPAMD_KEYPAIR_KEX);
+		unsigned int pklen;
+		const auto *peer_pk = rspamd_keypair_component(peer, RSPAMD_KEYPAIR_COMPONENT_PK,
+													   &pklen);
+		auto *good = rspamd_pubkey_from_bin(peer_pk, pklen, RSPAMD_KEYPAIR_KEX);
+		rspamd_pk_t zero_pk{};
+		auto *bad = rspamd_pubkey_from_bin(zero_pk, sizeof(zero_pk), RSPAMD_KEYPAIR_KEX);
+		auto *cache = rspamd_keypair_cache_new(8);
+
+		REQUIRE(good != nullptr);
+		REQUIRE(bad != nullptr);
+
+		/* With and without a cache, and a failure is never cached */
+		for (auto *c: {cache, cache, (struct rspamd_keypair_cache *) nullptr}) {
+			CHECK(rspamd_keypair_cache_process(c, kp, good));
+			CHECK(rspamd_pubkey_get_nm(good, kp) != nullptr);
+			CHECK_FALSE(rspamd_keypair_cache_process(c, kp, bad));
+			/* Callers ignoring the result still get a (random) secret */
+			CHECK(rspamd_pubkey_get_nm(bad, kp) != nullptr);
+		}
+
+		rspamd_keypair_cache_destroy(cache);
+		rspamd_pubkey_unref(good);
+		rspamd_pubkey_unref(bad);
+		rspamd_keypair_unref(kp);
+		rspamd_keypair_unref(peer);
 	}
 
 	TEST_CASE("rspamd_cryptobox_keypair_sig")
@@ -464,6 +531,114 @@ TEST_SUITE("rspamd_cryptobox")
 		CHECK(memcmp(subkey, expected_subkey, sizeof(expected_subkey)) == 0);
 		CHECK(memcmp(mac_key, expected_mac_key, sizeof(expected_mac_key)) == 0);
 	}
+
+#if defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+	TEST_CASE("rspamd_cryptobox_verify_evp rejects keys of the wrong type")
+	{
+		unsigned char digest[32];
+		unsigned char sig[64];
+		memset(digest, 0x42, sizeof(digest));
+		memset(sig, 0x17, sizeof(sig));
+
+		EVP_PKEY *ec = EVP_EC_gen("P-256");
+		EVP_PKEY *ed = EVP_PKEY_Q_keygen(NULL, NULL, "ED25519");
+		EVP_PKEY *x = EVP_PKEY_Q_keygen(NULL, NULL, "X25519");
+		REQUIRE(ec != NULL);
+		REQUIRE(ed != NULL);
+		REQUIRE(x != NULL);
+		ERR_clear_error();
+
+		EVP_PKEY *wrong_for_rsa[] = {ec, ed, x};
+		for (auto *key: wrong_for_rsa) {
+			GError *err = nullptr;
+			CHECK(rspamd_cryptobox_verify_evp_rsa(NID_sha256, sig, sizeof(sig),
+												  digest, sizeof(digest), key, &err) == false);
+			CHECK(err == nullptr);
+			CHECK(ERR_peek_error() == 0);
+			if (err) {
+				g_error_free(err);
+			}
+		}
+
+		EVP_PKEY *wrong_for_ecdsa[] = {ed, x};
+		for (auto *key: wrong_for_ecdsa) {
+			CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_sha256, sig, sizeof(sig),
+													digest, sizeof(digest), key) == false);
+			CHECK(ERR_peek_error() == 0);
+		}
+
+		/* Unknown digest nid */
+		CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_undef, sig, sizeof(sig),
+												digest, sizeof(digest), ec) == false);
+		CHECK(ERR_peek_error() == 0);
+
+		EVP_PKEY_free(ec);
+		EVP_PKEY_free(ed);
+		EVP_PKEY_free(x);
+	}
+
+	TEST_CASE("rspamd_cryptobox_verify_evp round trip")
+	{
+		unsigned char digest[32];
+		memset(digest, 0x5a, sizeof(digest));
+
+		auto sign = [&](EVP_PKEY *key, bool rsa) {
+			std::vector<unsigned char> out;
+			EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(key, NULL);
+			REQUIRE(ctx != NULL);
+			REQUIRE(EVP_PKEY_sign_init(ctx) == 1);
+			if (rsa) {
+				REQUIRE(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) > 0);
+			}
+			REQUIRE(EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) > 0);
+			size_t siglen = 0;
+			REQUIRE(EVP_PKEY_sign(ctx, NULL, &siglen, digest, sizeof(digest)) == 1);
+			out.resize(siglen);
+			REQUIRE(EVP_PKEY_sign(ctx, out.data(), &siglen, digest, sizeof(digest)) == 1);
+			out.resize(siglen);
+			EVP_PKEY_CTX_free(ctx);
+			return out;
+		};
+
+		SUBCASE("rsa")
+		{
+			EVP_PKEY *key = EVP_RSA_gen(2048);
+			REQUIRE(key != NULL);
+			auto sig = sign(key, true);
+			GError *err = nullptr;
+
+			CHECK(rspamd_cryptobox_verify_evp_rsa(NID_sha256, sig.data(), sig.size(),
+												  digest, sizeof(digest), key, &err) == true);
+			CHECK(err == nullptr);
+
+			sig[sig.size() / 2] ^= 0x01;
+			CHECK(rspamd_cryptobox_verify_evp_rsa(NID_sha256, sig.data(), sig.size(),
+												  digest, sizeof(digest), key, &err) == false);
+			CHECK(err == nullptr);
+			CHECK(ERR_peek_error() == 0);
+			if (err) {
+				g_error_free(err);
+			}
+			EVP_PKEY_free(key);
+		}
+
+		SUBCASE("ecdsa")
+		{
+			EVP_PKEY *key = EVP_EC_gen("P-256");
+			REQUIRE(key != NULL);
+			auto sig = sign(key, false);
+
+			CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_sha256, sig.data(), sig.size(),
+													digest, sizeof(digest), key) == true);
+
+			sig[sig.size() / 2] ^= 0x01;
+			CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_sha256, sig.data(), sig.size(),
+													digest, sizeof(digest), key) == false);
+			CHECK(ERR_peek_error() == 0);
+			EVP_PKEY_free(key);
+		}
+	}
+#endif
 }
 
 #endif

@@ -36,8 +36,8 @@ lol
             "headers": []
         },
         {
-            "content": "Hello world\n\n\n",
-            "size": 14,
+            "content": "Hello world\n\n",
+            "size": 13,
             "type": "text/plain",
             "boundary": "_000_6be055295eab48a5af7ad4022f33e2d0_",
             "detected_type": "text/plain",
@@ -85,7 +85,7 @@ lol
         }
     ],
     "newlines": "lf",
-    "digest": "043cf1a314d0a1af95951d6aec932faf",
+    "digest": "9acaf78deff83838809465ecd1af5be8",
     "envelope": {
         "recipients_smtp": [
             {
@@ -210,8 +210,8 @@ f
             "headers": []
         },
         {
-            "content": "--\nWBR yours\n--\na\n-----------------\nb\n------\nc\n-\nd\n--------\nf\n",
-            "size": 62,
+            "content": "--\nWBR yours\n--\na\n-----------------\nb\n------\nc\n-\nd\n--------\nf",
+            "size": 61,
             "type": "text/plain",
             "boundary": "-",
             "detected_type": "text/plain",
@@ -219,7 +219,7 @@ f
         }
     ],
     "newlines": "lf",
-    "digest": "1a680eb7563f32a2fbf67cf45e90f045",
+    "digest": "c3922025e94361c8769330b991c33353",
     "envelope": {
         "recipients_smtp": [
             {

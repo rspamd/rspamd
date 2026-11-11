@@ -47,6 +47,11 @@ local function pure_type(ltype)
   return ltype:match('^(.*)_list$')
 end
 
+-- Indexing values of arbitrary types can raise (e.g. numbers), so it is done via pcall
+local function safe_index(obj, key)
+  return obj[key]
+end
+
 local function implicit_tostring(t, ud_or_table)
   if t == 'table' then
     -- Table (very special)
@@ -275,7 +280,7 @@ local function make_grammar()
     NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * (argument + l.V("LIST_ARGS")) * comma ^ 0) ^ 0),
     LIST_ARGS = l.Ct(tbl_obrace * l.V("LIST_ARG") * tbl_ebrace),
     LIST_ARG = l.Cg(argument * comma ^ 0) ^ 0,
-  }
+  } * spc * l.Cp()
 end
 
 local parser = make_grammar()
@@ -288,6 +293,16 @@ exports.parse_selector = function(cfg, str)
   local output = {}
 
   if not parsed or not parsed[1] then
+    return nil
+  end
+
+  -- The last capture is the parse end position (lpeg.Cp); lpeg matches the
+  -- longest valid prefix, so anything left after that position is a parse
+  -- error, not a selector to be silently ignored
+  local last_pos = table.remove(parsed)
+  if last_pos <= #str then
+    logger.errx(cfg, "invalid selector '%s': unexpected token at position %d ('%s')",
+        str, last_pos, str:sub(last_pos))
     return nil
   end
 
@@ -382,8 +397,20 @@ exports.parse_selector = function(cfg, str)
               -- Plain table field
               ret = inp[method_name]
             else
+              local ok, meth = pcall(safe_index, inp, method_name)
+
+              if not ok or type(meth) ~= 'function' then
+                if transform_function[method_name] then
+                  logger.errx('cannot call method `%s` on %s value; use `.%s` to apply the transform of the same name',
+                      method_name, t, method_name)
+                else
+                  logger.errx('cannot call method `%s` on %s value', method_name, t)
+                end
+                return nil
+              end
+
               -- We call method unpacking arguments and dropping all but the first result returned
-              ret = (inp[method_name](inp, unpack_function(args or E)))
+              ret = (meth(inp, unpack_function(args or E)))
             end
 
             local ret_type = type(ret)
@@ -436,6 +463,84 @@ exports.parse_selector = function(cfg, str)
   end
 
   return output
+end
+
+--[[[
+-- @function lua_selectors.get_dependencies(cfg, str)
+-- Returns the list of symbols that must be executed before the selector can
+-- produce a value (e.g. `ASN_CHECK` for `asn`, the symbol itself for
+-- `symbol(NAME)`), or nil if the selector cannot be parsed
+--]]
+exports.get_dependencies = function(cfg, str)
+  local parsed = exports.parse_selector(cfg, str)
+
+  if not parsed then
+    return nil
+  end
+
+  local seen = {}
+  local deps = {}
+
+  for _, sel in ipairs(parsed) do
+    local extractor_deps = sel.selector.dependencies
+
+    if type(extractor_deps) == 'function' then
+      extractor_deps = extractor_deps(sel.selector.args)
+    end
+
+    for _, dep in ipairs(extractor_deps or E) do
+      if not seen[dep] then
+        seen[dep] = true
+        deps[#deps + 1] = dep
+      end
+    end
+  end
+
+  return deps
+end
+
+--[[[
+-- @function lua_selectors.register_dependencies(cfg, symbol, str)
+-- Registers the dependencies of a selector (see `get_dependencies`) for the
+-- symbol that evaluates it, so the symbols cache executes them first: a
+-- prefilter that uses `symbol(DKIM_CHECK)` gets DKIM_CHECK hoisted to the
+-- prefilter stage. Composites and classifiers are produced by the task stages
+-- rather than by symbols, and a dependency on a symbol of a later stage cannot
+-- be satisfied: those are skipped with a warning
+--]]
+exports.register_dependencies = function(cfg, symbol, str)
+  local deps = exports.get_dependencies(cfg, str)
+
+  if not deps or #deps == 0 then
+    return
+  end
+
+  local stage_rank = {
+    connfilter = 1,
+    prefilter = 2,
+    filter = 3,
+    postfilter = 4,
+    idempotent = 5,
+  }
+  local sym_type = cfg:get_symbol_type(symbol)
+
+  for _, dep in ipairs(deps) do
+    local dep_type = cfg:get_symbol_type(dep)
+
+    if dep_type and not stage_rank[dep_type] then
+      lua_util.debugm(M, cfg, 'selector "%s" needs %s (%s) which is not executed by the symbols cache; ' ..
+          'no dependency registered for %s', str, dep, dep_type, symbol)
+    elseif dep_type and sym_type and stage_rank[sym_type] and
+        stage_rank[dep_type] > stage_rank[sym_type] and
+        not (sym_type == 'prefilter' and dep_type == 'filter') then
+      logger.warnx(cfg, 'selector "%s" of %s (%s) needs %s (%s) which is executed later; ' ..
+          'the selector will have no value', str, symbol, sym_type, dep, dep_type)
+    else
+      -- Unknown symbols are resolved (or reported) when the cache is initialised
+      lua_util.debugm(M, cfg, 'register dependency %s -> %s for selector "%s"', symbol, dep, str)
+      cfg:register_dependency(symbol, dep)
+    end
+  end
 end
 
 --[[[

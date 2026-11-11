@@ -100,6 +100,24 @@ extern "C" {
 #define CONTENT_ENCODING_HEADER "Content-Encoding"
 #define ACCEPT_ENCODING_HEADER "Accept-Enconding"
 
+/*
+ * Privileged message source controls.
+ *
+ * These headers make rspamd read the message from a local object that the
+ * client names (a file path or a POSIX shared memory object) instead of from
+ * the request body, so they are only honoured on transports that the accepting
+ * worker has explicitly marked as trusted via `allow_file_and_shm_inputs`.
+ *
+ * NB: FILENAME_HEADER ("Filename") is deliberately NOT part of this set: it is
+ * purely descriptive metadata about the message being sent inline and it never
+ * selects a message source.
+ */
+#define FILE_HEADER "File"
+#define PATH_HEADER "Path"
+#define SHM_HEADER "Shm"
+#define SHM_OFFSET_HEADER "Shm-Offset"
+#define SHM_LENGTH_HEADER "Shm-Length"
+
 #ifdef __cplusplus
 }
 #endif

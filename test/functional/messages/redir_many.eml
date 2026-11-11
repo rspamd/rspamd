@@ -1,0 +1,16 @@
+Content-type: text/plain
+
+link 1 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=1
+
+link 2 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=2
+
+link 3 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=3
+
+link 4 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=4
+
+link 5 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=5
+
+link 6 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=6
+
+link 7 http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/redirect1?n=7
+

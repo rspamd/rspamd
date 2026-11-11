@@ -32,6 +32,38 @@ SPF ALLOW FAILED INCLUDE
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_ALLOW
 
+SPF A IPV4 PREFIX KEEPS IPV6 EXACT
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8:ffff::1  From=x@amask4.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF A IPV4 PREFIX MATCHES THE NETWORK
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.200  From=x@amask4.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF A WITHOUT PREFIX IS EXACT FOR IPV6
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8::11  From=x@amask0.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF A WITHOUT PREFIX MATCHES THE ADDRESS
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8::10  From=x@amask0.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF MACRO KEEPS RIGHT HAND PARTS
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@a.b.macro.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
 SPF NA NA
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@za
@@ -169,3 +201,330 @@ SPF PLUSALL
   ...  IP=8.8.8.8  From=x@plusall.com
   ...  Settings=${SETTINGS_SPF}
   Expect Symbol  R_SPF_PLUSALL
+
+SPF PERMFAIL MULTIPLE RECORDS
+  [Documentation]  RFC 7208 4.5: more than one SPF record yields permerror. An
+  ...  RRset has no order, so evaluating either of them would tie the verdict to
+  ...  the order the resolver answered in, even though 8.8.8.8 is authorised by
+  ...  the first one
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@twospf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF ALLOW ONE RECORD AMONG OTHER TXT
+  [Documentation]  Only records starting with the v=spf1 version string count
+  ...  towards that limit, an unrelated TXT record alongside one SPF record is
+  ...  the common case and must still be evaluated
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@onespf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_PERMFAIL
+
+SPF ALLOW MIXED CASE VERSION
+  [Documentation]  RFC 7208 4.5 matches the version section without regard to
+  ...  case, so a record announcing itself as V=SPF1 is an SPF record like any
+  ...  other
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@mixedcasespf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_NA
+
+SPF PERMFAIL MULTIPLE RECORDS MIXED CASE
+  [Documentation]  A caseless match is what makes the one-record limit hold: a
+  ...  duplicate spelled V=SPF1 must not escape permerror by its case
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@twomixedcasespf.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF ALLOW ONE RECORD BESIDE A LATER VERSION
+  [Documentation]  RFC 7208 4.5 terminates the version section with SP or the
+  ...  end of the record and says v=spf10 is discarded, so it is not a second
+  ...  SPF1 record and must not cause permerror
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@spf10.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_PERMFAIL
+
+SPF ALLOW MX
+  [Documentation]  A normal mx element is expanded to the addresses of its names
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@fewmx.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF PERMFAIL TOO MANY MX NAMES
+  [Documentation]  RFC 7208 4.6.4: an mx element must not query more than 10
+  ...  address records, exceeding that limit yields permerror
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@manymx.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF ALLOW NESTING AT LIMIT
+  [Documentation]  An include chain is followed up to max_dns_nesting levels
+  ...  (10 by default), 8.8.8.8 is listed by the last allowed one
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@nestok.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF PERMFAIL NESTING BEYOND LIMIT
+  [Documentation]  The same chain entered one level deeper cannot be evaluated
+  ...  to the end, which is permerror per RFC 7208 4.6.4 rather than a fail
+  ...  based on the part of the record that fitted in the limit
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@nestdeep.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF ALLOW EXISTS
+  [Documentation]  RFC 7208 5.7: an exists element whose name resolves matches
+  ...  any sender, here it follows an include that has appended an element of
+  ...  its own to the record
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@exists.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF FAIL UNRESOLVEABLE EXISTS
+  [Documentation]  An exists element whose name does not resolve matches
+  ...  nothing, so the trailing -all applies
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@noexists.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF ALLOW DNS REQUESTS AT LIMIT
+  [Documentation]  Exactly max_dns_requests DNS elements (30 by default) are
+  ...  evaluated, here the last of them authorises 8.8.8.8
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@fewreq.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF PERMFAIL DNS REQUESTS BEYOND LIMIT
+  [Documentation]  RFC 7208 4.6.4: a record with one DNS element more than the
+  ...  limit allows cannot be evaluated to the end and yields permerror
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@manyreq.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_PERMFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF FIRST MATCH WINS FAIL BEFORE PASS
+  [Documentation]  The terms of a record are checked from left to right
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=1.2.3.4  From=x@order1.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF FIRST MATCH WINS PASS BEFORE FAIL
+  [Documentation]  The same terms in the other order give the other result
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=1.2.3.4  From=x@order2.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF NOTHING AFTER ALL IS REACHED
+  [Documentation]  A term after all never matches
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=1.2.3.4  From=x@order3.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF EQUALS SIGN IN IP4
+  [Documentation]  ip4=addr is a mistake of real records, read as ip4:addr
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.1  From=x@equals.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF EQUALS SIGN IN IP6
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8:1::1  From=x@equals.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF EQUALS SIGN NO MATCH
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.2  From=x@equals.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF EQUALS SIGN IN INCLUDE
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.1  From=x@equalsinc.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF COLON IN REDIRECT
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.1  From=x@colonredir.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF DUAL PREFIX IPV4
+  [Documentation]  a/24//64 gives a length to each family
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.77  From=x@maskdual.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF DUAL PREFIX IPV6
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8::ffff  From=x@maskdual.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF DUAL PREFIX OUTSIDE
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.3.77  From=x@maskdual.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF ONE SLASH IS NOT A DUAL PREFIX
+  [Documentation]  a/24/64 is not a term: the address of the name does not match by it
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.77  From=x@maskbad.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF IPV6 ONLY PREFIX KEEPS IPV4 EXACT
+  [Documentation]  a//64 gives no length to IPv4
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@mask6only.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF IPV6 ONLY PREFIX MATCHES THE ADDRESS
+  [Documentation]  The address of the name itself still matches
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.10  From=x@mask6only.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF PREFIX LENGTH DOES NOT WRAP
+  [Documentation]  A length of 65536 is not a length of zero
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@maskwrap.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF PREFIX LENGTH WITH GARBAGE
+  [Documentation]  A term with a malformed length is not used
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.99  From=x@maskjunk.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF INCLUDE QUALIFIER IS APPLIED
+  [Documentation]  A pass of the included record gives the qualifier of the include
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=5.5.5.5  From=x@incfail.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF INCLUDE WITHOUT A MATCH IS PASSED OVER
+  [Documentation]  An address that the included record does not match goes on to the rest
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=9.9.9.9  From=x@incfail.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_NEUTRAL
+
+SPF INCLUDE FAIL IS NOT A FAIL OF THE RECORD
+  [Documentation]  A fail of the included record means that the include does not match
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=6.6.6.6  From=x@incskip.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF NESTED INCLUDE PASS
+  [Documentation]  A pass two includes deep is a pass
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=7.7.7.1  From=x@incnest.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF NESTED INCLUDE FAIL BEFORE THE INNER INCLUDE
+  [Documentation]  A fail in the outer include ends that include, not the record
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=7.7.7.7  From=x@incnest.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_SOFTFAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF NESTED INCLUDE GOES ON AFTER THE INNER ONE
+  [Documentation]  An inner include without a match goes on in the outer one
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=7.7.7.9  From=x@incnest.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF MACRO VALUE IS NOT A PREFIX LENGTH
+  [Documentation]  A slash in the local part does not become the prefix length of the term
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=slashhost.org.org.za/0@macroslash.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF VERSION MUST BE EXACT
+  [Documentation]  v=spf10 is no SPF record
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@version10.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_NA
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF MECHANISM NAME MUST BE EXACT
+  [Documentation]  +allfoo is not +all
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@allx.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_NEUTRAL
+  Do Not Expect Symbol  R_SPF_PLUSALL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF REDIRECT IS USED AFTER THE MECHANISMS
+  [Documentation]  A term after redirect is still checked
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@redirmid.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+
+SPF REDIRECT WITHOUT A MATCH
+  [Documentation]  The redirect decides when nothing matches
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=9.9.9.9  From=x@redirmid.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL

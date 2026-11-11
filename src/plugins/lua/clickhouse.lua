@@ -33,7 +33,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 10 -- Current schema version
+local schema_version = 12 -- Current schema version
 
 local extra_tables = {}
 local extra_table_rows = {}
@@ -177,12 +177,17 @@ CREATE TABLE IF NOT EXISTS rspamd
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
     `Urls.Flags` Array(UInt32) COMMENT 'Corresponding url flags, see `enum rspamd_url_flags` in libserver/url.h for details',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
+    `Fuzzy.Hash` Array(String) COMMENT 'Stored fuzzy digest that matched',
+    `Fuzzy.Queried` Array(String) COMMENT 'Fuzzy digest of the message part that was queried',
+    `Fuzzy.Rule` Array(LowCardinality(String)) COMMENT 'Fuzzy rule name',
+    `Fuzzy.Prob` Array(Float32) COMMENT 'Fuzzy match probability (shingle overlap ratio)',
+    `Fuzzy.Flag` Array(UInt32) COMMENT 'Fuzzy storage flag',
     ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     Country FixedString(2) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     IPNet String,
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
     `Symbols.Scores` Array(Float32) COMMENT 'Symbol score',
-    `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list)',
+    `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list; options containing delimiters are percent-encoded)',
     `Groups.Names` Array(LowCardinality(String)) COMMENT 'Group name',
     `Groups.Scores` Array(Float32) COMMENT 'Group score',
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',
@@ -194,7 +199,14 @@ CREATE TABLE IF NOT EXISTS rspamd
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
     SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'The first envelope recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
-    MIMERcpt ALIAS MimeRecipients[1] COMMENT 'The first recipient from headers (RFC5322.To/.CC/.BCC)'
+    MIMERcpt ALIAS MimeRecipients[1] COMMENT 'The first recipient from headers (RFC5322.To/.CC/.BCC)',
+    INDEX idx_message_id MessageId TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_from From TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_mime_from MimeFrom TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_ip IP TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_urls_tld `Urls.Tld` TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_attachments_digest `Attachments.Digest` TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_subject Subject TYPE bloom_filter(0.01) GRANULARITY 4
 ) ENGINE = MergeTree()
 PARTITION BY toMonday(Date)
 ORDER BY TS
@@ -306,6 +318,41 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (10)]],
   },
+  [10] = {
+    -- Add fuzzy matches information
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Hash` Array(String) AFTER Emails,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Queried` Array(String) AFTER `Fuzzy.Hash`,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Rule` Array(LowCardinality(String)) AFTER `Fuzzy.Queried`,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Prob` Array(Float32) AFTER `Fuzzy.Rule`,
+      ADD COLUMN IF NOT EXISTS `Fuzzy.Flag` Array(UInt32) AFTER `Fuzzy.Prob`
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (11)]],
+  },
+  [11] = {
+    -- Data-skipping indexes for point lookups: the table is ordered by TS
+    -- only, so a lookup by Message-ID, sender domain, client IP, URL eSLD,
+    -- attachment digest or exact subject reads every row in the time window
+    -- (measured: 303M rows / 15.5 GB / 1.6 s for one Message-ID on a 20M
+    -- messages/day install). Bloom filters over 4 granules cut that to a
+    -- few granules. ADD INDEX is a metadata-only change: parts written from
+    -- now on carry the index, and existing parts get it as they are merged
+    -- or expire. To backfill old parts explicitly run
+    --   ALTER TABLE rspamd MATERIALIZE INDEX <name>
+    -- for each index (a background mutation that rereads the column).
+    [[ALTER TABLE rspamd
+      ADD INDEX IF NOT EXISTS idx_message_id MessageId TYPE bloom_filter(0.01) GRANULARITY 4,
+      ADD INDEX IF NOT EXISTS idx_from From TYPE bloom_filter(0.01) GRANULARITY 4,
+      ADD INDEX IF NOT EXISTS idx_mime_from MimeFrom TYPE bloom_filter(0.01) GRANULARITY 4,
+      ADD INDEX IF NOT EXISTS idx_ip IP TYPE bloom_filter(0.01) GRANULARITY 4,
+      ADD INDEX IF NOT EXISTS idx_urls_tld `Urls.Tld` TYPE bloom_filter(0.01) GRANULARITY 4,
+      ADD INDEX IF NOT EXISTS idx_attachments_digest `Attachments.Digest` TYPE bloom_filter(0.01) GRANULARITY 4,
+      ADD INDEX IF NOT EXISTS idx_subject Subject TYPE bloom_filter(0.01) GRANULARITY 4
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (12)]],
+  },
 }
 
 local predefined_actions = {
@@ -389,6 +436,19 @@ end
 local function clickhouse_emails_row(res)
   local fields = {
     'Emails',
+  }
+  for _, v in ipairs(fields) do
+    table.insert(res, v)
+  end
+end
+
+local function clickhouse_fuzzy_row(res)
+  local fields = {
+    'Fuzzy.Hash',
+    'Fuzzy.Queried',
+    'Fuzzy.Rule',
+    'Fuzzy.Prob',
+    'Fuzzy.Flag',
   }
   for _, v in ipairs(fields) do
     table.insert(res, v)
@@ -527,6 +587,7 @@ local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, ext
   clickhouse_attachments_row(fields)
   clickhouse_urls_row(fields)
   clickhouse_emails_row(fields)
+  clickhouse_fuzzy_row(fields)
   clickhouse_asn_row(fields)
 
   if settings.enable_symbols then
@@ -1047,6 +1108,27 @@ local function clickhouse_collect(task)
     table.insert(row, {})
   end
 
+  -- Fuzzy matches
+  local fuzzy_hashes = {}
+  local fuzzy_queried = {}
+  local fuzzy_rules = {}
+  local fuzzy_probs = {}
+  local fuzzy_flags = {}
+
+  for _, m in ipairs(task:get_fuzzy_results() or {}) do
+    fuzzy_hashes[#fuzzy_hashes + 1] = m.found
+    fuzzy_queried[#fuzzy_queried + 1] = m.queried
+    fuzzy_rules[#fuzzy_rules + 1] = m.rule
+    fuzzy_probs[#fuzzy_probs + 1] = m.prob
+    fuzzy_flags[#fuzzy_flags + 1] = m.flag
+  end
+
+  table.insert(row, fuzzy_hashes)
+  table.insert(row, fuzzy_queried)
+  table.insert(row, fuzzy_rules)
+  table.insert(row, fuzzy_probs)
+  table.insert(row, fuzzy_flags)
+
   -- ASN information
   local asn, country, ipnet = 0, '--', '--'
   local pool = task:get_mempool()
@@ -1078,7 +1160,7 @@ local function clickhouse_collect(task)
       table.insert(scores_tab, s.score)
 
       if s.options then
-        table.insert(options_tab, table.concat(s.options, ','))
+        table.insert(options_tab, lua_util.symbol_options_to_string(s.options))
       else
         table.insert(options_tab, '');
       end
@@ -1796,11 +1878,9 @@ if opts then
       -- Select traverse function depending on what we have
       local iter_func = settings.extra_columns[1] and ipairs or pairs
 
-      for col_name, col_data in iter_func(settings.extra_columns) do
+      for col_key, col_data in iter_func(settings.extra_columns) do
         -- Array based extra columns
-        if col_data.name then
-          col_name = col_data.name
-        end
+        local col_name = col_data.name or col_key
         if not col_data.selector or not col_data.type then
           rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: no type or no selector',
               col_name)

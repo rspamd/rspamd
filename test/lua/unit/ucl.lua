@@ -3,6 +3,35 @@
 context("UCL manipulation", function()
   local ucl = require "ucl"
 
+  test('UCL serializes URL userdata as a string', function()
+    local pool = require('rspamd_mempool').create()
+    local url = require('rspamd_url').create(pool, 'https://example.com/path')
+    assert_not_nil(url)
+    local encoded = ucl.to_format({ url = url }, 'json-compact')
+    pool:destroy()
+    assert_equal('{"url":"https://example.com/path"}', encoded)
+  end)
+
+  test('UCL still serializes text slices and empty text', function()
+    local text = require('rspamd_text').fromstring('prefix hello suffix')
+    local encoded = ucl.to_format({ text = text:span(8, 5), empty = text:span(1, 0) }, 'json-compact')
+    local p = ucl.parser()
+    assert_true(p:parse_string(encoded))
+    local obj = p:get_object()
+    assert_equal('hello', obj.text)
+    assert_equal('', obj.empty)
+  end)
+
+  test('UCL serializes non-text userdata without reading a text layout', function()
+    local file = io.tmpfile()
+    local expected = tostring(file)
+    local encoded = ucl.to_format({ file = file }, 'json-compact')
+    file:close()
+    local p = ucl.parser()
+    assert_true(p:parse_string(encoded))
+    assert_equal(expected, p:get_object().file)
+  end)
+
   local parser = ucl.parser()
   local res, err = parser:parse_string('{"key":"val"}')
   assert(res)
@@ -69,6 +98,102 @@ context("UCL manipulation", function()
     reply.t.test = 'test'
     assert_equal(reply.t:type(), 'object')
     assert_equal(reply.t.test:unwrap(), 'test')
+  end)
+
+  test("UCL untrusted parser: defaults are applied", function()
+    local p = ucl.untrusted_parser()
+    local limits = p:get_limits()
+
+    assert_equal(limits.max_depth, 64)
+    assert_equal(limits.max_nodes, 1000000)
+    assert_equal(limits.max_alloc, 64 * 1024 * 1024)
+    assert_equal(limits.max_key_length, 1024)
+    assert_equal(limits.max_string_length, 16 * 1024 * 1024)
+  end)
+
+  test("UCL untrusted parser: rejects deep nesting", function()
+    local p = ucl.untrusted_parser()
+    local deep = string.rep('[', 1000) .. string.rep(']', 1000)
+    local ok, err = p:parse_string(deep)
+
+    assert_false(ok)
+    assert_not_nil(err)
+  end)
+
+  test("UCL untrusted parser: accepts ordinary replies", function()
+    local p = ucl.untrusted_parser()
+    local ok = p:parse_string('{"verdict": "clean", "scores": [1, 2, 3]}')
+
+    assert_true(ok)
+
+    local obj = p:get_object()
+    assert_equal(obj.verdict, 'clean')
+    assert_equal(#obj.scores, 3)
+  end)
+
+  test("UCL untrusted parser: msgpack is bounded too", function()
+    local p = ucl.untrusted_parser({ max_depth = 8 })
+    -- 9 nested fixarrays, innermost holding int 1
+    local deep = string.rep('\145', 9) .. '\1'
+    local ok = p:parse_text(deep, 'msgpack')
+
+    assert_false(ok)
+  end)
+
+  test("UCL untrusted parser: limits can be overridden", function()
+    local p = ucl.untrusted_parser({ max_depth = 4, max_string_length = 8 })
+    local limits = p:get_limits()
+
+    -- Overridden fields change, the rest keep the untrusted defaults
+    assert_equal(limits.max_depth, 4)
+    assert_equal(limits.max_string_length, 8)
+    assert_equal(limits.max_nodes, 1000000)
+
+    assert_false(p:parse_string('[[[[[1]]]]]'))
+  end)
+
+  test("UCL untrusted parser: zero means unlimited", function()
+    local p = ucl.untrusted_parser({ max_depth = 0 })
+    local deep = string.rep('[', 2000) .. string.rep(']', 2000)
+
+    assert_true(p:parse_string(deep))
+  end)
+
+  test("UCL parser: set_limits overlays without dropping the rest", function()
+    local p = ucl.untrusted_parser()
+    p:set_limits({ max_key_length = 4 })
+
+    local limits = p:get_limits()
+    assert_equal(limits.max_key_length, 4)
+    assert_equal(limits.max_depth, 64)
+
+    assert_false(p:parse_string('{"toolongkey": 1}'))
+  end)
+
+  test("UCL parser: default parser keeps the libucl defaults", function()
+    local p = ucl.parser()
+    local limits = p:get_limits()
+
+    -- Only the depth guard is on by default, so existing callers are unchanged
+    assert_equal(limits.max_depth, 1024)
+    assert_equal(limits.max_nodes, 0)
+    assert_equal(limits.max_alloc, 0)
+  end)
+
+  test("UCL parser: bad limit names are rejected", function()
+    local p = ucl.parser()
+
+    assert_false(pcall(function()
+      p:set_limits({ max_dpeth = 4 })
+    end))
+
+    assert_false(pcall(function()
+      p:set_limits({ max_depth = -1 })
+    end))
+
+    assert_false(pcall(function()
+      p:set_limits({ max_depth = 'lots' })
+    end))
   end)
 
   collectgarbage() -- To ensure we don't crash with asan

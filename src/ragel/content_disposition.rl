@@ -15,7 +15,9 @@
   token = 0x21..0x27 | 0x2a..0x2b | 0x2c..0x2e | 0x30..0x39 | 0x41..0x5a | 0x5e..0x7e;
   value = (quoted_string | (token -- ('"' | 0x3d | utf8_2c | utf8_3c | utf8_4c))+) >Param_Value_Start %Param_Value_End;
   attribute = (quoted_string | (token -- ('"' | '='))+) >Param_Name_Start %Param_Name_End;
-  parameter = CFWS? attribute FWS? "=" FWS? value CFWS?;
+  # An empty value (name=;) is none, but for a piece, and the parameters
+  # after it are read
+  parameter = (CFWS? attribute FWS? "=" FWS? value? CFWS?) %Param_End;
 
   ietf_token = token+;
   custom_x_token = /x/i "-" token+;
@@ -26,10 +28,22 @@
   content_disposition = disposition_type (";" disposition_parm)*;
 
   prepush {
+    if (top >= RSPAMD_RAGEL_MAX_COMMENT_NESTING) {
+      /* Too deeply nested comments, bail out instead of growing the stack */
+      fbreak;
+    }
+
     if (top >= st_storage.size) {
-      st_storage.size = (top + 1) * 2;
-      st_storage.data = realloc (st_storage.data, st_storage.size * sizeof (int));
-      g_assert (st_storage.data != NULL);
+      gsize _new_size = (top + 1) * 2;
+      int *_new_data = realloc (st_storage.data, _new_size * sizeof (int));
+
+      if (_new_data == NULL) {
+        /* Keep the old allocation so that it can still be freed */
+        fbreak;
+      }
+
+      st_storage.size = _new_size;
+      st_storage.data = _new_data;
       stack = st_storage.data;
     }
   }

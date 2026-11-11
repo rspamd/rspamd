@@ -142,7 +142,8 @@ public:
 
 protected:
 	int fd = -1;
-	bool temp;
+	/* Set here as the move constructor swaps with an object that is not built yet */
+	bool temp = false;
 	std::string fname;
 	struct stat st;
 

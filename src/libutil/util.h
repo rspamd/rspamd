@@ -373,6 +373,14 @@ void rspamd_gstring_free_soft(gpointer p);
 uint64_t rspamd_hash_seed(void);
 
 /**
+ * Returns a hash seed that is random for each process and never zero. It is
+ * meant for tables keyed by untrusted input; hashes made with it must not be
+ * stored or shared with other processes
+ * @return hash seed
+ */
+uint64_t rspamd_hash_seed_secure(void);
+
+/**
  * Returns random hex string of the specified length
  * @param buf
  * @param len
@@ -400,9 +408,9 @@ int rspamd_uuid_v7(char uuid_out[37], char *opt_uid_buf, gsize uid_buflen, doubl
 void rspamd_uuid_v7_patch_uid(char uuid[37], const char *tag, gsize tag_len);
 
 /**
- * Returns
+ * Create an exclusively owned shared memory segment using a random name
  * @param pattern pattern to create (should end with some number of X symbols), modified by this function
- * @return
+ * @return opened descriptor or -1 in case of error (errno is set accordingly)
  */
 int rspamd_shmem_mkstemp(char *pattern);
 
@@ -447,6 +455,15 @@ int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 					  gboolean allow_symlink);
 
 /**
+ * Write the whole buffer to fd, retrying short and interrupted writes
+ * @param fd file descriptor
+ * @param buf data to write
+ * @param len length of data
+ * @return TRUE if all data has been written, FALSE otherwise (errno is set)
+ */
+gboolean rspamd_write_all(int fd, const void *buf, gsize len);
+
+/**
  * Map file without following symlinks or special stuff
  * @param fname filename
  * @param mode mode to open
@@ -460,7 +477,8 @@ gpointer rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
  * Map named shared memory segment
  * @param fname filename
  * @param mode mode to open
- * @param size target size (must NOT be NULL)
+ * @param size target size (must NOT be NULL); it is set to 0 if the segment is
+ *             empty and to `(gsize)-1` for any other error
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
 gpointer rspamd_shmem_xmap(const char *fname, unsigned int mode,

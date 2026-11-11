@@ -17,13 +17,17 @@
 #include "config.h"
 #include "html_entities.hxx"
 
+#include <cstdint>
+#include <cstring>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include "contrib/ankerl/unordered_dense.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 #include "libutil/cxx/util.hxx"
+#include "libutil/str_util.h"
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
@@ -2188,7 +2192,35 @@ public:
 
 		for (const auto &e: html_entities_array) {
 			entity_by_name[e.name] = e;
-			entity_by_id[e.code] = e;
+
+			/*
+			 * A numeric reference is one code point: only a named entity
+			 * that stands for that code point alone can serve it, not one
+			 * that adds a combining mark or a variation selector to it
+			 */
+			char encoded[U8_MAX_LENGTH];
+			auto encoded_len = 0;
+			UBool is_error = false;
+
+			U8_APPEND((std::uint8_t *) encoded, encoded_len, (int) sizeof(encoded),
+					  (UChar32) e.code, is_error);
+
+			/*
+			 * Or another single character, as the space that stands for a
+			 * no-break space: a numeric reference gives what the name gives
+			 */
+			const std::string_view replacement{e.replacement};
+			std::int32_t rep_off = 0;
+			UChar32 rep_char = -1;
+
+			if (!replacement.empty()) {
+				U8_NEXT(replacement.data(), rep_off, (std::int32_t) replacement.size(), rep_char);
+			}
+
+			if (!is_error && (replacement == std::string_view{encoded, (std::size_t) encoded_len} ||
+							  (rep_char >= 0 && rep_off == (std::int32_t) replacement.size()))) {
+				entity_by_id[e.code] = e;
+			}
 
 			if (e.allow_heuristic) {
 				entity_by_name_heur[e.name] = e;
@@ -2228,6 +2260,89 @@ public:
 
 static const html_entities_storage html_entities_defs;
 
+namespace {
+
+auto valid_xml_codepoint(gulong cp) -> bool
+{
+	return cp == 0x09 || cp == 0x0a || cp == 0x0d ||
+		   (cp >= 0x20 && cp <= 0xd7ff) ||
+		   (cp >= 0xe000 && cp <= 0xfffd) ||
+		   (cp >= 0x10000 && cp <= 0x10ffff);
+}
+
+auto decode_xml_entities_inplace(char *s, std::size_t len) -> entity_decode_result
+{
+	auto *h = s;
+	auto *t = s;
+	const auto *end = s + len;
+
+	while (h < end) {
+		auto *amp = static_cast<char *>(memchr(h, '&', end - h));
+		if (amp == nullptr) {
+			memmove(t, h, end - h);
+			t += end - h;
+			break;
+		}
+
+		memmove(t, h, amp - h);
+		t += amp - h;
+		auto *semi = static_cast<char *>(memchr(amp + 1, ';', end - amp - 1));
+		if (semi == nullptr || semi - amp > 16) {
+			return tl::make_unexpected("unterminated or oversized entity");
+		}
+
+		std::string_view entity{amp + 1, static_cast<std::size_t>(semi - amp - 1)};
+		if (entity == "amp") {
+			*t++ = '&';
+		}
+		else if (entity == "apos") {
+			*t++ = '\'';
+		}
+		else if (entity == "gt") {
+			*t++ = '>';
+		}
+		else if (entity == "lt") {
+			*t++ = '<';
+		}
+		else if (entity == "quot") {
+			*t++ = '"';
+		}
+		else if (!entity.empty() && entity.front() == '#') {
+			auto digits = entity.substr(1);
+			bool hex = false;
+			if (!digits.empty() && (digits.front() == 'x' || digits.front() == 'X')) {
+				hex = true;
+				digits.remove_prefix(1);
+			}
+			gulong codepoint = 0;
+			if (digits.empty() ||
+				!(hex ? rspamd_xstrtoul(digits.data(), digits.size(), &codepoint)
+					  : rspamd_strtoul(digits.data(), digits.size(), &codepoint)) ||
+				!valid_xml_codepoint(codepoint)) {
+				return tl::make_unexpected("invalid XML character reference");
+			}
+
+			goffset offset = t - s;
+			UBool is_error = false;
+			U8_APPEND(reinterpret_cast<std::uint8_t *>(s), offset, len, codepoint, is_error);
+			if (is_error) {
+				return tl::make_unexpected("invalid XML character reference");
+			}
+			t = s + offset;
+		}
+		else {
+			return tl::make_unexpected(
+				"unsupported XML entity &" + std::string{entity} + ";");
+		}
+
+		h = semi + 1;
+	}
+
+	return t - s;
+}
+
+}// namespace
+
 std::size_t
 decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 {
@@ -2253,28 +2368,46 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 
 	end = s + len;
 
+	/*
+	 * The decoder works in place, so a replacement must not grow past the
+	 * input the entity has consumed: the terminating `;` is consumed with it,
+	 * a space or any other terminator is not. Some short entity names expand
+	 * to longer multi-codepoint replacements, e.g. `&nGt;`, which would
+	 * otherwise overwrite the unread input.
+	 */
+	auto entity_limit = [&]() -> const char * {
+		return (h < end && *h == ';') ? h + 1 : h;
+	};
+
 	auto replace_named_entity = [&](const char *entity, std::size_t len) -> bool {
 		const auto *entity_def = html_entities_defs.by_name({entity,
-															 (std::size_t)(h - entity)},
+															 (std::size_t) (h - entity)},
 															false);
 
-		auto replace_entity = [&]() -> void {
+		auto replace_entity = [&](const char *limit) -> bool {
 			auto l = strlen(entity_def->replacement);
-			/*
-			 * The decoder works in place, so the replacement may only be
-			 * written while it fits the remaining buffer. Some short entity
-			 * names expand to longer multi-codepoint replacements, which
-			 * would otherwise overflow when the entity sits at the very end
-			 * of the buffer. Drop such a truncated entity instead.
-			 */
-			if (end - t >= (decltype(end - t)) l) {
+
+			if (limit - t >= (decltype(limit - t)) l) {
 				memcpy(t, entity_def->replacement, l);
 				t += l;
+
+				return true;
 			}
+
+			return false;
 		};
 
 		if (entity_def) {
-			replace_entity();
+			auto limit = entity_limit();
+
+			if (replace_entity(limit)) {
+				return true;
+			}
+
+			/* Does not fit, leave undecoded, `;` included */
+			memmove(t, e, limit - e);
+			t += limit - e;
+
 			return true;
 		}
 		else {
@@ -2283,8 +2416,8 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				if (!entity_def && h - e > lookup_len) {
 					entity_def = html_entities_defs.by_name({entity, lookup_len}, true);
 
-					if (entity_def) {
-						replace_entity();
+					/* Decoding resumes right after the matched name */
+					if (entity_def && replace_entity(e + lookup_len + 1)) {
 						/* Adjust h back */
 						h = e + lookup_len;
 
@@ -2315,60 +2448,42 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		return false;
 	};
 
-	/* Strtoul works merely for 0 terminated strings, so leave it alone... */
-	auto dec_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
+	/*
+	 * Strtoul works merely for 0 terminated strings, so leave it alone...
+	 * Values are saturated just above the last Unicode code point, anything
+	 * larger is invalid anyway and must not overflow
+	 */
+	static constexpr int max_code_point = 0x10FFFF;
+	auto digits_to_int = [](const char *str, std::size_t len, int base) -> std::optional<int> {
 		int n = 0;
 
-		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (len > 0 && g_ascii_isdigit(*str)) {
-			n = 10 * n - (*str++ - '0');
-			len--;
-		}
+		while (len > 0) {
+			int digit;
 
-		if (len == 0) {
-			return -(n);
-		}
-		else {
-			return std::nullopt;
-		}
-	};
-	auto hex_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
-		int n = 0;
-
-		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (len > 0 && g_ascii_isxdigit(*str)) {
-			if (*str <= 0x39) {
-				n = 16 * n - (*str++ - '0');
+			if (g_ascii_isdigit(*str)) {
+				digit = *str - '0';
+			}
+			else if (g_ascii_isxdigit(*str)) {
+				digit = g_ascii_xdigit_value(*str);
 			}
 			else {
-				n = 16 * n - (((*str++) | ' ') - 'a' + 10);
-			}
-			len--;
-		}
-
-		if (len == 0) {
-			return -(n);
-		}
-		else {
-			return std::nullopt;
-		}
-	};
-	auto oct_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
-		int n = 0;
-
-		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (len > 0 && g_ascii_isdigit(*str)) {
-			if (*str > '7') {
 				break;
 			}
-			else {
-				n = 8 * n - (*str++ - '0');
+
+			if (digit >= base) {
+				break;
 			}
+
+			if (n <= max_code_point) {
+				n = base * n + digit;
+			}
+
+			str++;
 			len--;
 		}
 
 		if (len == 0) {
-			return -(n);
+			return n;
 		}
 		else {
 			return std::nullopt;
@@ -2379,14 +2494,16 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		UChar32 uc;
 		std::optional<int> maybe_num;
 
+		auto limit = entity_limit();
+
 		if (*entity == 'x' || *entity == 'X') {
-			maybe_num = hex_to_int(entity + 1, h - (entity + 1));
+			maybe_num = digits_to_int(entity + 1, h - (entity + 1), 16);
 		}
 		else if (*entity == 'o' || *entity == 'O') {
-			maybe_num = oct_to_int(entity + 1, h - (entity + 1));
+			maybe_num = digits_to_int(entity + 1, h - (entity + 1), 8);
 		}
 		else {
-			maybe_num = dec_to_int(entity, h - entity);
+			maybe_num = digits_to_int(entity, h - entity, 10);
 		}
 
 		if (!maybe_num) {
@@ -2400,13 +2517,28 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		}
 		else {
 			uc = maybe_num.value();
+
+			if (uc >= 0x80 && uc <= 0x9f) {
+				/*
+				 * Numeric references to C1 controls are read as Windows-1252,
+				 * as the HTML standard says: &#146; is a right single quote
+				 */
+				static constexpr std::uint16_t c1_map[32] = {
+					0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+					0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+					0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+					0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178};
+
+				uc = c1_map[uc - 0x80];
+			}
+
 			/* Search for a replacement */
 			const auto *entity_def = html_entities_defs.by_id(uc);
 
 			if (entity_def) {
 				auto rep_len = strlen(entity_def->replacement);
 
-				if (end - t >= rep_len) {
+				if (limit - t >= rep_len) {
 					memcpy(t, entity_def->replacement,
 						   rep_len);
 					t += rep_len;
@@ -2420,12 +2552,12 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				UBool is_error = 0;
 
 				if (uc > 0) {
-					U8_APPEND((std::uint8_t *) s, off, len, uc, is_error);
+					U8_APPEND((std::uint8_t *) s, off, limit - s, uc, is_error);
 
 					if (!is_error) {
 						t = s + off;
 					}
-					else if (end - t > 3) {
+					else if (limit - t >= 3) {
 						/* Not printable code point replace with 0xFFFD */
 						*t++ = '\357';
 						*t++ = '\277';
@@ -2434,7 +2566,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 						return true;
 					}
 				}
-				else if (end - t > 3) {
+				else if (limit - t >= 3) {
 					/* Not printable code point replace with 0xFFFD */
 					*t++ = '\357';
 					*t++ = '\277';
@@ -2463,7 +2595,12 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		return false;
 	};
 
-	if (norm_spaces && g_ascii_isspace(*h)) {
+	/*
+	 * Peek at the first byte to start inside a run of spaces rather than
+	 * emitting one for it. There is no such byte for an empty input, and
+	 * the caller is not required to keep one readable past the end.
+	 */
+	if (len > 0 && norm_spaces && g_ascii_isspace(*h)) {
 		state = parser_state::skip_start_spaces;
 	}
 
@@ -2561,13 +2698,16 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 	/* Leftover */
 	if (state == parser_state::ampersand && h > e) {
 		/* Unfinished entity, copy as is */
+		auto *t_before = t;
+
 		if (replace_entity()) {
 			/* To follow FSM semantics */
 			h++;
 		}
-		else {
+		else if (t == t_before) {
 			h = e; /* Include the last & */
 		}
+		/* Else it is copied undecoded already, which must not be copied again */
 
 		/* Leftover after replacement */
 		if (h < end && t + (end - h) <= end) {
@@ -2589,7 +2729,17 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		}
 	}
 
-	return (t - s);
+	return t - s;
+}
+
+auto decode_entities_inplace(char *s, std::size_t len, entity_decode_mode mode,
+							 bool norm_spaces) -> entity_decode_result
+{
+	if (mode == entity_decode_mode::xml) {
+		return decode_xml_entities_inplace(s, len);
+	}
+
+	return decode_html_entitles_inplace(s, len, norm_spaces);
 }
 
 auto decode_html_entitles_inplace(std::string &st) -> void
@@ -2628,6 +2778,16 @@ TEST_SUITE("html entities")
 			{"FOO&#x41BAR", "FOO䆺R"},
 			{"FOO&#x0000;ZOO", "FOO\uFFFDZOO"},
 			{"FOO&#x0081;ZOO", "FOO\u0081ZOO"},
+			/* A numeric reference is one code point, whatever named entities hold it */
+			{"a&#62;b", "a>b"},
+			{"a&#x3e;b", "a>b"},
+			{"a&#60;b", "a<b"},
+			{"a&#8804;b", "a\u2264b"},
+			{"a&nvgt;b", "a>\u20D2b"},
+			/* C1 controls are read as Windows-1252 */
+			{"it&#146;s", "it\u2019s"},
+			{"&#128;5", "\u20AC5"},
+			{"&#x99;", "\u2122"},
 			{"FOO&#xD800;ZOO", "FOO\uFFFDZOO"},
 			{"FOO&#xFFFFFF;ZOO", "FOO\uFFFDZOO"},
 			{"ZZ&pound_id=23", "ZZ£_id=23"},
@@ -2645,6 +2805,46 @@ TEST_SUITE("html entities")
 				auto nlen = decode_html_entitles_inplace(cpy, c.first.size(), true);
 				CHECK(std::string{cpy, nlen} == c.second);
 				delete[] cpy;
+			}
+		}
+	}
+
+	TEST_CASE("strict XML entities decode")
+	{
+		std::vector<std::pair<std::string, std::string>> valid_cases{
+			{"plain text", "plain text"},
+			{"&amp;&apos;&gt;&lt;&quot;", "&'><\""},
+			{"decimal &#65; hex &#x1f642;", "decimal A hex 🙂"},
+		};
+
+		for (const auto &c: valid_cases) {
+			SUBCASE(("decode XML entities: " + c.first).c_str())
+			{
+				auto decoded = c.first;
+				auto result = decode_entities_inplace(
+					decoded.data(), decoded.size(), entity_decode_mode::xml);
+				REQUIRE(result);
+				decoded.resize(*result);
+				CHECK(decoded == c.second);
+			}
+		}
+
+		std::vector<std::string> invalid_cases{
+			"&copy;",
+			"&amp",
+			"&#0;",
+			"&#xD800;",
+			"&#x110000;",
+			"&#xZZ;",
+		};
+
+		for (const auto &input: invalid_cases) {
+			SUBCASE(("reject XML entity: " + input).c_str())
+			{
+				auto decoded = input;
+				auto result = decode_entities_inplace(
+					decoded.data(), decoded.size(), entity_decode_mode::xml);
+				CHECK_FALSE(result);
 			}
 		}
 	}

@@ -158,6 +158,73 @@ rspamd_config:register_symbol({
   flags = 'coro'
 })
 
+local function http_forbid_local_symbol(task)
+  -- Numeric loopback destination: denied synchronously, the callback
+  -- never fires and request() returns false
+  local ret = rspamd_http.request({
+    url = string.format('http://127.0.0.1:%d/request', http_port),
+    task = task,
+    method = 'get',
+    callback = function(err, code)
+      if err then
+        task:insert_result('HTTP_FORBID_NUMERIC_ERROR', 1.0, err)
+      else
+        task:insert_result('HTTP_FORBID_NUMERIC_' .. code, 1.0)
+      end
+    end,
+    timeout = 1,
+    forbid_local = true,
+  })
+  if ret == false then
+    task:insert_result('HTTP_FORBID_NUMERIC_DENIED', 1.0)
+  end
+
+  -- Destinations that are neither loopback nor in local_addrs, and lead to
+  -- this host or to an internal network all the same; some of them only as
+  -- an IPv4 address inside of an IPv6 one
+  for _, host in ipairs({ '0.0.0.0', '0.1.2.3', '[::]', '[::ffff:0.0.0.0]', '[::ffff:127.0.0.1]',
+                          '[64:ff9b::7f00:1]', '100.64.0.1', '198.18.0.1',
+                          '[fc00::1]', '224.0.0.1', '255.255.255.255', '[ff02::1]' }) do
+    local special = rspamd_http.request({
+      url = string.format('http://%s:%d/request', host, http_port),
+      task = task,
+      method = 'get',
+      callback = function()
+        task:insert_result('HTTP_FORBID_SPECIAL_ALLOWED', 1.0, host)
+      end,
+      timeout = 1,
+      forbid_local = true,
+    })
+    if special == false then
+      task:insert_result('HTTP_FORBID_SPECIAL_DENIED', 1.0, host)
+    else
+      task:insert_result('HTTP_FORBID_SPECIAL_ALLOWED', 1.0, host)
+    end
+  end
+
+  -- DNS-resolved loopback destination: denied after resolution, surfaces
+  -- as an asynchronous error
+  local err, response = rspamd_http.request({
+    url = string.format('http://site.resolveme:%d/request', http_port),
+    task = task,
+    method = 'get',
+    timeout = 1,
+    forbid_local = true,
+  })
+  if err then
+    task:insert_result('HTTP_FORBID_DNS_ERROR', 1.0, err)
+  else
+    task:insert_result('HTTP_FORBID_DNS_' .. response.code, 1.0)
+  end
+end
+rspamd_config:register_symbol({
+  name = 'FORBID_LOCAL_TEST',
+  score = 1.0,
+  callback = http_forbid_local_symbol,
+  no_squeeze = true,
+  flags = 'coro'
+})
+
 rspamd_config:register_finish_script(finish)
 
 rspamd_config:add_on_load(function(cfg, ev_base, worker)

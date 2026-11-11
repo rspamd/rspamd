@@ -144,14 +144,14 @@ local function razor_check(task, content, digest, rule)
 
         local threat_string = tostring(data)
         if threat_string == "spam" then
-          lua_util.debugm(N, task, '%s: returned result is spam', rule['symbol'], rule['type'])
+          lua_util.debugm(N, task, '%s: returned result is spam', rule.log_prefix)
           common.yield_result(task, rule, threat_string, rule.default_score)
           common.save_cache(task, digest, rule, threat_string, rule.default_score)
         elseif threat_string == "ham" then
           if rule.log_clean then
-            rspamd_logger.infox(task, '%s: returned result is ham', rule['symbol'], rule['type'])
+            rspamd_logger.infox(task, '%s: returned result is ham', rule.log_prefix)
           else
-            lua_util.debugm(N, task, '%s: returned result is ham', rule['symbol'], rule['type'])
+            lua_util.debugm(N, task, '%s: returned result is ham', rule.log_prefix)
           end
           common.save_cache(task, digest, rule, 'OK', rule.default_score)
         else

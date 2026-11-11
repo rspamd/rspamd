@@ -94,6 +94,17 @@ struct rdns_reply * rdns_make_reply (struct rdns_request *req, enum dns_rcode rc
  */
 void rdns_reply_free (struct rdns_reply *rep);
 
+/**
+ * Free one entry of a reply that is not in the list of a reply
+ */
+void rdns_reply_entry_free (struct rdns_reply_entry *entry);
+
 void rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash);
+
+/**
+ * Drops the TCP packet of a request that is gone: an unwritten one is
+ * removed from the queue, a partially written one is kept for framing
+ */
+void rdns_request_drop_tcp_output (struct rdns_request *req);
 
 #endif /* UTIL_H_ */

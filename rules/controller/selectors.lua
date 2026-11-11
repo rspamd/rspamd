@@ -55,15 +55,15 @@ end
 return {
   list_extractors = {
     handler = handle_list_extractors,
-    enable = true,
+    enable = false,
   },
   list_transforms = {
     handler = handle_list_transforms,
-    enable = true,
+    enable = false,
   },
   check_selector = {
     handler = handle_check_selector,
-    enable = true,
+    enable = false,
   },
   check_message = {
     handler = handle_check_message,

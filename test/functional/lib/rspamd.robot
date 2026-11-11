@@ -281,6 +281,17 @@ Redis SET
 Redis Teardown
   Terminate Process  ${REDIS_PROCESS}
   Wait For Process  ${REDIS_PROCESS}
+  # Block until this suite's redis listening socket is actually closed, so the
+  # next redis-using suite on this pabot worker can rebind the same per-worker
+  # port. redis sets SO_REUSEADDR, so this is not about TIME_WAIT -- a
+  # still-LISTENing socket from the just-terminated process fails the next
+  # redis-server bind() with EADDRINUSE, which surfaces as the opaque
+  # "redis.pid was not created" startup flake under rapid successive
+  # redis-using suites (e.g. the 120_fuzzy sub-suites). Same lesson as Wait
+  # For Rspamd Ports Released. Failure to free is a warning, not a hard error.
+  Run Keyword And Warn On Failure
+  ...  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Port Is Free  ${RSPAMD_REDIS_ADDR}  ${RSPAMD_REDIS_PORT}
   Cleanup Temporary Directory  ${REDIS_TMPDIR}
 
 Rspamd Setup
@@ -362,13 +373,40 @@ Run Redis
   Create File  ${RSPAMD_TMPDIR}/redis-server.conf  ${config}
   Log  ${config}
   ${result} =  Start Process  redis-server  ${RSPAMD_TMPDIR}/redis-server.conf
-  Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/redis.pid  timeout=0.5s
-  Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${RSPAMD_REDIS_ADDR}  ${RSPAMD_REDIS_PORT}
+  # Export the process handle and tmpdir immediately so Redis Teardown can
+  # clean up even when redis fails to become ready. Without this the handle is
+  # lost on a startup failure and the redis-server child lingers, holding the
+  # port for the next suite.
+  Export Scoped Variables  ${REDIS_SCOPE}  REDIS_PROCESS=${result}  REDIS_TMPDIR=${RSPAMD_TMPDIR}
+  ${status}  ${err} =  Run Keyword And Ignore Error  Redis Process Ready
+  ...  ${RSPAMD_TMPDIR}/redis.pid  ${RSPAMD_REDIS_ADDR}  ${RSPAMD_REDIS_PORT}
+  # On failure, surface redis.log (bind error / OOM / config). It is otherwise
+  # only read on the success path and is deleted with the tmpdir on teardown,
+  # leaving just the opaque "pidfile not created" message.
+  IF  '${status}' == 'FAIL'
+      Log Redis Startup Failure  ${RSPAMD_TMPDIR}/redis.log
+      Fail  Redis did not become ready:\n${err}
+  END
   ${REDIS_PID} =  Get File  ${RSPAMD_TMPDIR}/redis.pid
   ${REDIS_PID} =  Convert To Number  ${REDIS_PID}
-  Export Scoped Variables  ${REDIS_SCOPE}  REDIS_PID=${REDIS_PID}  REDIS_PROCESS=${result}  REDIS_TMPDIR=${RSPAMD_TMPDIR}
+  Export Scoped Variables  ${REDIS_SCOPE}  REDIS_PID=${REDIS_PID}
   ${redis_log} =  Get File  ${RSPAMD_TMPDIR}/redis.log
   Log  ${redis_log}
+
+Redis Process Ready
+  [Arguments]  ${pidfile}  ${addr}  ${port}
+  Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${pidfile}  timeout=0.5s
+  Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${addr}  ${port}
+
+Log Redis Startup Failure
+  [Arguments]  ${log}
+  ${exists} =  Run Keyword And Return Status  File Should Exist  ${log}
+  IF  ${exists}
+      ${redis_log} =  Get File  ${log}  encoding_errors=ignore
+      Log  redis.log on startup failure:\n${redis_log}
+  ELSE
+      Log  redis.log was not written at ${log}
+  END
 
 Run Rspamd
   [Arguments]  ${check_port}=${RSPAMD_PORT_NORMAL}

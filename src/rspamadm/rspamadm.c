@@ -460,6 +460,20 @@ int main(int argc, char **argv, char **env)
 	rspamd_main->http_ctx = rspamd_http_context_create(cfg, rspamd_main->event_loop,
 													   NULL);
 
+	/*
+	 * Wire the upstreams library to our event loop and resolver. Without this
+	 * `ups_ctx->configured` stays FALSE, so upstreams that need DNS - SRV
+	 * placeholders created from `service=name+domain` and hostnames deferred
+	 * after a failed config time lookup - are never resolved and the lists stay
+	 * empty (e.g. `rspamadm fuzzyping` would see no servers at all).
+	 *
+	 * This must happen before any command loads its own configuration: the
+	 * upstreams are created later, and they only self-schedule resolution in
+	 * rspamd_upstream_set_active() when the context is already configured.
+	 */
+	rspamd_upstreams_library_config(cfg, cfg->ups_ctx, rspamd_main->event_loop,
+									resolver->r);
+
 	g_log_set_default_handler(rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler(rspamd_glib_printerr_function);
 	rspamd_config_post_load(cfg,

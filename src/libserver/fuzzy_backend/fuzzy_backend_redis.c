@@ -52,14 +52,14 @@ INIT_LOG_MODULE(fuzzy_redis)
 struct rspamd_fuzzy_backend_redis {
 	lua_State *L;
 	const char *redis_object;
-	const char *username;
-	const char *password;
-	const char *dbname;
+	struct rspamd_redis_connection_opts connection; /* strings live in cfg pool */
 	char *id;
 	struct rspamd_redis_pool *pool;
 	double timeout;
 	int conf_ref;
-	int cbref_update; /* Lua functor ref for updates */
+	int cbref_update;                    /* Lua functor ref for updates */
+	const ucl_object_t *count_scan_opts; /* worker `count_scan` section, cfg lifetime */
+	bool count_scan_started;
 	bool terminated;
 	ref_entry_t ref;
 };
@@ -67,7 +67,9 @@ struct rspamd_fuzzy_backend_redis {
 enum rspamd_fuzzy_redis_command {
 	RSPAMD_FUZZY_REDIS_COMMAND_COUNT,
 	RSPAMD_FUZZY_REDIS_COMMAND_VERSION,
-	RSPAMD_FUZZY_REDIS_COMMAND_CHECK
+	RSPAMD_FUZZY_REDIS_COMMAND_CHECK,
+	RSPAMD_FUZZY_REDIS_COMMAND_INSPECT,
+	RSPAMD_FUZZY_REDIS_COMMAND_STATS
 };
 
 struct rspamd_fuzzy_redis_session {
@@ -86,6 +88,8 @@ struct rspamd_fuzzy_redis_session {
 		rspamd_fuzzy_check_cb cb_check;
 		rspamd_fuzzy_version_cb cb_version;
 		rspamd_fuzzy_count_cb cb_count;
+		rspamd_fuzzy_inspect_cb cb_inspect;
+		rspamd_fuzzy_stats_cb cb_stats;
 	} callback;
 	void *cbdata;
 
@@ -235,6 +239,7 @@ rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 		backend->redis_object = ucl_object_tostring(elt);
 	}
 
+	backend->count_scan_opts = ucl_object_lookup(obj, "count_scan");
 	backend->conf_ref = conf_ref;
 
 	/* Check some common table values */
@@ -247,29 +252,7 @@ rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 	}
 	lua_pop(L, 1);
 
-	lua_pushstring(L, "db");
-	lua_gettable(L, -2);
-	if (lua_type(L, -1) == LUA_TSTRING) {
-		backend->dbname = rspamd_mempool_strdup(cfg->cfg_pool,
-												lua_tostring(L, -1));
-	}
-	lua_pop(L, 1);
-
-	lua_pushstring(L, "username");
-	lua_gettable(L, -2);
-	if (lua_type(L, -1) == LUA_TSTRING) {
-		backend->username = rspamd_mempool_strdup(cfg->cfg_pool,
-												  lua_tostring(L, -1));
-	}
-	lua_pop(L, 1);
-
-	lua_pushstring(L, "password");
-	lua_gettable(L, -2);
-	if (lua_type(L, -1) == LUA_TSTRING) {
-		backend->password = rspamd_mempool_strdup(cfg->cfg_pool,
-												  lua_tostring(L, -1));
-	}
-	lua_pop(L, 1);
+	rspamd_lua_redis_parse_connection(L, -1, &backend->connection, cfg->cfg_pool);
 
 	lua_settop(L, 0);
 
@@ -279,19 +262,19 @@ rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 	rspamd_cryptobox_hash_update(&st, backend->redis_object,
 								 strlen(backend->redis_object));
 
-	if (backend->dbname) {
-		rspamd_cryptobox_hash_update(&st, backend->dbname,
-									 strlen(backend->dbname));
+	if (backend->connection.dbname) {
+		rspamd_cryptobox_hash_update(&st, backend->connection.dbname,
+									 strlen(backend->connection.dbname));
 	}
 
-	if (backend->username) {
-		rspamd_cryptobox_hash_update(&st, backend->username,
-									 strlen(backend->username));
+	if (backend->connection.username) {
+		rspamd_cryptobox_hash_update(&st, backend->connection.username,
+									 strlen(backend->connection.username));
 	}
 
-	if (backend->password) {
-		rspamd_cryptobox_hash_update(&st, backend->password,
-									 strlen(backend->password));
+	if (backend->connection.password) {
+		rspamd_cryptobox_hash_update(&st, backend->connection.password,
+									 strlen(backend->connection.password));
 	}
 
 	rspamd_cryptobox_hash_final(&st, id_hash);
@@ -392,9 +375,11 @@ rspamd_fuzzy_redis_shingles_callback(redisAsyncContext *c, gpointer r,
 			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 				cur = reply->element[i];
 
-				if (cur->type == REDIS_REPLY_STRING) {
+				/* Anything but a full digest is garbage in the storage */
+				if (cur->type == REDIS_REPLY_STRING &&
+					cur->len == sizeof(shingles[i].digest)) {
 					shingles[i].found = 1;
-					memcpy(shingles[i].digest, cur->str, MIN(64, cur->len));
+					memcpy(shingles[i].digest, cur->str, sizeof(shingles[i].digest));
 					found++;
 				}
 				else {
@@ -766,11 +751,9 @@ void rspamd_fuzzy_backend_check_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_opts(backend->pool, &backend->connection,
+												  rspamd_inet_address_to_string(addr),
+												  rspamd_inet_address_get_port(addr));
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, TRUE, strerror(errno));
@@ -810,7 +793,7 @@ rspamd_fuzzy_redis_count_callback(redisAsyncContext *c, gpointer r,
 {
 	struct rspamd_fuzzy_redis_session *session = priv;
 	redisReply *reply = r;
-	gulong nelts;
+	long long nelts;
 
 	ev_timer_stop(session->event_loop, &session->timeout);
 
@@ -819,14 +802,18 @@ rspamd_fuzzy_redis_count_callback(redisAsyncContext *c, gpointer r,
 
 		if (reply->type == REDIS_REPLY_INTEGER) {
 			if (session->callback.cb_count) {
-				session->callback.cb_count(reply->integer, session->cbdata);
+				session->callback.cb_count(MAX(reply->integer, 0), session->cbdata);
 			}
 		}
 		else if (reply->type == REDIS_REPLY_STRING) {
-			nelts = strtoul(reply->str, NULL, 10);
+			/*
+			 * Counters maintained by older versions on updates could go
+			 * negative; do not turn them into huge unsigned numbers
+			 */
+			nelts = strtoll(reply->str, NULL, 10);
 
 			if (session->callback.cb_count) {
-				session->callback.cb_count(nelts, session->cbdata);
+				session->callback.cb_count(MAX(nelts, 0), session->cbdata);
 			}
 		}
 		else {
@@ -853,6 +840,207 @@ rspamd_fuzzy_redis_count_callback(redisAsyncContext *c, gpointer r,
 	}
 
 	rspamd_fuzzy_redis_session_dtor(session, FALSE);
+}
+
+/*
+ * Runs entirely on the redis side to gather per-hash diagnostics in a single
+ * round trip: flag slots, ttl and shingle slot ownership computed from the
+ * persisted 'S' field (see fuzzy_update.lua)
+ */
+static const char *rspamd_fuzzy_redis_inspect_script =
+	"local key = KEYS[1]\n"
+	"if redis.call('EXISTS', key) == 0 then return cjson.encode({found=false}) end\n"
+	"local o = {found=true, ttl=redis.call('TTL', key)}\n"
+	"local data = redis.call('HGETALL', key)\n"
+	"local fields = {}\n"
+	"for i=1,#data,2 do fields[data[i]] = data[i+1] end\n"
+	"o.flag = tonumber(fields['F'])\n"
+	"o.value = tonumber(fields['V'])\n"
+	"o.created = tonumber(fields['C'])\n"
+	"local extra = {}\n"
+	"for i=1,7 do\n"
+	"  if fields['F'..i] and fields['V'..i] then\n"
+	"    extra[#extra+1] = {flag=tonumber(fields['F'..i]), value=tonumber(fields['V'..i])}\n"
+	"  end\n"
+	"end\n"
+	"if #extra > 0 then o.extra_flags = extra end\n"
+	"if fields['S'] then\n"
+	"  local owned, total, vacant = 0, 0, 0\n"
+	"  local prefix = string.sub(key, 1, #key - #ARGV[1])\n"
+	"  for suf in string.gmatch(fields['S'], '[^,]+') do\n"
+	"    total = total + 1\n"
+	"    local owner = redis.call('GET', prefix .. '_' .. suf)\n"
+	"    if owner == ARGV[1] then owned = owned + 1\n"
+	"    elseif owner == false then vacant = vacant + 1 end\n"
+	"  end\n"
+	"  o.shingles = {total=total, owned=owned, vacant=vacant, foreign=total-owned-vacant}\n"
+	"end\n"
+	"return cjson.encode(o)\n";
+
+/*
+ * Shared by the inspect and storage stats commands: both get a json string
+ * (or nil) back and hand the parsed object to the caller
+ */
+static void
+rspamd_fuzzy_redis_json_callback(redisAsyncContext *c, gpointer r,
+								 gpointer priv)
+{
+	struct rspamd_fuzzy_redis_session *session = priv;
+	redisReply *reply = r;
+	ucl_object_t *res = NULL;
+	const char *what = session->command == RSPAMD_FUZZY_REDIS_COMMAND_STATS ? "storage stats" : "inspect";
+
+	ev_timer_stop(session->event_loop, &session->timeout);
+
+	if (c->err == 0 && reply != NULL) {
+		rspamd_upstream_ok(session->up);
+
+		if (reply->type == REDIS_REPLY_STRING) {
+			struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+
+			if (ucl_parser_add_chunk(parser, reply->str, reply->len)) {
+				res = ucl_parser_get_object(parser);
+			}
+			else {
+				msg_err_redis_session("cannot parse %s reply: %s", what,
+									  ucl_parser_get_error(parser));
+			}
+
+			ucl_parser_free(parser);
+		}
+		else if (reply->type == REDIS_REPLY_ERROR) {
+			msg_err_redis_session("fuzzy backend redis error: \"%s\"",
+								  reply->str);
+		}
+	}
+	else {
+		if (c->errstr) {
+			msg_err_redis_session("error getting %s on %s: %s", what,
+								  rspamd_inet_address_to_string_pretty(rspamd_upstream_addr_cur(session->up)),
+								  c->errstr);
+			rspamd_upstream_fail(session->up, FALSE, c->errstr);
+		}
+	}
+
+	if (session->command == RSPAMD_FUZZY_REDIS_COMMAND_STATS) {
+		if (session->callback.cb_stats) {
+			session->callback.cb_stats(res, session->cbdata);
+			res = NULL;
+		}
+	}
+	else if (session->callback.cb_inspect) {
+		session->callback.cb_inspect(res, session->cbdata);
+		res = NULL;
+	}
+
+	if (res) {
+		ucl_object_unref(res);
+	}
+
+	rspamd_fuzzy_redis_session_dtor(session, FALSE);
+}
+
+void rspamd_fuzzy_backend_inspect_redis(struct rspamd_fuzzy_backend *bk,
+										const unsigned char *digest,
+										rspamd_fuzzy_inspect_cb cb, void *ud,
+										void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
+	struct rspamd_fuzzy_redis_session *session;
+	struct upstream *up;
+	struct upstream_list *ups;
+	rspamd_inet_addr_t *addr;
+	GString *key;
+
+	g_assert(backend != NULL);
+
+	ups = rspamd_redis_get_servers(backend, "read_servers");
+	if (!ups) {
+		if (cb) {
+			cb(NULL, ud);
+		}
+
+		return;
+	}
+
+	session = g_malloc0(sizeof(*session));
+	session->backend = backend;
+	REF_RETAIN(session->backend);
+
+	session->callback.cb_inspect = cb;
+	session->cbdata = ud;
+	session->command = RSPAMD_FUZZY_REDIS_COMMAND_INSPECT;
+	session->event_loop = rspamd_fuzzy_backend_event_base(bk);
+
+	/* EVAL script 1 <hash key> <raw digest> */
+	session->nargs = 5;
+	session->argv = g_malloc0(sizeof(char *) * session->nargs);
+	session->argv_lens = g_malloc0(sizeof(gsize) * session->nargs);
+	session->argv[0] = g_strdup("EVAL");
+	session->argv_lens[0] = 4;
+	session->argv[1] = g_strdup(rspamd_fuzzy_redis_inspect_script);
+	session->argv_lens[1] = strlen(rspamd_fuzzy_redis_inspect_script);
+	session->argv[2] = g_strdup("1");
+	session->argv_lens[2] = 1;
+	key = g_string_new(backend->redis_object);
+	g_string_append_len(key, digest, rspamd_cryptobox_HASHBYTES);
+	session->argv[3] = key->str;
+	session->argv_lens[3] = key->len;
+	g_string_free(key, FALSE); /* Do not free underlying array */
+	session->argv[4] = g_malloc(rspamd_cryptobox_HASHBYTES);
+	memcpy(session->argv[4], digest, rspamd_cryptobox_HASHBYTES);
+	session->argv_lens[4] = rspamd_cryptobox_HASHBYTES;
+
+	up = rspamd_upstream_get(ups,
+							 RSPAMD_UPSTREAM_ROUND_ROBIN,
+							 NULL,
+							 0);
+
+	if (up == NULL) {
+		msg_err_redis_session("cannot select fuzzy redis upstream for inspect: "
+							  "all backends are dead or pending DNS resolution");
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			cb(NULL, ud);
+		}
+		return;
+	}
+
+	session->up = rspamd_upstream_ref(up);
+	addr = rspamd_upstream_addr_next(up);
+	g_assert(addr != NULL);
+	session->ctx = rspamd_redis_pool_connect_opts(backend->pool, &backend->connection,
+												  rspamd_inet_address_to_string(addr),
+												  rspamd_inet_address_get_port(addr));
+
+	if (session->ctx == NULL) {
+		rspamd_upstream_fail(up, TRUE, strerror(errno));
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+
+		if (cb) {
+			cb(NULL, ud);
+		}
+	}
+	else {
+		if (redisAsyncCommandArgv(session->ctx, rspamd_fuzzy_redis_json_callback,
+								  session, session->nargs,
+								  (const char **) session->argv, session->argv_lens) != REDIS_OK) {
+			rspamd_fuzzy_redis_session_dtor(session, TRUE);
+
+			if (cb) {
+				cb(NULL, ud);
+			}
+		}
+		else {
+			/* Add timeout */
+			session->timeout.data = session;
+			ev_now_update_if_cheap((struct ev_loop *) session->event_loop);
+			ev_timer_init(&session->timeout,
+						  rspamd_fuzzy_redis_timeout,
+						  session->backend->timeout, 0.0);
+			ev_timer_start(session->event_loop, &session->timeout);
+		}
+	}
 }
 
 void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
@@ -915,11 +1103,9 @@ void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_opts(backend->pool, &backend->connection,
+												  rspamd_inet_address_to_string(addr),
+												  rspamd_inet_address_get_port(addr));
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, TRUE, strerror(errno));
@@ -937,6 +1123,101 @@ void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
 
 			if (cb) {
 				cb(0, ud);
+			}
+		}
+		else {
+			/* Add timeout */
+			session->timeout.data = session;
+			ev_now_update_if_cheap((struct ev_loop *) session->event_loop);
+			ev_timer_init(&session->timeout,
+						  rspamd_fuzzy_redis_timeout,
+						  session->backend->timeout, 0.0);
+			ev_timer_start(session->event_loop, &session->timeout);
+		}
+	}
+}
+
+void rspamd_fuzzy_backend_storage_stats_redis(struct rspamd_fuzzy_backend *bk,
+											  rspamd_fuzzy_stats_cb cb, void *ud,
+											  void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
+	struct rspamd_fuzzy_redis_session *session;
+	struct upstream *up;
+	struct upstream_list *ups;
+	rspamd_inet_addr_t *addr;
+	GString *key;
+
+	g_assert(backend != NULL);
+
+	ups = rspamd_redis_get_servers(backend, "read_servers");
+	if (!ups) {
+		if (cb) {
+			cb(NULL, ud);
+		}
+
+		return;
+	}
+
+	session = g_malloc0(sizeof(*session));
+	session->backend = backend;
+	REF_RETAIN(session->backend);
+
+	session->callback.cb_stats = cb;
+	session->cbdata = ud;
+	session->command = RSPAMD_FUZZY_REDIS_COMMAND_STATS;
+	session->event_loop = rspamd_fuzzy_backend_event_base(bk);
+
+	/* The count scan publishes a json document under <prefix>_stats */
+	session->nargs = 2;
+	session->argv = g_malloc0(sizeof(char *) * session->nargs);
+	session->argv_lens = g_malloc0(sizeof(gsize) * session->nargs);
+	session->argv[0] = g_strdup("GET");
+	session->argv_lens[0] = 3;
+	key = g_string_new(backend->redis_object);
+	g_string_append(key, "_stats");
+	session->argv[1] = key->str;
+	session->argv_lens[1] = key->len;
+	g_string_free(key, FALSE); /* Do not free underlying array */
+
+	up = rspamd_upstream_get(ups,
+							 RSPAMD_UPSTREAM_ROUND_ROBIN,
+							 NULL,
+							 0);
+
+	if (up == NULL) {
+		msg_err_redis_session("cannot select fuzzy redis upstream for storage stats: "
+							  "all backends are dead or pending DNS resolution");
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+		if (cb) {
+			cb(NULL, ud);
+		}
+		return;
+	}
+
+	session->up = rspamd_upstream_ref(up);
+	addr = rspamd_upstream_addr_next(up);
+	g_assert(addr != NULL);
+	session->ctx = rspamd_redis_pool_connect_opts(backend->pool, &backend->connection,
+												  rspamd_inet_address_to_string(addr),
+												  rspamd_inet_address_get_port(addr));
+
+	if (session->ctx == NULL) {
+		rspamd_upstream_fail(up, TRUE, strerror(errno));
+		rspamd_fuzzy_redis_session_dtor(session, TRUE);
+
+		if (cb) {
+			cb(NULL, ud);
+		}
+	}
+	else {
+		if (redisAsyncCommandArgv(session->ctx, rspamd_fuzzy_redis_json_callback,
+								  session, session->nargs,
+								  (const char **) session->argv, session->argv_lens) != REDIS_OK) {
+			rspamd_fuzzy_redis_session_dtor(session, TRUE);
+
+			if (cb) {
+				cb(NULL, ud);
 			}
 		}
 		else {
@@ -1063,11 +1344,9 @@ void rspamd_fuzzy_backend_version_redis(struct rspamd_fuzzy_backend *bk,
 	session->up = rspamd_upstream_ref(up);
 	addr = rspamd_upstream_addr_next(up);
 	g_assert(addr != NULL);
-	session->ctx = rspamd_redis_pool_connect(backend->pool,
-											 backend->dbname,
-											 backend->username, backend->password,
-											 rspamd_inet_address_to_string(addr),
-											 rspamd_inet_address_get_port(addr));
+	session->ctx = rspamd_redis_pool_connect_opts(backend->pool, &backend->connection,
+												  rspamd_inet_address_to_string(addr),
+												  rspamd_inet_address_get_port(addr));
 
 	if (session->ctx == NULL) {
 		rspamd_upstream_fail(up, FALSE, strerror(errno));
@@ -1115,6 +1394,58 @@ void rspamd_fuzzy_backend_expire_redis(struct rspamd_fuzzy_backend *bk,
 	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
 
 	g_assert(backend != NULL);
+}
+
+void rspamd_fuzzy_backend_start_count_scan_redis(struct rspamd_fuzzy_backend *bk,
+												 void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
+	lua_State *L;
+	struct ev_loop **pev;
+	int err_idx;
+
+	g_assert(backend != NULL);
+
+	if (backend->count_scan_started) {
+		return;
+	}
+
+	backend->count_scan_started = true;
+	L = backend->L;
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	if (!rspamd_lua_require_function(L, "lua_fuzzy_redis",
+									 "lua_fuzzy_redis_start_count_scan")) {
+		msg_err("cannot require lua_fuzzy_redis.lua_fuzzy_redis_start_count_scan");
+		lua_settop(L, err_idx - 1);
+
+		return;
+	}
+
+	/* Arg 1: redis params */
+	lua_rawgeti(L, LUA_REGISTRYINDEX, backend->conf_ref);
+	/* Arg 2: ev_base */
+	pev = lua_newuserdata(L, sizeof(struct ev_loop *));
+	*pev = rspamd_fuzzy_backend_event_base(bk);
+	rspamd_lua_setclass(L, rspamd_ev_base_classname, -1);
+	/* Arg 3: prefix */
+	lua_pushstring(L, backend->redis_object);
+	/* Arg 4: options */
+	if (backend->count_scan_opts) {
+		ucl_object_push_lua(L, backend->count_scan_opts, true);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	if (lua_pcall(L, 4, 1, err_idx) != 0) {
+		msg_err("call to lua_fuzzy_redis_start_count_scan failed: %s",
+				lua_tostring(L, -1));
+	}
+
+	lua_settop(L, err_idx - 1);
 }
 
 /*

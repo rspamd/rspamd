@@ -1,0 +1,8 @@
+From: sender@example.com
+To: recipient@example.net
+Subject: Chartable Cyrillic-first test
+Date: Thu, 4 Sep 2026 12:00:00 +0000
+Message-ID: <chartable-cyrillic-first@example.com>
+Content-Type: text/plain; charset=UTF-8
+
+аpple

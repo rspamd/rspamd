@@ -170,6 +170,9 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
 #define RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE (1 << 3)
 #define RSPAMD_LUA_HTTP_FLAG_YIELDED (1 << 4)
+#define RSPAMD_LUA_HTTP_FLAG_NO_LOCAL (1 << 5)
+/* Per-request connection tuning was read from the request table */
+#define RSPAMD_LUA_HTTP_FLAG_TUNED (1 << 6)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -179,7 +182,6 @@ struct lua_http_cbdata {
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	struct rspamd_task *task;
-	lua_State *L;
 	ev_tstamp timeout;
 	/* optional per-request tuning */
 	double connect_timeout;
@@ -202,6 +204,7 @@ struct lua_http_cbdata {
 	int fd;
 	int cbref;
 	struct thread_entry *thread;
+	guint64 thread_generation;
 	ref_entry_t ref;
 };
 
@@ -220,9 +223,53 @@ lua_http_global_resolver(struct ev_loop *ev_base)
 }
 
 static void
+lua_http_read_tuning(lua_State *L, int idx, struct lua_http_cbdata *cbd)
+{
+	static const struct {
+		const char *name;
+		gsize offset;
+	} fields[] = {
+		{"connect_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, connect_timeout)},
+		{"ssl_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, ssl_timeout)},
+		{"write_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, write_timeout)},
+		{"read_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, read_timeout)},
+		{"connection_ttl", G_STRUCT_OFFSET(struct lua_http_cbdata, connection_ttl)},
+		{"idle_timeout", G_STRUCT_OFFSET(struct lua_http_cbdata, idle_timeout)},
+	};
+
+	for (unsigned int i = 0; i < G_N_ELEMENTS(fields); i++) {
+		lua_getfield(L, idx, fields[i].name);
+
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			G_STRUCT_MEMBER(double, cbd, fields[i].offset) = lua_tonumber(L, -1);
+		}
+
+		lua_pop(L, 1);
+	}
+
+	lua_getfield(L, idx, "max_reuse");
+
+	if (lua_type(L, -1) == LUA_TNUMBER) {
+		cbd->max_reuse = lua_tointeger(L, -1);
+	}
+
+	lua_pop(L, 1);
+	cbd->flags |= RSPAMD_LUA_HTTP_FLAG_TUNED;
+}
+
+static void
 lua_http_fin(gpointer arg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) arg;
+
+	if (cbd->thread) {
+		/*
+		 * A cancelled session finalises the request directly, without
+		 * lua_http_cbd_dtor, which releases the entry otherwise
+		 */
+		lua_thread_pool_release_entry(cbd->thread);
+		cbd->thread = NULL;
+	}
 
 	if (cbd->cbref != -1) {
 		luaL_unref(cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->cbref);
@@ -275,6 +322,12 @@ lua_http_fin(gpointer arg)
 static void
 lua_http_cbd_dtor(struct lua_http_cbdata *cbd)
 {
+	if (cbd->thread) {
+		/* Balances the retain taken when the coroutine yielded on this request */
+		lua_thread_pool_release_entry(cbd->thread);
+		cbd->thread = NULL;
+	}
+
 	if (cbd->session) {
 
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
@@ -284,6 +337,10 @@ lua_http_cbd_dtor(struct lua_http_cbdata *cbd)
 			}
 
 			rspamd_session_remove_event(cbd->session, lua_http_fin, cbd);
+		}
+		else {
+			/* Failed before its session event was added, e.g. in DNS */
+			lua_http_fin(cbd);
 		}
 	}
 	else {
@@ -296,6 +353,29 @@ lua_http_push_error(struct lua_http_cbdata *cbd, const char *err)
 {
 	struct lua_callback_state lcbd;
 	lua_State *L;
+
+	if (cbd->cbref == -1) {
+		/* Coroutine-style call: resume the yielded thread with (err, nil) */
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+
+			L = cbd->thread->lua_state;
+			lua_pushstring(L, err);
+			lua_pushnil(L);
+
+			if (cbd->item) {
+				rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+			}
+
+			lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+		}
+		else {
+			msg_info("lost HTTP error for %s in coroutines mess: %s",
+					 cbd->host ? cbd->host : "unknown host", err);
+		}
+
+		return;
+	}
 
 	lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &lcbd);
 
@@ -499,17 +579,110 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	lua_thread_resume(cbd->thread, 2);
+	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+}
+
+/*
+ * IPv4 destinations that are not hosts of the public network: "this network"
+ * (0.0.0.0 is the local host for a connect), shared address space, link-local
+ * addresses (whatever `local_addrs` is set to), protocol assignments, benchmarking, multicast and the reserved top of the space
+ */
+static gboolean
+lua_http_ip4_is_special(uint32_t ip)
+{
+	return (ip & 0xff000000U) == 0x00000000U || /* 0.0.0.0/8 */
+		   (ip & 0xffc00000U) == 0x64400000U || /* 100.64.0.0/10 */
+		   (ip & 0xffff0000U) == 0xa9fe0000U || /* 169.254.0.0/16, link-local */
+		   (ip & 0xffffff00U) == 0xc0000000U || /* 192.0.0.0/24 */
+		   (ip & 0xfffe0000U) == 0xc6120000U || /* 198.18.0.0/15 */
+		   (ip & 0xf0000000U) == 0xe0000000U || /* 224.0.0.0/4 */
+		   (ip & 0xf0000000U) == 0xf0000000U;   /* 240.0.0.0/4 */
+}
+
+/*
+ * What `forbid_local` refuses: the addresses that are local by the
+ * configuration, and those that lead to this host or to an internal network
+ * without being listed there. An IPv4 address inside of an IPv6 one, mapped or
+ * behind the well known NAT64 prefix, is judged as that IPv4 address.
+ */
+static gboolean
+lua_http_addr_is_forbidden(struct rspamd_config *cfg, const rspamd_inet_addr_t *addr)
+{
+	if (rspamd_ip_is_local_cfg(cfg, addr)) {
+		return TRUE;
+	}
+
+	int af = rspamd_inet_address_get_af(addr);
+	unsigned int klen = 0;
+	const unsigned char *key = rspamd_inet_address_get_hash_key(addr, &klen);
+
+	if (af == AF_INET && klen == 4) {
+		uint32_t ip = ((uint32_t) key[0] << 24) | ((uint32_t) key[1] << 16) |
+					  ((uint32_t) key[2] << 8) | key[3];
+
+		return lua_http_ip4_is_special(ip);
+	}
+	else if (af == AF_INET6 && klen == 16) {
+		static const unsigned char unspecified[16] = {0};
+		static const unsigned char v4mapped[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+		static const unsigned char nat64[12] = {0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
+
+		if (memcmp(key, unspecified, sizeof(unspecified)) == 0) {
+			/* The local host for a connect */
+			return TRUE;
+		}
+
+		if ((key[0] & 0xfe) == 0xfc || key[0] == 0xff) {
+			/* Unique local fc00::/7 and multicast ff00::/8 */
+			return TRUE;
+		}
+
+		if (memcmp(key, v4mapped, sizeof(v4mapped)) == 0 ||
+			memcmp(key, nat64, sizeof(nat64)) == 0) {
+			struct in_addr in4;
+			gboolean forbidden;
+
+			memcpy(&in4, key + 12, sizeof(in4));
+			rspamd_inet_addr_t *embedded = rspamd_inet_address_new(AF_INET, &in4);
+			forbidden = lua_http_addr_is_forbidden(cfg, embedded);
+			rspamd_inet_address_free(embedded);
+
+			return forbidden;
+		}
+	}
+
+	return FALSE;
 }
 
 static gboolean
 lua_http_make_connection(struct lua_http_cbdata *cbd)
 {
+	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NO_LOCAL) {
+		struct rspamd_config *cfg = cbd->cfg;
+
+		if (cfg == NULL && cbd->task) {
+			cfg = cbd->task->cfg;
+		}
+
+		if (lua_http_addr_is_forbidden(cfg, cbd->addr)) {
+			msg_info("forbid HTTP request to local address %s (host: %s) as 'forbid_local' is set",
+					 rspamd_inet_address_to_string(cbd->addr),
+					 cbd->host ? cbd->host : "unknown");
+
+			return FALSE;
+		}
+	}
+
 	rspamd_inet_address_set_port(cbd->addr, cbd->msg->port);
 	unsigned http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
 
 	if (cbd->msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
 		http_opts |= RSPAMD_HTTP_CLIENT_SSL;
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+			/* Not to be given a connection that was verified, nor the reverse */
+			http_opts |= RSPAMD_HTTP_CLIENT_SSL_NOVERIFY;
+		}
 	}
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
@@ -563,41 +736,13 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
-		/* Optional per-request tuning from table (if present) */
-		if (lua_type(cbd->L, 1) == LUA_TTABLE) {
-			double connect_timeout = 0, ssl_timeout = 0, write_timeout = 0, read_timeout = 0;
-			double connection_ttl = 0, idle_timeout = 0;
-			unsigned int max_reuse = 0;
-			lua_pushstring(cbd->L, "connect_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) connect_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "ssl_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) ssl_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "write_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) write_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "read_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) read_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			rspamd_http_connection_set_timeouts(cbd->conn, connect_timeout, ssl_timeout, write_timeout, read_timeout);
-			lua_pushstring(cbd->L, "connection_ttl");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) connection_ttl = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "idle_timeout");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) idle_timeout = lua_tonumber(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			lua_pushstring(cbd->L, "max_reuse");
-			lua_gettable(cbd->L, 1);
-			if (lua_type(cbd->L, -1) == LUA_TNUMBER) max_reuse = lua_tointeger(cbd->L, -1);
-			lua_pop(cbd->L, 1);
-			rspamd_http_connection_set_keepalive_tuning(cbd->conn, connection_ttl, idle_timeout, max_reuse);
+		/* Optional per-request tuning, read from the request table */
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TUNED) {
+			rspamd_http_connection_set_timeouts(cbd->conn, cbd->connect_timeout,
+												cbd->ssl_timeout, cbd->write_timeout,
+												cbd->read_timeout);
+			rspamd_http_connection_set_keepalive_tuning(cbd->conn, cbd->connection_ttl,
+														cbd->idle_timeout, cbd->max_reuse);
 		}
 
 		if (cbd->task) {
@@ -662,15 +807,16 @@ lua_http_dns_handler(struct rdns_reply *reply, gpointer ud)
 		else {
 			REF_RETAIN(cbd);
 			if (!lua_http_make_connection(cbd)) {
+				/*
+				 * E.g. the resolved address is denied by `forbid_local`; the
+				 * symbol's async counter taken for the DNS request is released
+				 * below as in the other error paths
+				 */
 				lua_http_push_error(cbd, "unable to make connection to the host");
 
 				if (cbd->ref.refcount > 1) {
 					REF_RELEASE(cbd);
 				}
-
-				REF_RELEASE(cbd);
-
-				return;
 			}
 			REF_RELEASE(cbd);
 		}
@@ -793,9 +939,11 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
+ * @param {number} max_size maximum size of the reply body in bytes (default is the `max_lua_http_response` global option, 256Mb; 0 disables the limit)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {boolean} forbid_local refuse to connect when the destination resolves to a loopback, unspecified, link-local, unique local, shared (100.64/10), multicast, reserved or `local_addrs` address, also when it is an IPv4 address of these inside of an IPv6 one (SSRF protection for requests to untrusted URLs)
  * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
@@ -832,7 +980,7 @@ lua_http_request(lua_State *L)
 	int flags = 0;
 	char *mime_type = NULL;
 	char *auth = NULL;
-	gsize max_size = 0;
+	gssize max_size = -1; /* -1 = use the global default; 0 = unlimited */
 	gboolean gzip = FALSE;
 
 	if (lua_gettop(L) >= 2) {
@@ -967,6 +1115,14 @@ lua_http_request(lua_State *L)
 		msg = rspamd_http_message_from_url(url);
 		if (msg == NULL) {
 			msg_err_task_check("cannot create HTTP message from url %s", url);
+
+			if (cbref == -1) {
+				/* Coroutine callers expect (err, response), not a bare false */
+				lua_pushstring(L, "cannot create HTTP message from url");
+				lua_pushnil(L);
+				return 2;
+			}
+
 			lua_pushboolean(L, FALSE);
 			return 1;
 		}
@@ -1146,6 +1302,15 @@ lua_http_request(lua_State *L)
 
 		lua_pop(L, 1);
 
+		lua_pushstring(L, "forbid_local");
+		lua_gettable(L, 1);
+
+		if (!!lua_toboolean(L, -1)) {
+			flags |= RSPAMD_LUA_HTTP_FLAG_NO_LOCAL;
+		}
+
+		lua_pop(L, 1);
+
 		lua_pushstring(L, "keepalive");
 		lua_gettable(L, 1);
 
@@ -1159,7 +1324,15 @@ lua_http_request(lua_State *L)
 		lua_gettable(L, 1);
 
 		if (lua_type(L, -1) == LUA_TNUMBER) {
-			max_size = lua_tointeger(L, -1);
+			lua_Integer i = lua_tointeger(L, -1);
+
+			if (i >= 0) {
+				max_size = i;
+			}
+			else {
+				msg_err_task_check("ignore negative max_size %L in HTTP request to %s",
+								   (int64_t) i, url);
+			}
 		}
 
 		lua_pop(L, 1);
@@ -1227,8 +1400,6 @@ lua_http_request(lua_State *L)
 	}
 
 	if (session && rspamd_session_blocked(session)) {
-		lua_pushboolean(L, FALSE);
-
 		g_free(auth);
 		rspamd_http_message_unref(msg);
 		if (body) {
@@ -1237,6 +1408,16 @@ lua_http_request(lua_State *L)
 		if (local_kp) {
 			rspamd_keypair_unref(local_kp);
 		}
+
+		if (cbref == -1) {
+			/* Coroutine callers expect (err, response), not a bare false */
+			lua_pushstring(L, "session is terminating");
+			lua_pushnil(L);
+
+			return 2;
+		}
+
+		lua_pushboolean(L, FALSE);
 
 		return 1;
 	}
@@ -1279,11 +1460,23 @@ lua_http_request(lua_State *L)
 	cbd->peer_pk = peer_key;
 	cbd->local_kp = local_kp;
 	cbd->flags = flags;
-	cbd->max_size = max_size;
+	if (max_size >= 0) {
+		cbd->max_size = max_size;
+	}
+	else {
+		cbd->max_size = cfg ? cfg->max_lua_http_response : 0;
+	}
 	cbd->url = url;
 	cbd->auth = auth;
 	cbd->task = task;
-	cbd->L = L;
+
+	/*
+	 * Per-request tuning is read now: the connection may be made from the
+	 * DNS reply callback, when this call frame and its arguments are gone
+	 */
+	if (lua_type(L, 1) == LUA_TTABLE) {
+		lua_http_read_tuning(L, 1, cbd);
+	}
 
 	if (up) {
 		cbd->up = rspamd_upstream_ref(up);
@@ -1291,6 +1484,9 @@ lua_http_request(lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+		cbd->thread_generation = cbd->thread->generation;
+		/* Held for the lifetime of cbd, released in lua_http_cbd_dtor() */
+		lua_thread_pool_retain_entry(cbd->thread);
 	}
 
 	REF_INIT_RETAIN(cbd, lua_http_cbd_dtor);
@@ -1325,35 +1521,45 @@ lua_http_request(lua_State *L)
 		cbd->host = g_malloc(hostlen + 1);
 		rspamd_strlcpy(cbd->host, host, hostlen + 1);
 
-		/* Keep-alive entry is available */
-		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
-			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
-																				  cbd->host,
-																				  msg->port,
-																				  msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
-
-			if (ka_addr) {
-				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
+		/*
+		 * The address is the one of an upstream, or the one that the URL
+		 * names. A pooled connection tells an address only for a name that
+		 * would be resolved otherwise: a request to an address goes to that
+		 * address, whatever its Host header shares with other requests
+		 */
+		if (cbd->up) {
+			numeric_ip = true;
+			cbd->addr = rspamd_inet_address_copy(rspamd_upstream_addr_next(cbd->up), NULL);
+		}
+		else {
+			/* We use msg->host here, not cbd->host ! */
+			if (rspamd_parse_inet_address(&cbd->addr,
+										  msg->host->str, msg->host->len,
+										  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				numeric_ip = true;
 			}
 		}
 
-		/*
-		 * No keep-alive stuff, check if we have upstream or if we can parse host as
-		 * a numeric address
-		 */
-		if (!cbd->addr) {
-			if (cbd->up) {
-				numeric_ip = true;
-				cbd->addr = rspamd_inet_address_copy(rspamd_upstream_addr_next(cbd->up), NULL);
-			}
-			else {
-				/* We use msg->host here, not cbd->host ! */
-				if (rspamd_parse_inet_address(&cbd->addr,
-											  msg->host->str, msg->host->len,
-											  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-					numeric_ip = true;
+		/* Keep-alive entry is available */
+		if (!cbd->addr && (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE)) {
+			unsigned int ssl_flags = 0;
+
+			if (msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
+				ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL;
+
+				if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+					ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL_NOVERIFY;
 				}
+			}
+
+			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
+																				  cbd->host,
+																				  msg->port,
+																				  ssl_flags);
+
+			if (ka_addr) {
+				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
+				numeric_ip = true;
 			}
 		}
 	}
@@ -1382,6 +1588,15 @@ lua_http_request(lua_State *L)
 			}
 
 			REF_RELEASE(cbd);
+
+			if (cbref == -1) {
+				/* Coroutine callers expect (err, response), not a bare false */
+				lua_pushstring(L, "cannot make HTTP connection");
+				lua_pushnil(L);
+
+				return 2;
+			}
+
 			lua_pushboolean(L, FALSE);
 
 			return 1;
@@ -1407,6 +1622,15 @@ lua_http_request(lua_State *L)
 				}
 
 				REF_RELEASE(cbd);
+
+				if (cbref == -1) {
+					/* Coroutine callers expect (err, response), not a bare false */
+					lua_pushstring(L, "cannot make DNS request");
+					lua_pushnil(L);
+
+					return 2;
+				}
+
 				lua_pushboolean(L, FALSE);
 
 				return 1;
@@ -1425,6 +1649,15 @@ lua_http_request(lua_State *L)
 				}
 
 				REF_RELEASE(cbd);
+
+				if (cbref == -1) {
+					/* Coroutine callers expect (err, response), not a bare false */
+					lua_pushstring(L, "cannot make DNS request");
+					lua_pushnil(L);
+
+					return 2;
+				}
+
 				lua_pushboolean(L, FALSE);
 
 				return 1;
@@ -1439,6 +1672,7 @@ lua_http_request(lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
+		cbd->thread_generation = cbd->thread->generation;
 		cbd->flags |= RSPAMD_LUA_HTTP_FLAG_YIELDED;
 
 		return lua_thread_yield(cbd->thread, 0);

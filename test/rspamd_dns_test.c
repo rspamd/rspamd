@@ -91,6 +91,8 @@ void rspamd_dns_test_func(void)
 	cfg->cfg_pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), NULL, 0);
 	cfg->dns_retransmits = 2;
 	cfg->dns_timeout = 0.5;
+	/* Servers are rejected without any IO channels */
+	cfg->dns_io_per_server = 1;
 
 	pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), NULL, 0);
 

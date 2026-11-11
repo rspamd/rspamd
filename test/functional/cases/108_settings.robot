@@ -36,6 +36,8 @@ NO SETTINGS SPAM
   Expect Symbol  SIMPLE_PRE
   Expect Symbol  SIMPLE_POST
   Expect Symbol  BAYES_SPAM
+  Do Not Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
 
 NO SETTINGS HAM
   Scan File  ${HAM_MESSAGE}
@@ -250,6 +252,49 @@ SETTINGS ID - VIRTUAL DEP
 SETTINGS ID - EXTERNAL MAP
   Scan File  ${MESSAGE}  Settings-Id=external
   Expect Symbol  EXTERNAL_SETTINGS
+
+EXPLICIT ENABLE - IMPLICIT SETTINGS ID
+  Scan File  ${MESSAGE}  Settings-Id=id_disabled_only
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
+
+EXPLICIT ENABLE - RAW SETTINGS NO LIST
+  Scan File  ${MESSAGE}  Settings={symbols_disabled = ["SIMPLE_PRE"]}
+  Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
+
+EXPLICIT ENABLE - RAW SETTINGS WHITELIST
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = ["EXPLICIT_ENABLE_TEST"]}
+  Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
+  Do Not Expect Symbol  SIMPLE_TEST
+
+EXPLICIT ENABLE - ENABLE SYMBOL API
+  Scan File  ${SPAM_MESSAGE}  Enable-Explicit=yes
+  Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
+  Expect Symbol  SIMPLE_TEST
+
+POLICY IMPLICIT ALLOW - SETTINGS ID
+  Scan File  ${MESSAGE}  Settings-Id=id_implicit_policy
+  Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
+  Do Not Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_PRE
+  Expect Symbol  SIMPLE_POST
+
+POLICY IMPLICIT ALLOW - RAW SETTINGS
+  Scan File  ${MESSAGE}  Settings={policy = "implicit_allow"; symbols_enabled = ["EXPLICIT_ENABLE_TEST"]; symbols_disabled = ["SIMPLE_TEST"]}
+  Expect Symbol  EXPLICIT_ENABLE_TEST
+  Do Not Expect Symbol  EXPLICIT_ENABLE_OTHER
+  Do Not Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_PRE
+  Expect Symbol  SIMPLE_POST
 
 PRIORITY
   Scan File  ${MESSAGE_PRIORITY}  Settings-Id=id_virtual_group  From=user@test.com

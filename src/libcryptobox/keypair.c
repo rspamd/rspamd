@@ -387,7 +387,8 @@ rspamd_pubkey_calculate_nm(struct rspamd_cryptobox_pubkey *p,
 	struct rspamd_cryptobox_keypair_25519 *sk_25519 =
 		RSPAMD_CRYPTOBOX_KEYPAIR_25519(kp);
 
-	rspamd_cryptobox_nm(p->nm->nm, rk_25519->pk, sk_25519->sk);
+	/* A low order key gets a random secret, which is fail closed */
+	(void) rspamd_cryptobox_nm(p->nm->nm, rk_25519->pk, sk_25519->sk);
 
 	return p->nm->nm;
 }

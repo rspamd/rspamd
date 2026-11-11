@@ -1,6 +1,10 @@
 context("HTML URL extraction", function()
   local rspamd_task = require("rspamd_task")
   local logger = require("rspamd_logger")
+  local test_helper = require("rspamd_test_helper")
+
+  -- Schemeless hrefs are dropped unless they resolve to a known TLD
+  test_helper.init_url_parser()
 
   test("Basic URL extraction from simple HTML", function()
     local msg = [[
@@ -426,6 +430,128 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  -- A schemeless href is given a scheme by a heuristic in html_process_url().
+  -- It used to stop at the first non-alphanumeric character, so a dot in an
+  -- email local part (`user.name@...`) was decided before the `@` was ever
+  -- seen: the address became `http://user.name@example.com`, i.e. a http
+  -- url with userinfo, and tripped URL_USER_PASSWORD.
+  local schemeless_cases = {
+    -- href, expected url text
+    { 'user.name@example.com', 'mailto:user.name@example.com' },
+    { 'first.last+tag@example.com', 'mailto:first.last+tag@example.com' },
+    { 'user@example.com', 'mailto:user@example.com' },
+    { 'user-name@example.com', 'mailto:user-name@example.com' },
+    { 'user_name@example.com', 'mailto:user_name@example.com' },
+    -- bare hostnames must keep resolving to http://
+    { 'www.example.com', 'http://www.example.com' },
+    { 'www.example.com/path', 'http://www.example.com/path' },
+    { 'www.example.com?a=b', 'http://www.example.com?a=b' },
+    { '//example.com/x', 'http://example.com/x' },
+    -- browsers drop tabs and line breaks and take backslashes as slashes
+    { '\\\\example.com/x', 'http://example.com/x' },
+    { '/\\example.com/x', 'http://example.com/x' },
+    { '/&#9;/example.com/x', 'http://example.com/x' },
+    { 'mai&#9;lto:x@y.com', 'mailto:x@y.com' },
+    -- `://` later in the link does not make it absolute
+    { '//example.com/#://', 'http://example.com/#://' },
+    -- explicit schemes are not touched by the heuristic at all
+    { 'http://user@host.com/', 'http://user@host.com/' },
+    { 'mailto:x@y.com', 'mailto:x@y.com' },
+  }
+
+  for _, case in ipairs(schemeless_cases) do
+    local href, expected = case[1], case[2]
+
+    test("schemeless href: " .. href, function()
+      local msg = string.format([[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body><a href="%s">text</a></body></html>
+]], href)
+      local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+      assert_true(res, "failed to load message")
+
+      task:process_message()
+
+      local found = {}
+      for _, u in ipairs(task:get_urls(true) or {}) do
+        table.insert(found, u:get_text())
+      end
+
+      assert_equal(expected, found[1],
+          string.format("href %s should be extracted as %s, got %s",
+              href, expected, table.concat(found, ', ')))
+
+      task:destroy()
+    end)
+  end
+
+  test("schemeless email href is not parsed as http userinfo", function()
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body><a href="user.name@example.com">user.name@example.com</a></body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    -- Both gates that keep URL_USER_PASSWORD quiet (see
+    -- user_password_analysis in src/plugins/lua/url_suspect.lua): the url is
+    -- mailto, and it does not carry the has_user flag
+    local rspamd_url = require "rspamd_url"
+    local bit = require "bit"
+
+    for _, u in ipairs(task:get_urls(true) or {}) do
+      assert_equal("mailto", u:get_protocol(),
+          "an email href must be a mailto url, not http")
+      assert_equal(0, bit.band(u:get_flags_num(), rspamd_url.flags.has_user),
+          string.format("the local part must not end up as http userinfo "
+              .. "(URL_USER_PASSWORD): url=%s flags=%s has_user=%s",
+              u:get_text(), tostring(u:get_flags_num()),
+              tostring(rspamd_url.flags.has_user)))
+    end
+
+    task:destroy()
+  end)
+
+  -- Leading ambiguous characters are still rejected: `./page.html` and friends
+  -- are relative hrefs, not hostnames
+  for _, href in ipairs({ './page.html', '../page.html', '.hidden' }) do
+    test("relative href is still rejected: " .. href, function()
+      local msg = string.format([[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body><a href="%s">text</a></body></html>
+]], href)
+      local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+      assert_true(res, "failed to load message")
+
+      task:process_message()
+
+      local found = {}
+      for _, u in ipairs(task:get_urls(true) or {}) do
+        table.insert(found, u:get_text())
+      end
+
+      assert_equal(0, #found,
+          string.format("%s must not yield a url, got %s",
+              href, table.concat(found, ', ')))
+
+      task:destroy()
+    end)
+  end
+
   test("Nested query-embedded URLs stop at RSPAMD_URL_QUERY_MAX_NESTING", function()
     -- wrap?u=l1?v=l2?w=l3?x=l4?y=l5?z=l6, each level escaped one layer deeper.
     -- With the nesting cap at 5, l1..l5 are extracted but l6 (a 6th level) is not.
@@ -457,6 +583,194 @@ Content-Type: text/html
     assert_nil(hosts["l6.com"], "level-6 URL is past the nesting cap and must not be extracted")
 
     task:destroy()
+  end)
+
+  test('A matching query target does not erase the displayed domain mismatch', function()
+    local res, task = rspamd_task.load_from_string(
+        'Content-Type: text/html\r\n\r\n' ..
+        '<a href="https://example.com/?url=https://example.org/">https://example.org/</a>',
+        rspamd_config)
+    assert_true(res)
+    task:process_message()
+
+    local found
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == 'example.com' then
+        found = true
+        assert_true(u:is_phished())
+        assert_equal('example.org', u:get_phished():get_host())
+      end
+    end
+    assert_true(found)
+    task:destroy()
+  end)
+
+  local padding_cases = {
+    { 'no padding', '', 'https://example.org/', true },
+    { 'zero-width padding', string.rep('\226\128\139', 1400), 'https://example.org/', true },
+    { 'transparent padding', '<span style="color:transparent">' .. string.rep('x', 4200) .. '</span>',
+      'https://example.org/', true },
+    { 'nested padding', string.rep('<span>\226\128\139</span>', 1400), 'https://example.org/', true },
+    { 'image alt after padding', string.rep('\226\128\139', 1400),
+      '<img alt="https://example.org/">', true },
+    { 'matching domain after padding', string.rep('\226\128\139', 1400), 'https://example.com/', false },
+    { 'ordinary label before URL', 'Read this: ', 'https://example.org/', false },
+  }
+
+  for _, case in ipairs(padding_cases) do
+    test('Displayed URL with ' .. case[1], function()
+      local res, task = rspamd_task.load_from_string(
+          'From: test@example.com\r\nContent-Type: text/html; charset=utf-8\r\n\r\n' ..
+          '<a href="https://example.com/">' .. case[2] .. case[3] .. '</a>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local found, phished, visible
+      for _, u in ipairs(task:get_urls() or {}) do
+        if u:get_host() == 'example.com' then
+          found = true
+          phished = u:is_phished()
+          visible = u:get_visible()
+        end
+      end
+      task:destroy()
+      assert_true(found)
+      assert_equal(case[4], phished)
+      if case[4] then
+        assert_not_nil(visible:match('^https://example%.org/%s*$'))
+      end
+    end)
+  end
+
+  test('Unclosed links with long leading padding keep the displayed domain of the last one', function()
+    -- A link start tag ends the open link, so the links are siblings
+    local body = {}
+    for i = 1, 50 do
+      body[#body + 1] = '<a href="https://example.com/' .. i .. '">' ..
+          string.rep('\226\128\139', 1400)
+    end
+    body[#body + 1] = 'https://example.org/'
+    local res, task = rspamd_task.load_from_string(
+        'Content-Type: text/html; charset=utf-8\r\n\r\n' .. table.concat(body), rspamd_config)
+    assert_true(res)
+    task:process_message()
+    local nlinks, nphished = 0, 0
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == 'example.com' then
+        nlinks = nlinks + 1
+        if u:is_phished() then
+          nphished = nphished + 1
+          assert_equal('https://example.com/50', tostring(u))
+          assert_equal('https://example.org/', u:get_visible())
+        end
+      end
+    end
+    assert_equal(50, nlinks)
+    assert_equal(1, nphished)
+    task:destroy()
+  end)
+
+  test('Visible text truncation keeps whole UTF-8 characters', function()
+    for _, ch in ipairs({ '\194\163', '\226\130\172', '\240\159\152\128' }) do
+      local res, task = rspamd_task.load_from_string(
+          'Content-Type: text/html; charset=utf-8\r\n\r\n<a href="https://example.com/">' ..
+          string.rep('x', 4095) .. ch .. 'tail</a>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local visible
+      for _, u in ipairs(task:get_urls() or {}) do
+        if u:get_host() == 'example.com' then visible = u:get_visible() end
+      end
+      task:destroy()
+      assert_equal(string.rep('x', 4095), visible)
+    end
+  end)
+
+  test("Visible part of nested unclosed links is bounded", function()
+    local links = {}
+    for i = 1, 50 do
+      links[#links + 1] = string.format('<a href="http://example.com/%d">link%d %s', i, i, string.rep('x', 10000))
+    end
+    local msg = [[
+From: test@example.com
+To: nobody@example.com
+Subject: test
+Content-Type: text/html
+
+<html><body>
+]] .. table.concat(links) .. [[
+</body></html>
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+
+    task:process_message()
+
+    local nlinks = 0
+    for _, u in ipairs(task:get_urls() or {}) do
+      local visible = u:get_visible()
+      if visible then
+        nlinks = nlinks + 1
+        assert_true(#visible <= 4096,
+            string.format("visible part of %s is %d bytes", tostring(u), #visible))
+        local n = tostring(u):match('/(%d+)$')
+        assert_equal(visible:sub(1, 4 + #n), 'link' .. n)
+      end
+    end
+    assert_equal(nlinks, 50)
+
+    task:destroy()
+  end)
+
+  test('Long invisible runs in href hosts do not stall the parser', function()
+    for _, lead in ipairs({ "a", "ab", "abc", "abcd" }) do
+      for _, ch in ipairs({ '\226\129\160', '\243\160\129\129' }) do
+        local res, task = rspamd_task.load_from_string(
+            'Content-Type: text/html; charset=utf-8\r\n\r\n' ..
+            '<a href="http://' .. lead .. string.rep(ch, 340) .. 'b.com/p">x</a>' ..
+            '<a href="http://e' .. string.rep(ch, 80) .. 'vil.com/">y</a>', rspamd_config)
+        assert_true(res)
+        task:process_message()
+        local hosts = {}
+        for _, u in ipairs(task:get_urls() or {}) do
+          hosts[u:get_host()] = u:get_flags().zw_spaces or false
+        end
+        task:destroy()
+        assert_true(hosts['evil.com'], 'padded host must be found and flagged')
+      end
+    end
+  end)
+
+  test('Displayed and text urls ending with a zero width character and a dot are merged', function()
+    for _, zw in ipairs({ '&#8203;', '&zwnj;', '&#8288;' }) do
+      local res, task = rspamd_task.load_from_string(
+          'Content-Type: text/html; charset=utf-8\r\n\r\n' ..
+          '<p>Go to <a href="http://other.org/">http://example.com' .. zw .. '.</a> Next</p>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local nexample = 0
+      for _, u in ipairs(task:get_urls(true) or {}) do
+        if u:get_host() == 'example.com' then nexample = nexample + 1 end
+      end
+      task:destroy()
+      assert_equal(1, nexample, zw)
+    end
+  end)
+
+  test('Visible part is terminated after zero width characters are stripped', function()
+    -- U+FEFF and U+200B inside the displayed text shrink it on normalisation
+    for _, zw in ipairs({ '\239\187\191', '\226\128\139' }) do
+      local res, task = rspamd_task.load_from_string(
+          'Content-Type: text/html; charset=utf-8\r\n\r\n' ..
+          '<a href="http://evil.example.net/r">https://pay' .. zw .. 'pal.com</a>', rspamd_config)
+      assert_true(res)
+      task:process_message()
+      local visible
+      for _, u in ipairs(task:get_urls() or {}) do
+        if u:get_host() == 'evil.example.net' then visible = u:get_visible() end
+      end
+      task:destroy()
+      assert_equal('https://paypal.com', visible)
+    end
   end)
 
 end)

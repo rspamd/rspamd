@@ -63,6 +63,35 @@ PASSWORD - ENABLE EQUAL TO NORMAL WRONG PASSWORD
   ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -P  nq2  stat
   Should Be Equal As Integers  ${result.rc}  1
 
+PASSWORD - FAILURES ARE THROTTLED
+  [Setup]  Password Setup  ${RSPAMD_CATENA_PASSWORD}  ${RSPAMD_ENABLE_CATENA_PASSWORD}
+  # Verifying a password runs an expensive KDF, so a source that keeps failing
+  # must stop being served before it can stall the controller's event loop
+  ${allowed} =  Set Variable  ${0}
+  ${code} =  Set Variable  ${0}
+  FOR  ${i}  IN RANGE  30
+    ${code} =  Controller Auth Status  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  wrong${i}
+    Exit For Loop If  ${code} == 429
+    Should Be Equal As Integers  ${code}  401
+    ${allowed} =  Evaluate  ${allowed} + 1
+  END
+  Should Be Equal As Integers  ${code}  429
+  Should Be True  ${allowed} >= 10
+
+PASSWORD - THROTTLING RESET BY A SUCCESSFUL AUTH
+  [Setup]  Password Setup  ${RSPAMD_CATENA_PASSWORD}  ${RSPAMD_ENABLE_CATENA_PASSWORD}
+  FOR  ${i}  IN RANGE  5
+    ${code} =  Controller Auth Status  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  wrong${i}
+    Should Be Equal As Integers  ${code}  401
+  END
+  ${code} =  Controller Auth Status  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  nq1
+  Should Be Equal As Integers  ${code}  200
+  # The budget is replenished, so these still get a verdict rather than a 429
+  FOR  ${i}  IN RANGE  10
+    ${code} =  Controller Auth Status  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  other${i}
+    Should Be Equal As Integers  ${code}  401
+  END
+
 *** Keywords ***
 Password Setup
   [Arguments]  ${RSPAMD_PASSWORD}  ${RSPAMD_ENABLE_PASSWORD}

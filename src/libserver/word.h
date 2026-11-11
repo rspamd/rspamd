@@ -45,6 +45,11 @@ extern "C" {
 #define RSPAMD_WORD_FLAG_SKIPPED (1u << 11)
 #define RSPAMD_WORD_FLAG_INVISIBLE_SPACES (1u << 12)
 #define RSPAMD_WORD_FLAG_EMOJI (1u << 13)
+#define RSPAMD_WORD_FLAG_MIXED_SCRIPT (1u << 14)
+#define RSPAMD_WORD_FLAG_UNICODE_SPOOF (1u << 15)
+#define RSPAMD_WORD_FLAG_CONFUSABLE_CANDIDATE (1u << 16)
+#define RSPAMD_WORD_FLAG_INVISIBLE (1u << 17)
+#define RSPAMD_WORD_FLAG_MIXED_NUMBERS (1u << 18)
 
 /**
  * Word structure representing tokenized text
@@ -61,6 +66,23 @@ typedef struct rspamd_word_s {
  * Vector of words using kvec
  */
 typedef kvec_t(rspamd_word_t) rspamd_words_t;
+
+/**
+ * Bounds tokenization for a single message: both the number of the retained
+ * words and the amount of text behind them, as every retained word is
+ * normalized and stemmed afterwards, and that costs several allocations from
+ * the task pool. The same budget is used for all text parts of a message, so
+ * that many small parts cannot bypass the per-part limits.
+ * Zero limits mean 'unlimited'.
+ */
+struct rspamd_tokenize_budget {
+	uint64_t max_words; /**< maximum number of the retained words */
+	uint64_t max_bytes; /**< maximum total length of the retained words */
+	uint64_t words;     /**< words retained so far */
+	uint64_t bytes;     /**< bytes retained so far */
+	gboolean exceeded;  /**< set when one of the limits has been hit */
+	gboolean decayed;   /**< set when words of a long text were left out by the decay */
+};
 
 /* Legacy typedefs for backward compatibility */
 typedef rspamd_word_t rspamd_stat_token_t;
@@ -80,6 +102,11 @@ typedef rspamd_word_t rspamd_stat_token_t;
 #define RSPAMD_STAT_TOKEN_FLAG_SKIPPED RSPAMD_WORD_FLAG_SKIPPED
 #define RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES RSPAMD_WORD_FLAG_INVISIBLE_SPACES
 #define RSPAMD_STAT_TOKEN_FLAG_EMOJI RSPAMD_WORD_FLAG_EMOJI
+#define RSPAMD_STAT_TOKEN_FLAG_MIXED_SCRIPT RSPAMD_WORD_FLAG_MIXED_SCRIPT
+#define RSPAMD_STAT_TOKEN_FLAG_UNICODE_SPOOF RSPAMD_WORD_FLAG_UNICODE_SPOOF
+#define RSPAMD_STAT_TOKEN_FLAG_CONFUSABLE_CANDIDATE RSPAMD_WORD_FLAG_CONFUSABLE_CANDIDATE
+#define RSPAMD_STAT_TOKEN_FLAG_INVISIBLE RSPAMD_WORD_FLAG_INVISIBLE
+#define RSPAMD_STAT_TOKEN_FLAG_MIXED_NUMBERS RSPAMD_WORD_FLAG_MIXED_NUMBERS
 
 #ifdef __cplusplus
 }

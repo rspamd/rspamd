@@ -67,6 +67,8 @@ struct rspamd_lru_volatile_element_s {
 typedef struct rspamd_lru_volatile_element_s rspamd_lru_vol_element_t;
 
 #define TIME_TO_TS(t) ((uint16_t) (((t) / 60) & 0xFFFFU))
+/* Minutes from `last` to `ts`, both TIME_TO_TS values, across the 16 bit wrap */
+#define TS_ELAPSED(ts, last) ((uint16_t) ((uint16_t) (ts) - (uint16_t) (last)))
 
 static rspamd_lru_vol_element_t *
 rspamd_lru_hash_get(const rspamd_lru_hash_t *h, gconstpointer key)
@@ -368,7 +370,13 @@ rspamd_lru_hash_update_counter(rspamd_lru_element_t *elt)
 static inline void
 rspamd_lru_hash_decrease_counter(rspamd_lru_element_t *elt, time_t now)
 {
-	if (now - elt->last > lfu_base_value) {
+	/*
+	 * `last` is in minutes, as stored by TIME_TO_TS; a `now` behind it
+	 * (e.g. an insert with the task start time) is no age at all
+	 */
+	uint16_t elapsed = TS_ELAPSED(TIME_TO_TS(now), elt->last);
+
+	if (elapsed < 0x8000U && elapsed > lfu_base_value) {
 		/* Penalise counters for outdated records */
 		elt->lg_usages /= 2;
 	}
@@ -442,11 +450,13 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 	/*
 	 * We either evict one node from the eviction list
 	 * or, at some probability scan all table and update eviction
-	 * list first
+	 * list first. An empty list (e.g. after a rehash) is rebuilt by
+	 * a scan as well, as there is nothing to evict from it
 	 */
 	r = rspamd_random_double_fast();
 
-	if (r < ((double) eviction_candidates) / hash->maxsize) {
+	if (hash->eviction_used == 0 ||
+		r < ((double) eviction_candidates) / hash->maxsize) {
 		/* Full hash scan */
 		rspamd_lru_vol_element_t *cur;
 		rspamd_lru_element_t *selected = NULL;
@@ -467,16 +477,16 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 					continue;
 				}
 			}
-			else {
-				rspamd_lru_hash_decrease_counter(node, now);
 
-				if (rspamd_lru_hash_maybe_evict(hash, node)) {
-					if (selected && node->lg_usages < selected->lg_usages) {
-						selected = node;
-					}
-					else if (selected == NULL) {
-						selected = node;
-					}
+			/* Live volatile elements are candidates too, the table is full */
+			rspamd_lru_hash_decrease_counter(node, now);
+
+			if (rspamd_lru_hash_maybe_evict(hash, node)) {
+				if (selected && node->lg_usages < selected->lg_usages) {
+					selected = node;
+				}
+				else if (selected == NULL) {
+					selected = node;
 				}
 			}
 		});
@@ -503,11 +513,12 @@ rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 }
 
 rspamd_lru_hash_t *
-rspamd_lru_hash_new_full(int maxsize,
-						 GDestroyNotify key_destroy,
-						 GDestroyNotify value_destroy,
-						 GHashFunc hf,
-						 GEqualFunc cmpf)
+rspamd_lru_hash_new_sized(int maxsize,
+						  int initial_size,
+						  GDestroyNotify key_destroy,
+						  GDestroyNotify value_destroy,
+						  GHashFunc hf,
+						  GEqualFunc cmpf)
 {
 	rspamd_lru_hash_t *h;
 
@@ -525,10 +536,28 @@ rspamd_lru_hash_new_full(int maxsize,
 	h->key_destroy = key_destroy;
 	h->eviction_min_prio = G_MAXUINT;
 
-	/* Preallocate some elements */
-	rspamd_lru_hash_resize(h, MIN(h->maxsize, 128));
+	/*
+	 * Preallocate buckets only when asked to: an empty table grows on the
+	 * first insertion, so tables that will mostly stay tiny cost nothing
+	 * beyond the header until they are actually used
+	 */
+	if (initial_size > 0) {
+		rspamd_lru_hash_resize(h, MIN((khint_t) initial_size, h->maxsize));
+	}
 
 	return h;
+}
+
+rspamd_lru_hash_t *
+rspamd_lru_hash_new_full(int maxsize,
+						 GDestroyNotify key_destroy,
+						 GDestroyNotify value_destroy,
+						 GHashFunc hf,
+						 GEqualFunc cmpf)
+{
+	return rspamd_lru_hash_new_sized(maxsize, 128,
+									 key_destroy, value_destroy,
+									 hf, cmpf);
 }
 
 rspamd_lru_hash_t *
@@ -561,8 +590,13 @@ rspamd_lru_hash_lookup(rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 			}
 		}
 
-		now = TIME_TO_TS(now);
-		res->last = MAX(res->last, now);
+		/* Never go back in time, but follow the 16 bit wrap */
+		uint16_t ts = TIME_TO_TS(now);
+
+		if (TS_ELAPSED(ts, res->last) < 0x8000U) {
+			res->last = ts;
+		}
+
 		rspamd_lru_hash_update_counter(res);
 		rspamd_lru_hash_maybe_evict(hash, res);
 
@@ -615,6 +649,11 @@ void rspamd_lru_hash_insert(rspamd_lru_hash_t *hash,
 
 			hash->key_destroy(hash->keys[off]);
 			hash->keys[off] = key;
+		}
+
+		/* Its eviction position is reset below, so leave the pool first */
+		if (node->eviction_pos != (uint8_t) -1) {
+			rspamd_lru_hash_remove_evicted(hash, node);
 		}
 	}
 

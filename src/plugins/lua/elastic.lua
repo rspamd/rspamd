@@ -98,6 +98,7 @@ local settings = {
     headers_text_ignore_above = 2048, -- strip specific header value and add '...' to the end, set 0 to disable limit
     symbols_nested = false,
     urls_nested = false,
+    fuzzy_nested = false,
     empty_value = 'unknown', -- empty numbers, ips and ipnets are not customizable they will be always 0, :: and ::/128 respectively
   },
   index_policy = {
@@ -833,6 +834,8 @@ local function get_general_metadata(task)
   end
   r.scan_time = scan_real
 
+  r.size = task:get_size() or 0
+
   local parts = task:get_text_parts()
   local lang_t = {}
   if parts then
@@ -854,8 +857,22 @@ local function get_general_metadata(task)
     end
   end
 
-  local fuzzy_hashes = task:get_mempool():get_variable('fuzzy_hashes', 'fstrings')
-  r.fuzzy_hashes = fuzzy_hashes or empty
+  local fuzzy_list = {}
+  for _, m in ipairs(task:get_fuzzy_results() or {}) do
+    table.insert(fuzzy_list, {
+      rule = m.rule or empty,
+      symbol = m.symbol or empty,
+      found = m.found or empty,
+      queried = m.queried or empty,
+      type = m.type or empty,
+      prob = m.prob or 0,
+      flag = m.flag or 0,
+      exact = m.exact and true or false,
+    })
+  end
+  if #fuzzy_list > 0 then
+    r.fuzzy = fuzzy_list
+  end
 
   local received_delay, received_ips = get_received_info(task:get_received_headers())
   r.received_delay = received_delay
@@ -1529,6 +1546,23 @@ local function configure_index_template(cfg, ev_base)
       list = urls_list_obj,
     },
   }
+  local fuzzy_obj = {
+    dynamic = false,
+    type = 'object',
+    properties = {
+      rule = t_keyword,
+      symbol = t_keyword,
+      found = t_keyword,
+      queried = t_keyword,
+      type = t_keyword,
+      prob = t_float,
+      flag = t_long,
+      exact = t_boolean_nil_false,
+    },
+  }
+  if settings['index_template']['fuzzy_nested'] then
+    fuzzy_obj['type'] = 'nested'
+  end
 
   -- dynamic templates
   local dynamic_templates_obj = {}
@@ -1594,9 +1628,10 @@ local function configure_index_template(cfg, ev_base)
               settings_id = t_keyword,
               asn = asn_obj,
               scan_time = t_float,
+              size = t_long,
               language = t_text,
               non_en = t_boolean_nil_true,
-              fuzzy_hashes = t_text,
+              fuzzy = fuzzy_obj,
               received_delay = t_long,
               received_ips = t_ip,
               urls = urls_obj,

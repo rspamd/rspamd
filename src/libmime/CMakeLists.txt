@@ -14,6 +14,8 @@ SET(LIBRSPAMDMIMESRC
 				${CMAKE_CURRENT_SOURCE_DIR}/lang_detection.c
 		${CMAKE_CURRENT_SOURCE_DIR}/lang_detection_fasttext.cxx
 		${CMAKE_CURRENT_SOURCE_DIR}/mime_string.cxx
+		${CMAKE_CURRENT_SOURCE_DIR}/pdf_glyphs.cxx
+		${CMAKE_CURRENT_SOURCE_DIR}/pdf_cmap.cxx
 		)
 
 SET(RSPAMD_MIME ${LIBRSPAMDMIMESRC} PARENT_SCOPE)

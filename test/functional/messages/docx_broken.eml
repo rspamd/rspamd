@@ -1,0 +1,22 @@
+From: sender@example.org
+To: recipient@example.org
+Date: Sat, 29 Aug 2026 12:00:00 +0000
+Message-ID: <docx-broken@example.org>
+Subject: Broken DOCX attachment
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="docx-broken-boundary"
+
+--docx-broken-boundary
+Content-Type: text/plain; charset=utf-8
+
+Please review the attached document.
+
+--docx-broken-boundary
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document;
+ name="broken.docx"
+Content-Disposition: attachment; filename="broken.docx"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBub3QgYSB2YWxpZCBET0NYIFpJUCBwYWNrYWdlLg==
+
+--docx-broken-boundary--

@@ -158,7 +158,7 @@ local function parse_json(data)
   if type(data) ~= 'string' or data == '' then
     return nil
   end
-  local parser = ucl.parser()
+  local parser = ucl.untrusted_parser()
   local ok, err = parser:parse_text(data)
   if not ok then return nil, err end
   return parser:get_object()

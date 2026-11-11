@@ -25,6 +25,18 @@ From: <>
 To: <nobody@example.com>
 Subject: test
 ]]
+  local function make_many_file_zip(nfiles)
+    local rspamd_util = require("rspamd_util")
+    local local_header = "PK\3\4" .. string.rep("\0", 26)
+    local cd_record = "PK\1\2" .. string.rep("\0", 24) ..
+        "\1\0" .. string.rep("\0", 16) .. "x"
+    local cd = string.rep(cd_record, nfiles)
+    local eocd = "PK\5\6" .. string.rep("\0", 8) ..
+        rspamd_util.pack("<I4", #cd) ..
+        rspamd_util.pack("<I4", #local_header) .. "\0\0"
+
+    return local_header .. cd .. eocd
+  end
   local mpart = [[
 Content-Type: multipart/mixed; boundary=XXX
 ]]
@@ -168,6 +180,280 @@ Thank you,
     task:destroy()
   end)
 
+  test("Process mime nesting: deep message/rfc822 chain is bounded", function()
+    -- Regression for the unbounded message/rfc822 recursion DoS: a long chain
+    -- of bare "Content-Type: message/rfc822" wrappers must not recurse past
+    -- the parser's max_nested limit (64). Before the fix the nesting counter
+    -- was copied to the new parser runtime before being incremented, so the
+    -- limit never fired and the parser recursed once per level (stack
+    -- exhaustion / quadratic CPU). The bound is observable as the number of
+    -- parsed MIME parts: capped near max_nested rather than growing with the
+    -- chain length.
+    local depth = 500
+    local msg = string.rep('Content-Type: message/rfc822\n\n', depth) ..
+      'Subject: poc\n\nInner body http://nested.example.com/\n'
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local parts = task:get_parts()
+    assert_true(#parts <= 128,
+      string.format("nesting not bounded: %d parts for a %d-level chain", #parts, depth))
+    task:destroy()
+  end)
+
+  test("MIME boundary candidates are bounded", function()
+    local epilogue = {}
+
+    for i = 1, 100001 do
+      epilogue[i] = '--not-the-boundary--\n'
+    end
+
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/mixed; boundary=REAL\n',
+      '\n',
+      '--REAL\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'legitimate body\n',
+      '--REAL--\n',
+      table.concat(epilogue),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_true(task:has_flag('broken_headers'),
+      "boundary candidate limit was not applied")
+    task:destroy()
+  end)
+
+  test("MIME part count is bounded", function()
+    local body_parts = {}
+
+    for i = 1, 10100 do
+      body_parts[i] = '--MANY\n\npart\n'
+    end
+
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/mixed; boundary=MANY\n',
+      '\n',
+      table.concat(body_parts),
+      '--MANY--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_true(task:has_flag('broken_headers'),
+      "MIME part limit was not applied")
+    assert_true(#task:get_parts() <= 10000,
+      string.format("too many MIME parts parsed: %d", #task:get_parts()))
+    task:destroy()
+  end)
+
+  test("Alternative text parts are linked", function()
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/alternative; boundary=ALT\n',
+      '\n',
+      '--ALT\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'plain text\n',
+      '--ALT\n',
+      'Content-Type: text/html\n',
+      '\n',
+      '<b>html text</b>\n',
+      '--ALT--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local tp = task:get_text_parts()
+    assert_equal(#tp, 2, string.format("expected 2 text parts, got %d", #tp))
+    for _, p in ipairs(tp) do
+      local alt = p:get_alt_part()
+      assert_true(alt ~= nil, "text part has no alternative linked")
+      assert_true(alt:is_html() ~= p:is_html(),
+        "alternative part has the same type as the original")
+    end
+    task:destroy()
+  end)
+
+  test("Alternative text part linking is bounded", function()
+    -- One multipart/alternative with many HTML branches and a single plain
+    -- branch at the end: every HTML part scans almost all siblings to find
+    -- the plain one, so unbounded linking is quadratic in the part count.
+    local nparts = 9000
+    local body_parts = {}
+
+    for i = 1, nparts do
+      body_parts[i] = '--ALT\nContent-Type: text/html\n\n<b>x</b>\n'
+    end
+
+    local msg = table.concat {
+      hdrs,
+      'Content-Type: multipart/alternative; boundary=ALT\n',
+      '\n',
+      table.concat(body_parts),
+      '--ALT\n',
+      'Content-Type: text/plain\n',
+      '\n',
+      'plain text\n',
+      '--ALT--\n',
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local tp = task:get_text_parts()
+    assert_equal(#tp, nparts + 1,
+      string.format("expected %d text parts, got %d", nparts + 1, #tp))
+
+    local linked = 0
+    for _, p in ipairs(tp) do
+      if p:get_alt_part() then
+        linked = linked + 1
+      end
+    end
+    -- Linking works while the budget lasts, then it is cut off; without the
+    -- bound every HTML part would be linked at a quadratic cost
+    assert_true(linked >= 1, "no text part has an alternative linked")
+    assert_true(linked < nparts / 2,
+      string.format("alternative linking was not bounded: %d parts linked", linked))
+    task:destroy()
+  end)
+
+  test("Text newline metadata is bounded", function()
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: text/plain; charset=utf-8\n",
+      "\n",
+      string.rep("x\n", 100001),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local text_parts = task:get_text_parts()
+    assert_equal(1, #text_parts)
+    local stats = text_parts[1]:get_stats()
+    assert_true(stats.newlines_truncated,
+      "newline metadata limit was not reported")
+    task:destroy()
+  end)
+
+  test("MIME header count is bounded", function()
+    local msg = string.rep('X:\n', 100001) .. '\nbody\n'
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_true(task:has_flag('broken_headers'),
+      "MIME header limit was not applied")
+    assert_true(task:get_header_count('X') <= 100000,
+      string.format("too many MIME headers parsed: %d",
+        task:get_header_count('X')))
+    task:destroy()
+  end)
+
+  test("Archive file metadata count is bounded", function()
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: application/zip\n",
+      "Content-Disposition: attachment; filename=many.zip\n",
+      "Content-Transfer-Encoding: binary\n",
+      "\n",
+      make_many_file_zip(100001),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local archives = task:get_archives()
+    assert_equal(1, #archives, "archive was not detected")
+    local files = archives[1]:get_files()
+    assert_equal(100000, #files,
+      string.format("unexpected archive file count: %d", #files))
+    assert_true(archives[1]:is_truncated(),
+      "archive metadata truncation was not exposed")
+    task:destroy()
+  end)
+
+  test("Archive file metadata count is bounded across parts", function()
+    local zip = make_many_file_zip(1000)
+    local body = {}
+
+    for i = 1, 101 do
+      body[#body + 1] = table.concat {
+        "--MANY-ARCHIVES\n",
+        "Content-Type: application/zip\n",
+        string.format(
+          "Content-Disposition: attachment; filename=archive-%d.zip\n", i),
+        "Content-Transfer-Encoding: binary\n",
+        "\n",
+        zip,
+        "\n",
+      }
+    end
+    body[#body + 1] = "--MANY-ARCHIVES--\n"
+
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: multipart/mixed; boundary=MANY-ARCHIVES\n",
+      "\n",
+      table.concat(body),
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local archives = task:get_archives()
+    assert_equal(101, #archives, "archives were not detected")
+    local nfiles = 0
+    for _, archive in ipairs(archives) do
+      nfiles = nfiles + #archive:get_files()
+    end
+    assert_equal(100000, nfiles,
+      string.format("unexpected archive file count across parts: %d", nfiles))
+    assert_false(archives[100]:is_truncated(),
+      "archive within the task budget was marked truncated")
+    assert_true(archives[101]:is_truncated(),
+      "archive exceeding the task budget was not marked truncated")
+    task:destroy()
+  end)
+
+  test("Embedded image dimensions are linked by Content-ID", function()
+    local png = "\137PNG\r\n\26\n" ..
+        "\0\0\0\13IHDR" ..
+        "\0\0\1\64\0\0\0\240"
+    local msg = table.concat {
+      hdrs,
+      "Content-Type: multipart/related; boundary=LINKED-IMAGE\n",
+      "\n",
+      "--LINKED-IMAGE\n",
+      "Content-Type: text/html\n",
+      "\n",
+      "<img src=\"cid:shared-image\">\n",
+      "--LINKED-IMAGE\n",
+      "Content-Type: image/png\n",
+      "Content-ID: <shared-image>\n",
+      "Content-Transfer-Encoding: binary\n",
+      "\n",
+      png,
+      "\n--LINKED-IMAGE--\n",
+    }
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+
+    local text_parts = task:get_text_parts()
+    assert_equal(1, #text_parts)
+    local html_images = text_parts[1]:get_html():get_images()
+    assert_equal(1, #html_images)
+    assert_equal(320, html_images[1].width)
+    assert_equal(240, html_images[1].height)
+    task:destroy()
+  end)
+
   test("Part URLs are not deduplicated across MIME parts", function()
     local msg = table.concat {
       hdrs,
@@ -224,6 +510,82 @@ Thank you,
       }
     })
 
+    task:destroy()
+  end)
+
+  test("symbol options are stored verbatim except for invalid characters", function()
+    local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
+    assert_true(res, "failed to load message")
+    task:insert_result(true, "OPTION_CONTRACT_TEST", 1.0,
+      { 'a];,[]{x}%5D', 'a%5D', 'a]', 'a]', '95.33%', 'é\n', 'bad\xff' })
+    local opts = task:get_symbol('OPTION_CONTRACT_TEST')[1].options
+    assert_rspamd_table_eq_sorted({
+      actual = opts,
+      expect = { 'a];,[]{x}%5D', 'a%5D', 'a]', '95.33%', 'é�', 'bad�' }
+    })
+    task:insert_result(true, 'OPTION_LIMIT_TEST', 1.0, string.rep(']', 8192))
+    assert_rspamd_table_eq_sorted({
+      actual = task:get_symbol('OPTION_LIMIT_TEST')[1].options,
+      expect = { '...' }
+    })
+    task:destroy()
+  end)
+
+  test("comma-separated option exporters encode only options with delimiters", function()
+    local lua_util = require 'lua_util'
+    local options = { 'first,second', '95.33%', 'literal%2C', 'a](0.00)[]; X[b', 'normal' }
+    local serialized = lua_util.symbol_options_to_string(options)
+    assert_equal(serialized,
+      'first%2Csecond,95.33%,literal%2C,a%5D(0.00)%5B%5D%3B X%5Bb,normal')
+    -- input is not modified
+    assert_equal(options[1], 'first,second')
+    assert_equal(options[4], 'a](0.00)[]; X[b')
+    -- untouched lists are joined as is
+    assert_equal(lua_util.symbol_options_to_string({ 'one', 'two', '50%' }), 'one,two,50%')
+    assert_equal(lua_util.symbol_options_to_string({}), '')
+    assert_equal(lua_util.symbol_options_to_string(nil), '')
+    -- an option containing a delimiter and a percent sign round-trips
+    local roundtrip = lua_util.symbol_options_to_string({ '95.33%;x', '{y}' })
+    assert_equal(roundtrip, '95.33%25%3Bx,%7By%7D')
+    assert_equal((roundtrip:gsub('%%(%x%x)', function(hex)
+      return string.char(tonumber(hex, 16))
+    end)), '95.33%;x,{y}')
+  end)
+
+  test("get_symbol table form returns a map of present symbols", function()
+    local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
+    assert_true(res, "failed to load message")
+    task:insert_result(true, "GET_SYMBOL_TEST_A", 1.0, "x")
+    task:insert_result(true, "GET_SYMBOL_TEST_B", 1.0, "y")
+
+    local syms = task:get_symbol({ "NOPE_A", "GET_SYMBOL_TEST_A", "NOPE_B", "GET_SYMBOL_TEST_B" })
+    assert_not_nil(syms, "table form")
+    assert_not_nil(syms.GET_SYMBOL_TEST_A, "table form A")
+    assert_not_nil(syms.GET_SYMBOL_TEST_B)
+    assert_nil(syms.NOPE_A)
+    assert_nil(task:get_symbol({ "NOPE_A", "NOPE_B" }))
+
+    local re_syms = task:get_symbol_regexp(require("rspamd_regexp").create_cached("/^GET_SYMBOL_TEST_.*$/"))
+    assert_not_nil(re_syms, "regexp form")
+    assert_not_nil(re_syms.GET_SYMBOL_TEST_A)
+    assert_not_nil(re_syms.GET_SYMBOL_TEST_B)
+
+    task:destroy()
+  end)
+
+  test("get_stat_tokens without a classifier", function()
+    -- the unit tests config has no classifier, hence no tokenizer
+    local msg = hdrs .. [[
+Content-Type: text/plain
+
+Some words to tokenize.
+]]
+    local res, task = rspamd_task.load_from_string(msg, rspamd_config)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    local tokens = task:get_stat_tokens()
+    assert_not_nil(tokens)
+    assert_equal(#tokens, 0)
     task:destroy()
   end)
 end)

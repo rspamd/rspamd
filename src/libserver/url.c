@@ -16,16 +16,19 @@
 
 #include "config.h"
 #include "url.h"
+#include "libserver/mempool_vars_internal.h"
 #include "util.h"
 #include "rspamd.h"
 #include "message.h"
 #include "multipattern.h"
+#include "tld_lookup.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/http-parser/http_parser.h"
 #include "lua/lua_common.h"
 #include <unicode/utf8.h>
+#include <unicode/utf16.h>
 #include <unicode/uchar.h>
-#include <unicode/usprep.h>
+#include <unicode/uidna.h>
 #include <unicode/ucnv.h>
 
 /*
@@ -51,13 +54,14 @@ typedef struct url_match_s {
 	const char *prefix;
 	const char *newline_pos;
 	const char *prev_newline_pos;
+	/* Where the next candidate may end, once this one is accepted */
+	const char *fin;
 	gboolean add_prefix;
 	char st;
 } url_match_t;
 
 #define URL_MATCHER_FLAG_NOHTML (1u << 0u)
 #define URL_MATCHER_FLAG_TLD_MATCH (1u << 1u)
-#define URL_MATCHER_FLAG_STAR_MATCH (1u << 2u)
 #define URL_MATCHER_FLAG_REGEXP (1u << 3u)
 
 struct url_callback_data;
@@ -87,7 +91,7 @@ static const struct {
 	 .len = 3},
 	{.proto = PROTOCOL_TELEPHONE,
 	 .name = "callto",
-	 .len = 3},
+	 .len = 6},
 	{.proto = PROTOCOL_UNKNOWN,
 	 .name = NULL,
 	 .len = 0}};
@@ -152,9 +156,7 @@ struct url_matcher static_matchers[] = {
 	 0},
 	{"file:\\\\", "", url_file_start, url_file_end,
 	 0},
-	{"ftp://", "", url_web_start, url_web_end,
-	 0},
-	{"ftp:\\\\", "", url_web_start, url_web_end,
+	{"ftp:", "", url_web_start, url_web_end,
 	 0},
 	{"sftp://", "", url_web_start, url_web_end,
 	 0},
@@ -180,8 +182,8 @@ struct url_matcher static_matchers[] = {
 	 0},
 	{"sip:", "", url_web_start, url_web_end,
 	 0},
-	{"www\\.[0-9a-z]", "http://", url_web_start, url_web_end,
-	 URL_MATCHER_FLAG_REGEXP},
+	{"www.", "http://", url_web_start, url_web_end,
+	 0},
 	{"ftp.", "ftp://", url_web_start, url_web_end,
 	 0},
 	/* Likely emails */
@@ -241,6 +243,32 @@ __KHASH_IMPL(rspamd_url_hash, kh_inline, struct rspamd_url *, char, false,
 __KHASH_IMPL(rspamd_url_host_hash, kh_inline, struct rspamd_url *, char, false,
 			 rspamd_url_host_hash, rspamd_urls_host_cmp);
 
+/*
+ * What the lookahead for the userinfo of an url has learnt about a text:
+ * [begin, end) holds no `@` and nothing that ends an authority. Candidates
+ * that start in the same token (`sip:sip:sip:...`) share it, so the token is
+ * scanned once and not once for each of them
+ */
+struct rspamd_url_lookahead {
+	const char *begin;
+	const char *end;
+	/* The scan stopped at a character at `end`, not at the end of its input */
+	gboolean end_is_stop;
+	/* The same for the scan after a backslash at `bs_at` */
+	const char *bs_at;
+	const char *bs_end;
+	gboolean bs_end_is_stop;
+	gboolean bs_obscured;
+	/*
+	 * The last `@` of an authority: the scan went on from `at_from` (right after
+	 * the first `@`) up to `at_end` and `at_last` is the last `@` it saw
+	 */
+	const char *at_from;
+	const char *at_last;
+	const char *at_end;
+	gboolean at_end_is_stop;
+};
+
 struct url_callback_data {
 	const char *begin;
 	char *url_str;
@@ -254,17 +282,22 @@ struct url_callback_data {
 	GPtrArray *newlines;
 	const char *start;
 	const char *fin;
+	/* The furthest end of a candidate that the parser has rejected */
+	const char *rejected_end;
+	/* Bytes of rejected candidates that were looked at again */
+	gsize rescan_spent;
 	const char *end;
 	const char *last_at;
+	struct rspamd_url_lookahead lookahead;
 	url_insert_function func;
 	void *funcd;
 };
 
 struct url_match_scanner {
-	GArray *matchers_full;
 	GArray *matchers_strict;
-	struct rspamd_multipattern *search_trie_full;
+	GArray *matchers_tld;
 	struct rspamd_multipattern *search_trie_strict;
+	struct rspamd_tld_lookup *tld_lookup;
 	bool has_tld_file;
 };
 
@@ -436,73 +469,6 @@ rspamd_url_strerror(int err)
 	return NULL;
 }
 
-static gboolean
-rspamd_url_parse_tld_file(const char *fname,
-						  struct url_match_scanner *scanner)
-{
-	FILE *f;
-	struct url_matcher m;
-	char *linebuf = NULL, *p;
-	gsize buflen = 0;
-	gssize r;
-	int flags;
-
-	f = fopen(fname, "r");
-
-	if (f == NULL) {
-		msg_err("cannot open TLD file %s: %s", fname, strerror(errno));
-		return FALSE;
-	}
-
-	m.end = url_tld_end;
-	m.start = url_tld_start;
-	m.prefix = "http://";
-
-	while ((r = rspamd_getline(&linebuf, &buflen, f)) > 0) {
-		if (linebuf[0] == '/' || g_ascii_isspace(linebuf[0])) {
-			/* Skip comment or empty line */
-			continue;
-		}
-
-		g_strchomp(linebuf);
-
-		/* TODO: add support for ! patterns */
-		if (linebuf[0] == '!') {
-			msg_debug("skip '!' patterns from parsing for now: %s", linebuf);
-			continue;
-		}
-
-		flags = URL_MATCHER_FLAG_NOHTML | URL_MATCHER_FLAG_TLD_MATCH;
-
-		if (linebuf[0] == '*') {
-			flags |= URL_MATCHER_FLAG_STAR_MATCH;
-			p = strchr(linebuf, '.');
-
-			if (p == NULL) {
-				msg_err("got bad star line, skip it: %s", linebuf);
-				continue;
-			}
-			p++;
-		}
-		else {
-			p = linebuf;
-		}
-
-		m.flags = flags;
-		rspamd_multipattern_add_pattern(url_scanner->search_trie_full, p,
-										RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-		m.pattern = rspamd_multipattern_get_pattern(url_scanner->search_trie_full,
-													rspamd_multipattern_get_npatterns(url_scanner->search_trie_full) - 1);
-
-		g_array_append_val(url_scanner->matchers_full, m);
-	}
-
-	rspamd_getline_free(linebuf);
-	fclose(f);
-
-	return TRUE;
-}
-
 static void
 rspamd_url_add_static_matchers(struct url_match_scanner *sc)
 {
@@ -523,35 +489,15 @@ rspamd_url_add_static_matchers(struct url_match_scanner *sc)
 	}
 
 	g_array_append_vals(sc->matchers_strict, static_matchers, n);
-
-	if (sc->matchers_full) {
-		for (i = 0; i < n; i++) {
-			if (static_matchers[i].flags & URL_MATCHER_FLAG_REGEXP) {
-				rspamd_multipattern_add_pattern(url_scanner->search_trie_full,
-												static_matchers[i].pattern,
-												RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8 |
-													RSPAMD_MULTIPATTERN_RE);
-			}
-			else {
-				rspamd_multipattern_add_pattern(url_scanner->search_trie_full,
-												static_matchers[i].pattern,
-												RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-			}
-		}
-		g_array_append_vals(sc->matchers_full, static_matchers, n);
-	}
 }
 
 void rspamd_url_deinit(void)
 {
 	if (url_scanner != NULL) {
-		if (url_scanner->search_trie_full) {
-			rspamd_multipattern_destroy(url_scanner->search_trie_full);
-			g_array_free(url_scanner->matchers_full, TRUE);
-		}
-
 		rspamd_multipattern_destroy(url_scanner->search_trie_strict);
 		g_array_free(url_scanner->matchers_strict, TRUE);
+		g_array_free(url_scanner->matchers_tld, TRUE);
+		rspamd_tld_lookup_destroy(url_scanner->tld_lookup);
 		g_free(url_scanner);
 
 		url_scanner = NULL;
@@ -561,8 +507,6 @@ void rspamd_url_deinit(void)
 void rspamd_url_init(const char *tld_file)
 {
 	GError *err = NULL;
-	gboolean ret = TRUE;
-	int mp_compile_flags = 0;
 
 	if (url_scanner != NULL) {
 		rspamd_url_deinit();
@@ -575,65 +519,47 @@ void rspamd_url_init(const char *tld_file)
 	url_scanner->search_trie_strict = rspamd_multipattern_create_sized(
 		G_N_ELEMENTS(static_matchers),
 		RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
+	url_scanner->has_tld_file = false;
+	url_scanner->tld_lookup = NULL;
 
-	if (tld_file) {
-		/* Reserve larger multipattern */
-		url_scanner->matchers_full = g_array_sized_new(FALSE, TRUE,
-													   sizeof(struct url_matcher), 13000);
-		url_scanner->search_trie_full = rspamd_multipattern_create_sized(13000,
-																		 RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8);
-		/* Use FALLBACK mode: ACISM immediately, HS async */
-		rspamd_multipattern_set_mode(url_scanner->search_trie_full, RSPAMD_MP_MODE_FALLBACK);
-	}
-	else {
-		url_scanner->matchers_full = NULL;
-		url_scanner->search_trie_full = NULL;
-		url_scanner->has_tld_file = false;
-		mp_compile_flags |= RSPAMD_MULTIPATTERN_COMPILE_NO_FS;
+	/* Shared matcher template for TLD candidates anchored by the suffix probe */
+	url_scanner->matchers_tld = g_array_sized_new(FALSE, TRUE,
+												  sizeof(struct url_matcher), 1);
+	{
+		struct url_matcher tld_matcher = {
+			.pattern = "",
+			.prefix = "http://",
+			.start = url_tld_start,
+			.end = url_tld_end,
+			.flags = URL_MATCHER_FLAG_NOHTML | URL_MATCHER_FLAG_TLD_MATCH,
+		};
+		g_array_append_val(url_scanner->matchers_tld, tld_matcher);
 	}
 
 	rspamd_url_add_static_matchers(url_scanner);
 
 	if (tld_file != NULL) {
-		ret = rspamd_url_parse_tld_file(tld_file, url_scanner);
+		url_scanner->tld_lookup = rspamd_tld_lookup_new(tld_file);
 
-		if (ret) {
+		if (url_scanner->tld_lookup != NULL) {
 			url_scanner->has_tld_file = true;
-		}
-	}
-
-	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, mp_compile_flags, &err)) {
-		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
-		abort();
-	}
-
-	if (url_scanner->search_trie_full) {
-		if (!rspamd_multipattern_compile(url_scanner->search_trie_full, mp_compile_flags, &err)) {
-			msg_err("cannot compile tld patterns, url matching will be "
-					"incomplete: %e",
-					err);
-			g_error_free(err);
-			ret = FALSE;
-		}
-		else if (rspamd_multipattern_get_state(url_scanner->search_trie_full) ==
-				 RSPAMD_MP_STATE_COMPILING) {
-			/* Add to pending queue for hs_helper to compile */
-			rspamd_multipattern_add_pending(url_scanner->search_trie_full, "tld");
-		}
-	}
-
-	if (tld_file != NULL) {
-		if (ret) {
 			msg_info("loaded %ud TLD suffixes from '%s'",
-					 url_scanner->matchers_full->len - url_scanner->matchers_strict->len,
+					 rspamd_tld_lookup_nrules(url_scanner->tld_lookup),
 					 tld_file);
 		}
 		else {
-			msg_err("failed to initialize url tld suffixes from '%s', "
+			msg_err("failed to load TLD suffixes from '%s', "
 					"use %ud internal match suffixes",
 					tld_file,
 					url_scanner->matchers_strict->len);
 		}
+	}
+
+	/* The static matcher set is small, so it is compiled in memory and never
+	 * uses the file cache or async compilation */
+	if (!rspamd_multipattern_compile(url_scanner->search_trie_strict, 0, &err)) {
+		msg_err("cannot compile url matcher static patterns, fatal error: %e", err);
+		abort();
 	}
 
 	/* Generate hashes for flags */
@@ -672,7 +598,8 @@ is_url_start(char c)
 		c == '{' ||
 		c == '[' ||
 		c == '<' ||
-		c == '\'') {
+		c == '\'' ||
+		c == '"') {
 		return TRUE;
 	}
 
@@ -686,7 +613,8 @@ is_url_end(char c)
 		c == '}' ||
 		c == ']' ||
 		c == '>' ||
-		c == '\'') {
+		c == '\'' ||
+		c == '"') {
 		return TRUE;
 	}
 
@@ -707,7 +635,75 @@ is_domain_start(int p)
 	return FALSE;
 }
 
+/*
+ * Invisible code points (zero width spaces, word joiner, variation selectors,
+ * tags...) that obfuscate a hostname: they are stripped from the host before
+ * the IDNA mapping and the url is flagged if they are inside the hostname. Bidi
+ * controls are excluded, as they are legitimate URL delimiters in RTL text
+ * and IDNA rejects them anyway.
+ */
+static inline bool
+is_invisible_host_char(UChar32 uc)
+{
+	/* U+1806 is invisible like the soft hyphen */
+	return uc == 0x1806 ||
+		   (u_hasBinaryProperty(uc, UCHAR_DEFAULT_IGNORABLE_CODE_POINT) &&
+			!u_hasBinaryProperty(uc, UCHAR_BIDI_CONTROL));
+}
+
+/*
+ * A variation selector after a non-ASCII character (emoji presentation,
+ * Mongolian or ideographic variants) is a legitimate part of the hostname
+ */
+static inline bool
+is_suspicious_invisible_host_char(UChar32 uc, bool after_non_ascii)
+{
+	return !after_non_ascii || !u_hasBinaryProperty(uc, UCHAR_VARIATION_SELECTOR);
+}
+
+/*
+ * Checks whether a hostname goes on after a run of invisible characters:
+ * otherwise they are an artefact after the url (e.g. a preheader filler)
+ */
+static bool
+is_host_continuation(const char *p, const char *last)
+{
+	if (p >= last) {
+		return false;
+	}
+
+	if (!(*p & 0x80)) {
+		/* A final dot is kept as in a plain hostname, but it is not flagged */
+		if (g_ascii_isalnum(*p) || *p == '.' || *p == '%' ||
+			*p == '/' || *p == '\\' || *p == '?' || *p == '#') {
+			return true;
+		}
+
+		if (p + 1 >= last) {
+			return false;
+		}
+
+		if (*p == ':') {
+			/* Port */
+			return g_ascii_isdigit(p[1]);
+		}
+
+		/* Not a dash */
+		return (*p == '-' || *p == '_') &&
+			   (g_ascii_isalnum(p[1]) || (p[1] & 0x80));
+	}
+
+	int32_t i = 0;
+	UChar32 uc;
+
+	U8_NEXT((const unsigned char *) p, i, last - p, uc);
+
+	return uc >= 0 && u_isalnum(uc);
+}
+
 static const unsigned int max_domain_length = 253;
+/* Raw hostname limit, including invisible characters */
+static const unsigned int max_domain_bytes = 253 * 4;
 static const unsigned int max_dns_label = 63;
 static const unsigned int max_email_user = 64;
 
@@ -1047,20 +1043,137 @@ rspamd_url_lua_consult(const char *url_str,
 					   unsigned int flags,
 					   lua_State *L);
 
+/*
+ * Tells whether `scheme` (without the colon) is one of the schemes whose
+ * authority follows any number of slashes or backslashes in browsers
+ */
+static gboolean
+rspamd_url_is_slashed_scheme(const char *scheme, gsize len)
+{
+	return (len == 3 && g_ascii_strncasecmp(scheme, "ftp", 3) == 0) ||
+		   (len == 4 && g_ascii_strncasecmp(scheme, "http", 4) == 0) ||
+		   (len == 5 && g_ascii_strncasecmp(scheme, "https", 5) == 0);
+}
+
+/*
+ * Returns the length of the scheme of `http:/host`, `https:\host` and `ftp:/host`:
+ * a special scheme with exactly one slash or backslash before the host. Returns
+ * 0 for everything else.
+ */
+static gsize
+rspamd_url_single_slash_scheme(const char *str, gsize len)
+{
+	const char *colon = memchr(str, ':', MIN(len, 6));
+
+	if (colon == NULL || colon - str < 3 ||
+		!rspamd_url_is_slashed_scheme(str, colon - str)) {
+		return 0;
+	}
+
+	gsize sl = colon - str;
+
+	if (len > sl + 2 && (colon[1] == '/' || colon[1] == '\\') &&
+		colon[2] != '/' && colon[2] != '\\') {
+		return sl;
+	}
+
+	return 0;
+}
+
+/*
+ * Finds the last `@` of an authority, searching from `from` that is right after
+ * a `@` of it. Browsers end the userinfo at that one, so an earlier `@` is a
+ * part of the userinfo. The search stops where the authority ends: the lookahead
+ * for the first `@` ends it at the same places. A text has more terminators
+ * than a link, as the url there cannot go past a quote or a list separator.
+ * Returns NULL if there is no `@` after `from`.
+ */
+static const char *
+rspamd_url_find_last_at(const char *from, const char *last,
+						enum rspamd_url_parse_flags parse_flags,
+						struct rspamd_url_lookahead *la)
+{
+	const char *tp = from, *found = NULL;
+	gboolean text = !(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM));
+
+	/*
+	 * [at_from, at_end) has been scanned and its last `@` is at_last: a search
+	 * that starts inside of it ends at the same place with the same `@`, if
+	 * that one is still after its start. Candidates of one token start at
+	 * different places of it, so the start is not required to be the same
+	 */
+	if (la != NULL && la->at_from != NULL &&
+		la->at_from <= from && from <= la->at_end &&
+		(last <= la->at_end || la->at_end_is_stop) &&
+		(la->at_last == NULL || la->at_last < last)) {
+		return (la->at_last != NULL && la->at_last >= from) ? la->at_last : NULL;
+	}
+
+	while (tp < last) {
+		unsigned char c = *tp;
+
+		if (c == '@') {
+			found = tp;
+		}
+		else if (c == '/' || c == '\\' || c == '#' || c == '?' ||
+				 (c < 0x80 && !g_ascii_isgraph(c))) {
+			break;
+		}
+		else if (text && (is_url_end(c) || is_url_start(c) || c == ',' || c == ';')) {
+			break;
+		}
+
+		tp++;
+	}
+
+	if (la != NULL) {
+		la->at_from = from;
+		la->at_last = found;
+		la->at_end = tp;
+		la->at_end_is_stop = tp < last;
+	}
+
+	return found;
+}
+
+/*
+ * Tells whether the `@` at `p` is followed by another `@` of the same
+ * authority, i.e. whether it still belongs to the userinfo. The last `@` is
+ * searched for once, when the first one is met.
+ */
+static gboolean
+rspamd_url_userinfo_goes_on(const char *p, const char *last,
+							enum rspamd_url_parse_flags parse_flags,
+							struct rspamd_url_lookahead *la,
+							const char **last_at, gboolean *known)
+{
+	if (!*known) {
+		*last_at = rspamd_url_find_last_at(p + 1, last, parse_flags, la);
+		*known = TRUE;
+	}
+
+	return *last_at != NULL && p < *last_at;
+}
+
 static int
 rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 char const **end,
 				 enum rspamd_url_parse_flags parse_flags,
 				 unsigned int *flags,
-				 void *lua_state)
+				 void *lua_state,
+				 struct rspamd_url_lookahead *la)
 {
 	const char *p = str, *c = str, *last = str + len, *slash = NULL,
 			   *password_start = NULL, *user_start = NULL;
 	char t = 0;
 	UChar32 uc;
-	glong pt;
+	glong pt, invisible_len = 0;
 	int ret = 1;
 	gboolean user_seen = FALSE;
+	gboolean user_oversized = FALSE;
+	/* The last `@` of the authority, known once the first `@` has been met */
+	const char *authority_last_at = NULL;
+	gboolean authority_at_known = FALSE;
 	enum {
 		parse_protocol,
 		parse_slash,
@@ -1118,10 +1231,26 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				st = parse_slash_slash;
 				*(flags) |= RSPAMD_URL_FLAG_MISSINGSLASHES;
 			}
+			if ((parse_flags & RSPAMD_URL_PARSE_UPSTREAM) && t != '/') {
+				goto out;
+			}
 			break;
 		case parse_slash:
+			if ((parse_flags & RSPAMD_URL_PARSE_UPSTREAM) && t != '/') {
+				goto out;
+			}
 			if (t == '/' || t == '\\') {
 				st = parse_slash_slash;
+			}
+			else if (!(parse_flags & RSPAMD_URL_PARSE_UPSTREAM) &&
+					 rspamd_url_is_slashed_scheme(str, (p - 2) - str)) {
+				/*
+				 * Browsers take `http:/host` and `http:\host` for
+				 * `http://host`, but the other parsers do not
+				 */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+				st = parse_slash_slash;
+				break;
 			}
 			else {
 				goto out;
@@ -1147,18 +1276,82 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				 */
 
 				const char *tp = p;
+				gboolean la_known = la != NULL && la->begin != NULL &&
+									la->begin <= p && p <= la->end;
+
+				if (la_known) {
+					/* Nothing to find before la->end, go on from there */
+					tp = MIN(la->end, last);
+				}
+
 				while (tp < last) {
 					if (*tp == '@') {
 						user_seen = TRUE;
 						st = parse_user;
 						break;
 					}
-					else if (*tp == '/' || *tp == '#' || *tp == '?') {
+					else if (*tp == '/' || *tp == '\\' || *tp == '#' || *tp == '?' ||
+							 ((unsigned char) *tp < 0x80 && !g_ascii_isgraph(*tp))) {
+						/*
+						 * The authority ends at the first slash, and browsers take
+						 * a backslash for a slash: the host of http://a.com\@b.com/
+						 * is a.com and @b.com/ is the path. Only a parser that
+						 * does not do so sees b.com, so such an url is obscured.
+						 * The userinfo cannot have a space or a control character
+						 * either, so an `@` after it belongs to some other text.
+						 * Bytes above 0x7f are opaque to it and do not end it.
+						 */
+						if (*tp == '\\') {
+							const char *bp = tp;
+							gboolean obscured = FALSE;
+
+							if (la != NULL && la->bs_at != NULL && la->bs_at <= tp &&
+								tp < la->bs_end &&
+								(last <= la->bs_end || la->bs_end_is_stop)) {
+								/*
+								 * Known: a scan that went through this backslash
+								 * ends where this one would. An `@` at bs_end
+								 * counts if it is in this input
+								 */
+								obscured = la->bs_obscured && la->bs_end < last;
+							}
+							else {
+								while (++bp < last && g_ascii_isgraph(*bp) &&
+									   *bp != '/' && *bp != '#' && *bp != '?') {
+									if (*bp == '@') {
+										obscured = TRUE;
+										break;
+									}
+								}
+
+								if (la != NULL) {
+									la->bs_at = tp;
+									la->bs_end = bp;
+									la->bs_end_is_stop = bp < last;
+									la->bs_obscured = obscured;
+								}
+							}
+
+							if (obscured) {
+								*flags |= RSPAMD_URL_FLAG_OBSCURED;
+							}
+						}
+
 						st = parse_domain_start;
 						break;
 					}
 
 					tp++;
+				}
+
+				if (la != NULL && !(la_known && last <= la->end)) {
+					/* A shorter input than the known range tells nothing new */
+					if (!la_known) {
+						la->begin = p;
+					}
+
+					la->end = tp;
+					la->end_is_stop = tp < last;
 				}
 
 				if (st == parse_domain_start && *p == '[') {
@@ -1169,6 +1362,9 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			}
 			else {
 				/* Skip multiple slashes */
+				if (parse_flags & RSPAMD_URL_PARSE_UPSTREAM) {
+					goto out;
+				}
 				p++;
 			}
 			break;
@@ -1179,6 +1375,11 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				}
 				SET_U(u, UF_HOST);
 				p++;
+
+				if (p == last) {
+					/* The host ends the input, e.g. http://[::1] */
+					break;
+				}
 
 				if (*p == ':') {
 					st = parse_port;
@@ -1196,7 +1397,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					st = parse_part;
 					c = p + 1;
 				}
-				else if (p != last) {
+				else {
 					goto out;
 				}
 			}
@@ -1210,8 +1411,24 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				if (p - c == 0) {
 					goto out;
 				}
+
+				/* Final consultation with the complete user field */
+				if (user_oversized &&
+					rspamd_url_lua_consult(c, p - c, *flags,
+										   (lua_State *) lua_state) ==
+						RSPAMD_URL_LUA_FILTER_REJECT) {
+					goto out;
+				}
+
 				user_start = c;
 				st = parse_password_start;
+			}
+			else if (t == '@' && p - c > 0 &&
+					 rspamd_url_userinfo_goes_on(p, last, parse_flags, la,
+												 &authority_last_at,
+												 &authority_at_known)) {
+				/* Not the last `@` of the authority: it is a part of the userinfo */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
 			}
 			else if (t == '@') {
 				/* No password */
@@ -1224,19 +1441,36 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					continue;
 				}
 
+				/* Final consultation with the complete user field */
+				if (user_oversized &&
+					rspamd_url_lua_consult(c, p - c, *flags,
+										   (lua_State *) lua_state) ==
+						RSPAMD_URL_LUA_FILTER_REJECT) {
+					goto out;
+				}
+
 				SET_U(u, UF_USERINFO);
 				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 				st = parse_at;
 			}
-			else if (!g_ascii_isgraph(t)) {
+			else if ((unsigned char) t < 0x80 && !g_ascii_isgraph(t)) {
 				goto out;
 			}
-			else if (p - c > max_email_user) {
+			else if (!(parse_flags & RSPAMD_URL_PARSE_UPSTREAM) &&
+					 !user_oversized && p - c > max_email_user) {
 				/*
 				 * Oversized user field is itself an obfuscation signal
 				 * (e.g. https://legit.com<lots-of-spaces>@evil.com/...),
 				 * so mark obscured regardless of what the Lua filter says.
+				 *
+				 * Consult Lua merely twice: here, when the limit is first
+				 * exceeded, and once again when the user field ends. Doing it
+				 * for every byte past the limit means re-scanning the whole
+				 * prefix each time, which is quadratic in the length of the
+				 * user field and costs thousands of C -> Lua transitions for a
+				 * rather small input.
 				 */
+				user_oversized = TRUE;
 				*flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_HAS_USER;
 
 				/* Consult Lua filter (fixes #5731) */
@@ -1267,6 +1501,16 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 					goto out;
 				}
 				/* ACCEPT or SUSPICIOUS: Continue but mark as obscured */
+
+				authority_last_at = rspamd_url_find_last_at(p, last, parse_flags, la);
+				authority_at_known = TRUE;
+
+				if (authority_last_at != NULL) {
+					/* The userinfo goes on up to the last `@` */
+					st = parse_user;
+					break;
+				}
+
 				/* Off by one */
 				p--;
 				SET_U(u, UF_USERINFO);
@@ -1279,7 +1523,16 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			}
 			break;
 		case parse_password_start:
-			if (t == '@') {
+			if (t == '@' &&
+				rspamd_url_userinfo_goes_on(p, last, parse_flags, la,
+											&authority_last_at, &authority_at_known)) {
+				/* The `@` is a part of the password */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+				c = p;
+				password_start = p;
+				st = parse_password;
+			}
+			else if (t == '@') {
 				/* Empty password */
 				SET_U(u, UF_USERINFO);
 				if (u != NULL && u->field_data[UF_USERINFO].len > 0) {
@@ -1297,7 +1550,13 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			p++;
 			break;
 		case parse_password:
-			if (t == '@') {
+			if (t == '@' &&
+				rspamd_url_userinfo_goes_on(p, last, parse_flags, la,
+											&authority_last_at, &authority_at_known)) {
+				/* Not the last `@` of the authority */
+				*flags |= RSPAMD_URL_FLAG_OBSCURED;
+			}
+			else if (t == '@') {
 				/* XXX: password is not stored */
 				if (u != NULL) {
 					if (u->field_data[UF_USERINFO].len == 0 && password_start && user_start && password_start > user_start + 1) {
@@ -1311,7 +1570,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				}
 				st = parse_at;
 			}
-			else if (!g_ascii_isgraph(t)) {
+			else if ((unsigned char) t < 0x80 && !g_ascii_isgraph(t)) {
 				goto out;
 			}
 			else if (p - c > max_domain_length) {
@@ -1338,13 +1597,15 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 		case parse_domain_start:
 			if (is_domain_start(t)) {
 				st = parse_domain;
+				invisible_len = 0;
 			}
 			else {
 				goto out;
 			}
 			break;
 		case parse_domain:
-			if (p - c > max_domain_length) {
+			if (p - c - invisible_len > max_domain_length ||
+				p - c > max_domain_bytes) {
 				/* Too large domain */
 				goto out;
 			}
@@ -1406,8 +1667,40 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 						if (!u_isalnum(uc)) {
 							/* Bad symbol */
-							if (IS_ZERO_WIDTH_SPACE(uc)) {
-								(*flags) |= RSPAMD_URL_FLAG_ZW_SPACES;
+							if (is_invisible_host_char(uc)) {
+								/*
+								 * Skip the whole run of invisible characters, the url
+								 * is flagged when they are stripped from the host
+								 */
+								const char *run_end = p + i;
+
+								while (run_end < last && run_end - c <= max_domain_bytes) {
+									unsigned int ni = 0;
+									UChar32 nc;
+
+									U8_NEXT(((const unsigned char *) run_end), ni, last - run_end, nc);
+
+									if (nc < 0 || !is_invisible_host_char(nc)) {
+										break;
+									}
+
+									run_end += ni;
+								}
+
+								if (run_end - c > max_domain_bytes) {
+									/* Too large domain */
+									p = run_end;
+									goto out;
+								}
+
+								if ((parse_flags & RSPAMD_URL_PARSE_CHECK) &&
+									!is_host_continuation(run_end, last)) {
+									/* Invisible characters after the url */
+									goto set;
+								}
+
+								invisible_len += run_end - p;
+								i = run_end - p;
 							}
 							else {
 								if (!u_isgraph(uc)) {
@@ -1456,7 +1749,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 
 				while (tmp < last) {
 					if (!g_ascii_isdigit(*tmp)) {
-						if (*tmp == '/' || *tmp == '#' || *tmp == '?' ||
+						if (*tmp == '/' || *tmp == '\\' || *tmp == '#' || *tmp == '?' ||
 							is_url_end(*tmp) || g_ascii_isspace(*tmp)) {
 							/* Port + something */
 							st = parse_port;
@@ -1579,7 +1872,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end(t)) {
+			else if (!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM)) && is_url_end(t)) {
 				goto set;
 			}
 			else if (is_lwsp(t)) {
@@ -1603,7 +1896,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end(t)) {
+			else if (!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM)) && is_url_end(t)) {
 				goto set;
 			}
 			else if (is_lwsp(t)) {
@@ -1620,7 +1913,7 @@ rspamd_web_parse(struct http_parser_url *u, const char *str, gsize len,
 			p++;
 			break;
 		case parse_part:
-			if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end(t)) {
+			if (!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM)) && is_url_end(t)) {
 				goto set;
 			}
 			else if (is_lwsp(t)) {
@@ -1707,91 +2000,47 @@ out:
 
 #undef SET_U
 
-static int
-rspamd_tld_trie_callback(struct rspamd_multipattern *mp,
-						 unsigned int strnum,
-						 int match_start,
-						 int match_pos,
-						 const char *text,
-						 gsize len,
-						 void *context)
-{
-	struct url_matcher *matcher;
-	const char *start, *pos, *p;
-	struct rspamd_url *url = context;
-	int ndots;
-
-	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
-							 strnum);
-	ndots = 1;
-
-	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
-		/* Skip one more tld component */
-		ndots++;
-	}
-
-	pos = text + match_start;
-	p = pos - 1;
-	start = rspamd_url_host_unsafe(url);
-
-	if (*pos != '.' || match_pos != (int) url->hostlen) {
-		/* Something weird has been found */
-		if (match_pos == (int) url->hostlen - 1) {
-			pos = rspamd_url_host_unsafe(url) + match_pos;
-			if (*pos == '.') {
-				/* This is dot at the end of domain */
-				url->hostlen--;
-			}
-			else {
-				return 0;
-			}
-		}
-		else {
-			return 0;
-		}
-	}
-
-	/* Now we need to find top level domain */
-	pos = start;
-	while (p >= start && ndots > 0) {
-		if (*p == '.') {
-			ndots--;
-			pos = p + 1;
-		}
-		else {
-			pos = p;
-		}
-
-		p--;
-	}
-
-	if ((ndots == 0 || p == start - 1) &&
-		url->tldlen < rspamd_url_host_unsafe(url) + url->hostlen - pos) {
-		url->tldshift = (pos - url->string);
-		url->tldlen = rspamd_url_host_unsafe(url) + url->hostlen - pos;
-	}
-
-	return 0;
-}
-
 static void
 rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af,
 								rspamd_mempool_t *pool)
 {
 	char *strbuf, *p;
-	const char *start_offset;
+	const char *start_offset, *after_host, *url_end;
 	gsize slen = uri->urllen - uri->hostlen;
 	goffset r = 0;
+	gboolean has_slash = FALSE;
 
 	if (af == AF_INET) {
 		slen += INET_ADDRSTRLEN;
 	}
 	else {
-		slen += INET6_ADDRSTRLEN;
+		/* And the brackets */
+		slen += INET6_ADDRSTRLEN + 2;
 	}
 
 	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT) {
 		slen += sizeof("65535") - 1;
+	}
+
+	/*
+	 * Learn what follows the authority before the host is replaced: the
+	 * closing bracket, the port and the slash of an empty path
+	 */
+	url_end = uri->string + uri->urllen;
+	after_host = rspamd_url_host_unsafe(uri) + uri->hostlen;
+
+	if (after_host < url_end && *after_host == ']') {
+		after_host++;
+	}
+	if (after_host < url_end && *after_host == ':') {
+		after_host++;
+
+		while (after_host < url_end && g_ascii_isdigit(*after_host)) {
+			after_host++;
+		}
+	}
+	if (after_host < url_end && (*after_host == '/' || *after_host == '\\')) {
+		has_slash = TRUE;
 	}
 
 	/* Allocate new string to build it from IP */
@@ -1799,6 +2048,11 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	r += rspamd_snprintf(strbuf + r, slen - r, "%*s",
 						 (int) (uri->hostshift),
 						 uri->string);
+
+	if (af == AF_INET6 && (r == 0 || strbuf[r - 1] != '[')) {
+		/* An address in an url is always in the brackets */
+		strbuf[r++] = '[';
+	}
 
 	uri->hostshift = r;
 	uri->tldshift = r;
@@ -1808,6 +2062,10 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	r += uri->hostlen;
 	uri->tldlen = uri->hostlen;
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
+
+	if (af == AF_INET6) {
+		strbuf[r++] = ']';
+	}
 
 	/* Reconstruct URL */
 	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT && uri->ext) {
@@ -1824,12 +2082,8 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 							 rspamd_url_data_unsafe(uri));
 		uri->datashift = start_offset - strbuf;
 	}
-	else {
-		/* Add trailing slash if needed */
-		if (uri->hostlen + uri->hostshift < uri->urllen &&
-			*(rspamd_url_host_unsafe(uri) + uri->hostlen) == '/') {
-			r += rspamd_snprintf(strbuf + r, slen - r, "/");
-		}
+	else if (has_slash) {
+		r += rspamd_snprintf(strbuf + r, slen - r, "/");
 	}
 
 	if (uri->querylen > 0) {
@@ -1853,15 +2107,106 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 	uri->urllen = r;
 }
 
+/*
+ * Reads a host as an IPv4 address the way a browser does (the IPv4 parser
+ * of the URL standard): one to four numbers, each of them decimal, octal
+ * with a leading zero or hexadecimal with `0x`; the last number fills all
+ * the remaining bytes of the address. Unlike a browser, a number with a
+ * leading zero and the digits 8 or 9 is read as decimal and not refused.
+ * A number of any length is accepted, as leading zeroes are free.
+ */
+static gboolean
+rspamd_url_parse_ip4_number(const char *p, const char *end, struct in_addr *in4)
+{
+	uint64_t parts[4];
+	unsigned int nparts = 0;
+
+	while (p < end) {
+		const char *dot = memchr(p, '.', end - p), *c = p;
+		const char *part_end = dot ? dot : end;
+		unsigned int base = 10;
+		uint64_t v = 0;
+
+		if (nparts == G_N_ELEMENTS(parts) || part_end == p) {
+			return FALSE;
+		}
+
+		if (part_end - c >= 2 && c[0] == '0' && (c[1] == 'x' || c[1] == 'X')) {
+			base = 16;
+			c += 2;
+		}
+		else if (part_end - c >= 2 && c[0] == '0') {
+			base = 8;
+
+			for (const char *t = c; t < part_end; t++) {
+				if (*t == '8' || *t == '9') {
+					base = 10;
+					break;
+				}
+			}
+		}
+
+		for (; c < part_end; c++) {
+			unsigned int d;
+
+			if (g_ascii_isdigit(*c)) {
+				d = *c - '0';
+			}
+			else if (base == 16 && g_ascii_isxdigit(*c)) {
+				d = g_ascii_tolower(*c) - 'a' + 10;
+			}
+			else {
+				return FALSE;
+			}
+
+			v = v * base + d;
+
+			if (v > G_MAXUINT32) {
+				/* No number of an address is that large */
+				return FALSE;
+			}
+		}
+
+		parts[nparts++] = v;
+		p = dot ? dot + 1 : end;
+
+		if (dot && p == end) {
+			/* Ends with an empty number */
+			return FALSE;
+		}
+	}
+
+	if (nparts == 0) {
+		return FALSE;
+	}
+
+	uint32_t addr = 0;
+
+	for (unsigned int i = 0; i + 1 < nparts; i++) {
+		if (parts[i] > 255) {
+			return FALSE;
+		}
+
+		addr |= (uint32_t) parts[i] << (8 * (3 - i));
+	}
+
+	if (parts[nparts - 1] >= (1ULL << (8 * (5 - nparts)))) {
+		return FALSE;
+	}
+
+	addr |= (uint32_t) parts[nparts - 1];
+	in4->s_addr = htonl(addr);
+
+	return TRUE;
+}
+
 static gboolean
 rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *pool)
 {
-	const char *p, *end, *c;
-	char *errstr;
+	const char *p, *end;
 	struct in_addr in4;
 	struct in6_addr in6;
-	gboolean ret = FALSE, check_num = TRUE;
-	uint32_t n, dots, t = 0, i = 0, shift, nshift;
+	gboolean ret = FALSE;
 
 	if (uri->hostlen == 0) {
 		return FALSE;
@@ -1880,133 +2225,27 @@ rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *po
 		end--;
 	}
 
-	if (end - p == 0 || end - p > INET6_ADDRSTRLEN) {
+	if (end - p == 0) {
 		return FALSE;
 	}
 
-	if (rspamd_str_has_8bit(p, end - p)) {
-		return FALSE;
-	}
+	if (rspamd_url_parse_ip4_number(p, end, &in4)) {
+		char canon[INET_ADDRSTRLEN];
 
-	if (rspamd_parse_inet_address_ip4(p, end - p, &in4)) {
+		inet_ntop(AF_INET, &in4, canon, sizeof(canon));
+
+		if (strlen(canon) != (gsize) (end - p) || memcmp(canon, p, end - p) != 0) {
+			/* Not what the address looks like: octal, hex, short or padded */
+			uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
+
 		rspamd_url_regen_from_inet_addr(uri, &in4, AF_INET, pool);
 		ret = TRUE;
 	}
-	else if (rspamd_parse_inet_address_ip6(p, end - p, &in6)) {
+	else if (end - p <= INET6_ADDRSTRLEN &&
+			 rspamd_parse_inet_address_ip6(p, end - p, &in6)) {
 		rspamd_url_regen_from_inet_addr(uri, &in6, AF_INET6, pool);
 		ret = TRUE;
-	}
-	else {
-		/* Heuristics for broken urls */
-		char buf[INET6_ADDRSTRLEN + 1];
-		/* Try also numeric notation */
-		c = p;
-		n = 0;
-		dots = 0;
-		shift = 0;
-
-		while (p <= end && check_num) {
-			if (shift < 32 &&
-				((*p == '.' && dots < 3) || (p == end && dots <= 3))) {
-				if (p - c + 1 >= (int) sizeof(buf)) {
-					msg_debug_pool("invalid numeric url %*.s...: too long",
-								   INET6_ADDRSTRLEN, c);
-					return FALSE;
-				}
-
-				rspamd_strlcpy(buf, c, p - c + 1);
-				c = p + 1;
-
-				if (p < end && *p == '.') {
-					dots++;
-				}
-
-				glong long_n = strtol(buf, &errstr, 0);
-
-				if ((errstr == NULL || *errstr == '\0') && long_n >= 0) {
-
-					t = long_n; /* Truncate as windows does */
-					/*
-					 * Even if we have zero, we need to shift by 1 octet
-					 */
-					nshift = (t == 0 ? shift + 8 : shift);
-
-					/*
-					 * Here we count number of octets encoded in this element
-					 */
-					for (i = 0; i < 4; i++) {
-						if ((t >> (8 * i)) > 0) {
-							nshift += 8;
-						}
-						else {
-							break;
-						}
-					}
-					/*
-					 * Here we need to find the proper shift of the previous
-					 * components, so we check possible cases:
-					 * 1) 1 octet - just use it applying shift
-					 * 2) 2 octets - convert to big endian 16 bit number
-					 * 3) 3 octets - convert to big endian 24 bit number
-					 * 4) 4 octets - convert to big endian 32 bit number
-					 */
-					switch (i) {
-					case 4:
-						t = GUINT32_TO_BE(t);
-						break;
-					case 3:
-						t = (GUINT32_TO_BE(t & 0xFFFFFFU)) >> 8;
-						break;
-					case 2:
-						t = GUINT16_TO_BE(t & 0xFFFFU);
-						break;
-					default:
-						t = t & 0xFF;
-						break;
-					}
-
-					if (p != end) {
-						n |= t << shift;
-
-						shift = nshift;
-					}
-				}
-				else {
-					check_num = FALSE;
-				}
-			}
-
-			p++;
-		}
-
-		/* The last component should be last according to url normalization:
-		 * 192.168.1 -> 192.168.0.1
-		 * 192 -> 0.0.0.192
-		 * 192.168 -> 192.0.0.168
-		 */
-		shift = 8 * (4 - i);
-
-		if (shift < 32) {
-			n |= t << shift;
-		}
-
-		if (check_num) {
-			if (dots <= 4) {
-				memcpy(&in4, &n, sizeof(in4));
-				rspamd_url_regen_from_inet_addr(uri, &in4, AF_INET, pool);
-				uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
-				ret = TRUE;
-			}
-			else if (end - c > (int) sizeof(buf) - 1) {
-				rspamd_strlcpy(buf, c, end - c + 1);
-
-				if (inet_pton(AF_INET6, buf, &in6) == 1) {
-					rspamd_url_regen_from_inet_addr(uri, &in6, AF_INET6, pool);
-					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
-					ret = TRUE;
-				}
-			}
-		}
 	}
 
 	return ret;
@@ -2312,6 +2551,382 @@ rspamd_url_lua_consult(const char *url_str,
 	return result;
 }
 
+/*
+ * Replaces a host, path, query or fragment of the url with new data of any
+ * length. The url string is rebuilt if its size changes and the offsets of
+ * the parts that follow are moved. Returns FALSE if the result would not fit
+ * into the 16 bit lengths and offsets of the url, the url is left untouched
+ * then.
+ */
+static gboolean
+rspamd_url_replace_field(rspamd_mempool_t *pool, struct rspamd_url *uri,
+						 enum http_parser_url_fields field,
+						 const char *data, gsize nlen)
+{
+	uint16_t *shift, *len;
+
+	switch (field) {
+	case UF_HOST:
+		shift = &uri->hostshift;
+		len = &uri->hostlen;
+		break;
+	case UF_PATH:
+		shift = &uri->datashift;
+		len = &uri->datalen;
+		break;
+	case UF_QUERY:
+		shift = &uri->queryshift;
+		len = &uri->querylen;
+		break;
+	case UF_FRAGMENT:
+		shift = &uri->fragmentshift;
+		len = &uri->fragmentlen;
+		break;
+	default:
+		return FALSE;
+	}
+
+	gsize off = *shift, olen = *len;
+	gsize new_urllen = (gsize) uri->urllen - olen + nlen;
+
+	if (nlen >= G_MAXUINT16 || new_urllen >= G_MAXUINT16) {
+		return FALSE;
+	}
+
+	if (nlen != olen) {
+		char *nstr = rspamd_mempool_alloc(pool, new_urllen + 1);
+		gsize delta_plus = nlen, delta_minus = olen;
+
+		memcpy(nstr, uri->string, off);
+		memcpy(nstr + off, data, nlen);
+		memcpy(nstr + off + nlen, uri->string + off + olen,
+			   uri->urllen - off - olen);
+		nstr[new_urllen] = '\0';
+		uri->string = nstr;
+
+		/* The parts that follow the field move with its tail */
+#define SHIFT_PART(shiftf, lenf)                              \
+	if (uri->lenf > 0 && uri->shiftf > off) {                 \
+		uri->shiftf = uri->shiftf + delta_plus - delta_minus; \
+	}
+		SHIFT_PART(usershift, userlen)
+		SHIFT_PART(hostshift, hostlen)
+		SHIFT_PART(datashift, datalen)
+		SHIFT_PART(queryshift, querylen)
+		SHIFT_PART(fragmentshift, fragmentlen)
+		SHIFT_PART(tldshift, tldlen)
+#undef SHIFT_PART
+
+		*len = nlen;
+		uri->urllen = new_urllen;
+
+		if (nlen < olen) {
+			switch (field) {
+			case UF_HOST:
+				uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
+				break;
+			case UF_PATH:
+				uri->flags |= RSPAMD_URL_FLAG_PATHENCODED;
+				break;
+			case UF_QUERY:
+				uri->flags |= RSPAMD_URL_FLAG_QUERYENCODED;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	else {
+		memcpy(uri->string + off, data, nlen);
+	}
+
+	return TRUE;
+}
+
+/*
+ * NFKC-normalises a host, path, query or fragment of the url, whatever the
+ * length of the result is. If the result cannot be stored, the part is kept
+ * as it is and the url is flagged.
+ */
+static void
+rspamd_url_normalise_field(rspamd_mempool_t *pool, struct rspamd_url *uri,
+						   enum http_parser_url_fields field)
+{
+	const char *data;
+	gsize len;
+
+	switch (field) {
+	case UF_HOST:
+		data = rspamd_url_host_unsafe(uri);
+		len = uri->hostlen;
+		break;
+	case UF_PATH:
+		data = rspamd_url_data_unsafe(uri);
+		len = uri->datalen;
+		break;
+	case UF_QUERY:
+		data = rspamd_url_query_unsafe(uri);
+		len = uri->querylen;
+		break;
+	case UF_FRAGMENT:
+		data = rspamd_url_fragment_unsafe(uri);
+		len = uri->fragmentlen;
+		break;
+	default:
+		return;
+	}
+
+	/* ASCII is normal already */
+	gsize i;
+
+	for (i = 0; i < len; i++) {
+		if ((unsigned char) data[i] >= 0x80) {
+			break;
+		}
+	}
+
+	if (i == len) {
+		return;
+	}
+
+	gsize out_len, needed;
+	char *out = rspamd_mempool_alloc(pool, len);
+	enum rspamd_utf8_normalise_result res;
+
+	res = rspamd_normalise_unicode_to(data, len, out, len, &out_len, &needed);
+
+	if (!(res & RSPAMD_UNICODE_NORM_ERROR) && needed > len) {
+		if (needed >= G_MAXUINT16) {
+			/* Would not fit into the url */
+			uri->flags |= RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_UNNORMALISED;
+			return;
+		}
+
+		out = rspamd_mempool_alloc(pool, needed);
+		res = rspamd_normalise_unicode_to(data, len, out, needed, &out_len, &needed);
+	}
+
+	if (res & RSPAMD_UNICODE_NORM_UNNORMAL) {
+		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
+	if (res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
+		uri->flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+	}
+	if (res & RSPAMD_UNICODE_NORM_ERROR) {
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		return;
+	}
+
+	if (!rspamd_url_replace_field(pool, uri, field, out, out_len)) {
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+	}
+}
+
+/*
+ * A code point that cannot be in a host (WHATWG forbidden host code points).
+ * The host of a percent-encoded url is checked after decoding, as a browser
+ * refuses such a host.
+ */
+static inline bool
+is_forbidden_host_char(unsigned char c)
+{
+	switch (c) {
+	case '#':
+	case '/':
+	case ':':
+	case '<':
+	case '>':
+	case '?':
+	case '@':
+	case '[':
+	case '\\':
+	case ']':
+	case '^':
+	case '|':
+	case '%':
+		return true;
+	default:
+		return c <= 0x20 || c == 0x7f;
+	}
+}
+
+/*
+ * Cuts the host at its first forbidden code point: a lenient client resolves
+ * only what is before it. Returns FALSE if nothing is left.
+ */
+static bool
+rspamd_url_cut_forbidden_host(struct rspamd_url *uri)
+{
+	const char *host = rspamd_url_host_unsafe(uri);
+
+	if (uri->protocol == PROTOCOL_TELEPHONE ||
+		(uri->hostshift > 0 && uri->string[uri->hostshift - 1] == '[')) {
+		/* A phone number or a bracketed IPv6 literal */
+		return uri->hostlen > 0;
+	}
+
+	for (unsigned int i = 0; i < uri->hostlen; i++) {
+		if (is_forbidden_host_char(host[i])) {
+			uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+
+			if (i == 0) {
+				return false;
+			}
+
+			rspamd_url_shift(uri, i, UF_HOST);
+			break;
+		}
+	}
+
+	return uri->hostlen > 0;
+}
+
+/*
+ * Maps the host to the form a browser resolves (UTS #46 non-transitional
+ * processing, so `ß` and `ς` are kept) and strips the invisible characters.
+ * Labels without non-ASCII characters are left as they are, including the
+ * punycode ones.
+ */
+static enum uri_errno
+rspamd_url_idna_host(rspamd_mempool_t *pool, struct rspamd_url *uri)
+{
+	static UIDNA *uts46 = NULL;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (uts46 == NULL) {
+		uts46 = uidna_openUTS46(UIDNA_NONTRANSITIONAL_TO_ASCII |
+									UIDNA_NONTRANSITIONAL_TO_UNICODE,
+								&uc_err);
+
+		g_assert(U_SUCCESS(uc_err));
+	}
+
+	const char *host = rspamd_url_host_unsafe(uri);
+	gsize hostlen = uri->hostlen;
+	char *stripped = rspamd_mempool_alloc(pool, hostlen + 1);
+	gsize slen = 0;
+	int32_t pos = 0;
+	UChar32 prev_uc = 0;
+	bool pending_invisible = false, non_ascii = false;
+
+	/*
+	 * Strip invisible characters: the mapping drops only some of them and
+	 * rejects the rest, losing the whole URL
+	 */
+	while (pos < (int32_t) hostlen) {
+		int32_t cur = pos;
+		UChar32 uc;
+
+		U8_NEXT((const uint8_t *) host, pos, (int32_t) hostlen, uc);
+
+		if (uc >= 0x80 && is_invisible_host_char(uc)) {
+			if (is_suspicious_invisible_host_char(uc, prev_uc >= 0x80)) {
+				pending_invisible = true;
+			}
+			continue;
+		}
+
+		if (pending_invisible && uc != '.') {
+			/* Invisible characters inside the hostname, not before its final dot */
+			uri->flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+			pending_invisible = false;
+		}
+
+		prev_uc = uc;
+
+		if (uc < 0 || uc >= 0x80) {
+			non_ascii = true;
+		}
+
+		memcpy(stripped + slen, host + cur, pos - cur);
+		slen += pos - cur;
+	}
+
+	if (slen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
+
+	GString *res = g_string_sized_new(slen * 2 + 16);
+	const char *lab = stripped, *send = stripped + slen;
+
+	if (!non_ascii) {
+		g_string_append_len(res, stripped, slen);
+	}
+
+	while (non_ascii && lab <= send) {
+		const char *dot = memchr(lab, '.', send - lab);
+		const char *lend = dot ? dot : send;
+		bool ascii = true;
+
+		for (const char *q = lab; q < lend; q++) {
+			if ((unsigned char) *q >= 0x80) {
+				ascii = false;
+				break;
+			}
+		}
+
+		if (ascii) {
+			g_string_append_len(res, lab, lend - lab);
+		}
+		else {
+			UIDNAInfo info = UIDNA_INFO_INITIALIZER;
+			gsize start = res->len;
+			int32_t cap = (lend - lab) * 2 + 16, ret = 0;
+
+			for (int attempt = 0; attempt < 2; attempt++) {
+				g_string_set_size(res, start + cap);
+				uc_err = U_ZERO_ERROR;
+				info = (UIDNAInfo) UIDNA_INFO_INITIALIZER;
+				ret = uidna_labelToUnicodeUTF8(uts46, lab, lend - lab,
+											   res->str + start, cap, &info, &uc_err);
+
+				if (uc_err == U_BUFFER_OVERFLOW_ERROR) {
+					/* ICU tells the size it needs */
+					cap = ret + 1;
+					continue;
+				}
+
+				break;
+			}
+
+			if (U_FAILURE(uc_err) || ret < 0 || ret > cap ||
+				(info.errors & (UIDNA_ERROR_DISALLOWED | UIDNA_ERROR_PUNYCODE |
+								UIDNA_ERROR_INVALID_ACE_LABEL))) {
+				/* A browser refuses this label: keep it and flag the url */
+				uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				g_string_truncate(res, start);
+				g_string_append_len(res, lab, lend - lab);
+			}
+			else {
+				g_string_set_size(res, start + ret);
+			}
+		}
+
+		if (res->len >= G_MAXUINT16 || dot == NULL) {
+			break;
+		}
+
+		g_string_append_c(res, '.');
+		lab = dot + 1;
+	}
+
+	enum uri_errno rc = URI_ERRNO_OK;
+
+	if (res->len >= G_MAXUINT16 ||
+		!rspamd_url_replace_field(pool, uri, UF_HOST, res->str, res->len)) {
+		/* The mapped host does not fit, keep the stripped one */
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+
+		if (!rspamd_url_replace_field(pool, uri, UF_HOST, stripped, slen)) {
+			rc = URI_ERRNO_BAD_FORMAT;
+		}
+	}
+
+	g_string_free(res, TRUE);
+
+	return rc;
+}
+
 enum uri_errno
 rspamd_url_parse(struct rspamd_url *uri,
 				 char *uristring, gsize len,
@@ -2336,9 +2951,36 @@ rspamd_url_parse(struct rspamd_url *uri,
 		return URI_ERRNO_EMPTY;
 	}
 
+	/* Direct parsing can also be used while loading the initial config. */
+	if (url_scanner == NULL) {
+		rspamd_url_init(NULL);
+	}
+
 	if (len >= G_MAXUINT16 / 2) {
+		if (parse_flags & RSPAMD_URL_PARSE_UPSTREAM) {
+			return URI_ERRNO_BAD_FORMAT;
+		}
 		flags |= RSPAMD_URL_FLAG_TRUNCATED;
 		len = G_MAXUINT16 / 2;
+	}
+
+	if (!(parse_flags & RSPAMD_URL_PARSE_UPSTREAM)) {
+		gsize scheme_len = rspamd_url_single_slash_scheme(uristring, len);
+
+		if (scheme_len > 0) {
+			/* Store `http:/host` as `http://host`, the way browsers read it */
+			char *fixed = rspamd_mempool_alloc(pool, len + 2);
+
+			memcpy(fixed, uristring, scheme_len + 1);
+			fixed[scheme_len + 1] = '/';
+			fixed[scheme_len + 2] = '/';
+			memcpy(fixed + scheme_len + 3, uristring + scheme_len + 2,
+				   len - scheme_len - 2);
+			len++;
+			fixed[len] = '\0';
+			uristring = fixed;
+			flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
 	}
 
 	p = uristring;
@@ -2358,14 +3000,20 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 		else {
 			ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags,
-								   &flags, lua_state);
+								   &flags, lua_state, NULL);
 		}
 	}
 	else {
-		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state);
+		ret = rspamd_web_parse(&u, uristring, len, &end, parse_flags, &flags, lua_state, NULL);
 	}
 
 	if (ret != 0) {
+		return URI_ERRNO_BAD_FORMAT;
+	}
+
+	if ((parse_flags & RSPAMD_URL_PARSE_UPSTREAM) &&
+		(end != uristring + len || memchr(uristring, '\0', len) != NULL ||
+		 (flags & RSPAMD_URL_FLAG_MISSINGSLASHES))) {
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
@@ -2460,10 +3108,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 	unquoted_len = rspamd_url_decode(rspamd_url_host_unsafe(uri),
 									 rspamd_url_host_unsafe(uri), uri->hostlen);
 
-	rspamd_url_normalise_propagate_flags(pool, rspamd_url_host_unsafe(uri),
-										 &unquoted_len, uri->flags);
-
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
+	rspamd_url_normalise_field(pool, uri, UF_HOST);
 
 	/*
 	 * URL-decoding the host can collapse it to nothing (e.g. a host that
@@ -2472,6 +3118,10 @@ rspamd_url_parse(struct rspamd_url *uri,
 	 * host out of the downstream host parsing.
 	 */
 	if (uri->hostlen == 0) {
+		return URI_ERRNO_HOST_MISSING;
+	}
+
+	if (!rspamd_url_cut_forbidden_host(uri)) {
 		return URI_ERRNO_HOST_MISSING;
 	}
 
@@ -2546,63 +3196,24 @@ rspamd_url_parse(struct rspamd_url *uri,
 		}
 	}
 
-	/* Apply nameprep algorithm */
-	static UStringPrepProfile *nameprep = NULL;
-	UErrorCode uc_err = U_ZERO_ERROR;
+	/* Map the host to the name a browser resolves */
+	enum uri_errno idna_rc = rspamd_url_idna_host(pool, uri);
 
-	if (nameprep == NULL) {
-		/* Open and cache profile */
-		nameprep = usprep_openByType(USPREP_RFC3491_NAMEPREP, &uc_err);
-
-		g_assert(U_SUCCESS(uc_err));
+	if (idna_rc != URI_ERRNO_OK) {
+		return idna_rc;
 	}
 
-	UChar *utf16_hostname, *norm_utf16;
-	int32_t utf16_len, norm_utf16_len, norm_utf8_len;
-	UParseError parse_error;
-
-	utf16_hostname = rspamd_mempool_alloc(pool, uri->hostlen * sizeof(UChar));
-	struct UConverter *utf8_conv = rspamd_get_utf8_converter();
-
-	utf16_len = ucnv_toUChars(utf8_conv, utf16_hostname, uri->hostlen,
-							  rspamd_url_host_unsafe(uri), uri->hostlen, &uc_err);
-
-	if (!U_SUCCESS(uc_err)) {
-
-		return URI_ERRNO_BAD_FORMAT;
+	if (!rspamd_url_cut_forbidden_host(uri)) {
+		return URI_ERRNO_HOST_MISSING;
 	}
-
-	norm_utf16 = rspamd_mempool_alloc(pool, utf16_len * sizeof(UChar));
-	norm_utf16_len = usprep_prepare(nameprep, utf16_hostname, utf16_len,
-									norm_utf16, utf16_len, USPREP_DEFAULT, &parse_error, &uc_err);
-
-	if (!U_SUCCESS(uc_err)) {
-
-		return URI_ERRNO_BAD_FORMAT;
-	}
-
-	/* Convert back to utf8, sigh... */
-	norm_utf8_len = ucnv_fromUChars(utf8_conv,
-									rspamd_url_host_unsafe(uri), uri->hostlen,
-									norm_utf16, norm_utf16_len, &uc_err);
-
-	if (!U_SUCCESS(uc_err)) {
-
-		return URI_ERRNO_BAD_FORMAT;
-	}
-
-	/* Final shift of lengths */
-	rspamd_url_shift(uri, norm_utf8_len, UF_HOST);
 
 	/* Process data part */
 	if (uri->datalen) {
 		unquoted_len = rspamd_url_decode(rspamd_url_data_unsafe(uri),
 										 rspamd_url_data_unsafe(uri), uri->datalen);
 
-		rspamd_url_normalise_propagate_flags(pool, rspamd_url_data_unsafe(uri),
-											 &unquoted_len, uri->flags);
-
 		rspamd_url_shift(uri, unquoted_len, UF_PATH);
+		rspamd_url_normalise_field(pool, uri, UF_PATH);
 		/* We now normalize path */
 		rspamd_normalize_path_inplace(rspamd_url_data_unsafe(uri),
 									  uri->datalen, &unquoted_len);
@@ -2614,9 +3225,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 rspamd_url_query_unsafe(uri),
 										 uri->querylen);
 
-		rspamd_url_normalise_propagate_flags(pool, rspamd_url_query_unsafe(uri),
-											 &unquoted_len, uri->flags);
 		rspamd_url_shift(uri, unquoted_len, UF_QUERY);
+		rspamd_url_normalise_field(pool, uri, UF_QUERY);
 	}
 
 	if (uri->fragmentlen) {
@@ -2624,9 +3234,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 										 rspamd_url_fragment_unsafe(uri),
 										 uri->fragmentlen);
 
-		rspamd_url_normalise_propagate_flags(pool, rspamd_url_fragment_unsafe(uri),
-											 &unquoted_len, uri->flags);
 		rspamd_url_shift(uri, unquoted_len, UF_FRAGMENT);
+		rspamd_url_normalise_field(pool, uri, UF_FRAGMENT);
 	}
 
 	rspamd_str_lc(uri->string, uri->protocollen);
@@ -2635,7 +3244,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
 		for (int i = 0; i < G_N_ELEMENTS(rspamd_url_protocols); i++) {
-			if (uri->protocollen == rspamd_url_protocols[i].len) {
+			if (uri->protocollen > 0 && uri->protocollen == rspamd_url_protocols[i].len) {
 				if (memcmp(uri->string,
 						   rspamd_url_protocols[i].name, uri->protocollen) == 0) {
 					uri->protocol = rspamd_url_protocols[i].proto;
@@ -2647,10 +3256,20 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 	if (uri->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_MAILTO | PROTOCOL_FTP | PROTOCOL_FILE)) {
 		/* Find TLD part */
-		if (url_scanner->search_trie_full) {
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   rspamd_url_host_unsafe(uri), uri->hostlen,
-									   rspamd_tld_trie_callback, uri, NULL);
+		if (url_scanner->tld_lookup) {
+			rspamd_ftok_t tld_tok;
+
+			if (rspamd_tld_lookup_registrable(url_scanner->tld_lookup,
+											  rspamd_url_host_unsafe(uri), uri->hostlen,
+											  &tld_tok)) {
+				if (rspamd_url_host_unsafe(uri)[uri->hostlen - 1] == '.') {
+					/* The trailing dot is not part of the host */
+					uri->hostlen--;
+				}
+
+				uri->tldshift = tld_tok.begin - uri->string;
+				uri->tldlen = tld_tok.len;
+			}
 		}
 
 		if (uri->tldlen == 0) {
@@ -2687,13 +3306,13 @@ rspamd_url_parse(struct rspamd_url *uri,
 					/* Additionally check for a numeric IP as we can have some number here */
 					/* Skip for mailto: as email domains cannot be numeric IPs (see #5823) */
 					if (uri->protocol != PROTOCOL_MAILTO) {
-						rspamd_url_maybe_regenerate_from_ip(uri, pool);
-
-						if (last_c == '.' && uri->hostlen > 1) {
+						if (!rspamd_url_maybe_regenerate_from_ip(uri, pool) &&
+							last_c == '.' && uri->hostlen > 1) {
 							/* Skip the last dot */
 							uri->tldlen = uri->hostlen - 1;
 						}
 						else {
+							/* An address has no trailing dot any longer */
 							uri->tldlen = uri->hostlen;
 						}
 
@@ -2705,7 +3324,8 @@ rspamd_url_parse(struct rspamd_url *uri,
 
 			if (!is_whole_hostname_tld) {
 				if (uri->protocol != PROTOCOL_MAILTO) {
-					if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+					if (url_scanner->has_tld_file &&
+						!(parse_flags & (RSPAMD_URL_PARSE_HREF | RSPAMD_URL_PARSE_UPSTREAM))) {
 						/* Ignore URL's without TLD if it is not a numeric URL */
 						if (!rspamd_url_maybe_regenerate_from_ip(uri, pool)) {
 							return URI_ERRNO_TLD_MISSING;
@@ -2744,7 +3364,15 @@ rspamd_url_parse(struct rspamd_url *uri,
 			char *pos = &uri->string[uri->protocollen],
 				 *host_start = rspamd_url_host_unsafe(uri);
 
-			while (pos < host_start) {
+			/*
+			 * Only the slashes after the schema: a slash in the userinfo
+			 * (or the password) would move the host of the normalised url
+			 */
+			if (pos < host_start && *pos == ':') {
+				pos++;
+			}
+
+			while (pos < host_start && (*pos == '/' || *pos == '\\')) {
 				if (*pos == '\\') {
 					*pos = '/';
 					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
@@ -2780,95 +3408,20 @@ rspamd_url_parse(struct rspamd_url *uri,
 	return URI_ERRNO_OK;
 }
 
-struct tld_trie_cbdata {
-	const char *begin;
-	gsize len;
-	rspamd_ftok_t *out;
-};
-
-static int
-rspamd_tld_trie_find_callback(struct rspamd_multipattern *mp,
-							  unsigned int strnum,
-							  int match_start,
-							  int match_pos,
-							  const char *text,
-							  gsize len,
-							  void *context)
-{
-	struct url_matcher *matcher;
-	const char *start, *pos, *p;
-	struct tld_trie_cbdata *cbdata = context;
-	int ndots = 1;
-
-	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
-							 strnum);
-
-	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
-		/* Skip one more tld component */
-		ndots = 2;
-	}
-
-	pos = text + match_start;
-	p = pos - 1;
-	start = text;
-
-	if (*pos != '.' || match_pos != (int) cbdata->len) {
-		/* Something weird has been found */
-		if (match_pos != (int) cbdata->len - 1) {
-			/* Search more */
-			return 0;
-		}
-	}
-
-	/* Now we need to find top level domain */
-	pos = start;
-
-	while (p >= start && ndots > 0) {
-		if (*p == '.') {
-			ndots--;
-			pos = p + 1;
-		}
-		else {
-			pos = p;
-		}
-
-		p--;
-	}
-
-	if (ndots == 0 || p == start - 1) {
-		if (cbdata->begin + cbdata->len - pos > cbdata->out->len) {
-			cbdata->out->begin = pos;
-			cbdata->out->len = cbdata->begin + cbdata->len - pos;
-		}
-	}
-
-	return 0;
-}
-
 gboolean
 rspamd_url_find_tld(const char *in, gsize inlen, rspamd_ftok_t *out)
 {
-	struct tld_trie_cbdata cbdata;
-
 	g_assert(in != NULL);
 	g_assert(out != NULL);
 	g_assert(url_scanner != NULL);
 
-	cbdata.begin = in;
-	cbdata.len = inlen;
-	cbdata.out = out;
-	out->len = 0;
+	return rspamd_tld_lookup_registrable(url_scanner->tld_lookup, in, inlen, out);
+}
 
-	if (url_scanner->search_trie_full) {
-		rspamd_multipattern_lookup(url_scanner->search_trie_full, in, inlen,
-								   rspamd_tld_trie_find_callback, &cbdata, NULL);
-	}
-
-	if (out->len > 0) {
-		return TRUE;
-	}
-
-	return FALSE;
+struct rspamd_tld_lookup *
+rspamd_url_get_tld_lookup(void)
+{
+	return url_scanner ? url_scanner->tld_lookup : NULL;
 }
 
 static const char url_braces[] = {
@@ -2907,12 +3460,18 @@ url_file_end(struct url_callback_data *cb,
 	unsigned int i;
 
 	p = pos + strlen(match->pattern);
+
+	/* The text is not NUL-terminated: a bare scheme at its end is no url */
+	if (p >= cb->end) {
+		return FALSE;
+	}
+
 	stop = *p;
 	if (*p == '/') {
 		p++;
 	}
 
-	for (i = 0; i < G_N_ELEMENTS(url_braces) / 2; i += 2) {
+	for (i = 0; p < cb->end && i < G_N_ELEMENTS(url_braces) / 2; i += 2) {
 		if (*p == url_braces[i]) {
 			stop = url_braces[i + 1];
 			break;
@@ -3047,29 +3606,51 @@ url_tld_end(struct url_callback_data *cb,
 	return ret;
 }
 
+/*
+ * Tells whether the scheme that starts at `pos` has the slashes after its colon:
+ * `http://`, `ftp:\\`, but not `http:` and `http:/`
+ */
+static gboolean
+url_web_scheme_has_slashes(struct url_callback_data *cb, const char *pos,
+						   gsize len)
+{
+	const char *colon = memchr(pos, ':', MIN(len, (gsize) (cb->end - pos)));
+
+	return colon != NULL && colon + 2 < cb->end &&
+		   (colon[1] == '/' || colon[1] == '\\') &&
+		   (colon[2] == '/' || colon[2] == '\\');
+}
+
 static gboolean
 url_web_start(struct url_callback_data *cb,
 			  const char *pos,
 			  url_match_t *match)
 {
 	/* Check what we have found */
-	if (pos > cb->begin) {
-		if (g_ascii_strncasecmp(pos, "www", 3) == 0) {
-
-			if (!(is_url_start(*(pos - 1)) ||
-				  g_ascii_isspace(*(pos - 1)) ||
-				  pos - 1 == match->prev_newline_pos ||
-				  (*(pos - 1) & 0x80))) { /* Chinese trick */
-				return FALSE;
-			}
+	if (g_ascii_strncasecmp(match->pattern, "www.", 4) == 0) {
+		/* The matcher is the bare `www.`, a label must follow it */
+		if (cb->end - pos < 5 || !g_ascii_isalnum(pos[4])) {
+			return FALSE;
 		}
-		else {
-			unsigned char prev = *(pos - 1);
 
-			if (g_ascii_isalnum(prev)) {
-				/* Part of another url */
-				return FALSE;
-			}
+		if (pos > cb->begin &&
+			!(is_url_start(*(pos - 1)) ||
+			  g_ascii_isspace(*(pos - 1)) ||
+			  pos - 1 == match->prev_newline_pos ||
+			  (*(pos - 1) & 0x80))) { /* Chinese trick */
+			return FALSE;
+		}
+	}
+	else if (pos > cb->begin) {
+		unsigned char prev = *(pos - 1);
+
+		if (g_ascii_isalnum(prev) &&
+			!url_web_scheme_has_slashes(cb, pos, match->m_len + 2)) {
+			/*
+			 * Part of another url. A scheme with its slashes starts an url
+			 * after any text, as it does in mail clients
+			 */
+			return FALSE;
 		}
 	}
 
@@ -3104,8 +3685,17 @@ url_web_end(struct url_callback_data *cb,
 		len = MIN(len, match->newline_pos - pos);
 	}
 
+	if (match->st == '"' || match->st == '\'') {
+		/* A quoted url ends at the closing quote, as in `href="..."` */
+		const char *quote = memchr(pos, match->st, len);
+
+		if (quote != NULL) {
+			len = quote - pos;
+		}
+	}
+
 	if (rspamd_web_parse(NULL, pos, len, &last,
-						 RSPAMD_URL_PARSE_CHECK, &flags, NULL) != 0) {
+						 RSPAMD_URL_PARSE_CHECK, &flags, NULL, &cb->lookahead) != 0) {
 		return FALSE;
 	}
 
@@ -3124,7 +3714,7 @@ url_web_end(struct url_callback_data *cb,
 	}
 
 	match->m_len = (last - pos);
-	cb->fin = last + 1;
+	match->fin = last + 1;
 
 	return TRUE;
 }
@@ -3272,13 +3862,135 @@ url_tel_start(struct url_callback_data *cb,
 	match->m_begin = pos;
 
 	if (pos >= cb->begin + 1) {
-		match->st = *(pos - 1);
+		unsigned char prev = *(pos - 1);
+
+		if (g_ascii_isalnum(prev)) {
+			/* `Hotel:` and `Intel:` are not phones */
+			return FALSE;
+		}
+
+		match->st = prev;
 	}
 	else {
 		match->st = '\0';
 	}
 
 	return TRUE;
+}
+
+/*
+ * Finds the end of a telephone uri that starts at `pos` and has `len` bytes
+ * to look at: the number, that is digits with the visual separators of RFC 3966
+ * and single spaces between the groups of digits, and the parameters after `;`.
+ * Returns NULL if there is no digit in the number.
+ */
+static const char *
+url_tel_find_end(const char *pos, gsize len)
+{
+	const char *p = pos, *last = pos + MIN(len, max_email_user + 16);
+	const char *good = NULL;
+	int depth = 0;
+	gboolean digits = FALSE;
+
+	p = memchr(p, ':', last - p);
+
+	if (p == NULL) {
+		return NULL;
+	}
+
+	p++;
+
+	/* Slashes and spaces between the colon and the number */
+	while (p < last && (*p == '/' || *p == '\\' || *p == ' ' || *p == '\t')) {
+		p++;
+	}
+
+	while (p < last) {
+		unsigned char c = *p;
+
+		if (g_ascii_isdigit(c)) {
+			digits = TRUE;
+			p++;
+			good = p;
+		}
+		else if (c >= 0x80) {
+			UChar32 uc;
+			int i = p - pos;
+
+			U8_NEXT(pos, i, (int) (last - pos), uc);
+
+			if (uc > 0 && u_isdigit(uc)) {
+				digits = TRUE;
+				p = pos + i;
+				good = p;
+			}
+			else {
+				break;
+			}
+		}
+		else if (c == '(') {
+			depth++;
+			p++;
+		}
+		else if (c == ')') {
+			if (depth == 0) {
+				break;
+			}
+			depth--;
+			p++;
+			good = p;
+		}
+		else if (c == '+' || c == '-' || c == '.') {
+			p++;
+		}
+		else if (c == '%') {
+			/* An escaped separator, such as %20 or %2B */
+			if (last - p < 3 || !g_ascii_isxdigit(p[1]) || !g_ascii_isxdigit(p[2])) {
+				break;
+			}
+			p += 3;
+		}
+		else if (c == ' ') {
+			/* A single space is a separator if the next group follows */
+			if (p + 1 < last && (g_ascii_isdigit(p[1]) || p[1] == '+' || p[1] == '(')) {
+				p++;
+			}
+			else {
+				break;
+			}
+		}
+		else {
+			break;
+		}
+	}
+
+	if (!digits) {
+		return NULL;
+	}
+
+	p = good;
+
+	/* Parameters, such as `;ext=123`, are a part of the uri */
+	if (p < last && *p == ';') {
+		const char *q = p + 1;
+
+		while (q < last && (g_ascii_isalnum(*q) || *q == '=' || *q == ';' ||
+							*q == '+' || *q == '-' || *q == '.' || *q == '_' ||
+							*q == '%' || *q == '(' || *q == ')')) {
+			q++;
+		}
+
+		/* Punctuation after the parameters belongs to the text */
+		while (q > p + 1 && !g_ascii_isalnum(q[-1]) && q[-1] != ')') {
+			q--;
+		}
+
+		if (q > p + 1) {
+			p = q;
+		}
+	}
+
+	return p;
 }
 
 static gboolean
@@ -3295,6 +4007,19 @@ url_tel_end(struct url_callback_data *cb,
 		/* We should also limit our match end to the newline */
 		len = MIN(len, match->newline_pos - pos);
 	}
+
+	if (len <= 0) {
+		return FALSE;
+	}
+
+	/* The end of the number is not the end of the line */
+	const char *tel_end = url_tel_find_end(pos, len);
+
+	if (tel_end == NULL) {
+		return FALSE;
+	}
+
+	len = tel_end - pos;
 
 	if (rspamd_telephone_parse(&u, pos, len, &last,
 							   RSPAMD_URL_PARSE_CHECK, &flags) != 0) {
@@ -3338,6 +4063,44 @@ rspamd_url_trie_is_match(struct url_matcher *matcher, const char *pos,
 	}
 
 	return TRUE;
+}
+
+/*
+ * A candidate that the parser has rejected does not hide the candidates that end
+ * inside it: `cb->fin` stays where it was. Looking at the bytes of a rejected
+ * candidate again must stay cheap, so the bytes of rejected candidates that
+ * overlap an earlier rejected one are counted. When they outgrow a few times
+ * the size of the text, a rejected candidate hides what ends inside it, as an
+ * accepted one does.
+ */
+static void
+rspamd_url_candidate_rejected(struct url_callback_data *cb, const url_match_t *m)
+{
+	const char *cand_end = m->m_begin + m->m_len;
+	gsize limit = 65536 + 4 * (gsize) (cb->end - cb->begin);
+
+	if (cb->last_at != NULL && cb->last_at >= m->m_begin && cb->last_at <= cand_end) {
+		/* The address of a rejected mailto: is left for the `@` matcher */
+		cb->last_at = NULL;
+	}
+
+	if (cb->rejected_end != NULL && cb->rejected_end > m->m_begin) {
+		cb->rescan_spent += MIN(cb->rejected_end, cand_end) - m->m_begin;
+	}
+
+	if (cb->rejected_end == NULL || cand_end > cb->rejected_end) {
+		cb->rejected_end = cand_end;
+	}
+
+	if (cb->rescan_spent > limit) {
+		if (cand_end > cb->fin) {
+			cb->fin = cand_end;
+		}
+
+		if (m->fin > cb->fin) {
+			cb->fin = m->fin;
+		}
+	}
 }
 
 static int
@@ -3425,6 +4188,10 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 			cb->fin = m.m_begin + m.m_len;
 		}
 
+		if (m.fin > cb->fin) {
+			cb->fin = m.fin;
+		}
+
 		return 1;
 	}
 	else {
@@ -3433,6 +4200,204 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 
 	/* Continue search */
 	return 0;
+}
+
+/*
+ * Two-pass full text scan: the small static-matcher multipattern provides
+ * scheme and known-prefix candidates, whilst TLD candidates are anchored on
+ * every '.<known final label>' occurrence found via the suffix lookup.
+ * Candidates must reach the processing callback in ascending match-end order,
+ * as both the cb->fin dedup and the newline cursor rely on it, so static
+ * matches are collected upfront and merged with the streamed TLD anchors.
+ */
+
+struct rspamd_url_static_match {
+	int start;
+	int end;
+	unsigned int strnum;
+};
+
+struct rspamd_url_static_matches {
+	struct rspamd_url_static_match fixed[64];
+	GArray *spill;
+	unsigned int n;
+};
+
+static int
+rspamd_url_static_collect_cb(struct rspamd_multipattern *mp,
+							 unsigned int strnum,
+							 int match_start,
+							 int match_pos,
+							 const char *text,
+							 gsize len,
+							 void *context)
+{
+	struct rspamd_url_static_matches *matches = context;
+	struct rspamd_url_static_match m = {match_start, match_pos, strnum};
+
+	if (matches->n < G_N_ELEMENTS(matches->fixed)) {
+		matches->fixed[matches->n] = m;
+	}
+	else {
+		if (matches->spill == NULL) {
+			matches->spill = g_array_new(FALSE, FALSE,
+										 sizeof(struct rspamd_url_static_match));
+		}
+		g_array_append_val(matches->spill, m);
+	}
+
+	matches->n++;
+
+	return 0;
+}
+
+static inline const struct rspamd_url_static_match *
+rspamd_url_static_match_at(const struct rspamd_url_static_matches *matches,
+						   unsigned int i)
+{
+	if (i < G_N_ELEMENTS(matches->fixed)) {
+		return &matches->fixed[i];
+	}
+
+	return &g_array_index(matches->spill, struct rspamd_url_static_match,
+						  i - G_N_ELEMENTS(matches->fixed));
+}
+
+struct rspamd_url_two_pass_state {
+	struct url_callback_data *cb;
+	rspamd_multipattern_cb_t func;
+	const char *in;
+	gsize inlen;
+	struct rspamd_url_static_matches matches;
+	unsigned int scur;
+	int ret;
+};
+
+/* Emit collected static matches with end offset up to the given bound */
+static gboolean
+rspamd_url_two_pass_flush_static(struct rspamd_url_two_pass_state *st, int bound)
+{
+	while (st->scur < st->matches.n) {
+		const struct rspamd_url_static_match *m =
+			rspamd_url_static_match_at(&st->matches, st->scur);
+
+		if (bound >= 0 && m->end > bound) {
+			break;
+		}
+
+		st->scur++;
+		st->cb->matchers = url_scanner->matchers_strict;
+		st->ret = st->func(NULL, m->strnum, m->start, m->end,
+						   st->in, st->inlen, st->cb);
+
+		if (st->ret != 0) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_url_two_pass_emit_tld(struct rspamd_url_two_pass_state *st,
+							 const char *lstart, gsize llen)
+{
+	if (!rspamd_tld_lookup_is_final_label(url_scanner->tld_lookup, lstart, llen)) {
+		return TRUE;
+	}
+
+	int match_pos = (lstart + llen) - st->in;
+
+	if (!rspamd_url_two_pass_flush_static(st, match_pos)) {
+		return FALSE;
+	}
+
+	st->cb->matchers = url_scanner->matchers_tld;
+	st->ret = st->func(NULL, 0, (lstart - 1) - st->in, match_pos,
+					   st->in, st->inlen, st->cb);
+
+	return st->ret == 0;
+}
+
+static int
+rspamd_url_scan_text_full(const char *in, gsize inlen,
+						  rspamd_multipattern_cb_t func,
+						  struct url_callback_data *cb)
+{
+	struct rspamd_url_two_pass_state st;
+
+	memset(&st, 0, sizeof(st));
+	st.cb = cb;
+	st.func = func;
+	st.in = in;
+	st.inlen = inlen;
+
+	/* First pass: collect the (few) static matcher candidates */
+	rspamd_multipattern_lookup(url_scanner->search_trie_strict, in, inlen,
+							   rspamd_url_static_collect_cb, &st.matches, NULL);
+
+	/* Second pass: stream TLD anchors, merging static candidates in */
+	if (url_scanner->tld_lookup != NULL) {
+		const char *p = in, *end = in + inlen;
+
+		while (p < end && (p = memchr(p, '.', end - p)) != NULL) {
+			const char *lstart = p + 1;
+			const char *q = lstart;
+			gboolean capped = FALSE;
+
+			while (q < end) {
+				unsigned char c = *q;
+
+				if (!(g_ascii_isalnum(c) || c == '-' || c >= 0x80)) {
+					break;
+				}
+
+				if (q > lstart && (c == '-' || c >= 0xC0)) {
+					/* A valid label may end here: this byte cannot continue
+					 * an alphanumeric TLD */
+					if (!rspamd_url_two_pass_emit_tld(&st, lstart, q - lstart)) {
+						goto out;
+					}
+				}
+
+				if (q - lstart >= 63) {
+					capped = TRUE;
+					break;
+				}
+
+				q++;
+			}
+
+			if (capped) {
+				/* An oversized run cannot end a valid label; skip it */
+				while (q < end) {
+					unsigned char c = *q;
+
+					if (!(g_ascii_isalnum(c) || c == '-' || c >= 0x80)) {
+						break;
+					}
+					q++;
+				}
+			}
+			else if (q > lstart) {
+				if (!rspamd_url_two_pass_emit_tld(&st, lstart, q - lstart)) {
+					goto out;
+				}
+			}
+
+			p = q > lstart ? q : lstart;
+		}
+	}
+
+	/* Flush the remaining static candidates */
+	rspamd_url_two_pass_flush_static(&st, -1);
+
+out:
+	if (st.matches.spill != NULL) {
+		g_array_free(st.matches.spill, TRUE);
+	}
+
+	return st.ret;
 }
 
 gboolean
@@ -3453,18 +4418,7 @@ rspamd_url_find(rspamd_mempool_t *pool,
 	cb.pool = pool;
 
 	if (how == RSPAMD_URL_FIND_ALL) {
-		if (url_scanner->search_trie_full) {
-			cb.matchers = url_scanner->matchers_full;
-			ret = rspamd_multipattern_lookup(url_scanner->search_trie_full,
-											 begin, len,
-											 rspamd_url_trie_callback, &cb, NULL);
-		}
-		else {
-			cb.matchers = url_scanner->matchers_strict;
-			ret = rspamd_multipattern_lookup(url_scanner->search_trie_strict,
-											 begin, len,
-											 rspamd_url_trie_callback, &cb, NULL);
-		}
+		ret = rspamd_url_scan_text_full(begin, len, rspamd_url_trie_callback, &cb);
 	}
 	else {
 		cb.matchers = url_scanner->matchers_strict;
@@ -3576,13 +4530,10 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 		else {
 			cb->url_str = rspamd_mempool_alloc(cb->pool, m.m_len + 1);
 			cb->len = rspamd_strlcpy(cb->url_str, m.m_begin, m.m_len + 1);
+			cb->prefix_added = FALSE;
 		}
 
 		cb->start = m.m_begin;
-
-		if (m.m_begin + m.m_len > cb->fin) {
-			cb->fin = m.m_begin + m.m_len;
-		}
 
 		url = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_url));
 		g_strstrip(cb->url_str);
@@ -3591,6 +4542,15 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 							  RSPAMD_URL_PARSE_TEXT, cb->lua_state);
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
+			/* Only an accepted candidate hides the ones that end inside it */
+			if (m.m_begin + m.m_len > cb->fin) {
+				cb->fin = m.m_begin + m.m_len;
+			}
+
+			if (m.fin > cb->fin) {
+				cb->fin = m.fin;
+			}
+
 			if (cb->prefix_added) {
 				url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
 				cb->prefix_added = FALSE;
@@ -3604,10 +4564,14 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 				}
 			}
 		}
-		else if (rc != URI_ERRNO_OK) {
-			msg_debug_pool_check("extract of url '%s' failed: %s",
-								 cb->url_str,
-								 rspamd_url_strerror(rc));
+		else {
+			if (rc != URI_ERRNO_OK) {
+				msg_debug_pool_check("extract of url '%s' failed: %s",
+									 cb->url_str,
+									 rspamd_url_strerror(rc));
+			}
+
+			rspamd_url_candidate_rejected(cb, &m);
 		}
 	}
 	else {
@@ -3617,6 +4581,11 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 	}
 
 	/* Continue search if required (return 0 means continue) */
+	if (rc != URI_ERRNO_OK || url->hostlen == 0) {
+		/* A rejected candidate is not a result */
+		return 0;
+	}
+
 	return !multiple;
 }
 
@@ -3680,10 +4649,13 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 	}
 	/* Also check max urls */
 	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
-		if (kh_size(MESSAGE_FIELD(task, urls)) > cbd->task->cfg->max_urls) {
-			msg_err_task("part has too many URLs, we cannot process more: "
-						 "%d urls extracted ",
-						 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+		if (kh_size(MESSAGE_FIELD(task, urls)) >= cbd->task->cfg->max_urls) {
+			/* Once for a message: each of its remaining urls gets here */
+			if (rspamd_url_note_limit_reached(task->task_pool)) {
+				msg_err_task("message has too many URLs, we cannot process more: "
+							 "%d urls extracted ",
+							 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+			}
 
 			return FALSE;
 		}
@@ -3696,7 +4668,8 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 
 	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+									   task->cfg ? task->cfg->max_urls : 0)) {
 
 		url->part_order = cbd->cur_part_order++;
 
@@ -3744,10 +4717,13 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 	}
 	/* Also check max urls */
 	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
-		if (kh_size(MESSAGE_FIELD(task, urls)) > cbd->task->cfg->max_urls) {
-			msg_err_task("part has too many URLs, we cannot process more: "
-						 "%d urls extracted ",
-						 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+		if (kh_size(MESSAGE_FIELD(task, urls)) >= cbd->task->cfg->max_urls) {
+			/* Once for a message: each of its remaining urls gets here */
+			if (rspamd_url_note_limit_reached(task->task_pool)) {
+				msg_err_task("message has too many URLs, we cannot process more: "
+							 "%d urls extracted ",
+							 (unsigned int) kh_size(MESSAGE_FIELD(task, urls)));
+			}
 
 			return FALSE;
 		}
@@ -3767,9 +4743,8 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 
 	rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
 
-	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false)) {
-		rspamd_mime_part_add_url(cbd->part ? cbd->part->mime_part : NULL, url);
-
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+									   task->cfg ? task->cfg->max_urls : 0)) {
 		url->part_order = cbd->cur_part_order++;
 
 		if (cbd->cur_url_order) {
@@ -3848,18 +4823,8 @@ void rspamd_url_find_multiple(rspamd_mempool_t *pool,
 	cb.newlines = nlines;
 
 	if (how == RSPAMD_URL_FIND_ALL) {
-		if (url_scanner->search_trie_full) {
-			cb.matchers = url_scanner->matchers_full;
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_multiple, &cb, NULL);
-		}
-		else {
-			cb.matchers = url_scanner->matchers_strict;
-			rspamd_multipattern_lookup(url_scanner->search_trie_strict,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_multiple, &cb, NULL);
-		}
+		rspamd_url_scan_text_full(in, inlen,
+								  rspamd_url_trie_generic_callback_multiple, &cb);
 	}
 	else {
 		cb.matchers = url_scanner->matchers_strict;
@@ -3958,9 +4923,22 @@ void rspamd_url_query_foreach_embedded(rspamd_mempool_t *pool,
 	while (p <= end) {
 		if (p == end || *p == '&' || *p == ';') {
 			if (p > c) {
-				/* Parameter [c, p): scan the value after the first '=' */
+				/*
+				 * Parameter [c, p): scan the value after the first '=', but
+				 * only when the part before '=' looks like a parameter key.
+				 * A bare embedded URL is its own parameter and can contain
+				 * '=' itself (e.g. base64 padding in the path), so a prefix
+				 * with URL structure characters means there is no key and
+				 * the whole parameter must be scanned.
+				 */
 				const char *eq = memchr(c, '=', p - c);
-				const char *vstart = eq ? eq + 1 : c;
+				const char *vstart = c;
+
+				if (eq != NULL &&
+					rspamd_memcspn(c, eq - c, ":/", 2) == (gsize) (eq - c)) {
+					vstart = eq + 1;
+				}
+
 				gsize vlen = p - vstart;
 
 				if (vlen > 0) {
@@ -4049,18 +5027,8 @@ void rspamd_url_find_single(rspamd_mempool_t *pool,
 	cb.func = func;
 
 	if (how == RSPAMD_URL_FIND_ALL) {
-		if (url_scanner->search_trie_full) {
-			cb.matchers = url_scanner->matchers_full;
-			rspamd_multipattern_lookup(url_scanner->search_trie_full,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_single, &cb, NULL);
-		}
-		else {
-			cb.matchers = url_scanner->matchers_strict;
-			rspamd_multipattern_lookup(url_scanner->search_trie_strict,
-									   in, inlen,
-									   rspamd_url_trie_generic_callback_single, &cb, NULL);
-		}
+		rspamd_url_scan_text_full(in, inlen,
+								  rspamd_url_trie_generic_callback_single, &cb);
 	}
 	else {
 		cb.matchers = url_scanner->matchers_strict;
@@ -4095,7 +5063,8 @@ rspamd_url_subject_query_callback(struct rspamd_url *query_url, gsize start_offs
 		return TRUE;
 	}
 
-	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), query_url, false);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), query_url, false,
+								   task->cfg ? task->cfg->max_urls : 0);
 
 	return TRUE;
 }
@@ -4115,7 +5084,8 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
+								   task->cfg ? task->cfg->max_urls : 0);
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
@@ -4544,9 +5514,23 @@ rspamd_url_protocol_from_string(const char *str)
 }
 
 
+bool rspamd_url_note_limit_reached(rspamd_mempool_t *pool)
+{
+	if (pool == NULL ||
+		rspamd_mempool_get_variable(pool, RSPAMD_MEMPOOL_URLS_LIMIT_REACHED) != NULL) {
+		return false;
+	}
+
+	rspamd_mempool_set_variable(pool, RSPAMD_MEMPOOL_URLS_LIMIT_REACHED,
+								(gpointer) "1", NULL);
+
+	return true;
+}
+
 bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
-									bool enforce_replace)
+									bool enforce_replace,
+									unsigned int max_urls)
 {
 	khiter_t k;
 	int r;
@@ -4557,6 +5541,11 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 		/* Existing url */
 		struct rspamd_url *ex = kh_key(set, k);
 #define SUSPICIOUS_URL_FLAGS (RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED | RSPAMD_URL_FLAG_ZW_SPACES)
+		if (!(u->flags & RSPAMD_URL_FLAG_IMAGE)) {
+			/* Seen not only as an image source: it is no image url any more */
+			ex->flags &= ~RSPAMD_URL_FLAG_IMAGE;
+		}
+
 		if (enforce_replace) {
 			kh_key(set, k) = u;
 			u->count++;
@@ -4580,6 +5569,11 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 		return false;
 	}
 	else {
+		if (max_urls > 0 && kh_size(set) >= max_urls) {
+			/* The set is full, silently reject the new url */
+			return false;
+		}
+
 		k = kh_put(rspamd_url_hash, set, u, &r);
 	}
 
@@ -4588,7 +5582,8 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 
 struct rspamd_url *
 rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
-							 struct rspamd_url *u)
+							 struct rspamd_url *u,
+							 unsigned int max_urls)
 {
 	khiter_t k;
 	int r;
@@ -4600,6 +5595,11 @@ rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
 			return kh_key(set, k);
 		}
 		else {
+			if (max_urls > 0 && kh_size(set) >= max_urls) {
+				/* The set is full, reject the new url */
+				return NULL;
+			}
+
 			k = kh_put(rspamd_url_hash, set, u, &r);
 
 			return kh_key(set, k);

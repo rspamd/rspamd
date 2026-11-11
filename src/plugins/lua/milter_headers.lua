@@ -258,7 +258,7 @@ local function milter_headers(task)
 
     for _, s in ipairs(common.symbols) do
       local sym_str = string.format('%s(%.2f)[%s]',
-        s.name, s.score, table.concat(s.options or {}, ','))
+        s.name, s.score, lua_util.symbol_options_to_string(s.options))
       table.insert(buf, sym_str)
     end
     add_header('x-spamd-result', table.concat(buf, '; '), ';')
@@ -340,7 +340,7 @@ local function milter_headers(task)
 
   routines['x-spamd-bar'] = function()
     local local_mod = settings.routines['x-spamd-bar']
-    if skip_wanted('x-rspamd-bar') then
+    if skip_wanted('x-spamd-bar') then
       return
     end
     if not common['metric_score'] then
@@ -446,7 +446,7 @@ local function milter_headers(task)
       local s = common.symbols_hash[sym]
       if s then
         if (s.options or E)[1] then
-          table.insert(virii, table.concat(s.options, ','))
+          table.insert(virii, lua_util.symbol_options_to_string(s.options))
         elseif s then
           table.insert(virii, 'unknown')
         end
@@ -466,7 +466,7 @@ local function milter_headers(task)
         if s then
           failed = true
           if (s.options or E)[1] then
-            fail_reason = table.concat(s.options, ',')
+            fail_reason = lua_util.symbol_options_to_string(s.options)
           end
         end
       end
@@ -475,7 +475,7 @@ local function milter_headers(task)
           add_header('x-virus', local_mod.status_clean)
         end
       else
-        if local_mod.status_clean then
+        if local_mod.status_fail then
           add_header('x-virus', string.format('%s(%s)',
             local_mod.status_fail, fail_reason))
         end
@@ -626,13 +626,33 @@ local function milter_headers(task)
   end
 
   routines['fuzzy-hashes'] = function()
-    local res = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
+    local matches = task:get_fuzzy_results()
+    local out = {}
 
-    if res and #res > 0 then
+    if matches and #matches > 0 then
+      for _, m in ipairs(matches) do
+        local ann = string.format('rule=%s; flag=%s; prob=%.2f', m.rule, m.flag, m.prob)
+
+        if not m.exact then
+          ann = ann .. string.format('; queried=%s', m.queried)
+        end
+
+        if m.added and m.added > 0 then
+          ann = ann .. string.format('; added=%s', os.date('!%Y-%m-%d %H:%M:%S', m.added))
+        end
+
+        out[#out + 1] = string.format('%s (%s)', m.found, ann)
+      end
+    else
+      -- Legacy pool variable set by external fuzzy implementations
+      out = task:get_mempool():get_variable("fuzzy_hashes", "fstrings") or {}
+    end
+
+    if #out > 0 then
       if settings.headers_modify_mode == 'compat' then
-        add_header('fuzzy-hashes', table.concat(res, ','))
+        add_header('fuzzy-hashes', table.concat(out, ','))
       else
-        for _, h in ipairs(res) do
+        for _, h in ipairs(out) do
           add_header('fuzzy-hashes', h)
         end
       end

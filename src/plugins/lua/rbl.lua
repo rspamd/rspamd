@@ -130,6 +130,24 @@ local function maybe_make_hash(data, rule)
   end
 end
 
+-- Only the one legal root dot goes, so a malformed "name.." stays invalid
+local function strip_root_dot(s)
+  if s:sub(-1) == '.' and s:sub(-2) ~= '..' then
+    return s:sub(1, -2)
+  end
+
+  return s
+end
+
+-- DNS names are case-insensitive, but a base64 hash carries data in its case
+local function fold_case(rule, name)
+  if rule.hash and rule.hash_format == 'base64' then
+    return name
+  end
+
+  return name:lower()
+end
+
 local function is_excluded_ip(rip)
   if local_exclusions and local_exclusions:get_key(rip) then
     return true
@@ -254,45 +272,90 @@ matchers.glob = function(_, to_match, _, map)
 end
 
 local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
-  local function make_option(ip, label)
+  local function make_option(origin, ip, label)
     if ip then
       return string.format('%s:%s:%s',
-          resolve_table_elt.orig,
+          origin,
           label,
           ip)
     else
       return string.format('%s:%s',
-          resolve_table_elt.orig,
+          origin,
           label)
     end
   end
 
-  local function insert_result(s, ip, label)
-    if rbl.symbols_prefixes then
-      local prefix = rbl.symbols_prefixes[label]
-
-      if not prefix then
-        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
-        task:insert_result(s, 1.0, make_option(ip, label))
-      else
-        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip, label))
-      end
-    else
-      task:insert_result(s, 1.0, make_option(ip, label))
-    end
-  end
+  -- merge_checks false restores the pre-4.2.3 one-insertion-per-check behavior
+  local merge_checks = rbl.merge_checks ~= false
 
   local function insert_results(s, ip)
-    for label in pairs(resolve_table_elt.what) do
-      insert_result(s, ip, label)
+    -- Symbol name -> origin -> labels; symbols_prefixes may split one origin
+    local by_symbol = {}
+
+    for origin, origin_labels in pairs(resolve_table_elt.origins) do
+      for label in pairs(origin_labels) do
+        local sym_name = s
+        if rbl.symbols_prefixes then
+          local prefix = rbl.symbols_prefixes[label]
+          if not prefix then
+            rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
+          else
+            sym_name = prefix .. '_' .. s
+          end
+        end
+        local sym_origins = by_symbol[sym_name]
+        if not sym_origins then
+          sym_origins = {}
+          by_symbol[sym_name] = sym_origins
+        end
+        if not sym_origins[origin] then
+          sym_origins[origin] = {}
+        end
+        table.insert(sym_origins[origin], tostring(label))
+      end
+    end
+
+    for sym_name, sym_origins in pairs(by_symbol) do
+      local options = {}
+      for origin, labels in pairs(sym_origins) do
+        table.sort(labels)
+        if merge_checks then
+          for _, label in ipairs(labels) do
+            options[#options + 1] = make_option(origin, ip, label)
+          end
+        else
+          for _, label in ipairs(labels) do
+            task:insert_result(sym_name, 1.0, make_option(origin, ip, label))
+          end
+        end
+      end
+
+      if merge_checks then
+        -- A single insertion with one option per check, so the weight is
+        -- counted (and a shot spent) once
+        table.sort(options)
+        task:insert_result(sym_name, 1.0, options)
+      end
     end
   end
 
   if err and (err ~= 'requested record is not found' and
       err ~= 'no records with this name') then
     rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
-    task:insert_result(rbl.symbol .. '_FAIL', 1, string.format('%s:%s',
-        resolve_table_elt.orig, err))
+    -- Report every merged origin
+    local failed_origins = lua_util.keys(resolve_table_elt.origins)
+    table.sort(failed_origins)
+    local options = {}
+    for i, origin in ipairs(failed_origins) do
+      options[i] = string.format('%s:%s', origin, err)
+    end
+    if merge_checks then
+      task:insert_result(rbl.symbol .. '_FAIL', 1.0, options)
+    else
+      for _, opt in ipairs(options) do
+        task:insert_result(rbl.symbol .. '_FAIL', 1.0, opt)
+      end
+    end
     return
   end
 
@@ -375,15 +438,17 @@ local function gen_rbl_callback(rule)
     if whitelist then
       local wl = whitelist[req_str]
       if wl then
-        lua_util.debugm(N, task,
-            'whitelisted request to %s by %s (%s) rbl rule (%s checked type, %s whitelist type)',
-            req_str, wl.type, wl.symbol, what, wl.type)
-        if wl.type == what then
-          -- This was decided to be a bad idea as in case of whitelisting a request to blacklist
-          -- is not even sent
-          --task:adjust_result(wl.symbol, 0.0 / 0.0, rule.symbol)
+        for _, wl_entry in ipairs(wl) do
+          lua_util.debugm(N, task,
+              'whitelisted request to %s by %s (%s) rbl rule (%s checked type, %s whitelist type)',
+              req_str, wl_entry.type, wl_entry.symbol, what, wl_entry.type)
+          if wl_entry.type == what then
+            -- This was decided to be a bad idea as in case of whitelisting a request to blacklist
+            -- is not even sent
+            --task:adjust_result(wl_entry.symbol, 0.0 / 0.0, rule.symbol)
 
-          return true
+            return true
+          end
         end
       end
     end
@@ -392,59 +457,97 @@ local function gen_rbl_callback(rule)
   end
 
   local function add_dns_request(task, req, forced, is_ip, requests_table, label, whitelist)
-    local req_str = req
-    if is_ip then
-      req_str = tostring(req)
+    -- Discard empty queries to avoid querying the RBL suffix itself
+    if not is_ip and (not req or req == '') then
+      lua_util.debugm(N, task, 'skip empty RBL request for %s (%s)',
+          rule.symbol, label)
+      return
     end
 
-    if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
-      return
+    local req_str = tostring(req)
+
+    if whitelist then
+      if is_whitelisted(task, req, req_str, whitelist, label) then
+        return
+      end
+
+      -- The query below drops a root dot, so the whitelist must see that name too
+      if not is_ip and not rule.process_script and (rule.resolve_ip or not rule.hash) then
+        local stripped = strip_root_dot(req_str)
+        if stripped ~= req_str and is_whitelisted(task, stripped, stripped, whitelist, label) then
+          return
+        end
+      end
     end
 
     if is_ip then
       req = ip_to_rbl(req)
     end
 
-    if requests_table[req] then
+    local resolve_ip = rule.resolve_ip and not is_ip
+    -- A name that is resolved first must not share a slot with an address
+    -- whose reversed octets are spelled the same
+    local req_key = resolve_ip and ('resolve:' .. req_str) or req
+
+    if requests_table[req_key] then
       -- Duplicate request
-      local nreq = requests_table[req]
+      local nreq = requests_table[req_key]
       if forced and not nreq.forced then
         nreq.forced = true
       end
       if not nreq.what[label] then
         nreq.what[label] = true
+        lua_util.debugm(N, task, 'merging duplicate RBL request for %s: %s (%s)',
+            rule.symbol, req_str, label)
       end
+      if not nreq.origins[req_str] then
+        nreq.origins[req_str] = {}
+      end
+      nreq.origins[req_str][label] = true
 
       return true, nreq -- Duplicate
     else
       local nreq
 
-      local resolve_ip = rule.resolve_ip and not is_ip
       if rule.process_script then
         local processed = rule.process_script(req, rule.rbl, task, resolve_ip)
+        local n = processed and strip_root_dot(tostring(processed))
 
-        if processed then
+        if n and n ~= '' then
           nreq = {
             forced = forced,
-            n = processed,
+            -- The script owns the name and its case may carry data
+            n = n,
             orig = req_str,
             resolve_ip = resolve_ip,
             what = { [label] = true },
+            origins = { [req_str] = { [label] = true } },
           }
-          requests_table[req] = nreq
+          requests_table[req_key] = nreq
         end
       else
         local to_resolve
-        local origin = req
+        local origin = tostring(req)
+
+        -- A hash covers the value as data, a trailing dot included
+        if resolve_ip or not rule.hash then
+          origin = strip_root_dot(origin)
+        end
+
+        if origin == '' then
+          lua_util.debugm(N, task, 'skip empty RBL request for %s (%s)',
+              rule.symbol, label)
+          return
+        end
 
         if not resolve_ip then
-          origin = maybe_make_hash(req, rule)
-          to_resolve = string.format('%s.%s',
+          origin = maybe_make_hash(origin, rule)
+          to_resolve = fold_case(rule, string.format('%s.%s',
               origin,
-              rule.rbl)
+              rule.rbl))
         else
           -- First, resolve origin stuff without hashing or anything
-          to_resolve = origin
+          to_resolve = origin:lower()
         end
 
         nreq = {
@@ -453,8 +556,9 @@ local function gen_rbl_callback(rule)
           orig = req_str,
           resolve_ip = resolve_ip,
           what = { [label] = true },
+          origins = { [req_str] = { [label] = true } },
         }
-        requests_table[req] = nreq
+        requests_table[req_key] = nreq
       end
       return false, nreq
     end
@@ -488,7 +592,7 @@ local function gen_rbl_callback(rule)
   local function check_required_symbols(task, _)
     if rule.require_symbols then
       return fun.all(function(sym)
-        task:has_symbol(sym)
+        return task:has_symbol(sym)
       end, rule.require_symbols)
     end
 
@@ -540,13 +644,12 @@ local function gen_rbl_callback(rule)
       if rule.dkim_match_from then
         -- We check merely mime from
         mime_from_domain = ((task:get_from('mime') or E)[1] or E).domain
-        if mime_from_domain then
-          local mime_from_domain_tld = rule.url_full_hostname and
-              mime_from_domain or rspamd_util.get_tld(mime_from_domain)
+        if mime_from_domain and rule.dkim_domainonly then
+          local mime_from_domain_tld = rspamd_util.get_tld(mime_from_domain)
 
           if rule.url_compose_map then
             mime_from_domain = rule.url_compose_map:process_url(task, mime_from_domain_tld, mime_from_domain)
-          else
+          elseif not rule.url_full_hostname then
             mime_from_domain = mime_from_domain_tld
           end
         end
@@ -561,7 +664,7 @@ local function gen_rbl_callback(rule)
           if rule.dkim_match_from then
             -- We check merely mime from
             local domain_tld = domain
-            if not rule.dkim_domainonly then
+            if rule.dkim_domainonly then
               -- Adjust
               domain_tld = rspamd_util.get_tld(domain)
 
@@ -944,6 +1047,35 @@ local function gen_rbl_callback(rule)
     end
 
     -- Now check all DNS requests pending and emit them
+    -- Deduplicate by DNS query name and resolution phase
+    local deduped_req = {}
+    for _, req in pairs(dns_req) do
+      local dedupe_key = (req.resolve_ip and 'resolve:' or 'rbl:') .. req.n
+      local existing = deduped_req[dedupe_key]
+      if existing then
+        for label, _ in pairs(req.what) do
+          if not existing.what[label] then
+            existing.what[label] = true
+          end
+        end
+        for origin, labels in pairs(req.origins) do
+          if not existing.origins[origin] then
+            existing.origins[origin] = {}
+          end
+          for label in pairs(labels) do
+            existing.origins[origin][label] = true
+          end
+        end
+        if req.forced and not existing.forced then
+          existing.forced = true
+        end
+        lua_util.debugm(N, task, 'merging DNS request for %s: %s (same query %s)',
+            rule.symbol, req.orig, req.n)
+      else
+        deduped_req[dedupe_key] = req
+      end
+    end
+
     local r = task:get_resolver()
     -- Used for 2 passes ip resolution
     local resolved_req = {}
@@ -957,12 +1089,26 @@ local function gen_rbl_callback(rule)
             -- Check if we have rspamd{ip} userdata
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
-              local label = next(orig_resolve_table_elt.what)
-              local dup, nreq = add_dns_request(task, dns_res, false, true,
-                  resolved_req, label)
-              -- Add original name
-              if not dup then
-                nreq.orig = nreq.orig .. ':' .. orig_resolve_table_elt.n
+              local nreq
+              for label in pairs(orig_resolve_table_elt.what) do
+                -- Not `_, nreq =`: Lua 5.5 makes the loop variable `_` constant
+                nreq = select(2, add_dns_request(task, dns_res, false, true,
+                    resolved_req, label))
+              end
+
+              -- No request if process_script dropped the address
+              if nreq then
+                local ip_str = tostring(dns_res)
+                nreq.origins[ip_str] = nil
+                for origin, labels in pairs(orig_resolve_table_elt.origins) do
+                  local resolved_origin = string.format('%s:%s', ip_str, origin)
+                  if not nreq.origins[resolved_origin] then
+                    nreq.origins[resolved_origin] = {}
+                  end
+                  for label in pairs(labels) do
+                    nreq.origins[resolved_origin][label] = true
+                  end
+                end
               end
             end
           end
@@ -992,7 +1138,7 @@ local function gen_rbl_callback(rule)
       end
     end
 
-    for name, req in pairs(dns_req) do
+    for name, req in pairs(deduped_req) do
       local val_res, val_error = validate_dns(req.n)
       if val_res then
         lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
@@ -1061,11 +1207,14 @@ local function add_rbl(key, rbl, global_opts)
   if rbl.selector then
 
     rbl.selectors = {}
+    -- Selector strings: the symbols they need are registered as dependencies
+    rbl.selector_strings = {}
     if type(rbl.selector) ~= 'table' then
       rbl.selector = { ['selector'] = rbl.selector }
     end
 
     for selector_label, selector in pairs(rbl.selector) do
+      table.insert(rbl.selector_strings, selector)
       if known_selectors[selector] then
         lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
             known_selectors[selector].id)
@@ -1209,6 +1358,11 @@ local function add_rbl(key, rbl, global_opts)
         rbl.symbol, rbl)
 
     local check_sym = rbl.symbols_prefixes and rbl.symbol .. '_CHECK' or rbl.symbol
+
+    for _, selector_str in ipairs(rbl.selector_strings or {}) do
+      -- Symbols used by the selector must be checked before the rule
+      selectors.register_dependencies(rspamd_config, check_sym, selector_str)
+    end
 
     if rbl.dkim then
       -- Weak: RBL has other query sources; DKIM-domain queries just won't happen
@@ -1364,6 +1518,11 @@ for key, rbl in pairs(opts.rbls) do
         end
       end
     end
+    -- merge_checks changes scoring, so its global opt-out must also reach
+    -- the rules that ignore the other defaults
+    if rbl.merge_checks == nil then
+      rbl.merge_checks = opts.default_merge_checks
+    end
 
     if not rbl.requests_limit then
       rbl.requests_limit = rspamd_config:get_dns_max_requests()
@@ -1374,14 +1533,15 @@ for key, rbl in pairs(opts.rbls) do
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
-      res = rbl_common.convert_checks(res, rbl.symbol or key:upper())
-      -- Aliases
+      -- Aliases must be resolved before convert_checks, as it autodetects
+      -- the luapattern matcher by looking at returncodes
       if res.return_codes then
         res.returncodes = res.return_codes
       end
       if res.return_bits then
         res.returnbits = res.return_bits
       end
+      res = rbl_common.convert_checks(res, rbl.symbol or key:upper())
 
       if not res then
         rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
@@ -1391,6 +1551,31 @@ for key, rbl in pairs(opts.rbls) do
       end
     end
   end -- rbl.enabled
+end
+
+-- Split an option produced by `make_option` back into the checked element and
+-- the check label. The option is either `<elt>:<label>` or, when the rule
+-- reports the DNS reply, `<elt>:<label>:<reply ip>`. `<elt>` is whatever was
+-- looked up and may itself contain colons -- an IPv6 address most notably --
+-- so the fields have to be taken from the right, not from the left.
+local function rbl_split_option(opt)
+  local elt, what = opt:match('^(.*):([^:]+)$')
+
+  if not elt then
+    return nil
+  end
+
+  -- The trailing field is the DNS reply address rather than the label: the
+  -- reply is always a dotted quad and a label never is, so this is unambiguous.
+  if what:match('^%d+%.%d+%.%d+%.%d+$') then
+    elt, what = elt:match('^(.*):([^:]+)$')
+
+    if not elt then
+      return nil
+    end
+  end
+
+  return elt, what
 end
 
 -- We now create two symbols:
@@ -1406,14 +1591,17 @@ local function rbl_callback_white(task)
         ws.options = {}
       end
       for _, opt in ipairs(ws.options) do
-        local elt, what = opt:match('^([^:]+):([^:]+)')
+        local elt, what = rbl_split_option(opt)
         lua_util.debugm(N, task, 'found whitelist from %s: %s(%s)', w,
             elt, what)
         if elt and what then
-          whitelisted_elements[elt] = {
+          if not whitelisted_elements[elt] then
+            whitelisted_elements[elt] = {}
+          end
+          table.insert(whitelisted_elements[elt], {
             type = what,
             symbol = w,
-          }
+          })
         end
       end
     end

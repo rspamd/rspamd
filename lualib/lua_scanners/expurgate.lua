@@ -241,7 +241,7 @@ local function expurgate_check(task, content, digest, rule, maybe_part)
           task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
           return
         end
-        local parser = ucl.parser()
+        local parser = ucl.untrusted_parser()
         local ret, err = parser:parse_string(body)
         if not ret then
           rspamd_logger.errx(task, 'expurgate: bad response body (raw): %s', body)

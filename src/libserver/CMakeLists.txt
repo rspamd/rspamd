@@ -18,6 +18,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_keys.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_ratelimit.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_storage_stat.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_wire.c
         ${CMAKE_CURRENT_SOURCE_DIR}/milter.c
         ${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
         ${CMAKE_CURRENT_SOURCE_DIR}/multipart_form.cxx
@@ -33,7 +34,9 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/symcache/symcache_runtime.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/symcache/symcache_c.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/settings_merge.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/allocator_conf.c
         ${CMAKE_CURRENT_SOURCE_DIR}/task.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tld_lookup.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/url.c
         ${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c
         ${CMAKE_CURRENT_SOURCE_DIR}/http_content_negotiation.c

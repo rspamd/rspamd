@@ -20,7 +20,6 @@ Also for each command you can check list of available **command_options** by run
 
     rspamadm help command
     rspamadm command --help
-    
 
 # OPTIONS
 
@@ -38,6 +37,31 @@ Also for each command you can check list of available **command_options** by run
 
 \--var=*value*
 :   Redefine ucl variable in format `VARIABLE=VALUE`
+
+# COMMAND DISCOVERY
+
+In addition to the built-in commands, `rspamadm` discovers Lua command modules
+(`*.lua` files exporting a `handler` function) from the following locations, in
+order:
+
+1. The built-in command directory inside rspamd's `lualib` tree.
+2. `$CONFDIR/rspamadm.d/*.lua` (a drop-in directory, consistent with `local.d`
+   and `modules.local.d`), if it exists.
+3. Every directory listed in the colon-separated `RSPAMADM_COMMAND_PATH`
+   environment variable (mirrors how `PATH` works).
+
+This lets third-party or premium packages ship `rspamadm` commands without
+writing into the rspamd-owned `lualib` tree. Externally loaded commands run with
+the same environment as the built-in ones (`rspamd_config`, event base, DNS
+resolver) and can `require` Lua libraries reachable through the configured
+`lua_path`. If two locations provide a command with the same name, the first one
+discovered wins (built-in commands always take precedence).
+
+# ENVIRONMENT
+
+RSPAMADM_COMMAND_PATH
+:   A colon-separated list of extra directories to scan for Lua command modules,
+    e.g. `RSPAMADM_COMMAND_PATH=/usr/share/rspamd-console/rspamadm`.
 
 # RETURN VALUE
 

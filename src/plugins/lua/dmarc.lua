@@ -47,15 +47,26 @@ local take_report_script = [[
 local index_key = KEYS[1]
 local report_key = KEYS[2]
 local max_entries = -(tonumber(KEYS[3]) + 1)
-local keys_expiry = tonumber(KEYS[4])
+local keys_expiry = math.floor(tonumber(KEYS[4]) or 172800)
 local dmarc_domain = ARGV[1]
 local report = ARGV[2]
 redis.call('SADD', index_key, report_key)
-redis.call('EXPIRE', index_key, 172800)
+redis.call('EXPIRE', index_key, keys_expiry)
 redis.call('ZINCRBY', report_key, 1, report)
 redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
-redis.call('EXPIRE', report_key, 172800)
+redis.call('EXPIRE', report_key, keys_expiry)
 ]]
+
+-- Publish the policy evaluation result so that other modules (e.g. fuzzy_check)
+-- can use it without matching our symbol names, which are configurable.
+-- Note that we report the *published* policy rather than the disposition we
+-- ended up applying: sampling (pct=) and local overrides describe us, not the
+-- sender.
+local function publish_result(task, result)
+  if result then
+    task:get_mempool():set_variable('dmarc_result', result)
+  end
+end
 
 local function maybe_force_action(task, disposition)
   if disposition then
@@ -76,7 +87,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local spf_tmpfail = false
   local dkim_tmpfail = false
 
-  local spf_domain = ((task:get_from(1) or E)[1] or E).domain
+  -- SPF alignment is checked against the envelope domain as it was seen in
+  -- the message, before any rewrite (e.g. by the aliases module)
+  local spf_domain = ((task:get_from({ 'smtp', 'orig' }) or E)[1] or E).domain
 
   if not spf_domain or spf_domain == '' then
     spf_domain = task:get_helo() or ''
@@ -124,7 +137,6 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
   if opts then
     dkim_results.pass = {}
-    local dkim_violated
 
     for _, opt in ipairs(opts) do
       local check_res = string.sub(opt, -1)
@@ -132,37 +144,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
       if check_res == '+' then
         table.insert(dkim_results.pass, domain)
-
-        if policy.strict_dkim then
-          if rspamd_util.strequal_caseless(hdrfromdom, domain) then
-            dkim_ok = true
-          else
-            dkim_violated = "DKIM not aligned (strict)"
-          end
-        else
-          local dkim_tld = rspamd_util.get_tld(domain)
-
-          if rspamd_util.strequal_caseless(dkim_tld, dmarc_esld) then
-            dkim_ok = true
-          else
-            dkim_violated = "DKIM not aligned (relaxed)"
-          end
-        end
       elseif check_res == '?' then
-        -- Check for dkim tempfail
-        if not dkim_ok then
-          if policy.strict_dkim then
-            if rspamd_util.strequal_caseless(hdrfromdom, domain) then
-              dkim_tmpfail = true
-            end
-          else
-            local dkim_tld = rspamd_util.get_tld(domain)
-
-            if rspamd_util.strequal_caseless(dkim_tld, dmarc_esld) then
-              dkim_tmpfail = true
-            end
-          end
-        end
         table.insert(dkim_results.temperror, domain)
       elseif check_res == '-' then
         table.insert(dkim_results.fail, domain)
@@ -171,8 +153,30 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       end
     end
 
-    if not dkim_ok and dkim_violated then
-      table.insert(reason, dkim_violated)
+    -- The dkim module has already compared the signing domains against the
+    -- From domain; it knows which signatures verified, so it is the one place
+    -- where that comparison belongs. `relaxed` here means relaxed and not
+    -- strict, so a strict policy only accepts the strict verdict.
+    local mpool = task:get_mempool()
+    local function aligned(sense)
+      if not sense then
+        return false
+      end
+      if policy.strict_dkim then
+        return sense == 'strict'
+      end
+      return true
+    end
+
+    dkim_ok = aligned(mpool:get_variable('dkim_alignment', 'string'))
+
+    if not dkim_ok then
+      dkim_tmpfail = aligned(mpool:get_variable('dkim_alignment_tempfail', 'string'))
+
+      if next(dkim_results.pass) ~= nil then
+        table.insert(reason, policy.strict_dkim and "DKIM not aligned (strict)"
+            or "DKIM not aligned (relaxed)")
+      end
     end
   else
     table.insert(reason, "No valid DKIM")
@@ -187,10 +191,23 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local disposition = 'none'
   local sampled_out = false
 
-  local function handle_dmarc_failure(what, reason_str)
+  -- One "domain : reason" option per failure reason followed by the extra
+  -- options, so that reasons never need to be joined with commas
+  local function failure_options(reasons, ...)
+    local result = {}
+    for _, r in ipairs(reasons) do
+      result[#result + 1] = policy.domain .. ' : ' .. r
+    end
+    for _, extra in ipairs({ ... }) do
+      result[#result + 1] = extra
+    end
+    return result
+  end
+
+  local function handle_dmarc_failure(what, reasons)
     if not policy.pct or policy.pct == 100 then
       task:insert_result(settings.symbols[what], 1.0,
-        policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+        failure_options(reasons, policy.dmarc_policy))
       disposition = what
     else
       local coin = math.random(100)
@@ -204,19 +221,19 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
           end
 
           task:insert_result(settings.symbols[disposition], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
+            failure_options(reasons, policy.dmarc_policy, "sampled_out"))
           sampled_out = true
           lua_util.debugm(N, task,
             'changed dmarc policy from %s to %s, sampled out: %s < %s',
             what, disposition, coin, policy.pct)
         else
           task:insert_result(settings.symbols[what], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
+            failure_options(reasons, policy.dmarc_policy, "local_policy"))
           disposition = what
         end
       else
         task:insert_result(settings.symbols[what], 1.0,
-          policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+          failure_options(reasons, policy.dmarc_policy))
         disposition = what
       end
     end
@@ -233,6 +250,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     ]] --
     task:insert_result(settings.symbols['allow'], 1.0, policy.domain,
       policy.dmarc_policy)
+    publish_result(task, 'pass')
   else
     --[[
     https://tools.ietf.org/html/rfc7489#section-6.6.2
@@ -245,18 +263,22 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     if spf_tmpfail or dkim_tmpfail then
       task:insert_result(settings.symbols['dnsfail'], 1.0, policy.domain ..
         ' : ' .. 'SPF/DKIM temp error', policy.dmarc_policy)
+      publish_result(task, 'temperror')
     else
       -- We can now check the failed policy and maybe send report data elt
-      local reason_str = table.concat(reason, ', ')
+      if policy.dmarc_policy == 'quarantine' or policy.dmarc_policy == 'reject' then
+        publish_result(task, 'fail_' .. policy.dmarc_policy)
+      else
+        publish_result(task, 'fail_none')
+      end
 
       if policy.dmarc_policy == 'quarantine' then
-        handle_dmarc_failure('quarantine', reason_str)
+        handle_dmarc_failure('quarantine', reason)
       elseif policy.dmarc_policy == 'reject' then
-        handle_dmarc_failure('reject', reason_str)
+        handle_dmarc_failure('reject', reason)
       else
         task:insert_result(settings.symbols['softfail'], 1.0,
-          policy.domain .. ' : ' .. reason_str,
-          policy.dmarc_policy)
+          failure_options(reason, policy.dmarc_policy))
       end
     end
   end
@@ -450,7 +472,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 end
 
 local function dmarc_callback(task)
-  local from = task:get_from(2)
+  -- DMARC must evaluate the RFC5322.From domain as it was seen in the
+  -- message; rewrites done via task:set_from (e.g. by the aliases module)
+  -- must not affect alignment, policy lookup or reporting
+  local from = task:get_from({ 'mime', 'orig' })
   local hfromdom = ((from or E)[1] or E).domain
   local dmarc_domain
   local ip_addr = task:get_ip()
@@ -474,12 +499,15 @@ local function dmarc_callback(task)
     dmarc_domain = rspamd_util.get_tld(hfromdom)
   elseif (from or E)[2] then
     task:insert_result(settings.symbols['na'], 1.0, 'Duplicate From header')
+    publish_result(task, 'no_record')
     return maybe_force_action(task, 'na')
   elseif (from or E)[1] then
     task:insert_result(settings.symbols['na'], 1.0, 'No domain in From header')
+    publish_result(task, 'no_record')
     return maybe_force_action(task, 'na')
   else
     task:insert_result(settings.symbols['na'], 1.0, 'No From header')
+    publish_result(task, 'no_record')
     return maybe_force_action(task, 'na')
   end
 
@@ -495,6 +523,7 @@ local function dmarc_callback(task)
       -- insert result
       if final or policy.fatal then
         task:insert_result(policy.symbol, 1.0, policy.err)
+        publish_result(task, policy.result)
         maybe_force_action(task, policy.disposition)
 
         return true
@@ -525,9 +554,11 @@ local function dmarc_callback(task)
                 err ~= 'no records with this name') then
             policy_target.err = lookup_domain .. ' : ' .. err
             policy_target.symbol = settings.symbols['dnsfail']
+            policy_target.result = 'temperror'
           else
             policy_target.err = lookup_domain
             policy_target.symbol = settings.symbols['na']
+            policy_target.result = 'no_record'
           end
         else
           local has_valid_policy = false
@@ -540,6 +571,7 @@ local function dmarc_callback(task)
                 -- We have a fatal parsing error, give up
                 policy_target.err = lookup_domain .. ' : ' .. results_or_err
                 policy_target.symbol = settings.symbols['badpolicy']
+                policy_target.result = 'permerror'
                 policy_target.fatal = true
                 seen_invalid = true
               end
@@ -548,6 +580,7 @@ local function dmarc_callback(task)
                 policy_target.err = lookup_domain .. ' : ' ..
                     'Multiple policies defined in DNS'
                 policy_target.symbol = settings.symbols['badpolicy']
+                policy_target.result = 'permerror'
                 policy_target.fatal = true
                 seen_invalid = true
               end
@@ -562,6 +595,7 @@ local function dmarc_callback(task)
           if not has_valid_policy and not seen_invalid then
             policy_target.err = lookup_domain .. ':' .. ' no valid DMARC record'
             policy_target.symbol = settings.symbols['na']
+            policy_target.result = 'no_record'
           end
         end
       end
@@ -581,25 +615,37 @@ local function dmarc_callback(task)
 
   local resolve_name = '_dmarc.' .. hfromdom
 
-  task:get_resolver():resolve_txt({
+  -- A request that cannot be made has no callback: a name too long for a
+  -- query, or a label over 63 bytes, which the domain of a From header can
+  -- be. It is not counted then, or the answer for the other name would wait
+  -- for it and the policy of the organisational domain would not be applied
+  local domain_cb = gen_dmarc_cb(hfromdom, false)
+  local tld_cb = dmarc_domain ~= hfromdom and gen_dmarc_cb(dmarc_domain, true)
+
+  dns_checks_inflight = dns_checks_inflight + 1
+  local domain_asked = task:get_resolver():resolve_txt({
     task = task,
     name = resolve_name,
-    callback = gen_dmarc_cb(hfromdom, false),
+    callback = domain_cb,
     forced = true
   })
-  dns_checks_inflight = dns_checks_inflight + 1
 
-  if dmarc_domain ~= hfromdom then
-    resolve_name = '_dmarc.' .. dmarc_domain
-
-    task:get_resolver():resolve_txt({
-      task = task,
-      name = resolve_name,
-      callback = gen_dmarc_cb(dmarc_domain, true),
-      forced = true
-    })
-
+  if tld_cb then
     dns_checks_inflight = dns_checks_inflight + 1
+
+    if not task:get_resolver():resolve_txt({
+      task = task,
+      name = '_dmarc.' .. dmarc_domain,
+      callback = tld_cb,
+      forced = true
+    }) then
+      -- As if the name did not exist
+      tld_cb(nil, nil, nil, 'no records with this name')
+    end
+  end
+
+  if not domain_asked then
+    domain_cb(nil, nil, nil, 'no records with this name')
   end
 end
 

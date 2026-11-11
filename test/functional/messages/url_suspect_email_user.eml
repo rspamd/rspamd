@@ -1,0 +1,11 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test email addresses must not be treated as user in URL
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<p>Write to us at support@example.com or use the link below:</p>
+<a href="mailto:sales@example.com">Contact sales</a>
+</body>
+</html>

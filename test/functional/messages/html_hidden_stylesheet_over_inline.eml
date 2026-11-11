@@ -1,0 +1,8 @@
+From: sender@example.com
+To: recipient@example.net
+Subject: Hidden content amount
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><head><style>.fine { font-size: 0 }</style></head><body style="font-size:12px"><p>Visible text.</p><span class="fine">Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. Hidden content. </span></body></html>

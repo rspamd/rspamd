@@ -48,6 +48,7 @@ export default [
 
             "camelcase": "off",
             "capitalized-comments": "off",
+            "complexity": ["warn", 22],
             "curly": ["error", "multi-line"],
             "func-names": "off",
             "func-style": ["error", "declaration"],

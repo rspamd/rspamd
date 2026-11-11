@@ -81,7 +81,7 @@ extract:flag "-w --words"
 extract:flag "-p --part"
        :description "Show part info"
 extract:flag "-s --structure"
-       :description "Show structure info (e.g. HTML tags)"
+       :description "Show structure info (HTML text previews: 4 KiB per tag, 1 MiB per message)"
 extract:flag "-i --invisible"
        :description "Show invisible content for HTML parts"
 extract:option "-F --words-format"
@@ -506,6 +506,7 @@ local function extract_handler(opts)
   for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
+    local structure_content_budget = 1024 * 1024
 
     if not opts.text and not opts.html then
       opts.text = true
@@ -647,11 +648,26 @@ local function extract_handler(opts)
                 local ex = tag:get_extra()
                 elt.tag = tag:get_type()
                 if ex then
-                  elt.extra = ex
+                  elt.extra = type(ex) == 'userdata' and tostring(ex) or ex
                 end
                 local content = tag:get_content()
                 if content then
-                  elt.content = tostring(content)
+                  local len = math.min(#content, 4096, structure_content_budget)
+                  if len > 0 then
+                    local preview = tostring(content:span(1, math.min(#content, len + 1)))
+                    while len > 0 and len < #preview and
+                        preview:byte(len + 1) >= 0x80 and preview:byte(len + 1) < 0xc0 do
+                      len = len - 1
+                    end
+                    elt.content = preview:sub(1, len)
+                  else
+                    elt.content = ''
+                  end
+                  structure_content_budget = structure_content_budget - len
+                  if len < #content then
+                    elt.content_length = #content
+                    elt.content_truncated = true
+                  end
                 end
                 local style = tag:get_style()
                 if style then

@@ -22,6 +22,9 @@
 #include <string>
 #include <cmath>
 
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
+
 namespace rspamd::css {
 
 /* Helpers to create tokens */
@@ -129,8 +132,9 @@ constexpr frozen::unordered_map<frozen::string, css_dimension_data, max_dims> di
 		 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
 		 */
 	{"ex", {css_parser_token::dim_type::dim_ex, 8.0}},
-	{"wv", {css_parser_token::dim_type::dim_wv, 8.0}},
-	{"wh", {css_parser_token::dim_type::dim_wh, 6.0}},
+	/* 1% of a viewport that a mail client is likely to use */
+	{"vw", {css_parser_token::dim_type::dim_vw, 8.0}},
+	{"vh", {css_parser_token::dim_type::dim_vh, 6.0}},
 	{"vmax", {css_parser_token::dim_type::dim_vmax, 8.0}},
 	{"vmin", {css_parser_token::dim_type::dim_vmin, 6.0}},
 	/* One point. 1pt = 1/72nd of 1in */
@@ -211,32 +215,39 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token 
 
 		auto is_plain_c = (allow_number || allow_middle_minus) ? is_plain_ident(c) : is_plain_ident_start(c);
 		if (!is_plain_c) {
-			if (c == '\\' && i + 1 < input.size()) {
+			if (c == '\\' && i + 1 < input.size() &&
+				input[i + 1] != '\n' && input[i + 1] != '\r' && input[i + 1] != '\f') {
 				/* Escape token */
 				need_escape = true;
-				auto nhex = 0;
+				auto j = i + 1;
 
-				/* Need to find an escape end */
-				do {
-					c = input[++i];
-					if (g_ascii_isxdigit(c)) {
+				if (g_ascii_isxdigit(input[j])) {
+					/*
+					 * \[hex]{1,6}, optionally followed by a single whitespace
+					 * that belongs to the escape
+					 */
+					auto nhex = 0;
+
+					while (j < input.size() && nhex < 6 && g_ascii_isxdigit(input[j])) {
+						j++;
 						nhex++;
+					}
 
-						if (nhex > 6) {
-							/* End of the escape */
-							break;
+					if (j < input.size() && g_ascii_isspace(input[j])) {
+						if (input[j] == '\r' && j + 1 < input.size() && input[j + 1] == '\n') {
+							j++;
 						}
+						j++;
 					}
-					else if (nhex > 0 && c == ' ') {
-						/* \[hex]{1,6} */
-						i++; /* Skip one space */
-						break;
-					}
-					else {
-						/* Single \ + char */
-						break;
-					}
-				} while (i + 1 < input.size());
+				}
+				else {
+					/* Single \ + char */
+					j++;
+				}
+
+				i = j;
+				allow_middle_minus = true;
+				continue;
 			}
 			else if (c == '(') {
 				/* Function or url token */
@@ -431,53 +442,52 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 	/* Helpers */
 
 	/*
-	 * This lambda eats comment handling nested comments;
-	 * offset is set to the next character after a comment (or eof)
-	 * Nothing is returned
+	 * This lambda eats a comment, which ends at the first closing sequence:
+	 * comments do not nest. Offset is set to the next character after a comment, or to
+	 * the end of the input for an unterminated one. Nothing is returned
 	 */
 	auto consume_comment = [this]() {
 		auto i = offset;
-		auto nested = 0;
 
-		if (input.empty()) {
-			/* Nothing to consume */
-			return;
-		}
-
-		/* We handle nested comments just because they can exist... */
-		while (i < input.size() - 1) {
-			auto c = input[i];
-			if (c == '*' && input[i + 1] == '/') {
-				if (nested == 0) {
-					offset = i + 2;
-					return;
-				}
-				else {
-					nested--;
-					i += 2;
-					continue;
-				}
-			}
-			else if (c == '/' && input[i + 1] == '*') {
-				nested++;
-				i += 2;
-				continue;
+		while (i + 1 < input.size()) {
+			if (input[i] == '*' && input[i + 1] == '/') {
+				offset = i + 2;
+				return;
 			}
 
 			i++;
 		}
 
-		offset = i;
+		offset = input.size();
 	};
 
 	/*
-	 * Consume quoted string, returns a string_view over a string, offset
-	 * is set one character after the string. Css unescaping is done automatically
-	 * Accepts a quote char to find end of string
+	 * Consume quoted string, returns a string token, offset is set one
+	 * character after the string. Css unescaping is done automatically.
+	 * Accepts a quote char to find end of string. A backslash escapes the next
+	 * character, so an escaped quote does not end the string. A newline that is
+	 * not escaped ends the string as a bad one: the newline is left in the
+	 * input and the token is flagged
 	 */
-	auto consume_string = [this](auto quote_char) -> auto {
+	auto consume_string = [this](auto quote_char) -> css_parser_token {
 		auto i = offset;
 		bool need_unescape = false;
+
+		auto make_result = [&](std::size_t end, bool bad) -> css_parser_token {
+			std::string_view res{&input[offset], end - offset};
+
+			if (need_unescape) {
+				res = rspamd::css::unescape_css(pool, res, true);
+			}
+
+			auto tok = make_token<css_parser_token::token_type::string_token>(res);
+
+			if (bad) {
+				tok.flags |= css_parser_token::flag_bad_string;
+			}
+
+			return tok;
+		};
 
 		while (i < input.size()) {
 			auto c = input[i];
@@ -485,52 +495,64 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 			if (c == '\\') {
 				if (i + 1 < input.size()) {
 					need_unescape = true;
+
+					if (input[i + 1] == '\r' && i + 2 < input.size() && input[i + 2] == '\n') {
+						i++;
+					}
+
+					/* Skip the escaped character, it cannot end the string */
+					i += 2;
+					continue;
 				}
-				else {
-					/* \ at the end -> ignore */
-				}
+				/* \ at the end -> ignore */
 			}
 			else if (c == quote_char) {
 				/* End of string */
-				std::string_view res{&input[offset], i - offset};
-
-				if (need_unescape) {
-					res = rspamd::css::unescape_css(pool, res);
-				}
+				auto ret = make_result(i, false);
 
 				offset = i + 1;
 
-				return res;
+				return ret;
 			}
-			else if (c == '\n') {
-				/* Should be a error, but we ignore it for now */
+			else if (c == '\n' || c == '\r' || c == '\f') {
+				auto ret = make_result(i, true);
+
+				offset = i;
+
+				return ret;
 			}
 
 			i++;
 		}
 
 		/* EOF with no quote character, consider it fine */
-		std::string_view res{&input[offset], i - offset};
-
-		if (need_unescape) {
-			res = rspamd::css::unescape_css(pool, res);
-		}
+		auto ret = make_result(i, false);
 
 		offset = i;
 
-		return res;
+		return ret;
 	};
 
-	/* Main tokenisation loop */
-	for (auto i = offset; i < input.size(); ++i) {
+	/*
+	 * Main tokenisation loop
+	 *
+	 * Every branch below either returns a token or, for comments, moves `i`
+	 * past the comment and continues. Recursing on comments would consume
+	 * stack proportionally to their count in the input.
+	 */
+	auto i = offset;
+
+	while (i < input.size()) {
 		auto c = input[i];
 
 		switch (c) {
 		case '/':
 			if (i + 1 < input.size() && input[i + 1] == '*') {
 				offset = i + 2;
-				consume_comment();   /* Consume comment and go forward */
-				return next_token(); /* Tail call */
+				consume_comment(); /* Consume comment and restart from the new offset */
+				/* consume_comment never moves offset backwards, so this always progresses */
+				i = offset;
+				continue;
 			}
 			else {
 				offset = i + 1;
@@ -556,7 +578,7 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 		case '\'':
 			offset = i + 1;
 			if (offset < input.size()) {
-				return make_token<css_parser_token::token_type::string_token>(consume_string(c));
+				return consume_string(c);
 			}
 			else {
 				/* Unpaired quote at the end of the rule */
@@ -725,6 +747,9 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 			}
 			break;
 		}
+
+		/* Not reached: all cases above either return or continue */
+		break;
 	}
 
 	return make_token<css_parser_token::token_type::eof_token>();
@@ -833,6 +858,219 @@ auto css_parser_token::debug_token_str() -> std::string
 	}
 
 	return ret; /* Copy elision */
+}
+
+TEST_SUITE("css")
+{
+	TEST_CASE("comments are skipped")
+	{
+		using tt = css_parser_token::token_type;
+		const std::vector<std::pair<const char *, std::vector<tt>>> cases{
+			{"/**/", {tt::eof_token}},
+			/* An unterminated comment runs to the end of the input */
+			{"/* unterminated", {tt::eof_token}},
+			{"/*/", {tt::eof_token}},
+			{"/* a /* b */ c", {tt::whitespace_token, tt::ident_token, tt::eof_token}},
+			{"/", {tt::delim_token, tt::eof_token}},
+			{"/*a*/b", {tt::ident_token, tt::eof_token}},
+			{"a/*b*/c", {tt::ident_token, tt::ident_token, tt::eof_token}},
+			{"/*a*//*b*//*c*/d", {tt::ident_token, tt::eof_token}},
+			/* Comments do not nest: the first closing sequence ends the comment */
+			{"/* /* nested */ still */e",
+			 {tt::whitespace_token, tt::ident_token, tt::whitespace_token, tt::delim_token,
+			  tt::delim_token, tt::ident_token, tt::eof_token}},
+			{"/*a*/ /*b*/\n/*c*/f", {tt::whitespace_token, tt::whitespace_token, tt::ident_token, tt::eof_token}},
+			{"p/*x*/{/*y*/color/*z*/:red}",
+			 {tt::ident_token, tt::ocurlbrace_token, tt::ident_token, tt::colon_token, tt::ident_token,
+			  tt::ecurlbrace_token, tt::eof_token}},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto &c: cases) {
+			css_tokeniser tok{pool, c.first};
+
+			for (auto expected: c.second) {
+				auto t = tok.next_token();
+				CHECK_MESSAGE(t.type == expected, std::string{c.first});
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("hex escape consumes exactly one trailing space")
+	{
+		using tt = css_parser_token::token_type;
+		/* The escaped ident is followed by `{`, which is not part of it */
+		const std::string_view full{"a\\41 {"};
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (auto input: {full, full.substr(0, full.size() - 1)}) {
+			css_tokeniser tok{pool, input};
+
+			auto t = tok.next_token();
+			REQUIRE(t.type == tt::ident_token);
+			CHECK(std::get<std::string_view>(t.value) == "aa");
+
+			if (input.size() == full.size()) {
+				CHECK(tok.next_token().type == tt::ocurlbrace_token);
+			}
+
+			CHECK(tok.next_token().type == tt::eof_token);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("strings end at the unescaped quote")
+	{
+		using tt = css_parser_token::token_type;
+		struct str_case {
+			std::string_view input;
+			std::string_view value;
+			bool bad;
+			tt next;
+		};
+		const std::vector<str_case> cases{
+			{R"x("abc")x", "abc", false, tt::eof_token},
+			{R"x("a\"b"x)x", R"x(a"b)x", false, tt::ident_token},
+			{R"x('a\'b'x)x", "a'b", false, tt::ident_token},
+			/* An escaped backslash does not escape the quote */
+			{R"x("a\\"x)x", R"x(a\)x", false, tt::ident_token},
+			/* A backslash before a newline continues the string */
+			{"\"a\\\nb\"x", "ab", false, tt::ident_token},
+			{"\"a\\\r\nb\"x", "ab", false, tt::ident_token},
+			/* A raw newline ends the string as a bad one */
+			{"\"a\nb", "a", true, tt::whitespace_token},
+			{"\"a\rb", "a", true, tt::whitespace_token},
+			{"\"a\fb", "a", true, tt::whitespace_token},
+			/* An unterminated string at the end of the input is fine */
+			{R"x("abc)x", "abc", false, tt::eof_token},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto &c: cases) {
+			css_tokeniser tok{pool, c.input};
+			auto t = tok.next_token();
+
+			REQUIRE_MESSAGE(t.type == tt::string_token, std::string{c.input});
+			CHECK_MESSAGE(std::get<std::string_view>(t.value) == c.value, std::string{c.input});
+			CHECK_MESSAGE(((t.flags & css_parser_token::flag_bad_string) != 0) == c.bad,
+						  std::string{c.input});
+			CHECK_MESSAGE(tok.next_token().type == c.next, std::string{c.input});
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("escapes do not create syntax")
+	{
+		using tt = css_parser_token::token_type;
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		/* Name characters are decoded, so that class names still match */
+		CHECK(unescape_css(pool, R"x(\68 ide)x") == "hide");
+		CHECK(unescape_css(pool, R"x(\68ide)x") == "hide");
+		CHECK(unescape_css(pool, R"x(\48 IDE)x") == "hide");
+		CHECK(unescape_css(pool, R"x(a\2d b)x") == "a-b");
+		CHECK(unescape_css(pool, R"x(\68\69)x") == "hi");
+		CHECK(unescape_css(pool, R"x(\e9 t)x") == "\xc3\xa9t");
+		/* At most six digits belong to an escape */
+		CHECK(unescape_css(pool, R"x(\000041b)x") == "ab");
+
+		/* Anything else stays an escape and never turns into a syntax character */
+		for (const auto *in: {R"x(\7b)x", R"x(\7d)x", R"x(\3a)x", R"x(\3b)x", R"x(\7B )x",
+							  R"x(\22 )x", R"x(\27)x", R"x(\5c)x", R"x(\0)x", R"x(\2f)x", R"x(\2a)x"}) {
+			auto out = unescape_css(pool, in);
+			CHECK_MESSAGE(out.find_first_of(R"x({};:"'/*)x") == std::string_view::npos,
+						  std::string{in});
+			/* Unescaping the result once more changes nothing */
+			CHECK_MESSAGE(unescape_css(pool, out) == out, std::string{in});
+		}
+
+		/* An escaped character that is not a name character keeps its backslash */
+		for (const auto *in: {R"x(\{)x", R"x(\;)x", R"x(\})x", R"x(\:)x", R"x(\")x", R"x(\')x",
+							  R"x(\/)x", R"x(\*)x", R"x(\()x", R"x(\!)x"}) {
+			CHECK_MESSAGE(unescape_css(pool, in) == in, std::string{in});
+		}
+
+		CHECK(unescape_css(pool, R"x(.\7b x{a:b})x") == R"x(.\7b x{a:b})x");
+		CHECK(unescape_css(pool, R"x(.a\3b{})x") == R"x(.a\3b{})x");
+		CHECK(unescape_css(pool, R"x(\7b{)x") == R"x(\7b{)x");
+		CHECK(unescape_css(pool, R"x(\7b a)x") == R"x(\7b a)x");
+		CHECK(unescape_css(pool, R"x(\00007b a)x") == R"x(\00007b a)x");
+		CHECK(unescape_css(pool, R"x(\00007b1)x") == R"x(\00007b 1)x");
+		/* A lone backslash and a backslash before a newline are not escapes */
+		CHECK(unescape_css(pool, "a\\") == "a\\");
+		CHECK(unescape_css(pool, "a\\\nb") == "a\\\nb");
+		/* Strings and comments are copied, only the rest is lowercased */
+		CHECK(unescape_css(pool, R"x(A"B\7b"C)x") == R"x(a"B\7b"c)x");
+		CHECK(unescape_css(pool, R"x(A/* B " */C)x") == R"x(a/* B " */c)x");
+		CHECK(unescape_css(pool, "A\"b\nC") == "a\"b\nc");
+		CHECK(unescape_css(pool, R"x("\\"\68 IDE)x") == R"x("\\"hide)x");
+		/* The content of a string gets all escapes decoded */
+		CHECK(unescape_css(pool, "a\\\"b\\7b\\\nc", true) == "a\"b{c");
+
+		/* The tokeniser reads a kept escape as a part of an identifier */
+		css_tokeniser tok{pool, R"x(.a\7b x{})x"};
+		CHECK(tok.next_token().type == tt::delim_token);
+		CHECK(tok.next_token().type == tt::ident_token);
+		CHECK(tok.next_token().type == tt::ocurlbrace_token);
+		CHECK(tok.next_token().type == tt::ecurlbrace_token);
+
+		for (const auto *in: {R"x(a\;b)x", R"x(\{a)x", R"x(a\7d{)x"}) {
+			css_tokeniser t2{pool, in};
+
+			CHECK_MESSAGE(t2.next_token().type == tt::ident_token, std::string{in});
+			CHECK_MESSAGE(css_has_escape(in), std::string{in});
+		}
+
+		/* The escape ends before the character that follows its digits */
+		css_tokeniser t3{pool, R"x(a\7d{)x"};
+		CHECK(t3.next_token().type == tt::ident_token);
+		CHECK(t3.next_token().type == tt::ocurlbrace_token);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("escapes are looked for outside of strings and comments")
+	{
+		CHECK(css_has_escape(R"x(a\b)x"));
+		CHECK(css_has_escape(R"x("a" \68 ide)x"));
+		CHECK(!css_has_escape(R"x("a\"b")x"));
+		/* An escaped backslash does not escape the closing quote */
+		CHECK(css_has_escape(R"x("\\" \68 ide)x"));
+		CHECK(!css_has_escape(R"x(/* \ */ a)x"));
+		/* A quote in a comment does not open a string */
+		CHECK(css_has_escape(R"x(/* it's */ \68 ide)x"));
+		/* A newline ends a string */
+		CHECK(css_has_escape("\"a\n\\68 ide"));
+		CHECK(!css_has_escape("\"a\\\nb\\68 ide\""));
+	}
+
+	TEST_CASE("many sequential comments do not exhaust stack")
+	{
+		constexpr auto ncomments = 100000;
+		std::string input;
+
+		input.reserve(ncomments * 4 + 4);
+
+		for (auto i = 0; i < ncomments; i++) {
+			input += "/**/";
+		}
+
+		input += "end";
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		css_tokeniser tok{pool, input};
+
+		CHECK(tok.next_token().type == css_parser_token::token_type::ident_token);
+		CHECK(tok.next_token().type == css_parser_token::token_type::eof_token);
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 }// namespace rspamd::css

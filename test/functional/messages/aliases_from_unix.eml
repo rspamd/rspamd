@@ -1,0 +1,7 @@
+From: Abuse Desk <abuse@example.com>
+To: user@example.com
+Subject: Test same-domain alias on From
+Message-ID: <test-from-unix@example.com>
+Date: Mon, 01 Jan 2025 10:00:00 +0000
+
+Same-domain aliases may still rewrite the From local part.

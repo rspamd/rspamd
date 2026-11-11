@@ -42,6 +42,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_MULTIPATTERN_LOADED,
 	RSPAMD_CONTROL_REGEXP_MAP_LOADED,
 	RSPAMD_CONTROL_MEMORY_STAT,
+	RSPAMD_CONTROL_FUZZY_HASH,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -90,7 +91,12 @@ struct rspamd_control_command {
 			char name[64];
 		} mp_loaded;
 		struct {
-			char name[64]; /* Map name */
+			/*
+			 * Digest identifies the database in the cache, whilst the name is
+			 * merely for logging: a map name is an URL and has no sane bound
+			 */
+			unsigned char digest[64]; /* rspamd_cryptobox_HASHBYTES */
+			char name[128];
 		} re_map_loaded;
 		struct {
 			char tag[32];
@@ -106,6 +112,9 @@ struct rspamd_control_command {
 		struct {
 			unsigned int unused;
 		} fuzzy_sync;
+		struct {
+			unsigned char digest[64];
+		} fuzzy_hash;
 		struct {
 			enum {
 				rspamd_child_offline,
@@ -168,6 +177,10 @@ struct rspamd_control_reply {
 			unsigned int status;
 			char storage_id[MEMPOOL_UID_LEN];
 		} fuzzy_stat;
+		struct {
+			unsigned int status;
+			char storage_id[MEMPOOL_UID_LEN];
+		} fuzzy_hash;
 		struct {
 			unsigned int status;
 		} fuzzy_sync;
@@ -257,7 +270,12 @@ struct rspamd_srv_command {
 		} mp_loaded;
 		/* Sent when a regexp map hyperscan db is compiled */
 		struct {
-			char name[64]; /* Map name */
+			/*
+			 * Digest identifies the database in the cache, whilst the name is
+			 * merely for logging: a map name is an URL and has no sane bound
+			 */
+			unsigned char digest[64]; /* rspamd_cryptobox_HASHBYTES */
+			char name[128];
 		} re_map_loaded;
 		struct {
 			gboolean is_busy;

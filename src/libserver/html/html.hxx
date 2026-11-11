@@ -27,6 +27,8 @@
 
 
 #include <vector>
+#include <array>
+#include <algorithm>
 #include "contrib/ankerl/unordered_dense.h"
 #include <memory>
 #include <string>
@@ -48,6 +50,29 @@ struct html_content {
 	std::vector<bool> tags_seen;
 	std::vector<html_image *> images;
 	std::vector<std::unique_ptr<struct html_tag>> all_tags;
+	/*
+	 * Formatting elements (font, b, ...) that an implied end tag closed with
+	 * their paragraph or list item: browsers open them again in what follows,
+	 * so their styles go on. Each list is from the outermost element in
+	 */
+	std::vector<std::vector<const html_tag *>> formatting_lists;
+	/*
+	 * Comments, declarations and processing instructions in `all_tags`: they
+	 * have a budget of their own, so they do not use up the one of elements
+	 */
+	std::size_t special_tags = 0;
+	/*
+	 * Links of the tags past the tags limit, which are not kept: one per tag,
+	 * so they are kept small
+	 */
+	struct clickable_past_limit_entry {
+		std::string_view value;
+		std::uint32_t offset;
+		std::uint32_t len;
+		std::int32_t tag_id;
+		std::uint8_t attr;
+	};
+	std::vector<clickable_past_limit_entry> clickable_past_limit;
 	std::string parsed;
 	std::string invisible;
 	std::shared_ptr<css::css_style_sheet> css_style;
@@ -88,39 +113,52 @@ struct html_content {
 	auto traverse_block_tags(fu2::function<bool(const html_tag *)> &&func,
 							 traverse_type how = traverse_type::PRE_ORDER) const -> bool
 	{
-
 		if (root_tag == nullptr) {
 			return false;
 		}
 
-		auto rec_functor_pre_order = [&](const html_tag *root, auto &&rec) -> bool {
-			if (func(root)) {
+		switch (how) {
+		case traverse_type::PRE_ORDER: {
+			std::vector<const html_tag *> stack{root_tag};
 
-				for (const auto *c: root->children) {
-					if (!rec(c, rec)) {
+			while (!stack.empty()) {
+				auto *tag = stack.back();
+				stack.pop_back();
+
+				if (!func(tag)) {
+					return false;
+				}
+
+				for (auto it = tag->children.rbegin(); it != tag->children.rend(); ++it) {
+					stack.push_back(*it);
+				}
+			}
+
+			return true;
+		}
+		case traverse_type::POST_ORDER: {
+			using stack_entry = std::pair<const html_tag *, bool>;
+			std::vector<stack_entry> stack{{root_tag, false}};
+
+			while (!stack.empty()) {
+				auto [tag, visited] = stack.back();
+				stack.pop_back();
+
+				if (visited) {
+					if (!func(tag)) {
 						return false;
 					}
 				}
-
-				return true;
-			}
-			return false;
-		};
-		auto rec_functor_post_order = [&](const html_tag *root, auto &&rec) -> bool {
-			for (const auto *c: root->children) {
-				if (!rec(c, rec)) {
-					return false;
+				else {
+					stack.emplace_back(tag, true);
+					for (auto it = tag->children.rbegin(); it != tag->children.rend(); ++it) {
+						stack.emplace_back(*it, false);
+					}
 				}
 			}
 
-			return func(root);
-		};
-
-		switch (how) {
-		case traverse_type::PRE_ORDER:
-			return rec_functor_pre_order(root_tag, rec_functor_pre_order);
-		case traverse_type::POST_ORDER:
-			return rec_functor_post_order(root_tag, rec_functor_post_order);
+			return true;
+		}
 		default:
 			RSPAMD_UNREACHABLE;
 		}
@@ -140,32 +178,56 @@ struct html_content {
 	}
 
 	/**
-	 * Enumerate all clickable attributes (href, src) with their spans for URL rewriting
-	 * @param callback function(tag, attr_name, span) -> bool (return false to stop iteration)
+	 * Enumerate the links URL rewriting replaces (see html_tag::clickable_attr), with their spans
+	 * @param callback function(clickable) -> bool (return false to stop iteration)
 	 */
-	auto for_each_clickable_attr(fu2::function<bool(const html_tag *, std::string_view, const attr_span &)> &&callback) const -> void
-	{
-		for (const auto &tag: all_tags) {
-			if (tag->flags & (FL_XML | FL_VIRTUAL | FL_BROKEN)) {
-				continue;
-			}
+	static constexpr std::array<std::string_view, 3> clickable_attr_names{"href", "xlink:href", "src"};
 
-			// Check for tags with href or src attributes
-			if (tag->flags & FL_HREF || tag->id == Tag_A || tag->id == Tag_IMG || tag->id == Tag_LINK || tag->id == Tag_BASE) {
-				// Try href first
-				if (auto span = tag->get_attr_span("href")) {
-					if (!callback(tag.get(), "href", span.value())) {
-						return;
-					}
-				}
-				// Then try src
-				else if (auto span = tag->get_attr_span("src")) {
-					if (!callback(tag.get(), "src", span.value())) {
-						return;
-					}
+	auto for_each_clickable_attr(fu2::function<bool(const html_clickable_attr &)> &&callback) const -> void
+	{
+		/*
+		 * A tag marked broken can still be a link that browsers follow,
+		 * such as <a/href=...>: its href is rewritten when its place in
+		 * the source is known (a span), as for any other link
+		 */
+		for (const auto &tag: all_tags) {
+			if (auto clickable = tag->clickable_attr()) {
+				if (!callback(clickable.value())) {
+					return;
 				}
 			}
 		}
+
+		/* Links past the tags limit, which are in no tag of the tree */
+		for (const auto &entry: clickable_past_limit) {
+			html_clickable_attr clickable{entry.tag_id, clickable_attr_names[entry.attr], entry.value,
+										  attr_span{entry.offset, entry.len}};
+
+			if (!callback(clickable)) {
+				return;
+			}
+		}
+	}
+
+	auto add_clickable_past_limit(const html_clickable_attr &clickable) -> void
+	{
+		/* Values that URL rewriting leaves alone are not kept */
+		if (clickable.value.empty() || clickable.value.starts_with("data:") ||
+			clickable.value.starts_with("cid:") ||
+			clickable.span.offset > G_MAXUINT32 || clickable.span.len > G_MAXUINT32) {
+			return;
+		}
+
+		auto attr = std::find(clickable_attr_names.begin(), clickable_attr_names.end(),
+							  clickable.attr_name);
+
+		if (attr == clickable_attr_names.end()) {
+			return;
+		}
+
+		clickable_past_limit.push_back({clickable.value, (std::uint32_t) clickable.span.offset,
+										(std::uint32_t) clickable.span.len, clickable.tag_id,
+										(std::uint8_t) (attr - clickable_attr_names.begin())});
 	}
 
 private:

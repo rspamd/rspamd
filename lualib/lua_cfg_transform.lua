@@ -37,7 +37,8 @@ local function surbl_section_convert(cfg, section)
         converted.whitelist = wl
       end
 
-      for k, v in value:pairs() do
+      for opt, v in value:pairs() do
+        local k = opt
         local skip = false
         -- Rename
         if k == 'suffix' then
@@ -65,7 +66,8 @@ local function surbl_section_convert(cfg, section)
         end
 
         if k == 'dkim' and v then
-          converted.dkim_domainonly = false
+          -- surbl checked the aligned eSLD; dkim_domainonly is the eSLD mode now that rbl.lua no longer inverts it
+          converted.dkim_domainonly = true
           converted.dkim_match_from = true
         end
 
@@ -103,7 +105,8 @@ local function emails_section_convert(cfg, section)
         converted.whitelist = wl
       end
 
-      for k, v in value:pairs() do
+      for opt, v in value:pairs() do
+        local k = opt
         local skip = false
         -- Rename
         if k == 'dnsbl' then
@@ -180,12 +183,13 @@ local function group_transform(cfg, k, v)
   local symbol_section = v:at('symbol')
   if symbol_section and symbol_section:type() == 'object' then
     for sk, sv in symbol_section:pairs() do
+      local sym_name = sk
       if sv:type() == 'object' and sv:at('name') then
-        sk = sv:at('name'):unwrap()
+        sym_name = sv:at('name'):unwrap()
         sv.name = nil -- Remove field
       end
 
-      new_group.symbols[sk] = sv
+      new_group.symbols[sym_name] = sv
     end
   end
 
@@ -382,9 +386,9 @@ return function(cfg)
 
       for k, v in cfg:at('actions'):pairs() do
         if not actions_set[k] then
-          -- Check if this is a custom action with flags (e.g., no_threshold)
+          -- Custom action defined as an object with a score or flags (e.g., no_threshold)
           local is_custom_action = false
-          if v and v:type() == 'object' and v:at('flags') then
+          if v and v:type() == 'object' and (v:at('flags') or v:at('score') or v:at('threshold')) then
             is_custom_action = true
           end
           if not is_custom_action then

@@ -4,6 +4,7 @@ import os
 import socket
 import socketserver
 import sys
+import time
 
 import dummy_killer
 import dummy_pidfile
@@ -15,7 +16,12 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         self.data = self.request.recv(1024).strip()
         self.request.sendall(b"210 SCAN DATA\r\n")
         if self.server.foundvirus:
-            self.request.sendall(b"SCAN /some/path/malware/xpaj/00908235ee9e267fa2f4c83fb4304c63af976cbc\t[L]0.0\t0 Eicar\\ [Heur]\r\n")
+            # Archive-style reply: infected inner file followed by the clean
+            # container line, which must not overwrite the cached verdict
+            self.request.sendall(b"SCAN /some/path/malware/xpaj/00908235ee9e267fa2f4c83fb4304c63af976cbc|>inner\t[L]0.0\t0 Eicar\\ [Heur]\r\n")
+            # The container line comes after the archive has been unpacked
+            time.sleep(0.2)
+            self.request.sendall(b"SCAN /some/path/malware/xpaj/00908235ee9e267fa2f4c83fb4304c63af976cbc\t[+]\r\n")
         else:
             self.request.sendall(b"SCAN /some/path/malware/xpaj/00908235ee9e267fa2f4c83fb4304c63af976cbc\t[+]\r\n")
         self.request.sendall(b"200 SCAN OK\r\n")

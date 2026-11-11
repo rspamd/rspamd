@@ -168,6 +168,12 @@ kad_node_t *kad_conv1d(kad_node_t *x, kad_node_t *w, int stride, int pad);  /* 1
 kad_node_t *kad_max1d(kad_node_t *x, int kernel_size, int stride, int pad); /* 1D max pooling */
 kad_node_t *kad_avg1d(kad_node_t *x, int kernel_size, int stride, int pad); /* 1D average pooling */
 
+/* Multi-head dot-product attention pooling over a zero-padded sequence.
+ * x: (batch, n_words * dim) -- flattened word vectors, all-zero words are padding
+ * q: (n_heads, dim)         -- learned query vectors
+ * output: (batch, n_heads * dim) -- per-head attention-weighted sums */
+kad_node_t *kad_attn_pool(kad_node_t *x, kad_node_t *q, int n_words);
+
 kad_node_t *kad_dropout(kad_node_t *x, kad_node_t *r);                      /* dropout at rate r */
 kad_node_t *kad_sample_normal(kad_node_t *x);                               /* f(x) = x * r, where r is drawn from a standard normal distribution */
 

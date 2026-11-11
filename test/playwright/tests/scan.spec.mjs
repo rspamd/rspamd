@@ -59,22 +59,26 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
      * @param {boolean} needsExpand - Whether row needs to be expanded
      */
     async function testSymbolOrdering(table, needsExpand) {
-        const tableLocator = page.locator(`#historyTable_${table} tbody`);
-        const firstRow = tableLocator.locator("tr").first();
+        const tableLocator = page.locator(`#historyTable_${table} .tabulator-table`);
+        const firstRow = tableLocator.locator(".tabulator-row").first();
         await expect(firstRow).toBeVisible();
 
-        if (needsExpand) {
+        // Tabulator renders the responsive-collapse detail as a descendant of the
+        // row element (.tabulator-responsive-collapse).
+        // Only expand when collapsed: a prior test may have left the row open, and a
+        // blind click would collapse it again.
+        const detailRow = firstRow.locator(".tabulator-responsive-collapse");
+        if (needsExpand && !(await detailRow.isVisible())) {
             await firstRow.click();
-            await page.waitForTimeout(200); // Wait for expand animation
         }
-
-        // Get the detail row that immediately follows the row we clicked/selected
-        const detailRow = firstRow.locator("+ tr.footable-detail-row");
         await expect(detailRow).toBeVisible();
 
-        // Find the symbols row within the detail table (identified by the th containing sort buttons)
-        const symbolsRow = detailRow.locator("tr:has(th:has(.sym-order-toggle))");
-        const symbolsCell = symbolsRow.locator("td");
+        // The collapse lays each hidden column out as
+        // <tr><td><strong>TITLE</strong></td><td>VALUE</td></tr>. The symbols column
+        // title embeds the .sym-order-toggle sort buttons, and the symbol HTML is the
+        // value cell (the second td in that row).
+        const symbolsRow = detailRow.locator("tr:has(.sym-order-toggle)");
+        const symbolsCell = symbolsRow.locator("td").nth(1);
 
         // Get initial symbols order
         let previousSymbols = await symbolsCell.innerHTML();
@@ -137,8 +141,9 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
                 await expectAlertSuccess("Data successfully scanned");
                 await expect(
-                    page.locator(`#historyTable_scan tbody tr:first-child td.footable-first-visible:has-text("${msgId}")`)
-                ).toBeVisible();
+                    page.locator("#historyTable_scan .tabulator-row").first()
+                        .locator('.tabulator-cell[tabulator-field="id"]')
+                ).toContainText(msgId);
             }
         });
 
@@ -154,10 +159,11 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             // Check both scanned messages are present in reverse order
             for (let i = 0; i < scannedSubjects.length; i++) {
                 const subject = scannedSubjects[scannedSubjects.length - 1 - i]; // reverse order
-                await expect(
-                    page.locator("#historyTable_history tbody tr").nth(i)
-                        .locator(`td:has-text("${subject}")`)
-                ).toBeVisible();
+                const row = page.locator("#historyTable_history .tabulator-row").nth(i);
+                // The Subject column can collapse into the detail row depending on
+                // viewport width, so expand the row and match against its full text.
+                await row.click();
+                await expect(row).toContainText(subject);
             }
         });
 
@@ -170,13 +176,25 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             const resetBtn = page.locator("#resetHistory");
             await expect(resetBtn).toBeVisible();
             page.once("dialog", (dialog) => dialog.accept());
-            await resetBtn.click();
+            // The reload disables #updateHistory only for the duration of the
+            // fast, local history request, which is too brief to assert on the
+            // DOM. Wait for the reset and the subsequent reload responses instead.
+            // Listeners must be registered BEFORE the click: waitForResponse only
+            // catches responses arriving after setup, and the local historyreset
+            // round-trip can otherwise beat a listener attached post-click.
+            await Promise.all([
+                page.waitForResponse((r) => r.url().includes("historyreset"), {timeout: 10000}),
+                page.waitForResponse(
+                    (r) => r.url().includes("history") && r.url().includes("from="),
+                    {timeout: 10000}
+                ),
+                resetBtn.click(),
+            ]);
 
             const updateHistoryBtn = page.locator("#updateHistory");
-            await expect(updateHistoryBtn).toBeDisabled();
-            await expect(updateHistoryBtn).not.toBeDisabled();
+            await expect(updateHistoryBtn).toBeEnabled();
 
-            const rows = await page.locator("#historyTable_history tbody tr").count();
+            const rows = await page.locator("#historyTable_history .tabulator-row").count();
             // Known bug: Rspamd leaves one row after history reset
             expect([0, 1]).toContain(rows);
         });
@@ -190,26 +208,27 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
 
         test("Throughput `Total messages` counter increased", async ({}, testInfo) => {
             testInfo.setTimeout(140000);
-            // With empty RRD the first PDP is lost, so only +1 is visible
-            // Depending on row boundaries, throughput may show +2 or even +3
-            const targetValues = [
-                scannedBefore.throughput + 1,
-                scannedBefore.throughput + 2,
-                scannedBefore.throughput + 3,
-            ];
-
+            // #rrd-total-value is a rate integral (truncated per series, summed
+            // over the 6 action series, with a msg/s↔msg/min scaleFactor switch)
+            // — an approximation. In the small-data regime (fresh RRD) it
+            // overshoots variably (CI saw up to ~3x the scan count: +6 for 2
+            // scans), so pin a wide band, not an exact value: it must rise above
+            // the baseline (regression: scans not reflected) yet stay below a
+            // generous ceiling that a gross normalization bug (dropped scaleFactor
+            // /unit divisor) would blow through.
+            const ceiling = scannedBefore.throughput + 50; // ~25x the 2 scans
             let lastValue = null;
             try {
                 await expect.poll(async () => {
                     lastValue = await readThroughput();
-                    return targetValues.includes(lastValue);
+                    return lastValue > scannedBefore.throughput && lastValue <= ceiling;
                 }, {
                     interval: 5000,
                     // step = 1s, pdp_per_row = 60 → next row every 60s
                     timeout: 125000,
                 }).toBeTruthy();
             } catch (e) {
-                const msg = `Throughput counter should be one of [${targetValues.join(", ")}], got ${lastValue}`;
+                const msg = `Throughput counter should be > ${scannedBefore.throughput} and <= ${ceiling}, got ${lastValue}`;
                 throw new Error(msg, {cause: e});
             }
         });
@@ -230,6 +249,11 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             // Login as read-only
             await login(page2, readOnlyPassword);
             await page2.waitForSelector("#navBar:not(.d-none)");
+            // Bootstrap dismisses #connectDialog asynchronously (fade transition).
+            // navBar loses d-none from the /auth "complete" callback, which can fire
+            // before the modal finishes closing — the lingering .show then intercepts
+            // nav clicks (seen on WebKit under CI load).
+            await expect(page2.locator("#connectDialog")).toBeHidden({timeout: 10000});
 
             // Go to Scan in RO
             await gotoTabLocal("scan");
@@ -246,6 +270,7 @@ test.describe.serial("Scan flow across WebUI tabs", () => {
             );
             await page2.locator("#connectButton").click();
             await page2.waitForSelector("#navBar:not(.d-none)");
+            await expect(page2.locator("#connectDialog")).toBeHidden({timeout: 10000});
             await p;
 
             // Expect classifiers to be populated

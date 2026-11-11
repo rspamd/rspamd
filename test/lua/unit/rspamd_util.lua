@@ -195,6 +195,32 @@ context("Rspamd util for lua - check generic functions", function()
     test("is_utf_mixed_script, empty str should return errror", function()
         assert_error(util.is_utf_mixed_script,'\200\213\202')
     end)
+
+    test("utf8 confusable skeleton", function()
+        assert_equal("paypa", util.utf8_confusable_skeleton("раура"))
+        assert_equal("paypal", util.utf8_confusable_skeleton("paypal"))
+    end)
+
+    test("utf8 spoof helper preserves hostname compatibility", function()
+        assert_true(select(1, util.is_utf_spoofed("paypal", "раураl")))
+        assert_false(util.is_utf_spoofed("пример.com"))
+        assert_false(util.is_utf_spoofed("сахар.com"))
+        assert_false(util.is_utf_spoofed("日本語.com"))
+        assert_true(select(1, util.is_utf_spoofed("ä̈")))
+    end)
+end)
+
+context("Rspamd util lower_utf8", function()
+    local util = require 'rspamd_util'
+
+    test("Characters growing when lowercased", function()
+        -- U+023A and U+023E are 2 bytes, their lowercase forms are 3 bytes
+        local s = string.rep("\200\186\200\190", 50) .. string.rep("A", 200)
+        local expected = string.rep("\226\177\165\226\177\166", 50) .. string.rep("a", 200)
+        assert_equal(expected, util.lower_utf8(s))
+        assert_equal("\226\177\165a", util.lower_utf8("\200\186A"))
+        assert_equal("", util.lower_utf8(""))
+    end)
 end)
 
 context("Rspamd string utility", function()

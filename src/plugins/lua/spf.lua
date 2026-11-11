@@ -33,10 +33,13 @@ spf {
   spf_cache_expire = 1d;
   # Whitelist IPs from checks
   whitelist = "/path/to/some/file";
-  # Maximum number of recursive DNS subrequests (e.g. includes chanin length)
+  # Maximum number of recursive DNS subrequests (e.g. includes chanin length),
+  # 0 disables the limit but the chain is still capped at 64 levels
   max_dns_nesting = 10;
   # Maximum count of DNS requests per record
   max_dns_requests = 30;
+  # Maximum count of address requests spawned by all mx/ptr elements in a record
+  max_dns_expansions = 100;
   # Minimum TTL enforced for all elements in SPF records
   min_cache_ttl = 5min;
   # Disable all IPv6 lookups
@@ -63,6 +66,7 @@ local default_config = {
   spf_cache_size = 2048,
   max_dns_nesting = 10,
   max_dns_requests = 30,
+  max_dns_expansions = 100,
   whitelist = nil,
   min_cache_ttl = 60 * 5,
   disable_ipv6 = false,
@@ -116,14 +120,26 @@ local function spf_check_callback(task)
     ip = task:get_from_ip()
   end
 
+  -- Publish the policy result so that other modules (e.g. fuzzy_check) can use
+  -- it without matching our symbol names, which are configurable
+  local function publish_result(res)
+    if res then
+      task:get_mempool():set_variable('spf_result', res)
+    end
+  end
+
   local function flag_to_symbol(fl)
     if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then
+      publish_result('temperror')
       return local_config.symbols.dnsfail
     elseif bit.band(fl, rspamd_spf.flags.plusall) ~= 0 then
+      publish_result('pass')
       return local_config.symbols.plusall
     elseif bit.band(fl, rspamd_spf.flags.perm_fail) ~= 0 then
+      publish_result('permerror')
       return local_config.symbols.permfail
     elseif bit.band(fl, rspamd_spf.flags.na) ~= 0 then
+      publish_result('none')
       return local_config.symbols.na
     end
 
@@ -132,12 +148,16 @@ local function spf_check_callback(task)
 
   local function policy_decode(res)
     if res == rspamd_spf.policy.fail then
+      publish_result('fail')
       return local_config.symbols.fail, '-'
     elseif res == rspamd_spf.policy.pass then
+      publish_result('pass')
       return local_config.symbols.allow, '+'
     elseif res == rspamd_spf.policy.soft_fail then
+      publish_result('softfail')
       return local_config.symbols.softfail, '~'
     elseif res == rspamd_spf.policy.neutral then
+      publish_result('neutral')
       return local_config.symbols.neutral, '?'
     end
 
@@ -190,7 +210,8 @@ local function spf_check_callback(task)
       return
     end
 
-    rspamd_spf.resolve(task, spf_resolved_cb)
+    -- The address checked may come from a relay: the record is resolved for it
+    rspamd_spf.resolve(task, spf_resolved_cb, ip)
   else
     lua_util.debugm(N, task, "spf checks are not possible as no source IP address is defined")
   end

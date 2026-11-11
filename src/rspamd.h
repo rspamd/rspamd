@@ -317,12 +317,13 @@ struct rspamd_main {
 	GHashTable *workers;               /**< workers pool indexed by pid                    */
 	GHashTable *spairs;                /**< socket pairs requested by workers				*/
 	rspamd_logger_t *logger;
-	uid_t workers_uid;            /**< worker's uid running to                        */
-	gid_t workers_gid;            /**< worker's gid running to						*/
-	gboolean is_privileged;       /**< true if run in privileged mode                 */
-	gboolean wanna_die;           /**< no respawn of processes						*/
-	gboolean cores_throttling;    /**< turn off cores when limits are exceeded		*/
-	struct roll_history *history; /**< rolling history								*/
+	rspamd_mempool_t *logger_pool; /**< reclaimed when the configured logger is replaced */
+	uid_t workers_uid;             /**< worker's uid running to                        */
+	gid_t workers_gid;             /**< worker's gid running to						*/
+	gboolean is_privileged;        /**< true if run in privileged mode                 */
+	gboolean wanna_die;            /**< no respawn of processes						*/
+	gboolean cores_throttling;     /**< turn off cores when limits are exceeded		*/
+	struct roll_history *history;  /**< rolling history								*/
 	struct ev_loop *event_loop;
 	ev_signal term_ev, int_ev, hup_ev, usr1_ev; /**< signals 										*/
 	ev_tstamp start_time;

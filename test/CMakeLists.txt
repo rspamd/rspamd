@@ -15,12 +15,14 @@ set(RSPAMD_TEST_SOURCES
         rspamd_cryptobox_test.c
         rspamd_heap_test.c
         rspamd_test_suite.c
+        ${CMAKE_SOURCE_DIR}/src/sanitizer_conf.c
 )
 
 # Main C test executable
 add_executable(rspamd-test ${RSPAMD_TEST_SOURCES})
 target_compile_definitions(rspamd-test PRIVATE RSPAMD_TEST)
 target_link_libraries(rspamd-test PRIVATE rspamd-server)
+RspamdLinkJemalloc(rspamd-test)
 set_target_properties(rspamd-test PROPERTIES
         LINKER_LANGUAGE CXX
 )
@@ -32,11 +34,12 @@ add_test(
 )
 
 # C++ unit tests
-set(CXX_TEST_SOURCES rspamd_cxx_unit.cxx)
+set(CXX_TEST_SOURCES rspamd_cxx_unit.cxx ${CMAKE_SOURCE_DIR}/src/sanitizer_conf.c)
 
 # C++ test executable
 add_executable(rspamd-test-cxx ${CXX_TEST_SOURCES})
 target_link_libraries(rspamd-test-cxx PRIVATE rspamd-server)
+RspamdLinkJemalloc(rspamd-test-cxx)
 set_target_properties(rspamd-test-cxx PROPERTIES
         LINKER_LANGUAGE CXX
 )
@@ -46,6 +49,40 @@ add_test(
         NAME rspamd-test-cxx
         COMMAND rspamd-test-cxx
 )
+
+if (WITH_HYPERSCAN)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        set(HYPERSCAN_TEST_TARGETS rspamd rspamadm)
+        add_test(
+                NAME hyperscan-cache-recovery
+                COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/functional/util/hyperscan_cache_recovery.py
+                --rspamd $<TARGET_FILE:rspamd>
+                --rspamadm $<TARGET_FILE:rspamadm>
+                --source ${CMAKE_SOURCE_DIR}
+        )
+        set_tests_properties(hyperscan-cache-recovery PROPERTIES TIMEOUT 90 SKIP_RETURN_CODE 77)
+    endif ()
+endif ()
+
+# Reload tests need LSan's exit-time reports; ordinary builds skip them.
+if (SANITIZE MATCHES "address")
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        foreach (reload_mode config maps http-maps lua)
+            add_test(NAME reload-leaks-${reload_mode}
+                    COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/functional/util/reload_leaks.py
+                    --rspamd $<TARGET_FILE:rspamd>
+                    --source ${CMAKE_SOURCE_DIR}
+                    --mode ${reload_mode}
+                    --output-dir ${CMAKE_CURRENT_BINARY_DIR}/reload-leaks/${reload_mode})
+            set_tests_properties(reload-leaks-${reload_mode} PROPERTIES
+                    TIMEOUT 240 SKIP_RETURN_CODE 77 LABELS "sanitizer;reload")
+        endforeach ()
+    endif ()
+endif ()
 
 # Copy test Lua scripts for out-of-source builds
 if (NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
@@ -94,7 +131,7 @@ set_tests_properties(rspamd-test PROPERTIES
 # Custom target for running all tests directly (convenience target)
 add_custom_target(run-tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS rspamd-test rspamd-test-cxx
+        DEPENDS rspamd-test rspamd-test-cxx ${HYPERSCAN_TEST_TARGETS}
         COMMENT "Running all Rspamd tests"
 )
 

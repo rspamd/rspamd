@@ -47,6 +47,23 @@ rspamd_lru_hash_t *rspamd_lru_hash_new_full(int maxsize,
 											GEqualFunc eqfunc);
 
 /**
+ * Create new lru hash with an explicit initial bucket count
+ * @param maxsize maximum elements in a hash
+ * @param initial_size buckets to preallocate; 0 allocates nothing until the
+ * first insertion, which is the right choice for tables that usually stay
+ * tiny (the plain constructors preallocate 128 buckets)
+ * @param hash_func pointer to hash function
+ * @param key_equal_func pointer to function for comparing keys
+ * @return new rspamd_hash object
+ */
+rspamd_lru_hash_t *rspamd_lru_hash_new_sized(int maxsize,
+											 int initial_size,
+											 GDestroyNotify key_destroy,
+											 GDestroyNotify value_destroy,
+											 GHashFunc hfunc,
+											 GEqualFunc eqfunc);
+
+/**
  * Lookup item from hash
  * @param hash hash object
  * @param key key to find

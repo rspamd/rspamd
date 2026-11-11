@@ -26,10 +26,15 @@
 #include "contrib/libottery/ottery.h"
 #include "libcryptobox/cryptobox.h"
 #include "libserver/http/http_message.h"
+#include "libutil/str_util.h"
 
 #include <vector>
 #include <utility>
 #include <string>
+#include <csignal>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 extern "C" long rspamd_http_parse_keepalive_timeout(const rspamd_ftok_t *tok);
 
@@ -41,7 +46,15 @@ TEST_SUITE("rspamd_utils")
 		std::vector<std::pair<std::string, std::string>> cases{
 			{"abc", "abc"},
 			{"abc(foo)", "abc"},
-			{"abc(foo()", "abc"},
+			/* Unbalanced comments are no comments */
+			{"abc(foo()", "abc(foo()"},
+			{"a((b)", "a((b)"},
+			{"(a)b(c", "(a)b(c"},
+			{"a(b\\)", "a(b\\)"},
+			{"a(b(c)d)e", "ae"},
+			{"(())x", "x"},
+			{"a)b", "a)b"},
+			{"a\\(b", "a(b"},
 			{"abc(foo))", "abc)"},
 			{"abc(foo(bar))", "abc"},
 			{"(bar)abc(foo)", "abc"},
@@ -237,6 +250,216 @@ TEST_SUITE("rspamd_utils")
 				rspamd_http_message_unref(msg);
 			}
 		}
+	}
+
+	TEST_CASE("rspamd_write_all")
+	{
+		const std::string data = "0123456789abcdef";
+		std::string path = std::string{g_get_tmp_dir()} + "/rspamd-write-all-XXXXXX";
+		int fd = g_mkstemp(path.data());
+		struct stat st;
+
+		REQUIRE(fd != -1);
+
+		SUBCASE("whole buffer is written")
+		{
+			CHECK(rspamd_write_all(fd, data.data(), data.size()));
+			REQUIRE(fstat(fd, &st) == 0);
+			CHECK(st.st_size == (off_t) data.size());
+		}
+
+		SUBCASE("empty buffer")
+		{
+			CHECK(rspamd_write_all(fd, data.data(), 0));
+		}
+
+		SUBCASE("bad fd")
+		{
+			errno = 0;
+			CHECK_FALSE(rspamd_write_all(-1, data.data(), data.size()));
+			CHECK(errno == EBADF);
+		}
+
+#if defined(RLIMIT_FSIZE) && defined(SIGXFSZ)
+		SUBCASE("short write is not reported as success")
+		{
+			struct rlimit old_limit, limit;
+			struct sigaction old_action, action;
+
+			REQUIRE(getrlimit(RLIMIT_FSIZE, &old_limit) == 0);
+			limit = old_limit;
+			limit.rlim_cur = 4;
+			memset(&action, 0, sizeof(action));
+			action.sa_handler = SIG_IGN;
+			sigemptyset(&action.sa_mask);
+			REQUIRE(sigaction(SIGXFSZ, &action, &old_action) == 0);
+			REQUIRE(setrlimit(RLIMIT_FSIZE, &limit) == 0);
+			/* The first write stops at the limit, the next one fails with EFBIG */
+			auto ret = rspamd_write_all(fd, data.data(), data.size());
+			auto saved_errno = errno;
+			/* Restore before any doctest output, it may go to a regular file */
+			setrlimit(RLIMIT_FSIZE, &old_limit);
+			sigaction(SIGXFSZ, &old_action, nullptr);
+
+			CHECK_FALSE(ret);
+			CHECK(saved_errno == EFBIG);
+			REQUIRE(fstat(fd, &st) == 0);
+			CHECK(st.st_size == 4);
+		}
+#endif
+
+		close(fd);
+		unlink(path.c_str());
+	}
+
+	TEST_CASE("rspamd_strto* reject an empty string, also as (NULL, 0)")
+	{
+		glong l = 42;
+		gulong ul = 42;
+		uint64_t u64 = 42;
+
+		/* An empty std::string_view is (nullptr, 0): no arithmetic on it (UBSan) */
+		CHECK_FALSE(rspamd_strtol(nullptr, 0, &l));
+		CHECK_FALSE(rspamd_strtoul(nullptr, 0, &ul));
+		CHECK_FALSE(rspamd_strtou64(nullptr, 0, &u64));
+		CHECK_FALSE(rspamd_xstrtoul(nullptr, 0, &ul));
+		/* An empty string is not zero */
+		CHECK_FALSE(rspamd_strtol("", 0, &l));
+		CHECK_FALSE(rspamd_strtoul("", 0, &ul));
+		CHECK_FALSE(rspamd_strtou64("", 0, &u64));
+		CHECK_FALSE(rspamd_xstrtoul("", 0, &ul));
+		CHECK(l == 42);
+		CHECK(ul == 42);
+		CHECK(u64 == 42);
+
+		CHECK(rspamd_strtol("-12", 3, &l));
+		CHECK(l == -12);
+		CHECK(rspamd_strtoul("12", 2, &ul));
+		CHECK(ul == 12);
+		CHECK(rspamd_strtou64("12", 2, &u64));
+		CHECK(u64 == 12);
+		CHECK(rspamd_xstrtoul("1f", 2, &ul));
+		CHECK(ul == 0x1f);
+	}
+
+	TEST_CASE("rspamd_xstrtoul detects an overflow")
+	{
+		/* All the hex digits a gulong holds, then one more */
+		std::string max(sizeof(gulong) * 2, 'f');
+		std::string over = "1" + std::string(sizeof(gulong) * 2, '0');
+		gulong ul = 42;
+
+		CHECK(rspamd_xstrtoul(max.data(), max.size(), &ul));
+		CHECK(ul == G_MAXULONG);
+		CHECK_FALSE(rspamd_xstrtoul(over.data(), over.size(), &ul));
+	}
+
+	TEST_CASE("rspamd_tm_to_time")
+	{
+		/* Compared as int64_t, so dates outside 32-bit time_t work everywhere */
+		auto to_time = [](int year, int mon, int mday, glong tz) -> int64_t {
+			struct tm tm;
+
+			memset(&tm, 0, sizeof(tm));
+			tm.tm_year = year - 1900;
+			tm.tm_mon = mon - 1;
+			tm.tm_mday = mday;
+
+			return (int64_t) rspamd_tm_to_time(&tm, tz);
+		};
+
+		/* Expected values are Python's calendar.timegm */
+		CHECK(to_time(1970, 1, 1, 0) == 0);
+		CHECK(to_time(1970, 1, 1, 130) == -5400);
+		/* Years 1902-2038: leap days before 1968 round down */
+		CHECK(to_time(1967, 1, 1, 0) == -94694400);
+		CHECK(to_time(1964, 2, 29, 0) == -184291200);
+		CHECK(to_time(1964, 3, 1, 0) == -184204800);
+		CHECK(to_time(1902, 1, 1, 0) == -2145916800);
+		CHECK(to_time(2000, 2, 29, 0) == 951782400);
+		/* Other years: centuries are leap years only when divisible by 400 */
+		CHECK(to_time(1900, 1, 1, 0) == -2208988800LL);
+		CHECK(to_time(2100, 1, 1, 0) == 4102444800LL);
+		CHECK(to_time(2100, 3, 1, 0) == 4107542400LL);
+		CHECK(to_time(2400, 2, 29, 0) == 13574563200LL);
+	}
+
+	TEST_CASE("rspamd_gmtime")
+	{
+		struct tm tm;
+
+		/* Times before 2000-03-01 have negative days */
+		rspamd_gmtime(0, &tm);
+		CHECK(tm.tm_year == 70);
+		CHECK(tm.tm_mon == 0);
+		CHECK(tm.tm_mday == 1);
+		CHECK(tm.tm_hour == 0);
+		CHECK(tm.tm_wday == 4);
+		CHECK(tm.tm_yday == 0);
+
+		rspamd_gmtime(-1, &tm);
+		CHECK(tm.tm_year == 69);
+		CHECK(tm.tm_mon == 11);
+		CHECK(tm.tm_mday == 31);
+		CHECK(tm.tm_hour == 23);
+		CHECK(tm.tm_min == 59);
+		CHECK(tm.tm_sec == 59);
+		CHECK(tm.tm_wday == 3);
+		CHECK(tm.tm_yday == 364);
+
+		rspamd_gmtime(951868799, &tm);
+		CHECK(tm.tm_year == 100);
+		CHECK(tm.tm_mon == 1);
+		CHECK(tm.tm_mday == 29);
+		CHECK(tm.tm_wday == 2);
+		CHECK(tm.tm_yday == 59);
+
+		/* Out of range times are clamped to the years an int can hold */
+		rspamd_gmtime(INT64_MAX, &tm);
+		CHECK(tm.tm_year == INT_MAX - 1900);
+		CHECK(tm.tm_mon == 11);
+		CHECK(tm.tm_mday == 31);
+		CHECK(tm.tm_hour == 23);
+		CHECK(tm.tm_sec == 59);
+
+		rspamd_gmtime(INT64_MIN, &tm);
+		CHECK(tm.tm_year == INT_MIN);
+		CHECK(tm.tm_mon == 0);
+		CHECK(tm.tm_mday == 1);
+		CHECK(tm.tm_hour == 0);
+		CHECK(tm.tm_sec == 0);
+
+		/* 1900-2100 in steps of a week and an hour or so */
+		int mismatches = 0;
+		int64_t first_bad = 0;
+
+		for (int64_t ts = -2208988800LL; ts < 4102444800LL; ts += 7 * 86400 + 3601) {
+			struct tm ours;
+
+			rspamd_gmtime(ts, &ours);
+			/* Days since the epoch, rounded down; 1970-01-01 was a Thursday */
+			int64_t days = ts / 86400 - (ts % 86400 < 0);
+			int wday = (int) (((days + 4) % 7 + 7) % 7);
+			auto bad = (int64_t) rspamd_tm_to_time(&ours, 0) != ts || ours.tm_wday != wday;
+
+			if constexpr (sizeof(time_t) >= 8) {
+				struct tm libc;
+				time_t tt = ts;
+
+				gmtime_r(&tt, &libc);
+				bad = bad || ours.tm_year != libc.tm_year || ours.tm_mon != libc.tm_mon ||
+					  ours.tm_mday != libc.tm_mday || ours.tm_hour != libc.tm_hour ||
+					  ours.tm_min != libc.tm_min || ours.tm_sec != libc.tm_sec ||
+					  ours.tm_wday != libc.tm_wday || ours.tm_yday != libc.tm_yday;
+			}
+
+			if (bad && mismatches++ == 0) {
+				first_bad = ts;
+			}
+		}
+
+		INFO("first mismatch at " << first_bad);
+		CHECK(mismatches == 0);
 	}
 }
 

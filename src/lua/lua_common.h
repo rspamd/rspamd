@@ -119,6 +119,7 @@ struct rspamd_lua_ip {
 enum rspamd_text_newline_mode {
 	RSPAMD_TEXT_NEWLINES_LF = 0,   /* Normalize to LF only */
 	RSPAMD_TEXT_NEWLINES_CRLF = 1, /* Normalize to CRLF */
+	RSPAMD_TEXT_NEWLINES_SMTP = 2, /* Every bare CR or LF to CRLF (RFC 5321 2.3.8) */
 };
 struct rspamd_lua_text {
 	const char *start;
@@ -284,6 +285,20 @@ void rspamd_lua_ip_push(lua_State *L, rspamd_inet_addr_t *addr);
 void rspamd_lua_task_push(lua_State *L, struct rspamd_task *task);
 
 /**
+* Push a symbol result as a table in the same layout as task:get_symbol();
+* returns FALSE (nothing is pushed) if the symbol is not found or ignored
+*/
+struct rspamd_symbol_result;
+struct rspamd_scan_result;
+gboolean rspamd_lua_push_symbol_result(lua_State *L,
+									   struct rspamd_task *task,
+									   const char *symbol,
+									   struct rspamd_symbol_result *symbol_result,
+									   struct rspamd_scan_result *metric_res,
+									   gboolean add_metric,
+									   gboolean add_name);
+
+/**
 * Return lua ip structure at the specified address
 */
 struct rspamd_lua_ip *lua_check_ip(lua_State *L, int pos);
@@ -334,7 +349,7 @@ bool lua_is_text_binary(struct rspamd_lua_text *t);
  *
  * @param t      text to normalize (may be modified in-place if owned)
  * @param pool   optional mempool for allocation (NULL = g_malloc)
- * @param mode   target newline mode (LF or CRLF)
+ * @param mode   target newline mode (LF, CRLF or SMTP)
  * @return       normalized text (may be same pointer if no changes needed)
  */
 struct rspamd_lua_text *rspamd_lua_text_normalize_newlines(
@@ -400,6 +415,8 @@ void luaopen_config(lua_State *L);
 
 void luaopen_map(lua_State *L);
 
+void luaopen_tld_lookup(lua_State *L);
+
 void luaopen_trie(lua_State *L);
 
 void luaopen_textpart(lua_State *L);
@@ -440,6 +457,13 @@ void luaopen_logger(lua_State *L);
 
 void luaopen_text(lua_State *L);
 
+/*
+ * Augments the rspamd{text} metatable with byte-statistics methods
+ * (entropy/byte_mean/...). Must be called after luaopen_text. Defined in
+ * lua_text_stats.cxx.
+ */
+void rspamd_lua_text_stats_init(lua_State *L);
+
 void luaopen_util(lua_State *L);
 
 void luaopen_tcp(lua_State *L);
@@ -467,6 +491,11 @@ void luaopen_parsers(lua_State *L);
 void luaopen_shingle(lua_State *L);
 
 void luaopen_fasttext(lua_State *L);
+
+void luaopen_static_embed(lua_State *L);
+void luaopen_pdf_text(lua_State *L);
+void luaopen_ooxml(lua_State *L);
+void luaopen_svg(lua_State *L);
 
 /* libarchive-based archive module */
 void luaopen_libarchive(lua_State *L);
@@ -674,6 +703,18 @@ gboolean rspamd_lua_require_function(lua_State *L, const char *modname,
 */
 gboolean rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 								   struct rspamd_config *cfg, int *ref_id);
+
+struct rspamd_redis_connection_opts;
+/**
+ * Decode a Redis connection table, or the `connection` table of a request.
+ * A nested connection is authoritative; flat request fields are supported for
+ * existing callers. Strings are copied when pool is non-NULL. Otherwise they
+ * are borrowed and kept alive on the Lua stack. The caller restores the stack
+ * after consuming the options (or after decoding when strings were copied).
+ */
+void rspamd_lua_redis_parse_connection(lua_State *L, int index,
+									   struct rspamd_redis_connection_opts *opts,
+									   rspamd_mempool_t *pool);
 
 struct rspamd_stat_token_s;
 

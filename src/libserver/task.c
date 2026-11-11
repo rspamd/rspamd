@@ -41,11 +41,7 @@
 
 #include <math.h>
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
@@ -186,6 +182,13 @@ rspamd_task_new(struct rspamd_worker *worker,
 	new_task->request_headers = kh_init(rspamd_req_headers_hash);
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME);
+	/*
+	 * Tasks that are not created by a network worker (rspamadm, Lua, embedded
+	 * users) are local and trusted, so privileged message sources are allowed
+	 * by default. The network workers clear this flag for every connection
+	 * that is not permitted to use them.
+	 */
+	new_task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
 	/* Default results chain */
 	rspamd_create_metric_result(new_task, NULL, -1);
 
@@ -390,135 +393,495 @@ void rspamd_task_free(struct rspamd_task *task)
 	}
 }
 
-struct rspamd_task_map {
-	gpointer begin;
-	gulong len;
-	int fd;
+/*
+ * Sanitise a client supplied path (or a POSIX shared memory object name) and
+ * copy it into `dst` which is `dstlen` bytes long.
+ *
+ * On success `dst` holds a NUL terminated, url decoded and unquoted string that
+ * is guaranteed to be non empty, to contain neither embedded NULs nor control
+ * characters, and to have been copied without truncation. Everything else is
+ * rejected here, before any syscall touches the name.
+ *
+ * `what` is used in the error messages only, e.g. "file path".
+ */
+static gboolean
+rspamd_task_sanitize_path(const rspamd_ftok_t *tok, char *dst, gsize dstlen,
+						  const char *what, GError **err)
+{
+	gsize len, i;
+
+	if (tok == NULL || tok->len == 0) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"empty %s", what);
+		return FALSE;
+	}
+
+	/*
+	 * rspamd_strlcpy truncates silently, and operating on a truncated path is
+	 * strictly worse than refusing it, so check the source length upfront
+	 */
+	if ((gsize) tok->len >= dstlen) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"too long %s: %zu bytes, maximum is %zu", what,
+					(gsize) tok->len, (gsize) (dstlen - 1));
+		return FALSE;
+	}
+
+	/* An embedded NUL would silently cut the name short */
+	if (memchr(tok->begin, '\0', tok->len) != NULL) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"%s contains a NUL byte", what);
+		return FALSE;
+	}
+
+	rspamd_strlcpy(dst, tok->begin, tok->len + 1);
+	/* Decoding never expands the input, so it is safe to do it in place */
+	len = rspamd_url_decode(dst, dst, tok->len);
+	dst[len] = '\0';
+
+	if (len > 2 && dst[0] == '"' && dst[len - 1] == '"') {
+		/* Unquote in place, so that the caller always uses `dst` itself */
+		memmove(dst, dst + 1, len - 2);
+		len -= 2;
+		dst[len] = '\0';
+	}
+
+	if (len == 0) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"empty %s after decoding", what);
+		return FALSE;
+	}
+
+	/*
+	 * A name is a single printable token, anything else is a mistake; this also
+	 * catches a NUL that has been produced by the decoding step above
+	 */
+	for (i = 0; i < len; i++) {
+		if ((unsigned char) dst[i] < ' ' || (unsigned char) dst[i] == 0x7f) {
+			g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+						"invalid character at position %zu in %s", i, what);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * Read up to `len` bytes from `fd` into `buf`, dealing with short reads and
+ * EINTR. `*read_len` is set to the number of bytes that were actually available:
+ * an object that has shrunk under us yields less than `len` bytes instead of
+ * faulting, and an object that has grown is simply truncated to `len`.
+ */
+static gboolean
+rspamd_task_read_snapshot(int fd, char *buf, gsize len, gsize *read_len)
+{
+	gsize total = 0;
+
+	while (total < len) {
+		ssize_t r = read(fd, buf + total, len - total);
+
+		if (r > 0) {
+			total += (gsize) r;
+		}
+		else if (r == 0) {
+			/* Truncated under us, whatever we have got is all there is */
+			break;
+		}
+		else if (errno == EINTR) {
+			continue;
+		}
+		else {
+			*read_len = total;
+
+			return FALSE;
+		}
+	}
+
+	*read_len = total;
+
+	return TRUE;
+}
+
+enum rspamd_snapshot_result {
+	RSPAMD_SNAPSHOT_OK = 0,
+	RSPAMD_SNAPSHOT_ERROR,
+	/* This descriptor does not support positional reads at all */
+	RSPAMD_SNAPSHOT_UNSUPPORTED,
 };
 
-static void
-rspamd_task_unmapper(gpointer ud)
+/*
+ * Reads `len` bytes at `offset` into `buf`, coping with short reads and EINTR.
+ *
+ * Unlike a copy out of a mapping, a read can never fault: if the object is
+ * truncated while we are reading it we merely get fewer bytes than we asked
+ * for, which the caller reflects in the payload length.
+ */
+static enum rspamd_snapshot_result
+rspamd_task_pread_snapshot(int fd, char *buf, gsize len, off_t offset,
+						   gsize *read_len)
 {
-	struct rspamd_task_map *m = ud;
+	gsize total = 0;
 
-	munmap(m->begin, m->len);
-	close(m->fd);
+	while (total < len) {
+		ssize_t r = pread(fd, buf + total, len - total,
+						  offset + (off_t) total);
+
+		if (r > 0) {
+			total += (gsize) r;
+		}
+		else if (r == 0) {
+			/* Truncated under us, whatever we have got is all there is */
+			break;
+		}
+		else if (errno == EINTR) {
+			continue;
+		}
+		else if (total == 0 && (errno == ESPIPE || errno == ENODEV ||
+								errno == EINVAL || errno == ENOTSUP ||
+								errno == EOPNOTSUPP)) {
+			/*
+			 * POSIX shared memory descriptors cannot be read on every platform
+			 * (macOS returns ESPIPE, some BSDs ENODEV), so the caller has to
+			 * fall back to mapping the window there.
+			 */
+			return RSPAMD_SNAPSHOT_UNSUPPORTED;
+		}
+		else {
+			*read_len = total;
+
+			return RSPAMD_SNAPSHOT_ERROR;
+		}
+	}
+
+	*read_len = total;
+
+	return RSPAMD_SNAPSHOT_OK;
+}
+
+struct rspamd_shmem_segment *
+rspamd_shmem_segment_map(rspamd_mempool_t *pool,
+						 const rspamd_ftok_t *name_tok,
+						 const rspamd_ftok_t *offset_tok,
+						 const rspamd_ftok_t *length_tok,
+						 gsize max_size,
+						 GError **err)
+{
+	char namebuf[PATH_MAX];
+	const char *name = namebuf;
+	gulong offset = 0, length = 0;
+	gsize page_size, aligned_offset, delta, map_len, nread = 0;
+	struct stat st;
+	int fd;
+	gpointer map;
+	char *data;
+	enum rspamd_snapshot_result res;
+	struct rspamd_shmem_segment *seg;
+#ifdef HAVE_SANE_SHMEM
+	const char *ft = "shm";
+	const char *what = "shm segment name";
+#else
+	const char *ft = "file";
+	const char *what = "file segment path";
+#endif
+
+	if (!rspamd_task_sanitize_path(name_tok, namebuf, sizeof(namebuf), what,
+								   err)) {
+		return NULL;
+	}
+
+	if (offset_tok != NULL &&
+		!rspamd_strtoul(offset_tok->begin, offset_tok->len, &offset)) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"invalid %s segment offset: %.*s", ft,
+					(int) offset_tok->len, offset_tok->begin);
+		return NULL;
+	}
+
+	if (length_tok != NULL &&
+		!rspamd_strtoul(length_tok->begin, length_tok->len, &length)) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"invalid %s segment length: %.*s", ft,
+					(int) length_tok->len, length_tok->begin);
+		return NULL;
+	}
+
+#ifdef HAVE_SANE_SHMEM
+	fd = shm_open(name, O_RDONLY, 0);
+#else
+	/*
+	 * O_NONBLOCK is essential here: on platforms without POSIX shmem the name
+	 * is an ordinary path, and a name that happens to point to a fifo would
+	 * otherwise block the whole worker inside open(2) until somebody opens the
+	 * writing end of it
+	 */
+	fd = open(name, O_RDONLY | O_NONBLOCK);
+#endif
+
+	if (fd == -1) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"cannot open %s segment (%s): %s", ft, name,
+					strerror(errno));
+		return NULL;
+	}
+
+	if (fstat(fd, &st) == -1) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"cannot stat %s segment (%s): %s", ft, name,
+					strerror(errno));
+		close(fd);
+
+		return NULL;
+	}
+
+	if (!S_ISREG(st.st_mode)) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"%s segment (%s) is not a regular object", ft, name);
+		close(fd);
+
+		return NULL;
+	}
+
+	if (st.st_size <= 0) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"empty %s segment (%s)", ft, name);
+		close(fd);
+
+		return NULL;
+	}
+
+	if ((uint64_t) st.st_size > (uint64_t) G_MAXSIZE) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"%s segment (%s) is too large to be mapped", ft, name);
+		close(fd);
+
+		return NULL;
+	}
+
+	if (offset > (gsize) st.st_size) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"invalid offset %lu (%llu available) for %s segment %s",
+					offset, (unsigned long long) st.st_size, ft, name);
+		close(fd);
+
+		return NULL;
+	}
+
+	if (length_tok == NULL) {
+		/* Everything from the offset to the end of the segment */
+		length = (gsize) st.st_size - offset;
+	}
+	else if (length > (gsize) st.st_size - offset) {
+		/*
+		 * The critical check: offset and length are validated together, as
+		 * either of them alone can fit the segment whilst their sum does not
+		 */
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"invalid length %lu at offset %lu (%llu available) for "
+					"%s segment %s",
+					length, offset, (unsigned long long) st.st_size, ft, name);
+		close(fd);
+
+		return NULL;
+	}
+
+	if (max_size > 0 && length > max_size) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"too large %s segment %s: %lu, maximum is %zu",
+					ft, name, length, max_size);
+		close(fd);
+
+		return NULL;
+	}
+
+	seg = rspamd_mempool_alloc0(pool, sizeof(*seg));
+	seg->name = rspamd_mempool_strdup(pool, name);
+	seg->offset = offset;
+	seg->data_len = length;
+	seg->map = NULL;
+	seg->map_len = 0;
+	seg->fd = -1;
+
+	if (length == 0) {
+		/* An empty window must never map the whole object */
+		close(fd);
+		seg->data = rspamd_mempool_strdup(pool, "");
+
+		return seg;
+	}
+
+	/*
+	 * The backing object belongs to the client and it can be truncated or
+	 * rewritten at any moment, so the parser must never be handed a live
+	 * mapping. Read the window straight into pool storage instead of copying it
+	 * out of one: a concurrent ftruncate between the fstat above and the copy
+	 * would raise SIGBUS on a mapping and take the whole worker down, whereas a
+	 * read merely returns fewer bytes.
+	 */
+	data = rspamd_mempool_alloc(pool, length);
+	res = rspamd_task_pread_snapshot(fd, data, length, (off_t) offset, &nread);
+
+	if (res == RSPAMD_SNAPSHOT_ERROR) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"cannot read %s segment (%s): %s", ft, name,
+					strerror(errno));
+		close(fd);
+
+		return NULL;
+	}
+
+	if (res == RSPAMD_SNAPSHOT_OK) {
+		close(fd);
+		/* The object may have shrunk under us, so trust what we really got */
+		seg->data_len = nread;
+		seg->data = data;
+
+		return seg;
+	}
+
+	/*
+	 * This descriptor cannot be read positionally, which happens for POSIX
+	 * shared memory on some platforms, so fall back to mapping. Map merely the
+	 * window that is really needed: the offset is rounded down to a page
+	 * boundary and the length is extended by the very same delta, so that a
+	 * small payload inside a huge object never maps that whole object.
+	 */
+	page_size = (gsize) sysconf(_SC_PAGESIZE);
+
+	if (page_size == 0 || page_size == (gsize) -1) {
+		page_size = 4096;
+	}
+
+	aligned_offset = ((gsize) offset / page_size) * page_size;
+	delta = (gsize) offset - aligned_offset;
+	map_len = (gsize) length + delta;
+
+	map = mmap(NULL, map_len, PROT_READ, MAP_SHARED, fd, (off_t) aligned_offset);
+
+	if (map == MAP_FAILED) {
+		g_set_error(err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"cannot mmap %s segment (%s): %s", ft, name,
+					strerror(errno));
+		close(fd);
+
+		return NULL;
+	}
+
+	memcpy(data, (const char *) map + delta, length);
+	munmap(map, map_len);
+	close(fd);
+
+	seg->data = data;
+
+	return seg;
+}
+
+gboolean
+rspamd_task_allow_file_shm_input(struct rspamd_task *task)
+{
+	if (task == NULL) {
+		return FALSE;
+	}
+
+	return (task->protocol_flags &
+			RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT) != 0;
+}
+
+gboolean
+rspamd_task_has_file_shm_input(struct rspamd_task *task)
+{
+	/* The lookup hash is case insensitive, so lowercase names are enough */
+	static const char *privileged_headers[] = {
+		"file",
+		"path",
+		"shm",
+		"shm-offset",
+		"shm-length",
+	};
+	unsigned int i;
+
+	if (task == NULL || task->request_headers == NULL) {
+		return FALSE;
+	}
+
+	for (i = 0; i < G_N_ELEMENTS(privileged_headers); i++) {
+		if (rspamd_task_get_request_header(task, privileged_headers[i]) != NULL) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 gboolean
 rspamd_task_load_message(struct rspamd_task *task,
 						 struct rspamd_http_message *msg, const char *start, gsize len)
 {
-	char filepath[PATH_MAX], *fp;
-	int fd, flen;
-	gulong offset = 0, shmem_size = 0;
+	char filepath[PATH_MAX];
+	int fd;
 	rspamd_ftok_t *tok;
-	gpointer map;
+	gsize max_message;
 	struct stat st;
-	struct rspamd_task_map *m;
-	const char *ft;
-
-#ifdef HAVE_SANE_SHMEM
-	ft = "shm";
-#else
-	ft = "file";
-#endif
 
 	if (msg && task->cmd != CMD_CHECK_V3) {
-		rspamd_protocol_handle_headers(task, msg);
+		/*
+		 * Header parsing rejects privileged message source controls that this
+		 * connection may not use, so its verdict must be honoured here: it has
+		 * already set task->err and the request must not be processed further.
+		 */
+		if (!rspamd_protocol_handle_headers(task, msg)) {
+			return FALSE;
+		}
 	}
+
+	/*
+	 * File and shm inputs make rspamd open an arbitrary local object of the
+	 * client's choosing, so they are only honoured on the transports that the
+	 * accepting worker has explicitly marked as privileged. This is checked
+	 * before any of the values is even looked at, hence no stat/open/mmap and
+	 * no shm_open can happen for a connection that is not allowed to use them.
+	 */
+	if (rspamd_task_has_file_shm_input(task) &&
+		!rspamd_task_allow_file_shm_input(task)) {
+		msg_info_task("deny file/shm message source from %s: this connection is "
+					  "not permitted to use privileged inputs; set "
+					  "`allow_file_and_shm_inputs = true` for this worker if all "
+					  "of its clients are trusted",
+					  rspamd_inet_address_to_string_pretty(task->client_addr));
+		g_set_error(&task->err, rspamd_task_quark(), 400,
+					"file and shm message sources are not allowed "
+					"on this connection");
+		/* This is a client error, so report it as a genuine 400 */
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+		return FALSE;
+	}
+
+	max_message = (task->cfg != NULL) ? task->cfg->max_message : 0;
 
 	tok = rspamd_task_get_request_header(task, "shm");
 
 	if (tok) {
 		/* Shared memory part */
-		size_t r = rspamd_strlcpy(filepath, tok->begin,
-								  MIN(sizeof(filepath), tok->len + 1));
+		struct rspamd_shmem_segment *seg;
+		rspamd_ftok_t *off_tok, *len_tok;
 
-		rspamd_url_decode(filepath, filepath, r + 1);
-		flen = strlen(filepath);
+		off_tok = rspamd_task_get_request_header(task, "shm-offset");
+		len_tok = rspamd_task_get_request_header(task, "shm-length");
 
-		if (filepath[0] == '"' && flen > 2) {
-			/* We need to unquote filepath */
-			fp = &filepath[1];
-			fp[flen - 2] = '\0';
-		}
-		else {
-			fp = &filepath[0];
-		}
-#ifdef HAVE_SANE_SHMEM
-		fd = shm_open(fp, O_RDONLY, 00600);
-#else
-		fd = open(fp, O_RDONLY, 00600);
-#endif
-		if (fd == -1) {
-			g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-						"Cannot open %s segment (%s): %s", ft, fp, strerror(errno));
+		seg = rspamd_shmem_segment_map(task->task_pool, tok, off_tok, len_tok,
+									   max_message, &task->err);
+
+		if (seg == NULL) {
 			return FALSE;
 		}
 
-		if (fstat(fd, &st) == -1) {
-			g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-						"Cannot stat %s segment (%s): %s", ft, fp, strerror(errno));
-			close(fd);
+		task->msg.begin = seg->data;
+		task->msg.len = seg->data_len;
 
-			return FALSE;
-		}
-
-		map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-
-		if (map == MAP_FAILED) {
-			close(fd);
-			g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-						"Cannot mmap %s (%s): %s", ft, fp, strerror(errno));
-			return FALSE;
-		}
-
-		tok = rspamd_task_get_request_header(task, "shm-offset");
-
-		if (tok) {
-			rspamd_strtoul(tok->begin, tok->len, &offset);
-
-			if (offset > (gulong) st.st_size) {
-				msg_err_task("invalid offset %ul (%ul available) for shm "
-							 "segment %s",
-							 offset, (gulong) st.st_size, fp);
-				munmap(map, st.st_size);
-				close(fd);
-
-				return FALSE;
-			}
-		}
-
-		tok = rspamd_task_get_request_header(task, "shm-length");
-		shmem_size = st.st_size;
-
-
-		if (tok) {
-			rspamd_strtoul(tok->begin, tok->len, &shmem_size);
-
-			if (shmem_size > (gulong) st.st_size) {
-				msg_err_task("invalid length %ul (%ul available) for %s "
-							 "segment %s",
-							 shmem_size, (gulong) st.st_size, ft, fp);
-				munmap(map, st.st_size);
-				close(fd);
-
-				return FALSE;
-			}
-		}
-
-		task->msg.begin = ((unsigned char *) map) + offset;
-		task->msg.len = shmem_size;
-		m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
-		m->begin = map;
-		m->len = st.st_size;
-		m->fd = fd;
-
-		msg_info_task("loaded message from shared memory %s (%ul size, %ul offset), fd=%d",
-					  fp, shmem_size, offset, fd);
-
-		rspamd_mempool_add_destructor(task->task_pool, rspamd_task_unmapper, m);
+		msg_info_task("loaded message from shared memory %s "
+					  "(%uz size, %uz offset)",
+					  seg->name, seg->data_len, seg->offset);
 	}
 	else {
 		/* Try file */
@@ -531,68 +894,110 @@ rspamd_task_load_message(struct rspamd_task *task,
 		if (tok) {
 			debug_task("want to scan file %T", tok);
 
-			size_t r = rspamd_strlcpy(filepath, tok->begin,
-									  MIN(sizeof(filepath), tok->len + 1));
-
-			rspamd_url_decode(filepath, filepath, r + 1);
-			flen = strlen(filepath);
-
-			if (filepath[0] == '"' && flen > 2) {
-				/* We need to unquote filepath */
-				fp = &filepath[1];
-				fp[flen - 2] = '\0';
-			}
-			else {
-				fp = &filepath[0];
+			if (!rspamd_task_sanitize_path(tok, filepath, sizeof(filepath),
+										   "file path", &task->err)) {
+				return FALSE;
 			}
 
-			if (stat(fp, &st) == -1) {
-				g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-							"Invalid file (%s): %s", fp, strerror(errno));
+			/*
+			 * Open first and validate the descriptor afterwards: a path based
+			 * stat(2) says nothing about the object that is actually opened.
+			 * O_NONBLOCK: never block the worker on opening a special file.
+			 */
+			fd = open(filepath, O_RDONLY | O_NONBLOCK);
+
+			if (fd == -1) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Cannot open file (%s): %s", filepath,
+							strerror(errno));
+				return FALSE;
+			}
+
+			if (fstat(fd, &st) == -1) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Cannot stat file (%s): %s", filepath,
+							strerror(errno));
+				close(fd);
+
+				return FALSE;
+			}
+
+			if (!S_ISREG(st.st_mode)) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Not a regular file (%s)", filepath);
+				close(fd);
+
+				return FALSE;
+			}
+
+			if (st.st_size < 0 ||
+				(uint64_t) st.st_size > (uint64_t) G_MAXSIZE) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Invalid size of file (%s): %lld", filepath,
+							(long long) st.st_size);
+				close(fd);
+
+				return FALSE;
+			}
+
+			/*
+			 * A file input must obey the very same limit as an inline body,
+			 * and it has to be enforced before anything is read at all
+			 */
+			if (max_message > 0 && (gsize) st.st_size > max_message) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Too large file (%s): %zu, maximum is %zu",
+							filepath, (gsize) st.st_size, max_message);
+				close(fd);
+
 				return FALSE;
 			}
 
 			if (G_UNLIKELY(st.st_size == 0)) {
-				/* Empty file */
+				/* Empty file, exactly as an empty inline message */
+				close(fd);
 				task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 				task->msg.begin = rspamd_mempool_strdup(task->task_pool, "");
 				task->msg.len = 0;
 			}
 			else {
-				fd = open(fp, O_RDONLY);
+				/*
+				 * The file belongs to the client and it can be truncated at any
+				 * moment, which would turn a MAP_SHARED mapping into a fault in
+				 * the middle of the parser. Take a bounded snapshot instead, so
+				 * that the parser is never given a range that can go away.
+				 */
+				gsize nread = 0;
+				char *buf = rspamd_mempool_alloc(task->task_pool,
+												 (gsize) st.st_size);
 
-				if (fd == -1) {
+				if (!rspamd_task_read_snapshot(fd, buf, (gsize) st.st_size,
+											   &nread)) {
 					g_set_error(&task->err, rspamd_task_quark(),
 								RSPAMD_PROTOCOL_ERROR,
-								"Cannot open file (%s): %s", fp, strerror(errno));
-					return FALSE;
-				}
-
-				map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-
-
-				if (map == MAP_FAILED) {
+								"Cannot read file (%s): %s", filepath,
+								strerror(errno));
 					close(fd);
-					g_set_error(&task->err, rspamd_task_quark(),
-								RSPAMD_PROTOCOL_ERROR,
-								"Cannot mmap file (%s): %s", fp, strerror(errno));
+
 					return FALSE;
 				}
 
-				task->msg.begin = map;
-				task->msg.len = st.st_size;
-				m = rspamd_mempool_alloc(task->task_pool, sizeof(*m));
-				m->begin = map;
-				m->len = st.st_size;
-				m->fd = fd;
+				close(fd);
 
-				rspamd_mempool_add_destructor(task->task_pool, rspamd_task_unmapper, m);
+				task->msg.begin = buf;
+				task->msg.len = nread;
 			}
 
-			task->msg.fpath = rspamd_mempool_strdup(task->task_pool, fp);
+			task->msg.fpath = rspamd_mempool_strdup(task->task_pool, filepath);
 			task->flags |= RSPAMD_TASK_FLAG_FILE;
 
-			msg_info_task("loaded message from file %s", fp);
+			msg_info_task("loaded message from file %s (%uz bytes)", filepath,
+						  task->msg.len);
 		}
 		else {
 			/* Plain data */
@@ -619,11 +1024,6 @@ rspamd_task_load_message(struct rspamd_task *task,
 		t.len = 4;
 
 		if (rspamd_ftok_casecmp(tok, &t) == 0) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
 			gulong dict_id;
 
 			if (!rspamd_libs_reset_decompression(task->cfg->libs_ctx)) {
@@ -660,47 +1060,34 @@ rspamd_task_load_message(struct rspamd_task *task,
 				}
 			}
 
-			zstream = task->cfg->libs_ctx->in_zstream;
+			GError *derr = NULL;
+			gsize compressed_len = task->msg.len;
+			rspamd_fstring_t *decompressed;
 
-			zin.pos = 0;
-			zin.src = task->msg.begin;
-			zin.size = task->msg.len;
+			decompressed = rspamd_zstd_decompress_bounded(task->cfg->libs_ctx->in_zstream,
+														  task->msg.begin, task->msg.len,
+														  task->cfg->max_message, &derr);
 
-			if ((outlen = ZSTD_getDecompressedSize(task->msg.begin, task->msg.len)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+			if (decompressed == NULL) {
+				g_set_error(&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Decompression error: %s",
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+
+				return FALSE;
 			}
 
-			out = g_malloc(outlen);
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					g_set_error(&task->err, rspamd_task_quark(),
-								RSPAMD_PROTOCOL_ERROR,
-								"Decompression error: %s", ZSTD_getErrorName(r));
-
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					zout.dst = g_realloc(zout.dst, zout.size);
-				}
-			}
-
-			rspamd_mempool_add_destructor(task->task_pool, g_free, zout.dst);
-			task->msg.begin = zout.dst;
-			task->msg.len = zout.pos;
+			rspamd_mempool_add_destructor(task->task_pool,
+										  (rspamd_mempool_destruct_t) rspamd_fstring_free,
+										  decompressed);
+			task->msg.begin = decompressed->str;
+			task->msg.len = decompressed->len;
 			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED;
 
 			msg_info_task("loaded message from zstd compressed stream; "
 						  "compressed: %ul; uncompressed: %ul",
-						  (gulong) zin.size, (gulong) zout.pos);
+						  (gulong) compressed_len, (gulong) decompressed->len);
 		}
 		else {
 			g_set_error(&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
@@ -792,12 +1179,16 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
 	case RSPAMD_TASK_STAGE_CLASSIFIERS_PRE:
 	case RSPAMD_TASK_STAGE_CLASSIFIERS_POST:
-		if (!RSPAMD_TASK_IS_EMPTY(task)) {
+		/* A passthrough result (e.g. a pre-result from a prefilter) makes classification pointless */
+		if (!RSPAMD_TASK_IS_EMPTY(task) && !rspamd_scan_result_has_passthrough(task->result)) {
 			if (rspamd_stat_classify(task, task->cfg->lua_state, st, &stat_error) ==
 				RSPAMD_STAT_PROCESS_ERROR) {
 				msg_err_task("classify error: %e", stat_error);
 				g_error_free(stat_error);
 			}
+		}
+		else if (!RSPAMD_TASK_IS_EMPTY(task)) {
+			msg_debug_task("skip classification: the task has a passthrough result");
 		}
 		break;
 
@@ -951,6 +1342,16 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 struct rspamd_email_address *
 rspamd_task_get_sender(struct rspamd_task *task)
 {
+	return task->from_envelope;
+}
+
+struct rspamd_email_address *
+rspamd_task_get_original_sender(struct rspamd_task *task)
+{
+	if (task->from_envelope_orig) {
+		return task->from_envelope_orig;
+	}
+
 	return task->from_envelope;
 }
 
@@ -1143,6 +1544,43 @@ rspamd_task_compare_log_group(gconstpointer a, gconstpointer b)
 }
 
 
+/*
+ * Options are stored verbatim; when joined into the delimited symbols list
+ * an option that contains a delimiter is percent-encoded (together with '%'),
+ * mirroring lua_util.symbol_options_to_string. Other options are written as is.
+ */
+static void
+rspamd_task_log_append_option(rspamd_fstring_t **symbuf, const char *opt, gsize optlen)
+{
+	static const char delimiters[] = "[]{};,";
+	static const char hex[] = "0123456789ABCDEF";
+	gboolean need_escape = FALSE;
+
+	for (gsize i = 0; i < optlen; i++) {
+		if (opt[i] != '\0' && strchr(delimiters, opt[i]) != NULL) {
+			need_escape = TRUE;
+			break;
+		}
+	}
+
+	if (!need_escape) {
+		rspamd_printf_fstring(symbuf, "%*s", (int) optlen, opt);
+		return;
+	}
+
+	for (gsize i = 0; i < optlen; i++) {
+		unsigned char c = opt[i];
+
+		if (c == '%' || (c != '\0' && strchr(delimiters, c) != NULL)) {
+			char enc[3] = {'%', hex[c >> 4], hex[c & 0xf]};
+			*symbuf = rspamd_fstring_append(*symbuf, enc, sizeof(enc));
+		}
+		else {
+			*symbuf = rspamd_fstring_append(*symbuf, (const char *) &c, 1);
+		}
+	}
+}
+
 static rspamd_ftok_t
 rspamd_task_log_metric_res(struct rspamd_task *task,
 						   struct rspamd_log_format *lf)
@@ -1223,8 +1661,8 @@ rspamd_task_log_metric_res(struct rspamd_task *task,
 
 						DL_FOREACH(sym->opts_head, opt)
 						{
-							rspamd_printf_fstring(&symbuf, "%*s;",
-												  (int) opt->optlen, opt->option);
+							rspamd_task_log_append_option(&symbuf, opt->option, opt->optlen);
+							rspamd_printf_fstring(&symbuf, ";");
 
 							if (j >= max_log_elts && opt->next) {
 								rspamd_printf_fstring(&symbuf, "...;");
@@ -1795,21 +2233,21 @@ void rspamd_task_add_request_header(struct rspamd_task *task,
 	k = kh_put(rspamd_req_headers_hash, task->request_headers,
 			   name, &res);
 
-	if (res == 0) {
-		/* Existing name */
-		nchain = rspamd_mempool_alloc(task->task_pool, sizeof(*nchain));
-		nchain->hdr = value;
-		nchain->next = NULL;
-		chain = kh_value(task->request_headers, k);
+	nchain = rspamd_mempool_alloc(task->task_pool, sizeof(*nchain));
+	nchain->hdr = value;
+	nchain->next = NULL;
+	nchain->tail = nchain;
 
-		/* Slow but OK here */
-		LL_APPEND(chain, nchain);
+	if (res == 0) {
+		/*
+		 * Existing name: append in constant time, as v3 metadata can repeat
+		 * a name many times (it is not bound by the HTTP header size limit)
+		 */
+		chain = kh_value(task->request_headers, k);
+		chain->tail->next = nchain;
+		chain->tail = nchain;
 	}
 	else {
-		nchain = rspamd_mempool_alloc(task->task_pool, sizeof(*nchain));
-		nchain->hdr = value;
-		nchain->next = NULL;
-
 		kh_value(task->request_headers, k) = nchain;
 	}
 }

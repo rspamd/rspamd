@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Mixed zero-width and bracket URL obfuscation
+Content-Type: text/plain; charset=utf-8
+
+Visit ex​ample[.]com for details

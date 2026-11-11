@@ -1,14 +1,20 @@
 {
+    "scripts": {
+        "build:icons": "node icons-build.mjs",
+        "check:deps": "node webui-deps-check.mjs",
+        "check:icons": "node icons-check.mjs && node icons-build.mjs && git diff --exit-code -- interface/img/icons.svg interface/css/icons.css"
+    },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@fortawesome/fontawesome-free": "7.3.1",
         "@stylistic/eslint-plugin": "^5.10.0",
-        "eslint": "^10.3.0",
-        "globals": "^17.6.0",
-        "postcss-html": "^1.8.1",
-        "stylelint": ">=17.11.0",
-        "stylelint-config-standard": "^40.0.0"
+        "eslint": "^10.14.0",
+        "globals": "^17.14.0",
+        "postcss-html": "^2.0.0",
+        "stylelint": "^18.0.0",
+        "stylelint-config-standard": "^41.0.0"
     },
     "dependencies": {
-        "npm-check-updates": "^22.1.1"
+        "npm-check-updates": "^23.1.1"
     }
 }

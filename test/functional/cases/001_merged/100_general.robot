@@ -56,6 +56,51 @@ EMAILS DETECTION ZEROFONT
   Expect Symbol  MANY_INVISIBLE_PARTS
   Expect Symbol  ZERO_FONT
 
+HTML VISIBILITY - Layout whitespace
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_visibility_layout.eml
+  ...  Settings={symbols_enabled = [MANY_INVISIBLE_PARTS, ZERO_FONT, R_WHITE_ON_WHITE, HIDDEN_TEXT]}
+  Do Not Expect Symbol  ZERO_FONT
+  Do Not Expect Symbol  MANY_INVISIBLE_PARTS
+  Do Not Expect Symbol  R_WHITE_ON_WHITE
+  Do Not Expect Symbol  HIDDEN_TEXT
+
+HTML VISIBILITY - Preview and dividers
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_visibility_preview.eml
+  ...  Settings={symbols_enabled = [MANY_INVISIBLE_PARTS, ZERO_FONT, HIDDEN_TEXT]}
+  Expect Symbol With Score And Exact Options  ZERO_FONT  0.1  1
+  Expect Symbol With Score And Exact Options  MANY_INVISIBLE_PARTS  0.05  1
+  Do Not Expect Symbol  HIDDEN_TEXT
+
+HTML VISIBILITY - Hidden text with padding
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_visibility_hidden.eml
+  ...  Settings={symbols_enabled = [MANY_INVISIBLE_PARTS, ZERO_FONT]}
+  Expect Symbol With Score And Exact Options  ZERO_FONT  0.2  2
+  Expect Symbol With Score And Exact Options  MANY_INVISIBLE_PARTS  0.2  3
+
+HTML VISIBILITY - Transparent text
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_visibility_transparent.eml
+  ...  Settings={symbols_enabled = [MANY_INVISIBLE_PARTS, R_WHITE_ON_WHITE]}
+  Expect Symbol With Score And Exact Options  MANY_INVISIBLE_PARTS  0.05  1
+  Expect Symbol With Exact Options  R_WHITE_ON_WHITE  span color #ffffff bgcolor #ffffff
+
+HTML VISIBILITY - Significant hidden content
+  [Template]  Check Hidden Content Amount
+  large_zero  5  500
+  large_nested  5  500
+  boundary  2  200
+  intermediate  3  300
+  multipart  2  200
+  stylesheet_over_inline  5  500
+
+HTML VISIBILITY - No significant hidden content
+  [Template]  Check No Significant Hidden Content
+  below_threshold
+  padding
+  visible
+  font_shorthand
+  relative_font
+  grouped_selector
+
 HTML ONLY - TRUE POSITIVE
   Scan File  ${RSPAMD_TESTDIR}/messages/zerofont.eml
   ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
@@ -100,3 +145,27 @@ HTML ONLY - multipart/alternative with html and text/calendar
   Scan File  ${ALT_HTML_CALENDAR}
   ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
   Do Not Expect Symbol  MIME_HTML_ONLY
+
+*** Keywords ***
+Check Hidden Content Amount
+  [Arguments]  ${fixture}  ${score}  ${characters}
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_hidden_${fixture}.eml
+  ...  Settings={symbols_enabled = [HIDDEN_TEXT]}
+  Expect Symbol With Score And Exact Options  HIDDEN_TEXT  ${score}  ${characters}
+
+Check No Significant Hidden Content
+  [Arguments]  ${fixture}
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_hidden_${fixture}.eml
+  ...  Settings={symbols_enabled = [HIDDEN_TEXT]}
+  Do Not Expect Symbol  HIDDEN_TEXT
+
+TEXT WORDS TRUNCATED - Long text
+  [Documentation]  The words of a long part are a sample, and that is told
+  Scan File  ${RSPAMD_TESTDIR}/messages/words_sampled.eml
+  ...  Settings={symbols_enabled = [TEXT_WORDS_TRUNCATED]}
+  Expect Symbol With Exact Options  TEXT_WORDS_TRUNCATED  sampled=1
+
+TEXT WORDS TRUNCATED - Short text
+  Scan File  ${RSPAMD_TESTDIR}/messages/zerofont.eml
+  ...  Settings={symbols_enabled = [TEXT_WORDS_TRUNCATED]}
+  Do Not Expect Symbol  TEXT_WORDS_TRUNCATED

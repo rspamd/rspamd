@@ -1,0 +1,11 @@
+From: dev@example.com
+To: <test@test.ru>
+Subject: build report
+Date: Mon, 27 Apr 2020 19:54:10 +0300
+Message-ID: <negative-1@example.com>
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+Commit a9993e364706816aba3e25717850c26c9cd0d89d built fine.
+Request 3f2504e0-4f89-11d3-9a0c-0305e82c3301 took 12 ms.
+Token vQBQPEjJmki5fhBboGBWRJhmcFkMvrr4Fu3tMSJ5Edyn expires tomorrow.

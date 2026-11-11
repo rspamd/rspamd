@@ -61,6 +61,11 @@ typedef struct rspamd_ftok_unicode {
 #define RSPAMD_WORD_FLAG_SKIPPED (1u << 11u)
 #define RSPAMD_WORD_FLAG_INVISIBLE_SPACES (1u << 12u)
 #define RSPAMD_WORD_FLAG_EMOJI (1u << 13u)
+#define RSPAMD_WORD_FLAG_MIXED_SCRIPT (1u << 14u)
+#define RSPAMD_WORD_FLAG_UNICODE_SPOOF (1u << 15u)
+#define RSPAMD_WORD_FLAG_CONFUSABLE_CANDIDATE (1u << 16u)
+#define RSPAMD_WORD_FLAG_INVISIBLE (1u << 17u)
+#define RSPAMD_WORD_FLAG_MIXED_NUMBERS (1u << 18u)
 
 /**
  * Word structure

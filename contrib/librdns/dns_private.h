@@ -129,6 +129,8 @@ struct rdns_request {
 	void *arg;
 
 	void *async_event;
+	/* The packet queued on a TCP channel while it is not written yet */
+	struct rdns_tcp_output_chain *tcp_oc;
 
 #if defined(TWEETNACL) || defined(USE_RSPAMD_CRYPTOBOX)
 	void *curve_plugin_data;
@@ -156,15 +158,27 @@ struct rdns_tcp_output_chain {
 	uint16_t next_write_size; /* Network byte order! */
 	uint16_t cur_write; /* Cur bytes written including `next_write_size` */
 	unsigned char *write_buf;
+	struct rdns_request *req; /* NULL once the request is gone */
 	struct rdns_tcp_output_chain *prev, *next;
 };
+
+/*
+ * Packets queued on one TCP channel: past it requests are not rescheduled
+ * over TCP, so a stalled upstream cannot accumulate them
+ */
+#define RDNS_MAX_TCP_OUTPUT_CHAINS 1024
 
 /**
  * Specific stuff for a TCP IO chain
  */
 struct rdns_tcp_channel {
 	uint16_t next_read_size; /* Network byte order on read, then host byte order */
-	uint16_t cur_read; /* Cur bytes read including `next_read_size` */
+	/*
+	 * Bytes read so far, including the two octets that encode `next_read_size`.
+	 * A maximum sized DNS-over-TCP frame is 2 + 65535 bytes, which does not fit
+	 * into 16 bits, so this counter must be wider than `next_read_size`.
+	 */
+	uint32_t cur_read;
 	unsigned char *cur_read_buf;
 	unsigned read_buf_allocated;
 

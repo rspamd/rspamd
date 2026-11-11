@@ -117,7 +117,7 @@ local function pyzor_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed',
-              rule['symbol'], rule['type'])
+              rule.log_prefix)
           task:insert_result(rule['symbol_fail'], 0.0,
               'failed to scan and retransmits exceed')
         end

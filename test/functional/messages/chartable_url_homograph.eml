@@ -1,0 +1,8 @@
+From: sender@example.com
+To: recipient@example.net
+Subject: Chartable URL homograph test
+Date: Thu, 4 Sep 2026 12:00:00 +0000
+Message-ID: <chartable-url-homograph@example.com>
+Content-Type: text/html; charset=UTF-8
+
+<html><body><a href="https://раура.com/login">https://paypa.com/login</a></body></html>

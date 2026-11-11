@@ -23,6 +23,16 @@
 #include "message.h"
 
 
+/*
+ * Maximum nesting depth of RFC 5322 comments, e.g. `(a (b (c)))`.
+ * The Ragel grammars implement nested comments via `fcall`, which pushes one
+ * entry onto a heap allocated state stack per level, so an unbounded limit lets
+ * a single header allocate memory proportional to its own length. Real world
+ * headers never nest more than a couple of levels; anything deeper is treated
+ * as a parse error.
+ */
+#define RSPAMD_RAGEL_MAX_COMMENT_NESTING 8
+
 #ifdef __cplusplus
 extern "C" {
 #endif

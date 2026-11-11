@@ -85,7 +85,7 @@ rspamd_config:add_condition("DKIM_CHECK", function(task)
   local hdr = task:get_request_header('DKIM')
 
   if hdr then
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local res, err = parser:parse_string(tostring(hdr))
     if not res then
       logger.infox(task, "cannot parse DKIM header: %1", err)
@@ -132,7 +132,7 @@ rspamd_config:add_condition("SPF_CHECK", function(task)
   local hdr = task:get_request_header('SPF')
 
   if hdr then
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local res, err = parser:parse_string(tostring(hdr))
     if not res then
       logger.infox(task, "cannot parse SPF header: %1", err)
@@ -165,7 +165,7 @@ rspamd_config:add_condition("DMARC_CALLBACK", function(task)
   local hdr = task:get_request_header('DMARC')
 
   if hdr then
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local res, err = parser:parse_string(tostring(hdr))
     if not res then
       logger.infox(task, "cannot parse DMARC header: %1", err)

@@ -62,8 +62,8 @@ struct css_parser_token {
 		dim_em,
 		dim_rem,
 		dim_ex,
-		dim_wv,
-		dim_wh,
+		dim_vw,
+		dim_vh,
 		dim_vmax,
 		dim_vmin,
 		dim_pt,
@@ -197,6 +197,19 @@ public:
 	auto pushback_token(const struct css_parser_token &t) const -> void
 	{
 		backlog.push_back(t);
+	}
+
+	/* Position of the next token in the input, valid while nothing is pushed back */
+	auto get_offset() const -> std::size_t
+	{
+		return offset;
+	}
+
+	/* Continue from the given position, dropping the pushed back tokens */
+	auto seek(std::size_t pos) -> void
+	{
+		offset = std::min(pos, input.size());
+		backlog.clear();
 	}
 
 private:

@@ -8,24 +8,24 @@ test.describe("Symbols", () => {
         await page.locator("#symbols_nav").click();
         await expect(page.locator("#symbolsTable")).toBeVisible();
         // Ensure table data has been loaded before running tests
-        await expect(page.locator("#symbolsTable tbody tr").first()).toBeVisible();
+        await expect(page.locator("#symbolsTable .tabulator-table .tabulator-row").first()).toBeVisible();
     });
 
     test("shows list and allows filtering by group", async ({page}) => {
-        // Check filtering by group (if selector exists)
-        const groupSelect = page.locator(".footable-filtering select.form-select").first();
+        // The group filter is a Tabulator header-filter <select> on the Group column.
+        const groupSelect = page.locator("#symbolsTable .tabulator-header select.form-select").first();
         if (await groupSelect.count()) {
             // Ensure there is at least one real group besides "Any group"
             const optionCount = await groupSelect.evaluate((el) => el.options.length);
             expect(optionCount).toBeGreaterThan(1);
 
-            // Read target group's value and text BEFORE selection to avoid FooTable redraw races
+            // Read target group's value and text BEFORE selection to avoid redraw races
             const target = await groupSelect.evaluate((el) => {
                 const [, op] = Array.from(el.options); // first non-default option
                 return {text: op.text, value: op.value};
             });
 
-            const groupCells = page.locator("#symbolsTable tbody tr td.footable-first-visible");
+            const groupCells = page.locator("#symbolsTable .tabulator-cell[tabulator-field='group']");
             const beforeTexts = await groupCells.allTextContents();
 
             await groupSelect.selectOption({value: target.value});

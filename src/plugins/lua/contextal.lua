@@ -163,7 +163,7 @@ local function action_cb(task)
       maybe_defer(task)
       return
     end
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local _, parse_err = parser:parse_string(body)
     if parse_err then
       rspamd_logger.err(task, 'cannot parse JSON: %s', err)
@@ -202,7 +202,7 @@ local function submit(task)
       maybe_defer(task)
       return
     end
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local _, parse_err = parser:parse_string(body)
     if parse_err then
       rspamd_logger.err(task, 'cannot parse JSON: %s', err)

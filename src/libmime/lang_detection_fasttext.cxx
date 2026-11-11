@@ -335,6 +335,10 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 {
 	/* Avoid too long inputs */
 	static const size_t max_fasttext_input_len = 1024 * 1024;
+	/* Longer "words" are garbage that only inflates subword ngrams */
+	static const size_t max_fasttext_word_len = 256;
+	/* Bound the total number of tokens fed into the model */
+	static const size_t max_fasttext_tokens = 128 * 1024;
 	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
 	std::vector<std::int32_t> words_vec;
 
@@ -343,12 +347,18 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 	}
 
 	auto words_count = kv_size(*utf_words);
-	words_vec.reserve(words_count);
+	words_vec.reserve(std::min(words_count, max_fasttext_tokens));
 
-	for (auto i = 0; i < std::min(words_count, max_fasttext_input_len); i++) {
+	for (size_t i = 0; i < std::min(words_count, max_fasttext_input_len); i++) {
 		const auto *w = &kv_A(*utf_words, i);
-		if (w->original.len > 0) {
+		if (w->original.len > 0 && w->original.len <= max_fasttext_word_len) {
 			real_model->word2vec(w->original.begin, w->original.len, words_vec);
+		}
+
+		if (words_vec.size() >= max_fasttext_tokens) {
+			msg_debug_lang_det("fasttext: tokens limit of %z is reached after %z words",
+							   max_fasttext_tokens, i);
+			break;
 		}
 	}
 

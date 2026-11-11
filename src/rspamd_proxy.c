@@ -47,11 +47,7 @@
 #include <netinet/tcp.h> /* for TCP_NODELAY */
 #endif
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
@@ -123,7 +119,7 @@ struct rspamd_http_mirror {
 	gboolean local;
 	gboolean compress;
 	gboolean ssl;
-	gboolean keepalive; /* Whether to use keepalive for this mirror */
+	gboolean keepalive;     /* Whether to use keepalive for this mirror */
 	gboolean follow_master; /* Tie mirror lifetime to master upstream */
 	enum rspamd_proxy_log_tag_type log_tag_type;
 	ucl_object_t *extra_headers;
@@ -156,7 +152,15 @@ struct rspamd_proxy_ctx {
 	GArray *cmp_refs;
 	/* Maximum count for retries */
 	unsigned int max_retries;
+	/* Maximum number of simultaneous connections, 0 means unlimited */
+	unsigned int max_connections;
+	/* Maximum number of simultaneous connections per source IP, 0 - unlimited */
+	unsigned int max_connections_per_source;
+	/* Pending connections per source address, created on demand */
+	GHashTable *conns_per_source;
 	gboolean encrypted_only;
+	/* Whether privileged File/Path/Shm message sources are honoured over TCP */
+	gboolean allow_file_and_shm_inputs;
 	/* If we have self_scanning backends, we need to work as a normal worker */
 	gboolean has_self_scan;
 	/* It is not HTTP but milter proxy */
@@ -236,6 +240,7 @@ struct rspamd_proxy_session {
 	struct rspamd_proxy_ctx *ctx;
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
+	/* Borrowed from the milter library; only valid until its close callback. */
 	struct rspamd_milter_session *client_milter_conn;
 	struct rspamd_http_upstream *backend;
 	gpointer map;
@@ -250,6 +255,15 @@ struct rspamd_proxy_session {
 	int retries;
 	ref_entry_t ref;
 	enum rspamd_proxy_session_flags flags;
+	/*
+	 * Both are derived from the accepted transport at accept time and never
+	 * from anything that the client sends
+	 */
+	gboolean allow_file_shm;
+	gboolean local_client;
+	gboolean conn_counted;
+	/* Key in ctx->conns_per_source, owned by the session, NULL if not counted */
+	char *source_key;
 
 	/* ESMTP arguments from milter session */
 	GHashTable *mail_esmtp_args;
@@ -257,6 +271,7 @@ struct rspamd_proxy_session {
 };
 
 static gboolean proxy_send_master_message(struct rspamd_proxy_session *session);
+static void proxy_close_follow_master_mirrors(struct rspamd_proxy_session *session);
 
 static void
 proxy_add_client_ip_header(struct rspamd_http_message *msg,
@@ -1050,6 +1065,13 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 	ctx->max_retries = DEFAULT_RETRIES;
 	ctx->spam_header = RSPAMD_MILTER_SPAM_HEADER;
 	ctx->log_tag_type = RSPAMD_PROXY_LOG_TAG_SESSION; /* Default to session tag */
+	/*
+	 * Permissive code default for this release to keep the existing setups
+	 * working; this is going to become FALSE in the next major release
+	 */
+	ctx->allow_file_and_shm_inputs = TRUE;
+	ctx->max_connections = 0;            /* Unlimited by default */
+	ctx->max_connections_per_source = 0; /* Unlimited by default */
 
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
@@ -1075,6 +1097,36 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, encrypted_only),
 									  0,
 									  "Allow only encrypted connections");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "allow_file_and_shm_inputs",
+									  rspamd_rcl_parse_struct_boolean,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, allow_file_and_shm_inputs),
+									  0,
+									  "Honour privileged File/Path/Shm message source inputs on TCP "
+									  "connections, and allow shared memory forwarding to loopback "
+									  "upstreams; unix socket clients and upstreams always may use them. "
+									  "Default: true, will become false in the next major release");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_connections",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, max_connections),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Maximum number of simultaneous connections per worker "
+									  "(default: 0, meaning unlimited)");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "max_connections_per_source",
+									  rspamd_rcl_parse_struct_integer,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, max_connections_per_source),
+									  RSPAMD_CL_FLAG_UINT,
+									  "Maximum number of simultaneous connections from a single source "
+									  "IP per worker; unix socket clients are never counted "
+									  "(default: 0, meaning unlimited)");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
 									  "ssl_cert",
@@ -1285,13 +1337,14 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		struct rspamd_content_type *parsed_ct = rspamd_content_type_parse(
 			ct->begin, ct->len, session->pool);
 
-		if (!parsed_ct || parsed_ct->boundary.len == 0) {
+		if (!parsed_ct || parsed_ct->orig_boundary.len == 0) {
 			msg_err_session("cannot extract boundary from multipart Content-Type");
 			return FALSE;
 		}
 
+		/* Use the case preserving boundary as HTTP boundaries are case sensitive */
 		struct rspamd_multipart_form_c *form = rspamd_multipart_form_parse(
-			in, inlen, parsed_ct->boundary.begin, parsed_ct->boundary.len);
+			in, inlen, parsed_ct->orig_boundary.begin, parsed_ct->orig_boundary.len);
 
 		if (!form) {
 			msg_err_session("cannot parse multipart/mixed response");
@@ -1309,7 +1362,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 
 		const char *result_data = result_part->data;
 		gsize result_len = result_part->data_len;
-		unsigned char *decompressed = NULL;
+		rspamd_fstring_t *decompressed = NULL;
 
 		/* Check for per-part zstd compression */
 		if (result_part->content_encoding &&
@@ -1317,37 +1370,27 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 			rspamd_substring_search_caseless(result_part->content_encoding,
 											 result_part->content_encoding_len,
 											 "zstd", 4) != -1) {
-			ZSTD_DStream *zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
-			ZSTD_inBuffer zin = {result_data, result_len, 0};
-			gsize outlen = ZSTD_getDecompressedSize(result_data, result_len);
-			if (outlen == 0) outlen = ZSTD_DStreamOutSize();
-			decompressed = g_malloc(outlen);
-			ZSTD_outBuffer zout = {decompressed, outlen, 0};
+			GError *derr = NULL;
 
-			while (zin.pos < zin.size) {
-				gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
-				if (ZSTD_isError(r)) {
-					g_free(decompressed);
-					ZSTD_freeDStream(zstream);
-					rspamd_multipart_form_free(form);
-					msg_err_session("result decompression error: %s",
-									ZSTD_getErrorName(r));
-					return FALSE;
-				}
-				if (zout.pos == zout.size) {
-					zout.size *= 2;
-					decompressed = g_realloc(zout.dst, zout.size);
-					zout.dst = decompressed;
-				}
+			decompressed = rspamd_zstd_decompress_bounded(NULL,
+														  result_data, result_len,
+														  session->ctx->cfg->max_message,
+														  &derr);
+
+			if (decompressed == NULL) {
+				msg_err_session("result decompression error: %s",
+								derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				rspamd_multipart_form_free(form);
+				return FALSE;
 			}
-			ZSTD_freeDStream(zstream);
-			result_data = (const char *) zout.dst;
-			result_len = zout.pos;
+
+			result_data = decompressed->str;
+			result_len = decompressed->len;
 		}
 
 		/* Parse UCL from result part */
-		parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+		parser = rspamd_ucl_parser_new_untrusted(result_len);
 
 		if (result_part->content_type &&
 			rspamd_substring_search_caseless(result_part->content_type,
@@ -1362,7 +1405,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 			ucl_parser_add_chunk(parser, (const unsigned char *) result_data, result_len);
 		}
 
-		g_free(decompressed);
+		rspamd_fstring_free(decompressed);
 
 		if (ucl_parser_get_error(parser)) {
 			msg_err_session("cannot parse result UCL: %s",
@@ -1389,38 +1432,28 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 				rspamd_substring_search_caseless(body_part_entry->content_encoding,
 												 body_part_entry->content_encoding_len,
 												 "zstd", 4) != -1) {
-				ZSTD_DStream *zstream = ZSTD_createDStream();
-				ZSTD_initDStream(zstream);
-				ZSTD_inBuffer zin = {bp_data, bp_len, 0};
-				gsize outlen = ZSTD_getDecompressedSize(bp_data, bp_len);
-				if (outlen == 0) outlen = ZSTD_DStreamOutSize();
-				unsigned char *bp_decompressed = g_malloc(outlen);
-				ZSTD_outBuffer zout = {bp_decompressed, outlen, 0};
-				gboolean decompress_ok = TRUE;
+				GError *derr = NULL;
+				rspamd_fstring_t *bp_decompressed;
 
-				while (zin.pos < zin.size) {
-					gsize r = ZSTD_decompressStream(zstream, &zout, &zin);
-					if (ZSTD_isError(r)) {
-						msg_warn_session("body decompression error: %s",
-										 ZSTD_getErrorName(r));
-						decompress_ok = FALSE;
-						break;
-					}
-					if (zout.pos == zout.size) {
-						zout.size *= 2;
-						bp_decompressed = g_realloc(zout.dst, zout.size);
-						zout.dst = bp_decompressed;
-					}
+				bp_decompressed = rspamd_zstd_decompress_bounded(NULL,
+																 bp_data, bp_len,
+																 session->ctx->cfg->max_message,
+																 &derr);
+
+				if (bp_decompressed == NULL) {
+					msg_warn_session("body decompression error: %s",
+									 derr ? derr->message : "unknown error");
+					g_clear_error(&derr);
 				}
-				ZSTD_freeDStream(zstream);
-
-				if (decompress_ok) {
+				else {
 					/* Copy to pool so it persists */
-					conn->body_data = rspamd_mempool_alloc(session->pool, zout.pos);
-					memcpy((void *) conn->body_data, zout.dst, zout.pos);
-					conn->body_len = zout.pos;
+					conn->body_data = rspamd_mempool_alloc(session->pool,
+														   bp_decompressed->len);
+					memcpy((void *) conn->body_data, bp_decompressed->str,
+						   bp_decompressed->len);
+					conn->body_len = bp_decompressed->len;
+					rspamd_fstring_free(bp_decompressed);
 				}
-				g_free(bp_decompressed);
 			}
 			else {
 				/* Uncompressed body — copy to pool */
@@ -1437,7 +1470,7 @@ proxy_backend_parse_results(struct rspamd_proxy_session *session,
 		RSPAMD_FTOK_ASSIGN(&json_ct, "application/json");
 
 		if (ct && rspamd_ftok_casecmp(ct, &json_ct) == 0) {
-			parser = ucl_parser_new(UCL_PARSER_SAFE_FLAGS);
+			parser = rspamd_ucl_parser_new_untrusted(inlen);
 
 			if (!ucl_parser_add_chunk(parser, in, inlen)) {
 				char *encoded;
@@ -1515,6 +1548,88 @@ proxy_call_cmp_script(struct rspamd_proxy_session *session, int cbref)
 	lua_settop(L, err_idx - 1);
 }
 
+/*
+ * Per source connection accounting.
+ *
+ * The key is the peer address with the port stripped, so that a single host
+ * cannot occupy all of the available slots. Unix socket peers are never
+ * counted: all of them would share the very same key and they are protected by
+ * the filesystem permissions anyway.
+ *
+ * The accounting follows worker->nconns exactly: a connection is reserved in
+ * proxy_accept_socket and released in proxy_conn_release, which is called from
+ * the session destructor for HTTP sessions and from the milter finish/error
+ * handlers for milter ones (a milter connection outlives the per message
+ * sessions created by proxy_session_refresh).
+ */
+static char *
+proxy_source_key_new(struct rspamd_proxy_ctx *ctx, rspamd_inet_addr_t *addr)
+{
+	if (ctx->max_connections_per_source == 0 || addr == NULL ||
+		rspamd_inet_address_get_af(addr) == AF_UNIX) {
+		return NULL;
+	}
+
+	return g_strdup(rspamd_inet_address_to_string(addr));
+}
+
+static gboolean
+proxy_source_conn_reserve(struct rspamd_proxy_ctx *ctx, const char *key)
+{
+	unsigned int cnt;
+
+	if (ctx->conns_per_source == NULL) {
+		ctx->conns_per_source = g_hash_table_new_full(g_str_hash, g_str_equal,
+													  g_free, NULL);
+	}
+
+	cnt = GPOINTER_TO_UINT(g_hash_table_lookup(ctx->conns_per_source, key));
+
+	if (cnt >= ctx->max_connections_per_source) {
+		return FALSE;
+	}
+
+	g_hash_table_insert(ctx->conns_per_source, g_strdup(key),
+						GUINT_TO_POINTER(cnt + 1));
+
+	return TRUE;
+}
+
+/*
+ * Releases both the global and the per source connection slots. Idempotent:
+ * the source key is dropped once it has been accounted for.
+ */
+static void
+proxy_conn_release(struct rspamd_proxy_session *session)
+{
+	if (!session->conn_counted) {
+		return;
+	}
+	session->conn_counted = FALSE;
+	session->worker->nconns--;
+
+	if (session->source_key) {
+		if (session->ctx->conns_per_source) {
+			unsigned int cnt = GPOINTER_TO_UINT(
+				g_hash_table_lookup(session->ctx->conns_per_source,
+									session->source_key));
+
+			if (cnt <= 1) {
+				g_hash_table_remove(session->ctx->conns_per_source,
+									session->source_key);
+			}
+			else {
+				g_hash_table_insert(session->ctx->conns_per_source,
+									g_strdup(session->source_key),
+									GUINT_TO_POINTER(cnt - 1));
+			}
+		}
+
+		g_free(session->source_key);
+		session->source_key = NULL;
+	}
+}
+
 static void
 proxy_session_dtor(struct rspamd_proxy_session *session)
 {
@@ -1533,10 +1648,7 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		proxy_backend_close_connection(session->master_conn);
 	}
 
-	if (session->client_milter_conn) {
-		rspamd_milter_session_unref(session->client_milter_conn);
-	}
-	else if (session->client_conn) {
+	if (session->client_conn) {
 		rspamd_http_connection_reset(session->client_conn);
 		rspamd_http_connection_unref(session->client_conn);
 	}
@@ -1588,14 +1700,9 @@ proxy_session_dtor(struct rspamd_proxy_session *session)
 		rspamd_mempool_delete(session->pool);
 	}
 
-	/* For milter sessions nconns is decremented explicitly when the MTA TCP
-	 * connection closes (proxy_milter_finish_handler / proxy_milter_error_handler)
-	 * because proxy_session_refresh creates a new session per message — each
-	 * intermediate session would otherwise decrement nconns prematurely. */
-	if (!session->ctx->milter) {
-		session->worker->nconns--;
-	}
+	proxy_conn_release(session);
 
+	g_free(session->source_key);
 	g_free(session);
 }
 
@@ -1644,60 +1751,31 @@ proxy_request_compress(struct rspamd_http_message *msg)
 }
 
 static void
-proxy_request_decompress(struct rspamd_http_message *msg)
+proxy_request_decompress(struct rspamd_http_message *msg, gsize max_size)
 {
 	rspamd_fstring_t *body;
 	const char *in;
-	gsize inlen, outlen, r;
-	ZSTD_DStream *zstream;
-	ZSTD_inBuffer zin;
-	ZSTD_outBuffer zout;
+	gsize inlen;
 
 	if (rspamd_http_message_find_header(msg, COMPRESSION_HEADER)) {
+		GError *err = NULL;
+
 		in = rspamd_http_message_get_body(msg, &inlen);
 
 		if (in == NULL || inlen == 0) {
 			return;
 		}
 
-		zstream = ZSTD_createDStream();
-		ZSTD_initDStream(zstream);
+		body = rspamd_zstd_decompress_bounded(NULL, in, inlen, max_size, &err);
 
-		zin.pos = 0;
-		zin.src = in;
-		zin.size = inlen;
+		if (body == NULL) {
+			msg_err("cannot decompress body: %s",
+					err ? err->message : "unknown error");
+			g_clear_error(&err);
 
-		if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-			outlen = ZSTD_DStreamOutSize();
+			return;
 		}
 
-		body = rspamd_fstring_sized_new(outlen);
-		zout.dst = body->str;
-		zout.pos = 0;
-		zout.size = outlen;
-
-		while (zin.pos < zin.size) {
-			r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-			if (ZSTD_isError(r)) {
-				msg_err("Decompression error: %s", ZSTD_getErrorName(r));
-				ZSTD_freeDStream(zstream);
-				rspamd_fstring_free(body);
-
-				return;
-			}
-
-			if (zout.pos == zout.size) {
-				/* We need to extend output buffer */
-				zout.size = zout.size * 2 + 1;
-				body = rspamd_fstring_grow(body, zout.size);
-				zout.size = body->allocated;
-				zout.dst = body->str;
-			}
-		}
-
-		body->len = zout.pos;
-		ZSTD_freeDStream(zstream);
 		rspamd_http_message_set_body_from_fstring_steal(msg, body);
 		rspamd_http_message_remove_header(msg, COMPRESSION_HEADER);
 		rspamd_http_message_remove_header(msg, CONTENT_ENCODING_HEADER);
@@ -1763,6 +1841,16 @@ proxy_session_refresh(struct rspamd_proxy_session *session)
 								  nsession);
 	nsession->client_addr = session->client_addr;
 	session->client_addr = NULL;
+	/*
+	 * The transport derived properties and the connection accounting belong to
+	 * the MTA connection, not to a single message, so they are moved over
+	 */
+	nsession->allow_file_shm = session->allow_file_shm;
+	nsession->local_client = session->local_client;
+	nsession->source_key = session->source_key;
+	session->source_key = NULL;
+	nsession->conn_counted = session->conn_counted;
+	session->conn_counted = FALSE;
 	nsession->ctx = session->ctx;
 	nsession->worker = session->worker;
 	nsession->pool = rspamd_mempool_new_short_lived("proxy");
@@ -1800,6 +1888,208 @@ proxy_session_refresh(struct rspamd_proxy_session *session)
 	return nsession;
 }
 
+/*
+ * Message source controls that make rspamd read an object of the client's
+ * choosing instead of the request body.
+ *
+ * `File` and `Path` are aliases of each other and they are consumed by the
+ * proxy itself; `Shm*` are reserved hop-by-hop headers that only ever have a
+ * meaning between the two ends of one connection and that are regenerated by
+ * the HTTP layer for the upstream connection.
+ *
+ * Note that a query argument is turned into a request header by
+ * rspamd_protocol_handle_url() at the *upstream*, so the URL has to be
+ * sanitised as thoroughly as the headers are.
+ */
+static const char *proxy_privileged_file_args[] = {"File", "Path"};
+static const char *proxy_privileged_shm_args[] = {"Shm", "Shm-Offset",
+												  "Shm-Length"};
+
+static gboolean
+proxy_has_query_arg(GHashTable *query_args, const char *name)
+{
+	rspamd_ftok_t srch;
+
+	srch.begin = name;
+	srch.len = strlen(name);
+
+	return g_hash_table_lookup(query_args, &srch) != NULL;
+}
+
+/*
+ * Rebuilds msg->url without the listed query arguments. Does nothing at all
+ * unless at least one of them is really there.
+ */
+static void
+proxy_strip_query_args(struct rspamd_http_message *msg,
+					   const char **names, unsigned int nnames)
+{
+	struct http_parser_url u;
+	GHashTable *query_args;
+	GHashTableIter it;
+	gpointer k, v;
+	rspamd_fstring_t *new_url;
+	unsigned int i;
+	gboolean found = FALSE;
+
+	if (msg->url == NULL || msg->url->len == 0) {
+		return;
+	}
+
+	if (http_parser_parse_url(RSPAMD_FSTRING_DATA(msg->url),
+							  RSPAMD_FSTRING_LEN(msg->url), 0, &u) != 0) {
+		return;
+	}
+
+	if (!(u.field_set & (1 << UF_QUERY))) {
+		return;
+	}
+
+	query_args = rspamd_http_message_parse_query(msg);
+
+	for (i = 0; i < nnames; i++) {
+		if (proxy_has_query_arg(query_args, names[i])) {
+			found = TRUE;
+			break;
+		}
+	}
+
+	if (!found) {
+		g_hash_table_unref(query_args);
+
+		return;
+	}
+
+	if (u.field_data[UF_QUERY].off == 0) {
+		/* A query always follows a '?', so this cannot happen; be defensive */
+		g_hash_table_unref(query_args);
+
+		return;
+	}
+
+	/*
+	 * UF_QUERY.off addresses the first byte *after* the '?', so the prefix has
+	 * to stop one byte short of it: copying up to `off` would keep the original
+	 * delimiter and the one appended below would produce a second one.
+	 */
+	new_url = rspamd_fstring_new_init(RSPAMD_FSTRING_DATA(msg->url),
+									  u.field_data[UF_QUERY].off - 1);
+	new_url = rspamd_fstring_append(new_url, "?", 1);
+
+	g_hash_table_iter_init(&it, query_args);
+
+	while (g_hash_table_iter_next(&it, &k, &v)) {
+		const rspamd_ftok_t *key_tok = k, *tok = v;
+		gboolean skip = FALSE;
+
+		for (i = 0; i < nnames; i++) {
+			rspamd_ftok_t srch;
+
+			srch.begin = names[i];
+			srch.len = strlen(names[i]);
+
+			if (rspamd_ftok_icase_equal(key_tok, &srch)) {
+				skip = TRUE;
+				break;
+			}
+		}
+
+		if (!skip) {
+			rspamd_printf_fstring(&new_url, "%T=%T&", key_tok, tok);
+		}
+	}
+
+	/* Erase last character (might be either & or ?) */
+	rspamd_fstring_erase(new_url, new_url->len - 1, 1);
+
+	rspamd_fstring_free(msg->url);
+	msg->url = new_url;
+
+	g_hash_table_unref(query_args);
+}
+
+/*
+ * Ingress sanitiser for the privileged message source controls.
+ *
+ * Called on the client message before anything is forwarded or scanned, and
+ * before proxy_check_file() may open anything at all. When this connection is
+ * not permitted to use privileged inputs:
+ *
+ *  - a File/Path header or query argument is a hard error (400), the named
+ *    object is never opened, mapped nor stat'ed;
+ *  - the reserved Shm* headers and query arguments are removed, so that a
+ *    client can never override the values that the proxy generates itself.
+ *
+ * The decision comes from the accepted transport only, never from the request.
+ */
+static gboolean
+proxy_sanitize_privileged_inputs(struct rspamd_http_message *msg,
+								 struct rspamd_proxy_session *session,
+								 int *err_code, const char **err_status)
+{
+	unsigned int i;
+	GHashTable *query_args = NULL;
+	struct http_parser_url u;
+	gboolean has_file_arg = FALSE;
+
+	if (session->allow_file_shm) {
+		return TRUE;
+	}
+
+	/*
+	 * rspamd_http_message_remove_header() drops every instance of a header at
+	 * once (all of the duplicates live in a single list), but loop anyway so
+	 * that a client supplied duplicate can never survive here
+	 */
+	for (i = 0; i < G_N_ELEMENTS(proxy_privileged_shm_args); i++) {
+		while (rspamd_http_message_remove_header(msg,
+												 proxy_privileged_shm_args[i])) {
+			/* Keep removing */
+		}
+	}
+
+	proxy_strip_query_args(msg, proxy_privileged_shm_args,
+						   G_N_ELEMENTS(proxy_privileged_shm_args));
+
+	for (i = 0; i < G_N_ELEMENTS(proxy_privileged_file_args); i++) {
+		if (rspamd_http_message_find_header(msg,
+											proxy_privileged_file_args[i])) {
+			has_file_arg = TRUE;
+			break;
+		}
+	}
+
+	if (!has_file_arg && msg->url != NULL && msg->url->len > 0 &&
+		http_parser_parse_url(RSPAMD_FSTRING_DATA(msg->url),
+							  RSPAMD_FSTRING_LEN(msg->url), 0, &u) == 0 &&
+		(u.field_set & (1 << UF_QUERY))) {
+		query_args = rspamd_http_message_parse_query(msg);
+
+		for (i = 0; i < G_N_ELEMENTS(proxy_privileged_file_args); i++) {
+			if (proxy_has_query_arg(query_args, proxy_privileged_file_args[i])) {
+				has_file_arg = TRUE;
+				break;
+			}
+		}
+
+		g_hash_table_unref(query_args);
+	}
+
+	if (has_file_arg) {
+		msg_info_session("deny file message source from %s: this connection is "
+						 "not permitted to use privileged inputs; set "
+						 "`allow_file_and_shm_inputs = true` for this worker if "
+						 "all of its clients are trusted",
+						 rspamd_inet_address_to_string_pretty(session->client_addr));
+		*err_code = 400;
+		*err_status = "File and shm message sources are not allowed";
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static gboolean
 proxy_check_file(struct rspamd_http_message *msg,
 				 struct rspamd_proxy_session *session)
@@ -1812,6 +2102,16 @@ proxy_check_file(struct rspamd_http_message *msg,
 	gpointer k, v;
 	struct http_parser_url u;
 	rspamd_fstring_t *new_url;
+
+	if (!session->allow_file_shm) {
+		/*
+		 * Privileged inputs have already been refused by
+		 * proxy_sanitize_privileged_inputs(), so there is nothing left to map
+		 * here. Guard it once more so that no path can ever reach
+		 * rspamd_file_xmap() without the capability.
+		 */
+		return TRUE;
+	}
 
 	tok = rspamd_http_message_find_header(msg, "File");
 
@@ -1895,6 +2195,60 @@ proxy_check_file(struct rspamd_http_message *msg,
 	return TRUE;
 }
 
+/*
+ * Shared memory forwarding (and the `File` handover that goes with it) hands
+ * the upstream a name that it will open on its own, so it may only be used
+ * when the upstream transport itself is protected:
+ *
+ *  - a unix socket, which is guarded by the filesystem permissions, as long as
+ *    the backend is declared `local` or privileged inputs are enabled;
+ *  - a strict loopback peer, as long as privileged inputs are enabled.
+ *
+ * Note that `local` alone is deliberately not sufficient for a TCP upstream any
+ * more: it used to let the proxy hand a shared memory name (or a file name of
+ * the client's choosing) to an arbitrary remote host, and
+ * rspamd_inet_address_is_local() was not a loopback test at all as it also
+ * accepted link local and site local addresses.
+ *
+ * The very same rule applies to encrypted and to unencrypted upstreams: an
+ * encrypted message never carries a shared body anyway (the HTTP layer detaches
+ * it), so this only ever removes the `File` header there.
+ */
+static gboolean
+rspamd_proxy_upstream_allows_shm(struct rspamd_proxy_session *session,
+								 gboolean backend_local,
+								 const rspamd_inet_addr_t *addr)
+{
+	if (addr == NULL) {
+		return FALSE;
+	}
+
+	if (rspamd_inet_address_get_af(addr) == AF_UNIX) {
+		return backend_local || session->ctx->allow_file_and_shm_inputs;
+	}
+
+	return rspamd_worker_addr_is_loopback(addr) &&
+		   session->ctx->allow_file_and_shm_inputs;
+}
+
+/*
+ * An inline body is read into memory by the upstream, so it must obey the
+ * configured message size limit. A body that came from the request itself is
+ * already bounded by rspamd_http_connection_set_max_size(), a mapped file is
+ * not bounded by anything, hence this check.
+ */
+static gboolean
+proxy_inline_body_fits(struct rspamd_proxy_session *session, gsize len)
+{
+	gsize max_message = session->ctx->cfg ? session->ctx->cfg->max_message : 0;
+
+	if (max_message > 0 && len > max_message) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static void
 proxy_backend_mirror_error_handler(struct rspamd_http_connection *conn, GError *err)
 {
@@ -1931,7 +2285,7 @@ proxy_backend_mirror_finish_handler(struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 
-	proxy_request_decompress(msg);
+	proxy_request_decompress(msg, session->ctx->cfg->max_message);
 	orig_ct = rspamd_http_message_find_header(msg, "Content-Type");
 
 	if (!proxy_backend_parse_results(session, bk_conn, session->ctx->lua_state,
@@ -2027,6 +2381,25 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 					/* We found a keepalive connection, use it */
 					struct rspamd_http_connection *conn;
 
+					/*
+					 * If this upstream may not receive a shared body then the
+					 * mapped file has to be forwarded inline, which is only
+					 * possible within the configured message size limit.
+					 * Checked before anything is checked out of the keepalive
+					 * pool, so that skipping the mirror is free.
+					 */
+					if (session->fname &&
+						!rspamd_proxy_upstream_allows_shm(session, m->local,
+														  keepalive_addr) &&
+						!proxy_inline_body_fits(session, session->map_len)) {
+						msg_warn_session("skip mirror %s: cannot forward a %uz "
+										 "bytes file inline, the limit is %uz bytes",
+										 m->name, session->map_len,
+										 session->ctx->cfg->max_message);
+
+						continue;
+					}
+
 					conn = rspamd_http_context_check_keepalive(
 						session->ctx->http_ctx,
 						(rspamd_inet_addr_t *) keepalive_addr,
@@ -2058,6 +2431,9 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 							if (err) {
 								g_error_free(err);
 							}
+							/* Taken from the pool for nothing: it is ours to close */
+							rspamd_http_connection_unref(conn);
+							bk_conn->backend_conn = NULL;
 							continue;
 						}
 
@@ -2109,7 +2485,8 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 							msg->peer_key = rspamd_pubkey_ref(m->key);
 						}
 
-						if (m->local || rspamd_inet_address_is_local(keepalive_addr)) {
+						if (rspamd_proxy_upstream_allows_shm(session, m->local,
+															 keepalive_addr)) {
 							if (session->fname) {
 								rspamd_http_message_add_header(msg, "File", session->fname);
 							}
@@ -2122,7 +2499,7 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 						}
 						else {
 							if (session->fname) {
-								msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
+								rspamd_http_message_drop_shared_body(msg);
 								rspamd_http_message_set_body(msg, session->map, session->map_len);
 							}
 
@@ -2185,9 +2562,30 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			continue;
 		}
 
-		bk_conn->backend_sock = rspamd_inet_address_connect(
-			rspamd_upstream_addr_next(bk_conn->up),
-			SOCK_STREAM, TRUE);
+		const rspamd_inet_addr_t *up_addr = rspamd_upstream_addr_next(bk_conn->up);
+		gboolean mirror_allows_shm = rspamd_proxy_upstream_allows_shm(session,
+																	  m->local,
+																	  up_addr);
+
+		/*
+		 * A mapped file that cannot be handed over as a shared body has to be
+		 * forwarded inline, which is only possible within the configured
+		 * message size limit. Checked before connecting, so that skipping the
+		 * mirror costs nothing.
+		 */
+		if (session->fname && !mirror_allows_shm &&
+			!proxy_inline_body_fits(session, session->map_len)) {
+			msg_warn_session("skip mirror %s: cannot forward a %uz bytes file "
+							 "inline, the limit is %uz bytes",
+							 m->name, session->map_len,
+							 session->ctx->cfg->max_message);
+			rspamd_upstream_release(bk_conn->up);
+
+			continue;
+		}
+
+		bk_conn->backend_sock = rspamd_inet_address_connect(up_addr,
+															SOCK_STREAM, TRUE);
 
 		if (bk_conn->backend_sock == -1) {
 			msg_err_session("cannot connect upstream for %s", m->name);
@@ -2266,12 +2664,21 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			http_opts,
 			bk_conn->backend_sock);
 
+		if (bk_conn->backend_conn &&
+			(session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE)) {
+			/*
+			 * With keepalive nobody closes the socket by hand: the
+			 * connection may be in the pool, which only drops its
+			 * reference. The connection closes it when it is freed
+			 */
+			rspamd_http_connection_own_socket(bk_conn->backend_conn);
+		}
+
 		if (m->key) {
 			msg->peer_key = rspamd_pubkey_ref(m->key);
 		}
 
-		if (m->local ||
-			rspamd_inet_address_is_local(rspamd_upstream_addr_cur(bk_conn->up))) {
+		if (mirror_allows_shm) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header(msg, "File", session->fname);
@@ -2284,7 +2691,7 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 		}
 		else {
 			if (session->fname) {
-				msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
+				rspamd_http_message_drop_shared_body(msg);
 				rspamd_http_message_set_body(msg, session->map, session->map_len);
 			}
 
@@ -2323,8 +2730,11 @@ proxy_client_write_error(struct rspamd_proxy_session *session, int code,
 	struct rspamd_http_message *reply;
 
 	if (session->client_milter_conn) {
-		rspamd_milter_send_action(session->client_milter_conn,
-								  RSPAMD_MILTER_TEMPFAIL);
+		/* Complete this message just like a successful scan: move the transport
+		 * to a fresh session before retiring this message and its mirrors. */
+		struct rspamd_proxy_session *nsession = proxy_session_refresh(session);
+		rspamd_milter_send_tempfail(nsession->client_milter_conn);
+		proxy_close_follow_master_mirrors(session);
 		REF_RELEASE(session);
 	}
 	else {
@@ -2426,15 +2836,9 @@ proxy_backend_master_error_handler(struct rspamd_http_connection *conn, GError *
 		}
 	}
 	else {
-		if (!proxy_send_master_message(session)) {
-			if (err) {
-				proxy_client_write_error(session, err->code, err->message);
-			}
-			else {
-				proxy_client_write_error(session, 503, "Unknown error on write");
-			}
-		}
-		else {
+		/* proxy_send_master_message owns terminal error completion. It can
+		 * retire session, so do not touch it again when it returns FALSE. */
+		if (proxy_send_master_message(session)) {
 			msg_info_session("retry connection to: %s"
 							 " retries left: %d",
 							 session->master_conn->up ? rspamd_inet_address_to_string(
@@ -2459,7 +2863,7 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg(session->master_conn->backend_conn);
-	proxy_request_decompress(msg);
+	proxy_request_decompress(msg, session->ctx->cfg->max_message);
 
 	/*
 	 * These are likely set by an http library, so we will double these headers
@@ -2625,6 +3029,10 @@ rspamd_proxy_scan_self_reply(struct rspamd_task *task)
 	const rspamd_ftok_t *accept_hdr = rspamd_task_get_request_header(task, "Accept");
 	rspamd_fstring_t *output;
 	struct rspamd_stat stat_copy;
+
+	if (session->ctx->milter && session->client_milter_conn == NULL) {
+		return;
+	}
 
 	if (accept_hdr && rspamd_substring_search(accept_hdr->begin, accept_hdr->len,
 											  "application/msgpack", sizeof("application/msgpack") - 1) != -1) {
@@ -2792,6 +3200,22 @@ rspamd_proxy_self_scan(struct rspamd_proxy_session *session)
 		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK;
 	}
 
+	/*
+	 * Both properties come from the transport that has been accepted, never
+	 * from anything that the client sends (a User-Agent, a forwarded header or
+	 * a query argument are all trivially spoofable)
+	 */
+	if (!session->allow_file_shm) {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_ALLOW_FILE_SHM_INPUT;
+	}
+
+	if (session->local_client) {
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+	else {
+		task->protocol_flags &= ~RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
+	}
+
 	task->sock = -1;
 
 	if (session->client_milter_conn) {
@@ -2865,6 +3289,8 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 	const rspamd_ftok_t *host;
 	GError *err = NULL;
 	char hostbuf[512];
+	int err_code = 404;
+	const char *err_status = "Backend not found";
 
 	host = rspamd_http_message_find_header(session->client_message, "Host");
 
@@ -2963,9 +3389,32 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 			goto err;
 		}
 
+		const rspamd_inet_addr_t *up_addr =
+			rspamd_upstream_addr_next(session->master_conn->up);
+		gboolean master_allows_shm = rspamd_proxy_upstream_allows_shm(
+			session, backend->local, up_addr);
+
+		/*
+		 * When this upstream may not receive a shared body the mapped file has
+		 * to be forwarded inline, and an inline body must obey the configured
+		 * message size limit. Fail cleanly instead of truncating, and do it
+		 * before connecting so that nothing has to be unwound.
+		 */
+		if (session->fname && !master_allows_shm &&
+			!proxy_inline_body_fits(session, session->map_len)) {
+			msg_err_session("cannot forward a %uz bytes file inline to %s, the "
+							"limit is %uz bytes",
+							session->map_len, host ? hostbuf : "default",
+							session->ctx->cfg->max_message);
+			rspamd_upstream_release(session->master_conn->up);
+			err_code = 413;
+			err_status = "Message too large to forward";
+
+			goto err;
+		}
+
 		session->master_conn->backend_sock = rspamd_inet_address_connect(
-			rspamd_upstream_addr_next(session->master_conn->up),
-			SOCK_STREAM, TRUE);
+			up_addr, SOCK_STREAM, TRUE);
 
 		if (session->master_conn->backend_sock == -1) {
 			msg_err_session("cannot connect upstream: %s(%s)",
@@ -3017,6 +3466,13 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 			proxy_backend_master_finish_handler,
 			http_opts,
 			session->master_conn->backend_sock);
+
+		if (session->master_conn->backend_conn &&
+			(session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE)) {
+			/* See the mirror connections: nobody else closes this socket */
+			rspamd_http_connection_own_socket(session->master_conn->backend_conn);
+		}
+
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
@@ -3054,10 +3510,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		/* Add/overwrite IP header with the actual client IP */
 		proxy_add_client_ip_header(msg, session);
 
-		if (backend->local ||
-			rspamd_inet_address_is_local(
-				rspamd_upstream_addr_cur(
-					session->master_conn->up))) {
+		if (master_allows_shm) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header(msg, "File", session->fname);
@@ -3073,7 +3526,7 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 		}
 		else {
 			if (session->fname) {
-				msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
+				rspamd_http_message_drop_shared_body(msg);
 				rspamd_http_message_set_body(msg,
 											 session->map, session->map_len);
 			}
@@ -3106,14 +3559,12 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 
 err:
 	if (session->client_milter_conn) {
-		rspamd_milter_send_action(session->client_milter_conn,
-								  RSPAMD_MILTER_TEMPFAIL);
-		REF_RELEASE(session);
+		proxy_client_write_error(session, err_code, err_status);
 	}
 	else {
 		rspamd_http_connection_steal_msg(session->client_conn);
 		rspamd_http_connection_reset(session->client_conn);
-		proxy_client_write_error(session, 404, "Backend not found");
+		proxy_client_write_error(session, err_code, err_status);
 	}
 
 	return FALSE;
@@ -3136,6 +3587,8 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 							struct rspamd_http_message *msg)
 {
 	struct rspamd_proxy_session *session = conn->ud;
+	int err_code = 404;
+	const char *err_status = "Backend not found";
 
 	if (!session->master_conn) {
 		session->master_conn = rspamd_mempool_alloc0(session->pool,
@@ -3160,6 +3613,17 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		if (msg->url->len == 0) {
 			msg->url = rspamd_fstring_append(msg->url,
 											 "/" MSG_CMD_CHECK_V2, strlen("/" MSG_CMD_CHECK_V2));
+		}
+
+		/*
+		 * Ingress sanitising: this happens before proxy_check_file() may open
+		 * anything and before the message is forwarded or self scanned, so a
+		 * client supplied File/Path/Shm* can neither be acted upon nor be
+		 * passed through to an upstream that trusts this proxy
+		 */
+		if (!proxy_sanitize_privileged_inputs(msg, session, &err_code,
+											  &err_status)) {
+			goto err;
 		}
 
 		if (!proxy_check_file(msg, session)) {
@@ -3229,7 +3693,7 @@ err:
 	rspamd_http_message_remove_header(msg, "Keep-Alive");
 	rspamd_http_message_remove_header(msg, "Connection");
 	rspamd_http_connection_reset(session->client_conn);
-	proxy_client_write_error(session, 404, "Backend not found");
+	proxy_client_write_error(session, err_code, err_status);
 
 	return 0;
 }
@@ -3244,40 +3708,40 @@ proxy_milter_finish_handler(int fd,
 
 	session->client_milter_conn = rms;
 
-	if (rms->message == NULL || rms->message->len == 0) {
-		msg_info_session("finished milter connection");
-		proxy_backend_close_connection(session->master_conn);
-		/* MTA TCP connection is closing: this is the one authoritative
-		 * decrement for nconns.  proxy_session_dtor skips nconns-- for milter
-		 * because proxy_session_refresh creates a new session per message and
-		 * each intermediate session destruction must not touch the counter. */
-		session->worker->nconns--;
-		REF_RELEASE(session);
+	if (!session->master_conn) {
+		session->master_conn = rspamd_mempool_alloc0(session->pool,
+													 sizeof(*session->master_conn));
 	}
-	else {
-		if (!session->master_conn) {
-			session->master_conn = rspamd_mempool_alloc0(session->pool,
-														 sizeof(*session->master_conn));
-		}
 
-		msg = rspamd_milter_to_http(rms);
-		session->master_conn->s = session;
-		session->master_conn->name = "master";
-		session->client_message = msg;
+	msg = rspamd_milter_to_http(rms);
+	session->master_conn->s = session;
+	session->master_conn->name = "master";
+	session->client_message = msg;
 
-		/* Store ESMTP arguments from milter session */
-		if (rms->mail_esmtp_args) {
-			session->mail_esmtp_args = rms->mail_esmtp_args;
-		}
-		if (rms->rcpt_esmtp_args) {
-			session->rcpt_esmtp_args = rms->rcpt_esmtp_args;
-		}
+	/*
+	 * Store ESMTP arguments from milter session. The milter session frees
+	 * them on abort or on the next MAIL, possibly before this message is
+	 * done, so keep references; arguments of a previous message must not
+	 * be kept either.
+	 */
+	session->mail_esmtp_args = NULL;
+	session->rcpt_esmtp_args = NULL;
 
-		/* Milter protocol doesn't support compression, so no need to set compression flag */
-
-		proxy_open_mirror_connections(session);
-		proxy_send_master_message(session);
+	if (rms->mail_esmtp_args) {
+		session->mail_esmtp_args = g_hash_table_ref(rms->mail_esmtp_args);
+		rspamd_mempool_add_destructor(session->pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref,
+									  session->mail_esmtp_args);
 	}
+	if (rms->rcpt_esmtp_args) {
+		session->rcpt_esmtp_args = proxy_rcpt_esmtp_args_dup(rms->rcpt_esmtp_args);
+		rspamd_mempool_add_destructor(session->pool,
+									  (rspamd_mempool_destruct_t) proxy_rcpt_esmtp_args_free,
+									  session->rcpt_esmtp_args);
+	}
+
+	proxy_open_mirror_connections(session);
+	proxy_send_master_message(session);
 }
 
 static void
@@ -3287,26 +3751,37 @@ proxy_milter_error_handler(int fd,
 {
 	struct rspamd_proxy_session *session = ud;
 
+	/* All transport exits, including QUIT, arrive here exactly once. Keep the
+	 * connection's base reference until backend and mirror work is cancelled. */
+	session->client_milter_conn = NULL;
+
 	if (err && err->code != 0) {
 		msg_info_session("abnormally closing milter connection from: %s, "
 						 "error: %e",
 						 rspamd_inet_address_to_string_pretty(session->client_addr),
 						 err);
-		/* Terminate session immediately */
-		proxy_backend_close_connection(session->master_conn);
-		session->worker->nconns--;
-		REF_RELEASE(session);
 	}
 	else {
-		msg_info_session("normally closing milter connection from: %s, "
-						 "%e",
-						 rspamd_inet_address_to_string_pretty(session->client_addr),
-						 err);
-		/* Terminate session immediately */
-		proxy_backend_close_connection(session->master_conn);
-		session->worker->nconns--;
-		REF_RELEASE(session);
+		msg_info_session("normally closing milter connection from: %s",
+						 rspamd_inet_address_to_string_pretty(session->client_addr));
 	}
+
+	proxy_backend_close_connection(session->master_conn);
+	if (session->master_conn && session->master_conn->task) {
+		struct rspamd_task *task = session->master_conn->task;
+		session->master_conn->task = NULL;
+		rspamd_session_destroy(task->s);
+	}
+	for (unsigned int i = 0; i < session->mirror_conns->len; i++) {
+		struct rspamd_proxy_backend_connection *conn =
+			g_ptr_array_index(session->mirror_conns, i);
+		if (!(conn->flags & RSPAMD_BACKEND_CLOSED)) {
+			proxy_backend_close_connection(conn);
+			REF_RELEASE(session);
+		}
+	}
+	proxy_conn_release(session);
+	REF_RELEASE(session);
 }
 
 static void
@@ -3316,6 +3791,7 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 	struct rspamd_proxy_ctx *ctx;
 	rspamd_inet_addr_t *addr = NULL;
 	struct rspamd_proxy_session *session;
+	char *source_key;
 	int nfd;
 
 	ctx = worker->ctx;
@@ -3332,17 +3808,57 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 		return;
 	}
 
+	/*
+	 * Admission control happens here, before a pool, a session, any keypair
+	 * work, a file mapping or a shared body allocation is made for this
+	 * connection. The connection is accepted and closed right away rather than
+	 * left in the backlog, so that a level triggered listener does not spin.
+	 */
+	if (ctx->max_connections > 0 && worker->nconns >= ctx->max_connections) {
+		msg_info("drop connection from %s: the limit of %ud simultaneous "
+				 "connections has been reached",
+				 rspamd_inet_address_to_string(addr), ctx->max_connections);
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
+	source_key = proxy_source_key_new(ctx, addr);
+
+	if (source_key != NULL && !proxy_source_conn_reserve(ctx, source_key)) {
+		msg_info("drop connection from %s: the limit of %ud simultaneous "
+				 "connections per source has been reached",
+				 source_key, ctx->max_connections_per_source);
+		g_free(source_key);
+		rspamd_inet_address_free(addr);
+		close(nfd);
+
+		return;
+	}
+
 	worker->nconns++;
 
 	session = g_malloc0(sizeof(*session));
 	REF_INIT_RETAIN(session, proxy_session_dtor);
+	session->conn_counted = TRUE;
 	session->client_sock = nfd;
 	session->client_addr = addr;
+	session->source_key = source_key;
 	session->mirror_conns = g_ptr_array_sized_new(ctx->mirrors->len);
 
 	session->pool = rspamd_mempool_new_short_lived("proxy");
 	session->ctx = ctx;
 	session->worker = worker;
+	/*
+	 * Privileged message sources are decided from the accepted transport only:
+	 * a unix socket is always trusted, everything else needs the option to be
+	 * enabled explicitly
+	 */
+	session->allow_file_shm = (rspamd_inet_address_get_af(addr) == AF_UNIX) ||
+							  ctx->allow_file_and_shm_inputs;
+	session->local_client = (rspamd_inet_address_get_af(addr) == AF_UNIX) ||
+							rspamd_worker_addr_is_loopback(addr);
 
 	if (ctx->sessions_cache) {
 		rspamd_worker_session_cache_add(ctx->sessions_cache,
@@ -3352,7 +3868,14 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 	if (!ctx->milter) {
 		int http_opts = 0;
 
-		if (ctx->encrypted_only && !rspamd_inet_address_is_local(addr)) {
+		/*
+		 * Only a genuinely local peer is exempt from `encrypted_only`.
+		 * rspamd_inet_address_is_local() used to be accepted here, but it also
+		 * matches IPv6 link local and site local addresses, which are other
+		 * hosts on the network and hence must not skip the encryption
+		 * requirement.
+		 */
+		if (ctx->encrypted_only && !session->local_client) {
 			http_opts |= RSPAMD_HTTP_REQUIRE_ENCRYPTION;
 		}
 		session->client_conn = rspamd_http_connection_new_server(
@@ -3362,6 +3885,9 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 			proxy_client_error_handler,
 			proxy_client_finish_handler,
 			http_opts);
+
+		rspamd_http_connection_set_max_size(session->client_conn,
+											ctx->cfg->max_message);
 
 		if (ctx->key) {
 			rspamd_http_connection_set_key(session->client_conn, ctx->key);
@@ -3458,6 +3984,16 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 	ctx->srv = worker->srv;
 	ctx->event_loop = rspamd_prepare_worker(worker, "rspamd_proxy",
 											proxy_accept_socket);
+	rspamd_worker_warn_file_shm_inputs(worker, "rspamd_proxy",
+									   ctx->allow_file_and_shm_inputs);
+
+	if (ctx->max_connections_per_source > 0 && ctx->conns_per_source == NULL) {
+		ctx->conns_per_source = g_hash_table_new_full(g_str_hash, g_str_equal,
+													  g_free, NULL);
+		rspamd_mempool_add_destructor(ctx->cfg->cfg_pool,
+									  (rspamd_mempool_destruct_t) g_hash_table_unref,
+									  ctx->conns_per_source);
+	}
 
 	ctx->resolver = rspamd_dns_resolver_init(worker->srv->logger,
 											 ctx->event_loop,
@@ -3546,8 +4082,16 @@ start_rspamd_proxy(struct rspamd_worker *worker)
 		rspamd_controller_on_terminate(worker, NULL);
 	}
 
+	/*
+	 * Keep DNS available to config unload hooks and destructors. Save the
+	 * worker-owned pointer before releasing cfg, which can also free ctx.
+	 * The loop and logger remain alive for resolver cleanup below.
+	 */
+	struct rspamd_dns_resolver *resolver = ctx->resolver;
+
 	CFG_REF_RELEASE(ctx->cfg);
 	CFG_REF_RELEASE(ctx->cfg);
+	rspamd_dns_resolver_deinit(resolver);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

@@ -468,6 +468,7 @@ rspamd_mime_expr_parse_regexp_atom(rspamd_mempool_t *pool, const char *line,
 		}
 		else {
 			msg_err_pool("could not read regexp: %s, unknown type", src);
+			g_string_free(re_flags, TRUE);
 			return NULL;
 		}
 	}
@@ -477,6 +478,7 @@ rspamd_mime_expr_parse_regexp_atom(rspamd_mempool_t *pool, const char *line,
 		 result->type == RSPAMD_RE_MIMEHEADER)) {
 		if (extra == NULL) {
 			msg_err_pool("header regexp: '%s' has no header part", src);
+			g_string_free(re_flags, TRUE);
 			return NULL;
 		}
 		else {
@@ -487,6 +489,7 @@ rspamd_mime_expr_parse_regexp_atom(rspamd_mempool_t *pool, const char *line,
 	if (result->type == RSPAMD_RE_SELECTOR) {
 		if (extra == NULL) {
 			msg_err_pool("selector regexp: '%s' has no selector part", src);
+			g_string_free(re_flags, TRUE);
 			return NULL;
 		}
 		else {
@@ -599,7 +602,8 @@ rspamd_mime_expr_parse_function_atom(rspamd_mempool_t *pool, const char *input)
 					/* Fallback to string */
 					msg_warn("cannot parse slashed argument %s as regexp: %s",
 							 databuf, err->message);
-					g_error_free(err);
+					/* Reset, the next slashed argument may fail as well */
+					g_clear_error(&err);
 					arg.type = EXPRESSION_ARGUMENT_NORMAL;
 					arg.data = databuf;
 				}

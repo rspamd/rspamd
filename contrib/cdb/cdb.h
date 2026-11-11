@@ -41,7 +41,8 @@ struct cdb
 	/* private members */
 	unsigned cdb_fsize; /* datafile size */
 	unsigned cdb_dend; /* end of data ptr */
-	const unsigned char *cdb_mem; /* mmap'ed file memory */
+	const unsigned char *cdb_mem; /* mmap'ed file memory, from the data offset */
+	unsigned cdb_moff; /* offset of the data in the file, e.g. behind a header */
 	unsigned cdb_vpos, cdb_vlen; /* found data */
 	unsigned cdb_kpos, cdb_klen; /* found key */
 };
@@ -55,6 +56,8 @@ struct cdb
 #define cdb_fileno(c) ((c)->cdb_fd)
 
 int cdb_init(struct cdb *cdbp, int fd);
+/* Same as cdb_init for the data starting at `offset` in the file */
+int cdb_init_offset(struct cdb *cdbp, int fd, unsigned offset);
 void cdb_add_timer(struct cdb *cdbp, EV_P_ ev_tstamp seconds);
 void cdb_free(struct cdb *cdbp);
 

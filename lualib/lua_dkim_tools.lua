@@ -652,14 +652,15 @@ exports.sign_using_vault = function(N, task, settings, selector, sign_func, err_
 
   local full_url = string.format('%s/v1/%s/%s',
     settings.vault_url, vault_path, selector.domain)
-  local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url)
+  local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url,
+      rspamd_config)
 
   local function vault_callback(err, code, body, _)
     if code ~= 200 then
       err_func(task, string.format('cannot request data from the vault url: %s; %s (%s)',
         full_url, err, body))
     else
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local res, parser_err = parser:parse_string(body)
       if not res then
         err_func(task, string.format('vault reply for %s (data=%s) cannot be parsed: %s',

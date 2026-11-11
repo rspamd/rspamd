@@ -32,3 +32,12 @@ WLBL BLACKLIST
   Expect Symbol  USER_IN_BLACKLIST_TO
   Do Not Expect Symbol  USER_IN_WHITELIST_TO
   Do Not Expect Symbol  USER_IN_WHITELIST
+
+SHIFTED DATE
+  Scan File  ${RSPAMD_TESTDIR}/messages/utf.eml
+  Expect Symbol  DATE_IN_PAST_96_XX
+
+SHIFTED DATE WITHOUT DATE
+  # No Date header is no date, not a date in 1970
+  Scan File  ${RSPAMD_TESTDIR}/messages/broken_richtext.eml
+  Do Not Expect Symbol  DATE_IN_PAST_96_XX

@@ -430,6 +430,75 @@ local function do_append_footer(task, part, footer, is_multipart, out, state)
 
 end
 
+-- Emit closing delimiters for every boundary we are leaving behind, stopping once
+-- the top of the stack is `target` -- the boundary that is about to be re-entered.
+--
+-- The number of levels to unwind is a property of the message structure, so it
+-- cannot be a fixed count. Popping one entry (or two, as the previous
+-- multipart/related special case did) desynchronises the stack as soon as the part
+-- walk returns from a nested part to a shallower one; `boundaries[#boundaries]`
+-- then names an unrelated boundary and a closing delimiter for it -- in practice
+-- the top-level one -- is emitted into the middle of the body.
+--
+-- When `target` is not on the stack at all, which happens when a nested
+-- message/rfc822 opens a boundary of its own, close exactly one level so the
+-- behaviour for that case is unchanged.
+local function close_boundaries_until(out, boundaries, target, newline_s)
+  local found = false
+
+  for i = 1, #boundaries do
+    if boundaries[i].boundary == target then
+      found = true
+      break
+    end
+  end
+
+  if not found then
+    if #boundaries > 0 then
+      out[#out + 1] = string.format('--%s--%s',
+          boundaries[#boundaries].boundary, newline_s)
+      table.remove(boundaries)
+    end
+
+    return
+  end
+
+  while #boundaries > 0 and boundaries[#boundaries].boundary ~= target do
+    out[#out + 1] = string.format('--%s--%s',
+        boundaries[#boundaries].boundary, newline_s)
+    table.remove(boundaries)
+  end
+end
+
+-- The same unwind for the two rewriters that keep a stack of plain boundary
+-- strings and emit {text, is_raw} pairs, rather than the {boundary = ...}
+-- records and plain strings used above. Sharing a single helper across both
+-- shapes would need an accessor and an emitter callback for no real gain.
+local function close_raw_boundaries_until(out, boundaries, target)
+  local found = false
+
+  for i = 1, #boundaries do
+    if boundaries[i] == target then
+      found = true
+      break
+    end
+  end
+
+  if not found then
+    if #boundaries > 0 then
+      out[#out + 1] = { string.format('--%s--', boundaries[#boundaries]), true }
+      table.remove(boundaries)
+    end
+
+    return
+  end
+
+  while #boundaries > 0 and boundaries[#boundaries] ~= target do
+    out[#out + 1] = { string.format('--%s--', boundaries[#boundaries]), true }
+    table.remove(boundaries)
+  end
+end
+
 --[[[
 -- @function lua_mime.add_text_footer(task, html_footer, text_footer)
 -- Adds a footer to all text parts in a message. It returns a table with the following
@@ -523,10 +592,8 @@ exports.add_text_footer = function(task, html_footer, text_footer)
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries].boundary, newline_s)
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_boundaries_until(out, boundaries, boundary, newline_s)
           cur_boundary = nil
         end
         out[#out + 1] = string.format('--%s',
@@ -565,16 +632,10 @@ exports.add_text_footer = function(task, html_footer, text_footer)
 
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries].boundary, newline_s)
-          -- Need to close previous boundary, if ct_subtype is related
-          if #boundaries > 1 and boundaries[#boundaries].ct_type == "multipart" and boundaries[#boundaries].ct_subtype == "related" then
-            out[#out + 1] = string.format('--%s--%s',
-                boundaries[#boundaries - 1].boundary, newline_s)
-            table.remove(boundaries)
-          end
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind. This subsumes the
+          -- former multipart/related special case: that shape is simply one
+          -- instance of "more than one level to close".
+          close_boundaries_until(out, boundaries, boundary, newline_s)
           cur_boundary = boundary
         end
         out[#out + 1] = string.format('--%s',
@@ -804,10 +865,8 @@ exports.multipattern_text_replace = function(task, mp, replacements)
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = { string.format('--%s--',
-              boundaries[#boundaries]), true }
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_raw_boundaries_until(out, boundaries, boundary)
           cur_boundary = nil
         end
         out[#out + 1] = { string.format('--%s',
@@ -833,10 +892,8 @@ exports.multipattern_text_replace = function(task, mp, replacements)
 
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = { string.format('--%s--',
-              boundaries[#boundaries]), true }
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_raw_boundaries_until(out, boundaries, boundary)
           cur_boundary = boundary
         end
         out[#out + 1] = { string.format('--%s',
@@ -1245,10 +1302,8 @@ exports.remove_attachments = function(task, settings)
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
-          -- Need to close boundary
-          out[#out + 1] = { string.format('--%s--',
-              boundaries[#boundaries]), true }
-          table.remove(boundaries)
+          -- Need to close every boundary we are leaving behind
+          close_raw_boundaries_until(out, boundaries, boundary)
           cur_boundary = nil
         end
         out[#out + 1] = { string.format('--%s',
@@ -1260,10 +1315,8 @@ exports.remove_attachments = function(task, settings)
       if parts_indexes_to_keep[i] then
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
-            -- Need to close previous boundary
-            out[#out + 1] = { string.format('--%s--',
-                boundaries[#boundaries]), true }
-            table.remove(boundaries)
+            -- Need to close every boundary we are leaving behind
+            close_raw_boundaries_until(out, boundaries, boundary)
             cur_boundary = boundary
           end
           out[#out + 1] = { string.format('--%s',
@@ -1767,7 +1820,7 @@ Return ONLY the response in this format without any explanations, markdown forma
       logger.debugm('lua_mime', task, 'anonymize_message: LLM response received, size: %s bytes',
           data.content and #data.content or 0)
 
-      local parser = ucl.parser()
+      local parser = ucl.untrusted_parser()
       local res, parse_err = parser:parse_string(data.content)
       if not res then
         logger.errx(task, 'anonymize_message: cannot parse LLM response: %s', parse_err)
@@ -2095,7 +2148,54 @@ exports.extract_text_limited = function(task, opts)
     if skip_rest then break end
 
     local keep_line = true
-    local trimmed_line = line:match("^%s*(.-)%s*$") or ""
+    local last_line = false
+
+    -- A line that does not fit is cut to what is left of the limit, and is
+    -- the last one: a first paragraph without line breaks is longer than
+    -- the limit on its own, and leaving it out leaves no text at all. It is
+    -- cut before anything else looks at it, so that the work on a line is
+    -- bounded by the limit as well
+    if current_bytes + #line + 1 > max_bytes then
+      local room = max_bytes - current_bytes - 1
+
+      if room <= 0 then
+        truncated = true
+        break
+      end
+
+      -- Not in the middle of a character
+      while room > 0 do
+        local b = line:byte(room + 1)
+        if not b or b < 0x80 or b >= 0xc0 then
+          break
+        end
+        room = room - 1
+      end
+
+      line = line:sub(1, room)
+      truncated = true
+      last_line = true
+    end
+
+    -- Without a pattern that backtracks: `^%s*(.-)%s*$` takes a time that is
+    -- the square of the length of a run of spaces inside of a line
+    local trimmed_line = ''
+    local first = line:find('%S')
+
+    if first then
+      local last = #line
+
+      while last > first do
+        local b = line:byte(last)
+        if b == 32 or (b >= 9 and b <= 13) then
+          last = last - 1
+        else
+          break
+        end
+      end
+
+      trimmed_line = line:sub(first, last)
+    end
 
 
     -- Check for standard signature separator (-- or --- with optional trailing whitespace)
@@ -2172,6 +2272,9 @@ exports.extract_text_limited = function(task, opts)
       current_bytes = current_bytes + line_len
     end
 
+    if last_line then
+      break
+    end
   end
 
   local text = table.concat(result_lines, "\n")

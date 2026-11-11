@@ -52,6 +52,87 @@ local function handle_fuzzy_storages(_task, conn)
   end
 end
 
+-- Per-server liveness probe of the configured fuzzy storages: ping every
+-- server of every rule and reply once all pings have settled (each ping is
+-- bounded by its own timeout). GET-only, no mutation: like fuzzy_ping, the
+-- probe does not feed the upstream ok/fail bookkeeping, so the read-only
+-- password is enough.
+local fuzzy_status_ping_timeout = 2.0
+
+local function handle_fuzzy_status(task, conn)
+  if type(rspamd_plugins.fuzzy_check) == 'table'
+      and type(rspamd_plugins.fuzzy_check.ping_storage_all) == 'function' then
+    local pok, storages = pcall(rspamd_plugins.fuzzy_check.list_storages, rspamd_config)
+
+    if not pok then
+      conn:send_error(500, 'cannot list fuzzy storages')
+      return
+    end
+
+    local results = {}
+    local expected = 0
+    local done = 0
+    local setup_done = false
+    local replied = false
+
+    -- The reply goes out once every expected result has landed; the
+    -- deadline passes force to flush a partial reply (a lost callback must
+    -- not hang the request until the client timeout)
+    local function reply(force)
+      if setup_done and not replied and (force or done >= expected) then
+        replied = true
+        conn:send_ucl({ success = true, storages = results })
+      end
+    end
+
+    -- Safety net: a lost or erroring callback must not hang the request
+    -- until the client timeout
+    task:add_timer(fuzzy_status_ping_timeout + 1.0, function() reply(true) end)
+
+    for rule_name in pairs(storages) do
+      local servers = {}
+      results[rule_name] = { servers = servers }
+
+      local ok, _, count = pcall(rspamd_plugins.fuzzy_check.ping_storage_all, task,
+        function(success, _ip, latency_or_err, server_name)
+          done = done + 1
+          local entry = { name = server_name, ok = success and true or false }
+          if success then
+            entry.latency = latency_or_err
+          else
+            entry.error = latency_or_err
+          end
+          servers[#servers + 1] = entry
+          reply()
+        end, rule_name, fuzzy_status_ping_timeout)
+
+      if not ok then
+        conn:send_error(500, 'cannot ping fuzzy storages')
+        return
+      end
+
+      if (count or 0) == 0 then
+        -- No pingable servers (e.g. SRV not resolved yet): report no
+        -- status for the rule rather than an empty result set
+        results[rule_name] = nil
+      else
+        expected = expected + count
+      end
+    end
+
+    -- Synchronous results (unresolved addresses, connect failures) arrive
+    -- before the matching count is added to `expected`, so the reply is
+    -- armed only after the whole setup pass
+    setup_done = true
+
+    if done >= expected then
+      reply()
+    end
+  else
+    conn:send_error(404, 'fuzzy_check is not enabled')
+  end
+end
+
 return {
   hashes = {
     handler = handle_gen_fuzzy,
@@ -60,6 +141,11 @@ return {
   },
   storages = {
     handler = handle_fuzzy_storages,
+    need_task = false,
+    enable = false
+  },
+  status = {
+    handler = handle_fuzzy_status,
     need_task = false,
     enable = false
   },

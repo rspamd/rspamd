@@ -21,3 +21,20 @@ config['regexp']['RSPAMD_TEXT_SELECTOR'] = {
   re = 'some_rspamd_text_re=/^hello$/{selector}',
   score = 1,
 }
+
+-- The 'orig' flavour must be reachable through selectors and return the
+-- address as it was seen in the message, before any task:set_from rewrite
+local selector_from = lua_selectors.create_selector_closure(
+    rspamd_config, "from('mime'):addr", '')
+local selector_from_orig = lua_selectors.create_selector_closure(
+    rspamd_config, "from('mime', 'orig'):addr", '')
+
+rspamd_config:register_symbol({
+  name = 'SELECTOR_FROM_ORIG',
+  score = 1.0,
+  callback = function(task)
+    local cur = selector_from(task)
+    local orig = selector_from_orig(task)
+    return true, string.format('%s|%s', cur or 'nil', orig or 'nil')
+  end
+})

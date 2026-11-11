@@ -91,7 +91,7 @@ end
 local function gen_callback()
 
   return function(data)
-    local parser = ucl.parser()
+    local parser = ucl.untrusted_parser()
     local res, err = parser:parse_string(data)
 
     if not res then

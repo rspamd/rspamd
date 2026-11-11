@@ -36,6 +36,8 @@ static struct rspamd_hs_cache_backend *global_hs_cache_backend = NULL;
 static lua_State *lua_backend_L = NULL;
 static int lua_backend_ref = LUA_NOREF;
 static const char *lua_backend_platform_id = NULL;
+/* Name of the configured backend: file (default), redis or http */
+static char *lua_backend_name = NULL;
 
 static gboolean
 rspamd_hs_cache_try_init_lua_backend_with_opts(struct rspamd_config *cfg,
@@ -134,6 +136,8 @@ rspamd_hs_cache_try_init_lua_backend_with_opts(struct rspamd_config *cfg,
 	lua_pop(L, 1);
 
 	rspamd_hs_cache_set_lua_backend(L, ref, platform_id);
+	g_free(lua_backend_name);
+	lua_backend_name = g_strdup(backend_name);
 	lua_settop(L, err_idx - 1);
 
 	msg_debug_hyperscan("initialized hyperscan cache backend: %s", backend_name);
@@ -170,6 +174,8 @@ void rspamd_hs_cache_free_backend(void)
 	lua_backend_L = NULL;
 	lua_backend_ref = LUA_NOREF;
 	lua_backend_platform_id = NULL;
+	g_free(lua_backend_name);
+	lua_backend_name = NULL;
 }
 
 void rspamd_hs_cache_set_lua_backend(lua_State *L, int ref, const char *platform_id)
@@ -183,6 +189,30 @@ gboolean
 rspamd_hs_cache_has_lua_backend(void)
 {
 	return lua_backend_L != NULL && lua_backend_ref != LUA_NOREF;
+}
+
+const char *
+rspamd_hs_cache_backend_name(void)
+{
+	return lua_backend_name ? lua_backend_name : "file";
+}
+
+gboolean
+rspamd_hs_cache_backend_is_file(void)
+{
+	return strcmp(rspamd_hs_cache_backend_name(), "file") == 0;
+}
+
+gboolean
+rspamd_hs_cache_error_is_miss(const char *error)
+{
+	if (error == NULL) {
+		/* Neither an error nor data: there is simply nothing cached */
+		return TRUE;
+	}
+
+	return strcmp(error, "not found") == 0 ||
+		   strcmp(error, "file not found") == 0;
 }
 
 gboolean

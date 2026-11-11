@@ -383,8 +383,13 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 	g_assert(!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	/* Add to pats array for ACISM/regex fallback (needed for FALLBACK mode) */
-	if (mp->pats != NULL) {
+	/*
+	 * Add to pats array for ACISM/regex fallback (needed for FALLBACK mode).
+	 * Without usable hyperscan the path below adds the pattern: adding it
+	 * here too would put every pattern twice in pats, while cnt counts it
+	 * once, so the second half of the patterns would never be compiled
+	 */
+	if (rspamd_hs_check() && mp->pats != NULL) {
 		struct rspamd_acism_pat acism_pat;
 
 		acism_pat.pat.ptr = rspamd_multipattern_escape_acism(pattern, patlen, flags, &dlen);
@@ -419,6 +424,15 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 		}
 		if (adjusted_flags & RSPAMD_MULTIPATTERN_NO_START) {
 			fl &= ~HS_FLAG_SOM_LEFTMOST;
+		}
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_SOM) {
+			/*
+			 * Explicit start-of-match request wins over the cost-saving
+			 * opt-outs above. SINGLEMATCH is incompatible with SOM in
+			 * hyperscan, so drop it here.
+			 */
+			fl |= HS_FLAG_SOM_LEFTMOST;
+			fl &= ~HS_FLAG_SINGLEMATCH;
 		}
 
 		g_array_append_val(mp->hs_flags, fl);
@@ -527,8 +541,8 @@ rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
 		return;
 	}
 
-	rspamd_snprintf(fp, sizeof(fp), "%s%shs-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
-					hs_cache_dir);
+	rspamd_snprintf(fp, sizeof(fp), "%s%shs-XXXXXXXXXXXXX", hs_cache_dir,
+					G_DIR_SEPARATOR_S);
 
 	if ((fd = g_mkstemp_full(fp, O_CREAT | O_EXCL | O_WRONLY, 00644)) != -1) {
 		/* Serialize with unified header format (magic, platform, CRC) */
@@ -933,6 +947,31 @@ rspamd_multipattern_acism_cb(int strnum, int textpos, void *context)
 	return ret;
 }
 
+/*
+ * Report a regex match using the real start/end offsets obtained from
+ * rspamd_regexp_search(). Unlike the literal ACISM path, a regex match length
+ * is not equal to the pattern string length, so the start MUST come from the
+ * regex engine rather than being derived as end - pattern_len (which would be
+ * bogus). Both offsets are byte offsets into cbd->in, 0-based, with match_pos
+ * exclusive (see rspamd_multipattern_cb_t).
+ */
+static int
+rspamd_multipattern_regex_cb(struct rspamd_multipattern_cbdata *cbd,
+							 unsigned int strnum,
+							 int match_start,
+							 int match_pos)
+{
+	int ret;
+
+	ret = cbd->cb(cbd->mp, strnum, match_start, match_pos,
+				  cbd->in, cbd->len, cbd->ud);
+
+	cbd->nfound++;
+	cbd->ret = ret;
+
+	return ret;
+}
+
 int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 							   const char *in, gsize len, rspamd_multipattern_cb_t cb,
 							   gpointer ud, unsigned int *pnfound)
@@ -1049,7 +1088,9 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 				if (start >= end) {
 					break;
 				}
-				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
+				if (rspamd_multipattern_regex_cb(&cbd, i,
+												 (int) (start - in),
+												 (int) (end - in))) {
 					goto hs_fallback_out;
 				}
 			}
@@ -1084,7 +1125,9 @@ int rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
 				if (start >= end) {
 					break;
 				}
-				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
+				if (rspamd_multipattern_regex_cb(&cbd, i,
+												 (int) (start - in),
+												 (int) (end - in))) {
 					goto out;
 				}
 			}
@@ -1818,14 +1861,35 @@ rspamd_multipattern_load_from_cache_cb(gboolean success,
 					mp->hs_db = NULL;
 				}
 			}
+			else {
+				/*
+				 * Stale blob (e.g. serialized by an incompatible hyperscan
+				 * version or fork): remove it so that a valid database is
+				 * compiled and re-stored, as re_cache does
+				 */
+				rspamd_hs_cache_lua_delete_async(ctx->cache_key, "multipattern",
+												 NULL, NULL);
+			}
+		}
+		else {
+			msg_debug("multipattern is not in the compiling state (%d), cannot hot-swap it",
+					  (int) mp->state);
 		}
 	}
+	else if (rspamd_hs_cache_error_is_miss(err)) {
+		/* Not compiled yet or a read replica has not caught up with the master */
+		msg_info("multipattern hyperscan database %s is not cached yet",
+				 ctx->cache_key);
+	}
 	else {
-		(void) err;
+		/* Report the error, otherwise the failure is unexplainable */
+		msg_warn("cannot load multipattern hyperscan database %s from cache backend: %s",
+				 ctx->cache_key, err);
 	}
 
 	if (!ok && gerr) {
-		msg_debug("multipattern hs load failed: %s", gerr->message);
+		msg_warn("cannot deserialize multipattern hyperscan database %s: %s",
+				 ctx->cache_key, gerr->message);
 	}
 	g_clear_error(&gerr);
 

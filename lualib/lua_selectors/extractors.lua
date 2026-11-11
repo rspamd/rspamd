@@ -25,6 +25,8 @@ local T = require "lua_shape.core"
 local maps = require "lua_selectors/maps"
 local E = {}
 local M = "selectors"
+-- Required on first use by the `crypto_addresses` extractor below
+local lua_crypto_addresses
 
 local HOSTNAME = rspamd_util.get_hostname()
 
@@ -94,7 +96,8 @@ For example, `list('foo', 'bar')` returns a list {'foo', 'bar'}]],
       return nil
     end,
     ['description'] = [[Get MIME or SMTP from (e.g. `from('smtp')` or `from('mime')`,
-uses any type by default)]],
+uses any type by default); add `orig` (e.g. `from('mime', 'orig')`) to get the
+address as it was seen in the message, before any rewrite (e.g. by the aliases module)]],
   },
   ['rcpts'] = {
     ['get_value'] = function(task, args)
@@ -110,7 +113,8 @@ uses any type by default)]],
       return nil
     end,
     ['description'] = [[Get MIME or SMTP rcpts (e.g. `rcpts('smtp')` or `rcpts('mime')`,
-uses any type by default)]],
+uses any type by default); add `orig` (e.g. `rcpts('mime', 'orig')`) to get the
+addresses as they were seen in the message, before any rewrite (e.g. by the aliases module)]],
   },
   -- Get country (ASN module must be executed first)
   ['country'] = {
@@ -123,6 +127,7 @@ uses any type by default)]],
       end
     end,
     ['description'] = [[Get country (ASN module must be executed first)]],
+    ['dependencies'] = { 'ASN_CHECK' },
   },
   -- Get ASN number
   ['asn'] = {
@@ -136,6 +141,7 @@ uses any type by default)]],
       end
     end,
     ['description'] = [[Get AS number (ASN module must be executed first)]],
+    ['dependencies'] = { 'ASN_CHECK' },
   },
   -- Get authenticated username
   ['user'] = {
@@ -468,7 +474,8 @@ The first argument must be header name.]],
       local what = args[1] or 'message'
       local dt = task:get_date { format = what, gmt = true }
 
-      if dt then
+      -- get_date gives 0 when the Date header is missing or invalid
+      if dt and dt ~= 0 then
         if args[2] then
           -- Should be in format !xxx, as dt is in GMT
           return os.date(args[2], dt), 'string'
@@ -559,7 +566,37 @@ The first argument must be header name.]],
     ['description'] = 'Get specific symbol. The first argument must be the symbol name. ' ..
         'The second argument is an optional shadow result name. ' ..
         'Returns the symbol table. See task:get_symbol()',
-    ['args_schema'] = { T.string(), T.string():optional() }
+    ['args_schema'] = { T.string(), T.string():optional() },
+    ['dependencies'] = function(args)
+      return { args[1] }
+    end,
+  },
+  -- Get cryptocurrency wallet addresses
+  ['crypto_addresses'] = {
+    ['get_value'] = function(task, args)
+      -- Required lazily and memoised: this pulls in a compiled regexp that is
+      -- pointless to build in a process that never asks for crypto addresses
+      if not lua_crypto_addresses then
+        lua_crypto_addresses = require "lua_crypto_addresses"
+      end
+
+      local a = args or E
+      local res = lua_crypto_addresses.get_addresses_flat(task, a[1], a[2] == 'typed')
+
+      if #res == 0 then
+        return nil
+      end
+
+      return res, 'string_list'
+    end,
+    ['description'] = 'Get cryptocurrency wallet addresses found in the message. ' ..
+        'Returns the bare addresses, ready to be matched against a map or looked up ' ..
+        'in DNS. The first argument optionally restricts the result to one currency ' ..
+        '(bitcoin, litecoin, dogecoin, tron, xrp, zcash, cardano, cosmos, stellar, ' ..
+        'ton, ethereum, monero); pass "typed" as the second argument to get ' ..
+        '"currency:address" strings instead. Computes the addresses itself, so no ' ..
+        'dependency on CRYPTO_ADDR_CHECK is needed',
+    ['args_schema'] = { T.string():optional(), T.string():optional() }
   },
   -- Get full scan result
   ['scan_result'] = {

@@ -1,0 +1,8 @@
+From: sender@example.com
+To: recipient@example.net
+Subject: HTML visibility regression
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Visible newsletter content with enough ordinary text to scan.</p><div style="font-size:0">&nbsp;Hidden offer&#x200b;</div><p style="display:none">&#x200c;Скрытый текст</p><span style="font-size:0;color:white;background-color:white">隠された文章</span></body></html>

@@ -68,6 +68,7 @@ rspamd_words_t *rspamd_tokenize_text(const char *text, gsize len,
 									 GList *exceptions,
 									 uint64_t *hash,
 									 rspamd_words_t *output_kvec,
+									 struct rspamd_tokenize_budget *budget,
 									 rspamd_mempool_t *pool);
 
 /* OSB tokenize function */

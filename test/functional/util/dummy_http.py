@@ -9,6 +9,7 @@ import ssl
 import argparse
 import os
 import sys
+import time
 import traceback
 
 class MainHandler(tornado.web.RequestHandler):
@@ -34,15 +35,29 @@ class MainHandler(tornado.web.RequestHandler):
             # Return a string 'hello map'
             self.set_header("Content-Type", "text/plain")
             self.write("hello map")
+        elif path == '/map-chunked':
+            # Return a sizeable map body with Transfer-Encoding: chunked:
+            # flushing before the reply is finished makes Tornado omit
+            # Content-Length and use chunked encoding. Rspamd has to grow its
+            # receive buffer for such a reply, and used to hand the whole
+            # buffer (body plus the raw tail of the last socket read plus zero
+            # padding) to the map consumer, see #6261.
+            self.set_header("Content-Type", "text/plain")
+            yield self.flush()
+            for i in range(16384):
+                self.write("chunked map line %d\n" % i)
+                if i % 1024 == 0:
+                    yield self.flush()
+            self.write("CHUNKED_MAP_END\n")
         elif path == '/map-query':
             # Parse the 'key' argument from the HTTP request
             key = self.get_query_argument("key", default=None)
-            if key == 'au':
-                # Return a string 'hit' if 'key' is equal to 'au'
+            if key == 'com.au':
+                # Return a string 'hit' if 'key' is equal to 'com.au'
                 self.set_header("Content-Type", "text/plain")
                 self.write("1.0")
             else:
-                # Return a 404 HTTP error if 'key' is not equal to 'au'
+                # Return a 404 HTTP error if 'key' is not equal to 'com.au'
                 raise tornado.web.HTTPError(404)
         elif path == '/settings':
             self.set_header("Content-Type", "application/json")
@@ -75,18 +90,21 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == '/map-query':
             # Parse the 'key' argument from the HTTP request
             key = self.get_query_argument("key", default="")
-            if key == 'au':
-                # Return a string 'hit' if 'key' is equal to 'au'
+            if key == 'com.au':
+                # Return a string 'hit' if 'key' is equal to 'com.au'
                 self.set_header("Content-Type", "text/plain")
                 self.write("hit")
             else:
-                # Return a 404 HTTP error if 'key' is not equal to 'au'
+                # Return a 404 HTTP error if 'key' is not equal to 'com.au'
                 raise tornado.web.HTTPError(404)
         elif path == '/settings':
             self.set_header("Content-Type", "application/json")
             self.write("{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}")
         else:
             raise tornado.web.HTTPError(404)
+
+    # Requests seen by /flaky
+    flaky_hits = 0
 
     def head(self, path):
         # Log the request headers in the exact order they arrived on the
@@ -95,7 +113,38 @@ class MainHandler(tornado.web.RequestHandler):
         hdrs = ", ".join(f"{k}={v}" for k, v in self.request.headers.get_all())
         print(f"dummy_http.py: HEAD {path} headers: {hdrs}", file=sys.stderr)
         self.set_header("Content-Type", "text/plain")
-        if path == "/redirect1":
+        if path == "/map-chunked":
+            # Rspamd checks a map with HEAD before fetching it with GET, so
+            # this has to be a plain 200 (the catch-all below is not).
+            self.set_status(200)
+        elif path == "/backslash_redirect":
+            # A browser reads a backslash after the scheme as a slash, so
+            # this leads to another host and not to a path on this one
+            self.set_status(302)
+            self.set_header("Location", "/\\backslash-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/double_location":
+            # Two Location headers
+            self.set_status(302)
+            self.add_header("Location", "http://first-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+            self.add_header("Location", "http://second-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/long_non_http":
+            # A target of a scheme that is not followed, as long as it gets
+            self.set_status(302)
+            self.set_header("Location", "javascript:" + "a" * 4000)
+        elif path == "/flaky":
+            # Fails on the first request and redirects on the next ones
+            MainHandler.flaky_hits += 1
+            if MainHandler.flaky_hits == 1:
+                self.set_status(503)
+            else:
+                self.set_status(302)
+                self.set_header("Location", "http://flaky-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/hard_slow":
+            # Takes its time to answer
+            time.sleep(1.5)
+            self.set_status(302)
+            self.set_header("Location", "http://slow-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
         elif path == "/redirect2":
@@ -107,6 +156,9 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == "/redirect4":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/redirect3")
+        elif path == "/redir_to_unlisted":
+            port = self.request.host.rsplit(":", 1)[-1]
+            self.redirect(f"{self.request.protocol}://unlisted-redirector-target.example.net:{port}/hello")
         elif path == "/tel_redirect":
             # Send an HTTP redirect to a tel: URL (non-HTTP scheme)
             self.redirect("tel:88006007775")
@@ -117,12 +169,22 @@ class MainHandler(tornado.web.RequestHandler):
             # Redirect to a domain matching the displayed text, so the phishing
             # module sees a 1:1 redirect target and must not fire (no FP).
             self.redirect("http://www.example.com/")
+        elif path == "/redir_to_query_decoy":
+            # The observed destination differs from the displayed cnn.com;
+            # a matching query parameter must not lower the phishing score.
+            self.redirect("http://www.example.com/?url=http://www.cnn.com/")
         elif path == "/chain_intermediate_1":
             # Intermediate hop to chain_to_tel2
             self.redirect(f"{self.request.protocol}://{self.request.host}/chain_intermediate_2")
         elif path == "/chain_intermediate_2":
             # Final hop to a tel: URL
             self.redirect("tel:88006007776")
+        elif path == "/relative_redirect":
+            # Relative location: must be resolved against this URL; the query
+            # carries a URL that must not be picked as the target instead
+            self.redirect("rel/target?u=http://decoy.example.net/")
+        elif path == "/rel/target":
+            self.redirect("/hello")
         elif path == "/chain1":
             # Intermediate hop to chain2
             self.redirect(f"{self.request.protocol}://{self.request.host}/chain2")

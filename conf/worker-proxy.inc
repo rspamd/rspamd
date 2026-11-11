@@ -42,3 +42,19 @@ discard_on_reject = false; # Discard message instead of rejection
 quarantine_on_reject = false; # Tell MTA to quarantine rejected messages
 spam_header = "X-Spam"; # Use the specific spam header
 reject_message = "Spam message rejected"; # Use custom rejection message
+
+# Allow client-named message sources: the `File`/`Path`/`Shm`/`Shm-Offset`/
+# `Shm-Length` headers, the `File` query argument, and the v3
+# `file`/`shm`/`shm_offset`/`shm_length` metadata keys, which make rspamd read
+# a path or map a shared memory object chosen by the client. TCP listeners
+# only: unix sockets always permit these inputs, since filesystem permissions
+# control access there.
+# Do not enable on a listener reachable from untrusted networks. Authentication
+# and encryption do NOT authorize this capability.
+# `true` here for backwards compatibility; it becomes `false` by default in the
+# next major release.
+allow_file_and_shm_inputs = true;
+
+# Upper bound on concurrent client connections served by a proxy process.
+# 0 (the default) means unlimited; a finite value bounds concurrency.
+# max_connections = 0;

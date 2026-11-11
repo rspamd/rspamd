@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+local lua_content = require "lua_content"
+
 local function process_pdf_specific(task, part, specific)
   local suspicious_factor = 0
   if specific.encrypted then
@@ -52,23 +54,243 @@ local function process_pdf_specific(task, part, specific)
     task:insert_result('PDF_TIMEOUT', 1.0, string.format('%s:%.3f',
         part:get_filename() or 'unknown', specific.timeout_processing))
   end
+
+  -- What the parser could not or did not look at: none of that is a proof of
+  -- anything on its own, but a file that is not fully seen is not a clean one
+  local flags = specific.flags
+  if type(flags) == 'table' then
+    local fname = part:get_filename() or 'unknown'
+
+    if flags.no_objects then
+      task:insert_result('PDF_NO_OBJECTS', 1.0, fname)
+    end
+    if flags.decode_limit then
+      task:insert_result('PDF_DECODE_LIMIT', 1.0, fname)
+    end
+    if flags.undecoded_streams then
+      task:insert_result('PDF_UNDECODED_STREAMS', 1.0, string.format('%s:%d',
+          fname, flags.undecoded_streams))
+    end
+    if flags.unparsed_objects or flags.object_errors then
+      task:insert_result('PDF_PARSE_ERRORS', 1.0, string.format('%s:%d',
+          fname, (flags.unparsed_objects or 0) + (flags.object_errors or 0)))
+    end
+    if flags.text_truncated then
+      task:insert_result('PDF_TEXT_TRUNCATED', 1.0, fname)
+    end
+  end
+end
+
+local ooxml_prefixes = {
+  docx = 'DOCX',
+  xlsx = 'XLSX',
+  pptx = 'PPTX',
+}
+local max_external_data_options = 8
+local max_target_option_length = 128
+
+local function trim_target(target)
+  if #target > max_target_option_length then
+    return target:sub(1, max_target_option_length) .. '...'
+  end
+  return target
+end
+
+local function process_ooxml_relationships(task, filename, specific)
+  local relationships = specific.relationships
+  if not relationships then return end
+
+  -- One option per finding, prefixed by the file name, so that options
+  -- never need to be split on commas
+  local macros = {}
+  for _, kind in ipairs(relationships.macros or {}) do
+    macros[#macros + 1] = string.format('%s:%s', filename, kind)
+  end
+  for _, name in ipairs(specific.auto_exec_names or {}) do
+    macros[#macros + 1] = string.format('%s:%s', filename, name)
+  end
+  if #macros > 0 then
+    task:insert_result('OOXML_MACROS', 1.0, macros)
+  end
+
+  if (relationships.ole_objects or 0) > 0 then
+    task:insert_result('OOXML_OLE_OBJECT', 1.0,
+        string.format('%s:%d', filename, relationships.ole_objects))
+  end
+
+  if relationships.remote_template then
+    task:insert_result('OOXML_REMOTE_TEMPLATE', 1.0,
+        string.format('%s:%s', filename, trim_target(relationships.remote_template)))
+  end
+
+  local external_targets = relationships.external_targets or {}
+  for i, target in ipairs(external_targets) do
+    if i > max_external_data_options then break end
+    task:insert_result('OOXML_EXTERNAL_DATA', 1.0,
+        string.format('%s:%s=%s', filename, target.type, trim_target(target.target)))
+  end
+end
+
+local function process_ooxml_specific(task, part, specific)
+  local filename = part:get_filename() or 'unknown'
+  local prefix = ooxml_prefixes[specific.tag]
+
+  process_ooxml_relationships(task, filename, specific)
+
+  if specific.suspicious then
+    task:insert_result(prefix .. '_SUSPICIOUS', 1.0,
+        string.format('%s:%s', filename, specific.reason or 'unknown'))
+    return
+  end
+
+  task:insert_result(prefix .. '_CONTENT', 1.0, filename)
+  if specific.truncated or specific.failed_stories then
+    -- Not all of the document was read: more parts than are processed, or
+    -- parts that could not be parsed
+    local options = {}
+    if specific.truncated then
+      options[#options + 1] = string.format('%s:truncated', filename)
+    end
+    if specific.failed_stories then
+      options[#options + 1] = string.format('%s:failed=%d', filename, specific.failed_stories)
+    end
+    task:insert_result('OOXML_INCOMPLETE', 1.0, options)
+  end
+  if specific.urls and #specific.urls > 0 then
+    task:insert_result(prefix .. '_EXTERNAL_LINKS', 1.0,
+        string.format('%s:%s', filename, #specific.urls))
+  end
+end
+
+local max_svg_resource_options = 8
+
+local function process_svg_specific(task, part, specific)
+  local filename = part:get_filename() or 'unknown'
+
+  if specific.suspicious then
+    task:insert_result('SVG_SUSPICIOUS', 1.0,
+        string.format('%s:%s', filename, specific.reason or 'unknown'))
+    return
+  end
+
+  task:insert_result('SVG_CONTENT', 1.0, filename)
+
+  -- Parts of the image that were not read: text, links or embedded documents
+  -- over the limits, or an embedded document that could not be read
+  local incomplete = {}
+  if specific.text_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:text', filename)
+  end
+  if specific.urls_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:urls', filename)
+  end
+  if specific.payloads_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:payloads', filename)
+  end
+  if specific.nested_suspicious then
+    incomplete[#incomplete + 1] = string.format('%s:nested=%s', filename, specific.nested_suspicious)
+  end
+  if #incomplete > 0 then
+    task:insert_result('SVG_INCOMPLETE', 1.0, incomplete)
+  end
+
+  local scripts = specific.scripts or 0
+  local handlers = specific.event_handlers or 0
+  local javascript_urls = specific.javascript_urls or 0
+  local external_scripts = specific.external_scripts or 0
+  if scripts + handlers + javascript_urls + external_scripts > 0 then
+    local options = {}
+    for _, counter in ipairs({
+      { 'scripts', scripts },
+      { 'handlers', handlers },
+      { 'javascript', javascript_urls },
+      { 'external', external_scripts },
+    }) do
+      if counter[2] > 0 then
+        options[#options + 1] = string.format('%s:%s=%d', filename, counter[1], counter[2])
+      end
+    end
+    for _, indicator in ipairs(specific.script_indicators or {}) do
+      options[#options + 1] = string.format('%s:%s', filename, indicator)
+    end
+    task:insert_result('SVG_SCRIPT', 1.0, options)
+  end
+
+  if (specific.foreign_objects or 0) > 0 then
+    task:insert_result('SVG_FOREIGN_OBJECT', 1.0,
+        string.format('%s:%d', filename, specific.foreign_objects))
+  end
+
+  -- Embedded raster images are the normal use of data: URIs; anything else
+  -- (HTML, scripts, nested SVG, octet streams) is smuggled content
+  local smuggled_types = {}
+  for _, uri_type in ipairs(specific.data_uri_types or {}) do
+    if not uri_type:find('^image/') or uri_type == 'image/svg+xml' then
+      smuggled_types[#smuggled_types + 1] = string.format('%s:%s', filename, uri_type)
+    end
+  end
+  if #smuggled_types > 0 then
+    task:insert_result('SVG_DATA_URI', 1.0, smuggled_types)
+  end
+
+  if (specific.hyperlinks or 0) > 0 then
+    task:insert_result('SVG_EXTERNAL_LINKS', 1.0,
+        string.format('%s:%d', filename, specific.hyperlinks))
+  end
+
+  for i, resource in ipairs(specific.resources or {}) do
+    if i > max_svg_resource_options then break end
+    task:insert_result('SVG_EXTERNAL_RESOURCES', 1.0,
+        string.format('%s:%s=%s', filename, resource.kind, trim_target(resource.url)))
+  end
+
+  local forms = specific.forms or 0
+  local passwords = specific.password_inputs or 0
+  if forms + passwords > 0 then
+    local options = {}
+    if forms > 0 then
+      options[#options + 1] = string.format('%s:forms=%d', filename, forms)
+    end
+    if passwords > 0 then
+      options[#options + 1] = string.format('%s:passwords=%d', filename, passwords)
+    end
+    task:insert_result('SVG_FORM', 1.0, options)
+  end
+
+  local redirects = {}
+  if (specific.meta_refresh or 0) > 0 then
+    redirects[#redirects + 1] = filename .. ':meta_refresh'
+  end
+  if (specific.embedded_documents or 0) > 0 then
+    redirects[#redirects + 1] = filename .. ':embedded_documents'
+  end
+  for _, indicator in ipairs(specific.script_indicators or {}) do
+    if indicator == 'location' then
+      redirects[#redirects + 1] = filename .. ':location'
+    end
+  end
+  if #redirects > 0 then
+    task:insert_result('SVG_REDIRECT', 1.0, redirects)
+  end
 end
 
 local tags_processors = {
-  pdf = process_pdf_specific
+  pdf = process_pdf_specific,
+  docx = process_ooxml_specific,
+  xlsx = process_ooxml_specific,
+  pptx = process_ooxml_specific,
+  svg = process_svg_specific,
 }
 
 local function process_specific_cb(task)
   local parts = task:get_parts() or {}
 
   for _, p in ipairs(parts) do
-    if p:is_specific() then
-      local data = p:get_specific()
+    local data = lua_content.get_specific(p, task)
 
-      if data and type(data) == 'table' and data.tag then
-        if tags_processors[data.tag] then
-          tags_processors[data.tag](task, p, data)
-        end
+    if data and type(data) == 'table' and data.tag then
+      if tags_processors[data.tag] then
+        tags_processors[data.tag](task, p, data)
       end
     end
   end
@@ -86,6 +308,42 @@ rspamd_config:register_symbol {
   parent = id,
   groups = { "content", "pdf" },
 }
+
+for tag, prefix in pairs(ooxml_prefixes) do
+  for _, suffix in ipairs({ 'CONTENT', 'EXTERNAL_LINKS', 'SUSPICIOUS' }) do
+    rspamd_config:register_symbol {
+      type = 'virtual',
+      name = prefix .. '_' .. suffix,
+      parent = id,
+      groups = { "content", tag },
+    }
+  end
+end
+
+for _, name in ipairs({
+  'OOXML_MACROS', 'OOXML_OLE_OBJECT', 'OOXML_REMOTE_TEMPLATE', 'OOXML_EXTERNAL_DATA',
+  'OOXML_INCOMPLETE',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "ooxml" },
+  }
+end
+
+for _, name in ipairs({
+  'SVG_CONTENT', 'SVG_SUSPICIOUS', 'SVG_SCRIPT', 'SVG_FOREIGN_OBJECT', 'SVG_DATA_URI',
+  'SVG_EXTERNAL_LINKS', 'SVG_EXTERNAL_RESOURCES', 'SVG_FORM', 'SVG_REDIRECT',
+  'SVG_INCOMPLETE',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "svg" },
+  }
+end
 rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_JAVASCRIPT',
@@ -116,3 +374,14 @@ rspamd_config:register_symbol {
   parent = id,
   groups = { "content", "pdf" },
 }
+for _, name in ipairs({
+  'PDF_NO_OBJECTS', 'PDF_DECODE_LIMIT', 'PDF_UNDECODED_STREAMS', 'PDF_PARSE_ERRORS',
+  'PDF_TEXT_TRUNCATED',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "pdf" },
+  }
+end

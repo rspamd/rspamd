@@ -556,19 +556,32 @@ rspamd_prepare_worker(struct rspamd_worker *worker, const char *name,
 	 * PCRE for missing/stale patterns. Async notifications still handle updates.
 	 */
 	if (rspamd_hs_cache_has_lua_backend() && worker->srv->cfg->re_cache) {
-		const char *cache_dir = worker->srv->cfg->hs_cache_dir ? worker->srv->cfg->hs_cache_dir : RSPAMD_DBDIR "/";
-		enum rspamd_hyperscan_status hs_status;
+		const char *cache_dir = worker->srv->cfg->hs_cache_dir ? worker->srv->cfg->hs_cache_dir : RSPAMD_DBDIR;
 
-		hs_status = rspamd_re_cache_load_hyperscan_scoped(worker->srv->cfg->re_cache,
-														  cache_dir, true);
-		if (hs_status == RSPAMD_HYPERSCAN_LOADED_FULL) {
-			msg_info("worker startup: hyperscan fully loaded from cache");
-		}
-		else if (hs_status == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
-			msg_info("worker startup: hyperscan partially loaded, waiting for hs_helper");
+		if (!rspamd_hs_cache_backend_is_file()) {
+			/*
+			 * Remote backends (redis, http) can only be queried asynchronously,
+			 * there are no local files to read here
+			 */
+			msg_debug("worker startup: loading hyperscan from '%s' cache backend",
+					  rspamd_hs_cache_backend_name());
+			rspamd_re_cache_load_hyperscan_scoped_async(worker->srv->cfg->re_cache,
+														event_loop, cache_dir, true);
 		}
 		else {
-			msg_debug("worker startup: no hyperscan available yet, waiting for hs_helper");
+			enum rspamd_hyperscan_status hs_status;
+
+			hs_status = rspamd_re_cache_load_hyperscan_scoped(worker->srv->cfg->re_cache,
+															  cache_dir, true);
+			if (hs_status == RSPAMD_HYPERSCAN_LOADED_FULL) {
+				msg_info("worker startup: hyperscan fully loaded from cache");
+			}
+			else if (hs_status == RSPAMD_HYPERSCAN_LOADED_PARTIAL) {
+				msg_info("worker startup: hyperscan partially loaded, waiting for hs_helper");
+			}
+			else {
+				msg_debug("worker startup: no hyperscan available yet, waiting for hs_helper");
+			}
 		}
 	}
 #endif
@@ -2057,13 +2070,19 @@ rspamd_worker_multipattern_async_loaded(gboolean success, void *ud)
 		msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan (backend)", cbd->name);
 	}
 	else {
-		/* Try file fallback if available */
-		if (cbd->mp && cbd->cache_dir && rspamd_multipattern_load_from_cache(cbd->mp, cbd->cache_dir)) {
+		/*
+		 * Try file fallback, but merely for the file backend: with redis or http
+		 * backends databases are never stored in `hs_cache_dir`, so reading it
+		 * would just fail with a misleading `No such file or directory` error
+		 */
+		if (rspamd_hs_cache_backend_is_file() && cbd->mp && cbd->cache_dir &&
+			rspamd_multipattern_load_from_cache(cbd->mp, cbd->cache_dir)) {
 			msg_debug_hyperscan("multipattern '%s' hot-swapped to hyperscan (file fallback)", cbd->name);
 		}
 		else {
-			msg_warn("failed to hot-swap multipattern '%s' to hyperscan, continuing with ACISM fallback",
-					 cbd->name);
+			msg_warn("failed to hot-swap multipattern '%s' to hyperscan using '%s' cache backend, "
+					 "continuing with ACISM fallback",
+					 cbd->name, rspamd_hs_cache_backend_name());
 		}
 	}
 
@@ -2203,7 +2222,9 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_regexp_map_helper *re_map;
 	const char *name = cmd->cmd.re_map_loaded.name;
-	const char *cache_dir = worker->srv->cfg->hs_cache_dir;
+	const char *cache_dir = worker->srv->cfg->hs_cache_dir ?
+								worker->srv->cfg->hs_cache_dir :
+								RSPAMD_DBDIR;
 
 	memset(&rep, 0, sizeof(rep));
 	rep.type = RSPAMD_CONTROL_REGEXP_MAP_LOADED;
@@ -2211,7 +2232,12 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 
 	msg_debug_hyperscan("received regexp map loaded notification for '%s'", name);
 
-	re_map = rspamd_regexp_map_find_pending(name);
+	/*
+	 * Look the map up by the digest of the content that has been compiled: our
+	 * own copy of that map might be of another version, and then there is
+	 * nothing to install here
+	 */
+	re_map = rspamd_regexp_map_find_pending_by_hash(cmd->cmd.re_map_loaded.digest);
 
 	if (re_map != NULL) {
 		/* All file operations go through Lua backend */
@@ -2226,7 +2252,12 @@ rspamd_worker_regexp_map_ready(struct rspamd_main *rspamd_main,
 		rep.reply.hs_loaded.status = 0;
 	}
 	else {
-		msg_warn("received regexp map notification for unknown '%s'", name);
+		/*
+		 * Normal whenever our copy of that map is of another version: it gets
+		 * its own database as soon as it is queued
+		 */
+		msg_info("no copy of regexp map '%s' with the compiled content here",
+				 name);
 		rep.reply.hs_loaded.status = ENOENT;
 	}
 
@@ -2942,4 +2973,192 @@ rspamd_worker_has_ssl_socket(struct rspamd_worker *worker)
 	}
 
 	return FALSE;
+}
+
+gboolean
+rspamd_worker_is_unix_socket(struct rspamd_worker *worker, int fd)
+{
+	GList *cur;
+	struct rspamd_worker_listen_socket *ls;
+
+	if (worker == NULL || worker->cf == NULL) {
+		return FALSE;
+	}
+
+	cur = worker->cf->listen_socks;
+
+	while (cur) {
+		ls = (struct rspamd_worker_listen_socket *) cur->data;
+
+		if (ls->fd == fd) {
+			return ls->addr != NULL &&
+				   rspamd_inet_address_get_af(ls->addr) == AF_UNIX;
+		}
+
+		cur = g_list_next(cur);
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_worker_addr_is_loopback(const rspamd_inet_addr_t *addr)
+{
+	int af;
+	socklen_t slen;
+	const struct sockaddr *sa;
+
+	if (addr == NULL) {
+		return FALSE;
+	}
+
+	af = rspamd_inet_address_get_af(addr);
+
+	if (af == AF_UNIX) {
+		/* Unix sockets are always local by definition */
+		return TRUE;
+	}
+
+	sa = rspamd_inet_address_get_sa(addr, &slen);
+
+	if (sa == NULL) {
+		return FALSE;
+	}
+
+	if (af == AF_INET) {
+		const struct sockaddr_in *sin = (const struct sockaddr_in *) sa;
+
+		return (ntohl(sin->sin_addr.s_addr) & 0xff000000U) == 0x7f000000U;
+	}
+	else if (af == AF_INET6) {
+		const struct sockaddr_in6 *sin6 = (const struct sockaddr_in6 *) sa;
+
+		if (IN6_IS_ADDR_LOOPBACK(&sin6->sin6_addr)) {
+			return TRUE;
+		}
+
+		/*
+		 * The accept path normally unwraps v4-mapped addresses, but be
+		 * defensive and treat ::ffff:127.0.0.0/104 as loopback as well.
+		 */
+		if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr)) {
+			uint32_t v4;
+
+			memcpy(&v4, &sin6->sin6_addr.s6_addr[12], sizeof(v4));
+
+			return (ntohl(v4) & 0xff000000U) == 0x7f000000U;
+		}
+	}
+
+	/*
+	 * Everything else, including link-local and site-local addresses, is
+	 * reachable from other hosts and hence is NOT loopback.
+	 */
+	return FALSE;
+}
+
+/*
+ * Try to find a human readable bind line that produced the given listen
+ * address, so that the operator can grep for it in the configuration.
+ */
+static const char *
+rspamd_worker_listen_bind_line(struct rspamd_worker *worker,
+							   const rspamd_inet_addr_t *addr)
+{
+	struct rspamd_worker_bind_conf *bcf;
+	unsigned int i;
+
+	LL_FOREACH(worker->cf->bind_conf, bcf)
+	{
+		if (bcf->addrs == NULL) {
+			continue;
+		}
+
+		for (i = 0; i < bcf->addrs->len; i++) {
+			const rspamd_inet_addr_t *cur = g_ptr_array_index(bcf->addrs, i);
+
+			if (rspamd_inet_address_port_equal(cur, addr)) {
+				return bcf->bind_line ? bcf->bind_line : bcf->name;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+void rspamd_worker_warn_file_shm_inputs(struct rspamd_worker *worker,
+										const char *worker_name,
+										gboolean enabled)
+{
+	GList *cur;
+	GHashTable *seen;
+	struct rspamd_worker_listen_socket *ls;
+	const char *bind_line;
+	char listener[512];
+
+	if (!enabled || worker == NULL || worker->cf == NULL) {
+		return;
+	}
+
+	if (worker_name == NULL) {
+		worker_name = "unknown";
+	}
+
+	/* A wildcard bind resolves to both address families, warn once per line */
+	seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+
+	for (cur = worker->cf->listen_socks; cur != NULL; cur = g_list_next(cur)) {
+		ls = (struct rspamd_worker_listen_socket *) cur->data;
+
+		if (ls == NULL || ls->addr == NULL) {
+			continue;
+		}
+
+		if (rspamd_inet_address_get_af(ls->addr) == AF_UNIX) {
+			/* Access is limited by the filesystem permissions, that is fine */
+			continue;
+		}
+
+		bind_line = rspamd_worker_listen_bind_line(worker, ls->addr);
+
+		if (bind_line != NULL) {
+			rspamd_snprintf(listener, sizeof(listener), "%s (bind_socket = \"%s\")",
+							rspamd_inet_address_to_string_pretty(ls->addr),
+							bind_line);
+		}
+		else {
+			rspamd_snprintf(listener, sizeof(listener), "%s",
+							rspamd_inet_address_to_string_pretty(ls->addr));
+		}
+
+		if (g_hash_table_contains(seen, listener)) {
+			continue;
+		}
+
+		g_hash_table_insert(seen, g_strdup(listener), GINT_TO_POINTER(1));
+
+		if (rspamd_worker_addr_is_loopback(ls->addr)) {
+			msg_warn("SECURITY: worker %s accepts privileged File/Path/Shm "
+					 "message source inputs on the TCP listener '%s'; any client "
+					 "that can reach this port can make rspamd read arbitrary "
+					 "files readable by the rspamd user. Prefer a unix socket "
+					 "protected by filesystem permissions, or set "
+					 "'allow_file_and_shm_inputs = false' in the worker section. "
+					 "This option will default to false in the next major release",
+					 worker_name, listener);
+		}
+		else {
+			msg_err("SECURITY: worker %s accepts privileged File/Path/Shm "
+					"message source inputs on the NON-LOOPBACK TCP listener '%s'; "
+					"any client that can reach this port can make rspamd read "
+					"arbitrary files readable by the rspamd user and disclose "
+					"their content. Bind to a unix socket protected by filesystem "
+					"permissions, or set 'allow_file_and_shm_inputs = false' in "
+					"the worker section. This option will default to false in the "
+					"next major release",
+					worker_name, listener);
+		}
+	}
+
+	g_hash_table_destroy(seen);
 }

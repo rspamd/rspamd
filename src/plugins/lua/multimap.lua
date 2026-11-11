@@ -24,6 +24,7 @@ local rules = {}
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_tld_lookup = require "rspamd_tld_lookup"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
@@ -971,6 +972,12 @@ local function apply_hostname_filter(task, filter, hostname, r)
     local tld = rspamd_util.get_tld(hostname)
     return tld
   elseif filter == 'top' then
+    -- The full public suffix of the hostname (e.g. `com.au`)
+    local suffix = rspamd_tld_lookup.suffix(hostname)
+    if suffix then
+      return suffix
+    end
+    -- No suffix list loaded or nothing matched: use the last label of the eSLD
     local tld = rspamd_util.get_tld(hostname)
     return tld:match('[^.]*$') or tld
   else
@@ -1004,8 +1011,14 @@ local function apply_url_filter(task, filter, url, r)
   if filter == 'tld' then
     return url:get_tld()
   elseif filter == 'top' then
+    -- The full public suffix of the url host (e.g. `com.au`)
+    local suffix = url:get_public_suffix()
+    if suffix then
+      return suffix
+    end
+    -- No suffix list loaded or nothing matched: use the last label of the eSLD
     local tld = url:get_tld()
-    return tld:match('[^.]*$') or tld
+    return tld and (tld:match('[^.]*$') or tld)
   elseif filter == 'full' then
     return url:get_text()
   elseif filter == 'is_phished' then
@@ -1278,7 +1291,7 @@ local function multimap_query_redis(key, task, value, callback)
     srch[#srch + 1] = tostring(value)
     -- IPv6 case
     local maxbits = 128
-    local minbits = 64
+    local minbits = 7
     if value:get_version() == 4 then
       maxbits = 32
       minbits = 8
@@ -1769,7 +1782,9 @@ local function multimap_callback(task, rule)
           end
         end
 
-        return p:is_archive() and det_type == 'archive' and not rule.skip_archives
+        -- A self-extracting archive is a program with files in it
+        return p:is_archive() and (det_type == 'archive' or det_type == 'executable')
+            and not rule.skip_archives
       end
 
       for _, p in fun.iter(fun.filter(filter_parts, parts)) do
@@ -2023,6 +2038,8 @@ local function add_multimap_rule(key, newrule)
         end
       end
 
+      -- Keep the selector string: symbols it needs are registered as dependencies
+      newrule.selector_str = newrule.selector
       newrule.selector = selector
     end
   end
@@ -2075,6 +2092,7 @@ local function add_multimap_rule(key, newrule)
     end
 
     newrule['redis_key'] = selector
+    newrule.redis_selector_str = selector_str
     ret = true
   elseif newrule.type == 'combined' then
     local lua_maps_expressions = require "lua_maps_expressions"
@@ -2397,6 +2415,11 @@ if opts and type(opts) == 'table' then
     })
 
     rule.callback_id = id
+
+    -- Symbols used by the selectors of the rule must be checked before it
+    for _, selector_str in pairs({ rule.selector_str, rule.redis_selector_str }) do
+      lua_selectors.register_dependencies(rspamd_config, rule['symbol'], selector_str)
+    end
 
     if rule['symbols'] then
       -- Find allowed symbols by this map

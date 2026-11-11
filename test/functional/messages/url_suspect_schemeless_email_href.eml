@@ -1,0 +1,11 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Test schemeless email href must not be treated as user in URL
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<p>Quote attribution links are emitted without a mailto: scheme:</p>
+<a href="user.name@example.com">user.name@example.com</a>
+</body>
+</html>

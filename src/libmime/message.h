@@ -38,6 +38,10 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_MISSING_CTE = (1u << 5u),
 	RSPAMD_MIME_PART_NO_TEXT_EXTRACTION = (1u << 6u),
 	RSPAMD_MIME_PART_COMPUTED = (1u << 7u),
+	/* Readable text/plain or text/html that lua_magic took for some format */
+	RSPAMD_MIME_PART_TEXT_CONTENT = (1u << 8u),
+	/* Binary data that clients show as text (text/plain or text/html, or a child without Content-Type) */
+	RSPAMD_MIME_PART_SHOWN_AS_TEXT = (1u << 9u),
 };
 
 enum rspamd_mime_part_type {
@@ -122,6 +126,10 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_RAW (1 << 3)
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED (1 << 4)
 #define RSPAMD_MIME_TEXT_PART_ATTACHMENT (1 << 5)
+#define RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED (1 << 6)
+#define RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED (1 << 7)
+/* Words of the part were left out by the decay that applies to long texts */
+#define RSPAMD_MIME_TEXT_PART_FLAG_WORDS_SAMPLED (1 << 8)
 
 #define IS_TEXT_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_TEXT_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -196,6 +204,15 @@ struct rspamd_message {
 	khash_t(rspamd_url_hash) * urls;
 	struct rspamd_mime_headers_table *raw_headers; /**< list of raw headers						*/
 	struct rspamd_mime_header *headers_order;      /**< order of raw headers							*/
+	unsigned int nheaders;                         /**< total parsed headers across all MIME parts */
+	gboolean headers_limit_reached;
+	unsigned int narchive_files; /**< total archive file metadata entries */
+	gboolean archive_files_limit_reached;
+	unsigned int ntext_newlines; /**< total tracked text newline positions */
+	gboolean text_newlines_limit_reached;
+	struct rspamd_tokenize_budget words_budget; /**< message wide words budget */
+	gboolean text_words_limit_reached;
+	gboolean text_words_processed; /**< per-part words and message-wide averages finalized */
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
@@ -229,6 +246,14 @@ void rspamd_message_process(struct rspamd_task *task);
 void rspamd_message_process_injected_text_part(struct rspamd_task *task,
 											   struct rspamd_mime_text_part *text_part,
 											   uint16_t *cur_url_order);
+
+/**
+ * Returns the HTML part of the multipart/alternative pair that `parts_distance`
+ * is computed for: the first non-attachment HTML part with an alternative
+ * @param task
+ * @return HTML text part (its pair is `alt_text_part`) or NULL
+ */
+struct rspamd_mime_text_part *rspamd_message_get_alternative_html_part(struct rspamd_task *task);
 
 /**
  * Converts string to cte

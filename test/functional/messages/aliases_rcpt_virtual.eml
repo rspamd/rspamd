@@ -1,0 +1,8 @@
+From: Sender <sender@external.com>
+To: virtual@example.com
+Subject: Test cross-domain recipient alias vs forged recipients
+Message-ID: <test-rcpt-virtual@example.com>
+Date: Mon, 01 Jan 2025 10:00:00 +0000
+
+A recipient rewritten to another domain must not make the wire To header
+look forged.

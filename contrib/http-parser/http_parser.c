@@ -1419,18 +1419,11 @@ size_t http_parser_execute (http_parser *parser,
           break;
         }
 
-        if (ch == CR) {
-          parser->state = s_header_almost_done;
-          CALLBACK_DATA(header_field);
-          break;
-        }
-
-        if (ch == LF) {
-          parser->state = s_header_field_start;
-          CALLBACK_DATA(header_field);
-          break;
-        }
-
+        /*
+         * A line without ':' is not a header: the next field would be
+         * reported as the continuation of its name ("X\r\nFoo: bar" as
+         * "XFoo: bar"). Refuse it, as upstream http-parser and nginx do.
+         */
         SET_ERRNO(HPE_INVALID_HEADER_TOKEN);
         goto error;
       }
@@ -1476,6 +1469,12 @@ size_t http_parser_execute (http_parser *parser,
 
           case h_content_length:
             if (!IS_NUM(ch)) {
+              SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+              goto error;
+            }
+
+            if (parser->flags & F_CHUNKED) {
+              /* Both framings given, see h_transfer_encoding_chunked */
               SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
               goto error;
             }
@@ -1539,12 +1538,19 @@ size_t http_parser_execute (http_parser *parser,
               goto error;
             }
 
-            t = parser->content_length;
-            t *= 10;
-            t += ch - '0';
+            /* Overflow? Checked before the multiply: a wrapped result is not
+             * reliably smaller than the value it came from, so comparing the
+             * two afterwards lets some overflowing lengths through. ULLONG_MAX
+             * itself is the "no content length" sentinel and is rejected too.
+             */
+            if (parser->content_length > (ULLONG_MAX - (uint64_t) (ch - '0')) / 10) {
+              SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+              goto error;
+            }
 
-            /* Overflow? */
-            if (t < parser->content_length || t == ULLONG_MAX) {
+            t = parser->content_length * 10 + (uint64_t) (ch - '0');
+
+            if (t == ULLONG_MAX) {
               SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
               goto error;
             }
@@ -1613,6 +1619,15 @@ size_t http_parser_execute (http_parser *parser,
             /* XXX: not needed for rspamd parser->flags |= F_CONNECTION_CLOSE; */
             break;
           case h_transfer_encoding_chunked:
+            if (parser->content_length != ULLONG_MAX) {
+              /* Both framings given: the length is ignored for framing but it
+               * has still been parsed, and a message framed two ways is a
+               * request smuggling vector. Refuse it.
+               */
+              SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+              goto error;
+            }
+
             parser->flags |= F_CHUNKED;
             break;
           default:
@@ -1812,12 +1827,15 @@ size_t http_parser_execute (http_parser *parser,
           goto error;
         }
 
-        t = parser->content_length;
-        t *= 16;
-        t += unhex_val;
+        /* Overflow? Checked before the multiply, see h_content_length above */
+        if (parser->content_length > (ULLONG_MAX - (uint64_t) unhex_val) / 16) {
+          SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+          goto error;
+        }
 
-        /* Overflow? */
-        if (t < parser->content_length || t == ULLONG_MAX) {
+        t = parser->content_length * 16 + (uint64_t) unhex_val;
+
+        if (t == ULLONG_MAX) {
           SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
           goto error;
         }

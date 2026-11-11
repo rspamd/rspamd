@@ -26,6 +26,7 @@
 #include "libserver/maps/map.h"
 #include "libserver/rspamd_symcache.h"
 #include "libutil/cxx/util.hxx"
+#include "lua/lua_common.h"
 
 namespace rspamd::composites {
 
@@ -51,6 +52,84 @@ composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_
 
 	return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
 }// namespace rspamd::composites
+
+/*
+ * Parse the optional `conditions` object (symbol name -> Lua function, coming
+ * through the config UCL tree as UCL_USERDATA closures) and the optional
+ * `depends_on` string/array. Returns false on a malformed definition: the
+ * whole composite must be rejected rather than silently accepted with a
+ * weaker match, since conditions are used as gates.
+ */
+static auto
+composite_parse_conditions(struct rspamd_config *cfg,
+						   std::string_view composite_name,
+						   const ucl_object_t *obj,
+						   rspamd_composite &composite) -> bool
+{
+	const auto *val = ucl_object_lookup(obj, "conditions");
+
+	if (val != nullptr) {
+		if (ucl_object_type(val) != UCL_OBJECT) {
+			msg_err_config("composite %*s: 'conditions' must be an object keyed by symbol name",
+						   (int) composite_name.size(), composite_name.data());
+			return false;
+		}
+
+		auto *it = ucl_object_iterate_new(val);
+		const ucl_object_t *cur;
+
+		while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
+			const auto *sym_name = ucl_object_key(cur);
+			const auto *fd = ucl_object_toclosure(cur);
+
+			if (sym_name == nullptr || fd == nullptr) {
+				msg_err_config("composite %*s: condition for symbol '%s' must be a function",
+							   (int) composite_name.size(), composite_name.data(),
+							   sym_name ? sym_name : "unknown");
+				ucl_object_iterate_free(it);
+				return false;
+			}
+
+			composite.conditions[std::string{sym_name}] = fd->idx;
+		}
+
+		ucl_object_iterate_free(it);
+	}
+
+	val = ucl_object_lookup(obj, "depends_on");
+
+	if (val != nullptr) {
+		if (ucl_object_type(val) == UCL_STRING) {
+			composite.depends_on.emplace_back(ucl_object_tostring(val));
+		}
+		else if (ucl_object_type(val) == UCL_ARRAY) {
+			auto *it = ucl_object_iterate_new(val);
+			const ucl_object_t *cur;
+
+			while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
+				const char *dep_sym = nullptr;
+
+				if (!ucl_object_tostring_safe(cur, &dep_sym)) {
+					msg_err_config("composite %*s: 'depends_on' elements must be strings",
+								   (int) composite_name.size(), composite_name.data());
+					ucl_object_iterate_free(it);
+					return false;
+				}
+
+				composite.depends_on.emplace_back(dep_sym);
+			}
+
+			ucl_object_iterate_free(it);
+		}
+		else {
+			msg_err_config("composite %*s: 'depends_on' must be a string or an array of strings",
+						   (int) composite_name.size(), composite_name.data());
+			return false;
+		}
+	}
+
+	return true;
+}
 
 auto composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj, bool silent_duplicate) -> rspamd_composite *
 {
@@ -95,7 +174,16 @@ auto composites_manager::add_composite(std::string_view composite_name, const uc
 		return nullptr;
 	}
 
+	/* Parse conditions/depends_on before the composite is registered anywhere,
+	 * so a malformed definition is rejected atomically */
+	rspamd_composite parsed_conditions;
+	if (!composite_parse_conditions(cfg, composite_name, obj, parsed_conditions)) {
+		return nullptr;
+	}
+
 	const auto &composite = new_composite(composite_name, expr, composite_expression);
+	composite->conditions = std::move(parsed_conditions.conditions);
+	composite->depends_on = std::move(parsed_conditions.depends_on);
 
 	auto score = std::isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
 	val = ucl_object_lookup(obj, "score");
@@ -498,6 +586,24 @@ void composites_manager::process_dependencies(composites_generation &gen)
 									   composite_dep_callback,
 									   &cbd);
 
+		if (!cbd.needs_second_pass) {
+			/* Symbols consulted by Lua conditions are invisible to the atom
+			 * walk; treat explicit depends_on entries as extra atoms */
+			for (const auto &dep: comp->depends_on) {
+				if (gen.find(dep) != nullptr) {
+					/* Reference to another composite: transitive pass handles it */
+					continue;
+				}
+
+				if (symbol_needs_second_pass(cfg, dep.c_str())) {
+					msg_debug_config("composite '%s' depends on second-pass symbol %s (depends_on)",
+									 comp->sym.c_str(), dep.c_str());
+					cbd.needs_second_pass = true;
+					break;
+				}
+			}
+		}
+
 		if (cbd.needs_second_pass) {
 			second_pass_set.insert(comp);
 			msg_debug_config("composite '%s' marked for second pass (direct dependency)",
@@ -531,6 +637,18 @@ void composites_manager::process_dependencies(composites_generation &gen)
 													   *data->has_dep = true;
 												   }
 											   } }, &trans_data);
+
+			if (!has_second_pass_dep) {
+				/* depends_on may also name other composites */
+				for (const auto &dep: comp->depends_on) {
+					if (auto *dep_comp = gen.find(dep);
+						dep_comp != nullptr &&
+						second_pass_set.contains(const_cast<rspamd_composite *>(dep_comp))) {
+						has_second_pass_dep = true;
+						break;
+					}
+				}
+			}
 
 			if (has_second_pass_dep) {
 				second_pass_set.insert(comp);
@@ -1039,6 +1157,15 @@ auto composites_manager::add_composite_to_staging(composites_generation &staging
 			return nullptr;
 		}
 		composite->policy = p;
+	}
+
+	/*
+	 * Dynamic maps deliver plain UCL text, so `conditions` closures cannot
+	 * arrive through this path; the parser will reject them with an error.
+	 * `depends_on` is fully supported though.
+	 */
+	if (!composite_parse_conditions(cfg, name, obj, *composite)) {
+		return nullptr;
 	}
 
 	/* Replace any existing entry under this name (came from base_gen

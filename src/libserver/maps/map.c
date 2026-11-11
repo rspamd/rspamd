@@ -20,6 +20,7 @@
 #include "config.h"
 #include "map.h"
 #include "map_private.h"
+#include "map_helpers.h"
 #include "libserver/http/http_connection.h"
 #include "libserver/http/http_private.h"
 #include "rspamd.h"
@@ -32,11 +33,7 @@
 
 #include <worker_util.h>
 
-#ifdef SYS_ZSTD
-#include "zstd.h"
-#else
-#include "contrib/zstd/zstd.h"
-#endif
+#include "libutil/compression.h"
 
 #undef MAP_DEBUG_REFS
 #ifdef MAP_DEBUG_REFS
@@ -56,19 +53,11 @@
 #define MAP_RELEASE(x, t) REF_RELEASE(x)
 #endif
 
-enum rspamd_map_periodic_opts {
-	RSPAMD_MAP_SCHEDULE_NORMAL = 0,
-	RSPAMD_MAP_SCHEDULE_ERROR = (1u << 0u),
-	RSPAMD_MAP_SCHEDULE_LOCKED = (1u << 1u),
-	RSPAMD_MAP_SCHEDULE_INIT = (1u << 2u),
-};
-
 static void free_http_cbdata_common(struct http_callback_data *cbd,
 									gboolean plan_new);
 static void free_http_cbdata_dtor(gpointer p);
 static void free_http_cbdata(struct http_callback_data *cbd);
 static void rspamd_map_process_periodic(struct map_periodic_cbdata *cbd);
-static void rspamd_map_schedule_periodic(struct rspamd_map *map, int how);
 static gboolean read_map_file_chunks(struct rspamd_map *map,
 									 struct map_cb_data *cbdata,
 									 const char *fname,
@@ -236,10 +225,14 @@ http_map_error(struct rspamd_http_connection *conn,
 	map = cbd->map;
 
 	if (cbd->periodic) {
-		cbd->periodic->errored = TRUE;
+		/*
+		 * A reply over the size limit comes back the same way next time;
+		 * anything else here (timeouts, resets, TLS) can go away by itself
+		 */
+		cbd->periodic->errored = (err && err->code == 413) ? RSPAMD_MAP_ERROR_PERMANENT : RSPAMD_MAP_ERROR_TRANSIENT;
 		msg_err_map("error reading %s(%s): "
 					"connection with http server terminated incorrectly: %e",
-					cbd->bk->uri,
+					cbd->bk->uri_log,
 					cbd->addr ? rspamd_inet_address_to_string_pretty(cbd->addr) : "",
 					err);
 
@@ -313,6 +306,105 @@ rspamd_map_cache_cb(struct ev_loop *loop, ev_timer *w, int revents)
 		ev_timer_stop(loop, &cache_cbd->timeout);
 		g_free(cache_cbd);
 	}
+}
+
+/*
+ * Zero and a date in the past are valid and ask to retry at once, so the
+ * validity is returned apart from the value
+ */
+gboolean
+rspamd_map_parse_retry_after(const rspamd_ftok_t *hdr, time_t now, double *delay)
+{
+	gulong delta;
+	time_t hdate;
+
+	if (hdr == NULL || hdr->len == 0) {
+		return FALSE;
+	}
+
+	if (rspamd_strtoul(hdr->begin, hdr->len, &delta)) {
+		*delay = delta;
+
+		return TRUE;
+	}
+
+	hdate = rspamd_http_parse_date(hdr->begin, hdr->len);
+
+	if (hdate != (time_t) -1) {
+		*delay = hdate > now ? hdate - now : 0;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+enum rspamd_map_error_class
+rspamd_map_http_error_class(int code, bool has_retry_after)
+{
+	if (code == 429) {
+		/* Rate limited: the source asks us to slow down either way */
+		return has_retry_after ? RSPAMD_MAP_ERROR_TRANSIENT : RSPAMD_MAP_ERROR_PERMANENT;
+	}
+
+	if (code == 408 || code >= 500) {
+		/* Overloaded or broken server, gateway problems */
+		return RSPAMD_MAP_ERROR_TRANSIENT;
+	}
+
+	/* Missing, forbidden, redirected elsewhere or otherwise refused */
+	return RSPAMD_MAP_ERROR_PERMANENT;
+}
+
+double
+rspamd_map_error_delay(double poll_timeout,
+					   enum rspamd_map_error_class cls,
+					   unsigned int streak,
+					   bool has_data,
+					   bool has_retry_after,
+					   double retry_after)
+{
+	/*
+	 * Failures that the source reports itself back off hard to keep the load
+	 * off it. Network failures of a map that has nothing to serve are retried
+	 * soon and never slower than the normal poll, which is the load a healthy
+	 * source gets anyway; with data at hand they back off up to the same limit
+	 * as the source failures, as there is no hurry.
+	 */
+	const double error_mult = 20.0, transient_initial = 10.0, min_delay = 2.0;
+	double max_delay = MAX(poll_timeout * error_mult, min_delay);
+	double delay, cap;
+
+	if (has_retry_after) {
+		return MIN(MAX(retry_after, min_delay), max_delay);
+	}
+
+	if (cls == RSPAMD_MAP_ERROR_PERMANENT) {
+		/*
+		 * Try once more at the normal pace: the source may be published a
+		 * moment after we have started
+		 */
+		if (!has_data && streak <= 1) {
+			return poll_timeout;
+		}
+
+		return max_delay;
+	}
+
+	if (has_data) {
+		delay = poll_timeout;
+		cap = max_delay;
+	}
+	else {
+		delay = MIN(transient_initial, poll_timeout);
+		cap = poll_timeout;
+	}
+
+	for (unsigned int i = 1; i < streak && delay < cap; i++) {
+		delay *= 2.0;
+	}
+
+	return MIN(delay, cap);
 }
 
 /**
@@ -466,13 +558,13 @@ rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
 	struct rspamd_map *map = bk ? bk->map : NULL;
 
 	if (!bk->has_secretbox_key) {
-		msg_err_map("%s: secretbox key is not configured", bk->uri);
+		msg_err_map("%s: secretbox key is not configured", bk->uri_log);
 		return FALSE;
 	}
 
 	if (inlen < crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES) {
 		msg_err_map("%s: too short buffer for secretbox: %z bytes (need >= %d)",
-					bk->uri, inlen, (int) (crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES));
+					bk->uri_log, inlen, (int) (crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES));
 		return FALSE;
 	}
 
@@ -482,7 +574,7 @@ rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
 
 	if (clen < crypto_secretbox_MACBYTES) {
 		msg_err_map("%s: invalid ciphertext length for secretbox: %z (< MAC %d)",
-					bk->uri, clen, (int) crypto_secretbox_MACBYTES);
+					bk->uri_log, clen, (int) crypto_secretbox_MACBYTES);
 		return FALSE;
 	}
 
@@ -494,7 +586,7 @@ rspamd_map_secretbox_decrypt_buf(struct rspamd_map_backend *bk,
 
 	if (crypto_secretbox_open_easy(pt, ct, clen, nonce, bk->secretbox_key) != 0) {
 		msg_err_map("%s: secretbox authentication failed (nonce_len=%d, ct_len=%z)",
-					bk->uri, (int) crypto_secretbox_NONCEBYTES, clen);
+					bk->uri_log, (int) crypto_secretbox_NONCEBYTES, clen);
 		g_free(pt);
 		return FALSE;
 	}
@@ -586,6 +678,16 @@ rspamd_map_payload_is_zstd(const unsigned char *p, gsize len)
 	return FALSE;
 }
 
+static inline gsize
+rspamd_map_effective_max_size(struct http_callback_data *cbd)
+{
+	if (cbd->data->max_size > 0) {
+		return cbd->data->max_size;
+	}
+
+	return cbd->map->cfg ? cbd->map->cfg->max_map_size : 0;
+}
+
 static void
 rspamd_map_try_load_secretbox_key(struct rspamd_config *cfg,
 								  struct rspamd_map_backend *bk)
@@ -625,6 +727,18 @@ http_map_finish(struct rspamd_http_connection *conn,
 	char next_check_date[128];
 	unsigned char *in = NULL;
 	gsize dlen = 0;
+	/*
+	 * Validators of the data we have: a new response updates them before it
+	 * is decoded and cached, so they are restored if that fails, otherwise
+	 * the next conditional request would skip the update we never applied
+	 */
+	time_t saved_last_modified = 0, saved_last_checked = 0;
+	rspamd_fstring_t *saved_etag = NULL;
+	gboolean validators_saved = FALSE;
+	/* Bad content stays bad until the source changes; local failures may not */
+	enum rspamd_map_error_class err_class = RSPAMD_MAP_ERROR_PERMANENT;
+	gboolean has_retry_after = FALSE;
+	double retry_after = 0;
 
 	map = cbd->map;
 	bk = cbd->bk;
@@ -651,6 +765,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 
 		/* This code is executed when we are actually reading a map */
+		saved_last_checked = cbd->data->last_checked;
+		saved_last_modified = cbd->data->last_modified;
+		saved_etag = cbd->data->etag ? rspamd_fstring_new_init(cbd->data->etag->str, cbd->data->etag->len) : NULL;
+		validators_saved = TRUE;
 		cbd->data->last_checked = msg->date;
 
 		if (msg->last_modified) {
@@ -678,6 +796,23 @@ http_map_finish(struct rspamd_http_connection *conn,
 			msg_err_map("cannot read tempfile %s: %s",
 						cbd->shmem_data->shm_name,
 						strerror(errno));
+			err_class = RSPAMD_MAP_ERROR_TRANSIENT;
+			goto err;
+		}
+
+		/*
+		 * `dlen` is the size of the shared memory segment that is used as a
+		 * growing buffer for the HTTP input, so it can be (and for chunked
+		 * replies usually is) larger than the body itself. Everything past
+		 * `cbd->data_len` is garbage: the raw tail of the last socket read plus
+		 * zero padding. Hence, `dlen` is only valid for `munmap`, whilst all
+		 * payload processing must use `cbd->data_len`.
+		 */
+		if (dlen < cbd->data_len) {
+			msg_err_map("cannot read tempfile %s: truncated length %z, %z expected",
+						cbd->shmem_data->shm_name,
+						dlen, cbd->data_len);
+			err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 			goto err;
 		}
 
@@ -771,82 +906,56 @@ http_map_finish(struct rspamd_http_connection *conn,
 		/* Prepare payload: decrypt (if needed) then optionally decompress */
 		unsigned char *payload = NULL;
 		gsize payload_len = 0;
-		unsigned char *final_out = NULL;
 
 		if (cbd->bk->is_encrypted) {
-			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, dlen, &payload, &payload_len)) {
-				msg_err_map("%s(%s): cannot decrypt data", cbd->bk->uri,
+			if (!rspamd_map_secretbox_decrypt_buf(cbd->bk, in, cbd->data_len, &payload, &payload_len)) {
+				msg_err_map("%s(%s): cannot decrypt data", cbd->bk->uri_log,
 							rspamd_inet_address_to_string_pretty(cbd->addr));
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
 				goto err;
 			}
 		}
 		else {
-			/* Use mapped buffer directly */
+			/* Use mapped buffer directly, limited to the real body length */
 			payload = (unsigned char *) in;
-			payload_len = dlen;
+			payload_len = cbd->data_len;
 		}
 
 		/* If compressed flag is set OR payload looks like zstd, decompress */
 		if (cbd->bk->is_compressed || rspamd_map_payload_is_zstd(payload, payload_len)) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			gsize outlen, r;
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			decompressed = rspamd_zstd_decompress_complete(NULL, payload, payload_len,
+														   max_size, &derr);
 
-			zin.pos = 0;
-			zin.src = payload;
-			zin.size = payload_len;
-
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+			if (decompressed == NULL) {
+				msg_err_map("%s(%s): cannot decompress data: %s",
+							cbd->bk->uri_log,
+							rspamd_inet_address_to_string_pretty(cbd->addr),
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
+					rspamd_explicit_memzero(payload, payload_len);
+					g_free(payload);
+				}
+				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				goto err;
 			}
 
-			final_out = g_malloc(outlen);
-
-			zout.dst = final_out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					msg_err_map("%s(%s): cannot decompress data: %s",
-								cbd->bk->uri,
-								rspamd_inet_address_to_string_pretty(cbd->addr),
-								ZSTD_getErrorName(r));
-					ZSTD_freeDStream(zstream);
-					g_free(final_out);
-					if (cbd->bk->is_encrypted && payload && payload != (unsigned char *) in) {
-						rspamd_explicit_memzero(payload, payload_len);
-						g_free(payload);
-					}
-					MAP_RELEASE(cbd->shmem_data, "shmem_data");
-					goto err;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1.0;
-					final_out = g_realloc(zout.dst, zout.size);
-					zout.dst = final_out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
 			msg_info_map("%s(%s): read map data %z bytes compressed, "
 						 "%z uncompressed, next check at %s",
 						 cbd->bk->uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
-						 payload_len, zout.pos, next_check_date);
-			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, final_out, zout.pos)) {
-				msg_err_map("%s: failed to save cache file", bk->uri);
-				g_free(final_out);
+						 payload_len, decompressed->len, next_check_date);
+			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data,
+												  (const unsigned char *) decompressed->str,
+												  decompressed->len)) {
+				msg_err_map("%s: failed to save cache file", bk->uri_log);
+				rspamd_fstring_free(decompressed);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 				goto err;
 			}
 
@@ -860,9 +969,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 								   &cbd->periodic->cbdata, TRUE);
 			}
 			else {
-				map->read_callback(final_out, zout.pos, &cbd->periodic->cbdata, TRUE);
+				map->read_callback(decompressed->str, decompressed->len,
+								   &cbd->periodic->cbdata, TRUE);
 			}
-			g_free(final_out);
+			rspamd_fstring_free(decompressed);
 		}
 		else {
 			msg_info_map("%s(%s): read map data %z bytes, next check at %s",
@@ -871,8 +981,9 @@ http_map_finish(struct rspamd_http_connection *conn,
 						 payload_len, next_check_date);
 
 			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, payload, payload_len)) {
-				msg_err_map("%s: failed to save cache file", bk->uri);
+				msg_err_map("%s: failed to save cache file", bk->uri_log);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 				goto err;
 			}
 
@@ -903,6 +1014,11 @@ http_map_finish(struct rspamd_http_connection *conn,
 		g_atomic_int_set(&data->cache->available, 1);
 		g_atomic_int_set(&map->shared->loaded, 1);
 		g_atomic_int_set(&map->shared->cached, 1);
+
+		/* The new validators describe the data we have now */
+		if (saved_etag) {
+			rspamd_fstring_free(saved_etag);
+		}
 
 		rspamd_map_process_periodic(cbd->periodic);
 	}
@@ -983,8 +1099,31 @@ http_map_finish(struct rspamd_http_connection *conn,
 		rspamd_map_process_periodic(cbd->periodic);
 	}
 	else {
-		msg_info_map("cannot load map %s from %s: HTTP error %d",
-					 bk->uri, cbd->data->host, msg->code);
+		has_retry_after = rspamd_map_parse_retry_after(
+			rspamd_http_message_find_header(msg, "Retry-After"),
+			msg->date ? msg->date : (time_t) rspamd_get_calendar_ticks(),
+			&retry_after);
+		err_class = rspamd_map_http_error_class(msg->code, has_retry_after);
+
+		if (msg->code != 429 && msg->code != 503) {
+			/* Only these replies ask a client to come back at a given time */
+			has_retry_after = FALSE;
+			retry_after = 0;
+		}
+
+		if (has_retry_after) {
+			msg_info_map("cannot load map %s from %s: HTTP error %d (%s, "
+						 "retry after %.0f seconds requested)",
+						 bk->uri, cbd->data->host, msg->code,
+						 err_class == RSPAMD_MAP_ERROR_PERMANENT ? "permanent" : "transient",
+						 retry_after);
+		}
+		else {
+			msg_info_map("cannot load map %s from %s: HTTP error %d (%s)",
+						 bk->uri, cbd->data->host, msg->code,
+						 err_class == RSPAMD_MAP_ERROR_PERMANENT ? "permanent" : "transient");
+		}
+
 		goto err;
 	}
 
@@ -992,7 +1131,25 @@ http_map_finish(struct rspamd_http_connection *conn,
 	return 0;
 
 err:
-	cbd->periodic->errored = 1;
+	if (in != NULL) {
+		/* Failed after the shmem segment has been mapped */
+		munmap(in, dlen);
+	}
+
+	if (validators_saved) {
+		cbd->data->last_checked = saved_last_checked;
+		cbd->data->last_modified = saved_last_modified;
+
+		if (cbd->data->etag) {
+			rspamd_fstring_free(cbd->data->etag);
+		}
+
+		cbd->data->etag = saved_etag;
+	}
+
+	cbd->periodic->errored = err_class;
+	cbd->periodic->has_retry_after = has_retry_after;
+	cbd->periodic->retry_after = retry_after;
 	rspamd_map_process_periodic(cbd->periodic);
 	MAP_RELEASE(cbd, "http_callback_data");
 
@@ -1164,8 +1321,14 @@ rspamd_map_check_file_sig(const char *fname,
 		pk = rspamd_pubkey_ref(bk->trusted_pubkey);
 	}
 
+	/*
+	 * `fname` is a filesystem path here (the same one we have just read the
+	 * `.pub` counterpart from), so it must be mapped as a file: shm_open(2)
+	 * operates on a flat namespace and rejects such names outright
+	 */
 	rspamd_snprintf(fpath, sizeof(fpath), "%s.sig", fname);
-	data = rspamd_shmem_xmap(fpath, PROT_READ, &len);
+	len = 0;
+	data = rspamd_file_xmap(fpath, PROT_READ, &len, TRUE);
 
 	if (data == NULL) {
 		msg_err_map("can't open signature %s: %s", fpath, strerror(errno));
@@ -1237,7 +1400,8 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 
 	if (len > 0) {
 		if (map->no_file_read) {
-			/* We just call read callback with backend name */
+			/* We just call read callback with backend name, a plain file */
+			map->no_file_read_offset = 0;
 			map->read_callback(data->filename, strlen(data->filename),
 							   &periodic->cbdata, TRUE);
 		}
@@ -1269,61 +1433,33 @@ read_map_file(struct rspamd_map *map, struct file_map_data *data,
 
 				/* If compressed flag is set OR payload looks like zstd, decompress */
 				if (bk->is_compressed || rspamd_map_payload_is_zstd((const unsigned char *) payload, payload_len)) {
-					ZSTD_DStream *zstream;
-					ZSTD_inBuffer zin;
-					ZSTD_outBuffer zout;
-					unsigned char *out;
-					gsize outlen, r;
+					GError *derr = NULL;
+					rspamd_fstring_t *decompressed;
 
-					zstream = ZSTD_createDStream();
-					ZSTD_initDStream(zstream);
+					decompressed = rspamd_zstd_decompress_complete(NULL, payload, payload_len,
+																   map->cfg ? map->cfg->max_map_size : 0,
+																   &derr);
 
-					zin.pos = 0;
-					zin.src = payload;
-					zin.size = payload_len;
-
-					if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-						outlen = ZSTD_DStreamOutSize();
+					if (decompressed == NULL) {
+						msg_err_map("%s: cannot decompress data: %s",
+									data->filename,
+									derr ? derr->message : "unknown error");
+						g_clear_error(&derr);
+						if (dec) {
+							rspamd_explicit_memzero(dec, declen);
+							g_free(dec);
+						}
+						munmap(bytes, len);
+						return FALSE;
 					}
 
-					out = g_malloc(outlen);
-
-					zout.dst = out;
-					zout.pos = 0;
-					zout.size = outlen;
-
-					while (zin.pos < zin.size) {
-						r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-						if (ZSTD_isError(r)) {
-							msg_err_map("%s: cannot decompress data: %s",
-										data->filename,
-										ZSTD_getErrorName(r));
-							ZSTD_freeDStream(zstream);
-							g_free(out);
-							if (dec) {
-								rspamd_explicit_memzero(dec, declen);
-								g_free(dec);
-							}
-							munmap(bytes, len);
-							return FALSE;
-						}
-
-						if (zout.pos == zout.size) {
-							/* We need to extend output buffer */
-							zout.size = zout.size * 2 + 1;
-							out = g_realloc(zout.dst, zout.size);
-							zout.dst = out;
-						}
-					}
-
-					ZSTD_freeDStream(zstream);
 					msg_info_map("%s: read map data, %z bytes compressed, "
 								 "%z uncompressed)",
 								 data->filename,
-								 payload_len, zout.pos);
-					map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-					g_free(out);
+								 payload_len, decompressed->len);
+					map->read_callback(decompressed->str, decompressed->len,
+									   &periodic->cbdata, TRUE);
+					rspamd_fstring_free(decompressed);
 
 					if (dec) {
 						rspamd_explicit_memzero(dec, declen);
@@ -1386,57 +1522,29 @@ read_map_static(struct rspamd_map *map, struct static_map_data *data,
 
 	if (len > 0) {
 		if (bk->is_compressed) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			decompressed = rspamd_zstd_decompress_complete(NULL, bytes, len,
+														   map->cfg ? map->cfg->max_map_size : 0,
+														   &derr);
 
-			zin.pos = 0;
-			zin.src = bytes;
-			zin.size = len;
+			if (decompressed == NULL) {
+				msg_err_map("%s: cannot decompress data: %s",
+							map->name,
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
 
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+				return FALSE;
 			}
 
-			out = g_malloc(outlen);
-
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					msg_err_map("%s: cannot decompress data: %s",
-								map->name,
-								ZSTD_getErrorName(r));
-					ZSTD_freeDStream(zstream);
-					g_free(out);
-
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
 			msg_info_map("%s: read map data, %z bytes compressed, "
 						 "%z uncompressed)",
 						 map->name,
-						 len, zout.pos);
-			map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-			g_free(out);
+						 len, decompressed->len);
+			map->read_callback(decompressed->str, decompressed->len,
+							   &periodic->cbdata, TRUE);
+			rspamd_fstring_free(decompressed);
 		}
 		else {
 			msg_info_map("%s: read map data, %z bytes",
@@ -1460,12 +1568,41 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 	struct rspamd_map *map = periodic->map;
 	msg_debug_map("periodic dtor %p; need_modify=%d", periodic, periodic->need_modify);
 
+	if (!periodic->errored && map->error_class != RSPAMD_MAP_ERROR_NONE) {
+		msg_info_map("%s: map source has recovered after %ud failed updates",
+					 map->name, map->error_streak);
+		map->error_class = RSPAMD_MAP_ERROR_NONE;
+		map->error_streak = 0;
+		map->error_has_retry_after = false;
+		map->error_retry_after = 0;
+	}
+
 	if (periodic->need_modify || periodic->cbdata.errored) {
 		/* Need to notify the real data structure */
 		periodic->map->fin_callback(&periodic->cbdata, periodic->map->user_data);
 
+		if (periodic->need_modify && !periodic->cbdata.errored &&
+			periodic->cbdata.cur_data != NULL) {
+			map->has_data = true;
+		}
+
 		if (map->on_load_function) {
 			map->on_load_function(map, map->on_load_ud);
+		}
+
+		/*
+		 * A large regexp map is queued for hyperscan compilation by the read
+		 * callback above. That queue is process local and hs_helper inherits
+		 * merely the maps that have been read before the fork, so a map read
+		 * later on would stay on the PCRE fallback forever unless we compile
+		 * it here. Do it in the primary controller only, as every worker reads
+		 * the same maps and would otherwise duplicate the work.
+		 */
+		if (rspamd_worker_is_primary_controller(map->wrk)) {
+			rspamd_regexp_map_compile_pending_async(map->wrk, map->event_loop,
+													map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR,
+													RSPAMD_REGEXP_MAP_PENDING_OWN_ONLY |
+														RSPAMD_REGEXP_MAP_PENDING_INSTALL);
 		}
 	}
 	else {
@@ -1496,14 +1633,13 @@ rspamd_map_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 	MAP_RELEASE(cbd, "periodic");
 }
 
-static void
-rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
+void rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 {
-	const double error_mult = 20.0, lock_mult = 0.1;
+	const double lock_mult = 0.1;
 	static const double min_timer_interval = 2.0;
 	const char *reason = "unknown reason";
 	double jittered_sec;
-	double timeout;
+	double timeout, error_delay = 0;
 	struct map_periodic_cbdata *cbd;
 
 	if (map->scheduled_check || (map->wrk &&
@@ -1522,7 +1658,22 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 
 	map->seen = true;
 
-	if (map->non_trivial && map->next_check != 0) {
+	if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
+		/*
+		 * The failure decides when to try again. The expiry may come from
+		 * another backend of this map that has replied fine before this one
+		 * failed, and must not postpone the retry, nor hasten it past what
+		 * the failure (e.g. Retry-After) asks for
+		 */
+		map->next_check = 0;
+		error_delay = rspamd_map_error_delay(map->poll_timeout, map->error_class,
+											 map->error_streak, map->has_data,
+											 map->error_has_retry_after,
+											 map->error_retry_after);
+		jittered_sec = rspamd_time_jitter(error_delay, 0);
+		reason = "errored scheduled check";
+	}
+	else if (map->non_trivial && map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks();
 		map->next_check = 0;
 
@@ -1530,11 +1681,7 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 			/* Early check case, jitter */
 			double poll_timeout = map->poll_timeout;
 
-			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
-				poll_timeout = map->poll_timeout * error_mult;
-				reason = "early active non-trivial check (after error)";
-			}
-			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
+			if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				poll_timeout = map->poll_timeout * lock_mult;
 				reason = "early active non-trivial check (after being locked)";
 			}
@@ -1546,15 +1693,8 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 		}
 		else if (timeout <= 0) {
 			/* Data is already expired, need to check */
-			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
-				/* In case of error we still need to increase delay */
-				jittered_sec = map->poll_timeout * error_mult;
-				reason = "expired non-trivial data (after error)";
-			}
-			else {
-				jittered_sec = 0.0;
-				reason = "expired non-trivial data";
-			}
+			jittered_sec = 0.0;
+			reason = "expired non-trivial data";
 		}
 		else {
 			/* No need to check now, wait till next_check */
@@ -1567,24 +1707,40 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 		timeout = map->poll_timeout;
 
 		if (how & RSPAMD_MAP_SCHEDULE_INIT) {
-			if (map->non_trivial && map->active_http) {
+			if (how & RSPAMD_MAP_SCHEDULE_TRUNCATED) {
+				/*
+				 * Editors that save in place truncate the file and write it
+				 * afterwards; give the write a chance to finish instead of
+				 * swapping an empty map in for that window. A further stat
+				 * event reschedules the check at once when the size changes.
+				 */
+				timeout = min_timer_interval;
+				reason = "map file truncated, waiting for the write to finish";
+			}
+			else if (map->non_trivial && map->active_http) {
 				/* Spill maps load to get better chances to hit ssl cache */
 				timeout = rspamd_time_jitter(0.0, 2.0);
+				reason = "init scheduled check";
 			}
 			else {
 				timeout = 0.0;
+				reason = "init scheduled check";
 			}
-
-			reason = "init scheduled check";
 		}
 		else {
-			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
-				timeout = map->poll_timeout * error_mult;
-				reason = "errored scheduled check";
-			}
-			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
+			if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				timeout = map->poll_timeout * lock_mult;
 				reason = "locked scheduled check";
+			}
+			else if (!map->active_http && !map->file_only && !map->has_data) {
+				/*
+				 * A passive worker that has not read the map yet: the active
+				 * worker is expected to fetch it and announce via the shared
+				 * cache, so check that cache frequently instead of sleeping
+				 * through the whole poll interval while serving no data
+				 */
+				timeout = min_timer_interval;
+				reason = "cold passive HTTP map wait";
 			}
 			else {
 				reason = "normal scheduled check";
@@ -1625,6 +1781,15 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 	cbd->ev.data = cbd;
 	ev_timer_init(&cbd->ev, rspamd_map_periodic_callback, jittered_sec, 0.0);
 	ev_timer_start(map->event_loop, &cbd->ev);
+
+	if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
+		msg_info_map("%s: %s failure #%ud%s, next try in %.1f seconds",
+					 map->name,
+					 map->error_class == RSPAMD_MAP_ERROR_PERMANENT ? "permanent" : "transient",
+					 map->error_streak,
+					 map->has_data ? "" : " with no data loaded",
+					 jittered_sec);
+	}
 
 	msg_debug_map("schedule new periodic event %p in %.3f seconds for %s; reason: %s",
 				  cbd, jittered_sec, map->name, reason);
@@ -1711,7 +1876,11 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 			/* We could not resolve host, so cowardly fail here */
 			msg_err_map("cannot resolve %s: %s", cbd->data->host,
 						rdns_strerror(reply->code));
-			cbd->periodic->errored = 1;
+			/*
+			 * Even NXDOMAIN: the name of a service that starts along with us
+			 * is commonly not registered in DNS yet
+			 */
+			cbd->periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
 			rspamd_map_process_periodic(cbd->periodic);
 		}
 		else {
@@ -1751,6 +1920,11 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 													  cbd->addr);
 
 		if (cbd->conn != NULL) {
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+
+			if (max_size > 0) {
+				rspamd_http_connection_set_max_size(cbd->conn, max_size);
+			}
 			/* Apply optional staged timeouts and keepalive tuning */
 			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
 				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
@@ -1784,10 +1958,10 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 			}
 			else {
 				/* Nothing else left */
-				cbd->periodic->errored = TRUE;
+				cbd->periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
 				msg_err_map("error reading %s(%s): "
 							"connection with http server terminated incorrectly: %s",
-							cbd->bk->uri,
+							cbd->bk->uri_log,
 							cbd->addr ? rspamd_inet_address_to_string_pretty(cbd->addr) : "",
 							strerror(errno));
 
@@ -1819,7 +1993,7 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		struct stat st;
 
 		if (map->cfg->maps_cache_dir == NULL || map->cfg->maps_cache_dir[0] == '\0') {
-			msg_err_map("%s: no maps cache dir configured for no_file_read map", bk->uri);
+			msg_err_map("%s: no maps cache dir configured for no_file_read map", bk->uri_log);
 			return FALSE;
 		}
 
@@ -1868,7 +2042,12 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 	 */
 	len = data->cache->len;
 
-	if (bk->is_encrypted || bk->is_compressed) {
+	/*
+	 * Detect zstd without the compressed flag too, as the fetching process
+	 * does: otherwise the other workers would parse compressed bytes
+	 */
+	if (bk->is_encrypted || bk->is_compressed ||
+		rspamd_map_payload_is_zstd((const unsigned char *) in, len)) {
 		unsigned char *payload = (unsigned char *) in;
 		gsize payload_len = len;
 		unsigned char *dec = NULL;
@@ -1885,61 +2064,33 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 
 		/* If compressed flag is set OR payload looks like zstd, decompress */
 		if (bk->is_compressed || rspamd_map_payload_is_zstd(payload, payload_len)) {
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			unsigned char *out;
-			gsize outlen, r;
+			GError *derr = NULL;
+			rspamd_fstring_t *decompressed;
 
-			zstream = ZSTD_createDStream();
-			ZSTD_initDStream(zstream);
+			decompressed = rspamd_zstd_decompress_complete(NULL, payload, payload_len,
+														   map->cfg ? map->cfg->max_map_size : 0,
+														   &derr);
 
-			zin.pos = 0;
-			zin.src = payload;
-			zin.size = payload_len;
-
-			if ((outlen = ZSTD_getDecompressedSize(zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize();
+			if (decompressed == NULL) {
+				msg_err_map("%s: cannot decompress data: %s",
+							bk->uri_log,
+							derr ? derr->message : "unknown error");
+				g_clear_error(&derr);
+				if (dec) {
+					rspamd_explicit_memzero(dec, declen);
+					g_free(dec);
+				}
+				munmap(in, mmap_len);
+				return FALSE;
 			}
 
-			out = g_malloc(outlen);
-
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream(zstream, &zout, &zin);
-
-				if (ZSTD_isError(r)) {
-					msg_err_map("%s: cannot decompress data: %s",
-								bk->uri,
-								ZSTD_getErrorName(r));
-					ZSTD_freeDStream(zstream);
-					g_free(out);
-					if (dec) {
-						rspamd_explicit_memzero(dec, declen);
-						g_free(dec);
-					}
-					munmap(in, mmap_len);
-					return FALSE;
-				}
-
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc(zout.dst, zout.size);
-					zout.dst = out;
-				}
-			}
-
-			ZSTD_freeDStream(zstream);
 			msg_info_map("%s: read map data cached %z bytes compressed, "
 						 "%z uncompressed",
 						 bk->uri,
-						 payload_len, zout.pos);
-			map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
-			g_free(out);
+						 payload_len, decompressed->len);
+			map->read_callback(decompressed->str, decompressed->len,
+							   &periodic->cbdata, TRUE);
+			rspamd_fstring_free(decompressed);
 			if (dec) {
 				rspamd_explicit_memzero(dec, declen);
 				g_free(dec);
@@ -2395,7 +2546,8 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 	if (g_atomic_int_get(&data->cache->available) == 1) {
 		/* Read cached data */
 		if (check) {
-			if (data->last_modified < data->cache->last_modified) {
+			if (data->last_modified < data->cache->last_modified ||
+				!map->has_data) {
 				msg_info_map("need to reread cached map triggered by %s "
 							 "(%d our modify time, %d cached modify time)",
 							 bk->uri,
@@ -2435,6 +2587,33 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 		}
 	}
 	else if (!map->active_http) {
+		if (g_atomic_int_get(&map->shared->cached) == 1) {
+			/*
+			 * The shm cache is not available (e.g. the active worker is
+			 * re-downloading the map), but a cache file has already been
+			 * saved on disk; use that file instead of waiting for the next
+			 * shm cache announcement
+			 */
+			if (check && !map->has_data) {
+				msg_info_map("%s: has no data but the map is saved in the "
+							 "cache file; schedule loading from that file",
+							 bk->uri);
+				periodic->need_modify = TRUE;
+				periodic->cur_backend = 0;
+				rspamd_map_process_periodic(periodic);
+
+				return;
+			}
+			else if (!check && rspamd_map_read_http_cached_file(map, bk, data,
+																&periodic->cbdata)) {
+				/* Switch to the next backend */
+				periodic->cur_backend++;
+				rspamd_map_process_periodic(periodic);
+
+				return;
+			}
+		}
+
 		/* Switch to the next backend */
 		periodic->cur_backend++;
 		rspamd_map_process_periodic(periodic);
@@ -2481,6 +2660,11 @@ check:
 			addr);
 
 		if (cbd->conn != NULL) {
+			gsize max_size = rspamd_map_effective_max_size(cbd);
+
+			if (max_size > 0) {
+				rspamd_http_connection_set_max_size(cbd->conn, max_size);
+			}
 			/* Apply optional staged timeouts and keepalive tuning */
 			if (cbd->data->connect_timeout > 0 || cbd->data->ssl_timeout > 0 ||
 				cbd->data->write_timeout > 0 || cbd->data->read_timeout > 0) {
@@ -2503,6 +2687,9 @@ check:
 		else {
 			msg_warn_map("cannot load map: cannot connect to %s: %s",
 						 data->host, strerror(errno));
+			/* Must reach the scheduler, or the map is never polled again */
+			periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
+			rspamd_map_process_periodic(periodic);
 			MAP_RELEASE(cbd, "http_callback_data");
 		}
 
@@ -2531,13 +2718,23 @@ check:
 		else if (nreq == 1) {
 			cbd->stage = http_map_resolve_host1;
 		}
+		else {
+			msg_err_map("cannot load map: cannot send DNS requests for %s",
+						data->host);
+			periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
+			rspamd_map_process_periodic(periodic);
+			MAP_RELEASE(cbd, "http_callback_data");
+
+			return;
+		}
 
 		map->tmp_dtor = free_http_cbdata_dtor;
 		map->tmp_dtor_data = cbd;
 	}
 	else {
 		msg_warn_map("cannot load map: DNS resolver is not initialized");
-		cbd->periodic->errored = TRUE;
+		periodic->errored = RSPAMD_MAP_ERROR_PERMANENT;
+		rspamd_map_process_periodic(periodic);
 	}
 
 	MAP_RELEASE(cbd, "http_callback_data");
@@ -2633,7 +2830,8 @@ rspamd_map_file_read_callback(struct map_periodic_cbdata *periodic)
 	msg_info_map("rereading map file %s", data->filename);
 
 	if (!read_map_file(map, data, bk, periodic)) {
-		periodic->errored = TRUE;
+		/* The stat watcher rereads the file as soon as it changes */
+		periodic->errored = RSPAMD_MAP_ERROR_PERMANENT;
 	}
 
 	/* Switch to the next backend */
@@ -2656,7 +2854,7 @@ rspamd_map_static_read_callback(struct map_periodic_cbdata *periodic)
 	msg_info_map("rereading static map");
 
 	if (!read_map_static(map, data, bk, periodic)) {
-		periodic->errored = TRUE;
+		periodic->errored = RSPAMD_MAP_ERROR_PERMANENT;
 	}
 
 	/* Switch to the next backend */
@@ -2673,19 +2871,21 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 	map = cbd->map;
 	map->scheduled_check = NULL;
 
-	/* For each backend we need to check for modifications */
-	if (cbd->cur_backend >= cbd->map->backends->len) {
-		/* Last backend */
-		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
-					  cbd->map->backends->len);
-		MAP_RELEASE(cbd, "periodic");
-
-		return;
-	}
-
-	bk = g_ptr_array_index(map->backends, cbd->cur_backend);
-
+	/*
+	 * Check for an error first: a failure of the last backend must reach the
+	 * consumer too, or it would install partial data in place of the map
+	 */
 	if (cbd->errored) {
+		/* The retry delay grows with consecutive failures of the same kind */
+		if (map->error_class != cbd->errored) {
+			map->error_class = cbd->errored;
+			map->error_streak = 0;
+		}
+
+		map->error_streak++;
+		map->error_has_retry_after = cbd->has_retry_after;
+		map->error_retry_after = cbd->retry_after;
+
 		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
@@ -2698,6 +2898,18 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 		return;
 	}
+
+	/* For each backend we need to check for modifications */
+	if (cbd->cur_backend >= cbd->map->backends->len) {
+		/* Last backend */
+		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
+					  cbd->map->backends->len);
+		MAP_RELEASE(cbd, "periodic");
+
+		return;
+	}
+
+	bk = g_ptr_array_index(map->backends, cbd->cur_backend);
 
 	if (cbd->map->wrk && cbd->map->wrk->state == rspamd_worker_state_running) {
 
@@ -2738,6 +2950,7 @@ static void
 rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 {
 	struct rspamd_map *map = (struct rspamd_map *) w->data;
+	int how = RSPAMD_MAP_SCHEDULE_INIT;
 
 	if (w->attr.st_nlink > 0) {
 		msg_info_map("old mtime is %t (size = %Hz), "
@@ -2745,6 +2958,12 @@ rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 					 w->prev.st_mtime, (gsize) w->prev.st_size,
 					 w->attr.st_mtime, (gsize) w->attr.st_size,
 					 w->path);
+
+		if (w->attr.st_size == 0 && w->prev.st_size > 0) {
+			msg_info_map("map file %s has been truncated, deferring the reread",
+						 w->path);
+			how |= RSPAMD_MAP_SCHEDULE_TRUNCATED;
+		}
 
 		/* Fire need modify flag */
 		struct rspamd_map_backend *bk;
@@ -2765,7 +2984,7 @@ rspamd_map_on_stat(struct ev_loop *loop, ev_stat *w, int revents)
 			map->scheduled_check = NULL;
 		}
 
-		rspamd_map_schedule_periodic(map, RSPAMD_MAP_SCHEDULE_INIT);
+		rspamd_map_schedule_periodic(map, how);
 	}
 }
 
@@ -2962,6 +3181,7 @@ void rspamd_map_preload(struct rspamd_config *cfg)
 				}
 
 				map->seen = true;
+				map->has_data = true;
 			}
 			else {
 				msg_info_map("preload of %s failed", map->name);
@@ -3015,6 +3235,75 @@ void rspamd_map_remove_all(struct rspamd_config *cfg)
 	cfg->maps = NULL;
 }
 
+/*
+ * Return a freshly allocated copy of @uri with the HTTP userinfo
+ * (the "user:pass@" prefix of the authority) replaced by "***@", so
+ * the result is safe to write to logs (e.g. the /errors ring buffer).
+ * URIs without a scheme or without userinfo are duplicated as-is.
+ */
+/* Non-static for unit testing */
+char *
+rspamd_map_uri_redacted(const char *uri)
+{
+	const char *scheme_sep, *authority, *at, *auth_end, *p;
+	char *res;
+	gsize prefix_len, rest_len;
+
+	g_assert(uri != NULL);
+
+	scheme_sep = strstr(uri, "://");
+
+	if (scheme_sep == NULL) {
+		return g_strdup(uri);
+	}
+
+	authority = scheme_sep + 3;
+	/* The authority ends at the first '/', '?' or '#' (or end of string) */
+	auth_end = authority + strcspn(authority, "/?#");
+	/* Userinfo, if present, is everything before the last '@' in the
+	 * authority. Using the last '@' (rather than the first) also covers
+	 * malformed inputs where a raw password itself contains '@'; an IPv6
+	 * host literal in brackets is unaffected since it follows the userinfo
+	 * and never contains '@'. */
+	at = NULL;
+	for (p = auth_end; p-- > authority;) {
+		if (*p == '@') {
+			at = p;
+			break;
+		}
+	}
+
+	if (at == NULL) {
+		return g_strdup(uri);
+	}
+
+	prefix_len = authority - uri; /* scheme + "://" */
+	rest_len = strlen(at + 1);
+	res = g_malloc(prefix_len + 4 /* "***@" */ + rest_len + 1);
+	memcpy(res, uri, prefix_len);
+	memcpy(res + prefix_len, "***@", 4);
+	memcpy(res + prefix_len + 4, at + 1, rest_len + 1); /* includes NUL */
+
+	return res;
+}
+
+/*
+ * Assign the backend uri and a matching redacted copy used for logging.
+ * The real uri is kept verbatim because it serves as a configuration key
+ * (the "maps { <uri> {} }" block) and carries the HTTP userinfo needed to
+ * build the Authorization header; bk->uri_log must be used in log messages
+ * instead.
+ */
+static void
+rspamd_map_backend_set_uri(struct rspamd_map_backend *bk, const char *uri)
+{
+	g_assert(bk != NULL);
+	g_assert(uri != NULL);
+
+	bk->uri = g_strdup(uri);
+	bk->uri_log = rspamd_map_uri_redacted(uri);
+}
+
 static const char *
 rspamd_map_check_proto(struct rspamd_config *cfg,
 					   const char *map_line, struct rspamd_map_backend *bk)
@@ -3029,13 +3318,13 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 	/* Static check */
 	if (g_ascii_strcasecmp(pos, "static") == 0) {
 		bk->protocol = MAP_PROTO_STATIC;
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 
 		return pos;
 	}
 	else if (g_ascii_strcasecmp(pos, "zst+static") == 0) {
 		bk->protocol = MAP_PROTO_STATIC;
-		bk->uri = g_strdup(pos + 4);
+		rspamd_map_backend_set_uri(bk, pos + 4);
 		bk->is_compressed = TRUE;
 
 		return pos + 4;
@@ -3096,23 +3385,23 @@ rspamd_map_check_proto(struct rspamd_config *cfg,
 	if (g_ascii_strncasecmp(pos, "http://", sizeof("http://") - 1) == 0) {
 		bk->protocol = MAP_PROTO_HTTP;
 		/* Include http:// */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 		pos += sizeof("http://") - 1;
 	}
 	else if (g_ascii_strncasecmp(pos, "https://", sizeof("https://") - 1) == 0) {
 		bk->protocol = MAP_PROTO_HTTPS;
 		/* Include https:// */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 		pos += sizeof("https://") - 1;
 	}
 	else if (g_ascii_strncasecmp(pos, "file://", sizeof("file://") - 1) == 0) {
 		pos += sizeof("file://") - 1;
 		/* Exclude file:// */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 	}
 	else if (*pos == '/') {
 		/* Trivial file case */
-		bk->uri = g_strdup(pos);
+		rspamd_map_backend_set_uri(bk, pos);
 	}
 	else {
 		msg_err_config("invalid map fetching protocol: %s", map_line);
@@ -3223,6 +3512,7 @@ rspamd_map_backend_dtor(struct rspamd_map_backend *bk)
 		rspamd_pubkey_unref(bk->trusted_pubkey);
 	}
 
+	g_free(bk->uri_log);
 	g_free(bk->uri);
 	g_free(bk);
 }
@@ -3246,7 +3536,7 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 	}
 
 	if (bk->is_fallback && bk->protocol != MAP_PROTO_FILE) {
-		msg_err_config("fallback backend must be file for %s", bk->uri);
+		msg_err_config("fallback backend must be file for %s", bk->uri_log);
 
 		goto err;
 	}
@@ -3295,12 +3585,12 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 		memset(&up, 0, sizeof(up));
 		if (http_parser_parse_url(bk->uri, strlen(bk->uri), FALSE,
 								  &up) != 0) {
-			msg_err_config("cannot parse HTTP url: %s", bk->uri);
+			msg_err_config("cannot parse HTTP url: %s", bk->uri_log);
 			goto err;
 		}
 		else {
 			if (!(up.field_set & 1u << UF_HOST)) {
-				msg_err_config("cannot parse HTTP url: %s: no host", bk->uri);
+				msg_err_config("cannot parse HTTP url: %s: no host", bk->uri_log);
 				goto err;
 			}
 
@@ -3437,6 +3727,9 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const char *map_line)
 				opt = ucl_object_lookup_any(src,
 											"max_reuse", "max-reuse", "keepalive_max_reuse", NULL);
 				if (opt) hdata->max_reuse = (unsigned int) ucl_object_toint(opt);
+				opt = ucl_object_lookup_any(src,
+											"max_size", "max-size", NULL);
+				if (opt) hdata->max_size = (gsize) ucl_object_toint(opt);
 			}
 		}
 
@@ -3609,7 +3902,7 @@ rspamd_map_add(struct rspamd_config *cfg,
 	}
 
 	if (bk->is_fallback) {
-		msg_err_config("cannot add map with fallback only backend: %s", bk->uri);
+		msg_err_config("cannot add map with fallback only backend: %s", bk->uri_log);
 		REF_RELEASE(bk);
 
 		return NULL;
@@ -3993,7 +4286,7 @@ void rspamd_map_trigger_hyperscan_compilation(struct rspamd_map *map)
 
 			/* Use default settings for compilation */
 			rspamd_re_cache_compile_hyperscan_scoped_single(scope, scope_for_check,
-															map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR "/",
+															map->cfg->hs_cache_dir ? map->cfg->hs_cache_dir : RSPAMD_DBDIR,
 															1.0,   /* max_time */
 															FALSE, /* silent */
 															worker->ctx ? ((struct rspamd_abstract_worker_ctx *) worker->ctx)->event_loop : NULL,

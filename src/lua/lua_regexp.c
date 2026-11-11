@@ -679,6 +679,11 @@ lua_regexp_matchn(lua_State *L)
 				if (max_matches >= 0 && matches >= max_matches) {
 					break;
 				}
+
+				if (start >= end) {
+					/* We found all matches, so no more hits are possible (protect from empty patterns) */
+					break;
+				}
 			}
 		}
 
