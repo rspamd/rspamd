@@ -97,6 +97,15 @@ typedef enum spf_action_e {
 /* Total number of address lookups spawned by all mx/ptr expansions */
 #define SPF_MAX_DNS_EXPANSIONS 100
 #define SPF_MIN_CACHE_TTL (60 * 5) /* 5 minutes */
+/* A record is not kept in the cache longer, whatever its DNS TTL says */
+#define SPF_MAX_CACHE_TTL (7 * 24 * 3600)
+/*
+ * Elements of a flattened record. Each address of each term takes one, and
+ * a record with its includes can name any number of them
+ */
+#define SPF_MAX_ELEMENTS 8192
+/* Marks a jump whose target is not known yet, see `jump` of struct spf_addr */
+#define SPF_JUMP_PENDING (1u << 31u)
 
 struct spf_addr {
 	unsigned char addr6[sizeof(struct in6_addr)];
@@ -110,6 +119,14 @@ struct spf_addr {
 	} m;
 	unsigned int flags;
 	spf_mech_t mech;
+	/*
+	 * Set in a flattened record for an element of an included record whose
+	 * match means that the include does not match: the check goes on from
+	 * the element with this index, the first one after the include. Zero
+	 * for an element whose match is the result, which is `mech`: for an
+	 * element of an included record that is the qualifier of the include.
+	 */
+	uint32_t jump;
 	char *spf_string;
 	struct spf_addr *prev, *next;
 };
@@ -140,12 +157,15 @@ struct rspamd_spf_cred {
 };
 
 /*
- * Resolve spf record for specified task and call a callback after resolution fails/succeed
+ * Resolve spf record for specified task and call a callback after resolution fails/succeed.
+ * `addr` is the address that the record is checked for, which the macros and
+ * `ptr` are about; NULL stands for the address that the message came from
  */
 gboolean rspamd_spf_resolve(struct rspamd_task *task,
 							spf_cb_t callback,
 							gpointer cbdata,
-							struct rspamd_spf_cred *cred);
+							struct rspamd_spf_cred *cred,
+							const rspamd_inet_addr_t *addr);
 
 /*
  * Get a domain for spf for specified task
@@ -179,6 +199,18 @@ char *spf_addr_mask_to_string(struct spf_addr *addr);
  * @param rec
  * @return
  */
+/*
+ * Tells if an element matches an address, with no regard to what the match
+ * means for the record
+ */
+gboolean spf_addr_match_ip(const struct spf_addr *addr, const rspamd_inet_addr_t *ip);
+
+/*
+ * Returns the element of a record that decides for an address, or NULL if
+ * no element does
+ */
+struct spf_addr *spf_addr_match(struct spf_resolved *rec, const rspamd_inet_addr_t *ip);
+
 struct spf_addr *spf_addr_match_task(struct rspamd_task *task,
 									 struct spf_resolved *rec);
 
