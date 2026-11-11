@@ -473,7 +473,8 @@ local function check_mime_type(task)
           if detected_ext then
             local detected_type = lua_magic_types[detected_ext]
 
-            if detected_type.type ~= 'archive' then
+            -- A self-extracting archive is a program with files in it
+            if detected_type.type ~= 'archive' and detected_type.type ~= 'executable' then
               logger.debugm("mime_types", task, "skip checking of %s as archive, %s is not archive but %s",
                   filename, detected_type.type)
               check = false

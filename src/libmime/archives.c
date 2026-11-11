@@ -2243,9 +2243,139 @@ rspamd_archive_zip_read_first(struct rspamd_task *task,
 	rspamd_archive_zip_locals_free(&locals);
 }
 
+/*
+ * Whether a local header at `pos` reads as one that a writer of zip files
+ * made: a check for a header found by its magic in data of another type,
+ * where these four bytes may stand for something else
+ */
+static gboolean
+rspamd_archive_zip_lh_plausible(const unsigned char *start, uint64_t limit, uint64_t pos)
+{
+	const uint64_t lh_basic_len = 30;
+	uint16_t version, method, fname_len, extra_len;
+
+	if (pos > limit || limit - pos < lh_basic_len) {
+		return FALSE;
+	}
+
+	memcpy(&version, start + pos + 4, sizeof(version));
+	memcpy(&method, start + pos + 8, sizeof(method));
+	memcpy(&fname_len, start + pos + 26, sizeof(fname_len));
+	memcpy(&extra_len, start + pos + 28, sizeof(extra_len));
+	version = GUINT16_FROM_LE(version);
+	method = GUINT16_FROM_LE(method);
+	fname_len = GUINT16_FROM_LE(fname_len);
+	extra_len = GUINT16_FROM_LE(extra_len);
+
+	/* The version needed to extract is at most 6.3, with no system in it */
+	if (version > 63 || fname_len == 0 ||
+		limit - pos - lh_basic_len < (uint64_t) fname_len + extra_len) {
+		return FALSE;
+	}
+
+	/* Methods of the specification, the last ones being AES and its neighbours */
+	if (method > 20 && !(method >= 93 && method <= 99)) {
+		return FALSE;
+	}
+
+	for (unsigned int i = 0; i < fname_len; i++) {
+		if (start[pos + lh_basic_len + i] < 0x20) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * An archive with no central directory that reads (cut, or broken on
+ * purpose) is still read by what goes by the local headers: readers of a
+ * stream, and the repair modes of the others. Its entries are listed from
+ * the first local header: the one at the start of the data, else, as for a
+ * self-extracting archive, one found in the first part of the data
+ * (`search`). Returns whether a file was listed
+ */
+static gboolean
+rspamd_archive_zip_list_stream(struct rspamd_task *task,
+							   struct rspamd_archive *arch,
+							   struct rspamd_zip_listed *listed,
+							   const unsigned char *start,
+							   uint64_t len,
+							   gboolean strict)
+{
+	static const unsigned char lh_magic[] = {0x50, 0x4b, 0x03, 0x04};
+	/* As far as the readers look for the start of an archive, and a few places only */
+	const uint64_t max_front = 1024 * 1024;
+	const unsigned int max_candidates = 8;
+	unsigned int candidates = 0, mark = arch->files->len;
+	uint64_t pos = 0;
+
+	while (len - pos >= sizeof(lh_magic) && pos <= max_front && candidates < max_candidates) {
+		const unsigned char *q;
+
+		if (pos == 0 && memcmp(start, lh_magic, sizeof(lh_magic)) == 0) {
+			q = start;
+		}
+		else {
+			goffset off = rspamd_substring_search((const char *) start + pos,
+												  MIN(len - pos, max_front + sizeof(lh_magic) - pos),
+												  (const char *) lh_magic, sizeof(lh_magic));
+
+			if (off == -1) {
+				break;
+			}
+
+			q = start + pos + off;
+		}
+
+		pos = q - start;
+
+		if ((!strict && pos == 0) || rspamd_archive_zip_lh_plausible(start, len, pos)) {
+			struct rspamd_zip_locals locals;
+
+			candidates++;
+			rspamd_archive_zip_locals_init(&locals);
+			rspamd_archive_zip_walk_first(start + pos, len - pos, &locals);
+			rspamd_archive_zip_list_local(task, arch, listed, start + pos, &locals);
+			rspamd_archive_zip_locals_free(&locals);
+
+			if (arch->files->len > mark) {
+				return TRUE;
+			}
+		}
+
+		pos++;
+	}
+
+	return FALSE;
+}
+
+static struct rspamd_archive *
+rspamd_archive_zip_new(struct rspamd_task *task, struct rspamd_mime_part *part)
+{
+	struct rspamd_archive *arch = rspamd_mempool_alloc0(task->task_pool, sizeof(*arch));
+
+	arch->files = g_ptr_array_new();
+	arch->type = RSPAMD_ARCHIVE_ZIP;
+
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
+
+	rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor, arch);
+
+	return arch;
+}
+
+/*
+ * `sniff`: the part was not detected as a zip file (data in front of the
+ * archive, as in a self-extracting one). Nothing is said when it is not an
+ * archive, and one with no files is not taken as an archive
+ */
 static void
 rspamd_archive_process_zip(struct rspamd_task *task,
-						   struct rspamd_mime_part *part)
+						   struct rspamd_mime_part *part,
+						   gboolean sniff)
 {
 	const unsigned char *p, *start;
 	const uint32_t eocd_magic = 0x06054b50;
@@ -2297,14 +2427,8 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 
 			if (check == RSPAMD_ZIP_EOCD_USABLE) {
 				if (arch == NULL) {
-					arch = rspamd_mempool_alloc0(task->task_pool, sizeof(*arch));
-					arch->files = g_ptr_array_new();
-					arch->type = RSPAMD_ARCHIVE_ZIP;
-					if (part->cd) {
-						arch->archive_name = &part->cd->filename;
-					}
-					rspamd_mempool_add_destructor(task->task_pool, rspamd_archive_dtor,
-												  arch);
+					arch = rspamd_archive_zip_new(task, part);
+
 					if (!rspamd_archive_file_limit_check(task, arch)) {
 						goto set;
 					}
@@ -2339,8 +2463,25 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 	}
 
 	if (read == RSPAMD_ZIP_CD_INVALID) {
-		/* Not a zip file */
-		msg_info_task("zip archive is invalid (no usable EOCD)");
+		/* No directory: the local headers are what is left to go by */
+		if (arch == NULL) {
+			arch = rspamd_archive_zip_new(task, part);
+		}
+
+		if (rspamd_archive_file_limit_check(task, arch) &&
+			rspamd_archive_zip_list_stream(task, arch, &listed, start,
+										   part->parsed_data.len, sniff)) {
+			msg_info_task("zip archive has no central directory that reads: "
+						  "%ud names are listed by its local headers",
+						  arch->files->len);
+			goto set;
+		}
+
+		if (!sniff) {
+			/* Not a zip file */
+			msg_info_task("zip archive is invalid (no usable EOCD)");
+		}
+
 		g_array_free(listed.records, TRUE);
 
 		return;
@@ -2357,6 +2498,11 @@ rspamd_archive_process_zip(struct rspamd_task *task,
 
 set:
 	g_array_free(listed.records, TRUE);
+
+	if (sniff && arch->files->len == 0) {
+		return;
+	}
+
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 
@@ -6103,6 +6249,112 @@ rspamd_archive_cheat_detect(struct rspamd_mime_part *part, const char *str,
 	return FALSE;
 }
 
+/*
+ * Whether a part that was not detected as an archive is looked at for one
+ * with data in front of it, which the unpackers open: a part of no known
+ * type, an executable (a self-extracting archive is one), and what reads as
+ * text but is sent as a file to save, not as text to show
+ */
+static gboolean
+rspamd_archive_part_may_hide(const struct rspamd_mime_part *part)
+{
+	const char *ext = part->detected_ext;
+	static const rspamd_ftok_t alternative = {.begin = "alternative", .len = sizeof("alternative") - 1};
+
+	if (ext == NULL && part->detected_type == NULL) {
+		return TRUE;
+	}
+
+	if (ext != NULL && g_ascii_strcasecmp(ext, "exe") == 0) {
+		return TRUE;
+	}
+
+	if ((ext == NULL || g_ascii_strcasecmp(ext, "txt") == 0) &&
+		part->cd != NULL && part->cd->type == RSPAMD_CT_ATTACHMENT &&
+		part->cd->filename.len > 0) {
+		/* An alternative is shown, whatever its disposition says */
+		return !(part->parent_part != NULL && part->parent_part->ct != NULL &&
+				 rspamd_ftok_casecmp(&part->parent_part->ct->subtype, &alternative) == 0);
+	}
+
+	return FALSE;
+}
+
+/* Runs a parser on the data from `off`, as on a part that starts there */
+static void
+rspamd_archive_process_at(struct rspamd_task *task, struct rspamd_mime_part *part, gsize off,
+						  void (*process)(struct rspamd_task *, struct rspamd_mime_part *))
+{
+	rspamd_ftok_t saved = part->parsed_data;
+
+	part->parsed_data.begin += off;
+	part->parsed_data.len -= off;
+	process(task, part);
+	part->parsed_data = saved;
+
+	if (part->part_type == RSPAMD_MIME_PART_ARCHIVE) {
+		struct rspamd_archive *arch = part->specific.arch;
+
+		if (arch->files->len == 0 && !(arch->flags & RSPAMD_ARCHIVE_ENCRYPTED)) {
+			/* These bytes in a file do not make it an archive */
+			part->part_type = RSPAMD_MIME_PART_UNDEFINED;
+			part->specific.arch = NULL;
+		}
+		else {
+			arch->size = saved.len;
+		}
+	}
+}
+
+static void
+rspamd_archive_sniff(struct rspamd_task *task, struct rspamd_mime_part *part)
+{
+	static const unsigned char rar_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07},
+							   sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
+	static const struct {
+		const unsigned char *magic;
+		gsize len;
+		void (*process)(struct rspamd_task *, struct rspamd_mime_part *);
+	} formats[] = {
+		{rar_magic, sizeof(rar_magic), rspamd_archive_process_rar},
+		{sz_magic, sizeof(sz_magic), rspamd_archive_process_7zip},
+	};
+	/* How far unrar and 7-Zip look for an archive after a module that unpacks it */
+	const gsize max_front = 1024 * 1024;
+	const unsigned int max_candidates = 4;
+
+	/* A zip file is found from its end, wherever it starts */
+	rspamd_archive_process_zip(task, part, TRUE);
+
+	for (unsigned int i = 0; i < G_N_ELEMENTS(formats) && part->part_type == RSPAMD_MIME_PART_UNDEFINED; i++) {
+		const unsigned char *start = (const unsigned char *) part->parsed_data.begin, *p = start;
+		gsize len = MIN(part->parsed_data.len, max_front + formats[i].len);
+		unsigned int candidates = 0;
+
+		while (candidates < max_candidates && (gsize) (p - start) < len) {
+			goffset off = rspamd_substring_search((const char *) p, len - (p - start),
+												  (const char *) formats[i].magic, formats[i].len);
+
+			if (off == -1) {
+				break;
+			}
+
+			p += off;
+			candidates++;
+			rspamd_archive_process_at(task, part, p - start, formats[i].process);
+
+			if (part->part_type != RSPAMD_MIME_PART_UNDEFINED) {
+				msg_info_task("found %s archive after %z bytes of other data",
+							  rspamd_archive_type_str(part->specific.arch->type),
+							  (gsize) (p - start));
+				break;
+			}
+
+			p++;
+		}
+	}
+}
+
 void rspamd_archives_process(struct rspamd_task *task)
 {
 	unsigned int i;
@@ -6114,7 +6366,7 @@ void rspamd_archives_process(struct rspamd_task *task)
 			const char *ext = part->detected_ext;
 			if (ext) {
 				if (g_ascii_strcasecmp(ext, "zip") == 0) {
-					rspamd_archive_process_zip(task, part);
+					rspamd_archive_process_zip(task, part, FALSE);
 				}
 				else if (g_ascii_strcasecmp(ext, "rar") == 0) {
 					rspamd_archive_process_rar(task, part);
@@ -6125,6 +6377,11 @@ void rspamd_archives_process(struct rspamd_task *task)
 				else if (g_ascii_strcasecmp(ext, "gz") == 0) {
 					rspamd_archive_process_gzip(task, part);
 				}
+			}
+
+			if (part->part_type == RSPAMD_MIME_PART_UNDEFINED &&
+				rspamd_archive_part_may_hide(part)) {
+				rspamd_archive_sniff(task, part);
 			}
 
 			if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&

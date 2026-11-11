@@ -341,6 +341,13 @@ local function detect_archive_flaw(part, arch, log_obj, _)
     end
   end
 
+  local content = part:get_content()
+
+  if #content > 2 and tostring(content:span(1, 2)) == 'MZ' then
+    -- A self-extracting archive is a program first
+    return 'exe', 40
+  end
+
   return arch_type:lower(), 40
 end
 
