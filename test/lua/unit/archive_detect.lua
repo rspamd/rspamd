@@ -69,6 +69,9 @@ context("Archive detection", function()
 
       if res.is_archive then
         local arch = p:get_archive()
+        res.unreadable = arch:is_unreadable()
+        res.obfuscated = arch:is_obfuscated()
+        res.encrypted = arch:is_encrypted()
         res.type = arch:get_type()
         res.names = arch:get_files()
       end
@@ -77,6 +80,26 @@ context("Archive detection", function()
     task:destroy()
 
     return res
+  end
+
+  -- A 7z file with a plain header: the files information only
+  local function wide(str)
+    return (str:gsub('.', '%0\0'))
+  end
+  local function sz_names(names, raw)
+    local body = '\0'
+
+    for _, n in ipairs(names) do
+      body = body .. (raw and n or wide(n)) .. '\0\0'
+    end
+
+    return '\17' .. string.char(#body) .. body
+  end
+  local function sz(nfiles, props)
+    local header = '\1\5' .. string.char(nfiles) .. props .. '\0\0'
+
+    return '7z\188\175\39\28\0\4' .. '\0\0\0\0' .. rspamd_util.pack('<I8', 0) ..
+        rspamd_util.pack('<I8', #header) .. '\0\0\0\0' .. header
   end
 
   local function sorted(names)
@@ -193,6 +216,74 @@ context("Archive detection", function()
     assert_true(res.is_text)
   end)
 
+  test("Files in a directory of a document do not make a document", function()
+    assert_equal('zip', look(zip({ 'xl/a', 'xl/b', 'evil.exe' })).ext)
+    assert_equal('zip', look(zip({ 'word/a', 'word/b', 'word/c' })).ext)
+    assert_equal('xlsx', look(zip({ '[Content_Types].xml', 'xl/workbook.xml' })).ext)
+    assert_equal('docx', look(zip({ '[Content_Types].xml', 'word/document.xml' })).ext)
+  end)
+
+  test("An archive that starts as one and does not read is told", function()
+    for _, magic in ipairs({ '7z\188\175\39\28\0\4', 'Rar!\26\7\1\0', 'Rar!\26\7\0',
+                             'PK\3\4' }) do
+      local res = look(magic .. string.rep('\255', 100))
+      assert_true(res.is_archive, magic)
+      assert_true(res.unreadable, magic)
+      assert_equal(0, #res.names)
+    end
+
+    local res = look(zip(two))
+    assert_false(res.unreadable)
+  end)
+
+  test("The optional parts of a gzip header are read in their order", function()
+    local function gz(flags, optional)
+      return '\31\139\8' .. string.char(flags) .. '\0\0\0\0\0\3' .. optional ..
+          '\3\0' .. string.rep('\0', 8)
+    end
+
+    assert_equal('evil.exe', sorted(look(gz(8, 'evil.exe\0')).names))
+    -- A checksum of the header stands after the name, not before it
+    assert_equal('evil.exe', sorted(look(gz(8 + 2, 'evil.exe\0\1\2')).names))
+    -- An extra field before the name
+    assert_equal('evil.exe', sorted(look(gz(8 + 4, '\4\0abcd' .. 'evil.exe\0')).names))
+    assert_equal('evil.exe', sorted(look(gz(8 + 4 + 2, '\4\0abcd' .. 'evil.exe\0\1\2')).names))
+
+    -- An empty name is no name: the data after it is not one
+    local res = look(gz(8, '\0') .. 'x.pdf.exe\0')
+    assert_true(res.is_archive)
+    assert_equal(0, #res.names)
+    assert_false(res.obfuscated)
+
+    -- No name at all
+    res = look(gz(0, ''))
+    assert_true(res.is_archive)
+    assert_equal(0, #res.names)
+  end)
+
+  test("Names of a 7z file are read past what is not known", function()
+    assert_equal('a.txt|evil.exe', sorted(look(sz(2, sz_names({ 'a.txt', 'evil.exe' }))).names))
+    -- A property of another kind before the names, and one that is not known
+    assert_equal('a.txt|evil.exe',
+      sorted(look(sz(2, '\24\1\0' .. sz_names({ 'a.txt', 'evil.exe' }))).names))
+    assert_equal('a.txt|evil.exe',
+      sorted(look(sz(2, '\48\2\0\0' .. sz_names({ 'a.txt', 'evil.exe' }))).names))
+    -- An empty name does not end the list
+    local res = look(sz(2, sz_names({ '', 'evil.exe' })))
+    assert_equal('evil.exe', sorted(res.names))
+    assert_false(res.unreadable)
+  end)
+
+  test("Characters that hide a name are told in a 7z file as in a zip file", function()
+    assert_false(look(sz(1, sz_names({ 'evil.exe' }))).obfuscated)
+    -- U+202E, U+200B and a control character
+    for _, hidden in ipairs({ '\46\32', '\11\32', '\1\0' }) do
+      local res = look(sz(1, sz_names({ wide('doc') .. hidden .. wide('fdp.exe') }, true)))
+      assert_equal(1, #res.names)
+      assert_true(res.obfuscated)
+    end
+  end)
+
   test("Names that share a hash of no secret cost what other names cost", function()
     -- "Aa" and "BB" have one hash under h * 31 + c, and so has any row of them
     local function many(colliding)
@@ -228,6 +319,71 @@ context("Archive detection", function()
     assert_equal(8192, coll_n)
     assert_true(coll_time < plain_time * 4 + 0.1,
       string.format('%.3f s for names that collide, %.3f s for others', coll_time, plain_time))
+  end)
+end)
+
+context("File types by fixed places", function()
+  local rspamd_util = require "rspamd_util"
+  local rspamd_text = require "rspamd_text"
+  local magic = require "lua_magic"
+
+  local function detect(s)
+    local part = {
+      get_content = function()
+        return rspamd_text.fromstring(s)
+      end,
+      get_filename = function()
+        return nil
+      end,
+    }
+
+    return (magic.detect(part, rspamd_config))
+  end
+
+  local pe = 'MZ' .. string.rep('\0', 58) .. rspamd_util.pack('<I4', 128) ..
+      string.rep('\0', 64) .. 'PE\0\0' .. string.rep('\0', 200)
+
+  test("A program is one whatever else it holds", function()
+    assert_equal('exe', detect(pe))
+    assert_equal('exe', detect(pe .. 'MSCF\0\0\0\0' .. string.rep('\0', 64)))
+    assert_equal('exe', detect(pe .. '\r\n@echo off\r\n'))
+    -- The same bytes before the header that the pointer leads to
+    assert_equal('exe', detect('MZ' .. string.rep('\0', 58) .. rspamd_util.pack('<I4', 128) ..
+      'PE\0\0' .. string.rep('\0', 60) .. 'PE\0\0' .. string.rep('\0', 200) ..
+      'MSCF\0\0\0\0' .. string.rep('\0', 64)))
+  end)
+
+  test("A pointer that leads nowhere leaves the other signatures", function()
+    local stub = 'MZ' .. string.rep('\0', 58) .. rspamd_util.pack('<I4', 0x7fffffff) ..
+        string.rep('\0', 64)
+    assert_equal('exe', detect(stub))
+    assert_equal('cab', detect(stub .. 'MSCF\0\0\0\0' .. string.rep('\0', 64)))
+  end)
+
+  test("A tar file is told by its place, whatever its first name is", function()
+    local function tar(name)
+      return name .. string.rep('\0', 257 - #name) .. 'ustar\0' .. '00' .. string.rep('\0', 512)
+    end
+
+    assert_equal('tar', detect(tar('file.txt')))
+    assert_equal('tar', detect(tar('ustar/ustar.txt')))
+    -- The word is not a tar file elsewhere
+    assert_not_equal('tar', detect('a word: ustar' .. string.rep('\0', 600)))
+  end)
+
+  test("A disk image is told by its descriptor, whatever stands before it", function()
+    local function iso(lead)
+      return lead .. string.rep('\0', 0x8000 - #lead) .. '\1CD001\1' .. string.rep('\0', 2048)
+    end
+
+    assert_equal('iso', detect(iso('')))
+    assert_equal('iso', detect(iso(string.rep('\0', 64) .. '\1CD001\1')))
+    assert_not_equal('iso', detect(string.rep('\0', 64) .. '\1CD001\1' .. string.rep('\0', 0x9000)))
+  end)
+
+  test("An ace and a zoo archive are told by their places", function()
+    assert_equal('ace', detect(string.rep('\1', 7) .. '**ACE**' .. string.rep('\1', 64)))
+    assert_equal('zoo', detect(string.rep('\1', 20) .. '\220\167\196\253' .. string.rep('\1', 64)))
   end)
 end)
 
@@ -281,5 +437,47 @@ context("Compound file detection", function()
     assert_equal('ole', detect(whole:sub(1, 512 + 70)))
     assert_equal('ole', detect(whole:sub(1, 512 + 128 + 66)))
     assert_equal('ole', detect(whole:sub(1, 300)))
+  end)
+end)
+
+context("Content handler choice", function()
+  local lua_content = require "lua_content"
+  local rspamd_text = require "rspamd_text"
+
+  test("A document of another kind than declared is read as what it is", function()
+    local pdf = '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' ..
+        '2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n' ..
+        'trailer\n<< /Root 1 0 R >>\n%%EOF\n'
+    local specific
+    local part = {
+      get_type = function()
+        return 'application', 'vnd.openxmlformats-officedocument.wordprocessingml.document'
+      end,
+      get_detected_ext = function()
+        return 'pdf'
+      end,
+      is_archive = function()
+        return false
+      end,
+      is_text = function()
+        return false
+      end,
+      get_filename = function()
+        return 'doc.docx'
+      end,
+      get_content = function()
+        return rspamd_text.fromstring(pdf)
+      end,
+      get_id = function()
+        return 77
+      end,
+      set_specific = function(_, data)
+        specific = data
+      end,
+    }
+
+    lua_content.maybe_process_mime_part(part, {})
+    assert_not_nil(specific)
+    assert_equal('pdf', specific.tag)
   end)
 end)

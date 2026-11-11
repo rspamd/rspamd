@@ -1,0 +1,24 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: stream
+Date: Wed, 11 Nov 2026 10:00:00 +0000
+Message-ID: <zip_ext_stream_suffix@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+See the attached file.
+
+--b1
+Content-Type: application/zip; name="a.zip"
+Content-Disposition: attachment; filename="a.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBBQAAAAAAAAAAAAAAAAAAQAAAAEAAAAKAAAAcmVhZG1lLnR4dHhQSwMEFAAAAAAAAAAAAAAA
+AAABAAAAAQAAAA8AAABldmlsLmV4ZTo6JERBVEF4UEsBAhQAFAAAAAAAAAAAAAAAAAABAAAAAQAA
+AAoAAAAAAAAAAAAAAAAAAAAAAHJlYWRtZS50eHRQSwECFAAUAAAAAAAAAAAAAAAAAAEAAAABAAAA
+DwAAAAAAAAAAAAAAAAApAAAAZXZpbC5leGU6OiREQVRBUEsFBgAAAAACAAIAdQAAAFcAAAAAAA==
+
+--b1--

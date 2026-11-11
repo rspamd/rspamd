@@ -78,3 +78,51 @@ Empty text part should not be treat as html
   Scan File  ${RSPAMD_TESTDIR}/messages/empty-plain-text.eml
   ...  Settings=${SETTINGS_MIMETYPES}
   Do Not Expect Symbol  FORGED_OUTLOOK_HTML
+
+Archive With More Files Than Are Checked
+  Scan File  ${RSPAMD_TESTDIR}/messages/archive_many_files.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol  MIME_TRUNCATED_ARCHIVE
+  Do Not Expect Symbol  MIME_UNREADABLE_ARCHIVE
+
+Archive That Cannot Be Read
+  Scan File  ${RSPAMD_TESTDIR}/messages/archive_unreadable.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol  MIME_UNREADABLE_ARCHIVE
+  Do Not Expect Symbol  MIME_TRUNCATED_ARCHIVE
+
+Plain Archive Is Neither Truncated Nor Unreadable
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Do Not Expect Symbol  MIME_TRUNCATED_ARCHIVE
+  Do Not Expect Symbol  MIME_UNREADABLE_ARCHIVE
+
+Space After Bad Extension In Archive
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip_ext_trailing_space.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol With Exact Options  MIME_BAD_EXTENSION  exe
+
+Stream Suffix After Bad Extension In Archive
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip_ext_stream_suffix.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol With Exact Options  MIME_BAD_EXTENSION  exe
+
+Program In A Document Package
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip_package_exe.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol With Exact Options  MIME_BAD_EXTENSION  exe
+
+Archive Named As A Document
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip_named_docx.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol With Exact Options  MIME_BAD_EXTENSION  exe
+
+Program With An Archive In It
+  Scan File  ${RSPAMD_TESTDIR}/messages/sfx_zip.eml
+  ...  Settings=${SETTINGS_MIMETYPES}
+  Expect Symbol With Option  MIME_BAD_EXTENSION  scr
+
+Program After Other Files In Archive
+  Scan File  ${RSPAMD_TESTDIR}/messages/zip_exe_after_files.eml
+  ...  Settings={symbols_enabled = [CHECK_ARCHIVES]}
+  Expect Symbol  EXE_IN_ARCHIVE
