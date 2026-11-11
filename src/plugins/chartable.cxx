@@ -34,6 +34,7 @@
 #include "unicode/uchar.h"
 #include "unicode/uscript.h"
 #include "unicode/unorm2.h"
+#include "unicode/uidna.h"
 
 #include <array>
 #include <cstring>
@@ -633,7 +634,15 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 	 */
 	part->capital_letters += ncap;
 
-	cur_score /= (double) part->nwords;
+	/*
+	 * The score is the badness of an average word, and a text of any length
+	 * can be put around the words that are bad: past this many words the
+	 * sum is what counts, so that a few of such words are seen in a long
+	 * text as they are in a short one
+	 */
+	static const unsigned int max_words_divisor = 24;
+
+	cur_score /= (double) MIN(part->nwords, max_words_divisor);
 
 	if (cur_score > 1.0) {
 		cur_score = 1.0;
@@ -727,10 +736,57 @@ chartable_symbol_callback(struct rspamd_task *task,
 	rspamd_symcache_finalize_item(task, item);
 }
 
+/*
+ * A host as it is shown: the labels in the ASCII form of an international
+ * name (`xn--...`) are turned into the characters that a browser displays,
+ * which are what can be mistaken for another name. Returns false if there
+ * is nothing to convert or the name cannot be converted.
+ */
+static auto
+rspamd_chartable_host_to_unicode(const char *start, gsize len, std::string &out) -> bool
+{
+	if (len < 4 || len > 1024 ||
+		rspamd_substring_search_caseless(start, len, "xn--", 4) == -1) {
+		return false;
+	}
+
+	static UIDNA *idna = nullptr;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (idna == nullptr) {
+		idna = uidna_openUTS46(UIDNA_NONTRANSITIONAL_TO_UNICODE, &uc_err);
+
+		if (U_FAILURE(uc_err)) {
+			idna = nullptr;
+			return false;
+		}
+	}
+
+	UIDNAInfo info = UIDNA_INFO_INITIALIZER;
+	char buf[1024];
+	auto converted = uidna_nameToUnicodeUTF8(idna, start, (int32_t) len, buf,
+											 sizeof(buf), &info, &uc_err);
+
+	if (U_FAILURE(uc_err) || converted <= 0 || converted > (int32_t) sizeof(buf)) {
+		return false;
+	}
+
+	out.assign(buf, converted);
+
+	return true;
+}
+
 static auto
 rspamd_chartable_identifier_spoofed(struct chartable_ctx *chartable_module_ctx,
 									const char *start, gsize len) -> bool
 {
+	std::string displayed;
+
+	if (rspamd_chartable_host_to_unicode(start, len, displayed)) {
+		start = displayed.data();
+		len = displayed.size();
+	}
+
 	if (!g_utf8_validate(start, len, nullptr)) {
 		return false;
 	}
@@ -793,15 +849,28 @@ rspamd_chartable_url_text_confusable(struct chartable_ctx *chartable_module_ctx,
 
 	const auto *href_host = rspamd_url_host(url);
 	const auto *text_host = rspamd_url_host(url->ext->linked_url);
-	const auto text_len = url->ext->linked_url->hostlen;
-	if (url->hostlen == text_len &&
+	gsize href_len = url->hostlen;
+	gsize text_len = url->ext->linked_url->hostlen;
+	if (href_len == text_len &&
 		g_ascii_strncasecmp(href_host, text_host, text_len) == 0) {
 		return false;
 	}
 
+	/* Compare what is displayed for each of the names */
+	std::string href_displayed, text_displayed;
+
+	if (rspamd_chartable_host_to_unicode(href_host, href_len, href_displayed)) {
+		href_host = href_displayed.data();
+		href_len = href_displayed.size();
+	}
+	if (rspamd_chartable_host_to_unicode(text_host, text_len, text_displayed)) {
+		text_host = text_displayed.data();
+		text_len = text_displayed.size();
+	}
+
 	std::string href_skeleton, text_skeleton;
 	return rspamd_chartable_get_skeleton(chartable_module_ctx, href_host,
-										 url->hostlen, href_skeleton) &&
+										 href_len, href_skeleton) &&
 		   rspamd_chartable_get_skeleton(chartable_module_ctx, text_host,
 										 text_len, text_skeleton) &&
 		   href_skeleton == text_skeleton;
