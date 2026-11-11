@@ -36,6 +36,11 @@ local settings = {
   symbol_attachment = 'MIME_BAD_ATTACHMENT',
   symbol_encrypted_archive = 'MIME_ENCRYPTED_ARCHIVE',
   symbol_obfuscated_archive = 'MIME_OBFUSCATED_ARCHIVE',
+  symbol_unreadable_archive = 'MIME_UNREADABLE_ARCHIVE',
+  symbol_truncated_archive = 'MIME_TRUNCATED_ARCHIVE',
+  -- How many names of an archive are checked, and how long a name is
+  max_archive_names = 1000,
+  max_name_length = 1024,
   symbol_exe_in_gen_split_rar = 'MIME_EXE_IN_GEN_SPLIT_RAR',
   symbol_archive_in_archive = 'MIME_ARCHIVE_IN_ARCHIVE',
   symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
@@ -249,9 +254,47 @@ local settings = {
 
 local map = nil
 
+-- Extensions that are bad for an attachment and usual for a part of a document
+local package_markup = {
+  htm = true,
+  html = true,
+  shtm = true,
+  shtml = true,
+  mht = true,
+  mhtml = true,
+}
+
 local function check_mime_type(task)
+  -- A name as the system that opens the file takes it: Windows drops dots
+  -- and spaces at the end of a name, and `::$DATA` names the file itself.
+  -- A name is cut to its end, where the extension is
+  local function clean_name(fname)
+    if #fname > settings.max_name_length then
+      fname = fname:sub(-settings.max_name_length)
+    end
+
+    local len
+    repeat
+      len = #fname
+      local last = len
+      while last > 0 do
+        local b = fname:byte(last)
+        if b > 0x20 and b ~= 0x2e and b ~= 0x7f then
+          break
+        end
+        last = last - 1
+      end
+      fname = fname:sub(1, last)
+      if #fname >= 7 and fname:sub(-7):lower() == '::$data' then
+        fname = fname:sub(1, -8)
+      end
+    until #fname == len
+
+    return fname
+  end
+
   local function gen_extension(fname)
-    local parts = lua_util.str_split(fname or '', '.')
+    local parts = lua_util.str_split(clean_name(fname or ''), '.')
 
     local ext = {}
     for n = 1, 2 do
@@ -262,6 +305,11 @@ local function check_mime_type(task)
   end
 
   local function check_filename(fname, ct, is_archive, part, detected_ext, nfiles)
+
+    if #fname > settings.max_name_length then
+      -- The checks below are not free, and the extension is at the end
+      fname = fname:sub(-settings.max_name_length)
+    end
 
     lua_util.debugm(N, task, "check filename: %s, ct=%s, is_archive=%s, detected_ext=%s, nfiles=%s",
         fname, ct, is_archive, detected_ext, nfiles)
@@ -470,6 +518,9 @@ local function check_mime_type(task)
 
         if p:is_archive() then
           local check = true
+          -- A package (a document that is an archive): its parts are not
+          -- files to open, but a program among them is still one
+          local package = false
           if detected_ext then
             local detected_type = lua_magic_types[detected_ext]
 
@@ -478,18 +529,37 @@ local function check_mime_type(task)
               logger.debugm("mime_types", task, "skip checking of %s as archive, %s is not archive but %s",
                   filename, detected_type.type)
               check = false
+              package = true
             end
           end
           if check and filename then
             local ext = gen_extension(filename)
 
-            if ext and settings.archive_exceptions[ext] then
+            -- The name alone does not make an archive a document: the content
+            -- must be detected as what the name says
+            if ext and settings.archive_exceptions[ext] and ext == detected_ext then
               check = false
+              package = true
               logger.debugm("mime_types", task, "skip checking of %s as archive, %s is whitelisted",
                   filename, ext)
             end
           end
           local arch = p:get_archive()
+
+          if package then
+            for _, f in ipairs(arch:get_files_full(settings.max_archive_names)) do
+              local ext = f.name and gen_extension(f.name)
+              -- Markup is a part of some packages (an alternative chunk)
+              local mult = ext and not package_markup[ext] and settings.bad_extensions[ext]
+
+              if mult then
+                task:insert_result(settings['symbol_bad_extension'], mult, ext)
+                task:insert_result('MIME_TRACE', 0.0,
+                    string.format("%s:%s", p:get_id(), '-'))
+                break
+              end
+            end
+          end
 
           -- TODO: migrate to flags once C part is ready
           if arch:is_encrypted() then
@@ -497,8 +567,9 @@ local function check_mime_type(task)
             task:insert_result('MIME_TRACE', 0.0,
                 string.format("%s:%s", p:get_id(), '-'))
           elseif arch:is_unreadable() then
-            task:insert_result(settings.symbol_encrypted_archive, 0.5, {
-              'compressed header',
+            -- It starts as an archive, and its files cannot be told
+            task:insert_result(settings.symbol_unreadable_archive, 1.0, {
+              arch:get_type(),
               filename,
             })
             task:insert_result('MIME_TRACE', 0.0,
@@ -519,7 +590,14 @@ local function check_mime_type(task)
               is_gen_split_rar = ext and (string.match(ext, '^%d%d%d$')) and (arch:get_type() == 'rar')
             end
 
-            local fl = arch:get_files_full(1000)
+            -- One more than what is checked tells that there are more
+            local fl = arch:get_files_full(settings.max_archive_names + 1)
+
+            if #fl > settings.max_archive_names or arch:is_truncated() then
+              -- Some names of this archive are not checked
+              fl[settings.max_archive_names + 1] = nil
+              task:insert_result(settings.symbol_truncated_archive, 1.0, filename)
+            end
 
             -- Other names of the same files do not count as files
             local nfiles, first_file = 0, nil
@@ -715,6 +793,18 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_obfuscated_archive'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_unreadable_archive'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_truncated_archive'],
       parent = id,
       group = 'mime_types',
     })
