@@ -37,6 +37,12 @@ struct html_block {
 	bool offscreen;
 	/* The `visibility` property: hidden or collapse */
 	bool visibility_hidden;
+	/*
+	 * Hidden by what is not `display`: opacity, a place off the screen, a
+	 * clip. No value of `display` shows such a block again, an important
+	 * one included
+	 */
+	bool forced_hidden;
 
 	unsigned fg_color_mask : 3;
 	unsigned bg_color_mask : 3;
@@ -306,10 +312,28 @@ public:
 		width_mask = set_value(width_mask, other.width_mask, width, other.width);
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
 		overflow_mask = set_value(overflow_mask, other.overflow_mask, overflow_hidden, other.overflow_hidden);
+
+		if (other.forced_hidden) {
+			forced_hidden = true;
+		}
+		if (other.offscreen) {
+			offscreen = true;
+		}
 	}
 
 	auto compute_visibility(void) -> void
 	{
+		if (forced_hidden) {
+			/*
+			 * As a hidden display for the descendants, which cannot bring the
+			 * content back
+			 */
+			set_display(css::css_display_value::DISPLAY_HIDDEN, html_block::important);
+			visibility_mask = html_block::invisible_flag;
+
+			return;
+		}
+
 		if (display_mask) {
 			if (display == css::css_display_value::DISPLAY_HIDDEN) {
 				visibility_mask = html_block::invisible_flag;
@@ -443,6 +467,7 @@ public:
 						  .overflow_hidden = false,
 						  .offscreen = false,
 						  .visibility_hidden = false,
+						  .forced_hidden = false,
 						  .fg_color_mask = html_block::inherited,
 						  .bg_color_mask = html_block::inherited,
 						  .height_mask = html_block::unset,

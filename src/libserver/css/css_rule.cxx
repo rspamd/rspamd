@@ -554,25 +554,73 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 	 * Normal declarations first, then the important ones over them: the
 	 * fields they set are marked, so that a block merged later can tell them
 	 */
-	compile_layer(out, false, rspamd::html::html_block::set);
+	css_hiding normal_hiding, hiding;
+
+	compile_layer(out, false, rspamd::html::html_block::set, normal_hiding);
 
 	rspamd::html::html_block important{};
-	compile_layer(important, true, rspamd::html::html_block::important);
+	compile_layer(important, true, rspamd::html::html_block::important, hiding);
 	out.set_block(important);
 
-	if (important.offscreen) {
+	/*
+	 * What hides a block without `display` is taken over both layers, each
+	 * property from the important one if it is there: `opacity: 0` is not
+	 * undone by an important `display`, and a position and its offset may
+	 * stand in different layers
+	 */
+	if (hiding.opacity < 0) {
+		hiding.opacity = normal_hiding.opacity;
+	}
+	if (!hiding.positioned) {
+		hiding.positioned = normal_hiding.positioned;
+	}
+	if (!hiding.left) {
+		hiding.left = normal_hiding.left;
+	}
+	if (!hiding.top) {
+		hiding.top = normal_hiding.top;
+	}
+	if (!hiding.text_indent) {
+		hiding.text_indent = normal_hiding.text_indent;
+	}
+	if (!hiding.clip) {
+		hiding.clip = normal_hiding.clip;
+	}
+
+	if (hiding.opacity >= 0 && hiding.opacity < 0.1) {
+		/* A (nearly) zero opacity makes the block invisible */
+		out.forced_hidden = true;
+	}
+
+	/*
+	 * Off-screen positioning and clipping hide the content while keeping it
+	 * in the document, which is additionally flagged for the offscreen
+	 * feature counter:
+	 *  - position:absolute|fixed with a large negative left/top
+	 *  - a large negative text-indent (image-replacement trick)
+	 *  - clip / clip-path collapsing the element to a zero area
+	 */
+	constexpr const auto offscreen_threshold = -1000.0f;
+	auto is_offscreen = [&](const std::optional<css_dimension> &d) -> bool {
+		return d && !d->is_percent && d->dim <= offscreen_threshold;
+	};
+
+	if ((hiding.positioned.value_or(false) && (is_offscreen(hiding.left) || is_offscreen(hiding.top))) ||
+		is_offscreen(hiding.text_indent) || hiding.clip.value_or(false)) {
+		out.forced_hidden = true;
 		out.offscreen = true;
 	}
 }
 
 /* Compiles the declarations that are important, or the ones that are not */
-auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool important, int how) const -> void
+auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool important, int how,
+										   css_hiding &hiding) const -> void
 {
 	auto *block = &out;
-	auto opacity = -1.0f;
 	std::optional<css_dimension> height, width, max_height, max_width;
-	std::optional<css_dimension> left, top, text_indent;
-	auto positioned = false, clip_hidden = false;
+	auto &opacity = hiding.opacity;
+	auto &left = hiding.left, &top = hiding.top, &text_indent = hiding.text_indent;
+	auto &positioned = hiding.positioned, &clip_hidden = hiding.clip;
 	std::optional<css_display_value> display, visibility;
 	auto has_color = rules.find(css_rule{css_property{css_property_type::PROPERTY_COLOR}}) != rules.end() ||
 					 rules.find(css_rule{css_property{css_property_type::PROPERTY_FONT_COLOR}}) != rules.end();
@@ -758,35 +806,6 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 	}
 	if (auto w = clamp_dim(width, max_width); w) {
 		block->set_width(w->dim, w->is_percent, how);
-	}
-
-	if (opacity >= 0 && opacity < 0.1) {
-		/*
-		 * A (nearly) zero opacity makes the block invisible, and, unlike
-		 * display, it cannot be reset by descendants; reuse the display
-		 * value as it has the desired inheritance semantics
-		 */
-		block->set_display(css_display_value::DISPLAY_HIDDEN, how);
-	}
-
-	/*
-	 * Off-screen positioning and clipping hide the content while keeping it
-	 * in the document. As with opacity, descendants cannot bring it back, so
-	 * model it as a hidden display, additionally flagging it for the
-	 * offscreen feature counter:
-	 *  - position:absolute|fixed with a large negative left/top
-	 *  - a large negative text-indent (image-replacement trick)
-	 *  - clip / clip-path collapsing the element to a zero area
-	 */
-	constexpr const auto offscreen_threshold = -1000.0f;
-	auto is_offscreen = [&](const std::optional<css_dimension> &d) -> bool {
-		return d && !d->is_percent && d->dim <= offscreen_threshold;
-	};
-
-	if ((positioned && (is_offscreen(left) || is_offscreen(top))) ||
-		is_offscreen(text_indent) || clip_hidden) {
-		block->set_display(css_display_value::DISPLAY_HIDDEN, how);
-		block->offscreen = true;
 	}
 }
 
