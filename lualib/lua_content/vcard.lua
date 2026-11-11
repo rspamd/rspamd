@@ -81,7 +81,10 @@ local function process_vcard(input, mpart, task)
   -- their number is bounded. They are matched one by one: a single match
   -- over the input would also keep a capture per property on the stack
   local property = gen_grammar() * l.Cp()
-  local line_end = (1 - l.P '\n') ^ 0 * l.P '\n' * l.Cp()
+  -- A line with the lines that continue it: a name is looked for over all
+  -- of them, so going on from a part of them would read the rest again
+  local nl = (l.P "\r" ^ -1 * l.P "\n") + l.P "\r"
+  local line_end = ((nl * l.S " \t\v\f") + (1 - nl)) ^ 0 * nl * l.Cp()
   local elts = {}
   local pos = 1
   local skipped = 0
@@ -93,7 +96,12 @@ local function process_vcard(input, mpart, task)
       -- Not a property: go on from the next line
       local next_line = line_end:match(input, pos)
 
-      if not next_line or skipped >= max_elts then
+      if not next_line then
+        break
+      end
+
+      if skipped >= max_elts then
+        truncated = true
         break
       end
 

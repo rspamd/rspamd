@@ -190,8 +190,9 @@ local function generic_grammar_elts()
   -- Helper functions
   local function pdf_hexstring_unescape(s)
     -- White space is allowed between the digits
-    if s:find('%s') or s:find('%z') then
-      s = s:gsub('[%s%z]', '')
+    -- (`%z` is not a class in Lua 5.2 and later: all that is not a digit goes)
+    if s:find('%X') then
+      s = s:gsub('%X', '')
     end
     if #s % 2 == 1 then
       -- The last digit of an odd run stands for a high nibble
@@ -877,7 +878,7 @@ end
 
 -- Extract interesting stuff from /Action, e.g. javascript
 local function process_action(task, pdf, obj)
-  if not (obj.js or obj.launch) and (obj.dict and (obj.dict.JS or obj.dict.F)) then
+  if not (obj.js or obj.launch) and (obj.dict and (obj.dict.JS or obj.dict.F or obj.dict.Win)) then
     local js = obj.dict.JS and maybe_dereference_object(obj.dict.JS, pdf, task)
 
     if js then
@@ -1071,7 +1072,8 @@ process_dict = function(task, pdf, obj, dict)
 
     if not obj.type then
       -- Defensive: check obj.dict exists before accessing its fields
-      if obj.dict and type(obj.dict) == 'table' and obj.dict.S == 'Launch' and obj.dict.F then
+      if obj.dict and type(obj.dict) == 'table' and obj.dict.S == 'Launch' and
+          (obj.dict.F or obj.dict.Win) then
         -- An action without a type of its own, as the ones written in place
         obj.type = 'Action'
       elseif obj.dict and type(obj.dict) == 'table' and obj.dict.S and obj.dict.JS then
@@ -1925,6 +1927,11 @@ local function font_decoder_of(font, pdf, task)
       local enc_dict = spec.dict or spec
       base = enc_dict.BaseEncoding
       diffs = maybe_dereference_object(enc_dict.Differences, pdf, task)
+
+      if type(diffs) == 'table' and diffs.dict then
+        -- An array that is an object of its own
+        diffs = diffs.dict
+      end
     end
 
     if type(base) == 'string' then
@@ -1990,14 +1997,20 @@ local function content_stream_ops(task, pdf, tobj)
   end
 
   local len = #uncompressed
-  pdf.text_size = pdf.text_size + len
 
   local ops = {}
   local pos = 1
   -- The grammar stops at a bracket that is never closed. The byte is skipped
-  -- and the reading goes on, a few times only: every attempt may walk to the
-  -- end of the stream to learn that the bracket is not closed
-  for _ = 1, 8 do
+  -- and the reading goes on. Every attempt may walk to the end of the stream
+  -- to learn that the bracket is not closed, so the attempts are bounded by
+  -- what they may read in total, a few times the stream, and not by their
+  -- number: a few brackets at the start must not hide the text after them
+  local work, max_work = 0, 8 * len + 65536
+  local complete = false
+
+  while work <= max_work do
+    work = work + (len - pos + 1) + 64
+
     local ok, chunk, stopped = pcall(pdf_text_grammar.match, pdf_text_grammar, uncompressed, pos)
 
     if not ok or type(chunk) ~= 'table' then
@@ -2018,10 +2031,16 @@ local function content_stream_ops(task, pdf, tobj)
     end
 
     if type(stopped) ~= 'number' or stopped > len then
+      complete = true
       break
     end
 
     pos = stopped + 1
+  end
+
+  if not complete then
+    -- Some of the stream is not read
+    pdf.flags.text_truncated = true
   end
 
   tobj.rspamd_ops = ops
