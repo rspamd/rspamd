@@ -1066,7 +1066,9 @@ lua_textpart_filter_words(lua_State *L)
 				}
 				break;
 			case RSPAMD_LUA_WORDS_FULL:
-				if (rspamd_regexp_match(re->re, w->normalized.begin,
+				/* A placeholder for an url is a word with no normalized text */
+				if (w->normalized.len > 0 &&
+					rspamd_regexp_match(re->re, w->normalized.begin,
 										w->normalized.len, FALSE)) {
 					rspamd_lua_push_full_word(L, w);
 					/* Push to the resulting vector */
