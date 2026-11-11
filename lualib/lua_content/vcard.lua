@@ -26,7 +26,11 @@ local function gen_grammar()
     local wsp = l.S(" \t\v\f")
     local crlf = (l.P "\r" ^ -1 * l.P "\n") + l.P "\r"
     local eol = (crlf * #crlf) + (crlf - (crlf ^ -1 * wsp))
-    local name = l.C((l.P(1) - (l.P ":")) ^ 1) / function(v)
+    -- A name ends at the colon of its own line, or of the lines that
+    -- continue it: a line without a colon is not the start of the name of
+    -- the property after it
+    local fold = crlf * wsp
+    local name = l.C((fold + (l.P(1) - l.S ":\r\n")) ^ 1) / function(v)
       return (v:gsub("[\n\r]+%s", ""))
     end
     local value = l.C((l.P(1) - eol) ^ 0) / function(v)
@@ -77,24 +81,35 @@ local function process_vcard(input, mpart, task)
   -- their number is bounded. They are matched one by one: a single match
   -- over the input would also keep a capture per property on the stack
   local property = gen_grammar() * l.Cp()
+  local line_end = (1 - l.P '\n') ^ 0 * l.P '\n' * l.Cp()
   local elts = {}
   local pos = 1
+  local skipped = 0
 
   while true do
     local key, value, next_pos = property:match(input, pos)
 
     if not next_pos then
-      break
-    end
+      -- Not a property: go on from the next line
+      local next_line = line_end:match(input, pos)
 
-    if nelts >= max_elts then
-      truncated = true
-      break
-    end
+      if not next_line or skipped >= max_elts then
+        break
+      end
 
-    nelts = nelts + 1
-    elts[nelts] = process_property(key, value)
-    pos = next_pos
+      skipped = skipped + 1
+      pos = next_line
+    else
+
+      if nelts >= max_elts then
+        truncated = true
+        break
+      end
+
+      nelts = nelts + 1
+      elts[nelts] = process_property(key, value)
+      pos = next_pos
+    end
   end
 
   if nelts == 0 then
