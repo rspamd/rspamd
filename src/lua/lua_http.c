@@ -678,6 +678,11 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 
 	if (cbd->msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
 		http_opts |= RSPAMD_HTTP_CLIENT_SSL;
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+			/* Not to be given a connection that was verified, nor the reverse */
+			http_opts |= RSPAMD_HTTP_CLIENT_SSL_NOVERIFY;
+		}
 	}
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
@@ -1516,35 +1521,45 @@ lua_http_request(lua_State *L)
 		cbd->host = g_malloc(hostlen + 1);
 		rspamd_strlcpy(cbd->host, host, hostlen + 1);
 
-		/* Keep-alive entry is available */
-		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
-			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
-																				  cbd->host,
-																				  msg->port,
-																				  msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
-
-			if (ka_addr) {
-				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
+		/*
+		 * The address is the one of an upstream, or the one that the URL
+		 * names. A pooled connection tells an address only for a name that
+		 * would be resolved otherwise: a request to an address goes to that
+		 * address, whatever its Host header shares with other requests
+		 */
+		if (cbd->up) {
+			numeric_ip = true;
+			cbd->addr = rspamd_inet_address_copy(rspamd_upstream_addr_next(cbd->up), NULL);
+		}
+		else {
+			/* We use msg->host here, not cbd->host ! */
+			if (rspamd_parse_inet_address(&cbd->addr,
+										  msg->host->str, msg->host->len,
+										  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				numeric_ip = true;
 			}
 		}
 
-		/*
-		 * No keep-alive stuff, check if we have upstream or if we can parse host as
-		 * a numeric address
-		 */
-		if (!cbd->addr) {
-			if (cbd->up) {
-				numeric_ip = true;
-				cbd->addr = rspamd_inet_address_copy(rspamd_upstream_addr_next(cbd->up), NULL);
-			}
-			else {
-				/* We use msg->host here, not cbd->host ! */
-				if (rspamd_parse_inet_address(&cbd->addr,
-											  msg->host->str, msg->host->len,
-											  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-					numeric_ip = true;
+		/* Keep-alive entry is available */
+		if (!cbd->addr && (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE)) {
+			unsigned int ssl_flags = 0;
+
+			if (msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
+				ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL;
+
+				if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+					ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL_NOVERIFY;
 				}
+			}
+
+			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
+																				  cbd->host,
+																				  msg->port,
+																				  ssl_flags);
+
+			if (ka_addr) {
+				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
+				numeric_ip = true;
 			}
 		}
 	}
