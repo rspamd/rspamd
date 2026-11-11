@@ -51,6 +51,24 @@ INIT_LOG_MODULE(archive)
 
 static const unsigned int max_archive_files = 100000;
 
+/*
+ * Tables here are keyed by names from the archive, which its sender chooses:
+ * a hash without a secret seed lets them all fall in one chain
+ */
+static unsigned int
+rspamd_archive_bytes_hash(const void *data, gsize len)
+{
+	return (unsigned int) rspamd_cryptobox_fast_hash(data, len, rspamd_hash_seed_secure());
+}
+
+static unsigned int
+rspamd_archive_gstring_hash(gconstpointer key)
+{
+	const GString *s = (const GString *) key;
+
+	return rspamd_archive_bytes_hash(s->str, s->len);
+}
+
 static GQuark
 rspamd_archives_err_quark(void)
 {
@@ -1614,7 +1632,9 @@ struct rspamd_zip_locals {
 static unsigned int
 rspamd_archive_ftok_hash(gconstpointer key)
 {
-	return rspamd_ftok_hash((const rspamd_ftok_t *) key);
+	const rspamd_ftok_t *tok = (const rspamd_ftok_t *) key;
+
+	return rspamd_archive_bytes_hash(tok->begin, tok->len);
 }
 
 static gboolean
@@ -1910,7 +1930,7 @@ rspamd_archive_zip_list_local(struct rspamd_task *task,
 		return;
 	}
 
-	names = g_hash_table_new((GHashFunc) g_string_hash, (GEqualFunc) g_string_equal);
+	names = g_hash_table_new(rspamd_archive_gstring_hash, (GEqualFunc) g_string_equal);
 	/* Names as they are, each converted once: a name of a record is not again */
 	raw_names = g_hash_table_new_full(rspamd_archive_ftok_hash, rspamd_archive_ftok_equal,
 									  g_free, NULL);
@@ -3486,13 +3506,8 @@ static guint
 rspamd_rar5_listed_hash(gconstpointer k)
 {
 	const struct rspamd_rar5_listed *l = k;
-	guint h = (guint) (l->pos ^ (l->pos >> 32));
 
-	for (gsize i = 0; i < l->len; i++) {
-		h = h * 31 + l->name[i];
-	}
-
-	return h;
+	return rspamd_archive_bytes_hash(l->name, l->len) ^ (guint) (l->pos ^ (l->pos >> 32));
 }
 
 static gboolean
@@ -4378,7 +4393,7 @@ rspamd_archive_rar5_unrar_qo(struct rspamd_task *task, struct rspamd_archive *ar
 	struct rspamd_rar5_qo qo;
 	struct rspamd_rar5_walk u;
 	GByteArray *scratch = g_byte_array_new();
-	GHashTable *unique = g_hash_table_new((GHashFunc) g_string_hash, (GEqualFunc) g_string_equal);
+	GHashTable *unique = g_hash_table_new(rspamd_archive_gstring_hash, (GEqualFunc) g_string_equal);
 	uint64_t pos = start, max_work = 8 * file_len + 65536;
 	gboolean ended = FALSE, fits = TRUE, subhead_enc = FALSE;
 
