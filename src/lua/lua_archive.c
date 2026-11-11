@@ -701,10 +701,20 @@ struct rspamd_archive_limits {
  */
 #define RSPAMD_ARCHIVE_RATIO_MIN_BYTES (64ULL * 1024)
 
+#define RSPAMD_ARCHIVE_DEFAULT_MAX_OUTPUT (G_GUINT64_CONSTANT(1) << 30)
+#define RSPAMD_ARCHIVE_DEFAULT_MAX_ENTRIES G_GUINT64_CONSTANT(1000000)
+
 static void
 lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limits *lim)
 {
 	memset(lim, 0, sizeof(*lim));
+	/*
+	 * What a caller that sets no limit gets: enough for any archive that is
+	 * unpacked on purpose, and an end for one made to have none. A limit set
+	 * to zero is no limit
+	 */
+	lim->max_output = RSPAMD_ARCHIVE_DEFAULT_MAX_OUTPUT;
+	lim->max_entries = RSPAMD_ARCHIVE_DEFAULT_MAX_ENTRIES;
 
 	if (opts_idx <= 0 || !lua_istable(L, opts_idx)) {
 		return;
@@ -777,10 +787,11 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
 		while (lua_next(L, -2) != 0) {
 			const char *name = NULL;
 
-			if (lua_isstring(L, -1)) {
+			/* Strings only: a number is converted in place, which breaks lua_next for a key */
+			if (lua_type(L, -1) == LUA_TSTRING) {
 				name = lua_tostring(L, -1);
 			}
-			else if (lua_isstring(L, -2) && lua_toboolean(L, -1)) {
+			else if (lua_type(L, -2) == LUA_TSTRING && lua_toboolean(L, -1)) {
 				name = lua_tostring(L, -2);
 			}
 
@@ -817,7 +828,8 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
  * @param {string} password optional passphrase for encrypted archives (ZIP: ZipCrypto/AES)
- * @param {table} opts optional extraction limits (any field omitted/0 = unlimited):
+ * @param {table} opts optional extraction limits (0 = unlimited; omitted = unlimited,
+ *   but for `max_output`, 1 GiB, and `max_entries`, 1000000):
  *  - max_output: total uncompressed bytes across all members
  *  - max_file_size: per-member uncompressed cap (members are truncated at this size)
  *  - max_files: maximum number of members to extract
@@ -882,7 +894,23 @@ lua_archive_unpack(lua_State *L)
 		archive_read_support_filter_none(a);
 	}
 	else {
-		archive_read_support_filter_all(a);
+		/*
+		 * The filters that the library does itself. "All" of them adds the
+		 * ones that run a program of the system (grzip, lrzip, lzop) on the
+		 * data, which is not for data from a message
+		 */
+		archive_read_support_filter_gzip(a);
+		archive_read_support_filter_bzip2(a);
+		archive_read_support_filter_xz(a);
+		archive_read_support_filter_lzma(a);
+		archive_read_support_filter_lzip(a);
+		archive_read_support_filter_lz4(a);
+#if ARCHIVE_VERSION_NUMBER >= 3003003
+		archive_read_support_filter_zstd(a);
+#endif
+		archive_read_support_filter_compress(a);
+		archive_read_support_filter_uu(a);
+		archive_read_support_filter_rpm(a);
 	}
 	if (format) {
 		/* Enable a specific format by known name mapping */
