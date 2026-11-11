@@ -60,6 +60,38 @@ struct html_image {
 	struct rspamd_url *url;
 	struct rspamd_image *embedded_image;
 	void *tag;
+	/* The same dimensions in double precision, for the tiny area
+	 * check: rounding each side to an integer would distort the
+	 * area of fractional dimensions in both directions */
+	double width_exact;
+	double height_exact;
+	/* Dimension provenance for the tiny external pixel classification:
+	 * 0 = not specified, 1 = attribute, 2 = stylesheet, 3 = inline style,
+	 * 4 = specified but unresolvable (percent or non-numeric CSS value) */
+	unsigned char width_source;
+	unsigned char height_source;
+	/* Absolute min-width/min-height from the inline style (in pixels),
+	 * used to re-clamp the size after stylesheet reconciliation */
+	double min_width;
+	double min_height;
+	/* Bits of inline-specified minimums (0x1 height, 0x2 width; the
+	 * higher bits 0x4/0x8 mark the percent ones, which cannot be
+	 * resolved but may raise the size, and 0x10/0x20 the !important
+	 * ones): an inline minimum overrides a stylesheet one entirely,
+	 * unless the latter is !important while the former is not */
+	unsigned char min_source;
+	/* Inline max-width/max-height bounds (in pixels); a negative value
+	 * means no bound (none or a non-absolute value) */
+	double max_width;
+	double max_height;
+	/* Bits of inline-specified maximums (0x1 height, 0x2 width; the
+	 * higher bits 0x4/0x8 mark the !important ones): an inline
+	 * maximum overrides a stylesheet one entirely, unless the latter
+	 * is !important while the former is not */
+	unsigned char max_source;
+	/* Bits of !important inline width/height declarations (0x1 height,
+	 * 0x2 width): an inline !important beats a stylesheet !important */
+	unsigned char inline_important;
 };
 
 

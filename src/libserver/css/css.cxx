@@ -73,6 +73,11 @@ css_style_sheet::~css_style_sheet()
 {
 }
 
+auto css_style_sheet::reset_match_budget() -> void
+{
+	pimpl->match_budget.remaining = css_match_budget::max_work;
+}
+
 auto css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
 										css_declarations_block_ptr decls) -> void
 {

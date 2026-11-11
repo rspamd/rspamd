@@ -1,0 +1,21 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Document
+Message-ID: <doc-960@service.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUND960"
+
+--BOUND960
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Doc</p>
+<img src="https://tracker.example.com/px/960/" width="1" height="1"/>
+</body></html>
+--BOUND960
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJTBmb3JtCjEgMCBvYmoKPDwvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFI+Pgpl
+bmRvYmoKdHJhaWxlcgp0cmFpbGVyCg==
+--BOUND960--

@@ -74,6 +74,9 @@ struct alignas(int) css_color {
 struct css_dimension {
 	float dim;
 	bool is_percent;
+	/* A font-relative or viewport unit (em, ex, vw, ...) cannot be
+	 * resolved against the environment and is not an absolute size */
+	bool is_relative_unit;
 };
 
 /*

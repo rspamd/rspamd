@@ -74,6 +74,15 @@ public:
 		return prop;
 	}
 
+	/*
+	 * The !important suffix is parsed after the property has already
+	 * been copied into the rule, so the flag has to be set separately
+	 */
+	void mark_important(css_property_flag flag)
+	{
+		prop.flag = flag;
+	}
+
 	/* Import values from another rules according to the importance */
 	void override_values(const css_rule &other);
 	void merge_values(const css_rule &other);

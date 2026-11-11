@@ -1,0 +1,11 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Diagram
+Message-ID: <diagram-903@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>See diagram</p>
+<img src="https://service.example.org/diagram.png" width="1" height="1" style="min-width:100px;min-height:100px" alt="Diagram"/>
+</body></html>

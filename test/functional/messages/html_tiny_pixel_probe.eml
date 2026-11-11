@@ -1,0 +1,18 @@
+From: RTCP <no-reply@mailer.example.com>
+To: <probe-rcpt@example.net>
+Subject: RTCP ID 1046957
+Message-ID: <1046957.probe-rcpt@example.net@mailer.example.com>
+List-Unsubscribe: <https://mailer.example.com/u/1046957/>
+Precedence: bulk
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_probe"
+
+--=_probe
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: base64
+
+PGh0bWw+PGJvZHk+ZTJmZTVmODA5M2Y2NDk0MTg0YzQyZjc1ZmNjNTlkN2QKCjxzcGFuIHN0eWxl
+PSJwb3NpdGlvbjogYWJzb2x1dGU7IHZpc2liaWxpdHk6IGhpZGRlbjsiPgogPGltZyBoZWlnaHQ9
+IjEiIHNyYz0iaHR0cHM6Ly90cmFja2VyLmV4YW1wbGUuY29tL3B4LzI3MDY1MzMvMzE0Mjc3ODc5
+LyIgd2lkdGg9IjEiLz4KPC9zcGFuPgo8L2JvZHk+PC9odG1sPgo=
+--=_probe--

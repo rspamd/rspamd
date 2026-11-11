@@ -1,0 +1,12 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Confirm your email
+Message-ID: <confirm-456@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Please confirm your email address.</p>
+<a href="https://service.example.org/confirm?t=abc123">Confirm email</a>
+<span style="display:none"><img width="1" height="1" src="https://tracker.example.com/o/456/"/></span>
+</body></html>

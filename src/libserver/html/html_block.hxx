@@ -44,6 +44,61 @@ struct html_block {
 	unsigned visibility_mask : 2;
 	unsigned overflow_mask : 2;
 
+	/* Set when the corresponding dimension comes from a max-width /
+	 * max-height bound rather than from an actual width / height */
+	bool width_from_max = false;
+	bool height_from_max = false;
+
+	/* Set when the size field holds the `auto` sentinel, which yields
+	 * to a value flattened from a max bound of another rule, as a
+	 * maximum caps an auto size, but not to a real size */
+	bool width_auto = false;
+	bool height_auto = false;
+
+	/* Absolute minimum dimensions from min-width / min-height (in
+	 * pixels, fractional ones included); the mask distinguishes an
+	 * absolute value (1) from a percent one, which cannot raise the
+	 * floor (2), and from the absence of the property (0) */
+	float min_width = 0.0;
+	float min_height = 0.0;
+	unsigned min_width_mask : 2;
+	unsigned min_height_mask : 2;
+
+	/* Set when the winning minimum is !important, so it beats any
+	 * inline style value */
+	bool min_width_important = false;
+	bool min_height_important = false;
+
+	/* Absolute max-width / max-height bounds (in pixels, fractional
+	 * ones included), kept separately from the width / height values
+	 * for the image classification; the mask distinguishes an
+	 * explicit bound (1) from `none` or a percent value removing it
+	 * (2) and from the absence of the property (0) */
+	float width_max = 0.0;
+	float height_max = 0.0;
+	unsigned width_max_mask : 2;
+	unsigned height_max_mask : 2;
+
+	/* Set when the winning maximum is !important, so it beats any
+	 * inline style value */
+	bool max_width_important = false;
+	bool max_height_important = false;
+
+	/* Actual width / height property values from the stylesheet
+	 * cascade, recorded before the rule's own max bound flattens the
+	 * main width / height fields (fractional ones included): the
+	 * image classification applies them, while the flattened values
+	 * stay for the visibility detection */
+	float width_real = 0.0;
+	float height_real = 0.0;
+	unsigned width_real_mask : 1;
+	unsigned height_real_mask : 1;
+
+	/* Set when the real width / height declaration that won the
+	 * cascade is !important, so it beats any inline style value */
+	bool width_important = false;
+	bool height_important = false;
+
 	constexpr static const auto unset = 0;
 	constexpr static const auto inherited = 1;
 	constexpr static const auto implicit = 1;
@@ -260,8 +315,115 @@ public:
 		fg_color_mask = set_value(fg_color_mask, other.fg_color_mask, fg_color, other.fg_color);
 		bg_color_mask = set_value(bg_color_mask, other.bg_color_mask, bg_color, other.bg_color);
 		display_mask = set_value(display_mask, other.display_mask, display, other.display);
-		height_mask = set_value(height_mask, other.height_mask, height, other.height);
-		width_mask = set_value(width_mask, other.width_mask, width, other.width);
+
+		/*
+		 * Whether the maximum of the same axis was taken from the
+		 * other rule: a size flattened from the own maximum yields to
+		 * any size of that rule then, while the `auto` sentinel, a
+		 * width declaration that won the cascade, yields to one
+		 * flattened from the winning maximum only
+		 */
+		auto other_max_height_wins = other.height_max_mask &&
+			(!height_max_mask ||
+			 (other.max_height_important && !max_height_important));
+		auto other_max_width_wins = other.width_max_mask &&
+			(!width_max_mask ||
+			 (other.max_width_important && !max_width_important));
+		/* ... and whether ours won instead, so a size of the other
+		 * rule flattened from its losing maximum is stale */
+		auto our_max_height_wins = height_max_mask &&
+			(!other.height_max_mask ||
+			 (max_height_important && !other.max_height_important));
+		auto our_max_width_wins = width_max_mask &&
+			(!other.width_max_mask ||
+			 (max_width_important && !other.max_width_important));
+
+		if (other.height_mask &&
+			(height_mask != html_block::set
+				 ? !(our_max_height_wins && other.height_from_max)
+				 : ((height_from_max ||
+					 (height_auto && other.height_from_max)) &&
+					other_max_height_wins))) {
+			height = other.height;
+			height_mask = other.height_mask;
+			height_from_max = other.height_from_max;
+			height_auto = other.height_auto;
+		}
+		else if (height_from_max && other_max_height_wins) {
+			/*
+			 * The maximum this size has been flattened from lost the
+			 * cascade, and the winning rule carries no size of its
+			 * own: the stale flattened value goes away, so that a
+			 * less specific rule can fill the size in
+			 */
+			height = 0;
+			height_mask = html_block::unset;
+			height_from_max = false;
+			height_auto = false;
+		}
+
+		if (other.width_mask &&
+			(width_mask != html_block::set
+				 ? !(our_max_width_wins && other.width_from_max)
+				 : ((width_from_max ||
+					 (width_auto && other.width_from_max)) &&
+					other_max_width_wins))) {
+			width = other.width;
+			width_mask = other.width_mask;
+			width_from_max = other.width_from_max;
+			width_auto = other.width_auto;
+		}
+		else if (width_from_max && other_max_width_wins) {
+			width = 0;
+			width_mask = html_block::unset;
+			width_from_max = false;
+			width_auto = false;
+		}
+
+		if (other.height_real_mask &&
+			(!height_real_mask ||
+			 (other.height_important && !height_important))) {
+			height_real = other.height_real;
+			height_real_mask = 1;
+			height_important = other.height_important;
+		}
+
+		if (other.width_real_mask &&
+			(!width_real_mask ||
+			 (other.width_important && !width_important))) {
+			width_real = other.width_real;
+			width_real_mask = 1;
+			width_important = other.width_important;
+		}
+
+		if (other.min_height_mask &&
+			(!min_height_mask ||
+			 (other.min_height_important && !min_height_important))) {
+			min_height = other.min_height;
+			min_height_mask = other.min_height_mask;
+			min_height_important = other.min_height_important;
+		}
+
+		if (other.min_width_mask &&
+			(!min_width_mask ||
+			 (other.min_width_important && !min_width_important))) {
+			min_width = other.min_width;
+			min_width_mask = other.min_width_mask;
+			min_width_important = other.min_width_important;
+		}
+
+		if (other_max_height_wins) {
+			height_max = other.height_max;
+			height_max_mask = other.height_max_mask;
+			max_height_important = other.max_height_important;
+		}
+
+		if (other_max_width_wins) {
+			width_max = other.width_max;
+			width_max_mask = other.width_max_mask;
+			max_width_important = other.max_width_important;
+		}
+
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
 		overflow_mask = set_value(overflow_mask, other.overflow_mask, overflow_hidden, other.overflow_hidden);
 	}
@@ -401,7 +563,13 @@ public:
 						  .font_mask = html_block::unset,
 						  .display_mask = html_block::inherited,
 						  .visibility_mask = html_block::unset,
-						  .overflow_mask = html_block::unset};
+						  .overflow_mask = html_block::unset,
+					  .min_width_mask = 0,
+					  .min_height_mask = 0,
+					  .width_max_mask = 0,
+					  .height_max_mask = 0,
+					  .width_real_mask = 0,
+					  .height_real_mask = 0};
 	}
 	/**
 	 * Produces html block with no defined values allocated from the pool

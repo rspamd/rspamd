@@ -304,6 +304,7 @@ auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 		css_dimension dim;
 
 		dim.dim = dbl;
+		dim.is_relative_unit = tok.is_relative_dimension();
 
 		if (tok.flags & css_parser_token::number_percent) {
 			dim.is_percent = true;

@@ -1,0 +1,12 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Banner
+Message-ID: <banner-948@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><head><style>img {min-width:100px !important; min-height:100px !important}</style></head>
+<body><p>Banner</p>
+<img src="https://service.example.org/banner.png" style="width:1px;height:1px;min-width:0;min-height:0" alt="Banner"/>
+</body></html>

@@ -62,13 +62,45 @@ struct css_parser_token {
 		dim_em,
 		dim_rem,
 		dim_ex,
+		dim_ch,
+		dim_lh,
+		dim_cap,
+		dim_ic,
+		dim_rlh,
 		dim_vw,
 		dim_vh,
 		dim_vmax,
 		dim_vmin,
+		dim_svw,
+		dim_svh,
+		dim_svi,
+		dim_svb,
+		dim_svmin,
+		dim_svmax,
+		dim_lvw,
+		dim_lvh,
+		dim_lvi,
+		dim_lvb,
+		dim_lvmin,
+		dim_lvmax,
+		dim_dvw,
+		dim_dvh,
+		dim_dvi,
+		dim_dvb,
+		dim_dvmin,
+		dim_dvmax,
+		dim_vi,
+		dim_vb,
+		dim_cqw,
+		dim_cqh,
+		dim_cqi,
+		dim_cqb,
+		dim_cqmin,
+		dim_cqmax,
 		dim_pt,
 		dim_cm,
 		dim_mm,
+		dim_q,
 		dim_in,
 		dim_pc,
 		dim_max,
@@ -163,6 +195,56 @@ struct css_parser_token {
 		return def;
 	}
 
+	/*
+	 * Font-relative and viewport dimensions resolve against the
+	 * environment rather than a fixed pixel multiplier
+	 */
+	auto is_relative_dimension(void) const -> bool
+	{
+		if (!(flags & css_parser_token::number_dimension)) {
+			return false;
+		}
+
+		return dimension_type == dim_type::dim_em ||
+			   dimension_type == dim_type::dim_rem ||
+			   dimension_type == dim_type::dim_ex ||
+			   dimension_type == dim_type::dim_ch ||
+			   dimension_type == dim_type::dim_lh ||
+			   dimension_type == dim_type::dim_cap ||
+			   dimension_type == dim_type::dim_ic ||
+			   dimension_type == dim_type::dim_rlh ||
+			   dimension_type == dim_type::dim_vw ||
+			   dimension_type == dim_type::dim_vh ||
+			   dimension_type == dim_type::dim_vmax ||
+			   dimension_type == dim_type::dim_vmin ||
+			   dimension_type == dim_type::dim_svw ||
+			   dimension_type == dim_type::dim_svh ||
+			   dimension_type == dim_type::dim_svi ||
+			   dimension_type == dim_type::dim_svb ||
+			   dimension_type == dim_type::dim_svmin ||
+			   dimension_type == dim_type::dim_svmax ||
+			   dimension_type == dim_type::dim_lvw ||
+			   dimension_type == dim_type::dim_lvh ||
+			   dimension_type == dim_type::dim_lvi ||
+			   dimension_type == dim_type::dim_lvb ||
+			   dimension_type == dim_type::dim_lvmin ||
+			   dimension_type == dim_type::dim_lvmax ||
+			   dimension_type == dim_type::dim_dvw ||
+			   dimension_type == dim_type::dim_dvh ||
+			   dimension_type == dim_type::dim_dvi ||
+			   dimension_type == dim_type::dim_dvb ||
+			   dimension_type == dim_type::dim_dvmin ||
+			   dimension_type == dim_type::dim_dvmax ||
+			   dimension_type == dim_type::dim_vi ||
+			   dimension_type == dim_type::dim_vb ||
+			   dimension_type == dim_type::dim_cqw ||
+			   dimension_type == dim_type::dim_cqh ||
+			   dimension_type == dim_type::dim_cqi ||
+			   dimension_type == dim_type::dim_cqb ||
+			   dimension_type == dim_type::dim_cqmin ||
+			   dimension_type == dim_type::dim_cqmax;
+	}
+
 	/* Debugging routines */
 	constexpr auto get_token_type() -> const char *;
 	/* This function might be slow */
@@ -177,6 +259,12 @@ static auto css_parser_eof_token(void) -> const css_parser_token &
 
 	return eof_tok;
 }
+
+/*
+ * Whether a unit name is a known CSS length unit; the lookup is
+ * case-insensitive, as CSS units are
+ */
+auto css_is_known_unit(std::string_view unit) -> bool;
 
 /* Ensure that parser tokens are simple enough */
 /*

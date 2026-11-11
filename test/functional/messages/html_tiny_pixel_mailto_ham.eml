@@ -1,0 +1,11 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Contact us
+Message-ID: <contact-890@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Contact support@example.org</p>
+<span style="display:none"><img width="1" height="1" src="https://tracker.example.com/o/890/"/></span>
+</body></html>

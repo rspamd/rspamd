@@ -52,6 +52,13 @@ public:
 
 	auto check_tag_block(const rspamd::html::html_tag *tag) -> rspamd::html::html_block *;
 
+	/*
+	 * Restores the selector matching budget; safe to call when the
+	 * elements checked so far have consumed what they needed and no
+	 * later matching depends on the pre-reset remaining budget
+	 */
+	auto reset_match_budget() -> void;
+
 private:
 	class impl;
 	rspamd_mempool_t *pool;

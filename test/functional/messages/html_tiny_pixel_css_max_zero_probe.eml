@@ -1,0 +1,12 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Diagram
+Message-ID: <diagram-918@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><head><style>.px {width:600px;max-width:0;height:200px;max-height:0}</style></head>
+<body><p>See diagram</p>
+<img class="px" src="https://tracker.example.com/px/918/" style="width:600px;height:200px" alt="Diagram"/>
+</body></html>

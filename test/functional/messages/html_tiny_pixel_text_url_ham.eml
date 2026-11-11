@@ -1,0 +1,20 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Weekly digest
+Message-ID: <digest-655@service.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_alt"
+
+--=_alt
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Weekly digest: https://service.example.org/digest/655
+--=_alt
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Weekly digest</p>
+<span style="display:none"><img width="1" height="1" src="https://tracker.example.com/o/655/"/></span>
+</body></html>
+--=_alt--
