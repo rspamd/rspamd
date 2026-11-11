@@ -149,6 +149,12 @@ auto resolve_part_name(std::string_view source_part, std::string_view target)
 	-> ooxml_result<std::string>
 {
 	if (target.empty()) return tl::make_unexpected("empty relationship target");
+	if (target.front() == '/') {
+		/* A part name: it starts at the root of the package, not at the source */
+		target.remove_prefix(1);
+		source_part = {};
+		if (target.empty()) return tl::make_unexpected("empty relationship target");
+	}
 	if (target.front() == '/' || has_uri_scheme(target) ||
 		std::any_of(target.begin(), target.end(), [](char ch) {
 			return g_ascii_iscntrl(static_cast<unsigned char>(ch)) || ch == '\\';
@@ -1034,7 +1040,6 @@ auto read_limits(lua_State *L, int table_index) -> ooxml_result<ooxml_limits>
 	auto xml = rspamd::xml::read_limits(L, table_index, result.xml);
 	if (!xml) return tl::make_unexpected(std::move(xml.error()));
 	result.xml = *xml;
-	lua_pop(L, 1);
 	return result;
 }
 
@@ -1237,6 +1242,13 @@ static int lua_ooxml_extract(lua_State *L)
 	if (!limits) return push_error(L, limits.error());
 	extraction_result result{limits->max_text, limits->max_urls};
 	std::size_t total_tokens = 0;
+	/*
+	 * A story that cannot be read is left out and counted, with what was
+	 * read of it kept: one broken part, or one made so, must not take away
+	 * the text and the links of all the others
+	 */
+	int failed_stories = 0;
+	std::string first_error;
 	auto stories_index = lua_absindex(L, 1);
 	auto count = rspamd_lua_table_size(L, stories_index);
 	for (int i = 1; i <= count; i++) {
@@ -1294,17 +1306,21 @@ static int lua_ooxml_extract(lua_State *L)
 		}
 		}
 		if (!parsed) {
-			lua_pop(L, 2);
-			return push_error_with_tokens(L, parsed.error(), total_tokens);
+			if (failed_stories++ == 0) {
+				first_error = parsed.error();
+			}
 		}
 		lua_pop(L, 1); /* content */
 		if (!result.last_chunk_is_newline) {
-			if (auto added = result.add_text("\n"); !added) {
-				lua_pop(L, 1);
-				return push_error_with_tokens(L, added.error(), total_tokens);
-			}
+			/* Fails only when the text is full already */
+			(void) result.add_text("\n");
 		}
 		lua_pop(L, 1); /* story */
+	}
+
+	if (failed_stories > 0 && failed_stories == count) {
+		/* Nothing of the document could be read */
+		return push_error_with_tokens(L, first_error, total_tokens);
 	}
 
 	collapse_newlines(result.text.get());
@@ -1333,6 +1349,12 @@ static int lua_ooxml_extract(lua_State *L)
 		lua_rawseti(L, -2, i + 1);
 	}
 	lua_setfield(L, -2, "auto_exec_names");
+	if (failed_stories > 0) {
+		lua_pushinteger(L, failed_stories);
+		lua_setfield(L, -2, "failed_stories");
+		lua_pushlstring(L, first_error.data(), first_error.size());
+		lua_setfield(L, -2, "error");
+	}
 	lua_pushnil(L);
 	lua_pushinteger(L, total_tokens);
 	return 3;

@@ -297,14 +297,22 @@ context("Text parts that hold a file signature", function()
     assert_equal('very/long/tail.php', u:get_path())
     task:destroy()
     -- A link that the other order shows under another name is phished, not counted again
+    -- A space ends the text of the link, so it reads the same in both messages
     local shown = string.rep('A\0', 200) ..
-        utf16le('<a href="https://evil.example.com/x">https://evil.example.com/x</a>')
+        utf16le('<a href="https://evil.example.com/x">https://evil.example.com/x</a> ')
     task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64', tostring(b64(shown, 76)))
     local count = has_url(task, 'evil.example.com'):get_count()
     task:destroy()
     task = load('text/html; charset=utf-16\nContent-Transfer-Encoding: base64',
         tostring(b64(shown .. utf16be('<a href="https://evil.example.com/x">https://paypal.com/signin</a>'), 76)))
-    u = has_url(task, 'evil.example.com')
+    -- The link itself: its text, glued to the letters before it and with the
+    -- other half read as garbage after it, is an url of its own in the text
+    u = nil
+    for _, cand in ipairs(task:get_urls() or {}) do
+      if tostring(cand) == 'https://evil.example.com/x' then
+        u = cand
+      end
+    end
     assert_not_nil(u)
     assert_true(u:is_phished())
     assert_equal(count, u:get_count())

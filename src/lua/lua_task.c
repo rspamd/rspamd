@@ -2782,16 +2782,66 @@ lua_task_append_message(lua_State *L)
 }
 
 
+/*
+ * Pushes a table with the urls of the task that pass the filter in `cb`.
+ * The sampling is driven by the number of the urls that pass the filter,
+ * not by the size of the whole set.
+ */
+static void
+lua_task_push_filtered_urls(lua_State *L, struct rspamd_task *task,
+							struct lua_tree_cb_data *cb)
+{
+	struct rspamd_url *u;
+	gsize matched = 0, sz;
+
+	kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
+		if (lua_url_cbdata_match(cb, u)) {
+			matched++;
+		}
+	});
+
+	sz = lua_url_adjust_skip_prob(task->task_timestamp,
+								  MESSAGE_FIELD(task, digest), cb, matched);
+
+	lua_createtable(L, sz, 0);
+
+	if (cb->sort) {
+		struct rspamd_url **urls_sorted;
+		gsize i = 0;
+
+		urls_sorted = g_new0(struct rspamd_url *, sz > 0 ? sz : 1);
+
+		kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
+			if (i < sz && lua_url_cbdata_match(cb, u) &&
+				lua_url_cbdata_sample_take(cb)) {
+				urls_sorted[i++] = u;
+			}
+		});
+
+		qsort(urls_sorted, i, sizeof(struct rspamd_url *), rspamd_url_cmp_qsort);
+
+		for (gsize j = 0; j < i; j++) {
+			lua_url_cbdata_push(cb, urls_sorted[j]);
+		}
+
+		g_free(urls_sorted);
+	}
+	else {
+		kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
+			lua_tree_url_callback(u, u, cb);
+		});
+	}
+}
+
 static int
 lua_task_get_urls(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct lua_tree_cb_data cb;
-	struct rspamd_url *u;
 	static const int default_protocols_mask = PROTOCOL_HTTP | PROTOCOL_HTTPS |
 											  PROTOCOL_FILE | PROTOCOL_FTP;
-	gsize sz, max_urls = 0;
+	gsize max_urls = 0;
 
 	if (task) {
 		if (task->cfg) {
@@ -2819,39 +2869,7 @@ lua_task_get_urls(lua_State *L)
 			return luaL_error(L, "invalid arguments");
 		}
 
-		sz = kh_size(MESSAGE_FIELD(task, urls));
-		sz = lua_url_adjust_skip_prob(task->task_timestamp,
-									  MESSAGE_FIELD(task, digest), &cb, sz);
-
-		lua_createtable(L, sz, 0);
-
-		if (cb.sort) {
-			struct rspamd_url **urls_sorted;
-			int i = 0;
-
-			urls_sorted = g_new0(struct rspamd_url *, sz);
-
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				if (i < sz) {
-					urls_sorted[i] = u;
-					i++;
-				}
-			});
-
-			qsort(urls_sorted, i, sizeof(struct rspamd_url *), rspamd_url_cmp_qsort);
-
-			for (int j = 0; j < i; j++) {
-				lua_tree_url_callback(urls_sorted[j], urls_sorted[j], &cb);
-			}
-
-			g_free(urls_sorted);
-		}
-		else {
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				lua_tree_url_callback(u, u, &cb);
-			});
-		}
-
+		lua_task_push_filtered_urls(L, task, &cb);
 		lua_url_cbdata_dtor(&cb);
 	}
 	else {
@@ -2867,10 +2885,9 @@ lua_task_get_urls_filtered(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct lua_tree_cb_data cb;
-	struct rspamd_url *u;
 	static const int default_protocols_mask = PROTOCOL_HTTP | PROTOCOL_HTTPS |
 											  PROTOCOL_FILE | PROTOCOL_FTP;
-	gsize sz, max_urls = 0;
+	gsize max_urls = 0;
 
 	if (task) {
 		if (task->cfg) {
@@ -2887,39 +2904,7 @@ lua_task_get_urls_filtered(lua_State *L)
 			return luaL_error(L, "invalid arguments");
 		}
 
-		sz = kh_size(MESSAGE_FIELD(task, urls));
-		sz = lua_url_adjust_skip_prob(task->task_timestamp,
-									  MESSAGE_FIELD(task, digest), &cb, sz);
-
-		lua_createtable(L, sz, 0);
-
-		if (cb.sort) {
-			struct rspamd_url **urls_sorted;
-			int i = 0;
-
-			urls_sorted = g_new0(struct rspamd_url *, sz);
-
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				if (i < sz) {
-					urls_sorted[i] = u;
-					i++;
-				}
-			});
-
-			qsort(urls_sorted, i, sizeof(struct rspamd_url *), rspamd_url_cmp_qsort);
-
-			for (int j = 0; j < i; j++) {
-				lua_tree_url_callback(urls_sorted[j], urls_sorted[j], &cb);
-			}
-
-			g_free(urls_sorted);
-		}
-		else {
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				lua_tree_url_callback(u, u, &cb);
-			});
-		}
-
+		lua_task_push_filtered_urls(L, task, &cb);
 		lua_url_cbdata_dtor(&cb);
 	}
 	else {
@@ -3180,8 +3165,15 @@ lua_task_inject_url(lua_State *L)
 
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
-		mpart = *((struct rspamd_mime_part **)
-					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
+		struct rspamd_mime_part **pmpart =
+			rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname);
+
+		if (pmpart == NULL) {
+			return luaL_error(L, "invalid arguments: a mime part is expected "
+								 "as the third argument");
+		}
+
+		mpart = *pmpart;
 	}
 	if (task && task->message && url && url->url) {
 		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false,
@@ -3295,8 +3287,7 @@ lua_task_get_emails(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct lua_tree_cb_data cb;
-	struct rspamd_url *u;
-	gsize max_urls = 0, sz;
+	gsize max_urls = 0;
 
 	if (task) {
 		if (task->message) {
@@ -3319,16 +3310,7 @@ lua_task_get_emails(lua_State *L)
 				return luaL_error(L, "invalid arguments");
 			}
 
-			sz = kh_size(MESSAGE_FIELD(task, urls));
-			sz = lua_url_adjust_skip_prob(task->task_timestamp,
-										  MESSAGE_FIELD(task, digest), &cb, sz);
-
-			lua_createtable(L, sz, 0);
-
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				lua_tree_url_callback(u, u, &cb);
-			});
-
+			lua_task_push_filtered_urls(L, task, &cb);
 			lua_url_cbdata_dtor(&cb);
 		}
 		else {

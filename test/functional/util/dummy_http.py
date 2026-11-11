@@ -9,6 +9,7 @@ import ssl
 import argparse
 import os
 import sys
+import time
 import traceback
 
 class MainHandler(tornado.web.RequestHandler):
@@ -102,6 +103,9 @@ class MainHandler(tornado.web.RequestHandler):
         else:
             raise tornado.web.HTTPError(404)
 
+    # Requests seen by /flaky
+    flaky_hits = 0
+
     def head(self, path):
         # Log the request headers in the exact order they arrived on the
         # wire so functional tests can assert on header presence and order
@@ -113,6 +117,33 @@ class MainHandler(tornado.web.RequestHandler):
             # Rspamd checks a map with HEAD before fetching it with GET, so
             # this has to be a plain 200 (the catch-all below is not).
             self.set_status(200)
+        elif path == "/backslash_redirect":
+            # A browser reads a backslash after the scheme as a slash, so
+            # this leads to another host and not to a path on this one
+            self.set_status(302)
+            self.set_header("Location", "/\\backslash-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/double_location":
+            # Two Location headers
+            self.set_status(302)
+            self.add_header("Location", "http://first-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+            self.add_header("Location", "http://second-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/long_non_http":
+            # A target of a scheme that is not followed, as long as it gets
+            self.set_status(302)
+            self.set_header("Location", "javascript:" + "a" * 4000)
+        elif path == "/flaky":
+            # Fails on the first request and redirects on the next ones
+            MainHandler.flaky_hits += 1
+            if MainHandler.flaky_hits == 1:
+                self.set_status(503)
+            else:
+                self.set_status(302)
+                self.set_header("Location", "http://flaky-target.example.net:%s/hello" % self.request.host.split(":")[-1])
+        elif path == "/hard_slow":
+            # Takes its time to answer
+            time.sleep(1.5)
+            self.set_status(302)
+            self.set_header("Location", "http://slow-target.example.net:%s/hello" % self.request.host.split(":")[-1])
         elif path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
             self.redirect(f"{self.request.protocol}://{self.request.host}/hello")

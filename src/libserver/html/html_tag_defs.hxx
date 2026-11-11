@@ -208,6 +208,11 @@ public:
 
 	auto by_id(int id) const -> const html_tag_def *
 	{
+		/* The id of an unknown element is no tag_id_t */
+		if (id < Tag_UNKNOWN || id >= Tag_MAX) {
+			return nullptr;
+		}
+
 		auto it = tag_by_id.find(static_cast<tag_id_t>(id));
 		if (it != tag_by_id.end()) {
 			return &(it->second);
@@ -218,6 +223,10 @@ public:
 
 	auto name_by_id_safe(int id) const -> std::string_view
 	{
+		if (id < Tag_UNKNOWN || id >= Tag_MAX) {
+			return "unknown";
+		}
+
 		auto it = tag_by_id.find(static_cast<tag_id_t>(id));
 		if (it != tag_by_id.end()) {
 			return it->second.name;

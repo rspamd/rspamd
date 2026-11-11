@@ -1810,6 +1810,18 @@ rspamd_hash_seed(void)
 	return 0xabf9727ba290690bULL;
 }
 
+uint64_t
+rspamd_hash_seed_secure(void)
+{
+	static uint64_t seed;
+
+	while (G_UNLIKELY(seed == 0)) {
+		seed = ottery_rand_uint64();
+	}
+
+	return seed;
+}
+
 static inline double
 rspamd_double_from_int64(uint64_t x)
 {

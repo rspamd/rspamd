@@ -81,6 +81,7 @@ struct rspamd_tokenize_budget {
 	uint64_t words;     /**< words retained so far */
 	uint64_t bytes;     /**< bytes retained so far */
 	gboolean exceeded;  /**< set when one of the limits has been hit */
+	gboolean decayed;   /**< set when words of a long text were left out by the decay */
 };
 
 /* Legacy typedefs for backward compatibility */

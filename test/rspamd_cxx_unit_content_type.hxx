@@ -525,6 +525,178 @@ TEST_SUITE("content_type")
 		rspamd_mempool_delete(pool);
 	}
 
+	/* The value of a parameter of a Content-Type, as parsed */
+	static std::string ct_param_value(struct rspamd_content_type * ct, const char *name)
+	{
+		rspamd_ftok_t key;
+		key.begin = name;
+		key.len = strlen(name);
+
+		if (ct->attrs == nullptr) {
+			return "<no attrs>";
+		}
+
+		auto *param = (struct rspamd_content_type_param *) g_hash_table_lookup(ct->attrs, &key);
+
+		if (param == nullptr) {
+			return "<no param>";
+		}
+
+		return std::string{param->value.begin, param->value.len};
+	}
+
+	TEST_CASE("many distinct RFC 2231 names resolve correctly")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		/* Each name is its own chain of one value; under the cap of 1024 parameters */
+		std::string hdr = "text/plain";
+		for (int i = 0; i < 1000; i++) {
+			hdr += "; p" + std::to_string(i) + "*=utf-8''v" + std::to_string(i);
+		}
+
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		CHECK(ct->nparams == 1000);
+		CHECK(ct_param_value(ct, "p0") == "v0");
+		CHECK(ct_param_value(ct, "p1") == "v1");
+		CHECK(ct_param_value(ct, "p500") == "v500");
+		CHECK(ct_param_value(ct, "p999") == "v999");
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("a high piece number alone")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		std::string hdr = "text/plain; name*999=x";
+
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		/* No piece 0: kept as it is, flagged */
+		CHECK(ct_param_value(ct, "name") == "x");
+
+		rspamd_ftok_t key;
+		key.begin = "name";
+		key.len = 4;
+		auto *param = (struct rspamd_content_type_param *) g_hash_table_lookup(ct->attrs, &key);
+		REQUIRE(param != nullptr);
+		CHECK((param->flags & RSPAMD_CONTENT_PARAM_NO_VALUE) != 0);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("pieces of short and long chains are joined in order")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		const std::string alphabet = "abcdefghijklmnopqrstuvwxyz";
+
+		/* 5 pieces are a short chain, 26 a long one; in order and reversed */
+		for (size_t count: {5, 16, 17, 26}) {
+			for (bool reversed: {false, true}) {
+				std::string hdr = "text/plain";
+				for (size_t i = 0; i < count; i++) {
+					size_t n = reversed ? count - 1 - i : i;
+					hdr += "; x*" + std::to_string(n) + "=" + std::string(1, alphabet[n]);
+				}
+
+				auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+				REQUIRE(ct != nullptr);
+				CHECK_MESSAGE(ct_param_value(ct, "x") == alphabet.substr(0, count), hdr);
+			}
+		}
+
+		/* The run stops at a missing piece, in both */
+		{
+			std::string hdr = "text/plain; x*0=a; x*1=b; x*3=d";
+			auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(ct != nullptr);
+			CHECK(ct_param_value(ct, "x") == "ab");
+
+			hdr = "text/plain";
+			for (int i = 0; i < 26; i++) {
+				if (i != 10) {
+					hdr += "; x*" + std::to_string(i) + "=" + std::string(1, alphabet[i]);
+				}
+			}
+			ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+			REQUIRE(ct != nullptr);
+			CHECK(ct_param_value(ct, "x") == "abcdefghij");
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("quoted pairs of a quoted value are unescaped")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		std::string hdr = "multipart/mixed; boundary=\"A\\\"B\"; foo=1";
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+		CHECK(std::string_view{ct->boundary.begin, ct->boundary.len} == "a\"b");
+		CHECK(std::string_view{ct->orig_boundary.begin, ct->orig_boundary.len} == "A\"B");
+		CHECK(ct_param_value(ct, "foo") == "1");
+
+		const std::pair<std::string, std::string> cases[] = {
+			{"text/plain; name=\"a\\\\b.txt\"", "a\\b.txt"},
+			{"text/plain; name=\"a\\b\"", "ab"},
+			{"text/plain; name=\"a\\\\\"", "a\\"},
+			{"text/plain; name=\"a\\\\\"; foo=bar", "a\\"},
+			{"text/plain; name=\"\\\"\\\"\"", "\"\""},
+			/* Unquoted tokens keep their backslashes */
+			{"text/plain; name=a\\b", "a\\b"},
+		};
+
+		for (const auto &[h, expected]: cases) {
+			ct = rspamd_content_type_parse(h.data(), h.size(), pool);
+			REQUIRE(ct != nullptr);
+			CHECK_MESSAGE(ct_param_value(ct, "name") == expected, h);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("quoted pairs of a quoted content-disposition value are unescaped")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"cd-test", 0);
+		const std::pair<std::string, std::string> cases[] = {
+			{"attachment; filename=\"a\\\"b.txt\"", "a\"b.txt"},
+			{"attachment; filename=\"a\\\\b.txt\"", "a\\b.txt"},
+			{"attachment; filename=\"a\\b\"", "ab"},
+			{"attachment; filename=\"a\\\\\"", "a\\"},
+			{"attachment; filename=\"a\\\\\"; foo=bar", "a\\"},
+		};
+
+		for (const auto &[h, expected]: cases) {
+			auto *cd = rspamd_content_disposition_parse(h.data(), h.size(), pool);
+			REQUIRE(cd != nullptr);
+			CHECK_MESSAGE((std::string_view{cd->filename.begin, cd->filename.len} == expected), h);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("lowercasing a parameter value keeps its new length")
+	{
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+													"ct-test", 0);
+		/* U+212A KELVIN SIGN (3 bytes) lowercases to 'k' (1 byte): "kabc" is 4 bytes, not 6 */
+		std::string hdr = "text/plain; foo=\xE2\x84\xAA"
+						  "ABC";
+		auto *ct = rspamd_content_type_parse(hdr.data(), hdr.size(), pool);
+		REQUIRE(ct != nullptr);
+
+		std::string value = ct_param_value(ct, "foo");
+		CHECK(value.size() == 4);
+		CHECK(value == "kabc");
+
+		rspamd_mempool_delete(pool);
+	}
+
 	TEST_CASE("empty type with parameters is rejected without leaking")
 	{
 		/*

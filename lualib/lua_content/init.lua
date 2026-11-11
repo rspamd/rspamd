@@ -89,11 +89,15 @@ local content_modules = {
     output = "table",
     -- gzip-compressed SVGZ parts are detected as archives
     process_archive = true,
+    -- A document that the strict detection does not take for an image is
+    -- still opened as one by its name, and the handler tells what is wrong
+    by_name = true,
   },
 }
 
 local modules_by_mime_type
 local modules_by_extension
+local ooxml_modules = { docx = true, xlsx = true, pptx = true }
 
 local function cache_key(part)
   return string.format('lua_content:%s', part:get_id())
@@ -133,12 +137,45 @@ exports.maybe_process_mime_part = function(part, task, keep_text)
   local mt = string.format("%s/%s", ctype or 'application',
       csubtype or 'octet-stream')
   local pair = modules_by_mime_type[mt]
+  local ext = part:get_detected_ext()
+
+  if pair and ext then
+    -- The declared type is the word of the sender: when the content is
+    -- found to be a document of another kind, that kind reads it, so that a
+    -- wrong type does not keep it unread. The OOXML handlers do that among
+    -- themselves, and tell the difference
+    local detected = modules_by_extension[ext]
+
+    if detected and detected[1] ~= pair[1] and
+        not (ooxml_modules[detected[1]] and ooxml_modules[pair[1]]) then
+      pair = detected
+    end
+  end
 
   if not pair then
-    local ext = part:get_detected_ext()
-
     if ext then
       pair = modules_by_extension[ext]
+    end
+
+    if not pair and ext == 'zip' and not keep_text then
+      -- The content tells nothing more than "an archive". The application
+      -- that opens the file goes by its name, so the name picks the handler,
+      -- which then says if the content is what the name claims
+      local fname = part:get_filename()
+      local fext = fname and fname:match('%.([%w]+)$')
+
+      if fext then
+        pair = modules_by_extension[fext:lower()]
+      end
+    elseif not pair and not ext and not keep_text and not part:is_text() then
+      -- The content is not recognised at all
+      local fname = part:get_filename()
+      local fext = fname and fname:match('%.([%w]+)$')
+      local by_ext = fext and modules_by_extension[fext:lower()]
+
+      if by_ext and by_ext[2].by_name then
+        pair = by_ext
+      end
     end
   end
 

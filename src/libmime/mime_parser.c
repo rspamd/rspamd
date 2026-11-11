@@ -123,6 +123,8 @@ static const unsigned int max_boundary_candidates = 100000;
 INIT_LOG_MODULE_PUBLIC(mime)
 
 #define RSPAMD_MIME_BOUNDARY_FLAG_CLOSED (1 << 0)
+/* The line ended with "--" when found; it stays set when CLOSED is cleared */
+#define RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED (1 << 1)
 #define RSPAMD_BOUNDARY_IS_CLOSED(b) ((b)->flags & RSPAMD_MIME_BOUNDARY_FLAG_CLOSED)
 
 struct rspamd_mime_boundary {
@@ -130,6 +132,7 @@ struct rspamd_mime_boundary {
 	goffset start;
 	uint64_t hash;
 	uint64_t closed_hash;
+	uint64_t found_hash; /* the hash as it was found, see rspamd_multipart_boundaries_filter */
 	int flags;
 };
 
@@ -156,7 +159,7 @@ struct rspamd_mime_range {
 };
 
 struct rspamd_mime_parser_runtime {
-	GArray *boundaries; /* Boundaries found in the whole message */
+	GArray *boundaries;                        /* Boundaries found in the whole message */
 	struct rspamd_mime_boundary_index *bindex; /* built on demand */
 	/*
 	 * Bodies of parts parsed by runtimes of their own (embedded messages,
@@ -164,9 +167,14 @@ struct rspamd_mime_parser_runtime {
 	 */
 	GArray *nested_bodies;
 	struct rspamd_mime_parser_runtime *root;
+	/* The runtime whose buffer contains this one, if there is such */
+	struct rspamd_mime_parser_runtime *parent;
 	const char *start;
 	const char *pos;
 	const char *end;
+	/* The range that boundaries have been collected from, NULL if none */
+	const char *scanned_begin;
+	const char *scanned_end;
 	struct rspamd_task *task;
 	unsigned int nesting;
 	unsigned int boundary_candidates;
@@ -2204,7 +2212,8 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 						   (int) blen, lc_copy, b.hash, (int) b.boundary, (int) b.start);
 
 			if (closing) {
-				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
+				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED |
+						  RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED;
 				rspamd_cryptobox_siphash((unsigned char *) &b.closed_hash, lc_copy,
 										 blen + 2,
 										 task->cfg->mime_parser_cfg->hkey);
@@ -2217,6 +2226,8 @@ rspamd_mime_preprocess_cb(struct rspamd_multipattern *mp,
 				b.flags = 0;
 				b.closed_hash = 0;
 			}
+
+			b.found_hash = b.hash;
 
 			/* Check if a string has been allocated on the heap */
 			if (blen + 2 >= sizeof(lc_copy_buf)) {
@@ -2329,6 +2340,9 @@ rspamd_mime_preprocess_range(struct rspamd_task *task,
 							 struct rspamd_mime_parser_runtime *st,
 							 const char *start, gsize len)
 {
+	st->scanned_begin = start;
+	st->scanned_end = start + len;
+
 	if (start == st->start && len > 2 && start[0] == '-' && start[1] == '-') {
 		/*
 		 * The patterns include the line break before the dashes, and there
@@ -2340,6 +2354,103 @@ rspamd_mime_preprocess_range(struct rspamd_task *task,
 	rspamd_multipattern_lookup(task->cfg->mime_parser_cfg->mp_boundary,
 							   start, len,
 							   rspamd_mime_preprocess_cb, st, NULL);
+}
+
+/*
+ * Fills the candidates of st, whose buffer is a part of the buffer of its
+ * parent, from the ones the parent has found in the range [begin, begin + len),
+ * so the same lines are neither scanned nor counted against the limit twice.
+ * Returns FALSE (with nothing added) if the result would differ from scanning
+ * the range, then the caller scans it.
+ */
+static gboolean
+rspamd_mime_reuse_candidates(struct rspamd_mime_parser_runtime *st,
+							 const char *begin, gsize len)
+{
+	struct rspamd_mime_parser_runtime *parent = st->parent;
+	const char *end = begin + len;
+	goffset begin_off, end_off, shift;
+	unsigned int left, right, i;
+	gboolean special, found_special = FALSE;
+
+	if (parent == NULL || parent->scanned_end == NULL ||
+		st->start < parent->start || st->end > parent->end ||
+		begin < parent->scanned_begin || end > parent->scanned_end) {
+		return FALSE;
+	}
+
+	/*
+	 * A line that goes on after the end of this buffer is cut here, but not in
+	 * the parent: its hash and its data offset would differ
+	 */
+	if (end < parent->scanned_end && *end != '\r' && *end != '\n') {
+		return FALSE;
+	}
+
+	begin_off = begin - parent->start;
+	end_off = end - parent->start;
+	shift = st->start - parent->start;
+	/* A line at the very start of the buffer needs no line break before it */
+	special = (begin == st->start && len > 2 && begin[0] == '-' && begin[1] == '-');
+
+	left = 0;
+	right = parent->boundaries->len;
+	while (left < right) {
+		unsigned int mid = left + (right - left) / 2;
+		const struct rspamd_mime_boundary *cur = &g_array_index(parent->boundaries,
+																struct rspamd_mime_boundary, mid);
+
+		if (cur->boundary < begin_off) {
+			left = mid + 1;
+		}
+		else {
+			right = mid;
+		}
+	}
+
+	for (i = left; i < parent->boundaries->len; i++) {
+		const struct rspamd_mime_boundary *cur = &g_array_index(parent->boundaries,
+																struct rspamd_mime_boundary, i);
+		struct rspamd_mime_boundary b;
+
+		/* The line must have something after the dashes in this range */
+		if (cur->boundary + 2 >= end_off) {
+			break;
+		}
+
+		if (cur->boundary == begin_off) {
+			/* Only the start of the buffer can be a candidate without a line break */
+			if (!special) {
+				continue;
+			}
+
+			found_special = TRUE;
+		}
+
+		/* Undo what the boundaries filter has done to the parent's candidate */
+		b.hash = cur->found_hash;
+		b.found_hash = cur->found_hash;
+		b.closed_hash = cur->closed_hash;
+		b.flags = (cur->flags & RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED) ? (RSPAMD_MIME_BOUNDARY_FLAG_CLOSED |
+																		   RSPAMD_MIME_BOUNDARY_FLAG_FOUND_CLOSED)
+																		: 0;
+		b.boundary = cur->boundary - shift;
+		/* The scan does not look for the line break after the end of its buffer */
+		b.start = MIN(cur->start, end_off) - shift;
+		g_array_append_val(st->boundaries, b);
+	}
+
+	if (special && !found_special) {
+		/* The parent does not see this line, as nothing is before it there */
+		g_array_set_size(st->boundaries, 0);
+
+		return FALSE;
+	}
+
+	st->scanned_begin = begin;
+	st->scanned_end = end;
+
+	return TRUE;
 }
 
 static void
@@ -2360,7 +2471,9 @@ rspamd_mime_preprocess_message(struct rspamd_task *task,
 			lookup_len++;
 		}
 
-		rspamd_mime_preprocess_range(task, st, lookup_start, lookup_len);
+		if (!rspamd_mime_reuse_candidates(st, lookup_start, lookup_len)) {
+			rspamd_mime_preprocess_range(task, st, lookup_start, lookup_len);
+		}
 	}
 	else {
 		rspamd_mime_preprocess_range(task, st, st->pos, st->end - st->pos);
@@ -2529,6 +2642,7 @@ rspamd_mime_parse_message(struct rspamd_task *task,
 		nst->task = st->task;
 		nst->nesting = st->nesting;
 		nst->root = st->root;
+		nst->parent = st;
 
 		str.str = (char *) part->parsed_data.begin;
 		str.len = part->parsed_data.len;

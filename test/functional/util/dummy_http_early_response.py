@@ -221,6 +221,29 @@ class EarlyResponseServer:
                                            "Keep-Alive": "timeout=30"},
                                           b"normal keepalive response")
 
+            elif path == '/garbage-after':
+                # A reply that says keep-alive, with bytes that are not a
+                # message after its body, in one write
+                writer.write(b"HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n"
+                             b"Content-Length: 5\r\n\r\nfirstJUNKJUNKJUNK")
+                await writer.drain()
+                await asyncio.sleep(0.2)
+
+            elif path == '/eof-keepalive':
+                # A reply with no length, which ends where the stream ends,
+                # and still says keep-alive
+                writer.write(b"HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\nbody until eof")
+                await writer.drain()
+
+            elif path == '/interim':
+                # An interim reply, then the final one
+                writer.write(b"HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n")
+                await writer.drain()
+                await asyncio.sleep(0.05)
+                await self._send_response(writer, 200, "OK",
+                                          {"Content-Type": "text/plain", "Connection": "close"},
+                                          b"final reply")
+
             else:
                 await self._send_response(writer, 404, "Not Found",
                                           {"Content-Type": "text/plain", "Connection": "close"},

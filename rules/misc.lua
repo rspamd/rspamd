@@ -61,6 +61,46 @@ rspamd_config.R_PARTS_DIFFER = {
 }
 
 -- Date issues
+-- Parts whose words are not all of their words: a long text is represented
+-- by its first words and a sample of the rest, and a message has a budget of
+-- words for all of its parts. Statistics, fuzzy hashes and rules on words do
+-- not see what was left out, so a message that is built to hit either limit
+-- can be told from one that is not.
+rspamd_config.TEXT_WORDS_TRUNCATED = {
+  callback = function(task)
+    local sampled, truncated = 0, 0
+
+    for _, part in ipairs(task:get_text_parts() or {}) do
+      local stats = part:get_stats()
+
+      if stats.words_sampled then
+        sampled = sampled + 1
+      end
+      if stats.words_truncated then
+        truncated = truncated + 1
+      end
+    end
+
+    if sampled + truncated > 0 then
+      local options = {}
+
+      if sampled > 0 then
+        options[#options + 1] = string.format('sampled=%d', sampled)
+      end
+      if truncated > 0 then
+        options[#options + 1] = string.format('limit=%d', truncated)
+      end
+
+      return true, 1.0, options
+    end
+
+    return false
+  end,
+  score = 0.0,
+  description = 'A text part has more words than are processed',
+  group = 'body'
+}
+
 local date_id = rspamd_config:register_symbol({
   name = 'DATE_CB',
   type = 'callback,mime',

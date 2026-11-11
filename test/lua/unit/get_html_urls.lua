@@ -641,7 +641,8 @@ Content-Type: text/html
     end)
   end
 
-  test('Nested links share long leading padding without losing the displayed domain', function()
+  test('Unclosed links with long leading padding keep the displayed domain of the last one', function()
+    -- A link start tag ends the open link, so the links are siblings
     local body = {}
     for i = 1, 50 do
       body[#body + 1] = '<a href="https://example.com/' .. i .. '">' ..
@@ -652,15 +653,19 @@ Content-Type: text/html
         'Content-Type: text/html; charset=utf-8\r\n\r\n' .. table.concat(body), rspamd_config)
     assert_true(res)
     task:process_message()
-    local nlinks = 0
+    local nlinks, nphished = 0, 0
     for _, u in ipairs(task:get_urls() or {}) do
       if u:get_host() == 'example.com' then
         nlinks = nlinks + 1
-        assert_true(u:is_phished())
-        assert_equal('https://example.org/', u:get_visible())
+        if u:is_phished() then
+          nphished = nphished + 1
+          assert_equal('https://example.com/50', tostring(u))
+          assert_equal('https://example.org/', u:get_visible())
+        end
       end
     end
     assert_equal(50, nlinks)
+    assert_equal(1, nphished)
     task:destroy()
   end)
 

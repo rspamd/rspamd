@@ -55,6 +55,10 @@ enum rspamd_http_priv_flags {
 	RSPAMD_HTTP_CONN_OWN_SOCKET = 1u << 7u,
 	RSPAMD_HTTP_CONN_FLAG_EARLY_RESPONSE = 1u << 8u, /* Server sent early response during write */
 	RSPAMD_HTTP_CONN_FLAG_INNER_COMPLETE = 1u << 9u, /* Decrypted inner message was completed */
+	/* Bytes of a message arrived when no message was expected: after a reply */
+	RSPAMD_HTTP_CONN_FLAG_UNSOLICITED = 1u << 10u,
+	/* An interim (1xx) reply is being read: the final one follows it */
+	RSPAMD_HTTP_CONN_FLAG_INTERIM = 1u << 11u,
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
@@ -84,6 +88,8 @@ struct rspamd_http_connection_private {
 	ev_tstamp write_timeout;
 	ev_tstamp read_timeout;
 	struct rspamd_http_message *msg;
+	/* How many messages were given to the finish handler on this connection */
+	unsigned int completed;
 	struct iovec *out;
 	unsigned int outlen;
 	enum rspamd_http_priv_flags flags;
@@ -274,6 +280,7 @@ rspamd_http_on_status(http_parser *parser, const char *at, size_t length)
 
 	if (priv->msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -353,6 +360,7 @@ rspamd_http_on_header_field(http_parser *parser,
 
 	if (priv->msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -384,6 +392,7 @@ rspamd_http_on_header_value(http_parser *parser,
 
 	if (priv->msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -518,6 +527,7 @@ rspamd_http_on_headers_complete(http_parser *parser)
 
 	if (msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -528,12 +538,25 @@ rspamd_http_on_headers_complete(http_parser *parser)
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 	}
 
+	if (conn->type == RSPAMD_HTTP_CLIENT && parser->type == HTTP_RESPONSE &&
+		parser->status_code >= 100 && parser->status_code < 200 &&
+		parser->status_code != 101) {
+		/*
+		 * An interim reply (100 Continue, 103 Early Hints): it is not the
+		 * answer to the request, which follows it on this connection
+		 */
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_INTERIM;
+
+		return 0;
+	}
+
 	if (msg->method == HTTP_HEAD) {
 		/* We don't care about the rest */
 		rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 
 		msg->code = parser->status_code;
 		rspamd_http_connection_ref(conn);
+		priv->completed++;
 		ret = conn->finish_handler(conn, msg);
 
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
@@ -666,6 +689,7 @@ rspamd_http_on_body(http_parser *parser, const char *at, size_t length)
 
 	if (msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -803,6 +827,7 @@ rspamd_http_on_message_complete_decrypted(http_parser *parser)
 
 	if (priv->msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -831,6 +856,7 @@ rspamd_http_on_headers_complete_decrypted(http_parser *parser)
 
 	if (msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -850,6 +876,7 @@ rspamd_http_on_headers_complete_decrypted(http_parser *parser)
 		rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 		msg->code = parser->status_code;
 		rspamd_http_connection_ref(conn);
+		priv->completed++;
 		ret = conn->finish_handler(conn, msg);
 
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
@@ -988,6 +1015,7 @@ rspamd_http_on_message_complete(http_parser *parser)
 
 	if (priv->msg == NULL) {
 		/* Arrived after the message was released, see rspamd_http_on_url */
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
 		return 0;
 	}
 
@@ -999,6 +1027,19 @@ rspamd_http_on_message_complete(http_parser *parser)
 	if (priv->header != NULL) {
 		rspamd_http_finish_header(conn, priv);
 		priv->header = NULL;
+	}
+
+	if (priv->flags & RSPAMD_HTTP_CONN_FLAG_INTERIM) {
+		/*
+		 * The end of an interim reply: go on reading the final one. The
+		 * parser is started anew: it takes a reply with no keep-alive in it
+		 * for the last message of its connection, and an interim one says
+		 * nothing of that
+		 */
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_INTERIM;
+		http_parser_init(parser, HTTP_RESPONSE);
+
+		return 0;
 	}
 
 	if ((conn->opts & RSPAMD_HTTP_REQUIRE_ENCRYPTION) && !IS_CONN_ENCRYPTED(priv)) {
@@ -1045,6 +1086,7 @@ rspamd_http_on_message_complete(http_parser *parser)
 	if (ret == 0) {
 		rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
 		rspamd_http_connection_ref(conn);
+		priv->completed++;
 		ret = conn->finish_handler(conn, priv->msg);
 
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
@@ -1373,6 +1415,8 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 	pbuf = priv->buf;
 	REF_RETAIN(pbuf);
 	rspamd_http_connection_ref(conn);
+	/* To tell if a message is completed by what is read here */
+	const unsigned int completed = priv->completed;
 
 	if (what & EV_READ) {
 		/* Check for early response while still sending request (client only) */
@@ -1409,9 +1453,26 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
 		if (r > 0) {
+			priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
+
 			if (http_parser_execute(&priv->parser, &priv->parser_cb,
 									d, r) != (size_t) r ||
 				priv->parser.http_errno != 0) {
+				if (priv->completed != completed) {
+					/*
+					 * The message was read and given to its owner, who is
+					 * done with this exchange: what follows the message is
+					 * not an error of that request. Such a connection is
+					 * not one to reuse
+					 */
+					msg_info("got garbage after the end of a message, close the connection");
+					rspamd_http_context_drop_keepalive(priv->ctx, conn);
+					REF_RELEASE(pbuf);
+					rspamd_http_connection_unref(conn);
+
+					return;
+				}
+
 				if (priv->flags & RSPAMD_HTTP_CONN_FLAG_TOO_LARGE) {
 					err = g_error_new(HTTP_ERROR, 413,
 									  "Request entity too large: %zu",
@@ -1465,6 +1526,17 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 			 * callbacks can finish or reset the connection and replace its
 			 * read buffer, stop then.
 			 */
+			if (priv->completed != completed &&
+				(priv->flags & RSPAMD_HTTP_CONN_FLAG_UNSOLICITED)) {
+				/* Bytes of something else after the message, in the same read */
+				msg_info("got data after the end of a message, close the connection");
+				rspamd_http_context_drop_keepalive(priv->ctx, conn);
+				REF_RELEASE(pbuf);
+				rspamd_http_connection_unref(conn);
+
+				return;
+			}
+
 			if (priv->ssl && !conn->finished && !IS_CONN_RESETED(priv) &&
 				priv->buf == pbuf && priv->msg != NULL &&
 				rspamd_ssl_pending(priv->ssl) > 0) {
@@ -1474,6 +1546,19 @@ rspamd_http_event_handler(int fd, short what, gpointer ud)
 		else if (r == 0) {
 			/* We can still call http parser */
 			http_parser_execute(&priv->parser, &priv->parser_cb, d, r);
+
+			if (priv->completed != completed) {
+				/*
+				 * A message that ends where the stream ends is complete, and
+				 * its owner has it. The connection is over, whatever its
+				 * headers said about keeping it
+				 */
+				rspamd_http_context_drop_keepalive(priv->ctx, conn);
+				REF_RELEASE(pbuf);
+				rspamd_http_connection_unref(conn);
+
+				return;
+			}
 
 			if (!conn->finished) {
 				err = g_error_new(HTTP_ERROR,
@@ -1789,10 +1874,37 @@ rspamd_http_connection_new_client_keepalive(struct rspamd_http_context *ctx,
 		ctx = rspamd_http_context_default();
 	}
 
-	conn = rspamd_http_context_check_keepalive(ctx, addr, host,
-											   opts & RSPAMD_HTTP_CLIENT_SSL);
+	unsigned int ssl_flags = 0;
+
+	if (opts & RSPAMD_HTTP_CLIENT_SSL) {
+		ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL;
+
+		if (opts & RSPAMD_HTTP_CLIENT_SSL_NOVERIFY) {
+			ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL_NOVERIFY;
+		}
+	}
+
+	conn = rspamd_http_context_check_keepalive(ctx, addr, host, ssl_flags);
 
 	if (conn) {
+		struct rspamd_http_connection_private *priv = conn->priv;
+
+		/*
+		 * What the request before set for itself does not go on to this
+		 * one: its limits, its timeouts, the key of its peer
+		 */
+		if (priv->peer_key) {
+			rspamd_pubkey_unref(priv->peer_key);
+			priv->peer_key = NULL;
+		}
+
+		priv->connect_timeout = 0;
+		priv->ssl_timeout = 0;
+		priv->write_timeout = 0;
+		priv->read_timeout = 0;
+		priv->flags &= ~(RSPAMD_HTTP_CONN_FLAG_UNSOLICITED | RSPAMD_HTTP_CONN_FLAG_INTERIM);
+		conn->max_size = 0;
+
 		return conn;
 	}
 
@@ -1802,8 +1914,7 @@ rspamd_http_connection_new_client_keepalive(struct rspamd_http_context *ctx,
 											 addr);
 
 	if (conn) {
-		rspamd_http_context_prepare_keepalive(ctx, conn, addr, host,
-											  opts & RSPAMD_HTTP_CLIENT_SSL);
+		rspamd_http_context_prepare_keepalive(ctx, conn, addr, host, ssl_flags);
 	}
 
 	return conn;
@@ -2057,6 +2168,11 @@ void rspamd_http_connection_free(struct rspamd_http_connection *conn)
 		if (priv->flags & RSPAMD_HTTP_CONN_OWN_SOCKET) {
 			/* Fd is owned by a connection */
 			close(conn->fd);
+		}
+
+		if (conn->keepalive_addr) {
+			rspamd_inet_address_free(conn->keepalive_addr);
+			conn->keepalive_addr = NULL;
 		}
 
 		g_free(priv);
@@ -2703,7 +2819,14 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	}
 
 	if (priv->peer_key && priv->local_key) {
-		priv->msg->peer_key = priv->peer_key;
+		if (priv->msg->peer_key != NULL) {
+			/* The message has a key of its own: that is the one to use */
+			rspamd_pubkey_unref(priv->peer_key);
+		}
+		else {
+			priv->msg->peer_key = priv->peer_key;
+		}
+
 		priv->peer_key = NULL;
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}

@@ -27,6 +27,7 @@
 #include "contrib/ankerl/unordered_dense.h"
 
 #include <list>
+#include <string>
 #include <unordered_map>
 
 namespace rspamd {
@@ -71,6 +72,8 @@ private:
 	static auto redis_conn_timeout_cb(EV_P_ ev_timer *w, int revents) -> void;
 	static auto redis_quit_cb(redisAsyncContext *c, void *r, void *priv) -> void;
 	static auto redis_on_disconnect(const struct redisAsyncContext *ac, int status) -> auto;
+	static auto redis_setup_cb(redisAsyncContext *c, void *r, void *priv) -> void;
+	static auto redis_ev_cleanup(void *privdata) -> void;
 };
 
 
@@ -102,6 +105,7 @@ class redis_pool_elt {
 	int port;
 	redis_pool_key_t key;
 	bool is_unix;
+	ev_tstamp last_limit_log = 0;
 
 public:
 	/* Disable copy */
@@ -148,6 +152,7 @@ public:
 	}
 
 	auto new_connection() -> redisAsyncContext *;
+	auto can_open() -> bool;
 
 	auto release_connection(const redis_pool_connection *conn) -> void
 	{
@@ -187,37 +192,36 @@ public:
 
 		rspamd_cryptobox_fast_hash_init(&st, rspamd_hash_seed());
 
-		if (db) {
-			rspamd_cryptobox_fast_hash_update(&st, db, strlen(db));
-		}
-		if (username) {
-			rspamd_cryptobox_fast_hash_update(&st, username, strlen(username));
-		}
-		if (password) {
-			rspamd_cryptobox_fast_hash_update(&st, password, strlen(password));
-		}
+		/*
+		 * Each field with its presence and its length: fields that are put
+		 * one after another with nothing between them make one key of
+		 * different sets of them (db "12" and db "1" with a password "2"),
+		 * and those would share their connections
+		 */
+		auto add_field = [&st](const char *field) {
+			std::uint64_t len = field ? strlen(field) + 1 : 0;
 
-		rspamd_cryptobox_fast_hash_update(&st, ip, strlen(ip));
+			rspamd_cryptobox_fast_hash_update(&st, &len, sizeof(len));
+
+			if (field) {
+				rspamd_cryptobox_fast_hash_update(&st, field, len - 1);
+			}
+		};
+
+		add_field(db);
+		add_field(username);
+		add_field(password);
+		add_field(ip);
 		rspamd_cryptobox_fast_hash_update(&st, &port, sizeof(port));
 
 		/* TLS parameters */
 		rspamd_cryptobox_fast_hash_update(&st, &use_tls, sizeof(use_tls));
 		rspamd_cryptobox_fast_hash_update(&st, &no_ssl_verify, sizeof(no_ssl_verify));
-		if (ca_file) {
-			rspamd_cryptobox_fast_hash_update(&st, ca_file, strlen(ca_file));
-		}
-		if (ca_dir) {
-			rspamd_cryptobox_fast_hash_update(&st, ca_dir, strlen(ca_dir));
-		}
-		if (cert_file) {
-			rspamd_cryptobox_fast_hash_update(&st, cert_file, strlen(cert_file));
-		}
-		if (key_file) {
-			rspamd_cryptobox_fast_hash_update(&st, key_file, strlen(key_file));
-		}
-		if (sni) {
-			rspamd_cryptobox_fast_hash_update(&st, sni, strlen(sni));
-		}
+		add_field(ca_file);
+		add_field(ca_dir);
+		add_field(cert_file);
+		add_field(key_file);
+		add_field(sni);
 
 		return rspamd_cryptobox_fast_hash_final(&st);
 	}
@@ -225,6 +229,12 @@ public:
 	auto num_active() const -> auto
 	{
 		return active.size();
+	}
+
+	/* The server of the element for a log line, with no credentials in it */
+	auto describe() const -> std::string
+	{
+		return is_unix ? ip : ip + ":" + std::to_string(port);
 	}
 
 	~redis_pool_elt()
@@ -279,6 +289,12 @@ private:
 class redis_pool final {
 	static constexpr const double default_timeout = 10.0;
 	static constexpr const unsigned default_max_conns = 100;
+	/*
+	 * Connections of one server and set of credentials that may be in use
+	 * at once, in units of max_conns: past that the server does not answer,
+	 * and more connections to it only use up the descriptors of the process
+	 */
+	static constexpr const unsigned hard_limit_factor = 10;
 
 	/* We want to have references integrity */
 	ankerl::unordered_dense::map<redisAsyncContext *,
@@ -333,6 +349,11 @@ public:
 		conns_by_ctx.emplace(ctx, conn);
 	}
 
+	auto hard_max_conns() const -> std::size_t
+	{
+		return static_cast<std::size_t>(max_conns) * hard_limit_factor;
+	}
+
 	/* Hack to prevent Redis callbacks to be executed */
 	auto prepare_to_die() -> void
 	{
@@ -355,6 +376,9 @@ redis_pool_connection::~redis_pool_connection()
 		if (ctx) {
 			pool->unregister_context(ctx);
 
+			/* The context may outlive this object for a while: it must not find it */
+			ctx->data = nullptr;
+
 			if (!(ctx->c.flags & REDIS_FREEING)) {
 				auto *ac = ctx;
 				ctx = nullptr;
@@ -369,6 +393,7 @@ redis_pool_connection::~redis_pool_connection()
 		ev_timer_stop(pool->event_loop, &timeout);
 		if (ctx) {
 			pool->unregister_context(ctx);
+			ctx->data = nullptr;
 
 			if (!(ctx->c.flags & REDIS_FREEING)) {
 				auto *ac = ctx;
@@ -435,6 +460,11 @@ auto redis_pool_connection::redis_on_disconnect(const struct redisAsyncContext *
 {
 	auto *conn = (struct redis_pool_connection *) ac->data;
 
+	if (conn == nullptr) {
+		/* Released while the context was being freed */
+		return;
+	}
+
 	/*
 	 * Here, we know that redis itself will free this connection
 	 * so, we need to do something very clever about it
@@ -448,6 +478,72 @@ auto redis_pool_connection::redis_on_disconnect(const struct redisAsyncContext *
 
 		/* Erasure of shared pointer will cause it to be removed */
 		conn->elt->release_connection(conn);
+	}
+}
+
+/*
+ * hiredis frees a context when its connection ends, whoever holds it. A
+ * connection that is given out and has commands in flight is fine with
+ * that: their callbacks are called, and the holder releases the connection
+ * from them. One with no command in flight has no callback to be told by,
+ * and its holder would go on with a pointer to freed memory: a request made
+ * from a coroutine keeps its connection until the Lua object is collected,
+ * and Redis may restart or drop an idle connection in between. Such a
+ * context is kept (it takes no more commands) until its holder releases
+ * it. This is called when hiredis stops the events of a context, which is
+ * the place where it tells a disconnect
+ */
+auto redis_pool_connection::redis_ev_cleanup(void *privdata) -> void
+{
+	auto *ev = (redisLibevEvents *) privdata;
+	auto *ac = ev->context;
+	auto *conn = (struct redis_pool_connection *) ac->data;
+
+	const auto held_idle = conn != nullptr && conn->ctx == ac &&
+						   conn->state == rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE &&
+						   !(ac->c.flags & (REDIS_FREEING | REDIS_SUBSCRIBED | REDIS_MONITORING)) &&
+						   ac->replies.head == nullptr && ac->sub.replies.head == nullptr;
+
+	if (held_idle) {
+		msg_debug_rpool("connection %p is closed while it is held with no commands: %s",
+						ac, ac->errstr);
+	}
+	else {
+		/* As usual: hiredis frees it and tells that by the callbacks */
+		ac->c.flags &= ~REDIS_NO_AUTO_FREE;
+	}
+
+	redisLibevCleanup(privdata);
+}
+
+/*
+ * The reply to AUTH or SELECT that a new connection starts with. When one of
+ * them fails, the commands that follow would run without the user or in the
+ * database 0, with nothing to tell that: the connection is not used then
+ */
+auto redis_pool_connection::redis_setup_cb(redisAsyncContext *ac, void *r, void *priv) -> void
+{
+	auto *reply = (redisReply *) r;
+	auto *conn = (struct redis_pool_connection *) ac->data;
+
+	if (reply == nullptr || reply->type != REDIS_REPLY_ERROR || conn == nullptr || conn->ctx != ac) {
+		return;
+	}
+
+	msg_err("cannot set up a connection to redis %s: %s failed: %s",
+			conn->elt->describe().c_str(), (const char *) priv,
+			reply->str ? reply->str : "unknown error");
+
+	if (ac->replies.head != nullptr) {
+		/* The commands queued after it fail now, and their owner releases the connection */
+		redisAsyncFree(ac);
+	}
+	else {
+		/* Nothing is queued: no more commands are taken, and the owner sees the error */
+		ac->err = REDIS_ERR_OTHER;
+		rspamd_snprintf(ac->errstr, sizeof(ac->errstr), "%s failed: %s",
+						(const char *) priv, reply->str ? reply->str : "unknown error");
+		ac->c.flags |= REDIS_DISCONNECTING;
 	}
 }
 
@@ -498,10 +594,13 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 
 	redisLibevAttach(pool->event_loop, ctx);
 	redisAsyncSetDisconnectCallback(ctx, redis_pool_connection::redis_on_disconnect);
+	/* See redis_ev_cleanup */
+	ctx->c.flags |= REDIS_NO_AUTO_FREE;
+	ctx->ev.cleanup = redis_pool_connection::redis_ev_cleanup;
 
 	if (!username.empty()) {
 		if (!password.empty()) {
-			redisAsyncCommand(ctx, nullptr, nullptr,
+			redisAsyncCommand(ctx, redis_pool_connection::redis_setup_cb, (void *) "AUTH",
 							  "AUTH %s %s", username.c_str(), password.c_str());
 		}
 		else {
@@ -509,13 +608,30 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 		}
 	}
 	else if (!password.empty()) {
-		redisAsyncCommand(ctx, nullptr, nullptr,
+		redisAsyncCommand(ctx, redis_pool_connection::redis_setup_cb, (void *) "AUTH",
 						  "AUTH %s", password.c_str());
 	}
 	if (!db.empty()) {
-		redisAsyncCommand(ctx, nullptr, nullptr,
+		redisAsyncCommand(ctx, redis_pool_connection::redis_setup_cb, (void *) "SELECT",
 						  "SELECT %s", db.c_str());
 	}
+}
+
+auto redis_pool_elt::can_open() -> bool
+{
+	if (active.size() < pool->hard_max_conns()) {
+		return true;
+	}
+
+	const auto now = ev_now(pool->event_loop);
+
+	if (now - last_limit_log >= 1.0) {
+		last_limit_log = now;
+		msg_err("%z connections to redis %s are in use: no more are opened until some are released",
+				active.size(), describe().c_str());
+	}
+
+	return false;
 }
 
 /* OpenSSL is initialised by core before Redis pool is used */
@@ -560,7 +676,7 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 			}
 		}
 		else {
-			auto *nctx = redis_async_new();
+			auto *nctx = can_open() ? redis_async_new() : nullptr;
 			msg_debug_rpool("error in the inactive connection: %s; opened new connection to %s:%d: %p",
 							conn->ctx->errstr, ip.c_str(), port, nctx);
 
@@ -584,7 +700,7 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 		}
 	}
 	else {
-		auto *nctx = redis_async_new();
+		auto *nctx = can_open() ? redis_async_new() : nullptr;
 
 		if (nctx) {
 			/* If TLS is configured for this element, initiate it now */

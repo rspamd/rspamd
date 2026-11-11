@@ -241,32 +241,32 @@ end
 local function entry_to_xml(data)
   local xml_template = [[<record>
   <row>
-    <source_ip>{= data.ip =}</source_ip>
+    <source_ip>{= data.ip | escape_xml =}</source_ip>
     <count>{= data.count =}</count>
     <policy_evaluated>
-      <disposition>{= data.disposition =}</disposition>
-      <dkim>{= data.dkim_disposition =}</dkim>
-      <spf>{= data.spf_disposition =}</spf>
+      <disposition>{= data.disposition | escape_xml =}</disposition>
+      <dkim>{= data.dkim_disposition | escape_xml =}</dkim>
+      <spf>{= data.spf_disposition | escape_xml =}</spf>
       {% if data.override and data.override ~= '' -%}
-      <reason><type>{= data.override =}</type></reason>
+      <reason><type>{= data.override | escape_xml =}</type></reason>
       {%- endif %}
     </policy_evaluated>
   </row>
   <identifiers>
-    <header_from>{= data.header_from =}</header_from>
+    <header_from>{= data.header_from | escape_xml =}</header_from>
   </identifiers>
   <auth_results>
     {% if data.dkim_results[1] -%}
     {% for d in data.dkim_results -%}
     <dkim>
-      <domain>{= d.domain =}</domain>
-      <result>{= d.result =}</result>
+      <domain>{= d.domain | escape_xml =}</domain>
+      <result>{= d.result | escape_xml =}</result>
     </dkim>
     {%- endfor %}
     {%- endif %}
     <spf>
-      <domain>{= data.spf_domain =}</domain>
-      <result>{= data.spf_result =}</result>
+      <domain>{= data.spf_domain | escape_xml =}</domain>
+      <result>{= data.spf_result | escape_xml =}</result>
     </spf>
   </auth_results>
 </record>

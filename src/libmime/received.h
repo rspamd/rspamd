@@ -34,6 +34,7 @@ struct rspamd_mime_header;
 
 /**
  * Parse received header from an input header data
+ * The data must be NUL-terminated (readable at data[sz])
  * @param task
  * @param data
  * @param sz

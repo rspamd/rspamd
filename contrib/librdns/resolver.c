@@ -202,6 +202,86 @@ rdns_find_dns_request(uint8_t *in, struct rdns_io_channel *ioc)
 	return kh_value(ioc->requests, k);
 }
 
+/* Compares two names without regard to the case and to a trailing dot */
+static bool
+rdns_names_equal(const char *a, const char *b)
+{
+	size_t alen, blen;
+
+	if (a == NULL || b == NULL) {
+		return false;
+	}
+
+	alen = strlen(a);
+	blen = strlen(b);
+
+	while (alen > 0 && a[alen - 1] == '.') {
+		alen--;
+	}
+	while (blen > 0 && b[blen - 1] == '.') {
+		blen--;
+	}
+
+	return alen == blen && strncasecmp(a, b, alen) == 0;
+}
+
+/* A record of the answer section with the name that owns it */
+struct rdns_owned_entry {
+	struct rdns_reply_entry *elt;
+	char *owner;
+	bool accepted;
+	struct rdns_owned_entry *next;
+};
+
+/*
+ * Keeps the records that answer the question: those owned by the name that
+ * was asked for, and those owned by a name that a CNAME among the accepted
+ * ones leads to. Anything else in the answer section is somebody's records
+ * for some other name, and a consumer has no way to tell them apart once
+ * they are in the list.
+ *
+ * The order of the records in a reply is not relied upon, so this goes
+ * over them until no more names are reached.
+ */
+static void
+rdns_accept_owned_entries(struct rdns_request *req, struct rdns_owned_entry *head)
+{
+	struct rdns_owned_entry *cur;
+	bool progress = true;
+	unsigned int rounds = 0;
+
+	for (cur = head; cur != NULL; cur = cur->next) {
+		for (unsigned int i = 0; i < req->qcount; i++) {
+			if (rdns_names_equal(cur->owner, req->requested_names[i].name)) {
+				cur->accepted = true;
+				break;
+			}
+		}
+	}
+
+	/* A chain of aliases is short; this bounds a reply made to be slow */
+	while (progress && rounds++ < 16) {
+		struct rdns_owned_entry *alias;
+
+		progress = false;
+
+		for (alias = head; alias != NULL; alias = alias->next) {
+			if (!alias->accepted || alias->elt->type != RDNS_REQUEST_CNAME ||
+				alias->elt->content.cname.name == NULL) {
+				continue;
+			}
+
+			for (cur = head; cur != NULL; cur = cur->next) {
+				if (!cur->accepted &&
+					rdns_names_equal(cur->owner, alias->elt->content.cname.name)) {
+					cur->accepted = true;
+					progress = true;
+				}
+			}
+		}
+	}
+}
+
 static bool
 rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 				 struct rdns_reply **_rep)
@@ -272,9 +352,15 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 	type = req->requested_names[0].type;
 
 	if (rep->code == RDNS_RC_NOERROR) {
+		struct rdns_owned_entry *owned = NULL, *owned_tail = NULL, *oe, *oe_next;
+
 		r -= pos - in;
 		/* Extract RR records */
 		for (i = 0; i < ntohs(header->ancount); i++) {
+			char *owner = NULL;
+			uint8_t *owner_pos = pos;
+			int owner_remain = r;
+
 			elt = calloc(1, sizeof(struct rdns_reply_entry));
 
 			if (elt == NULL) {
@@ -282,8 +368,15 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 				break;
 			}
 
+			/* The name that owns the record; a failure is reported below */
+			if (!rdns_parse_labels(resolver, in, &owner, &owner_pos, rep,
+								   &owner_remain, true, 0)) {
+				owner = NULL;
+			}
+
 			t = rdns_parse_rr(resolver, in, elt, &pos, rep, &r);
 			if (t == -1) {
+				free(owner);
 				free(elt);
 				rdns_debug("incomplete reply");
 
@@ -298,16 +391,55 @@ rdns_parse_reply(uint8_t *in, int r, struct rdns_request *req,
 				break;
 			}
 			else if (t == 1) {
-				DL_APPEND(rep->entries, elt);
-				if (elt->type == type) {
-					found = true;
+				oe = calloc(1, sizeof(*oe));
+
+				if (oe == NULL) {
+					rdns_warn("Cannot allocate memory for reply entry");
+					free(owner);
+					/* Frees what the record holds as well */
+					DL_APPEND(rep->entries, elt);
+					break;
 				}
+
+				oe->elt = elt;
+				oe->owner = owner;
+
+				if (owned_tail) {
+					owned_tail->next = oe;
+				}
+				else {
+					owned = oe;
+				}
+				owned_tail = oe;
 			}
 			else {
 				rdns_debug("no matching reply for %s",
 						   req->requested_names[0].name);
+				free(owner);
 				free(elt);
 			}
+		}
+
+		rdns_accept_owned_entries(req, owned);
+
+		for (oe = owned; oe != NULL; oe = oe_next) {
+			oe_next = oe->next;
+
+			if (oe->accepted) {
+				DL_APPEND(rep->entries, oe->elt);
+				if (oe->elt->type == type) {
+					found = true;
+				}
+			}
+			else {
+				rdns_info("drop a record of type %d owned by %s from the reply for %s",
+						  (int) oe->elt->type, oe->owner ? oe->owner : "(bad name)",
+						  req->requested_names[0].name);
+				rdns_reply_entry_free(oe->elt);
+			}
+
+			free(oe->owner);
+			free(oe);
 		}
 	}
 

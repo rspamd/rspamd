@@ -582,6 +582,78 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
 }
 
+/*
+ * IPv4 destinations that are not hosts of the public network: "this network"
+ * (0.0.0.0 is the local host for a connect), shared address space, link-local
+ * addresses (whatever `local_addrs` is set to), protocol assignments, benchmarking, multicast and the reserved top of the space
+ */
+static gboolean
+lua_http_ip4_is_special(uint32_t ip)
+{
+	return (ip & 0xff000000U) == 0x00000000U || /* 0.0.0.0/8 */
+		   (ip & 0xffc00000U) == 0x64400000U || /* 100.64.0.0/10 */
+		   (ip & 0xffff0000U) == 0xa9fe0000U || /* 169.254.0.0/16, link-local */
+		   (ip & 0xffffff00U) == 0xc0000000U || /* 192.0.0.0/24 */
+		   (ip & 0xfffe0000U) == 0xc6120000U || /* 198.18.0.0/15 */
+		   (ip & 0xf0000000U) == 0xe0000000U || /* 224.0.0.0/4 */
+		   (ip & 0xf0000000U) == 0xf0000000U;   /* 240.0.0.0/4 */
+}
+
+/*
+ * What `forbid_local` refuses: the addresses that are local by the
+ * configuration, and those that lead to this host or to an internal network
+ * without being listed there. An IPv4 address inside of an IPv6 one, mapped or
+ * behind the well known NAT64 prefix, is judged as that IPv4 address.
+ */
+static gboolean
+lua_http_addr_is_forbidden(struct rspamd_config *cfg, const rspamd_inet_addr_t *addr)
+{
+	if (rspamd_ip_is_local_cfg(cfg, addr)) {
+		return TRUE;
+	}
+
+	int af = rspamd_inet_address_get_af(addr);
+	unsigned int klen = 0;
+	const unsigned char *key = rspamd_inet_address_get_hash_key(addr, &klen);
+
+	if (af == AF_INET && klen == 4) {
+		uint32_t ip = ((uint32_t) key[0] << 24) | ((uint32_t) key[1] << 16) |
+					  ((uint32_t) key[2] << 8) | key[3];
+
+		return lua_http_ip4_is_special(ip);
+	}
+	else if (af == AF_INET6 && klen == 16) {
+		static const unsigned char unspecified[16] = {0};
+		static const unsigned char v4mapped[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+		static const unsigned char nat64[12] = {0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
+
+		if (memcmp(key, unspecified, sizeof(unspecified)) == 0) {
+			/* The local host for a connect */
+			return TRUE;
+		}
+
+		if ((key[0] & 0xfe) == 0xfc || key[0] == 0xff) {
+			/* Unique local fc00::/7 and multicast ff00::/8 */
+			return TRUE;
+		}
+
+		if (memcmp(key, v4mapped, sizeof(v4mapped)) == 0 ||
+			memcmp(key, nat64, sizeof(nat64)) == 0) {
+			struct in_addr in4;
+			gboolean forbidden;
+
+			memcpy(&in4, key + 12, sizeof(in4));
+			rspamd_inet_addr_t *embedded = rspamd_inet_address_new(AF_INET, &in4);
+			forbidden = lua_http_addr_is_forbidden(cfg, embedded);
+			rspamd_inet_address_free(embedded);
+
+			return forbidden;
+		}
+	}
+
+	return FALSE;
+}
+
 static gboolean
 lua_http_make_connection(struct lua_http_cbdata *cbd)
 {
@@ -592,7 +664,7 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 			cfg = cbd->task->cfg;
 		}
 
-		if (rspamd_ip_is_local_cfg(cfg, cbd->addr)) {
+		if (lua_http_addr_is_forbidden(cfg, cbd->addr)) {
 			msg_info("forbid HTTP request to local address %s (host: %s) as 'forbid_local' is set",
 					 rspamd_inet_address_to_string(cbd->addr),
 					 cbd->host ? cbd->host : "unknown");
@@ -606,6 +678,11 @@ lua_http_make_connection(struct lua_http_cbdata *cbd)
 
 	if (cbd->msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
 		http_opts |= RSPAMD_HTTP_CLIENT_SSL;
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+			/* Not to be given a connection that was verified, nor the reverse */
+			http_opts |= RSPAMD_HTTP_CLIENT_SSL_NOVERIFY;
+		}
 	}
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
@@ -866,7 +943,7 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
- * @param {boolean} forbid_local refuse to connect when the destination resolves to a loopback, link-local or `local_addrs` address (SSRF protection for requests to untrusted URLs)
+ * @param {boolean} forbid_local refuse to connect when the destination resolves to a loopback, unspecified, link-local, unique local, shared (100.64/10), multicast, reserved or `local_addrs` address, also when it is an IPv4 address of these inside of an IPv6 one (SSRF protection for requests to untrusted URLs)
  * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
@@ -1444,35 +1521,45 @@ lua_http_request(lua_State *L)
 		cbd->host = g_malloc(hostlen + 1);
 		rspamd_strlcpy(cbd->host, host, hostlen + 1);
 
-		/* Keep-alive entry is available */
-		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
-			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
-																				  cbd->host,
-																				  msg->port,
-																				  msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
-
-			if (ka_addr) {
-				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
+		/*
+		 * The address is the one of an upstream, or the one that the URL
+		 * names. A pooled connection tells an address only for a name that
+		 * would be resolved otherwise: a request to an address goes to that
+		 * address, whatever its Host header shares with other requests
+		 */
+		if (cbd->up) {
+			numeric_ip = true;
+			cbd->addr = rspamd_inet_address_copy(rspamd_upstream_addr_next(cbd->up), NULL);
+		}
+		else {
+			/* We use msg->host here, not cbd->host ! */
+			if (rspamd_parse_inet_address(&cbd->addr,
+										  msg->host->str, msg->host->len,
+										  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				numeric_ip = true;
 			}
 		}
 
-		/*
-		 * No keep-alive stuff, check if we have upstream or if we can parse host as
-		 * a numeric address
-		 */
-		if (!cbd->addr) {
-			if (cbd->up) {
-				numeric_ip = true;
-				cbd->addr = rspamd_inet_address_copy(rspamd_upstream_addr_next(cbd->up), NULL);
-			}
-			else {
-				/* We use msg->host here, not cbd->host ! */
-				if (rspamd_parse_inet_address(&cbd->addr,
-											  msg->host->str, msg->host->len,
-											  RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-					numeric_ip = true;
+		/* Keep-alive entry is available */
+		if (!cbd->addr && (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE)) {
+			unsigned int ssl_flags = 0;
+
+			if (msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
+				ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL;
+
+				if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+					ssl_flags |= RSPAMD_HTTP_KEEPALIVE_SSL_NOVERIFY;
 				}
+			}
+
+			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
+																				  cbd->host,
+																				  msg->port,
+																				  ssl_flags);
+
+			if (ka_addr) {
+				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
+				numeric_ip = true;
 			}
 		}
 	}

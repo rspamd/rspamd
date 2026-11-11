@@ -54,6 +54,31 @@ local function process_pdf_specific(task, part, specific)
     task:insert_result('PDF_TIMEOUT', 1.0, string.format('%s:%.3f',
         part:get_filename() or 'unknown', specific.timeout_processing))
   end
+
+  -- What the parser could not or did not look at: none of that is a proof of
+  -- anything on its own, but a file that is not fully seen is not a clean one
+  local flags = specific.flags
+  if type(flags) == 'table' then
+    local fname = part:get_filename() or 'unknown'
+
+    if flags.no_objects then
+      task:insert_result('PDF_NO_OBJECTS', 1.0, fname)
+    end
+    if flags.decode_limit then
+      task:insert_result('PDF_DECODE_LIMIT', 1.0, fname)
+    end
+    if flags.undecoded_streams then
+      task:insert_result('PDF_UNDECODED_STREAMS', 1.0, string.format('%s:%d',
+          fname, flags.undecoded_streams))
+    end
+    if flags.unparsed_objects or flags.object_errors then
+      task:insert_result('PDF_PARSE_ERRORS', 1.0, string.format('%s:%d',
+          fname, (flags.unparsed_objects or 0) + (flags.object_errors or 0)))
+    end
+    if flags.text_truncated then
+      task:insert_result('PDF_TEXT_TRUNCATED', 1.0, fname)
+    end
+  end
 end
 
 local ooxml_prefixes = {
@@ -119,6 +144,18 @@ local function process_ooxml_specific(task, part, specific)
   end
 
   task:insert_result(prefix .. '_CONTENT', 1.0, filename)
+  if specific.truncated or specific.failed_stories then
+    -- Not all of the document was read: more parts than are processed, or
+    -- parts that could not be parsed
+    local options = {}
+    if specific.truncated then
+      options[#options + 1] = string.format('%s:truncated', filename)
+    end
+    if specific.failed_stories then
+      options[#options + 1] = string.format('%s:failed=%d', filename, specific.failed_stories)
+    end
+    task:insert_result('OOXML_INCOMPLETE', 1.0, options)
+  end
   if specific.urls and #specific.urls > 0 then
     task:insert_result(prefix .. '_EXTERNAL_LINKS', 1.0,
         string.format('%s:%s', filename, #specific.urls))
@@ -137,6 +174,25 @@ local function process_svg_specific(task, part, specific)
   end
 
   task:insert_result('SVG_CONTENT', 1.0, filename)
+
+  -- Parts of the image that were not read: text, links or embedded documents
+  -- over the limits, or an embedded document that could not be read
+  local incomplete = {}
+  if specific.text_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:text', filename)
+  end
+  if specific.urls_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:urls', filename)
+  end
+  if specific.payloads_truncated then
+    incomplete[#incomplete + 1] = string.format('%s:payloads', filename)
+  end
+  if specific.nested_suspicious then
+    incomplete[#incomplete + 1] = string.format('%s:nested=%s', filename, specific.nested_suspicious)
+  end
+  if #incomplete > 0 then
+    task:insert_result('SVG_INCOMPLETE', 1.0, incomplete)
+  end
 
   local scripts = specific.scripts or 0
   local handlers = specific.event_handlers or 0
@@ -266,6 +322,7 @@ end
 
 for _, name in ipairs({
   'OOXML_MACROS', 'OOXML_OLE_OBJECT', 'OOXML_REMOTE_TEMPLATE', 'OOXML_EXTERNAL_DATA',
+  'OOXML_INCOMPLETE',
 }) do
   rspamd_config:register_symbol {
     type = 'virtual',
@@ -278,6 +335,7 @@ end
 for _, name in ipairs({
   'SVG_CONTENT', 'SVG_SUSPICIOUS', 'SVG_SCRIPT', 'SVG_FOREIGN_OBJECT', 'SVG_DATA_URI',
   'SVG_EXTERNAL_LINKS', 'SVG_EXTERNAL_RESOURCES', 'SVG_FORM', 'SVG_REDIRECT',
+  'SVG_INCOMPLETE',
 }) do
   rspamd_config:register_symbol {
     type = 'virtual',
@@ -316,3 +374,14 @@ rspamd_config:register_symbol {
   parent = id,
   groups = { "content", "pdf" },
 }
+for _, name in ipairs({
+  'PDF_NO_OBJECTS', 'PDF_DECODE_LIMIT', 'PDF_UNDECODED_STREAMS', 'PDF_PARSE_ERRORS',
+  'PDF_TEXT_TRUNCATED',
+}) do
+  rspamd_config:register_symbol {
+    type = 'virtual',
+    name = name,
+    parent = id,
+    groups = { "content", "pdf" },
+  }
+end

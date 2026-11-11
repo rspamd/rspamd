@@ -58,6 +58,45 @@ PDF javascript
   ...  Settings={symbols_enabled = [PDF_JAVASCRIPT]}
   Expect Symbol  PDF_JAVASCRIPT
 
+PDF that is not fully processed
+  Scan File  ${RSPAMD_TESTDIR}/messages/pdf_limits.eml
+  ...  Settings={symbols_enabled = [PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS, PDF_NO_OBJECTS, PDF_JAVASCRIPT]}
+  Expect Symbol With Exact Options  PDF_DECODE_LIMIT  limits.pdf
+  Expect Symbol With Exact Options  PDF_UNDECODED_STREAMS  limits.pdf:1
+  Expect Symbol With Exact Options  PDF_PARSE_ERRORS  limits.pdf:1
+  Do Not Expect Symbol  PDF_NO_OBJECTS
+
+PDF without objects
+  Scan File  ${RSPAMD_TESTDIR}/messages/pdf_no_objects.eml
+  ...  Settings={symbols_enabled = [PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS]}
+  Expect Symbol With Exact Options  PDF_NO_OBJECTS  empty.pdf
+  Do Not Expect Symbol  PDF_DECODE_LIMIT
+  Do Not Expect Symbol  PDF_PARSE_ERRORS
+
+PDF that is fully processed
+  Scan File  ${MESSAGE7}
+  ...  Settings={symbols_enabled = [PDF_JAVASCRIPT, PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS, PDF_TEXT_TRUNCATED]}
+  Expect Symbol  PDF_JAVASCRIPT
+  Do Not Expect Symbol  PDF_NO_OBJECTS
+  Do Not Expect Symbol  PDF_DECODE_LIMIT
+  Do Not Expect Symbol  PDF_UNDECODED_STREAMS
+  Do Not Expect Symbol  PDF_PARSE_ERRORS
+  Do Not Expect Symbol  PDF_TEXT_TRUNCATED
+
+SVG with an image inside that cannot be read
+  Scan File  ${RSPAMD_TESTDIR}/messages/svg_incomplete.eml
+  ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_INCOMPLETE]}
+  Expect Symbol With Exact Options  SVG_CONTENT  logo.svg
+  Expect Symbol With Exact Options  SVG_INCOMPLETE  logo.svg:nested=xml
+  Do Not Expect Symbol  SVG_SUSPICIOUS
+
+DOCX with a part that cannot be parsed
+  Scan File  ${RSPAMD_TESTDIR}/messages/docx_incomplete.eml
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_SUSPICIOUS, OOXML_INCOMPLETE]}
+  Expect Symbol With Exact Options  DOCX_CONTENT  report.docx
+  Expect Symbol With Exact Options  OOXML_INCOMPLETE  report.docx:failed=1
+  Do Not Expect Symbol  DOCX_SUSPICIOUS
+
 DOCX content
   Scan File  ${MESSAGE9}
   ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS, DOCX_SUSPICIOUS]}

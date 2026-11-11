@@ -615,25 +615,37 @@ local function dmarc_callback(task)
 
   local resolve_name = '_dmarc.' .. hfromdom
 
-  task:get_resolver():resolve_txt({
+  -- A request that cannot be made has no callback: a name too long for a
+  -- query, or a label over 63 bytes, which the domain of a From header can
+  -- be. It is not counted then, or the answer for the other name would wait
+  -- for it and the policy of the organisational domain would not be applied
+  local domain_cb = gen_dmarc_cb(hfromdom, false)
+  local tld_cb = dmarc_domain ~= hfromdom and gen_dmarc_cb(dmarc_domain, true)
+
+  dns_checks_inflight = dns_checks_inflight + 1
+  local domain_asked = task:get_resolver():resolve_txt({
     task = task,
     name = resolve_name,
-    callback = gen_dmarc_cb(hfromdom, false),
+    callback = domain_cb,
     forced = true
   })
-  dns_checks_inflight = dns_checks_inflight + 1
 
-  if dmarc_domain ~= hfromdom then
-    resolve_name = '_dmarc.' .. dmarc_domain
-
-    task:get_resolver():resolve_txt({
-      task = task,
-      name = resolve_name,
-      callback = gen_dmarc_cb(dmarc_domain, true),
-      forced = true
-    })
-
+  if tld_cb then
     dns_checks_inflight = dns_checks_inflight + 1
+
+    if not task:get_resolver():resolve_txt({
+      task = task,
+      name = '_dmarc.' .. dmarc_domain,
+      callback = tld_cb,
+      forced = true
+    }) then
+      -- As if the name did not exist
+      tld_cb(nil, nil, nil, 'no records with this name')
+    end
+  end
+
+  if not domain_asked then
+    domain_cb(nil, nil, nil, 'no records with this name')
   end
 end
 

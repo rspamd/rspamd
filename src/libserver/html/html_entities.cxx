@@ -2192,7 +2192,35 @@ public:
 
 		for (const auto &e: html_entities_array) {
 			entity_by_name[e.name] = e;
-			entity_by_id[e.code] = e;
+
+			/*
+			 * A numeric reference is one code point: only a named entity
+			 * that stands for that code point alone can serve it, not one
+			 * that adds a combining mark or a variation selector to it
+			 */
+			char encoded[U8_MAX_LENGTH];
+			auto encoded_len = 0;
+			UBool is_error = false;
+
+			U8_APPEND((std::uint8_t *) encoded, encoded_len, (int) sizeof(encoded),
+					  (UChar32) e.code, is_error);
+
+			/*
+			 * Or another single character, as the space that stands for a
+			 * no-break space: a numeric reference gives what the name gives
+			 */
+			const std::string_view replacement{e.replacement};
+			std::int32_t rep_off = 0;
+			UChar32 rep_char = -1;
+
+			if (!replacement.empty()) {
+				U8_NEXT(replacement.data(), rep_off, (std::int32_t) replacement.size(), rep_char);
+			}
+
+			if (!is_error && (replacement == std::string_view{encoded, (std::size_t) encoded_len} ||
+							  (rep_char >= 0 && rep_off == (std::int32_t) replacement.size()))) {
+				entity_by_id[e.code] = e;
+			}
 
 			if (e.allow_heuristic) {
 				entity_by_name_heur[e.name] = e;
@@ -2489,6 +2517,21 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		}
 		else {
 			uc = maybe_num.value();
+
+			if (uc >= 0x80 && uc <= 0x9f) {
+				/*
+				 * Numeric references to C1 controls are read as Windows-1252,
+				 * as the HTML standard says: &#146; is a right single quote
+				 */
+				static constexpr std::uint16_t c1_map[32] = {
+					0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+					0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+					0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+					0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178};
+
+				uc = c1_map[uc - 0x80];
+			}
+
 			/* Search for a replacement */
 			const auto *entity_def = html_entities_defs.by_id(uc);
 
@@ -2735,6 +2778,16 @@ TEST_SUITE("html entities")
 			{"FOO&#x41BAR", "FOO䆺R"},
 			{"FOO&#x0000;ZOO", "FOO\uFFFDZOO"},
 			{"FOO&#x0081;ZOO", "FOO\u0081ZOO"},
+			/* A numeric reference is one code point, whatever named entities hold it */
+			{"a&#62;b", "a>b"},
+			{"a&#x3e;b", "a>b"},
+			{"a&#60;b", "a<b"},
+			{"a&#8804;b", "a\u2264b"},
+			{"a&nvgt;b", "a>\u20D2b"},
+			/* C1 controls are read as Windows-1252 */
+			{"it&#146;s", "it\u2019s"},
+			{"&#128;5", "\u20AC5"},
+			{"&#x99;", "\u2122"},
 			{"FOO&#xD800;ZOO", "FOO\uFFFDZOO"},
 			{"FOO&#xFFFFFF;ZOO", "FOO\uFFFDZOO"},
 			{"ZZ&pound_id=23", "ZZ£_id=23"},

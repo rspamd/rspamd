@@ -36,9 +36,29 @@ struct lua_tree_cb_data {
 	} flags_mode;
 	gboolean sort;
 	gsize max_urls;
-	double skip_prob;
+	/* Sampling state: pick `sample_pick` out of the `sample_total` urls left */
+	gsize sample_total;
+	gsize sample_pick;
 	uint64_t random_seed;
 };
+
+/**
+ * Returns TRUE if the url passes the protocol and flags filter of the cbdata
+ */
+gboolean lua_url_cbdata_match(const struct lua_tree_cb_data *cb,
+							  const struct rspamd_url *url);
+
+/**
+ * Applies the sampling to a url that passed `lua_url_cbdata_match`:
+ * returns TRUE if the url should be returned to Lua. Must be called for
+ * every matching url, in the same order as the urls were counted
+ */
+gboolean lua_url_cbdata_sample_take(struct lua_tree_cb_data *cb);
+
+/**
+ * Pushes the url to the table on the top of the stack
+ */
+void lua_url_cbdata_push(struct lua_tree_cb_data *cb, struct rspamd_url *url);
 
 void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud);
 
@@ -67,18 +87,20 @@ gboolean lua_url_cbdata_fill_exclude_include(lua_State *L, int pos,
 void lua_url_cbdata_dtor(struct lua_tree_cb_data *cbd);
 
 /**
- * Adjust probabilistic skip of the urls
- * @param timestamp
- * @param digest
+ * Sets up the sampling of the urls that passed the filter of the cbdata.
+ * If there are more of them than `max_urls`, exactly `max_urls` are chosen
+ * with a pseudo random sequence that is the same for the same task, but
+ * depends on a per process secret.
+ * @param timestamp task timestamp
+ * @param digest message digest
  * @param cb
- * @param sz
- * @param max_urls
- * @return
+ * @param matched number of urls that passed the filter
+ * @return number of urls that will be returned
  */
 gsize lua_url_adjust_skip_prob(float timestamp,
 							   unsigned char digest[16],
 							   struct lua_tree_cb_data *cb,
-							   gsize sz);
+							   gsize matched);
 
 #ifdef __cplusplus
 }

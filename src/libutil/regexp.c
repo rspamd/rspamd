@@ -711,12 +711,13 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 	const int junk = 0xdeadbabe;
 
 	g_assert(re != NULL);
-	g_assert(text != NULL);
 
 	if (len == 0) {
-		/* No length, no match! */
+		/* No length, no match: an empty text may come with no pointer */
 		return FALSE;
 	}
+
+	g_assert(text != NULL);
 
 	if (re->match_limit > 0 && len > re->match_limit) {
 		len = re->match_limit;
@@ -875,12 +876,13 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 	gboolean ret = FALSE;
 
 	g_assert(re != NULL);
-	g_assert(text != NULL);
 
 	if (len == 0) {
-		/* No length, no match! */
+		/* No length, no match: an empty text may come with no pointer */
 		return FALSE;
 	}
+
+	g_assert(text != NULL);
 
 	if (re->match_limit > 0 && len > re->match_limit) {
 		len = re->match_limit;
@@ -1112,6 +1114,11 @@ rspamd_regexp_match(const rspamd_regexp_t *re, const char *text, gsize len,
 	const char *start = NULL, *end = NULL;
 
 	g_assert(re != NULL);
+
+	if (len == 0) {
+		return FALSE;
+	}
+
 	g_assert(text != NULL);
 
 	if (rspamd_regexp_search(re, text, len, &start, &end, raw, NULL)) {

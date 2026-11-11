@@ -270,12 +270,39 @@ local function flatten_redis_table(tbl)
   return res
 end
 
+-- Parameters of a connection for a log line: all but the secrets
+local function redacted_params(params)
+  if type(params) ~= 'table' then
+    return params
+  end
+
+  local res = {}
+  for k, v in pairs(params) do
+    if k == 'password' or k == 'sentinel_password' then
+      res[k] = '<redacted>'
+    elseif k == 'sentinel' and type(v) == 'table' then
+      res[k] = redacted_params(v)
+    else
+      res[k] = v
+    end
+  end
+
+  return res
+end
+
 local function sentinel_node(fields, master)
   if type(fields) ~= 'table' then return nil end
   local node = flatten_redis_table(fields)
   local port = tonumber(node.port)
   if type(node.ip) ~= 'string' or not port or port < 1 or port > 65535 or port % 1 ~= 0 or
       (master and type(node.name) ~= 'string') then
+    return nil
+  end
+  -- The address becomes a part of a list of servers: it is an IP address or
+  -- a host name and nothing else, so that a reply of a sentinel cannot add
+  -- servers, options or a path of a socket to that list
+  if #node.ip == 0 or #node.ip > 255 or not node.ip:match('^[%w%.%-_:]+$') then
+    logger.errx(rspamd_config, 'sentinel has sent an address that is not one: %s', node.ip)
     return nil
   end
   if node.ip:find(':', 1, true) and node.ip:sub(1, 1) ~= '[' then
@@ -323,7 +350,13 @@ local function redis_query_sentinel(ev_base, params)
       local pending_subrequests = 0
       local subrequests_failed = false
 
-      for _, m in ipairs(result) do
+      for nmaster, m in ipairs(result) do
+        if nmaster > 64 then
+          -- Each master is one more request to the sentinel
+          logger.errx(rspamd_config, 'sentinel %s lists more than 64 masters, the rest is ignored',
+              host:to_string(true))
+          break
+        end
         local master = sentinel_node(m, true)
         if not master then
           logger.errx(rspamd_config, 'invalid master returned by sentinel %s', host:to_string(true))
@@ -651,7 +684,7 @@ local function maybe_return_cached(redis_params)
   local h = calculate_redis_hash(redis_params)
 
   if cached_results[h] then
-    lutil.debugm(N, 'reused redis server: %s', redis_params)
+    lutil.debugm(N, 'reused redis server: %s', redacted_params(redis_params))
     return cached_results[h]
   end
 
@@ -662,7 +695,7 @@ local function maybe_return_cached(redis_params)
     add_redis_sentinels(redis_params)
   end
 
-  lutil.debugm(N, 'loaded new redis server: %s', redis_params)
+  lutil.debugm(N, 'loaded new redis server: %s', redacted_params(redis_params))
   return redis_params
 end
 
@@ -2121,15 +2154,24 @@ end
 -- synchronous rspamadm path and the async worker watcher.
 apply_sentinel_topology = function(params, masters)
   local read_servers_tbl, write_servers_tbl = {}, {}
+  -- More servers than a deployment has are not taken from a sentinel
+  local max_sentinel_servers = 64
 
   for _, master in pairs(masters) do
+    if #write_servers_tbl >= max_sentinel_servers then
+      logger.errx(rspamd_config, 'sentinel lists more than %s masters, the rest is ignored',
+          max_sentinel_servers)
+      break
+    end
+
     write_servers_tbl[#write_servers_tbl + 1] = string.format(
         '%s:%s', master.ip, master.port)
     read_servers_tbl[#read_servers_tbl + 1] = string.format(
         '%s:%s', master.ip, master.port)
 
     for _, slave in ipairs(master.slaves or E) do
-      if slave['master-link-status'] == 'ok' then
+      if slave['master-link-status'] == 'ok' and
+          #read_servers_tbl < max_sentinel_servers * 2 then
         read_servers_tbl[#read_servers_tbl + 1] = string.format(
             '%s:%s', slave.ip, slave.port)
       end
@@ -2228,7 +2270,10 @@ local function redis_resolve_sentinels_sync(redis_params, attrs)
               sentinel_addr:to_string(true), tostring(masters_result))
         else
           masters = {}
-          for _, m in ipairs(masters_result) do
+          for nmaster, m in ipairs(masters_result) do
+            if nmaster > 64 then
+              break
+            end
             local master = sentinel_node(m, true)
             if not master then
               masters = nil

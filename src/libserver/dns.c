@@ -780,7 +780,11 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 
 	UErrorCode uc_err = U_ZERO_ERROR;
 
-	dns_resolver->uidna = uidna_openUTS46(UIDNA_DEFAULT, &uc_err);
+	/*
+	 * Non-transitional, as browsers and the url parser do it: sharp s and
+	 * final sigma are kept, so a name is looked up as it is clicked
+	 */
+	dns_resolver->uidna = uidna_openUTS46(UIDNA_NONTRANSITIONAL_TO_ASCII, &uc_err);
 	g_assert(!U_FAILURE(uc_err));
 	rdns_bind_libev(dns_resolver->r, dns_resolver->event_loop);
 

@@ -431,6 +431,43 @@ rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
 }
 
 void
+rdns_reply_entry_free (struct rdns_reply_entry *entry)
+{
+	switch (entry->type) {
+	case RDNS_REQUEST_PTR:
+		free (entry->content.ptr.name);
+		break;
+	case RDNS_REQUEST_NS:
+		free (entry->content.ns.name);
+		break;
+	case RDNS_REQUEST_MX:
+		free (entry->content.mx.name);
+		break;
+	case RDNS_REQUEST_TXT:
+	case RDNS_REQUEST_SPF:
+		free (entry->content.txt.data);
+		break;
+	case RDNS_REQUEST_SRV:
+		free (entry->content.srv.target);
+		break;
+	case RDNS_REQUEST_TLSA:
+		free (entry->content.tlsa.data);
+		break;
+	case RDNS_REQUEST_SOA:
+		free (entry->content.soa.mname);
+		free (entry->content.soa.admin);
+		break;
+	case RDNS_REQUEST_CNAME:
+		free (entry->content.cname.name);
+		break;
+	default:
+		break;
+	}
+
+	free (entry);
+}
+
+void
 rdns_reply_free (struct rdns_reply *rep)
 {
 	struct rdns_reply_entry *entry, *tmp;
@@ -438,37 +475,7 @@ rdns_reply_free (struct rdns_reply *rep)
 	/* We don't need to free data for faked replies */
 	if (!rep->request || rep->request->state != RDNS_REQUEST_FAKE) {
 		LL_FOREACH_SAFE (rep->entries, entry, tmp) {
-			switch (entry->type) {
-			case RDNS_REQUEST_PTR:
-				free (entry->content.ptr.name);
-				break;
-			case RDNS_REQUEST_NS:
-				free (entry->content.ns.name);
-				break;
-			case RDNS_REQUEST_MX:
-				free (entry->content.mx.name);
-				break;
-			case RDNS_REQUEST_TXT:
-			case RDNS_REQUEST_SPF:
-				free (entry->content.txt.data);
-				break;
-			case RDNS_REQUEST_SRV:
-				free (entry->content.srv.target);
-				break;
-			case RDNS_REQUEST_TLSA:
-				free (entry->content.tlsa.data);
-				break;
-			case RDNS_REQUEST_SOA:
-				free (entry->content.soa.mname);
-				free (entry->content.soa.admin);
-				break;
-			case RDNS_REQUEST_CNAME:
-				free(entry->content.cname.name);
-				break;
-			default:
-				break;
-			}
-			free (entry);
+			rdns_reply_entry_free (entry);
 		}
 	}
 
@@ -737,14 +744,20 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 			ioc->tcp->async_read = NULL;
 		}
 
-		/* Clean all buffers and temporaries */
+		/*
+		 * Clean all buffers and temporaries. The read state is reset whether
+		 * or not a buffer is there: a frame that announces no data leaves no
+		 * buffer and still leaves the state in the middle of a frame, where
+		 * the next connection would start from
+		 */
 		if (ioc->tcp->cur_read_buf) {
 			free (ioc->tcp->cur_read_buf);
-			ioc->tcp->read_buf_allocated = 0;
-			ioc->tcp->next_read_size = 0;
-			ioc->tcp->cur_read = 0;
 			ioc->tcp->cur_read_buf = NULL;
 		}
+
+		ioc->tcp->read_buf_allocated = 0;
+		ioc->tcp->next_read_size = 0;
+		ioc->tcp->cur_read = 0;
 
 		struct rdns_tcp_output_chain *oc, *tmp;
 		DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {

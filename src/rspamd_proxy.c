@@ -2431,6 +2431,9 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 							if (err) {
 								g_error_free(err);
 							}
+							/* Taken from the pool for nothing: it is ours to close */
+							rspamd_http_connection_unref(conn);
+							bk_conn->backend_conn = NULL;
 							continue;
 						}
 
@@ -2660,6 +2663,16 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 			proxy_backend_mirror_finish_handler,
 			http_opts,
 			bk_conn->backend_sock);
+
+		if (bk_conn->backend_conn &&
+			(session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE)) {
+			/*
+			 * With keepalive nobody closes the socket by hand: the
+			 * connection may be in the pool, which only drops its
+			 * reference. The connection closes it when it is freed
+			 */
+			rspamd_http_connection_own_socket(bk_conn->backend_conn);
+		}
 
 		if (m->key) {
 			msg->peer_key = rspamd_pubkey_ref(m->key);
@@ -3453,6 +3466,13 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 			proxy_backend_master_finish_handler,
 			http_opts,
 			session->master_conn->backend_sock);
+
+		if (session->master_conn->backend_conn &&
+			(session->flags & RSPAMD_PROXY_SESSION_FLAG_USE_KEEPALIVE)) {
+			/* See the mirror connections: nobody else closes this socket */
+			rspamd_http_connection_own_socket(session->master_conn->backend_conn);
+		}
+
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
