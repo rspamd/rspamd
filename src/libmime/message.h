@@ -128,6 +128,8 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_ATTACHMENT (1 << 5)
 #define RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED (1 << 6)
 #define RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED (1 << 7)
+/* Words of the part were left out by the decay that applies to long texts */
+#define RSPAMD_MIME_TEXT_PART_FLAG_WORDS_SAMPLED (1 << 8)
 
 #define IS_TEXT_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_TEXT_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)

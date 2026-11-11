@@ -203,6 +203,9 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 	/* Initialize kvec for words */
 	kv_init(part->utf_words);
 
+	/* Told per part, while the budget is the one of the message */
+	MESSAGE_FIELD(task, words_budget).decayed = FALSE;
+
 	rspamd_tokenize_text(
 		part->utf_stripped_content->data,
 		part->utf_stripped_content->len,
@@ -213,6 +216,19 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 		&part->utf_words,
 		&MESSAGE_FIELD(task, words_budget),
 		task->task_pool);
+
+	if (MESSAGE_FIELD(task, words_budget).decayed) {
+		/*
+		 * A long text is represented by its first words and by a sample of
+		 * the rest, or by none of the rest when it is long enough. Whoever
+		 * looks at the words must be able to tell that they are not all
+		 */
+		part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_WORDS_SAMPLED;
+		msg_info_task("words of a text part are sampled: %z words are kept of "
+					  "%z bytes of text",
+					  (gsize) kv_size(part->utf_words),
+					  (gsize) part->utf_stripped_content->len);
+	}
 
 	if (MESSAGE_FIELD(task, words_budget).exceeded) {
 		part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED;
@@ -278,11 +294,73 @@ rspamd_text_part_maybe_add_newline(struct rspamd_task *task,
 	}
 }
 
+/*
+ * A piece of the source text that went into the stripped text as it is.
+ * What is between two pieces was removed or replaced, so the pieces tell
+ * where an offset into the source is in the stripped text.
+ */
+struct rspamd_strip_segment {
+	gsize src;
+	gsize dst;
+	gsize len;
+};
+
+typedef kvec_t(struct rspamd_strip_segment) rspamd_strip_segments_t;
+
+/* Maps an offset into the source text to the stripped text */
+static gsize
+rspamd_strip_map_offset(const rspamd_strip_segments_t *segs, gsize stripped_len,
+						gsize off)
+{
+	gsize lo = 0, hi = kv_size(*segs);
+
+	/* The first piece that ends after the offset */
+	while (lo < hi) {
+		gsize mid = lo + (hi - lo) / 2;
+		const struct rspamd_strip_segment *seg = &kv_A(*segs, mid);
+
+		if (seg->src + seg->len > off) {
+			hi = mid;
+		}
+		else {
+			lo = mid + 1;
+		}
+	}
+
+	if (lo == kv_size(*segs)) {
+		return stripped_len;
+	}
+
+	const struct rspamd_strip_segment *seg = &kv_A(*segs, lo);
+
+	if (seg->src <= off) {
+		return seg->dst + (off - seg->src);
+	}
+
+	/* In what was removed before the piece */
+	return seg->dst;
+}
+
 static void
 rspamd_strip_newlines_parse(struct rspamd_task *task,
 							const char *begin, const char *pe,
-							struct rspamd_mime_text_part *part)
+							struct rspamd_mime_text_part *part,
+							rspamd_strip_segments_t *segs)
 {
+#define STRIP_APPEND_SOURCE(ptr, n)                                              \
+	do {                                                                         \
+		if (segs != NULL) {                                                      \
+			struct rspamd_strip_segment strip_seg = {                            \
+				.src = (gsize) ((ptr) - begin),                                  \
+				.dst = part->utf_stripped_content->len,                          \
+				.len = (gsize) (n),                                              \
+			};                                                                   \
+			kv_push(struct rspamd_strip_segment, *segs, strip_seg);              \
+		}                                                                        \
+		g_byte_array_append(part->utf_stripped_content, (const uint8_t *) (ptr), \
+							(n));                                                \
+	} while (0)
+
 	const char *p = begin, *c = begin;
 	gboolean crlf_added = FALSE, is_utf = IS_TEXT_PART_UTF(part);
 	gboolean url_open_bracket = FALSE;
@@ -307,11 +385,16 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 						part->spaces++;
 
 						if (p > c) {
-							g_byte_array_append(part->utf_stripped_content,
-												(const uint8_t *) c, p - c);
-							c = begin + off;
-							p = c;
+							STRIP_APPEND_SOURCE(c, p - c);
 						}
+
+						/*
+						 * Past the character, also when nothing stands before
+						 * it: at the start of the text or right after another
+						 * removed one it was counted and then left in place
+						 */
+						c = begin + off;
+						p = c;
 
 						U8_NEXT(begin, off, pe - begin, uc);
 
@@ -344,8 +427,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 			case normal_char:
 				state = seen_cr;
 				if (p > c) {
-					g_byte_array_append(part->utf_stripped_content,
-										(const uint8_t *) c, p - c);
+					STRIP_APPEND_SOURCE(c, p - c);
 				}
 
 				crlf_added = FALSE;
@@ -381,8 +463,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 				state = seen_lf;
 
 				if (p > c) {
-					g_byte_array_append(part->utf_stripped_content,
-										(const uint8_t *) c, p - c);
+					STRIP_APPEND_SOURCE(c, p - c);
 				}
 
 				c = p + 1;
@@ -510,8 +591,7 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 
 		switch (state) {
 		case normal_char:
-			g_byte_array_append(part->utf_stripped_content,
-								(const uint8_t *) c, p - c);
+			STRIP_APPEND_SOURCE(c, p - c);
 
 			while (c < p) {
 				if (*c == ' ') {
@@ -549,6 +629,8 @@ rspamd_strip_newlines_parse(struct rspamd_task *task,
 	}
 }
 
+#undef STRIP_APPEND_SOURCE
+
 static void
 rspamd_u_text_dtor(void *p)
 {
@@ -576,7 +658,33 @@ rspamd_normalize_text_part(struct rspamd_task *task,
 		p = (const char *) part->utf_content.begin;
 		end = p + part->utf_content.len;
 
-		rspamd_strip_newlines_parse(task, p, end, part);
+		rspamd_strip_segments_t segs;
+
+		kv_init(segs);
+		rspamd_strip_newlines_parse(task, p, end, part, &segs);
+
+		/*
+		 * The exceptions that are there at this point were found in the text
+		 * as it was, by the HTML parser, while the words are taken from the
+		 * stripped text: every character removed before an exception would
+		 * otherwise move it over the words that follow it
+		 */
+		for (GList *cur = part->exceptions; cur != NULL; cur = g_list_next(cur)) {
+			ex = (struct rspamd_process_exception *) cur->data;
+
+			if (ex->pos >= 0) {
+				gsize from = rspamd_strip_map_offset(&segs,
+													 part->utf_stripped_content->len, ex->pos);
+				gsize to = rspamd_strip_map_offset(&segs,
+												   part->utf_stripped_content->len,
+												   (gsize) ex->pos + ex->len);
+
+				ex->pos = from;
+				ex->len = to > from ? to - from : 0;
+			}
+		}
+
+		kv_destroy(segs);
 
 		for (i = 0; i < part->newlines->len; i++) {
 			ex = rspamd_mempool_alloc(task->task_pool, sizeof(*ex));
@@ -2094,7 +2202,7 @@ rspamd_message_utf16_other_order_urls(struct rspamd_task *task,
 									  lines->newlines);
 		unsigned int bad_unicode = task->flags & RSPAMD_TASK_FLAG_BAD_UNICODE;
 
-		rspamd_strip_newlines_parse(task, text.begin, text.begin + text.len, lines);
+		rspamd_strip_newlines_parse(task, text.begin, text.begin + text.len, lines, NULL);
 		/* What a read of junk looks like is not what clients show */
 		task->flags = (task->flags & ~RSPAMD_TASK_FLAG_BAD_UNICODE) | bad_unicode;
 

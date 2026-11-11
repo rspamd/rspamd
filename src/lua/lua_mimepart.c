@@ -1697,6 +1697,13 @@ lua_textpart_get_stats(lua_State *L)
 		lua_pushstring(L, "newlines_truncated");
 		lua_pushboolean(L, part->flags & RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED);
 		lua_settable(L, -3);
+		/* The words of the part are not all of its words */
+		lua_pushstring(L, "words_truncated");
+		lua_pushboolean(L, part->flags & RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED);
+		lua_settable(L, -3);
+		lua_pushstring(L, "words_sampled");
+		lua_pushboolean(L, part->flags & RSPAMD_MIME_TEXT_PART_FLAG_WORDS_SAMPLED);
+		lua_settable(L, -3);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
