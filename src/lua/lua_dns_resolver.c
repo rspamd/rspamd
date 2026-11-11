@@ -372,6 +372,8 @@ lua_dns_resolver_resolve_common(lua_State *L,
 	if (to_resolve != NULL) {
 		if (pool != NULL) {
 			cbdata = rspamd_mempool_alloc0(pool, sizeof(struct lua_dns_cbdata));
+			/* Set at once: the error path releases it */
+			cbdata->cbref = cbref;
 			cbdata->user_str = rspamd_mempool_strdup(pool, user_str);
 
 			if (type != RDNS_REQUEST_PTR) {
@@ -395,6 +397,7 @@ lua_dns_resolver_resolve_common(lua_State *L,
 		}
 		else {
 			cbdata = g_malloc0(sizeof(struct lua_dns_cbdata));
+			cbdata->cbref = cbref;
 			cbdata->user_str = user_str ? g_strdup(user_str) : NULL;
 
 			if (type != RDNS_REQUEST_PTR) {
@@ -412,6 +415,8 @@ lua_dns_resolver_resolve_common(lua_State *L,
 				}
 
 				cbdata->to_resolve = g_strdup(ptr_str);
+				/* The name to ask for, as in the branch with a pool */
+				to_resolve = cbdata->to_resolve;
 				free(ptr_str);
 			}
 		}
