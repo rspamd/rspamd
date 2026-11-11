@@ -1373,6 +1373,12 @@ struct html_tag {
 	std::vector<struct html_tag *> children;
 	struct html_tag *parent = nullptr;
 	unsigned int depth = 0;
+	/*
+	 * Formatting elements that are open around this element though they are
+	 * not its ancestors: an index from 1 into `formatting_lists` of the
+	 * content, or 0
+	 */
+	std::uint32_t formatting = 0;
 
 	// Template method to find component by type
 	template<typename T>

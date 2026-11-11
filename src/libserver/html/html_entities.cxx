@@ -2205,7 +2205,20 @@ public:
 			U8_APPEND((std::uint8_t *) encoded, encoded_len, (int) sizeof(encoded),
 					  (UChar32) e.code, is_error);
 
-			if (!is_error && std::string_view{e.replacement} == std::string_view{encoded, (std::size_t) encoded_len}) {
+			/*
+			 * Or another single character, as the space that stands for a
+			 * no-break space: a numeric reference gives what the name gives
+			 */
+			const std::string_view replacement{e.replacement};
+			std::int32_t rep_off = 0;
+			UChar32 rep_char = -1;
+
+			if (!replacement.empty()) {
+				U8_NEXT(replacement.data(), rep_off, (std::int32_t) replacement.size(), rep_char);
+			}
+
+			if (!is_error && (replacement == std::string_view{encoded, (std::size_t) encoded_len} ||
+							  (rep_char >= 0 && rep_off == (std::int32_t) replacement.size()))) {
 				entity_by_id[e.code] = e;
 			}
 

@@ -212,6 +212,71 @@ struct html_balance_state {
 	ankerl::unordered_dense::map<std::int32_t, std::vector<html_tag *>> open_tags;
 	/* The scope depths of the open element at each depth of the stack */
 	std::vector<html_scope_depths> scopes;
+	/*
+	 * Formatting elements closed by an implied end tag and not ended by a
+	 * tag of their own yet, from the outermost one, and where this list is
+	 * in `formatting_lists` of the content (0 if it is not there)
+	 */
+	std::vector<const html_tag *> active_formatting;
+	std::uint32_t active_formatting_idx = 0;
+	constexpr static const std::size_t max_active_formatting = 8;
+
+	static constexpr auto is_formatting(std::int32_t id) -> bool
+	{
+		switch (id) {
+		case Tag_B:
+		case Tag_BIG:
+		case Tag_CODE:
+		case Tag_EM:
+		case Tag_FONT:
+		case Tag_I:
+		case Tag_S:
+		case Tag_SMALL:
+		case Tag_STRIKE:
+		case Tag_STRONG:
+		case Tag_TT:
+		case Tag_U:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	auto clear_formatting() -> void
+	{
+		active_formatting.clear();
+		active_formatting_idx = 0;
+	}
+
+	/* An end tag of a formatting element that is not open: it ends an active one */
+	auto end_formatting(std::int32_t id) -> void
+	{
+		for (auto it = active_formatting.rbegin(); it != active_formatting.rend(); ++it) {
+			if ((*it)->id == id) {
+				active_formatting.erase(std::next(it).base());
+				active_formatting_idx = 0;
+				break;
+			}
+		}
+	}
+
+	/* Gives a new element the formatting elements that are active around it */
+	auto apply_formatting(html_content &hc, html_tag *tag) -> void
+	{
+		if (active_formatting.empty() || (tag->flags & (FL_COMMENT | FL_XML | FL_VIRTUAL))) {
+			return;
+		}
+
+		if (active_formatting_idx == 0) {
+			hc.formatting_lists.push_back(active_formatting);
+			active_formatting_idx = static_cast<std::uint32_t>(hc.formatting_lists.size());
+		}
+
+		/* A child of an element that has this list has it through that element */
+		if (!(tag->parent && tag->parent->formatting == active_formatting_idx)) {
+			tag->formatting = active_formatting_idx;
+		}
+	}
 
 	html_balance_state()
 	{
@@ -2353,6 +2418,17 @@ html_legacy_color_value(std::string_view input) -> std::optional<css::css_value>
 
 	if (name.front() != '#' && (name.size() == 3 || name.size() == 6) &&
 		std::all_of(name.begin(), name.end(), [](char c) { return g_ascii_isxdigit(c); })) {
+		if (name.size() == 3) {
+			/*
+			 * Only `#abc` is the short form of `#aabbcc`. Without the sharp
+			 * the legacy rules read each digit as a component of its own:
+			 * `fff` is the dark #0f0f0f, not white
+			 */
+			const char wide[6] = {'0', name[0], '0', name[1], '0', name[2]};
+
+			return css::css_value::maybe_color_from_hex(std::string_view{wide, sizeof(wide)});
+		}
+
 		return css::css_value::maybe_color_from_hex(name);
 	}
 
@@ -3304,18 +3380,44 @@ html_close_implied_end_tags(html_content *hc,
 
 		return node->depth < balance.scopes.size() ? balance.scopes[node->depth] : none;
 	};
+	/*
+	 * A paragraph, a heading or a list item that ends this way takes its
+	 * open formatting elements with it, and browsers open them again in the
+	 * element that follows ("reconstruct the active formatting elements"):
+	 * `<p><font color=...>one<p>two` has both lines in that color, and both
+	 * are hidden if the font is. Parts of a table do not carry them over
+	 */
+	const auto keep_formatting = what == kind::paragraph || what == kind::heading ||
+								 what == kind::list_item || what == kind::definition;
 	/* Ends the open elements from the current one up to `target` */
 	auto close_through = [&](html_tag *target) -> void {
+		const auto mark = balance.active_formatting.size();
+
 		for (auto *it = current(); it != nullptr; it = it->parent) {
 			if (!(it->flags & FL_CLOSED)) {
 				it->flags |= FL_CLOSED;
 				it->closing.start = std::max(offset, static_cast<goffset>(it->content_offset));
 				it->closing.end = it->closing.start;
+
+				if (keep_formatting && it != target && !(it->flags & FL_FOREIGN) &&
+					html_balance_state::is_formatting(it->id)) {
+					balance.active_formatting.push_back(it);
+					balance.active_formatting_idx = 0;
+				}
 			}
 
 			if (it == target) {
 				break;
 			}
+		}
+
+		/* They were met from the innermost one, and are kept from the outermost */
+		std::reverse(balance.active_formatting.begin() + mark, balance.active_formatting.end());
+
+		if (balance.active_formatting.size() > html_balance_state::max_active_formatting) {
+			balance.active_formatting.erase(balance.active_formatting.begin(),
+											balance.active_formatting.end() -
+												html_balance_state::max_active_formatting);
 		}
 	};
 	/* An open element of the id between the current one and the boundary */
@@ -3943,6 +4045,15 @@ auto html_process_input(struct rspamd_task *task,
 			g_assert(cur_tag->parent != &cur_closing_tag);
 			parent_tag = pt;
 			parent_tag->children.push_back(cur_tag);
+
+			if (cur_tag->id == Tag_TABLE || cur_tag->id == Tag_TD || cur_tag->id == Tag_TH ||
+				cur_tag->id == Tag_CAPTION) {
+				/* Formatting does not go into a table or a cell from outside */
+				balance.clear_formatting();
+			}
+			else {
+				balance.apply_formatting(*hc, cur_tag);
+			}
 		}
 		else {
 			if (hc->root_tag) {
@@ -4604,6 +4715,18 @@ auto html_process_input(struct rspamd_task *task,
 					closed_directly = nullptr;
 				}
 
+				if (!balance.active_formatting.empty()) {
+					if (cur_tag->id == Tag_TABLE || cur_tag->id == Tag_TD || cur_tag->id == Tag_TH ||
+						cur_tag->id == Tag_CAPTION) {
+						balance.clear_formatting();
+					}
+					else if (closed_directly == nullptr &&
+							 html_balance_state::is_formatting(cur_tag->id) &&
+							 !balance.has_open_tag(*hc, cur_tag->id)) {
+						balance.end_formatting(cur_tag->id);
+					}
+				}
+
 				auto *next_cur_tag = (hc->root_tag &&
 									  (cur_tag->id == Tag_BODY || cur_tag->id == Tag_HTML))
 										 ? nullptr
@@ -4837,6 +4960,19 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 		}
+		if (tag->block && tag->formatting != 0 && tag->formatting <= hc->formatting_lists.size()) {
+			/*
+			 * As if these elements were open here again: what they set goes
+			 * over what the parent gave, the inner ones over the outer ones.
+			 * They stand before this element, so their blocks are ready
+			 */
+			for (const auto *fmt: hc->formatting_lists[tag->formatting - 1]) {
+				if (fmt->block) {
+					tag->block->propagate_block(*fmt->block, false);
+				}
+			}
+		}
+
 		if (tag->block) {
 			/* Preserve inherited display:none when assigning tag defaults. */
 			if (!tag->block->has_display(html_block::hint) &&
@@ -5209,7 +5345,7 @@ auto html_process_input(struct rspamd_task *task,
 		 */
 		{
 			std::vector<open_record> seeds;
-			bool any_hidden = false, in_head = false, link_hidden = false;
+			bool in_head = false, link_hidden = false;
 			const html_tag *link_tag = nullptr;
 
 			for (const auto *t: open_chain) {
@@ -5237,7 +5373,6 @@ auto html_process_input(struct rspamd_task *task,
 					rec.vis_hidden = t->block->visibility_prop_mask && t->block->visibility_hidden;
 				}
 
-				any_hidden = any_hidden || rec.hard || rec.vis_hidden;
 				seeds.push_back(rec);
 
 				if (t == link_tag) {
@@ -5245,10 +5380,12 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 
-			if (any_hidden) {
-				for (const auto &seed: seeds) {
-					push_record(seed);
-				}
+			/*
+			 * All of them, hidden or not: an end tag of one of them ends the
+			 * elements opened after it, a hidden one among those included
+			 */
+			for (const auto &seed: seeds) {
+				push_record(seed);
 			}
 
 			record_limit = open_records.size() + max_open_records;

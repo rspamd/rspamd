@@ -912,13 +912,13 @@ TEST_SUITE("html")
 			auto *hc = process("<html><body>" + repeat("<i>", 8200) +
 							   "<div style=\"display:none\">HIDONE</div><span hidden>HIDTWO</span>"
 							   "<div style=\"visibility:hidden\">HIDTHREE<b style=\"visibility:visible\">SHOWNTWO</b></div>"
-							   "<p>SHOWN</p>");
+							   "<p>LASTSEEN</p>");
 
 			CHECK(hc != nullptr);
 			CHECK((hc->flags & RSPAMD_HTML_FLAG_TOO_MANY_TAGS) != 0);
 			CHECK(hc->parsed.find("HID") == std::string::npos);
 			CHECK(hc->parsed.find("SHOWNTWO") != std::string::npos);
-			CHECK(hc->parsed.find("SHOWN") != std::string::npos);
+			CHECK(hc->parsed.find("LASTSEEN") != std::string::npos);
 			CHECK(hc->invisible.find("HIDONE") != std::string::npos);
 			CHECK(hc->invisible.find("HIDTWO") != std::string::npos);
 			CHECK(hc->invisible.find("HIDTHREE") != std::string::npos);
