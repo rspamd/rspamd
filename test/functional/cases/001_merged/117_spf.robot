@@ -348,6 +348,42 @@ SPF NOTHING AFTER ALL IS REACHED
   Expect Symbol  R_SPF_FAIL
   Do Not Expect Symbol  R_SPF_ALLOW
 
+SPF EQUALS SIGN IN IP4
+  [Documentation]  ip4=addr is a mistake of real records, read as ip4:addr
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.1  From=x@equals.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF EQUALS SIGN IN IP6
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8:1::1  From=x@equals.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF EQUALS SIGN NO MATCH
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.2  From=x@equals.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF EQUALS SIGN IN INCLUDE
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.1  From=x@equalsinc.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF COLON IN REDIRECT
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=198.51.100.1  From=x@colonredir.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
 SPF DUAL PREFIX IPV4
   [Documentation]  a/24//64 gives a length to each family
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml

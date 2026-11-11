@@ -1785,7 +1785,8 @@ parse_spf_ip4(struct spf_record *rec, struct spf_addr *addr)
 	uint32_t mask;
 	static const uint32_t min_valid_mask = 8;
 
-	semicolon = strchr(addr->spf_string, ':');
+	/* The first of them: an IPv6 address has colons of its own after `=` */
+	semicolon = strpbrk(addr->spf_string, ":=");
 
 	if (semicolon == NULL) {
 		semicolon = strchr(addr->spf_string, '=');
@@ -1861,7 +1862,8 @@ parse_spf_ip6(struct spf_record *rec, struct spf_addr *addr)
 	uint32_t mask;
 	static const uint32_t min_valid_mask = 8;
 
-	semicolon = strchr(addr->spf_string, ':');
+	/* The first of them: an IPv6 address has colons of its own after `=` */
+	semicolon = strpbrk(addr->spf_string, ":=");
 
 	if (semicolon == NULL) {
 		semicolon = strchr(addr->spf_string, '=');
@@ -1937,7 +1939,8 @@ parse_spf_include(struct spf_record *rec,
 
 	CHECK_REC(rec);
 	CHECK_NESTING(rec, resolved);
-	domain = strchr(addr->spf_string, ':');
+	/* The first of them: an IPv6 address has colons of its own after `=` */
+	domain = strpbrk(addr->spf_string, ":=");
 
 	if (domain == NULL) {
 		/* Common mistake */
@@ -2665,20 +2668,24 @@ spf_process_element(struct spf_record *rec,
 		}
 		break;
 	case 'i':
-		/* include or ip4 */
-		if (spf_term_is(begin, SPF_IP4, ":", FALSE)) {
+		/*
+		 * include or ip4. `=` in place of `:` is a mistake that records of
+		 * legitimate senders have (`ip4=1.2.3.4`, `include=example.com`), so
+		 * it is read as what was meant, as `redirect:` is below
+		 */
+		if (spf_term_is(begin, SPF_IP4, ":=", FALSE)) {
 			res = parse_spf_ip4(rec, addr);
 		}
-		else if (spf_term_is(begin, SPF_INCLUDE, ":", FALSE)) {
+		else if (spf_term_is(begin, SPF_INCLUDE, ":=", FALSE)) {
 			res = parse_spf_include(rec, resolved, addr);
 		}
-		else if (spf_term_is(begin, SPF_IP6, ":", FALSE)) {
+		else if (spf_term_is(begin, SPF_IP6, ":=", FALSE)) {
 			res = parse_spf_ip6(rec, addr);
 		}
-		else if (spf_term_is(begin, SPF_IP4_ALT, ":", FALSE)) {
+		else if (spf_term_is(begin, SPF_IP4_ALT, ":=", FALSE)) {
 			res = parse_spf_ip4(rec, addr);
 		}
-		else if (spf_term_is(begin, SPF_IP6_ALT, ":", FALSE)) {
+		else if (spf_term_is(begin, SPF_IP6_ALT, ":=", FALSE)) {
 			res = parse_spf_ip6(rec, addr);
 		}
 		else {
@@ -2721,7 +2728,7 @@ spf_process_element(struct spf_record *rec,
 		break;
 	case 'r':
 		/* redirect */
-		if (spf_term_is(begin, SPF_REDIRECT, "=", FALSE)) {
+		if (spf_term_is(begin, SPF_REDIRECT, "=:", FALSE)) {
 			/*
 				 * According to https://tools.ietf.org/html/rfc7208#section-6.1
 				 * There must be no ALL element anywhere in the record,
