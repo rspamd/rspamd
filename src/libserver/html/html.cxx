@@ -40,6 +40,7 @@
 #include "contrib/frozen/include/frozen/unordered_map.h"
 #include "contrib/frozen/include/frozen/string.h"
 #include "contrib/fmt/include/fmt/core.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 #include <functional>
 #include <algorithm>
@@ -5134,14 +5135,35 @@ auto html_process_input(struct rspamd_task *task,
 						   content_end, end - start);
 	}
 
+	/* Raw cascade blocks of the image tags: the propagation pass
+	 * matches the selectors of a tag once and caches the unmerged
+	 * result, so the tiny pixel reconciliation below does not match
+	 * the same tag and spend the shared budget twice */
+	ankerl::unordered_dense::map<const html_tag *, html_block *> img_cascade_blocks;
+
 	/* Propagate styles */
-	hc->traverse_block_tags([&hc, &pool](const html_tag *tag) -> bool {
+	hc->traverse_block_tags([&hc, &pool, &img_cascade_blocks](const html_tag *tag) -> bool {
 		/*
 		 * Unknown elements have negative ids and are inline elements to
 		 * a browser: class, id and universal rules apply to them
 		 */
 		if (hc->css_style && tag->id != Tag_UNKNOWN && tag->id < Tag_MAX) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
+
+			if (tag->id == Tag_IMG) {
+				if (!css_block || tag->block) {
+					img_cascade_blocks.emplace(tag, css_block);
+				}
+				else {
+					/* Without a block of its own the tag absorbs this
+					 * very block and flattens the relative sizes of it
+					 * below, so the reconciliation gets a copy of the
+					 * raw cascade */
+					auto *raw = rspamd_mempool_alloc_type(pool, html_block);
+					*raw = *css_block;
+					img_cascade_blocks.emplace(tag, raw);
+				}
+			}
 
 			if (css_block) {
 				if (tag->block) {
@@ -5273,7 +5295,24 @@ auto html_process_input(struct rspamd_task *task,
 							known_dim(img->height_source) &&
 							html_image_is_tiny(img->width_exact, img->height_exact);
 			auto *img_tag = static_cast<struct html_tag *>(img->tag);
-			auto *css_block = hc->css_style->check_tag_block(img_tag);
+			html_block *css_block = nullptr;
+
+			if (img_tag != nullptr) {
+				/* The propagation pass above has matched the selectors
+				 * of the tag of the image already: its raw cascade block
+				 * is cached there, and the shared budget is not spent on
+				 * matching the same tag twice */
+				auto cached = img_cascade_blocks.find(img_tag);
+
+				if (cached != img_cascade_blocks.end()) {
+					css_block = cached->second;
+				}
+				else {
+					/* A tag that the propagation has not reached, which
+					 * should not normally happen */
+					css_block = hc->css_style->check_tag_block(img_tag);
+				}
+			}
 
 			if (css_block == nullptr) {
 				css_block = &no_css_block;
