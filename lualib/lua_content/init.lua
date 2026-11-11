@@ -89,6 +89,9 @@ local content_modules = {
     output = "table",
     -- gzip-compressed SVGZ parts are detected as archives
     process_archive = true,
+    -- A document that the strict detection does not take for an image is
+    -- still opened as one by its name, and the handler tells what is wrong
+    by_name = true,
   },
 }
 
@@ -150,6 +153,15 @@ exports.maybe_process_mime_part = function(part, task, keep_text)
 
       if fext then
         pair = modules_by_extension[fext:lower()]
+      end
+    elseif not pair and not ext and not keep_text and not part:is_text() then
+      -- The content is not recognised at all
+      local fname = part:get_filename()
+      local fext = fname and fname:match('%.([%w]+)$')
+      local by_ext = fext and modules_by_extension[fext:lower()]
+
+      if by_ext and by_ext[2].by_name then
+        pair = by_ext
       end
     end
   end
