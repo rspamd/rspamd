@@ -97,6 +97,7 @@ local content_modules = {
 
 local modules_by_mime_type
 local modules_by_extension
+local ooxml_modules = { docx = true, xlsx = true, pptx = true }
 
 local function cache_key(part)
   return string.format('lua_content:%s', part:get_id())
@@ -136,10 +137,22 @@ exports.maybe_process_mime_part = function(part, task, keep_text)
   local mt = string.format("%s/%s", ctype or 'application',
       csubtype or 'octet-stream')
   local pair = modules_by_mime_type[mt]
+  local ext = part:get_detected_ext()
+
+  if pair and ext then
+    -- The declared type is the word of the sender: when the content is
+    -- found to be a document of another kind, that kind reads it, so that a
+    -- wrong type does not keep it unread. The OOXML handlers do that among
+    -- themselves, and tell the difference
+    local detected = modules_by_extension[ext]
+
+    if detected and detected[1] ~= pair[1] and
+        not (ooxml_modules[detected[1]] and ooxml_modules[pair[1]]) then
+      pair = detected
+    end
+  end
 
   if not pair then
-    local ext = part:get_detected_ext()
-
     if ext then
       pair = modules_by_extension[ext]
     end

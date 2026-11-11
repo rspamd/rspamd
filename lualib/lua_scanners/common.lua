@@ -477,6 +477,20 @@ local function check_parts_match(task, rule)
         if magic.av_check ~= false or is_part_checkable then
           return true
         end
+
+        if fname ~= nil then
+          -- A file is opened by its name: one that starts as an image or
+          -- as text and is named as something else is that something else
+          local fext = gen_extension(fname)
+          local named = fext and lua_magic_types[fext]
+
+          if fext and fext ~= detected_ext and (not named or named.av_check ~= false
+              and named.type ~= magic.type) then
+            lua_util.debugm(rule.name, task, '%s: part detected as %s is named as %s',
+              rule.log_prefix, detected_ext, fext)
+            return true
+          end
+        end
       elseif is_part_checkable then
         -- Just rely on attachment property
         return true
