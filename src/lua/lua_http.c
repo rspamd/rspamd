@@ -584,14 +584,15 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 
 /*
  * IPv4 destinations that are not hosts of the public network: "this network"
- * (0.0.0.0 is the local host for a connect), shared address space, protocol
- * assignments, benchmarking, multicast and the reserved top of the space
+ * (0.0.0.0 is the local host for a connect), shared address space, link-local
+ * addresses (whatever `local_addrs` is set to), protocol assignments, benchmarking, multicast and the reserved top of the space
  */
 static gboolean
 lua_http_ip4_is_special(uint32_t ip)
 {
 	return (ip & 0xff000000U) == 0x00000000U || /* 0.0.0.0/8 */
 		   (ip & 0xffc00000U) == 0x64400000U || /* 100.64.0.0/10 */
+		   (ip & 0xffff0000U) == 0xa9fe0000U || /* 169.254.0.0/16, link-local */
 		   (ip & 0xffffff00U) == 0xc0000000U || /* 192.0.0.0/24 */
 		   (ip & 0xfffe0000U) == 0xc6120000U || /* 198.18.0.0/15 */
 		   (ip & 0xf0000000U) == 0xe0000000U || /* 224.0.0.0/4 */
