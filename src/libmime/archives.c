@@ -2340,6 +2340,15 @@ rspamd_archive_zip_list_stream(struct rspamd_task *task,
 			rspamd_archive_zip_locals_free(&locals);
 
 			if (arch->files->len > mark) {
+				/* There is no directory that these would be other names of */
+				for (unsigned int i = mark; i < arch->files->len; i++) {
+					struct rspamd_archive_file *f = g_ptr_array_index(arch->files, i);
+
+					if (!(f->flags & RSPAMD_ARCHIVE_FILE_SAME_ENTRY)) {
+						f->flags &= ~RSPAMD_ARCHIVE_FILE_ALIAS;
+					}
+				}
+
 				return TRUE;
 			}
 		}
@@ -5973,12 +5982,17 @@ rspamd_archive_process_7zip(struct rspamd_task *task,
 	SZ_READ_UINT64(section_offset);
 	SZ_READ_UINT64(section_length);
 
-	if (end - p > sizeof(uint32_t)) {
+	if (end - p >= (glong) sizeof(uint32_t)) {
 		p += sizeof(uint32_t);
 	}
 	else {
 		msg_debug_archive("7z archive is invalid (truncated crc)");
 		arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
+		goto end;
+	}
+
+	if (section_offset == 0 && section_length == 0) {
+		/* An archive with no header is one with no files */
 		goto end;
 	}
 
@@ -6195,11 +6209,25 @@ rspamd_archive_part_may_hide(const struct rspamd_mime_part *part)
 	}
 
 	if ((ext == NULL || g_ascii_strcasecmp(ext, "txt") == 0) &&
-		part->cd != NULL && part->cd->type == RSPAMD_CT_ATTACHMENT &&
-		part->cd->filename.len > 0) {
+		part->cd != NULL && part->cd->type == RSPAMD_CT_ATTACHMENT) {
+		/*
+		 * Named as an archive, so opened as one. A text file of another
+		 * name is read as text, whatever follows the text in it
+		 */
+		static const char *names[] = {"zip", "rar", "7z"};
+		const rspamd_ftok_t *fn = &part->cd->filename;
+		gboolean named = FALSE;
+
+		for (unsigned int i = 0; i < G_N_ELEMENTS(names) && !named; i++) {
+			gsize elen = strlen(names[i]);
+
+			named = fn->len > elen + 1 && fn->begin[fn->len - elen - 1] == '.' &&
+					g_ascii_strncasecmp(fn->begin + fn->len - elen, names[i], elen) == 0;
+		}
+
 		/* An alternative is shown, whatever its disposition says */
-		return !(part->parent_part != NULL && part->parent_part->ct != NULL &&
-				 rspamd_ftok_casecmp(&part->parent_part->ct->subtype, &alternative) == 0);
+		return named && !(part->parent_part != NULL && part->parent_part->ct != NULL &&
+						  rspamd_ftok_casecmp(&part->parent_part->ct->subtype, &alternative) == 0);
 	}
 
 	return FALSE;
@@ -6223,6 +6251,7 @@ rspamd_archive_process_at(struct rspamd_task *task, struct rspamd_mime_part *par
 		if ((arch->files->len == 0 && !(arch->flags & RSPAMD_ARCHIVE_ENCRYPTED)) ||
 			(arch->flags & RSPAMD_ARCHIVE_CANNOT_READ)) {
 			/* These bytes in a file do not make it an archive */
+			rspamd_archive_files_reset(task, arch);
 			part->part_type = RSPAMD_MIME_PART_UNDEFINED;
 			part->specific.arch = NULL;
 		}
@@ -6279,6 +6308,18 @@ rspamd_archive_sniff(struct rspamd_task *task, struct rspamd_mime_part *part)
 			p++;
 		}
 	}
+}
+
+/* A part that a mail client shows as text: declared as text and not a file to save */
+static gboolean
+rspamd_archive_part_is_text(const struct rspamd_mime_part *part)
+{
+	if (part->cd != NULL && part->cd->type == RSPAMD_CT_ATTACHMENT) {
+		return FALSE;
+	}
+
+	return (part->flags & RSPAMD_MIME_PART_TEXT_CONTENT) ||
+		   (part->ct != NULL && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT));
 }
 
 /*
@@ -6346,7 +6387,19 @@ void rspamd_archives_process(struct rspamd_task *task)
 					known = FALSE;
 				}
 
-				if (known && part->part_type != RSPAMD_MIME_PART_ARCHIVE) {
+				if (known && rspamd_archive_part_is_text(part)) {
+					/*
+					 * Text that starts with the magic of an archive is shown
+					 * as text: it is an archive only if files are listed
+					 * from it, else its words and links would not be read
+					 */
+					if (part->part_type == RSPAMD_MIME_PART_ARCHIVE &&
+						part->specific.arch->files->len == 0) {
+						part->part_type = RSPAMD_MIME_PART_UNDEFINED;
+						part->specific.arch = NULL;
+					}
+				}
+				else if (known && part->part_type != RSPAMD_MIME_PART_ARCHIVE) {
 					rspamd_archive_unreadable(task, part, ext);
 				}
 			}

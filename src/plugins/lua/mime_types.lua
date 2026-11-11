@@ -547,7 +547,14 @@ local function check_mime_type(task)
           local arch = p:get_archive()
 
           if package then
-            for _, f in ipairs(arch:get_files_full(settings.max_archive_names)) do
+            local members = arch:get_files_full(settings.max_archive_names + 1)
+
+            if #members > settings.max_archive_names or arch:is_truncated() then
+              members[settings.max_archive_names + 1] = nil
+              task:insert_result(settings.symbol_truncated_archive, 1.0, filename)
+            end
+
+            for _, f in ipairs(members) do
               local ext = f.name and gen_extension(f.name)
               -- Markup is a part of some packages (an alternative chunk)
               local mult = ext and not package_markup[ext] and settings.bad_extensions[ext]
@@ -567,13 +574,16 @@ local function check_mime_type(task)
             task:insert_result('MIME_TRACE', 0.0,
                 string.format("%s:%s", p:get_id(), '-'))
           elseif arch:is_unreadable() then
-            -- It starts as an archive, and its files cannot be told
-            task:insert_result(settings.symbol_unreadable_archive, 1.0, {
-              arch:get_type(),
-              filename,
-            })
-            task:insert_result('MIME_TRACE', 0.0,
-                string.format("%s:%s", p:get_id(), '-'))
+            -- It starts as an archive, and its files cannot be told. A volume
+            -- of a split archive (x.7z.001) has its list in another volume
+            if not (filename and filename:match('%.%d%d%d$')) then
+              task:insert_result(settings.symbol_unreadable_archive, 1.0, {
+                arch:get_type(),
+                filename,
+              })
+              task:insert_result('MIME_TRACE', 0.0,
+                  string.format("%s:%s", p:get_id(), '-'))
+            end
           elseif arch:is_obfuscated() then
             task:insert_result(settings.symbol_obfuscated_archive, 1.0, {
               'obfuscated archive',
