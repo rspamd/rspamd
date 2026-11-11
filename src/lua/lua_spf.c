@@ -299,6 +299,16 @@ lua_spf_push_spf_addr(lua_State *L, struct spf_addr *addr)
 	lua_pushinteger(L, addr->flags);
 	lua_setfield(L, -2, "flags");
 
+	if (addr->jump != 0) {
+		/*
+		 * An element of an included record whose match is not a result of
+		 * the record: the check goes on from the element with this index
+		 * (from 1, as the elements are in a Lua table)
+		 */
+		lua_pushinteger(L, (lua_Integer) addr->jump + 1);
+		lua_setfield(L, -2, "jump");
+	}
+
 	if (addr->spf_string) {
 		lua_pushstring(L, addr->spf_string);
 		lua_setfield(L, -2, "str");

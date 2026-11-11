@@ -279,9 +279,13 @@ local function spf_flatten_handler(opts)
     local seen_all = false
 
     for _, elt in ipairs(elts) do
-      local processed = false
+      -- An element of an included record that says where the include does
+      -- not match (its `-all`, a `-ip4:`) is not a term of the flat record
+      local processed = elt.jump ~= nil
 
-      if elt.str and is_all_mechanism(elt.str) then
+      if processed then
+        processed = true
+      elseif elt.str and is_all_mechanism(elt.str) then
         local qualifier = result_to_qualifier(elt.result)
         local all_mech = (qualifier == '+' and 'all') or (qualifier .. 'all')
         table.insert(other_mechanisms, all_mech)

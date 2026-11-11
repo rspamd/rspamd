@@ -1493,8 +1493,16 @@ parse_spf_domain_mask(struct spf_record *rec, struct spf_addr *addr,
 					else {
 						bad_mask = TRUE;
 					}
+
+					/* `/24//64`: this is the first of the two slashes */
+					state = parse_second_slash;
 				}
-				state = parse_second_slash;
+				else {
+					/* `//64`: the first slash led here, this is the second */
+					state = parse_ipv6_mask;
+					cur_mask = 0;
+					mask_digits = 0;
+				}
 			}
 			else {
 				/* Not a length */
@@ -1503,10 +1511,16 @@ parse_spf_domain_mask(struct spf_record *rec, struct spf_addr *addr,
 			p++;
 			break;
 		case parse_second_slash:
-			c = p;
-			state = parse_ipv6_mask;
-			cur_mask = 0;
-			mask_digits = 0;
+			if (t == '/') {
+				state = parse_ipv6_mask;
+				cur_mask = 0;
+				mask_digits = 0;
+			}
+			else {
+				/* `/24/64` is not a dual length */
+				bad_mask = TRUE;
+			}
+			p++;
 			break;
 		case parse_ipv6_mask:
 			if (g_ascii_isdigit(t)) {
