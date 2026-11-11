@@ -79,6 +79,44 @@ context("PDF text layout", function()
     assert_not_nil(text:find('two', 1, true))
   end)
 
+  test("Tokens that do not read at the start of a page do not hide its text", function()
+    local cases = {
+      string.rep('<x> ', 40),
+      string.rep('[)] ', 40),
+      string.rep('q BI /W 1 /H 1 /BPC 8 ID \255EI Q ', 40),
+    }
+
+    for _, lead in ipairs(cases) do
+      local text = extract(lead .. 'BT /F1 12 Tf (after) Tj ET')
+      assert_not_nil(text:find('after', 1, true), lead:sub(1, 12))
+    end
+  end)
+
+  test("A hex string with zero bytes between its digits is read", function()
+    assert_equal('one\n', extract('BT /F1 12 Tf <6f\0 6e\0\n65> Tj ET'))
+  end)
+
+  test("Differences of an encoding that are an object of their own are applied", function()
+    local page = '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>'
+    local function with_font(encoding, extra)
+      local objs = {
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        page,
+        stream('BT /F1 12 Tf (ABC) Tj ET'),
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding ' .. encoding .. ' >>',
+      }
+      objs[#objs + 1] = extra
+
+      return text_of(pdf.process(build(objs), nil, {}))
+    end
+
+    local inline = with_font('<< /Type /Encoding /Differences [65 /x /y /z] >>')
+    local indirect = with_font('<< /Type /Encoding /Differences 6 0 R >>', '[65 /x /y /z]')
+    assert_equal('xyz\n', inline)
+    assert_equal(inline, indirect)
+  end)
+
   -- The forms of a text object
 
   local objects = {

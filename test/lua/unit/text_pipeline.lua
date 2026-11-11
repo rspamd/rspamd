@@ -91,6 +91,15 @@ context("Text pipeline", function()
     rspamd_config:init_subsystem('langdet')
   end)
 
+  test("The language of the reference text is detected", function()
+    -- The tests of languages below are not there without it
+    if has_languages then
+      assert_equal('en', inspect(english).language)
+    else
+      assert_false(has_languages)
+    end
+  end)
+
   if has_languages and inspect(english).language == 'en' then
     local single = {
       { 'a Greek letter', '\206\177' },
@@ -124,6 +133,15 @@ context("Text pipeline", function()
         assert_equal(c[1], inspect(string.rep(c[2], 10)).language)
       end)
     end
+
+    test("Links in a short text of ideographs or syllables do not make it English", function()
+      local links = " http://www.example.com/some/rather/long/path/to/a/page/with/words/in/it.html" ..
+          " http://shop.example.com/another/long/address/of/a/product/page/number/two.html" ..
+          " http://news.example.com/yet/another/address/that/is/made/of/latin/letters.html"
+      assert_equal('zh-CN', inspect("这是一个中文句子。今天天气很好。我们去公园散步吧。请看下面的链接。" .. links).language)
+      assert_equal('ja', inspect("これは日本語の文章です。今日は天気がいいですね。" .. links).language)
+      assert_equal('ko', inspect("이것은 한국어 문장입니다. 오늘 날씨가 좋습니다." .. links).language)
+    end)
 
     test("The language of a text is the same on every scan", function()
       local ambiguous = string.rep("water in de winter is warm en de hand is open ", 12)

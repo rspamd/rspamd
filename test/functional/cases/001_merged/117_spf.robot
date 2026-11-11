@@ -348,6 +348,36 @@ SPF NOTHING AFTER ALL IS REACHED
   Expect Symbol  R_SPF_FAIL
   Do Not Expect Symbol  R_SPF_ALLOW
 
+SPF DUAL PREFIX IPV4
+  [Documentation]  a/24//64 gives a length to each family
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.77  From=x@maskdual.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF DUAL PREFIX IPV6
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=2001:db8::ffff  From=x@maskdual.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_ALLOW
+  Do Not Expect Symbol  R_SPF_FAIL
+
+SPF DUAL PREFIX OUTSIDE
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.3.77  From=x@maskdual.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
+SPF ONE SLASH IS NOT A DUAL PREFIX
+  [Documentation]  a/24/64 is not a term: the address of the name does not match by it
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=192.0.2.77  From=x@maskbad.org.org.za
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_FAIL
+  Do Not Expect Symbol  R_SPF_ALLOW
+
 SPF IPV6 ONLY PREFIX KEEPS IPV4 EXACT
   [Documentation]  a//64 gives no length to IPv4
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml

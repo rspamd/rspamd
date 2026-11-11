@@ -284,6 +284,61 @@ context("Archive detection", function()
     end
   end)
 
+  test("Text that starts as an archive stays text", function()
+    local function alternative(prefix)
+      local msg = table.concat({
+        "Subject: text", "MIME-Version: 1.0",
+        'Content-Type: multipart/alternative; boundary="b1"', "",
+        "--b1", "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: 8bit", "",
+        prefix .. " plain words here http://plain.example.com/a", "",
+        "--b1", "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: 8bit", "",
+        prefix .. ' <a href="http://html.example.com/b">html words here</a>', "",
+        "--b1--", "" }, "\r\n")
+      local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+      task:process_message()
+      local ntext, nurls, narch = #task:get_text_parts(), #task:get_urls(), #(task:get_archives() or {})
+      task:destroy()
+
+      return ntext, nurls, narch
+    end
+
+    for _, prefix in ipairs({ '', '\31\139\8\0', 'PK\3\4', '7z\188\175\39\28\0\4' }) do
+      local ntext, nurls, narch = alternative(prefix)
+      assert_equal(2, ntext, prefix)
+      assert_equal(2, nurls, prefix)
+      assert_equal(0, narch, prefix)
+    end
+  end)
+
+  test("A text file with an archive after its text is read as text", function()
+    local text = string.rep('Just some words of plain text here. ', 8) .. 'http://example.com/x\r\n'
+    local res = look(text .. zip(two), 'text/plain', 'attachment; filename="notes.txt"')
+    assert_false(res.is_archive)
+    assert_true(res.is_text)
+  end)
+
+  test("An empty 7z file is not one that cannot be read", function()
+    local res = look('7z\188\175\39\28\0\4' .. string.rep('\0', 24))
+    assert_true(res.is_archive)
+    assert_false(res.unreadable)
+    assert_equal(0, #res.names)
+  end)
+
+  test("Files listed by local headers are files, not other names of files", function()
+    local locals = zip_pieces({ 'setup.exe' })
+    local msg = table.concat({
+      "Subject: archive", "MIME-Version: 1.0", "Content-Type: application/zip",
+      "Content-Transfer-Encoding: base64", "",
+      tostring(rspamd_util.encode_base64(locals, 76)), "" }, "\r\n")
+    local _, task = rspamd_task.load_from_string(msg, rspamd_config)
+    task:process_message()
+    local files = task:get_archives()[1]:get_files_full()
+    task:destroy()
+    assert_equal(1, #files)
+    assert_equal('setup.exe', files[1].name)
+    assert_false(files[1].alias)
+  end)
+
   test("Names that share a hash of no secret cost what other names cost", function()
     -- "Aa" and "BB" have one hash under h * 31 + c, and so has any row of them
     local function many(colliding)

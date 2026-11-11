@@ -211,6 +211,37 @@ context("Content handlers limits", function()
     pool:destroy()
   end)
 
+  test("A calendar of lines that continue with no property is read in linear time", function()
+    local ical = require "lua_content/ical"
+    local vcard = require "lua_content/vcard"
+    local pool = require("rspamd_mempool").create()
+    local task = {
+      get_mempool = function()
+        return pool
+      end,
+      inject_url = function()
+      end,
+    }
+
+    local function timed(mod, n)
+      local input = 'x\n' .. string.rep(' x\n', n) .. 'SUMMARY:hello\n'
+      local t = os.clock()
+      local res = mod.process(input, nil, task)
+
+      return os.clock() - t, res
+    end
+
+    for _, mod in ipairs({ ical, vcard }) do
+      local small = timed(mod, 5000)
+      local large, res = timed(mod, 80000)
+      -- 16 times the input: a square of it would be 256 times the time
+      assert_true(large < small * 64 + 0.5, string.format('%.3f s and %.3f s', small, large))
+      assert_equal('summary', res.elts[#res.elts][1])
+    end
+
+    pool:destroy()
+  end)
+
   test("An OOXML package is not looked for inside a compressed stream", function()
     local archive = require "archive"
     local zip = archive.zip({ { name = 'a.txt', content = 'hello' } })

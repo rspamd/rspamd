@@ -33,6 +33,12 @@ Hindi vowel signs are ignored
   Should Be True  'hi' in $languages or 'ne' in $languages
   Do Not Expect Symbol  R_MIXED_CHARSET
 
+Names with diacritics in a long English text are not a sign
+  Scan File  ${RSPAMD_TESTDIR}/messages/chartable_english_names.eml
+  ...  Settings=${SETTINGS_CHARTABLE}
+  Expect Symbol With Option  TEST_LANGUAGE  en
+  Do Not Expect Symbol  R_MIXED_CHARSET
+
 English diacritics are significant
   Scan File  ${RSPAMD_TESTDIR}/messages/chartable_english_diacritics.eml
   ...  Settings=${SETTINGS_CHARTABLE}
