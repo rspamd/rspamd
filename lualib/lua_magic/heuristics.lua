@@ -188,8 +188,9 @@ local function detect_ole_format(input, log_obj, _, part)
   lua_util.debugm(N, log_obj, "directory: %s", directory_offset)
 
   if inplen < directory_offset then
+    -- A compound file all the same, cut or with its directory elsewhere
     lua_util.debugm(N, log_obj, "short length: %s", inplen)
-    return nil
+    return 'ole', 40
   end
 
   local function process_dir_entry(offset)
@@ -199,7 +200,8 @@ local function detect_ole_format(input, log_obj, _, part)
     if dtype then
       if dtype == 5 then
         -- Extract clsid
-        local matches = msoffice_trie_clsid:match(input:span(offset + 80, 16))
+        local matches = offset + 95 <= inplen and
+            msoffice_trie_clsid:match(input:span(offset + 80, 16))
         if matches then
           for n, _ in pairs(matches) do
             if msoffice_clsid_indexes[n] then
@@ -211,7 +213,8 @@ local function detect_ole_format(input, log_obj, _, part)
         end
         return true, nil
       elseif dtype == 2 then
-        local matches = msoffice_trie:match(input:span(offset, 64))
+        local matches = offset + 63 <= inplen and
+            msoffice_trie:match(input:span(offset, 64))
         if matches then
           for n, _ in pairs(matches) do
             if msoffice_patterns_indexes[n] then
@@ -242,6 +245,10 @@ local function detect_ole_format(input, log_obj, _, part)
 
     directory_offset = directory_offset + 128
   until directory_offset >= inplen
+
+  -- No stream that tells an office document: a compound file of some other
+  -- kind, which is still more than data of no type
+  return 'ole', 40
 end
 
 exports.ole_format_heuristic = detect_ole_format
