@@ -59,7 +59,17 @@ static const struct rspamd_language_unicode_match unicode_langs[] = {
 	{"hy", RSPAMD_UNICODE_ARMENIAN, 0},
 	{"ja", RSPAMD_UNICODE_JP, 0},
 	{"ko", RSPAMD_UNICODE_HANGUL, 0},
+	{"he", RSPAMD_UNICODE_HEBREW, 0},
 };
+
+/*
+ * A script tells the language of a text only if a fair share of the letters
+ * of the text are of that script: a letter or two of another script in a
+ * text are a quotation, a name or a trick, not the language of the text
+ */
+#define RSPAMD_UNISCRIPT_MIN_SHARE 5 /* one letter of five */
+#define RSPAMD_UNISCRIPT_MIN_LETTERS 2
+#define RSPAMD_UNISCRIPT_NSCRIPTS 32
 
 /*
  * Top Languages
@@ -1001,9 +1011,10 @@ rspamd_language_detector_random_select(rspamd_words_t *ucs_tokens, unsigned int 
 	out_idx = 0;
 	coin = rspamd_random_uint64_fast_seed(seed);
 	sel = coin % (step_len + remainder);
-	offsets_out[out_idx] = sel;
+	/* The word of the first split has a slot of its own */
+	offsets_out[out_idx++] = sel;
 
-	for (i = step_len + remainder; i < kv_size(*ucs_tokens);
+	for (i = step_len + remainder; i < kv_size(*ucs_tokens) && out_idx < nwords;
 		 i += step_len, out_idx++) {
 		unsigned int ntries = 0;
 		coin = rspamd_random_uint64_fast_seed(seed);
@@ -1359,86 +1370,67 @@ struct rspamd_frequency_sort_cbdata {
 
 static const double tier0_adjustment = 1.2;
 static const double tier1_adjustment = 0.8;
-static const double frequency_adjustment = 0.8;
 
-static int
-rspamd_language_detector_cmp_heuristic(gconstpointer a, gconstpointer b,
-									   gpointer ud)
+/*
+ * Applies the tiers of the languages to the probabilities of the candidates.
+ * It is done once and before the sort: a comparator that changes what it
+ * compares gives an order that depends on how many times it was called. The
+ * result is a function of the text only, so that the same text is the same
+ * language on every scan and in every worker: how often a language was seen
+ * by this process before is not a part of it.
+ */
+static void
+rspamd_language_detector_apply_heuristic(GPtrArray *result,
+										 const struct rspamd_frequency_sort_cbdata *cbd)
 {
-	struct rspamd_frequency_sort_cbdata *cbd = ud;
-	struct rspamd_lang_detector_res
-		*canda = *(struct rspamd_lang_detector_res **) a,
-		*candb = *(struct rspamd_lang_detector_res **) b;
-	double adj;
-	double proba_adjusted, probb_adjusted, freqa, freqb;
+	for (unsigned int i = 0; i < result->len; i++) {
+		struct rspamd_lang_detector_res *cand = g_ptr_array_index(result, i);
+		double adj;
 
-	if (cbd->d->total_occurrences == 0) {
-		/* Not enough data, compare directly */
-		return rspamd_language_detector_cmp(a, b);
+		if (cand->elt == NULL) {
+			continue;
+		}
+
+		if (cand->elt->flags & RS_LANGUAGE_TIER1) {
+			adj = (cbd->flags & RSPAMD_LANG_FLAG_SHORT) ? tier1_adjustment * 2.0 : tier1_adjustment;
+			cand->prob += cbd->std * adj;
+		}
+
+		if (cand->elt->flags & RS_LANGUAGE_TIER0) {
+			adj = (cbd->flags & RSPAMD_LANG_FLAG_SHORT) ? tier0_adjustment * 16.0 : tier0_adjustment;
+			cand->prob += cbd->std * adj;
+		}
+	}
+}
+
+/* The index of a script in the counters: the number of its bit */
+static inline unsigned int
+rspamd_uniscript_idx(unsigned int script)
+{
+	unsigned int idx = 0;
+
+	while (script > 1 && idx < RSPAMD_UNISCRIPT_NSCRIPTS - 1) {
+		script >>= 1;
+		idx++;
 	}
 
-	freqa = ((double) canda->elt->occurrences) /
-			(double) cbd->d->total_occurrences;
-	freqb = ((double) candb->elt->occurrences) /
-			(double) cbd->d->total_occurrences;
-
-	proba_adjusted = canda->prob;
-	probb_adjusted = candb->prob;
-
-	if (isnormal(freqa) && isnormal(freqb)) {
-		proba_adjusted += cbd->std * (frequency_adjustment * freqa);
-		probb_adjusted += cbd->std * (frequency_adjustment * freqb);
-	}
-
-	if (cbd->flags & RSPAMD_LANG_FLAG_SHORT) {
-		adj = tier1_adjustment * 2.0;
-	}
-	else {
-		adj = tier1_adjustment;
-	}
-	if (canda->elt->flags & RS_LANGUAGE_TIER1) {
-		proba_adjusted += cbd->std * adj;
-	}
-
-	if (candb->elt->flags & RS_LANGUAGE_TIER1) {
-		probb_adjusted += cbd->std * adj;
-	}
-
-	if (cbd->flags & RSPAMD_LANG_FLAG_SHORT) {
-		adj = tier0_adjustment * 16.0;
-	}
-	else {
-		adj = tier0_adjustment;
-	}
-
-	if (canda->elt->flags & RS_LANGUAGE_TIER0) {
-		proba_adjusted += cbd->std * adj;
-	}
-
-	if (candb->elt->flags & RS_LANGUAGE_TIER0) {
-		probb_adjusted += cbd->std * adj;
-	}
-
-	/* Hack: adjust probability directly */
-	canda->prob = proba_adjusted;
-	candb->prob = probb_adjusted;
-
-	if (proba_adjusted > probb_adjusted) {
-		return -1;
-	}
-	else if (probb_adjusted > proba_adjusted) {
-		return 1;
-	}
-
-	return 0;
+	return idx;
 }
 
 static void
 rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 										 struct rspamd_mime_text_part *part,
 										 unsigned int *pchinese,
-										 unsigned int *pspecial)
+										 unsigned int *pspecial,
+										 unsigned int *pletters,
+										 unsigned int *script_letters)
 {
+#define COUNT_SCRIPT(script)                            \
+	do {                                                \
+		part->unicode_scripts |= (script);              \
+		script_letters[rspamd_uniscript_idx(script)]++; \
+	} while (0)
+
 	const char *p = part->utf_stripped_content->data, *end;
 	unsigned int i = 0, cnt = 0;
 	end = p + part->utf_stripped_content->len;
@@ -1460,19 +1452,19 @@ rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 			switch (sc) {
 			case UBLOCK_BASIC_LATIN:
 			case UBLOCK_LATIN_1_SUPPLEMENT:
-				part->unicode_scripts |= RSPAMD_UNICODE_LATIN;
+				COUNT_SCRIPT(RSPAMD_UNICODE_LATIN);
 				nlatin++;
 				break;
 			case UBLOCK_HEBREW:
-				part->unicode_scripts |= RSPAMD_UNICODE_HEBREW;
+				COUNT_SCRIPT(RSPAMD_UNICODE_HEBREW);
 				nspecial++;
 				break;
 			case UBLOCK_GREEK:
-				part->unicode_scripts |= RSPAMD_UNICODE_GREEK;
+				COUNT_SCRIPT(RSPAMD_UNICODE_GREEK);
 				nspecial++;
 				break;
 			case UBLOCK_CYRILLIC:
-				part->unicode_scripts |= RSPAMD_UNICODE_CYRILLIC;
+				COUNT_SCRIPT(RSPAMD_UNICODE_CYRILLIC);
 				nspecial++;
 				break;
 			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS:
@@ -1480,57 +1472,58 @@ rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 			case UBLOCK_CJK_RADICALS_SUPPLEMENT:
 			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A:
 			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B:
-				part->unicode_scripts |= RSPAMD_UNICODE_CJK;
+				COUNT_SCRIPT(RSPAMD_UNICODE_CJK);
 				nchinese++;
 				break;
 			case UBLOCK_HIRAGANA:
 			case UBLOCK_KATAKANA:
-				part->unicode_scripts |= RSPAMD_UNICODE_JP;
+				COUNT_SCRIPT(RSPAMD_UNICODE_JP);
 				nspecial++;
 				break;
 			case UBLOCK_HANGUL_JAMO:
 			case UBLOCK_HANGUL_COMPATIBILITY_JAMO:
-				part->unicode_scripts |= RSPAMD_UNICODE_HANGUL;
+			case UBLOCK_HANGUL_SYLLABLES:
+				COUNT_SCRIPT(RSPAMD_UNICODE_HANGUL);
 				nspecial++;
 				break;
 			case UBLOCK_ARABIC:
-				part->unicode_scripts |= RSPAMD_UNICODE_ARABIC;
+				COUNT_SCRIPT(RSPAMD_UNICODE_ARABIC);
 				nspecial++;
 				break;
 			case UBLOCK_DEVANAGARI:
-				part->unicode_scripts |= RSPAMD_UNICODE_DEVANAGARI;
+				COUNT_SCRIPT(RSPAMD_UNICODE_DEVANAGARI);
 				nspecial++;
 				break;
 			case UBLOCK_ARMENIAN:
-				part->unicode_scripts |= RSPAMD_UNICODE_ARMENIAN;
+				COUNT_SCRIPT(RSPAMD_UNICODE_ARMENIAN);
 				nspecial++;
 				break;
 			case UBLOCK_GEORGIAN:
-				part->unicode_scripts |= RSPAMD_UNICODE_GEORGIAN;
+				COUNT_SCRIPT(RSPAMD_UNICODE_GEORGIAN);
 				nspecial++;
 				break;
 			case UBLOCK_GUJARATI:
-				part->unicode_scripts |= RSPAMD_UNICODE_GUJARATI;
+				COUNT_SCRIPT(RSPAMD_UNICODE_GUJARATI);
 				nspecial++;
 				break;
 			case UBLOCK_TELUGU:
-				part->unicode_scripts |= RSPAMD_UNICODE_TELUGU;
+				COUNT_SCRIPT(RSPAMD_UNICODE_TELUGU);
 				nspecial++;
 				break;
 			case UBLOCK_TAMIL:
-				part->unicode_scripts |= RSPAMD_UNICODE_TAMIL;
+				COUNT_SCRIPT(RSPAMD_UNICODE_TAMIL);
 				nspecial++;
 				break;
 			case UBLOCK_THAI:
-				part->unicode_scripts |= RSPAMD_UNICODE_THAI;
+				COUNT_SCRIPT(RSPAMD_UNICODE_THAI);
 				nspecial++;
 				break;
-			case RSPAMD_UNICODE_MALAYALAM:
-				part->unicode_scripts |= RSPAMD_UNICODE_MALAYALAM;
+			case UBLOCK_MALAYALAM:
+				COUNT_SCRIPT(RSPAMD_UNICODE_MALAYALAM);
 				nspecial++;
 				break;
-			case RSPAMD_UNICODE_SINHALA:
-				part->unicode_scripts |= RSPAMD_UNICODE_SINHALA;
+			case UBLOCK_SINHALA:
+				COUNT_SCRIPT(RSPAMD_UNICODE_SINHALA);
 				nspecial++;
 				break;
 			}
@@ -1553,6 +1546,9 @@ rspamd_language_detector_unicode_scripts(struct rspamd_task *task,
 
 	*pchinese = nchinese;
 	*pspecial = nspecial;
+	*pletters = cnt;
+
+#undef COUNT_SCRIPT
 }
 
 static inline void
@@ -1576,48 +1572,69 @@ rspamd_language_detector_set_language(struct rspamd_task *task,
 	part->language = code;
 }
 
+/* Tells if enough of the letters of a text are of the script counted */
+static inline gboolean
+rspamd_uniscript_is_fair_share(unsigned int count, unsigned int nletters)
+{
+	return count >= RSPAMD_UNISCRIPT_MIN_LETTERS &&
+		   (uint64_t) count * RSPAMD_UNISCRIPT_MIN_SHARE >= nletters;
+}
+
 static gboolean
 rspamd_language_detector_try_uniscript(struct rspamd_task *task,
 									   struct rspamd_mime_text_part *part,
 									   unsigned int nchinese,
-									   unsigned int nspecial)
+									   unsigned int nspecial,
+									   unsigned int nletters,
+									   const unsigned int *script_letters)
 {
-	unsigned int i;
+	unsigned int i, best_count = 0;
+	const struct rspamd_language_unicode_match *best = NULL;
 
+	/* The script with the most letters, if that is a fair share of the text */
 	for (i = 0; i < G_N_ELEMENTS(unicode_langs); i++) {
-		if (unicode_langs[i].unicode_code & part->unicode_scripts) {
+		unsigned int count;
 
-			if (unicode_langs[i].unicode_code != RSPAMD_UNICODE_JP) {
-				msg_debug_lang_det("set language based on unicode script %s",
-								   unicode_langs[i].lang);
-				rspamd_language_detector_set_language(task, part,
-													  unicode_langs[i].lang, NULL);
+		if (!(unicode_langs[i].unicode_code & part->unicode_scripts)) {
+			continue;
+		}
 
-				return TRUE;
+		count = script_letters[rspamd_uniscript_idx(unicode_langs[i].unicode_code)];
+
+		if (unicode_langs[i].unicode_code == RSPAMD_UNICODE_JP) {
+			/*
+			 * Japanese <-> Chinese guess
+			 *
+			 * Typically there might be around 0-70% of kanji glyphs
+			 * and the rest are Haragana/Katakana
+			 *
+			 * If we discover that Kanji is more than 80% then we consider
+			 * it Chinese
+			 */
+			if (!(nchinese <= 5 || nchinese < count * 5)) {
+				continue;
 			}
-			else {
-				/* Japanese <-> Chinese guess */
 
-				/*
-				 * Typically there might be around 0-70% of kanji glyphs
-				 * and the rest are Haragana/Katakana
-				 *
-				 * If we discover that Kanji is more than 80% then we consider
-				 * it Chinese
-				 */
-				if (nchinese <= 5 || nchinese < nspecial * 5) {
-					msg_debug_lang_det("set language based on unicode script %s",
-									   unicode_langs[i].lang);
-					rspamd_language_detector_set_language(task, part,
-														  unicode_langs[i].lang, NULL);
+			/* The ideographs are a part of the same text */
+			count += nchinese;
+		}
 
-					return TRUE;
-				}
-			}
+		if (count > best_count && rspamd_uniscript_is_fair_share(count, nletters)) {
+			best_count = count;
+			best = &unicode_langs[i];
 		}
 	}
 
-	if (part->unicode_scripts & RSPAMD_UNICODE_CJK) {
+	if (best != NULL) {
+		msg_debug_lang_det("set language based on unicode script %s: %d letters of %d",
+						   best->lang, best_count, nletters);
+		rspamd_language_detector_set_language(task, part, best->lang, NULL);
+
+		return TRUE;
+	}
+
+	if ((part->unicode_scripts & RSPAMD_UNICODE_CJK) &&
+		rspamd_uniscript_is_fair_share(nchinese, nletters)) {
 		msg_debug_lang_det("guess chinese based on CJK characters: %d chinese, %d special",
 						   nchinese, nspecial);
 		rspamd_language_detector_set_language(task, part,
@@ -1646,7 +1663,8 @@ rspamd_langelt_equal_func(gconstpointer v, gconstpointer v2)
 }
 
 /* This hash set stores a word index in the language to avoid duplicate stop words */
-KHASH_INIT(rspamd_sw_res_set, int, char, 0, kh_int_hash_func, kh_int_hash_equal);
+/* A stop word found in a text -> how many times it stands there */
+KHASH_INIT(rspamd_sw_res_set, int, unsigned int, 1, kh_int_hash_func, kh_int_hash_equal);
 
 KHASH_INIT(rspamd_sw_hash, struct rspamd_language_elt *, khash_t(rspamd_sw_res_set) *, 1,
 		   rspamd_langelt_hash_func, rspamd_langelt_equal_func);
@@ -1688,6 +1706,8 @@ rspamd_language_detector_sw_cb(struct rspamd_multipattern *mp,
 	struct rspamd_sw_cbdata *cbdata = (struct rspamd_sw_cbdata *) context;
 	khiter_t k;
 	static const gsize max_stop_words = 80;
+	/* One word repeated does not stand for a text */
+	static const unsigned int max_stop_word_count = 16;
 	struct rspamd_task *task;
 
 	if (match_start > 0) {
@@ -1726,8 +1746,12 @@ rspamd_language_detector_sw_cb(struct rspamd_multipattern *mp,
 		if (set_k == kh_end(kh_value(cbdata->res, k))) {
 			/* New word */
 			set_k = kh_put(rspamd_sw_res_set, kh_value(cbdata->res, k), strnum, &tt);
+			kh_value(kh_value(cbdata->res, k), set_k) = 1;
 			msg_debug_lang_det("found new word %*s from %s language (%d stop words found so far)",
 							   (int) (next - prev - 1), prev + 1, r->elt->name, nwords);
+		}
+		else if (kh_value(kh_value(cbdata->res, k), set_k) < max_stop_word_count) {
+			kh_value(kh_value(cbdata->res, k), set_k)++;
 		}
 
 		if (nwords > max_stop_words) {
@@ -1739,13 +1763,29 @@ rspamd_language_detector_sw_cb(struct rspamd_multipattern *mp,
 
 		k = kh_put(rspamd_sw_hash, cbdata->res, r->elt, &tt);
 		kh_value(cbdata->res, k) = kh_init(rspamd_sw_res_set);
-		kh_put(rspamd_sw_res_set, kh_value(cbdata->res, k), strnum, &tt);
+		khiter_t first_k = kh_put(rspamd_sw_res_set, kh_value(cbdata->res, k), strnum, &tt);
+		kh_value(kh_value(cbdata->res, k), first_k) = 1;
 
 		msg_debug_lang_det("found new word %*s from %s language (%d stop words found so far)",
 						   (int) (next - prev - 1), prev + 1, r->elt->name, nwords);
 	}
 
 	return 0;
+}
+
+/* How many times the stop words of one language stand in a text */
+static unsigned int
+rspamd_language_detector_sw_occurrences(khash_t(rspamd_sw_res_set) * words)
+{
+	unsigned int total = 0;
+
+	for (khiter_t it = kh_begin(words); it != kh_end(words); ++it) {
+		if (kh_exist(words, it)) {
+			total += kh_value(words, it);
+		}
+	}
+
+	return total;
 }
 
 static gboolean
@@ -1772,6 +1812,7 @@ rspamd_language_detector_try_stop_words(struct rspamd_task *task,
 	if (kh_size(cbdata.res) > 0) {
 		khash_t(rspamd_sw_res_set) * cur_res;
 		double max_rate = G_MINDOUBLE;
+		unsigned int max_occurrences = 0;
 		struct rspamd_language_elt *cur_lang, *sel = NULL;
 		gboolean ignore_ascii = FALSE, ignore_latin = FALSE;
 
@@ -1784,6 +1825,7 @@ rspamd_language_detector_try_stop_words(struct rspamd_task *task,
 				ignore_ascii = TRUE;
 				sel = NULL;
 				max_rate = G_MINDOUBLE;
+				max_occurrences = 0;
 				msg_debug_lang_det("ignore ascii after finding %d stop words from %s",
 								   cur_matches, cur_lang->name);
 				goto again;
@@ -1794,6 +1836,7 @@ rspamd_language_detector_try_stop_words(struct rspamd_task *task,
 				ignore_latin = TRUE;
 				sel = NULL;
 				max_rate = G_MINDOUBLE;
+				max_occurrences = 0;
 				msg_debug_lang_det("ignore latin after finding stop %d words from %s",
 								   cur_matches, cur_lang->name);
 				goto again;
@@ -1815,14 +1858,23 @@ rspamd_language_detector_try_stop_words(struct rspamd_task *task,
 			}
 
 			double rate = (double) cur_matches / (double) cur_lang->stop_words;
+			unsigned int occurrences = rspamd_language_detector_sw_occurrences(cur_res);
 
-			if (rate > max_rate) {
+			/*
+			 * The language whose stop words stand in the text most often:
+			 * these are the commonest words of a language; so they are a
+			 * large part of any text in it. How much of the list of a
+			 * language is covered is not the measure - a few dozen words
+			 * added to a text cover most of a short list. It only breaks
+			 * a tie
+			 */
+			if (occurrences > max_occurrences || (occurrences == max_occurrences && rate > max_rate)) {
+				max_occurrences = occurrences;
 				max_rate = rate;
 				sel = cur_lang;
 			}
 
-			msg_debug_lang_det("found %d stop words from %s: %3f rate",
-							   cur_matches, cur_lang->name, rate);
+			msg_debug_lang_det("found %d stop words from %s: %d times, %3f rate", cur_matches, cur_lang->name, occurrences, rate);
 		});
 
 		/* Cleanup */
@@ -1870,13 +1922,16 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 
 	start_ticks = rspamd_get_ticks(TRUE);
 
-	unsigned int nchinese = 0, nspecial = 0;
-	rspamd_language_detector_unicode_scripts(task, part, &nchinese, &nspecial);
+	unsigned int nchinese = 0, nspecial = 0, nletters = 0;
+	unsigned int script_letters[RSPAMD_UNISCRIPT_NSCRIPTS] = {0};
+	rspamd_language_detector_unicode_scripts(task, part, &nchinese, &nspecial,
+											 &nletters, script_letters);
 
 	/* Disable internal language detection heuristics if we have fasttext */
 	if (!rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector) || !d->prefer_fasttext) {
 		/* Apply unicode scripts heuristic */
-		if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial)) {
+		if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial,
+												   nletters, script_letters)) {
 			ret = TRUE;
 		}
 
@@ -1945,7 +2000,8 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 
 			if (!internal_heuristic_applied) {
 				/* Apply unicode scripts heuristic */
-				if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial)) {
+				if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial,
+														   nletters, script_letters)) {
 					ret = TRUE;
 				}
 
@@ -2062,13 +2118,10 @@ rspamd_language_detector_detect(struct rspamd_task *task,
 			});
 
 			if (frequency_heuristic_applied) {
-				g_ptr_array_sort_with_data(result,
-										   rspamd_language_detector_cmp_heuristic,
-										   (gpointer) &cbd);
+				rspamd_language_detector_apply_heuristic(result, &cbd);
 			}
-			else {
-				g_ptr_array_sort(result, rspamd_language_detector_cmp);
-			}
+
+			g_ptr_array_sort(result, rspamd_language_detector_cmp);
 
 			int i;
 			PTR_ARRAY_FOREACH(result, i, cand)
