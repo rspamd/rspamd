@@ -359,22 +359,51 @@ lua_redis_push_error(const char *err,
  * valid while the reply lives, unless copy_text asks for owned copies for a
  * reply freed before Lua gets the result
  */
+/* Replies are nested no deeper: what Redis sends is nested a few times */
+#define LUA_REDIS_MAX_REPLY_DEPTH 32
+
 static void
-lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
-					 gboolean copy_text)
+lua_redis_push_reply_depth(lua_State *L, const redisReply *r, gboolean text_data,
+						   gboolean copy_text, unsigned int depth)
 {
-	unsigned int i;
+	gsize i;
+
+	/*
+	 * Exactly one value is pushed for a reply of any type: the callers store
+	 * it or pass it on, and a value that is missing shifts all the others
+	 */
+	if (r == NULL || depth > LUA_REDIS_MAX_REPLY_DEPTH || !lua_checkstack(L, 4)) {
+		if (r != NULL) {
+			msg_info("redis reply is nested too deep: the rest of it is dropped");
+		}
+
+		lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
+
+		return;
+	}
 
 	switch (r->type) {
 	case REDIS_REPLY_INTEGER:
 		lua_pushinteger(L, r->integer);
+		break;
+	case REDIS_REPLY_BOOL:
+		lua_pushboolean(L, r->integer != 0);
+		break;
+	case REDIS_REPLY_DOUBLE:
+		lua_pushnumber(L, r->dval);
 		break;
 	case REDIS_REPLY_NIL:
 		lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
 		break;
 	case REDIS_REPLY_STRING:
 	case REDIS_REPLY_STATUS:
-		if (text_data) {
+	case REDIS_REPLY_ERROR:
+	case REDIS_REPLY_BIGNUM:
+	case REDIS_REPLY_VERB:
+		if (r->str == NULL) {
+			lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
+		}
+		else if (text_data) {
 			lua_new_text(L, r->str, r->len, copy_text);
 		}
 		else {
@@ -382,16 +411,30 @@ lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
 		}
 		break;
 	case REDIS_REPLY_ARRAY:
-		lua_createtable(L, r->elements, 0);
+	case REDIS_REPLY_SET:
+	case REDIS_REPLY_PUSH:
+	case REDIS_REPLY_MAP:
+	case REDIS_REPLY_ATTR:
+		/* A map is its keys and values one after another, as RESP2 has it */
+		lua_createtable(L, MIN(r->elements, 1024), 0);
 		for (i = 0; i < r->elements; ++i) {
-			lua_redis_push_reply(L, r->element[i], text_data, copy_text);
+			lua_redis_push_reply_depth(L, r->element ? r->element[i] : NULL, text_data,
+									   copy_text, depth + 1);
 			lua_rawseti(L, -2, i + 1); /* Store sub-reply */
 		}
 		break;
-	default: /* should not happen */
+	default:
 		msg_info("unknown reply type: %d", r->type);
+		lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
 		break;
 	}
+}
+
+static void
+lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
+					 gboolean copy_text)
+{
+	lua_redis_push_reply_depth(L, r, text_data, copy_text, 0);
 }
 
 /**
@@ -524,6 +567,8 @@ lua_redis_callback(redisAsyncContext *c, gpointer r, gpointer priv)
 		if (ctx->cmds_pending == 0 && !ud->terminated) {
 			/* Disconnect redis early as we don't need it anymore */
 			ud->terminated = 1;
+			/* No command is taken after that: there is no connection for it */
+			ctx->flags |= LUA_REDIS_TERMINATED;
 			ac = ud->ctx;
 			ud->ctx = NULL;
 
@@ -808,6 +853,11 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 	gsize *arglens;
 	int top;
 
+	if (cmd == NULL) {
+		/* Not a string: Redis replies that there is no such command */
+		cmd = "";
+	}
+
 	if (idx != 0 && lua_type(L, idx) == LUA_TTABLE) {
 		/* Get all arguments */
 		lua_pushvalue(L, idx);
@@ -827,7 +877,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 		args = g_malloc((top + 1) * sizeof(char *));
 		arglens = g_malloc((top + 1) * sizeof(gsize));
 		arglens[0] = strlen(cmd);
-		args[0] = g_malloc(arglens[0]);
+		args[0] = g_malloc(arglens[0] + 1);
 		memcpy(args[0], cmd, arglens[0]);
 		top = 1;
 		lua_pushnil(L);
@@ -839,7 +889,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 				const char *s;
 
 				s = lua_tolstring(L, -1, &arglens[top]);
-				args[top] = g_malloc(arglens[top]);
+				args[top] = g_malloc(arglens[top] + 1);
 				memcpy(args[top], s, arglens[top]);
 				top++;
 			}
@@ -850,7 +900,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 
 				if (t && t->start) {
 					arglens[top] = t->len;
-					args[top] = g_malloc(arglens[top]);
+					args[top] = g_malloc(arglens[top] + 1);
 					memcpy(args[top], t->start, arglens[top]);
 					top++;
 				}
@@ -870,7 +920,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 				}
 
 				arglens[top] = r;
-				args[top] = g_malloc(arglens[top]);
+				args[top] = g_malloc(arglens[top] + 1);
 				memcpy(args[top], numbuf, arglens[top]);
 				top++;
 			}
@@ -886,7 +936,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 		args = g_malloc(sizeof(char *));
 		arglens = g_malloc(sizeof(gsize));
 		arglens[0] = strlen(cmd);
-		args[0] = g_malloc(arglens[0]);
+		args[0] = g_malloc(arglens[0] + 1);
 		memcpy(args[0], cmd, arglens[0]);
 		top = 1;
 	}
@@ -894,6 +944,31 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 	*pargs = args;
 	*parglens = arglens;
 	*nargs = top;
+}
+
+/*
+ * Commands that leave something on a connection for whoever uses it next: a
+ * database or a user that is not the one of the pool, an open transaction,
+ * a subscription. A connection that had one of them is closed, not reused
+ */
+static gboolean
+lua_redis_cmd_changes_state(const char *cmd)
+{
+	static const char *const names[] = {
+		"select", "auth", "hello", "multi", "watch", "subscribe", "psubscribe",
+		"ssubscribe", "monitor", "client", "reset", "readonly", "readwrite", "asking"};
+
+	if (cmd == NULL) {
+		return FALSE;
+	}
+
+	for (unsigned int i = 0; i < G_N_ELEMENTS(names); i++) {
+		if (g_ascii_strcasecmp(cmd, names[i]) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 /* Keep fetched values rooted until the pool has copied the connection identity. */
@@ -1082,6 +1157,8 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 			}
 			else {
 				ud = &ctx->async;
+				/* The pool is left as asked; text replies stay strings here */
+				ctx->flags |= flags & LUA_REDIS_NO_POOL;
 				ctx->replies = g_queue_new();
 				ctx->events_cleanup = g_queue_new();
 			}
@@ -1201,6 +1278,10 @@ lua_redis_make_request(lua_State *L)
 		cmd = lua_tostring(L, -1);
 		lua_pop(L, 1);
 		sp_ud->cmd = g_strdup(cmd);
+
+		if (lua_redis_cmd_changes_state(cmd)) {
+			ctx->flags |= LUA_REDIS_NO_POOL;
+		}
 
 		lua_pushstring(L, "timeout");
 		lua_gettable(L, 1);
@@ -1538,7 +1619,7 @@ lua_redis_add_cmd(lua_State *L)
 	int cbref = -1, ret;
 
 	if (ctx) {
-		if (ctx->flags & LUA_REDIS_TERMINATED) {
+		if ((ctx->flags & LUA_REDIS_TERMINATED) || ctx->async.ctx == NULL) {
 			lua_pushboolean(L, FALSE);
 			lua_pushstring(L, "Connection is terminated");
 
@@ -1570,6 +1651,10 @@ lua_redis_add_cmd(lua_State *L)
 
 		sp_ud->ctx = ctx;
 		sp_ud->cmd = g_strdup(cmd);
+
+		if (lua_redis_cmd_changes_state(cmd)) {
+			ctx->flags |= LUA_REDIS_NO_POOL;
+		}
 
 		lua_redis_parse_args(L, args_pos, cmd, &sp_ud->args,
 							 &sp_ud->arglens, &sp_ud->nargs);
