@@ -258,6 +258,9 @@ local function process_top_detected(res)
 
   if #extensions > 0 then
     table.sort(extensions, function(ex1, ex2)
+      if res[ex1] == res[ex2] then
+        return ex1 < ex2
+      end
       return res[ex1] > res[ex2]
     end)
 
@@ -301,21 +304,34 @@ local function detect_archive_flaw(part, arch, log_obj, _)
     -- The parts that tell what a package is may stand after any number of
     -- other members, so a look at the first few of them is not enough
     local files = arch:get_files(10000) or {}
+    local seen = {}
     for _, file in ipairs(files) do
-      if res.docx >= 100 or res.xlsx >= 100 or res.pptx >= 100 then
-        break
-      end
       if has_control_or_zw(file) then
         lua_util.debugm(N, log_obj, "archive filename has control/zw chars: %s", file)
       end
+      -- A package has its list of content types and the directory of its
+      -- kind: each tells once, so that files in a directory of that name do
+      -- not make a package of a plain archive
       if file == '[Content_Types].xml' then
-        add_msoffice_confidence(10)
+        if not seen.types then
+          seen.types = true
+          add_msoffice_confidence(10)
+        end
       elseif file:sub(1, 3) == 'xl/' then
-        res.xlsx = res.xlsx + 30
+        if not seen.xlsx then
+          seen.xlsx = true
+          res.xlsx = res.xlsx + 30
+        end
       elseif file:sub(1, 5) == 'word/' then
-        res.docx = res.docx + 30
+        if not seen.docx then
+          seen.docx = true
+          res.docx = res.docx + 30
+        end
       elseif file:sub(1, 4) == 'ppt/' then
-        res.pptx = res.pptx + 30
+        if not seen.pptx then
+          seen.pptx = true
+          res.pptx = res.pptx + 30
+        end
       elseif file == 'META-INF/MANIFEST.MF' then
         res.jar = res.jar + 40
       elseif file == 'AndroidManifest.xml' then
@@ -621,24 +637,21 @@ exports.pdf_format_heuristic = function(input, log_obj, pos, part)
 end
 
 exports.pe_part_heuristic = function(input, log_obj, pos, part)
-  if not input then
-    return
+  -- An MS-DOS header: a program for it at least
+  local ext, weight = 'exe', 15
+
+  -- The PE header starts at the offset that the MS-DOS header holds at 60..63
+  if #input >= 64 then
+    local pe_ptr = rspamd_util.unpack("<I4", input:span(61, 4))
+
+    if pe_ptr >= 64 and pe_ptr + 4 <= #input and
+        tostring(input:span(pe_ptr + 1, 4)) == 'PE\0\0' then
+      -- It is a PE file, whatever else is found in it
+      weight = 75
+    end
   end
 
-  -- pe header should start at the offset that is placed in msdos header at position 60..64
-  local pe_ptr_bin = input:sub(60, 64)
-  if #pe_ptr_bin ~= 4 then
-    return
-  end
-
-  -- it is an LE 32 bit integer
-  local pe_ptr = rspamd_util.unpack("<I4", pe_ptr_bin)
-  -- if pe header magic matches the offset, it is definitely a PE file
-  if pe_ptr ~= pos then
-    return
-  end
-
-  return 'exe', 30
+  return ext, weight
 end
 
 -- A signature only identifies a candidate; embedded SVG must not hide HTML.

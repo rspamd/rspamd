@@ -77,6 +77,7 @@ local patterns = {
       {
         string = [[DJVM]],
         relative_position = 0x0c,
+        fixed = true,
         weight = 60,
       }
     }
@@ -96,17 +97,12 @@ local patterns = {
   exe = {
     matches = {
       {
+        -- The heuristic follows the pointer to the PE header
         string = [[MZ]],
         relative_position = 0,
         weight = 15,
-      },
-      -- PE part
-      {
-        string = [[PE\x{00}\x{00}]],
-        position = { '>=', 0x3c + 4 },
-        weight = 15,
         heuristic = heuristics.pe_part_heuristic,
-      }
+      },
     }
   },
   elf = {
@@ -179,8 +175,9 @@ local patterns = {
   ace = {
     matches = {
       {
-        string = [[\*\*ACE\*\*]],
-        position = 14,
+        string = [[**ACE**]],
+        relative_position = 7,
+        fixed = true,
         weight = 60,
       },
     }
@@ -199,6 +196,7 @@ local patterns = {
       {
         string = [[ustar]],
         relative_position = 257,
+        fixed = true,
         weight = 60,
       },
     }
@@ -251,6 +249,7 @@ local patterns = {
       {
         hex = [[dca7c4fd]],
         relative_position = 20,
+        fixed = true,
         weight = 60,
       },
     }
@@ -307,9 +306,23 @@ local patterns = {
   },
   iso = {
     matches = {
+      -- The volume descriptor is in the sector 16, of 2048, 2336 or 2352 bytes
       {
-        string = [[\x{01}CD001\x{01}]],
-        position = { '>=', 0x8000 + 7 }, -- first 32k is unused
+        hex = [[014344303031]], -- \x01CD001
+        relative_position = 0x8000,
+        fixed = true,
+        weight = 60,
+      },
+      {
+        hex = [[014344303031]],
+        relative_position = 0x8800,
+        fixed = true,
+        weight = 60,
+      },
+      {
+        hex = [[014344303031]],
+        relative_position = 0x9300,
+        fixed = true,
         weight = 60,
       },
     }
