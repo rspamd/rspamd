@@ -1574,10 +1574,23 @@ rspamd_language_detector_set_language(struct rspamd_task *task,
 
 /* Tells if enough of the letters of a text are of the script counted */
 static inline gboolean
-rspamd_uniscript_is_fair_share(unsigned int count, unsigned int nletters)
+rspamd_uniscript_is_fair_share(unsigned int count, unsigned int nletters, unsigned int weight)
 {
 	return count >= RSPAMD_UNISCRIPT_MIN_LETTERS &&
-		   (uint64_t) count * RSPAMD_UNISCRIPT_MIN_SHARE >= nletters;
+		   (uint64_t) count * weight * RSPAMD_UNISCRIPT_MIN_SHARE >= nletters;
+}
+
+/*
+ * An ideograph or a syllable block stands for what takes several letters of
+ * an alphabet: a few links in a short text of them have more letters than
+ * the text has, and are not what the text is written in
+ */
+#define RSPAMD_UNISCRIPT_DENSE_WEIGHT 4
+
+static inline unsigned int
+rspamd_uniscript_weight(unsigned int unicode_code)
+{
+	return (unicode_code & (RSPAMD_UNICODE_CJK | RSPAMD_UNICODE_JP | RSPAMD_UNICODE_HANGUL)) ? RSPAMD_UNISCRIPT_DENSE_WEIGHT : 1;
 }
 
 static gboolean
@@ -1619,7 +1632,9 @@ rspamd_language_detector_try_uniscript(struct rspamd_task *task,
 			count += nchinese;
 		}
 
-		if (count > best_count && rspamd_uniscript_is_fair_share(count, nletters)) {
+		if (count > best_count &&
+			rspamd_uniscript_is_fair_share(count, nletters,
+										   rspamd_uniscript_weight(unicode_langs[i].unicode_code))) {
 			best_count = count;
 			best = &unicode_langs[i];
 		}
@@ -1634,7 +1649,7 @@ rspamd_language_detector_try_uniscript(struct rspamd_task *task,
 	}
 
 	if ((part->unicode_scripts & RSPAMD_UNICODE_CJK) &&
-		rspamd_uniscript_is_fair_share(nchinese, nletters)) {
+		rspamd_uniscript_is_fair_share(nchinese, nletters, RSPAMD_UNISCRIPT_DENSE_WEIGHT)) {
 		msg_debug_lang_det("guess chinese based on CJK characters: %d chinese, %d special",
 						   nchinese, nspecial);
 		rspamd_language_detector_set_language(task, part,

@@ -224,10 +224,10 @@ rspamd_mime_part_create_words(struct rspamd_task *task,
 		 * looks at the words must be able to tell that they are not all
 		 */
 		part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_WORDS_SAMPLED;
-		msg_info_task("words of a text part are sampled: %z words are kept of "
-					  "%z bytes of text",
-					  (gsize) kv_size(part->utf_words),
-					  (gsize) part->utf_stripped_content->len);
+		msg_debug_task("words of a text part are sampled: %z words are kept of "
+					   "%z bytes of text",
+					   (gsize) kv_size(part->utf_words),
+					   (gsize) part->utf_stripped_content->len);
 	}
 
 	if (MESSAGE_FIELD(task, words_budget).exceeded) {
@@ -661,7 +661,8 @@ rspamd_normalize_text_part(struct rspamd_task *task,
 		rspamd_strip_segments_t segs;
 
 		kv_init(segs);
-		rspamd_strip_newlines_parse(task, p, end, part, &segs);
+		/* The map of what is removed serves the exceptions, if there are any */
+		rspamd_strip_newlines_parse(task, p, end, part, part->exceptions ? &segs : NULL);
 
 		/*
 		 * The exceptions that are there at this point were found in the text

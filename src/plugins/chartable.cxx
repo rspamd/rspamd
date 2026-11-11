@@ -586,7 +586,8 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 {
 	rspamd_word_t *w;
 	unsigned int i, ncap = 0, latin_letters = 0, non_latin_letters = 0;
-	double cur_score = 0.0;
+	/* Badness of the words that mix scripts or hide characters, and of the other ones */
+	double cur_score = 0.0, spoof_score = 0.0;
 
 	if (part == nullptr || part->utf_words.a == nullptr ||
 		kv_size(part->utf_words) == 0 || part->nwords == 0) {
@@ -607,7 +608,13 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 				word_result = rspamd_chartable_process_word_ascii(task, w, FALSE);
 			}
 
-			cur_score += word_result.badness;
+			if (word_result.unicode_spoof) {
+				spoof_score += word_result.badness;
+			}
+			else {
+				cur_score += word_result.badness;
+			}
+
 			latin_letters += word_result.latin_letters;
 			non_latin_letters += word_result.non_latin_letters;
 		}
@@ -636,13 +643,16 @@ rspamd_chartable_process_part(struct rspamd_task *task,
 
 	/*
 	 * The score is the badness of an average word, and a text of any length
-	 * can be put around the words that are bad: past this many words the
-	 * sum is what counts, so that a few of such words are seen in a long
-	 * text as they are in a short one
+	 * can be put around the words that are bad. For the words that mix
+	 * scripts or hide characters the sum is what counts past this many
+	 * words, so that a few of them are seen in a long text as they are in a
+	 * short one. Letters with diacritics and digits in words are a matter of
+	 * their share: names with such letters in a long text are not a sign
 	 */
 	static const unsigned int max_words_divisor = 24;
 
-	cur_score /= (double) MIN(part->nwords, max_words_divisor);
+	cur_score = cur_score / (double) part->nwords +
+				spoof_score / (double) MIN(part->nwords, max_words_divisor);
 
 	if (cur_score > 1.0) {
 		cur_score = 1.0;
