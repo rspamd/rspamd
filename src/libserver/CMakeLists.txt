@@ -9,6 +9,7 @@ SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/dkim.c
         ${CMAKE_CURRENT_SOURCE_DIR}/dkim2.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/dkim2_recipe.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/dkim2_sign.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/dkim2_util.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/dns.c
         ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_cfg.c

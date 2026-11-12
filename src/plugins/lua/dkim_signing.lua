@@ -47,6 +47,11 @@ local settings = {
   use_redis = false,
   key_prefix = 'dkim_keys', -- default hash name
   use_milter_headers = false, -- use milter headers instead of `dkim_signature`
+  -- Experimental: also sign as the Originator with DKIM2 (draft-ietf-dkim-dkim2-spec).
+  -- The SMTP envelope is recorded in the signature, so enable it only where the MTA
+  -- sends a message with the same MAIL FROM and RCPT TO as it has passed to Rspamd
+  sign_dkim2 = false,
+  symbol_dkim2 = 'DKIM2_SIGNED',
 }
 
 local N = 'dkim_signing'
@@ -65,6 +70,36 @@ local function insert_sign_results(task, ret, hdr, dkim_params)
     task:insert_result(settings.symbol, 1.0, string.format('%s:s=%s',
         dkim_params.domain, dkim_params.selector))
   end
+end
+
+-- Adds the DKIM2 header fields: unlike DKIM-Signature, they always go via
+-- the header modifications, as there are two of them
+local function sign_dkim2(task, p)
+  if not settings.sign_dkim2 then
+    return
+  end
+
+  local ret, mi, sig = sign_func(task, {
+    domain = p.domain,
+    selector = p.selector,
+    key = p.key,
+    rawkey = p.rawkey,
+    sign_type = 'dkim2',
+  })
+
+  if not ret then
+    -- The reason is logged by the signing function
+    return
+  end
+
+  lua_mime.modify_headers(task, {
+    add = {
+      ['Message-Instance'] = { order = 1, value = mi },
+      ['DKIM2-Signature'] = { order = 1, value = sig },
+    }
+  })
+  task:insert_result(settings.symbol_dkim2, 1.0, string.format('%s:s=%s',
+      p.domain, p.selector))
 end
 
 local function do_sign(task, p)
@@ -91,12 +126,14 @@ local function do_sign(task, p)
 
         local sret, hdr = sign_func(task, p)
         insert_sign_results(task, sret, hdr, p)
+        sign_dkim2(task, p)
       end,
       forced = true
     })
   else
     local sret, hdr = sign_func(task, p)
     insert_sign_results(task, sret, hdr, p)
+    sign_dkim2(task, p)
   end
 end
 
@@ -177,6 +214,16 @@ if type(settings.forbidden_ids) == 'table' then
   sym_reg_tbl.forbidden_ids = settings.forbidden_ids
 end
 
-rspamd_config:register_symbol(sym_reg_tbl)
+local sign_id = rspamd_config:register_symbol(sym_reg_tbl)
+
+if settings.sign_dkim2 then
+  rspamd_config:register_symbol({
+    name = settings.symbol_dkim2,
+    type = 'virtual',
+    parent = sign_id,
+    groups = { "policies", "dkim" },
+    score = 0.0,
+  })
+end
 -- Add weak dependency on DKIM checks (signing works without it, just loses R_DKIM_REJECT suppression)
 rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK')

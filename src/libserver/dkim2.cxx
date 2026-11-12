@@ -36,6 +36,7 @@
 #include "dkim.h"
 #include "dkim2.h"
 #include "dkim2.hxx"
+#include "dkim2_task.hxx"
 #include "utlist.h"
 #include "libmime/email_addr.h"
 #include "libutil/cxx/util.hxx"
@@ -1011,10 +1012,7 @@ struct dkim2_msg_state {
 };
 
 /* Header and body digests of one message state for one hash algorithm */
-struct dkim2_digests {
-	std::string hdr;
-	std::string body;
-};
+using dkim2_digests = message_digests_t;
 
 /*
  * A digest fed through a buffer: canonical forms come in tiny pieces (a line,
@@ -1335,8 +1333,7 @@ rspamd_dkim2_chain_parse(struct rspamd_task *task, GError **err)
 	 * read again here, strictly, and a message whose header is not a
 	 * sequence of RFC 5322 fields cannot be verified.
 	 */
-	const auto &raw = MESSAGE_FIELD(task, raw_headers_content);
-	auto headers = scan_headers(raw.begin != nullptr ? std::string_view{raw.begin, raw.len} : std::string_view{});
+	auto headers = message_headers(task);
 
 	if (!headers) {
 		return set_err(fmt::format("message header cannot be verified: {}", headers.error()));
@@ -1438,8 +1435,15 @@ rspamd_dkim2_chain_len(const rspamd_dkim2_chain_t *chain)
 	return chain ? chain->sigs.size() : 0;
 }
 
-static auto
-dkim2_message_body(struct rspamd_task *task) -> std::string_view
+auto rspamd::dkim2::message_headers(struct rspamd_task *task)
+	-> tl::expected<std::vector<raw_header_t>, std::string>
+{
+	const auto &raw = MESSAGE_FIELD(task, raw_headers_content);
+
+	return scan_headers(raw.begin != nullptr ? std::string_view{raw.begin, raw.len} : std::string_view{});
+}
+
+auto rspamd::dkim2::message_body(struct rspamd_task *task) -> std::string_view
 {
 	const char *body_start = MESSAGE_FIELD(task, raw_headers_content).body_start;
 	const char *msg_end = task->msg.begin + task->msg.len;
@@ -1455,15 +1459,14 @@ dkim2_message_body(struct rspamd_task *task) -> std::string_view
  * Compute the header and body hashes (Sections 6.1, 6.2) of the message as it
  * was received
  */
-static auto
-dkim2_hash_current(const rspamd_dkim2_chain_t *chain, struct rspamd_task *task,
-				   const EVP_MD *md) -> std::optional<dkim2_digests>
+auto rspamd::dkim2::hash_message(std::span<const raw_header_t> headers, std::string_view body,
+								 const EVP_MD *md) -> std::optional<message_digests_t>
 {
-	dkim2_digests res;
+	message_digests_t res;
 	dkim2_digest digest{md};
 
 	/* Body hash */
-	body_canon_foreach(dkim2_message_body(task), [&](const char *p, std::size_t len) {
+	body_canon_foreach(body, [&](const char *p, std::size_t len) {
 		digest.update(p, len);
 	});
 	res.body = digest.finish();
@@ -1476,8 +1479,8 @@ dkim2_hash_current(const rspamd_dkim2_chain_t *chain, struct rspamd_task *task,
 	};
 	std::vector<hdr_row> rows;
 
-	for (std::size_t k = 0; k < chain->headers.size(); k++) {
-		const auto &hdr = chain->headers[k];
+	for (std::size_t k = 0; k < headers.size(); k++) {
+		const auto &hdr = headers[k];
 
 		if (!is_unsigned_header(hdr.name)) {
 			rows.emplace_back(hdr_row{lc_string(hdr.name), k, &hdr});
@@ -1538,7 +1541,7 @@ dkim2_build_current_state(const rspamd_dkim2_chain_t *chain,
 		std::reverse(kv.second.begin(), kv.second.end());
 	}
 
-	auto lines = split_body_lines(dkim2_message_body(task), limits.max_body_lines);
+	auto lines = split_body_lines(message_body(task), limits.max_body_lines);
 
 	if (!lines) {
 		return false;
@@ -1712,9 +1715,8 @@ dkim2_eval_hashes(const mi_header_t &mi, Compute &&compute, bool &no_digests)
 	return {overall, fmt::format("Message-Instance m={} no group of hashes passed", mi.m)};
 }
 
-/* Lowercase ASCII form (A-labels) of a domain, nullopt if it has none */
-static auto
-dkim2_alabel(struct rspamd_task *task, std::string_view domain) -> std::optional<std::string>
+auto rspamd::dkim2::domain_alabel(struct rspamd_task *task, std::string_view domain)
+	-> std::optional<std::string>
 {
 	auto is_ascii = std::all_of(domain.begin(), domain.end(), [](char c) {
 		return static_cast<unsigned char>(c) < 0x80;
@@ -1789,7 +1791,7 @@ dkim2_check_from(rspamd_dkim2_chain_t *chain, struct rspamd_task *task,
 		return not_authentic("From uses a domain literal");
 	}
 
-	auto from_domain = dkim2_alabel(task, raw_domain);
+	auto from_domain = domain_alabel(task, raw_domain);
 
 	if (!from_domain || !valid_domain(*from_domain)) {
 		return not_authentic("matching From is not authentic");
@@ -2029,7 +2031,7 @@ dkim2_envelope_key(struct rspamd_task *task, std::string_view addr) -> std::stri
 	auto at_pos = key.rfind('@');
 
 	if (at_pos != std::string::npos) {
-		auto alabel = dkim2_alabel(task, std::string_view{key}.substr(at_pos + 1));
+		auto alabel = domain_alabel(task, std::string_view{key}.substr(at_pos + 1));
 
 		if (alabel) {
 			key.replace(at_pos + 1, std::string::npos, *alabel);
@@ -2817,7 +2819,7 @@ bool rspamd_dkim2_chain_verify(rspamd_dkim2_chain_t *chain,
 	auto [latest_res, latest_reason] = dkim2_eval_hashes(
 		chain->mis.back().parsed,
 		[&](const EVP_MD *md) {
-			return dkim2_hash_current(chain, task, md);
+			return hash_message(chain->headers, message_body(task), md);
 		},
 		no_digests);
 

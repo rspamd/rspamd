@@ -29,6 +29,7 @@
 
 #include "config.h"
 #include <stdbool.h>
+#include "dkim.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -131,6 +132,23 @@ bool rspamd_dkim2_chain_verify(rspamd_dkim2_chain_t *chain,
 							   const struct rspamd_dkim2_verify_params *params,
 							   rspamd_dkim2_verify_cb cb,
 							   void *ud);
+
+/**
+ * Sign an original message, that is a message without DKIM2 header fields,
+ * on behalf of its Originator: makes the m=1 Message-Instance and the i=1
+ * DKIM2-Signature header fields. The SMTP envelope of the task is recorded
+ * in the signature, so it has to be the one the message will be sent with.
+ * The values are folded, allocated in the task pool and do not include the
+ * field names.
+ * @return false if the message cannot be signed, *err tells why
+ */
+bool rspamd_dkim2_sign(struct rspamd_task *task,
+					   rspamd_dkim_sign_key_t *key,
+					   const char *domain,
+					   const char *selector,
+					   const char **mi_out,
+					   const char **sig_out,
+					   GError **err);
 
 #ifdef __cplusplus
 }

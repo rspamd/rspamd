@@ -206,6 +206,34 @@ auto b64_decode(std::string_view in, bool allow_fws) -> std::optional<std::strin
 	return out;
 }
 
+auto b64_encode(std::string_view in) -> std::string
+{
+	static constexpr char alphabet[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	std::string out;
+
+	out.reserve((in.size() + 2) / 3 * 4);
+
+	for (std::size_t pos = 0; pos < in.size(); pos += 3) {
+		auto left = in.size() - pos;
+		std::uint32_t acc = static_cast<unsigned char>(in[pos]) << 16;
+
+		if (left > 1) {
+			acc |= static_cast<unsigned char>(in[pos + 1]) << 8;
+		}
+		if (left > 2) {
+			acc |= static_cast<unsigned char>(in[pos + 2]);
+		}
+
+		out.push_back(alphabet[(acc >> 18) & 0x3F]);
+		out.push_back(alphabet[(acc >> 12) & 0x3F]);
+		out.push_back(left > 1 ? alphabet[(acc >> 6) & 0x3F] : '=');
+		out.push_back(left > 2 ? alphabet[acc & 0x3F] : '=');
+	}
+
+	return out;
+}
+
 auto valid_domain(std::string_view in) -> bool
 {
 	if (in.empty() || in.size() > 253) {
@@ -503,7 +531,13 @@ auto scan_headers(std::string_view block)
 
 auto from_is_single_mailbox(std::string_view value) -> bool
 {
+	return from_mailbox_domain(value).has_value();
+}
+
+auto from_mailbox_domain(std::string_view value) -> std::optional<std::string_view>
+{
 	unsigned int nat = 0, comment_depth = 0;
+	std::size_t at_pos = 0;
 	bool in_quotes = false;
 
 	for (std::size_t pos = 0; pos < value.size(); pos++) {
@@ -532,13 +566,22 @@ auto from_is_single_mailbox(std::string_view value) -> bool
 		}
 		else if (c == '@') {
 			nat++;
+			at_pos = pos;
 		}
 		else if (c == ',' || c == ';') {
-			return false;
+			return std::nullopt;
 		}
 	}
 
-	return nat == 1 && !in_quotes && comment_depth == 0;
+	if (nat != 1 || in_quotes || comment_depth != 0) {
+		return std::nullopt;
+	}
+
+	/* The domain ends where a comment, the angle bracket or whitespace starts */
+	auto domain = value.substr(at_pos + 1);
+	auto end = domain.find_first_of(" \t>(");
+
+	return domain.substr(0, end);
 }
 
 }// namespace rspamd::dkim2

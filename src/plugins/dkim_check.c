@@ -885,7 +885,7 @@ lua_dkim_sign_handler(lua_State *L)
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0, keylen = 0;
-	gboolean no_cache = FALSE, strict_pubkey_check = FALSE;
+	gboolean no_cache = FALSE, strict_pubkey_check = FALSE, is_dkim2 = FALSE;
 	struct dkim_ctx *dkim_module_ctx;
 
 	if (task == NULL) {
@@ -969,6 +969,9 @@ lua_dkim_sign_handler(lua_State *L)
 				return luaL_error(L, "no arc idx specified");
 			}
 		}
+		else if (strcmp(sign_type_str, "dkim2") == 0) {
+			is_dkim2 = TRUE;
+		}
 		else {
 			lua_settop(L, 0);
 			return luaL_error(L, "unknown sign type: %s",
@@ -1027,6 +1030,30 @@ lua_dkim_sign_handler(lua_State *L)
 
 			rspamd_dkim_key_unref(pk);
 		}
+	}
+
+	if (is_dkim2) {
+		/*
+		 * DKIM2 has nothing in common with the signing context of DKIM: it
+		 * yields two header fields, Message-Instance and DKIM2-Signature
+		 */
+		const char *mi_value = NULL, *sig_value = NULL;
+
+		if (!rspamd_dkim2_sign(task, dkim_key, domain, selector,
+							   &mi_value, &sig_value, &err)) {
+			msg_info_task("cannot make a DKIM2 signature for %s/%s: %e",
+						  domain, selector, err);
+			g_error_free(err);
+
+			lua_pushboolean(L, FALSE);
+			return 1;
+		}
+
+		lua_pushboolean(L, TRUE);
+		lua_pushstring(L, mi_value);
+		lua_pushstring(L, sig_value);
+
+		return 3;
 	}
 
 	ctx = rspamd_create_dkim_sign_context(task, dkim_key,
