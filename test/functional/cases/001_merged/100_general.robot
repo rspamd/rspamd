@@ -96,6 +96,7 @@ HTML VISIBILITY - No significant hidden content
   [Template]  Check No Significant Hidden Content
   below_threshold
   padding
+  react_email_padding
   visible
   font_shorthand
   relative_font
