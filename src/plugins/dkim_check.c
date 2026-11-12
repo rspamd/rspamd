@@ -780,6 +780,12 @@ dkim_module_load_key_format(struct rspamd_task *task,
 		rspamd_lru_hash_insert(dkim_module_ctx->dkim_sign_hash,
 							   g_strdup(hex_hash), ret, time(NULL), 0);
 	}
+	else {
+		/* No cache: the task owns the reference from loading */
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) rspamd_dkim_sign_key_unref,
+									  ret);
+	}
 
 	return ret;
 }
@@ -1445,8 +1451,8 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 		/* Another ref belongs to the check context */
 		res->key = rspamd_dkim_key_ref(key);
 		/*
-		 * We actually receive key with refcount = 1, so we just assume that
-		 * lru hash owns this object now
+		 * We receive the key with refcount = 1: that reference goes to
+		 * the lru hash, or is dropped when there is no cache
 		 */
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor(res->task->task_pool,
@@ -1463,6 +1469,9 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 						  rspamd_dkim_key_get_ttl(key),
 						  rspamd_lru_hash_size(dkim_module_ctx->dkim_hash),
 						  rspamd_lru_hash_capacity(dkim_module_ctx->dkim_hash));
+		}
+		else {
+			rspamd_dkim_key_unref(key);
 		}
 	}
 	else {
@@ -1812,14 +1821,17 @@ dkim_module_lua_on_key(rspamd_dkim_key_t *key,
 		/* Another ref belongs to the check context */
 		cbd->key = rspamd_dkim_key_ref(key);
 		/*
-		 * We actually receive key with refcount = 1, so we just assume that
-		 * lru hash owns this object now
+		 * We receive the key with refcount = 1: that reference goes to
+		 * the lru hash, or is dropped when there is no cache
 		 */
 
 		if (dkim_module_ctx->dkim_hash) {
 			rspamd_lru_hash_insert(dkim_module_ctx->dkim_hash,
 								   g_strdup(rspamd_dkim_get_dns_key(ctx)),
 								   key, cbd->task->task_timestamp, rspamd_dkim_key_get_ttl(key));
+		}
+		else {
+			rspamd_dkim_key_unref(key);
 		}
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor(cbd->task->task_pool,

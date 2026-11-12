@@ -691,6 +691,7 @@ struct rspamd_archive_limits {
 	double max_ratio;      /* per-member uncompressed/compressed ratio cap */
 	double end_timestamp;  /* absolute processing deadline */
 	GHashTable *files;     /* exact member names selected for extraction */
+	gboolean no_filters;   /* the archive is not wrapped into a compressed stream */
 };
 
 /*
@@ -700,14 +701,30 @@ struct rspamd_archive_limits {
  */
 #define RSPAMD_ARCHIVE_RATIO_MIN_BYTES (64ULL * 1024)
 
+#define RSPAMD_ARCHIVE_DEFAULT_MAX_OUTPUT (G_GUINT64_CONSTANT(1) << 30)
+#define RSPAMD_ARCHIVE_DEFAULT_MAX_ENTRIES G_GUINT64_CONSTANT(1000000)
+
 static void
 lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limits *lim)
 {
 	memset(lim, 0, sizeof(*lim));
+	/*
+	 * What a caller that sets no limit gets: enough for any archive that is
+	 * unpacked on purpose, and an end for one made to have none. A limit set
+	 * to zero is no limit
+	 */
+	lim->max_output = RSPAMD_ARCHIVE_DEFAULT_MAX_OUTPUT;
+	lim->max_entries = RSPAMD_ARCHIVE_DEFAULT_MAX_ENTRIES;
 
 	if (opts_idx <= 0 || !lua_istable(L, opts_idx)) {
 		return;
 	}
+
+	lua_getfield(L, opts_idx, "filters");
+	if (lua_isboolean(L, -1) && !lua_toboolean(L, -1)) {
+		lim->no_filters = TRUE;
+	}
+	lua_pop(L, 1);
 
 	lua_getfield(L, opts_idx, "max_output");
 	if (lua_isnumber(L, -1)) {
@@ -751,17 +768,30 @@ lua_archive_parse_limits(lua_State *L, int opts_idx, struct rspamd_archive_limit
 	}
 	lua_pop(L, 1);
 
+	gboolean ignore_case = FALSE;
+
+	lua_getfield(L, opts_idx, "ignore_case");
+	ignore_case = lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
 	lua_getfield(L, opts_idx, "files");
 	if (lua_istable(L, -1)) {
-		lim->files = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+		if (ignore_case) {
+			lim->files = g_hash_table_new_full(rspamd_strcase_hash, rspamd_strcase_equal,
+											   g_free, NULL);
+		}
+		else {
+			lim->files = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+		}
 		lua_pushnil(L);
 		while (lua_next(L, -2) != 0) {
 			const char *name = NULL;
 
-			if (lua_isstring(L, -1)) {
+			/* Strings only: a number is converted in place, which breaks lua_next for a key */
+			if (lua_type(L, -1) == LUA_TSTRING) {
 				name = lua_tostring(L, -1);
 			}
-			else if (lua_isstring(L, -2) && lua_toboolean(L, -1)) {
+			else if (lua_type(L, -2) == LUA_TSTRING && lua_toboolean(L, -1)) {
 				name = lua_tostring(L, -2);
 			}
 
@@ -798,7 +828,8 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  * @param {string|text} data archive contents
  * @param {string} format optional format name to restrict autodetection (e.g. "zip")
  * @param {string} password optional passphrase for encrypted archives (ZIP: ZipCrypto/AES)
- * @param {table} opts optional extraction limits (any field omitted/0 = unlimited):
+ * @param {table} opts optional extraction limits (0 = unlimited; omitted = unlimited,
+ *   but for `max_output`, 1 GiB, and `max_entries`, 1000000):
  *  - max_output: total uncompressed bytes across all members
  *  - max_file_size: per-member uncompressed cap (members are truncated at this size)
  *  - max_files: maximum number of members to extract
@@ -806,6 +837,9 @@ lua_archive_limits_cleanup(struct rspamd_archive_limits *lim)
  *  - max_ratio: per-member max uncompressed/compressed ratio (members exceeding it are dropped)
  *  - end_timestamp: absolute rspamd_get_ticks() deadline
  *  - files: array or set of exact member names to extract (unselected members are skipped)
+ *  - ignore_case: `true` to match the names in `files` without regard to the case of ASCII letters
+ *  - filters: `false` to refuse an archive that is wrapped into a compressed stream
+ *    (gzip, xz and so on), whose members cannot be skipped without decompressing all of it
  * @return {table} array of files: { name = string, content = text } (non-regular entries are skipped)
  * @return {boolean} truncated: true if any limit stopped, truncated, or dropped content
  * @return {number} entries_seen: number of archive headers inspected
@@ -849,7 +883,35 @@ lua_archive_unpack(lua_State *L)
 		return luaL_error(L, "cannot create libarchive reader");
 	}
 
-	archive_read_support_filter_all(a);
+	if (lim.no_filters) {
+		/*
+		 * The caller expects the archive itself. With the filters on, an
+		 * archive wrapped into a compressed stream is read as well, and such
+		 * a stream cannot be seeked: all of it is decompressed to walk over
+		 * the members, the skipped ones included, which none of the limits
+		 * on the members can account for
+		 */
+		archive_read_support_filter_none(a);
+	}
+	else {
+		/*
+		 * The filters that the library does itself. "All" of them adds the
+		 * ones that run a program of the system (grzip, lrzip, lzop) on the
+		 * data, which is not for data from a message
+		 */
+		archive_read_support_filter_gzip(a);
+		archive_read_support_filter_bzip2(a);
+		archive_read_support_filter_xz(a);
+		archive_read_support_filter_lzma(a);
+		archive_read_support_filter_lzip(a);
+		archive_read_support_filter_lz4(a);
+#if ARCHIVE_VERSION_NUMBER >= 3003003
+		archive_read_support_filter_zstd(a);
+#endif
+		archive_read_support_filter_compress(a);
+		archive_read_support_filter_uu(a);
+		archive_read_support_filter_rpm(a);
+	}
 	if (format) {
 		/* Enable a specific format by known name mapping */
 		lua_archive_enable_read_format_by_name(a, format);

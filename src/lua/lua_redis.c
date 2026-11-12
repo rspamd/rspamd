@@ -359,22 +359,51 @@ lua_redis_push_error(const char *err,
  * valid while the reply lives, unless copy_text asks for owned copies for a
  * reply freed before Lua gets the result
  */
+/* Replies are nested no deeper: what Redis sends is nested a few times */
+#define LUA_REDIS_MAX_REPLY_DEPTH 32
+
 static void
-lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
-					 gboolean copy_text)
+lua_redis_push_reply_depth(lua_State *L, const redisReply *r, gboolean text_data,
+						   gboolean copy_text, unsigned int depth)
 {
-	unsigned int i;
+	gsize i;
+
+	/*
+	 * Exactly one value is pushed for a reply of any type: the callers store
+	 * it or pass it on, and a value that is missing shifts all the others
+	 */
+	if (r == NULL || depth > LUA_REDIS_MAX_REPLY_DEPTH || !lua_checkstack(L, 4)) {
+		if (r != NULL) {
+			msg_info("redis reply is nested too deep: the rest of it is dropped");
+		}
+
+		lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
+
+		return;
+	}
 
 	switch (r->type) {
 	case REDIS_REPLY_INTEGER:
 		lua_pushinteger(L, r->integer);
+		break;
+	case REDIS_REPLY_BOOL:
+		lua_pushboolean(L, r->integer != 0);
+		break;
+	case REDIS_REPLY_DOUBLE:
+		lua_pushnumber(L, r->dval);
 		break;
 	case REDIS_REPLY_NIL:
 		lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
 		break;
 	case REDIS_REPLY_STRING:
 	case REDIS_REPLY_STATUS:
-		if (text_data) {
+	case REDIS_REPLY_ERROR:
+	case REDIS_REPLY_BIGNUM:
+	case REDIS_REPLY_VERB:
+		if (r->str == NULL) {
+			lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
+		}
+		else if (text_data) {
 			lua_new_text(L, r->str, r->len, copy_text);
 		}
 		else {
@@ -382,16 +411,30 @@ lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
 		}
 		break;
 	case REDIS_REPLY_ARRAY:
-		lua_createtable(L, r->elements, 0);
+	case REDIS_REPLY_SET:
+	case REDIS_REPLY_PUSH:
+	case REDIS_REPLY_MAP:
+	case REDIS_REPLY_ATTR:
+		/* A map is its keys and values one after another, as RESP2 has it */
+		lua_createtable(L, MIN(r->elements, 1024), 0);
 		for (i = 0; i < r->elements; ++i) {
-			lua_redis_push_reply(L, r->element[i], text_data, copy_text);
+			lua_redis_push_reply_depth(L, r->element ? r->element[i] : NULL, text_data,
+									   copy_text, depth + 1);
 			lua_rawseti(L, -2, i + 1); /* Store sub-reply */
 		}
 		break;
-	default: /* should not happen */
+	default:
 		msg_info("unknown reply type: %d", r->type);
+		lua_getfield(L, LUA_REGISTRYINDEX, "redis.null");
 		break;
 	}
+}
+
+static void
+lua_redis_push_reply(lua_State *L, const redisReply *r, gboolean text_data,
+					 gboolean copy_text)
+{
+	lua_redis_push_reply_depth(L, r, text_data, copy_text, 0);
 }
 
 /**
@@ -524,6 +567,8 @@ lua_redis_callback(redisAsyncContext *c, gpointer r, gpointer priv)
 		if (ctx->cmds_pending == 0 && !ud->terminated) {
 			/* Disconnect redis early as we don't need it anymore */
 			ud->terminated = 1;
+			/* No command is taken after that: there is no connection for it */
+			ctx->flags |= LUA_REDIS_TERMINATED;
 			ac = ud->ctx;
 			ud->ctx = NULL;
 
@@ -808,6 +853,11 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 	gsize *arglens;
 	int top;
 
+	if (cmd == NULL) {
+		/* Not a string: Redis replies that there is no such command */
+		cmd = "";
+	}
+
 	if (idx != 0 && lua_type(L, idx) == LUA_TTABLE) {
 		/* Get all arguments */
 		lua_pushvalue(L, idx);
@@ -827,7 +877,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 		args = g_malloc((top + 1) * sizeof(char *));
 		arglens = g_malloc((top + 1) * sizeof(gsize));
 		arglens[0] = strlen(cmd);
-		args[0] = g_malloc(arglens[0]);
+		args[0] = g_malloc(arglens[0] + 1);
 		memcpy(args[0], cmd, arglens[0]);
 		top = 1;
 		lua_pushnil(L);
@@ -839,7 +889,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 				const char *s;
 
 				s = lua_tolstring(L, -1, &arglens[top]);
-				args[top] = g_malloc(arglens[top]);
+				args[top] = g_malloc(arglens[top] + 1);
 				memcpy(args[top], s, arglens[top]);
 				top++;
 			}
@@ -850,7 +900,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 
 				if (t && t->start) {
 					arglens[top] = t->len;
-					args[top] = g_malloc(arglens[top]);
+					args[top] = g_malloc(arglens[top] + 1);
 					memcpy(args[top], t->start, arglens[top]);
 					top++;
 				}
@@ -870,7 +920,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 				}
 
 				arglens[top] = r;
-				args[top] = g_malloc(arglens[top]);
+				args[top] = g_malloc(arglens[top] + 1);
 				memcpy(args[top], numbuf, arglens[top]);
 				top++;
 			}
@@ -886,7 +936,7 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 		args = g_malloc(sizeof(char *));
 		arglens = g_malloc(sizeof(gsize));
 		arglens[0] = strlen(cmd);
-		args[0] = g_malloc(arglens[0]);
+		args[0] = g_malloc(arglens[0] + 1);
 		memcpy(args[0], cmd, arglens[0]);
 		top = 1;
 	}
@@ -894,6 +944,82 @@ lua_redis_parse_args(lua_State *L, int idx, const char *cmd,
 	*pargs = args;
 	*parglens = arglens;
 	*nargs = top;
+}
+
+/*
+ * Commands that leave something on a connection for whoever uses it next: a
+ * database or a user that is not the one of the pool, an open transaction,
+ * a subscription. A connection that had one of them is closed, not reused
+ */
+static gboolean
+lua_redis_cmd_changes_state(const char *cmd)
+{
+	static const char *const names[] = {
+		"select", "auth", "hello", "multi", "watch", "subscribe", "psubscribe",
+		"ssubscribe", "monitor", "client", "reset", "readonly", "readwrite", "asking"};
+
+	if (cmd == NULL) {
+		return FALSE;
+	}
+
+	for (unsigned int i = 0; i < G_N_ELEMENTS(names); i++) {
+		if (g_ascii_strcasecmp(cmd, names[i]) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+/* Keep fetched values rooted until the pool has copied the connection identity. */
+static const char *
+lua_redis_connection_string(lua_State *L, int index, const char *name,
+							rspamd_mempool_t *pool, gboolean numeric)
+{
+	lua_getfield(L, index, name);
+	if (lua_type(L, -1) == LUA_TSTRING || (numeric && lua_type(L, -1) == LUA_TNUMBER)) {
+		const char *value = lua_tostring(L, -1);
+		return pool ? rspamd_mempool_strdup(pool, value) : value;
+	}
+
+	return NULL;
+}
+
+void rspamd_lua_redis_parse_connection(lua_State *L, int index,
+									   struct rspamd_redis_connection_opts *opts,
+									   rspamd_mempool_t *pool)
+{
+	index = lua_absindex(L, index);
+	luaL_checktype(L, index, LUA_TTABLE);
+	luaL_checkstack(L, 12, "Redis connection options");
+	memset(opts, 0, sizeof(*opts));
+
+	lua_getfield(L, index, "connection");
+	if (!lua_isnil(L, -1)) {
+		/* Never fall back to plaintext when a nested configuration is invalid. */
+		luaL_checktype(L, -1, LUA_TTABLE);
+		index = lua_gettop(L);
+	}
+
+	opts->username = lua_redis_connection_string(L, index, "username", pool, FALSE);
+	opts->password = lua_redis_connection_string(L, index, "password", pool, FALSE);
+	opts->dbname = lua_redis_connection_string(L, index, "dbname", pool, TRUE);
+	if (opts->dbname == NULL) {
+		opts->dbname = lua_redis_connection_string(L, index, "db", pool, TRUE);
+	}
+
+	lua_getfield(L, index, "ssl");
+	opts->tls.use_tls = !!lua_toboolean(L, -1);
+	lua_pop(L, 1);
+	lua_getfield(L, index, "no_ssl_verify");
+	opts->tls.no_ssl_verify = !!lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
+	opts->tls.ca_file = lua_redis_connection_string(L, index, "ssl_ca", pool, FALSE);
+	opts->tls.ca_dir = lua_redis_connection_string(L, index, "ssl_ca_dir", pool, FALSE);
+	opts->tls.cert_file = lua_redis_connection_string(L, index, "ssl_cert", pool, FALSE);
+	opts->tls.key_file = lua_redis_connection_string(L, index, "ssl_key", pool, FALSE);
+	opts->tls.sni = lua_redis_connection_string(L, index, "sni", pool, FALSE);
 }
 
 static struct lua_redis_ctx *
@@ -905,21 +1031,18 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 	struct rspamd_lua_ip *addr = NULL;
 	struct rspamd_task *task = NULL;
 	const char *host = NULL;
-	const char *username = NULL, *password = NULL, *dbname = NULL, *log_tag = NULL;
-	struct rspamd_redis_tls_opts tls_opts;
+	const char *log_tag = NULL;
+	struct rspamd_redis_connection_opts connection;
 	int cbref = -1;
-	/* Track postponed TLS values on Lua stack and table index */
-	int tls_items = 0;
-	int tls_tbl_idx = 0;
+	const int stack_top = lua_gettop(L);
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
 	struct ev_loop *ev_base = NULL;
 	gboolean ret = FALSE;
 	unsigned int flags = 0;
 
-	memset(&tls_opts, 0, sizeof(tls_opts));
-
 	if (lua_istable(L, 1)) {
+		rspamd_lua_redis_parse_connection(L, 1, &connection, NULL);
 		/* Table version */
 		lua_pushvalue(L, 1);
 		lua_pushstring(L, "task");
@@ -1006,27 +1129,6 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
-		lua_pushstring(L, "username");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			username = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
-
-		lua_pushstring(L, "password");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			password = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
-
-		lua_pushstring(L, "dbname");
-		lua_gettable(L, -2);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			dbname = lua_tostring(L, -1);
-		}
-		lua_pop(L, 1);
-
 		lua_pushstring(L, "opaque_data");
 		lua_gettable(L, -2);
 		if (!!lua_toboolean(L, -1)) {
@@ -1034,64 +1136,12 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		}
 		lua_pop(L, 1);
 
-		/* TLS options (optional). Postpone pops to keep values alive */
-		tls_tbl_idx = lua_gettop(L);
-
-		lua_pushstring(L, "ssl");
-		lua_gettable(L, tls_tbl_idx);
-		if (!!lua_toboolean(L, -1)) {
-			tls_opts.use_tls = true;
-		}
-		tls_items++;
-
-		lua_pushstring(L, "no_ssl_verify");
-		lua_gettable(L, tls_tbl_idx);
-		if (!!lua_toboolean(L, -1)) {
-			tls_opts.no_ssl_verify = true;
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_ca");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.ca_file = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_ca_dir");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.ca_dir = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_cert");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.cert_file = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "ssl_key");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.key_file = lua_tostring(L, -1);
-		}
-		tls_items++;
-
-		lua_pushstring(L, "sni");
-		lua_gettable(L, tls_tbl_idx);
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			tls_opts.sni = lua_tostring(L, -1);
-		}
-		tls_items++;
-
 		lua_pushstring(L, "no_pool");
-		lua_gettable(L, tls_tbl_idx);
+		lua_gettable(L, -2);
 		if (!!lua_toboolean(L, -1)) {
 			flags |= LUA_REDIS_NO_POOL;
 		}
-		tls_items++;
+		lua_pop(L, 1);
 
 		if (session && rspamd_session_blocked(session)) {
 			msg_err_task_check("Session is being destroying");
@@ -1107,6 +1157,8 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 			}
 			else {
 				ud = &ctx->async;
+				/* The pool is left as asked; text replies stay strings here */
+				ctx->flags |= flags & LUA_REDIS_NO_POOL;
 				ctx->replies = g_queue_new();
 				ctx->events_cleanup = g_queue_new();
 			}
@@ -1145,21 +1197,10 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 
 	if (ret) {
 		ud->terminated = 0;
-		ud->ctx = rspamd_redis_pool_connect_ext(ud->pool,
-												dbname, username, password,
-												rspamd_inet_address_to_string(addr->addr),
-												rspamd_inet_address_get_port(addr->addr),
-												&tls_opts);
-
-		/* Pop postponed TLS values and the table itself */
-		if (tls_items > 0) {
-			lua_pop(L, tls_items);
-			tls_items = 0;
-		}
-		if (tls_tbl_idx != 0) {
-			lua_pop(L, 1);
-			tls_tbl_idx = 0;
-		}
+		ud->ctx = rspamd_redis_pool_connect_opts(ud->pool, &connection,
+												 rspamd_inet_address_to_string(addr->addr),
+												 rspamd_inet_address_get_port(addr->addr));
+		lua_settop(L, stack_top);
 
 		if (ip) {
 			rspamd_inet_address_free(ip);
@@ -1193,6 +1234,7 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
 		rspamd_inet_address_free(ip);
 	}
 
+	lua_settop(L, stack_top);
 	return NULL;
 }
 
@@ -1201,6 +1243,9 @@ rspamd_lua_redis_prepare_connection(lua_State *L, int *pcbref, gboolean is_async
  * Make request to redis server, params is a table of key=value arguments in any order
  * @param {task} task worker task object
  * @param {ip|string} host server address
+ * @param {table} connection connection settings (username, password, db/dbname,
+ *   ssl, no_ssl_verify, ssl_ca, ssl_ca_dir, ssl_cert, ssl_key, sni). When present,
+ *   this table is authoritative; otherwise legacy flat connection fields apply.
  * @param {function} callback callback to be called in form `function (task, err, data)`
  * @param {string} cmd command to be sent to redis
  * @param {table} args numeric array of strings used as redis arguments
@@ -1233,6 +1278,10 @@ lua_redis_make_request(lua_State *L)
 		cmd = lua_tostring(L, -1);
 		lua_pop(L, 1);
 		sp_ud->cmd = g_strdup(cmd);
+
+		if (lua_redis_cmd_changes_state(cmd)) {
+			ctx->flags |= LUA_REDIS_NO_POOL;
+		}
 
 		lua_pushstring(L, "timeout");
 		lua_gettable(L, 1);
@@ -1467,6 +1516,7 @@ lua_redis_make_request_sync(lua_State *L)
  * Make request to redis server, params is a table of key=value arguments in any order
  * @param {task} task worker task object
  * @param {ip|string} host server address
+ * @param {table} connection optional connection settings, as in make_request
  * @param {number} timeout timeout in seconds for request (1.0 by default)
  * @return {boolean,redis} new connection object or nil if connection failed
  */
@@ -1511,6 +1561,7 @@ lua_redis_connect(lua_State *L)
  * @function rspamd_redis.connect_sync({params})
  * Make blocking request to redis server, params is a table of key=value arguments in any order
  * @param {ip|string} host server address
+ * @param {table} connection optional connection settings, as in make_request
  * @param {number} timeout timeout in seconds for request (1.0 by default)
  * @return {redis} redis object if a request has been successful
  */
@@ -1568,7 +1619,7 @@ lua_redis_add_cmd(lua_State *L)
 	int cbref = -1, ret;
 
 	if (ctx) {
-		if (ctx->flags & LUA_REDIS_TERMINATED) {
+		if ((ctx->flags & LUA_REDIS_TERMINATED) || ctx->async.ctx == NULL) {
 			lua_pushboolean(L, FALSE);
 			lua_pushstring(L, "Connection is terminated");
 
@@ -1600,6 +1651,10 @@ lua_redis_add_cmd(lua_State *L)
 
 		sp_ud->ctx = ctx;
 		sp_ud->cmd = g_strdup(cmd);
+
+		if (lua_redis_cmd_changes_state(cmd)) {
+			ctx->flags |= LUA_REDIS_NO_POOL;
+		}
 
 		lua_redis_parse_args(L, args_pos, cmd, &sp_ud->args,
 							 &sp_ud->arglens, &sp_ud->nargs);

@@ -58,6 +58,45 @@ PDF javascript
   ...  Settings={symbols_enabled = [PDF_JAVASCRIPT]}
   Expect Symbol  PDF_JAVASCRIPT
 
+PDF that is not fully processed
+  Scan File  ${RSPAMD_TESTDIR}/messages/pdf_limits.eml
+  ...  Settings={symbols_enabled = [PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS, PDF_NO_OBJECTS, PDF_JAVASCRIPT]}
+  Expect Symbol With Exact Options  PDF_DECODE_LIMIT  limits.pdf
+  Expect Symbol With Exact Options  PDF_UNDECODED_STREAMS  limits.pdf:1
+  Expect Symbol With Exact Options  PDF_PARSE_ERRORS  limits.pdf:1
+  Do Not Expect Symbol  PDF_NO_OBJECTS
+
+PDF without objects
+  Scan File  ${RSPAMD_TESTDIR}/messages/pdf_no_objects.eml
+  ...  Settings={symbols_enabled = [PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS]}
+  Expect Symbol With Exact Options  PDF_NO_OBJECTS  empty.pdf
+  Do Not Expect Symbol  PDF_DECODE_LIMIT
+  Do Not Expect Symbol  PDF_PARSE_ERRORS
+
+PDF that is fully processed
+  Scan File  ${MESSAGE7}
+  ...  Settings={symbols_enabled = [PDF_JAVASCRIPT, PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS, PDF_TEXT_TRUNCATED]}
+  Expect Symbol  PDF_JAVASCRIPT
+  Do Not Expect Symbol  PDF_NO_OBJECTS
+  Do Not Expect Symbol  PDF_DECODE_LIMIT
+  Do Not Expect Symbol  PDF_UNDECODED_STREAMS
+  Do Not Expect Symbol  PDF_PARSE_ERRORS
+  Do Not Expect Symbol  PDF_TEXT_TRUNCATED
+
+SVG with an image inside that cannot be read
+  Scan File  ${RSPAMD_TESTDIR}/messages/svg_incomplete.eml
+  ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_INCOMPLETE]}
+  Expect Symbol With Exact Options  SVG_CONTENT  logo.svg
+  Expect Symbol With Exact Options  SVG_INCOMPLETE  logo.svg:nested=xml
+  Do Not Expect Symbol  SVG_SUSPICIOUS
+
+DOCX with a part that cannot be parsed
+  Scan File  ${RSPAMD_TESTDIR}/messages/docx_incomplete.eml
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_SUSPICIOUS, OOXML_INCOMPLETE]}
+  Expect Symbol With Exact Options  DOCX_CONTENT  report.docx
+  Expect Symbol With Exact Options  OOXML_INCOMPLETE  report.docx:failed=1
+  Do Not Expect Symbol  DOCX_SUSPICIOUS
+
 DOCX content
   Scan File  ${MESSAGE9}
   ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS, DOCX_SUSPICIOUS]}
@@ -87,7 +126,7 @@ XLSX content
   ...  Settings={symbols_enabled = [XLSX_CONTENT, XLSX_EXTERNAL_LINKS, XLSX_SUSPICIOUS, OOXML_MACROS, OOXML_EXTERNAL_DATA, OOXML_OLE_OBJECT, OOXML_REMOTE_TEMPLATE]}
   Expect Symbol With Exact Options  XLSX_CONTENT  invoice.xlsm
   Expect Symbol With Exact Options  XLSX_EXTERNAL_LINKS  invoice.xlsm:3
-  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm%2Cvba%2C_xlnm.Auto_Open
+  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm  invoice.xlsm:vba  invoice.xlsm:_xlnm.Auto_Open
   Expect Symbol With Exact Options  OOXML_EXTERNAL_DATA  invoice.xlsm:externalLinkPath=https://external.example.com/data.xlsx
   Do Not Expect Symbol  XLSX_SUSPICIOUS
   Do Not Expect Symbol  OOXML_OLE_OBJECT
@@ -113,11 +152,11 @@ SVG smuggling
   Scan File  ${MESSAGE14}
   ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
   Expect Symbol With Exact Options  SVG_CONTENT  invoice.svg
-  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2%2Chandlers=1%2Cjavascript=2%2Cexternal=1%2Catob%2CBlob%2CcreateObjectURL%2Clocation
+  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2  invoice.svg:handlers=1  invoice.svg:javascript=2  invoice.svg:external=1  invoice.svg:atob  invoice.svg:Blob  invoice.svg:createObjectURL  invoice.svg:location
   Expect Symbol With Exact Options  SVG_FOREIGN_OBJECT  invoice.svg:1
   Expect Symbol With Exact Options  SVG_DATA_URI  invoice.svg:text/html
-  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1%2Cpasswords=1
-  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh%2Cembedded_documents%2Clocation
+  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1  invoice.svg:passwords=1
+  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh  invoice.svg:embedded_documents  invoice.svg:location
   Expect Symbol  SVG_EXTERNAL_RESOURCES
   Do Not Expect Symbol  SVG_SUSPICIOUS
   Expect URL  phish.example.com
@@ -386,3 +425,61 @@ SUBJECT_HAS_CURRENCY
   Scan File  ${RSPAMD_TESTDIR}/messages/currency.eml
   ...  Settings={symbols_enabled = [SUBJECT_HAS_CURRENCY]}
   Expect Symbol  SUBJECT_HAS_CURRENCY
+
+DATE_FAR_FUTURE_NO_TZ
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_no_tz_future.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_FUTURE]}
+  Expect Symbol  INVALID_DATE
+  Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+  Do Not Expect Symbol  DATE_IN_FUTURE
+
+DATE_FAR_FUTURE_NO_TZ past date
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_no_tz_past.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_PAST]}
+  Expect Symbol  INVALID_DATE
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+  Do Not Expect Symbol  DATE_IN_PAST
+
+DATE_FAR_FUTURE_NO_TZ zoned date
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_tz_future.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_FUTURE]}
+  Expect Symbol  DATE_IN_FUTURE
+  Do Not Expect Symbol  INVALID_DATE
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+DATE_FAR_FUTURE_NO_TZ under threshold
+  # Read as UTC+14, 56 hours ahead is only 42 hours for sure
+  Scan Zone-less Date Ahead  56
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+DATE_FAR_FUTURE_NO_TZ over threshold
+  # Read as UTC+14, 64 hours ahead is still 50 hours for sure
+  Scan Zone-less Date Ahead  64
+  Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+APPLE_IOS_MAILER FIVE DIGIT BUILD
+  # iOS 27.2 on iPhone Duo: five digits after the build letter (#6349)
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_duo.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  APPLE_IOS_MAILER
+  Do Not Expect Symbol  FORGED_X_MAILER
+
+FORGED_X_MAILER NOT IOS BUILD
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_forged.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  FORGED_X_MAILER
+  Do Not Expect Symbol  APPLE_IOS_MAILER
+
+*** Keywords ***
+Scan Zone-less Date Ahead
+  [Arguments]  ${hours}
+  # formatdate gives a locale-independent date in UTC; cutting ' -0000'
+  # leaves it without a zone
+  ${date} =  Evaluate  email.utils.formatdate(time.time() + ${hours} * 3600)[:-6]
+  ...  modules=email.utils,time
+  ${file} =  Set Variable  ${RSPAMD_TMPDIR}/date-no-tz-${hours}.eml
+  Create File  ${file}  From: sender@example.com\r\nSubject: test\r\nDate: ${date}\r\n\r\nbody\r\n
+  Scan File  ${file}
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ]}
+  Remove File  ${file}
+  Expect Symbol  INVALID_DATE

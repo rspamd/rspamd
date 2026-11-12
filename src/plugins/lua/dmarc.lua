@@ -47,14 +47,14 @@ local take_report_script = [[
 local index_key = KEYS[1]
 local report_key = KEYS[2]
 local max_entries = -(tonumber(KEYS[3]) + 1)
-local keys_expiry = tonumber(KEYS[4])
+local keys_expiry = math.floor(tonumber(KEYS[4]) or 172800)
 local dmarc_domain = ARGV[1]
 local report = ARGV[2]
 redis.call('SADD', index_key, report_key)
-redis.call('EXPIRE', index_key, 172800)
+redis.call('EXPIRE', index_key, keys_expiry)
 redis.call('ZINCRBY', report_key, 1, report)
 redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
-redis.call('EXPIRE', report_key, 172800)
+redis.call('EXPIRE', report_key, keys_expiry)
 ]]
 
 -- Publish the policy evaluation result so that other modules (e.g. fuzzy_check)
@@ -191,10 +191,23 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local disposition = 'none'
   local sampled_out = false
 
-  local function handle_dmarc_failure(what, reason_str)
+  -- One "domain : reason" option per failure reason followed by the extra
+  -- options, so that reasons never need to be joined with commas
+  local function failure_options(reasons, ...)
+    local result = {}
+    for _, r in ipairs(reasons) do
+      result[#result + 1] = policy.domain .. ' : ' .. r
+    end
+    for _, extra in ipairs({ ... }) do
+      result[#result + 1] = extra
+    end
+    return result
+  end
+
+  local function handle_dmarc_failure(what, reasons)
     if not policy.pct or policy.pct == 100 then
       task:insert_result(settings.symbols[what], 1.0,
-        policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+        failure_options(reasons, policy.dmarc_policy))
       disposition = what
     else
       local coin = math.random(100)
@@ -208,19 +221,19 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
           end
 
           task:insert_result(settings.symbols[disposition], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
+            failure_options(reasons, policy.dmarc_policy, "sampled_out"))
           sampled_out = true
           lua_util.debugm(N, task,
             'changed dmarc policy from %s to %s, sampled out: %s < %s',
             what, disposition, coin, policy.pct)
         else
           task:insert_result(settings.symbols[what], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
+            failure_options(reasons, policy.dmarc_policy, "local_policy"))
           disposition = what
         end
       else
         task:insert_result(settings.symbols[what], 1.0,
-          policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+          failure_options(reasons, policy.dmarc_policy))
         disposition = what
       end
     end
@@ -253,8 +266,6 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       publish_result(task, 'temperror')
     else
       -- We can now check the failed policy and maybe send report data elt
-      local reason_str = table.concat(reason, ', ')
-
       if policy.dmarc_policy == 'quarantine' or policy.dmarc_policy == 'reject' then
         publish_result(task, 'fail_' .. policy.dmarc_policy)
       else
@@ -262,13 +273,12 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       end
 
       if policy.dmarc_policy == 'quarantine' then
-        handle_dmarc_failure('quarantine', reason_str)
+        handle_dmarc_failure('quarantine', reason)
       elseif policy.dmarc_policy == 'reject' then
-        handle_dmarc_failure('reject', reason_str)
+        handle_dmarc_failure('reject', reason)
       else
         task:insert_result(settings.symbols['softfail'], 1.0,
-          policy.domain .. ' : ' .. reason_str,
-          policy.dmarc_policy)
+          failure_options(reason, policy.dmarc_policy))
       end
     end
   end
@@ -605,25 +615,37 @@ local function dmarc_callback(task)
 
   local resolve_name = '_dmarc.' .. hfromdom
 
-  task:get_resolver():resolve_txt({
+  -- A request that cannot be made has no callback: a name too long for a
+  -- query, or a label over 63 bytes, which the domain of a From header can
+  -- be. It is not counted then, or the answer for the other name would wait
+  -- for it and the policy of the organisational domain would not be applied
+  local domain_cb = gen_dmarc_cb(hfromdom, false)
+  local tld_cb = dmarc_domain ~= hfromdom and gen_dmarc_cb(dmarc_domain, true)
+
+  dns_checks_inflight = dns_checks_inflight + 1
+  local domain_asked = task:get_resolver():resolve_txt({
     task = task,
     name = resolve_name,
-    callback = gen_dmarc_cb(hfromdom, false),
+    callback = domain_cb,
     forced = true
   })
-  dns_checks_inflight = dns_checks_inflight + 1
 
-  if dmarc_domain ~= hfromdom then
-    resolve_name = '_dmarc.' .. dmarc_domain
-
-    task:get_resolver():resolve_txt({
-      task = task,
-      name = resolve_name,
-      callback = gen_dmarc_cb(dmarc_domain, true),
-      forced = true
-    })
-
+  if tld_cb then
     dns_checks_inflight = dns_checks_inflight + 1
+
+    if not task:get_resolver():resolve_txt({
+      task = task,
+      name = '_dmarc.' .. dmarc_domain,
+      callback = tld_cb,
+      forced = true
+    }) then
+      -- As if the name did not exist
+      tld_cb(nil, nil, nil, 'no records with this name')
+    end
+  end
+
+  if not domain_asked then
+    domain_cb(nil, nil, nil, 'no records with this name')
   end
 end
 

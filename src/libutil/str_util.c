@@ -451,16 +451,18 @@ rspamd_strlcpy_safe(char *dst, const char *src, gsize siz)
 gboolean
 rspamd_strtol(const char *s, gsize len, glong *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	glong v = 0;
 	const glong cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
 	gboolean neg;
 
-	/* Avoid absurd length */
+	/* Avoid absurd length; an empty string may come as (NULL, 0) */
 	if (len == 0 || len > sizeof("-18446744073709551615")) {
 		return FALSE;
 	}
+
+	end = s + len;
 
 	/* Case negative values */
 	if (*p == '-') {
@@ -525,14 +527,17 @@ rspamd_strtol(const char *s, gsize len, glong *value)
 gboolean
 rspamd_strtoul(const char *s, gsize len, gulong *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	gulong v = 0;
 	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
 
+	/* An empty string may come as (NULL, 0) */
 	if (len == 0 || len > sizeof("-18446744073709551615")) {
 		return FALSE;
 	}
+
+	end = s + len;
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXULONG);
 
@@ -543,11 +548,17 @@ rspamd_strtoul(const char *s, gsize len, gulong *value)
 gboolean
 rspamd_strtou64(const char *s, gsize len, uint64_t *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	uint64_t v = 0;
 	const uint64_t cutoff = G_MAXUINT64 / 10, cutlim = G_MAXUINT64 % 10;
 
+	/* An empty string is not a number, and may come as (NULL, 0) */
+	if (len == 0) {
+		return FALSE;
+	}
+
+	end = s + len;
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXUINT64);
 
@@ -558,11 +569,18 @@ rspamd_strtou64(const char *s, gsize len, uint64_t *value)
 gboolean
 rspamd_xstrtoul(const char *s, gsize len, gulong *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	gulong v = 0;
-	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
+	/* A hex digit multiplies by 16: a decimal cutoff lets the value wrap */
+	const gulong cutoff = G_MAXULONG / 16, cutlim = G_MAXULONG % 16;
 
+	/* An empty string is not a number, and may come as (NULL, 0) */
+	if (len == 0) {
+		return FALSE;
+	}
+
+	end = s + len;
 	/* Some preparations for range errors */
 	while (p < end) {
 		c = g_ascii_tolower(*p);
@@ -1564,6 +1582,11 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 						out[i++] = hexdigests[(last_sp & 0xF)];
 
 						span = 0;
+						/*
+						 * The newline is read again: without the spaces it is
+						 * written as is, or it would overwrite the last digit
+						 */
+						seen_spaces = 0;
 					}
 					else {
 						/* Encode last space */
@@ -1621,7 +1644,12 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 			seen_spaces = 0;
 		}
 
-		if (QP_SPAN_NORMAL(span, str_len)) {
+		/*
+		 * In CR mode, not right before a literal LF: `=\r` and the LF would
+		 * read as a soft CRLF break, and the line ends at the LF anyway
+		 */
+		if (QP_SPAN_NORMAL(span, str_len) &&
+			!(how == RSPAMD_TASK_NEWLINES_CR && p + 1 < end && p[1] == '\n')) {
 			/* Add new line and then continue */
 			if (p + 1 < end || span > str_len || seen_spaces) {
 				switch (how) {

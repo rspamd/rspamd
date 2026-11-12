@@ -457,7 +457,7 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		 */
 		zero = memchr(pos, '\0', cmdlen);
 
-		if (zero == NULL || zero > (end - sizeof(uint16_t) + 1)) {
+		if (zero == NULL) {
 			err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid "
 															 "connect command (no name)");
 			rspamd_milter_on_protocol_error(session, priv, err);
@@ -487,12 +487,22 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 								 session->hostname);
 			}
 
+			/* A repeated CONNECT replaces the previous address */
+			if (session->addr) {
+				rspamd_inet_address_free(session->addr);
+				session->addr = NULL;
+			}
+
 			pos = zero + 1;
-			proto = *pos++;
+			/* The family and the port may be missing: no address then */
+			proto = pos < end ? *pos++ : RSPAMD_MILTER_CONN_UNKNOWN;
 
 			if (proto == RSPAMD_MILTER_CONN_UNKNOWN) {
 				/* We have no information about host */
 				msg_debug_milter("unknown connect address");
+			}
+			else if (end - pos < (ptrdiff_t) sizeof(port)) {
+				msg_debug_milter("no port in connect command");
 			}
 			else {
 				READ_INT_16(pos, port);
@@ -605,9 +615,9 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		pos++;
 
 		while (pos < end) {
-			zero = memchr(pos, '\0', cmdlen);
+			zero = memchr(pos, '\0', end - pos);
 
-			if (zero == NULL || zero >= end) {
+			if (zero == NULL) {
 				err = g_error_new(rspamd_milter_quark(), EINVAL, "invalid "
 																 "macro command (no name)");
 				rspamd_milter_on_protocol_error(session, priv, err);
@@ -632,7 +642,6 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 					msg_debug_milter("got macro: %T -> %T",
 									 name_tok, value_tok);
 
-					cmdlen -= zero_val - pos;
 					pos = zero_val + 1;
 				}
 				else {
@@ -647,6 +656,17 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_BODYEOB:
 		msg_debug_milter("got eob command");
+
+		if (priv->eob_pending) {
+			/* The callback owns the previous message until it is replied */
+			err = g_error_new(rspamd_milter_quark(), EINVAL, "end of body "
+															 "before the reply to the previous one");
+			rspamd_milter_on_protocol_error(session, priv, err);
+
+			return FALSE;
+		}
+
+		priv->eob_pending = TRUE;
 		REF_RETAIN(session);
 		priv->fin_cb(priv->fd, session, priv->ud);
 		REF_RELEASE(session);
@@ -760,6 +780,17 @@ rspamd_milter_process_command(struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_MAIL:
 		msg_debug_milter("mail command");
+
+		if (session->from || session->mail_esmtp_args || session->rcpts ||
+			(session->message && session->message->len > 0)) {
+			/*
+			 * MAIL without ABORT after an unfinished transaction: abort it
+			 * first, as libmilter does, so nothing of it is mixed into or
+			 * leaked by the new one
+			 */
+			msg_debug_milter("mail command inside a transaction, abort it");
+			rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
+		}
 
 		while (pos < end) {
 			struct rspamd_email_address *addr;
@@ -1651,6 +1682,9 @@ rspamd_milter_send_action(struct rspamd_milter_session *session,
 
 void rspamd_milter_send_tempfail(struct rspamd_milter_session *session)
 {
+	struct rspamd_milter_private *priv = session->priv;
+
+	priv->eob_pending = FALSE;
 	rspamd_milter_send_action(session, RSPAMD_MILTER_TEMPFAIL);
 	rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
 }
@@ -2599,6 +2633,7 @@ cleanup:
 	rspamd_fstring_free(xcode);
 	rspamd_fstring_free(reply);
 
+	priv->eob_pending = FALSE;
 	rspamd_milter_session_reset(session, RSPAMD_MILTER_RESET_ABORT);
 }
 

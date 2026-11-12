@@ -17,6 +17,13 @@ context("SMTP date functions", function()
     -- extra comment
     { 'Thu, 18 May 2006 16:08:11 +0400 (MSD)', 1147954091 },
     { 'Thu, 18 May 2006 16:08:11 +0400', 1147954091 },
+    -- quoted pairs in a comment
+    { 'Thu, 18 May 2006 16:08:11 +0400 (a \\) b)', 1147954091 },
+    { 'Thu, 18 May 2006 16:08:11 +0400 (a \\( b)', 1147954091 },
+    -- zone minutes go up to 59
+    { 'Sat, 26 Sep 2020 17:36:21 +0059', 1601138241 },
+    { 'Sat, 26 Sep 2020 17:36:21 +0060', nil },
+    { 'Sat, 26 Sep 2020 17:36:21 -0099', nil },
     -- obs_zone
     { 'Sat, 26 Sep 2020 17:36:21 GMT', 1601141781 },
     { 'Sat, 26 Sep 2020 17:36:21 UT', 1601141781 },
@@ -25,25 +32,56 @@ context("SMTP date functions", function()
     { 'Wed, 30 Sep 2020 20:32:31 -0400', 1601512351 },
     { 'Wed, 30 Sep 2020 17:32:31 PDT', 1601512351 },
     { 'Wed, 30 Sep 2020 17:32:31 -0700', 1601512351 },
+    -- UTC is not an RFC 5322 zone, but some mailers write it
+    { 'Sat, 26 Sep 2020 17:36:21 UTC', 1601141781 },
+    { 'Sat, 26 Sep 2020 17:36:21 UTC (Coordinated Universal Time)', 1601141781 },
+    { 'Sat, 26 Sep 2020 17:36:21 UTCX', nil },
+    -- names are case-insensitive, as in RFC 5322
+    { 'mon, 05 oct 2020 19:05:57 -0000', 1601924757 },
+    { 'MON, 05 OCT 2020 19:05:57 -0000', 1601924757 },
+    { 'Sat, 26 Sep 2020 17:36:21 gmt', 1601141781 },
+    { 'Sat, 26 Sep 2020 17:36:21 Utc', 1601141781 },
+    { 'Wed, 30 Sep 2020 20:32:31 edt', 1601512351 },
+    { 'Wed, 30 Sep 2020 17:32:31 pDt', 1601512351 },
+    -- ... but only in their three letter forms
+    { 'Monday, 05 Oct 2020 19:05:57 -0000', nil },
+    { 'Mon, 05 October 2020 19:05:57 -0000', nil },
     -- 2 digit year < 50
     { 'Mon, 05 Oct 20 06:35:38 GMT', 1601879738 },
     { 'Mon, 05 Oct 2020 06:35:38 GMT', 1601879738 },
     -- 2 digit year >= 50
     { '26 Aug 76 14:30 EDT', 209932200 },
     { '26 Aug 1976 14:30 EDT', 209932200 },
+    -- 3 digit years add 1900, even below 50, and so do zero-padded
+    -- 4 digit ones: tm_year printed with %04d gives 0102 for 2002
+    { '05 Oct 120 06:35:38 GMT', 1601879738 },
+    { '05 Oct 049 06:35:38 GMT', -638731462 },
+    { '05 Oct 0049 06:35:38 GMT', -638731462 },
+    { 'Mon, 26 Aug 0102 23:12:40 -0700', 1030428760 },
     -- Year 2038 problem (broken on 32-bit systems, see #4754)
     --{ 'Tue, 19 Jan 2038 03:14:07 GMT', 2 ^ 31 - 1 },
     --{ 'Tue, 19 Jan 2038 03:14:09 GMT', 2 ^ 31 + 1 },
     -- double space before TZ
     { 'Sat, 29 Aug 2020 08:25:15  +0700', 1598664315 },
-    -- XXX timestamp corresponding to Sat Dec 30 00:00:00 GMT 1899 returned on error
-    --{'Sat, Dec 30 1899 00:00:00 GMT', -2209161600},
     -- Invalid format
     { 'Mon Oct  5 20:29:23 BST 2020', nil },
     -- Wrong date
     { '32 Jan 2020 00:00 GMT', nil },
+    -- Day past the end of the month
+    { '31 Apr 2020 00:00 GMT', nil },
+    { '30 Apr 2020 00:00 GMT', 1588204800 },
+    { '29 Feb 2021 00:00 GMT', nil },
+    { '29 Feb 2020 00:00 GMT', 1582934400 },
+    { '29 Feb 2100 00:00 GMT', nil },
+    { '29 Feb 2000 00:00 GMT', 951782400 },
     -- Wrong time
-    { '1 Jan 2020 25:00 GMT', nil }
+    { '1 Jan 2020 25:00 GMT', nil },
+    -- Missing zone: invalid, DATE_FAR_FUTURE_NO_TZ reparses it as UTC+14
+    { 'Thu, 12 Nov 2026 19:47:48', nil },
+    { 'Thu, 12 Nov 2026 19:47:48 +1400', 1794462468 },
+    -- ... and appending a zone must not repair any other defect
+    { 'Thu, 12 Nov 2026 19:47:48 bogus +1400', nil },
+    { 'Thu, 12 Nov 2026 19:47:48 +0300 xyz +1400', nil },
   }
 
   for _, case in ipairs(cases) do

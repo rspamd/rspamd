@@ -57,7 +57,7 @@ local function asn_check(task)
       table.insert(descr_t, "country:" .. country)
     end
     if options['symbol'] then
-      task:insert_result(options['symbol'], 0.0, table.concat(descr_t, ', '))
+      task:insert_result(options['symbol'], 0.0, descr_t)
     end
   end
 

@@ -33,6 +33,12 @@ Hindi vowel signs are ignored
   Should Be True  'hi' in $languages or 'ne' in $languages
   Do Not Expect Symbol  R_MIXED_CHARSET
 
+Names with diacritics in a long English text are not a sign
+  Scan File  ${RSPAMD_TESTDIR}/messages/chartable_english_names.eml
+  ...  Settings=${SETTINGS_CHARTABLE}
+  Expect Symbol With Option  TEST_LANGUAGE  en
+  Do Not Expect Symbol  R_MIXED_CHARSET
+
 English diacritics are significant
   Scan File  ${RSPAMD_TESTDIR}/messages/chartable_english_diacritics.eml
   ...  Settings=${SETTINGS_CHARTABLE}
@@ -126,3 +132,19 @@ Legitimate combining marks and number sets stay clean
   ...  Settings=${SETTINGS_CHARTABLE}
   Do Not Expect Symbol  R_MIXED_CHARSET
   Do Not Expect Symbol  TEST_CHARTABLE_WORDS
+
+Mixed script words are seen in a long text
+  [Documentation]  Three words of mixed scripts among a hundred plain ones
+  Scan File  ${RSPAMD_TESTDIR}/messages/chartable_diluted_mixed.eml
+  ...  Settings=${SETTINGS_CHARTABLE}
+  Expect Symbol  R_MIXED_CHARSET
+
+One mixed script word in a long text is not enough
+  Scan File  ${RSPAMD_TESTDIR}/messages/chartable_diluted_one.eml
+  ...  Settings=${SETTINGS_CHARTABLE}
+  Do Not Expect Symbol  R_MIXED_CHARSET
+
+Host in the ASCII form of an international name is checked as displayed
+  Scan File  ${RSPAMD_TESTDIR}/messages/chartable_punycode_host.eml
+  ...  Settings=${SETTINGS_CHARTABLE}
+  Expect Symbol  R_MIXED_CHARSET_URL

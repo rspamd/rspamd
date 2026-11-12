@@ -69,8 +69,14 @@ static auto
 received_process_part(const std::string_view &data,
 					  received_part_type type,
 					  std::ptrdiff_t &last,
-					  received_part &npart) -> bool
+					  received_part &npart,
+					  bool &unterminated_comment) -> bool
 {
+	/*
+	 * Returns false when no element could be read. unterminated_comment is
+	 * set when that happens because a comment opened in `data` is never
+	 * closed: the whole rest of `data` was scanned and belongs to it.
+	 */
 	auto obraces = 0, ebraces = 0;
 	auto seen_tcpinfo = false;
 	enum _parse_state {
@@ -216,6 +222,9 @@ received_process_part(const std::string_view &data,
 
 	/* Leftover */
 	switch (state) {
+	case in_comment:
+		unterminated_comment = true;
+		break;
 	case read_data:
 		if (p > c) {
 			if (type != received_part_type::RSPAMD_RECEIVED_PART_UNKNOWN) {
@@ -273,6 +282,7 @@ received_spill(const std::string_view &in,
 	skip_spaces();
 
 	/* Skip SMTP comments */
+	/* The input must be NUL-terminated: *p is read even when p == end */
 	if (*p == '(') {
 		auto obraces = 0, ebraces = 0;
 
@@ -300,12 +310,15 @@ received_spill(const std::string_view &in,
 		return parts;
 	}
 
+	/* Set when a part failed on a comment that is not closed up to the end */
+	auto unterminated_comment = false;
+
 	auto maybe_process_part = [&](received_part_type what) -> bool {
 		parts.emplace_back(what);
 		auto &rcvd_part = parts.back();
 		auto chunk = std::string_view{p, (std::size_t) (end - p)};
 
-		if (!received_process_part(chunk, what, pos, rcvd_part)) {
+		if (!received_process_part(chunk, what, pos, rcvd_part, unterminated_comment)) {
 			parts.pop_back();
 
 			return false;
@@ -395,6 +408,21 @@ received_spill(const std::string_view &in,
 			}
 
 			if (!got_part) {
+				if (unterminated_comment) {
+					/*
+					 * The rest of the header is inside a comment that is never
+					 * closed, retrying from the next byte would rescan it.
+					 * The date is still taken after the first separator.
+					 */
+					const auto *sep = static_cast<const char *>(memchr(p, ';', end - p));
+
+					if (sep != nullptr) {
+						date_pos = sep - in.data() + 1;
+					}
+
+					break;
+				}
+
 				p++;
 				len = end > p ? end - p : 0;
 			}
@@ -682,6 +710,12 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 			}
 			break;
 		case received_part_type::RSPAMD_RECEIVED_PART_FOR:
+			/* A header can repeat `for`: the last clause wins */
+			if (rh.for_addr) {
+				rspamd_email_address_free(rh.for_addr);
+				rh.for_addr = nullptr;
+			}
+
 			rh.for_mbox.assign_copy(part.data);
 			rh.for_addr = rspamd_email_address_from_smtp(rh.for_mbox.data(),
 														 rh.for_mbox.size());
@@ -698,8 +732,17 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 
 	if (date_pos > 0 && date_pos < in.size()) {
 		auto date_sub = in.substr(date_pos);
-		rh.timestamp = rspamd_parse_smtp_date((const unsigned char *) date_sub.data(),
-											  date_sub.size(), nullptr);
+		GError *err = nullptr;
+		auto ts = rspamd_parse_smtp_date((const unsigned char *) date_sub.data(),
+										 date_sub.size(), &err);
+
+		if (err == nullptr) {
+			rh.timestamp = ts;
+		}
+		else {
+			/* Keep 0, as for no date at all: the parser returns -1 on errors */
+			g_error_free(err);
+		}
 	}
 
 	return true;
@@ -1048,6 +1091,65 @@ TEST_SUITE("received")
 		CHECK(parts.size() <= rspamd::mime::max_received_parts);
 	}
 
+	TEST_CASE("received unbalanced comments are linear")
+	{
+		/* Quadratic rescanning of the tail would take minutes here */
+		std::string input{"from sender.example by receiver.example with esmtp "};
+		input.append(200000, '(');
+		std::ptrdiff_t date_pos = -1;
+		auto parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() >= 2);
+		CHECK(parts.size() <= rspamd::mime::max_received_parts);
+		CHECK(parts.front().type == rspamd::mime::received_part_type::RSPAMD_RECEIVED_PART_FROM);
+		CHECK(date_pos == -1);
+
+		/* Same for unknown parts and nested unclosed comments */
+		input = "from sender.example by receiver.example x-foo ";
+		for (auto i = 0; i < 100000; i++) {
+			input.append("(a ");
+		}
+		parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() >= 2);
+		CHECK(parts.size() <= rspamd::mime::max_received_parts);
+	}
+
+	TEST_CASE("received unclosed tcpinfo is linear")
+	{
+		std::string input{"from sender.example "};
+		input.append(200000, '[');
+		std::ptrdiff_t date_pos = -1;
+		auto parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() <= rspamd::mime::max_received_parts);
+
+		input = "from sender.example [1.2.3.4 by receiver.example";
+		input.append(200000, '[');
+		parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() <= rspamd::mime::max_received_parts);
+	}
+
+	TEST_CASE("received balanced comments and date are kept")
+	{
+		std::string input{"from a (c1 (nested)) by b (c2) with esmtp (c3); Tue, 3 Nov 2026 12:00:00 +0000"};
+		std::ptrdiff_t date_pos = -1;
+		auto parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() == 3);
+		CHECK(date_pos == (std::ptrdiff_t) input.find(';') + 1);
+
+		/* The part with the unclosed comment is dropped, earlier ones are kept */
+		input = "from a by b with esmtp (never closed";
+		date_pos = -1;
+		parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() == 2);
+		CHECK(date_pos == -1);
+
+		/* The date after an unclosed comment is still found */
+		input = "from a by b with esmtp (never closed; Tue, 3 Nov 2026 12:00:00 +0000";
+		date_pos = -1;
+		parts = rspamd::mime::received_spill(input, date_pos);
+		CHECK(parts.size() == 2);
+		CHECK(date_pos == (std::ptrdiff_t) input.find(';') + 1);
+	}
+
 	TEST_CASE("received comments are bounded")
 	{
 		std::string input{"from sender.example"};
@@ -1061,5 +1163,32 @@ TEST_SUITE("received")
 		auto parts = rspamd::mime::received_spill(input, date_pos);
 		REQUIRE(!parts.empty());
 		CHECK(parts.front().comments.size() <= rspamd::mime::max_received_comments);
+	}
+
+	TEST_CASE("received with several for clauses keeps one address")
+	{
+		/*
+		 * Every `for` clause used to overwrite for_addr without freeing the
+		 * previous address, so all but the last one leaked (LeakSanitizer
+		 * reports it at exit). The last clause wins, for_mbox and for_addr
+		 * must describe the same mailbox.
+		 */
+		using namespace std::string_view_literals;
+		rspamd_mempool_t *pool = rspamd_mempool_new_default("rcvd test", 0);
+
+		{
+			rspamd::mime::received_header_chain chain;
+			auto in = "from a by b for <a@b.c> for <d@e.f> for <g@h.i>; "
+					  "Tue, 3 Nov 2026 12:00:00 +0000"sv;
+			REQUIRE(rspamd::mime::received_header_parse(chain, pool, in, nullptr));
+			auto rh = chain.get_received(0);
+			REQUIRE(rh.has_value());
+			const auto &hdr = rh.value().get();
+			CHECK(hdr.for_mbox.as_view() == "<g@h.i>"sv);
+			REQUIRE(hdr.for_addr != nullptr);
+			CHECK(std::string_view{hdr.for_addr->addr, hdr.for_addr->addr_len} == "g@h.i"sv);
+		}
+
+		rspamd_mempool_delete(pool);
 	}
 }

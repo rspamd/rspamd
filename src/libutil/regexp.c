@@ -83,7 +83,7 @@ struct rspamd_regexp_cache {
 static struct rspamd_regexp_cache *global_re_cache = NULL;
 static gboolean can_jit = FALSE;
 static gboolean check_jit = TRUE;
-static const int max_re_cache_size = 8192;
+static const unsigned int re_cache_warn_size = 8192;
 
 #ifdef WITH_PCRE2
 static pcre2_compile_context *pcre2_ctx = NULL;
@@ -711,12 +711,13 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 	const int junk = 0xdeadbabe;
 
 	g_assert(re != NULL);
-	g_assert(text != NULL);
 
 	if (len == 0) {
-		/* No length, no match! */
+		/* No length, no match: an empty text may come with no pointer */
 		return FALSE;
 	}
+
+	g_assert(text != NULL);
 
 	if (re->match_limit > 0 && len > re->match_limit) {
 		len = re->match_limit;
@@ -875,12 +876,13 @@ rspamd_regexp_search(const rspamd_regexp_t *re, const char *text, gsize len,
 	gboolean ret = FALSE;
 
 	g_assert(re != NULL);
-	g_assert(text != NULL);
 
 	if (len == 0) {
-		/* No length, no match! */
+		/* No length, no match: an empty text may come with no pointer */
 		return FALSE;
 	}
+
+	g_assert(text != NULL);
 
 	if (re->match_limit > 0 && len > re->match_limit) {
 		len = re->match_limit;
@@ -1112,6 +1114,11 @@ rspamd_regexp_match(const rspamd_regexp_t *re, const char *text, gsize len,
 	const char *start = NULL, *end = NULL;
 
 	g_assert(re != NULL);
+
+	if (len == 0) {
+		return FALSE;
+	}
+
 	g_assert(text != NULL);
 
 	if (rspamd_regexp_search(re, text, len, &start, &end, raw, NULL)) {
@@ -1243,15 +1250,17 @@ rspamd_regexp_cache_create(struct rspamd_regexp_cache *cache,
 	res = rspamd_regexp_new(pattern, flags, err);
 
 	if (res) {
-		/* REF_RETAIN (res); */
-		if (g_hash_table_size(cache->tbl) < max_re_cache_size) {
-			g_hash_table_insert(cache->tbl, res->id, res);
-		}
-		else {
-			msg_warn("cannot insert regexp to the cache: maximum size is reached (%d expressions); "
+		/*
+		 * Callers keep the result without a reference of their own, so the
+		 * cache must own every regexp it returns; the size is only a warning.
+		 */
+		if (g_hash_table_size(cache->tbl) >= re_cache_warn_size) {
+			msg_warn("regexp cache holds %ud expressions; "
 					 "it might be cached regexp misuse; regexp pattern: %s",
-					 max_re_cache_size, pattern);
+					 g_hash_table_size(cache->tbl), pattern);
 		}
+
+		g_hash_table_insert(cache->tbl, res->id, res);
 	}
 
 	return res;

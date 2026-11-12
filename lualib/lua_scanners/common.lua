@@ -397,6 +397,17 @@ local function gen_extension(fname)
   return ext[1], ext[2], filename_parts
 end
 
+-- Other spellings of the extensions that the types are known by
+local extension_aliases = {
+  jpeg = 'jpg',
+  jpe = 'jpg',
+  jfif = 'jpg',
+  tif = 'tiff',
+  htm = 'html',
+  shtml = 'html',
+  text = 'txt',
+}
+
 local function check_parts_match(task, rule)
   local filter_func = function(p)
     local mtype, msubtype = p:get_type()
@@ -476,6 +487,21 @@ local function check_parts_match(task, rule)
 
         if magic.av_check ~= false or is_part_checkable then
           return true
+        end
+
+        if fname ~= nil then
+          -- A file is opened by its name: one that starts as an image or
+          -- as text and is named as something else is that something else
+          local fext = gen_extension(fname)
+          fext = fext and (extension_aliases[fext] or fext)
+          local named = fext and lua_magic_types[fext]
+
+          if fext and fext ~= detected_ext and (not named or named.av_check ~= false
+              and named.type ~= magic.type) then
+            lua_util.debugm(rule.name, task, '%s: part detected as %s is named as %s',
+              rule.log_prefix, detected_ext, fext)
+            return true
+          end
         end
       elseif is_part_checkable then
         -- Just rely on attachment property

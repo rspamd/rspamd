@@ -44,8 +44,16 @@ local id = rspamd_config:register_symbol {
           end
         end
 
-        local files = arc:get_files_full(10)
+        -- A few files in front of a program do not hide it
+        local files = arc:get_files_full(1000)
         local max_check = #files
+        -- Other names of the same files do not count as files
+        local nfiles = 0
+        for _, info in ipairs(files) do
+          if not info.alias then
+            nfiles = nfiles + 1
+          end
+        end
 
         for i = 1, max_check do
           local info = files[i]
@@ -71,7 +79,7 @@ local id = rspamd_config:register_symbol {
         end
 
         if exe then
-          if #files == 1 then
+          if nfiles == 1 then
             task:insert_result('SINGLE_FILE_ARCHIVE_WITH_EXE', 1.0)
           end
         end

@@ -88,8 +88,13 @@ struct limits {
 
 inline auto is_name_start(unsigned char ch) -> bool
 {
+	/*
+	 * A name may hold letters of any script. The input is valid UTF-8 at this
+	 * point, and none of the few characters outside of ASCII that a name
+	 * cannot hold is worth refusing a document for
+	 */
 	return ch == ':' || ch == '_' || (ch >= 'A' && ch <= 'Z') ||
-		   (ch >= 'a' && ch <= 'z');
+		   (ch >= 'a' && ch <= 'z') || ch >= 0x80;
 }
 
 inline auto is_name_char(unsigned char ch) -> bool
@@ -321,7 +326,8 @@ private:
 			}
 		}
 		for (auto ch: input_) {
-			if (g_ascii_iscntrl(ch) && ch != '\t' && ch != '\n' && ch != '\r') {
+			/* DEL is a character that a document may hold */
+			if (g_ascii_iscntrl(ch) && ch != '\t' && ch != '\n' && ch != '\r' && ch != 0x7f) {
 				return tl::make_unexpected("XML input contains an invalid control character");
 			}
 		}

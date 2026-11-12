@@ -94,6 +94,11 @@ struct rdns_reply * rdns_make_reply (struct rdns_request *req, enum dns_rcode rc
  */
 void rdns_reply_free (struct rdns_reply *rep);
 
+/**
+ * Free one entry of a reply that is not in the list of a reply
+ */
+void rdns_reply_entry_free (struct rdns_reply_entry *entry);
+
 void rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash);
 
 /**

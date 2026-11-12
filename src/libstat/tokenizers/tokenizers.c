@@ -489,6 +489,9 @@ rspamd_tokenize_text(const char *text, gsize len,
 					decay = TRUE;
 				}
 				else {
+					if (budget) {
+						budget->decayed = TRUE;
+					}
 					token.original.begin = pos;
 					continue;
 				}
@@ -679,6 +682,9 @@ rspamd_tokenize_text(const char *text, gsize len,
 						decay = TRUE;
 					}
 					else {
+						if (budget) {
+							budget->decayed = TRUE;
+						}
 						/*
 						 * Drop the decayed token as the raw tokenizer does:
 						 * keeping it in the vector defeats the decay, as all

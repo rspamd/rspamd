@@ -38,6 +38,10 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_MISSING_CTE = (1u << 5u),
 	RSPAMD_MIME_PART_NO_TEXT_EXTRACTION = (1u << 6u),
 	RSPAMD_MIME_PART_COMPUTED = (1u << 7u),
+	/* Readable text/plain or text/html that lua_magic took for some format */
+	RSPAMD_MIME_PART_TEXT_CONTENT = (1u << 8u),
+	/* Binary data that clients show as text (text/plain or text/html, or a child without Content-Type) */
+	RSPAMD_MIME_PART_SHOWN_AS_TEXT = (1u << 9u),
 };
 
 enum rspamd_mime_part_type {
@@ -124,6 +128,8 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_ATTACHMENT (1 << 5)
 #define RSPAMD_MIME_TEXT_PART_FLAG_NEWLINES_TRUNCATED (1 << 6)
 #define RSPAMD_MIME_TEXT_PART_FLAG_WORDS_TRUNCATED (1 << 7)
+/* Words of the part were left out by the decay that applies to long texts */
+#define RSPAMD_MIME_TEXT_PART_FLAG_WORDS_SAMPLED (1 << 8)
 
 #define IS_TEXT_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_TEXT_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)

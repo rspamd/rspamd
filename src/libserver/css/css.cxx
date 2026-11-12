@@ -38,7 +38,7 @@ public:
 		css_declarations_block_ptr decls;
 		/* Source order: at equal specificity a later rule wins */
 		unsigned order;
-		unsigned specificity;
+		std::uint64_t specificity;
 	};
 	using selectors_bucket = std::vector<selector_entry>;
 	/*
@@ -190,8 +190,8 @@ auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspa
 		}
 	}
 
-	/* Tags part */
-	if (!pimpl->tags_selectors.empty()) {
+	/* Tags part: no type selector names an unknown element, whose id is no tag_id_t */
+	if (!pimpl->tags_selectors.empty() && tag->id > Tag_UNKNOWN && tag->id < Tag_MAX) {
 		collect_hash(pimpl->tags_selectors,
 					 css_simple_selector{static_cast<tag_id_t>(tag->id)});
 	}

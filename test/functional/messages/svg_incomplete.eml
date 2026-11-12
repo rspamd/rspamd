@@ -1,0 +1,25 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: image
+Date: Tue, 10 Nov 2026 10:00:00 +0000
+Message-ID: <svg_incomplete@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_svg"
+
+------=_svg
+Content-Type: text/plain; charset=us-ascii
+
+Please see the attached image.
+
+------=_svg
+Content-Type: image/svg+xml; name="logo.svg"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="logo.svg"
+
+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRw
+Oi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIj48dGV4dCB4PSIxIiB5PSIxIj5sb2dvPC90ZXh0Pjxp
+bWFnZSBocmVmPSJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI0Yld4dWN6MGlhSFIw
+Y0RvdkwzZDNkeTUzTXk1dmNtY3ZNakF3TUM5emRtY2lJSGh0Ykc1ek9uaHNhVzVyUFNKb2RIUndP
+aTh2ZDNkM0xuY3pMbTl5Wnk4eE9UazVMM2hzYVc1cklqNDhZbkp2YTJWdSIvPjwvc3ZnPg==
+
+------=_svg--

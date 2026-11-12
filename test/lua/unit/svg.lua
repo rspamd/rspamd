@@ -150,9 +150,12 @@ context("SVG content extraction", function()
   end)
 
   test("enforces text and structural limits", function()
+    -- Text over the limit is left out and the document is read to its end
     local extracted, err = svg.extract(clean, { max_text = 8 })
-    assert_equal(extracted, nil)
-    assert_not_nil(err:find("text limit", 1, true))
+    assert_not_nil(extracted, err)
+    assert_equal(extracted.text_truncated, true)
+    assert_true(extracted.text:len() <= 8)
+    assert_equal(extracted.urls[1], "https://www.example.com/")
 
     extracted, err = svg.extract(clean, { xml = { max_depth = 1 } })
     assert_equal(extracted, nil)

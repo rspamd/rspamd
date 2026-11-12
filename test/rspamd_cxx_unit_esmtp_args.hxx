@@ -11,11 +11,16 @@
 #include "libserver/task.h"
 #include "libserver/protocol.h"
 #include "libserver/http/http_message.h"
+#include "libserver/cfg_file.h"
+#include "libmime/email_addr.h"
+#include "libutil/addr.h"
 #include "libutil/fstring.h"
 #include "libutil/str_util.h"
 #include <cstring>
+#include <initializer_list>
 #include <memory>
 #include <string>
+#include <utility>
 
 /* Run this suite under ASan/LSan: without protocol pool destructors the
  * parsing assertions pass, but the containers and their tokens leak.
@@ -40,14 +45,14 @@ static std::string lookup(GHashTable *args, const char *name)
 
 class task_holder {
 public:
-	explicit task_holder(bool external_pool = false)
+	explicit task_holder(bool external_pool = false, struct rspamd_config *cfg = nullptr)
 	{
 		loop = ev_loop_new(0);
 		REQUIRE(loop != nullptr);
 		if (external_pool) {
 			pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "esmtp_test", 0);
 		}
-		task = rspamd_task_new(nullptr, nullptr, pool, nullptr, loop, FALSE);
+		task = rspamd_task_new(nullptr, cfg, pool, nullptr, loop, FALSE);
 	}
 
 	task_holder(const task_holder &) = delete;
@@ -81,6 +86,16 @@ public:
 			replace ? "0:notify=SUCCESS" : "0:NOTIFY=FAILURE");
 		rspamd_http_message_add_header(msg.get(), "X-Rspamd-Rcpt-Esmtp-Args",
 			"3:ORCPT=rfc822;dest@example.net");
+		REQUIRE(rspamd_protocol_handle_headers(task, msg.get()));
+	}
+
+	/* One v2 request; repeated names keep their order, as on the wire */
+	void send(std::initializer_list<std::pair<const char *, const char *>> hdrs)
+	{
+		message_ptr msg{rspamd_http_new_message(HTTP_REQUEST), rspamd_http_message_unref};
+		for (const auto &hdr: hdrs) {
+			rspamd_http_message_add_header(msg.get(), hdr.first, hdr.second);
+		}
 		REQUIRE(rspamd_protocol_handle_headers(task, msg.get()));
 	}
 
@@ -222,6 +237,248 @@ TEST_SUITE("esmtp_args")
 			CHECK(lookup(static_cast<GHashTable *>(g_ptr_array_index(rcpts.get(), 0)), "notify") == "NEVER");
 		}
 		CHECK(borrowed_tokens_freed == 6);
+	}
+
+	/*
+	 * The index used to go through strtol into an int: a negative one (or one
+	 * that wraps to negative) read and wrote outside of the array, and a large
+	 * one grew it to billions of slots.
+	 */
+	TEST_CASE("v2 malformed or out of range recipient indexes are rejected")
+	{
+		using namespace rspamd_esmtp_args_test;
+		/* No config, so the built-in bound of 1024 recipients applies */
+		const char *rejected[] = {
+			"-1:NOTIFY=NEVER",
+			"-2147483648:NOTIFY=NEVER",
+			"4294967295:NOTIFY=NEVER",
+			"2147483647:NOTIFY=NEVER",
+			"18446744073709551616:NOTIFY=NEVER",
+			"1024:NOTIFY=NEVER",
+			"abc:NOTIFY=NEVER",
+			"1x:NOTIFY=NEVER",
+			" 1:NOTIFY=NEVER",
+			"+1:NOTIFY=NEVER",
+			":NOTIFY=NEVER",
+		};
+
+		for (const char *value: rejected) {
+			CAPTURE(value);
+			task_holder holder;
+			holder.send({{"X-Rspamd-Rcpt-Esmtp-Args", value}});
+			CHECK(holder.task->rcpt_esmtp_args == nullptr);
+		}
+
+		/* Next to valid indexes, bad ones must neither be read nor written */
+		task_holder holder;
+		holder.send({{"X-Rspamd-Rcpt-Esmtp-Args", "1:NOTIFY=NEVER"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "-1:ORCPT=rfc822;neg@example.net"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "4294967295:ORCPT=rfc822;wrap@example.net"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1024:ORCPT=rfc822;over@example.net"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1023:ORCPT=rfc822;last@example.net"}});
+		auto *rcpts = holder.task->rcpt_esmtp_args;
+		REQUIRE(rcpts != nullptr);
+		REQUIRE(rcpts->len == 1024);
+		CHECK(g_ptr_array_index(rcpts, 0) == nullptr);
+		auto *second = static_cast<GHashTable *>(g_ptr_array_index(rcpts, 1));
+		CHECK(g_hash_table_size(second) == 1);
+		CHECK(lookup(second, "NOTIFY") == "NEVER");
+		auto *last = static_cast<GHashTable *>(g_ptr_array_index(rcpts, 1023));
+		CHECK(g_hash_table_size(last) == 1);
+		CHECK(lookup(last, "ORCPT") == "rfc822;last@example.net");
+	}
+
+	TEST_CASE("recipient indexes are bounded by max_recipients in both protocols")
+	{
+		using namespace rspamd_esmtp_args_test;
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		cfg->max_recipients = 4;
+		{
+			task_holder holder(false, cfg);
+			holder.send({{"X-Rspamd-Rcpt-Esmtp-Args", "3:NOTIFY=NEVER"},
+						 {"X-Rspamd-Rcpt-Esmtp-Args", "4:NOTIFY=DELAY"}});
+			auto *rcpts = holder.task->rcpt_esmtp_args;
+			REQUIRE(rcpts != nullptr);
+			REQUIRE(rcpts->len == 4);
+			CHECK(lookup(static_cast<GHashTable *>(g_ptr_array_index(rcpts, 3)), "NOTIFY") == "NEVER");
+		}
+		{
+			/* v3 indexes are array positions: entries past the bound are dropped */
+			task_holder holder(false, cfg);
+			CHECK(holder.metadata(R"({"rcpt_esmtp_args":[null,null,null,{"NOTIFY":"NEVER"},{"NOTIFY":"DELAY"},null]})",
+								  true));
+			auto *rcpts = holder.task->rcpt_esmtp_args;
+			REQUIRE(rcpts != nullptr);
+			REQUIRE(rcpts->len == 4);
+			CHECK(lookup(static_cast<GHashTable *>(g_ptr_array_index(rcpts, 3)), "NOTIFY") == "NEVER");
+		}
+		rspamd_config_free(cfg);
+
+		/* Without a config the built-in bound applies to v3 as well */
+		std::string json = R"({"rcpt_esmtp_args":[)";
+		for (unsigned i = 0; i < 1030; i++) {
+			json += "null,";
+		}
+		json += R"({"NOTIFY":"NEVER"}]})";
+		task_holder holder;
+		CHECK(holder.metadata(json.c_str(), true));
+		REQUIRE(holder.task->rcpt_esmtp_args != nullptr);
+		CHECK(holder.task->rcpt_esmtp_args->len == 1024);
+	}
+
+	/* Each repeated header used to overwrite, and leak, the previous address */
+	TEST_CASE("v2 repeated From and IP headers keep the last good value")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"From", "<first@example.com>"},
+					 {"IP", "192.0.2.1"},
+					 {"From", "<second@example.org>"},
+					 {"IP", "198.51.100.7"},
+					 /* Not an address: the previous one stays */
+					 {"IP", "not-an-address"}});
+		auto *task = holder.task;
+		REQUIRE(task->from_envelope != nullptr);
+		CHECK(std::string(task->from_envelope->addr, task->from_envelope->addr_len) ==
+			  "second@example.org");
+		REQUIRE(task->from_addr != nullptr);
+		CHECK(std::string(rspamd_inet_address_to_string(task->from_addr)) == "198.51.100.7");
+		CHECK((task->flags & RSPAMD_TASK_FLAG_NO_IP) == 0);
+	}
+
+	/* Milter passes a keyword without '=' (SMTPUTF8, REQUIRETLS) as is */
+	TEST_CASE("v2 ESMTP keywords without a value are kept")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"X-Rspamd-Mail-Esmtp-Args", "SMTPUTF8"},
+					 {"X-Rspamd-Mail-Esmtp-Args", "SIZE=100"},
+					 {"X-Rspamd-Mail-Esmtp-Args", "=nokey"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "0:REQUIRETLS"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "0:NOTIFY=NEVER"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1:"},
+					 {"X-Rspamd-Rcpt-Esmtp-Args", "1:=nokey"}});
+		auto *mail = holder.task->mail_esmtp_args;
+		REQUIRE(mail != nullptr);
+		CHECK(g_hash_table_size(mail) == 2);
+		CHECK(lookup(mail, "SMTPUTF8").empty());
+		CHECK(lookup(mail, "SIZE") == "100");
+		auto *rcpts = holder.task->rcpt_esmtp_args;
+		REQUIRE(rcpts != nullptr);
+		REQUIRE(rcpts->len == 1);
+		auto *first = static_cast<GHashTable *>(g_ptr_array_index(rcpts, 0));
+		CHECK(g_hash_table_size(first) == 2);
+		CHECK(lookup(first, "REQUIRETLS").empty());
+		CHECK(lookup(first, "NOTIFY") == "NEVER");
+	}
+
+	/*
+	 * Unix socket paths come from milter and proxy for local clients; the
+	 * client must not make the worker look users or groups up
+	 */
+	TEST_CASE("v2 IP header takes a unix socket path as is")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"IP", "/var/run/mta.sock owner=no-such-user-for-rspamd"}});
+		auto *task = holder.task;
+		REQUIRE(task->from_addr != nullptr);
+		CHECK(rspamd_inet_address_get_af(task->from_addr) == AF_UNIX);
+		CHECK(std::string(rspamd_inet_address_to_string(task->from_addr)) ==
+			  "/var/run/mta.sock owner=no-such-user-for-rspamd");
+	}
+
+	/* An empty value used to hit an assertion and abort the worker */
+	TEST_CASE("v2 empty Deliver-To keeps the previous value")
+	{
+		using namespace rspamd_esmtp_args_test;
+		task_holder holder;
+		holder.send({{"Deliver-To", "<first@example.com>"},
+					 {"Deliver-To", ""}});
+		REQUIRE(holder.task->deliver_to != nullptr);
+		CHECK(std::string(holder.task->deliver_to) == "first@example.com");
+
+		task_holder braces;
+		braces.send({{"Deliver-To", "<<<"}});
+		REQUIRE(braces.task->deliver_to != nullptr);
+		CHECK(std::string(braces.task->deliver_to).empty());
+	}
+
+	/* v3 metadata can repeat a header name far more often than HTTP allows */
+	TEST_CASE("v3 repeated metadata headers keep their order")
+	{
+		using namespace rspamd_esmtp_args_test;
+		constexpr unsigned n = 20000;
+		std::string json = R"({"headers":{"X-Repeated":[)";
+		for (unsigned i = 0; i < n; i++) {
+			json += (i ? ",\"" : "\"") + std::to_string(i) + "\"";
+		}
+		json += "]}}";
+		task_holder holder;
+		REQUIRE(holder.metadata(json.c_str(), true));
+		unsigned count = 0;
+		bool ordered = true;
+		for (auto *cur = rspamd_task_get_request_header_multiple(holder.task, "X-Repeated");
+			 cur != nullptr; cur = cur->next) {
+			ordered = ordered && std::string(cur->hdr->begin, cur->hdr->len) == std::to_string(count);
+			count++;
+		}
+		CHECK(count == n);
+		CHECK(ordered);
+	}
+
+	/*
+	 * Settings elements are refcounted and live in the config pool, so a lost
+	 * reference is invisible to LSan: count the references instead.
+	 */
+	TEST_CASE("v2 repeated Settings-ID headers keep one owned reference")
+	{
+		using namespace rspamd_esmtp_args_test;
+		const char *last = nullptr;
+		SUBCASE("known id last")
+		{
+			last = "second";
+		}
+		SUBCASE("unknown id last")
+		{
+			last = "missing";
+		}
+
+		auto *cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+		rspamd_config_register_settings_id(cfg, "first", nullptr, nullptr,
+										   RSPAMD_SETTINGS_POLICY_DEFAULT);
+		rspamd_config_register_settings_id(cfg, "second", nullptr, nullptr,
+										   RSPAMD_SETTINGS_POLICY_DEFAULT);
+		auto *first = rspamd_config_find_settings_name_ref(cfg, "first", strlen("first"));
+		auto *second = rspamd_config_find_settings_name_ref(cfg, "second", strlen("second"));
+		REQUIRE(first != nullptr);
+		REQUIRE(second != nullptr);
+		const auto first_refs = first->ref.refcount;
+		const auto second_refs = second->ref.refcount;
+
+		{
+			task_holder holder(false, cfg);
+			holder.send({{"Settings-ID", "first"},
+						 {"Settings-ID", "second"},
+						 {"Settings-ID", last}});
+
+			if (strcmp(last, "second") == 0) {
+				CHECK(holder.task->settings_elt == second);
+				CHECK(second->ref.refcount == second_refs + 1);
+			}
+			else {
+				CHECK(holder.task->settings_elt == nullptr);
+				CHECK(second->ref.refcount == second_refs);
+			}
+
+			CHECK(first->ref.refcount == first_refs);
+			holder.close();
+			CHECK(second->ref.refcount == second_refs);
+		}
+
+		REF_RELEASE(first);
+		REF_RELEASE(second);
+		rspamd_config_free(cfg);
 	}
 }
 

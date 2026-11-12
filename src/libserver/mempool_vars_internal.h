@@ -66,5 +66,7 @@
 #define RSPAMD_MEMPOOL_RE_MAPS_CACHE "re_maps_cache"
 #define RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME "stat_http_runtime"
 #define RSPAMD_MEMPOOL_FUZZY_STAT "fuzzy_stat"
+/* Set once an url of the message is not taken, as it has max_urls of them */
+#define RSPAMD_MEMPOOL_URLS_LIMIT_REACHED "urls_limit_reached"
 
 #endif

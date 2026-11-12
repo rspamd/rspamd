@@ -1,0 +1,10 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: account
+Date: Tue, 10 Nov 2026 10:00:00 +0000
+Message-ID: <chartable_punycode_host@example.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Please confirm your account</p><a href="http://xn--pypal-4ve.com/login">http://paypal.com/login</a></body></html>

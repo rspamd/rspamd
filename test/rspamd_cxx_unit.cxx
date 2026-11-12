@@ -56,15 +56,23 @@
 #include "rspamd_cxx_unit_tokenizer.hxx"
 #include "rspamd_cxx_unit_http_timeout.hxx"
 #include "rspamd_cxx_unit_http_chunked.hxx"
+#include "rspamd_cxx_unit_http_key.hxx"
+#include "rspamd_cxx_unit_http_header_values.hxx"
 #include "rspamd_cxx_unit_milter_lifecycle.hxx"
 #include "rspamd_cxx_unit_task_input.hxx"
 #include "rspamd_cxx_unit_esmtp_args.hxx"
 #include "rspamd_cxx_unit_ucl_limits.hxx"
 #include "rspamd_cxx_unit_tld_lookup.hxx"
 #include "rspamd_cxx_unit_lru_hash.hxx"
+#include "rspamd_cxx_unit_dkim_cache.hxx"
+#include "rspamd_cxx_unit_mime_expressions.hxx"
 #include "rspamd_cxx_unit_fuzzy_key_ips.hxx"
 #include "rspamd_cxx_unit_lua_task.hxx"
+#include "rspamd_cxx_unit_redis_connection.hxx"
 #include "rspamd_cxx_unit_scan_result.hxx"
+#include "rspamd_cxx_unit_acism.hxx"
+#include "rspamd_cxx_unit_url_find.hxx"
+#include "rspamd_cxx_unit_email_addr.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

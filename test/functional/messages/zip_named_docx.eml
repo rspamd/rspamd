@@ -1,0 +1,23 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: named
+Date: Wed, 11 Nov 2026 10:00:00 +0000
+Message-ID: <zip_named_docx@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+See the attached file.
+
+--b1
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document; name="doc.docx"
+Content-Disposition: attachment; filename="doc.docx"
+Content-Transfer-Encoding: base64
+
+UEsDBBQAAAAAAAAAAAAAAAAAAQAAAAEAAAAKAAAAcmVhZG1lLnR4dHhQSwMEFAAAAAAAAAAAAAAA
+AAABAAAAAQAAAAgAAABldmlsLmV4ZXhQSwECFAAUAAAAAAAAAAAAAAAAAAEAAAABAAAACgAAAAAA
+AAAAAAAAAAAAAAAAcmVhZG1lLnR4dFBLAQIUABQAAAAAAAAAAAAAAAAAAQAAAAEAAAAIAAAAAAAA
+AAAAAAAAACkAAABldmlsLmV4ZVBLBQYAAAAAAgACAG4AAABQAAAAAAA=
+--b1--

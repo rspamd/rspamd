@@ -42,14 +42,16 @@ rspamd_http_parse_date(const char *header, gsize len)
 		isoc    /* Tue Dec 10 23:50:13 2002    */
 	} fmt;
 
-	fmt = 0;
-	if (len > 0) {
-		end = header + len;
-	}
-	else {
-		end = header + strlen(header);
+	/*
+	 * The value always comes with its length: header values are tokens inside
+	 * a buffer that is not NUL-terminated, and an empty one has a length of 0.
+	 */
+	if (len == 0) {
+		return (time_t) -1;
 	}
 
+	fmt = 0;
+	end = header + len;
 	day = 32;
 	year = 2038;
 

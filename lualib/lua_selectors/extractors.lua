@@ -474,7 +474,8 @@ The first argument must be header name.]],
       local what = args[1] or 'message'
       local dt = task:get_date { format = what, gmt = true }
 
-      if dt then
+      -- get_date gives 0 when the Date header is missing or invalid
+      if dt and dt ~= 0 then
         if args[2] then
           -- Should be in format !xxx, as dt is in GMT
           return os.date(args[2], dt), 'string'
