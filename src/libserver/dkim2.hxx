@@ -17,7 +17,8 @@
 /*
  * Internal C++ interface of the DKIM2 module: header tag parsing,
  * canonicalization and chain logic primitives, kept free of task/DNS
- * dependencies so that they can be unit tested in isolation.
+ * dependencies so that they can be unit tested in isolation. The string and
+ * message helpers live in dkim2_util.hxx, recipes in dkim2_recipe.hxx.
  *
  * Reference: draft-ietf-dkim-dkim2-spec-09; section numbers in the comments
  * refer to that revision.
@@ -36,6 +37,9 @@
 #include <cstdint>
 
 #include "contrib/expected/expected.hpp"
+
+#include "dkim2_util.hxx"
+#include "dkim2_recipe.hxx"
 
 namespace rspamd::dkim2 {
 
@@ -154,124 +158,6 @@ auto parse_mi(std::string_view value) -> tl::expected<mi_header_t, parse_error_t
 auto parse_sig(std::string_view value) -> tl::expected<sig_header_t, parse_error_t>;
 
 /**
- * Check if a string is a domain name usable in a DNS request: dot separated
- * non-empty labels of letters, digits, `-` and `_`
- */
-auto valid_domain(std::string_view in) -> bool;
-
-/* A header field of a message as it is on the wire */
-struct raw_header_t {
-	std::string_view name;  /* without the WSP before the colon */
-	std::string_view value; /* unfolded; points to `unfolded` if it was folded */
-	std::string unfolded;
-};
-
-/* More header fields than that are not accepted: the limit of the MIME parser */
-constexpr std::size_t DKIM2_MAX_HEADER_FIELDS = 100000;
-
-/**
- * Split a header block into fields exactly as RFC 5322 defines them: nothing
- * is skipped, repaired or guessed, because every octet that is not covered by
- * a hash can be changed in transit. A line ends with LF or CRLF, a line that
- * starts with WSP continues the previous field, and unfolding removes only
- * the line terminator. Scanning stops at the empty line that ends the header.
- * Fails on what is not a header field and on too many fields.
- */
-auto scan_headers(std::string_view block)
-	-> tl::expected<std::vector<raw_header_t>, std::string>;
-
-/**
- * Check that a From value can hold just one mailbox: one `@` and no list or
- * group separators outside of quoted strings and comments. It guards the
- * tolerant address parser, which makes a single address of several ones.
- */
-auto from_is_single_mailbox(std::string_view value) -> bool;
-
-/**
- * Header fields that are not signed (Section 4), as well as Message-Instance
- * and DKIM2-Signature, that do not participate in the header hash
- */
-auto is_unsigned_header(std::string_view name) -> bool;
-
-/*
- * Recipes (the r= tag of Message-Instance, Section 5): JSON instructions to
- * recreate the previous message state. The spec imposes no limits on them, so
- * all limits below are internal hard caps; a recipe exceeding them is reported
- * as `unacceptably complex` (Section 14.2).
- */
-
-struct recipe_limits_t {
-	std::size_t max_recipe_len = 256 * 1024; /* decoded recipe JSON size */
-	std::size_t max_steps = 256;             /* steps per recipe part */
-	std::size_t max_names = 256;             /* header field names per recipe */
-	std::size_t max_data_lines = 16384;      /* strings of all data steps of a recipe */
-	std::size_t max_body_lines = 1000000;    /* body lines per message state */
-	std::size_t max_header_instances = 1000; /* header instances per name */
-};
-
-struct recipe_step_t {
-	bool is_copy = false;
-	/* Copy steps: 1-based inclusive range of elements of the current state */
-	std::size_t start = 0;
-	std::size_t end = 0;
-	/* Data steps ("d" and decoded "u"): header values or body lines */
-	std::vector<std::string> data;
-};
-
-struct recipe_t {
-	bool has_headers = false; /* "h" key present */
-	bool has_body = false;    /* "b" key present */
-	bool body_null = false;   /* "b" is null: prior body cannot be recreated */
-	/* lowercase header field name -> steps */
-	std::vector<std::pair<std::string, std::vector<recipe_step_t>>> headers;
-	std::vector<recipe_step_t> body;
-
-	/* Steps for a (lowercase) header field name, nullptr if there are none */
-	auto find_header(std::string_view lc_name) const -> const std::vector<recipe_step_t> *;
-};
-
-enum class recipe_error_kind {
-	invalid_json,   /* not JSON at all */
-	invalid_recipe, /* JSON that breaks the schema or the rules of Section 5 */
-	too_complex,    /* valid, but over the internal limits */
-};
-
-struct recipe_error_t {
-	recipe_error_kind kind;
-	std::string what;
-};
-
-/**
- * Parse a decoded (JSON) recipe, enforcing the schema, the extra rules of
- * Section 5 (lowercase unique keys, ascending copy ranges, no recipes for
- * unsigned header fields) and the limits
- */
-auto parse_recipe(std::string_view json, const recipe_limits_t &limits)
-	-> tl::expected<recipe_t, recipe_error_t>;
-
-/**
- * Apply recipe steps to a list of elements (body lines or header field
- * instances of one name, index 0 corresponding to element number 1) producing
- * the previous state. Output views point into `current` elements or into the
- * data strings of the owning recipe_t, which must outlive the result.
- * `budget` is the shared work allowance in bytes for the whole chain. Recipe
- * application charges every emitted byte; reconstructed-state hashing charges
- * the same budget separately.
- */
-auto apply_recipe_steps(const std::vector<std::string_view> &current,
-						const std::vector<recipe_step_t> &steps,
-						std::size_t max_elements,
-						std::size_t &budget)
-	-> tl::expected<std::vector<std::string_view>, recipe_error_t>;
-
-/**
- * Split a message body into lines (line terminators, LF or CRLF, are not
- * included); a trailing terminator does not produce an extra empty line
- */
-auto split_body_lines(std::string_view body, std::size_t max_lines)
-	-> tl::expected<std::vector<std::string_view>, std::string>;
-
-/**
  * Canonicalize a header for the *message header hash* (Section 6.2):
  * lowercase name, collapse WSP runs to a single SP, trim trailing WSP and
  * WSP around the colon; result is `name:value\r\n`.
@@ -304,36 +190,6 @@ auto blank_sig_values(std::string_view canon_line) -> std::string;
 auto build_sig_input(std::span<const std::string> mi_lines,
 					 std::span<const std::string> prev_sig_lines,
 					 std::string_view current_sig_line) -> std::string;
-
-/**
- * Relaxed domain match (Section 7.2): strip the leftmost labels from `param1`
- * until it equals `param2` (case-insensitively) or no labels remain. The
- * match is asymmetric. A domain literal never matches.
- */
-auto relaxed_domain_match(std::string_view param1, std::string_view param2) -> bool;
-
-/**
- * Compare two SMTP paths: angle brackets are stripped, the local part is
- * compared case-sensitively and the domain case-insensitively. The null
- * reverse-path `<>` only matches an empty address.
- */
-auto smtp_addr_equal(std::string_view a, std::string_view b) -> bool;
-
-/**
- * Comparison key of an SMTP path: no angle brackets, lowercase domain
- */
-auto smtp_addr_key(std::string_view addr) -> std::string;
-
-/**
- * Extract the domain part of an SMTP path (`<local@domain>` or `local@domain`),
- * empty view if there is none
- */
-auto smtp_addr_domain(std::string_view addr) -> std::string_view;
-
-/**
- * Check if a decoded mf= value is the null reverse-path
- */
-auto smtp_addr_is_null(std::string_view addr) -> bool;
 
 /**
  * Check the Chain of Custody recorded in the signatures (Section 7.1 items 1
@@ -380,53 +236,6 @@ auto parse_policy_record(std::string_view txt, policy_record_t &out) -> record_s
  * empty for an unknown algorithm
  */
 auto sig_alg_key_type(std::string_view sig_alg) -> std::string_view;
-
-/**
- * Body canonicalization (Section 6.1): all trailing empty lines are ignored
- * and a single final CRLF is appended. A line ends with LF or CRLF, both are
- * emitted as CRLF, since a message may reach us with its line endings
- * converted; a CR that is not followed by LF is an octet of the line as any
- * other. Yields chunks via `out(const char *, std::size_t)`.
- */
-template<typename Func>
-void body_canon_foreach(std::string_view body, Func &&out)
-{
-	/* Strip all trailing line terminators: this removes trailing empty lines
-	 * together with the line terminator of the last non-empty line, which is
-	 * then restored as the single final CRLF */
-	auto end = body.size();
-	while (end > 0 && body[end - 1] == '\n') {
-		end--;
-		if (end > 0 && body[end - 1] == '\r') {
-			end--;
-		}
-	}
-
-	body = body.substr(0, end);
-
-	while (!body.empty()) {
-		auto nl_pos = body.find('\n');
-		auto line = body.substr(0, nl_pos);
-
-		if (nl_pos != std::string_view::npos && !line.empty() && line.back() == '\r') {
-			line.remove_suffix(1);
-		}
-
-		if (!line.empty()) {
-			out(line.data(), line.size());
-		}
-
-		if (nl_pos == std::string_view::npos) {
-			break;
-		}
-
-		out("\r\n", 2);
-		body.remove_prefix(nl_pos + 1);
-	}
-
-	/* Final CRLF: always present, also for an empty body */
-	out("\r\n", 2);
-}
 
 }// namespace rspamd::dkim2
 
