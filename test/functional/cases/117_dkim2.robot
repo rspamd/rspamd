@@ -45,6 +45,10 @@ DKIM2 PASS Unsigned Header Fields Change
   Scan DKIM2 Message  unsigned_header
   Expect Symbol  R_DKIM2_ALLOW
 
+DKIM2 PASS Bare RSAPublicKey Record
+  Scan DKIM2 Message  pkcs1_key
+  Expect Symbol  R_DKIM2_ALLOW
+
 DKIM2 PASS SHA512 Hashes
   Scan DKIM2 Message  sha512
   Expect Symbol  R_DKIM2_ALLOW

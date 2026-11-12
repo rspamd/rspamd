@@ -339,6 +339,8 @@ def scenario(name, signer):
         return originate(signer, sigs=[[("pq", "falcon512")]]).render()
     if name == "hybrid_unknown":
         return originate(signer, sigs=[[("rsa", "rsa-sha256"), ("pq", "falcon512")]]).render()
+    if name == "pkcs1_key":
+        return originate(signer, sigs=[[("pkcs1", "rsa-sha256")]]).render()
     if name == "revoked":
         return originate(signer, sigs=[[("revoked", "rsa-sha256")]]).render()
     if name == "nokey":
