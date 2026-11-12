@@ -53,21 +53,11 @@
 #define MAP_RELEASE(x, t) REF_RELEASE(x)
 #endif
 
-enum rspamd_map_periodic_opts {
-	RSPAMD_MAP_SCHEDULE_NORMAL = 0,
-	RSPAMD_MAP_SCHEDULE_ERROR = (1u << 0u),
-	RSPAMD_MAP_SCHEDULE_LOCKED = (1u << 1u),
-	RSPAMD_MAP_SCHEDULE_INIT = (1u << 2u),
-	/* The map file has just been truncated: an editor is likely rewriting it */
-	RSPAMD_MAP_SCHEDULE_TRUNCATED = (1u << 3u),
-};
-
 static void free_http_cbdata_common(struct http_callback_data *cbd,
 									gboolean plan_new);
 static void free_http_cbdata_dtor(gpointer p);
 static void free_http_cbdata(struct http_callback_data *cbd);
 static void rspamd_map_process_periodic(struct map_periodic_cbdata *cbd);
-static void rspamd_map_schedule_periodic(struct rspamd_map *map, int how);
 static gboolean read_map_file_chunks(struct rspamd_map *map,
 									 struct map_cb_data *cbdata,
 									 const char *fname,
@@ -235,7 +225,11 @@ http_map_error(struct rspamd_http_connection *conn,
 	map = cbd->map;
 
 	if (cbd->periodic) {
-		cbd->periodic->errored = TRUE;
+		/*
+		 * A reply over the size limit comes back the same way next time;
+		 * anything else here (timeouts, resets, TLS) can go away by itself
+		 */
+		cbd->periodic->errored = (err && err->code == 413) ? RSPAMD_MAP_ERROR_PERMANENT : RSPAMD_MAP_ERROR_TRANSIENT;
 		msg_err_map("error reading %s(%s): "
 					"connection with http server terminated incorrectly: %e",
 					cbd->bk->uri_log,
@@ -312,6 +306,105 @@ rspamd_map_cache_cb(struct ev_loop *loop, ev_timer *w, int revents)
 		ev_timer_stop(loop, &cache_cbd->timeout);
 		g_free(cache_cbd);
 	}
+}
+
+/*
+ * Zero and a date in the past are valid and ask to retry at once, so the
+ * validity is returned apart from the value
+ */
+gboolean
+rspamd_map_parse_retry_after(const rspamd_ftok_t *hdr, time_t now, double *delay)
+{
+	gulong delta;
+	time_t hdate;
+
+	if (hdr == NULL || hdr->len == 0) {
+		return FALSE;
+	}
+
+	if (rspamd_strtoul(hdr->begin, hdr->len, &delta)) {
+		*delay = delta;
+
+		return TRUE;
+	}
+
+	hdate = rspamd_http_parse_date(hdr->begin, hdr->len);
+
+	if (hdate != (time_t) -1) {
+		*delay = hdate > now ? hdate - now : 0;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+enum rspamd_map_error_class
+rspamd_map_http_error_class(int code, bool has_retry_after)
+{
+	if (code == 429) {
+		/* Rate limited: the source asks us to slow down either way */
+		return has_retry_after ? RSPAMD_MAP_ERROR_TRANSIENT : RSPAMD_MAP_ERROR_PERMANENT;
+	}
+
+	if (code == 408 || code >= 500) {
+		/* Overloaded or broken server, gateway problems */
+		return RSPAMD_MAP_ERROR_TRANSIENT;
+	}
+
+	/* Missing, forbidden, redirected elsewhere or otherwise refused */
+	return RSPAMD_MAP_ERROR_PERMANENT;
+}
+
+double
+rspamd_map_error_delay(double poll_timeout,
+					   enum rspamd_map_error_class cls,
+					   unsigned int streak,
+					   bool has_data,
+					   bool has_retry_after,
+					   double retry_after)
+{
+	/*
+	 * Failures that the source reports itself back off hard to keep the load
+	 * off it. Network failures of a map that has nothing to serve are retried
+	 * soon and never slower than the normal poll, which is the load a healthy
+	 * source gets anyway; with data at hand they back off up to the same limit
+	 * as the source failures, as there is no hurry.
+	 */
+	const double error_mult = 20.0, transient_initial = 10.0, min_delay = 2.0;
+	double max_delay = MAX(poll_timeout * error_mult, min_delay);
+	double delay, cap;
+
+	if (has_retry_after) {
+		return MIN(MAX(retry_after, min_delay), max_delay);
+	}
+
+	if (cls == RSPAMD_MAP_ERROR_PERMANENT) {
+		/*
+		 * Try once more at the normal pace: the source may be published a
+		 * moment after we have started
+		 */
+		if (!has_data && streak <= 1) {
+			return poll_timeout;
+		}
+
+		return max_delay;
+	}
+
+	if (has_data) {
+		delay = poll_timeout;
+		cap = max_delay;
+	}
+	else {
+		delay = MIN(transient_initial, poll_timeout);
+		cap = poll_timeout;
+	}
+
+	for (unsigned int i = 1; i < streak && delay < cap; i++) {
+		delay *= 2.0;
+	}
+
+	return MIN(delay, cap);
 }
 
 /**
@@ -642,6 +735,10 @@ http_map_finish(struct rspamd_http_connection *conn,
 	time_t saved_last_modified = 0, saved_last_checked = 0;
 	rspamd_fstring_t *saved_etag = NULL;
 	gboolean validators_saved = FALSE;
+	/* Bad content stays bad until the source changes; local failures may not */
+	enum rspamd_map_error_class err_class = RSPAMD_MAP_ERROR_PERMANENT;
+	gboolean has_retry_after = FALSE;
+	double retry_after = 0;
 
 	map = cbd->map;
 	bk = cbd->bk;
@@ -699,6 +796,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			msg_err_map("cannot read tempfile %s: %s",
 						cbd->shmem_data->shm_name,
 						strerror(errno));
+			err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 			goto err;
 		}
 
@@ -714,6 +812,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			msg_err_map("cannot read tempfile %s: truncated length %z, %z expected",
 						cbd->shmem_data->shm_name,
 						dlen, cbd->data_len);
+			err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 			goto err;
 		}
 
@@ -856,6 +955,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 				msg_err_map("%s: failed to save cache file", bk->uri_log);
 				rspamd_fstring_free(decompressed);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 				goto err;
 			}
 
@@ -883,6 +983,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			if (!rspamd_map_save_http_cached_file(map, bk, cbd->data, payload, payload_len)) {
 				msg_err_map("%s: failed to save cache file", bk->uri_log);
 				MAP_RELEASE(cbd->shmem_data, "shmem_data");
+				err_class = RSPAMD_MAP_ERROR_TRANSIENT;
 				goto err;
 			}
 
@@ -998,8 +1099,31 @@ http_map_finish(struct rspamd_http_connection *conn,
 		rspamd_map_process_periodic(cbd->periodic);
 	}
 	else {
-		msg_info_map("cannot load map %s from %s: HTTP error %d",
-					 bk->uri, cbd->data->host, msg->code);
+		has_retry_after = rspamd_map_parse_retry_after(
+			rspamd_http_message_find_header(msg, "Retry-After"),
+			msg->date ? msg->date : (time_t) rspamd_get_calendar_ticks(),
+			&retry_after);
+		err_class = rspamd_map_http_error_class(msg->code, has_retry_after);
+
+		if (msg->code != 429 && msg->code != 503) {
+			/* Only these replies ask a client to come back at a given time */
+			has_retry_after = FALSE;
+			retry_after = 0;
+		}
+
+		if (has_retry_after) {
+			msg_info_map("cannot load map %s from %s: HTTP error %d (%s, "
+						 "retry after %.0f seconds requested)",
+						 bk->uri, cbd->data->host, msg->code,
+						 err_class == RSPAMD_MAP_ERROR_PERMANENT ? "permanent" : "transient",
+						 retry_after);
+		}
+		else {
+			msg_info_map("cannot load map %s from %s: HTTP error %d (%s)",
+						 bk->uri, cbd->data->host, msg->code,
+						 err_class == RSPAMD_MAP_ERROR_PERMANENT ? "permanent" : "transient");
+		}
+
 		goto err;
 	}
 
@@ -1023,7 +1147,9 @@ err:
 		cbd->data->etag = saved_etag;
 	}
 
-	cbd->periodic->errored = 1;
+	cbd->periodic->errored = err_class;
+	cbd->periodic->has_retry_after = has_retry_after;
+	cbd->periodic->retry_after = retry_after;
 	rspamd_map_process_periodic(cbd->periodic);
 	MAP_RELEASE(cbd, "http_callback_data");
 
@@ -1442,6 +1568,15 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 	struct rspamd_map *map = periodic->map;
 	msg_debug_map("periodic dtor %p; need_modify=%d", periodic, periodic->need_modify);
 
+	if (!periodic->errored && map->error_class != RSPAMD_MAP_ERROR_NONE) {
+		msg_info_map("%s: map source has recovered after %ud failed updates",
+					 map->name, map->error_streak);
+		map->error_class = RSPAMD_MAP_ERROR_NONE;
+		map->error_streak = 0;
+		map->error_has_retry_after = false;
+		map->error_retry_after = 0;
+	}
+
 	if (periodic->need_modify || periodic->cbdata.errored) {
 		/* Need to notify the real data structure */
 		periodic->map->fin_callback(&periodic->cbdata, periodic->map->user_data);
@@ -1498,14 +1633,13 @@ rspamd_map_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 	MAP_RELEASE(cbd, "periodic");
 }
 
-static void
-rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
+void rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 {
-	const double error_mult = 20.0, lock_mult = 0.1;
+	const double lock_mult = 0.1;
 	static const double min_timer_interval = 2.0;
 	const char *reason = "unknown reason";
 	double jittered_sec;
-	double timeout;
+	double timeout, error_delay = 0;
 	struct map_periodic_cbdata *cbd;
 
 	if (map->scheduled_check || (map->wrk &&
@@ -1524,7 +1658,22 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 
 	map->seen = true;
 
-	if (map->non_trivial && map->next_check != 0) {
+	if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
+		/*
+		 * The failure decides when to try again. The expiry may come from
+		 * another backend of this map that has replied fine before this one
+		 * failed, and must not postpone the retry, nor hasten it past what
+		 * the failure (e.g. Retry-After) asks for
+		 */
+		map->next_check = 0;
+		error_delay = rspamd_map_error_delay(map->poll_timeout, map->error_class,
+											 map->error_streak, map->has_data,
+											 map->error_has_retry_after,
+											 map->error_retry_after);
+		jittered_sec = rspamd_time_jitter(error_delay, 0);
+		reason = "errored scheduled check";
+	}
+	else if (map->non_trivial && map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks();
 		map->next_check = 0;
 
@@ -1532,11 +1681,7 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 			/* Early check case, jitter */
 			double poll_timeout = map->poll_timeout;
 
-			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
-				poll_timeout = map->poll_timeout * error_mult;
-				reason = "early active non-trivial check (after error)";
-			}
-			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
+			if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				poll_timeout = map->poll_timeout * lock_mult;
 				reason = "early active non-trivial check (after being locked)";
 			}
@@ -1548,15 +1693,8 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 		}
 		else if (timeout <= 0) {
 			/* Data is already expired, need to check */
-			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
-				/* In case of error we still need to increase delay */
-				jittered_sec = map->poll_timeout * error_mult;
-				reason = "expired non-trivial data (after error)";
-			}
-			else {
-				jittered_sec = 0.0;
-				reason = "expired non-trivial data";
-			}
+			jittered_sec = 0.0;
+			reason = "expired non-trivial data";
 		}
 		else {
 			/* No need to check now, wait till next_check */
@@ -1590,11 +1728,7 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 			}
 		}
 		else {
-			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
-				timeout = map->poll_timeout * error_mult;
-				reason = "errored scheduled check";
-			}
-			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
+			if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				timeout = map->poll_timeout * lock_mult;
 				reason = "locked scheduled check";
 			}
@@ -1647,6 +1781,15 @@ rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 	cbd->ev.data = cbd;
 	ev_timer_init(&cbd->ev, rspamd_map_periodic_callback, jittered_sec, 0.0);
 	ev_timer_start(map->event_loop, &cbd->ev);
+
+	if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
+		msg_info_map("%s: %s failure #%ud%s, next try in %.1f seconds",
+					 map->name,
+					 map->error_class == RSPAMD_MAP_ERROR_PERMANENT ? "permanent" : "transient",
+					 map->error_streak,
+					 map->has_data ? "" : " with no data loaded",
+					 jittered_sec);
+	}
 
 	msg_debug_map("schedule new periodic event %p in %.3f seconds for %s; reason: %s",
 				  cbd, jittered_sec, map->name, reason);
@@ -1733,7 +1876,11 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 			/* We could not resolve host, so cowardly fail here */
 			msg_err_map("cannot resolve %s: %s", cbd->data->host,
 						rdns_strerror(reply->code));
-			cbd->periodic->errored = 1;
+			/*
+			 * Even NXDOMAIN: the name of a service that starts along with us
+			 * is commonly not registered in DNS yet
+			 */
+			cbd->periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
 			rspamd_map_process_periodic(cbd->periodic);
 		}
 		else {
@@ -1811,7 +1958,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 			}
 			else {
 				/* Nothing else left */
-				cbd->periodic->errored = TRUE;
+				cbd->periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
 				msg_err_map("error reading %s(%s): "
 							"connection with http server terminated incorrectly: %s",
 							cbd->bk->uri_log,
@@ -2540,6 +2687,9 @@ check:
 		else {
 			msg_warn_map("cannot load map: cannot connect to %s: %s",
 						 data->host, strerror(errno));
+			/* Must reach the scheduler, or the map is never polled again */
+			periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
+			rspamd_map_process_periodic(periodic);
 			MAP_RELEASE(cbd, "http_callback_data");
 		}
 
@@ -2568,13 +2718,23 @@ check:
 		else if (nreq == 1) {
 			cbd->stage = http_map_resolve_host1;
 		}
+		else {
+			msg_err_map("cannot load map: cannot send DNS requests for %s",
+						data->host);
+			periodic->errored = RSPAMD_MAP_ERROR_TRANSIENT;
+			rspamd_map_process_periodic(periodic);
+			MAP_RELEASE(cbd, "http_callback_data");
+
+			return;
+		}
 
 		map->tmp_dtor = free_http_cbdata_dtor;
 		map->tmp_dtor_data = cbd;
 	}
 	else {
 		msg_warn_map("cannot load map: DNS resolver is not initialized");
-		cbd->periodic->errored = TRUE;
+		periodic->errored = RSPAMD_MAP_ERROR_PERMANENT;
+		rspamd_map_process_periodic(periodic);
 	}
 
 	MAP_RELEASE(cbd, "http_callback_data");
@@ -2670,7 +2830,8 @@ rspamd_map_file_read_callback(struct map_periodic_cbdata *periodic)
 	msg_info_map("rereading map file %s", data->filename);
 
 	if (!read_map_file(map, data, bk, periodic)) {
-		periodic->errored = TRUE;
+		/* The stat watcher rereads the file as soon as it changes */
+		periodic->errored = RSPAMD_MAP_ERROR_PERMANENT;
 	}
 
 	/* Switch to the next backend */
@@ -2693,7 +2854,7 @@ rspamd_map_static_read_callback(struct map_periodic_cbdata *periodic)
 	msg_info_map("rereading static map");
 
 	if (!read_map_static(map, data, bk, periodic)) {
-		periodic->errored = TRUE;
+		periodic->errored = RSPAMD_MAP_ERROR_PERMANENT;
 	}
 
 	/* Switch to the next backend */
@@ -2715,6 +2876,16 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 	 * consumer too, or it would install partial data in place of the map
 	 */
 	if (cbd->errored) {
+		/* The retry delay grows with consecutive failures of the same kind */
+		if (map->error_class != cbd->errored) {
+			map->error_class = cbd->errored;
+			map->error_streak = 0;
+		}
+
+		map->error_streak++;
+		map->error_has_retry_after = cbd->has_retry_after;
+		map->error_retry_after = cbd->retry_after;
+
 		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 

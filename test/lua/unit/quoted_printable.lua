@@ -95,6 +95,26 @@ context("Quoted-Printable encoding", function()
       assert_rspamd_eq(res)
     end)
   end
+  -- A space or tab at the end of a line that also ends near the fold limit:
+  -- it is moved after a soft line break, then the line break follows
+  for n = 68, 77 do
+    for ws, ws_name in pairs({ [' '] = 'space', ['\t'] = 'tab', ['  '] = 'two spaces' }) do
+      for nl, nl_name in pairs({ ['\r\n'] = 'CRLF', ['\n'] = 'LF' }) do
+        local inp = string.rep('x', n) .. ws .. nl .. 'y'
+        test(string.format("QP trailing whitespace near the fold: %d x, %s, %s", n, ws_name, nl_name), function()
+          local encoded = tostring(rspamd_util.encode_qp(inp, 76))
+          assert_rspamd_eq({
+            expect = inp,
+            actual = tostring(rspamd_util.decode_qp(encoded))
+          })
+          for line in encoded:gmatch('[^\r\n]+') do
+            assert_true(#line <= 76, encoded)
+          end
+        end)
+      end
+    end
+  end
+
   -- Decode issues
   cases = {
     {
@@ -134,6 +154,24 @@ context("Quoted-Printable encoding", function()
     end)
   end
 
+
+  test("A line break right after a full line is kept", function()
+    -- A soft break there is of no use, and in CR mode '=\r' with the LF
+    -- that follows would read as a soft CRLF break
+    for _, how in ipairs({ 'cr', 'lf', 'crlf' }) do
+      for _, inp in ipairs({
+        string.rep('x', 73) .. '  \ny',
+        string.rep('x', 75) .. '\ny',
+        string.rep('x', 75) .. '\r\ny',
+        string.rep('x', 74) .. ' \ny',
+      }) do
+        assert_rspamd_eq({
+          expect = inp,
+          actual = tostring(rspamd_util.decode_qp(rspamd_util.encode_qp(inp, 76, how))),
+        })
+      end
+    end
+  end)
 
   if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
     -- Fuzz testing

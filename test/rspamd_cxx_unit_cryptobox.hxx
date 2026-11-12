@@ -24,7 +24,14 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <cstring>
 #include <iosfwd>
+#ifdef HAVE_OPENSSL
+#include <openssl/evp.h>
+#include <openssl/err.h>
+#include <openssl/obj_mac.h>
+#include <openssl/rsa.h>
+#endif
 
 namespace std// NOLINT(cert-dcl58-cpp)
 {
@@ -524,6 +531,114 @@ TEST_SUITE("rspamd_cryptobox")
 		CHECK(memcmp(subkey, expected_subkey, sizeof(expected_subkey)) == 0);
 		CHECK(memcmp(mac_key, expected_mac_key, sizeof(expected_mac_key)) == 0);
 	}
+
+#if defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+	TEST_CASE("rspamd_cryptobox_verify_evp rejects keys of the wrong type")
+	{
+		unsigned char digest[32];
+		unsigned char sig[64];
+		memset(digest, 0x42, sizeof(digest));
+		memset(sig, 0x17, sizeof(sig));
+
+		EVP_PKEY *ec = EVP_EC_gen("P-256");
+		EVP_PKEY *ed = EVP_PKEY_Q_keygen(NULL, NULL, "ED25519");
+		EVP_PKEY *x = EVP_PKEY_Q_keygen(NULL, NULL, "X25519");
+		REQUIRE(ec != NULL);
+		REQUIRE(ed != NULL);
+		REQUIRE(x != NULL);
+		ERR_clear_error();
+
+		EVP_PKEY *wrong_for_rsa[] = {ec, ed, x};
+		for (auto *key: wrong_for_rsa) {
+			GError *err = nullptr;
+			CHECK(rspamd_cryptobox_verify_evp_rsa(NID_sha256, sig, sizeof(sig),
+												  digest, sizeof(digest), key, &err) == false);
+			CHECK(err == nullptr);
+			CHECK(ERR_peek_error() == 0);
+			if (err) {
+				g_error_free(err);
+			}
+		}
+
+		EVP_PKEY *wrong_for_ecdsa[] = {ed, x};
+		for (auto *key: wrong_for_ecdsa) {
+			CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_sha256, sig, sizeof(sig),
+													digest, sizeof(digest), key) == false);
+			CHECK(ERR_peek_error() == 0);
+		}
+
+		/* Unknown digest nid */
+		CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_undef, sig, sizeof(sig),
+												digest, sizeof(digest), ec) == false);
+		CHECK(ERR_peek_error() == 0);
+
+		EVP_PKEY_free(ec);
+		EVP_PKEY_free(ed);
+		EVP_PKEY_free(x);
+	}
+
+	TEST_CASE("rspamd_cryptobox_verify_evp round trip")
+	{
+		unsigned char digest[32];
+		memset(digest, 0x5a, sizeof(digest));
+
+		auto sign = [&](EVP_PKEY *key, bool rsa) {
+			std::vector<unsigned char> out;
+			EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(key, NULL);
+			REQUIRE(ctx != NULL);
+			REQUIRE(EVP_PKEY_sign_init(ctx) == 1);
+			if (rsa) {
+				REQUIRE(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) > 0);
+			}
+			REQUIRE(EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) > 0);
+			size_t siglen = 0;
+			REQUIRE(EVP_PKEY_sign(ctx, NULL, &siglen, digest, sizeof(digest)) == 1);
+			out.resize(siglen);
+			REQUIRE(EVP_PKEY_sign(ctx, out.data(), &siglen, digest, sizeof(digest)) == 1);
+			out.resize(siglen);
+			EVP_PKEY_CTX_free(ctx);
+			return out;
+		};
+
+		SUBCASE("rsa")
+		{
+			EVP_PKEY *key = EVP_RSA_gen(2048);
+			REQUIRE(key != NULL);
+			auto sig = sign(key, true);
+			GError *err = nullptr;
+
+			CHECK(rspamd_cryptobox_verify_evp_rsa(NID_sha256, sig.data(), sig.size(),
+												  digest, sizeof(digest), key, &err) == true);
+			CHECK(err == nullptr);
+
+			sig[sig.size() / 2] ^= 0x01;
+			CHECK(rspamd_cryptobox_verify_evp_rsa(NID_sha256, sig.data(), sig.size(),
+												  digest, sizeof(digest), key, &err) == false);
+			CHECK(err == nullptr);
+			CHECK(ERR_peek_error() == 0);
+			if (err) {
+				g_error_free(err);
+			}
+			EVP_PKEY_free(key);
+		}
+
+		SUBCASE("ecdsa")
+		{
+			EVP_PKEY *key = EVP_EC_gen("P-256");
+			REQUIRE(key != NULL);
+			auto sig = sign(key, false);
+
+			CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_sha256, sig.data(), sig.size(),
+													digest, sizeof(digest), key) == true);
+
+			sig[sig.size() / 2] ^= 0x01;
+			CHECK(rspamd_cryptobox_verify_evp_ecdsa(NID_sha256, sig.data(), sig.size(),
+													digest, sizeof(digest), key) == false);
+			CHECK(ERR_peek_error() == 0);
+			EVP_PKEY_free(key);
+		}
+	}
+#endif
 }
 
 #endif

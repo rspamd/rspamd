@@ -511,7 +511,15 @@ bool rspamd_cryptobox_verify_evp_ed25519(int nid,
 	if (siglen == crypto_sign_bytes()) {
 		rspamd_pk_t pk;
 		size_t len_pk = sizeof(rspamd_pk_t);
-		EVP_PKEY_get_raw_public_key(pub_key, pk, &len_pk);
+
+		/* A key of another type has no raw public key of this size */
+		if (EVP_PKEY_get_raw_public_key(pub_key, pk, &len_pk) != 1 ||
+			len_pk != sizeof(rspamd_pk_t)) {
+			ERR_clear_error();
+
+			return false;
+		}
+
 		ret = (crypto_sign_verify_detached(sig, digest, dlen, pk) == 0);
 	}
 
@@ -526,21 +534,38 @@ bool rspamd_cryptobox_verify_evp_ecdsa(int nid,
 									   EVP_PKEY *pub_key)
 {
 	bool ret = false;
-	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(pub_key, NULL);
-	g_assert(pctx != NULL);
-	EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
 	const EVP_MD *md = EVP_get_digestbynid(nid);
+	EVP_PKEY_CTX *pctx;
 
-	g_assert(EVP_PKEY_verify_init(pctx) == 1);
-	g_assert(EVP_PKEY_CTX_set_signature_md(pctx, md) == 1);
+	if (md == NULL) {
+		ERR_clear_error();
+		return false;
+	}
+
+	/* The key comes from untrusted input and can be of any type */
+	pctx = EVP_PKEY_CTX_new(pub_key, NULL);
+	if (pctx == NULL) {
+		ERR_clear_error();
+		return false;
+	}
+
+	if (EVP_PKEY_verify_init(pctx) != 1 ||
+		EVP_PKEY_CTX_set_signature_md(pctx, md) <= 0) {
+		EVP_PKEY_CTX_free(pctx);
+		ERR_clear_error();
+		return false;
+	}
 
 	ret = (EVP_PKEY_verify(pctx, sig, siglen, digest, dlen) == 1);
+	if (!ret) {
+		ERR_clear_error();
+	}
 
 	EVP_PKEY_CTX_free(pctx);
-	EVP_MD_CTX_free(mdctx);
 
 	return ret;
 }
+
 bool rspamd_cryptobox_verify_evp_rsa(int nid,
 									 const unsigned char *sig,
 									 gsize siglen,
@@ -608,11 +633,31 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 	md = EVP_get_digestbynid(nid);
 #endif
 
-	g_assert(pctx != NULL);
-	EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+	/*
+	 * The key comes from untrusted input and can be of any type; a key that
+	 * cannot do RSA PKCS#1 verification is a plain verification failure.
+	 */
+	if (pctx == NULL) {
+		ERR_clear_error();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (nid == NID_sha1 && md != NULL) {
+			EVP_MD_free((EVP_MD *) md);
+		}
+#endif
+		return false;
+	}
 
-	g_assert(EVP_PKEY_verify_init(pctx) == 1);
-	g_assert(EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) == 1);
+	if (EVP_PKEY_verify_init(pctx) != 1 ||
+		EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PADDING) <= 0) {
+		EVP_PKEY_CTX_free(pctx);
+		ERR_clear_error();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		if (nid == NID_sha1 && md != NULL) {
+			EVP_MD_free((EVP_MD *) md);
+		}
+#endif
+		return false;
+	}
 
 	if ((rc = EVP_PKEY_CTX_set_signature_md(pctx, md)) <= 0) {
 		unsigned long ossl_err = ERR_get_error();
@@ -641,8 +686,8 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 					md ? EVP_MD_name(md) : "unknown",
 					ERR_reason_error_string(ossl_err));
 #endif
+		ERR_clear_error();
 		EVP_PKEY_CTX_free(pctx);
-		EVP_MD_CTX_free(mdctx);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 		if (nid == NID_sha1 && md != NULL) {
 			EVP_MD_free((EVP_MD *) md);
@@ -668,12 +713,13 @@ bool rspamd_cryptobox_verify_evp_rsa(int nid,
 							ERR_lib_error_string(ossl_err),
 							ERR_reason_error_string(ossl_err));
 			}
-			ERR_clear_error();
 		}
+
+		/* A mismatch leaves errors on the queue as well */
+		ERR_clear_error();
 	}
 
 	EVP_PKEY_CTX_free(pctx);
-	EVP_MD_CTX_free(mdctx);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	if (nid == NID_sha1 && md != NULL) {
 		EVP_MD_free((EVP_MD *) md);

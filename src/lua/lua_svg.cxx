@@ -131,6 +131,14 @@ struct svg_result {
 	std::size_t embedded_documents = 0;
 	std::size_t css_urls = 0;
 	bool last_chunk_is_newline = true;
+	/*
+	 * What a limit left out. A document over a limit of text, links or
+	 * payloads is read to its end nevertheless: its scripts and the rest of
+	 * the indicators are counted whatever the amount of padding before them
+	 */
+	bool text_truncated = false;
+	bool urls_truncated = false;
+	bool payloads_truncated = false;
 	const svg_limits &limits;
 
 	explicit svg_result(const svg_limits &limits_value)
@@ -141,7 +149,8 @@ struct svg_result {
 	auto add_text(std::string_view value) -> status
 	{
 		if (text->len + value.size() > limits.max_text) {
-			return tl::make_unexpected("SVG text limit exceeded");
+			text_truncated = true;
+			return {};
 		}
 		g_string_append_len(text.get(), value.data(), value.size());
 		last_chunk_is_newline = value == "\n";
@@ -158,7 +167,8 @@ struct svg_result {
 	{
 		if (value.empty() || url_seen.contains(value)) return {};
 		if (urls.size() >= limits.max_urls) {
-			return tl::make_unexpected("SVG URL limit exceeded");
+			urls_truncated = true;
+			return {};
 		}
 		url_seen.emplace(value);
 		urls.push_back(std::move(value));
@@ -414,6 +424,12 @@ public:
 			else if (caseless_equals(attribute.name, "style")) {
 				if (auto ret = scan_css(attribute.value); !ret) return ret;
 			}
+			else if (attribute.value.size() > 5 && attribute.value.size() < 4096 &&
+					 rspamd_substring_search_caseless(attribute.value.data(), attribute.value.size(),
+													  "url(", 4) != -1) {
+				/* A presentation attribute, as `fill` or `filter`, holds what a style does */
+				if (auto ret = scan_css(attribute.value); !ret) return ret;
+			}
 		}
 
 		if (in_html(ns)) {
@@ -425,7 +441,11 @@ public:
 	auto end_element(namespace_id ns, std::string_view name) -> status
 	{
 		bool html = in_html(ns);
-		if (script_depth_ == depth_) script_depth_.reset();
+		if (script_depth_ == depth_) {
+			script_depth_.reset();
+			scan_script(script_);
+			script_.clear();
+		}
 		if (style_depth_ == depth_) {
 			style_depth_.reset();
 			auto ret = scan_css(css_);
@@ -462,12 +482,33 @@ public:
 	auto text(std::string_view value) -> status
 	{
 		if (script_depth_) {
-			scan_script(value);
+			/*
+			 * The text of an element comes in pieces, split by comments and
+			 * by CDATA sections, and a word may be split with them
+			 */
+			script_.append(value);
+			if (script_.size() >= result_.limits.max_css) {
+				scan_script(script_);
+				/* Keep the tail: a word may go on in the next piece */
+				script_.erase(0, script_.size() - std::min<std::size_t>(script_.size(), 64));
+			}
 			return {};
 		}
 		if (style_depth_) {
-			if (css_.size() < result_.limits.max_css) {
-				css_.append(value.substr(0, result_.limits.max_css - css_.size()));
+			css_.append(value);
+			if (css_.size() >= result_.limits.max_css) {
+				/*
+				 * A style sheet of any size is scanned, in pieces: padding
+				 * must not push an import out of what is looked at. What
+				 * follows the last rule or declaration is left for the next
+				 * piece, so that an url is not cut in two
+				 */
+				auto boundary = css_.find_last_of(";}");
+				auto piece = boundary == std::string::npos ? css_.size() : boundary + 1;
+				auto ret = scan_css(std::string_view{css_}.substr(0, piece));
+				css_.erase(0, piece);
+				if (css_.size() > 4096) css_.clear();
+				if (!ret) return ret;
 			}
 			return {};
 		}
@@ -503,9 +544,18 @@ private:
 	static auto find_attribute(const std::vector<xml_attribute> &attributes, std::string_view name)
 		-> const std::string *
 	{
+		/*
+		 * The attribute without a namespace wins wherever it stands: a
+		 * browser takes `href` over `xlink:href` when an element has both
+		 */
 		for (const auto &attribute: attributes) {
-			if ((attribute.namespace_value == namespace_id::none ||
-				 attribute.namespace_value == namespace_id::xlink ||
+			if (attribute.namespace_value == namespace_id::none &&
+				caseless_equals(attribute.name, name)) {
+				return &attribute.value;
+			}
+		}
+		for (const auto &attribute: attributes) {
+			if ((attribute.namespace_value == namespace_id::xlink ||
 				 attribute.namespace_value == namespace_id::svg ||
 				 attribute.namespace_value == namespace_id::xhtml) &&
 				caseless_equals(attribute.name, name)) {
@@ -676,6 +726,19 @@ private:
 	auto handle_url(std::string_view raw, std::string_view kind, bool as_resource) -> status
 	{
 		auto value = trim(raw);
+		/*
+		 * A browser removes tabs and line ends from an url before it reads
+		 * the scheme, and a character reference puts them into an attribute
+		 * past the normalisation of XML: `java&#9;script:` is a script
+		 */
+		std::string cleaned;
+		if (value.find_first_of("\t\n\r") != std::string_view::npos) {
+			cleaned.reserve(value.size());
+			for (auto ch: value) {
+				if (ch != '\t' && ch != '\n' && ch != '\r') cleaned.push_back(ch);
+			}
+			value = cleaned;
+		}
 		if (value.empty() || value.front() == '#') return {};
 		if (starts_with_caseless(value, "javascript:")) {
 			result_.javascript_urls++;
@@ -741,7 +804,11 @@ private:
 
 		bool wanted = type == "text/html" || type == "application/xhtml+xml" ||
 					  type == "image/svg+xml";
-		if (!wanted || result_.payloads.size() >= result_.limits.max_payloads) return {};
+		if (!wanted) return {};
+		if (result_.payloads.size() >= result_.limits.max_payloads) {
+			result_.payloads_truncated = true;
+			return {};
+		}
 
 		/*
 		 * Oversized payloads are truncated rather than dropped: the head of a
@@ -810,6 +877,7 @@ private:
 
 	svg_result &result_;
 	std::string css_;
+	std::string script_;
 	std::size_t depth_ = 0;
 	std::size_t text_nesting_ = 0;
 	std::optional<std::size_t> html_depth_;
@@ -965,6 +1033,14 @@ static int lua_svg_extract(lua_State *L)
 	push_counter(L, result.css_urls, "css_urls");
 	lua_pushboolean(L, scanner.has_doctype());
 	lua_setfield(L, -2, "doctype");
+	for (auto [value, field]: {std::pair{result.text_truncated, "text_truncated"},
+							   std::pair{result.urls_truncated, "urls_truncated"},
+							   std::pair{result.payloads_truncated, "payloads_truncated"}}) {
+		if (value) {
+			lua_pushboolean(L, true);
+			lua_setfield(L, -2, field);
+		}
+	}
 	for (auto [value, field]: {std::pair{&result.width, "width"}, std::pair{&result.height, "height"},
 							   std::pair{&result.view_box, "view_box"}}) {
 		if (!value->empty()) {

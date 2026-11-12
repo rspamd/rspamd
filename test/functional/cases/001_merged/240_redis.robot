@@ -15,3 +15,11 @@ Redis client
   Expect Symbol With Exact Options  REDIS  hello from lua on redis
   Expect Symbol With Exact Options  REDIS_ASYNC  test value
   Expect Symbol With Exact Options  REDIS_ASYNC201809  test value
+
+Redis pooled connections
+  [Documentation]  Nothing of a request stays on a connection; a setup that fails is an error
+  Redis SET  test_key  test value
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [REDIS_POOL_TEST]}
+  Expect Symbol  REDIS_POOL_OK
+  Do Not Expect Symbol  REDIS_POOL_FAIL

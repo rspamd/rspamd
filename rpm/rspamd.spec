@@ -6,7 +6,7 @@ Name:             rspamd
 Conflicts:        rspamd-asan
 %endif
 Provides:         rspamd
-Version:          3.2
+Version:          4.2.3
 Release:          1
 Summary:          Rapid spam filtering system
 Group:            System Environment/Daemons
@@ -55,8 +55,12 @@ BuildRequires:    gcc-toolset-12-libasan-devel
 %endif
 
 %ifarch x86_64 amd64
-%if 0%{?el8} || 0%{?fedora} > 10
+%if 0%{?el8} || ( 0%{?fedora} > 10 && 0%{?fedora} < 40 )
 BuildRequires:    hyperscan-devel
+%else
+%if 0%{?fedora} > 39
+BuildRequires:    vectorscan-devel
+%endif
 %endif
 %if !0%{?el10}
 BuildRequires:    jemalloc-devel
@@ -81,6 +85,12 @@ Requires(pre):    shadow-utils
 Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd
+
+%if 0%{?fedora} > 43
+%{add_sysuser u _rspamd - "RSpamd user" %{_localstatedir}/lib/rspamd /bin/false}
+%{add_sysuser g _rspamd -}
+%{add_sysuser m _rspamd _rspamd}
+%endif
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -119,6 +129,7 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
 %{cmake} \
 %endif
 	-B . \
+	-G "Unix Makefiles" \
 %if 0%{getenv:ASAN}
         -DCMAKE_BUILD_TYPE=Debug \
         -DSANITIZE=address \
@@ -191,8 +202,10 @@ make %{?_smp_mflags}
 rm -rf %{buildroot}
 
 %pre
+%if !0%{?fedora} > 43
 %{_sbindir}/groupadd -r _rspamd 2>/dev/null || :
 %{_sbindir}/useradd -g _rspamd -c "Rspamd user" -s /bin/false -r -d %{_localstatedir}/lib/rspamd _rspamd 2>/dev/null || :
+%endif
 
 %post
 %{__chown} -R _rspamd:_rspamd %{_localstatedir}/lib/rspamd

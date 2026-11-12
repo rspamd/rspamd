@@ -1,0 +1,11 @@
+Content-Type: multipart/mixed; boundary="=__bnd"
+
+--=__bnd
+Content-Type: application/zip; name=f.zip
+Content-Disposition: attachment; filename=f.zip
+Content-Transfer-Encoding: base64
+
+UEsDBAoAAAAAAAAAIQDhJUmUBwAAAAcAAAAIABAAZGF0YS5iaW51cAwAAaF8KD1hcHAuamFyUEsD
+BGphclBLAQIeAwoAAAAAAAAAIQDhJUmUBwAAAAcAAAAIABAAAAAAAAAAAAAAAAAAAABkYXRhLmJp
+bnVwDAABoXwoPWFwcC5qYXJQSwUGAAAAAAEAAQBGAAAAPQAAAAAA
+--=__bnd--

@@ -37,8 +37,8 @@ struct html_tag;
  * Represents a single href/src attribute that may be rewritten
  */
 struct rewrite_candidate {
-	const html_tag *tag;       // Tag containing the attribute
-	std::string_view attr_name;// "href" or "src"
+	int tag_id;                // Tag containing the attribute
+	std::string_view attr_name;// "href", "xlink:href" or "src"
 	std::string absolute_url;  // Absolute/canonicalized URL for Lua policy
 	std::size_t offset;        // Offset of attribute value in UTF-8 HTML buffer (utf_raw_content)
 	std::size_t len;           // Length of attribute value in UTF-8 HTML buffer (utf_raw_content)
@@ -70,9 +70,12 @@ struct rewrite_patch {
  * @param hc HTML content structure
  * @param task Rspamd task
  * @param part_id MIME part ID
+ * @param source the UTF-8 HTML buffer (utf_raw_content) the spans point into,
+ * where a value cut at a quote is read whole
  * @return vector of rewrite candidates
  */
-auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *task, int part_id)
+auto enumerate_rewrite_candidates(const html_content *hc, struct rspamd_task *task, int part_id,
+								  std::string_view source)
 	-> std::vector<rewrite_candidate>;
 
 /**

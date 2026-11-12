@@ -992,7 +992,7 @@ local function get_general_metadata(task, flatten, no_content)
     for _, sym in ipairs(list) do
       local txt
       if sym.options then
-        local topt = table.concat(sym.options, ', ')
+        local topt = lua_util.symbol_options_to_string(sym.options)
         txt = sym.name .. '(' .. string.format('%.2f', sym.score) .. ')' .. ' [' .. topt .. ']'
       else
         txt = sym.name .. '(' .. string.format('%.2f', sym.score) .. ')'

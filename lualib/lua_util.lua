@@ -1846,8 +1846,14 @@ end
 local tspecial = lpeg.S "()<>,;:\\\"/[]?= \t\v"
 local special_match = lpeg.P((1 - tspecial) ^ 0 * tspecial ^ 1)
 exports.maybe_smtp_quote_value = function(str)
+  -- Control characters have no place in a header: a reader can end a quoted
+  -- string at CR or LF, and take what follows as the next element
+  str = str:gsub('%c', function(c)
+    return c == '\t' and c or '?'
+  end)
   if special_match:match(str) then
-    return string.format('"%s"', str:gsub('"', '\\"'))
+    -- A backslash is escaped too: one at the end would escape the closing quote
+    return string.format('"%s"', (str:gsub('[\\"]', '\\%0')))
   end
 
   return str
@@ -2014,6 +2020,41 @@ local function url_encode_string(str)
   return str
 end
 exports.url_encode_string = url_encode_string
+
+---[[[
+-- @function lua_util.symbol_options_to_string(options)
+-- Joins symbol options into a comma-separated list suitable for text output
+-- such as X-Spamd-Result. Options are stored verbatim, so an option that
+-- contains one of the structural delimiters `[`, `]`, `{`, `}`, `;` or `,`
+-- is percent-encoded (together with `%`, so that it can be decoded
+-- unambiguously). Options without delimiters are emitted untouched, including
+-- any `%` in them. The C log writer applies the same rule.
+-- @param {table} options symbol options, or nil
+-- @return {string} comma-separated options
+---]]]
+local function symbol_option_escape(c)
+  return string.format('%%%02X', c:byte())
+end
+exports.symbol_options_to_string = function(options)
+  if not options or not options[1] then
+    return ''
+  end
+  local escaped = options
+  for i, option in ipairs(options) do
+    if option:find('[%[%]{};,]') then
+      if escaped == options then
+        escaped = {}
+        for j = 1, i - 1 do
+          escaped[j] = options[j]
+        end
+      end
+      escaped[i] = option:gsub('[%%%[%]{};,]', symbol_option_escape)
+    elseif escaped ~= options then
+      escaped[i] = option
+    end
+  end
+  return table.concat(escaped, ',')
+end
 
 assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')
 assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')

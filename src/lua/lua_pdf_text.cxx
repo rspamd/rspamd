@@ -69,6 +69,7 @@ LUA_FUNCTION_DEF(pdf_text_builder, set_cmap);
 LUA_FUNCTION_DEF(pdf_text_builder, add_string);
 LUA_FUNCTION_DEF(pdf_text_builder, add_hexstring);
 LUA_FUNCTION_DEF(pdf_text_builder, add_encoded);
+LUA_FUNCTION_DEF(pdf_text_builder, count_codes);
 LUA_FUNCTION_DEF(pdf_text_builder, add_utf8);
 LUA_FUNCTION_DEF(pdf_text_builder, add_char);
 LUA_FUNCTION_DEF(pdf_text_builder, len);
@@ -103,6 +104,7 @@ static const struct luaL_reg pdf_text_builderlib_m[] = {
 	LUA_INTERFACE_DEF(pdf_text_builder, add_string),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_hexstring),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_encoded),
+	LUA_INTERFACE_DEF(pdf_text_builder, count_codes),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_utf8),
 	LUA_INTERFACE_DEF(pdf_text_builder, add_char),
 	LUA_INTERFACE_DEF(pdf_text_builder, len),
@@ -263,7 +265,8 @@ lua_pdf_encoding_apply_differences(lua_State *L)
 				}
 			}
 
-			if (code >= 0) {
+			/* Codes over 255 map nothing: no need to count past them */
+			if (code >= 0 && code <= 255) {
 				code++;
 			}
 		}
@@ -381,14 +384,23 @@ lua_pdf_text_builder(lua_State *L)
  * that Lua cannot collect an object the C++ side still dereferences.
  */
 static void
-lua_pdf_builder_anchor(lua_State *L, struct lua_pdf_builder *b, int pos)
+lua_pdf_builder_anchor(lua_State *L, struct lua_pdf_builder *b, int pos, int pos2 = 0)
 {
 	if (b->decoder_ref != LUA_NOREF) {
 		luaL_unref(L, LUA_REGISTRYINDEX, b->decoder_ref);
 		b->decoder_ref = LUA_NOREF;
 	}
 
-	if (pos != 0) {
+	if (pos != 0 && pos2 != 0) {
+		/* Two objects to keep: a table holds both */
+		lua_createtable(L, 2, 0);
+		lua_pushvalue(L, pos);
+		lua_rawseti(L, -2, 1);
+		lua_pushvalue(L, pos2);
+		lua_rawseti(L, -2, 2);
+		b->decoder_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	}
+	else if (pos != 0) {
 		lua_pushvalue(L, pos);
 		b->decoder_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	}
@@ -421,10 +433,14 @@ lua_pdf_text_builder_set_encoding(lua_State *L)
 }
 
 /***
- * @method builder:set_cmap(cmap)
+ * @method builder:set_cmap(cmap[, simple])
  * Selects a /ToUnicode CMap for the following add_* calls, for a composite font
  * whose codes are glyph indices. Passing nil goes back to the simple font path.
+ * With `simple` the CMap is the one of a simple font: a code is one byte
+ * whatever the codespace says, and a code that the CMap does not map goes
+ * through the encoding given, or StandardEncoding for `true`.
  * @param {rspamd_pdf_cmap|nil} cmap parsed cmap
+ * @param {rspamd_pdf_encoding|boolean} simple encoding of a simple font, or true
  */
 static int
 lua_pdf_text_builder_set_cmap(lua_State *L)
@@ -440,8 +456,20 @@ lua_pdf_text_builder_set_cmap(lua_State *L)
 	}
 
 	auto *cm = lua_check_pdf_cmap(L, 2);
-	b->builder.set_cmap(cm);
-	lua_pdf_builder_anchor(L, b, 2);
+
+	if (lua_type(L, 3) == LUA_TUSERDATA) {
+		auto *enc = lua_check_pdf_encoding(L, 3);
+		b->builder.set_simple_cmap(cm, enc);
+		lua_pdf_builder_anchor(L, b, 2, 3);
+	}
+	else if (lua_toboolean(L, 3)) {
+		b->builder.set_simple_cmap(cm, nullptr);
+		lua_pdf_builder_anchor(L, b, 2);
+	}
+	else {
+		b->builder.set_cmap(cm);
+		lua_pdf_builder_anchor(L, b, 2);
+	}
 
 	return 0;
 }
@@ -494,6 +522,24 @@ lua_pdf_text_builder_add_encoded(lua_State *L)
 	b->builder.add_encoded(lua_check_bytes(L, 2));
 
 	return 0;
+}
+
+/***
+ * @method builder:count_codes(codes)
+ * Tells how many character codes the bytes are for the current font: a code of
+ * a composite font takes as many bytes as its CMap says.
+ * @param {string|text} codes raw character codes
+ * @return {number} number of codes
+ */
+static int
+lua_pdf_text_builder_count_codes(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	auto *b = lua_check_pdf_builder(L, 1);
+
+	lua_pushinteger(L, b->builder.count_codes(lua_check_bytes(L, 2)));
+
+	return 1;
 }
 
 /***

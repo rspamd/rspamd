@@ -99,5 +99,10 @@ rspamd_smtp_addr_parse (const char *data, size_t len, struct rspamd_email_addres
   %% write init;
   %% write exec;
 
+  /* The address is valid only if the whole input is consumed by the machine */
+  if (cs < %%{ write first_final; }%%) {
+    addr->flags &= ~RSPAMD_EMAIL_ADDR_VALID;
+  }
+
   return cs;
 }

@@ -149,6 +149,12 @@ auto resolve_part_name(std::string_view source_part, std::string_view target)
 	-> ooxml_result<std::string>
 {
 	if (target.empty()) return tl::make_unexpected("empty relationship target");
+	if (target.front() == '/') {
+		/* A part name: it starts at the root of the package, not at the source */
+		target.remove_prefix(1);
+		source_part = {};
+		if (target.empty()) return tl::make_unexpected("empty relationship target");
+	}
 	if (target.front() == '/' || has_uri_scheme(target) ||
 		std::any_of(target.begin(), target.end(), [](char ch) {
 			return g_ascii_iscntrl(static_cast<unsigned char>(ch)) || ch == '\\';
@@ -162,54 +168,53 @@ auto resolve_part_name(std::string_view source_part, std::string_view target)
 		return tl::make_unexpected("invalid internal relationship target");
 	}
 
+	/*
+	 * Build the part name from the segments validated here: only "." and ".."
+	 * are dot segments, anything else ("...", "..x", ".x", "x.") is a name.
+	 * A URL path normaliser does not follow these rules.
+	 */
+	std::vector<std::string_view> segments;
 	auto source_directory_end = source_part.rfind('/');
-	std::size_t depth = 0;
 	if (source_directory_end != std::string_view::npos) {
-		for (std::size_t pos = 0; pos < source_directory_end;) {
-			auto slash = source_part.find('/', pos);
-			if (slash == std::string_view::npos || slash > source_directory_end) {
-				slash = source_directory_end;
-			}
-			if (slash > pos) depth++;
+		auto directory = source_part.substr(0, source_directory_end);
+		for (std::size_t pos = 0; pos < directory.size();) {
+			auto slash = directory.find('/', pos);
+			if (slash == std::string_view::npos) slash = directory.size();
+			if (slash > pos) segments.push_back(directory.substr(pos, slash - pos));
 			pos = slash + 1;
 		}
 	}
 
 	std::size_t start = 0;
+	std::string_view segment;
 	while (start < path.size()) {
 		auto slash = path.find('/', start);
 		if (slash == std::string_view::npos) slash = path.size();
-		auto segment = path.substr(start, slash - start);
+		segment = path.substr(start, slash - start);
 		if (segment == "..") {
-			if (depth == 0) {
+			if (segments.empty()) {
 				return tl::make_unexpected("relationship target escapes package root");
 			}
-			depth--;
+			segments.pop_back();
 		}
 		else if (segment != ".") {
 			if (!validate_segment(segment)) {
 				return tl::make_unexpected("invalid relationship path segment");
 			}
-			depth++;
+			segments.push_back(segment);
 		}
 		start = slash + 1;
 	}
-	if (depth == 0) {
+	/* A last "." or ".." names a directory, as a trailing "/" does */
+	if (segments.empty() || segment == "." || segment == "..") {
 		return tl::make_unexpected("relationship target does not name a part");
 	}
 
-	std::string result{"/"};
-	if (source_directory_end != std::string_view::npos) {
-		result.append(source_part.substr(0, source_directory_end + 1));
+	std::string result;
+	for (auto name: segments) {
+		if (!result.empty()) result.push_back('/');
+		result.append(name);
 	}
-	result.append(path);
-	if (result.size() > G_MAXUINT) {
-		return tl::make_unexpected("internal relationship target is too long");
-	}
-	gsize normalized_size;
-	rspamd_normalize_path_inplace(result.data(), result.size(), &normalized_size);
-	result.resize(normalized_size);
-	result.erase(0, 1);
 	return result;
 }
 
@@ -1035,7 +1040,6 @@ auto read_limits(lua_State *L, int table_index) -> ooxml_result<ooxml_limits>
 	auto xml = rspamd::xml::read_limits(L, table_index, result.xml);
 	if (!xml) return tl::make_unexpected(std::move(xml.error()));
 	result.xml = *xml;
-	lua_pop(L, 1);
 	return result;
 }
 
@@ -1238,6 +1242,13 @@ static int lua_ooxml_extract(lua_State *L)
 	if (!limits) return push_error(L, limits.error());
 	extraction_result result{limits->max_text, limits->max_urls};
 	std::size_t total_tokens = 0;
+	/*
+	 * A story that cannot be read is left out and counted, with what was
+	 * read of it kept: one broken part, or one made so, must not take away
+	 * the text and the links of all the others
+	 */
+	int failed_stories = 0;
+	std::string first_error;
 	auto stories_index = lua_absindex(L, 1);
 	auto count = rspamd_lua_table_size(L, stories_index);
 	for (int i = 1; i <= count; i++) {
@@ -1295,17 +1306,21 @@ static int lua_ooxml_extract(lua_State *L)
 		}
 		}
 		if (!parsed) {
-			lua_pop(L, 2);
-			return push_error_with_tokens(L, parsed.error(), total_tokens);
+			if (failed_stories++ == 0) {
+				first_error = parsed.error();
+			}
 		}
 		lua_pop(L, 1); /* content */
 		if (!result.last_chunk_is_newline) {
-			if (auto added = result.add_text("\n"); !added) {
-				lua_pop(L, 1);
-				return push_error_with_tokens(L, added.error(), total_tokens);
-			}
+			/* Fails only when the text is full already */
+			(void) result.add_text("\n");
 		}
 		lua_pop(L, 1); /* story */
+	}
+
+	if (failed_stories > 0 && failed_stories == count) {
+		/* Nothing of the document could be read */
+		return push_error_with_tokens(L, first_error, total_tokens);
 	}
 
 	collapse_newlines(result.text.get());
@@ -1334,6 +1349,12 @@ static int lua_ooxml_extract(lua_State *L)
 		lua_rawseti(L, -2, i + 1);
 	}
 	lua_setfield(L, -2, "auto_exec_names");
+	if (failed_stories > 0) {
+		lua_pushinteger(L, failed_stories);
+		lua_setfield(L, -2, "failed_stories");
+		lua_pushlstring(L, first_error.data(), first_error.size());
+		lua_setfield(L, -2, "error");
+	}
 	lua_pushnil(L);
 	lua_pushinteger(L, total_tokens);
 	return 3;

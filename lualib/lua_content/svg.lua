@@ -55,7 +55,9 @@ local config = {
 }
 
 local budget_cache_key = 'lua_content:svg_budget'
-local max_nesting = 1
+-- How deep documents inside of documents are read; all of them share the
+-- budgets of the message
+local max_nesting = 3
 
 local function configure()
   if not rspamd_config then return end
@@ -152,6 +154,10 @@ local function copy_extracted(extracted)
     height = extracted.height,
     view_box = extracted.view_box,
     nested_documents = 0,
+    -- More text or links than are kept: the rest of the document is read
+    text_truncated = extracted.text_truncated,
+    urls_truncated = extracted.urls_truncated,
+    payloads_truncated = extracted.payloads_truncated,
   }
   for _, name in ipairs(counters) do
     result[name] = extracted[name] or 0
@@ -164,8 +170,17 @@ end
 local function merge_nested(result, nested)
   result.nested_documents = result.nested_documents + 1
   if nested.suspicious then
-    result.nested_suspicious = nested.reason
+    result.nested_suspicious = result.nested_suspicious or nested.reason
     return
+  end
+  if nested.nested_suspicious then
+    result.nested_suspicious = result.nested_suspicious or nested.nested_suspicious
+  end
+  if nested.text_truncated then
+    result.text_truncated = true
+  end
+  if nested.urls_truncated then
+    result.urls_truncated = true
   end
   for _, name in ipairs(counters) do
     result[name] = result[name] + (nested[name] or 0)
@@ -274,6 +289,9 @@ local function process_svg(input, mpart, task, nesting)
     if payload.type == 'image/svg+xml' then
       if nesting < max_nesting then
         merge_nested(result, process_svg(payload.content, mpart, task, nesting + 1))
+      else
+        -- A document that is not looked into
+        result.nested_suspicious = result.nested_suspicious or 'depth'
       end
     elseif config.inject_payloads and task.inject_part then
       -- text/html or application/xhtml+xml: let the HTML parser and rules see it

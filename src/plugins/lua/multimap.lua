@@ -1782,7 +1782,9 @@ local function multimap_callback(task, rule)
           end
         end
 
-        return p:is_archive() and det_type == 'archive' and not rule.skip_archives
+        -- A self-extracting archive is a program with files in it
+        return p:is_archive() and (det_type == 'archive' or det_type == 'executable')
+            and not rule.skip_archives
       end
 
       for _, p in fun.iter(fun.filter(filter_parts, parts)) do

@@ -630,7 +630,7 @@ local multiple_unique_headers_id = rspamd_config:register_symbol {
     end
 
     if res > 0 then
-      task:insert_result('MULTIPLE_UNIQUE_HEADERS', max_mult, table.concat(res_tbl, ','))
+      task:insert_result('MULTIPLE_UNIQUE_HEADERS', max_mult, res_tbl)
     elseif found == 0 then
       task:insert_result('MISSING_ESSENTIAL_HEADERS', 1.0)
     end

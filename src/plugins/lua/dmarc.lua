@@ -47,14 +47,14 @@ local take_report_script = [[
 local index_key = KEYS[1]
 local report_key = KEYS[2]
 local max_entries = -(tonumber(KEYS[3]) + 1)
-local keys_expiry = tonumber(KEYS[4])
+local keys_expiry = math.floor(tonumber(KEYS[4]) or 172800)
 local dmarc_domain = ARGV[1]
 local report = ARGV[2]
 redis.call('SADD', index_key, report_key)
-redis.call('EXPIRE', index_key, 172800)
+redis.call('EXPIRE', index_key, keys_expiry)
 redis.call('ZINCRBY', report_key, 1, report)
 redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
-redis.call('EXPIRE', report_key, 172800)
+redis.call('EXPIRE', report_key, keys_expiry)
 ]]
 
 -- Publish the policy evaluation result so that other modules (e.g. fuzzy_check)
@@ -78,6 +78,21 @@ local function maybe_force_action(task, disposition)
   end
 end
 
+-- Returns the A-label form of a domain that has U-labels: the From header
+-- field of an EAI message has the latter, signatures and SMTP have either,
+-- and RFC 8616 says that they are one domain
+local function domain_to_alabel(task, domain)
+  if domain and domain:find('[\128-\255]') then
+    domain = task:get_resolver():idna_convert_utf8(domain, task:get_mempool())
+    -- What does not convert comes back with U+FFFD
+    if not domain or domain:find('[\128-\255]') then
+      return nil
+    end
+  end
+
+  return domain
+end
+
 local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local reason = {}
 
@@ -94,6 +109,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   if not spf_domain or spf_domain == '' then
     spf_domain = task:get_helo() or ''
   end
+
+  -- The From domain is in its A-label form here
+  spf_domain = domain_to_alabel(task, spf_domain) or ''
 
   if task:has_symbol(settings.symbols['spf_allow_symbol']) then
     if policy.strict_spf then
@@ -191,10 +209,23 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local disposition = 'none'
   local sampled_out = false
 
-  local function handle_dmarc_failure(what, reason_str)
+  -- One "domain : reason" option per failure reason followed by the extra
+  -- options, so that reasons never need to be joined with commas
+  local function failure_options(reasons, ...)
+    local result = {}
+    for _, r in ipairs(reasons) do
+      result[#result + 1] = policy.domain .. ' : ' .. r
+    end
+    for _, extra in ipairs({ ... }) do
+      result[#result + 1] = extra
+    end
+    return result
+  end
+
+  local function handle_dmarc_failure(what, reasons)
     if not policy.pct or policy.pct == 100 then
       task:insert_result(settings.symbols[what], 1.0,
-        policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+        failure_options(reasons, policy.dmarc_policy))
       disposition = what
     else
       local coin = math.random(100)
@@ -208,19 +239,19 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
           end
 
           task:insert_result(settings.symbols[disposition], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
+            failure_options(reasons, policy.dmarc_policy, "sampled_out"))
           sampled_out = true
           lua_util.debugm(N, task,
             'changed dmarc policy from %s to %s, sampled out: %s < %s',
             what, disposition, coin, policy.pct)
         else
           task:insert_result(settings.symbols[what], 1.0,
-            policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
+            failure_options(reasons, policy.dmarc_policy, "local_policy"))
           disposition = what
         end
       else
         task:insert_result(settings.symbols[what], 1.0,
-          policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
+          failure_options(reasons, policy.dmarc_policy))
         disposition = what
       end
     end
@@ -253,8 +284,6 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       publish_result(task, 'temperror')
     else
       -- We can now check the failed policy and maybe send report data elt
-      local reason_str = table.concat(reason, ', ')
-
       if policy.dmarc_policy == 'quarantine' or policy.dmarc_policy == 'reject' then
         publish_result(task, 'fail_' .. policy.dmarc_policy)
       else
@@ -262,13 +291,12 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       end
 
       if policy.dmarc_policy == 'quarantine' then
-        handle_dmarc_failure('quarantine', reason_str)
+        handle_dmarc_failure('quarantine', reason)
       elseif policy.dmarc_policy == 'reject' then
-        handle_dmarc_failure('reject', reason_str)
+        handle_dmarc_failure('reject', reason)
       else
         task:insert_result(settings.symbols['softfail'], 1.0,
-          policy.domain .. ' : ' .. reason_str,
-          policy.dmarc_policy)
+          failure_options(reason, policy.dmarc_policy))
       end
     end
   end
@@ -466,7 +494,9 @@ local function dmarc_callback(task)
   -- message; rewrites done via task:set_from (e.g. by the aliases module)
   -- must not affect alignment, policy lookup or reporting
   local from = task:get_from({ 'mime', 'orig' })
-  local hfromdom = ((from or E)[1] or E).domain
+  -- A U-label domain is handled as its A-label: this is what the alignment
+  -- compares, what is looked up in DNS and what goes to the reports
+  local hfromdom = domain_to_alabel(task, ((from or E)[1] or E).domain)
   local dmarc_domain
   local ip_addr = task:get_ip()
   local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'double') or 0
@@ -605,25 +635,37 @@ local function dmarc_callback(task)
 
   local resolve_name = '_dmarc.' .. hfromdom
 
-  task:get_resolver():resolve_txt({
+  -- A request that cannot be made has no callback: a name too long for a
+  -- query, or a label over 63 bytes, which the domain of a From header can
+  -- be. It is not counted then, or the answer for the other name would wait
+  -- for it and the policy of the organisational domain would not be applied
+  local domain_cb = gen_dmarc_cb(hfromdom, false)
+  local tld_cb = dmarc_domain ~= hfromdom and gen_dmarc_cb(dmarc_domain, true)
+
+  dns_checks_inflight = dns_checks_inflight + 1
+  local domain_asked = task:get_resolver():resolve_txt({
     task = task,
     name = resolve_name,
-    callback = gen_dmarc_cb(hfromdom, false),
+    callback = domain_cb,
     forced = true
   })
-  dns_checks_inflight = dns_checks_inflight + 1
 
-  if dmarc_domain ~= hfromdom then
-    resolve_name = '_dmarc.' .. dmarc_domain
-
-    task:get_resolver():resolve_txt({
-      task = task,
-      name = resolve_name,
-      callback = gen_dmarc_cb(dmarc_domain, true),
-      forced = true
-    })
-
+  if tld_cb then
     dns_checks_inflight = dns_checks_inflight + 1
+
+    if not task:get_resolver():resolve_txt({
+      task = task,
+      name = '_dmarc.' .. dmarc_domain,
+      callback = tld_cb,
+      forced = true
+    }) then
+      -- As if the name did not exist
+      tld_cb(nil, nil, nil, 'no records with this name')
+    end
+  end
+
+  if not domain_asked then
+    domain_cb(nil, nil, nil, 'no records with this name')
   end
 end
 

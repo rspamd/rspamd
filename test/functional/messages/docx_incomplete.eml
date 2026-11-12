@@ -1,0 +1,43 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: document
+Date: Tue, 10 Nov 2026 10:00:00 +0000
+Message-ID: <docx_incomplete@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_ooxml"
+
+------=_ooxml
+Content-Type: text/plain; charset=us-ascii
+
+Please see the attached file.
+
+------=_ooxml
+Content-Type: application/octet-stream; name="report.docx"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="report.docx"
+
+UEsDBBQAAAAIABe3al33S4B1wgAAAHYBAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2QuQ7CMAyG
+X6XKiqgRAwOiLMAKDLyAlbptRC7FLsfbk3INCBjt//gsLw7XSFxcnPVcqU4kzgFYd+SQyxDJZ6UJ
+yaHkMbUQUR+xJZhOJjPQwQt5GcvQoZaLNTXYWyk2l7xmE3ylEllWxephHFiVwhit0ShZh5OvPyjj
+J6HMybuHOxN5lA0KvhIG5TfgmdudKCVTU7HHJFt02QXnkGqog+5dTpb/a77cGZrGaHrnh7aYgiZm
+41tny7fi0PjX/XB/9/IGUEsDBBQAAAAIABe3al0ItBIshgAAAPAAAAALAAAAX3JlbHMvLnJlbHON
+zz0OAiEQBeCrkDnAzsbCwgCVja3xAgQGlrj8BMaot5fCYjUWlvPey5eMPNNqOJbcl1i7eKQ1dwUL
+cz0gdrtQMn0qlfJofGnJ8DhbwGrs1QTC3TzvsW0N0HJripNTkEBcnpX+gYv30dKx2FuizD/8r8WQ
+TQvECvBemkP3zqfhAmqJHw/qF1BLAwQUAAAACAAXt2pdPRb0LXwAAACqAAAAEQAAAFdvcmQvRG9j
+dW1lbnQueG1sRc5RDsIgDAbgq5AdwC4++ECQU3gBhG4sWSmBGubthRnjy9c2f9LWNB3YvwiTqIP2
+VHW7T1Eka4DqI5KrF86YerZwISd9LCs0LiEX9ljrllba4TrPNyC3pcmapp8c3qPmQRmIfURUgoco
+XpT0/nfWwEiH5TSffjfA/zv7AVBLAwQUAAAACAAXt2pdwYt7jYMAAADhAAAAHAAAAHdvcmQvX3Jl
+bHMvZG9jdW1lbnQueG1sLnJlbHONz7sKAjEQheFXCXmAndXCQmIqG1vxBYbs5IKbC8kI+vYOVitY
+WP4c+OCYK63IqZYRUxvqmdcyTjoytyPAcJEyjqk2KrL42jOyZA/Q0N0xEOzn+QB9a2hrtqa6LOJp
+dXs1+geu3idH5+oemQr/8CESLtRFxB6Ixfz0bhJIgzXw9ci+AVBLAwQUAAAACAAXt2pdnGUzCWUA
+AAB8AAAAEAAAAHdvcmQvaGVhZGVyMS54bWwdylEOhCAMBNCrbDzA1vixHwS9C0oVo21JS8IeX/Dn
+ZSYzvroU9fOnm83VeUilZAdgW0IK9pWM3LZdlEJpVQ+oojGrbGh28kE3TOP4AwonD4uvLne0U5aE
+IaJ66Lmrr+2xqlzID1BLAQIUAxQAAAAIABe3al33S4B1wgAAAHYBAAATAAAAAAAAAAAAAACAAQAA
+AABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgAF7dqXQi0EiyGAAAA8AAAAAsAAAAAAAAA
+AAAAAIAB8wAAAF9yZWxzLy5yZWxzUEsBAhQDFAAAAAgAF7dqXT0W9C18AAAAqgAAABEAAAAAAAAA
+AAAAAIABogEAAFdvcmQvRG9jdW1lbnQueG1sUEsBAhQDFAAAAAgAF7dqXcGLe42DAAAA4QAAABwA
+AAAAAAAAAAAAAIABTQIAAHdvcmQvX3JlbHMvZG9jdW1lbnQueG1sLnJlbHNQSwECFAMUAAAACAAX
+t2pdnGUzCWUAAAB8AAAAEAAAAAAAAAAAAAAAgAEKAwAAd29yZC9oZWFkZXIxLnhtbFBLBQYAAAAA
+BQAFAEEBAACdAwAAAAA=
+
+------=_ooxml--

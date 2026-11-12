@@ -105,18 +105,23 @@ struct css_simple_selector {
 	}
 
 	/*
-	 * Specificity weight of a single simple selector, following the CSS
-	 * (id, class, type) triple flattened to one number
+	 * Specificity of a single simple selector: the CSS (ids, classes,
+	 * types) triple packed to one integer, see specificity_id and friends
 	 */
-	auto specificity() const -> unsigned
+	static constexpr std::uint64_t specificity_field_bits = 20;
+	static constexpr std::uint64_t specificity_id = 1ULL << (2 * specificity_field_bits);
+	static constexpr std::uint64_t specificity_class = 1ULL << specificity_field_bits;
+	static constexpr std::uint64_t specificity_type = 1;
+
+	auto specificity() const -> std::uint64_t
 	{
 		switch (type) {
 		case selector_type::SELECTOR_ID:
-			return 100;
+			return specificity_id;
 		case selector_type::SELECTOR_CLASS:
-			return 10;
+			return specificity_class;
 		case selector_type::SELECTOR_TAG:
-			return 1;
+			return specificity_type;
 		case selector_type::SELECTOR_ALL:
 			break;
 		}
@@ -142,9 +147,14 @@ struct css_compound_selector {
 	static constexpr std::size_t max_parts = 64;
 	std::vector<css_simple_selector> parts;
 
-	auto specificity() const -> unsigned
+	/*
+	 * Each field of the packed specificity holds at most
+	 * max_parts * (max_chain_length + 1) counts, far below 2^20, so the
+	 * sum never carries into the next field
+	 */
+	auto specificity() const -> std::uint64_t
 	{
-		unsigned ret = 0;
+		std::uint64_t ret = 0;
 
 		for (const auto &p: parts) {
 			ret += p.specificity();
@@ -241,7 +251,7 @@ struct css_selector {
 		return subject.key();
 	}
 
-	auto specificity() const -> unsigned
+	auto specificity() const -> std::uint64_t
 	{
 		auto ret = subject.specificity();
 

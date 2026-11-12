@@ -21,6 +21,7 @@
     qend = NULL;
     pname_start = p;
     pname_end = NULL;
+    value_seen = FALSE;
   }
 
   action Param_Name_End {
@@ -41,6 +42,7 @@
   action Param_Value_Start {
     qstart = NULL;
     qend = NULL;
+    value_seen = TRUE;
 
     if (pname_end) {
       pvalue_start = p;
@@ -51,11 +53,14 @@
 
   action Param_Value_End {
     if (pname_end) {
+      gboolean quoted = FALSE;
+
       if (qstart) {
         pvalue_start = qstart;
       }
       if (qend && qend >= qstart) {
         pvalue_end = qend;
+        quoted = qstart != NULL;
       }
       else if (p >= pvalue_start) {
         pvalue_end = p;
@@ -63,7 +68,17 @@
       qstart = NULL;
       qend = NULL;
 
-      if (pvalue_end && pvalue_end > pvalue_start && pname_end > pname_start) {
+      /*
+       * An empty quoted piece of an RFC 2231 value (name*1="") is a piece,
+       * which readers join past: dropped, it would end the pieces there.
+       * Other empty values (name*="", name="") are no value, as before
+       */
+      const unsigned char *star = pname_end > pname_start ?
+        memchr (pname_start, '*', pname_end - pname_start) : NULL;
+
+      if (pvalue_end && pname_end > pname_start &&
+          (pvalue_end > pvalue_start ||
+           (quoted && star != NULL && star + 1 < pname_end && g_ascii_isdigit (star[1])))) {
         rspamd_content_disposition_add_param (pool, cd, pname_start, pname_end, pvalue_start, pvalue_end);
       }
     }
@@ -74,6 +89,22 @@
     pvalue_end = NULL;
     qend = NULL;
     qstart = NULL;
+  }
+
+  action Param_End {
+    /*
+     * An empty unquoted piece of an RFC 2231 value (name*1=;) is a piece,
+     * which readers join past, as an empty quoted one
+     */
+    if (!value_seen && pname_start && pname_end && pname_end > pname_start) {
+      const unsigned char *star = memchr (pname_start, '*', pname_end - pname_start);
+
+      if (star != NULL && star + 1 < pname_end && g_ascii_isdigit (star[1])) {
+        rspamd_content_disposition_add_param (pool, cd, pname_start, pname_end, p, p);
+      }
+    }
+
+    value_seen = FALSE;
   }
 
   action Quoted_Str_Start {
@@ -104,6 +135,7 @@ rspamd_content_disposition_parser (const char *data, size_t len, struct rspamd_c
 {
   const unsigned char *p = data, *pe = data + len, *eof, *qstart = NULL, *qend = NULL,
     *pname_start = NULL, *pname_end = NULL, *pvalue_start = NULL, *pvalue_end = NULL;
+  gboolean value_seen = FALSE;
   int cs, *stack = NULL;
   gsize top = 0;
   struct _ragel_st_storage {

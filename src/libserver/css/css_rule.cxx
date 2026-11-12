@@ -18,6 +18,8 @@
 #include "css.hxx"
 #include "libserver/html/html_block.hxx"
 #include <limits>
+#include <array>
+#include <algorithm>
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
@@ -36,21 +38,19 @@ void css_rule::override_values(const css_rule &other)
 		bits |= static_cast<int>(1 << v.value.index());
 	}
 
+	/*
+	 * Each value we have takes the last value of its type in `other`: one pass
+	 * over each list, as a declaration may carry any number of values
+	 */
+	std::array<const css_value *, std::variant_size_v<decltype(css_value::value)>> last{};
+
 	for (const auto &ov: other.values) {
-		if (bits & (1 << ov.value.index())) {
-			/* We need to override the existing value */
-			/*
-			 * The algorithm is not very efficient,
-			 * so we need to sort the values first and have a O(N) algorithm
-			 * On the other hand, values vectors are usually limited to the
-			 * number of elements about less then 10, so this O(N^2) algorithm
-			 * is probably ok here
-			 */
-			for (auto &v: values) {
-				if (v.value.index() == ov.value.index()) {
-					v = ov;
-				}
-			}
+		last[ov.value.index()] = &ov;
+	}
+
+	for (auto &v: values) {
+		if (const auto *ov = last[v.value.index()]; ov != nullptr) {
+			v = *ov;
 		}
 	}
 
@@ -76,59 +76,47 @@ void css_rule::merge_values(const css_rule &other)
 				 });
 }
 
+void css_rule::replace_with(const css_rule &other)
+{
+	values = other.values;
+	prop.flag = other.prop.flag;
+	order = other.order;
+}
+
 auto css_declarations_block::add_rule(rule_shared_ptr rule) -> bool
 {
-	auto it = rules.find(rule);
-	auto &&remote_prop = rule->get_prop();
-	auto ret = true;
-
 	if (rule->get_values().size() == 0) {
 		/* Ignore rules with no values */
 		return false;
 	}
 
-	if (it != rules.end()) {
-		auto &&local_rule = *it;
-		auto &&local_prop = local_rule->get_prop();
-
-		if (local_prop.flag == css_property_flag::FLAG_IMPORTANT) {
-			if (remote_prop.flag == css_property_flag::FLAG_IMPORTANT) {
-				local_rule->override_values(*rule);
-			}
-			else {
-				/* Override remote not important over local important */
-				local_rule->merge_values(*rule);
-			}
-		}
-		else if (local_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
-			if (remote_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
-				local_rule->override_values(*rule);
-			}
-			else {
-				/* Override local not important over important */
-				local_rule->merge_values(*rule);
-			}
-		}
-		else {
-			if (remote_prop.flag == css_property_flag::FLAG_IMPORTANT) {
-				/* Override with remote */
-				local_rule->override_values(*rule);
-			}
-			else if (remote_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
-				/* Ignore remote not important over local normal */
-				ret = false;
-			}
-			else {
-				/* Override with remote - in CSS, later declarations win */
-				local_rule->override_values(*rule);
-			}
-		}
+	if (rule->get_order() == 0) {
+		rule->set_order(next_order++);
 	}
-	else {
+
+	auto it = rules.find(rule);
+
+	if (it == rules.end()) {
 		rules.insert(std::move(rule));
+
+		return true;
 	}
 
-	return ret;
+	auto &&local_rule = *it;
+
+	if (local_rule->get_prop().flag == css_property_flag::FLAG_IMPORTANT &&
+		rule->get_prop().flag != css_property_flag::FLAG_IMPORTANT) {
+		/* A normal declaration never overrides an important one */
+		return false;
+	}
+
+	/*
+	 * Otherwise the later declaration wins: it is either important itself or
+	 * both are of the same importance
+	 */
+	local_rule->replace_with(*rule);
+
+	return true;
 }
 
 }// namespace rspamd::css
@@ -272,6 +260,10 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			const auto &tok = parser_block.get_token_or_empty();
 
 			if (tok.type == css_parser_token::token_type::ident_token) {
+				if (tok.get_string_or_default("") == "visible") {
+					return css_value{css_display_value::DISPLAY_INLINE};
+				}
+
 				return css_value::maybe_display_from_string(tok.get_string_or_default(""));
 			}
 		}
@@ -348,11 +340,18 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 	enum {
 		parse_property,
 		parse_value,
-		ignore_value, /* For unknown properties */
+		ignore_value, /* For unknown properties and invalid declarations */
 	} state = parse_property;
 
 	auto seen_not = false;
 	ret = std::make_shared<css_declarations_block>();
+
+	/* Drops the current declaration, the next one starts after the `;` */
+	auto drop_declaration = [&]() {
+		cur_rule.reset();
+		seen_not = false;
+		state = ignore_value;
+	};
 
 	while (can_continue) {
 		const auto &next_tok = next_block_functor();
@@ -361,7 +360,14 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 		case css_consumed_block::parser_tag_type::css_component:
 			/* Component can be a property or a compound list of values */
 			if (state == parse_property) {
-				cur_property = css_property::from_token(next_tok.get_token_or_empty())
+				const auto &prop_tok = next_tok.get_token_or_empty();
+
+				if (prop_tok.type == css_parser_token::token_type::semicolon_token) {
+					/* An empty declaration */
+					continue;
+				}
+
+				cur_property = css_property::from_token(prop_tok)
 								   .value_or(bad_property);
 
 				if (cur_property.type == css_property_type::PROPERTY_NYI) {
@@ -375,60 +381,70 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 				/* We now expect colon block */
 				const auto &expect_colon_block = next_block_functor();
 
-				if (expect_colon_block.tag != css_consumed_block::parser_tag_type::css_component) {
+				if (expect_colon_block.tag == css_consumed_block::parser_tag_type::css_eof_block) {
+					can_continue = false;
+				}
+				else if (expect_colon_block.tag != css_consumed_block::parser_tag_type::css_component) {
 					state = ignore_value; /* Ignore up to the next rule */
 				}
 				else {
 					const auto &expect_colon_tok = expect_colon_block.get_token_or_empty();
 
-					if (expect_colon_tok.type != css_parser_token::token_type::colon_token) {
+					if (expect_colon_tok.type == css_parser_token::token_type::colon_token) {
+						state = parse_value;
+						seen_not = false;
+						cur_rule = std::make_shared<css_rule>(cur_property);
+					}
+					else if (expect_colon_tok.type == css_parser_token::token_type::semicolon_token) {
 						msg_debug_css("invalid rule, no colon after property");
-						state = ignore_value; /* Ignore up to the next rule */
+						state = parse_property;
 					}
 					else {
-						state = parse_value;
-						cur_rule = std::make_shared<css_rule>(cur_property);
+						msg_debug_css("invalid rule, no colon after property");
+						state = ignore_value; /* Ignore up to the next rule */
 					}
 				}
 			}
 			else if (state == parse_value) {
-				/* Check semicolon */
-				if (next_tok.is_token()) {
-					const auto &parser_tok = next_tok.get_token_or_empty();
+				const auto &parser_tok = next_tok.get_token_or_empty();
 
-					if (parser_tok.type == css_parser_token::token_type::semicolon_token && cur_rule) {
+				if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
+					if (cur_rule) {
 						ret->add_rule(std::move(cur_rule));
-						state = parse_property;
-						seen_not = false;
+					}
+					cur_rule.reset();
+					state = parse_property;
+					seen_not = false;
+					continue;
+				}
+				else if (parser_tok.type == css_parser_token::token_type::delim_token &&
+						 parser_tok.get_string_or_default("") == "!") {
+					/* Probably something like !important */
+					seen_not = true;
+					continue;
+				}
+				else if (parser_tok.type == css_parser_token::token_type::string_token &&
+						 (parser_tok.flags & css_parser_token::flag_bad_string)) {
+					/* A string with a raw newline makes the declaration invalid */
+					msg_debug_css("bad string in the property %s", cur_property.to_string());
+					drop_declaration();
+					continue;
+				}
+				else if (parser_tok.type == css_parser_token::token_type::ident_token &&
+						 seen_not) {
+					auto sv = parser_tok.get_string_or_default("");
+
+					seen_not = false;
+
+					if (sv.size() == 9 && g_ascii_strncasecmp(sv.data(), "important", 9) == 0) {
+						msg_debug_css("add important flag to property %s",
+									  cur_property.to_string());
+						cur_rule->set_flag(css_property_flag::FLAG_IMPORTANT);
 						continue;
 					}
-					else if (parser_tok.type == css_parser_token::token_type::delim_token) {
-						if (parser_tok.get_string_or_default("") == "!") {
-							/* Probably something like !important */
-							seen_not = true;
-						}
-					}
-					else if (parser_tok.type == css_parser_token::token_type::ident_token) {
-						if (parser_tok.get_string_or_default("") == "important") {
-							if (seen_not) {
-								msg_debug_css("add !important flag to property %s",
-											  cur_property.to_string());
-								cur_property.flag = css_property_flag::FLAG_NOT_IMPORTANT;
-							}
-							else {
-								msg_debug_css("add important flag to property %s",
-											  cur_property.to_string());
-								cur_property.flag = css_property_flag::FLAG_IMPORTANT;
-							}
-
-							seen_not = false;
-
-							continue;
-						}
-						else {
-							seen_not = false;
-						}
-					}
+				}
+				else {
+					seen_not = false;
 				}
 
 				auto maybe_value = allowed_property_value(cur_property, next_tok);
@@ -442,17 +458,16 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			}
 			else {
 				/* Ignore all till ; */
-				if (next_tok.is_token()) {
-					const auto &parser_tok = next_tok.get_token_or_empty();
+				const auto &parser_tok = next_tok.get_token_or_empty();
 
-					if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
-						state = parse_property;
-					}
+				if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
+					state = parse_property;
 				}
 			}
 			break;
 		case css_consumed_block::parser_tag_type::css_function:
 			if (state == parse_value) {
+				seen_not = false;
 				auto maybe_value = allowed_property_value(cur_property, next_tok);
 
 				if (maybe_value && cur_rule) {
@@ -462,9 +477,24 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					cur_rule->add_value(maybe_value.value());
 				}
 			}
+			else if (state == parse_property) {
+				state = ignore_value;
+			}
+			break;
+		case css_consumed_block::parser_tag_type::css_simple_block:
+			/*
+			 * A block in a value is something that the properties here do not
+			 * take: the declaration is invalid, the next ones are not
+			 */
+			if (state == parse_value) {
+				drop_declaration();
+			}
+			else if (state == parse_property) {
+				state = ignore_value;
+			}
 			break;
 		case css_consumed_block::parser_tag_type::css_eof_block:
-			if (state == parse_value) {
+			if (state == parse_value && cur_rule) {
 				ret->add_rule(std::move(cur_rule));
 			}
 			can_continue = false;
@@ -520,14 +550,99 @@ auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> r
 
 auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -> void
 {
+	/*
+	 * Normal declarations first, then the important ones over them: the
+	 * fields they set are marked, so that a block merged later can tell them
+	 */
+	css_hiding normal_hiding, hiding;
+
+	compile_layer(out, false, rspamd::html::html_block::set, normal_hiding);
+
+	rspamd::html::html_block important{};
+	compile_layer(important, true, rspamd::html::html_block::important, hiding);
+	out.set_block(important);
+
+	/*
+	 * What hides a block without `display` is taken over both layers, each
+	 * property from the important one if it is there: `opacity: 0` is not
+	 * undone by an important `display`, and a position and its offset may
+	 * stand in different layers
+	 */
+	if (hiding.opacity < 0) {
+		hiding.opacity = normal_hiding.opacity;
+	}
+	if (!hiding.positioned) {
+		hiding.positioned = normal_hiding.positioned;
+	}
+	if (!hiding.left) {
+		hiding.left = normal_hiding.left;
+	}
+	if (!hiding.top) {
+		hiding.top = normal_hiding.top;
+	}
+	if (!hiding.text_indent) {
+		hiding.text_indent = normal_hiding.text_indent;
+	}
+	if (!hiding.clip) {
+		hiding.clip = normal_hiding.clip;
+	}
+
+	if (hiding.opacity >= 0 && hiding.opacity < 0.1) {
+		/* A (nearly) zero opacity makes the block invisible */
+		out.forced_hidden = true;
+	}
+
+	/*
+	 * Off-screen positioning and clipping hide the content while keeping it
+	 * in the document, which is additionally flagged for the offscreen
+	 * feature counter:
+	 *  - position:absolute|fixed with a large negative left/top
+	 *  - a large negative text-indent (image-replacement trick)
+	 *  - clip / clip-path collapsing the element to a zero area
+	 */
+	constexpr const auto offscreen_threshold = -1000.0f;
+	auto is_offscreen = [&](const std::optional<css_dimension> &d) -> bool {
+		return d && !d->is_percent && d->dim <= offscreen_threshold;
+	};
+
+	if ((hiding.positioned.value_or(false) && (is_offscreen(hiding.left) || is_offscreen(hiding.top))) ||
+		is_offscreen(hiding.text_indent) || hiding.clip.value_or(false)) {
+		out.forced_hidden = true;
+		out.offscreen = true;
+	}
+}
+
+/* Compiles the declarations that are important, or the ones that are not */
+auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool important, int how,
+										   css_hiding &hiding) const -> void
+{
 	auto *block = &out;
-	auto opacity = -1.0f;
 	std::optional<css_dimension> height, width, max_height, max_width;
-	std::optional<css_dimension> left, top, text_indent;
-	auto positioned = false, clip_hidden = false;
-	const css_rule *font_rule = nullptr, *background_rule = nullptr;
+	auto &opacity = hiding.opacity;
+	auto &left = hiding.left, &top = hiding.top, &text_indent = hiding.text_indent;
+	auto &positioned = hiding.positioned, &clip_hidden = hiding.clip;
+	std::optional<css_display_value> display, visibility;
+	auto has_color = rules.find(css_rule{css_property{css_property_type::PROPERTY_COLOR}}) != rules.end() ||
+					 rules.find(css_rule{css_property{css_property_type::PROPERTY_FONT_COLOR}}) != rules.end();
+
+	/*
+	 * Declarations are applied in the source order, so that a shorthand and a
+	 * longhand override each other as they do in a browser
+	 */
+	std::vector<const css_rule *> ordered;
+	ordered.reserve(rules.size());
 
 	for (const auto &rule: rules) {
+		if ((rule->get_prop().flag == css_property_flag::FLAG_IMPORTANT) == important) {
+			ordered.push_back(rule.get());
+		}
+	}
+
+	std::sort(ordered.begin(), ordered.end(), [](const css_rule *a, const css_rule *b) {
+		return a->get_order() < b->get_order();
+	});
+
+	for (const auto *rule: ordered) {
 		auto prop = rule->get_prop().type;
 		const auto &vals = rule->get_values();
 
@@ -536,16 +651,18 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		}
 
 		switch (prop) {
-		case css_property_type::PROPERTY_VISIBILITY:
 		case css_property_type::PROPERTY_DISPLAY: {
-			auto disp = vals.back().to_display().value_or(css_display_value::DISPLAY_INLINE);
-			block->set_display(disp);
+			display = vals.back().to_display().value_or(css_display_value::DISPLAY_INLINE);
+			break;
+		}
+		case css_property_type::PROPERTY_VISIBILITY: {
+			visibility = vals.back().to_display().value_or(css_display_value::DISPLAY_INLINE);
 			break;
 		}
 		case css_property_type::PROPERTY_FONT_SIZE: {
 			auto fs = vals.back().to_dimension();
 			if (fs) {
-				block->set_font_size(fs.value().dim, fs.value().is_percent);
+				block->set_font_size(fs.value().dim, fs.value().is_percent, how);
 			}
 			break;
 		}
@@ -557,14 +674,14 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		case css_property_type::PROPERTY_COLOR: {
 			auto color = vals.back().to_color();
 			if (color) {
-				block->set_fgcolor(color.value());
+				block->set_fgcolor(color.value(), how);
 			}
 			break;
 		}
 		case css_property_type::PROPERTY_BGCOLOR: {
 			auto color = vals.back().to_color();
 			if (color) {
-				block->set_bgcolor(color.value());
+				block->set_bgcolor(color.value(), how);
 			}
 			break;
 		}
@@ -587,7 +704,7 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 		case css_property_type::PROPERTY_OVERFLOW: {
 			auto disp = vals.back().to_display();
 			if (disp) {
-				block->set_overflow(disp.value() == css_display_value::DISPLAY_HIDDEN);
+				block->set_overflow(disp.value() == css_display_value::DISPLAY_HIDDEN, how);
 			}
 			break;
 		}
@@ -614,17 +731,55 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 			}
 			break;
 		}
-		/* Optional attributes */
-		case css_property_type::PROPERTY_FONT:
-			font_rule = rule.get();
+		case css_property_type::PROPERTY_FONT: {
+			/* A color in the shorthand is taken only if there is no color property */
+			if (!has_color) {
+				for (const auto &val: vals) {
+					auto maybe_color = val.to_color();
+
+					if (maybe_color) {
+						block->set_fgcolor(maybe_color.value(), how);
+					}
+				}
+			}
+
+			for (const auto &val: vals) {
+				auto maybe_dim = val.to_dimension();
+
+				if (maybe_dim) {
+					/* The size is the first length of the shorthand */
+					block->set_font_size(maybe_dim.value().dim, maybe_dim.value().is_percent, how);
+					break;
+				}
+			}
 			break;
-		case css_property_type::PROPERTY_BACKGROUND:
-			background_rule = rule.get();
+		}
+		case css_property_type::PROPERTY_BACKGROUND: {
+			for (const auto &val: vals) {
+				auto maybe_color = val.to_color();
+
+				if (maybe_color) {
+					block->set_bgcolor(maybe_color.value(), how);
+				}
+			}
 			break;
+		}
 		default:
 			/* Do nothing for now */
 			break;
 		}
+	}
+
+	/*
+	 * Display and visibility are independent properties: a descendant cannot
+	 * undo a hidden display, but it can reset an inherited visibility
+	 */
+	if (display) {
+		block->set_display(*display, how);
+	}
+
+	if (visibility) {
+		block->set_visibility(*visibility == css_display_value::DISPLAY_HIDDEN, how);
 	}
 
 	/*
@@ -647,78 +802,10 @@ auto css_declarations_block::compile_into(rspamd::html::html_block &out) const -
 	};
 
 	if (auto h = clamp_dim(height, max_height); h) {
-		block->set_height(h->dim, h->is_percent);
+		block->set_height(h->dim, h->is_percent, how);
 	}
 	if (auto w = clamp_dim(width, max_width); w) {
-		block->set_width(w->dim, w->is_percent);
-	}
-
-	if (opacity >= 0 && opacity < 0.1) {
-		/*
-		 * A (nearly) zero opacity makes the block invisible, and, unlike
-		 * display, it cannot be reset by descendants; reuse the display
-		 * value as it has the desired inheritance semantics
-		 */
-		block->set_display(css_display_value::DISPLAY_HIDDEN);
-	}
-
-	/*
-	 * Off-screen positioning and clipping hide the content while keeping it
-	 * in the document. As with opacity, descendants cannot bring it back, so
-	 * model it as a hidden display, additionally flagging it for the
-	 * offscreen feature counter:
-	 *  - position:absolute|fixed with a large negative left/top
-	 *  - a large negative text-indent (image-replacement trick)
-	 *  - clip / clip-path collapsing the element to a zero area
-	 */
-	constexpr const auto offscreen_threshold = -1000.0f;
-	auto is_offscreen = [&](const std::optional<css_dimension> &d) -> bool {
-		return d && !d->is_percent && d->dim <= offscreen_threshold;
-	};
-
-	if ((positioned && (is_offscreen(left) || is_offscreen(top))) ||
-		is_offscreen(text_indent) || clip_hidden) {
-		block->set_display(css_display_value::DISPLAY_HIDDEN);
-		block->offscreen = true;
-	}
-
-	/* Optional properties */
-	if (!(block->fg_color_mask) && font_rule) {
-		auto &vals = font_rule->get_values();
-
-		for (const auto &val: vals) {
-			auto maybe_color = val.to_color();
-
-			if (maybe_color) {
-				block->set_fgcolor(maybe_color.value());
-			}
-		}
-	}
-
-	if (!(block->font_mask) && font_rule) {
-		auto &vals = font_rule->get_values();
-
-		for (const auto &val: vals) {
-			auto maybe_dim = val.to_dimension();
-
-			if (maybe_dim) {
-				/* The size is the first length of the shorthand */
-				block->set_font_size(maybe_dim.value().dim, maybe_dim.value().is_percent);
-				break;
-			}
-		}
-	}
-
-	if (!(block->bg_color_mask) && background_rule) {
-		auto &vals = background_rule->get_values();
-
-		for (const auto &val: vals) {
-			auto maybe_color = val.to_color();
-
-			if (maybe_color) {
-				block->set_bgcolor(maybe_color.value());
-			}
-		}
+		block->set_width(w->dim, w->is_percent, how);
 	}
 }
 
@@ -1045,6 +1132,263 @@ TEST_SUITE("css")
 		CHECK(block->fg_color.r == 0x23);
 		CHECK(block->fg_color.g == 0x23);
 		CHECK(block->fg_color.b == 0x33);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	/* Compiles an inline style and tells if the block is hidden */
+	static auto style_is_hidden(rspamd_mempool_t * pool, const std::string &style) -> bool
+	{
+		auto res = process_declaration_tokens(pool, get_rules_parser_functor(pool, style));
+		auto *block = res->compile_to_block(pool);
+
+		block->compute_visibility();
+
+		return !block->is_visible();
+	}
+
+	static auto style_flag(rspamd_mempool_t * pool, const std::string &style,
+						   css_property_type type) -> std::optional<css_property_flag>
+	{
+		auto res = process_declaration_tokens(pool, get_rules_parser_functor(pool, style));
+
+		for (const auto &rule: res->get_rules()) {
+			if (rule->get_prop().type == type) {
+				return rule->get_prop().flag;
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	TEST_CASE("empty declarations are skipped")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto *style: {";display:none", ";;display:none", "color:red;;display:none",
+								 "color:red; ; ;display:none", "display:none;;", "display:;display:none",
+								 "display;display:none", "color;;display:none", "; ;\n;display:none"}) {
+			CHECK_MESSAGE(style_is_hidden(pool, style), std::string{style});
+		}
+
+		for (const auto *style: {";display:block", "color:red;;display:block", ";;", ";", "",
+								 "display:block;;display:foo", "x;;display:block"}) {
+			CHECK_MESSAGE(!style_is_hidden(pool, style), std::string{style});
+		}
+
+		/* The same inside of a rule body */
+		auto sheet = parse_css(pool, ".h{;;display:none} .v{;;display:block}", nullptr);
+		CHECK(sheet.has_value());
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("a declaration with an unusable value is dropped alone")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto *style: {"x:[a];display:none", "y:(b);display:none", "z:{c};display:none",
+								 "color:[a];display:none", "color:red [a];display:none",
+								 "display:none;color:{c}", "color:{c};color:(d);display:none",
+								 "x:[a;b];display:none", "x:{a;b};display:none",
+								 "x:y(z);display:none", "x(y):z;display:none",
+								 "[a]:b;display:none"}) {
+			CHECK_MESSAGE(style_is_hidden(pool, style), std::string{style});
+		}
+
+		for (const auto *style: {"x:[a;display:none]", "x:{a;display:none}", "x:(a;display:none)",
+								 "display:block;x:[a]", "color:{display:none}", "display:[a];display:block",
+								 "display:block;display:[a]", "color:rgb(;display:none"}) {
+			CHECK_MESSAGE(!style_is_hidden(pool, style), std::string{style});
+		}
+
+		/* A string with a raw newline makes only its own declaration invalid */
+		CHECK(style_is_hidden(pool, "color:\"red\n;display:none"));
+		CHECK(!style_is_hidden(pool, "color:\"red;display:none\""));
+		CHECK(!style_is_hidden(pool, "color:'red;display:none'"));
+		CHECK(style_is_hidden(pool, "color:\"a\\\"b\";display:none"));
+		CHECK(!style_is_hidden(pool, "color:\"a\\\";display:none"));
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("a bad declaration with deep nesting does not drop the next ones")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		const auto deep = std::string(30, '[') + std::string(30, ']');
+
+		CHECK(style_is_hidden(pool, "x:" + deep + ";display:none"));
+		CHECK(style_is_hidden(pool, "color:red " + deep + ";display:none"));
+		CHECK(style_is_hidden(pool, "display:none;x:" + deep));
+		CHECK(!style_is_hidden(pool, "x:" + deep + std::string(2, ';') + "display:block"));
+		/* The part of the declaration that was read does not apply */
+		CHECK(!style_is_hidden(pool, "display:none " + deep + ";display:block"));
+		CHECK(!style_is_hidden(pool, "display:none " + deep));
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("important flag reaches the stored rule")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		const std::vector<std::pair<const char *, css_property_flag>> cases{
+			{"display:none !important", css_property_flag::FLAG_IMPORTANT},
+			{"display:none!important", css_property_flag::FLAG_IMPORTANT},
+			{"display:none ! important", css_property_flag::FLAG_IMPORTANT},
+			{"display:none !IMPORTANT", css_property_flag::FLAG_IMPORTANT},
+			{"display:none !Important;", css_property_flag::FLAG_IMPORTANT},
+			{"display:none !/**/important", css_property_flag::FLAG_IMPORTANT},
+			{"display:none;display:block !important", css_property_flag::FLAG_IMPORTANT},
+			{"display:none", css_property_flag::FLAG_NORMAL},
+			{"display:none important", css_property_flag::FLAG_NORMAL},
+			{"display:none !importantx", css_property_flag::FLAG_NORMAL},
+			{"display:none !imp", css_property_flag::FLAG_NORMAL},
+			{"display:none !important;display:block", css_property_flag::FLAG_IMPORTANT},
+			{"display:none;display:block", css_property_flag::FLAG_NORMAL},
+		};
+
+		for (const auto &c: cases) {
+			auto flag = style_flag(pool, c.first, css_property_type::PROPERTY_DISPLAY);
+
+			REQUIRE_MESSAGE(flag.has_value(), std::string{c.first});
+			CHECK_MESSAGE(*flag == c.second, std::string{c.first});
+		}
+
+		/* The flag belongs to the declaration it follows */
+		CHECK(*style_flag(pool, "color:red !important; display:none", css_property_type::PROPERTY_COLOR) ==
+			  css_property_flag::FLAG_IMPORTANT);
+		CHECK(*style_flag(pool, "color:red !important; display:none", css_property_type::PROPERTY_DISPLAY) ==
+			  css_property_flag::FLAG_NORMAL);
+		/* The color function and the flag */
+		CHECK(*style_flag(pool, "color:rgb(1,2,3) !important", css_property_type::PROPERTY_COLOR) ==
+			  css_property_flag::FLAG_IMPORTANT);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("important wins within a block regardless of the order")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		const std::vector<std::pair<const char *, bool>> cases{
+			{"display:none !important; display:block", true},
+			{"display:block; display:none !important", true},
+			{"display:none; display:block", false},
+			{"display:block; display:none", true},
+			{"display:none ! important; display:block", true},
+			{"display:none !important; display:block !important", false},
+			{"display:block !important; display:none !important", true},
+			{"display:block !important; display:none", false},
+			{"display:none; display:block !important", false},
+			{"display:none; display:block !important; display:none", false},
+			{"display:none !important; display:block; display:foo", true},
+			/* An invalid later declaration does not override anything */
+			{"display:none; display:foo", true},
+			{"display:block; display:foo", false},
+			{"display:block !important; display:none !important; display:block", true},
+		};
+
+		for (const auto &c: cases) {
+			CHECK_MESSAGE(style_is_hidden(pool, c.first) == c.second, std::string{c.first});
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("shorthands and longhands apply in the source order")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		auto compile = [&](const std::string &style) {
+			auto res = process_declaration_tokens(pool, get_rules_parser_functor(pool, style));
+
+			return res->compile_to_block(pool);
+		};
+
+		const std::vector<std::pair<const char *, int>> sizes{
+			{"font-size:12px; font:0 Arial", 0},
+			{"font:0 Arial; font-size:12px", 12},
+			{"font:12px Arial; font-size:0", 0},
+			{"font-size:0; font:12px Arial", 12},
+			{"font-size:12px !important; font:0 Arial", 12},
+			{"font:0 Arial !important; font-size:12px", 0},
+			{"font-size:12px; font:0 Arial; color:red", 0},
+			{"font-size:0; color:red; font:10px Arial; font-size:14px", 14},
+			{"font:10px Arial; font:0 Arial", 0},
+		};
+
+		for (const auto &c: sizes) {
+			auto *block = compile(c.first);
+
+			CHECK_MESSAGE(static_cast<int>(block->font_mask) != 0, std::string{c.first});
+			CHECK_MESSAGE(block->font_size == c.second, std::string{c.first});
+		}
+
+		const std::vector<std::pair<const char *, int>> backgrounds{
+			{"background:#ffffff; background-color:#000000", 0x00},
+			{"background-color:#000000; background:#ffffff", 0xff},
+			{"background-color:#000000 !important; background:#ffffff", 0x00},
+			{"background:#ffffff !important; background-color:#000000", 0xff},
+			{"background:#ffffff", 0xff},
+		};
+
+		for (const auto &c: backgrounds) {
+			auto *block = compile(c.first);
+
+			CHECK_MESSAGE(static_cast<int>(block->bg_color_mask) != 0, std::string{c.first});
+			CHECK_MESSAGE(block->bg_color.r == c.second, std::string{c.first});
+		}
+
+		/* A color of the font shorthand is used only when there is no color property */
+		CHECK(compile("font:12px red; color:#ffffff")->fg_color.g == 0xff);
+		CHECK(compile("color:#ffffff; font:12px red")->fg_color.g == 0xff);
+
+		/* Display and visibility are independent and both hide */
+		for (const auto *style: {"display:none; visibility:visible", "visibility:hidden; display:block",
+								 "display:block; visibility:hidden", "visibility:collapse; display:inline",
+								 "display:none; display:block; visibility:hidden"}) {
+			CHECK_MESSAGE(style_is_hidden(pool, style), std::string{style});
+		}
+
+		for (const auto *style: {"display:none; display:block", "visibility:hidden; visibility:visible",
+								 "display:block; visibility:visible", "visibility:visible; display:block"}) {
+			CHECK_MESSAGE(!style_is_hidden(pool, style), std::string{style});
+		}
+
+		/* Visibility is a property of its own, display is not touched by it */
+		CHECK(compile("visibility:hidden")->visibility_hidden);
+		CHECK(compile("visibility:collapse")->visibility_hidden);
+		CHECK(!compile("visibility:visible")->visibility_hidden);
+		CHECK(static_cast<int>(compile("visibility:hidden")->visibility_prop_mask) == rspamd::html::html_block::set);
+		CHECK(static_cast<int>(compile("visibility:hidden")->display_mask) == rspamd::html::html_block::unset);
+		CHECK(static_cast<int>(compile("visibility:hidden !important")->visibility_prop_mask) == rspamd::html::html_block::important);
+		CHECK(static_cast<int>(compile("display:none")->visibility_prop_mask) == rspamd::html::html_block::unset);
+
+		/* A child resets an inherited visibility */
+		{
+			auto *parent = compile("visibility:hidden; display:block");
+			auto *child = compile("visibility:visible; display:block");
+			auto *plain = compile("");
+			child->propagate_block(*parent);
+			plain->propagate_block(*parent);
+			CHECK(!child->visibility_hidden);
+			CHECK(plain->visibility_hidden);
+			CHECK(static_cast<int>(plain->visibility_prop_mask) == rspamd::html::html_block::inherited);
+		}
+
+		/* An attribute hint is replaced by an author value and beats an inherited one */
+		{
+			auto *parent = compile("color:#333333");
+			rspamd::html::html_block hinted{};
+			hinted.set_fgcolor(css_color::white(), rspamd::html::html_block::hint);
+			hinted.propagate_block(*parent);
+			CHECK(hinted.fg_color.r == 0xff);
+			CHECK(static_cast<int>(hinted.fg_color_mask) == rspamd::html::html_block::hint);
+			hinted.set_block(*compile("color:#111111"));
+			CHECK(hinted.fg_color.r == 0x11);
+			CHECK(static_cast<int>(hinted.fg_color_mask) == rspamd::html::html_block::set);
+		}
 
 		rspamd_mempool_delete(pool);
 	}

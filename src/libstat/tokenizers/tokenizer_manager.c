@@ -558,8 +558,10 @@ rspamd_custom_tokenizer_tokenize_with_exceptions(
 
 		kv_push(rspamd_word_t, *words, ex_tok);
 
-		/* Move past exception */
-		pos = ex->pos + ex->len;
+		/* Move past exception, never back: exceptions may overlap */
+		if ((gsize) (ex->pos + ex->len) > pos) {
+			pos = ex->pos + ex->len;
+		}
 		cur_ex = g_list_next(cur_ex);
 	}
 

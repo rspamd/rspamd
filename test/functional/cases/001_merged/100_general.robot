@@ -158,3 +158,14 @@ Check No Significant Hidden Content
   Scan File  ${RSPAMD_TESTDIR}/messages/html_hidden_${fixture}.eml
   ...  Settings={symbols_enabled = [HIDDEN_TEXT]}
   Do Not Expect Symbol  HIDDEN_TEXT
+
+TEXT WORDS TRUNCATED - Long text
+  [Documentation]  The words of a long part are a sample, and that is told
+  Scan File  ${RSPAMD_TESTDIR}/messages/words_sampled.eml
+  ...  Settings={symbols_enabled = [TEXT_WORDS_TRUNCATED]}
+  Expect Symbol With Exact Options  TEXT_WORDS_TRUNCATED  sampled=1
+
+TEXT WORDS TRUNCATED - Short text
+  Scan File  ${RSPAMD_TESTDIR}/messages/zerofont.eml
+  ...  Settings={symbols_enabled = [TEXT_WORDS_TRUNCATED]}
+  Do Not Expect Symbol  TEXT_WORDS_TRUNCATED

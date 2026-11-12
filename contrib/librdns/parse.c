@@ -266,6 +266,18 @@ rdns_parse_labels(struct rdns_resolver *resolver,
 			}
 
 			memcpy(name + namelen, in + off, llen);
+
+			/*
+			 * A label is any bytes, and the name goes on as a C string with
+			 * dots between the labels: a zero byte would cut it short for
+			 * whoever reads it, and a dot would split the label in two
+			 */
+			for (size_t li = 0; li < llen; li++) {
+				if (name[namelen + li] == '\0' || name[namelen + li] == '.') {
+					name[namelen + li] = '?';
+				}
+			}
+
 			namelen += llen;
 			name[namelen++] = '.';
 		}
@@ -487,6 +499,16 @@ rdns_parse_rr(struct rdns_resolver *resolver,
 				   txtlen);
 			copied += txtlen;
 			consumed += txtlen + 1;
+		}
+
+		/*
+		 * The text is read as a C string by its consumers: a zero byte in it
+		 * must not hide what follows from them
+		 */
+		for (size_t ti = 0; ti < copied; ti++) {
+			if (elt->content.txt.data[ti] == '\0') {
+				elt->content.txt.data[ti] = ' ';
+			}
 		}
 
 		*(elt->content.txt.data + copied) = '\0';

@@ -302,7 +302,7 @@ auto css_simple_selector::matches(const html::html_tag *tag, css_match_budget &b
 	case selector_type::SELECTOR_ALL:
 		return true;
 	case selector_type::SELECTOR_TAG:
-		return static_cast<tag_id_t>(tag->id) == std::get<tag_id_t>(value);
+		return tag->id == static_cast<std::int32_t>(std::get<tag_id_t>(value));
 	case selector_type::SELECTOR_ID: {
 		auto id_comp = tag->find_id();
 		return id_comp && budget.consume(id_comp->size()) &&
