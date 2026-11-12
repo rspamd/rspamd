@@ -277,6 +277,9 @@ def scenario(name, signer):
     """Returns the message; the SMTP envelope to scan it with is in the tests"""
     now = int(time.time())
 
+    if name == "unsigned":
+        # For the signing tests: Rspamd is the Originator
+        return original().render()
     if name == "simple":
         return originate(signer).render()
     if name == "tampered_body":
