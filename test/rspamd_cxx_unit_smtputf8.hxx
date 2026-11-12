@@ -112,6 +112,18 @@ TEST_SUITE("smtputf8 syntax")
 			// way, and so are the local part's a-labels
 			{"grå@grå.xn--fiqs8s", RSPAMD_SMTPUTF8_A_LABEL},
 			{"xn--gr-zia@grå.org", RSPAMD_SMTPUTF8_A_LABEL},
+			// An ACE prefix only counts when the whole atom is an IDNA2008 A-label.
+			{"xn--café@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"xn--team+sales@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"xn--@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"xn--abc-@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"xn--a@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"xn--e28h@example.com", RSPAMD_SMTPUTF8_VALID},    // emoji
+			{"xn--a-0hc@example.com", RSPAMD_SMTPUTF8_VALID},   // Latin and Hebrew, violates Bidi
+			{"xn--9ca58h@example.com", RSPAMD_SMTPUTF8_VALID},  // leading combining mark
+			{"xn--ab-m1t@example.com", RSPAMD_SMTPUTF8_VALID},  // joiner without context
+			{"xn--ngbn6f@example.com", RSPAMD_SMTPUTF8_A_LABEL},// دبي
+			{"xn--7q1dqd@example.com", RSPAMD_SMTPUTF8_A_LABEL},// Tulu-Tigalari
 			// A quoted string is not an atom, so rule 1 does not reach it
 			{"\"xn--gr-zia\"@example.com", RSPAMD_SMTPUTF8_VALID},
 			// Latin-1, an overlong slash and a surrogate are not UTF-8
@@ -152,6 +164,11 @@ TEST_SUITE("smtputf8 syntax")
 			// RFC5892 A.1 and A.2: the joiners are fine after a virama
 			{"क्‌ष@example.com", RSPAMD_SMTPUTF8_VALID},
 			{"क्‍ष@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"\U00011392\U000113ce\u200d\U00011392@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"\U00011392\U000113c2\U000113b8@example.com", RSPAMD_SMTPUTF8_NOT_NFC},
+			{"\U00011392\U000113c7@example.com", RSPAMD_SMTPUTF8_VALID},
+			{"Ḋ\u0323@example.com", RSPAMD_SMTPUTF8_NOT_NFC},     /* reorder inside a composed starter */
+			{"a\u0305\u0301@example.com", RSPAMD_SMTPUTF8_VALID}, /* equal classes block composition */
 			{"a‍b@example.com", RSPAMD_SMTPUTF8_CODE_POINT},
 			// RFC5892 A.1: ZWNJ is also fine between joining letters
 			{"ب‌ب@example.com", RSPAMD_SMTPUTF8_VALID},

@@ -1236,15 +1236,12 @@ local function check_addrs(addrs, want_8bit)
   return false
 end
 
-local function first_from(task)
-  local from = (task:get_from('mime') or {})[1]
-
-  return from and { from } or {}
-end
+-- Check the spelling in the header, before alias expansion or other rewrites.
+local original_mime_addrs = { 'mime', 'orig' }
 
 rspamd_config.INVALID_FROM_8BIT = {
   callback = function(task)
-    return check_addrs(first_from(task), true)
+    return check_addrs(task:get_from(original_mime_addrs) or {}, true)
   end,
   description = 'Invalid 8bit From address: not UTF-8, or breaks the SMTPUTF8 address syntax',
   score = 6.0,
@@ -1253,7 +1250,7 @@ rspamd_config.INVALID_FROM_8BIT = {
 
 rspamd_config.INVALID_RCPT_8BIT = {
   callback = function(task)
-    return check_addrs(task:get_recipients('mime') or {}, true)
+    return check_addrs(task:get_recipients(original_mime_addrs) or {}, true)
   end,
   description = 'Invalid 8bit recipient address: not UTF-8, or breaks the SMTPUTF8 address syntax',
   score = 6.0,
@@ -1262,7 +1259,7 @@ rspamd_config.INVALID_RCPT_8BIT = {
 
 rspamd_config.INVALID_FROM_ASCII_ADDR = {
   callback = function(task)
-    return check_addrs(first_from(task), false)
+    return check_addrs(task:get_from(original_mime_addrs) or {}, false)
   end,
   description = 'ASCII From address breaks the SMTPUTF8 address syntax: a-label local part or control character',
   score = 1.0,
@@ -1271,7 +1268,7 @@ rspamd_config.INVALID_FROM_ASCII_ADDR = {
 
 rspamd_config.INVALID_RCPT_ASCII_ADDR = {
   callback = function(task)
-    return check_addrs(task:get_recipients('mime') or {}, false)
+    return check_addrs(task:get_recipients(original_mime_addrs) or {}, false)
   end,
   description = 'ASCII recipient address breaks the SMTPUTF8 address syntax: a-label local part or control character',
   score = 1.0,

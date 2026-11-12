@@ -36,10 +36,10 @@ rspamd_email_address_unescape(struct rspamd_email_address *addr)
 	end = h + addr->user_len;
 
 	while (h < end) {
-		if (*h != '\\') {
-			*t++ = *h;
+		if (*h == '\\' && h + 1 < end) {
+			h++;
 		}
-		h++;
+		*t++ = *h++;
 	}
 
 	addr->user = d;
@@ -250,6 +250,8 @@ rspamd_email_address_from_mime(rspamd_mempool_t *pool, const char *hdr,
 	gboolean seen_at = FALSE, seen_obrace = FALSE;
 
 	const char *p = hdr, *end = hdr + len, *c = hdr, *t;
+	const char *quote_start = NULL;
+	gsize name_before_quote = 0;
 	GString *ns, *cpy;
 	int obraces, ebraces;
 	enum {
@@ -359,6 +361,8 @@ rspamd_email_address_from_mime(rspamd_mempool_t *pool, const char *hdr,
 					}
 				}
 
+				quote_start = p;
+				name_before_quote = ns->len;
 				state = parse_quoted;
 				c = p + 1;
 			}
@@ -430,6 +434,15 @@ rspamd_email_address_from_mime(rspamd_mempool_t *pool, const char *hdr,
 				c = p;
 			}
 			else if (*p == '"') {
+				if (p + 1 < end && p[1] == '@') {
+					/* A bare quoted local part belongs to the mailbox. */
+					g_string_truncate(ns, name_before_quote);
+					c = quote_start;
+					state = parse_name;
+					p++;
+					break;
+				}
+
 				if (p > c) {
 					g_string_append_len(ns, c, p - c);
 				}

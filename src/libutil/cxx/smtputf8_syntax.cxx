@@ -1,10 +1,8 @@
 #define U_CHARSET_IS_UTF8 1
 #include <unicode/utypes.h>
 #include <unicode/utf8.h>
-#include <unicode/uchar.h>
-#include <unicode/normalizer2.h>
-#include <unicode/unistr.h>
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <iterator>
 #include <initializer_list>
@@ -13,41 +11,29 @@
 
 #include "smtputf8_syntax.h"
 #include "smtputf8_data.hxx"
+extern "C" {
+#include "contrib/librdns/punycode.h"
+}
 
 namespace {
 
 using script_code = rspamd::smtputf8::script;
-using rspamd::smtputf8::script_ranges;
+using namespace rspamd::smtputf8;
 
-/*
- * Rule 1. The ACE prefix is case-insensitive, so XN-- is an a-label too.
- * A quoted local part is not made of atoms, so the caller skips it.
- */
-auto has_a_label(std::string_view s) -> bool
+auto properties_of(char32_t cp) -> const properties &
 {
-	std::size_t start = 0;
-
-	for (;;) {
-		auto end = s.find('.', start);
-		auto atom = s.substr(start, end == std::string_view::npos ? end : end - start);
-
-		if (atom.size() >= 4 && (atom[0] | 0x20) == 'x' && (atom[1] | 0x20) == 'n' &&
-			atom[2] == '-' && atom[3] == '-') {
-			return true;
-		}
-
-		if (end == std::string_view::npos) {
-			return false;
-		}
-
-		start = end + 1;
-	}
+	static_assert(ranges[0].first == 0);
+	auto it = std::upper_bound(std::begin(ranges), std::end(ranges), cp,
+							   [](char32_t c, const property_range &r) { return c < r.first; });
+	return property_values[(it - 1)->index];
 }
 
-auto decode_utf8(std::string_view s, std::vector<UChar32> &out) -> bool
+using codepoints = std::vector<std::uint32_t>;
+
+auto decode_utf8(std::string_view s, codepoints &out) -> bool
 {
-	int32_t i = 0;
-	auto len = static_cast<int32_t>(s.size());
+	std::size_t i = 0;
+	auto len = s.size();
 
 	while (i < len) {
 		UChar32 cp;
@@ -63,17 +49,9 @@ auto decode_utf8(std::string_view s, std::vector<UChar32> &out) -> bool
 	return true;
 }
 
-static_assert(script_ranges[0] >> 8 == 0 &&
-				  std::is_sorted(std::begin(script_ranges), std::end(script_ranges)),
-			  "script_of() needs a sorted table that starts at U+0000");
-
-/* Binary search, since the table holds about 1500 ranges */
 auto script_of(UChar32 cp) -> script_code
 {
-	auto key = (static_cast<std::uint32_t>(cp) << 8) | 0xff;
-	auto it = std::upper_bound(std::begin(script_ranges), std::end(script_ranges), key);
-
-	return static_cast<script_code>(*(it - 1) & 0xff);
+	return properties_of(cp).sc;
 }
 
 /*
@@ -93,20 +71,10 @@ auto is_contexto(UChar32 cp) -> bool
 		   (cp >= 0x06F0 && cp <= 0x06F9);
 }
 
-auto is_virama(UChar32 cp) -> bool
-{
-	return u_getCombiningClass(cp) == 9;
-}
-
-auto joining_type(UChar32 cp) -> int32_t
-{
-	return u_getIntPropertyValue(cp, UCHAR_JOINING_TYPE);
-}
-
 /* RFC5892 A.1 and A.2 */
-auto contextj_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
+auto contextj_ok(const codepoints &cps, std::size_t i) -> bool
 {
-	if (i > 0 && is_virama(cps[i - 1])) {
+	if (i > 0 && properties_of(cps[i - 1]).ccc == 9) {
 		return true;
 	}
 
@@ -117,7 +85,7 @@ auto contextj_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
 	/* (Joining_Type:{L,D})(Joining_Type:T)*‌(Joining_Type:T)*(Joining_Type:{R,D}) */
 	auto before = i;
 
-	while (before > 0 && joining_type(cps[before - 1]) == U_JT_TRANSPARENT) {
+	while (before > 0 && properties_of(cps[before - 1]).jt == joining::transparent) {
 		before--;
 	}
 
@@ -125,15 +93,15 @@ auto contextj_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
 		return false;
 	}
 
-	auto left = joining_type(cps[before - 1]);
+	auto left = properties_of(cps[before - 1]).jt;
 
-	if (left != U_JT_LEFT_JOINING && left != U_JT_DUAL_JOINING) {
+	if (left != joining::left && left != joining::dual) {
 		return false;
 	}
 
 	auto after = i + 1;
 
-	while (after < cps.size() && joining_type(cps[after]) == U_JT_TRANSPARENT) {
+	while (after < cps.size() && properties_of(cps[after]).jt == joining::transparent) {
 		after++;
 	}
 
@@ -141,9 +109,9 @@ auto contextj_ok(const std::vector<UChar32> &cps, std::size_t i) -> bool
 		return false;
 	}
 
-	auto right = joining_type(cps[after]);
+	auto right = properties_of(cps[after]).jt;
 
-	return right == U_JT_RIGHT_JOINING || right == U_JT_DUAL_JOINING;
+	return right == joining::right || right == joining::dual;
 }
 
 struct contexto_properties {
@@ -153,7 +121,7 @@ struct contexto_properties {
 };
 
 /* Compute address-wide context once, rather than rescanning for each character. */
-auto get_contexto_properties(const std::vector<UChar32> &cps) -> contexto_properties
+auto get_contexto_properties(const codepoints &cps) -> contexto_properties
 {
 	contexto_properties context;
 	bool middle_dot = false;
@@ -184,7 +152,7 @@ auto get_contexto_properties(const std::vector<UChar32> &cps) -> contexto_proper
 }
 
 /* RFC5892 A.3 to A.9 */
-auto contexto_ok(const std::vector<UChar32> &cps, std::size_t i,
+auto contexto_ok(const codepoints &cps, std::size_t i,
 				 const contexto_properties &context) -> bool
 {
 	auto cp = cps[i];
@@ -246,7 +214,7 @@ auto within(const std::vector<script_code> &used,
  * Rule 3. Japanese uses Han, Hiragana and Katakana together, so those
  * count as one script, as do Han with Hangul and Han with Bopomofo.
  */
-auto single_script(const std::vector<UChar32> &cps) -> bool
+auto single_script(const codepoints &cps) -> bool
 {
 	std::vector<script_code> used;
 
@@ -280,24 +248,112 @@ auto single_script(const std::vector<UChar32> &cps) -> bool
 		   within(used, {script_code::han, script_code::bopomofo});
 }
 
-auto is_nfc(const std::vector<UChar32> &cps) -> bool
+/* PRECIS and IDNA both exclude NFC_QC=No and conjoining Hangul jamo.
+ * Check canonical order and whether an unblocked character changes the
+ * starter. The table includes pairs whose starter is already composed. */
+auto is_nfc(const codepoints &cps) -> bool
 {
-	UErrorCode uc_err = U_ZERO_ERROR;
-	const auto *nfc = icu::Normalizer2::getNFCInstance(uc_err);
+	char32_t starter = 0;
+	unsigned last_ccc = 0;
+	for (auto cp: cps) {
+		const auto &p = properties_of(cp);
+		if (p.ccc != 0 && last_ccc > p.ccc) {
+			return false;
+		}
+		if (p.nfc_maybe && (last_ccc == 0 || last_ccc < p.ccc) &&
+			std::binary_search(std::begin(non_nfc_pairs), std::end(non_nfc_pairs), pair_key(starter, cp))) {
+			return false;
+		}
+		if (p.ccc == 0) {
+			starter = cp;
+		}
+		last_ccc = p.ccc;
+	}
+	return true;
+}
 
-	if (U_FAILURE(uc_err)) {
+/* For a single label RFC5893 is triggered by R, AL or AN. */
+auto valid_ulabel(const codepoints &cps) -> bool
+{
+	if (cps.empty() || cps.front() == '-' || cps.back() == '-' ||
+		(cps.size() >= 4 && cps[2] == '-' && cps[3] == '-') ||
+		properties_of(cps.front()).leading_mark) {
 		return false;
 	}
 
-	icu::UnicodeString us;
+	const auto context = get_contexto_properties(cps);
+	bool has_rtl = false, european_number = false, arabic_number = false, other = false;
+	auto last = bidi::other;
+	for (std::size_t i = 0; i < cps.size(); ++i) {
+		auto cp = cps[i];
+		const auto &p = properties_of(cp);
+		if (!p.idna_allowed || (is_contextj(cp) && !contextj_ok(cps, i)) ||
+			(is_contexto(cp) && !contexto_ok(cps, i, context))) {
+			return false;
+		}
 
-	for (auto cp: cps) {
-		us.append(cp);
+		has_rtl |= p.direction == bidi::rtl;
+		arabic_number |= p.direction == bidi::arabic_number;
+		european_number |= p.direction == bidi::european_number;
+		other |= p.direction == bidi::other;
+		if (p.direction != bidi::mark) {
+			last = p.direction;
+		}
+	}
+	if (has_rtl || arabic_number) {
+		if (properties_of(cps.front()).direction != bidi::rtl || other ||
+			(arabic_number && european_number) ||
+			(last != bidi::rtl && last != bidi::arabic_number && last != bidi::european_number)) {
+			return false;
+		}
+	}
+	return is_nfc(cps);
+}
+
+auto is_a_label(std::string_view atom) -> bool
+{
+	if (atom.size() <= 4 || atom.size() > 63 || g_ascii_strncasecmp(atom.data(), "xn--", 4) != 0) {
+		return false;
+	}
+	std::array<char, 64> ascii{};
+	for (std::size_t i = 0; i < atom.size(); ++i) {
+		auto c = atom[i];
+		if (!g_ascii_isalnum(c) && c != '-') {
+			return false;
+		}
+		ascii[i] = g_ascii_tolower(c);
 	}
 
-	auto normalized = nfc->isNormalized(us, uc_err);
+	gchar *decoded = g_hostname_to_unicode(ascii.data());
+	if (decoded == nullptr) {
+		return false;
+	}
+	codepoints label;
+	bool valid = decode_utf8(decoded, label);
+	g_free(decoded);
+	if (!valid || std::none_of(label.begin(), label.end(), [](auto cp) { return cp >= 0x80; }) ||
+		!valid_ulabel(label)) {
+		return false;
+	}
+	/* RFC5890 requires the decoded U-label to round-trip to the A-label. */
+	std::array<char, 64> encoded{};
+	auto len = encoded.size();
+	return rdns_punycode_label_toascii(label.data(), label.size(), encoded.data(), &len) &&
+		   len == atom.size() && std::equal(encoded.begin(), encoded.begin() + len, ascii.begin());
+}
 
-	return U_SUCCESS(uc_err) && normalized;
+auto has_a_label(std::string_view s) -> bool
+{
+	for (;;) {
+		auto end = s.find('.');
+		if (is_a_label(s.substr(0, end))) {
+			return true;
+		}
+		if (end == s.npos) {
+			return false;
+		}
+		s.remove_prefix(end + 1);
+	}
 }
 
 }// namespace
@@ -312,7 +368,7 @@ rspamd_smtputf8_check_address(const char *user, gsize user_len,
 	const auto ascii_domain = std::all_of(domain_sv.begin(), domain_sv.end(), is_ascii);
 	const auto ascii_address = ascii_domain &&
 							   std::all_of(user_sv.begin(), user_sv.end(), is_ascii);
-	std::vector<UChar32> cps;
+	codepoints cps;
 
 	if (!ascii_address) {
 		cps.reserve(user_len + domain_len + 1);

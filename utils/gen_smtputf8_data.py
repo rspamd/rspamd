@@ -3,9 +3,8 @@
 Generates src/libutil/cxx/smtputf8_data.hxx, the code point table for
 draft-ietf-mailmaint-smtputf8-syntax.
 
-The table gives the script of each code point the PRECIS IdentifierClass
-permits (RFC8264 8, with the exceptions from RFC5892 2.6), and "none" for
-the rest. Rule 2 of the draft needs the former and rule 3 the latter.
+The tables describe the PRECIS IdentifierClass, scripts, joining and NFC
+properties, and IDNA2008 validity for decoding A-labels.
 
 CONTEXTJ and CONTEXTO code points get their script like any permitted
 code point. RFC5892 enumerates them, so smtputf8_syntax.cxx applies their
@@ -16,7 +15,10 @@ To move to a new Unicode version, fetch these files from
 https://www.unicode.org/Public/<version>/ucd/ into one directory:
 
   UnicodeData.txt DerivedCoreProperties.txt DerivedNormalizationProps.txt
-  Scripts.txt HangulSyllableType.txt PropList.txt
+  Scripts.txt HangulSyllableType.txt PropList.txt extracted/DerivedJoiningType.txt
+
+Also copy ../idna/Idna2008.txt from the same Unicode release into that directory.
+Use Python with the matching unicodedata version, or install unicodedata2==<version>.
 
 Run:  python3 gen_smtputf8_data.py <dir> > src/libutil/cxx/smtputf8_data.hxx
 """
@@ -24,6 +26,7 @@ Run:  python3 gen_smtputf8_data.py <dir> > src/libutil/cxx/smtputf8_data.hxx
 import os
 import re
 import sys
+import unicodedata
 
 MAX_CP = 0x10FFFF
 
@@ -66,11 +69,11 @@ def ucd_ranges(directory, name):
         yield int(first, 16), int(last or first, 16), fields[1:]
 
 
-def ucd_version(directory):
-    with open(os.path.join(directory, "Scripts.txt"), encoding="utf-8") as f:
-        m = re.match(r"# Scripts-(\d+\.\d+\.\d+)\.txt", f.readline())
+def ucd_version(directory, name):
+    with open(os.path.join(directory, name), encoding="utf-8") as f:
+        m = re.search(r"-(\d+\.\d+\.\d+)\.txt", f.readline())
     if not m:
-        sys.exit("Scripts.txt does not name its Unicode version")
+        sys.exit(f"{name} does not name its Unicode version")
     return m.group(1)
 
 
@@ -132,11 +135,47 @@ def enum_name(script):
     return script.lower()
 
 
+def unicode_database(version):
+    if unicodedata.unidata_version == version:
+        return unicodedata
+    try:
+        import unicodedata2
+        if unicodedata2.unidata_version == version:
+            return unicodedata2
+    except ImportError:
+        pass
+    sys.exit(f"regeneration requires unicodedata {version} or unicodedata2=={version}")
+
+
+def nfc_pairs(db, permitted, maybe):
+    # All permitted single code points are NFC. Jamo that compose Hangul
+    # are excluded by PRECIS. The remaining starters that can change are
+    # either the first part of a canonical composition or already composed.
+    starters = set()
+    for cp in range(MAX_CP + 1):
+        decomp = db.decomposition(chr(cp))
+        if decomp and not decomp.startswith("<"):
+            starters.add(int(decomp.split()[0], 16))
+            starters.add(cp)
+    seconds = sorted(cp for cp in maybe if permitted[cp])
+    for first in sorted(starters):
+        if permitted[first] and db.combining(chr(first)) == 0:
+            for second in seconds:
+                pair = chr(first) + chr(second)
+                if db.normalize("NFC", pair) != pair:
+                    yield first, second
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: gen_smtputf8_data.py <directory with UCD files>")
     directory = sys.argv[1]
-    version = ucd_version(directory)
+    version = ucd_version(directory, "Scripts.txt")
+    for name in ("Idna2008.txt", "extracted/DerivedJoiningType.txt", "DerivedNormalizationProps.txt",
+                 "DerivedCoreProperties.txt", "HangulSyllableType.txt", "PropList.txt"):
+        if ucd_version(directory, name) != version:
+            sys.exit(f"{name} does not match Unicode {version}")
+    db = unicode_database(version)
 
     props = {
         "noncharacters": property_set(directory, "PropList.txt",
@@ -175,19 +214,32 @@ def main():
 
     names = ["none"] + sorted({enum_name(v) for v in values if v})
 
+    maybe = property_set(directory, "DerivedNormalizationProps.txt", "NFC_QC", "M")
+    joining = property_map(directory, "extracted/DerivedJoiningType.txt")
+    idna = property_map(directory, "Idna2008.txt")
+    joins = {"L": "left", "R": "right", "D": "dual", "T": "transparent"}
+    directions = {"R": "rtl", "AL": "rtl", "AN": "arabic_number", "EN": "european_number",
+                  "NSM": "mark", **dict.fromkeys(("ES", "CS", "ET", "ON", "BN"), "neutral")}
+    properties = {}
     ranges = []
     for cp, value in enumerate(values):
-        name = enum_name(value) if value else "none"
-        if not ranges or ranges[-1][1] != name:
-            ranges.append((cp, name))
+        allowed = idna.get(cp) in ("PVALID", "CONTEXTJ", "CONTEXTO")
+        if allowed and not value:
+            sys.exit(f"IDNA code point U+{cp:04X} is outside the generated PRECIS repertoire")
+        fields = (enum_name(value) if value else "none", db.combining(chr(cp)),
+                  joins.get(joining.get(cp), "other"),
+                  directions.get(db.bidirectional(chr(cp)), "other") if allowed else "other",
+                  cp in maybe, allowed, allowed and category[cp].startswith("M"))
+        index = properties.setdefault(fields, len(properties))
+        if not ranges or ranges[-1][1] != index:
+            ranges.append((cp, index))
 
     print("/*")
     print(" * Generated by utils/gen_smtputf8_data.py from the Unicode %s"
           % version)
     print(" * character database -- do not edit by hand.")
     print(" *")
-    print(" * The script of each code point the PRECIS IdentifierClass permits,")
-    print(" * and none for the rest.")
+    print(" * PRECIS, contextual, NFC and IDNA2008 properties for SMTPUTF8.")
     print(" */")
     print()
     print("#ifndef RSPAMD_SMTPUTF8_DATA_HXX")
@@ -204,19 +256,39 @@ def main():
         print("\t%s," % name)
     print("};")
     print()
-    print("/*")
-    print(" * Each entry is the first code point of a range, shifted left by")
-    print(" * eight, plus the script of the range. A range ends where the next")
-    print(" * one starts, and the entries are sorted for binary search.")
-    print(" */")
-    print("constexpr std::uint32_t range(char32_t first, script s)")
+    for enum, members in (("joining", ("other", "left", "right", "dual", "transparent")),
+                          ("bidi", ("other", "rtl", "arabic_number", "european_number", "mark", "neutral"))):
+        print(f"enum class {enum} : std::uint8_t {{")
+        for member in members:
+            print(f"\t{member},")
+        print("};")
+    print("struct properties {")
+    print("\tscript sc;")
+    print("\tstd::uint8_t ccc;")
+    print("\tjoining jt;")
+    print("\tbidi direction;")
+    print("\tbool nfc_maybe, idna_allowed, leading_mark;")
+    print("};")
+    print("constexpr properties property_values[] = {")
+    for sc, ccc, jt, bidi, *flags in properties:
+        bools = ", ".join(str(v).lower() for v in flags)
+        print(f"\t{{script::{sc}, {ccc}, joining::{jt}, bidi::{bidi}, {bools}}},")
+    print("};")
+    print("struct property_range {")
+    print("\tchar32_t first;")
+    print("\tstd::uint16_t index;")
+    print("};")
+    print("constexpr property_range ranges[] = {")
+    for cp, index in ranges:
+        print(f"\t{{0x{cp:04X}, {index}}},")
+    print("};")
+    print("constexpr std::uint64_t pair_key(char32_t first, char32_t second)")
     print("{")
-    print("\treturn (static_cast<std::uint32_t>(first) << 8) | static_cast<std::uint8_t>(s);")
+    print("\treturn (static_cast<std::uint64_t>(first) << 21) | second;")
     print("}")
-    print()
-    print("constexpr std::uint32_t script_ranges[] = {")
-    for cp, name in ranges:
-        print("\trange(0x%04X, script::%s)," % (cp, name))
+    print("constexpr std::uint64_t non_nfc_pairs[] = {")
+    for first, second in nfc_pairs(db, values, maybe):
+        print(f"\tpair_key(0x{first:04X}, 0x{second:04X}),")
     print("};")
     print()
     print("}// namespace rspamd::smtputf8")
