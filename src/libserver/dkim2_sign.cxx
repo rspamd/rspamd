@@ -123,7 +123,8 @@ auto tag_list_builder::folded(std::string_view newline, std::size_t width) const
 	return out;
 }
 
-auto check_originator(std::span<const raw_header_t> headers, const sign_fields_t &fields)
+auto check_originator(std::span<const raw_header_t> headers, const sign_fields_t &fields,
+					  const to_alabel_fn &to_alabel)
 	-> std::optional<std::string>
 {
 	std::string_view from;
@@ -162,7 +163,9 @@ auto check_originator(std::span<const raw_header_t> headers, const sign_fields_t
 		return "the message does not have a single From address";
 	}
 
-	auto from_domain = *maybe_domain;
+	/* A U-label is compared in its A-label form */
+	auto mapped = to_alabel ? to_alabel(*maybe_domain) : std::optional<std::string>{std::string{*maybe_domain}};
+	std::string_view from_domain = mapped ? std::string_view{*mapped} : std::string_view{};
 
 	if (!valid_domain(from_domain)) {
 		return "the From address does not have a usable domain";
@@ -305,9 +308,15 @@ bool rspamd_dkim2_sign(struct rspamd_task *task,
 
 	sign_fields_t fields;
 
-	fields.domain = domain;
+	/* The signing domain may come from a From header field with a U-label */
+	auto signing_domain = domain_alabel(task, domain);
+
+	if (!signing_domain) {
+		return fail("the signing domain cannot be mapped to A-labels");
+	}
+
+	fields.domain = std::move(*signing_domain);
 	fields.selector = selector;
-	rspamd_str_lc(fields.domain.data(), fields.domain.size());
 
 	switch (rspamd_dkim_sign_key_get_type(key)) {
 	case RSPAMD_DKIM_KEY_RSA:
@@ -373,7 +382,11 @@ bool rspamd_dkim2_sign(struct rspamd_task *task,
 		return fail(fmt::format("the message header cannot be signed: {}", headers.error()));
 	}
 
-	if (auto problem = check_originator(*headers, fields)) {
+	auto problem = check_originator(*headers, fields, [&](std::string_view dom) {
+		return domain_alabel(task, dom);
+	});
+
+	if (problem) {
 		return fail(*problem);
 	}
 

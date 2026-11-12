@@ -16,6 +16,10 @@ ${SIGNER}          ${RSPAMD_TESTDIR}/util/dkim2_sign.py
 ${MAIL_FROM}       bounce@example.com
 ${RCPT_TO}         list@example.net
 
+# U+00E5 in UTF-8: the HTTP client sends header values as Latin-1 octets,
+# while an MTA passes an SMTPUTF8 envelope to Rspamd in UTF-8
+${UTF8_A_RING}     \xc3\xa5
+
 *** Keywords ***
 DKIM2 Signing Setup
   Rspamd Setup
@@ -58,6 +62,24 @@ DKIM2 Sign Subdomain MAIL FROM
   Sign Message  ${RSPAMD_TMPDIR}/signed_sub.eml  from=bounce@mail.example.com
   Scan File  ${RSPAMD_TMPDIR}/signed_sub.eml  From=bounce@mail.example.com  Rcpt=${RCPT_TO}
   Expect Symbol With Exact Options  R_DKIM2_ALLOW  example.com:i=1:m=1/1
+
+DKIM2 Sign From With U-label
+  [Documentation]  An EAI sender: d= and mf= are written as A-labels
+  ${result} =  Run Process  python3  ${SIGNER}
+  ...  --rsa-key  ${RSPAMD_TESTDIR}/configs/dkim.key
+  ...  --ed-key  ${RSPAMD_TESTDIR}/configs/dkim-eddsa-pem.key
+  ...  idn_unsigned  ${RSPAMD_TMPDIR}/idn_unsigned.eml
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stderr}
+  Scan File  ${RSPAMD_TMPDIR}/idn_unsigned.eml  User=arnt@gr${UTF8_A_RING}.org  From=bounce@gr${UTF8_A_RING}.org  Rcpt=${RCPT_TO}
+  Expect Symbol  DKIM2_SIGNED
+  ${added} =  Set Variable  ${SCAN_RESULT}[milter][add_headers]
+  Should Contain  ${added}[DKIM2-Signature][value]  d=xn--gr-zia.org
+  Should Not Contain  ${added}[DKIM2-Signature][value]  grå
+  ${original} =  Get Binary File  ${RSPAMD_TMPDIR}/idn_unsigned.eml
+  ${signed} =  Evaluate  ('DKIM2-Signature: ' + $added['DKIM2-Signature']['value'] + '\\r\\nMessage-Instance: ' + $added['Message-Instance']['value'] + '\\r\\n').replace('\\r\\n', '\\n').replace('\\n', '\\r\\n').encode() + $original
+  Create Binary File  ${RSPAMD_TMPDIR}/idn_signed.eml  ${signed}
+  Scan File  ${RSPAMD_TMPDIR}/idn_signed.eml  From=bounce@gr${UTF8_A_RING}.org  Rcpt=${RCPT_TO}
+  Expect Symbol With Exact Options  R_DKIM2_ALLOW  xn--gr-zia.org:i=1:m=1/1
 
 DKIM2 Not Signed Without Envelope
   Scan File  ${RSPAMD_TMPDIR}/unsigned.eml  User=alice@example.com

@@ -1336,6 +1336,26 @@ TEST_SUITE("rspamd_dkim2")
 		CHECK(check("From: alice@example.com, bob@example.com\r\n").has_value());
 		CHECK(check("From: alice@[192.0.2.1]\r\n").has_value());
 
+		/* A U-label in the From is compared as an A-label, if it can be mapped */
+		fields.domain = "xn--gr-zia.org";
+		fields.mf = "<bounce@xn--gr-zia.org>";
+		CHECK(check("From: Arnt <arnt@gr\xc3\xa5.org>\r\n").has_value());
+		{
+			auto hdrs = scan_headers("From: Arnt <arnt@gr\xc3\xa5.org>\r\n");
+			REQUIRE(hdrs.has_value());
+			auto mapper = [](std::string_view dom) -> std::optional<std::string> {
+				if (dom == "gr\xc3\xa5.org") {
+					return "xn--gr-zia.org";
+				}
+				return std::nullopt;
+			};
+			CHECK(!check_originator(*hdrs, fields, mapper));
+			fields.domain = "example.com";
+			fields.mf = "<bounce@example.com>";
+			CHECK(check_originator(*hdrs, fields, mapper).has_value());
+		}
+		fields.mf = "<bounce@mail.example.com>";
+
 		/* Not an original message */
 		CHECK(check("Message-Instance: m=1; h=sha256:AA==:AA==\r\nFrom: alice@example.com\r\n").has_value());
 		CHECK(check("dkim2-signature: i=1\r\nFrom: alice@example.com\r\n").has_value());

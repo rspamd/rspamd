@@ -85,13 +85,21 @@ struct signed_fields_t {
 /* Signs a SHA-256 digest of the signature input, returns the raw signature */
 using sign_digest_fn = std::function<std::optional<std::string>(std::string_view digest)>;
 
+/*
+ * Maps a domain to its lowercase A-label form, nullopt if it has none. A
+ * From header field may have a U-label, which has to be mapped before any
+ * comparison (Section 18); without the function only ASCII domains pass.
+ */
+using to_alabel_fn = std::function<std::optional<std::string>(std::string_view domain)>;
+
 /**
  * Check that the Originator may sign: there are no DKIM2 fields yet, the
  * signing domain matches the MAIL FROM domain (Section 10.8) and the only
  * From header field is Authentic for it (Section 11).
  * @return what is wrong, or nullopt
  */
-auto check_originator(std::span<const raw_header_t> headers, const sign_fields_t &fields)
+auto check_originator(std::span<const raw_header_t> headers, const sign_fields_t &fields,
+					  const to_alabel_fn &to_alabel = {})
 	-> std::optional<std::string>;
 
 /**
