@@ -78,6 +78,21 @@ local function maybe_force_action(task, disposition)
   end
 end
 
+-- Returns the A-label form of a domain that has U-labels: the From header
+-- field of an EAI message has the latter, signatures and SMTP have either,
+-- and RFC 8616 says that they are one domain
+local function domain_to_alabel(task, domain)
+  if domain and domain:find('[\128-\255]') then
+    domain = task:get_resolver():idna_convert_utf8(domain, task:get_mempool())
+    -- What does not convert comes back with U+FFFD
+    if not domain or domain:find('[\128-\255]') then
+      return nil
+    end
+  end
+
+  return domain
+end
+
 local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local reason = {}
 
@@ -94,6 +109,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   if not spf_domain or spf_domain == '' then
     spf_domain = task:get_helo() or ''
   end
+
+  -- The From domain is in its A-label form here
+  spf_domain = domain_to_alabel(task, spf_domain) or ''
 
   if task:has_symbol(settings.symbols['spf_allow_symbol']) then
     if policy.strict_spf then
@@ -476,7 +494,9 @@ local function dmarc_callback(task)
   -- message; rewrites done via task:set_from (e.g. by the aliases module)
   -- must not affect alignment, policy lookup or reporting
   local from = task:get_from({ 'mime', 'orig' })
-  local hfromdom = ((from or E)[1] or E).domain
+  -- A U-label domain is handled as its A-label: this is what the alignment
+  -- compares, what is looked up in DNS and what goes to the reports
+  local hfromdom = domain_to_alabel(task, ((from or E)[1] or E).domain)
   local dmarc_domain
   local ip_addr = task:get_ip()
   local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'double') or 0

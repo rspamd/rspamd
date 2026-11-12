@@ -697,8 +697,12 @@ lua_dns_resolver_idna_convert_utf8(lua_State *L)
 	unsigned int conv_len = 0;
 	const char *hname = luaL_checklstring(L, 2, &hlen);
 	char *converted;
-	rspamd_mempool_t *pool = rspamd_lua_check_udata_maybe(L, 3, rspamd_mempool_classname);
+	rspamd_mempool_t *pool = NULL;
 
+	if (lua_type(L, 3) == LUA_TUSERDATA) {
+		/* The userdata holds a pointer to the pool, it is not the pool itself */
+		pool = rspamd_lua_check_mempool(L, 3);
+	}
 
 	if (dns_resolver && hname) {
 		if (!rspamd_str_has_8bit(hname, hlen)) {

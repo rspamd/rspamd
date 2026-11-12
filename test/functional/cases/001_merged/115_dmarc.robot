@@ -87,6 +87,29 @@ DMARC SUBDOMAIN PASS DKIM RELAXED ALIGNMENT
   ...  Settings=${DMARC_SETTINGS}
   Expect Symbol  DMARC_POLICY_ALLOW
 
+DMARC EAI PASS SPF A-LABEL ENVELOPE
+  [Documentation]  The From domain is a U-label and MAIL FROM has the A-label
+  ...  form of the same domain: they are one domain for the alignment
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/eai_spf.eml
+  ...  IP=8.8.4.4  From=arnt@spf.xn--gr-zia.org
+  ...  Settings=${DMARC_SETTINGS}
+  Expect Symbol  DMARC_POLICY_ALLOW
+
+DMARC EAI PASS SPF U-LABEL ENVELOPE
+  [Documentation]  An SMTPUTF8 envelope has the U-label too; the HTTP client
+  ...  sends header values as Latin-1, hence the UTF-8 octets written out
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/eai_spf.eml
+  ...  IP=8.8.4.4  From=arnt@spf.gr\xc3\xa5.org
+  ...  Settings=${DMARC_SETTINGS}
+  Expect Symbol  DMARC_POLICY_ALLOW
+
+DMARC EAI FAIL SPF NOT ALIGNED
+  [Documentation]  SPF passes for another domain, which authorises nothing
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/eai_spf.eml
+  ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
+  ...  Settings=${DMARC_SETTINGS}
+  Expect Symbol  DMARC_POLICY_REJECT
+
 DMARC SUBDOMAIN PASS SPF STRICT ALIGNMENT
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/onsubdomain_fail_alignment.eml
   ...  IP=37.48.67.26  From=foo@yo.mom.za.org
