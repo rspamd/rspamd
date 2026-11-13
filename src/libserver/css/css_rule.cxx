@@ -184,20 +184,6 @@ clip_function_hides(const css_consumed_block::css_function_block &func) -> bool
 	return false;
 }
 
-/*
- * Case-insensitive comparison of an identifier token with a word
- * given as a literal
- */
-template<std::size_t N>
-static auto
-css_ident_equals(const css_parser_token &tok, const char (&word)[N]) -> bool
-{
-	auto str = tok.get_string_or_default("");
-
-	return str.size() == N - 1 &&
-		   g_ascii_strncasecmp(str.data(), word, N - 1) == 0;
-}
-
 static auto
 allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
 	-> std::optional<css_value>
@@ -257,75 +243,6 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 				}
 
 				return css_value::maybe_dimension_from_number(tok);
-			}
-		}
-		else if (parser_block.is_function() &&
-				 (prop.type == css_property_type::PROPERTY_WIDTH ||
-				  prop.type == css_property_type::PROPERTY_HEIGHT ||
-				  prop.type == css_property_type::PROPERTY_MIN_WIDTH ||
-				  prop.type == css_property_type::PROPERTY_MIN_HEIGHT ||
-				  prop.type == css_property_type::PROPERTY_MAX_WIDTH ||
-				  prop.type == css_property_type::PROPERTY_MAX_HEIGHT)) {
-			/*
-			 * A function value such as calc() or var() cannot be
-			 * resolved to an absolute size. Width, height and the
-			 * minimums are recorded as unknown ones, the same way as
-			 * `auto`, and a maximum the `none` way, so that a bound
-			 * declared earlier does not survive a declaration that
-			 * replaced it with an unresolvable one
-			 */
-			if (prop.type == css_property_type::PROPERTY_MAX_HEIGHT ||
-				prop.type == css_property_type::PROPERTY_MAX_WIDTH) {
-				return css_value(css_dimension{-1.0f, false, false});
-			}
-
-			return css_value(css_dimension{-2.0f, false, false});
-		}
-	}
-	if (prop.type == css_property_type::PROPERTY_MAX_HEIGHT ||
-		prop.type == css_property_type::PROPERTY_MAX_WIDTH) {
-		if (parser_block.is_token()) {
-			/* A single token */
-			const auto &tok = parser_block.get_token_or_empty();
-
-			if (tok.type == css_parser_token::token_type::ident_token &&
-				(css_ident_equals(tok, "none") ||
-				 css_ident_equals(tok, "inherit"))) {
-				/* `none` removes the bound, and `inherit` resolves
-				 * against the parent and cannot be resolved here; both
-				 * are encoded as a negative length, which no valid CSS
-				 * dimension can be */
-				return css_value(css_dimension{-1.0f, false, false});
-			}
-		}
-	}
-	if (prop.type == css_property_type::PROPERTY_WIDTH ||
-		prop.type == css_property_type::PROPERTY_HEIGHT) {
-		if (parser_block.is_token()) {
-			/* A single token */
-			const auto &tok = parser_block.get_token_or_empty();
-
-			if (tok.type == css_parser_token::token_type::ident_token &&
-				(css_ident_equals(tok, "auto") ||
-				 css_ident_equals(tok, "inherit"))) {
-				/* `auto` is the intrinsic size, and `inherit` resolves
-				 * against the parent; both are unresolvable and encoded
-				 * as a negative length distinct from the `none` one */
-				return css_value(css_dimension{-2.0f, false, false});
-			}
-		}
-	}
-	if (prop.type == css_property_type::PROPERTY_MIN_HEIGHT ||
-		prop.type == css_property_type::PROPERTY_MIN_WIDTH) {
-		if (parser_block.is_token()) {
-			/* A single token */
-			const auto &tok = parser_block.get_token_or_empty();
-
-			if (tok.type == css_parser_token::token_type::ident_token &&
-				css_ident_equals(tok, "inherit")) {
-				/* An inherited minimum resolves against the parent and
-				 * cannot raise the floor here */
-				return css_value(css_dimension{-2.0f, false, false});
 			}
 		}
 	}
@@ -410,6 +327,105 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 	return std::nullopt;
 }
 
+/*
+ * The value of one of the sizing properties: width, height and the
+ * minimum and maximum ones. A declaration of them holds exactly one
+ * component, which is either a non negative length, or a keyword or a
+ * function that is valid for the property, but cannot be resolved to an
+ * absolute size here; anything else makes the declaration invalid.
+ *
+ * A value that cannot be resolved is a negative dimension, as no valid
+ * length is one: the -2 sentinel stands for `auto` and its likes (the
+ * size or the floor is not known), the -1 one for `none` and its likes
+ * of a maximum (there is no bound known)
+ */
+static auto
+sizing_property_value(const css_property &prop, const css_consumed_block &parser_block)
+	-> std::optional<css_value>
+{
+	const auto is_max = prop.type == css_property_type::PROPERTY_MAX_HEIGHT ||
+						prop.type == css_property_type::PROPERTY_MAX_WIDTH;
+	const auto unresolvable = css_value(css_dimension{is_max ? -1.0f : -2.0f, false, false});
+
+	if (parser_block.is_function()) {
+		static constexpr const std::string_view functions[] = {
+			"calc", "var", "env", "attr", "min", "max", "clamp", "fit-content",
+			"round", "mod", "rem", "sin", "cos", "tan", "asin", "acos", "atan",
+			"atan2", "pow", "sqrt", "hypot", "log", "exp", "abs", "sign",
+			"calc-size", "anchor-size", "-webkit-calc", "-moz-calc",
+			"-webkit-fit-content", "-moz-fit-content"};
+		auto name = parser_block.get_function_or_invalid().as_string();
+
+		for (const auto &f: functions) {
+			if (name.size() == f.size() &&
+				g_ascii_strncasecmp(name.data(), f.data(), f.size()) == 0) {
+				return unresolvable;
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	if (!parser_block.is_token()) {
+		return std::nullopt;
+	}
+
+	const auto &tok = parser_block.get_token_or_empty();
+
+	if (tok.type == css_parser_token::token_type::number_token) {
+		if ((tok.flags & css_parser_token::flag_bad_dimension) ||
+			!std::holds_alternative<float>(tok.value) ||
+			std::get<float>(tok.value) < 0) {
+			/* An unknown unit, or a negative size, which these properties
+			 * do not accept: the declaration is dropped */
+			return std::nullopt;
+		}
+
+		return css_value::maybe_dimension_from_number(tok);
+	}
+
+	if (tok.type != css_parser_token::token_type::ident_token) {
+		return std::nullopt;
+	}
+
+	/* The CSS-wide keywords and the intrinsic sizing ones, valid for any sizing property */
+	static constexpr const std::string_view common[] = {
+		"inherit", "initial", "unset", "revert", "revert-layer",
+		"min-content", "max-content", "fit-content", "stretch",
+		"-webkit-fill-available", "-moz-available", "-webkit-min-content",
+		"-webkit-max-content", "-moz-min-content", "-moz-max-content",
+		"-webkit-fit-content", "-moz-fit-content"};
+	auto word = tok.get_string_or_default("");
+	auto word_is = [&word](std::string_view w) -> bool {
+		return word.size() == w.size() &&
+			   g_ascii_strncasecmp(word.data(), w.data(), w.size()) == 0;
+	};
+
+	for (const auto &w: common) {
+		if (word_is(w)) {
+			return unresolvable;
+		}
+	}
+
+	/* `none` is valid for a maximum only, `auto` for the other ones */
+	if (is_max ? word_is("none") : word_is("auto")) {
+		return unresolvable;
+	}
+
+	return std::nullopt;
+}
+
+static auto
+is_sizing_property(const css_property &prop) -> bool
+{
+	return prop.type == css_property_type::PROPERTY_WIDTH ||
+		   prop.type == css_property_type::PROPERTY_HEIGHT ||
+		   prop.type == css_property_type::PROPERTY_MIN_WIDTH ||
+		   prop.type == css_property_type::PROPERTY_MIN_HEIGHT ||
+		   prop.type == css_property_type::PROPERTY_MAX_WIDTH ||
+		   prop.type == css_property_type::PROPERTY_MAX_HEIGHT;
+}
+
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 								blocks_gen_functor &&next_block_functor)
 	-> css_declarations_block_ptr
@@ -429,6 +445,12 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 	} state = parse_property;
 
 	auto seen_not = false;
+	/* The value components of the declaration, the important flag excluded */
+	auto value_parts = 0u;
+	/* Something follows the important flag, or a `!` is not the flag */
+	auto junk_after_value = false, seen_important = false;
+	/* The declaration that is skipped is an at-rule, which ends with a block */
+	auto skipping_at_rule = false;
 	ret = std::make_shared<css_declarations_block>();
 
 	/* Drops the current declaration, the next one starts after the `;` */
@@ -436,6 +458,29 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 		cur_rule.reset();
 		seen_not = false;
 		state = ignore_value;
+	};
+
+	/*
+	 * The end of a declaration: the sizing properties take exactly one
+	 * component and nothing after the important flag, or the declaration is
+	 * invalid and does not hide an earlier valid one
+	 */
+	auto finish_declaration = [&]() {
+		if (cur_rule) {
+			if (is_sizing_property(cur_property) &&
+				(junk_after_value || seen_not || value_parts != 1 ||
+				 cur_rule->get_values().size() != 1)) {
+				msg_debug_css("invalid value of the property %s",
+							  cur_property.to_string());
+			}
+			else {
+				ret->add_rule(std::move(cur_rule));
+			}
+		}
+
+		cur_rule.reset();
+		state = parse_property;
+		seen_not = false;
 	};
 
 	while (can_continue) {
@@ -451,6 +496,8 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					/* An empty declaration */
 					continue;
 				}
+
+				skipping_at_rule = prop_tok.type == css_parser_token::token_type::at_keyword_token;
 
 				cur_property = css_property::from_token(prop_tok)
 								   .value_or(bad_property);
@@ -478,6 +525,8 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					if (expect_colon_tok.type == css_parser_token::token_type::colon_token) {
 						state = parse_value;
 						seen_not = false;
+						value_parts = 0;
+						junk_after_value = seen_important = false;
 						cur_rule = std::make_shared<css_rule>(cur_property);
 					}
 					else if (expect_colon_tok.type == css_parser_token::token_type::semicolon_token) {
@@ -494,17 +543,13 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 				const auto &parser_tok = next_tok.get_token_or_empty();
 
 				if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
-					if (cur_rule) {
-						ret->add_rule(std::move(cur_rule));
-					}
-					cur_rule.reset();
-					state = parse_property;
-					seen_not = false;
+					finish_declaration();
 					continue;
 				}
 				else if (parser_tok.type == css_parser_token::token_type::delim_token &&
 						 parser_tok.get_string_or_default("") == "!") {
 					/* Probably something like !important */
+					junk_after_value = junk_after_value || seen_not || seen_important;
 					seen_not = true;
 					continue;
 				}
@@ -525,14 +570,24 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 						msg_debug_css("add important flag to property %s",
 									  cur_property.to_string());
 						cur_rule->set_flag(css_property_flag::FLAG_IMPORTANT);
+						seen_important = true;
 						continue;
 					}
+
+					/* A `!` that is not followed by the flag */
+					junk_after_value = true;
 				}
 				else {
+					junk_after_value = junk_after_value || seen_not;
 					seen_not = false;
 				}
 
-				auto maybe_value = allowed_property_value(cur_property, next_tok);
+				junk_after_value = junk_after_value || seen_important;
+				value_parts++;
+
+				auto maybe_value = is_sizing_property(cur_property)
+									   ? sizing_property_value(cur_property, next_tok)
+									   : allowed_property_value(cur_property, next_tok);
 
 				if (maybe_value) {
 					msg_debug_css("added value %s to the property %s",
@@ -552,8 +607,13 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			break;
 		case css_consumed_block::parser_tag_type::css_function:
 			if (state == parse_value) {
+				junk_after_value = junk_after_value || seen_not || seen_important;
 				seen_not = false;
-				auto maybe_value = allowed_property_value(cur_property, next_tok);
+				value_parts++;
+
+				auto maybe_value = is_sizing_property(cur_property)
+									   ? sizing_property_value(cur_property, next_tok)
+									   : allowed_property_value(cur_property, next_tok);
 
 				if (maybe_value && cur_rule) {
 					msg_debug_css("added value %s to the property %s",
@@ -563,6 +623,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 				}
 			}
 			else if (state == parse_property) {
+				skipping_at_rule = false;
 				state = ignore_value;
 			}
 			break;
@@ -575,12 +636,18 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 				drop_declaration();
 			}
 			else if (state == parse_property) {
+				skipping_at_rule = false;
 				state = ignore_value;
+			}
+			else if (skipping_at_rule && next_tok.opener == css_parser_token::token_type::ocurlbrace_token) {
+				/* The block ends an at-rule, no semicolon is needed */
+				skipping_at_rule = false;
+				state = parse_property;
 			}
 			break;
 		case css_consumed_block::parser_tag_type::css_eof_block:
-			if (state == parse_value && cur_rule) {
-				ret->add_rule(std::move(cur_rule));
+			if (state == parse_value) {
+				finish_declaration();
 			}
 			can_continue = false;
 			break;
@@ -1637,6 +1704,425 @@ TEST_SUITE("css")
 			hinted.set_block(*compile("color:#111111"));
 			CHECK(hinted.fg_color.r == 0x11);
 			CHECK(static_cast<int>(hinted.fg_color_mask) == rspamd::html::html_block::set);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	/*
+	 * Inline style declarations of the sizing properties. The "`" in a style
+	 * stands for the property name, so a row is checked for all six
+	 */
+	TEST_CASE("sizing properties in an inline style")
+	{
+		enum class kind {
+			len,       /* a length of the value, set by a normal declaration */
+			len_imp,   /* ... by an important one */
+			dropped,   /* invalid, nothing is recorded */
+			unres,     /* valid, but cannot be resolved to a size */
+			unres_imp, /* ... by an important declaration */
+			max_only,  /* a keyword valid for a maximum only (`none`) */
+			not_max,   /* a keyword valid for all but a maximum (`auto`) */
+		};
+		struct row {
+			std::string style;
+			kind k;
+			float v = 0;
+		};
+		constexpr auto len = kind::len, len_imp = kind::len_imp, dropped = kind::dropped,
+					   unres = kind::unres, unres_imp = kind::unres_imp,
+					   max_only = kind::max_only, not_max = kind::not_max;
+
+		const std::vector<row> rows{
+			/* Whitespace and comments around the colon */
+			{"` :100px", len, 100},
+			{"`/**/:100px", len, 100},
+			{"`:/**/ 100px /**/", len, 100},
+			{"` : 100px ;", len, 100},
+			{"`:\n100px\n;", len, 100},
+			/* Nothing inside a custom property or a function is a declaration */
+			{"--s:100px;`:var(--s,{x:y;`:1px;})", unres},
+			{"--s:{a:b;`:1px};`:2px", len, 2},
+			{"--s:(;`:1px)", dropped},
+			{"`:calc(1px;`:2px)", unres},
+			/* An invalid value is dropped, the earlier one stays */
+			{"`:1px;`:bogus", len, 1},
+			{"`:1px;`:foo(1)", len, 1},
+			{"`:1px;`:-1px", len, 1},
+			{"`:1px;`:1.px", len, 1},
+			{"`:1px;`:1px 2px", len, 1},
+			{"`:1px;`:1px foo", len, 1},
+			{"`:1px;`:", len, 1},
+			{"`:1px;`:=1px", len, 1},
+			{"`:1px;`:1foo", len, 1},
+			{"`:1px;`:url(x)", len, 1},
+			{"`:1px;`:\"1px\"", len, 1},
+			{"`:1px;`:#fff", len, 1},
+			{"`:1px;`:1px/2px", len, 1},
+			{"`:1px;`:1px,2px", len, 1},
+			{"`:1px;`:(1px)", len, 1},
+			/* Numbers */
+			{"`:1e2px", len, 100},
+			{"`:1E2px", len, 100},
+			{"`:1e+2px", len, 100},
+			{"`:1.5e-1px", len, 0.15f},
+			{"`:1e2", len, 100},
+			{"`:2e0px", len, 2},
+			{"`:+1px", len, 1},
+			{"`:-1px", dropped},
+			{"`:-1%", dropped},
+			{"`:-0px", len, 0},
+			{"`:.5px", len, 0.5f},
+			{"`:+.5px", len, 0.5f},
+			{"`:1.px", dropped},
+			{"`:1e+px", dropped},
+			{"`:1e", dropped},
+			{"`:1.5.5px", dropped},
+			{"`:0", len, 0},
+			{"`:0%", len, 0},
+			{"`:1PX", len, 1},
+			{"`:1Px", len, 1},
+			{"`:1IN", len, 96},
+			{"`:5", len, 5}, /* a unitless number is taken as pixels, as it always was */
+			{"`:" + std::string(40, '0') + "100px", len, 100},
+			{"`:" + std::string(300, '0') + "100px", len, 100},
+			{"`:0." + std::string(40, '0') + "1px", len, 1e-41f},
+			{"`:1" + std::string(400, '0') + "px", len, G_MAXFLOAT},
+			{"`:99999999999999999999999999999999999999999px", len, G_MAXFLOAT},
+			{"`:3e38in", len, G_MAXFLOAT},
+			{"`:1e999px", len, G_MAXFLOAT},
+			{"`:-1e999px", dropped},
+			/* Names */
+			{"WIDTH:1px", len, 1},
+			{"w\\69 dth:1px", len, 1},
+			{"W\\49 DTH:1px", len, 1},
+			{"\\77 idth:1px", len, 1},
+			{"w\\000069 dth:1px", len, 1},
+			{"w\\69\ndth:1px", len, 1},
+			{"border-`:1px", dropped},
+			{"-`:1px", dropped},
+			{"`-x:1px", dropped},
+			{"x`:1px", dropped},
+			{"--`:1px", dropped},
+			{"`\\3a 1px", dropped}, /* an escaped colon is a part of the name */
+			/* Values with more than a component, junk, the important flag */
+			{"`:1px 2px", dropped},
+			{"`:1px foo", dropped},
+			{"`:1px !important", len_imp, 1},
+			{"`:1px!important", len_imp, 1},
+			{"`:1px ! IMPORTANT", len_imp, 1},
+			{"`:1px !/**/important", len_imp, 1},
+			{"`:1px !ie", dropped},
+			{"`:1px !importantx", dropped},
+			{"`:1px !important !important", dropped},
+			{"`:1px !important 2px", dropped},
+			{"`:1px important", dropped},
+			{"`:important", dropped},
+			{"`:", dropped},
+			{"`:;", dropped},
+			{"`:!important", dropped},
+			{"`:=1px", dropped},
+			{"`:1px}", dropped},
+			{"`:1px)", dropped},
+			{"`:1px\\", dropped},
+			/* Keywords and functions that cannot be resolved */
+			{"`:auto", not_max},
+			{"`:AUTO", not_max},
+			{"`:none", max_only},
+			{"`:inherit", unres},
+			{"`:initial", unres},
+			{"`:unset", unres},
+			{"`:revert", unres},
+			{"`:revert-layer", unres},
+			{"`:min-content", unres},
+			{"`:max-content", unres},
+			{"`:fit-content", unres},
+			{"`:stretch", unres},
+			{"`:-webkit-fill-available", unres},
+			{"`:calc(1px + 2px)", unres},
+			{"`:calc((1px) + (2px))", unres},
+			{"`:calc(1px + (2px)", unres},
+			{"`:var(--x)", unres},
+			{"`:env(x)", unres},
+			{"`:min(1px,2px)", unres},
+			{"`:max(1px,2px)", unres},
+			{"`:clamp(1px,2px,3px)", unres},
+			{"`:attr(x)", unres},
+			{"`:fit-content(10px)", unres},
+			{"`:CALC(1px)", unres},
+			{"`:calc(1px) 2px", dropped},
+			{"`:calc(1px) !important", unres_imp},
+			{"`:1px;`:calc(1px)", unres},
+			{"`:1px;`:inherit", unres},
+			{"`:1px !important;`:calc(1px)", len_imp, 1},
+			{"`:1px;`:calc(1px) !important", unres_imp},
+			/* Strings, urls and comments */
+			{"content:\"a;`:1px\"", dropped},
+			{"content:'a;`:1px'", dropped},
+			{"background:url(x;`:1px)", dropped},
+			{"background:url( \"x;`:1px\" )", dropped},
+			{"content:\"a\\\"b;`:1px\"", dropped},
+			{"content:\"a\\\\\";`:1px", len, 1},
+			{"content:\"a/*\";`:1px", len, 1},
+			{"content:\"a\n;`:1px", len, 1}, /* a raw newline ends a string */
+			{"content:'a;`:1px", dropped},
+			{"content:\"a;`:1px", dropped},
+			{"`:1px /* unterminated", len, 1},
+			{"/* unterminated `:1px", dropped},
+			{"`:1px;/*`:2px", len, 1},
+			{"`:1px;/*`:2px*/", len, 1},
+			{"/*a*/ ` /*b*/ : /*c*/ 1px /*d*/", len, 1},
+			{"/* /* */`:1px */", dropped}, /* comments do not nest */
+			/* Brackets */
+			{"x:(;`:1px", dropped},
+			{"x:[;`:1px", dropped},
+			{"x:{;`:1px", dropped},
+			{"x:(;`:1px)", dropped},
+			{"x:(a);`:1px", len, 1},
+			{"x:[a;b];`:1px", len, 1},
+			{"x:{a;b};`:1px", len, 1},
+			{"x:(a];`:1px", dropped}, /* `]` does not close `(` */
+			{"x:(a]);`:1px", len, 1},
+			{"x:a);`:1px", len, 1},
+			{"};`:1px", len, 1},
+			{");`:1px", len, 1},
+			{"];`:1px", len, 1},
+			{"`:1px;}`:2px", len, 1},
+			{";;`:1px;;", len, 1},
+			{"{`:2px;`:1px}", dropped},
+			{"{a:b}`:2px;`:1px", len, 1},
+			{"{a:b};`:1px", len, 1},
+			{"x(;`:2px);`:1px", len, 1},
+			/* At-rules */
+			{"@media{`:2px}`:1px", len, 1},
+			{"@x `:2px;`:1px", len, 1},
+			{"@x;`:1px", len, 1},
+			{"@x{a:b;`:2px};`:1px", len, 1},
+			{"@x(a;b){}`:1px", len, 1},
+			{"@", dropped},
+			{"@`:1px", dropped},
+			/* NUL, non-ASCII and the empty input */
+			{std::string("`:1px;\0`:2px;`:3px", 18), len, 3},
+			{std::string("`:1\0px", 6), dropped},
+			{std::string("`:1px\0", 6), dropped},
+			{"`:1px\xC3\xA9", dropped},
+			{"\xC3\xA9:1px;`:1px", len, 1},
+			{"`:1px;\xFF\xFE:1;`:2px", len, 2},
+			{"", dropped},
+			{"   ", dropped},
+			{"\t\n\r\f", dropped},
+			{"`:1px\v", dropped}, /* a vertical tab is not whitespace in CSS */
+			/* The cascade inside a list */
+			{"`:1px;`:2px", len, 2},
+			{"`:1px !important;`:2px", len_imp, 1},
+			{"`:1px;`:2px !important", len_imp, 2},
+			{"`:1px !important;`:2px !important", len_imp, 2},
+			{"`:1px !important;`:bogus", len_imp, 1},
+			{"`:1px;`:bogus !important", len, 1},
+			{"`:1px !important;`:bogus !important", len_imp, 1},
+			{"`:1px;`:-1px !important", len, 1},
+			{"`:1px !important;`:-1px", len_imp, 1},
+			{"`:1px !important;`:-1px !important", len_imp, 1},
+			{"`:1px !important;`:foo(1) !important", len_imp, 1},
+			{"`:1px!important;`:1px 2px !important", len_imp, 1},
+			{"`:1PX;`:2Px", len, 2},
+			{"`:1px !important;`:calc(1px) !important", unres_imp},
+			{"`:1px;`:calc(1px);`:3px", len, 3},
+		};
+
+		struct prop_info {
+			const char *name;
+			bool is_max;
+			bool is_min;
+		};
+		const prop_info props[] = {
+			{"width", false, false},
+			{"height", false, false},
+			{"min-width", false, true},
+			{"min-height", false, true},
+			{"max-width", true, false},
+			{"max-height", true, false}};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto &r: rows) {
+			for (const auto &p: props) {
+				if (r.style.find('`') == std::string::npos && p.name != props[0].name) {
+					/* The row names the property itself: it is a width one */
+					continue;
+				}
+
+				std::string style;
+
+				for (auto c: r.style) {
+					if (c == '`') {
+						style += p.name;
+					}
+					else {
+						style.push_back(c);
+					}
+				}
+
+				auto label = style.size() > 80 ? style.substr(0, 80) : style;
+				auto *b = rspamd::css::parse_css_declaration(pool, style);
+				REQUIRE(b != nullptr);
+
+				float val;
+				unsigned mask;
+				bool imp;
+				const auto name = std::string_view{p.name};
+
+				if (name == "width") {
+					val = b->width_real, mask = b->width_real_mask, imp = b->width_important;
+				}
+				else if (name == "height") {
+					val = b->height_real, mask = b->height_real_mask, imp = b->height_important;
+				}
+				else if (name == "min-width") {
+					val = b->min_width, mask = b->min_width_mask, imp = b->min_width_important;
+				}
+				else if (name == "min-height") {
+					val = b->min_height, mask = b->min_height_mask, imp = b->min_height_important;
+				}
+				else if (name == "max-width") {
+					val = b->width_max, mask = b->width_max_mask, imp = b->max_width_important;
+				}
+				else {
+					val = b->height_max, mask = b->height_max_mask, imp = b->max_height_important;
+				}
+
+				auto k = r.k;
+
+				if (k == max_only) {
+					k = p.is_max ? unres : dropped;
+				}
+				else if (k == not_max) {
+					k = p.is_max ? dropped : unres;
+				}
+
+				switch (k) {
+				case len:
+				case len_imp:
+					CHECK_MESSAGE(mask == 1, p.name, ": ", label);
+					CHECK_MESSAGE(val == doctest::Approx(r.v).epsilon(1e-5), p.name, ": ", label);
+					CHECK_MESSAGE(imp == (k == len_imp), p.name, ": ", label);
+					break;
+				case unres:
+				case unres_imp:
+					/* A width or a height records a negative size, the other ones a mask of 2 */
+					if (p.is_max || p.is_min) {
+						CHECK_MESSAGE(mask == 2, p.name, ": ", label);
+					}
+					else {
+						CHECK_MESSAGE(mask == 1, p.name, ": ", label);
+						CHECK_MESSAGE(val < 0, p.name, ": ", label);
+					}
+					CHECK_MESSAGE(imp == (k == unres_imp), p.name, ": ", label);
+					break;
+				default:
+					CHECK_MESSAGE(mask == 0, p.name, ": ", label);
+					break;
+				}
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("escapes in a property name")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		/*
+		 * An escape takes up to six hex digits, so `\69d` is U+069D and the
+		 * name is not `width`: only a space or a non hex character ends it
+		 */
+		auto *b = rspamd::css::parse_css_declaration(pool, "w\\69dth:1px");
+		CHECK(unsigned(b->width_real_mask) == 0);
+		b = rspamd::css::parse_css_declaration(pool, "w\\69 dth:1px");
+		CHECK(unsigned(b->width_real_mask) == 1);
+		b = rspamd::css::parse_css_declaration(pool, "w\\i\\64 th:1px");
+		CHECK(unsigned(b->width_real_mask) == 1);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("hostile inline styles are consumed fast and without recursion")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		const std::size_t n = 50000;
+
+		auto width_of = [&](const std::string &style) -> std::pair<float, unsigned> {
+			auto *b = rspamd::css::parse_css_declaration(pool, style);
+
+			return {b->width_real, unsigned(b->width_real_mask)};
+		};
+
+		/* Closed and unclosed deep nesting of every bracket kind */
+		for (auto open: {'(', '[', '{'}) {
+			auto close = open == '(' ? ')' : open == '[' ? ']'
+														 : '}';
+			auto closed = "width:1px;--x:" + std::string(n, open) + std::string(n, close);
+
+			CHECK(width_of(closed + ";width:2px") == std::pair<float, unsigned>{2, 1});
+			CHECK(width_of(closed + "width:2px") == std::pair<float, unsigned>{1, 1});
+			CHECK(width_of("width:1px;--x:" + std::string(2 * n, open) + ";width:2px") ==
+				  std::pair<float, unsigned>{1, 1});
+		}
+
+		std::string nested = "width:1px;width:";
+
+		for (auto i = 0; i < 1000; i++) {
+			nested += "calc(";
+		}
+
+		for (auto i = 0; i < 1000; i++) {
+			nested += ")";
+		}
+
+		auto w = width_of(nested);
+		CHECK(w.second == 1);
+		CHECK(w.first < 0);
+		CHECK(width_of(nested + ";width:3px") == std::pair<float, unsigned>{3, 1});
+
+		/* A lot of declarations, valid and not, with the last one winning; the
+		 * input stays below the limit of the tokens consumed from one style */
+		std::string many;
+
+		for (auto i = 0; i < 5000; i++) {
+			many += "a:b;width:" + std::to_string(i % 7) + "px;width:bogus;";
+		}
+
+		CHECK(width_of(many + "width:9px") == std::pair<float, unsigned>{9, 1});
+
+		/* Many short comments and strings */
+		std::string noise;
+
+		for (auto i = 0; i < 20000; i++) {
+			noise += "/**/\"a;\"/*;*/";
+		}
+
+		CHECK(width_of("width:4px;x:" + noise + ";width:5px") == std::pair<float, unsigned>{5, 1});
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("important flag in declaration lists of a rule")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		const std::vector<std::pair<const char *, bool>> cases{
+			{"min-width:0 !important", true},
+			{"min-width:0 ! important", true},
+			{"min-width:0 important", false}, /* invalid, dropped */
+			{"min-width:0", false},
+		};
+
+		for (const auto &c: cases) {
+			auto res = process_declaration_tokens(pool, get_rules_parser_functor(pool, c.first));
+			auto *block = res->compile_to_block(pool);
+
+			CHECK_MESSAGE(block->min_width_important == c.second, c.first);
+			CHECK_MESSAGE(unsigned(block->min_width_mask) == (std::string_view{c.first} == "min-width:0 important" ? 0 : 1), c.first);
 		}
 
 		rspamd_mempool_delete(pool);
