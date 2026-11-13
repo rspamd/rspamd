@@ -179,6 +179,86 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
   description = 'Message has high image to text ratio'
 }
 
+rspamd_config.HTML_TINY_PIXEL_TRACKER = {
+  callback = function(task)
+    local tp = task:get_text_parts()
+    local has_tiny_pixel = false
+
+    for _, p in ipairs(tp) do
+      if p:get_length() >= 100 then
+        -- Some part carries real content, so the whole message
+        -- is not a contentless probe
+        return false
+      end
+
+      if p:is_html() then
+        local hc = p:get_html()
+
+        if hc then
+          local fl = hc:get_features()
+
+          if fl and fl['links'] then
+            -- A contentless message whose only images are tiny external
+            -- tracking pixels and that has no links at all is typical
+            -- for bounce/address probe messages. Links, images, URLs
+            -- and length are checked over all parts of the message
+            if fl['links']['total_links'] > 0 then
+              return false
+            end
+
+            if fl['images_tiny_external'] ~= fl['images_total'] then
+              return false
+            end
+
+            if fl['images_tiny_external'] > 0 then
+              has_tiny_pixel = true
+            end
+          end
+        end
+
+        -- Bare URLs and email addresses in HTML text are content as
+        -- well: image sources are the only URLs a contentless probe
+        -- may legitimately have
+        local urls = p:get_mimepart():get_urls(true)
+
+        if urls then
+          for _, u in ipairs(urls) do
+            local ufl = u:get_flags()
+
+            if not ufl or not ufl['image'] then
+              return false
+            end
+          end
+        end
+      else
+        -- URLs in text parts are content as well
+        local nurls = p:get_urls_length()
+
+        if nurls and nurls > 0 then
+          return false
+        end
+      end
+    end
+
+    -- Attachments carry content that text parts do not represent:
+    -- a message with a document or an archive is not a contentless
+    -- probe even when all its text parts are short. A binary part
+    -- without a name and a disposition is an attachment as well
+    for _, part in ipairs(task:get_parts()) do
+      if part:is_attachment() or part:get_filename() or
+          (not part:is_text() and not part:is_multipart()) then
+        return false
+      end
+    end
+
+    return has_tiny_pixel
+  end,
+
+  score = 3.0,
+  group = 'html',
+  description = 'Contentless message whose only images are tiny external tracking pixels'
+}
+
 -- Ignore layout whitespace and invisible characters used to pad inbox previews.
 local hidden_text_re = rspamd_regexp.create_cached(
     '/[^\\s\\p{Z}\\x{00ad}\\x{034f}\\x{200b}-\\x{200f}\\x{2060}\\x{feff}]/u')

@@ -1,0 +1,11 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Delivery update
+Message-ID: <update-321@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Your delivery slot is 14:00.</p>
+<img src="https://service.example.org/map.png" style="min-width:0;min-height:0" alt="Map"/>
+</body></html>

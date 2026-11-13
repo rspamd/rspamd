@@ -132,16 +132,58 @@ constexpr frozen::unordered_map<frozen::string, css_dimension_data, max_dims> di
 		 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
 		 */
 	{"ex", {css_parser_token::dim_type::dim_ex, 8.0}},
+	/* The advance of the "0" glyph, roughly 0.5em in many fonts */
+	{"ch", {css_parser_token::dim_type::dim_ch, 8.0}},
+	/* The line height of the element, roughly the font size */
+	{"lh", {css_parser_token::dim_type::dim_lh, 16.0}},
+	/* The rarer font-relative units of the same scale */
+	{"cap", {css_parser_token::dim_type::dim_cap, 10.0}},
+	{"ic", {css_parser_token::dim_type::dim_ic, 16.0}},
+	{"rlh", {css_parser_token::dim_type::dim_rlh, 16.0}},
 	/* 1% of a viewport that a mail client is likely to use */
 	{"vw", {css_parser_token::dim_type::dim_vw, 8.0}},
 	{"vh", {css_parser_token::dim_type::dim_vh, 6.0}},
 	{"vmax", {css_parser_token::dim_type::dim_vmax, 8.0}},
 	{"vmin", {css_parser_token::dim_type::dim_vmin, 6.0}},
+	/* The inline and block axes of a viewport, of the vmin scale */
+	{"vi", {css_parser_token::dim_type::dim_vi, 6.0}},
+	{"vb", {css_parser_token::dim_type::dim_vb, 6.0}},
+	/*
+	 * Small, large and dynamic viewport units: a mail client window
+	 * is small, so the multipliers of the base ones apply
+	 */
+	{"svw", {css_parser_token::dim_type::dim_svw, 8.0}},
+	{"lvw", {css_parser_token::dim_type::dim_lvw, 8.0}},
+	{"dvw", {css_parser_token::dim_type::dim_dvw, 8.0}},
+	{"svh", {css_parser_token::dim_type::dim_svh, 6.0}},
+	{"lvh", {css_parser_token::dim_type::dim_lvh, 6.0}},
+	{"dvh", {css_parser_token::dim_type::dim_dvh, 6.0}},
+	{"svi", {css_parser_token::dim_type::dim_svi, 6.0}},
+	{"lvi", {css_parser_token::dim_type::dim_lvi, 6.0}},
+	{"dvi", {css_parser_token::dim_type::dim_dvi, 6.0}},
+	{"svb", {css_parser_token::dim_type::dim_svb, 6.0}},
+	{"lvb", {css_parser_token::dim_type::dim_lvb, 6.0}},
+	{"dvb", {css_parser_token::dim_type::dim_dvb, 6.0}},
+	{"svmin", {css_parser_token::dim_type::dim_svmin, 6.0}},
+	{"lvmin", {css_parser_token::dim_type::dim_lvmin, 6.0}},
+	{"dvmin", {css_parser_token::dim_type::dim_dvmin, 6.0}},
+	{"svmax", {css_parser_token::dim_type::dim_svmax, 8.0}},
+	{"lvmax", {css_parser_token::dim_type::dim_lvmax, 8.0}},
+	{"dvmax", {css_parser_token::dim_type::dim_dvmax, 8.0}},
+	/* Container query units, of the viewport scale */
+	{"cqw", {css_parser_token::dim_type::dim_cqw, 8.0}},
+	{"cqh", {css_parser_token::dim_type::dim_cqh, 6.0}},
+	{"cqi", {css_parser_token::dim_type::dim_cqi, 6.0}},
+	{"cqb", {css_parser_token::dim_type::dim_cqb, 6.0}},
+	{"cqmin", {css_parser_token::dim_type::dim_cqmin, 6.0}},
+	{"cqmax", {css_parser_token::dim_type::dim_cqmax, 8.0}},
 	/* One point. 1pt = 1/72nd of 1in */
 	{"pt", {css_parser_token::dim_type::dim_pt, 96.0 / 72.0}},
 	/* 96px/2.54 */
 	{"cm", {css_parser_token::dim_type::dim_cm, 96.0 / 2.54}},
 	{"mm", {css_parser_token::dim_type::dim_mm, 9.60 / 2.54}},
+	/* A quarter of a millimetre */
+	{"q", {css_parser_token::dim_type::dim_q, 9.60 / 2.54 / 4}},
 	{"in", {css_parser_token::dim_type::dim_in, 96.0}},
 	/* 1pc = 12pt = 1/6th of 1in. */
 	{"pc", {css_parser_token::dim_type::dim_pc, 96.0 / 6.0}}};
@@ -157,7 +199,18 @@ auto css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	auto num = std::get<float>(value);
 	auto sv = std::get<std::string_view>(dim_token.value);
 
-	auto dim_found = find_map(dimensions_map, sv);
+	/* CSS units are case-insensitive */
+	char lower_buf[8];
+	auto unit_len = sv.size() > sizeof(lower_buf) - 1
+						? sizeof(lower_buf) - 1
+						: sv.size();
+
+	for (auto i = 0; i < unit_len; i++) {
+		lower_buf[i] = g_ascii_tolower(sv[i]);
+	}
+
+	auto dim_found = find_map(dimensions_map,
+							  std::string_view{lower_buf, unit_len});
 
 	if (dim_found) {
 		auto dim_elt = dim_found.value().get();
@@ -176,6 +229,22 @@ auto css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	return true;
 }
 
+auto css_is_known_unit(std::string_view unit) -> bool
+{
+	/* CSS units are case-insensitive */
+	char lower_buf[8];
+	auto unit_len = unit.size() > sizeof(lower_buf) - 1
+						? sizeof(lower_buf) - 1
+						: unit.size();
+
+	for (auto i = 0; i < unit_len; i++) {
+		lower_buf[i] = g_ascii_tolower(unit[i]);
+	}
+
+	return find_map(dimensions_map,
+					std::string_view{lower_buf, unit_len})
+		.has_value();
+}
 
 /*
  * Consume functions: return a token and advance lexer offset

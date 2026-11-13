@@ -40,6 +40,8 @@ enum class css_property_type : std::uint16_t {
 	PROPERTY_WIDTH,
 	PROPERTY_MAX_HEIGHT,
 	PROPERTY_MAX_WIDTH,
+	PROPERTY_MIN_HEIGHT,
+	PROPERTY_MIN_WIDTH,
 	PROPERTY_DISPLAY,
 	PROPERTY_VISIBILITY,
 	PROPERTY_OPACITY,
@@ -157,6 +159,8 @@ struct alignas(int) css_property {
 			   type == css_property_type::PROPERTY_WIDTH ||
 			   type == css_property_type::PROPERTY_MAX_HEIGHT ||
 			   type == css_property_type::PROPERTY_MAX_WIDTH ||
+			   type == css_property_type::PROPERTY_MIN_HEIGHT ||
+			   type == css_property_type::PROPERTY_MIN_WIDTH ||
 			   type == css_property_type::PROPERTY_LEFT ||
 			   type == css_property_type::PROPERTY_TOP ||
 			   type == css_property_type::PROPERTY_TEXT_INDENT ||

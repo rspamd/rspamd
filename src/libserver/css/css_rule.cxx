@@ -17,6 +17,7 @@
 #include "css_rule.hxx"
 #include "css.hxx"
 #include "libserver/html/html_block.hxx"
+#include <cmath>
 #include <limits>
 #include <array>
 #include <algorithm>
@@ -183,6 +184,20 @@ clip_function_hides(const css_consumed_block::css_function_block &func) -> bool
 	return false;
 }
 
+/*
+ * Case-insensitive comparison of an identifier token with a word
+ * given as a literal
+ */
+template<std::size_t N>
+static auto
+css_ident_equals(const css_parser_token &tok, const char (&word)[N]) -> bool
+{
+	auto str = tok.get_string_or_default("");
+
+	return str.size() == N - 1 &&
+		   g_ascii_strncasecmp(str.data(), word, N - 1) == 0;
+}
+
 static auto
 allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
 	-> std::optional<css_value>
@@ -216,9 +231,10 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			if (tok.type == css_parser_token::token_type::number_token) {
 				if (tok.flags & css_parser_token::flag_bad_dimension) {
 					/*
-					 * The unit is not one we know: the tokeniser leaves the
-					 * bare number behind, and reading it as pixels turns a
-					 * responsive size into a hidden one
+					 * The unit is not one we know, while all the valid CSS
+					 * length units are: this is invalid CSS, which a
+					 * browser drops as well, leaving the earlier
+					 * declaration of the property in effect
 					 */
 					return std::nullopt;
 				}
@@ -241,6 +257,75 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 				}
 
 				return css_value::maybe_dimension_from_number(tok);
+			}
+		}
+		else if (parser_block.is_function() &&
+				 (prop.type == css_property_type::PROPERTY_WIDTH ||
+				  prop.type == css_property_type::PROPERTY_HEIGHT ||
+				  prop.type == css_property_type::PROPERTY_MIN_WIDTH ||
+				  prop.type == css_property_type::PROPERTY_MIN_HEIGHT ||
+				  prop.type == css_property_type::PROPERTY_MAX_WIDTH ||
+				  prop.type == css_property_type::PROPERTY_MAX_HEIGHT)) {
+			/*
+			 * A function value such as calc() or var() cannot be
+			 * resolved to an absolute size. Width, height and the
+			 * minimums are recorded as unknown ones, the same way as
+			 * `auto`, and a maximum the `none` way, so that a bound
+			 * declared earlier does not survive a declaration that
+			 * replaced it with an unresolvable one
+			 */
+			if (prop.type == css_property_type::PROPERTY_MAX_HEIGHT ||
+				prop.type == css_property_type::PROPERTY_MAX_WIDTH) {
+				return css_value(css_dimension{-1.0f, false, false});
+			}
+
+			return css_value(css_dimension{-2.0f, false, false});
+		}
+	}
+	if (prop.type == css_property_type::PROPERTY_MAX_HEIGHT ||
+		prop.type == css_property_type::PROPERTY_MAX_WIDTH) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token &&
+				(css_ident_equals(tok, "none") ||
+				 css_ident_equals(tok, "inherit"))) {
+				/* `none` removes the bound, and `inherit` resolves
+				 * against the parent and cannot be resolved here; both
+				 * are encoded as a negative length, which no valid CSS
+				 * dimension can be */
+				return css_value(css_dimension{-1.0f, false, false});
+			}
+		}
+	}
+	if (prop.type == css_property_type::PROPERTY_WIDTH ||
+		prop.type == css_property_type::PROPERTY_HEIGHT) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token &&
+				(css_ident_equals(tok, "auto") ||
+				 css_ident_equals(tok, "inherit"))) {
+				/* `auto` is the intrinsic size, and `inherit` resolves
+				 * against the parent; both are unresolvable and encoded
+				 * as a negative length distinct from the `none` one */
+				return css_value(css_dimension{-2.0f, false, false});
+			}
+		}
+	}
+	if (prop.type == css_property_type::PROPERTY_MIN_HEIGHT ||
+		prop.type == css_property_type::PROPERTY_MIN_WIDTH) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token &&
+				css_ident_equals(tok, "inherit")) {
+				/* An inherited minimum resolves against the parent and
+				 * cannot raise the floor here */
+				return css_value(css_dimension{-2.0f, false, false});
 			}
 		}
 	}
@@ -621,6 +706,7 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 	auto &opacity = hiding.opacity;
 	auto &left = hiding.left, &top = hiding.top, &text_indent = hiding.text_indent;
 	auto &positioned = hiding.positioned, &clip_hidden = hiding.clip;
+	std::optional<css_dimension> min_height, min_width;
 	std::optional<css_display_value> display, visibility;
 	auto has_color = rules.find(css_rule{css_property{css_property_type::PROPERTY_COLOR}}) != rules.end() ||
 					 rules.find(css_rule{css_property{css_property_type::PROPERTY_FONT_COLOR}}) != rules.end();
@@ -699,6 +785,14 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 		}
 		case css_property_type::PROPERTY_MAX_WIDTH: {
 			max_width = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_MIN_HEIGHT: {
+			min_height = vals.back().to_dimension();
+			break;
+		}
+		case css_property_type::PROPERTY_MIN_WIDTH: {
+			min_width = vals.back().to_dimension();
 			break;
 		}
 		case css_property_type::PROPERTY_OVERFLOW: {
@@ -789,7 +883,10 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 	 * the visibility detection
 	 */
 	auto clamp_dim = [](std::optional<css_dimension> dim,
-						std::optional<css_dimension> max_dim) -> std::optional<css_dimension> {
+						std::optional<css_dimension> max_dim,
+						bool *from_max) -> std::optional<css_dimension> {
+		*from_max = false;
+
 		if (dim && max_dim) {
 			if (dim->is_percent == max_dim->is_percent) {
 				return max_dim->dim < dim->dim ? max_dim : dim;
@@ -798,14 +895,161 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 			return max_dim->dim == 0 ? max_dim : dim;
 		}
 
-		return dim ? dim : max_dim;
+		if (dim) {
+			return dim;
+		}
+
+		if (max_dim) {
+			*from_max = true;
+
+			return max_dim;
+		}
+
+		return std::nullopt;
 	};
 
-	if (auto h = clamp_dim(height, max_height); h) {
-		block->set_height(h->dim, h->is_percent, how);
+	/* A zero percent value, whether a size, a bound or a floor, is an
+	 * absolute zero, so it is normalised to one before anything else */
+	auto zero_percent = [](std::optional<css_dimension> &d) -> void {
+		if (d && d->is_percent && d->dim == 0) {
+			d->is_percent = false;
+		}
+	};
+	zero_percent(width);
+	zero_percent(height);
+	zero_percent(max_width);
+	zero_percent(max_height);
+	zero_percent(min_width);
+	zero_percent(min_height);
+
+	/*
+	 * The actual dimensions are recorded before the max bounds clamp
+	 * the flattened values below, so that the image classification
+	 * can apply the cascade result rather than a clamped one. A
+	 * percent size or `auto` wins the cascade as well, but has no
+	 * absolute value, so it is recorded as a negative sentinel
+	 */
+	if (width) {
+		if (width->is_percent || width->is_relative_unit || width->dim < 0) {
+			block->width_real = -1;
+		}
+		else {
+			block->width_real = width->dim;
+		}
+		block->width_real_mask = 1;
+		block->width_important = important;
 	}
-	if (auto w = clamp_dim(width, max_width); w) {
+	if (height) {
+		if (height->is_percent || height->is_relative_unit || height->dim < 0) {
+			block->height_real = -1;
+		}
+		else {
+			block->height_real = height->dim;
+		}
+		block->height_real_mask = 1;
+		block->height_important = important;
+	}
+
+	/* A negative max dimension encodes `none`, and a percent one is
+	 * unresolvable: both remove the bound rather than set it. The
+	 * same applies to the minimums, which a percent value cannot
+	 * raise either */
+	if (max_width && (max_width->is_percent || max_width->is_relative_unit ||
+					  max_width->dim < 0)) {
+		block->width_max_mask = 2;
+		block->max_width_important = important;
+	}
+	if (max_height && (max_height->is_percent || max_height->is_relative_unit ||
+					   max_height->dim < 0)) {
+		block->height_max_mask = 2;
+		block->max_height_important = important;
+	}
+	if (min_width &&
+		(min_width->is_percent || min_width->is_relative_unit || min_width->dim < 0)) {
+		block->min_width_mask = 2;
+		block->min_width_important = important;
+	}
+	if (min_height &&
+		(min_height->is_percent || min_height->is_relative_unit || min_height->dim < 0)) {
+		block->min_height_mask = 2;
+		block->min_height_important = important;
+	}
+
+	/* `none` and percent maxima must not clamp the dimensions */
+	auto no_bound = [](const std::optional<css_dimension> &d) -> std::optional<css_dimension> {
+		if (d && (d->is_percent || d->dim < 0)) {
+			return std::nullopt;
+		}
+
+		return d;
+	};
+	/* `auto` must not be flattened into the width/height fields
+	 * either, as a negative value there encodes a percent */
+	auto no_auto = [](const std::optional<css_dimension> &d) -> std::optional<css_dimension> {
+		if (d && !d->is_percent && d->dim < 0) {
+			return std::nullopt;
+		}
+
+		return d;
+	};
+
+	bool height_from_max = false, width_from_max = false;
+
+	if (auto h = clamp_dim(no_auto(height), no_bound(max_height), &height_from_max); h) {
+		block->set_height(h->dim, h->is_percent, how);
+		block->height_from_max = height_from_max;
+	}
+	if (auto w = clamp_dim(no_auto(width), no_bound(max_width), &width_from_max); w) {
 		block->set_width(w->dim, w->is_percent, how);
+		block->width_from_max = width_from_max;
+	}
+
+	/*
+	 * `auto` is excluded from the flattening above, but the size
+	 * fields must still be set, so that a less specific absolute
+	 * value does not fill in on merging and the size never looks
+	 * like a zero one for the visibility detection. A max bound
+	 * still flattens over it, capping the auto size
+	 */
+	if (height && !height->is_percent && height->dim < 0 &&
+		block->height_mask != how) {
+		block->set_height((float) INT16_MAX, false, how);
+		block->height_auto = true;
+	}
+	if (width && !width->is_percent && width->dim < 0 &&
+		block->width_mask != how) {
+		block->set_width((float) INT16_MAX, false, how);
+		block->width_auto = true;
+	}
+
+	/*
+	 * Minimum dimensions and max bounds are needed for the image
+	 * classification only, so absolute values are stored as is and
+	 * percent ones are ignored
+	 */
+	if (min_height && !min_height->is_percent && !min_height->is_relative_unit &&
+		min_height->dim >= 0) {
+		block->min_height = min_height->dim;
+		block->min_height_mask = 1;
+		block->min_height_important = important;
+	}
+	if (min_width && !min_width->is_percent && !min_width->is_relative_unit &&
+		min_width->dim >= 0) {
+		block->min_width = min_width->dim;
+		block->min_width_mask = 1;
+		block->min_width_important = important;
+	}
+	if (max_height && !max_height->is_percent && !max_height->is_relative_unit &&
+		max_height->dim >= 0) {
+		block->height_max = max_height->dim;
+		block->height_max_mask = 1;
+		block->max_height_important = important;
+	}
+	if (max_width && !max_width->is_percent && !max_width->is_relative_unit &&
+		max_width->dim >= 0) {
+		block->width_max = max_width->dim;
+		block->width_max_mask = 1;
+		block->max_width_important = important;
 	}
 }
 
@@ -980,8 +1224,8 @@ TEST_SUITE("css")
 
 		/* The tokeniser leaves the number behind when it cannot place the
 		 * unit; taking it as pixels turns a responsive size into a hidden one */
-		for (const auto *css_text: {"font-size:2ch", "font-size:2lh", "font-size:2q",
-									"height:0nonsense", "width:0nonsense"}) {
+		for (const auto *css_text: {"font-size:2nonsense", "height:0nonsense",
+									"width:0nonsense"}) {
 			auto res = process_declaration_tokens(pool,
 												  get_rules_parser_functor(pool, css_text));
 			CHECK(res.get() != nullptr);
@@ -991,12 +1235,17 @@ TEST_SUITE("css")
 			CHECK_MESSAGE(block->is_visible(), css_text);
 		}
 
-		/* Viewport units are known and keep working */
+		/* Viewport units are known and keep working, and so do the units
+		 * that used to be unknown: ch and lh are font-relative, and q is
+		 * a quarter of a millimetre, small enough to hide the text */
 		const std::vector<std::pair<const char *, int>> known{
 			{"font-size:2vw", 16},
 			{"font-size:2vh", 12},
 			{"font-size:2vmin", 12},
 			{"font-size:2vmax", 16},
+			{"font-size:2ch", 16},
+			{"font-size:2lh", 32},
+			{"font-size:2q", 1},
 		};
 
 		for (const auto &c: known) {

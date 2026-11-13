@@ -22,6 +22,7 @@
 #include "html.hxx"
 #include "libserver/css/css_value.hxx"
 #include "libserver/css/css.hxx"
+#include "libserver/css/css_tokeniser.hxx"
 #include "libserver/task.h"
 #include "libserver/cfg_file.h"
 
@@ -1902,6 +1903,171 @@ html_is_absolute_url(std::string_view st) -> bool
 	return false;
 }
 
+/*
+ * Resolves a link against the base url of the document. Returns
+ * false for a data: url, which is never inserted as one
+ */
+static auto
+html_resolve_against_base(rspamd_mempool_t *pool,
+						  std::string_view &href_value,
+						  struct html_content *hc) -> bool
+{
+	if (!(hc && hc->base_url)) {
+		return true;
+	}
+
+	/*
+	 * Resolved as browsers do: a link with a scheme of its own is not
+	 * relative (mailto:, or http:x.com under an https base), two
+	 * slashes take only the scheme of the base (//evil.com is another
+	 * host), one slash its host, anything else its path
+	 */
+	auto is_slash = [](char c) { return c == '/' || c == '\\'; };
+	auto scheme_char = [](char c) { return g_ascii_isalnum(c) || c == '+' || c == '-' || c == '.'; };
+	std::string_view scheme, rest = href_value;
+	std::string_view base_scheme{hc->base_url->string, hc->base_url->protocollen};
+
+	if (auto colon = href_value.find(':'); colon != std::string_view::npos && colon > 0 &&
+										   g_ascii_isalpha(href_value[0]) &&
+										   std::all_of(href_value.begin(), href_value.begin() + colon, scheme_char)) {
+		scheme = href_value.substr(0, colon);
+	}
+
+	if (!scheme.empty() && scheme.size() == sizeof("data") - 1 &&
+		g_ascii_strncasecmp(scheme.data(), "data", scheme.size()) == 0) {
+		return false;
+	}
+
+	bool same_scheme = !scheme.empty() && scheme.size() == base_scheme.size() &&
+					   g_ascii_strncasecmp(scheme.data(), base_scheme.data(), scheme.size()) == 0;
+
+	if (same_scheme) {
+		rest = href_value.substr(scheme.size() + 1);
+	}
+
+	std::string_view base_str{hc->base_url->string, hc->base_url->urllen};
+	auto authority_end = static_cast<std::size_t>(hc->base_url->hostshift) +
+						 hc->base_url->hostlen;
+
+	if (authority_end > base_str.size()) {
+		authority_end = base_str.size();
+	}
+
+	/* A port belongs to the authority of the base */
+	if (authority_end < base_str.size() && base_str[authority_end] == ':') {
+		auto port_end = authority_end + 1;
+
+		while (port_end < base_str.size() &&
+			   g_ascii_isdigit(base_str[port_end])) {
+			port_end++;
+		}
+
+		if (port_end > authority_end + 1 &&
+			(port_end == base_str.size() || base_str[port_end] == '/' ||
+			 base_str[port_end] == '?' || base_str[port_end] == '#')) {
+			authority_end = port_end;
+		}
+	}
+
+	auto path_end = base_str.find_first_of("?#", authority_end);
+
+	if (path_end == std::string_view::npos) {
+		path_end = base_str.size();
+	}
+
+	if (!scheme.empty() && !same_scheme) {
+		/* Not relative */
+	}
+	else if (rest.size() >= 2 && is_slash(rest[0]) && is_slash(rest[1])) {
+		/* Relative to the scheme */
+		auto len = base_scheme.size() + 1 + rest.size();
+		auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+		auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s:%*s",
+												  (int) base_scheme.size(), base_scheme.data(),
+												  (int) rest.size(), rest.data());
+		href_value = {buf, nlen};
+	}
+	else if (!rest.empty() && is_slash(rest[0])) {
+		/*
+		 * Relative to the host: the authority of the base, its port
+		 * included, stays
+		 */
+		auto len = authority_end + rest.size();
+		auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+		auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s%*s",
+												  (int) authority_end, base_str.data(),
+												  (int) rest.size(), rest.data());
+		href_value = {buf, nlen};
+	}
+	else if (!rest.empty() && rest[0] == '#') {
+		/*
+		 * A fragment link keeps everything of the base but its own
+		 * fragment, its query included
+		 */
+		auto keep_end = base_str.size();
+
+		if (hc->base_url->fragmentlen > 0) {
+			keep_end = hc->base_url->fragmentshift;
+		}
+
+		auto len = keep_end + rest.size();
+		auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+		auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s%*s",
+												  (int) keep_end, base_str.data(),
+												  (int) rest.size(), rest.data());
+		href_value = {buf, nlen};
+	}
+	else if (!rest.empty() && rest[0] == '?') {
+		/* A query link keeps the path of the base and replaces the
+		 * query and the fragment of it */
+		auto len = path_end + rest.size();
+		auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+		auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s%*s",
+												  (int) path_end, base_str.data(),
+												  (int) rest.size(), rest.data());
+		href_value = {buf, nlen};
+	}
+	else {
+		/*
+		 * Relative to the path: resolved against its directory part,
+		 * as browsers do, while a query or a fragment of the base
+		 * carries over nothing
+		 */
+		auto dir_end = std::string_view::npos;
+
+		if (path_end > authority_end) {
+			dir_end = base_str.substr(authority_end,
+									  path_end - authority_end)
+						  .find_last_of('/');
+
+			if (dir_end != std::string_view::npos) {
+				dir_end += authority_end;
+			}
+		}
+
+		if (dir_end != std::string_view::npos) {
+			/* The directory part of the base path, slash included */
+			auto len = dir_end + 1 + rest.size();
+			auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+			auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s%*s",
+													  (int) (dir_end + 1), base_str.data(),
+													  (int) rest.size(), rest.data());
+			href_value = {buf, nlen};
+		}
+		else {
+			/* No directory part: resolve against the root of the host */
+			auto len = authority_end + 1 + rest.size();
+			auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+			auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s/%*s",
+													  (int) authority_end, base_str.data(),
+													  (int) rest.size(), rest.data());
+			href_value = {buf, nlen};
+		}
+	}
+
+	return true;
+}
+
 static auto
 html_process_url_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
@@ -1936,78 +2102,9 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			href_value = {buf, (std::size_t) (last - buf)};
 		}
 
-		if (hc && hc->base_url) {
-			/*
-			 * Resolved as browsers do: a link with a scheme of its own is not
-			 * relative (mailto:, or http:x.com under an https base), two
-			 * slashes take only the scheme of the base (//evil.com is another
-			 * host), one slash its host, anything else its path
-			 */
-			auto is_slash = [](char c) { return c == '/' || c == '\\'; };
-			auto scheme_char = [](char c) { return g_ascii_isalnum(c) || c == '+' || c == '-' || c == '.'; };
-			std::string_view scheme, rest = href_value;
-			std::string_view base_scheme{hc->base_url->string, hc->base_url->protocollen};
-
-			if (auto colon = href_value.find(':'); colon != std::string_view::npos && colon > 0 &&
-												   g_ascii_isalpha(href_value[0]) &&
-												   std::all_of(href_value.begin(), href_value.begin() + colon, scheme_char)) {
-				scheme = href_value.substr(0, colon);
-			}
-
-			if (!scheme.empty() && scheme.size() == sizeof("data") - 1 &&
-				g_ascii_strncasecmp(scheme.data(), "data", scheme.size()) == 0) {
-				/* Image data url, never insert as url */
-				return std::nullopt;
-			}
-
-			bool same_scheme = !scheme.empty() && scheme.size() == base_scheme.size() &&
-							   g_ascii_strncasecmp(scheme.data(), base_scheme.data(), scheme.size()) == 0;
-
-			if (same_scheme) {
-				rest = href_value.substr(scheme.size() + 1);
-			}
-
-			if (!scheme.empty() && !same_scheme) {
-				/* Not relative */
-			}
-			else if (rest.size() >= 2 && is_slash(rest[0]) && is_slash(rest[1])) {
-				/* Relative to the scheme */
-				auto len = base_scheme.size() + 1 + rest.size();
-				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
-				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s:%*s",
-														  (int) base_scheme.size(), base_scheme.data(),
-														  (int) rest.size(), rest.data());
-				href_value = {buf, nlen};
-			}
-			else if (!rest.empty() && is_slash(rest[0])) {
-				/* Relative to the host */
-				auto len = rest.size() + hc->base_url->hostlen + base_scheme.size() + 3 /* for :// */;
-				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
-				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1, "%*s://%*s%*s",
-														  (int) base_scheme.size(), base_scheme.data(),
-														  (int) hc->base_url->hostlen, rspamd_url_host_unsafe(hc->base_url),
-														  (int) rest.size(), rest.data());
-				href_value = {buf, nlen};
-			}
-			else {
-				/* Relative to the path */
-				auto need_slash = false;
-				auto orig_len = rest.size();
-				auto len = orig_len + hc->base_url->urllen;
-
-				if (hc->base_url->datalen == 0) {
-					need_slash = true;
-					len++;
-				}
-
-				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
-				auto nlen = (std::size_t) rspamd_snprintf(buf, len + 1,
-														  "%*s%s%*s",
-														  (int) hc->base_url->urllen, hc->base_url->string,
-														  need_slash ? "/" : "",
-														  (int) orig_len, rest.data());
-				href_value = {buf, nlen};
-			}
+		if (!html_resolve_against_base(pool, href_value, hc)) {
+			/* Image data url, never insert as url */
+			return std::nullopt;
 		}
 
 		auto url = html_process_url(pool, href_value, L).value_or(nullptr);
@@ -2167,6 +2264,654 @@ html_process_data_image(rspamd_mempool_t *pool,
 	}
 }
 
+/*
+ * Finds a CSS property in a style attribute value ensuring that the match
+ * is the whole property name and not a part of a longer one (e.g. `height`
+ * inside `min-height` or `width` inside `border-width`). Returns the
+ * winning declaration of the property: a !important one beats any
+ * normal one, otherwise the last declaration wins
+ */
+/*
+ * Returns the end of a number that starts at the `i` position of a
+ * style value: digits with an optional fractional part and an
+ * exponent, as in 1.5e-2, which is a valid CSS number
+ */
+static std::size_t
+html_style_number_end(std::string_view sv, std::size_t i)
+{
+	auto end = i;
+
+	/* Integer part */
+	while (end < sv.size() && g_ascii_isdigit(sv[end])) {
+		end++;
+	}
+
+	/* Fractional part */
+	if (end < sv.size() && sv[end] == '.' &&
+		end + 1 < sv.size() && g_ascii_isdigit(sv[end + 1])) {
+		end++;
+
+		while (end < sv.size() && g_ascii_isdigit(sv[end])) {
+			end++;
+		}
+	}
+
+	/* Exponent, only after a mantissa */
+	if (end > i && end < sv.size() && (sv[end] == 'e' || sv[end] == 'E')) {
+		auto exp = end + 1;
+
+		if (exp < sv.size() && (sv[exp] == '+' || sv[exp] == '-')) {
+			exp++;
+		}
+
+		if (exp < sv.size() && g_ascii_isdigit(sv[exp])) {
+			end = exp;
+
+			while (end < sv.size() && g_ascii_isdigit(sv[end])) {
+				end++;
+			}
+		}
+	}
+
+	return end;
+}
+
+/*
+ * Returns the offset of the semicolon that ends the declaration the
+ * `from` position belongs to, or the size when there is none: a
+ * semicolon inside braces or parentheses of the value, such as one
+ * of a var() argument, does not end the declaration
+ */
+static gsize
+html_style_decl_end(const char *data, gsize size, gsize from)
+{
+	auto depth = 0;
+	auto i = from;
+
+	while (i < size) {
+		if (data[i] == '{' || data[i] == '(') {
+			depth++;
+		}
+		else if (data[i] == '}' || data[i] == ')') {
+			if (depth > 0) {
+				depth--;
+			}
+		}
+		else if (data[i] == ';' && depth == 0) {
+			break;
+		}
+
+		i++;
+	}
+
+	return i;
+}
+
+/*
+ * Checks whether the value of a dimension declaration is valid CSS:
+ * a number in it must carry a known unit, or none, or a percent one,
+ * and an identifier or a function must be a known one
+ */
+static bool
+html_style_dim_value_valid(std::string_view value)
+{
+	auto i = 0;
+
+	while (i < value.size() && (g_ascii_isspace(value[i]) ||
+								value[i] == '=' || value[i] == ':')) {
+		i++;
+	}
+
+	auto num_end = html_style_number_end(value, i);
+
+	if (num_end == i) {
+		/* Not a number: an identifier or a function value */
+		auto ident_end = i;
+
+		while (ident_end < value.size() &&
+			   (g_ascii_isalnum(value[ident_end]) ||
+				value[ident_end] == '-')) {
+			ident_end++;
+		}
+
+		auto is_function = ident_end < value.size() && value[ident_end] == '(';
+		static constexpr const struct {
+			const char *name;
+			bool function;
+		} known_values[] = {
+			{"auto", false},
+			{"inherit", false},
+			{"initial", false},
+			{"unset", false},
+			{"revert", false},
+			{"none", false},
+			{"min-content", false},
+			{"max-content", false},
+			{"fit-content", false},
+			{"stretch", false},
+			{"calc", true},
+			{"var", true},
+			{"env", true},
+			{"min", true},
+			{"max", true},
+			{"clamp", true},
+			{"attr", true},
+		};
+
+		for (const auto &kw: known_values) {
+			auto kw_len = strlen(kw.name);
+
+			if (ident_end - i == kw_len &&
+				g_ascii_strncasecmp(value.data() + i, kw.name, kw_len) == 0 &&
+				(!is_function || kw.function)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	i = num_end;
+
+	if (i >= value.size() || value[i] == ';') {
+		/* Unitless, which is pixels */
+		return true;
+	}
+
+	if (value[i] == '%') {
+		return true;
+	}
+
+	if (g_ascii_isalpha(value[i])) {
+		auto unit_end = i;
+
+		while (unit_end < value.size() && g_ascii_isalnum(value[unit_end])) {
+			unit_end++;
+		}
+
+		return rspamd::css::css_is_known_unit(value.substr(i, unit_end - i));
+	}
+
+	return true;
+}
+
+/*
+ * Finds a CSS property in a style attribute value in a single pass
+ * over the declarations: the name must match the property one
+ * exactly, while the value of a custom property (--var) is skipped
+ * entirely, braces, parentheses and semicolons included, so nothing
+ * inside it is taken for a declaration. A declaration whose value is
+ * invalid CSS, such as a number in an unknown unit or an unknown
+ * identifier, is dropped as a browser does.
+ * Returns the winning declaration of the property: a !important one
+ * beats any normal one, otherwise the last declaration wins
+ */
+static goffset
+html_find_style_property(const char *data, gsize size, const char *prop,
+						 gsize prop_len)
+{
+	goffset found = -1, found_important = -1;
+	gsize i = 0;
+
+	while (i < size) {
+		while (i < size && g_ascii_isspace(data[i])) {
+			i++;
+		}
+
+		auto name_start = i;
+
+		while (i < size && data[i] != ':' && data[i] != ';' &&
+			   data[i] != '{') {
+			i++;
+		}
+
+		/* Spaces are allowed between a name and the colon of it */
+		while (i > name_start && g_ascii_isspace(data[i - 1])) {
+			i--;
+		}
+
+		if (i < size && data[i] == ':' &&
+			i - name_start == prop_len &&
+			g_ascii_strncasecmp(data + name_start, prop, prop_len) == 0 &&
+			html_style_dim_value_valid({data + i + 1, size - i - 1})) {
+			/* A !important declaration beats any normal one; among
+			 * declarations of the same importance the last one wins */
+			auto decl_end = html_style_decl_end(data, size, i + 1);
+
+			if (memchr(data + name_start, '!',
+					   decl_end - name_start) != NULL) {
+				found_important = name_start;
+			}
+			else {
+				found = name_start;
+			}
+
+			i = decl_end;
+		}
+
+		if (i < size && data[i] == ':') {
+			/* Skip the value, semicolons inside braces and
+			 * parentheses of it included */
+			i = html_style_decl_end(data, size, i + 1);
+		}
+
+		/* Skip the delimiter and go to the next declaration */
+		if (i < size && (data[i] == ';' || data[i] == '{' ||
+						 data[i] == '}' || data[i] == ')')) {
+			i++;
+		}
+		else {
+			break;
+		}
+	}
+
+	return found_important != -1 ? found_important : found;
+}
+
+/*
+ * Checks if a length that starts at the `pos` position of a style value
+ * is followed by an absolute unit, so it can be treated as a pixel
+ * dimension. Physical units are converted to pixels using the same
+ * multipliers as the CSS tokeniser, while font-relative and viewport
+ * ones resolve against the environment and are not absolute; the
+ * double value in `val` (if any) is converted in place, so a
+ * fractional number is not rounded before the unit conversion, and
+ * the unrounded converted value goes to `raw` (if any)
+ */
+static bool
+html_is_absolute_length(std::string_view sv, std::size_t pos,
+						double *val = nullptr, double *raw = nullptr)
+{
+	auto unit_end = pos;
+
+	while (unit_end < sv.size() &&
+		   (g_ascii_isalnum(sv[unit_end]) || sv[unit_end] == '%' ||
+			sv[unit_end] == '.')) {
+		unit_end++;
+	}
+
+	auto unit_len = unit_end - pos;
+
+	if (unit_len == 0) {
+		if (val != nullptr) {
+			if (raw != nullptr) {
+				*raw = *val;
+			}
+			/* Round a unitless number up as well */
+			*val = ceilf(*val);
+		}
+
+		return true;
+	}
+
+	static constexpr const struct {
+		const char *suffix;
+		std::size_t len;
+		double mult;
+	} units[] = {
+		{"px", 2, 1.0},
+		{"pt", 2, 96.0 / 72.0},
+		{"pc", 2, 96.0 / 6.0},
+		{"in", 2, 96.0},
+		{"cm", 2, 96.0 / 2.54},
+		{"mm", 2, 9.6 / 2.54},
+		{"q", 1, 9.6 / 2.54 / 4},
+	};
+
+	for (const auto &u: units) {
+		if (unit_len == u.len &&
+			g_ascii_strncasecmp(sv.data() + pos, u.suffix, u.len) == 0) {
+			if (val != nullptr) {
+				if (raw != nullptr) {
+					*raw = *val * u.mult;
+				}
+				/* Convert and round up, so a fractional number is
+				 * neither truncated nor rounded down to a zero by
+				 * the caller */
+				*val = ceilf(*val * u.mult);
+			}
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+ * Converts a dimension to an unsigned integer one, clamping it to the
+ * range of the latter: a style value may exceed it, and casting an
+ * out-of-range floating point number is undefined
+ */
+static inline unsigned int
+html_dim_to_unsigned(double dim)
+{
+	if (dim >= (double) ~0u) {
+		return ~0u;
+	}
+
+	return (unsigned int) dim;
+}
+
+/*
+ * Parses a number with an optional fractional part from the beginning
+ * of a span, rounding it to an unsigned long, unlike rspamd_strtoul,
+ * which rejects a fractional part; returns false when there is no
+ * number. The rounded value goes to `value`, the raw one to `number`
+ */
+static bool
+html_style_number(const char *s, std::size_t len, unsigned long *value,
+				  double *number = nullptr)
+{
+	char numbuf[32];
+	auto numlen = len < sizeof(numbuf) - 1 ? len : sizeof(numbuf) - 1;
+
+	memcpy(numbuf, s, numlen);
+	numbuf[numlen] = '\0';
+
+	char *end = nullptr;
+	auto num = g_ascii_strtod(numbuf, &end);
+
+	if (end == numbuf) {
+		return false;
+	}
+
+	if (num >= (double) ULONG_MAX) {
+		*value = ULONG_MAX;
+	}
+	else {
+		*value = (unsigned long) ceilf(num);
+	}
+
+	if (number != nullptr) {
+		*number = num;
+	}
+
+	return true;
+}
+
+/*
+ * Extracts the numeric absolute value of a style property located at
+ * the `prop_pos` position; returns 0 if there is none. The rounded
+ * value goes to the return code, the unrounded converted one to
+ * `exact` (if any)
+ */
+static unsigned long
+html_style_property_number(std::string_view sv, goffset prop_pos,
+						   std::size_t prop_len, bool *numeric = nullptr,
+						   double *exact = nullptr)
+{
+	auto substr = sv.substr(static_cast<std::size_t>(prop_pos) + prop_len);
+
+	for (auto i = 0; i < substr.size(); i++) {
+		auto t = substr[i];
+
+		if (g_ascii_isdigit(t) ||
+			(t == '.' && i + 1 < substr.size() &&
+			 g_ascii_isdigit(substr[i + 1]))) {
+			auto digit_end = html_style_number_end(substr, i);
+
+			double num = 0, num_raw = 0;
+			unsigned long val = 0;
+
+			if (html_style_number(substr.data() + i, digit_end - i, &val, &num) &&
+				html_is_absolute_length(substr, digit_end, &num, &num_raw)) {
+				if (numeric != nullptr) {
+					*numeric = true;
+				}
+
+				if (exact != nullptr) {
+					*exact = num_raw;
+				}
+
+				return (unsigned long) num;
+			}
+
+			if (num == 0 && digit_end < substr.size() &&
+				substr[digit_end] == '%') {
+				/* A zero percent value is an absolute zero */
+				if (numeric != nullptr) {
+					*numeric = true;
+				}
+
+				if (exact != nullptr) {
+					*exact = 0;
+				}
+
+				return 0;
+			}
+
+			return 0;
+		}
+		else if (!g_ascii_isspace(t) && t != '=' && t != ':') {
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Extracts absolute min-width/min-height values from a style attribute;
+ * a zero value means that the property is missing or not absolute.
+ * The `present` mask (0x1 height, 0x2 width) marks the properties that
+ * are specified inline, whatever their value is, and the higher bits
+ * (0x4 height, 0x8 width) mark the percent ones, which cannot be
+ * resolved against the container but may still raise the size
+ */
+static void
+html_style_min_dimensions(std::string_view style, double *min_height,
+						  double *min_width, unsigned char *present)
+{
+	static constexpr const char *props[] = {"min-height", "min-width"};
+	double dims[2] = {0, 0};
+
+	for (auto i = 0; i < 2; i++) {
+		auto pos = html_find_style_property(style.data(), style.size(),
+											props[i], strlen(props[i]));
+
+		if (pos != -1) {
+			bool numeric = false;
+			*present |= 1u << i;
+			html_style_property_number(style, pos,
+									   strlen(props[i]), &numeric, &dims[i]);
+
+			if (!numeric) {
+				*present |= 1u << (i + 2);
+			}
+		}
+	}
+
+	*min_height = dims[0];
+	*min_width = dims[1];
+}
+
+/* Sentinel for the absence of an image dimension bound; a negative
+ * maximum imposes no bound at all */
+constexpr static const double no_image_bound = -1.0;
+
+/*
+ * Whether an image of the given dimensions is a tiny pixel: the area
+ * is compared at float precision, as the stylesheet dimensions are
+ * stored with it, so a 0.1px x 40px stylesheet size, held as
+ * 0.10000000149, still counts as the exact area of 4
+ */
+static inline bool
+html_image_is_tiny(double width, double height)
+{
+	return ((float) (width * height)) <= 4.0f;
+}
+
+/*
+ * Extracts absolute max-width/max-height bounds from a style attribute;
+ * the `present` mask (0x1 height, 0x2 width) marks the properties that
+ * are specified inline, and `none` or non-absolute values impose no
+ * bound at all
+ */
+static void
+html_style_max_dimensions(std::string_view style, double *max_height,
+						  double *max_width, unsigned char *present)
+{
+	static constexpr const char *props[] = {"max-height", "max-width"};
+	double dims[2] = {no_image_bound, no_image_bound};
+
+	for (auto i = 0; i < 2; i++) {
+		auto pos = html_find_style_property(style.data(), style.size(),
+											props[i], strlen(props[i]));
+
+		if (pos != -1) {
+			bool numeric = false;
+			double exact = no_image_bound;
+
+			*present |= 1u << i;
+			html_style_property_number(style, pos,
+									   strlen(props[i]), &numeric, &exact);
+
+			if (numeric) {
+				dims[i] = exact;
+			}
+		}
+	}
+
+	*max_height = dims[0];
+	*max_width = dims[1];
+}
+
+enum html_image_dim_source {
+	dim_src_none = 0,
+	dim_src_attribute = 1,
+	dim_src_stylesheet = 2,
+	dim_src_inline = 3,
+	dim_src_unknown = 4,
+};
+
+/*
+ * Returns the style attribute with CSS comments stripped: they carry
+ * no declarations, while property names are searched for by substring.
+ * Quoted strings are blanked out, so neither a comment opening nor
+ * property-looking substrings inside a url() or another string are
+ * taken for CSS
+ */
+static std::string_view
+html_style_strip_comments(rspamd_mempool_t *pool, std::string_view style)
+{
+	if (style.find('/') == std::string_view::npos &&
+		style.find('"') == std::string_view::npos &&
+		style.find('\'') == std::string_view::npos &&
+		style.find('u') == std::string_view::npos &&
+		style.find('U') == std::string_view::npos) {
+		return style;
+	}
+
+	auto *copy = static_cast<char *>(rspamd_mempool_alloc(pool, style.size()));
+	std::size_t out = 0;
+	auto in_comment = false;
+	auto quote = '\0';
+
+	for (std::size_t i = 0; i < style.size(); i++) {
+		auto c = style[i];
+
+		if (in_comment) {
+			if (c == '*' && i + 1 < style.size() && style[i + 1] == '/') {
+				in_comment = false;
+				i++;
+			}
+
+			continue;
+		}
+
+		if (quote != '\0') {
+			/* The string content is blanked out: property names and
+			 * values are never inside it */
+			copy[out++] = ' ';
+
+			if (c == '\\' && i + 1 < style.size()) {
+				/* An escaped character is not a closing quote */
+				copy[out++] = ' ';
+				i++;
+			}
+			else if (c == quote) {
+				quote = '\0';
+			}
+
+			continue;
+		}
+
+		if (c == '"' || c == '\'') {
+			quote = c;
+			copy[out++] = c;
+		}
+		else if ((c == 'u' || c == 'U') && i + 4 < style.size() &&
+				 g_ascii_strncasecmp(style.data() + i, "url(", 4) == 0 &&
+				 style[i + 4] != '"' && style[i + 4] != '\'') {
+			/* An unquoted url(...) is blanked out like a string; a
+			 * quoted one is left to the quote handling above */
+			copy[out++] = style[i];
+			copy[out++] = style[i + 1];
+			copy[out++] = style[i + 2];
+			copy[out++] = style[i + 3];
+			i += 4;
+
+			while (i < style.size() && style[i] != ')') {
+				copy[out++] = ' ';
+
+				if (style[i] == '\\' && i + 1 < style.size()) {
+					/* An escaped character cannot close the url */
+					i++;
+					copy[out++] = ' ';
+				}
+
+				i++;
+			}
+
+			if (i < style.size()) {
+				copy[out++] = style[i];
+			}
+		}
+		else if (c == '/' && i + 1 < style.size() && style[i + 1] == '*') {
+			in_comment = true;
+			i++;
+		}
+		else {
+			copy[out++] = c;
+		}
+	}
+
+	return std::string_view{copy, out};
+}
+
+/*
+ * Checks whether the declaration of a style property located at the
+ * `prop_pos` position carries the !important flag
+ */
+static bool
+html_style_decl_important(std::string_view sv, goffset prop_pos,
+						  std::size_t prop_len)
+{
+	auto substr = sv.substr(static_cast<std::size_t>(prop_pos) + prop_len);
+	auto decl_end = html_style_decl_end(substr.data(), substr.size(), 0);
+	auto decl = substr.substr(0, decl_end);
+	auto pos = decl.find('!');
+
+	while (pos != std::string_view::npos) {
+		auto after = pos + 1;
+
+		while (after < decl.size() && g_ascii_isspace(decl[after])) {
+			after++;
+		}
+
+		if (decl.size() - after >= sizeof("important") - 1 &&
+			g_ascii_strncasecmp(decl.data() + after, "important",
+								sizeof("important") - 1) == 0) {
+			return true;
+		}
+
+		pos = decl.find('!', pos + 1);
+	}
+
+	return false;
+}
+
 static void
 html_process_img_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
@@ -2208,15 +2953,15 @@ html_process_img_tag(rspamd_mempool_t *pool,
 		fstr.len = href_value->size();
 		img->src = rspamd_mempool_ftokdup(pool, &fstr);
 
-		if (href_value->size() > sizeof("cid:") - 1 && memcmp(href_value->data(),
-															  "cid:", sizeof("cid:") - 1) == 0) {
+		if (href_value->size() > sizeof("cid:") - 1 && g_ascii_strncasecmp(href_value->data(),
+																		   "cid:", sizeof("cid:") - 1) == 0) {
 			/* We have an embedded image */
 			img->src += sizeof("cid:") - 1;
 			img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
 		}
 		else {
-			if (href_value->size() > sizeof("data:") - 1 && memcmp(href_value->data(),
-																   "data:", sizeof("data:") - 1) == 0) {
+			if (href_value->size() > sizeof("data:") - 1 && g_ascii_strncasecmp(href_value->data(),
+																				"data:", sizeof("data:") - 1) == 0) {
 				/* We have an embedded image in HTML tag */
 				img->flags |=
 					(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED | RSPAMD_HTML_FLAG_IMAGE_DATA);
@@ -2224,13 +2969,17 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
 			}
 			else {
-				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
 				if (img->src) {
 
 					std::string_view cpy{*href_value};
+					html_resolve_against_base(pool, cpy, hc);
 					auto maybe_url = html_process_url(pool, cpy, L);
 
 					if (maybe_url) {
+						/* A source that did not resolve to a URL,
+						 * such as a same-document fragment, is not
+						 * an external image */
+						img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
 						img->url = maybe_url.value();
 
 						img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
@@ -2269,36 +3018,77 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	}
 
 	// Process numeric dimensions using the new helper methods
+	bool explicit_height = false, explicit_width = false;
+
 	if (auto height = tag->find_height()) {
 		img->height = height.value();
+		img->height_exact = height.value();
+		explicit_height = true;
+		img->height_source = dim_src_attribute;
 	}
 
 	if (auto width = tag->find_width()) {
 		img->width = width.value();
+		img->width_exact = width.value();
+		explicit_width = true;
+		img->width_source = dim_src_attribute;
 	}
 
 	// Process style component for dimensions
+	auto style = std::string_view();
+
 	if (auto style_value = tag->find_style()) {
-		if (img->height == 0) {
-			auto pos = rspamd_substring_search_caseless(style_value->data(),
-														style_value->size(),
-														"height", sizeof("height") - 1);
+		style = html_style_strip_comments(pool, *style_value);
+	}
+
+	if (!style.empty()) {
+		{ /* CSS dimensions override the attribute ones */
+			auto pos = html_find_style_property(style.data(),
+												style.size(),
+												"height", sizeof("height") - 1);
 			if (pos != -1) {
-				auto substr = style_value->substr(pos + sizeof("height") - 1);
+				auto substr = style.substr(pos + sizeof("height") - 1);
+				/* The CSS property overrides the attribute one; without a
+				 * numeric absolute value the effective size is unknown */
+				explicit_height = false;
+				img->height_source = dim_src_unknown;
+
+				if (html_style_decl_important(style, pos, sizeof("height") - 1)) {
+					img->inline_important |= 0x1;
+				}
 
 				for (auto i = 0; i < substr.size(); i++) {
 					auto t = substr[i];
-					if (g_ascii_isdigit(t)) {
-						/* Parse the digit run starting at this position */
-						auto digit_end = i;
-						while (digit_end < substr.size() &&
-							   g_ascii_isdigit(substr[digit_end])) {
-							digit_end++;
-						}
+					if (g_ascii_isdigit(t) ||
+						(t == '.' && i + 1 < substr.size() &&
+						 g_ascii_isdigit(substr[i + 1]))) {
+						/* Parse the number starting at this position */
+						auto digit_end = html_style_number_end(substr, i);
+						double num = 0, num_raw = 0;
 						unsigned long val;
-						if (rspamd_strtoul(substr.data() + i,
-										   digit_end - i, &val)) {
-							img->height = val;
+						if (html_style_number(substr.data() + i,
+											  digit_end - i, &val, &num)) {
+							if (html_is_absolute_length(substr, digit_end, &num,
+														&num_raw)) {
+								img->height = html_dim_to_unsigned(num);
+								img->height_exact = num_raw;
+								explicit_height = true;
+								img->height_source = dim_src_inline;
+							}
+							else if (num == 0 && digit_end < substr.size() &&
+									 substr[digit_end] == '%') {
+								/* A zero percent value is an absolute zero */
+								img->height = 0;
+								img->height_exact = 0;
+								explicit_height = true;
+								img->height_source = dim_src_inline;
+							}
+							else if (img->height == 0) {
+								/* Preserve the legacy behaviour for images
+								 * with no attribute dimensions */
+								img->height = html_dim_to_unsigned(val);
+								img->height_exact = val;
+							}
 						}
 						break;
 					}
@@ -2309,26 +3099,53 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				}
 			}
 		}
-		if (img->width == 0) {
-			auto pos = rspamd_substring_search_caseless(style_value->data(),
-														style_value->size(),
-														"width", sizeof("width") - 1);
+		{ /* CSS dimensions override the attribute ones */
+			auto pos = html_find_style_property(style.data(),
+												style.size(),
+												"width", sizeof("width") - 1);
 			if (pos != -1) {
-				auto substr = style_value->substr(pos + sizeof("width") - 1);
+				auto substr = style.substr(pos + sizeof("width") - 1);
+				/* The CSS property overrides the attribute one; without a
+				 * numeric absolute value the effective size is unknown */
+				explicit_width = false;
+				img->width_source = dim_src_unknown;
+
+				if (html_style_decl_important(style, pos, sizeof("width") - 1)) {
+					img->inline_important |= 0x2;
+				}
 
 				for (auto i = 0; i < substr.size(); i++) {
 					auto t = substr[i];
-					if (g_ascii_isdigit(t)) {
-						/* Parse the digit run starting at this position */
-						auto digit_end = i;
-						while (digit_end < substr.size() &&
-							   g_ascii_isdigit(substr[digit_end])) {
-							digit_end++;
-						}
+					if (g_ascii_isdigit(t) ||
+						(t == '.' && i + 1 < substr.size() &&
+						 g_ascii_isdigit(substr[i + 1]))) {
+						/* Parse the number starting at this position */
+						auto digit_end = html_style_number_end(substr, i);
+						double num = 0, num_raw = 0;
 						unsigned long val;
-						if (rspamd_strtoul(substr.data() + i,
-										   digit_end - i, &val)) {
-							img->width = val;
+						if (html_style_number(substr.data() + i,
+											  digit_end - i, &val, &num)) {
+							if (html_is_absolute_length(substr, digit_end, &num,
+														&num_raw)) {
+								img->width = html_dim_to_unsigned(num);
+								img->width_exact = num_raw;
+								explicit_width = true;
+								img->width_source = dim_src_inline;
+							}
+							else if (num == 0 && digit_end < substr.size() &&
+									 substr[digit_end] == '%') {
+								/* A zero percent value is an absolute zero */
+								img->width = 0;
+								img->width_exact = 0;
+								explicit_width = true;
+								img->width_source = dim_src_inline;
+							}
+							else if (img->width == 0) {
+								/* Preserve the legacy behaviour for images
+								 * with no attribute dimensions */
+								img->width = html_dim_to_unsigned(val);
+								img->width_exact = val;
+							}
 						}
 						break;
 					}
@@ -2339,14 +3156,70 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				}
 			}
 		}
+	}
+
+	/* Minimum dimensions clamp the effective size from below, but the
+	 * clamping itself is done after the stylesheet reconciliation,
+	 * so that a stylesheet minimum can still override an inline one */
+	if (!style.empty()) {
+		double min_height, min_width;
+		unsigned char min_present = 0;
+		double max_height = no_image_bound, max_width = no_image_bound;
+		unsigned char max_present = 0;
+
+		html_style_min_dimensions(style, &min_height, &min_width,
+								  &min_present);
+		static constexpr const char *min_props[] = {"min-height", "min-width"};
+
+		for (auto i = 0; i < 2; i++) {
+			if (!(min_present & (1u << i))) {
+				continue;
+			}
+
+			auto pos = html_find_style_property(style.data(), style.size(),
+												min_props[i], strlen(min_props[i]));
+
+			if (pos != -1 &&
+				html_style_decl_important(style, pos, strlen(min_props[i]))) {
+				min_present |= 1u << (i + 4);
+			}
+		}
+
+		img->min_height = min_height;
+		img->min_width = min_width;
+		img->min_source = min_present;
+
+		html_style_max_dimensions(style, &max_height, &max_width,
+								  &max_present);
+		static constexpr const char *max_props[] = {"max-height", "max-width"};
+
+		for (auto i = 0; i < 2; i++) {
+			if (!(max_present & (1u << i))) {
+				continue;
+			}
+
+			auto pos = html_find_style_property(style.data(), style.size(),
+												max_props[i], strlen(max_props[i]));
+
+			if (pos != -1 &&
+				html_style_decl_important(style, pos, strlen(max_props[i]))) {
+				max_present |= 1u << (i + 2);
+			}
+		}
+
+		img->max_height = max_height;
+		img->max_width = max_width;
+		img->max_source = max_present;
 	}
 
 	if (img->embedded_image) {
 		if (img->height == 0) {
 			img->height = img->embedded_image->height;
+			img->height_exact = img->embedded_image->height;
 		}
 		if (img->width == 0) {
 			img->width = img->embedded_image->width;
+			img->width_exact = img->embedded_image->width;
 		}
 	}
 
@@ -2359,8 +3232,10 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	}
 	if (img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL) {
 		hc->features.images_external++;
-		/* tiny external pixel tracking */
-		if (img->width > 0 && img->height > 0 && (img->width * img->height) <= 4u) {
+		/* tiny external pixel tracking; explicitly zero-sized images
+		 * are also invisible, so they are counted as tiny as well */
+		if (explicit_width && explicit_height &&
+			html_image_is_tiny(img->width_exact, img->height_exact)) {
 			hc->features.images_tiny_external++;
 		}
 	}
@@ -5021,6 +5896,434 @@ auto html_process_input(struct rspamd_task *task,
 	},
 							html_content::traverse_type::PRE_ORDER);
 
+	/*
+	 * Style sheets may resize images parsed before the corresponding
+	 * <style> tag, so the tiny pixel classification is reconciled here,
+	 * when all sheets are already parsed, and in both directions: an
+	 * image shrunk to a pixel by a stylesheet is detected, and an image
+	 * enlarged by one is not reported. Images sized by a stylesheet
+	 * alone are classified as well, and inline max bounds and minimums
+	 * are honoured even without any stylesheet. A stylesheet
+	 * rule beats the attribute dimensions and fills the missing ones,
+	 * but loses to the inline style values; max-width/max-height are
+	 * honoured as upper bounds rather than actual sizes, and an inline
+	 * maximum overrides a stylesheet one entirely, with `none`
+	 * removing the bound. An !important stylesheet width/height
+	 * beats a non-important inline style; an inline !important is
+	 * not recognised.
+	 */
+	/* Updates the tiny external images counter after the dimensions
+	 * of an image have been reconciled */
+	auto count_tiny_external = [hc](bool was_tiny, bool is_tiny) -> void {
+		if (was_tiny && !is_tiny) {
+			hc->features.images_tiny_external--;
+		}
+		else if (!was_tiny && is_tiny) {
+			hc->features.images_tiny_external++;
+		}
+	};
+
+	auto known_dim = [](unsigned char source) -> bool {
+		return source != dim_src_none && source != dim_src_unknown;
+	};
+
+	/* An empty stylesheet block standing in when no rule matches an
+	 * image, so that the inline bounds and minimums are still applied
+	 * by the common code path */
+	html_block no_css_block{};
+
+	if (hc->css_style) {
+		for (auto *img: hc->images) {
+			if (!(img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL)) {
+				continue;
+			}
+
+			auto was_tiny = known_dim(img->width_source) &&
+							known_dim(img->height_source) &&
+							html_image_is_tiny(img->width_exact, img->height_exact);
+			auto *img_tag = static_cast<struct html_tag *>(img->tag);
+			auto *css_block = hc->css_style->check_tag_block(img_tag);
+
+			if (css_block == nullptr) {
+				css_block = &no_css_block;
+			}
+
+			/* An inline minimum keeps winning unless an !important
+			 * stylesheet minimum replaces it */
+			auto inline_min_width_wins = (img->min_source & 0x2) &&
+										 !(css_block->min_width_important &&
+										   !(img->min_source & 0x20));
+			auto inline_min_height_wins = (img->min_source & 0x1) &&
+										  !(css_block->min_height_important &&
+											!(img->min_source & 0x10));
+
+			if (css_block) {
+				/* An !important stylesheet maximum beats a
+				 * non-important inline one */
+				auto sheet_max_width_wins =
+					css_block->max_width_important &&
+					!(img->max_source & 0x8);
+				auto sheet_max_height_wins =
+					css_block->max_height_important &&
+					!(img->max_source & 0x4);
+
+				if (css_block->width_real_mask &&
+					css_block->width_real >= 0 &&
+					((css_block->width_important &&
+					  !(img->inline_important & 0x2)) ||
+					 img->width_source == dim_src_attribute ||
+					 img->width_source == dim_src_none)) {
+					/* An actual width property from the stylesheet
+					 * cascade, recorded before the rule's own max
+					 * bound is applied; an !important one beats the
+					 * inline style, unless the latter is !important
+					 * too */
+					img->width = html_dim_to_unsigned(ceilf(css_block->width_real));
+					img->width_exact = css_block->width_real;
+					img->width_source = dim_src_stylesheet;
+				}
+				else if (css_block->width_real_mask &&
+						 ((css_block->width_important &&
+						   !(img->inline_important & 0x2)) ||
+						  img->width_source == dim_src_attribute ||
+						  img->width_source == dim_src_none)) {
+					/* A percent real size from the cascade: the
+					 * effective size is unknown, and it overrides a
+					 * value flattened from a max bound; an !important
+					 * one beats the inline style */
+					img->width_source = dim_src_unknown;
+				}
+				else if (css_block->width_mask == html_block::set) {
+					if (css_block->width >= 0) {
+						if (!css_block->width_from_max &&
+							(img->width_source == dim_src_attribute ||
+							 img->width_source == dim_src_none)) {
+							img->width = css_block->width;
+							img->width_exact = css_block->width;
+							img->width_source = dim_src_stylesheet;
+						}
+						else if (css_block->width_from_max &&
+								 css_block->width_max_mask != 2 &&
+								 (!(img->max_source & 0x2) ||
+								  sheet_max_width_wins)) {
+							/* An inline max-width supersedes the
+							 * stylesheet one entirely, and an effective
+							 * `none` maximum invalidates a value
+							 * flattened from a removed bound */
+							if (css_block->width_max <= 4.0 ||
+								(known_dim(img->height_source) &&
+								 html_image_is_tiny(css_block->width_max,
+													img->height_exact))) {
+								/* The bound itself is within the tiny
+								 * threshold, so the size is tiny anyway */
+								if (!known_dim(img->width_source) ||
+									css_block->width_max < img->width_exact) {
+									img->width = html_dim_to_unsigned(ceilf(css_block->width_max));
+									img->width_exact = css_block->width_max;
+									img->width_source = dim_src_stylesheet;
+								}
+							}
+							else if (known_dim(img->width_source)) {
+								/* Cap a larger known size; the source
+								 * stays, as a maximum is not a size */
+								if (css_block->width_max < img->width_exact) {
+									img->width = html_dim_to_unsigned(ceilf(css_block->width_max));
+									img->width_exact = css_block->width_max;
+								}
+							}
+							else {
+								/* An upper bound above the threshold
+								 * tells nothing about the actual size */
+								img->width_source = dim_src_unknown;
+							}
+						}
+					}
+					else if (img->width_source == dim_src_attribute ||
+							 img->width_source == dim_src_none) {
+						/* Percent value: the effective size is unknown */
+						img->width_source = dim_src_unknown;
+					}
+				}
+
+				if (css_block->height_real_mask &&
+					css_block->height_real >= 0 &&
+					((css_block->height_important &&
+					  !(img->inline_important & 0x1)) ||
+					 img->height_source == dim_src_attribute ||
+					 img->height_source == dim_src_none)) {
+					/* An actual height property from the stylesheet
+					 * cascade, recorded before the rule's own max
+					 * bound is applied; an !important one beats the
+					 * inline style, unless the latter is !important
+					 * too */
+					img->height = html_dim_to_unsigned(ceilf(css_block->height_real));
+					img->height_exact = css_block->height_real;
+					img->height_source = dim_src_stylesheet;
+				}
+				else if (css_block->height_real_mask &&
+						 ((css_block->height_important &&
+						   !(img->inline_important & 0x1)) ||
+						  img->height_source == dim_src_attribute ||
+						  img->height_source == dim_src_none)) {
+					/* A percent real size from the cascade: the
+					 * effective size is unknown, and it overrides a
+					 * value flattened from a max bound; an !important
+					 * one beats the inline style */
+					img->height_source = dim_src_unknown;
+				}
+				else if (css_block->height_mask == html_block::set) {
+					if (css_block->height >= 0) {
+						if (!css_block->height_from_max &&
+							(img->height_source == dim_src_attribute ||
+							 img->height_source == dim_src_none)) {
+							img->height = css_block->height;
+							img->height_exact = css_block->height;
+							img->height_source = dim_src_stylesheet;
+						}
+						else if (css_block->height_from_max &&
+								 css_block->height_max_mask != 2 &&
+								 (!(img->max_source & 0x1) ||
+								  sheet_max_height_wins)) {
+							/* An inline max-height supersedes the
+							 * stylesheet one entirely, and an effective
+							 * `none` maximum invalidates a value
+							 * flattened from a removed bound */
+							if (css_block->height_max <= 4.0 ||
+								(known_dim(img->width_source) &&
+								 html_image_is_tiny(img->width_exact,
+													css_block->height_max))) {
+								if (!known_dim(img->height_source) ||
+									css_block->height_max < img->height_exact) {
+									img->height = html_dim_to_unsigned(ceilf(css_block->height_max));
+									img->height_exact = css_block->height_max;
+									img->height_source = dim_src_stylesheet;
+								}
+							}
+							else if (known_dim(img->height_source)) {
+								if (css_block->height_max < img->height_exact) {
+									img->height = html_dim_to_unsigned(ceilf(css_block->height_max));
+									img->height_exact = css_block->height_max;
+								}
+							}
+							else {
+								img->height_source = dim_src_unknown;
+							}
+						}
+					}
+					else if (img->height_source == dim_src_attribute ||
+							 img->height_source == dim_src_none) {
+						img->height_source = dim_src_unknown;
+					}
+				}
+
+				/* A max bound caps any known size, including an inline
+				 * style one; an inline maximum overrides a stylesheet
+				 * one entirely, and `none` removes the bound */
+				auto width_bound = (img->max_source & 0x2) && !sheet_max_width_wins
+									   ? img->max_width
+									   : (css_block->width_max_mask == 1
+											  ? css_block->width_max
+											  : no_image_bound);
+
+				if (width_bound >= 0 &&
+					(width_bound <= 4.0 ||
+					 (known_dim(img->height_source) &&
+					  html_image_is_tiny(width_bound, img->height_exact))) &&
+					(!known_dim(img->width_source) ||
+					 width_bound < img->width_exact)) {
+					/* The bound itself is within the tiny threshold, so
+					 * the size is tiny whatever it actually is */
+					img->width = html_dim_to_unsigned(ceilf(width_bound));
+					img->width_exact = width_bound;
+					img->width_source = dim_src_stylesheet;
+				}
+				else if (width_bound >= 0 &&
+						 known_dim(img->width_source) &&
+						 width_bound < img->width_exact) {
+					img->width = html_dim_to_unsigned(ceilf(width_bound));
+					img->width_exact = width_bound;
+				}
+
+				auto height_bound = (img->max_source & 0x1) && !sheet_max_height_wins
+										? img->max_height
+										: (css_block->height_max_mask == 1
+											   ? css_block->height_max
+											   : no_image_bound);
+
+				if (height_bound >= 0 &&
+					(height_bound <= 4.0 ||
+					 (known_dim(img->width_source) &&
+					  html_image_is_tiny(img->width_exact, height_bound))) &&
+					(!known_dim(img->height_source) ||
+					 height_bound < img->height_exact)) {
+					/* The bound itself is within the tiny threshold, so
+					 * the size is tiny whatever it actually is */
+					img->height = html_dim_to_unsigned(ceilf(height_bound));
+					img->height_exact = height_bound;
+					img->height_source = dim_src_stylesheet;
+				}
+				else if (height_bound >= 0 &&
+						 known_dim(img->height_source) &&
+						 height_bound < img->height_exact) {
+					img->height = html_dim_to_unsigned(ceilf(height_bound));
+					img->height_exact = height_bound;
+				}
+
+				/* Minimums apply to the cascade result, so re-clamp;
+				 * a stylesheet minimum is skipped when an inline one is
+				 * specified, as the latter overrides it entirely */
+				if (css_block->min_width_mask == 1 &&
+					!inline_min_width_wins) {
+					if (img->min_source & 0x2) {
+						/* An !important stylesheet minimum replaces
+						 * the inline one entirely */
+						img->min_width = css_block->min_width;
+					}
+					else if (css_block->min_width >
+							 img->min_width) {
+						img->min_width = css_block->min_width;
+					}
+				}
+
+				if (css_block->min_height_mask == 1 &&
+					!inline_min_height_wins) {
+					if (img->min_source & 0x1) {
+						/* An !important stylesheet minimum replaces
+						 * the inline one entirely */
+						img->min_height = css_block->min_height;
+					}
+					else if (css_block->min_height >
+							 img->min_height) {
+						img->min_height = css_block->min_height;
+					}
+				}
+
+				if (known_dim(img->width_source) &&
+					img->min_width > img->width_exact) {
+					img->width = html_dim_to_unsigned(ceilf(img->min_width));
+					img->width_exact = img->min_width;
+				}
+
+				if (known_dim(img->height_source) &&
+					img->min_height > img->height_exact) {
+					img->height = html_dim_to_unsigned(ceilf(img->min_height));
+					img->height_exact = img->min_height;
+				}
+			}
+
+			/* A percent minimum resolves against the container and may
+			 * raise the size above the tiny threshold, so the size
+			 * cannot be classified as tiny then; an inline minimum of
+			 * the same axis overrides a stylesheet one entirely */
+			if ((css_block->min_width_mask == 2 &&
+				 !inline_min_width_wins) ||
+				((img->min_source & 0x8) &&
+				 inline_min_width_wins)) {
+				img->width_source = dim_src_unknown;
+			}
+
+			if ((css_block->min_height_mask == 2 &&
+				 !inline_min_height_wins) ||
+				((img->min_source & 0x4) &&
+				 inline_min_height_wins)) {
+				img->height_source = dim_src_unknown;
+			}
+
+			auto is_tiny = known_dim(img->width_source) &&
+						   known_dim(img->height_source) &&
+						   html_image_is_tiny(img->width_exact, img->height_exact);
+
+			count_tiny_external(was_tiny, is_tiny);
+		}
+	}
+	else {
+		/* Without a stylesheet, inline max bounds and minimums still
+		 * resize the image for the classification */
+		for (auto *img: hc->images) {
+			if (!(img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL)) {
+				continue;
+			}
+
+			auto was_tiny = known_dim(img->width_source) &&
+							known_dim(img->height_source) &&
+							html_image_is_tiny(img->width_exact, img->height_exact);
+
+			auto width_bound = no_image_bound;
+
+			if (img->max_source & 0x2) {
+				width_bound = img->max_width;
+			}
+
+			if (width_bound >= 0 &&
+				(width_bound <= 4.0 ||
+				 (known_dim(img->height_source) &&
+				  html_image_is_tiny(width_bound, img->height_exact))) &&
+				(!known_dim(img->width_source) ||
+				 width_bound < img->width_exact)) {
+				/* The bound itself is within the tiny threshold, so
+				 * the size is tiny whatever it actually is */
+				img->width = html_dim_to_unsigned(ceilf(width_bound));
+				img->width_exact = width_bound;
+				img->width_source = dim_src_stylesheet;
+			}
+			else if (width_bound >= 0 &&
+					 known_dim(img->width_source) &&
+					 width_bound < img->width_exact) {
+				img->width = html_dim_to_unsigned(ceilf(width_bound));
+				img->width_exact = width_bound;
+			}
+
+			auto height_bound = no_image_bound;
+
+			if (img->max_source & 0x1) {
+				height_bound = img->max_height;
+			}
+
+			if (height_bound >= 0 &&
+				(height_bound <= 4.0 ||
+				 (known_dim(img->width_source) &&
+				  html_image_is_tiny(img->width_exact, height_bound))) &&
+				(!known_dim(img->height_source) ||
+				 height_bound < img->height_exact)) {
+				img->height = html_dim_to_unsigned(ceilf(height_bound));
+				img->height_exact = height_bound;
+				img->height_source = dim_src_stylesheet;
+			}
+			else if (height_bound >= 0 &&
+					 known_dim(img->height_source) &&
+					 height_bound < img->height_exact) {
+				img->height = html_dim_to_unsigned(ceilf(height_bound));
+				img->height_exact = height_bound;
+			}
+
+			if (known_dim(img->width_source) && img->min_width > img->width_exact) {
+				img->width = html_dim_to_unsigned(ceilf(img->min_width));
+				img->width_exact = img->min_width;
+			}
+
+			if (known_dim(img->height_source) && img->min_height > img->height_exact) {
+				img->height = html_dim_to_unsigned(ceilf(img->min_height));
+				img->height_exact = img->min_height;
+			}
+
+			/* A percent minimum may raise the size above the tiny
+			 * threshold, so the size cannot be classified as tiny */
+			if (img->min_source & 0x8) {
+				img->width_source = dim_src_unknown;
+			}
+
+			if (img->min_source & 0x4) {
+				img->height_source = dim_src_unknown;
+			}
+
+			auto is_tiny = known_dim(img->width_source) &&
+						   known_dim(img->height_source) &&
+						   html_image_is_tiny(img->width_exact, img->height_exact);
+
+			count_tiny_external(was_tiny, is_tiny);
+		}
+	}
+
 	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
 								exceptions, url_set,
@@ -5312,9 +6615,11 @@ auto html_process_input(struct rspamd_task *task,
 				return;
 			}
 
+			html_resolve_against_base(pool, src, hc);
 			auto maybe_url = html_process_url(pool, src, L);
 
 			if (maybe_url) {
+				hc->features.images_external++;
 				auto *img_url = maybe_url.value();
 				img_url->flags |= RSPAMD_URL_FLAG_IMAGE;
 
@@ -5614,6 +6919,12 @@ auto html_process_input(struct rspamd_task *task,
 				}
 			}
 			else if (scratch.id == Tag_IMG) {
+				/* Images past the tags limit cannot be classified by
+				 * their dimensions, but they still count, whether they
+				 * carry a source or a srcset only, so that a pixel
+				 * parsed before the limit cannot remain the only image */
+				hc->features.images_total++;
+
 				if (auto src = scratch.find_component<html_component_src>()) {
 					register_image(src.value()->value);
 				}

@@ -1,0 +1,13 @@
+From: someone@client.example.org
+To: <friend@example.net>
+Subject: Hello
+Message-ID: <greeting-789@client.example.org>
+List-Unsubscribe: <https://client.example.org/u/789/>
+Precedence: bulk
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Hello friendly user</p>
+<span style="display:none"><img width="1" height="1" src="https://tracker.example.com/o/789/"/></span>
+</body></html>

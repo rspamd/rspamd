@@ -1,0 +1,11 @@
+From: someone@client.example.org
+To: <friend@example.net>
+Subject: Hello
+Message-ID: <greeting-789@client.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Hello friendly user</p>
+<span style="display:none"><img width="0" height="0" src="https://tracker.example.com/o/789/"/></span>
+</body></html>
