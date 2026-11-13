@@ -471,15 +471,11 @@ create_listen_socket(GPtrArray *addrs, unsigned int cnt,
 }
 
 static GList *
-systemd_get_socket(struct rspamd_main *rspamd_main, const char *fdname)
+systemd_add_socket(struct rspamd_main *rspamd_main, int sock, GList *sockets)
 {
-	int number, sock, num_passed, flags;
-	GList *result = NULL;
-	const char *e;
-	char **fdnames;
-	char *end;
+	int flags;
 	struct stat st;
-	static const int sd_listen_fds_start = 3; /* SD_LISTEN_FDS_START */
+	GList *result = NULL;
 	struct rspamd_worker_listen_socket *ls;
 
 	union {
@@ -491,9 +487,101 @@ systemd_get_socket(struct rspamd_main *rspamd_main, const char *fdname)
 	socklen_t slen = sizeof(addr_storage);
 	int stype;
 
+	if (fstat(sock, &st) == -1) {
+		msg_warn_main("cannot stat systemd descriptor %d", sock);
+		return NULL;
+	}
+	if (!S_ISSOCK(st.st_mode)) {
+		msg_warn_main("systemd descriptor %d is not a socket", sock);
+		errno = EINVAL;
+		return NULL;
+	}
+	flags = fcntl(sock, F_GETFD);
+
+	if (flags != -1) {
+		(void) fcntl(sock, F_SETFD, flags | FD_CLOEXEC);
+	}
+
+	rspamd_socket_nonblocking(sock);
+
+	if (getsockname(sock, &addr_storage.sa, &slen) == -1) {
+		msg_warn_main("cannot get name for systemd descriptor %d: %s",
+					  sock, strerror(errno));
+		errno = EINVAL;
+		return NULL;
+	}
+
+	ls = g_malloc0(sizeof(*ls));
+	ls->addr = rspamd_inet_address_from_sa(&addr_storage.sa, slen);
+	ls->fd = sock;
+	ls->is_systemd = true;
+
+	slen = sizeof(stype);
+	if (getsockopt(sock, SOL_SOCKET, SO_TYPE, &stype, &slen) != -1) {
+		if (stype == SOCK_STREAM) {
+			ls->type = RSPAMD_WORKER_SOCKET_TCP;
+		}
+		else {
+			ls->type = RSPAMD_WORKER_SOCKET_UDP;
+		}
+	}
+	else {
+		msg_warn_main("cannot get type for systemd descriptor %d: %s",
+					  sock, strerror(errno));
+		ls->type = RSPAMD_WORKER_SOCKET_TCP;
+	}
+
+	result = g_list_prepend(sockets, ls);
+	if (!result)
+		g_free(ls);
+	return result;
+}
+
+static GList *
+systemd_get_socket(struct rspamd_main *rspamd_main, const char *fdname)
+{
+	int number, sock, num_passed;
+	GList *result = NULL, *lst = NULL;
+	const char *e;
+	char **fdnames;
+	char *end;
+	static const int sd_listen_fds_start = 3; /* SD_LISTEN_FDS_START */
+
 	number = strtoul(fdname, &end, 10);
-	if (end != NULL && *end != '\0') {
-		/* Cannot parse as number, assume a name in LISTEN_FDNAMES. */
+	if (end == NULL || *end == '\0') {
+		/* An index into systemd's provided sockets was provided. */
+		e = getenv("LISTEN_FDS");
+		if (!e) {
+			msg_err_main("cannot get systemd variable 'LISTEN_FDS'");
+			errno = ENOENT;
+			return NULL;
+		}
+
+		num_passed = strtol(e, &end, 10);
+		if (end != NULL && *end != '\0') {
+			msg_err_main("systemd variable 'LISTEN_FDS' is not a number");
+			errno = EINVAL;
+			return NULL;
+		}
+
+		if (number < 0) {
+			msg_warn_main("cannot find systemd socket: %s", fdname);
+			errno = ENOENT;
+			return NULL;
+		}
+
+		if (num_passed <= number) {
+			msg_err_main("systemd LISTEN_FDS does not contain the expected fd: %d",
+						 num_passed);
+			errno = EINVAL;
+			return NULL;
+		}
+
+		sock = number + sd_listen_fds_start;
+		result = systemd_add_socket(rspamd_main, sock, result);
+	}
+	else {
+		/* Cannot parse as a number, so assume it was a file descriptor name. */
 		e = getenv("LISTEN_FDNAMES");
 		if (!e) {
 			msg_err_main("cannot get systemd variable 'LISTEN_FDNAMES'");
@@ -501,86 +589,28 @@ systemd_get_socket(struct rspamd_main *rspamd_main, const char *fdname)
 			return NULL;
 		}
 
+		/* We need to find all sockets associated with the fdname. */
 		fdnames = g_strsplit(e, ":", -1);
 		for (number = 0; fdnames[number]; number++) {
 			if (!strcmp(fdnames[number], fdname)) {
-				break;
+				sock = number + sd_listen_fds_start;
+				lst = systemd_add_socket(rspamd_main, sock, result);
+				if (!lst) {
+					if (result) {
+						g_list_free_full(result, g_free);
+					}
+					return NULL;
+				}
+				result = lst;
 			}
-		}
-		if (!fdnames[number]) {
-			number = -1;
 		}
 		g_strfreev(fdnames);
-	}
 
-	if (number < 0) {
-		msg_warn_main("cannot find systemd socket: %s", fdname);
-		errno = ENOENT;
-		return NULL;
-	}
-
-	e = getenv("LISTEN_FDS");
-	if (e != NULL) {
-		errno = 0;
-		num_passed = strtoul(e, &end, 10);
-		if ((end == NULL || *end == '\0') && num_passed > number) {
-			sock = number + sd_listen_fds_start;
-			if (fstat(sock, &st) == -1) {
-				msg_warn_main("cannot stat systemd descriptor %d", sock);
-				return NULL;
-			}
-			if (!S_ISSOCK(st.st_mode)) {
-				msg_warn_main("systemd descriptor %d is not a socket", sock);
-				errno = EINVAL;
-				return NULL;
-			}
-			flags = fcntl(sock, F_GETFD);
-
-			if (flags != -1) {
-				(void) fcntl(sock, F_SETFD, flags | FD_CLOEXEC);
-			}
-
-			rspamd_socket_nonblocking(sock);
-
-			if (getsockname(sock, &addr_storage.sa, &slen) == -1) {
-				msg_warn_main("cannot get name for systemd descriptor %d: %s",
-							  sock, strerror(errno));
-				errno = EINVAL;
-				return NULL;
-			}
-
-			ls = g_malloc0(sizeof(*ls));
-			ls->addr = rspamd_inet_address_from_sa(&addr_storage.sa, slen);
-			ls->fd = sock;
-			ls->is_systemd = true;
-
-			slen = sizeof(stype);
-			if (getsockopt(sock, SOL_SOCKET, SO_TYPE, &stype, &slen) != -1) {
-				if (stype == SOCK_STREAM) {
-					ls->type = RSPAMD_WORKER_SOCKET_TCP;
-				}
-				else {
-					ls->type = RSPAMD_WORKER_SOCKET_UDP;
-				}
-			}
-			else {
-				msg_warn_main("cannot get type for systemd descriptor %d: %s",
-							  sock, strerror(errno));
-				ls->type = RSPAMD_WORKER_SOCKET_TCP;
-			}
-
-
-			result = g_list_prepend(result, ls);
+		/* result remains NULL if there were no sockets obtained. */
+		if (!result) {
+			msg_warn_main("cannot find systemd socket: %s", fdname);
+			errno = ENOENT;
 		}
-		else if (num_passed <= number) {
-			msg_err_main("systemd LISTEN_FDS does not contain the expected fd: %d",
-						 num_passed);
-			errno = EINVAL;
-		}
-	}
-	else {
-		msg_err_main("cannot get systemd variable 'LISTEN_FDS'");
-		errno = ENOENT;
 	}
 
 	return result;
