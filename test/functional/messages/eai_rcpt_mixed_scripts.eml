@@ -1,0 +1,10 @@
+From: Gøril <gøril@example.com>
+To: Info <info@例子.中国>, Q <阿Q正传@dømi.fo>
+Date: Fri, 23 Oct 2026 10:00:00 +0200
+Message-ID: <eai_rcpt_mixed_scripts@grå.org>
+Subject: A recipient address that mixes Han and Latin
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+The second recipient mixes Han and non-ASCII Latin, which rule 3 bans.

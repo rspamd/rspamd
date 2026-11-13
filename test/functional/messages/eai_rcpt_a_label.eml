@@ -1,0 +1,9 @@
+From: sender@example.com
+To: recipient@example.com, first.XN--GR-ZIA@example.com
+Date: Fri, 30 Oct 2026 10:00:00 +0000
+Message-ID: <eai_rcpt_a_label@example.com>
+Subject: ASCII recipient containing an A-label atom
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+
+The second recipient contains an A-label after a dot.

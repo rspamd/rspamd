@@ -1,0 +1,10 @@
+From: Gøril <gøril@example.com>
+To: Info <info@example.com>
+Date: Fri, 23 Oct 2026 10:00:00 +0200
+Message-ID: <eai_from_latin1@example.com>
+Subject: A From address in ISO-8859-1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=iso-8859-1
+Content-Transfer-Encoding: 8bit
+
+The From address is in ISO-8859-1, not UTF-8, so it is not an RFC6532 address.

@@ -16,6 +16,15 @@ context("MIME address list parser", function()
       { { addr = 'a@example.com', name = 'A Name', valid = true } } },
     { '"Quoted Name" <a@example.com>',
       { { addr = 'a@example.com', name = 'Quoted Name', valid = true } } },
+    { '"René"@dømi.fo, <"René"@dømi.fo>',
+      { { user = 'René', domain = 'dømi.fo', valid = true },
+        { user = 'René', domain = 'dømi.fo', valid = true } } },
+    { '"quoted;semi"@example.com',
+      { { user = 'quoted;semi', domain = 'example.com', valid = true } } },
+    { '"a\\"b"@example.com, "Quoted Name" <other@example.org>',
+      { { user = 'a"b', domain = 'example.com', valid = true },
+        { addr = 'other@example.org', name = 'Quoted Name', valid = true } } },
+    { [["a\\b"@example.com]], { { user = [[a\b]], valid = true } } },
     { 'a@example.com (ignored comment)',
       { { addr = 'a@example.com', valid = true } } },
     { 'Тест <a@example.com>',
@@ -79,12 +88,6 @@ context("MIME address list parser", function()
     { 'undisclosed-recipients:;', {} },
   }
 
-  -- Only the number of parsed entries is stable for these
-  local count_only_cases = {
-    -- Semicolon inside a quoted string must not split the element
-    { '"quoted;semi"@example.com', 1 },
-  }
-
   fun.each(function(case)
     test("Parse MIME addr list: " .. case[1], function()
       local res = util.parse_mail_address(case[1])
@@ -114,13 +117,4 @@ context("MIME address list parser", function()
       end
     end)
   end, cases)
-
-  fun.each(function(case)
-    test("Parse MIME addr list (count): " .. case[1], function()
-      local res = util.parse_mail_address(case[1])
-      assert_not_nil(res, 'should parse ' .. case[1])
-      assert_equal(#res, case[2],
-          string.format('expected %s addresses, got %s', case[2], #res))
-    end)
-  end, count_only_cases)
 end)
