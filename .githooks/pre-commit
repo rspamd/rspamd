@@ -1,0 +1,76 @@
+#!/bin/sh
+#
+# rspamd pre-commit checks (plain git hook, no hook manager needed).
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Skip for one commit:     git commit --no-verify
+#
+# Checks only what is being committed (the index), not the whole tree:
+#   1. whitespace errors (trailing spaces, CRLF, space before tab, conflict markers)
+#   2. luacheck on staged Lua files
+#   3. clang-format on staged C/C++ lines (reformats and re-stages automatically)
+
+set -eu
+IFS='
+'
+fail=0
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if git rev-parse --verify -q HEAD >/dev/null; then
+	against=HEAD
+else
+	against=$(git hash-object -t tree /dev/null)
+fi
+
+staged() {
+	git diff --cached --name-only --diff-filter=ACMR "$against" -- "$@"
+}
+
+# 1. Whitespace: added lines only. Vendored code and raw test messages are exempt.
+if ! git diff --cached --check "$against" -- . \
+	':(exclude)contrib/' ':(exclude)test/functional/messages/'; then
+	echo "pre-commit: whitespace errors above" >&2
+	fail=1
+fi
+
+# 2. luacheck: staged content, filtered by .luacheckrc exclude_files.
+lua_files=$(staged '*.lua')
+if [ -n "$lua_files" ]; then
+	if command -v luacheck >/dev/null 2>&1; then
+		for f in $lua_files; do
+			git show ":$f" | luacheck --formatter plain --codes --filename "$f" - || fail=1
+		done
+	else
+		echo "pre-commit: luacheck not installed, Lua files not checked" >&2
+	fi
+fi
+
+# 3. clang-format: reformat staged lines and put the result back in the index.
+#    git clang-format refuses (and fails the commit) if a file also has
+#    unstaged changes, so nothing unrelated gets staged.
+exts=c,cc,cpp,cxx,h,hh,hpp,hxx
+c_files=$(staged '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx')
+if [ -n "$c_files" ]; then
+	if git clang-format -h >/dev/null 2>&1; then
+		if ! git clang-format --staged --extensions "$exts" --diff --quiet >/dev/null 2>&1; then
+			dirty_before=$(git diff --name-only -- $c_files)
+			# Exits 1 whenever it changes something, so judge by the re-check below.
+			git clang-format --staged --extensions "$exts" --quiet || true
+			# Re-stage only the files clang-format touched.
+			fixed=$(git diff --name-only -- $c_files | grep -vxF "${dirty_before:-/dev/null}" || true)
+			[ -z "$fixed" ] || git add -- $fixed
+			if git clang-format --staged --extensions "$exts" --diff --quiet >/dev/null 2>&1; then
+				echo "pre-commit: clang-format reformatted and re-staged:" >&2
+				echo "$fixed" | sed 's/^/  /' >&2
+			else
+				echo "pre-commit: staged C/C++ lines are not clang-formatted" >&2
+				fail=1
+			fi
+		fi
+	else
+		echo "pre-commit: git-clang-format not installed, C/C++ files not checked" >&2
+	fi
+fi
+
+exit $fail
