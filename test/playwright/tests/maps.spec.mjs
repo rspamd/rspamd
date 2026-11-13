@@ -30,6 +30,11 @@ test.describe("WebUI Configuration → Maps editor", () => {
         );
         test.skip((await writableLink.count()) === 0, "no writable map present in this configuration");
 
+        // Uncaught JS errors surface here, not as failed assertions: a broken
+        // codejar module makes requirejs.onError rethrow (see js/main.js).
+        const jsErrors = [];
+        page.on("pageerror", (err) => jsErrors.push(err.message));
+
         // Register the response listener before the click: getmap on localhost is
         // faster than a sequentially-registered waitForResponse, which would miss it.
         await Promise.all([
@@ -39,10 +44,23 @@ test.describe("WebUI Configuration → Maps editor", () => {
 
         await expect(page.locator("#modalDialog")).toBeVisible();
         await expect(page.locator("#modalTitle")).not.toBeEmpty();
-        await expect(page.locator("#editor")).toBeVisible();
+        const editorElt = page.locator("#editor");
+        await expect(editorElt).toBeVisible();
         // Writable branch: Save group is shown (no d-none).
         await expect(page.locator("#modalSaveGroup")).not.toHaveClass(/\bd-none\b/);
         await expect(page.locator("#modalSave")).toBeVisible();
+
+        // Advanced mode (map <= 5 KiB) renders CodeJar: jar.updateCode() fills
+        // the editor and withLineNumbers() nests it into .codejar-wrap. An empty
+        // editor or a missing wrapper means the modules failed silently.
+        if (await editorElt.evaluate((el) => el.matches(".language-clike"))) {
+            await expect(editorElt).not.toBeEmpty();
+            await expect(page.locator(".codejar-wrap #editor")).toBeVisible();
+        }
+
+        // The modal opened without uncaught JS errors (module load, CodeJar init).
+        await page.waitForTimeout(500);
+        expect(jsErrors).toEqual([]);
     });
 
     test("opening a read-only map hides Save", async ({page}) => {
