@@ -1809,17 +1809,23 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 	elt = ucl_object_lookup(obj, "add");
 	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
 		if (!(hdr_elt->flags & RSPAMD_HEADER_MODIFIED)) {
-			/* Copy the header itself to the modified chain */
-			struct rspamd_mime_header *nhdr;
+			/* Copy all headers with this name to the modified chain */
+			struct rspamd_mime_header *cur_hdr, *nhdr;
 			hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
-			nhdr = rspamd_mempool_alloc(
-				task->task_pool, sizeof(*nhdr));
-			memcpy(nhdr, hdr_elt, sizeof(*hdr_elt));
-			nhdr->modified_chain = NULL;
-			nhdr->next = NULL;
-			nhdr->ord_next = NULL;
-			nhdr->prev = nhdr;
-			hdr_elt->modified_chain = nhdr;
+			hdr_elt->modified_chain = NULL;
+
+			LL_FOREACH(hdr_elt, cur_hdr)
+			{
+				nhdr = rspamd_mempool_alloc(
+					task->task_pool, sizeof(*nhdr));
+				memcpy(nhdr, cur_hdr, sizeof(*nhdr));
+				nhdr->modified_chain = NULL;
+				nhdr->prev = NULL;
+				nhdr->next = NULL;
+				nhdr->ord_next = NULL;
+
+				DL_APPEND(hdr_elt->modified_chain, nhdr);
+			}
 		}
 
 		/*
