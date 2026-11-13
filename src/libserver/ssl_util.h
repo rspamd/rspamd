@@ -99,6 +99,14 @@ gssize rspamd_ssl_read(struct rspamd_ssl_connection *conn, gpointer buf,
 					   gsize buflen);
 
 /**
+ * Returns the number of decrypted bytes available for immediate reading
+ * @param conn non-NULL SSL connection
+ * @return number of pending application data bytes, or 0 if none are
+ * available or the SSL session has not been initialized
+ */
+gsize rspamd_ssl_pending(struct rspamd_ssl_connection *conn);
+
+/**
  * Perform async write to ssl buffer
  * @param conn
  * @param buf

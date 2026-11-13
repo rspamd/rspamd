@@ -469,6 +469,19 @@ TEST_SUITE("symcache_order")
 		i = info("PRE");
 		CHECK(i.level == 5);
 	}
+
+	TEST_CASE_FIXTURE(symcache_order_fixture, "only composites report the composite flag")
+	{
+		add("COMP", 0, SYMBOL_TYPE_COMPOSITE);
+		add("FILT", 0, SYMBOL_TYPE_NORMAL);
+		add("POST", 0, SYMBOL_TYPE_POSTFILTER);
+		init();
+
+		CHECK((rspamd_symcache_get_symbol_flags(cache, "COMP") & SYMBOL_TYPE_COMPOSITE) != 0);
+		CHECK((rspamd_symcache_get_symbol_flags(cache, "FILT") & SYMBOL_TYPE_COMPOSITE) == 0);
+		CHECK((rspamd_symcache_get_symbol_flags(cache, "POST") & SYMBOL_TYPE_COMPOSITE) == 0);
+		CHECK(rspamd_symcache_get_symbol_stage(cache, "COMP") == SYMBOL_TYPE_COMPOSITE);
+	}
 }
 
 #endif

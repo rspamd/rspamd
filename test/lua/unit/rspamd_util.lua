@@ -210,6 +210,19 @@ context("Rspamd util for lua - check generic functions", function()
     end)
 end)
 
+context("Rspamd util lower_utf8", function()
+    local util = require 'rspamd_util'
+
+    test("Characters growing when lowercased", function()
+        -- U+023A and U+023E are 2 bytes, their lowercase forms are 3 bytes
+        local s = string.rep("\200\186\200\190", 50) .. string.rep("A", 200)
+        local expected = string.rep("\226\177\165\226\177\166", 50) .. string.rep("a", 200)
+        assert_equal(expected, util.lower_utf8(s))
+        assert_equal("\226\177\165a", util.lower_utf8("\200\186A"))
+        assert_equal("", util.lower_utf8(""))
+    end)
+end)
+
 context("Rspamd string utility", function()
     local ok, ffi = pcall(require, "ffi")
     if not ok then

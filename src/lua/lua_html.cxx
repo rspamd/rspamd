@@ -293,6 +293,7 @@ constexpr const auto prop_map = frozen::make_unordered_map<frozen::string, int>(
 	{"duplicate_elements", RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS},
 	{"unbalanced", RSPAMD_HTML_FLAG_UNBALANCED},
 	{"data_urls", RSPAMD_HTML_FLAG_HAS_DATA_URLS},
+	{"cdata_in_html", RSPAMD_HTML_FLAG_CDATA_IN_HTML},
 });
 
 static int

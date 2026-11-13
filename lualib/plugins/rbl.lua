@@ -56,6 +56,7 @@ local default_options = {
   ['default_no_ip'] = false,
   ['default_dkim_match_from'] = false,
   ['default_selector_flatten'] = true,
+  ['default_merge_checks'] = true,
 }
 
 local return_codes_schema = T.table({}, {
@@ -145,6 +146,8 @@ local rule_schema_tbl = {
       :doc({ summary = "Treat this RBL as a whitelist (positive result means whitelisted)" }),
   local_exclude_ip_map = T.string():optional()
       :doc({ summary = "Path to map file containing IPs to exclude from this RBL check" }),
+  merge_checks = T.boolean():optional()
+      :doc({ summary = "Insert the symbol once with a combined option when several checks yield the same DNS query" }),
   monitored_address = T.string():optional()
       :doc({ summary = "Specific address to use for RBL health monitoring queries" }),
   no_ip = T.boolean():optional()
@@ -293,9 +296,12 @@ local function convert_checks(rule, name)
 end
 
 
--- Add default boolean flags to the schema
+-- Add default boolean flags to the schema, keeping any explicitly documented entry
 for def_k, _ in pairs(default_options) do
-  rule_schema_tbl[def_k:sub(#('default_') + 1)] = T.boolean():optional()
+  local rule_k = def_k:sub(#('default_') + 1)
+  if not rule_schema_tbl[rule_k] then
+    rule_schema_tbl[rule_k] = T.boolean():optional()
+  end
 end
 
 local rule_schema = T.table(rule_schema_tbl):doc({ summary = "RBL rule configuration schema" })
@@ -329,6 +335,8 @@ local plugin_schema = T.table({
       :doc({ summary = "Default value for dkim_match_from option in rules" }),
   default_selector_flatten = T.boolean():optional()
       :doc({ summary = "Default value for selector_flatten option in rules" }),
+  default_merge_checks = T.boolean():optional()
+      :doc({ summary = "Default value for merge_checks option in rules" }),
   default_received_flags = T.array(T.string()):optional()
       :doc({ summary = "Default received flags for all rules" }),
   default_received_nflags = T.array(T.string()):optional()

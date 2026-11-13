@@ -164,7 +164,7 @@ textarea {
  * The bundled bootstrap5 theme hardcodes light colors (#fff, #dee2e6, ...),
  * which do not respond to data-bs-theme. Map them to Bootstrap CSS variables
  * (which flip with data-bs-theme) so light/dark follow automatically.
- * rspamd.css is loaded after tabulator_bs5.min.css, so these win the cascade.
+ * rspamd.css is loaded after tabulator_bootstrap5.min.css, so these win the cascade.
  */
 .tabulator {
     border: none;
@@ -222,7 +222,7 @@ textarea {
    Scoped to text-like inputs so it does not strip the native checkbox
    (the action filter's "not" toggle) of its checkmark and stretch it.
    The full .tabulator > header > col > header-filter path is required:
-   tabulator_bs5.min.css targets the input by that path with higher
+   tabulator_bootstrap5.min.css targets the input by that path with higher
    specificity, so a shorter selector is overridden. */
 .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input:not([type="checkbox"], [type="radio"]) {
     -webkit-appearance: none;

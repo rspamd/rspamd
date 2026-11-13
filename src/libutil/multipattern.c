@@ -383,8 +383,13 @@ void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
 	g_assert(!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	/* Add to pats array for ACISM/regex fallback (needed for FALLBACK mode) */
-	if (mp->pats != NULL) {
+	/*
+	 * Add to pats array for ACISM/regex fallback (needed for FALLBACK mode).
+	 * Without usable hyperscan the path below adds the pattern: adding it
+	 * here too would put every pattern twice in pats, while cnt counts it
+	 * once, so the second half of the patterns would never be compiled
+	 */
+	if (rspamd_hs_check() && mp->pats != NULL) {
 		struct rspamd_acism_pat acism_pat;
 
 		acism_pat.pat.ptr = rspamd_multipattern_escape_acism(pattern, patlen, flags, &dlen);
@@ -1855,6 +1860,15 @@ rspamd_multipattern_load_from_cache_cb(gboolean success,
 					rspamd_hyperscan_free(mp->hs_db, true);
 					mp->hs_db = NULL;
 				}
+			}
+			else {
+				/*
+				 * Stale blob (e.g. serialized by an incompatible hyperscan
+				 * version or fork): remove it so that a valid database is
+				 * compiled and re-stored, as re_cache does
+				 */
+				rspamd_hs_cache_lua_delete_async(ctx->cache_key, "multipattern",
+												 NULL, NULL);
 			}
 		}
 		else {

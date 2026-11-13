@@ -579,12 +579,13 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 
 	if (type & trivial_types) {
 		auto check_trivial = [&](auto flag,
-								 symcache_item_type ty) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
+								 symcache_item_type ty,
+								 bool keep_flag = false) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
 			if (all_but_one_ty(type, flag)) {
 				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", (int) type));
 			}
 
-			return std::make_pair(ty, type & ~flag);
+			return std::make_pair(ty, keep_flag ? type : type & ~flag);
 		};
 		if (type & SYMBOL_TYPE_CONNFILTER) {
 			return check_trivial(SYMBOL_TYPE_CONNFILTER, symcache_item_type::CONNFILTER);
@@ -599,7 +600,8 @@ auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, in
 			return check_trivial(SYMBOL_TYPE_IDEMPOTENT, symcache_item_type::IDEMPOTENT);
 		}
 		else if (type & SYMBOL_TYPE_COMPOSITE) {
-			return check_trivial(SYMBOL_TYPE_COMPOSITE, symcache_item_type::COMPOSITE);
+			/* Composites keep their flag, it is what the flag lists report */
+			return check_trivial(SYMBOL_TYPE_COMPOSITE, symcache_item_type::COMPOSITE, true);
 		}
 		else if (type & SYMBOL_TYPE_CLASSIFIER) {
 			return check_trivial(SYMBOL_TYPE_CLASSIFIER, symcache_item_type::CLASSIFIER);

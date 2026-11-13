@@ -33,23 +33,52 @@ struct html_block {
 	rspamd::css::css_display_value display;
 	std::int16_t font_size;
 	bool overflow_hidden;
-	bool offscreen; /* hidden via off-screen positioning / clipping */
+	/* Hidden via off-screen positioning / clipping */
+	bool offscreen;
+	/* The `visibility` property: hidden or collapse */
+	bool visibility_hidden;
+	/*
+	 * Hidden by what is not `display`: opacity, a place off the screen, a
+	 * clip. No value of `display` shows such a block again, an important
+	 * one included
+	 */
+	bool forced_hidden;
 
-	unsigned fg_color_mask : 2;
-	unsigned bg_color_mask : 2;
-	unsigned height_mask : 2;
-	unsigned width_mask : 2;
-	unsigned font_mask : 2;
-	unsigned display_mask : 2;
+	unsigned fg_color_mask : 3;
+	unsigned bg_color_mask : 3;
+	unsigned height_mask : 3;
+	unsigned width_mask : 3;
+	unsigned font_mask : 3;
+	unsigned display_mask : 3;
+	/* Not a source mask: the invisible and transparent flags of the block */
 	unsigned visibility_mask : 2;
-	unsigned overflow_mask : 2;
+	unsigned overflow_mask : 3;
+	/* Source mask of `visibility_hidden` */
+	unsigned visibility_prop_mask : 3;
 
+	/*
+	 * Where a value comes from, from the weakest to the strongest: a hint of
+	 * a presentational attribute loses to any author declaration, and an
+	 * !important declaration wins over a normal one
+	 */
 	constexpr static const auto unset = 0;
 	constexpr static const auto inherited = 1;
 	constexpr static const auto implicit = 1;
+	constexpr static const auto hint = 2;
 	constexpr static const auto set = 3;
+	constexpr static const auto important = 4;
 	constexpr static const auto invisible_flag = 1;
 	constexpr static const auto transparent_flag = 2;
+
+	/*
+	 * A value of a parent, whatever its source, replaces only what the child
+	 * has not got itself: nothing or an inherited value
+	 */
+	template<typename MT>
+	static constexpr auto inherit_strength(MT mask_val) -> MT
+	{
+		return mask_val > html_block::hint ? static_cast<MT>(html_block::hint) : mask_val;
+	}
 
 	/* Helpers to set mask when setting the elements */
 	auto set_fgcolor(const rspamd::css::css_color &c, int how = html_block::set) -> void
@@ -110,6 +139,12 @@ struct html_block {
 		display_mask = how;
 	}
 
+	auto set_visibility(bool hidden, int how = html_block::set) -> void
+	{
+		visibility_hidden = hidden;
+		visibility_prop_mask = how;
+	}
+
 	auto set_overflow(bool hidden, int how = html_block::set) -> void
 	{
 		overflow_hidden = hidden;
@@ -137,7 +172,7 @@ private:
 	static constexpr auto simple_prop(MT mask_val, MT other_mask, T &our_val,
 									  T other_val) -> MT
 	{
-		if (other_mask && other_mask > mask_val) {
+		if (other_mask && html_block::inherit_strength(other_mask) > mask_val) {
 			our_val = other_val;
 			mask_val = html_block::inherited;
 		}
@@ -173,14 +208,14 @@ private:
 					our_val = default_val * (-our_val / 100.0);
 				}
 			}
-			else if (other_mask && other_mask > mask_val) {
+			else if (other_mask && html_block::inherit_strength(other_mask) > mask_val) {
 				our_val = other_val;
 				mask_val = html_block::inherited;
 			}
 		}
 		else {
 			/* We propagate parent if defined */
-			if (other_mask && other_mask > mask_val) {
+			if (other_mask && html_block::inherit_strength(other_mask) > mask_val) {
 				our_val = other_val;
 				mask_val = html_block::inherited;
 			}
@@ -194,9 +229,10 @@ public:
 	/**
 	 * Propagate values from the block if they are not defined by the current block
 	 * @param other
+	 * @param bounded whether the width and height of `other` bound this block
 	 * @return
 	 */
-	auto propagate_block(const html_block &other) -> void
+	auto propagate_block(const html_block &other, bool bounded = true) -> void
 	{
 		fg_color_mask = html_block::simple_prop(fg_color_mask, other.fg_color_mask,
 												fg_color, other.fg_color);
@@ -217,21 +253,31 @@ public:
 												   display, other.display);
 		}
 
-		resolve_sizes(other);
+		/* Visibility is inherited, and a descendant can reset it */
+		visibility_prop_mask = html_block::simple_prop(visibility_prop_mask,
+													   other.visibility_prop_mask,
+													   visibility_hidden, other.visibility_hidden);
+
+		resolve_sizes(other, bounded);
 	}
 
 	/*
 	 * Turn sizes that are still relative into absolute ones against an
 	 * already computed parent. Called on propagation, and again once a
 	 * stylesheet block has been merged, since that happens after the parent
-	 * has propagated and can introduce a fresh relative value
+	 * has propagated and can introduce a fresh relative value.
+	 * When the parent does not bound this block, its width and height are
+	 * neither inherited nor used to resolve relative ones
 	 */
-	auto resolve_sizes(const html_block &other) -> void
+	auto resolve_sizes(const html_block &other, bool bounded = true) -> void
 	{
-		height_mask = html_block::size_prop(height_mask, other.height_mask,
-											height, other.height, static_cast<std::int16_t>(800));
-		width_mask = html_block::size_prop(width_mask, other.width_mask,
-										   width, other.width, static_cast<std::int16_t>(1024));
+		static const html_block unbounded{};
+		const auto &box = bounded ? other : unbounded;
+
+		height_mask = html_block::size_prop(height_mask, box.height_mask,
+											height, box.height, static_cast<std::int16_t>(800));
+		width_mask = html_block::size_prop(width_mask, box.width_mask,
+										   width, box.width, static_cast<std::int16_t>(1024));
 		font_mask = html_block::size_prop(font_mask, other.font_mask,
 										  font_size, other.font_size, static_cast<std::int16_t>(16));
 	}
@@ -243,7 +289,9 @@ public:
 	{
 		constexpr auto set_value = [](auto mask_val, auto other_mask, auto &our_val,
 									  auto other_val) constexpr -> int {
-			if (other_mask && mask_val != html_block::set) {
+			/* An important value replaces a normal one, the others only fill in */
+			if (other_mask && (mask_val < html_block::set ||
+							   (other_mask == html_block::important && mask_val != html_block::important))) {
 				our_val = other_val;
 				mask_val = other_mask;
 			}
@@ -253,21 +301,51 @@ public:
 
 		fg_color_mask = set_value(fg_color_mask, other.fg_color_mask, fg_color, other.fg_color);
 		bg_color_mask = set_value(bg_color_mask, other.bg_color_mask, bg_color, other.bg_color);
-		display_mask = set_value(display_mask, other.display_mask, display, other.display);
+		if (!(display_mask == html_block::inherited &&
+			  display == css::css_display_value::DISPLAY_HIDDEN)) {
+			/* Display hidden by an ancestor cannot be reset by own rules */
+			display_mask = set_value(display_mask, other.display_mask, display, other.display);
+		}
+		visibility_prop_mask = set_value(visibility_prop_mask, other.visibility_prop_mask,
+										 visibility_hidden, other.visibility_hidden);
 		height_mask = set_value(height_mask, other.height_mask, height, other.height);
 		width_mask = set_value(width_mask, other.width_mask, width, other.width);
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
 		overflow_mask = set_value(overflow_mask, other.overflow_mask, overflow_hidden, other.overflow_hidden);
+
+		if (other.forced_hidden) {
+			forced_hidden = true;
+		}
+		if (other.offscreen) {
+			offscreen = true;
+		}
 	}
 
 	auto compute_visibility(void) -> void
 	{
+		if (forced_hidden) {
+			/*
+			 * As a hidden display for the descendants, which cannot bring the
+			 * content back
+			 */
+			set_display(css::css_display_value::DISPLAY_HIDDEN, html_block::important);
+			visibility_mask = html_block::invisible_flag;
+
+			return;
+		}
+
 		if (display_mask) {
 			if (display == css::css_display_value::DISPLAY_HIDDEN) {
 				visibility_mask = html_block::invisible_flag;
 
 				return;
 			}
+		}
+
+		if (visibility_prop_mask && visibility_hidden) {
+			visibility_mask = html_block::invisible_flag;
+
+			return;
 		}
 
 		if (font_mask) {
@@ -388,6 +466,8 @@ public:
 						  .font_size = 12,
 						  .overflow_hidden = false,
 						  .offscreen = false,
+						  .visibility_hidden = false,
+						  .forced_hidden = false,
 						  .fg_color_mask = html_block::inherited,
 						  .bg_color_mask = html_block::inherited,
 						  .height_mask = html_block::unset,
@@ -395,7 +475,8 @@ public:
 						  .font_mask = html_block::unset,
 						  .display_mask = html_block::inherited,
 						  .visibility_mask = html_block::unset,
-						  .overflow_mask = html_block::unset};
+						  .overflow_mask = html_block::unset,
+						  .visibility_prop_mask = html_block::unset};
 	}
 	/**
 	 * Produces html block with no defined values allocated from the pool

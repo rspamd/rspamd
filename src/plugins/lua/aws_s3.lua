@@ -266,7 +266,7 @@ rspamd_logger.infox(rspamd_config, 'enabled AWS s3 dump to %s', res.s3_bucket)
 settings = res
 
 settings.upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(),
-    string.format('https://%s.%s', settings.s3_bucket, settings.s3_host))
+    string.format('https://%s.%s', settings.s3_bucket, settings.s3_host), rspamd_config)
 
 if not settings.upstreams then
   rspamd_logger.warnx(rspamd_config, 'cannot parse hostname: %s',

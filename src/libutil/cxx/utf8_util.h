@@ -54,6 +54,23 @@ enum rspamd_utf8_normalise_result {
 enum rspamd_utf8_normalise_result rspamd_normalise_unicode_inplace(char *start, gsize *len);
 
 /**
+ * Normalises a string like rspamd_normalise_unicode_inplace but writes the
+ * result to another buffer, so that it may be longer than the input.
+ * @param in input string
+ * @param in_len length of the input
+ * @param out output buffer, may be NULL if out_cap is zero
+ * @param out_cap size of the output buffer
+ * @param out_len set to the number of bytes written to the output
+ * @param needed set to the size of the complete result: if it is greater than
+ * out_cap, the output holds only its first out_len bytes and the call should be
+ * repeated with a larger buffer
+ * @return normalisation flags; on RSPAMD_UNICODE_NORM_ERROR nothing is written
+ */
+enum rspamd_utf8_normalise_result rspamd_normalise_unicode_to(const char *in, gsize in_len,
+															  char *out, gsize out_cap,
+															  gsize *out_len, gsize *needed);
+
+/**
  * Transliterate a string to ASCII
  * @param start
  * @param len

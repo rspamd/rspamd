@@ -139,6 +139,9 @@ LUA_FUNCTION_DEF(task, get_worker);
  * @method task:insert_result([enforce_symbol,]symbol, weight[, option1, ...])
  * Insert specific symbol to the tasks scanning results assigning the initial
  * weight to it.
+ * Options are stored as is; invalid and non-printable characters become U+FFFD.
+ * Exporters that join options into a comma-separated text form escape the
+ * delimiters themselves (see lua_util.symbol_options_to_string).
  * @param {boolean} enforce_symbol if represented and true, then insert symbol even if it is not registered in the metric
  * @param {string} symbol symbol to insert
  * @param {number} weight initial weight (this weight is multiplied by the metric weight)
@@ -206,7 +209,7 @@ LUA_FUNCTION_DEF(task, remove_result);
  * - message: string
  * - module: string
  * - score: number
- * - priority: integer
+ * - priority: integer, 0 (low) to 3 (critical), the default is 1 (normal)
  * - flags: flags string
  * - result: named result if needed
  *
@@ -214,8 +217,8 @@ LUA_FUNCTION_DEF(task, remove_result);
  * @param {string} message action message
  * @param {string} module optional module name
  * @param {number/nil} score optional explicit score
- * @param {number/nil} priority optional explicit priority
- * @param {string/nil} flags optional flags (e.g. 'least' for least action)
+ * @param {number/nil} priority optional explicit priority, 1 (normal) by default
+ * @param {string/nil} flags optional comma separated flags: 'least', 'process_all', 'no_smtp_message'
 @example
 local function cb(task)
 	local gr = task:get_header('Greylist')
@@ -227,12 +230,16 @@ end
 LUA_FUNCTION_DEF(task, set_pre_result);
 
 /***
- * @method task:has_pre_result()
+ * @method task:has_pre_result([selected])
  * Returns true if task has some pre-result being set.
- * If result has been set this function also returns pre result action,
- * message and module as strings in this order.
+ * If result has been set this function also returns pre result action name,
+ * message, module and flags (comma separated, as for `set_pre_result`) as
+ * strings in this order. These are of the pre-result with the highest priority,
+ * or, if `selected` is true, of the one that selects the action and the reply:
+ * then it returns false when the score selects the action.
  *
- * @return {boolean,[string,string,string]} true if task has some pre-result being set
+ * @param {boolean} selected return the pre-result that selects the action
+ * @return {boolean,[string,string,string,string]} true if task has some pre-result being set
  */
 LUA_FUNCTION_DEF(task, has_pre_result);
 /***
@@ -754,8 +761,13 @@ LUA_FUNCTION_DEF(task, get_images);
  * Returns list of all archives found in a task as a table of `rspamd_archive`.
  * Each archive has the following methods available:
  *
- * * `get_files` - return list of strings with filenames inside archive
- * * `get_files_full` - return list of tables with all information about files
+ * * `get_files` - return list of strings with filenames inside archive; with
+ *   a number `n`, those of the first `n` files of its directory and of its
+ *   local headers, each with the other names it is listed with (Unicode Path)
+ * * `get_files_full` - return list of tables with all information about files,
+ *   limited as `get_files`; `alias` is true for another name of a file listed
+ *   already (the name of its local header, its Unicode Path), which counts of
+ *   files skip
  * * `is_encrypted` - return true if an archive is encrypted
  * * `is_truncated` - return true if the archive file list hit the task limit
  * * `get_type` - return string representation of image's type (e.g. 'zip')
@@ -1406,6 +1418,10 @@ LUA_FUNCTION_DEF(task, add_timer);
  * @method task:rewrite_html_urls(callback)
  * Rewrites URLs in HTML parts using the specified Lua callback function.
  * The callback receives (task, url) and should return the replacement URL or nil.
+ * The url is the attribute value as browsers read it, the one the replacement
+ * takes the place of: it may differ from the text of task:get_urls(), e.g. an
+ * unquoted value with a quote in it (`href=http://x.example/a"b`), so compare
+ * hosts or parsed URLs rather than text.
  * @param {function} callback Lua function to call for each URL
  * @return {table|nil} table of rewritten HTML parts indexed by part number, or nil on error
  */
@@ -1415,6 +1431,7 @@ LUA_FUNCTION_DEF(task, rewrite_html_urls);
  * @method task:get_html_urls()
  * Extracts all URLs from HTML parts without rewriting.
  * Useful for async URL checking workflows where URLs need to be batched.
+ * Each url is the one task:rewrite_html_urls() gives to its callback.
  * @return {table|nil} table indexed by part number, each containing an array of URL info tables with keys: url, attr, tag
  */
 /* Implemented in lua_html_url_rewrite.cxx as C++ binding */
@@ -2547,8 +2564,9 @@ lua_task_set_pre_result(lua_State *L)
 		if (lua_type(L, 2) == LUA_TTABLE) {
 			GError *err = NULL;
 
+			/* Missing keys keep their defaults, so the priority stays normal */
 			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "*action=S;message=S;module=S;score=D;priority=i;flags=S;result=S",
 												  &act_str, &message, &module, &score, &priority, &fl_str, &res_name)) {
 				int ret = luaL_error(L, "invalid arguments: %s", err->message);
@@ -2620,10 +2638,10 @@ lua_task_set_pre_result(lua_State *L)
 			if (strstr(fl_str, "least") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_LEAST;
 			}
-			else if (strstr(fl_str, "no_smtp_message") != NULL) {
+			if (strstr(fl_str, "no_smtp_message") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE;
 			}
-			else if (strstr(fl_str, "process_all") != NULL) {
+			if (strstr(fl_str, "process_all") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_PROCESS_ALL;
 			}
 		}
@@ -2664,15 +2682,39 @@ lua_task_has_pre_result(lua_State *L)
 	int nret = 1;
 
 	if (task) {
-		if (task->result->passthrough_result) {
-			struct rspamd_passthrough_result *pr = task->result->passthrough_result;
+		struct rspamd_passthrough_result *pr = task->result->passthrough_result;
+
+		if (pr && lua_toboolean(L, 2)) {
+			/*
+			 * The one that selects the action and the reply, if any. Selecting
+			 * may raise the score to a least threshold: leave it to the caller
+			 */
+			double saved_score = task->result->score;
+
+			pr = NULL;
+			rspamd_check_action_metric(task, &pr, NULL);
+			task->result->score = saved_score;
+		}
+
+		if (pr) {
+			static const struct {
+				int flag;
+				const char *name;
+			} pr_flags[] = {
+				{RSPAMD_PASSTHROUGH_LEAST, "least"},
+				{RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE, "no_smtp_message"},
+				{RSPAMD_PASSTHROUGH_PROCESS_ALL, "process_all"},
+			};
+			char flags_buf[64];
+			size_t flags_len = 0;
 
 			lua_pushboolean(L, true);
-			nret = 4;
-			/* bool, action, message, module */
+			nret = 5;
+			/* bool, action, message, module, flags */
 
 			if (pr->action) {
-				lua_pushstring(L, rspamd_action_to_str(pr->action->action_type));
+				/* All custom actions share one type, so use the name */
+				lua_pushstring(L, pr->action->name);
 			}
 			else {
 				lua_pushnil(L);
@@ -2690,6 +2732,16 @@ lua_task_has_pre_result(lua_State *L)
 			else {
 				lua_pushnil(L);
 			}
+
+			/* In the format that set_pre_result accepts */
+			for (unsigned int i = 0; i < G_N_ELEMENTS(pr_flags); i++) {
+				if (pr->flags & pr_flags[i].flag) {
+					flags_len += rspamd_snprintf(flags_buf + flags_len, sizeof(flags_buf) - flags_len,
+												 "%s%s", flags_len > 0 ? "," : "", pr_flags[i].name);
+				}
+			}
+
+			lua_pushlstring(L, flags_buf, flags_len);
 		}
 		else {
 			lua_pushboolean(L, false);
@@ -2730,16 +2782,66 @@ lua_task_append_message(lua_State *L)
 }
 
 
+/*
+ * Pushes a table with the urls of the task that pass the filter in `cb`.
+ * The sampling is driven by the number of the urls that pass the filter,
+ * not by the size of the whole set.
+ */
+static void
+lua_task_push_filtered_urls(lua_State *L, struct rspamd_task *task,
+							struct lua_tree_cb_data *cb)
+{
+	struct rspamd_url *u;
+	gsize matched = 0, sz;
+
+	kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
+		if (lua_url_cbdata_match(cb, u)) {
+			matched++;
+		}
+	});
+
+	sz = lua_url_adjust_skip_prob(task->task_timestamp,
+								  MESSAGE_FIELD(task, digest), cb, matched);
+
+	lua_createtable(L, sz, 0);
+
+	if (cb->sort) {
+		struct rspamd_url **urls_sorted;
+		gsize i = 0;
+
+		urls_sorted = g_new0(struct rspamd_url *, sz > 0 ? sz : 1);
+
+		kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
+			if (i < sz && lua_url_cbdata_match(cb, u) &&
+				lua_url_cbdata_sample_take(cb)) {
+				urls_sorted[i++] = u;
+			}
+		});
+
+		qsort(urls_sorted, i, sizeof(struct rspamd_url *), rspamd_url_cmp_qsort);
+
+		for (gsize j = 0; j < i; j++) {
+			lua_url_cbdata_push(cb, urls_sorted[j]);
+		}
+
+		g_free(urls_sorted);
+	}
+	else {
+		kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
+			lua_tree_url_callback(u, u, cb);
+		});
+	}
+}
+
 static int
 lua_task_get_urls(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct lua_tree_cb_data cb;
-	struct rspamd_url *u;
 	static const int default_protocols_mask = PROTOCOL_HTTP | PROTOCOL_HTTPS |
 											  PROTOCOL_FILE | PROTOCOL_FTP;
-	gsize sz, max_urls = 0;
+	gsize max_urls = 0;
 
 	if (task) {
 		if (task->cfg) {
@@ -2767,39 +2869,7 @@ lua_task_get_urls(lua_State *L)
 			return luaL_error(L, "invalid arguments");
 		}
 
-		sz = kh_size(MESSAGE_FIELD(task, urls));
-		sz = lua_url_adjust_skip_prob(task->task_timestamp,
-									  MESSAGE_FIELD(task, digest), &cb, sz);
-
-		lua_createtable(L, sz, 0);
-
-		if (cb.sort) {
-			struct rspamd_url **urls_sorted;
-			int i = 0;
-
-			urls_sorted = g_new0(struct rspamd_url *, sz);
-
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				if (i < sz) {
-					urls_sorted[i] = u;
-					i++;
-				}
-			});
-
-			qsort(urls_sorted, i, sizeof(struct rspamd_url *), rspamd_url_cmp_qsort);
-
-			for (int j = 0; j < i; j++) {
-				lua_tree_url_callback(urls_sorted[j], urls_sorted[j], &cb);
-			}
-
-			g_free(urls_sorted);
-		}
-		else {
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				lua_tree_url_callback(u, u, &cb);
-			});
-		}
-
+		lua_task_push_filtered_urls(L, task, &cb);
 		lua_url_cbdata_dtor(&cb);
 	}
 	else {
@@ -2815,10 +2885,9 @@ lua_task_get_urls_filtered(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct lua_tree_cb_data cb;
-	struct rspamd_url *u;
 	static const int default_protocols_mask = PROTOCOL_HTTP | PROTOCOL_HTTPS |
 											  PROTOCOL_FILE | PROTOCOL_FTP;
-	gsize sz, max_urls = 0;
+	gsize max_urls = 0;
 
 	if (task) {
 		if (task->cfg) {
@@ -2835,39 +2904,7 @@ lua_task_get_urls_filtered(lua_State *L)
 			return luaL_error(L, "invalid arguments");
 		}
 
-		sz = kh_size(MESSAGE_FIELD(task, urls));
-		sz = lua_url_adjust_skip_prob(task->task_timestamp,
-									  MESSAGE_FIELD(task, digest), &cb, sz);
-
-		lua_createtable(L, sz, 0);
-
-		if (cb.sort) {
-			struct rspamd_url **urls_sorted;
-			int i = 0;
-
-			urls_sorted = g_new0(struct rspamd_url *, sz);
-
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				if (i < sz) {
-					urls_sorted[i] = u;
-					i++;
-				}
-			});
-
-			qsort(urls_sorted, i, sizeof(struct rspamd_url *), rspamd_url_cmp_qsort);
-
-			for (int j = 0; j < i; j++) {
-				lua_tree_url_callback(urls_sorted[j], urls_sorted[j], &cb);
-			}
-
-			g_free(urls_sorted);
-		}
-		else {
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				lua_tree_url_callback(u, u, &cb);
-			});
-		}
-
+		lua_task_push_filtered_urls(L, task, &cb);
 		lua_url_cbdata_dtor(&cb);
 	}
 	else {
@@ -3128,8 +3165,15 @@ lua_task_inject_url(lua_State *L)
 
 	if (lua_isuserdata(L, 3)) {
 		/* We also have a mime part there */
-		mpart = *((struct rspamd_mime_part **)
-					  rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname));
+		struct rspamd_mime_part **pmpart =
+			rspamd_lua_check_udata_maybe(L, 3, rspamd_mimepart_classname);
+
+		if (pmpart == NULL) {
+			return luaL_error(L, "invalid arguments: a mime part is expected "
+								 "as the third argument");
+		}
+
+		mpart = *pmpart;
 	}
 	if (task && task->message && url && url->url) {
 		rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url->url, false,
@@ -3243,8 +3287,7 @@ lua_task_get_emails(lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct lua_tree_cb_data cb;
-	struct rspamd_url *u;
-	gsize max_urls = 0, sz;
+	gsize max_urls = 0;
 
 	if (task) {
 		if (task->message) {
@@ -3267,16 +3310,7 @@ lua_task_get_emails(lua_State *L)
 				return luaL_error(L, "invalid arguments");
 			}
 
-			sz = kh_size(MESSAGE_FIELD(task, urls));
-			sz = lua_url_adjust_skip_prob(task->task_timestamp,
-										  MESSAGE_FIELD(task, digest), &cb, sz);
-
-			lua_createtable(L, sz, 0);
-
-			kh_foreach_key(MESSAGE_FIELD(task, urls), u, {
-				lua_tree_url_callback(u, u, &cb);
-			});
-
+			lua_task_push_filtered_urls(L, task, &cb);
 			lua_url_cbdata_dtor(&cb);
 		}
 		else {
@@ -4173,7 +4207,8 @@ lua_import_email_address(lua_State *L, struct rspamd_task *task,
 	}
 	else {
 		/* Construct addr */
-		len = addr->domain_len + addr->user_len + 1;
+		/* '@' and the terminating zero written by rspamd_snprintf */
+		len = addr->domain_len + addr->user_len + 2;
 		addr->addr = (const char *) rspamd_mempool_alloc(task->task_pool, len);
 		addr->addr_len = rspamd_snprintf((char *) addr->addr, len, "%*s@%*s",
 										 (int) addr->user_len, addr->user,
@@ -4336,7 +4371,7 @@ lua_task_set_recipients(lua_State *L)
 				/* Clear old addresses */
 				PTR_ARRAY_FOREACH(ptrs, i, tmp)
 				{
-					rspamd_email_address_free(addr);
+					rspamd_email_address_free(tmp);
 				}
 
 				g_ptr_array_set_size(ptrs, 0);
@@ -4644,7 +4679,14 @@ lua_task_set_from(lua_State *L)
 		else if (paddr) {
 			/* SMTP from case */
 			if (lua_import_email_address(L, task, 3, &addr)) {
-				task->from_envelope_orig = *paddr;
+				if (task->from_envelope_orig) {
+					/* Keep the original sender, free the previous rewrite */
+					rspamd_email_address_free(*paddr);
+				}
+				else {
+					task->from_envelope_orig = *paddr;
+				}
+
 				task->from_envelope = addr;
 				lua_pushboolean(L, true);
 			}
@@ -5429,9 +5471,10 @@ lua_task_resolve_shadow_result(lua_State *L,
 	return TRUE;
 }
 
-/* Push a name+info pair into the map table currently at top of stack. */
+/* Push a name+info pair into the map table at absolute index map_idx. */
 static inline void
 lua_task_symbol_push_into_map(lua_State *L,
+							  int map_idx,
 							  struct rspamd_task *task,
 							  const char *name,
 							  struct rspamd_symbol_result *s,
@@ -5439,7 +5482,7 @@ lua_task_symbol_push_into_map(lua_State *L,
 							  unsigned int *count)
 {
 	if (rspamd_lua_push_symbol_result(L, task, name, s, sres, FALSE, FALSE)) {
-		lua_setfield(L, -2, name);
+		lua_setfield(L, map_idx, name);
 		(*count)++;
 	}
 }
@@ -5464,12 +5507,13 @@ lua_task_get_symbol(lua_State *L)
 		}
 
 		lua_createtable(L, 0, 4);
+		int map_idx = lua_gettop(L);
 
 		lua_pushnil(L);
 		while (lua_next(L, 2) != 0) {
 			if (lua_type(L, -1) == LUA_TSTRING) {
 				const char *name = lua_tostring(L, -1);
-				lua_task_symbol_push_into_map(L, task, name, NULL, sres, &count);
+				lua_task_symbol_push_into_map(L, map_idx, task, name, NULL, sres, &count);
 			}
 			lua_pop(L, 1);
 		}
@@ -5537,11 +5581,12 @@ lua_task_get_symbol_regexp(lua_State *L)
 	}
 
 	lua_createtable(L, 0, 4);
+	int map_idx = lua_gettop(L);
 
 	kh_foreach_value(sres->symbols, s, {
 		if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED) && s->name) {
 			if (rspamd_regexp_match(re->re, s->name, strlen(s->name), FALSE)) {
-				lua_task_symbol_push_into_map(L, task, s->name, s, sres, &count);
+				lua_task_symbol_push_into_map(L, map_idx, task, s->name, s, sres, &count);
 			}
 		}
 	});
@@ -7168,15 +7213,16 @@ lua_task_store_in_file(lua_State *L)
 	gboolean force_new = FALSE, keep = FALSE;
 	char fpath[PATH_MAX];
 	const char *tmpmask = NULL, *fname = NULL;
-	unsigned int mode = 00600;
+	int64_t mode = 00600;
 	int fd;
 	struct lua_file_cbdata *cbdata;
 	GError *err = NULL;
 
 	if (task) {
 		if (lua_istable(L, 2)) {
+			/* Keep the defaults above for missing keys (mode must stay 0600) */
 			if (!rspamd_lua_parse_table_arguments(L, 2, &err,
-												  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "filename=S;tmpmask=S;mode=I;force_new=B;keep=B",
 												  &fname, &tmpmask, &mode, &force_new, &keep)) {
 				msg_err_task("cannot get parameters list: %e", err);
@@ -7224,14 +7270,30 @@ lua_task_store_in_file(lua_State *L)
 				lua_pushnil(L);
 			}
 			else {
-				if (write(fd, task->msg.begin, task->msg.len) == -1) {
-					msg_err_task("cannot write file %s: %s", fpath,
-								 strerror(errno));
-					unlink(fname);
-					close(fd);
-					lua_pushnil(L);
+				const char *wpos = task->msg.begin;
+				gsize wremain = task->msg.len;
 
-					return 1;
+				while (wremain > 0) {
+					gssize w = write(fd, wpos, wremain);
+
+					if (w == -1 && errno == EINTR) {
+						continue;
+					}
+
+					if (w <= 0) {
+						int saved_errno = w == 0 ? EIO : errno;
+
+						msg_err_task("cannot write file %s: %s", fname,
+									 strerror(saved_errno));
+						unlink(fname);
+						close(fd);
+						lua_pushnil(L);
+
+						return 1;
+					}
+
+					wpos += w;
+					wremain -= w;
 				}
 
 				cbdata = rspamd_mempool_alloc(task->task_pool, sizeof(*cbdata));
@@ -8319,30 +8381,65 @@ lua_archive_get_type(lua_State *L)
 	return 1;
 }
 
+/*
+ * A read of the first files of an archive, entry after entry. Readers go by
+ * one of two listings, the directory or the local headers (whose names are
+ * aliases), so each listing is read up to its first `max_files` files. The
+ * other names of a file listed right after it come with it. So names cannot
+ * crowd the files after them out of a limited read, and the read is bounded
+ */
+struct lua_archive_files_read {
+	unsigned int max_files;
+	unsigned int nfiles[2]; /* Of the directory, of the local headers */
+	gboolean taking;
+};
+
+static void
+lua_archive_files_read_init(lua_State *L, int pos, struct lua_archive_files_read *rd)
+{
+	memset(rd, 0, sizeof(*rd));
+	/* As before: a negative limit reads all */
+	rd->max_files = lua_isnumber(L, pos) ? (unsigned int) lua_tointeger(L, pos) : G_MAXUINT;
+}
+
+static gboolean
+lua_archive_files_read_takes(struct lua_archive_files_read *rd, const struct rspamd_archive_file *f)
+{
+	if (!(f->flags & RSPAMD_ARCHIVE_FILE_SAME_ENTRY)) {
+		unsigned int listing = (f->flags & RSPAMD_ARCHIVE_FILE_ALIAS) ? 1 : 0;
+
+		rd->taking = rd->nfiles[listing] < rd->max_files;
+
+		if (rd->taking) {
+			rd->nfiles[listing]++;
+		}
+	}
+
+	return rd->taking;
+}
+
 static int
 lua_archive_get_files(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive(L);
-	unsigned int i, max_files = 0;
+	struct lua_archive_files_read rd;
+	unsigned int i, n = 0;
 	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
-		if (lua_isnumber(L, 2)) {
-			max_files = lua_tointeger(L, 2);
-			max_files = MIN(arch->files->len, max_files);
-		}
-		else {
-			max_files = arch->files->len;
-		}
+		lua_archive_files_read_init(L, 2, &rd);
+		lua_newtable(L);
 
-		lua_createtable(L, max_files, 0);
-
-		for (i = 0; i < max_files; i++) {
+		for (i = 0; i < arch->files->len; i++) {
 			f = g_ptr_array_index(arch->files, i);
 
+			if (!lua_archive_files_read_takes(&rd, f)) {
+				continue;
+			}
+
 			lua_pushlstring(L, f->fname->str, f->fname->len);
-			lua_rawseti(L, -2, i + 1);
+			lua_rawseti(L, -2, ++n);
 		}
 	}
 	else {
@@ -8357,24 +8454,22 @@ lua_archive_get_files_full(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive(L);
-	unsigned int i, max_files = 0;
+	struct lua_archive_files_read rd;
+	unsigned int i, n = 0;
 	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
-		if (lua_isnumber(L, 2)) {
-			max_files = lua_tointeger(L, 2);
-			max_files = MIN(arch->files->len, max_files);
-		}
-		else {
-			max_files = arch->files->len;
-		}
+		lua_archive_files_read_init(L, 2, &rd);
+		lua_newtable(L);
 
-		lua_createtable(L, max_files, 0);
-
-		for (i = 0; i < max_files; i++) {
+		for (i = 0; i < arch->files->len; i++) {
 			f = g_ptr_array_index(arch->files, i);
 
-			lua_createtable(L, 0, 4);
+			if (!lua_archive_files_read_takes(&rd, f)) {
+				continue;
+			}
+
+			lua_createtable(L, 0, 5);
 
 			lua_pushstring(L, "name");
 			lua_pushlstring(L, f->fname->str, f->fname->len);
@@ -8392,7 +8487,11 @@ lua_archive_get_files_full(lua_State *L)
 			lua_pushboolean(L, (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) ? true : false);
 			lua_settable(L, -3);
 
-			lua_rawseti(L, -2, i + 1);
+			lua_pushstring(L, "alias");
+			lua_pushboolean(L, (f->flags & RSPAMD_ARCHIVE_FILE_ALIAS) ? true : false);
+			lua_settable(L, -3);
+
+			lua_rawseti(L, -2, ++n);
 		}
 	}
 	else {

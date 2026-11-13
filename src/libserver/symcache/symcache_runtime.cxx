@@ -245,8 +245,9 @@ auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 
 		/*
 		 * The mask is checked against the flags and the type: the type bit is
-		 * stripped from the flags at registration, so `SYMBOL_TYPE_IDEMPOTENT`
-		 * in the mask spares the idempotent symbols as intended
+		 * stripped from the flags at registration (only composites keep theirs),
+		 * so `SYMBOL_TYPE_IDEMPOTENT` in the mask spares the idempotent symbols as
+		 * intended
 		 */
 		if (item->get_flags() & skip_mask) {
 			continue;

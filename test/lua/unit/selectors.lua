@@ -86,7 +86,7 @@ context("Selectors test", function()
 
     ["digest"] = {
                 selector = "digest",
-                expect = {"1ac109c58a7d0f5f532100ac14e9f4d9"}
+                expect = {"c9606480a77f91b608593099e1e719a0"}
     },
 
     ["user"] = {
@@ -443,6 +443,23 @@ context("Selectors test", function()
       local ok, res = pcall(sels, task)
       assert_true(ok)
       assert_nil(res)
+    end)
+  end
+
+  -- get_date gives 0 for a missing or invalid Date: that is no date, not 1970
+  for case_name, date_hdr in lua_util.spairs({
+    ["missing Date"] = '',
+    ["invalid Date"] = 'Date: 31 Apr 2020 00:00:00 +0000\r\n',
+  }) do
+    test("time(message) with " .. case_name, function()
+      local res, t = rspamd_task.load_from_string(
+          'From: <a@example.com>\r\n' .. date_hdr .. 'Subject: t\r\n\r\nbody\r\n', cfg)
+      assert_true(res)
+      t:process_message()
+      local sels = lua_selectors.create_selector_closure_fn(nil, cfg, "time(message)", nil,
+          function(_, r, _) return r end)
+      assert_nil(sels(t))
+      t:destroy()
     end)
   end
 end)

@@ -26,6 +26,7 @@ extern "C" {
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 /*
  * `rspamd_regexp_new_len` takes a pointer plus a length, so the pattern is not
@@ -112,6 +113,49 @@ TEST_SUITE("regexp bounded patterns")
 		CHECK(err != nullptr);
 		g_clear_error(&err);
 		g_free(raw);
+	}
+}
+
+/*
+ * `rspamd_regexp_cache_create` returns a regexp the cache owns: callers such as
+ * mime expression arguments keep it without a reference of their own.
+ */
+TEST_SUITE("regexp cache")
+{
+	TEST_CASE("cache owns regexps past its warning size")
+	{
+		/* A private cache, so the global one is left alone */
+		auto *cache = rspamd_regexp_cache_new();
+		/* More than re_cache_warn_size (8192) in regexp.c */
+		constexpr std::size_t npatterns = 8192 + 8;
+		auto pattern = [](std::size_t i) {
+			return "/re" + std::to_string(i) + "/";
+		};
+		std::vector<rspamd_regexp_t *> created;
+		created.reserve(npatterns);
+
+		for (std::size_t i = 0; i < npatterns; i++) {
+			auto *re = rspamd_regexp_cache_create(cache, pattern(i).c_str(),
+												  nullptr, nullptr);
+			REQUIRE(re != nullptr);
+			created.push_back(re);
+		}
+
+		std::size_t not_cached = 0;
+
+		for (std::size_t i = 0; i < npatterns; i++) {
+			if (rspamd_regexp_cache_query(cache, pattern(i).c_str(), nullptr) != created[i]) {
+				not_cached++;
+			}
+		}
+
+		CHECK(not_cached == 0);
+		/* A repeated pattern is not compiled again */
+		CHECK(rspamd_regexp_cache_create(cache, pattern(npatterns - 1).c_str(),
+										 nullptr, nullptr) == created.back());
+
+		/* Frees every regexp; one left out of the cache is reported by LSan */
+		rspamd_regexp_cache_destroy(cache);
 	}
 }
 

@@ -169,6 +169,32 @@ context("Rspamd_text:normalize_newlines() test", function()
     assert_equal(t:str(), "line1\rline2\r\n")
   end)
 
+  -- SMTP mode: CR and LF only as a CRLF pair (RFC 5321 2.3.8)
+  test("SMTP mode: bare CR and bare LF both become CRLF", function()
+    local t = rspamd_text.fromstring("a\rb\nc\r\nd\r")
+    t:normalize_newlines("smtp")
+    assert_equal(t:str(), "a\r\nb\r\nc\r\nd\r\n")
+  end)
+
+  test("SMTP mode: a CR.CRLF line cannot hide from dot-stuffing", function()
+    local t = rspamd_text.fromstring("line1\r.\r\nnext")
+    t:normalize_newlines("smtp")
+    assert_equal(t:str(), "line1\r\n.\r\nnext")
+  end)
+
+  test("SMTP mode: CRLF text is returned unchanged", function()
+    local t = rspamd_text.fromstring("a\r\nb\r\n")
+    local orig_ptr = t:ptr()
+    t:normalize_newlines("smtp")
+    assert_equal(t:ptr(), orig_ptr, "should return same text when no change needed")
+  end)
+
+  test("SMTP mode: consecutive bare CRs and LFs", function()
+    local t = rspamd_text.fromstring("\r\r\n\n\r")
+    t:normalize_newlines("smtp")
+    assert_equal(t:str(), "\r\n\r\n\r\n\r\n")
+  end)
+
   test("CR only preserved in LF mode", function()
     local t = rspamd_text.fromstring("line1\rline2\r\n")
     t:normalize_newlines("lf")
@@ -295,5 +321,44 @@ context("Rspamd_text:normalize_newlines() test", function()
     local t = rspamd_text.fromstring("a\n")
     t:normalize_newlines("CRLF")
     assert_equal(t:str(), "a\r\n")
+  end)
+end)
+
+context("Rspamd_text:save_in_file() test", function()
+  local rspamd_text = require "rspamd_text"
+  local rspamd_util = require "rspamd_util"
+
+  local function tmp_name()
+    return string.format("%s/rspamd-save-in-file-%s", os.getenv("TMPDIR") or "/tmp",
+        rspamd_util.random_hex(8))
+  end
+
+  test("writes the whole text to a new file", function()
+    local fname = tmp_name()
+    local data = string.rep("0123456789\0", 4096)
+    local ok = rspamd_text.fromstring(data):save_in_file(fname)
+    assert_true(ok)
+    local f = assert(io.open(fname, "rb"))
+    local stored = f:read("*a")
+    f:close()
+    os.remove(fname)
+    assert_equal(#stored, #data)
+    assert_true(stored == data)
+  end)
+
+  test("does not close a caller-supplied fd on error", function()
+    local fname = tmp_name()
+    local f = assert(io.open(fname, "wb"))
+    f:close()
+    -- lock_file opens the file read-only, so writing to it fails
+    local fd = rspamd_util.lock_file(fname)
+    assert_not_nil(fd)
+    local ok, err = rspamd_text.fromstring("data"):save_in_file(fd)
+    assert_false(ok)
+    assert_not_nil(err)
+    -- the fd still belongs to the caller and must be closable exactly once
+    local closed = rspamd_util.close_file(fd)
+    os.remove(fname)
+    assert_true(closed)
   end)
 end)

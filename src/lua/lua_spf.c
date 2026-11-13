@@ -208,10 +208,11 @@ spf_lua_lib_callback(struct spf_resolved *record, struct rspamd_task *task,
 }
 
 /***
- * @function rspamd_spf.resolve(task, callback)
+ * @function rspamd_spf.resolve(task, callback[, ip])
  * Resolves SPF credentials for a task
  * @param {rspamd_task} task task
  * @param {function} callback callback that is called on spf resolution
+ * @param {rspamd_ip} ip address that the record is checked for, if it is not the one the message came from (used by the macros and by `ptr`)
 */
 int lua_spf_resolve(lua_State *L)
 {
@@ -235,7 +236,21 @@ int lua_spf_resolve(lua_State *L)
 		}
 		REF_INIT_RETAIN(cbd, lua_spf_dtor);
 
-		if (!rspamd_spf_resolve(task, spf_lua_lib_callback, cbd, spf_cred)) {
+		/*
+		 * The address that the record is checked for, if it is not the one
+		 * that the message came from: the macros of a record are about it
+		 */
+		const rspamd_inet_addr_t *check_addr = NULL;
+
+		if (lua_type(L, 3) == LUA_TUSERDATA) {
+			struct rspamd_lua_ip *ip = lua_check_ip(L, 3);
+
+			if (ip && ip->addr) {
+				check_addr = rspamd_inet_address_copy(ip->addr, task->task_pool);
+			}
+		}
+
+		if (!rspamd_spf_resolve(task, spf_lua_lib_callback, cbd, spf_cred, check_addr)) {
 			msg_info_task("cannot make spf request for %s",
 						  spf_cred ? spf_cred->domain : "empty domain");
 			if (spf_cred) {
@@ -284,6 +299,16 @@ lua_spf_push_spf_addr(lua_State *L, struct spf_addr *addr)
 	lua_pushinteger(L, addr->flags);
 	lua_setfield(L, -2, "flags");
 
+	if (addr->jump != 0) {
+		/*
+		 * An element of an included record whose match is not a result of
+		 * the record: the check goes on from the element with this index
+		 * (from 1, as the elements are in a Lua table)
+		 */
+		lua_pushinteger(L, (lua_Integer) addr->jump + 1);
+		lua_setfield(L, -2, "jump");
+	}
+
 	if (addr->spf_string) {
 		lua_pushstring(L, addr->spf_string);
 		lua_setfield(L, -2, "str");
@@ -298,99 +323,40 @@ lua_spf_push_spf_addr(lua_State *L, struct spf_addr *addr)
 	}
 }
 
+/* Pushes the result of a check for the element that has matched */
 static int
-spf_check_element(lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
-				  struct rspamd_lua_ip *ip)
+spf_push_match(lua_State *L, struct spf_resolved *rec, struct spf_addr *addr)
 {
-	gboolean res = FALSE;
-	const uint8_t *s, *d;
-	unsigned int af, mask, bmask, addrlen;
-
-
-	if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
-		/* Ignore failed addresses */
-
-		return -1;
-	}
-
-	af = rspamd_inet_address_get_af(ip->addr);
-	/* Basic comparing algorithm */
-	if (((addr->flags & RSPAMD_SPF_FLAG_IPV6) && af == AF_INET6) ||
-		((addr->flags & RSPAMD_SPF_FLAG_IPV4) && af == AF_INET)) {
-		d = rspamd_inet_address_get_hash_key(ip->addr, &addrlen);
-
-		if (af == AF_INET6) {
-			s = (const uint8_t *) addr->addr6;
-			mask = addr->m.dual.mask_v6;
+	if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+		if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
+			lua_pushboolean(L, false);
+			lua_pushinteger(L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
+			lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
 		}
-		else {
-			s = (const uint8_t *) addr->addr4;
-			mask = addr->m.dual.mask_v4;
+		else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
+			lua_pushboolean(L, false);
+			lua_pushinteger(L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
+			lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
 		}
-
-		/* Compare the first bytes */
-		bmask = mask / CHAR_BIT;
-		if (mask > addrlen * CHAR_BIT) {
-			/* XXX: add logging */
-		}
-		else if (memcmp(s, d, bmask) == 0) {
-			if (bmask * CHAR_BIT < mask) {
-				/* Compare the remaining bits */
-				s += bmask;
-				d += bmask;
-				mask = (0xff << (CHAR_BIT - (mask - bmask * 8))) & 0xff;
-
-				if ((*s & mask) == (*d & mask)) {
-					res = TRUE;
-				}
-			}
-			else {
-				res = TRUE;
-			}
-		}
-	}
-	else {
-		if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
-			res = TRUE;
-		}
-		else {
-			res = FALSE;
-		}
-	}
-
-	if (res) {
-		if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
-			if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
-				lua_pushboolean(L, false);
-				lua_pushinteger(L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
-				lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
-			}
-			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
-				lua_pushboolean(L, false);
-				lua_pushinteger(L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
-				lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
-			}
-			else if (rec->flags & RSPAMD_SPF_RESOLVED_PLUSALL) {
-				lua_pushboolean(L, false);
-				lua_pushinteger(L, RSPAMD_SPF_RESOLVED_PLUSALL);
-				lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
-			}
-			else {
-				lua_pushboolean(L, true);
-				lua_pushinteger(L, addr->mech);
-				lua_spf_push_spf_addr(L, addr);
-			}
+		else if ((rec->flags & RSPAMD_SPF_RESOLVED_PLUSALL) && addr->mech == SPF_PASS) {
+			/* The `all` that lets everyone in, not another one of the record */
+			lua_pushboolean(L, false);
+			lua_pushinteger(L, RSPAMD_SPF_RESOLVED_PLUSALL);
+			lua_pushfstring(L, "%cany", spf_mech_char(addr->mech));
 		}
 		else {
 			lua_pushboolean(L, true);
 			lua_pushinteger(L, addr->mech);
 			lua_spf_push_spf_addr(L, addr);
 		}
-
-		return 3;
+	}
+	else {
+		lua_pushboolean(L, true);
+		lua_pushinteger(L, addr->mech);
+		lua_spf_push_spf_addr(L, addr);
 	}
 
-	return -1;
+	return 3;
 }
 
 /***
@@ -435,15 +401,16 @@ lua_spf_record_check_ip(lua_State *L)
 	}
 
 	if (record && ip && ip->addr) {
-		for (unsigned int i = 0; i < record->elts->len; i++) {
-			struct spf_addr *addr = &g_array_index(record->elts, struct spf_addr, i);
-			if ((nres = spf_check_element(L, record, addr, ip)) > 0) {
-				if (need_free_ip) {
-					g_free(ip);
-				}
+		struct spf_addr *addr = spf_addr_match(record, ip->addr);
 
-				return nres;
+		if (addr != NULL) {
+			nres = spf_push_match(L, record, addr);
+
+			if (need_free_ip) {
+				g_free(ip);
 			}
+
+			return nres;
 		}
 	}
 	else {

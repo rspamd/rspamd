@@ -165,6 +165,8 @@ enum rspamd_url_parse_flags {
 	RSPAMD_URL_PARSE_TEXT = 0u,
 	RSPAMD_URL_PARSE_HREF = (1u << 0u),
 	RSPAMD_URL_PARSE_CHECK = (1u << 1u),
+	/* A complete endpoint from configuration, without public-suffix policy. */
+	RSPAMD_URL_PARSE_UPSTREAM = (1u << 2u),
 };
 
 enum rspamd_url_find_type {
@@ -418,6 +420,14 @@ KHASH_DECLARE(rspamd_url_host_hash, struct rspamd_url *, char);
  * url is silently rejected when the set is already full
  * @return true if a new url has been added
  */
+/**
+ * Notes in the pool of a task that an url has not been taken, as the message
+ * has max_urls of them already: rules can read the variable
+ * `urls_limit_reached` to know that they do not see all the urls
+ * @return true if it is noted for the first time
+ */
+bool rspamd_url_note_limit_reached(rspamd_mempool_t *pool);
+
 bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
 									bool enforce_replace,
@@ -503,26 +513,54 @@ static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port_if_special(struc
 }
 
 /**
- * Normalize unicode input and set out url flags as appropriate
+ * Normalises unicode input in place and sets url flags as appropriate. The
+ * input is kept as it is if its normal form is longer: it cannot grow in its
+ * buffer, and rspamd_url_parse normalises the parts of the url on its own.
  * @param pool
  * @param input
  * @param len_out (must be &var)
  * @param url_flags_out (must be just a var with no dereference)
  */
+static inline void
+rspamd_url_normalise_keep_length(rspamd_mempool_t *pool, char *input,
+								 gsize *len, unsigned int *url_flags)
+{
+	gsize i, out_len = 0, needed = 0;
+	char *out;
+	enum rspamd_utf8_normalise_result norm_res;
+
+	for (i = 0; i < *len; i++) {
+		if ((unsigned char) input[i] >= 0x80) {
+			break;
+		}
+	}
+
+	if (i == *len) {
+		/* ASCII is normal */
+		return;
+	}
+
+	out = (char *) rspamd_mempool_alloc(pool, *len);
+	norm_res = rspamd_normalise_unicode_to(input, *len, out, *len, &out_len, &needed);
+
+	if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {
+		*url_flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
+	if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
+		*url_flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+	}
+	if (norm_res & RSPAMD_UNICODE_NORM_ERROR) {
+		*url_flags |= RSPAMD_URL_FLAG_OBSCURED;
+	}
+	else if (needed <= *len) {
+		memcpy(input, out, out_len);
+		*len = out_len;
+	}
+}
+
 #define rspamd_url_normalise_propagate_flags(pool, input, len_out, url_flags_out) \
-	do {                                                                          \
-		enum rspamd_utf8_normalise_result norm_res;                               \
-		norm_res = rspamd_normalise_unicode_inplace((input), (len_out));          \
-		if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                            \
-			url_flags_out |= RSPAMD_URL_FLAG_UNNORMALISED;                        \
-		}                                                                         \
-		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {                         \
-			url_flags_out |= RSPAMD_URL_FLAG_ZW_SPACES;                           \
-		}                                                                         \
-		if (norm_res & (RSPAMD_UNICODE_NORM_ERROR)) {                             \
-			url_flags_out |= RSPAMD_URL_FLAG_OBSCURED;                            \
-		}                                                                         \
-	} while (0)
+	rspamd_url_normalise_keep_length((pool), (input), (len_out), &(url_flags_out))
+
 #ifdef __cplusplus
 }
 #endif

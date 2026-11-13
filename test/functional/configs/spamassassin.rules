@@ -85,6 +85,10 @@ whitelist_to zelen@megafonkavkaz.ru
 #def_whitelist_from  rspamd.com
 endif
 
+header   DATE_IN_PAST_96_XX  eval:check_for_shifted_date('undef', '-96')
+describe DATE_IN_PAST_96_XX  Date: is 96 hours or more before Received: date
+score    DATE_IN_PAST_96_XX  1.0
+
 # These rules are /not/ from SpamAssassin project
 
 header	TEST_XFOO	X-Foo =~ /.{1,50}/

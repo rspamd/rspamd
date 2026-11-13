@@ -55,7 +55,7 @@ struct rspamd_milter_outbuf {
 enum rspamd_milter_io_state {
 	RSPAMD_MILTER_READ_MORE,
 	RSPAMD_MILTER_WRITE_REPLY,
-	RSPAMD_MILTER_WANNA_DIE,
+	RSPAMD_MILTER_CLOSED,
 	RSPAMD_MILTER_WRITE_AND_DIE,
 	RSPAMD_MILTER_PONG_AND_DIE,
 };
@@ -80,6 +80,7 @@ struct rspamd_milter_private {
 	gboolean quarantine_on_reject;
 	gboolean no_action;
 	gboolean hdr_leadspc; /* SMFIP_HDR_LEADSPC has been negotiated */
+	gboolean eob_pending; /* end of body is being processed, no reply yet */
 };
 
 enum rspamd_milter_io_cmd {

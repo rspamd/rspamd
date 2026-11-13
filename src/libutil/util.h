@@ -373,6 +373,14 @@ void rspamd_gstring_free_soft(gpointer p);
 uint64_t rspamd_hash_seed(void);
 
 /**
+ * Returns a hash seed that is random for each process and never zero. It is
+ * meant for tables keyed by untrusted input; hashes made with it must not be
+ * stored or shared with other processes
+ * @return hash seed
+ */
+uint64_t rspamd_hash_seed_secure(void);
+
+/**
  * Returns random hex string of the specified length
  * @param buf
  * @param len
@@ -445,6 +453,15 @@ gboolean rspamd_constant_memcmp(const void *a, const void *b, gsize len);
  */
 int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 					  gboolean allow_symlink);
+
+/**
+ * Write the whole buffer to fd, retrying short and interrupted writes
+ * @param fd file descriptor
+ * @param buf data to write
+ * @param len length of data
+ * @return TRUE if all data has been written, FALSE otherwise (errno is set)
+ */
+gboolean rspamd_write_all(int fd, const void *buf, gsize len);
 
 /**
  * Map file without following symlinks or special stuff

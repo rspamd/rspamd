@@ -24,6 +24,30 @@ DKIM ALIGNED RELAXED
   Expect Symbol  R_DKIM_ALLOW
   Expect Symbol With Option  R_DKIM_ALIGNED  relaxed
 
+DKIM ALIGNED STRICT EAI A-LABEL
+  [Documentation]  An EAI From domain is a U-label and d= is usually the
+  ...  A-label of the same domain, which RFC8616 says must compare equal
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_eai_alabel_d.eml
+  ...  Settings=${SETTINGS_DKIM}
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Option  R_DKIM_ALIGNED  strict
+
+DKIM ALIGNED STRICT EAI U-LABEL
+  [Documentation]  RFC8616 also permits a U-label in d=, which the verifier
+  ...  converts to an A-label before it reaches the alignment check
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_eai_ulabel_d.eml
+  ...  Settings=${SETTINGS_DKIM}
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Option  R_DKIM_ALIGNED  strict
+
+DKIM ALIGNED RELAXED EAI
+  [Documentation]  The organisational domains of a U-label From and an
+  ...  A-label d= must compare equal as well
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_eai_relaxed.eml
+  ...  Settings=${SETTINGS_DKIM}
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Option  R_DKIM_ALIGNED  relaxed
+
 DKIM NOT ALIGNED
   [Documentation]  A signature that verifies for an unrelated domain authorises
   ...  nothing about the author, so no alignment is reported

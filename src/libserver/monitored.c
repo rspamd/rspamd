@@ -308,7 +308,7 @@ rspamd_monitored_dns_conf(struct rspamd_monitored *m,
 				ucl_object_iter_t it = NULL;
 
 				while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
-					radix_add_generic_iplist(ucl_object_tostring(elt),
+					radix_add_generic_iplist(ucl_object_tostring(cur),
 											 &conf->expected, FALSE, NULL);
 				}
 			}

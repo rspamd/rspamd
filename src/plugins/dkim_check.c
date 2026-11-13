@@ -780,6 +780,12 @@ dkim_module_load_key_format(struct rspamd_task *task,
 		rspamd_lru_hash_insert(dkim_module_ctx->dkim_sign_hash,
 							   g_strdup(hex_hash), ret, time(NULL), 0);
 	}
+	else {
+		/* No cache: the task owns the reference from loading */
+		rspamd_mempool_add_destructor(task->task_pool,
+									  (rspamd_mempool_destruct_t) rspamd_dkim_sign_key_unref,
+									  ret);
+	}
 
 	return ret;
 }
@@ -1281,7 +1287,21 @@ dkim_module_check(struct dkim_check_result *res)
 			if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
 				from_domain = from_addr->domain;
 				from_domain_len = from_addr->domain_len;
-				(void) rspamd_url_find_tld(from_domain, from_domain_len, &from_tld);
+
+				if (rspamd_str_has_8bit((const unsigned char *) from_domain,
+										from_domain_len)) {
+					unsigned int alabel_len = 0;
+
+					from_domain = rspamd_dns_resolver_idna_convert_utf8(
+						task->resolver, task->task_pool,
+						from_domain, from_domain_len, &alabel_len);
+					from_domain_len = alabel_len;
+				}
+
+				if (from_domain != NULL) {
+					(void) rspamd_url_find_tld(from_domain, from_domain_len,
+											   &from_tld);
+				}
 			}
 		}
 
@@ -1431,8 +1451,8 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 		/* Another ref belongs to the check context */
 		res->key = rspamd_dkim_key_ref(key);
 		/*
-		 * We actually receive key with refcount = 1, so we just assume that
-		 * lru hash owns this object now
+		 * We receive the key with refcount = 1: that reference goes to
+		 * the lru hash, or is dropped when there is no cache
 		 */
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor(res->task->task_pool,
@@ -1449,6 +1469,9 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 						  rspamd_dkim_key_get_ttl(key),
 						  rspamd_lru_hash_size(dkim_module_ctx->dkim_hash),
 						  rspamd_lru_hash_capacity(dkim_module_ctx->dkim_hash));
+		}
+		else {
+			rspamd_dkim_key_unref(key);
 		}
 	}
 	else {
@@ -1798,14 +1821,17 @@ dkim_module_lua_on_key(rspamd_dkim_key_t *key,
 		/* Another ref belongs to the check context */
 		cbd->key = rspamd_dkim_key_ref(key);
 		/*
-		 * We actually receive key with refcount = 1, so we just assume that
-		 * lru hash owns this object now
+		 * We receive the key with refcount = 1: that reference goes to
+		 * the lru hash, or is dropped when there is no cache
 		 */
 
 		if (dkim_module_ctx->dkim_hash) {
 			rspamd_lru_hash_insert(dkim_module_ctx->dkim_hash,
 								   g_strdup(rspamd_dkim_get_dns_key(ctx)),
 								   key, cbd->task->task_timestamp, rspamd_dkim_key_get_ttl(key));
+		}
+		else {
+			rspamd_dkim_key_unref(key);
 		}
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor(cbd->task->task_pool,
@@ -1928,11 +1954,17 @@ lua_dkim_verify_handler(lua_State *L)
 			ret = rspamd_dkim_check(cbd->ctx, cbd->key, cbd->task);
 			dkim_module_lua_push_verify_result(cbd, ret, NULL);
 		}
-		else {
-			rspamd_get_dkim_key(ctx,
-								task,
-								dkim_module_lua_on_key,
-								cbd);
+		else if (!rspamd_get_dkim_key(ctx,
+									  task,
+									  dkim_module_lua_on_key,
+									  cbd)) {
+			/* No DNS request means no callback, so report an immediate failure */
+			luaL_unref(L, LUA_REGISTRYINDEX, cbd->cbref);
+			lua_pushboolean(L, false);
+			lua_pushfstring(L, "cannot request DKIM key %s",
+							rspamd_dkim_get_dns_key(ctx));
+
+			return 2;
 		}
 	}
 	else {

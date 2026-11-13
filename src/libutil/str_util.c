@@ -451,16 +451,18 @@ rspamd_strlcpy_safe(char *dst, const char *src, gsize siz)
 gboolean
 rspamd_strtol(const char *s, gsize len, glong *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	glong v = 0;
 	const glong cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
 	gboolean neg;
 
-	/* Avoid absurd length */
+	/* Avoid absurd length; an empty string may come as (NULL, 0) */
 	if (len == 0 || len > sizeof("-18446744073709551615")) {
 		return FALSE;
 	}
+
+	end = s + len;
 
 	/* Case negative values */
 	if (*p == '-') {
@@ -525,14 +527,17 @@ rspamd_strtol(const char *s, gsize len, glong *value)
 gboolean
 rspamd_strtoul(const char *s, gsize len, gulong *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	gulong v = 0;
 	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
 
+	/* An empty string may come as (NULL, 0) */
 	if (len == 0 || len > sizeof("-18446744073709551615")) {
 		return FALSE;
 	}
+
+	end = s + len;
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXULONG);
 
@@ -543,11 +548,17 @@ rspamd_strtoul(const char *s, gsize len, gulong *value)
 gboolean
 rspamd_strtou64(const char *s, gsize len, uint64_t *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	uint64_t v = 0;
 	const uint64_t cutoff = G_MAXUINT64 / 10, cutlim = G_MAXUINT64 % 10;
 
+	/* An empty string is not a number, and may come as (NULL, 0) */
+	if (len == 0) {
+		return FALSE;
+	}
+
+	end = s + len;
 	/* Some preparations for range errors */
 	CONV_STR_LIM_DECIMAL(G_MAXUINT64);
 
@@ -558,11 +569,18 @@ rspamd_strtou64(const char *s, gsize len, uint64_t *value)
 gboolean
 rspamd_xstrtoul(const char *s, gsize len, gulong *value)
 {
-	const char *p = s, *end = s + len;
+	const char *p = s, *end;
 	char c;
 	gulong v = 0;
-	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
+	/* A hex digit multiplies by 16: a decimal cutoff lets the value wrap */
+	const gulong cutoff = G_MAXULONG / 16, cutlim = G_MAXULONG % 16;
 
+	/* An empty string is not a number, and may come as (NULL, 0) */
+	if (len == 0) {
+		return FALSE;
+	}
+
+	end = s + len;
 	/* Some preparations for range errors */
 	while (p < end) {
 		c = g_ascii_tolower(*p);
@@ -1564,6 +1582,11 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 						out[i++] = hexdigests[(last_sp & 0xF)];
 
 						span = 0;
+						/*
+						 * The newline is read again: without the spaces it is
+						 * written as is, or it would overwrite the last digit
+						 */
+						seen_spaces = 0;
 					}
 					else {
 						/* Encode last space */
@@ -1621,7 +1644,12 @@ rspamd_encode_qp_fold(const unsigned char *in, gsize inlen, int str_len,
 			seen_spaces = 0;
 		}
 
-		if (QP_SPAN_NORMAL(span, str_len)) {
+		/*
+		 * In CR mode, not right before a literal LF: `=\r` and the LF would
+		 * read as a soft CRLF break, and the line ends at the LF anyway
+		 */
+		if (QP_SPAN_NORMAL(span, str_len) &&
+			!(how == RSPAMD_TASK_NEWLINES_CR && p + 1 < end && p[1] == '\n')) {
 			/* Add new line and then continue */
 			if (p + 1 < end || span > str_len || seen_spaces) {
 				switch (how) {
@@ -2072,6 +2100,106 @@ rspamd_header_value_fold(const char *name, gsize name_len,
 	default:
 		g_assert(p == c);
 		break;
+	}
+
+	return res;
+}
+
+GString *
+rspamd_header_value_fold_unstructured(const char *name, gsize name_len,
+									  const char *value, gsize value_len,
+									  unsigned int fold_max,
+									  enum rspamd_newlines_type how)
+{
+	const unsigned int default_fold_max = 76;
+	const char *p = value, *end = value + value_len, *newline;
+	gsize cur_len = name_len + 2; /* "Name: " */
+	gboolean line_has_word = FALSE;
+	GString *res;
+
+	g_assert(name != NULL);
+	g_assert(value != NULL);
+
+	/* Filter insane values */
+	if (fold_max < 20) {
+		fold_max = default_fold_max;
+	}
+
+	switch (how) {
+	case RSPAMD_TASK_NEWLINES_LF:
+		newline = "\n";
+		break;
+	case RSPAMD_TASK_NEWLINES_CR:
+		newline = "\r";
+		break;
+	case RSPAMD_TASK_NEWLINES_CRLF:
+	default:
+		newline = "\r\n";
+		break;
+	}
+
+	res = g_string_sized_new(value_len + value_len / 16 + 8);
+
+	while (p < end) {
+		const char *ws = p, *word;
+
+		if (*p == '\r' || *p == '\n') {
+			/* A line break already in the value (an existing fold) stays */
+			while (p < end && (*p == '\r' || *p == '\n')) {
+				g_string_append_c(res, *p++);
+			}
+
+			cur_len = 0;
+			line_has_word = FALSE;
+			continue;
+		}
+
+		while (p < end && (*p == ' ' || *p == '\t')) {
+			p++;
+		}
+
+		word = p;
+
+		while (p < end && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n') {
+			p++;
+		}
+
+		/*
+		 * A word that would overflow the line moves to a continuation line
+		 * that starts with whitespace from before it, so unfolding (removing
+		 * the line break) restores the value byte for byte. A whitespace run
+		 * takes one fold at most (RFC 5322 3.2.2), so a long run is split
+		 * there: as little of it as possible stays at the end of the line
+		 * for the continuation to fit fold_max, or else the 998 octets line
+		 * limit (RFC 5322 2.1.1). A word longer than a line is never split.
+		 */
+		if (word > ws && p > word && line_has_word &&
+			cur_len + (p - ws) > fold_max) {
+			const gsize line_limits[] = {fold_max, 998};
+			gsize run = word - ws, total = p - ws, keep = run - 1;
+			unsigned int i;
+
+			for (i = 0; i < G_N_ELEMENTS(line_limits); i++) {
+				gsize need = total > line_limits[i] ? total - line_limits[i] : 0;
+
+				if (need < run && cur_len + need <= line_limits[i]) {
+					keep = need;
+					break;
+				}
+			}
+
+			g_string_append_len(res, ws, keep);
+			g_string_append(res, newline);
+			ws += keep;
+			cur_len = 0;
+		}
+
+		g_string_append_len(res, ws, p - ws);
+		cur_len += p - ws;
+
+		if (p > word) {
+			line_has_word = TRUE;
+		}
 	}
 
 	return res;

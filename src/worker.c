@@ -692,8 +692,16 @@ start_worker(struct rspamd_worker *worker)
 	}
 
 	rspamd_stat_close();
+	/*
+	 * Keep DNS available to config unload hooks and destructors. Save the
+	 * worker-owned pointer before releasing cfg, which can also free ctx.
+	 * The loop and logger remain alive for resolver cleanup below.
+	 */
+	struct rspamd_dns_resolver *resolver = ctx->resolver;
+
 	CFG_REF_RELEASE(ctx->cfg);
 	CFG_REF_RELEASE(ctx->cfg);
+	rspamd_dns_resolver_deinit(resolver);
 	rspamd_log_close(worker->srv->logger);
 	rspamd_unset_crash_handler(worker->srv);
 

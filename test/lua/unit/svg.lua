@@ -150,9 +150,12 @@ context("SVG content extraction", function()
   end)
 
   test("enforces text and structural limits", function()
+    -- Text over the limit is left out and the document is read to its end
     local extracted, err = svg.extract(clean, { max_text = 8 })
-    assert_equal(extracted, nil)
-    assert_not_nil(err:find("text limit", 1, true))
+    assert_not_nil(extracted, err)
+    assert_equal(extracted.text_truncated, true)
+    assert_true(extracted.text:len() <= 8)
+    assert_equal(extracted.urls[1], "https://www.example.com/")
 
     extracted, err = svg.extract(clean, { xml = { max_depth = 1 } })
     assert_equal(extracted, nil)
@@ -164,6 +167,40 @@ context("SVG content extraction", function()
     assert_equal(#extracted.payloads[1].content, 8)
     assert_equal(extracted.payloads[1].truncated, true)
     assert_equal(extracted.payloads[1].content, html_payload:sub(1, 8))
+  end)
+
+  test("rejects oversized UTF-16 before conversion", function()
+    -- The decoded document fits; the original byte stream does not.
+    local document = '<svg><text>hello</text></svg>'
+    for _, little_endian in ipairs({ true, false }) do
+      local bytes = { little_endian and '\255\254' or '\254\255' }
+      for i = 1, #document do
+        local ch = document:sub(i, i)
+        bytes[#bytes + 1] = little_endian and (ch .. '\0') or ('\0' .. ch)
+      end
+      local input = table.concat(bytes)
+      local extracted, err = svg.extract(input, { xml = { max_input = #document } })
+      assert_equal(extracted, nil)
+      assert_not_nil(err:find('input limit', 1, true))
+      extracted, err = svg.extract(input, { xml = { max_input = #input } })
+      assert_not_nil(extracted, err)
+      assert_not_nil(tostring(extracted.text):find('hello', 1, true))
+    end
+  end)
+
+  test("extracts mixed CSS targets and repeated URLs", function()
+    local css = string.rep('background:URL(https://css.example.com/repeated);', 2048) ..
+        '@IMPORT url(https://css.example.com/imported);' ..
+        '@import &quot;https://css.example.com/quoted&quot;;' ..
+        'background:url(https://css.example.com/final)'
+    local extracted, err = svg.extract('<svg style="' .. css .. '"/>')
+    assert_not_nil(extracted, err)
+    local urls = set_of(extracted.urls)
+    assert_equal(#extracted.urls, 4)
+    assert_true(urls['https://css.example.com/repeated'])
+    assert_true(urls['https://css.example.com/imported'])
+    assert_true(urls['https://css.example.com/quoted'])
+    assert_true(urls['https://css.example.com/final'])
   end)
 
   local function make_task(part)

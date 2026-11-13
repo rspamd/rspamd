@@ -184,6 +184,7 @@ struct rspamd_task_data_storage {
 struct rspamd_request_header_chain {
 	rspamd_ftok_t *hdr;
 	struct rspamd_request_header_chain *next;
+	struct rspamd_request_header_chain *tail; /* valid in the first element only */
 };
 
 __KHASH_TYPE(rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *);

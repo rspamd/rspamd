@@ -117,6 +117,8 @@ enum class html_component_enum_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_DATA_TRACK,
 	RSPAMD_HTML_COMPONENT_DATA_ID,
 	RSPAMD_HTML_COMPONENT_DATA_URL,
+	// SVG
+	RSPAMD_HTML_COMPONENT_XLINK_HREF,
 };
 
 // Forward declarations for component types
@@ -678,13 +680,19 @@ struct html_component_opacity : html_component_base {
 	explicit html_component_opacity(std::string_view v)
 		: raw_value(v)
 	{
+		/* A valueless attribute has no data at all, and no number either */
+		if (v.empty()) {
+			return;
+		}
+
 		char numbuf[128], *endptr = nullptr;
 		size_t n = std::min(v.size(), sizeof(numbuf) - 1);
 		memcpy(numbuf, v.data(), n);
 		numbuf[n] = '\0';
 		auto num = g_ascii_strtod(numbuf, &endptr);
 
-		if (!std::isnan(num)) {
+		/* Nothing parsed (e.g. opacity="abc") is no number, not opacity 0 */
+		if (endptr != numbuf && !std::isnan(num)) {
 			numeric_value = num;
 		}
 	}
@@ -1175,6 +1183,21 @@ struct html_component_data_url : html_component_base {
 	}
 };
 
+/* Where an SVG link without href goes, see html_tag::find_href */
+struct html_component_xlink_href : html_component_base {
+	std::string_view value;
+	std::size_t offset = 0;// offset in UTF-8 HTML buffer (utf_raw_content)
+	std::size_t len = 0;   // length in UTF-8 HTML buffer (utf_raw_content)
+	explicit html_component_xlink_href(std::string_view v, std::size_t off = 0, std::size_t l = 0)
+		: value(v), offset(off), len(l)
+	{
+	}
+	std::string_view get_string_value() const override
+	{
+		return value;
+	}
+};
+
 // The variant type that holds all possible components
 using html_tag_component = std::variant<
 	html_component_name,
@@ -1256,6 +1279,8 @@ using html_tag_component = std::variant<
 	html_component_data_track,
 	html_component_data_id,
 	html_component_data_url,
+	// SVG
+	html_component_xlink_href,
 	// Unknown
 	html_component_unknown>;
 
@@ -1282,6 +1307,12 @@ auto html_component_from_string(std::string_view name, std::string_view value, s
 #define FL_VIRTUAL (1 << (CM_USER_SHIFT + 7))
 /* Content offsets refer to html_content::invisible rather than ::parsed */
 #define FL_CONTENT_INVISIBLE (1 << (CM_USER_SHIFT + 8))
+/* Elements in the SVG and MathML namespaces (foreign content) */
+#define FL_SVG (1 << (CM_USER_SHIFT + 9))
+#define FL_MATHML (1 << (CM_USER_SHIFT + 10))
+#define FL_FOREIGN (FL_SVG | FL_MATHML)
+/* Content is text without character references (raw text, CDATA) */
+#define FL_LITERAL_TEXT (1 << (CM_USER_SHIFT + 11))
 
 using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
 
@@ -1302,6 +1333,32 @@ struct attr_span {
 	std::size_t len;
 };
 
+/* Frames, embedded objects and media: browsers load their src and ignore any href */
+static inline auto
+html_tag_goes_to_src(int id) -> bool
+{
+	switch (id) {
+	case Tag_IFRAME:
+	case Tag_FRAME:
+	case Tag_EMBED:
+	case Tag_AUDIO:
+	case Tag_VIDEO:
+	case Tag_SOURCE:
+	case Tag_TRACK:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* A link of a tag that URL rewriting can replace: where it goes and its place */
+struct html_clickable_attr {
+	int tag_id;
+	std::string_view attr_name;
+	std::string_view value;
+	attr_span span;
+};
+
 struct html_tag {
 	unsigned int tag_start = 0;
 	unsigned int content_offset = 0;
@@ -1316,6 +1373,12 @@ struct html_tag {
 	std::vector<struct html_tag *> children;
 	struct html_tag *parent = nullptr;
 	unsigned int depth = 0;
+	/*
+	 * Formatting elements that are open around this element though they are
+	 * not its ancestors: an index from 1 into `formatting_lists` of the
+	 * content, or 0
+	 */
+	std::uint32_t formatting = 0;
 
 	// Template method to find component by type
 	template<typename T>
@@ -1332,8 +1395,20 @@ struct html_tag {
 	// Helper methods for common component access
 	auto find_href() const -> std::optional<std::string_view>
 	{
+		if (html_tag_goes_to_src(id)) {
+			if (auto comp = find_component<html_component_src>()) {
+				return comp.value()->value;
+			}
+			return std::nullopt;
+		}
 		if (auto comp = find_component<html_component_href>()) {
 			return comp.value()->value;
+		}
+		if (id == Tag_A && (flags & FL_SVG)) {
+			/* An SVG link without href goes to xlink:href, which href overrides */
+			if (auto comp = find_component<html_component_xlink_href>()) {
+				return comp.value()->value;
+			}
 		}
 		return std::nullopt;
 	}
@@ -1415,6 +1490,69 @@ struct html_tag {
 				}
 			}
 		}
+		else if (attr_name == "xlink:href") {
+			if (auto comp = find_component<html_component_xlink_href>()) {
+				if (comp.value()->len > 0) {
+					return attr_span{comp.value()->offset, comp.value()->len};
+				}
+			}
+		}
+		return std::nullopt;
+	}
+
+	/*
+	 * The link URL rewriting replaces in this tag, if its place in the source
+	 * is known: src of an image, a frame or an embedded object, which browsers
+	 * load whatever href says; else href if the tag has one, else xlink:href
+	 * of an SVG link (as in find_href), else src
+	 */
+	auto clickable_attr() const -> std::optional<html_clickable_attr>
+	{
+		if (flags & (FL_XML | FL_VIRTUAL)) {
+			return std::nullopt;
+		}
+
+		if (id == Tag_IMG || html_tag_goes_to_src(id)) {
+			auto src = find_component<html_component_src>();
+
+			if (src && src.value()->len > 0) {
+				return html_clickable_attr{id, "src", src.value()->value,
+										   attr_span{src.value()->offset, src.value()->len}};
+			}
+
+			return std::nullopt;
+		}
+
+		if (!(flags & FL_HREF) && id != Tag_A && id != Tag_LINK && id != Tag_BASE) {
+			return std::nullopt;
+		}
+
+		/*
+		 * The attribute is the one browsers follow, whether or not its place
+		 * is known: a later one is not replaced in its stead
+		 */
+		auto clickable = [this](std::string_view attr_name, std::string_view value) -> std::optional<html_clickable_attr> {
+			if (auto span = get_attr_span(attr_name)) {
+				return html_clickable_attr{id, attr_name, value, span.value()};
+			}
+
+			return std::nullopt;
+		};
+
+		if (auto href = find_component<html_component_href>()) {
+			return clickable("href", href.value()->value);
+		}
+
+		if (id == Tag_A && (flags & FL_SVG)) {
+			if (auto xlink = find_component<html_component_xlink_href>()) {
+				return clickable("xlink:href", xlink.value()->value);
+			}
+		}
+
+		if (auto src = find_component<html_component_src>()) {
+			return clickable("src", src.value()->value);
+		}
+
 		return std::nullopt;
 	}
 

@@ -1585,6 +1585,9 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg(ap, gboolean *)) = 0;
 					}
+					else {
+						(void) va_arg(ap, gboolean *);
+					}
 				}
 				else {
 					g_set_error(err,

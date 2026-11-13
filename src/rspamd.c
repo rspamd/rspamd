@@ -297,7 +297,10 @@ config_logger(rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rspamd_main = ud;
 
-	rspamd_main->logger = rspamd_log_open_specific(rspamd_main->server_pool,
+	/* Each reload must be able to reclaim the logger and its shared error log. */
+	rspamd_main->logger_pool = rspamd_mempool_new_long_lived(
+		rspamd_mempool_suggest_size(), "logger");
+	rspamd_main->logger = rspamd_log_open_specific(rspamd_main->logger_pool,
 												   rspamd_main->cfg,
 												   "main",
 												   rspamd_main->workers_uid,
@@ -334,12 +337,24 @@ reread_config(struct rspamd_main *rspamd_main)
 	old_cfg = rspamd_main->cfg;
 	rspamd_main->cfg = tmp_cfg;
 	rspamd_logger_t *old_logger = rspamd_main->logger;
+	rspamd_mempool_t *old_logger_pool = rspamd_main->logger_pool;
 
 	if (!load_rspamd_config(rspamd_main, tmp_cfg, TRUE, load_opts, TRUE)) {
+		/* Parsing can fail after config_logger has opened a replacement. */
+		if (rspamd_main->logger != old_logger) {
+			rspamd_log_close(rspamd_main->logger);
+		}
+		rspamd_mempool_t *failed_logger_pool = rspamd_main->logger_pool;
 		rspamd_main->cfg = old_cfg;
 		rspamd_main->logger = old_logger;
+		rspamd_main->logger_pool = old_logger_pool;
+		rspamd_log_set_default_logger(old_logger);
+		rspamd_logger_configure_modules(old_cfg->debug_modules);
 		msg_err_main("cannot parse new config file, revert to old one");
 		CFG_REF_RELEASE(tmp_cfg);
+		if (failed_logger_pool != old_logger_pool) {
+			rspamd_mempool_delete(failed_logger_pool);
+		}
 
 		return FALSE;
 	}
@@ -352,6 +367,7 @@ reread_config(struct rspamd_main *rspamd_main)
 		rspamd_regexp_map_clear_pending();
 #endif
 		CFG_REF_RELEASE(old_cfg);
+		rspamd_mempool_delete(old_logger_pool);
 		rspamd_main->cfg->rspamd_user = rspamd_user;
 		rspamd_main->cfg->rspamd_group = rspamd_group;
 		/* Here, we can do post actions with the existing config */
@@ -1765,6 +1781,7 @@ int main(int argc, char **argv, char **env)
 #endif
 	CFG_REF_RELEASE(rspamd_main->cfg);
 	rspamd_log_close(rspamd_main->logger);
+	rspamd_mempool_delete(rspamd_main->logger_pool);
 	g_hash_table_unref(rspamd_main->spairs);
 	g_hash_table_unref(rspamd_main->workers);
 	rspamd_mempool_delete(rspamd_main->server_pool);

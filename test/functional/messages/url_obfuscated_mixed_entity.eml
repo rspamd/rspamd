@@ -1,0 +1,6 @@
+From: sender@example.com
+To: victim@example.com
+Subject: Mixed entity and bracket URL obfuscation
+Content-Type: text/plain; charset=utf-8
+
+Visit &#101;xample[.]com for details

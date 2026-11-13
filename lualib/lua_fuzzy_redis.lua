@@ -28,93 +28,171 @@ local ucl = require "ucl"
 local N = "fuzzy_redis"
 
 local function gen_update_functor(redis_params, update_script_id)
-  -- Returns function(ev_base, prefix, updates, src, expire, callback)
-  -- updates is an array of tables: {op, digest, flag, value, is_weak, shingle_keys}
-  -- callback(success_boolean) is called when all operations complete
-  return function(ev_base, prefix, updates, src, expire, callback)
-    local n_ops = 0
-    local n_completed = 0
+  -- Batches are FIFO, including their version INCR. Within a batch only
+  -- repeated digests need ordering; independent digests remain concurrent.
+  local head, tail
+  local running, pumping = false, false
+  local pump_batches
+
+  local function run_batch(batch)
+    local updates = batch.updates
+    batch.updates = nil -- Do not retain the input array in reply callbacks.
+    local n_ops, n_completed = 0, 0
     local has_error = false
 
-    -- Count actual operations (skip "dup")
-    for _, upd in ipairs(updates) do
-      if upd.op ~= "dup" then
-        n_ops = n_ops + 1
-      end
+    local function finish(success)
+      -- Keep running set during the callback: reentrant submissions go behind
+      -- batches already waiting, and pump_batches handles synchronous replies.
+      batch.callback(success)
+      running = false
+      pump_batches()
     end
 
-    -- Final step: INCR version key and invoke callback
     local function do_version_incr()
-      local version_key = prefix .. src
-
+      local version_key = batch.prefix .. batch.src
       local function version_cb(err, _)
         if err then
           logger.errx(rspamd_config, '%s: version INCR failed for %s: %s',
               N, version_key, err)
         end
-        callback(not has_error)
+        finish(not has_error)
       end
 
-      if not lua_redis.redis_make_request_taskless(ev_base, rspamd_config,
+      if not lua_redis.redis_make_request_taskless(batch.ev_base, rspamd_config,
           redis_params, version_key, true, version_cb, 'INCR', { version_key }) then
         logger.errx(rspamd_config, '%s: cannot make version INCR request', N)
-        callback(false)
+        finish(false)
       end
     end
 
-    -- Called when one exec_redis_script completes
-    local function on_op_complete()
+    -- Shared by every independent digest: no per-request closure or queue.
+    local function update_cb(err, _)
+      if err then
+        logger.errx(rspamd_config, '%s: update script failed: %s', N, err)
+        has_error = true
+      end
       n_completed = n_completed + 1
-      if n_completed >= n_ops then
+      if n_completed == n_ops then
         do_version_incr()
       end
     end
 
-    -- If no actual operations, just do version INCR
+    local function send_update(upd, cb)
+      local hash_key = batch.prefix .. upd.digest
+      local keys = { hash_key }
+      if upd.shingle_keys then
+        for _, sk in ipairs(upd.shingle_keys) do
+          keys[#keys + 1] = sk
+        end
+      end
+      local args = {
+        upd.op,
+        tostring(upd.flag),
+        tostring(upd.value),
+        tostring(batch.expire),
+        tostring(upd.timestamp),
+        tostring(upd.is_weak),
+        upd.digest,
+      }
+
+      if not lua_redis.exec_redis_script(update_script_id,
+          { ev_base = batch.ev_base, is_write = true, key = hash_key },
+          cb, keys, args) then
+        cb('cannot execute update script', nil)
+      end
+    end
+
+    -- Reuse the input tables as links only when a digest actually repeats.
+    -- Redis arguments are built at dispatch, never stored on these links.
+    local first, last = {}, {}
+    for _, upd in ipairs(updates) do
+      if upd.op ~= 'dup' then
+        n_ops = n_ops + 1
+        local previous = last[upd.digest]
+        if previous then
+          previous.redis_next = upd
+        else
+          first[#first + 1] = upd
+        end
+        last[upd.digest] = upd
+      end
+    end
+    last = nil
+
     if n_ops == 0 then
       do_version_incr()
       return
     end
 
-    for _, upd in ipairs(updates) do
-      if upd.op ~= "dup" then
-        local hash_key = prefix .. upd.digest
-
-        -- Build KEYS array (only actual Redis key names) and ARGV (parameters)
-        local keys = {
-          hash_key,
-        }
-
-        -- Append shingle keys if present
-        if upd.shingle_keys then
-          for _, sk in ipairs(upd.shingle_keys) do
-            keys[#keys + 1] = sk
-          end
+    local function run_chain(upd)
+      local next_update = upd
+      local dispatching, pending = false, false
+      local drain
+      local function chain_cb(err, _)
+        pending = false
+        update_cb(err)
+        if not dispatching then
+          drain()
         end
-
-        local args = {
-          upd.op,
-          tostring(upd.flag),
-          tostring(upd.value),
-          tostring(expire),
-          tostring(upd.timestamp),
-          tostring(upd.is_weak),
-          upd.digest,
-        }
-
-        local function update_cb(err, _)
-          if err then
-            logger.errx(rspamd_config, '%s: update script failed: %s', N, err)
-            has_error = true
-          end
-          on_op_complete()
+      end
+      drain = function()
+        dispatching = true
+        while next_update and not pending do
+          local current = next_update
+          next_update = current.redis_next
+          current.redis_next = nil
+          pending = true
+          send_update(current, chain_cb)
         end
+        dispatching = false
+      end
+      drain()
+    end
 
-        lua_redis.exec_redis_script(update_script_id,
-            { ev_base = ev_base, is_write = true, key = hash_key },
-            update_cb, keys, args)
+    for _, upd in ipairs(first) do
+      if upd.redis_next then
+        run_chain(upd)
+      else
+        send_update(upd, update_cb)
       end
     end
+  end
+
+  pump_batches = function()
+    if pumping then
+      return
+    end
+    pumping = true
+    while head and not running do
+      local batch = head
+      head = batch.next
+      batch.next = nil
+      if not head then
+        tail = nil
+      end
+      running = true
+      run_batch(batch)
+    end
+    pumping = false
+  end
+
+  -- callback(success_boolean) runs after all updates and the version INCR.
+  return function(ev_base, prefix, updates, src, expire, callback)
+    local batch = {
+      ev_base = ev_base,
+      prefix = prefix,
+      updates = updates,
+      src = src,
+      expire = expire,
+      callback = callback,
+    }
+    if tail then
+      tail.next = batch
+    else
+      head = batch
+    end
+    tail = batch
+    pump_batches()
   end
 end
 

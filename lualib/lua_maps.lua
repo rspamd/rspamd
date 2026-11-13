@@ -608,7 +608,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
 
             return ret
           elseif opt.backend then
-            ret.__upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), opt.backend)
+            ret.__upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), opt.backend,
+                rspamd_config)
             if ret.__upstreams then
               ret.__data = opt
               ret.__external = true

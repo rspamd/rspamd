@@ -274,6 +274,7 @@ public:
 	{
 		cur_encoding = enc;
 		cur_cmap = nullptr;
+		cmap_simple = false;
 	}
 
 	/**
@@ -285,10 +286,30 @@ public:
 	{
 		cur_cmap = cm;
 		cur_encoding = nullptr;
+		cmap_simple = false;
+	}
+
+	/**
+	 * The /ToUnicode CMap of a simple font. The codes of a simple font are
+	 * one byte each whatever codespace its CMap declares, and producers do
+	 * declare a two byte one for such fonts. A code that the CMap does not
+	 * map goes through the encoding of the font.
+	 */
+	auto set_simple_cmap(const cmap *cm, const font_encoding *enc) noexcept -> void
+	{
+		cur_cmap = cm;
+		cur_encoding = enc;
+		cmap_simple = cm != nullptr;
 	}
 
 	/** Raw character codes, mapped through the current encoding. */
 	auto add_encoded(std::string_view codes) -> void;
+
+	/**
+	 * How many character codes the bytes are for the current font: a code of
+	 * a composite font takes as many bytes as its CMap says.
+	 */
+	[[nodiscard]] auto count_codes(std::string_view codes) const noexcept -> std::size_t;
 
 	/**
 	 * A literal string as it appears between parentheses, still escaped.
@@ -363,6 +384,7 @@ private:
 	std::string buf;
 	const font_encoding *cur_encoding = nullptr;
 	const cmap *cur_cmap = nullptr;
+	bool cmap_simple = false;
 	std::size_t limit = max_output_bytes;
 	bool hit_ceiling = false;
 };

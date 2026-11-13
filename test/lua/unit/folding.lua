@@ -64,3 +64,124 @@ context("Headers folding unit test", function()
     end)
   end
 end)
+
+context("Unstructured header folding unit test", function()
+  local util = require("rspamd_util")
+
+  local function unfold(str)
+    return (string.gsub(str, '\r?\n', ''))
+  end
+
+  test("folds before existing whitespace and keeps it", function()
+    local words = {}
+    for i = 1, 10 do
+      words[i] = string.format('w%09d', i)
+    end
+    local folded = util.fold_header_unstructured('X', table.concat(words, ' '))
+    assert_equal(folded, table.concat(words, ' ', 1, 6) .. '\r\n ' .. table.concat(words, ' ', 7, 10))
+  end)
+
+  test("never folds after a comma or turns whitespace into a tab", function()
+    local value = 'Report for 1,000,000 messages from host-alpha,host-beta,host-gamma,' ..
+        'host-delta,host-epsilon'
+    local folded = util.fold_header_unstructured('Subject', value, 'lf')
+    assert_equal(folded, 'Report for 1,000,000 messages from\n ' ..
+        'host-alpha,host-beta,host-gamma,host-delta,host-epsilon')
+    assert_equal(unfold(folded), value)
+    -- the structured folder adds a tab after a comma for the same value
+    assert_not_equal(unfold(util.fold_header('Subject', value, 'lf')), value)
+  end)
+
+  test("tabs, existing folds and long words are kept", function()
+    local long = string.rep('x', 100)
+    assert_equal(util.fold_header_unstructured('X', 'a\tb'), 'a\tb')
+    assert_equal(util.fold_header_unstructured('X', 'first\r\n second'), 'first\r\n second')
+    assert_equal(util.fold_header_unstructured('X', long), long)
+    assert_equal(util.fold_header_unstructured('X', 'short ' .. long .. ' end', 'lf'),
+        'short\n ' .. long .. '\n end')
+  end)
+
+  -- Every line, the first one with its "Name: " prefix, fits `limit`
+  local function lines_fit(name, folded, limit)
+    local first = true
+    for line in string.gmatch(folded .. '\r\n', '(.-)\r\n') do
+      local len = #line + (first and #name + 2 or 0)
+      first = false
+      if len > limit then
+        return false, line
+      end
+    end
+    return true
+  end
+
+  test("a long whitespace run is split to keep lines within 998 octets", function()
+    local value = 'a' .. string.rep(' ', 10) .. string.rep('b', 990)
+    local folded = util.fold_header_unstructured('Subject', value)
+    assert_equal(unfold(folded), value)
+    assert_true(lines_fit('Subject', folded, 998))
+    -- the continuation keeps all the whitespace it can
+    assert_equal(folded, 'a  \r\n' .. string.rep(' ', 8) .. string.rep('b', 990))
+  end)
+
+  test("a whitespace run is split to keep lines within fold_max", function()
+    local value = 'a' .. string.rep(' ', 50) .. string.rep('b', 40)
+    local folded = util.fold_header_unstructured('X', value)
+    assert_equal(unfold(folded), value)
+    assert_true(lines_fit('X', folded, 76))
+    assert_equal(folded, 'a' .. string.rep(' ', 14) .. '\r\n' .. string.rep(' ', 36) .. string.rep('b', 40))
+  end)
+
+  test("short whitespace runs move whole to the continuation line", function()
+    local folded = util.fold_header_unstructured('X', string.rep('a', 60) .. '  ' .. string.rep('b', 20))
+    assert_equal(folded, string.rep('a', 60) .. '\r\n  ' .. string.rep('b', 20))
+  end)
+
+  test("long words and runs never break the 998 octets limit when they fit", function()
+    math.randomseed(6293)
+    for _ = 1, 300 do
+      local parts = {}
+      for i = 1, math.random(1, 6) do
+        local word = string.rep('w', math.random(1, 900))
+        if i > 1 then
+          word = string.rep(math.random() < 0.5 and ' ' or '\t', math.random(1, 60)) .. word
+        end
+        parts[#parts + 1] = word
+      end
+      local value = table.concat(parts)
+      local folded = util.fold_header_unstructured('Subject', value)
+      assert_equal(unfold(folded), value)
+      local ok, line = lines_fit('Subject', folded, 998)
+      assert_true(ok, line and #line)
+    end
+  end)
+
+  test("unfolding always gives the value back", function()
+    math.randomseed(6292)
+    local alphabet = 'abcdefghij,;.=?-_'
+    for _ = 1, 500 do
+      local parts = {}
+      for i = 1, math.random(1, 40) do
+        local len = math.random(1, 30)
+        local chars = {}
+        for j = 1, len do
+          local k = math.random(1, #alphabet)
+          chars[j] = string.sub(alphabet, k, k)
+        end
+        parts[#parts + 1] = table.concat(chars)
+        if i > 1 then
+          parts[#parts] = (math.random() < 0.2 and '\t' or ' ') .. parts[#parts]
+        end
+      end
+      local value = table.concat(parts)
+      local folded = util.fold_header_unstructured('Subject', value, 'crlf')
+      assert_equal(unfold(folded), value)
+      for line in string.gmatch(folded .. '\r\n', '(.-)\r\n') do
+        local first_line_extra = (#line == #folded or line == string.match(folded, '^[^\r]*')) and 9 or 0
+        -- a line only overflows if it holds a single word longer than a line
+        if #line + first_line_extra > 76 then
+          assert_nil(string.find(line, '%S[ \t]+%S'), line)
+        end
+      end
+    end
+  end)
+end)

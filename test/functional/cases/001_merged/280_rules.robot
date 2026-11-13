@@ -58,6 +58,45 @@ PDF javascript
   ...  Settings={symbols_enabled = [PDF_JAVASCRIPT]}
   Expect Symbol  PDF_JAVASCRIPT
 
+PDF that is not fully processed
+  Scan File  ${RSPAMD_TESTDIR}/messages/pdf_limits.eml
+  ...  Settings={symbols_enabled = [PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS, PDF_NO_OBJECTS, PDF_JAVASCRIPT]}
+  Expect Symbol With Exact Options  PDF_DECODE_LIMIT  limits.pdf
+  Expect Symbol With Exact Options  PDF_UNDECODED_STREAMS  limits.pdf:1
+  Expect Symbol With Exact Options  PDF_PARSE_ERRORS  limits.pdf:1
+  Do Not Expect Symbol  PDF_NO_OBJECTS
+
+PDF without objects
+  Scan File  ${RSPAMD_TESTDIR}/messages/pdf_no_objects.eml
+  ...  Settings={symbols_enabled = [PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS]}
+  Expect Symbol With Exact Options  PDF_NO_OBJECTS  empty.pdf
+  Do Not Expect Symbol  PDF_DECODE_LIMIT
+  Do Not Expect Symbol  PDF_PARSE_ERRORS
+
+PDF that is fully processed
+  Scan File  ${MESSAGE7}
+  ...  Settings={symbols_enabled = [PDF_JAVASCRIPT, PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS, PDF_TEXT_TRUNCATED]}
+  Expect Symbol  PDF_JAVASCRIPT
+  Do Not Expect Symbol  PDF_NO_OBJECTS
+  Do Not Expect Symbol  PDF_DECODE_LIMIT
+  Do Not Expect Symbol  PDF_UNDECODED_STREAMS
+  Do Not Expect Symbol  PDF_PARSE_ERRORS
+  Do Not Expect Symbol  PDF_TEXT_TRUNCATED
+
+SVG with an image inside that cannot be read
+  Scan File  ${RSPAMD_TESTDIR}/messages/svg_incomplete.eml
+  ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_INCOMPLETE]}
+  Expect Symbol With Exact Options  SVG_CONTENT  logo.svg
+  Expect Symbol With Exact Options  SVG_INCOMPLETE  logo.svg:nested=xml
+  Do Not Expect Symbol  SVG_SUSPICIOUS
+
+DOCX with a part that cannot be parsed
+  Scan File  ${RSPAMD_TESTDIR}/messages/docx_incomplete.eml
+  ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_SUSPICIOUS, OOXML_INCOMPLETE]}
+  Expect Symbol With Exact Options  DOCX_CONTENT  report.docx
+  Expect Symbol With Exact Options  OOXML_INCOMPLETE  report.docx:failed=1
+  Do Not Expect Symbol  DOCX_SUSPICIOUS
+
 DOCX content
   Scan File  ${MESSAGE9}
   ...  Settings={symbols_enabled = [DOCX_CONTENT, DOCX_EXTERNAL_LINKS, DOCX_SUSPICIOUS]}
@@ -87,7 +126,7 @@ XLSX content
   ...  Settings={symbols_enabled = [XLSX_CONTENT, XLSX_EXTERNAL_LINKS, XLSX_SUSPICIOUS, OOXML_MACROS, OOXML_EXTERNAL_DATA, OOXML_OLE_OBJECT, OOXML_REMOTE_TEMPLATE]}
   Expect Symbol With Exact Options  XLSX_CONTENT  invoice.xlsm
   Expect Symbol With Exact Options  XLSX_EXTERNAL_LINKS  invoice.xlsm:3
-  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm,vba,_xlnm.Auto_Open
+  Expect Symbol With Exact Options  OOXML_MACROS  invoice.xlsm:xlm  invoice.xlsm:vba  invoice.xlsm:_xlnm.Auto_Open
   Expect Symbol With Exact Options  OOXML_EXTERNAL_DATA  invoice.xlsm:externalLinkPath=https://external.example.com/data.xlsx
   Do Not Expect Symbol  XLSX_SUSPICIOUS
   Do Not Expect Symbol  OOXML_OLE_OBJECT
@@ -113,11 +152,11 @@ SVG smuggling
   Scan File  ${MESSAGE14}
   ...  Settings={symbols_enabled = [SVG_CONTENT, SVG_SUSPICIOUS, SVG_SCRIPT, SVG_FOREIGN_OBJECT, SVG_DATA_URI, SVG_EXTERNAL_LINKS, SVG_EXTERNAL_RESOURCES, SVG_FORM, SVG_REDIRECT]}
   Expect Symbol With Exact Options  SVG_CONTENT  invoice.svg
-  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2,handlers=1,javascript=2,external=1,atob,Blob,createObjectURL,location
+  Expect Symbol With Exact Options  SVG_SCRIPT  invoice.svg:scripts=2  invoice.svg:handlers=1  invoice.svg:javascript=2  invoice.svg:external=1  invoice.svg:atob  invoice.svg:Blob  invoice.svg:createObjectURL  invoice.svg:location
   Expect Symbol With Exact Options  SVG_FOREIGN_OBJECT  invoice.svg:1
   Expect Symbol With Exact Options  SVG_DATA_URI  invoice.svg:text/html
-  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1,passwords=1
-  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh,embedded_documents,location
+  Expect Symbol With Exact Options  SVG_FORM  invoice.svg:forms=1  invoice.svg:passwords=1
+  Expect Symbol With Exact Options  SVG_REDIRECT  invoice.svg:meta_refresh  invoice.svg:embedded_documents  invoice.svg:location
   Expect Symbol  SVG_EXTERNAL_RESOURCES
   Do Not Expect Symbol  SVG_SUSPICIOUS
   Expect URL  phish.example.com
@@ -154,6 +193,159 @@ BITCOIN ADDR 4
   ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
   Expect Symbol With Exact Options  BITCOIN_ADDR  1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
   ...  bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq  bitcoincash:qztslqhavnjcgth9zwu6dw0jjcfy4zahfy7vf0smwp
+
+ETHEREUM ADDR MAYBE
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [ETHEREUM_ADDR_MAYBE]}
+  Expect Symbol With Exact Options  ETHEREUM_ADDR_MAYBE  0x000000000000000000000000000000000000dEaD
+
+TRON ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [TRON_ADDR]}
+  Expect Symbol With Exact Options  TRON_ADDR  T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb
+
+DOGECOIN ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [DOGECOIN_ADDR]}
+  Expect Symbol With Exact Options  DOGECOIN_ADDR  D596YFweJQuHY1BbjazZYmAbt8jJPbKehC
+
+XRP ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [XRP_ADDR]}
+  Expect Symbol With Exact Options  XRP_ADDR  rrrrrrrrrrrrrrrrrrrrrhoLvTp
+
+MONERO ADDR MAYBE
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [MONERO_ADDR_MAYBE]}
+  Expect Symbol With Exact Options  MONERO_ADDR_MAYBE
+  ...  4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
+
+NO WALLET ADDRESS IN ORDINARY TOKENS
+  # A 44 char Base58 run, a commit hash and a UUID: none of them is an address.
+  # With no checksum to verify, a Base58 run of that shape matches ordinary
+  # base64 and token blobs, so nothing may claim it.
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_negative.eml
+  ...  Settings={symbols_enabled = [CRYPTO_ADDR_CHECK]}
+  Do Not Expect Symbol  CRYPTO_ADDR_CHECK
+
+BITCOIN ADDR TAPROOT
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol With Option  BITCOIN_ADDR  bc1pqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7rusqwk0jyn
+
+UPPERCASE BITCOIN ADDRESSES
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_uppercase.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol With Exact Options  BITCOIN_ADDR
+  ...  BC1QQYPQXPQ9QCRSSZG2PVXQ6RS0ZQG3YYC5FCJ4Z3
+  ...  BITCOINCASH:QPM2QSZNHKS23Z7629MMS6S4CWEF74VCWVY22GDX6A
+
+LITECOIN ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR]}
+  Expect Symbol With Exact Options  LITECOIN_ADDR  LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd
+  ...  ltc1qqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5dyg36p
+
+ZCASH ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [ZCASH_ADDR]}
+  Expect Symbol With Exact Options  ZCASH_ADDR  t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu
+
+CARDANO ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [CARDANO_ADDR]}
+  Expect Symbol With Exact Options  CARDANO_ADDR
+  ...  addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg
+
+COSMOS ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [COSMOS_ADDR]}
+  Expect Symbol With Exact Options  COSMOS_ADDR  cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu
+
+STELLAR ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [STELLAR_ADDR]}
+  Expect Symbol With Exact Options  STELLAR_ADDR
+  ...  GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV
+
+TON ADDR
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [TON_ADDR]}
+  Expect Symbol With Exact Options  TON_ADDR  EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B
+
+CRYPTO ADDR CHECK
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [CRYPTO_ADDR_CHECK]}
+  Expect Symbol With Exact Options  CRYPTO_ADDR_CHECK
+  ...  bitcoin:16L5yRNPTuciSgXGHqYwn9N6NeoKqopAu
+  ...  bitcoin:bc1pqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwxqergd3c8g7rusqwk0jyn
+  ...  litecoin:LKKHMBjCU89fyFNgSRprDoD8Jb25N8uWvd
+  ...  litecoin:ltc1qqypqxpq9qcrsszg2pvxq6rs0zqg3yyc5dyg36p
+  ...  dogecoin:D596YFweJQuHY1BbjazZYmAbt8jJPbKehC
+  ...  tron:T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb
+  ...  xrp:rrrrrrrrrrrrrrrrrrrrrhoLvTp
+  ...  zcash:t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu
+  ...  cardano:addr1vyqqzqsrqszsvpcgpy9qkrqdpc83qygjzv2p29shrqv35xcjrvarg
+  ...  cosmos:cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu
+  ...  stellar:GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV
+  ...  ton:EQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIP8B
+  ...  ethereum:0x000000000000000000000000000000000000dEaD
+  ...  monero:4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
+
+CRYPTO ADDR SELECTOR MAP
+  # The selector computes the addresses itself, so no dependency on
+  # CRYPTO_ADDR_CHECK is needed and it works with only this symbol enabled
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [CRYPTO_ADDR_SELECTOR_MAP]}
+  Expect Symbol With Exact Options  CRYPTO_ADDR_SELECTOR_MAP
+  ...  16L5yRNPTuciSgXGHqYwn9N6NeoKqopAu
+  ...  4Ah82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmUNJAEqN76R7PwPfHt3oWb8R6cKvhgyxQdDn53jFrK6wFx7RJWh
+
+LEAKED PASSWORD SCAM NON BITCOIN
+  # The composite used to require BITCOIN_ADDR, so a scam quoting any other
+  # currency scored nothing. A Litecoin address with a scam phrase is enough now.
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_scam.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR A NEWSLETTER
+  # List-Unsubscribe alone gates Bitcoin as it always did, but not the others
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_newsletter.eml
+  ...  Settings={symbols_enabled = [LITECOIN_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  LITECOIN_ADDR
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR A WITHDRAWAL NOTICE
+  # An exchange notice names the wallet the funds went to: the word "wallet"
+  # next to a real address is ordinary, not a scam signal
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_withdrawal.eml
+  ...  Settings={symbols_enabled = [TRON_ADDR, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  TRON_ADDR
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+NO LEAKED PASSWORD SCAM FOR HEX DATA
+  # Any 0x + 40 hex token passes as an Ethereum address (a SHA-1 here), so the
+  # format-only symbol must not gate the scam rule
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto_hex_ham.eml
+  ...  Settings={symbols_enabled = [ETHEREUM_ADDR_MAYBE, LEAKED_PASSWORD_SCAM_RE, LEAKED_PASSWORD_SCAM]}
+  Expect Symbol  ETHEREUM_ADDR_MAYBE
+  Do Not Expect Symbol  LEAKED_PASSWORD_SCAM
+
+DISABLING ONE CURRENCY KEEPS THE OTHERS
+  # Every other symbol runs here, greylisting included: a unique envelope keeps
+  # its greylist record away from the other tests
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  From=crypto-disabled@example.com  Rcpt=crypto-disabled-rcpt@example.com
+  ...  Settings={symbols_disabled = [ETHEREUM_ADDR_MAYBE]}
+  Expect Symbol  BITCOIN_ADDR
+  Do Not Expect Symbol  ETHEREUM_ADDR_MAYBE
+
+ENABLING ONE CURRENCY ENABLES ONLY IT
+  Scan File  ${RSPAMD_TESTDIR}/messages/crypto.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol  BITCOIN_ADDR
+  Do Not Expect Symbol  LITECOIN_ADDR
+  Do Not Expect Symbol  ETHEREUM_ADDR_MAYBE
 
 RCVD_COUNT_ONE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
@@ -195,6 +387,19 @@ PHISH_SENDER_C
   ...  Settings={symbols_enabled = [BROKEN_HEADERS]}
   Expect Symbol  BROKEN_HEADERS
 
+OBSOLETE FROM RETAINS ANOMALY SCORE
+  FOR  ${whitespace}  IN  ${SPACE}  \t  ${SPACE}\t${SPACE}
+    ${file} =  Set Variable  ${RSPAMD_TMPDIR}/obsolete-from-score.eml
+    Create File  ${file}  From${whitespace}: spoof@example.org\r\nSubject: test\r\n\r\nbody\r\n
+    Scan File  ${file}
+    ...  Settings={symbols_enabled = [BROKEN_HEADERS, MISSING_FROM]}
+    # The default headers group caps its total score at 8.0.
+    Expect Symbol With Score  BROKEN_HEADERS  8.0
+    Do Not Expect Symbol  MISSING_FROM
+    Expect Score  8.0
+    Remove File  ${file}
+  END
+
 PHISH_SENDER_D
   Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender4.eml
   ...  Settings={symbols_enabled = [BROKEN_HEADERS]}
@@ -220,3 +425,61 @@ SUBJECT_HAS_CURRENCY
   Scan File  ${RSPAMD_TESTDIR}/messages/currency.eml
   ...  Settings={symbols_enabled = [SUBJECT_HAS_CURRENCY]}
   Expect Symbol  SUBJECT_HAS_CURRENCY
+
+DATE_FAR_FUTURE_NO_TZ
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_no_tz_future.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_FUTURE]}
+  Expect Symbol  INVALID_DATE
+  Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+  Do Not Expect Symbol  DATE_IN_FUTURE
+
+DATE_FAR_FUTURE_NO_TZ past date
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_no_tz_past.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_PAST]}
+  Expect Symbol  INVALID_DATE
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+  Do Not Expect Symbol  DATE_IN_PAST
+
+DATE_FAR_FUTURE_NO_TZ zoned date
+  Scan File  ${RSPAMD_TESTDIR}/messages/date_tz_future.eml
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ, DATE_IN_FUTURE]}
+  Expect Symbol  DATE_IN_FUTURE
+  Do Not Expect Symbol  INVALID_DATE
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+DATE_FAR_FUTURE_NO_TZ under threshold
+  # Read as UTC+14, 56 hours ahead is only 42 hours for sure
+  Scan Zone-less Date Ahead  56
+  Do Not Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+DATE_FAR_FUTURE_NO_TZ over threshold
+  # Read as UTC+14, 64 hours ahead is still 50 hours for sure
+  Scan Zone-less Date Ahead  64
+  Expect Symbol  DATE_FAR_FUTURE_NO_TZ
+
+APPLE_IOS_MAILER FIVE DIGIT BUILD
+  # iOS 27.2 on iPhone Duo: five digits after the build letter (#6349)
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_duo.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  APPLE_IOS_MAILER
+  Do Not Expect Symbol  FORGED_X_MAILER
+
+FORGED_X_MAILER NOT IOS BUILD
+  Scan File  ${RSPAMD_TESTDIR}/messages/xmailer_iphone_forged.eml
+  ...  Settings={symbols_enabled = [APPLE_IOS_MAILER, FORGED_X_MAILER]}
+  Expect Symbol  FORGED_X_MAILER
+  Do Not Expect Symbol  APPLE_IOS_MAILER
+
+*** Keywords ***
+Scan Zone-less Date Ahead
+  [Arguments]  ${hours}
+  # formatdate gives a locale-independent date in UTC; cutting ' -0000'
+  # leaves it without a zone
+  ${date} =  Evaluate  email.utils.formatdate(time.time() + ${hours} * 3600)[:-6]
+  ...  modules=email.utils,time
+  ${file} =  Set Variable  ${RSPAMD_TMPDIR}/date-no-tz-${hours}.eml
+  Create File  ${file}  From: sender@example.com\r\nSubject: test\r\nDate: ${date}\r\n\r\nbody\r\n
+  Scan File  ${file}
+  ...  Settings={symbols_enabled = [INVALID_DATE, DATE_FAR_FUTURE_NO_TZ]}
+  Remove File  ${file}
+  Expect Symbol  INVALID_DATE

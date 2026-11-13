@@ -20,122 +20,275 @@
 
 namespace rspamd::css {
 
-std::string_view unescape_css(rspamd_mempool_t *pool,
-							  const std::string_view &sv)
+
+namespace {
+
+constexpr auto is_css_newline(char c) -> bool
 {
-	auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, sv.length()));
+	return c == '\n' || c == '\r' || c == '\f';
+}
+
+/* Characters that can be part of an identifier */
+constexpr auto is_css_name_char(unsigned char c) -> bool
+{
+	return (c & 0x80) || g_ascii_isalnum(c) || c == '-' || c == '_';
+}
+
+}// namespace
+
+std::string_view unescape_css(rspamd_mempool_t *pool,
+							  const std::string_view &sv,
+							  bool in_string)
+{
+	const auto n = sv.size();
+	/* Keeping an escape may add a separating space, one per at least 7 characters */
+	auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, n + n / 4 + 2));
 	auto *d = nspace;
-	auto nleft = sv.length();
+	auto *dend = nspace + n + n / 4 + 2;
 
 	enum {
 		normal = 0,
 		quoted,
-		escape,
-		skip_spaces,
+		comment,
 	} state = normal;
 
-	char quote_char, prev_c = 0;
-	auto escape_offset = 0, i = 0;
+	char quote_char = 0;
 
-#define MAYBE_CONSUME_CHAR(c)            \
-	do {                                 \
-		if ((c) == '"' || (c) == '\'') { \
-			state = quoted;              \
-			quote_char = (c);            \
-			nleft--;                     \
-			*d++ = (c);                  \
-		}                                \
-		else if ((c) == '\\') {          \
-			escape_offset = i;           \
-			state = escape;              \
-		}                                \
-		else {                           \
-			state = normal;              \
-			nleft--;                     \
-			*d++ = g_ascii_tolower(c);   \
-		}                                \
-	} while (0)
-
-	for (const auto c: sv) {
-		if (nleft == 0) {
-			msg_err_css("cannot unescape css: truncated buffer of size %d",
-						(int) sv.length());
-			break;
-		}
-		switch (state) {
-		case normal:
-			MAYBE_CONSUME_CHAR(c);
-			break;
-		case quoted:
-			if (c == quote_char) {
-				if (prev_c != '\\') {
-					state = normal;
-				}
-			}
-			prev_c = c;
-			nleft--;
+	auto put = [&](char c) {
+		if (d < dend) {
 			*d++ = c;
-			break;
-		case escape:
-			if (!g_ascii_isxdigit(c)) {
-				if (i > escape_offset + 1) {
-					/* Try to decode an escape */
-					const auto *escape_start = &sv[escape_offset + 1];
-					unsigned long val;
+		}
+	};
 
-					if (!rspamd_xstrtoul(escape_start, i - escape_offset - 1, &val)) {
-						msg_debug_css("invalid broken escape found at pos %d",
-									  escape_offset);
-					}
-					else {
-						if (val < 0x80) {
-							/* Trivial case: ascii character */
-							*d++ = (unsigned char) g_ascii_tolower(val);
-							nleft--;
-						}
-						else {
-							UChar32 uc = val;
-							auto off = 0;
-							UTF8_APPEND_CHAR_SAFE((uint8_t *) d, off,
-												  sv.length(), u_tolower(uc));
-							d += off;
-							nleft -= off;
-						}
-					}
-				}
-				else {
-					/* Empty escape, ignore it */
-					msg_debug_css("invalid empty escape found at pos %d",
-								  escape_offset);
-				}
+	/*
+	 * Handles an escape that starts at sv[i] == '\\', returns the index of the
+	 * first character after it. An escape never creates syntax: outside of
+	 * strings it is decoded only when it yields a name character, otherwise
+	 * it is kept in place for the tokeniser, which reads it as a part of an
+	 * identifier.
+	 */
+	auto escape = [&](std::size_t i) -> std::size_t {
+		auto j = i + 1;
 
-				if (nleft <= 0) {
-					msg_err_css("cannot unescape css: truncated buffer of size %d",
-								(int) sv.length());
-				}
-				else {
-					/* Escape is done, advance forward */
-					if (g_ascii_isspace(c)) {
-						state = skip_spaces;
-					}
-					else {
-						MAYBE_CONSUME_CHAR(c);
-					}
-				}
+		if (j >= n) {
+			/* A lone backslash at the end of the input */
+			if (!in_string) {
+				put('\\');
 			}
-			break;
-		case skip_spaces:
-			if (!g_ascii_isspace(c)) {
-				MAYBE_CONSUME_CHAR(c);
-			}
-			/* Ignore spaces */
-			break;
+
+			return j;
 		}
 
-		i++;
+		auto c = sv[j];
+
+		if (g_ascii_isxdigit(c)) {
+			unsigned long val = 0;
+			auto k = j;
+
+			while (k < n && k - j < 6 && g_ascii_isxdigit(sv[k])) {
+				val = val * 16 + g_ascii_xdigit_value(sv[k]);
+				k++;
+			}
+
+			auto hex_end = k;
+			auto had_space = false;
+
+			if (k < n && g_ascii_isspace(sv[k])) {
+				/* A single whitespace belongs to the escape, \r\n is one */
+				had_space = true;
+				if (sv[k] == '\r' && k + 1 < n && sv[k + 1] == '\n') {
+					k++;
+				}
+				k++;
+			}
+
+			if (val == 0 && in_string) {
+				return k;
+			}
+
+			if (val > 0x10FFFF || (val >= 0xD800 && val <= 0xDFFF)) {
+				val = 0xFFFD;
+			}
+
+			if (val != 0 && (val >= 0x80 || in_string || is_css_name_char(val))) {
+				if (val < 0x80) {
+					put(g_ascii_tolower(val));
+				}
+				else {
+					UChar32 uc = u_tolower(static_cast<UChar32>(val));
+					auto off = 0;
+					auto room = static_cast<int>(dend - d);
+
+					UTF8_APPEND_CHAR_SAFE((uint8_t *) d, off, room, uc);
+					d += off;
+				}
+			}
+			else {
+				/* Keep the escape, it must not become a syntax character */
+				put('\\');
+				for (auto m = j; m < hex_end; m++) {
+					put(g_ascii_tolower(sv[m]));
+				}
+				if (had_space || (hex_end < n && g_ascii_isxdigit(sv[hex_end]))) {
+					put(' ');
+				}
+			}
+
+			return k;
+		}
+
+		if (is_css_newline(c)) {
+			if (in_string) {
+				/* Line continuation */
+				if (c == '\r' && j + 1 < n && sv[j + 1] == '\n') {
+					return j + 2;
+				}
+
+				return j + 1;
+			}
+
+			/* Not an escape: a backslash followed by a newline */
+			put('\\');
+			return j;
+		}
+
+		if (in_string || is_css_name_char(c)) {
+			/* The escaped character itself; the rest of a multibyte one passes as it is */
+			put((static_cast<unsigned char>(c) & 0x80) ? c : g_ascii_tolower(c));
+		}
+		else {
+			put('\\');
+			put(c);
+		}
+
+		return j + 1;
+	};
+
+	if (in_string) {
+		for (std::size_t i = 0; i < n;) {
+			if (sv[i] == '\\') {
+				i = escape(i);
+			}
+			else {
+				put(g_ascii_tolower(sv[i]));
+				i++;
+			}
+		}
+
+		return std::string_view{nspace, static_cast<std::size_t>(d - nspace)};
 	}
 
-	return std::string_view{nspace, sv.size() - nleft};
+	for (std::size_t i = 0; i < n;) {
+		auto c = sv[i];
+
+		switch (state) {
+		case normal:
+			if (c == '"' || c == '\'') {
+				state = quoted;
+				quote_char = c;
+				put(c);
+				i++;
+			}
+			else if (c == '/' && i + 1 < n && sv[i + 1] == '*') {
+				state = comment;
+				put('/');
+				put('*');
+				i += 2;
+			}
+			else if (c == '\\') {
+				i = escape(i);
+			}
+			else {
+				put(g_ascii_tolower(c));
+				i++;
+			}
+			break;
+		case quoted:
+			/* Strings are kept as they are, the tokeniser unescapes them */
+			if (c == '\\') {
+				put(c);
+				i++;
+
+				if (i < n) {
+					put(sv[i]);
+					if (sv[i] == '\r' && i + 1 < n && sv[i + 1] == '\n') {
+						i++;
+						put('\n');
+					}
+					i++;
+				}
+			}
+			else {
+				if (c == quote_char || is_css_newline(c)) {
+					state = normal;
+				}
+				put(c);
+				i++;
+			}
+			break;
+		case comment:
+			put(c);
+			if (c == '*' && i + 1 < n && sv[i + 1] == '/') {
+				put('/');
+				state = normal;
+				i++;
+			}
+			i++;
+			break;
+		}
+	}
+
+	return std::string_view{nspace, static_cast<std::size_t>(d - nspace)};
+}
+
+bool css_has_escape(const std::string_view &sv)
+{
+	enum {
+		normal,
+		quoted,
+		comment,
+	} state = normal;
+	char quote_char = 0;
+	const auto n = sv.size();
+
+	for (std::size_t i = 0; i < n; i++) {
+		auto c = sv[i];
+
+		switch (state) {
+		case normal:
+			if (c == '"' || c == '\'') {
+				state = quoted;
+				quote_char = c;
+			}
+			else if (c == '/' && i + 1 < n && sv[i + 1] == '*') {
+				state = comment;
+				i++;
+			}
+			else if (c == '\\') {
+				return true;
+			}
+			break;
+		case quoted:
+			if (c == '\\') {
+				if (i + 2 < n && sv[i + 1] == '\r' && sv[i + 2] == '\n') {
+					i++;
+				}
+				i++;
+			}
+			else if (c == quote_char || is_css_newline(c)) {
+				state = normal;
+			}
+			break;
+		case comment:
+			if (c == '*' && i + 1 < n && sv[i + 1] == '/') {
+				state = normal;
+				i++;
+			}
+			break;
+		}
+	}
+
+	return false;
 }
 
 }// namespace rspamd::css

@@ -121,9 +121,10 @@ LUA_FUNCTION_DEF(util, decode_html_entities);
 LUA_FUNCTION_DEF(util, decode_base64);
 
 /***
- * @function util.decode_ascii85(input)
+ * @function util.decode_ascii85(input[, size_limit])
  * Decodes data from ASCII85 (Base85) encoding used in PDF files
  * @param {text or string} input data to decode
+ * @param {integer} size_limit optional maximum size of the decoded data; decoding fails over it
  * @return {rspamd_text} decoded data chunk or nil on error
  */
 LUA_FUNCTION_DEF(util, decode_ascii85);
@@ -198,6 +199,20 @@ LUA_FUNCTION_DEF(util, levenshtein_distance);
  * @return {string} Folded value of the header
  */
 LUA_FUNCTION_DEF(util, fold_header);
+
+/***
+ * @function util.fold_header_unstructured(name, value, [how])
+ * Fold an unstructured header value (Subject, free text) the RFC 5322 way:
+ * line breaks go only before existing whitespace, which is kept, so unfolding
+ * gives the value back unchanged. Unlike `fold_header`, it never folds after
+ * ',' or ';' and never turns the folding whitespace into a tab.
+ *
+ * @param {string} name name of the header
+ * @param {string} value value of the header
+ * @param {string} how "cr" for \r, "lf" for \n and "crlf" for \r\n (default)
+ * @return {string} Folded value of the header
+ */
+LUA_FUNCTION_DEF(util, fold_header_unstructured);
 
 /***
  * @function util.is_uppercase(str)
@@ -485,7 +500,7 @@ LUA_FUNCTION_DEF(util, gzip_decompress);
  *
  * @param {string/rspamd_text} data compressed data
  * @param {integer} size_limit optional size limit
- * @return {rspamd_text} decompressed text
+ * @return {rspamd_text} decompressed text, or nil and a description of the error
  */
 LUA_FUNCTION_DEF(util, inflate);
 
@@ -782,9 +797,11 @@ LUA_FUNCTION_DEF(util, parse_content_type);
 
 /***
  *  @function util.mime_header_encode(hdr[, is_structured])
- * Encodes header if needed
+ * RFC 2047-encodes a header value if it carries 8-bit data
  * @param {string} hdr input header
- * @param {boolean} is_structured if true, then we encode as structured header (e.g. encode all non alpha-numeric characters)
+ * @param {boolean} is_structured if true, the value is an address list: only
+ * display names, group names and comments are encoded, addresses (which have
+ * no RFC 2047 form) are kept as they are; otherwise it is unstructured text
  * @return encoded header
  */
 LUA_FUNCTION_DEF(util, mime_header_encode);
@@ -826,6 +843,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF(util, parse_html),
 	LUA_INTERFACE_DEF(util, levenshtein_distance),
 	LUA_INTERFACE_DEF(util, fold_header),
+	LUA_INTERFACE_DEF(util, fold_header_unstructured),
 	LUA_INTERFACE_DEF(util, is_uppercase),
 	LUA_INTERFACE_DEF(util, humanize_number),
 	LUA_INTERFACE_DEF(util, get_tld),
@@ -1407,8 +1425,33 @@ lua_util_decode_ascii85(lua_State *L)
 	}
 
 	if (s != NULL && inlen > 0) {
-		/* ASCII85 expands 5 chars to 4 bytes, so output is at most (inlen * 4 / 5) + 4 */
-		gsize max_outlen = (inlen * 4 / 5) + 4;
+		/*
+		 * ASCII85 expands 5 chars to 4 bytes, and a `z` stands for 4 zero
+		 * bytes on its own
+		 */
+		gsize nz = 0;
+		const char *zp = s, *zend = s + inlen;
+
+		while ((zp = memchr(zp, 'z', zend - zp)) != NULL) {
+			nz++;
+			zp++;
+		}
+
+		gsize max_outlen = ((inlen - nz) * 4 / 5) + 4 + nz * 4;
+
+		if (lua_type(L, 2) == LUA_TNUMBER) {
+			lua_Integer size_limit = lua_tointeger(L, 2);
+
+			if (size_limit <= 0) {
+				return luaL_error(L, "invalid arguments (size_limit)");
+			}
+
+			/* More than that does not fit and fails the decoding */
+			if ((gsize) size_limit < max_outlen) {
+				max_outlen = size_limit;
+			}
+		}
+
 		unsigned char *buf = g_malloc(max_outlen);
 
 		outlen = rspamd_decode_ascii85_buf(s, inlen, buf, max_outlen);
@@ -1665,6 +1708,40 @@ lua_util_fold_header(lua_State *L)
 }
 
 static int
+lua_util_fold_header_unstructured(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *name, *value;
+	enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
+	GString *folded;
+
+	name = lua_check_text_or_string(L, 1);
+	value = lua_check_text_or_string(L, 2);
+
+	if (!name || !value) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (lua_isstring(L, 3)) {
+		const char *how_str = lua_tostring(L, 3);
+
+		if (strcmp(how_str, "cr") == 0) {
+			how = RSPAMD_TASK_NEWLINES_CR;
+		}
+		else if (strcmp(how_str, "lf") == 0) {
+			how = RSPAMD_TASK_NEWLINES_LF;
+		}
+	}
+
+	folded = rspamd_header_value_fold_unstructured(name->start, name->len,
+												   value->start, value->len, 0, how);
+	lua_pushlstring(L, folded->str, folded->len);
+	g_string_free(folded, TRUE);
+
+	return 1;
+}
+
+static int
 lua_util_is_uppercase(lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1828,12 +1905,17 @@ lua_util_lower_utf8(lua_State *L)
 	t = lua_check_text_or_string(L, 1);
 
 	if (t) {
-		dst = g_malloc(t->len);
+		/*
+		 * U+023A and U+023E grow from 2 to 3 bytes when lowercased, and
+		 * U8_APPEND does not check the capacity for ASCII characters
+		 */
+		int32_t dst_len = t->len + t->len / 2;
+		dst = g_malloc(dst_len);
 
 		while (i < t->len && err == 0) {
 			U8_NEXT((uint8_t *) t->start, i, t->len, uc);
 			uc = u_tolower(uc);
-			U8_APPEND(dst, j, t->len, uc, err);
+			U8_APPEND(dst, j, dst_len, uc, err);
 		}
 
 		if (lua_isstring(L, 1)) {

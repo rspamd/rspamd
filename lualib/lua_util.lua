@@ -1505,22 +1505,26 @@ exports.maybe_decrypt_header = function(encrypted_header, settings, prefix, nonc
 end
 
 ---[[[
--- @function lua_util.callback_from_string(str)
+-- @function lua_util.callback_from_string(str[, chunkname[, return_chunk]])
 -- Converts a string like `return function(...) end` to lua function and return true and this function
 -- or returns false + error message
+-- @param {string} chunkname optional name used to identify the chunk in syntax error messages
+-- @param {boolean} return_chunk evaluate the string as a chunk that must return a function
 -- @return status code and function object or an error message
 --]]]
-exports.callback_from_string = function(s)
+exports.callback_from_string = function(s, chunkname, return_chunk)
   local loadstring = loadstring or load
 
-  if not s or #s == 0 then
+  if type(s) ~= 'string' or #s == 0 then
     return false, 'invalid or empty string'
   end
 
   s = exports.rspamd_str_trim(s)
   local inp
 
-  if s:match('^return%s*function') then
+  if return_chunk then
+    inp = s
+  elseif s:match('^return%s*function') then
     -- 'return function', can be evaluated directly
     inp = s
   elseif s:match('^function%s*%(') then
@@ -1530,18 +1534,26 @@ exports.callback_from_string = function(s)
     inp = 'return function(...)\n' .. s .. '; end'
   end
 
-  local chunk, err = loadstring(inp)
+  -- '=' prefix makes Lua print chunkname verbatim instead of '[string "..."]'
+  local chunk, err = loadstring(inp, chunkname and ('=' .. chunkname) or nil)
   if not chunk then
     return false, err
   end
 
   local ret, res_or_err = pcall(chunk)
 
-  if not ret or type(res_or_err) ~= 'function' then
-    return false, res_or_err
+  if not ret then
+    -- Runtime error while evaluating the chunk, res_or_err carries its message
+    return false, tostring(res_or_err)
   end
 
-  return ret, res_or_err
+  if type(res_or_err) ~= 'function' then
+    -- The chunk itself is valid Lua but yields no callback; report that as an
+    -- error message rather than handing the bare value back as if it was one
+    return false, string.format('chunk did not return a function, got %s', type(res_or_err))
+  end
+
+  return true, res_or_err
 end
 
 ---[[[
@@ -1834,8 +1846,14 @@ end
 local tspecial = lpeg.S "()<>,;:\\\"/[]?= \t\v"
 local special_match = lpeg.P((1 - tspecial) ^ 0 * tspecial ^ 1)
 exports.maybe_smtp_quote_value = function(str)
+  -- Control characters have no place in a header: a reader can end a quoted
+  -- string at CR or LF, and take what follows as the next element
+  str = str:gsub('%c', function(c)
+    return c == '\t' and c or '?'
+  end)
   if special_match:match(str) then
-    return string.format('"%s"', str:gsub('"', '\\"'))
+    -- A backslash is escaped too: one at the end would escape the closing quote
+    return string.format('"%s"', (str:gsub('[\\"]', '\\%0')))
   end
 
   return str
@@ -1874,7 +1892,7 @@ exports.unhex = function(str)
 end
 
 local http_upstream_lists = {}
-local function http_upstreams_by_url(pool, url)
+local function http_upstreams_by_url(pool, url, cfg)
   local rspamd_url = require "rspamd_url"
 
   local cached = http_upstream_lists[url]
@@ -1882,7 +1900,7 @@ local function http_upstreams_by_url(pool, url)
     return cached
   end
 
-  local real_url = rspamd_url.create(pool, url)
+  local real_url = rspamd_url.parse(pool, url, { upstream = true })
 
   if not real_url then
     return nil
@@ -1890,9 +1908,25 @@ local function http_upstreams_by_url(pool, url)
 
   local host = real_url:get_host()
   local proto = real_url:get_protocol() or 'http'
+  if proto ~= 'http' and proto ~= 'https' then
+    return nil
+  end
   local port = real_url:get_port() or (proto == 'https' and 443 or 80)
+  -- Upstream definitions require brackets to distinguish IPv6 from host:port.
+  if host:find(':', 1, true) then
+    host = '[' .. host .. ']'
+  end
   local upstream_list = require "rspamd_upstream_list"
-  local upstreams = upstream_list.create(host, port)
+  -- Attach to the config upstream context when available: otherwise a
+  -- failed startup DNS lookup leaves the upstream pending forever, as the
+  -- deferred resolve timer is armed only for upstreams owned by the ctx
+  cfg = cfg or rawget(_G, 'rspamd_config')
+  local upstreams
+  if cfg then
+    upstreams = upstream_list.create(cfg, host, port)
+  else
+    upstreams = upstream_list.create(host, port)
+  end
 
   if upstreams then
     http_upstream_lists[url] = upstreams
@@ -1902,10 +1936,11 @@ local function http_upstreams_by_url(pool, url)
   return nil
 end
 ---[[[
--- @function lua_util.http_upstreams_by_url(pool, url)
+-- @function lua_util.http_upstreams_by_url(pool, url[, cfg])
 -- Returns a cached or new upstreams list that corresponds to the specific url
 -- @param {mempool} pool memory pool to use (typically static pool from rspamd_config)
 -- @param {string} url full url
+-- @param {config} cfg optional rspamd config (global rspamd_config is used if nil)
 -- @return {upstreams_list} object to get upstream from an url
 --]]]
 exports.http_upstreams_by_url = http_upstreams_by_url
@@ -1985,6 +2020,41 @@ local function url_encode_string(str)
   return str
 end
 exports.url_encode_string = url_encode_string
+
+---[[[
+-- @function lua_util.symbol_options_to_string(options)
+-- Joins symbol options into a comma-separated list suitable for text output
+-- such as X-Spamd-Result. Options are stored verbatim, so an option that
+-- contains one of the structural delimiters `[`, `]`, `{`, `}`, `;` or `,`
+-- is percent-encoded (together with `%`, so that it can be decoded
+-- unambiguously). Options without delimiters are emitted untouched, including
+-- any `%` in them. The C log writer applies the same rule.
+-- @param {table} options symbol options, or nil
+-- @return {string} comma-separated options
+---]]]
+local function symbol_option_escape(c)
+  return string.format('%%%02X', c:byte())
+end
+exports.symbol_options_to_string = function(options)
+  if not options or not options[1] then
+    return ''
+  end
+  local escaped = options
+  for i, option in ipairs(options) do
+    if option:find('[%[%]{};,]') then
+      if escaped == options then
+        escaped = {}
+        for j = 1, i - 1 do
+          escaped[j] = options[j]
+        end
+      end
+      escaped[i] = option:gsub('[%%%[%]{};,]', symbol_option_escape)
+    elseif escaped ~= options then
+      escaped[i] = option
+    end
+  end
+  return table.concat(escaped, ',')
+end
 
 assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')
 assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')

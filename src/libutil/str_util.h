@@ -386,6 +386,26 @@ GString *rspamd_header_value_fold(const char *name,
 								  const char *fold_on_chars);
 
 /**
+ * Fold an unstructured header value (Subject, free text) as RFC 5322 2.2.3
+ * defines it: a line break is only inserted before existing whitespace, which
+ * is kept, so unfolding gives the value back unchanged. Unlike
+ * rspamd_header_value_fold, it never folds after ',' or ';' and never turns
+ * the folding whitespace into a tab. Line breaks already in the value are
+ * kept, and a word longer than a line is not split.
+ * @param name name of header (used just for folding)
+ * @param value value of header
+ * @param fold_max maximum line length (76 if lower than 20)
+ * @param how line break to insert
+ * @return new GString with the folded value
+ */
+GString *rspamd_header_value_fold_unstructured(const char *name,
+											   gsize name_len,
+											   const char *value,
+											   gsize value_len,
+											   unsigned int fold_max,
+											   enum rspamd_newlines_type how);
+
+/**
  * Search for a substring `srch` in the text `in` using Apostolico-Crochemore algorithm
  * http://www-igm.univ-mlv.fr/~lecroq/string/node12.html#SECTION00120
  * @param in input

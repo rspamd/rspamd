@@ -1,0 +1,24 @@
+From: test@example.com
+To: nobody@example.com
+Subject: test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="m"
+
+--m
+Content-Type: multipart/alternative; boundary="b"
+
+--b
+Content-Type: text/plain; charset=utf-8
+
+Quarterly lighthouse spreadsheet attached for review today.
+--b
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Quarterly lighthouse spreadsheet attached for review today.</p></body></html>
+--b--
+--m
+Content-Type: image/svg+xml
+Content-Disposition: attachment; filename="logo.svg"
+
+<svg xmlns="http://www.w3.org/2000/svg"><text x="1" y="1">Penguin orchestra trombone concert</text></svg>
+--m--

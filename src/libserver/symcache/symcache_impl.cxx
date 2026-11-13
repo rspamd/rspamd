@@ -380,7 +380,7 @@ bool symcache::save_items() const
 	}
 
 	auto file_sink = util::raii_file_sink::create(cfg->cache_filename,
-												  O_WRONLY | O_TRUNC, 00644);
+												  O_WRONLY, 00644);
 
 	if (!file_sink.has_value()) {
 		if (errno == EEXIST) {
@@ -393,16 +393,16 @@ bool symcache::save_items() const
 		return false;
 	}
 
+	/* Truncate only after acquiring the lock on the temporary file. */
+	if (ftruncate(file_sink->get_fd(), 0) == -1) {
+		msg_err_cache("cannot truncate temporary cache file for %s: %s",
+					  cfg->cache_filename, strerror(errno));
+		return false;
+	}
+
 	struct symcache_header hdr;
 	memset(&hdr, 0, sizeof(hdr));
 	memcpy(hdr.magic, symcache_magic, sizeof(symcache_magic));
-
-	if (write(file_sink->get_fd(), &hdr, sizeof(hdr)) == -1) {
-		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename, errno,
-					  strerror(errno));
-
-		return false;
-	}
 
 	auto *top = ucl_object_typed_new(UCL_OBJECT);
 
@@ -430,14 +430,53 @@ bool symcache::save_items() const
 		ucl_object_insert_key(top, elt, it.first.data(), 0, true);
 	}
 
-	auto fp = fdopen(file_sink->get_fd(), "a");
-	auto *efunc = ucl_object_emit_file_funcs(fp);
-	auto ret = ucl_object_emit_full(top, UCL_EMIT_JSON_COMPACT, efunc, nullptr);
-	ucl_object_emit_funcs_free(efunc);
+	/* Keep the sink as the sole descriptor owner; no stdio buffering. */
+	size_t len = 0;
+	auto *data = ucl_object_emit_len(top, UCL_EMIT_JSON_COMPACT, &len);
 	ucl_object_unref(top);
-	fclose(fp);
 
-	return ret;
+	if (data == nullptr) {
+		msg_err_cache("cannot serialize symbols cache for %s", cfg->cache_filename);
+		return false;
+	}
+
+	auto write_all = [&](const void *buf, size_t remaining) -> bool {
+		auto *p = static_cast<const unsigned char *>(buf);
+
+		while (remaining > 0) {
+			auto written = write(file_sink->get_fd(), p, remaining);
+
+			if (written == -1 && errno == EINTR) {
+				continue;
+			}
+			if (written <= 0) {
+				auto err = written == 0 ? EIO : errno;
+				msg_err_cache("cannot write symbols cache %s: %s",
+							  cfg->cache_filename, strerror(err));
+				return false;
+			}
+
+			p += written;
+			remaining -= written;
+		}
+
+		return true;
+	};
+
+	auto ret = write_all(&hdr, sizeof(hdr)) && write_all(data, len);
+	free(data);
+
+	if (!ret) {
+		return false;
+	}
+
+	if (!file_sink->write_output()) {
+		msg_err_cache("cannot commit symbols cache %s: %s",
+					  cfg->cache_filename, strerror(errno));
+		return false;
+	}
+
+	return true;
 }
 
 auto symcache::metric_connect_cb(void *k, void *v, void *ud) -> void

@@ -170,8 +170,15 @@ rspamd_string_unicode_trim_inplace(const char *str, size_t *len)
 	return ret;
 }
 
-enum rspamd_utf8_normalise_result
-rspamd_normalise_unicode_inplace(char *start, size_t *len)
+/*
+ * Normalises `in` to NFKC and drops zero width spaces. The result is written
+ * to `out` as far as `out_cap` allows, `*out_len` is the number of bytes
+ * written and `*needed` is the size of the complete result.
+ */
+static enum rspamd_utf8_normalise_result
+normalise_unicode_impl(const char *in, size_t in_len,
+					   char *out, size_t out_cap,
+					   size_t *out_len, size_t *needed)
 {
 	UErrorCode uc_err = U_ZERO_ERROR;
 	const auto *nfkc_norm = icu::Normalizer2::getNFKCInstance(uc_err);
@@ -184,7 +191,7 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 		zw_spaces.add(0x200C);
 		/* See github issue #4290 for explanation. It seems that the ZWJ has many legit use cases */
 		//zw_spaces.add(0x200D);
-		zw_spaces.add(0xFEF);
+		zw_spaces.add(0xFEFF);
 		zw_spaces.add(0x00AD);
 		zw_spaces.freeze();
 	}
@@ -193,46 +200,63 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 
 	g_assert(U_SUCCESS(uc_err));
 
-	auto uc_string = icu::UnicodeString::fromUTF8(icu::StringPiece(start, *len));
+	*out_len = 0;
+	*needed = 0;
+
+	auto uc_string = icu::UnicodeString::fromUTF8(icu::StringPiece(in, in_len));
 	auto is_normal = nfkc_norm->quickCheck(uc_string, uc_err);
 
 	if (!U_SUCCESS(uc_err)) {
 		return RSPAMD_UNICODE_NORM_ERROR;
 	}
 
-	/* Filter zero width spaces and push resulting string back */
-	const auto filter_zw_spaces_and_push_back = [&](const icu::UnicodeString &input) -> size_t {
+	/* Filter zero width spaces and push the result to the output */
+	const auto filter_zw_spaces_and_push_back = [&](const icu::UnicodeString &input) {
 		icu::StringCharacterIterator it{input};
-		size_t i = 0;
+		size_t i = 0, total = 0;
+		bool full = false;
 
 		while (it.hasNext()) {
-			/* libicu is very 'special' if it comes to 'safe' macro */
-			if (i >= *len) {
-				ret |= RSPAMD_UNICODE_NORM_ERROR;
-				break;
-			}
-
 			auto uc = it.next32PostInc();
 
 			if (zw_spaces.contains(uc)) {
 				ret |= RSPAMD_UNICODE_NORM_ZERO_SPACES;
 			}
 			else {
-				UBool err = 0;
-
 				if (uc == 0xFFFD) {
 					ret |= RSPAMD_UNICODE_NORM_UNNORMAL;
 				}
-				U8_APPEND((uint8_t *) start, i, *len, uc, err);
 
-				if (err) {
-					ret |= RSPAMD_UNICODE_NORM_ERROR;
-					break;
+				/* Surrogates cannot be encoded: they become U+FFFD like in fromUTF8 */
+				if (U_IS_SURROGATE(uc)) {
+					uc = 0xFFFD;
+				}
+
+				total += U8_LENGTH(uc);
+
+				/* The ASCII branch of U8_APPEND does not check the capacity */
+				if (!full && i >= out_cap) {
+					full = true;
+				}
+
+				if (!full) {
+					UBool err = 0;
+					size_t ni = i;
+
+					U8_APPEND((uint8_t *) out, ni, out_cap, uc, err);
+
+					if (err) {
+						full = true;
+					}
+					else {
+						i = ni;
+					}
 				}
 			}
 		}
 
-		return i;
+		*out_len = i;
+		*needed = total;
 	};
 
 	if (is_normal != UNORM_YES) {
@@ -245,13 +269,43 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 			return RSPAMD_UNICODE_NORM_ERROR;
 		}
 
-		*len = filter_zw_spaces_and_push_back(normalised);
+		filter_zw_spaces_and_push_back(normalised);
 	}
 	else {
-		*len = filter_zw_spaces_and_push_back(uc_string);
+		filter_zw_spaces_and_push_back(uc_string);
 	}
 
 	return static_cast<enum rspamd_utf8_normalise_result>(ret);
+}
+
+enum rspamd_utf8_normalise_result
+rspamd_normalise_unicode_inplace(char *start, size_t *len)
+{
+	size_t out_len, needed;
+	/* The input is converted before the output is written, so they may overlap */
+	auto ret = normalise_unicode_impl(start, *len, start, *len, &out_len, &needed);
+
+	if (ret & RSPAMD_UNICODE_NORM_ERROR) {
+		/* Nothing has been written */
+		return static_cast<enum rspamd_utf8_normalise_result>(ret);
+	}
+
+	if (needed > *len) {
+		/* The result has been cut */
+		ret = static_cast<enum rspamd_utf8_normalise_result>(ret | RSPAMD_UNICODE_NORM_ERROR);
+	}
+
+	*len = out_len;
+
+	return ret;
+}
+
+enum rspamd_utf8_normalise_result
+rspamd_normalise_unicode_to(const char *in, size_t in_len,
+							char *out, size_t out_cap,
+							size_t *out_len, size_t *needed)
+{
+	return normalise_unicode_impl(in, in_len, out, out_cap, out_len, needed);
 }
 
 char *
@@ -378,6 +432,8 @@ TEST_SUITE("utf8 utils")
 			{"س\u200Cت", "ست", RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			// String containing a soft hyphen
 			{"in\u00ADter\u00ADest\u00ADing", "interesting", RSPAMD_UNICODE_NORM_ZERO_SPACES},
+			// String containing a zero width no-break space (BOM)
+			{"\uFEFFte\uFEFFst", "test", RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			// String with ligature
 			{"ﬁsh", "fish", RSPAMD_UNICODE_NORM_UNNORMAL},
 			// String with accented characters and zero-width spaces
@@ -405,6 +461,56 @@ TEST_SUITE("utf8 utils")
 			CHECK(cpy == std::string(std::get<1>(c)));
 			CHECK(res == std::get<2>(c));
 		}
+	}
+
+	TEST_CASE("utf8 normalise to a separate buffer")
+	{
+		/* U+01C6 is 2 bytes and becomes 3 bytes under NFKC */
+		std::string in;
+
+		for (auto i = 0; i < 12; i++) {
+			in += "\xC7\x86";
+		}
+		in += ".example.com";
+
+		std::string expected;
+
+		for (auto i = 0; i < 12; i++) {
+			expected += "d\xC5\xBE";
+		}
+		expected += ".example.com";
+
+		/* A short buffer reports the size needed */
+		std::string out(in.size(), '\0');
+		size_t out_len = 0, needed = 0;
+		auto res = rspamd_normalise_unicode_to(in.data(), in.size(), out.data(), out.size(),
+											   &out_len, &needed);
+		CHECK((res & RSPAMD_UNICODE_NORM_UNNORMAL) != 0);
+		CHECK((res & RSPAMD_UNICODE_NORM_ERROR) == 0);
+		CHECK(needed == expected.size());
+		CHECK(out_len <= out.size());
+
+		/* The whole result fits a buffer of that size */
+		out.assign(needed, '\0');
+		res = rspamd_normalise_unicode_to(in.data(), in.size(), out.data(), out.size(),
+										  &out_len, &needed);
+		CHECK(out_len == expected.size());
+		CHECK(out == expected);
+
+		/* Nothing is written without a buffer, the size is still known */
+		res = rspamd_normalise_unicode_to(in.data(), in.size(), nullptr, 0, &out_len, &needed);
+		CHECK(out_len == 0);
+		CHECK(needed == expected.size());
+
+		/* The shrinking cases are the same as in place */
+		std::string zw = "a\xE2\x80\x8B"
+						 "b";
+		out.assign(zw.size(), '\0');
+		res = rspamd_normalise_unicode_to(zw.data(), zw.size(), out.data(), out.size(),
+										  &out_len, &needed);
+		CHECK((res & RSPAMD_UNICODE_NORM_ZERO_SPACES) != 0);
+		CHECK(std::string(out.data(), out_len) == "ab");
+		CHECK(needed == 2);
 	}
 
 	TEST_CASE("utf8 trim")

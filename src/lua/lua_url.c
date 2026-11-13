@@ -66,12 +66,15 @@ LUA_FUNCTION_DEF(url, is_obscured);
 LUA_FUNCTION_DEF(url, is_html_displayed);
 LUA_FUNCTION_DEF(url, is_subject);
 LUA_FUNCTION_DEF(url, get_phished);
+LUA_FUNCTION_DEF(url, get_redirected);
 LUA_FUNCTION_DEF(url, set_redirected);
 LUA_FUNCTION_DEF(url, get_count);
 LUA_FUNCTION_DEF(url, get_query_embedded_urls);
+LUA_FUNCTION_DEF(url, get_query_target);
 LUA_FUNCTION_DEF(url, get_visible);
 LUA_FUNCTION_DEF(url, get_hash);
 LUA_FUNCTION_DEF(url, create);
+LUA_FUNCTION_DEF(url, parse);
 LUA_FUNCTION_DEF(url, init);
 LUA_FUNCTION_DEF(url, all);
 LUA_FUNCTION_DEF(url, lt);
@@ -104,13 +107,14 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_visible),
 	LUA_INTERFACE_DEF(url, get_count),
 	LUA_INTERFACE_DEF(url, get_query_embedded_urls),
+	LUA_INTERFACE_DEF(url, get_query_target),
 	LUA_INTERFACE_DEF(url, get_hash),
 	LUA_INTERFACE_DEF(url, get_flags),
 	LUA_INTERFACE_DEF(url, get_flags_num),
 	LUA_INTERFACE_DEF(url, get_order),
 	LUA_INTERFACE_DEF(url, get_part_order),
 	LUA_INTERFACE_DEF(url, to_http),
-	{"get_redirected", lua_url_get_phished},
+	LUA_INTERFACE_DEF(url, get_redirected),
 	LUA_INTERFACE_DEF(url, set_redirected),
 	{"__tostring", lua_url_tostring},
 	{"__eq", lua_url_eq},
@@ -120,6 +124,7 @@ static const struct luaL_reg urllib_m[] = {
 static const struct luaL_reg urllib_f[] = {
 	LUA_INTERFACE_DEF(url, init),
 	LUA_INTERFACE_DEF(url, create),
+	LUA_INTERFACE_DEF(url, parse),
 	LUA_INTERFACE_DEF(url, all),
 	{NULL, NULL}};
 
@@ -412,6 +417,51 @@ lua_url_tostring(lua_State *L)
 	return 1;
 }
 
+/*
+ * Pushes an url for a request line: the parts of an url are stored decoded,
+ * so `%0d%0a` in a path is a raw line break there, and a control character
+ * or a space must not reach a request
+ */
+static void
+lua_url_push_request_safe(lua_State *L, const char *in, gsize len)
+{
+	static const char hexdigits[] = "0123456789ABCDEF";
+	gsize nunsafe = 0;
+
+	for (gsize i = 0; i < len; i++) {
+		unsigned char c = in[i];
+
+		if (c <= 0x20 || c == 0x7f) {
+			nunsafe++;
+		}
+	}
+
+	if (nunsafe == 0) {
+		lua_pushlstring(L, in, len);
+
+		return;
+	}
+
+	luaL_Buffer b;
+
+	luaL_buffinit(L, &b);
+
+	for (gsize i = 0; i < len; i++) {
+		unsigned char c = in[i];
+
+		if (c <= 0x20 || c == 0x7f) {
+			luaL_addchar(&b, '%');
+			luaL_addchar(&b, hexdigits[c >> 4]);
+			luaL_addchar(&b, hexdigits[c & 0xf]);
+		}
+		else {
+			luaL_addchar(&b, c);
+		}
+	}
+
+	luaL_pushresult(&b);
+}
+
 /***
  * @method url:to_http()
  * Get URL suitable for HTTP request (e.g. by trimming fragment and user parts)
@@ -432,14 +482,10 @@ lua_url_to_http(lua_State *L)
 
 			if (url->url->userlen > 0) {
 				/* We need to reconstruct url :( */
-				gsize len = url->url->urllen - url->url->fragmentlen + 1;
-
-				/* Strip the # character */
-				if (url->url->fragmentlen > 0 && len > 0) {
-					while (url->url->string[len - 1] == '#' && len > 0) {
-						len--;
-					}
-				}
+				/* Sized by what is written below, whatever the source looks like */
+				gsize len = url->url->protocollen + sizeof("://") +
+							url->url->hostlen + sizeof(":65535/") +
+							url->url->datalen + 1 + url->url->querylen;
 				char *nstr = g_malloc(len);
 				char *d = nstr, *end = nstr + len;
 				memcpy(nstr, url->url->string, url->url->protocollen);
@@ -449,8 +495,10 @@ lua_url_to_http(lua_State *L)
 				*d++ = '/';
 
 				/* Host part */
-				memcpy(d, rspamd_url_host(url->url), url->url->hostlen);
-				d += url->url->hostlen;
+				if (url->url->hostlen > 0) {
+					memcpy(d, rspamd_url_host_unsafe(url->url), url->url->hostlen);
+					d += url->url->hostlen;
+				}
 
 				int port = rspamd_url_get_port_if_special(url->url);
 
@@ -473,7 +521,8 @@ lua_url_to_http(lua_State *L)
 				}
 
 				g_assert(d < end);
-				lua_pushlstring(L, nstr, d - nstr);
+				lua_url_push_request_safe(L, nstr, d - nstr);
+				g_free(nstr);
 			}
 			else {
 				gsize len = url->url->urllen - url->url->fragmentlen;
@@ -484,7 +533,7 @@ lua_url_to_http(lua_State *L)
 						len--;
 					}
 				}
-				lua_pushlstring(L, url->url->string, len);
+				lua_url_push_request_safe(L, url->url->string, len);
 			}
 		}
 	}
@@ -518,8 +567,9 @@ lua_url_get_raw(lua_State *L)
 
 /***
  * @method url:is_phished()
- * Check whether URL is treated as phished
- * @return {boolean} `true` if URL is phished
+ * Check whether URL has a displayed-domain mismatch or an obscured display.
+ * This is a parser signal; the phishing module applies scoring and exceptions.
+ * @return {boolean} `true` if URL has a phishing candidate signal
  */
 static int
 lua_url_is_phished(lua_State *L)
@@ -622,33 +672,56 @@ lua_url_is_subject(lua_State *L)
 	return 1;
 }
 
-/***
- * @method url:get_phished()
- * Get another URL that pretends to be this URL (e.g. used in phishing)
- * @return {url} phished URL
+/*
+ * The url shown for a link and the target of a redirect share one slot of
+ * an url, and the flags tell what it holds; a redirect set later replaces
+ * the shown url
  */
 static int
-lua_url_get_phished(lua_State *L)
+lua_url_push_linked(lua_State *L, struct rspamd_lua_url *url, bool redirected)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_lua_url *purl, *url = lua_check_url(L, 1);
+	if (url && url->url && url->url->ext && url->url->ext->linked_url != NULL) {
+		bool is_redirected = !!(url->url->flags & RSPAMD_URL_FLAG_REDIRECTED);
+		bool is_phished = !!(url->url->flags & RSPAMD_URL_FLAG_PHISHED);
 
-	if (url) {
-		if (url->url->ext && url->url->ext->linked_url != NULL) {
-			/* XXX: in fact, this is the only possible combination of flags, so this check is redundant */
-			if (url->url->flags &
-				(RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_REDIRECTED)) {
-				purl = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
-				rspamd_lua_setclass(L, rspamd_url_classname, -1);
-				purl->url = url->url->ext->linked_url;
+		if (redirected ? is_redirected : (is_phished && !is_redirected)) {
+			struct rspamd_lua_url *purl = lua_newuserdata(L, sizeof(struct rspamd_lua_url));
 
-				return 1;
-			}
+			rspamd_lua_setclass(L, rspamd_url_classname, -1);
+			purl->url = url->url->ext->linked_url;
+
+			return 1;
 		}
 	}
 
 	lua_pushnil(L);
 	return 1;
+}
+
+/***
+ * @method url:get_phished()
+ * Get another URL that pretends to be this URL (e.g. used in phishing)
+ * @return {url} phished URL, or nil if the url is not phished or is redirected
+ */
+static int
+lua_url_get_phished(lua_State *L)
+{
+	LUA_TRACE_POINT;
+
+	return lua_url_push_linked(L, lua_check_url(L, 1), false);
+}
+
+/***
+ * @method url:get_redirected()
+ * Get the URL that this URL redirects to
+ * @return {url} target of the redirect, or nil if the url is not redirected
+ */
+static int
+lua_url_get_redirected(lua_State *L)
+{
+	LUA_TRACE_POINT;
+
+	return lua_url_push_linked(L, lua_check_url(L, 1), true);
 }
 
 /***
@@ -683,12 +756,13 @@ lua_url_set_redirected(lua_State *L)
 
 		gsize len;
 		const char *urlstr = lua_tolstring(L, 2, &len);
+		int top = lua_gettop(L);
 
 		rspamd_url_find_single(pool, urlstr, len, RSPAMD_URL_FIND_ALL,
 							   lua_url_single_inserter, L);
 
-		if (lua_type(L, -1) != LUA_TUSERDATA) {
-			/* URL is actually not found */
+		if (lua_gettop(L) == top) {
+			/* URL is actually not found: the top is still an argument */
 			lua_pushnil(L);
 		}
 		else {
@@ -838,6 +912,82 @@ lua_url_get_query_embedded_urls(lua_State *L)
 
 	if (url != NULL && url->url != NULL) {
 		lua_pushinteger(L, url->url->ext ? url->url->ext->query_embedded_urls : 0);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+struct lua_url_query_target_cbd {
+	unsigned int count;
+	struct rspamd_url *single;
+};
+
+static gboolean
+lua_url_query_target_cb(struct rspamd_url *url, gsize start_offset,
+						gsize end_offset, gpointer ud)
+{
+	struct lua_url_query_target_cbd *cbd = ud;
+
+	if ((url->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_FTP)) &&
+		url->tldlen > 0) {
+		cbd->count++;
+		cbd->single = url;
+	}
+
+	return TRUE;
+}
+
+/***
+ * @method url:get_query_target(pool)
+ * Follow a single embedded HTTP/HTTPS/FTP URL per query level to its leaf.
+ * Uses the URL parser's parameter boundaries, decoding and nesting limit.
+ * An embedded target is untrusted input, not evidence of an HTTP redirect.
+ * @param {mempool} pool memory pool for the extracted URLs
+ * @return {url|nil} leaf URL, or nil for no target, ambiguity or depth exhaustion
+ */
+static int
+lua_url_get_query_target(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
+	struct rspamd_url *cur, *leaf = NULL;
+	bool fully_consumed = false;
+
+	if (url == NULL || pool == NULL) {
+		return luaL_error(L, "url and memory pool are required");
+	}
+
+	cur = url->url;
+	for (unsigned int depth = 0; depth < RSPAMD_URL_QUERY_MAX_NESTING; depth++) {
+		if (cur->querylen == 0) {
+			fully_consumed = true;
+			break;
+		}
+
+		struct lua_url_query_target_cbd cbd = {0, NULL};
+		rspamd_url_query_foreach_embedded(pool, cur, RSPAMD_URL_FIND_ALL,
+										  lua_url_query_target_cb, &cbd, L);
+
+		if (cbd.count == 0) {
+			fully_consumed = true;
+			break;
+		}
+		if (cbd.count != 1) {
+			break;
+		}
+
+		leaf = cbd.single;
+		cur = leaf;
+	}
+
+	if (fully_consumed && leaf != NULL) {
+		struct rspamd_lua_url *target = lua_newuserdata(L, sizeof(*target));
+		rspamd_lua_setclass(L, rspamd_url_classname, -1);
+		target->url = leaf;
 	}
 	else {
 		lua_pushnil(L);
@@ -1019,11 +1169,16 @@ lua_url_create(lua_State *L)
 		return luaL_error(L, "invalid arguments: mempool is expected as the first argument");
 	}
 
+	int top = lua_gettop(L);
+
 	rspamd_url_find_single(pool, t->start, t->len, RSPAMD_URL_FIND_ALL,
 						   lua_url_single_inserter, L);
 
-	if (lua_type(L, -1) != LUA_TUSERDATA) {
-		/* URL is actually not found */
+	if (lua_gettop(L) == top) {
+		/*
+		 * URL is actually not found; the top of the stack is an argument,
+		 * that can be userdata as well (a text or a pool)
+		 */
 		lua_pushnil(L);
 
 		return 1;
@@ -1046,6 +1201,80 @@ lua_url_create(lua_State *L)
 			}
 		}
 	}
+
+	return 1;
+}
+
+/***
+ * @function url.parse([mempool,] str[, options])
+ * Parse a complete URL directly, without extracting it from text.
+ *
+ * WARNING: Omitting mempool uses a process-wide static pool. Allocations,
+ * including those made by failed parses, are not reclaimed by Lua garbage
+ * collection and remain until process exit. Repeated calls without a pool
+ * therefore cause unbounded memory growth. Never omit the pool in per-message,
+ * per-request, or other unbounded code paths.
+ *
+ * Use task:get_mempool() for message processing, or rspamd_config:get_mempool()
+ * for configured endpoints. The returned URL must not be used after its pool
+ * is destroyed. The pool-less form is only suitable for bounded, process-lifetime
+ * allocations.
+ * @param {rspamd_mempool} mempool pool owning the result; strongly recommended
+ * @param {string} str URL to parse
+ * @param {table} options optional table; upstream=true permits config endpoints
+ * without a public suffix and disables text boundary heuristics
+ * @return {url} URL object, or nil and an error string
+ * @example
+local url, err = require('rspamd_url').parse(
+  rspamd_config:get_mempool(), 'http://user:password@llm.internal.lan:8080/api',
+  {upstream = true})
+ */
+static int
+lua_url_parse(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	rspamd_mempool_t *pool = static_lua_url_pool;
+	int str_pos = 1;
+	enum rspamd_url_parse_flags parse_flags = RSPAMD_URL_PARSE_TEXT;
+
+	if (lua_type(L, 1) == LUA_TUSERDATA) {
+		pool = rspamd_lua_check_mempool(L, 1);
+		str_pos = 2;
+	}
+
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, str_pos);
+	if (pool == NULL || t == NULL) {
+		return luaL_error(L, "invalid arguments: memory pool and URL string expected");
+	}
+
+	if (!lua_isnoneornil(L, str_pos + 1)) {
+		luaL_checktype(L, str_pos + 1, LUA_TTABLE);
+		lua_getfield(L, str_pos + 1, "upstream");
+		if (lua_toboolean(L, -1)) {
+			parse_flags |= RSPAMD_URL_PARSE_UPSTREAM;
+		}
+		lua_pop(L, 1);
+	}
+
+	/* The parser keeps the raw string in the URL's owning pool. */
+	char *input = rspamd_mempool_alloc(pool, t->len + 1);
+	memcpy(input, t->start, t->len);
+	input[t->len] = '\0';
+	struct rspamd_url *url = rspamd_mempool_alloc_type(pool, struct rspamd_url);
+	enum uri_errno err = rspamd_url_parse(url, input, t->len, pool, parse_flags, L);
+
+	if (err == URI_ERRNO_OK && url->rawlen != t->len) {
+		err = URI_ERRNO_BAD_FORMAT;
+	}
+	if (err != URI_ERRNO_OK) {
+		lua_pushnil(L);
+		lua_pushstring(L, rspamd_url_strerror(err));
+		return 2;
+	}
+
+	struct rspamd_lua_url *lua_url = lua_newuserdata(L, sizeof(*lua_url));
+	rspamd_lua_setclass(L, rspamd_url_classname, -1);
+	lua_url->url = url;
 
 	return 1;
 }
@@ -1232,55 +1461,84 @@ lua_url_get_part_order(lua_State *L)
 	return 1;
 }
 
-void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
+gboolean
+lua_url_cbdata_match(const struct lua_tree_cb_data *cb,
+					 const struct rspamd_url *url)
+{
+	if ((url->protocol & cb->protocols_mask) != url->protocol) {
+		return FALSE;
+	}
+
+	/* Handle different flags application logic */
+	switch (cb->flags_mode) {
+	case url_flags_mode_include_any:
+		if (url->flags != (url->flags & cb->flags_mask)) {
+			return FALSE;
+		}
+		break;
+	case url_flags_mode_include_explicit:
+		if ((url->flags & cb->flags_mask) != cb->flags_mask) {
+			return FALSE;
+		}
+		break;
+	case url_flags_mode_exclude_include:
+		if ((url->flags & cb->flags_exclude_mask) != 0) {
+			return FALSE;
+		}
+		/*
+		 * `flags_mask` is set to ~0U when no include list has been given,
+		 * meaning "include everything". A plain bitwise test would still
+		 * drop urls that carry no flags at all (e.g. urls found in html
+		 * parts), so only apply the include filter when one was requested.
+		 */
+		if (cb->flags_mask != ~0U && (url->flags & cb->flags_mask) == 0) {
+			return FALSE;
+		}
+		break;
+	}
+
+	return TRUE;
+}
+
+gboolean
+lua_url_cbdata_sample_take(struct lua_tree_cb_data *cb)
+{
+	if (cb->sample_total == 0) {
+		/* Sampling is off */
+		return TRUE;
+	}
+
+	/* Selection sampling: exactly `sample_pick` urls are taken */
+	double coin = rspamd_random_double_fast_seed(&cb->random_seed);
+	gboolean take = coin * (double) cb->sample_total < (double) cb->sample_pick;
+
+	cb->sample_total--;
+
+	if (take) {
+		cb->sample_pick--;
+	}
+
+	return take;
+}
+
+void lua_url_cbdata_push(struct lua_tree_cb_data *cb, struct rspamd_url *url)
 {
 	struct rspamd_lua_url *lua_url;
+
+	lua_url = lua_newuserdata(cb->L, sizeof(struct rspamd_lua_url));
+	lua_pushvalue(cb->L, cb->metatable_pos);
+	lua_setmetatable(cb->L, -2);
+	lua_url->url = url;
+	lua_rawseti(cb->L, -2, cb->i++);
+}
+
+void lua_tree_url_callback(gpointer key, gpointer value, gpointer ud)
+{
 	struct rspamd_url *url = (struct rspamd_url *) value;
 	struct lua_tree_cb_data *cb = ud;
 
-	if ((url->protocol & cb->protocols_mask) == url->protocol) {
-
-		/* Handle different flags application logic */
-		switch (cb->flags_mode) {
-		case url_flags_mode_include_any:
-			if (url->flags != (url->flags & cb->flags_mask)) {
-				return;
-			}
-			break;
-		case url_flags_mode_include_explicit:
-			if ((url->flags & cb->flags_mask) != cb->flags_mask) {
-				return;
-			}
-			break;
-		case url_flags_mode_exclude_include:
-			if ((url->flags & cb->flags_exclude_mask) != 0) {
-				return;
-			}
-			/*
-			 * `flags_mask` is set to ~0U when no include list has been given,
-			 * meaning "include everything". A plain bitwise test would still
-			 * drop urls that carry no flags at all (e.g. urls found in html
-			 * parts), so only apply the include filter when one was requested.
-			 */
-			if (cb->flags_mask != ~0U && (url->flags & cb->flags_mask) == 0) {
-				return;
-			}
-			break;
-		}
-
-		if (cb->skip_prob > 0) {
-			double coin = rspamd_random_double_fast_seed(&cb->random_seed);
-
-			if (coin < cb->skip_prob) {
-				return;
-			}
-		}
-
-		lua_url = lua_newuserdata(cb->L, sizeof(struct rspamd_lua_url));
-		lua_pushvalue(cb->L, cb->metatable_pos);
-		lua_setmetatable(cb->L, -2);
-		lua_url->url = url;
-		lua_rawseti(cb->L, -2, cb->i++);
+	if (lua_url_cbdata_match(cb, url) && lua_url_cbdata_sample_take(cb)) {
+		lua_url_cbdata_push(cb, url);
 	}
 }
 
@@ -1308,7 +1566,7 @@ lua_url_cbdata_fill(lua_State *L,
 		}
 	}
 	else if (pos_arg_type == LUA_TTABLE) {
-		if (rspamd_lua_geti(L, 1, pos) == LUA_TNIL) {
+		if (rspamd_lua_geti(L, pos, 1) == LUA_TNIL) {
 			/* New method: indexed table */
 
 			lua_getfield(L, pos, "flags");
@@ -1432,7 +1690,7 @@ lua_url_cbdata_fill(lua_State *L,
 
 			lua_getfield(L, pos, "sort");
 			if (lua_isboolean(L, -1)) {
-				cbd->sort = TRUE;
+				cbd->sort = lua_toboolean(L, -1);
 			}
 			lua_pop(L, 1);
 		}
@@ -1643,22 +1901,30 @@ void lua_url_cbdata_dtor(struct lua_tree_cb_data *cbd)
 gsize lua_url_adjust_skip_prob(float timestamp,
 							   unsigned char digest[16],
 							   struct lua_tree_cb_data *cb,
-							   gsize sz)
+							   gsize matched)
 {
-	if (cb->max_urls > 0 && sz > cb->max_urls) {
-		cb->skip_prob = 1.0 - ((double) cb->max_urls) / (double) sz;
+	cb->sample_total = 0;
+	cb->sample_pick = 0;
+
+	if (cb->max_urls > 0 && matched > cb->max_urls) {
+		unsigned char buf[16 + sizeof(float)];
+
 		/*
-		 * Use task dependent probabilistic seed to ensure that
-		 * consequent task:get_urls return the same list of urls
-		 * We use both digest and timestamp here to avoid attack surface
-		 * based just on digest.
+		 * The seed depends on the task (digest and timestamp), so that
+		 * consequent calls with the same options return the same list of
+		 * urls, and on a per process secret, so that a sender cannot compute
+		 * which urls are going to be dropped.
 		 */
-		memcpy(&cb->random_seed, digest, 4);
-		memcpy(((unsigned char *) &cb->random_seed) + 4, &timestamp, 4);
-		sz = cb->max_urls;
+		memcpy(buf, digest, 16);
+		memcpy(buf + 16, &timestamp, sizeof(float));
+		cb->random_seed = rspamd_cryptobox_fast_hash(buf, sizeof(buf),
+													 rspamd_hash_seed_secure());
+		cb->sample_total = matched;
+		cb->sample_pick = cb->max_urls;
+		matched = cb->max_urls;
 	}
 
-	return sz;
+	return matched;
 }
 
 static int
@@ -1686,7 +1952,7 @@ lua_url_lt(lua_State *L)
 						  *u2 = lua_check_url(L, 2);
 
 	if (u1 && u2) {
-		lua_pushinteger(L, rspamd_url_cmp(u1->url, u2->url));
+		lua_pushboolean(L, rspamd_url_cmp(u1->url, u2->url) < 0);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");

@@ -1,0 +1,11 @@
+From: list@ietf.example
+To: <test@test.ru>
+Subject: Re: test vectors
+Date: Mon, 27 Apr 2020 19:54:10 +0300
+Message-ID: <hexham-1@ietf.example>
+List-Unsubscribe: <mailto:unsub@ietf.example>
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+The password hashing draft quotes SHA1("abc") as
+0xA9993E364706816ABA3E25717850C26C9CD0D89D

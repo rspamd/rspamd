@@ -245,17 +245,14 @@ local function print_storage_stats(st)
 end
 
 local function print_result(r)
+  -- Statistics arrays start from RSPAMD_FUZZY_EPOCH10
   local function num_to_epoch(num)
     if num == 1 then
-      return 'v0.6'
-    elseif num == 2 then
-      return 'v0.8'
-    elseif num == 3 then
-      return 'v0.9'
-    elseif num == 4 then
       return 'v1.0+'
-    elseif num == 5 then
+    elseif num == 2 then
       return 'v1.7+'
+    elseif num == 3 then
+      return 'multi-flag'
     end
     return '???'
   end

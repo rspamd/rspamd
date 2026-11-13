@@ -1810,6 +1810,18 @@ rspamd_hash_seed(void)
 	return 0xabf9727ba290690bULL;
 }
 
+uint64_t
+rspamd_hash_seed_secure(void)
+{
+	static uint64_t seed;
+
+	while (G_UNLIKELY(seed == 0)) {
+		seed = ottery_rand_uint64();
+	}
+
+	return seed;
+}
+
 static inline double
 rspamd_double_from_int64(uint64_t x)
 {
@@ -2002,6 +2014,36 @@ int rspamd_file_xopen(const char *fname, int oflags, unsigned int mode,
 	return (fd);
 }
 
+gboolean
+rspamd_write_all(int fd, const void *buf, gsize len)
+{
+	const char *p = buf;
+
+	while (len > 0) {
+		gssize r = write(fd, p, len);
+
+		if (r == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+
+			return FALSE;
+		}
+
+		if (r == 0) {
+			/* Should not happen for len > 0, avoid looping forever */
+			errno = EIO;
+
+			return FALSE;
+		}
+
+		p += r;
+		len -= r;
+	}
+
+	return TRUE;
+}
+
 gpointer
 rspamd_file_xmap(const char *fname, unsigned int mode, gsize *size,
 				 gboolean allow_symlink)
@@ -2173,6 +2215,11 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 	if (tm->tm_year - 2ULL <= 136) {
 		leaps = (y - 68) / 4;
 
+		if ((y - 68) % 4 < 0) {
+			/* musl shifts: round down, not towards zero, before 1968 */
+			leaps--;
+		}
+
 		if (!((y - 68) & 3)) {
 			leaps--;
 			is_leap = 1;
@@ -2215,7 +2262,8 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 			}
 
 			if (!rem) {
-				is_leap = 1;
+				/* A century year not divisible by 400 is not a leap year */
+				is_leap = 0;
 				leaps = 0;
 			}
 			else {
@@ -2250,17 +2298,32 @@ rspamd_tm_to_time(const struct tm *tm, glong tz)
 
 void rspamd_gmtime(int64_t ts, struct tm *dest)
 {
-	uint64_t days, secs, years;
+	/* Signed, as in musl: times before 2000-03-01 have negative days */
+	int64_t days, secs, years;
 	int remdays, remsecs, remyears;
 	int leap_400_cycles, leap_100_cycles, leap_4_cycles;
 	int months;
 	int wday, yday, leap;
 	/* From March */
 	static const uint8_t days_in_month[] = {31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29};
-	static const uint64_t leap_epoch = 946684800ULL + 86400 * (31 + 29);
-	static const uint64_t days_per_400y = 365 * 400 + 97;
-	static const uint64_t days_per_100y = 365 * 100 + 24;
-	static const uint64_t days_per_4y = 365 * 4 + 1;
+	static const int64_t leap_epoch = 946684800LL + 86400 * (31 + 29);
+	static const int64_t days_per_400y = 365 * 400 + 97;
+	static const int64_t days_per_100y = 365 * 100 + 24;
+	static const int64_t days_per_4y = 365 * 4 + 1;
+
+	/*
+	 * musl fails when the year does not fit in an int; clamp instead, to
+	 * years INT_MIN + 1900 .. INT_MAX, so that both tm_year and the
+	 * tm_year + 1900 that callers print fit in an int
+	 */
+	if (ts < -67768040609740800LL) {
+		/* -2147481748-01-01 00:00:00 */
+		ts = -67768040609740800LL;
+	}
+	else if (ts > 67767976233532799LL) {
+		/* 2147483647-12-31 23:59:59 */
+		ts = 67767976233532799LL;
+	}
 
 	secs = ts - leap_epoch;
 	days = secs / 86400;
@@ -2315,7 +2378,7 @@ void rspamd_gmtime(int64_t ts, struct tm *dest)
 	}
 
 	years = remyears + 4 * leap_4_cycles + 100 * leap_100_cycles +
-			400ULL * leap_400_cycles;
+			400LL * leap_400_cycles;
 
 	for (months = 0; days_in_month[months] <= remdays; months++) {
 		remdays -= days_in_month[months];

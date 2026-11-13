@@ -427,7 +427,7 @@ rspamd_keep_alive_key_hash(struct rspamd_keepalive_hash_key *k)
 {
 	rspamd_cryptobox_fast_hash_state_t hst;
 
-	rspamd_cryptobox_fast_hash_init(&hst, 0);
+	rspamd_cryptobox_fast_hash_init(&hst, rspamd_hash_seed());
 
 	if (k->host) {
 		rspamd_cryptobox_fast_hash_update(&hst, k->host, strlen(k->host));
@@ -459,11 +459,66 @@ bool rspamd_keep_alive_key_equal(struct rspamd_keepalive_hash_key *k1,
 	return false;
 }
 
+/*
+ * A connection of the pool is fit for a request if nothing has happened to
+ * it while it was idle: no error, no bytes to read and no end of the stream.
+ * The watcher of the pool sees these only when the event loop runs, and a
+ * busy loop can get here first: bytes that a server sent after its reply
+ * would be read as the reply to the next request.
+ */
+static gboolean
+rspamd_http_keepalive_conn_is_idle(struct rspamd_http_connection *conn)
+{
+	int err = 0;
+	socklen_t len = sizeof(int);
+	char probe;
+	gssize r;
+
+	if (getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, (void *) &err, &len) == -1) {
+		err = errno;
+	}
+
+	if (err != 0) {
+		return FALSE;
+	}
+
+	r = recv(conn->fd, &probe, sizeof(probe), MSG_PEEK | MSG_DONTWAIT);
+
+	if (r >= 0) {
+		/* Data, or the end of the stream */
+		return FALSE;
+	}
+
+	return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
+}
+
+/* The element of the queue that the eviction policy takes next, from `from` on */
+static GList *
+rspamd_http_keepalive_next(struct rspamd_http_context *ctx, GQueue *conns, GList *from)
+{
+	if (ctx->config.keepalive_eviction_policy == 1) {
+		/* LRU: reuse the tail (oldest) */
+		return from ? from->prev : g_queue_peek_tail_link(conns);
+	}
+
+	/* LIFO: reuse the head (most recent) */
+	return from ? from->next : g_queue_peek_head_link(conns);
+}
+
+static gboolean
+rspamd_http_keepalive_addr_matches(const struct rspamd_http_connection *conn,
+								   const rspamd_inet_addr_t *addr)
+{
+	/* The same address and port: the name of a key may stand for several servers */
+	return addr == NULL || conn->keepalive_addr == NULL ||
+		   rspamd_inet_address_compare(conn->keepalive_addr, addr, FALSE) == 0;
+}
+
 struct rspamd_http_connection *
 rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 									const rspamd_inet_addr_t *addr,
 									const char *host,
-									bool is_ssl)
+									unsigned int ssl_flags)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
@@ -475,53 +530,43 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 	hk.addr = (rspamd_inet_addr_t *) addr;
 	hk.host = (char *) host;
 	hk.port = rspamd_inet_address_get_port(addr);
-	hk.is_ssl = is_ssl;
+	hk.is_ssl = ssl_flags;
 
 	k = kh_get(rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
 
 	if (k != kh_end(ctx->keep_alive_hash)) {
 		phk = kh_key(ctx->keep_alive_hash, k);
 		GQueue *conns = &phk->conns;
+		GList *cur = rspamd_http_keepalive_next(ctx, conns, NULL);
 
-		/* Use stack based approach */
+		while (cur != NULL) {
+			struct rspamd_http_keepalive_cbdata *cbd = (struct rspamd_http_keepalive_cbdata *) cur->data;
+			struct rspamd_http_connection *conn = cbd->conn;
+			GList *next = rspamd_http_keepalive_next(ctx, conns, cur);
 
-		if (g_queue_get_length(conns) > 0) {
-			struct rspamd_http_keepalive_cbdata *cbd;
-			struct rspamd_http_connection *conn;
-			int err;
-			socklen_t len = sizeof(int);
-
-			if (ctx->config.keepalive_eviction_policy == 1) {
-				/* LRU: reuse the tail (oldest) */
-				GList *tail = g_queue_peek_tail_link(conns);
-				cbd = (struct rspamd_http_keepalive_cbdata *) tail->data;
-				g_queue_delete_link(conns, tail);
+			if (!rspamd_http_keepalive_addr_matches(conn, addr)) {
+				/* A connection to another server of that name */
+				cur = next;
+				continue;
 			}
-			else {
-				/* LIFO: reuse the head (most recent) */
-				cbd = g_queue_pop_head(conns);
-			}
+
+			g_queue_delete_link(conns, cur);
 			rspamd_ev_watcher_stop(ctx->event_loop, &cbd->ev);
-			conn = cbd->conn;
 			g_free(cbd);
+			cur = next;
 
-			if (getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, (void *) &err, &len) == -1) {
-				err = errno;
-			}
-
-			if (err != 0) {
-				rspamd_http_connection_unref(conn);
-
-				msg_debug_http_context("invalid reused keepalive element %s (%s, ssl=%d); "
-									   "%s error; "
+			if (!rspamd_http_keepalive_conn_is_idle(conn)) {
+				msg_debug_http_context("invalid reused keepalive element %s (%s, ssl=%d): "
+									   "it is closed or has data to read; "
 									   "%d connections queued",
 									   rspamd_inet_address_to_string_pretty(phk->addr),
 									   phk->host,
 									   (int) phk->is_ssl,
-									   g_strerror(err),
 									   conns->length);
+				rspamd_http_connection_unref(conn);
 
-				return NULL;
+				/* The next one may be fine */
+				continue;
 			}
 
 			/* Enforce ttl/reuse limits */
@@ -534,7 +579,8 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 									   phk->host,
 									   (int) phk->is_ssl);
 				rspamd_http_connection_unref(conn);
-				return NULL;
+
+				continue;
 			}
 
 			/* Track reuse */
@@ -549,11 +595,10 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 			/* We transfer refcount here! */
 			return conn;
 		}
-		else {
-			msg_debug_http_context("found empty keepalive element %s (%s), cannot reuse",
-								   rspamd_inet_address_to_string_pretty(phk->addr),
-								   phk->host);
-		}
+
+		msg_debug_http_context("found no keepalive element to reuse for %s (%s)",
+							   rspamd_inet_address_to_string_pretty(phk->addr),
+							   phk->host);
 	}
 
 	return NULL;
@@ -563,7 +608,7 @@ const rspamd_inet_addr_t *
 rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
 								  const char *host,
 								  unsigned port,
-								  bool is_ssl)
+								  unsigned int ssl_flags)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
@@ -574,35 +619,81 @@ rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
 
 	hk.host = (char *) host;
 	hk.port = port;
-	hk.is_ssl = is_ssl;
+	hk.is_ssl = ssl_flags;
 
 	k = kh_get(rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
 
 	if (k != kh_end(ctx->keep_alive_hash)) {
 		phk = kh_key(ctx->keep_alive_hash, k);
-		GQueue *conns = &phk->conns;
+		GList *first = rspamd_http_keepalive_next(ctx, &phk->conns, NULL);
 
-		if (g_queue_get_length(conns) > 0) {
-			return phk->addr;
+		if (first != NULL) {
+			const struct rspamd_http_connection *conn =
+				((struct rspamd_http_keepalive_cbdata *) first->data)->conn;
+
+			/* Where the connection that is taken first really leads */
+			return conn->keepalive_addr ? conn->keepalive_addr : phk->addr;
 		}
 	}
 
 	return NULL;
 }
 
+void rspamd_http_context_drop_keepalive(struct rspamd_http_context *ctx,
+										struct rspamd_http_connection *conn)
+{
+	conn->finished = TRUE;
+
+	if (conn->keepalive_hash_key == NULL) {
+		return;
+	}
+
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default();
+	}
+
+	GQueue *conns = &conn->keepalive_hash_key->conns;
+
+	for (GList *cur = conns->head; cur != NULL; cur = cur->next) {
+		struct rspamd_http_keepalive_cbdata *cbd = (struct rspamd_http_keepalive_cbdata *) cur->data;
+
+		if (cbd->conn == conn) {
+			g_queue_delete_link(conns, cur);
+			rspamd_ev_watcher_stop(ctx->event_loop, &cbd->ev);
+			msg_debug_http_context("drop keepalive element %s (%s): not fit for reuse",
+								   rspamd_inet_address_to_string_pretty(conn->keepalive_hash_key->addr),
+								   conn->keepalive_hash_key->host);
+			rspamd_http_connection_unref(conn);
+			g_free(cbd);
+
+			break;
+		}
+	}
+}
+
 void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 										   struct rspamd_http_connection *conn,
 										   const rspamd_inet_addr_t *addr,
 										   const char *host,
-										   bool is_ssl)
+										   unsigned int ssl_flags)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
+	unsigned int is_ssl = ssl_flags;
 
 	hk.addr = (rspamd_inet_addr_t *) addr;
 	hk.host = (char *) host;
 	hk.is_ssl = is_ssl;
 	hk.port = rspamd_inet_address_get_port(addr);
+
+	if (conn->keepalive_addr == NULL ||
+		rspamd_inet_address_compare(conn->keepalive_addr, addr, FALSE) != 0) {
+		if (conn->keepalive_addr) {
+			rspamd_inet_address_free(conn->keepalive_addr);
+		}
+
+		conn->keepalive_addr = rspamd_inet_address_copy(addr, NULL);
+	}
 
 	k = kh_get(rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
 
@@ -654,6 +745,11 @@ rspamd_http_keepalive_handler(int fd, short what, gpointer ud)
 	rspamd_http_connection_unref(cbdata->conn);
 	g_free(cbdata);
 }
+
+/* The longest time a server may ask an idle connection to be kept for, seconds */
+static const double rspamd_http_keepalive_max_idle = 300.0;
+/* Idle connections kept for one key when `keepalive_pool_size` is not set */
+static const unsigned int rspamd_http_keepalive_default_pool_size = 128;
 
 /* Non-static for unit testing */
 long rspamd_http_parse_keepalive_timeout(const rspamd_ftok_t *tok)
@@ -726,7 +822,33 @@ void rspamd_http_context_push_keepalive(struct rspamd_http_context *ctx,
 			long maybe_timeout = rspamd_http_parse_keepalive_timeout(tok);
 
 			if (maybe_timeout > 0) {
-				timeout = maybe_timeout;
+				/*
+				 * What the server says, within reason: it does not decide
+				 * that a connection is kept here for days
+				 */
+				timeout = MIN((double) maybe_timeout, rspamd_http_keepalive_max_idle);
+			}
+		}
+
+		/* `close` in any of the Connection headers ends the connection */
+		GPtrArray *all_connection = rspamd_http_message_find_header_multiple(msg, "Connection");
+
+		if (all_connection != NULL) {
+			gboolean closing = FALSE;
+
+			for (unsigned int i = 0; i < all_connection->len && !closing; i++) {
+				const rspamd_ftok_t *val = (const rspamd_ftok_t *) g_ptr_array_index(all_connection, i);
+
+				closing = rspamd_substring_search_caseless(val->begin, val->len,
+														   "close", sizeof("close") - 1) != -1;
+			}
+
+			g_ptr_array_free(all_connection, TRUE);
+
+			if (closing) {
+				conn->finished = TRUE;
+				msg_debug_http_context("connection header says `close`");
+				return;
 			}
 		}
 	}
@@ -744,8 +866,10 @@ void rspamd_http_context_push_keepalive(struct rspamd_http_context *ctx,
 	conn->finished = FALSE;
 
 	/* Enforce pool size (evict tail if exceeded) */
-	if (ctx->config.keepalive_pool_size > 0) {
-		while ((unsigned) cbdata->queue->length > ctx->config.keepalive_pool_size) {
+	const unsigned int pool_size = ctx->config.keepalive_pool_size > 0 ? ctx->config.keepalive_pool_size : rspamd_http_keepalive_default_pool_size;
+
+	if (pool_size > 0) {
+		while ((unsigned) cbdata->queue->length > pool_size) {
 			GList *last = g_queue_peek_tail_link(cbdata->queue);
 			if (last) {
 				struct rspamd_http_keepalive_cbdata *to_evict = (struct rspamd_http_keepalive_cbdata *) last->data;

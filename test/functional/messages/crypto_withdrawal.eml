@@ -1,0 +1,10 @@
+From: "Exchange" <no-reply@exchange.example>
+To: <test@test.ru>
+Subject: Withdrawal confirmed
+Date: Mon, 27 Apr 2020 19:54:10 +0300
+Message-ID: <withdrawal-1@exchange.example>
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+Your withdrawal of 250.00 USDT has been sent to the following wallet address:
+T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb

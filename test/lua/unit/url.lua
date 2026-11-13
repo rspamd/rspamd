@@ -20,6 +20,46 @@ context("URL check functions", function()
 
   local pool = mpool.create()
 
+  local query_targets = {
+    { 'http://wrap.com/', false },
+    { 'http://wrap.com/?id=123', false },
+    { 'http://wrap.com/?u=http://dest.com/', 'http://dest.com/' },
+    { 'http://wrap.com/?u=http%3A%2F%2Fdest.com%2F&b=x', 'http://dest.com/' },
+    { 'http://wrap.com/?u=http%3A%2F%2Fdest.com%2F%3Fa%3Dx%26b%3Dy&c=z',
+      'http://dest.com/?a=x&b=y' },
+    { 'http://wrap.com/?u=http%3A%2F%2Fmid.com%2F%3Fv%3Dhttp%253A%252F%252Fdest.com%252F',
+      'http://dest.com/' },
+    { 'http://wrap.com/?u=http://dest.com/&v=http://other.com/', false },
+    { 'http://wrap.com/?u=http%3A%2F%2Fmid.com%2F%3Fa%3Dhttp%253A%252F%252Fdest.com%252F%26b%3Dhttp%253A%252F%252Fother.com%252F',
+      false },
+  }
+
+  for i, case in ipairs(query_targets) do
+    test('Unambiguous query target ' .. i, function()
+      local u = url.create(pool, case[1])
+      assert_not_nil(u)
+      local target = u:get_query_target(pool)
+      if case[2] then
+        assert_not_nil(target)
+        assert_equal(case[2], target:get_text())
+      else
+        assert_nil(target)
+      end
+    end)
+  end
+
+  test('Query target depth exhaustion does not return an intermediate match', function()
+    local href = 'http://dest.com/'
+    for i = 1, 6 do
+      href = 'http://wrap' .. i .. '.com/?u=' .. href:gsub('[^%w]', function(c)
+        return string.format('%%%02X', c:byte())
+      end)
+    end
+    local u = url.create(pool, href)
+    assert_not_nil(u)
+    assert_nil(u:get_query_target(pool))
+  end)
+
   local cases = {
     { "test.com", { "test.com", nil } },
     { " test.com", { "test.com", nil } },
@@ -302,6 +342,100 @@ context("URL check functions", function()
     assert_nil(u:get_public_suffix())
   end)
 
+  test("Invisible characters in host are flagged and stripped", function()
+    local obfuscated_cases = {
+      -- U+2060 WORD JOINER
+      "http://exa\226\129\160mple.com/path text",
+      "exa\226\129\160mple.com text",
+      -- U+FE0F VARIATION SELECTOR-16
+      "http://exa\239\184\143mple.com/ text",
+      -- U+E0041 TAG LATIN CAPITAL LETTER A (rejected by nameprep)
+      "http://exa\243\160\129\129mple.com/ text",
+      -- U+2061 FUNCTION APPLICATION, percent encoded (rejected by nameprep)
+      "http://exa%E2%81%A1mple.com/ text",
+    }
+
+    for _, c in ipairs(obfuscated_cases) do
+      local u = url.create(pool, c)
+      assert_not_nil(u, "cannot parse " .. c)
+      assert_equal("example.com", u:get_host(), c)
+      assert_true(u:get_flags().zw_spaces, "no zw_spaces flag for " .. c)
+    end
+
+    -- Invisible characters do not count against the hostname length limit
+    local u = url.create(pool, "http://e" .. string.rep("\226\129\160", 90) .. "vil.com/ text")
+    assert_not_nil(u, "cannot parse padded url")
+    assert_equal("evil.com", u:get_host())
+    assert_true(u:get_flags().zw_spaces)
+
+    -- A sharp s is kept, as browsers do (UTS #46 non-transitional processing)
+    u = url.create(pool, "http://stra\239\184\143\195\159e.com/ text")
+    assert_not_nil(u, "cannot parse url with sharp s")
+    assert_equal("stra\195\159e.com", u:get_host())
+
+    -- A host made of invisible characters only is not a host
+    assert_nil(url.create(pool, "http://%E2%81%A0/path text"))
+
+    -- Invisible characters after the hostname end the url and are not flagged
+    local clean_cases = {
+      "http://example.com\226\129\160 text",
+      "http://example.com" .. string.rep("\226\129\160", 90) .. " text",
+      -- Preheader filler: CGJ, ZWNJ, NBSP
+      "https://example.com\205\143\226\128\140\194\160\205\143\226\128\140\194\160 text",
+      -- Bidi controls terminate a URL in RTL text
+      "\215\169\215\156\215\149\215\157 http://example.com\226\128\143 text",
+      -- Punctuation after the url
+      "Visit https://example.com\226\129\160. Next",
+      "Visit https://example.com\226\129\160: great",
+      "Visit https://example.com\226\129\160\226\128\148 next",
+      "Visit https://example.com\226\129\160- next",
+    }
+
+    for _, c in ipairs(clean_cases) do
+      u = url.create(pool, c)
+      assert_not_nil(u, "cannot parse " .. c)
+      assert_equal("example.com", u:get_host(), c)
+      assert_nil(u:get_flags().zw_spaces, "unexpected zw_spaces flag for " .. c)
+    end
+
+    -- Invisible characters between the hostname and the path keep the url whole
+    u = url.create(pool, "https://example.com\226\129\160/login now")
+    assert_not_nil(u, "cannot parse url with invisible character before path")
+    assert_equal("example.com", u:get_host())
+    assert_equal("login", u:get_path())
+    assert_nil(u:get_flags().zw_spaces)
+
+    u = url.create(pool, "https://example.com\226\129\160:8080/ now")
+    assert_not_nil(u, "cannot parse url with invisible character before port")
+    assert_equal("example.com", u:get_host())
+    assert_equal(8080, u:get_port())
+
+    -- Before a dot inside the hostname
+    u = url.create(pool, "http://example\226\129\160.com/ text")
+    assert_not_nil(u, "cannot parse url with invisible character before a dot")
+    assert_equal("example.com", u:get_host())
+    assert_true(u:get_flags().zw_spaces)
+
+    -- Runs longer than the raw hostname limit are rejected, whatever their alignment
+    for _, lead in ipairs({ "a", "ab", "abc", "abcd" }) do
+      for _, ch in ipairs({ "\226\129\160", "\243\160\129\129" }) do
+        assert_nil(url.create(pool, "http://" .. lead .. string.rep(ch, 340) .. "b.com/p text"))
+      end
+    end
+
+    -- Emoji presentation selector is a legitimate part of an emoji host
+    u = url.create(pool, "http://ex\226\152\186\239\184\143ample.com/ text")
+    assert_not_nil(u, "cannot parse emoji url")
+    assert_equal("ex\226\152\186ample.com", u:get_host())
+    assert_nil(u:get_flags().zw_spaces)
+
+    -- U+FEFF ZERO WIDTH NO-BREAK SPACE outside of the host
+    u = url.create(pool, "http://example.com/pa\239\187\191th text")
+    assert_not_nil(u, "cannot parse url with BOM in path")
+    assert_equal("path", u:get_path())
+    assert_true(u:get_flags().zw_spaces, "no zw_spaces flag for BOM in path")
+  end)
+
   test("URL regexp issue", function()
     local rspamd_regexp = require "rspamd_regexp"
     local u = url.create(pool,
@@ -404,4 +538,49 @@ context("Query-embedded URL extraction", function()
     assert_not_nil(urls["www.dest2.com"],
         "schemaless www url at value start must be extracted")
   end)
+end)
+
+context("Quoted URL extraction", function()
+  local rspamd_task = require "rspamd_task"
+  local rspamd_util = require "rspamd_util"
+  local test_helper = require "rspamd_test_helper"
+
+  local cfg = rspamd_util.config_from_ucl(test_helper.default_config(),
+      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+
+  local function urls_of(body)
+    local msg = string.format(
+        "From: s@example.org\r\nTo: r@example.org\r\nSubject: t\r\n" ..
+        "MIME-Version: 1.0\r\nContent-Type: text/plain\r\n\r\n%s\r\n", body)
+    local res, task = rspamd_task.load_from_string(msg, cfg)
+    assert(res, "failed to load message")
+    assert(task:process_message(), "failed to process message")
+    local out = {}
+    for _, u in ipairs(task:get_urls() or {}) do
+      out[u:get_host()] = u:get_text()
+    end
+    return out
+  end
+
+  -- A url opened by a quote ends at the closing one: the quote is not part
+  -- of the path, and markup after it must not make the url invalid
+  local cases = {
+    { 'say "http://dq.example.com/x" now', 'dq.example.com', 'http://dq.example.com/x' },
+    { "say 'http://sq.example.com/x' now", 'sq.example.com', 'http://sq.example.com/x' },
+    { '<a href="http://tag.example.com/">click</a>', 'tag.example.com', 'http://tag.example.com/' },
+    { 'href="http://end.example.com/">', 'end.example.com', 'http://end.example.com/' },
+    { '"www.schemeless.com/path"', 'www.schemeless.com', 'http://www.schemeless.com/path' },
+    { 'see "www.dqschemeless.com" now', 'www.dqschemeless.com', 'http://www.dqschemeless.com' },
+    -- Either quote ends a url in text, as it is never a part of one
+    { 'http://bare.example.com/it"s', 'bare.example.com', 'http://bare.example.com/it' },
+    { "http://bare2.example.com/it's", 'bare2.example.com', 'http://bare2.example.com/it' },
+  }
+
+  for i, c in ipairs(cases) do
+    test("quoted url " .. i, function()
+      local urls = urls_of(c[1])
+      assert_equal(c[3], urls[c[2]],
+          string.format("in %s: expected %s, got %s", c[1], c[3], tostring(urls[c[2]])))
+    end)
+  end
 end)

@@ -103,6 +103,7 @@
 #cmakedefine HAVE_TIME_H         1
 #cmakedefine HAVE_UCONTEXT_H     1
 #cmakedefine HAVE_UNISTD_H       1
+#cmakedefine HAVE_USELOCALE      1
 #cmakedefine PARAM_H_HAS_BITSET  1
 #cmakedefine WITH_GPERF_TOOLS    1
 #cmakedefine WITH_HYPERSCAN      1

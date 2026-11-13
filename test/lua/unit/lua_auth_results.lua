@@ -34,6 +34,36 @@ context("Lua auth results - AAR parsing", function()
       assert_equal("pass", r.arc)
     end)
 
+    test("method and result in any case, with a version", function()
+      for _, elt in ipairs({ "DMARC=Pass Header.From=example.com", "dmarc/1=pass header.from=example.com",
+                             "dmarc / 1 = pass (comment) header.from=example.com",
+                             "(first) Dmarc=(why) PASS header.from=example.com" }) do
+        local r = lua_auth_results.parse_ar_element(elt)
+        assert_not_nil(r, elt)
+        assert_equal("dmarc", r.method, elt)
+        assert_equal("pass", r.dmarc, elt)
+        assert_equal("example.com", r["header.from"], elt)
+      end
+    end)
+
+    test("the result is the one of the method, not a pair after it", function()
+      local r = lua_auth_results.parse_ar_element("dmarc=fail (x)dmarc=pass header.from=example.com")
+      assert_not_nil(r)
+      assert_equal("dmarc", r.method)
+      assert_equal("fail", r.dmarc)
+      r = lua_auth_results.parse_ar_element("spf=pass (x)dmarc=pass smtp.mailfrom=a@example.com")
+      assert_equal("spf", r.method)
+      assert_equal("pass", r.spf)
+    end)
+
+    test("a method property is no method", function()
+      local r = lua_auth_results.parse_ar_element('"x" method=dmarc dmarc=pass header.from=example.com')
+      assert_not_nil(r)
+      assert_nil(r.method)
+      r = lua_auth_results.parse_ar_element("method=dmarc dmarc=pass header.from=example.com")
+      assert_equal("method", r.method)
+    end)
+
     test("authserv-id without equals returns nil", function()
       local r = lua_auth_results.parse_ar_element("mail.example.com")
       assert_nil(r)
@@ -77,10 +107,7 @@ context("Lua auth results - AAR parsing", function()
     end)
 
     test("AAR with semicolon inside quoted string does not split", function()
-      -- The split respects quotes so "foo;bar" stays in one element.
-      -- Note: parse_ar_element cannot consume key="quoted" pairs, so
-      -- properties after reason="..." are lost.  The important thing is
-      -- the semicolon inside quotes does not create a spurious element.
+      -- The split respects quotes so "foo;bar" stays in one element
       local r = lua_auth_results.parse_aar_header(
         'i=1; mx.example.com; dkim=pass reason="foo;bar" header.d=example.com')
       assert_not_nil(r)
@@ -88,6 +115,8 @@ context("Lua auth results - AAR parsing", function()
       assert_not_nil(r.ar)
       assert_equal(1, #r.ar)
       assert_equal("pass", r.ar[1].dkim)
+      assert_equal("foo;bar", r.ar[1].reason)
+      assert_equal("example.com", r.ar[1]["header.d"])
     end)
 
     test("AAR with nested parentheses", function()
@@ -106,6 +135,49 @@ context("Lua auth results - AAR parsing", function()
       assert_not_nil(r)
       assert_equal("1", r.i)
       -- ar may be nil or empty since "none" has no '='
+    end)
+
+    test("an empty element does not end the split", function()
+      local r = lua_auth_results.parse_aar_header(
+        "i=1; mx.example.com;; spf=pass smtp.helo=a; ; dmarc=fail header.from=example.com")
+      assert_not_nil(r)
+      assert_equal("1", r.i)
+      assert_equal(2, #r.ar)
+      assert_equal("pass", r.ar[1].spf)
+      assert_equal("fail", r.ar[2].dmarc)
+    end)
+
+    test("a long run of blanks or escaped quotes is split in linear time", function()
+      local t0 = os.clock()
+      local r = lua_auth_results.parse_aar_header("i=1; mx.example; dmarc=" .. string.rep(" ", 4000) ..
+          "pass header.from=example.com")
+      assert_not_nil(r)
+      assert_equal("pass", r.ar[1].dmarc)
+      -- Quotes and comments that do not close, which the split read to the end from each of them
+      r = lua_auth_results.parse_aar_header("i=3; mx.example; dmarc=pass header.from=example.com; x=" ..
+          string.rep('"\\', 4000) .. string.rep('(\\', 4000))
+      assert_equal("pass", r.ar[1].dmarc)
+      -- Longer ones give their instance only
+      r = lua_auth_results.parse_aar_header("i=2; mx.example; dmarc=pass" .. string.rep('"\\', 30000))
+      assert_equal("2", r.i)
+      assert_nil(r.ar)
+      assert_true(os.clock() - t0 < 1.0)
+    end)
+
+    test("the split respects comments and quoted strings that close, and only them", function()
+      local split = lua_auth_results.split_aar_header
+      assert_rspamd_table_eq({ actual = split('i=1; a (x;y) b; "c;d" e;; f'),
+                               expect = { 'i=1', 'a (x;y) b', '"c;d" e', '', 'f' } })
+      -- Comments nested too deep to be read give nothing
+      assert_nil(split('a; (' .. string.rep('(', 250) .. string.rep(')', 251) .. ' b'))
+      assert_nil(lua_auth_results.parse_aar_header('i=1; mx.example; dmarc=pass ' ..
+          string.rep('(', 250) .. string.rep(')', 250)))
+      assert_equal(2, #split('a; (' .. string.rep('(', 150) .. string.rep(')', 151) .. ' b'))
+      -- An unclosed one is text: the ';' after it splits
+      assert_rspamd_table_eq({ actual = split('a "b; c (d; e'), expect = { 'a "b', 'c (d', 'e' } })
+      -- Quoted-pairs, and comments in comments
+      assert_rspamd_table_eq({ actual = split('a (b \\) ; (c) d) ; e "f\\";g"'),
+                               expect = { 'a (b \\) ; (c) d) ', 'e "f\\";g"' } })
     end)
 
     test("empty string returns nil", function()
@@ -143,5 +215,96 @@ context("Lua auth results - AAR parsing", function()
       assert_equal("pass", r.ar[4].dmarc)
       assert_equal("example.com", r.ar[4]["header.from"])
     end)
+  end)
+
+  -- Comments hold text of others, such as the SMTP sender: it must not add
+  -- results to the header
+  context("results hidden in comments", function()
+    test("the method of an element is recorded", function()
+      assert_equal("dmarc", lua_auth_results.parse_ar_element("dmarc=pass header.from=a.example").method)
+      assert_equal("dkim", lua_auth_results.parse_ar_element("DKIM/1=pass header.d=a.example").method)
+      -- RFC 8601 2.2 allows comments before the method too
+      assert_equal("dmarc", lua_auth_results.parse_ar_element(
+          "(forwarder result) dmarc=pass header.from=a.example").method)
+      assert_equal("dmarc", lua_auth_results.parse_ar_element(
+          "(a (nested\\) one) ) dmarc=pass header.from=a.example").method)
+    end)
+
+    test("an escaped parenthesis does not end a comment", function()
+      local r = lua_auth_results.parse_ar_element(
+        'spf=pass (x\\)dmarc=pass header.from=bank.example\\(y) smtp.mailfrom=a@b.example')
+      assert_not_nil(r)
+      assert_equal("spf", r.method)
+      assert_equal("pass", r.spf)
+      assert_nil(r.dmarc)
+      assert_equal("a@b.example", r["smtp.mailfrom"])
+    end)
+
+    test("an escaped parenthesis does not let a semicolon split", function()
+      local r = lua_auth_results.parse_aar_header(
+        'i=1; mx.example; spf=pass (x\\); dmarc=pass header.from=bank.example \\(y) '
+        .. 'smtp.mailfrom=a@b.example; dmarc=fail header.from=bank.example')
+      assert_equal(2, #r.ar)
+      assert_equal("spf", r.ar[1].method)
+      assert_equal("dmarc", r.ar[2].method)
+      assert_equal("fail", r.ar[2].dmarc)
+    end)
+
+    test("a quoted value is unquoted", function()
+      local r = lua_auth_results.parse_ar_element('dmarc=pass header.from="bank.example" policy.x="a\\"b"')
+      assert_equal("bank.example", r["header.from"])
+      assert_equal('a"b', r["policy.x"])
+    end)
+
+    -- What gen_auth_results writes about a sender, read back
+    local function written_results(smtp_from, helo)
+      local task = {
+        get_request_header = function() return nil end,
+        get_symbol = function(_, sym)
+          if sym == 'R_SPF_ALLOW' then return { { score = 1, options = {} } } end
+        end,
+        get_dkim_results = function() return {} end,
+        get_from = function() return smtp_from and { { addr = smtp_from } } or { { addr = '' } } end,
+        get_helo = function() return helo end,
+        get_from_ip = function() return '192.0.2.1' end,
+        get_user = function() return nil end,
+      }
+      local hdr = assert(lua_auth_results.gen_auth_results(task))
+      return assert(lua_auth_results.parse_aar_header('i=1; ' .. hdr)).ar
+    end
+
+    for name, sender in pairs({
+      ['a parenthesis in the sender'] = { '"x)dmarc=pass header.from=bank.example(y"@attacker.example' },
+      ['a semicolon in the sender'] = { 'x); dmarc=pass header.from=bank.example (y@attacker.example' },
+      ['a backslash at the end of HELO'] = { nil, 'a; dmarc=pass header.from=bank.example \\' },
+      ['a quote in HELO'] = { nil, 'a"; dmarc=pass header.from=bank.example "' },
+    }) do
+      test("no result from " .. name, function()
+        local ar = written_results(sender[1], sender[2])
+        assert_equal(1, #ar)
+        assert_equal("spf", ar[1].method)
+        assert_equal("pass", ar[1].spf)
+        assert_nil(ar[1].dmarc)
+        assert_equal(sender[1] or sender[2], ar[1]["smtp.mailfrom"] or ar[1]["smtp.helo"])
+      end)
+    end
+
+    for name, c in pairs({ CR = '\r', LF = '\n', FF = '\f' }) do
+      test("no result from " .. name .. " in HELO", function()
+        local ar = written_results(nil, 'x' .. c .. ';dmarc=pass header.from=bank.example')
+        assert_equal(1, #ar)
+        assert_equal("spf", ar[1].method)
+        assert_nil(ar[1].dmarc)
+        assert_equal('x?;dmarc=pass header.from=bank.example', ar[1]["smtp.helo"])
+      end)
+
+      test("a quoted value with " .. name .. " is one element", function()
+        -- As an older version, or another implementation, writes it
+        local r = lua_auth_results.parse_aar_header(
+          'i=1; mx.example; spf=pass smtp.helo="x' .. c .. ';dmarc=pass header.from=bank.example"')
+        assert_equal(1, #r.ar)
+        assert_equal("spf", r.ar[1].method)
+      end)
+    end
   end)
 end)

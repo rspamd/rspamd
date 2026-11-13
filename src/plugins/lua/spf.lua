@@ -210,7 +210,8 @@ local function spf_check_callback(task)
       return
     end
 
-    rspamd_spf.resolve(task, spf_resolved_cb)
+    -- The address checked may come from a relay: the record is resolved for it
+    rspamd_spf.resolve(task, spf_resolved_cb, ip)
   else
     lua_util.debugm(N, task, "spf checks are not possible as no source IP address is defined")
   end

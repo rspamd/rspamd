@@ -503,7 +503,7 @@ local function ip_reputation_filter(task, rule)
     end
 
     if math.abs(score) > 0.001 then
-      add_symbol_score(task, rule, score, table.concat(description_t, ', '))
+      add_symbol_score(task, rule, score, description_t)
     end
   end
 

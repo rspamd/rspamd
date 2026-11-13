@@ -50,6 +50,40 @@ add_test(
         COMMAND rspamd-test-cxx
 )
 
+if (WITH_HYPERSCAN)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        set(HYPERSCAN_TEST_TARGETS rspamd rspamadm)
+        add_test(
+                NAME hyperscan-cache-recovery
+                COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/functional/util/hyperscan_cache_recovery.py
+                --rspamd $<TARGET_FILE:rspamd>
+                --rspamadm $<TARGET_FILE:rspamadm>
+                --source ${CMAKE_SOURCE_DIR}
+        )
+        set_tests_properties(hyperscan-cache-recovery PROPERTIES TIMEOUT 90 SKIP_RETURN_CODE 77)
+    endif ()
+endif ()
+
+# Reload tests need LSan's exit-time reports; ordinary builds skip them.
+if (SANITIZE MATCHES "address")
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        foreach (reload_mode config maps http-maps lua)
+            add_test(NAME reload-leaks-${reload_mode}
+                    COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/functional/util/reload_leaks.py
+                    --rspamd $<TARGET_FILE:rspamd>
+                    --source ${CMAKE_SOURCE_DIR}
+                    --mode ${reload_mode}
+                    --output-dir ${CMAKE_CURRENT_BINARY_DIR}/reload-leaks/${reload_mode})
+            set_tests_properties(reload-leaks-${reload_mode} PROPERTIES
+                    TIMEOUT 240 SKIP_RETURN_CODE 77 LABELS "sanitizer;reload")
+        endforeach ()
+    endif ()
+endif ()
+
 # Copy test Lua scripts for out-of-source builds
 if (NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
     # Find Lua test files
@@ -97,7 +131,7 @@ set_tests_properties(rspamd-test PROPERTIES
 # Custom target for running all tests directly (convenience target)
 add_custom_target(run-tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS rspamd-test rspamd-test-cxx
+        DEPENDS rspamd-test rspamd-test-cxx ${HYPERSCAN_TEST_TARGETS}
         COMMENT "Running all Rspamd tests"
 )
 

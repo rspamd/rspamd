@@ -32,13 +32,25 @@ context("HTML processing", function()
     <script src="script.js"></script>
     <style><!--
 - -a -a -a -- --- -
-  --></head>
+  --></style></head>
   <body>
     <!-- page content -->
     Hello, world!
   </body>
 </html>
       ]], 'Hello, world!' },
+    -- Only its own end tag ends a style, so browsers show nothing here
+    { [[
+<html>
+  <head>
+    <style><!--
+- -a -a -a -- --- -
+  --></head>
+  <body>
+    Hello, world!
+  </body>
+</html>
+      ]], '' },
     { [[
 <html lang="en">
   <head>
@@ -151,6 +163,47 @@ context("HTML processing", function()
         assert_true(tag:get_style().visible)
       end
     end
+    pool:destroy()
+  end)
+
+  -- Table layout sizes a table by its content, so a zero width on it (as in
+  -- tables pasted from Google Sheets) must not reach cells with overflow:hidden
+  test("Zero table width does not clip its cells", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed, tags = parse_html_and_extract_tags(
+        '<table style="table-layout:fixed;font-size:10pt;width:0px">' ..
+        '<colgroup><col width="160"><col width="420"></colgroup>' ..
+        '<tbody><tr style="height:21px"><td style="overflow:hidden">Item</td>' ..
+        '<td style="overflow:hidden">Description</td></tr></tbody></table>', pool)
+
+    assert_equal('', tostring(parsed:get_invisible()))
+    local cells = 0
+    for _, tag in ipairs(tags) do
+      if tag:get_type() == 'td' then
+        assert_true(tag:get_style().visible)
+        cells = cells + 1
+      end
+    end
+    assert_equal(2, cells)
+    pool:destroy()
+  end)
+
+  test("Zero width box does not clip table cells", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed = parse_html_and_extract_tags(
+        '<div style="width:0"><table><tr><td style="overflow:hidden">cell</td></tr></table></div>', pool)
+
+    assert_equal('', tostring(parsed:get_invisible()))
+    pool:destroy()
+  end)
+
+  test("Zero width with overflow:hidden still hides blocks and cells", function()
+    local pool = require("rspamd_mempool").create()
+    local parsed = parse_html_and_extract_tags(
+        '<div style="width:0"><div style="overflow:hidden">one</div></div>' ..
+        '<table><tr><td style="width:0;overflow:hidden">two</td></tr></table>', pool)
+
+    assert_equal('onetwo', tostring(parsed:get_invisible()))
     pool:destroy()
   end)
 
@@ -348,6 +401,18 @@ context("HTML processing", function()
         '<body><div class="spacer">gone</div></body></html>')
     assert_not_nil(hidden, 'html part not parsed')
     assert_equal('gone', tostring(hidden:get_invisible()))
+  end)
+
+  -- Sizes from a stylesheet are resolved against the parent once more after
+  -- the merge, which must not bring the table width back into the cells
+  test("Zero table width from a stylesheet does not clip its cells", function()
+    local html = parse_html_message(
+        '<html><head><style>.sheet { width: 0 } .cell { overflow: hidden } ' ..
+        '.half { width: 50%; overflow: hidden }</style></head>' ..
+        '<body><table class="sheet"><tr><td class="cell">cell</td>' ..
+        '<td class="half">half</td></tr></table></body></html>')
+    assert_not_nil(html, 'html part not parsed')
+    assert_equal('', tostring(html:get_invisible()))
   end)
 
   local function invisible_of(css, body)

@@ -1,3 +1,137 @@
+Unreleased
+
+  * [Fix] Escape symbol option delimiters in X-Spamd-Result and ClickHouse output: an option containing `[`, `]`, `{`, `}`, `;` or `,` is percent-encoded (together with `%`) when options are joined in X-Spamd-Result, X-Virus, metadata_exporter, ClickHouse and the symbols log line, so a crafted attachment name can no longer appear as an extra symbol; options without delimiters are emitted as is. Stored options are unchanged apart from the existing U+FFFD replacement of invalid characters.
+  * [Fix] asn, reputation, rbl, dmarc, content rules and MULTIPLE_UNIQUE_HEADERS insert multi-value results as separate symbol options instead of one comma-joined option
+
+  ** Bug fixes **
+  * [Fix] lua_aliases: Reject external maps for equivalent domains instead of accepting them and failing every synchronous lookup (custom equivalent domains never folded)
+
+4.2.3: 21 Oct 2026
+
+  ** Incompatible changes **
+  * [Conf] phishing: Disable phishtank.rspamd.com by default (the zone no longer carries data)
+  * [Feature] rbl: Merge duplicate DNS queries from several checks into one request and one symbol insertion (a rule now scores once per matched value; set merge_checks = false to keep one insertion per check)
+  * [Fix] rbl: Fix the inverted dkim_domainonly test under dkim_match_from (eSLDs were compared when dkim_domainonly was off)
+
+  ** Features **
+  * [Feature] force_actions: Promote rules that depend on composites to postfilters
+  * [Feature] force_actions: Add a priority setting to arbitrate between matching rules, shown as a priority:N symbol option
+  * [Feature] lua_task: Return the action name instead of its type from has_pre_result, plus its flags
+  * [Feature] metadata_exporter: Add unix_time to general metadata
+
+  ** Bug fixes **
+  * [Fix] arc: Do not trust ARC forwarders whose seal failed verification (a whitelisted d= with a broken seal gave ARC_ALLOW_TRUSTED and its AAR could lower DMARC)
+  * [Fix] arc: Require exactly one ARC-Authentication-Results per instance and wait for all seal checks before publishing results
+  * [Fix] dkim: Report a key request that cannot be scheduled as a failure (ARC chains with such a seal published no result)
+  * [Fix] milter: Fix a session use-after-free on connection close
+  * [Fix] maps: Do not crash on a regexp map that repeats an invalid regexp
+  * [Fix] lua_task: Do not crash in get_stat_tokens without a classifier
+  * [Fix] hyperscan: Recompile cached map and multipattern databases that fail to deserialize (stale blobs kept maps on the PCRE fallback)
+  * [Fix] http: Drain pending TLS data (HTTPS reads stalled on records over 8 KiB)
+  * [Fix] librdns: Reconnect the UDP channel after the kernel drops it
+  * [Fix] lua_util: Resolve HTTP upstreams for hosts without a public suffix (gpt failed on every message after a reload)
+  * [Fix] html: End declarations, comments and raw text like browsers (content after them was hidden from the scan)
+  * [Fix] html: Track SVG/MathML elements and honour `/>` only on void and foreign elements, as browsers do
+  * [Fix] html: Run SVG CDATA sections to `]]>` and close tags only on a slash right before `>`
+  * [Fix] html: Keep character references undecoded in CDATA and raw text elements
+  * [Fix] url: End text URLs at quotes and find schemeless URLs after a double quote
+  * [Fix] bayes: Deduplicate plain and HTML alternatives by parts_distance, including HTML inside multipart/related (the body was counted twice)
+  * [Fix] mime: Correct inverted substitution costs in parts distance
+  * [Fix] stat: Finalize statistical words in late-injected parts
+  * [Fix] mime: Accept obsolete whitespace before header colons
+  * [Fix] rbl: Query eSLDs in RSPAMD_URIBL and skip IP literal hosts
+  * [Fix] rbl: Fix require_symbols (rules using it never ran) and luapattern matching for return_codes
+  * [Fix] rbl: Normalise From and DKIM domains consistently
+  * [Fix] monitored: Load every element of an ipnet array
+  * [Fix] lua_task: Retry short writes in store_in_file and save_in_file, keep the default 0600 mode and do not close a caller-supplied descriptor
+  * [Fix] lua_task: Use normal priority by default in table set_pre_result and accept several flags
+  * [Fix] lua_config: Report the composite flag in get_symbol_flags
+  * [Fix] symcache: Fix persistence and file descriptor ownership
+  * [Fix] worker: Fix DNS resolver leaks on shutdown
+  * [Fix] Fix memory leaks of ESMTP argument containers
+
+4.2.2: 10 Oct 2026
+
+  ** Incompatible changes **
+  * [Fix] mime: Exclude the CRLF preceding a boundary delimiter from parts (message and non-base64 part digests change for multipart messages)
+
+  ** Features **
+  * [Feature] crypto: Detect wallet addresses for Bitcoin and forks, Litecoin, Dogecoin, Tron, XRP, Zcash, Cardano, Cosmos, Stellar, TON, Ethereum and Monero, replacing bitcoin.lua with one independent symbol per currency
+  * [Feature] lua_crypto_addresses: Add a bounded wallet address scanner that catches split addresses, plus add_from_string for text recovered from attachments
+  * [Feature] lua_selectors: Add the crypto_addresses() extractor
+  * [Feature] metadata_exporter: Add custom variables and selector expansion for mail_from, mail_to, helo, channel, stream_key and the email template
+  * [Feature] metadata_exporter: Build multipart email alerts from email_parts, grouping plain and html parts into multipart/alternative
+  * [Feature] metadata_exporter: Encode non-ASCII headers in email alerts automatically
+  * [Feature] metadata_exporter: Validate rules against a schema, so configtest fails on invalid rules
+  * [Feature] lua_smtp: Negotiate EHLO and 8BITMIME with a HELO fallback, and downgrade 8-bit messages to 7-bit when 8BITMIME is not advertised
+  * [Feature] str_util: Add RFC 5322 folding for unstructured headers (util.fold_header_unstructured)
+  * [Feature] lua_text: Add the smtp newline normalization mode
+
+  ** Bug fixes **
+  * [CritFix] lua_util: Fix a heap overflow in lower_utf8 (U+023A and U+023E grow when lowercased)
+  * [Fix] http: Guard connection-finished checks around keepalive reset (crash on a late error handler when the peer closes the connection)
+  * [Fix] html: Do not inherit box sizes into table elements (HIDDEN_TEXT and MANY_INVISIBLE_PARTS on tables pasted from Google Sheets)
+  * [Fix] html: Terminate the visible link text after normalisation (stale trailing bytes broke phishing checks)
+  * [Fix] url: Accept invisible characters in hostnames and flag them instead of truncating the URL
+  * [Fix] utf8: Strip U+FEFF in unicode normalisation
+  * [Fix] url_suspect: Anchor obfuscated URL extraction to the matched URL and make URL_OBFUSCATED_TEXT one-shot (plain-sight domains were reported as obfuscated)
+  * [Fix] crypto: Gate LEAKED_PASSWORD_SCAM only on checksum-verified addresses and drop "wallet" as a scam signal
+  * [Fix] mime_headers: Emit valid RFC 2047 encoded-words and keep addresses intact in structured mode
+  * [Fix] lua_smtp: Dot-stuff DATA (a bare '.' line truncated messages), turn bare CR into CRLF, accept a bare reply code and read multi-line greetings
+  * [Fix] lua_util: Retry deferred DNS for HTTP upstreams (gpt, aws_s3, http maps and dkim vault were stuck after a failed startup lookup)
+  * [Fix] lua_util: Let callback_from_string compile whole-chunk callbacks
+  * [Fix] lua_task: Fix get_symbol() with a table of names when the symbols are present
+  * [Fix] lua_parsers: Keep boundary and charset as strings in parse_content_type
+  * [Fix] known_senders: Expire senders after max_ttl in zset mode
+  * [Fix] replies, known_senders: Honour reply_sender_privacy
+  * [Fix] milter_headers: Apply header skipping to x-spamd-bar and fix the x-virus fail branch
+  * [Fix] fuzzy_check: Parse top-level html_ignore_domains
+  * [Fix] metadata_exporter: Always emit an integer redis_stream MAXLEN
+  * [Fix] cfg_transform: Do not warn about scored custom actions
+  * [Fix] rspamadm: Fix epoch labels in fuzzy_stat
+
+4.2.1: 01 Oct 2026
+
+  ** Bug fixes **
+  * [CritFix] http: Do not size the body from a chunk size or Content-Length sent by the peer (a huge chunk size caused a heap overflow)
+  * [CritFix] http: Keep zero-copy reads inside the body (use-after-free when a finish handler replaces the body)
+  * [CritFix] fstring: Refuse a length that cannot be allocated (the size wrapped and later writes went out of bounds)
+  * [CritFix] cryptobox: Fail closed on low order public keys (an uninitialised shared secret was cached and used to decrypt fuzzy requests)
+  * [CritFix] hiredis: Keep the socket until async cleanup (assertion abort when redis is down)
+  * [Fix] http_parser: Refuse a message framed by both Content-Length and Transfer-Encoding
+  * [Fix] http_parser: Check Content-Length and chunk sizes before they overflow
+  * [Fix] http: Finish the last trailer of a chunked message and keep chunk framing out of encrypted inner bodies
+  * [Fix] http: Apply timeouts at the correct I/O stage
+  * [Fix] maps: Use the HTTP body length instead of the shared memory size (garbage in large chunked maps and their cache)
+  * [Fix] maps: Keep the previous map on failed reloads, reject truncated zstd frames and write the whole map on /savemap
+  * [Fix] maps: Skip the HTTP cache header when reading cdb maps
+  * [Fix] maps: Do not leak the shared memory mapping on errors
+  * [Fix] fuzzy_storage: Bound the TCP backlog, meter unauthenticated error replies and enforce key expiry for writes and deletes
+  * [Fix] fuzzy_backend: Saturate deduplicated weights and reject short redis shingle digests
+  * [Fix] fuzzy: Preserve address userdata in Redis count scans
+  * [Fix] rdns: Fix TCP queue accounting, a dropped last byte of TCP packets, malformed reply handling and the retransmit channel lifetime
+  * [Fix] lua_tcp: Stop after a fatal TLS read and bound the data buffered for a stop pattern
+  * [Fix] lua_http/lua_redis: Fix request tuning after DNS, coroutine cleanup on cancellation and freed redis replies read from Lua
+  * [Fix] re_cache: Verify hyperscan prefiltered regexps per input and saturate hit counts instead of wrapping
+  * [Fix] regexp: Validate UTF-8 once per search instead of on every remaining suffix
+  * [Fix] spf: Match a and mx without a prefix length per address family, and apply the macro digit transformer
+  * [Fix] dkim: Fix a header table leak and the l= body check with relaxed canonicalisation
+  * [Fix] url: Do not read past an IPv6 host at the end of the input, and treat mapped loopback as local
+  * [Fix] url_redirector: Key by the raw URL, cap the whole chain and resolve relative Location headers
+  * [Fix] rbl: Fix whitelists for IPv6 addresses
+  * [Fix] multimap: Support IPv6 ULA prefixes in Redis maps
+  * [Fix] avast: Keep the cached virus verdict for archives
+  * [Fix] archives: Harden rar, 7z and libarchive parsing
+  * [Fix] 7z: Read substreams sizes and digests per stream (archives with an unpacked header listed no files)
+  * [Fix] html: Bound the text inspected per link and do not sniff JSON attachments as HTML
+  * [Fix] html: Bound nested HTML processing and structure exports without losing phishing checks
+  * [Fix] html: Stop rescanning quoted attributes for '>' and keep entity replacements within the consumed input
+  * [Fix] css: Bound the token count while building the block tree and do not swallow the byte after a hex escape
+  * [Fix] mime: Decode adjacent encoded words with their own charsets
+  * [Fix] ucl: Let binary msgpack strings own their value (use-after-free once the input buffer is released)
+  * [Fix] ucl: Keep the key when a msgpack map ends in an empty value
+  * [Fix] Rules: Exempt Mailchimp from SUBJ_EXCESS_QP and REPLYTO_EXCESS_QP
+
 4.2.0: 18 Sep 2026
 
   ** Incompatible changes **

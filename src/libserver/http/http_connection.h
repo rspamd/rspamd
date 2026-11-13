@@ -102,6 +102,8 @@ enum rspamd_http_options {
 	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 1u << 4,
 	RSPAMD_HTTP_CLIENT_KEEP_ALIVE = 1u << 5,
 	RSPAMD_HTTP_CLIENT_SSL = 1u << 6u,
+	/* The certificate of the peer is not verified: such a connection is pooled apart */
+	RSPAMD_HTTP_CLIENT_SSL_NOVERIFY = 1u << 7u,
 };
 
 typedef int (*rspamd_http_body_handler_t)(struct rspamd_http_connection *conn,
@@ -127,6 +129,8 @@ struct rspamd_http_connection {
 	const char *log_tag;
 	/* Used for keepalive */
 	struct rspamd_keepalive_hash_key *keepalive_hash_key;
+	/* The address this connection is made to: a key may have several */
+	rspamd_inet_addr_t *keepalive_addr;
 	gsize max_size;
 	unsigned opts;
 	enum rspamd_http_connection_type type;

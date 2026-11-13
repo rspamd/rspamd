@@ -91,10 +91,11 @@ bool rspamd_log_syslog_log(const char *module, const char *id,
 	bool log_json = (rspamd_log->flags & RSPAMD_LOG_FLAG_JSON);
 
 	/* Ensure safety as %.*s is used */
-	char idbuf[RSPAMD_LOG_ID_LEN + 1];
+	char idbuf[MEMPOOL_UID_LEN + 1];
 
 	if (id != NULL) {
-		rspamd_strlcpy(idbuf, id, RSPAMD_LOG_ID_LEN + 1);
+		const int processed_len = rspamd_log_process_id(rspamd_log, id, idbuf);
+		idbuf[processed_len] = '\0';
 	}
 	else {
 		idbuf[0] = '\0';

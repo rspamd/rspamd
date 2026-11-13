@@ -258,7 +258,7 @@ local function milter_headers(task)
 
     for _, s in ipairs(common.symbols) do
       local sym_str = string.format('%s(%.2f)[%s]',
-        s.name, s.score, table.concat(s.options or {}, ','))
+        s.name, s.score, lua_util.symbol_options_to_string(s.options))
       table.insert(buf, sym_str)
     end
     add_header('x-spamd-result', table.concat(buf, '; '), ';')
@@ -340,7 +340,7 @@ local function milter_headers(task)
 
   routines['x-spamd-bar'] = function()
     local local_mod = settings.routines['x-spamd-bar']
-    if skip_wanted('x-rspamd-bar') then
+    if skip_wanted('x-spamd-bar') then
       return
     end
     if not common['metric_score'] then
@@ -446,7 +446,7 @@ local function milter_headers(task)
       local s = common.symbols_hash[sym]
       if s then
         if (s.options or E)[1] then
-          table.insert(virii, table.concat(s.options, ','))
+          table.insert(virii, lua_util.symbol_options_to_string(s.options))
         elseif s then
           table.insert(virii, 'unknown')
         end
@@ -466,7 +466,7 @@ local function milter_headers(task)
         if s then
           failed = true
           if (s.options or E)[1] then
-            fail_reason = table.concat(s.options, ',')
+            fail_reason = lua_util.symbol_options_to_string(s.options)
           end
         end
       end
@@ -475,7 +475,7 @@ local function milter_headers(task)
           add_header('x-virus', local_mod.status_clean)
         end
       else
-        if local_mod.status_clean then
+        if local_mod.status_fail then
           add_header('x-virus', string.format('%s(%s)',
             local_mod.status_fail, fail_reason))
         end
