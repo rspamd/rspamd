@@ -204,8 +204,6 @@ local default_autolearn_settings = {
   },
   learn_verdict = false,
   balance = {
-    enabled = false,
-    min_balance = 0.9,
     spam_key = 'spam_learns',
     ham_key = 'ham_learns',
     value_type = 'int64',
