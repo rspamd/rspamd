@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <initializer_list>
 #include <string_view>
 #include <vector>
@@ -32,8 +33,13 @@ using codepoints = std::vector<std::uint32_t>;
 
 auto decode_utf8(std::string_view s, codepoints &out) -> bool
 {
-	std::size_t i = 0;
-	auto len = s.size();
+	/* ICU takes offsets as int32_t; older versions pass them by pointer */
+	if (s.size() > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max())) {
+		return false;
+	}
+
+	std::int32_t i = 0;
+	auto len = static_cast<std::int32_t>(s.size());
 
 	while (i < len) {
 		UChar32 cp;
