@@ -260,12 +260,6 @@ static auto css_parser_eof_token(void) -> const css_parser_token &
 	return eof_tok;
 }
 
-/*
- * Whether a unit name is a known CSS length unit; the lookup is
- * case-insensitive, as CSS units are
- */
-auto css_is_known_unit(std::string_view unit) -> bool;
-
 /* Ensure that parser tokens are simple enough */
 /*
  * compiler must implement P0602 "variant and optional should propagate copy/move triviality"

@@ -245,23 +245,6 @@ auto css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	return true;
 }
 
-auto css_is_known_unit(std::string_view unit) -> bool
-{
-	/* CSS units are case-insensitive */
-	char lower_buf[8];
-	auto unit_len = unit.size() > sizeof(lower_buf) - 1
-						? sizeof(lower_buf) - 1
-						: unit.size();
-
-	for (auto i = 0; i < unit_len; i++) {
-		lower_buf[i] = g_ascii_tolower(unit[i]);
-	}
-
-	return find_map(dimensions_map,
-					std::string_view{lower_buf, unit_len})
-		.has_value();
-}
-
 /*
  * Consume functions: return a token and advance lexer offset
  */

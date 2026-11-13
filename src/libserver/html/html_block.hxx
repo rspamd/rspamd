@@ -106,6 +106,13 @@ struct html_block {
 	unsigned width_real_mask : 1;
 	unsigned height_real_mask : 1;
 
+	/* The percentage of a percent real size, or zero otherwise (an
+	 * absolute size, or one that has no number to report, such as a
+	 * font-relative one, whose number the tokeniser has already scaled):
+	 * the legacy image size exposed to Lua is derived from it */
+	float width_real_raw = 0.0;
+	float height_real_raw = 0.0;
+
 	/* Set when the real width / height declaration that won the
 	 * cascade is !important, so it beats any inline style value */
 	bool width_important = false;

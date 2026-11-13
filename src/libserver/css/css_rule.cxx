@@ -999,6 +999,7 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 	if (width) {
 		if (width->is_percent || width->is_relative_unit || width->dim < 0) {
 			block->width_real = -1;
+			block->width_real_raw = width->is_percent && width->dim > 0 ? width->dim : 0;
 		}
 		else {
 			block->width_real = width->dim;
@@ -1009,6 +1010,7 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 	if (height) {
 		if (height->is_percent || height->is_relative_unit || height->dim < 0) {
 			block->height_real = -1;
+			block->height_real_raw = height->is_percent && height->dim > 0 ? height->dim : 0;
 		}
 		else {
 			block->height_real = height->dim;
@@ -2043,6 +2045,39 @@ TEST_SUITE("css")
 		CHECK(unsigned(b->width_real_mask) == 1);
 		b = rspamd::css::parse_css_declaration(pool, "w\\i\\64 th:1px");
 		CHECK(unsigned(b->width_real_mask) == 1);
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("number of an unresolvable real size")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		struct row {
+			const char *style;
+			float raw;
+		};
+		const row rows[] = {
+			{"width:50%", 50},
+			{"width:12.5%", 12.5f},
+			{"width:3em", 0},
+			{"width:2.5vw", 0},
+			{"width:auto", 0},
+			{"width:0%", 0},
+			{"width:10px", 0},
+			{"width:50%;width:auto", 0},
+			{"width:10px;width:50%", 50},
+		};
+
+		for (const auto &r: rows) {
+			auto *b = rspamd::css::parse_css_declaration(pool, r.style);
+			REQUIRE(b != nullptr);
+			CHECK_MESSAGE(b->width_real_raw == doctest::Approx(r.raw), r.style);
+		}
+
+		auto *b = rspamd::css::parse_css_declaration(pool, "height:7%");
+		CHECK(b->height_real_raw == doctest::Approx(7));
+		CHECK(b->width_real_raw == 0);
 
 		rspamd_mempool_delete(pool);
 	}
