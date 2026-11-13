@@ -122,7 +122,7 @@ Email export expands and validates selector addresses
   # A header that needs no encoding is kept as written, not refolded
   Should Contain  ${smtp}
   ...  X-Hosts: host-alpha,host-beta,host-gamma,host-delta,host-epsilon,host-zeta,host-eta
-  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log
+  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
   Should Contain  ${rspamd_log}  METADATA_OPTIONS_EXPANDED
   Should Not Contain  ${rspamd_log}  METADATA_OPTIONS_FAILED
 
@@ -431,7 +431,7 @@ Email export defers when a custom variable raises
 Invalid rule with unknown key fails configtest
   [Documentation]  A rule with an unrecognized option is rejected by the
   ...  schema, disabled at config load time, and reported by configtest.
-  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log
+  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
   Should Contain  ${rspamd_log}  INVALID_RULE_BAD_KEY
   Should Contain  ${rspamd_log}  invalid configuration
   Should Contain  ${rspamd_log}  DISABLED
@@ -453,7 +453,7 @@ Invalid rule with unknown key fails configtest
 *** Keywords ***
 Rspamd Log Should Contain
   [Arguments]  ${text}
-  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log
+  ${rspamd_log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
   Should Contain  ${rspamd_log}  ${text}
 
 Metadata Exporter Structured Setup
