@@ -181,7 +181,7 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
 
 -- Ignore layout whitespace and invisible characters used to pad inbox previews.
 local hidden_text_re = rspamd_regexp.create_cached(
-    '/[^\\s\\p{Z}\\x{00ad}\\x{034f}\\x{200b}-\\x{200d}\\x{2060}\\x{feff}]/u')
+    '/[^\\s\\p{Z}\\x{00ad}\\x{034f}\\x{200b}-\\x{200f}\\x{2060}\\x{feff}]/u')
 
 local vis_check_id = rspamd_config:register_symbol {
   name = 'HTML_VISIBLE_CHECKS',
