@@ -1,0 +1,33 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: pdf limits
+Date: Tue, 10 Nov 2026 10:00:00 +0000
+Message-ID: <pdf_limits@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_pdf_limits"
+
+------=_pdf_limits
+Content-Type: text/plain; charset=us-ascii
+
+Please see the attached file.
+
+------=_pdf_limits
+Content-Type: application/pdf; name="limits.pdf"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="limits.pdf"
+
+JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2Jq
+CjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFtdIC9Db3VudCAwID4+CmVuZG9iagozIDAg
+b2JqCjw8IC9UeXBlIC9BY3Rpb24gL1MgL0phdmFTY3JpcHQgL0pTIDQgMCBSID4+CmVuZG9iago0
+IDAgb2JqCjw8IC9GaWx0ZXIgWy9GbGF0ZURlY29kZSAvRmxhdGVEZWNvZGUgL0ZsYXRlRGVjb2Rl
+IC9GbGF0ZURlY29kZSAvRmxhdGVEZWNvZGUgL0ZsYXRlRGVjb2RlXSAvTGVuZ3RoIDEwMSA+Pgpz
+dHJlYW0KeJwBWgCl/3icAU8AsP94nKuYw2jNcOR/xRxGA4bzQMpbR+OC9xlPXa2LAec9zp48Ga5x
+Xv+UZ6DGyRM6YQyL1iSV+r4+EmgqspqR4YNJba8kt2izVK9kEABOkx13TfomTfW4KxoKZW5kc3Ry
+ZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9BY3Rpb24gL1MgL0phdmFTY3JpcHQgL0pTIDYg
+MCBSID4+CmVuZG9iago2IDAgb2JqCjw8IC9GaWx0ZXIgL0ZsYXRlRGVjb2RlIC9MZW5ndGggNDAg
+Pj4Kc3RyZWFtCnRoaXMgaXMgbm90IGEgZGVmbGF0ZSBzdHJlYW0sIG5vdCBhdCBhbGwKZW5kc3Ry
+ZWFtCmVuZG9iago3IDAgb2JqCjw8IC9UeXBlIC9Bbm5vdCAvQnJva2VuIFsgKHVuYmFsYW5jZWQg
+Pj4KZW5kb2JqCnRyYWlsZXIKPDwgL1NpemUgOSAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMAol
+JUVPRgo=
+
+------=_pdf_limits--

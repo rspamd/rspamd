@@ -121,9 +121,10 @@ LUA_FUNCTION_DEF(util, decode_html_entities);
 LUA_FUNCTION_DEF(util, decode_base64);
 
 /***
- * @function util.decode_ascii85(input)
+ * @function util.decode_ascii85(input[, size_limit])
  * Decodes data from ASCII85 (Base85) encoding used in PDF files
  * @param {text or string} input data to decode
+ * @param {integer} size_limit optional maximum size of the decoded data; decoding fails over it
  * @return {rspamd_text} decoded data chunk or nil on error
  */
 LUA_FUNCTION_DEF(util, decode_ascii85);
@@ -499,7 +500,7 @@ LUA_FUNCTION_DEF(util, gzip_decompress);
  *
  * @param {string/rspamd_text} data compressed data
  * @param {integer} size_limit optional size limit
- * @return {rspamd_text} decompressed text
+ * @return {rspamd_text} decompressed text, or nil and a description of the error
  */
 LUA_FUNCTION_DEF(util, inflate);
 
@@ -1424,8 +1425,33 @@ lua_util_decode_ascii85(lua_State *L)
 	}
 
 	if (s != NULL && inlen > 0) {
-		/* ASCII85 expands 5 chars to 4 bytes, so output is at most (inlen * 4 / 5) + 4 */
-		gsize max_outlen = (inlen * 4 / 5) + 4;
+		/*
+		 * ASCII85 expands 5 chars to 4 bytes, and a `z` stands for 4 zero
+		 * bytes on its own
+		 */
+		gsize nz = 0;
+		const char *zp = s, *zend = s + inlen;
+
+		while ((zp = memchr(zp, 'z', zend - zp)) != NULL) {
+			nz++;
+			zp++;
+		}
+
+		gsize max_outlen = ((inlen - nz) * 4 / 5) + 4 + nz * 4;
+
+		if (lua_type(L, 2) == LUA_TNUMBER) {
+			lua_Integer size_limit = lua_tointeger(L, 2);
+
+			if (size_limit <= 0) {
+				return luaL_error(L, "invalid arguments (size_limit)");
+			}
+
+			/* More than that does not fit and fails the decoding */
+			if ((gsize) size_limit < max_outlen) {
+				max_outlen = size_limit;
+			}
+		}
+
 		unsigned char *buf = g_malloc(max_outlen);
 
 		outlen = rspamd_decode_ascii85_buf(s, inlen, buf, max_outlen);

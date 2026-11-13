@@ -229,6 +229,10 @@ bool ucl_hash_insert(ucl_hash_t *hashlin, const ucl_object_t *obj,
 		k = kh_put(ucl_hash_caseless_node, h, obj, &ret);
 		if (ret > 0) {
 			elt = UCL_ALLOC(sizeof(*elt));
+			if (elt == NULL) {
+				kh_del(ucl_hash_caseless_node, h, k);
+				goto e0;
+			}
 			pelt = &kh_value(h, k);
 			*pelt = elt;
 			DL_APPEND(hashlin->head, elt);
@@ -244,6 +248,10 @@ bool ucl_hash_insert(ucl_hash_t *hashlin, const ucl_object_t *obj,
 		k = kh_put(ucl_hash_node, h, obj, &ret);
 		if (ret > 0) {
 			elt = UCL_ALLOC(sizeof(*elt));
+			if (elt == NULL) {
+				kh_del(ucl_hash_node, h, k);
+				goto e0;
+			}
 			pelt = &kh_value(h, k);
 			*pelt = elt;
 			DL_APPEND(hashlin->head, elt);
@@ -262,8 +270,6 @@ void ucl_hash_replace(ucl_hash_t *hashlin, const ucl_object_t *old,
 					  const ucl_object_t *new)
 {
 	khiter_t k;
-	int ret;
-	struct ucl_hash_elt *elt, *nelt;
 
 	if (hashlin == NULL) {
 		return;
@@ -272,98 +278,80 @@ void ucl_hash_replace(ucl_hash_t *hashlin, const ucl_object_t *old,
 	if (hashlin->caseless) {
 		khash_t(ucl_hash_caseless_node) *h = (khash_t(ucl_hash_caseless_node) *)
 												 hashlin->hash;
-		k = kh_put(ucl_hash_caseless_node, h, old, &ret);
-		if (ret == 0) {
-			elt = kh_value(h, k);
-			kh_del(ucl_hash_caseless_node, h, k);
-			k = kh_put(ucl_hash_caseless_node, h, new, &ret);
-			nelt = UCL_ALLOC(sizeof(*nelt));
-			nelt->obj = new;
-			kh_value(h, k) = nelt;
-			DL_REPLACE_ELEM(hashlin->head, elt, nelt);
-			UCL_FREE(sizeof(*elt), elt);
+		k = kh_get(ucl_hash_caseless_node, h, old);
+		if (k != kh_end(h) && ucl_hash_caseless_equal(old, new)) {
+			/* The same key hashes to the same slot */
+			kh_key(h, k) = new;
+			kh_value(h, k)->obj = new;
 		}
 	}
 	else {
 		khash_t(ucl_hash_node) *h = (khash_t(ucl_hash_node) *)
 										hashlin->hash;
-		k = kh_put(ucl_hash_node, h, old, &ret);
-		if (ret == 0) {
-			elt = kh_value(h, k);
-			kh_del(ucl_hash_node, h, k);
-			k = kh_put(ucl_hash_node, h, new, &ret);
-			nelt = UCL_ALLOC(sizeof(*nelt));
-			nelt->obj = new;
-			kh_value(h, k) = nelt;
-			DL_REPLACE_ELEM(hashlin->head, elt, nelt);
-			UCL_FREE(sizeof(*elt), elt);
+		k = kh_get(ucl_hash_node, h, old);
+		if (k != kh_end(h) && ucl_hash_equal(old, new)) {
+			/* The same key hashes to the same slot */
+			kh_key(h, k) = new;
+			kh_value(h, k)->obj = new;
 		}
 	}
 }
-
-struct ucl_hash_real_iter {
-	const struct ucl_hash_elt *cur;
-};
 
 #define UHI_SETERR(ep, ern)          \
 	{                                \
 		if (ep != NULL) *ep = (ern); \
 	}
 
+/*
+ * An iterator is the element to return next, so that the one returned last
+ * may be deleted while iterating, or the end once the last one is returned.
+ * Iterating allocates nothing, so it cannot stop short of the end.
+ */
+static const char ucl_hash_iter_end;
+#define UCL_HASH_ITER_END ((ucl_hash_iter_t) &ucl_hash_iter_end)
+
 const void *
 ucl_hash_iterate2(ucl_hash_t *hashlin, ucl_hash_iter_t *iter, int *ep)
 {
-	struct ucl_hash_real_iter *it = (struct ucl_hash_real_iter *) (*iter);
-	const ucl_object_t *ret = NULL;
-
-	if (hashlin == NULL) {
-		UHI_SETERR(ep, EINVAL);
-		return NULL;
-	}
-
-	if (it == NULL) {
-		it = UCL_ALLOC(sizeof(*it));
-
-		if (it == NULL) {
-			UHI_SETERR(ep, ENOMEM);
-			return NULL;
-		}
-
-		it->cur = hashlin->head;
-	}
+	const struct ucl_hash_elt *elt;
 
 	UHI_SETERR(ep, 0);
-	if (it->cur) {
-		ret = it->cur->obj;
-		it->cur = it->cur->next;
+
+	/* An object that has never had a key has no hash */
+	if (hashlin == NULL || *iter == UCL_HASH_ITER_END) {
+		elt = NULL;
+	}
+	else if (*iter == NULL) {
+		elt = hashlin->head;
 	}
 	else {
-		UCL_FREE(sizeof(*it), it);
+		elt = *iter;
+	}
+
+	if (elt == NULL) {
 		*iter = NULL;
 		return NULL;
 	}
 
-	*iter = it;
+	*iter = elt->next != NULL ? (ucl_hash_iter_t) elt->next : UCL_HASH_ITER_END;
 
-	return ret;
+	return elt->obj;
 }
 
 bool ucl_hash_iter_has_next(ucl_hash_t *hashlin, ucl_hash_iter_t iter)
 {
-	struct ucl_hash_real_iter *it = (struct ucl_hash_real_iter *) (iter);
+	if (iter == NULL) {
+		return hashlin != NULL && hashlin->head != NULL;
+	}
 
-	return it->cur != NULL;
+	return iter != UCL_HASH_ITER_END;
 }
 
 void ucl_hash_iterate_free(ucl_hash_iter_t iter)
 {
-	struct ucl_hash_real_iter *it = (struct ucl_hash_real_iter *) (iter);
-
-	if (it != NULL) {
-		UCL_FREE(sizeof(*it), it);
-	}
+	/* Nothing is allocated for an iterator */
+	(void) iter;
 }
-
 
 const ucl_object_t *
 ucl_hash_search(ucl_hash_t *hashlin, const char *key, unsigned keylen)
@@ -439,25 +427,83 @@ void ucl_hash_delete(ucl_hash_t *hashlin, const ucl_object_t *obj)
 
 bool ucl_hash_reserve(ucl_hash_t *hashlin, size_t sz)
 {
+	size_t nbuckets;
+
 	if (hashlin == NULL) {
 		return false;
 	}
 
 	if (sz > kh_size((khash_t(ucl_hash_node) *) hashlin->hash)) {
+		/*
+		 * khash rounds the bucket count up to a power of two held in a
+		 * khint_t, so refuse anything above the largest such power
+		 */
+		if (!ucl_size_mul(sz, 2, &nbuckets) ||
+			nbuckets > ((size_t) 1 << (sizeof(khint_t) * 8 - 1))) {
+			return false;
+		}
+
 		if (hashlin->caseless) {
 			khash_t(ucl_hash_caseless_node) *h = (khash_t(
 				ucl_hash_caseless_node) *)
 													 hashlin->hash;
-			kh_resize(ucl_hash_caseless_node, h, sz * 2);
+			if (kh_resize(ucl_hash_caseless_node, h, (khint_t) nbuckets) < 0) {
+				return false;
+			}
 		}
 		else {
 			khash_t(ucl_hash_node) *h = (khash_t(ucl_hash_node) *)
 											hashlin->hash;
-			kh_resize(ucl_hash_node, h, sz * 2);
+			if (kh_resize(ucl_hash_node, h, (khint_t) nbuckets) < 0) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static int
+ucl_lc_cmp(const char *s, const char *d, size_t l)
+{
+	unsigned int fp, i;
+	unsigned char c1, c2, c3, c4;
+	union {
+		unsigned char c[4];
+		uint32_t n;
+	} cmp1, cmp2;
+	size_t leftover = l % 4;
+	int ret = 0;
+
+	fp = l - leftover;
+
+	for (i = 0; i != fp; i += 4) {
+		c1 = s[i], c2 = s[i + 1], c3 = s[i + 2], c4 = s[i + 3];
+		cmp1.c[0] = lc_map[c1];
+		cmp1.c[1] = lc_map[c2];
+		cmp1.c[2] = lc_map[c3];
+		cmp1.c[3] = lc_map[c4];
+
+		c1 = d[i], c2 = d[i + 1], c3 = d[i + 2], c4 = d[i + 3];
+		cmp2.c[0] = lc_map[c1];
+		cmp2.c[1] = lc_map[c2];
+		cmp2.c[2] = lc_map[c3];
+		cmp2.c[3] = lc_map[c4];
+
+		if (cmp1.n != cmp2.n) {
+			return cmp1.n - cmp2.n;
 		}
 	}
 
-	return true;
+	while (leftover > 0) {
+		if (lc_map[(unsigned char) s[i]] != lc_map[(unsigned char) d[i]]) {
+			return s[i] - d[i];
+		}
+
+		leftover--;
+		i++;
+	}
+
+	return ret;
 }
 
 static int
@@ -467,7 +513,7 @@ ucl_hash_cmp_icase(const void *a, const void *b)
 							  *ob = (const struct ucl_hash_elt *) b;
 
 	if (oa->obj->keylen == ob->obj->keylen) {
-		return rspamd_lc_cmp(oa->obj->key, ob->obj->key, oa->obj->keylen);
+		return ucl_lc_cmp(oa->obj->key, ob->obj->key, oa->obj->keylen);
 	}
 
 	return ((int) (oa->obj->keylen)) - ob->obj->keylen;
@@ -488,6 +534,9 @@ ucl_hash_cmp_case_sens(const void *a, const void *b)
 
 void ucl_hash_sort(ucl_hash_t *hashlin, enum ucl_object_keys_sort_flags fl)
 {
+	if (hashlin == NULL) {
+		return;
+	}
 
 	if (fl & UCL_SORT_KEYS_ICASE) {
 		DL_SORT(hashlin->head, ucl_hash_cmp_icase);

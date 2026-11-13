@@ -513,6 +513,45 @@ Thank you,
     task:destroy()
   end)
 
+  test("symbol options are stored verbatim except for invalid characters", function()
+    local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
+    assert_true(res, "failed to load message")
+    task:insert_result(true, "OPTION_CONTRACT_TEST", 1.0,
+      { 'a];,[]{x}%5D', 'a%5D', 'a]', 'a]', '95.33%', 'é\n', 'bad\xff' })
+    local opts = task:get_symbol('OPTION_CONTRACT_TEST')[1].options
+    assert_rspamd_table_eq_sorted({
+      actual = opts,
+      expect = { 'a];,[]{x}%5D', 'a%5D', 'a]', '95.33%', 'é�', 'bad�' }
+    })
+    task:insert_result(true, 'OPTION_LIMIT_TEST', 1.0, string.rep(']', 8192))
+    assert_rspamd_table_eq_sorted({
+      actual = task:get_symbol('OPTION_LIMIT_TEST')[1].options,
+      expect = { '...' }
+    })
+    task:destroy()
+  end)
+
+  test("comma-separated option exporters encode only options with delimiters", function()
+    local lua_util = require 'lua_util'
+    local options = { 'first,second', '95.33%', 'literal%2C', 'a](0.00)[]; X[b', 'normal' }
+    local serialized = lua_util.symbol_options_to_string(options)
+    assert_equal(serialized,
+      'first%2Csecond,95.33%,literal%2C,a%5D(0.00)%5B%5D%3B X%5Bb,normal')
+    -- input is not modified
+    assert_equal(options[1], 'first,second')
+    assert_equal(options[4], 'a](0.00)[]; X[b')
+    -- untouched lists are joined as is
+    assert_equal(lua_util.symbol_options_to_string({ 'one', 'two', '50%' }), 'one,two,50%')
+    assert_equal(lua_util.symbol_options_to_string({}), '')
+    assert_equal(lua_util.symbol_options_to_string(nil), '')
+    -- an option containing a delimiter and a percent sign round-trips
+    local roundtrip = lua_util.symbol_options_to_string({ '95.33%;x', '{y}' })
+    assert_equal(roundtrip, '95.33%25%3Bx,%7By%7D')
+    assert_equal((roundtrip:gsub('%%(%x%x)', function(hex)
+      return string.char(tonumber(hex, 16))
+    end)), '95.33%;x,{y}')
+  end)
+
   test("get_symbol table form returns a map of present symbols", function()
     local res, task = rspamd_task.load_from_string(hdrs .. "\nTest.\n", rspamd_config)
     assert_true(res, "failed to load message")

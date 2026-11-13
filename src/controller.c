@@ -822,12 +822,12 @@ rspamd_controller_check_password(struct rspamd_http_connection_entry *entry,
 	if (password == NULL) {
 		if (ctx->secure_map == NULL) {
 			if (ctx->password == NULL && !is_enable) {
-				return TRUE;
+				goto end;
 			}
 			else if (is_enable && (ctx->password == NULL &&
 								   ctx->enable_password == NULL)) {
 				session->is_read_only = FALSE;
-				return TRUE;
+				goto end;
 			}
 		}
 
@@ -3068,6 +3068,7 @@ rspamd_controller_stat_fin_task(void *ud)
 
 	if (cbdata->stat) {
 		ucl_object_insert_key(top, cbdata->stat, "statfiles", 0, false);
+		cbdata->stat = NULL; /* Ownership has moved to top */
 	}
 
 	GHashTable *fuzzy_elts = rspamd_mempool_get_variable(cbdata->task->task_pool, RSPAMD_MEMPOOL_FUZZY_STAT);
@@ -3100,6 +3101,8 @@ rspamd_controller_stat_cleanup_task(void *ud)
 	struct rspamd_stat_cbdata *cbdata = ud;
 
 	rspamd_task_free(cbdata->task);
+	/* Metrics and unfinished requests retain ownership of stat */
+	ucl_object_unref(cbdata->stat);
 	ucl_object_unref(cbdata->top);
 	if (cbdata->req_msg) {
 		rspamd_http_message_unref(cbdata->req_msg);
@@ -3604,8 +3607,7 @@ rspamd_controller_handle_custom(struct rspamd_http_connection_entry *conn_ent,
 		while (g_hash_table_iter_next(&it, &k, &v)) {
 			key = k;
 			value = v;
-			/* Steal strings */
-			g_hash_table_iter_steal(&it);
+			/* Header construction copies both strings; the table owns the originals. */
 			url_str = rspamd_ftok_cstr(key);
 			rspamd_http_message_add_header_len(msg, url_str,
 											   value->begin, value->len);

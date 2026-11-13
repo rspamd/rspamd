@@ -200,7 +200,16 @@ text_builder::text_builder(std::size_t reserve, std::size_t max_output)
 
 auto text_builder::reserve_for(std::size_t extra) -> void
 {
-	buf.reserve(std::min(buf.size() + extra, limit));
+	const auto needed = std::min(buf.size() + extra, limit);
+
+	if (needed > buf.capacity()) {
+		/*
+		 * This is called for every piece of text. A request for the exact
+		 * size makes an implementation that allocates what it is asked for
+		 * copy the whole buffer each time, so grow by doubling
+		 */
+		buf.reserve(std::min(std::max(needed, buf.capacity() * 2), limit));
+	}
 }
 
 auto text_builder::append_capped(std::string_view utf8) -> bool
@@ -272,6 +281,33 @@ auto text_builder::decode_codes(std::string_view codes) -> void
 	 * A composite font is addressed through its CMap, whose codes may span
 	 * several bytes; a simple font is one code per byte.
 	 */
+	if (cur_cmap != nullptr && cmap_simple) {
+		glyph_utf8 scratch{};
+
+		for (auto c: codes) {
+			if (hit_ceiling) {
+				break;
+			}
+
+			const auto code = static_cast<unsigned char>(c);
+			auto utf8 = cur_cmap->lookup(code, 1, scratch);
+
+			if (utf8.empty()) {
+				/* The same code written with two bytes, as some producers do */
+				utf8 = cur_cmap->lookup(code, 2, scratch);
+			}
+
+			if (!utf8.empty()) {
+				append_capped(utf8);
+			}
+			else {
+				add_code(code);
+			}
+		}
+
+		return;
+	}
+
 	if (cur_cmap != nullptr) {
 		add_cmapped(codes);
 
@@ -285,6 +321,28 @@ auto text_builder::decode_codes(std::string_view codes) -> void
 
 		add_code(static_cast<unsigned char>(c));
 	}
+}
+
+auto text_builder::count_codes(std::string_view codes) const noexcept -> std::size_t
+{
+	if (cur_cmap == nullptr || cmap_simple) {
+		return codes.size();
+	}
+
+	std::size_t n = 0;
+
+	while (!codes.empty()) {
+		auto nbytes = cur_cmap->code_length(codes);
+
+		if (nbytes == 0 || nbytes > codes.size()) {
+			break;
+		}
+
+		n++;
+		codes.remove_prefix(nbytes);
+	}
+
+	return n;
 }
 
 auto text_builder::add_encoded(std::string_view codes) -> void

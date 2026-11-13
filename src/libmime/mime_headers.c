@@ -22,13 +22,26 @@
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/cfg_file.h"
 #include "libutil/util.h"
+#include "contrib/libottery/ottery.h"
 #include <unicode/utf8.h>
 
 static const unsigned int max_mime_headers = 100000;
 
+/*
+ * Header names are chosen by the sender, so the table hash is seeded with a
+ * value that the sender cannot know
+ */
+static inline khint_t
+rspamd_mime_headers_name_hash(const char *name)
+{
+	uint64_t h = rspamd_icase_hash(name, strlen(name), rspamd_hash_seed_secure());
+
+	return (khint_t) (h ^ (h >> 32));
+}
+
 KHASH_INIT(rspamd_mime_headers_htb, char *,
 		   struct rspamd_mime_header *, 1,
-		   rspamd_strcase_hash, rspamd_strcase_equal);
+		   rspamd_mime_headers_name_hash, rspamd_strcase_equal);
 
 struct rspamd_mime_headers_table {
 	khash_t(rspamd_mime_headers_htb) htb;
@@ -158,6 +171,14 @@ rspamd_mime_header_check_special(struct rspamd_task *task,
 		if (task->from_envelope == NULL) {
 			task->from_envelope = rspamd_email_address_from_smtp(rh->decoded,
 																 strlen(rh->decoded));
+
+			if (task->from_envelope == NULL && strchr(rh->decoded, '(') != NULL) {
+				/* A path followed by a comment: the address points to the copy */
+				char *path = rspamd_mempool_strdup(task->task_pool, rh->decoded);
+				gsize path_len = rspamd_strip_smtp_comments_inplace(path, strlen(path));
+
+				task->from_envelope = rspamd_email_address_from_smtp(path, path_len);
+			}
 		}
 		rh->flags = RSPAMD_HEADER_RETURN_PATH | RSPAMD_HEADER_UNIQUE;
 		break;
@@ -532,8 +553,10 @@ void rspamd_mime_headers_process(struct rspamd_task *task,
 		}
 	}
 
-	/* Since we have prepended headers, we need to reverse the list to get the actual order */
-	LL_REVERSE(*order_ptr);
+	/*
+	 * The order list is built by prepending (via ord_next), so it is left in
+	 * reverse order; callers reverse it with LL_REVERSE2 on ord_next.
+	 */
 
 	if (check_newlines) {
 		unsigned int max_cnt = 0;
@@ -1910,87 +1933,53 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 
 gsize rspamd_strip_smtp_comments_inplace(char *input, gsize len)
 {
-	enum parser_state {
-		parse_normal,
-		parse_obrace,
-		parse_comment,
-		parse_quoted_copy,
-		parse_quoted_ignore,
-	} state = parse_normal,
-	  next_state = parse_normal;
-	char *d = input, *end = input + len, *start = input;
-	char t;
-	int obraces = 0, ebraces = 0;
+	const char *p, *end = input + len;
+	char *d = input;
+	unsigned int depth = 0;
 
-	while (input < end) {
-		t = *input;
-		switch (state) {
-		case parse_normal:
-			if (t == '(') {
-				state = parse_obrace;
+	/* Read-only pass: comments must be balanced, otherwise nothing is stripped */
+	for (p = input; p < end; p++) {
+		if (*p == '\\') {
+			/* Quoted char never changes the depth */
+			if (p + 1 < end) {
+				p++;
 			}
-			else if (t == '\\') {
-				state = parse_quoted_copy;
-				next_state = parse_normal;
-			}
-			else {
-				*d++ = t;
-			}
-			input++;
-			break;
-		case parse_obrace:
-			obraces++;
-			if (t == '(') {
-				obraces++;
-			}
-			else if (t == ')') {
-				ebraces++;
-
-				if (obraces == ebraces) {
-					obraces = 0;
-					ebraces = 0;
-					state = parse_normal;
-				}
-			}
-			else if (t == '\\') {
-				state = parse_quoted_ignore;
-				next_state = parse_comment;
-			}
-			else {
-				state = parse_comment;
-			}
-			input++;
-			break;
-		case parse_comment:
-			if (t == '(') {
-				state = parse_obrace;
-			}
-			else if (t == ')') {
-				ebraces++;
-
-				if (obraces == ebraces) {
-					obraces = 0;
-					ebraces = 0;
-					state = parse_normal;
-				}
-			}
-			else if (t == '\\') {
-				state = parse_quoted_ignore;
-				next_state = parse_comment;
-			}
-			input++;
-			break;
-		case parse_quoted_copy:
-			*d++ = t;
-			state = next_state;
-			input++;
-			break;
-		case parse_quoted_ignore:
-			state = next_state;
-			input++;
-			break;
+		}
+		else if (*p == '(') {
+			depth++;
+		}
+		else if (*p == ')' && depth > 0) {
+			depth--;
 		}
 	}
 
-	return (d - start);
+	if (depth != 0) {
+		return len;
+	}
+
+	depth = 0;
+
+	for (p = input; p < end; p++) {
+		if (*p == '\\') {
+			/* Outside of comments the quoted char is copied, the backslash is dropped */
+			if (p + 1 < end) {
+				p++;
+
+				if (depth == 0) {
+					*d++ = *p;
+				}
+			}
+		}
+		else if (*p == '(') {
+			depth++;
+		}
+		else if (*p == ')' && depth > 0) {
+			depth--;
+		}
+		else if (depth == 0) {
+			*d++ = *p;
+		}
+	}
+
+	return (d - input);
 }

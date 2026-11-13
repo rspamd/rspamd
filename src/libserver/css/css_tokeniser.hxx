@@ -199,6 +199,19 @@ public:
 		backlog.push_back(t);
 	}
 
+	/* Position of the next token in the input, valid while nothing is pushed back */
+	auto get_offset() const -> std::size_t
+	{
+		return offset;
+	}
+
+	/* Continue from the given position, dropping the pushed back tokens */
+	auto seek(std::size_t pos) -> void
+	{
+		offset = std::min(pos, input.size());
+		backlog.clear();
+	}
+
 private:
 	std::string_view input;
 	std::size_t offset;

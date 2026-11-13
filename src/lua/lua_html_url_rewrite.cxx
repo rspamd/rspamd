@@ -59,7 +59,9 @@ int lua_task_get_html_urls(lua_State *L)
 		auto candidates = rspamd::html::enumerate_rewrite_candidates(
 			static_cast<const rspamd::html::html_content *>(text_part->html),
 			task,
-			text_part->mime_part->part_number);
+			text_part->mime_part->part_number,
+			std::string_view{(const char *) text_part->utf_raw_content->data,
+							 text_part->utf_raw_content->len});
 
 		if (candidates.empty()) {
 			continue;
@@ -87,14 +89,8 @@ int lua_task_get_html_urls(lua_State *L)
 
 			// tag field - get tag name
 			lua_pushstring(L, "tag");
-			if (cand.tag) {
-				const char *tag_name = rspamd_html_tag_by_id(cand.tag->id);
-				if (tag_name) {
-					lua_pushstring(L, tag_name);
-				}
-				else {
-					lua_pushstring(L, "unknown");
-				}
+			if (const char *tag_name = rspamd_html_tag_by_id(cand.tag_id)) {
+				lua_pushstring(L, tag_name);
 			}
 			else {
 				lua_pushstring(L, "unknown");

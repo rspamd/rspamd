@@ -67,6 +67,9 @@ local result_symbols = {
   -- Test 14: Instant reply (before headers even read)
   'HTTP_INSTANT_REPLY_ERROR',
   'HTTP_INSTANT_REPLY_413',
+  -- Test 15: replies that must not be followed on their connection
+  'HTTP_KEEPALIVE_HYGIENE_OK',
+  'HTTP_KEEPALIVE_HYGIENE_FAIL',
 }
 
 -- Register all result symbols as virtual symbols
@@ -598,6 +601,60 @@ rspamd_config:register_symbol({
   name = 'HTTP_INSTANT_REPLY_TEST',
   score = 1.0,
   callback = test_instant_reply,
+  no_squeeze = true,
+  flags = 'coro'
+})
+
+-- Test 15: a connection is not reused after a reply that is followed by
+-- garbage or that ends at the end of the stream, an interim reply is not the
+-- answer, and none of these is an error of a request that got its answer
+rspamd_config:register_symbol({
+  name = 'HTTP_KEEPALIVE_HYGIENE_TEST',
+  score = 1.0,
+  callback = function(task)
+    local function get(path)
+      local err, response = rspamd_http.request({
+        url = base_url .. path,
+        task = task,
+        method = 'get',
+        timeout = 5,
+        keepalive = true,
+        -- A pool of its own: the other tests leave connections that the
+        -- server closes right after its reply
+        headers = { Host = 'hygiene.test' },
+      })
+
+      if err then
+        return 'error: ' .. tostring(err)
+      end
+
+      return string.format('%s %s', response.code, response.content)
+    end
+
+    local results = {}
+    local expected = {
+      { '/garbage-after', '200 first' },
+      { '/garbage-after', '200 first' },
+      { '/eof-keepalive', '200 body until eof' },
+      { '/eof-keepalive', '200 body until eof' },
+      { '/interim', '200 final reply' },
+      { '/keepalive-normal', '200 normal keepalive response' },
+    }
+    -- Options of a symbol are a set: number them to keep them all
+    local ok = true
+
+    for _, case in ipairs(expected) do
+      local got = get(case[1])
+      results[#results + 1] = string.format('%s:%s=%s', #results + 1, case[1], got)
+
+      if got ~= case[2] then
+        ok = false
+      end
+    end
+
+    task:insert_result(ok and 'HTTP_KEEPALIVE_HYGIENE_OK' or 'HTTP_KEEPALIVE_HYGIENE_FAIL',
+        1.0, results)
+  end,
   no_squeeze = true,
   flags = 'coro'
 })

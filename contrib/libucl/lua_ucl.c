@@ -223,7 +223,8 @@ ucl_object_lua_push_object(lua_State *L, const ucl_object_t *obj,
 }
 
 /**
- * Push an array to lua as table indexed by integers
+ * Push an array to lua as table indexed by integers: the values of a repeated
+ * key with LUA_UCL_ALLOW_ARRAY, or the elements of an explicit array
  * @param L
  * @param obj
  * @return
@@ -232,24 +233,25 @@ static int
 ucl_object_lua_push_array(lua_State *L, const ucl_object_t *obj, int flags)
 {
 	const ucl_object_t *cur;
-	ucl_object_iter_t it;
+	ucl_object_iter_t it = NULL;
 	int i = 1, nelt = 0;
 
-	if (obj->type == UCL_ARRAY) {
+	if (!(flags & LUA_UCL_ALLOW_ARRAY) || obj->next == NULL) {
+		/*
+		 * Only the array's own elements: the values of a repeated key that
+		 * follow it are not, even if the array is the first of them
+		 */
 		nelt = obj->len;
-		it = ucl_object_iterate_new(obj);
 		lua_createtable(L, nelt, 0);
 
-		while ((cur = ucl_object_iterate_safe(it, true))) {
-			ucl_object_push_lua(L, cur, (flags & ~LUA_UCL_ALLOW_ARRAY));
+		while ((cur = ucl_object_iterate(obj, &it, true))) {
+			ucl_object_push_lua_common(L, cur, (flags & ~LUA_UCL_ALLOW_ARRAY));
 			lua_rawseti(L, -2, i);
 			i++;
 		}
 
 		luaL_getmetatable(L, UCL_ARRAY_TYPE_META);
 		lua_setmetatable(L, -2);
-
-		ucl_object_iterate_free(it);
 	}
 	else {
 		/* Optimize allocation by preallocation of table */
@@ -262,7 +264,7 @@ ucl_object_lua_push_array(lua_State *L, const ucl_object_t *obj, int flags)
 
 		LL_FOREACH(obj, cur)
 		{
-			ucl_object_push_lua(L, cur, (flags & ~LUA_UCL_ALLOW_ARRAY));
+			ucl_object_push_lua_common(L, cur, (flags & ~LUA_UCL_ALLOW_ARRAY));
 			lua_rawseti(L, -2, i);
 			i++;
 		}
@@ -549,7 +551,9 @@ ucl_object_lua_fromelt(lua_State *L, int idx, ucl_string_flags_t flags)
 		break;
 	case LUA_TNUMBER:
 		num = lua_tonumber(L, idx);
-		if (num == (int64_t) num) {
+		/* The cast is undefined for NaN and out of range values */
+		if (num >= -9223372036854775808.0 && num < 9223372036854775808.0 &&
+			num == (int64_t) num) {
 			obj = ucl_object_fromint(num);
 		}
 		else {
@@ -1041,6 +1045,9 @@ lua_ucl_str_to_parse_type(const char *str)
 	if (str != NULL) {
 		if (strcasecmp(str, "msgpack") == 0) {
 			type = UCL_PARSE_MSGPACK;
+		}
+		else if (strcasecmp(str, "cbor") == 0) {
+			type = UCL_PARSE_CBOR;
 		}
 		else if (strcasecmp(str, "sexp") == 0 ||
 				 strcasecmp(str, "csexp") == 0) {
@@ -2166,6 +2173,9 @@ lua_ucl_to_format(lua_State *L)
 			else if (strcasecmp(strtype, "msgpack") == 0 ||
 					 strcasecmp(strtype, "messagepack") == 0) {
 				format = UCL_EMIT_MSGPACK;
+			}
+			else if (strcasecmp(strtype, "cbor") == 0) {
+				format = UCL_EMIT_CBOR;
 			}
 		}
 

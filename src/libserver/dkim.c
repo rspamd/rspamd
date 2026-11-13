@@ -28,6 +28,11 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
+#include <openssl/ec.h>
+#include <openssl/obj_mac.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+#include <openssl/core_names.h>
+#endif
 
 /* special DNS tokens */
 #define DKIM_DNSKEYNAME "_domainkey"
@@ -147,6 +152,10 @@ struct rspamd_dkim_context_s {
 	char *dns_key;
 	enum rspamd_arc_seal_cv cv;
 	const char *dkim_header;
+	/* Tags seen so far, by enum rspamd_dkim_param_type */
+	unsigned int seen_params;
+	/* l=0: the signature covers no body at all */
+	bool zero_len;
 };
 
 #define RSPAMD_DKIM_KEY_ID_LEN 16
@@ -355,6 +364,13 @@ rspamd_dkim_parse_domain(rspamd_dkim_context_t *ctx,
 			return false;
 		}
 	}
+
+	/*
+	 * Domain names are case-insensitive: keep d= in canonical lowercase form,
+	 * so results, symbol options and map lookups never depend on the case
+	 * a signer chose
+	 */
+	rspamd_str_lc(ctx->domain, strlen(ctx->domain));
 
 	return true;
 }
@@ -713,6 +729,7 @@ rspamd_dkim_parse_bodylength(rspamd_dkim_context_t *ctx,
 		return false;
 	}
 	ctx->common.len = val;
+	ctx->zero_len = (val == 0);
 
 	return true;
 }
@@ -725,7 +742,12 @@ rspamd_dkim_parse_idx(rspamd_dkim_context_t *ctx,
 {
 	unsigned long val;
 
-	if (!rspamd_strtoul(param, len, &val)) {
+	/*
+	 * Instances start at 1 (RFC 8617 4.2.1); checking the range here also
+	 * keeps a value above UINT_MAX from being truncated into a valid one
+	 */
+	if (!rspamd_strtoul(param, len, &val) || val == 0 ||
+		val > RSPAMD_DKIM_MAX_ARC_IDX) {
 		g_set_error(err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_INVALID_L,
@@ -771,14 +793,43 @@ rspamd_dkim_parse_cv(rspamd_dkim_context_t *ctx,
 }
 
 
+/*
+ * Parses the value of a known tag. A tag must not be duplicated (RFC 6376
+ * section 3.2): a signature that has one is not valid
+ */
+static bool
+rspamd_dkim_parse_param(rspamd_dkim_context_t *ctx, int param,
+						const char *value, size_t len, GError **err)
+{
+	if (ctx->seen_params & (1u << param)) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"duplicate dkim tag");
+		return false;
+	}
+
+	ctx->seen_params |= 1u << param;
+
+	return parser_funcs[param](ctx, value, len, err);
+}
+
 static void
 rspamd_dkim_add_arc_seal_headers(rspamd_mempool_t *pool,
 								 struct rspamd_dkim_common_ctx *ctx)
 {
 	struct rspamd_dkim_header *hdr;
-	int count = ctx->idx, i;
+	unsigned int count = ctx->idx, i;
 
-	ctx->hlist = g_ptr_array_sized_new(count * 3 - 1);
+	/*
+	 * Instance i covers 3 * i - 1 headers. The verifier validates i= before
+	 * calling this; a sign context has no instance yet and gets an empty list
+	 */
+	if (count > RSPAMD_DKIM_MAX_ARC_IDX) {
+		count = 0;
+	}
+
+	ctx->hlist = g_ptr_array_sized_new(count > 0 ? count * 3 - 1 : 0);
 
 	for (i = 0; i < count; i++) {
 		/* Authentication results */
@@ -877,7 +928,18 @@ rspamd_create_dkim_context(const char *sig,
 	while (p <= end) {
 		switch (state) {
 		case DKIM_STATE_TAG:
-			if (g_ascii_isspace(*p)) {
+			if (*p == ';') {
+				/*
+				 * An empty tag-spec (`;;`) or one without `=`: skip it, as
+				 * arc.lua does. A `;` must never become part of a tag name:
+				 * `;;i=1` would hide from us a tag that arc.lua checks
+				 */
+				state = DKIM_STATE_SKIP_SPACES;
+				next_state = DKIM_STATE_TAG;
+				taglen = 0;
+				p++;
+			}
+			else if (g_ascii_isspace(*p)) {
 				taglen = (int) (p - c);
 				while (*p && g_ascii_isspace(*p)) {
 					/* Skip spaces before '=' sign */
@@ -1069,7 +1131,7 @@ rspamd_create_dkim_context(const char *sig,
 					}
 
 					if (param != DKIM_PARAM_UNKNOWN) {
-						if (!parser_funcs[param](ctx, c, tlen, err)) {
+						if (!rspamd_dkim_parse_param(ctx, param, c, tlen, err)) {
 							state = DKIM_STATE_ERROR;
 						}
 						else {
@@ -1104,7 +1166,7 @@ rspamd_create_dkim_context(const char *sig,
 				}
 
 				if (param != DKIM_PARAM_UNKNOWN) {
-					if (!parser_funcs[param](ctx, c, tlen, err)) {
+					if (!rspamd_dkim_parse_param(ctx, param, c, tlen, err)) {
 						state = DKIM_STATE_ERROR;
 					}
 				}
@@ -1154,7 +1216,17 @@ rspamd_create_dkim_context(const char *sig,
 		}
 	}
 
+	if (ctx->common.type != RSPAMD_DKIM_NORMAL && (ctx->common.idx == 0 ||
+												   ctx->common.idx > RSPAMD_DKIM_MAX_ARC_IDX)) {
+		g_set_error(err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"i parameter missing or invalid for ARC");
+		return NULL;
+	}
+
 	if (type == RSPAMD_DKIM_ARC_SEAL) {
+		/* Sized from i=, so only once it has been validated */
 		rspamd_dkim_add_arc_seal_headers(pool, &ctx->common);
 	}
 
@@ -1265,15 +1337,6 @@ rspamd_create_dkim_context(const char *sig,
 		return NULL;
 	}
 
-	if (ctx->common.type != RSPAMD_DKIM_NORMAL && (ctx->common.idx == 0 ||
-												   ctx->common.idx > RSPAMD_DKIM_MAX_ARC_IDX)) {
-		g_set_error(err,
-					DKIM_ERROR,
-					DKIM_SIGERROR_UNKNOWN,
-					"i parameter missing or invalid for ARC");
-		return NULL;
-	}
-
 	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL) {
 		if (ctx->cv == RSPAMD_ARC_UNKNOWN) {
 			g_set_error(err,
@@ -1346,6 +1409,43 @@ struct rspamd_dkim_key_cbdata {
 	void *ud;
 };
 
+/* True if the EC key is on a named P-256, P-384 or P-521 curve */
+static bool
+rspamd_dkim_ec_curve_allowed(EVP_PKEY *pkey)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+	char name[64];
+	size_t len = 0;
+
+	/* Fails for curves that are not named, so explicit parameters are rejected */
+	if (EVP_PKEY_get_utf8_string_param(pkey, OSSL_PKEY_PARAM_GROUP_NAME,
+									   name, sizeof(name), &len) != 1) {
+		return false;
+	}
+
+	return strcmp(name, "prime256v1") == 0 ||
+		   strcmp(name, "secp384r1") == 0 ||
+		   strcmp(name, "secp521r1") == 0;
+#else
+	EC_KEY *ec = EVP_PKEY_get1_EC_KEY(pkey);
+	int nid = NID_undef;
+
+	if (ec == NULL) {
+		return false;
+	}
+
+	if (EC_KEY_get0_group(ec) != NULL) {
+		/* NID_undef for explicit parameters */
+		nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
+	}
+
+	EC_KEY_free(ec);
+
+	return nid == NID_X9_62_prime256v1 || nid == NID_secp384r1 ||
+		   nid == NID_secp521r1;
+#endif
+}
+
 rspamd_dkim_key_t *
 rspamd_dkim_make_key(const char *keydata,
 					 unsigned int keylen, enum rspamd_dkim_key_type type, GError **err)
@@ -1362,6 +1462,8 @@ rspamd_dkim_make_key(const char *keydata,
 	 */
 	static const unsigned int max_dkim_key_len = 4096;
 	static const int max_dkim_key_bits = 8192;
+	/* RFC 8301 section 3.2: RSA keys shorter than 1024 bits are not valid */
+	static const int min_dkim_rsa_key_bits = 1024;
 
 	if (keylen < 3) {
 		g_set_error(err,
@@ -1427,6 +1529,9 @@ rspamd_dkim_make_key(const char *keydata,
 		EVP_DigestUpdate(mdctx, key->keydata, key->decoded_len);
 		EVP_DigestFinal_ex(mdctx, key->key_id, &dlen);
 	}
+	else {
+		ERR_clear_error();
+	}
 
 	EVP_MD_CTX_destroy(mdctx);
 
@@ -1465,9 +1570,49 @@ rspamd_dkim_make_key(const char *keydata,
 						DKIM_ERROR,
 						DKIM_SIGERROR_KEYFAIL,
 						"cannot extract pubkey from bio");
+			ERR_clear_error();
 			REF_RELEASE(key);
 
 			return NULL;
+		}
+
+		/* d2i_PUBKEY_bio accepts any key type, so check it against k= */
+		EVP_PKEY *evp = key->specific.key_ssl.key_evp;
+
+		if (key->type == RSPAMD_DKIM_KEY_RSA) {
+			if (EVP_PKEY_base_id(evp) != EVP_PKEY_RSA) {
+				g_set_error(err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_KEYFAIL,
+							"DKIM key is not an RSA key");
+				ERR_clear_error();
+				REF_RELEASE(key);
+
+				return NULL;
+			}
+		}
+		else if (key->type == RSPAMD_DKIM_KEY_ECDSA) {
+			if (EVP_PKEY_base_id(evp) != EVP_PKEY_EC) {
+				g_set_error(err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_KEYFAIL,
+							"DKIM key is not an ECDSA key");
+				ERR_clear_error();
+				REF_RELEASE(key);
+
+				return NULL;
+			}
+
+			if (!rspamd_dkim_ec_curve_allowed(evp)) {
+				g_set_error(err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_KEYFAIL,
+							"DKIM key is not on a named P-256, P-384 or P-521 curve");
+				ERR_clear_error();
+				REF_RELEASE(key);
+
+				return NULL;
+			}
 		}
 
 		/*
@@ -1485,6 +1630,19 @@ rspamd_dkim_make_key(const char *keydata,
 						DKIM_SIGERROR_KEYFAIL,
 						"DKIM key has too many bits: %d, maximum is %d",
 						key_bits, max_dkim_key_bits);
+			ERR_clear_error();
+			REF_RELEASE(key);
+
+			return NULL;
+		}
+
+		if (key->type == RSPAMD_DKIM_KEY_RSA && key_bits < min_dkim_rsa_key_bits) {
+			g_set_error(err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_KEYFAIL,
+						"DKIM RSA key is too short: %d bits, minimum is %d",
+						key_bits, min_dkim_rsa_key_bits);
+			ERR_clear_error();
 			REF_RELEASE(key);
 
 			return NULL;
@@ -1558,7 +1716,8 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 		skip_spaces,
 	} state = read_tag,
 	  next_state;
-	char tag = '\0';
+	const char *tag_start = NULL;
+	size_t tag_len = 0;
 	size_t klen = 0, alglen = 0;
 
 	c = txt;
@@ -1571,10 +1730,14 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 			if (*p == '=') {
 				state = read_eqsign;
 			}
+			else if (*p == ';') {
+				/* Empty tag or a tag without value */
+				tag_len = 0;
+			}
 			else if (g_ascii_isspace(*p)) {
 				state = skip_spaces;
 
-				if (tag != '\0') {
+				if (tag_len > 0) {
 					/* We had tag letter */
 					next_state = read_tag_before_eqsign;
 				}
@@ -1584,7 +1747,10 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				}
 			}
 			else {
-				tag = *p;
+				if (tag_len == 0) {
+					tag_start = p;
+				}
+				tag_len++;
 			}
 			p++;
 			break;
@@ -1596,8 +1762,15 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 			if (*p == '=') {
 				state = read_eqsign;
 			}
+			else if (*p == ';') {
+				/* The previous tag had no value */
+				tag_len = 0;
+				state = read_tag;
+			}
 			else {
-				tag = *p;
+				/* The previous tag had no value, this is the start of a new one */
+				tag_start = p;
+				tag_len = 1;
 				state = read_tag;
 			}
 			p++;
@@ -1606,16 +1779,16 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 			/* Always switch to skip spaces state and do not advance p */
 			state = skip_spaces;
 
-			if (tag == 'p') {
+			if (tag_len == 1 && *tag_start == 'p') {
 				next_state = read_p_tag;
 			}
-			else if (tag == 'k') {
+			else if (tag_len == 1 && *tag_start == 'k') {
 				next_state = read_k_tag;
 			}
 			else {
 				/* Unknown tag, ignore */
 				next_state = ignore_value;
-				tag = '\0';
+				tag_len = 0;
 			}
 			break;
 		case read_p_tag:
@@ -1623,7 +1796,7 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				klen = p - c;
 				key = c;
 				state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 				p++;
 			}
 			else {
@@ -1635,7 +1808,7 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				alglen = p - c;
 				alg = c;
 				state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 				p++;
 			}
 			else if (g_ascii_isspace(*p)) {
@@ -1643,7 +1816,7 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 				alg = c;
 				state = skip_spaces;
 				next_state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 			}
 			else {
 				p++;
@@ -1652,13 +1825,13 @@ rspamd_dkim_parse_key(const char *txt, size_t *keylen, GError **err)
 		case ignore_value:
 			if (*p == ';') {
 				state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 				p++;
 			}
 			else if (g_ascii_isspace(*p)) {
 				state = skip_spaces;
 				next_state = read_tag;
-				tag = '\0';
+				tag_len = 0;
 			}
 			else {
 				p++;
@@ -1928,7 +2101,7 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 				}
 				continue;
 			}
-			else if (g_ascii_isspace(*p)) {
+			else if (*p == ' ' || *p == '\t') {
 				/* Process any chunk before the spaces */
 				if (!got_sp && p > chunk_start) {
 					size_t chunk_len = p - chunk_start;
@@ -1952,7 +2125,7 @@ rspamd_dkim_relaxed_body_step(struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck
 				/* Skip all spaces and look ahead */
 				const char *space_start = p;
 				int space_count = 0;
-				while (len > 0 && g_ascii_isspace(*p) && *p != '\r' && *p != '\n') {
+				while (len > 0 && (*p == ' ' || *p == '\t')) {
 					p++;
 					len--;
 					space_count++;
@@ -2441,56 +2614,94 @@ rspamd_dkim_hash_update(EVP_MD_CTX *ck, const char *begin, size_t len)
 	}
 }
 
-/* Update hash by signature value (ignoring b= tag) */
+/* Folding whitespace in a header: WSP and the line breaks of folding */
+#define RSPAMD_DKIM_IS_FWS(c) ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
+
+static void
+rspamd_dkim_signature_hash_part(struct rspamd_dkim_common_ctx *ctx,
+								const char *from, const char *to)
+{
+	if (to > from) {
+		msg_debug_dkim("update hash with signature part: %*s",
+					   (int) (to - from), from);
+		ctx->headers_canonicalised += to - from;
+		rspamd_dkim_hash_update(ctx->headers_hash, from, to - from);
+	}
+}
+
+/*
+ * Update hash by the signature header: everything but the value of the b= tag.
+ * The tag name, whitespace before '=' and '=' itself are hashed, the value up
+ * to the next ';' (or the end) is not, and the trailing line break is not.
+ */
 static void
 rspamd_dkim_signature_update(struct rspamd_dkim_common_ctx *ctx,
 							 const char *begin,
 							 unsigned int len)
 {
-	const char *p, *c, *end;
-	bool tag, skip;
+	const char *p, *c, *end, *colon, *name_start, *name_end;
 
 	end = begin + len;
-	p = begin;
+	/* Skip \r\n at the end */
+	while (end > begin && (end[-1] == '\r' || end[-1] == '\n')) {
+		end--;
+	}
+
+	/* c is the start of the part that is not hashed yet */
 	c = begin;
-	tag = true;
-	skip = false;
+	colon = memchr(begin, ':', end - begin);
+
+	if (colon == NULL) {
+		rspamd_dkim_signature_hash_part(ctx, c, end);
+		return;
+	}
+
+	p = colon + 1;
 
 	while (p < end) {
-		if (tag && p[0] == 'b' && p[1] == '=') {
-			/* Add to signature */
-			msg_debug_dkim("initial update hash with signature part: %*s",
-						   (int) (p - c + 2),
-						   c);
-			ctx->headers_canonicalised += p - c + 2;
-			rspamd_dkim_hash_update(ctx->headers_hash, c, p - c + 2);
-			skip = true;
+		/* Tag name */
+		while (p < end && RSPAMD_DKIM_IS_FWS(*p)) {
+			p++;
 		}
-		else if (skip && (*p == ';' || p == end - 1)) {
-			skip = false;
-			c = p;
+
+		name_start = p;
+
+		while (p < end && *p != '=' && *p != ';') {
+			p++;
 		}
-		else if (!tag && *p == ';') {
-			tag = true;
+
+		if (p < end && *p == '=') {
+			name_end = p;
+
+			while (name_end > name_start && RSPAMD_DKIM_IS_FWS(name_end[-1])) {
+				name_end--;
+			}
+
+			if (name_end - name_start == 1 && *name_start == 'b') {
+				/* Hash up to and including '=' and skip the value */
+				rspamd_dkim_signature_hash_part(ctx, c, p + 1);
+
+				while (p < end && *p != ';') {
+					p++;
+				}
+
+				c = p;
+			}
+			else {
+				/* Tag value */
+				while (p < end && *p != ';') {
+					p++;
+				}
+			}
 		}
-		else if (tag && *p == '=') {
-			tag = false;
+
+		if (p < end) {
+			/* Skip ';' */
+			p++;
 		}
-		p++;
 	}
 
-	p--;
-	/* Skip \r\n at the end */
-	while ((*p == '\r' || *p == '\n') && p >= c) {
-		p--;
-	}
-
-	if (p - c + 1 > 0) {
-		msg_debug_dkim("final update hash with signature part: %*s",
-					   (int) (p - c + 1), c);
-		ctx->headers_canonicalised += p - c + 1;
-		rspamd_dkim_hash_update(ctx->headers_hash, c, p - c + 1);
-	}
+	rspamd_dkim_signature_hash_part(ctx, c, end);
 }
 
 off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
@@ -2519,14 +2730,14 @@ off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
 	/* Value part */
 	h = hvalue;
 	/* Skip spaces at the beginning */
-	while (g_ascii_isspace(*h)) {
+	while (RSPAMD_DKIM_IS_FWS(*h)) {
 		h++;
 	}
 
 	got_sp = false;
 
 	while (*h && (t - out < outlen)) {
-		if (g_ascii_isspace(*h)) {
+		if (RSPAMD_DKIM_IS_FWS(*h)) {
 			if (got_sp) {
 				h++;
 				continue;
@@ -2545,7 +2756,7 @@ off_t rspamd_dkim_canonize_header_relaxed_str(const char *hname,
 		*t++ = *h++;
 	}
 
-	if (g_ascii_isspace(*(t - 1))) {
+	if (RSPAMD_DKIM_IS_FWS(*(t - 1))) {
 		t--;
 	}
 
@@ -2605,6 +2816,86 @@ rspamd_dkim_canonize_header_relaxed(struct rspamd_dkim_common_ctx *ctx,
 	return true;
 }
 
+
+/*
+ * True if the header value is a tag list with the tag i= equal to the given
+ * instance. Tags are checked in order; parsing stops quietly at the first
+ * element that is not name=value, as the payload after i= may be free-form.
+ */
+static bool
+rspamd_dkim_header_has_instance(const char *value, int instance)
+{
+	const char *p = value, *name_start, *name_end, *val_start, *val_end;
+	const char *end = value + strlen(value);
+	char *numend;
+	char numbuf[16];
+	size_t vlen;
+	long v;
+
+	while (p < end) {
+		while (p < end && g_ascii_isspace(*p)) {
+			p++;
+		}
+
+		name_start = p;
+
+		while (p < end && *p != '=' && *p != ';') {
+			p++;
+		}
+
+		if (p >= end || *p != '=') {
+			return false;
+		}
+
+		name_end = p;
+
+		while (name_end > name_start && g_ascii_isspace(name_end[-1])) {
+			name_end--;
+		}
+
+		p++;
+		val_start = p;
+
+		while (p < end && *p != ';') {
+			p++;
+		}
+
+		if (name_end - name_start == 1 && *name_start == 'i') {
+			val_end = p;
+
+			while (val_start < val_end && g_ascii_isspace(*val_start)) {
+				val_start++;
+			}
+
+			while (val_end > val_start && g_ascii_isspace(val_end[-1])) {
+				val_end--;
+			}
+
+			vlen = val_end - val_start;
+
+			if (vlen == 0 || vlen >= sizeof(numbuf)) {
+				return false;
+			}
+
+			memcpy(numbuf, val_start, vlen);
+			numbuf[vlen] = '\0';
+
+			if (!g_ascii_isdigit(numbuf[0])) {
+				return false;
+			}
+
+			v = strtol(numbuf, &numend, 10);
+
+			return *numend == '\0' && v == (long) instance;
+		}
+
+		if (p < end) {
+			p++;
+		}
+	}
+
+	return false;
+}
 
 static bool
 rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
@@ -2678,16 +2969,11 @@ rspamd_dkim_canonize_header(struct rspamd_dkim_common_ctx *ctx,
 				* This branch is used for ARC headers, and it orders them based on
 				* i=<number> string and not their real order in the list of headers
 				*/
-				char idx_buf[16];
-				int id_len, i;
-
-				id_len = rspamd_snprintf(idx_buf, sizeof(idx_buf), "i=%d;",
-										 count);
+				int i;
 
 				for (cur = rh->prev, i = 0; i < max_list_iters; cur = cur->prev, i++) {
 					if (cur->decoded &&
-						rspamd_substring_search(cur->decoded, strlen(cur->decoded),
-												idx_buf, id_len) != -1) {
+						rspamd_dkim_header_has_instance(cur->decoded, count)) {
 						sel = cur;
 						break;
 					}
@@ -2891,6 +3177,21 @@ rspamd_dkim_check(rspamd_dkim_context_t *ctx,
 	if (!body_start) {
 		res->rcode = DKIM_ERROR;
 		return res;
+	}
+
+	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL && ctx->zero_len) {
+		/* Any content of the body would be outside of the signature */
+		for (const char *p = body_start; p < body_end; p++) {
+			if (*p != '\r' && *p != '\n' && *p != ' ' && *p != '\t') {
+				msg_info_dkim("%s: l=0 for a message with a body; d=%s; s=%s",
+							  rspamd_dkim_type_to_string(ctx->common.type),
+							  ctx->domain, ctx->selector);
+				res->fail_reason = "l=0 does not cover the body";
+				res->rcode = DKIM_RECORD_ERROR;
+
+				return res;
+			}
+		}
 	}
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {

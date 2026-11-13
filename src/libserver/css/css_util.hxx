@@ -28,9 +28,21 @@ namespace rspamd::css {
  * Unescape css escapes
  * \20AC : must be followed by a space if the next character is one of a-f, A-F, 0-9
  * \0020AC : must be 6 digits long, no space needed (but can be included)
+ *
+ * The result is lowercased. An escape is decoded only if the result is a name
+ * character, any other escape is kept in place so that it cannot become a
+ * syntax character. With in_string set the input is the content of a string
+ * and every escape is decoded.
  */
 std::string_view unescape_css(rspamd_mempool_t *pool,
-							  const std::string_view &sv);
+							  const std::string_view &sv,
+							  bool in_string = false);
+
+/*
+ * Returns true if the input has a backslash outside of strings and comments;
+ * strings end the way the tokeniser ends them
+ */
+bool css_has_escape(const std::string_view &sv);
 
 }// namespace rspamd::css
 

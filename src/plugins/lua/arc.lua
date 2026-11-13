@@ -88,23 +88,28 @@ local ar_settings = lua_auth_results.default_settings
 
 -- Get Authentication-Results header, optionally filtering by trusted authserv-id
 local function get_trusted_ar_header(task)
-  if settings.trusted_authserv_id then
-    local ar_headers = task:get_header_full('Authentication-Results')
-    if ar_headers then
-      for _, hdr in ipairs(ar_headers) do
-        local authserv_id = string.match(hdr.decoded, '^%s*([^;%s]+)')
-        if authserv_id and authserv_id == settings.trusted_authserv_id then
-          lua_util.debugm(N, task, 'found trusted AR header with authserv-id: %s', authserv_id)
-          return hdr.decoded
-        end
-      end
-      lua_util.debugm(N, task, 'no AR header matched trusted authserv-id: %s',
-          settings.trusted_authserv_id)
-    end
+  -- The values as they are, not decoded: they are copied into the seal, and an
+  -- encoded-word decoded in a comment would close it and add a result
+  local ar_headers = task:get_header_full('Authentication-Results')
+
+  if not ar_headers or #ar_headers == 0 then
     return nil
-  else
-    return task:get_header('Authentication-Results')
   end
+
+  if settings.trusted_authserv_id then
+    for _, hdr in ipairs(ar_headers) do
+      local authserv_id = string.match(hdr.value or '', '^%s*([^;%s]+)')
+      if authserv_id and authserv_id == settings.trusted_authserv_id then
+        lua_util.debugm(N, task, 'found trusted AR header with authserv-id: %s', authserv_id)
+        return hdr.value
+      end
+    end
+    lua_util.debugm(N, task, 'no AR header matched trusted authserv-id: %s',
+        settings.trusted_authserv_id)
+    return nil
+  end
+
+  return ar_headers[1].value
 end
 
 local function parse_arc_header(hdr, target, is_aar)
@@ -139,9 +144,12 @@ local function parse_arc_header(hdr, target, is_aar)
         end, elts)
       )
     else
-      -- For AAR: use LPeg-based parser that respects comments and quoted
-      -- strings when splitting on ';' (fixes #5963)
-      local parsed = lua_auth_results.parse_aar_header(val.decoded)
+      -- For AAR: a parser that respects comments and quoted strings when
+      -- splitting on ';' (fixes #5963); comments nested too deep give no
+      -- AAR, which fails the chain
+      -- Not the decoded value: an encoded-word decoded in a comment (e.g. the
+      -- sender a forwarder put there) would close it and add a result
+      local parsed = lua_auth_results.parse_aar_header(val.value)
       if parsed then
         if parsed.i then
           target[i].i = parsed.i
@@ -149,6 +157,7 @@ local function parse_arc_header(hdr, target, is_aar)
         if parsed.ar then
           target[i].ar = parsed.ar
         end
+        target[i].truncated = parsed.truncated
       end
     end
 
@@ -160,6 +169,45 @@ local function parse_arc_header(hdr, target, is_aar)
   table.sort(target, function(a, b)
     return (tonumber(a.i) or 0) < (tonumber(b.i) or 0)
   end)
+end
+
+-- The results of a method in an AAR: only the result of the method of an
+-- element counts, other `key=value` pairs are properties, or text that a
+-- comment failed to hide
+local function aar_method_results(aar, method)
+  local res = {}
+  for _, ar in ipairs(aar.ar or {}) do
+    if ar.method == method and ar[method] then
+      table.insert(res, ar)
+    end
+  end
+  return res
+end
+
+-- The DMARC results that a split on every ';' finds, ignoring comments and
+-- quotes: text that should have been a comment (a sender written unescaped)
+-- may open a quote or a comment that hides a later result from the split
+-- that respects them
+local function naive_dmarc_count(raw)
+  -- Each place where an element can start one: after ';' or after a comment
+  -- in front of it, blanks between. Never fewer than the split finds
+  local n = 0
+  for _ in (';' .. raw):gmatch('[;)]%s*[Dd][Mm][Aa][Rr][Cc]%s*[/=]') do
+    n = n + 1
+  end
+  return n
+end
+
+-- The DMARC result of an AAR: a forwarder writes one. More of them means that
+-- text that should have been a comment looks like a result: when unsure, do
+-- not take any. The second value is true then
+local function aar_dmarc_result(aar)
+  local res = aar_method_results(aar, 'dmarc')
+  -- An AAR too long to be read gives no result to trust either
+  if aar.truncated or #res > 1 or (aar.raw_header and naive_dmarc_count(aar.raw_header) > #res) then
+    return nil, true
+  end
+  return res[1], false
 end
 
 local function arc_validate_seals(task, seals, sigs, ars)
@@ -255,11 +303,30 @@ local function arc_callback(task)
     return
   end
 
+  -- A chain that fails here is not sealed further either (see 'arc-failure')
+  local function fail_chain(reason)
+    task:insert_result(arc_symbols['invalid'], 1.0, reason)
+    task:cache_set('arc-failure', reason)
+  end
+
+  if #arc_seal_headers > 50 or (arc_ar_headers and #arc_ar_headers > 50) then
+    -- RFC 8617 5.2: at most 50 sets, else the chain fails
+    fail_chain('too many ARC sets')
+    return
+  end
+
   if #arc_sig_headers ~= #arc_seal_headers then
     -- We mandate that count of seals is equal to count of signatures
     rspamd_logger.infox(task, 'number of seals (%s) is not equal to number of signatures (%s)',
       #arc_seal_headers, #arc_sig_headers)
-    task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
+    fail_chain('invalid count of seals and signatures')
+    return
+  end
+
+  if arc_ar_headers and #arc_ar_headers ~= #arc_seal_headers then
+    -- Each set has one AAR (checked again with the seals): not parsed for nothing
+    fail_chain(string.format('invalid count of ARC-Authentication-Results: %d, expected %d',
+      #arc_ar_headers, #arc_seal_headers))
     return
   end
 
@@ -279,7 +346,13 @@ local function arc_callback(task)
   parse_arc_header(arc_sig_headers, cbdata.sigs, false)
 
   if arc_ar_headers then
-    parse_arc_header(arc_ar_headers, cbdata.ars, true)
+    -- Results that the parser cannot read fail the chain
+    local ok, err = pcall(parse_arc_header, arc_ar_headers, cbdata.ars, true)
+    if not ok then
+      rspamd_logger.infox(task, 'cannot parse ARC-Authentication-Results: %s', err)
+      fail_chain('cannot parse ARC-Authentication-Results')
+      return
+    end
   end
 
   -- Fix i type
@@ -328,15 +401,45 @@ local function arc_callback(task)
 
     -- Publish trust only after the entire chain succeeds, in instance order.
     if settings.whitelisted_signers_map then
-      for index, sig in ipairs(cbdata.seals) do
+      -- A forwarder vouches for the message as it passed it on, not for what
+      -- the later hops did to it: anyone can add an ARC set of their own after
+      -- a genuine one, and change the message on the way. So a trusted
+      -- forwarder counts only if every later instance up to N, the hop that
+      -- handed the message to us, is a trusted forwarder too.
+      local first_trusted = #cbdata.seals + 1
+      if not cbdata.ams_verified then
+        -- The whitelist keeps the chain valid, but without the newest AMS
+        -- the AARs can belong to any message
+        rspamd_logger.infox(task, 'do not trust forwarders: the newest ARC-Message-Signature ' ..
+          'was not verified')
+      end
+      for index = cbdata.ams_verified and #cbdata.seals or 0, 1, -1 do
+        -- The d= whose key verified the seal, as the C parser read it:
+        -- our own split of the header can see a different d=
         local domain = cbdata.seal_domains[index]
-        local trusted = settings.whitelisted_signers_map:get_key(sig.d)
-        if trusted and not cbdata.seal_verified[index] then
+        if not settings.whitelisted_signers_map:get_key(domain) then
+          break
+        end
+        if not cbdata.seal_verified[index] then
           -- The whitelist keeps the chain valid, but a failed seal does not
           -- authenticate its d= or the AAR of its instance
           rspamd_logger.infox(task, 'do not trust forwarder %s on i=%s: its seal was not verified',
             domain, index)
-        elseif trusted then
+          break
+        end
+        first_trusted = index
+      end
+
+      local trusted_aars = {}
+      for index, sig in ipairs(cbdata.seals) do
+        local domain = cbdata.seal_domains[index]
+        if index < first_trusted then
+          if cbdata.ams_verified and cbdata.seal_verified[index] and
+              settings.whitelisted_signers_map:get_key(domain) then
+            rspamd_logger.infox(task, 'do not trust forwarder %s on i=%s: a later hop is not trusted',
+              domain, index)
+          end
+        else
           -- Whitelisted signer has been found in a valid chain
           local mult = 1.0
           local cur_aar = cbdata.ars[index]
@@ -344,25 +447,22 @@ local function arc_callback(task)
             rspamd_logger.warnx(task, "cannot find Arc-Authentication-Results for trusted " ..
               "forwarder %s on i=%s", domain, index)
           else
-            task:cache_set(AR_TRUSTED_CACHE_KEY, cur_aar)
-            local seen_dmarc
-            for _, ar in ipairs(cur_aar.ar or {}) do
-              if ar.dmarc then
-                local dmarc_fwd = ar.dmarc
-                seen_dmarc = true
-                if dmarc_fwd == 'reject' or dmarc_fwd == 'fail' or dmarc_fwd == 'quarantine' then
-                  lua_util.debugm(N, "found rejected dmarc on forwarding")
-                  mult = 0.0
-                elseif dmarc_fwd == 'pass' then
-                  mult = 1.0
-                end
-              elseif ar.spf then
+            table.insert(trusted_aars, cur_aar)
+            local dmarc, ambiguous = aar_dmarc_result(cur_aar)
+            local dmarc_fwd = dmarc and dmarc.dmarc
+            if ambiguous then
+              rspamd_logger.infox(task, 'forwarder %s on i=%s has more than one DMARC result',
+                domain, index)
+              mult = 0.0
+            elseif dmarc_fwd == 'reject' or dmarc_fwd == 'fail' or dmarc_fwd == 'quarantine' then
+              lua_util.debugm(N, "found rejected dmarc on forwarding")
+              mult = 0.0
+            elseif dmarc_fwd ~= 'pass' then
+              for _, ar in ipairs(aar_method_results(cur_aar, 'spf')) do
                 local spf_fwd = ar.spf
                 if spf_fwd == 'reject' or spf_fwd == 'fail' or spf_fwd == 'quarantine' then
                   lua_util.debugm(N, "found rejected spf on forwarding")
-                  if not seen_dmarc then
-                    mult = mult * 0.5
-                  end
+                  mult = 0.5
                 end
               end
             end
@@ -370,6 +470,11 @@ local function arc_callback(task)
           task:insert_result(arc_symbols.trusted_allow, mult,
             string.format('%s:s=%s:i=%d', domain, sig.s, index))
         end
+      end
+
+      if #trusted_aars > 0 then
+        -- In instance order
+        task:cache_set(AR_TRUSTED_CACHE_KEY, trusted_aars)
       end
     end
 
@@ -415,6 +520,8 @@ local function arc_callback(task)
   local function arc_signature_cb(_, res, err, domain)
     lua_util.debugm(N, task, 'checked arc signature %s: %s(%s)',
       domain, res, err)
+    -- Only the newest AMS binds the sealed AARs to this message
+    cbdata.ams_verified = res and true or false
 
     if not res then
       -- Check if this domain is whitelisted for broken ARC implementations
@@ -964,28 +1071,64 @@ rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CHECK', true)
 rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK', true)
 
 if settings.adjust_dmarc and settings.whitelisted_signers_map then
+  -- A domain as DMARC compares it: lowercase A-labels, no trailing dot
+  local function normalize_domain(task, domain)
+    if type(domain) ~= 'string' then
+      return nil
+    end
+    -- Some implementations put an address there
+    domain = domain:match('^<?(.-)>?$'):match('([^@]*)$'):gsub('%.$', '')
+    if domain == '' then
+      return nil
+    end
+    if domain:find('[\128-\255]') then
+      domain = task:get_resolver():idna_convert_utf8(domain, task:get_mempool())
+      -- What does not convert comes back with U+FFFD
+      if not domain or domain:find('[\128-\255]') then
+        return nil
+      end
+    end
+    return domain:lower()
+  end
+
   local function arc_dmarc_adjust_cb(task)
-    local trusted_arc_ar = task:cache_get(AR_TRUSTED_CACHE_KEY)
+    local trusted_aars = task:cache_get(AR_TRUSTED_CACHE_KEY)
     local sym_to_adjust
     if task:has_symbol(ar_settings.dmarc_symbols.reject) then
       sym_to_adjust = ar_settings.dmarc_symbols.reject
     elseif task:has_symbol(ar_settings.dmarc_symbols.quarantine) then
       sym_to_adjust = ar_settings.dmarc_symbols.quarantine
     end
-    if sym_to_adjust and trusted_arc_ar and trusted_arc_ar.ar then
-      for _, ar in ipairs(trusted_arc_ar.ar) do
-        if ar.dmarc then
-          local dmarc_fwd = ar.dmarc
-          if dmarc_fwd == 'pass' then
-            rspamd_logger.infox(task, "adjust dmarc reject score as trusted forwarder "
-              .. "proved DMARC validity for %s", ar['header.from'])
-            task:adjust_result(sym_to_adjust, 0.1,
-              'ARC trusted')
-          end
+    if not sym_to_adjust or not trusted_aars then
+      return
+    end
+    -- A forwarder proves DMARC for the From it saw, which must be the From
+    -- that DMARC has checked here (the one the message came with)
+    local from = task:get_from({ 'mime', 'orig' })
+    if not from or not from[1] or from[2] then
+      return
+    end
+    local from_domain = normalize_domain(task, from[1].domain)
+    if not from_domain then
+      return
+    end
+    for _, aar in ipairs(trusted_aars) do
+      local ar = aar_dmarc_result(aar)
+      if ar and ar.dmarc == 'pass' then
+        local proved_domain = normalize_domain(task, ar['header.from'])
+        if proved_domain == from_domain then
+          rspamd_logger.infox(task, "adjust dmarc reject score as trusted forwarder "
+            .. "proved DMARC validity for %s", from_domain)
+          task:adjust_result(sym_to_adjust, 0.1,
+            'ARC trusted')
+          return
         end
+        rspamd_logger.infox(task, "do not adjust dmarc reject score: trusted forwarder "
+          .. "proved DMARC validity for %s, not for %s", proved_domain, from_domain)
       end
     end
   end
+
   rspamd_config:register_symbol({
     name = 'ARC_DMARC_ADJUSTMENT',
     callback = arc_dmarc_adjust_cb,

@@ -28,6 +28,7 @@ local lua_util = require "lua_util"
 local rspamd_text = require "rspamd_text"
 local rspamd_trie = require "rspamd_trie"
 
+local logger = require "rspamd_logger"
 local N = "lua_magic"
 local exports = {}
 -- trie objects
@@ -38,6 +39,10 @@ local compiled_tail_patterns
 local processed_patterns = {}
 local short_patterns = {}
 local tail_patterns = {}
+-- {offset, bytes, weight, ext}: bytes at one place past the start of the
+-- data, which are compared there. A pattern for them would be looked for
+-- anywhere and be told once, at its first place, which may be another one
+local fixed_patterns = {}
 
 local short_match_limit = 128
 local max_short_offset = -1
@@ -96,7 +101,14 @@ local function process_patterns(log_obj)
       assert(types[ext], 'not found type: ' .. ext)
       pattern.ext = ext
       for _, match in ipairs(pattern.matches) do
-        if match.string then
+        if match.fixed then
+          local bytes = match.string or match.hex:gsub('%x%x', function(h)
+            return string.char(tonumber(h, 16))
+          end)
+          fixed_patterns[#fixed_patterns + 1] = {
+            match.relative_position, bytes, match.weight, ext
+          }
+        elseif match.string then
           if match.relative_position and not match.position then
             match.position = match.relative_position + #match.string
 
@@ -227,9 +239,12 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
           pattern.ext, pos, offset)
         if match_position(pos + offset, position) then
           if match.heuristic then
-            local ext, weight = match.heuristic(input, log_obj, pos + offset, part)
+            -- An error in one heuristic must not leave the part with no type
+            local ok, ext, weight = pcall(match.heuristic, input, log_obj, pos + offset, part)
 
-            if ext then
+            if not ok then
+              logger.errx(log_obj, 'heuristic for %s failed: %s', pattern.ext, ext)
+            elseif ext then
               add_result(weight, ext)
               break
             end
@@ -237,40 +252,6 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
             add_result(match.weight, pattern.ext)
             break
           end
-        end
-      end
-    elseif match.positions then
-      -- Match all positions
-      local all_right = true
-      local matched_pos = 0
-      for _, position in ipairs(match.positions) do
-        local matched = false
-        for _, pos in ipairs(matched_positions) do
-          lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
-            pattern.ext, pos, offset)
-          if not match_position(pos + offset, position) then
-            matched = true
-            matched_pos = pos
-            break
-          end
-        end
-        if not matched then
-          all_right = false
-          break
-        end
-      end
-
-      if all_right then
-        if match.heuristic then
-          local ext, weight = match.heuristic(input, log_obj, matched_pos + offset, part)
-
-          if ext then
-            add_result(weight, ext)
-            break
-          end
-        else
-          add_result(match.weight, pattern.ext)
-          break
         end
       end
     end
@@ -282,6 +263,10 @@ local function process_detected(res)
 
   if #extensions > 0 then
     table.sort(extensions, function(ex1, ex2)
+      if res[ex1] == res[ex2] then
+        -- The same answer on each run
+        return ex1 < ex2
+      end
       return res[ex1] > res[ex2]
     end)
 
@@ -291,6 +276,13 @@ local function process_detected(res)
   return nil
 end
 
+-- What a file that ends as a disk image may really start with: the images
+-- are made of compressed chunks, and the first one is at the start
+local tail_wins_over = {
+  bz2 = true,
+  xz = true,
+}
+
 exports.detect = function(part, log_obj)
   if not log_obj then
     log_obj = rspamd_config
@@ -298,6 +290,18 @@ exports.detect = function(part, log_obj)
   local input = part:get_content()
 
   local res = {}
+  -- A signature at the end of the data is what is left when the start of the
+  -- data says nothing: bytes appended to a file do not change what opens it
+  local tail_res = {}
+  local function by_tail(head_ext)
+    if head_ext and not tail_wins_over[head_ext] then
+      return nil
+    end
+
+    local extensions = process_detected(tail_res)
+
+    return extensions and extensions[1]
+  end
 
   if type(input) == 'string' then
     -- Convert to rspamd_text
@@ -315,7 +319,15 @@ exports.detect = function(part, log_obj)
     if inplen > min_tail_offset then
       local tail = input:span(inplen - min_tail_offset, min_tail_offset)
       match_chunk(tail, input, inplen, inplen - min_tail_offset,
-        compiled_tail_patterns, tail_patterns, log_obj, res, part)
+        compiled_tail_patterns, tail_patterns, log_obj, tail_res, part)
+    end
+
+    for _, fixed in ipairs(fixed_patterns) do
+      local offset, bytes = fixed[1], fixed[2]
+
+      if inplen >= offset + #bytes and tostring(input:span(offset + 1, #bytes)) == bytes then
+        res[fixed[4]] = (res[fixed[4]] or 0) + fixed[3]
+      end
     end
 
     -- Try short match
@@ -330,7 +342,9 @@ exports.detect = function(part, log_obj)
 
     if extensions and #extensions > 0 and confidence > 30 then
       -- We are done on short patterns
-      return extensions[1], types[extensions[1]]
+      local ext = by_tail(extensions[1]) or extensions[1]
+
+      return ext, types[ext]
     end
 
     -- No way, let's check data in chunks or just the whole input if it is small enough
@@ -359,9 +373,17 @@ exports.detect = function(part, log_obj)
   if extensions and #extensions > 0 then
     for _, ext in ipairs(extensions) do
       if ext ~= 'svg' or heuristics.svg_format_heuristic(input, log_obj) then
+        ext = by_tail(ext) or ext
+
         return ext, types[ext]
       end
     end
+  end
+
+  local tail_ext = by_tail(nil)
+
+  if tail_ext then
+    return tail_ext, types[tail_ext]
   end
 
   -- Nothing found

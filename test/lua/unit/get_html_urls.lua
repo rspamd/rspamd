@@ -447,6 +447,13 @@ Content-Type: text/html
     { 'www.example.com/path', 'http://www.example.com/path' },
     { 'www.example.com?a=b', 'http://www.example.com?a=b' },
     { '//example.com/x', 'http://example.com/x' },
+    -- browsers drop tabs and line breaks and take backslashes as slashes
+    { '\\\\example.com/x', 'http://example.com/x' },
+    { '/\\example.com/x', 'http://example.com/x' },
+    { '/&#9;/example.com/x', 'http://example.com/x' },
+    { 'mai&#9;lto:x@y.com', 'mailto:x@y.com' },
+    -- `://` later in the link does not make it absolute
+    { '//example.com/#://', 'http://example.com/#://' },
     -- explicit schemes are not touched by the heuristic at all
     { 'http://user@host.com/', 'http://user@host.com/' },
     { 'mailto:x@y.com', 'mailto:x@y.com' },
@@ -578,6 +585,26 @@ Content-Type: text/html
     task:destroy()
   end)
 
+  test('A matching query target does not erase the displayed domain mismatch', function()
+    local res, task = rspamd_task.load_from_string(
+        'Content-Type: text/html\r\n\r\n' ..
+        '<a href="https://example.com/?url=https://example.org/">https://example.org/</a>',
+        rspamd_config)
+    assert_true(res)
+    task:process_message()
+
+    local found
+    for _, u in ipairs(task:get_urls() or {}) do
+      if u:get_host() == 'example.com' then
+        found = true
+        assert_true(u:is_phished())
+        assert_equal('example.org', u:get_phished():get_host())
+      end
+    end
+    assert_true(found)
+    task:destroy()
+  end)
+
   local padding_cases = {
     { 'no padding', '', 'https://example.org/', true },
     { 'zero-width padding', string.rep('\226\128\139', 1400), 'https://example.org/', true },
@@ -614,7 +641,8 @@ Content-Type: text/html
     end)
   end
 
-  test('Nested links share long leading padding without losing the displayed domain', function()
+  test('Unclosed links with long leading padding keep the displayed domain of the last one', function()
+    -- A link start tag ends the open link, so the links are siblings
     local body = {}
     for i = 1, 50 do
       body[#body + 1] = '<a href="https://example.com/' .. i .. '">' ..
@@ -625,15 +653,19 @@ Content-Type: text/html
         'Content-Type: text/html; charset=utf-8\r\n\r\n' .. table.concat(body), rspamd_config)
     assert_true(res)
     task:process_message()
-    local nlinks = 0
+    local nlinks, nphished = 0, 0
     for _, u in ipairs(task:get_urls() or {}) do
       if u:get_host() == 'example.com' then
         nlinks = nlinks + 1
-        assert_true(u:is_phished())
-        assert_equal('https://example.org/', u:get_visible())
+        if u:is_phished() then
+          nphished = nphished + 1
+          assert_equal('https://example.com/50', tostring(u))
+          assert_equal('https://example.org/', u:get_visible())
+        end
       end
     end
     assert_equal(50, nlinks)
+    assert_equal(1, nphished)
     task:destroy()
   end)
 

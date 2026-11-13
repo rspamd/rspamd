@@ -320,7 +320,9 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
       for origin, labels in pairs(sym_origins) do
         table.sort(labels)
         if merge_checks then
-          options[#options + 1] = make_option(origin, ip, table.concat(labels, ','))
+          for _, label in ipairs(labels) do
+            options[#options + 1] = make_option(origin, ip, label)
+          end
         else
           for _, label in ipairs(labels) do
             task:insert_result(sym_name, 1.0, make_option(origin, ip, label))
@@ -329,7 +331,8 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
       end
 
       if merge_checks then
-        -- A single insertion, so the weight is counted (and a shot spent) once
+        -- A single insertion with one option per check, so the weight is
+        -- counted (and a shot spent) once
         table.sort(options)
         task:insert_result(sym_name, 1.0, options)
       end
@@ -1595,13 +1598,10 @@ local function rbl_callback_white(task)
           if not whitelisted_elements[elt] then
             whitelisted_elements[elt] = {}
           end
-          -- `what` might be a comma-joined list of labels (merged request)
-          for label in what:gmatch('[^,]+') do
-            table.insert(whitelisted_elements[elt], {
-              type = label,
-              symbol = w,
-            })
-          end
+          table.insert(whitelisted_elements[elt], {
+            type = what,
+            symbol = w,
+          })
         end
       end
     end

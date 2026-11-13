@@ -31,9 +31,9 @@
 struct ucl_hash_node_s;
 typedef struct ucl_hash_node_s ucl_hash_node_t;
 
-typedef int (*ucl_hash_cmp_func) (const void* void_a, const void* void_b);
-typedef void (*ucl_hash_free_func) (void *ptr, void *ud);
-typedef void* ucl_hash_iter_t;
+typedef int (*ucl_hash_cmp_func)(const void *void_a, const void *void_b);
+typedef void (*ucl_hash_free_func)(void *ptr, void *ud);
+typedef void *ucl_hash_iter_t;
 
 
 /**
@@ -46,7 +46,7 @@ typedef struct ucl_hash_struct ucl_hash_t;
 /**
  * Initializes the hashtable.
  */
-ucl_hash_t* ucl_hash_create (bool ignore_case);
+ucl_hash_t *ucl_hash_create(bool ignore_case);
 
 /**
  * Deinitializes the hashtable.
@@ -55,41 +55,43 @@ ucl_hash_t* ucl_hash_create (bool ignore_case);
  *   the stored objects alone and only frees the table
  * @param ud opaque context handed to `func`
  */
-void ucl_hash_destroy (ucl_hash_t* hashlin, ucl_hash_free_func func, void *ud);
+void ucl_hash_destroy(ucl_hash_t *hashlin, ucl_hash_free_func func, void *ud);
 
 /**
  * Inserts an element in the the hashtable.
  * @return true on success, false on failure (i.e. ENOMEM)
  */
-bool ucl_hash_insert (ucl_hash_t* hashlin, const ucl_object_t *obj, const char *key,
-		unsigned keylen);
+bool ucl_hash_insert(ucl_hash_t *hashlin, const ucl_object_t *obj, const char *key,
+					 unsigned keylen);
 
 /**
- * Replace element in the hash
+ * Replace element in the hash with one that has the same key, keeping its
+ * position in the insertion order; nothing is allocated
  */
-void ucl_hash_replace (ucl_hash_t* hashlin, const ucl_object_t *old,
-		const ucl_object_t *new);
+void ucl_hash_replace(ucl_hash_t *hashlin, const ucl_object_t *old,
+					  const ucl_object_t *new);
 
 /**
  * Delete an element from the the hashtable.
  */
-void ucl_hash_delete (ucl_hash_t* hashlin, const ucl_object_t *obj);
+void ucl_hash_delete(ucl_hash_t *hashlin, const ucl_object_t *obj);
 
 /**
  * Searches an element in the hashtable.
  */
-const ucl_object_t* ucl_hash_search (ucl_hash_t* hashlin, const char *key,
-		unsigned keylen);
+const ucl_object_t *ucl_hash_search(ucl_hash_t *hashlin, const char *key,
+									unsigned keylen);
 
 
 /**
  * Iterate over hash table
  * @param hashlin hash
  * @param iter iterator (must be NULL on first iteration)
- * @param ep pointer record exception (such as ENOMEM), could be NULL
+ * @param ep pointer record exception, could be NULL; iterating allocates
+ * nothing and sets it to 0 always
  * @return the next object
  */
-const void* ucl_hash_iterate2 (ucl_hash_t *hashlin, ucl_hash_iter_t *iter, int *ep);
+const void *ucl_hash_iterate2(ucl_hash_t *hashlin, ucl_hash_iter_t *iter, int *ep);
 
 /**
  * Helper macro to support older code
@@ -99,11 +101,12 @@ const void* ucl_hash_iterate2 (ucl_hash_t *hashlin, ucl_hash_iter_t *iter, int *
 /**
  * Check whether an iterator has next element
  */
-bool ucl_hash_iter_has_next (ucl_hash_t *hashlin, ucl_hash_iter_t iter);
+bool ucl_hash_iter_has_next(ucl_hash_t *hashlin, ucl_hash_iter_t iter);
 
 /**
- * Free resources associated with an iterator when iteration is abandoned
- * before completion. Safe to call with NULL iterator.
+ * Free a hash iterator (used when iteration is abandoned early), which holds
+ * nothing to free now
+ * @param iter iterator to free, may be NULL
  */
 void ucl_hash_iterate_free(ucl_hash_iter_t iter);
 
@@ -112,13 +115,8 @@ void ucl_hash_iterate_free(ucl_hash_iter_t iter);
  * @return true on sucess, false on failure (e.g. ENOMEM)
  * @param hashlin
  */
-bool ucl_hash_reserve (ucl_hash_t *hashlin, size_t sz);
+bool ucl_hash_reserve(ucl_hash_t *hashlin, size_t sz);
 
-/**
- * Sorts keys in a hash
- * @param hashlin
- * @param fl
- */
-void ucl_hash_sort (ucl_hash_t *hashlin, enum ucl_object_keys_sort_flags fl);
+void ucl_hash_sort(ucl_hash_t *hashlin, enum ucl_object_keys_sort_flags fl);
 
 #endif

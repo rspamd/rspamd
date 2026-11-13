@@ -107,7 +107,8 @@ struct rspamd_http_message {
 struct rspamd_keepalive_hash_key {
 	rspamd_inet_addr_t *addr;
 	char *host;
-	gboolean is_ssl;
+	/* RSPAMD_HTTP_KEEPALIVE_* */
+	unsigned int is_ssl;
 	unsigned port;
 	GQueue conns;
 };

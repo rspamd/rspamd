@@ -1,0 +1,26 @@
+From: <sender@example.com>
+To: <rcpt@example.com>
+Subject: package
+Date: Wed, 11 Nov 2026 10:00:00 +0000
+Message-ID: <zip_package_exe@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+See the attached file.
+
+--b1
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; name="book.xlsx"
+Content-Disposition: attachment; filename="book.xlsx"
+Content-Transfer-Encoding: base64
+
+UEsDBBQAAAAAAAAAAAAAAAAAAQAAAAEAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbHhQSwMEFAAA
+AAAAAAAAAAAAAAABAAAAAQAAAA8AAAB4bC93b3JrYm9vay54bWx4UEsDBBQAAAAAAAAAAAAAAAAA
+AQAAAAEAAAALAAAAeGwvZXZpbC5leGV4UEsBAhQAFAAAAAAAAAAAAAAAAAABAAAAAQAAABMAAAAA
+AAAAAAAAAAAAAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAAUAAAAAAAAAAAAAAAAAAEAAAAB
+AAAADwAAAAAAAAAAAAAAAAAyAAAAeGwvd29ya2Jvb2sueG1sUEsBAhQAFAAAAAAAAAAAAAAAAAAB
+AAAAAQAAAAsAAAAAAAAAAAAAAAAAYAAAAHhsL2V2aWwuZXhlUEsFBgAAAAADAAMAtwAAAIoAAAAA
+AA==
+--b1--

@@ -18,7 +18,9 @@ jobs:
   integration-test:
     name: Integration & Load Test
     if: github.event_name != 'schedule' || github.repository == 'rspamd/rspamd'
-    runs-on: ubuntu-latest
+    # Must match the base image in test/integration/Dockerfile.local: rspamd
+    # is built on the runner and run inside that container
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:

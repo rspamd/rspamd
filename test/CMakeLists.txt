@@ -66,6 +66,24 @@ if (WITH_HYPERSCAN)
     endif ()
 endif ()
 
+# Reload tests need LSan's exit-time reports; ordinary builds skip them.
+if (SANITIZE MATCHES "address")
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        foreach (reload_mode config maps http-maps lua)
+            add_test(NAME reload-leaks-${reload_mode}
+                    COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/functional/util/reload_leaks.py
+                    --rspamd $<TARGET_FILE:rspamd>
+                    --source ${CMAKE_SOURCE_DIR}
+                    --mode ${reload_mode}
+                    --output-dir ${CMAKE_CURRENT_BINARY_DIR}/reload-leaks/${reload_mode})
+            set_tests_properties(reload-leaks-${reload_mode} PROPERTIES
+                    TIMEOUT 240 SKIP_RETURN_CODE 77 LABELS "sanitizer;reload")
+        endforeach ()
+    endif ()
+endif ()
+
 # Copy test Lua scripts for out-of-source builds
 if (NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
     # Find Lua test files

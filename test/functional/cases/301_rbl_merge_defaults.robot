@@ -22,5 +22,5 @@ GLOBAL OPT-OUT REACHES IGNORE_DEFAULTS RULES
 # A rule that sets merge_checks itself is not overridden by the global default
 RULE MERGE_CHECKS OVERRIDES GLOBAL DEFAULT
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [RBL_MERGE_EXPLICIT]}
-  Expect Symbol With Exact Options  RBL_MERGE_EXPLICIT  example.org:first,second
+  Expect Symbol With Exact Options  RBL_MERGE_EXPLICIT  example.org:first  example.org:second
   Expect Symbol With Score  RBL_MERGE_EXPLICIT  1.0

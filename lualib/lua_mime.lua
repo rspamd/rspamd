@@ -2148,7 +2148,54 @@ exports.extract_text_limited = function(task, opts)
     if skip_rest then break end
 
     local keep_line = true
-    local trimmed_line = line:match("^%s*(.-)%s*$") or ""
+    local last_line = false
+
+    -- A line that does not fit is cut to what is left of the limit, and is
+    -- the last one: a first paragraph without line breaks is longer than
+    -- the limit on its own, and leaving it out leaves no text at all. It is
+    -- cut before anything else looks at it, so that the work on a line is
+    -- bounded by the limit as well
+    if current_bytes + #line + 1 > max_bytes then
+      local room = max_bytes - current_bytes - 1
+
+      if room <= 0 then
+        truncated = true
+        break
+      end
+
+      -- Not in the middle of a character
+      while room > 0 do
+        local b = line:byte(room + 1)
+        if not b or b < 0x80 or b >= 0xc0 then
+          break
+        end
+        room = room - 1
+      end
+
+      line = line:sub(1, room)
+      truncated = true
+      last_line = true
+    end
+
+    -- Without a pattern that backtracks: `^%s*(.-)%s*$` takes a time that is
+    -- the square of the length of a run of spaces inside of a line
+    local trimmed_line = ''
+    local first = line:find('%S')
+
+    if first then
+      local last = #line
+
+      while last > first do
+        local b = line:byte(last)
+        if b == 32 or (b >= 9 and b <= 13) then
+          last = last - 1
+        else
+          break
+        end
+      end
+
+      trimmed_line = line:sub(first, last)
+    end
 
 
     -- Check for standard signature separator (-- or --- with optional trailing whitespace)
@@ -2225,6 +2272,9 @@ exports.extract_text_limited = function(task, opts)
       current_bytes = current_bytes + line_len
     end
 
+    if last_line then
+      break
+    end
   end
 
   local text = table.concat(result_lines, "\n")

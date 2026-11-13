@@ -1553,8 +1553,10 @@ public:
 private:
   bool _bfd_loaded;
 
-  typedef details::handle<bfd *,
-                          details::deleter<bfd_boolean, bfd *, &bfd_close>>
+  // binutils 2.39 dropped bfd_boolean in favour of bool, so take the
+  // return type from bfd_close itself to build against either version
+  typedef details::handle<
+      bfd *, details::deleter<decltype(bfd_close(nullptr)), bfd *, &bfd_close>>
       bfd_handle_t;
 
   typedef details::handle<asymbol **> bfd_symtab_t;

@@ -28,6 +28,9 @@ local lua_maps = require "lua_maps"
 --
 local N = 'phishing'
 local symbol = 'PHISHED_URL'
+local mismatch_symbol = 'URL_DISPLAY_MISMATCH'
+local query_symbol = 'PHISHING_QUERY'
+local rewrite_symbol = 'PHISHING_REWRITE_ALLOWED'
 local phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED'
 local generic_service_symbol = 'PHISHED_GENERIC_SERVICE'
 local openphish_symbol = 'PHISHED_OPENPHISH'
@@ -58,6 +61,38 @@ if not (opts and type(opts) == 'table') then
   return
 end
 
+local maps = {
+  trusted_redirectors = opts.trusted_redirectors,
+  rewrite_domains = opts.rewrite_domains,
+  rewrite_redirectors = opts.rewrite_redirectors,
+  legacy_redirectors = opts.legacy_redirectors,
+}
+if not lua_maps.fill_config_maps(N, maps, {
+  trusted_redirectors = {
+    type = 'glob',
+    description = 'Phishing trusted wrapper hosts',
+    optional = true,
+  },
+  rewrite_domains = {
+    type = 'hash',
+    description = 'Phishing displayed domains and allowed wrappers',
+    optional = true,
+  },
+  rewrite_redirectors = {
+    type = 'hash',
+    description = 'Phishing wrappers and allowed displayed domains',
+    optional = true,
+  },
+  legacy_redirectors = {
+    type = 'set',
+    description = 'Phishing legacy redirectors map',
+    optional = true,
+  },
+}) then
+  lua_util.disable_module(N, 'config')
+  return
+end
+
 local function is_host_excluded(exclusion_map, host)
   if exclusion_map and host then
     local excluded = exclusion_map[host]
@@ -65,6 +100,75 @@ local function is_host_excluded(exclusion_map, host)
       return true
     end
     return false
+  end
+end
+
+local function query_target_matches(task, url, displayed_tld)
+  local pool = task:get_mempool()
+  local target = url:get_query_target(pool)
+  local target_tld = target and target:get_tld()
+  if not target_tld then
+    return false
+  end
+  if target_tld == displayed_tld then
+    return true
+  end
+
+  -- Compare Unicode and punycode spellings of the same domain consistently.
+  local resolver = task:get_resolver()
+  target_tld = resolver:idna_convert_utf8(target_tld)
+  return target_tld and target_tld == resolver:idna_convert_utf8(displayed_tld)
+end
+
+local function canonical_domain(task, domain)
+  if not domain then
+    return nil
+  end
+  local name = task:get_resolver():idna_convert_utf8(domain)
+  return name and (name:lower():gsub('%.$', ''))
+end
+
+local function pair_map_allows(task, map, key_host, key_tld, value_host, value_tld)
+  if not map then
+    return false
+  end
+  for _, key in ipairs({ key_host, key_tld }) do
+    local values = map:get_key(key)
+    if type(values) == 'string' then
+      for _, value in ipairs(lua_util.str_split(values, ', \t')) do
+        local domain = canonical_domain(task, value)
+        if domain and (domain == value_host or domain == value_tld) then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
+local function allowed_rewrite(task, url, displayed)
+  if not (maps.trusted_redirectors or maps.rewrite_domains or maps.rewrite_redirectors) then
+    return nil
+  end
+  local host = canonical_domain(task, url:get_host())
+  if host and maps.trusted_redirectors
+      and maps.trusted_redirectors:get_key(host) then
+    return 'trusted_redirector'
+  end
+
+  local tld = canonical_domain(task, url:get_tld())
+  local displayed_host = canonical_domain(task, displayed:get_host())
+  local displayed_tld = canonical_domain(task, displayed:get_tld())
+  if not (host and tld and displayed_host and displayed_tld) then
+    return nil
+  end
+  if pair_map_allows(task, maps.rewrite_domains,
+      displayed_host, displayed_tld, host, tld) then
+    return 'rewrite_domains'
+  end
+  if pair_map_allows(task, maps.rewrite_redirectors,
+      host, tld, displayed_host, displayed_tld) then
+    return 'rewrite_redirectors'
   end
 end
 
@@ -261,11 +365,13 @@ local function phishing_cb(task)
 
       if url:is_phished() then
         local surl = tostring(url)
+        local href_tld = url:get_tld()
+        local redirected = url:is_redirected()
         local purl
         lua_util.debugm(N, task, 'found phished url: %s',
             surl)
 
-        if url:is_redirected() then
+        if redirected then
           lua_util.debugm(N, task, 'url %s is also been redirected',
               surl)
           local rspamd_url = require "rspamd_url"
@@ -293,6 +399,12 @@ local function phishing_cb(task)
         local tld = url:get_tld()
         local ptld = purl:get_tld()
 
+        -- Record the parser signal even when an authenticated sender, known
+        -- wrapper or resolved redirect makes it harmless for scoring.
+        if href_tld and ptld and href_tld ~= ptld then
+          task:insert_result(mismatch_symbol, 1.0, ptld .. '->' .. href_tld)
+        end
+
         if not ptld or not tld then
           return
         end
@@ -301,6 +413,16 @@ local function phishing_cb(task)
           lua_util.debugm(N, 'exclude phishing from %s -> %s by dmarc domain', tld,
               ptld)
           return
+        end
+
+        if not redirected then
+          local allowed = allowed_rewrite(task, url, purl)
+          if allowed then
+            -- Explicit rewrite permissions also apply to strictly protected
+            -- displayed domains. Feed checks and the raw mismatch remain.
+            task:insert_result(rewrite_symbol, 1.0, ptld .. '->' .. tld .. ':' .. allowed)
+            return
+          end
         end
 
         -- Compare merely the registrable labels: the first label of an eSLD is
@@ -396,12 +518,17 @@ local function phishing_cb(task)
         if weight > 0 then
           if not found_in_map(anchor_exceptions_maps) then
             if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
-              if domains then
-                if is_url_in_map(domains, purl) then
+              if not domains or is_url_in_map(domains, purl) then
+                if not redirected and query_target_matches(task, url, ptld) then
+                  -- A matching embedded target is common in legitimate
+                  -- wrappers, but the outer server can ignore it entirely.
+                  -- Keep this ambiguous case separate from ordinary phishing.
+                  task:insert_result(query_symbol, 1.0, ptld .. '->' .. tld)
+                else
+                  -- An observed redirect destination takes precedence over
+                  -- query parameters that merely claim a destination.
                   task:insert_result(symbol, weight, ptld .. '->' .. tld)
                 end
-              else
-                task:insert_result(symbol, weight, ptld .. '->' .. tld)
               end
             end
           end
@@ -574,6 +701,9 @@ if opts then
   local id
   if opts['symbol'] then
     symbol = opts['symbol']
+    mismatch_symbol = opts['mismatch_symbol'] or mismatch_symbol
+    query_symbol = opts['query_symbol'] or query_symbol
+    rewrite_symbol = opts['rewrite_symbol'] or rewrite_symbol
     -- Register symbol's callback
     id = rspamd_config:register_symbol({
       name = symbol,
@@ -582,6 +712,30 @@ if opts then
 
     -- To exclude from domains for dmarc verified messages
     rspamd_config:register_dependency(symbol, 'DMARC_CHECK')
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = mismatch_symbol,
+      score = 0.0,
+      group = N,
+    })
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = query_symbol,
+      score = 0.0,
+      group = N,
+    })
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = rewrite_symbol,
+      score = 0.0,
+      group = N,
+    })
 
     if opts['phishing_feed_exclusion_symbol'] then
       phishing_feed_exclusion_symbol = opts['phishing_feed_exclusion_symbol']
@@ -690,4 +844,16 @@ if opts then
   phishing_map('phishing_exceptions', phishing_exceptions_maps, id)
   phishing_map('exceptions', anchor_exceptions_maps, id)
   phishing_map('strict_domains', strict_domains_maps, id)
+  -- Preserve the historical exemption while operators migrate to explicit
+  -- trust maps. Redirector discovery alone does not establish trust.
+  if maps.legacy_redirectors then
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = 'REDIRECTOR_FALSE',
+      score = 0.0,
+      group = N,
+    })
+    table.insert(anchor_exceptions_maps, { symbol = 'REDIRECTOR_FALSE', map = maps.legacy_redirectors })
+  end
 end

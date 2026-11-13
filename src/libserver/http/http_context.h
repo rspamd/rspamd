@@ -77,6 +77,14 @@ void rspamd_http_context_free(struct rspamd_http_context *ctx);
 
 struct rspamd_http_context *rspamd_http_context_default(void);
 
+/*
+ * What a pooled connection is besides its host and port: a connection whose
+ * peer certificate was not verified is never given to a request that wants
+ * it verified. A plain `true` is a verified TLS connection
+ */
+#define RSPAMD_HTTP_KEEPALIVE_SSL (1u << 0u)
+#define RSPAMD_HTTP_KEEPALIVE_SSL_NOVERIFY (1u << 1u)
+
 /**
  * Returns preserved keepalive connection if it's available.
  * Refcount is transferred to caller!
@@ -88,7 +96,7 @@ struct rspamd_http_context *rspamd_http_context_default(void);
 struct rspamd_http_connection *rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 																   const rspamd_inet_addr_t *addr,
 																   const char *host,
-																   bool is_ssl);
+																   unsigned int ssl_flags);
 
 /**
  * Checks if there is a valid keepalive connection
@@ -101,7 +109,7 @@ struct rspamd_http_connection *rspamd_http_context_check_keepalive(struct rspamd
 const rspamd_inet_addr_t *rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
 															const char *host,
 															unsigned port,
-															bool is_ssl);
+															unsigned int ssl_flags);
 
 /**
  * Prepares keepalive key for a connection by creating a new entry or by reusing existent
@@ -112,7 +120,17 @@ const rspamd_inet_addr_t *rspamd_http_context_has_keepalive(struct rspamd_http_c
  * @param host
  */
 void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx, struct rspamd_http_connection *conn,
-										   const rspamd_inet_addr_t *addr, const char *host, bool is_ssl);
+										   const rspamd_inet_addr_t *addr, const char *host,
+										   unsigned int ssl_flags);
+
+/**
+ * Takes a connection out of the keepalive pool and closes it, if it is
+ * there: for a connection that has been pushed and is found unfit for reuse
+ * @param ctx
+ * @param conn
+ */
+void rspamd_http_context_drop_keepalive(struct rspamd_http_context *ctx,
+										struct rspamd_http_connection *conn);
 
 /**
  * Pushes a connection to keepalive pool after client request is finished,
