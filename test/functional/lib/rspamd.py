@@ -382,6 +382,75 @@ def Scan_File(filename, **headers):
     return
 
 
+def Apply_Milter_Reply(filename, outfile):
+    """Write `filename` to `outfile` with the header changes from the milter
+    block of ${SCAN_RESULT} applied as rspamd's milter asks an MTA to do it:
+    removals first, then additions, where `order` -1 (or none) appends the
+    header and `order` N >= 0 inserts it at position N of the header block.
+    DKIM signatures returned outside of the milter block go to position 1"""
+    result = BuiltIn().get_variable_value("${SCAN_RESULT}")
+    milter = result.get("milter", {})
+    data = open(filename, 'rb').read().decode('utf-8')
+    nl = '\r\n' if '\r\n' in data else '\n'
+    head, body = data.split(nl + nl, 1)
+
+    headers = []
+    for line in head.split(nl):
+        if line[:1] in (' ', '\t') and headers:
+            headers[-1] += nl + line
+        else:
+            headers.append(line)
+
+    def positions(name):
+        return [i for i, h in enumerate(headers)
+                if h.split(':', 1)[0].strip().lower() == name.lower()]
+
+    for name, nums in milter.get('remove_headers', {}).items():
+        for num in (nums if isinstance(nums, list) else [nums]):
+            pos = positions(name)
+            if num == 0:
+                drop = pos
+            elif 0 < num <= len(pos):
+                drop = [pos[num - 1]]
+            elif num < 0 and -num <= len(pos):
+                drop = [pos[num]]
+            else:
+                drop = []
+            for i in reversed(drop):
+                del headers[i]
+
+    for name, values in milter.get('add_headers', {}).items():
+        for v in (values if isinstance(values, list) else [values]):
+            if isinstance(v, dict):
+                value, order = v['value'], v.get('order', -1)
+            else:
+                value, order = v, -1
+            hdr = '%s: %s' % (name, value)
+            if order < 0:
+                headers.insert(max(0, len(headers) + order + 1), hdr)
+            else:
+                headers.insert(order, hdr)
+
+    sigs = result.get('dkim-signature', [])
+    for sig in (sigs if isinstance(sigs, list) else [sigs]):
+        headers.insert(1, 'DKIM-Signature: %s' % sig)
+
+    with open(outfile, 'wb') as f:
+        f.write((nl.join(headers) + nl + nl + body).encode('utf-8'))
+
+    return outfile
+
+
+def Get_DKIM_Signed_Headers(filename):
+    """Lowercased names in the h= tag of the first DKIM-Signature of a message"""
+    msg = email.message_from_bytes(open(filename, 'rb').read())
+    sig = re.sub(r'\s+', '', msg.get('DKIM-Signature', ''))
+    for tag in sig.split(';'):
+        if tag.startswith('h='):
+            return [h.lower() for h in tag[2:].split(':')]
+    return []
+
+
 def Scan_File_Expect_Error(filename, expected_status, port=None, **headers):
     """POST /checkv2 and require a specific HTTP status; return the body.
 
