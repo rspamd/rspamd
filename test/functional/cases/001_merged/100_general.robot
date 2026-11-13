@@ -909,6 +909,81 @@ TINY PIXEL TRACKER - EXPONENTIAL NOTATION
   ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
   Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
 
+TINY PIXEL TRACKER - PLUS SIGN
+  # A leading plus sign is part of a valid CSS number, so the inline sizes
+  # of 1 pixel override the large attribute ones
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_plus_sign_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - TWO VALUES
+  # Two values are invalid for a width, so the declaration is dropped and
+  # the previous large width stays in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_two_values_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - TWO VALUES CONTROL
+  # The same message with a plain pixel size is a tracking pixel, so
+  # the test above is not vacuous
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_two_values_plain_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - UNKNOWN PRIORITY
+  # Anything but important after an exclamation mark makes the declaration
+  # invalid, so the previous large width stays in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_bang_junk_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - UNKNOWN PRIORITY CONTROL
+  # The same message with a plain pixel size is a tracking pixel, so
+  # the test above is not vacuous
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_bang_junk_plain_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - LEADING ZEROS
+  # Leading zeros do not change a number, so the width is 100 pixels
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_leading_zeros_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - LEADING ZEROS CONTROL
+  # The same message with a plain pixel size is a tracking pixel, so
+  # the test above is not vacuous
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_leading_zeros_plain_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - ESCAPED PROPERTY NAME
+  # An escape in a property name is resolved, so this is a 100 pixel width
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_escaped_name_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - ESCAPED PROPERTY NAME CONTROL
+  # The same message with a plain pixel size is a tracking pixel, so
+  # the test above is not vacuous
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_escaped_name_plain_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - ESCAPED QUOTE IN STRING
+  # An escaped quote does not end a string, so the declarations inside it
+  # are not declarations and the attribute sizes stay in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_string_leak_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - ESCAPED QUOTE IN STRING CONTROL
+  # The same message with a plain pixel size is a tracking pixel, so
+  # the test above is not vacuous
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_string_leak_plain_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
 TINY PIXEL PROBE COMPOSITE - TRUE POSITIVE
   # Per-recipient tracking in Message-Id and a tracker token in the
   # body corroborate the contentless probe shape

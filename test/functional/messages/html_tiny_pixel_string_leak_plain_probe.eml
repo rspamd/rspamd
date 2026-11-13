@@ -1,0 +1,12 @@
+From: no-reply@service.example.org
+To: <user@example.net>
+Subject: Banner
+Message-ID: <banner-979@service.example.org>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Banner</p>
+<img src="https://tracker.example.com/px/979/" width="100" height="100"
+  style="width:1px;height:1px" alt="Banner"/>
+</body></html>
