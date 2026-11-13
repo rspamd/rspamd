@@ -486,7 +486,7 @@ local function gen_rbl_callback(rule)
 
     -- `no_ip` must cover textual sources as well: helo and selectors (e.g. the
     -- `mid` one in DBL) can yield a bare IP literal, rejected by domain zones
-    if rule.no_ip and not is_ip and is_ip_literal(req_str) then
+    if rule.no_ip and not is_ip and is_ip_literal(strip_root_dot(req_str)) then
       lua_util.debugm(N, task, 'skip ip %s from %s: no_ip for rbl %s',
           req_str, label, rule.symbol)
       return

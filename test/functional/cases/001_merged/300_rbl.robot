@@ -258,6 +258,12 @@ NO_IP HELO BRACKETED LITERAL
   Do Not Expect Symbol  RBL_NOIP_HELO
   Do Not Expect Symbol  RBL_NOIP_SELECTOR
 
+NO_IP HELO ROOT DOT LITERAL
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=4.3.2.1.
+  ...  Settings={symbols_enabled = [RBL_NOIP_HELO, RBL_NOIP_SELECTOR]}
+  Do Not Expect Symbol  RBL_NOIP_HELO
+  Do Not Expect Symbol  RBL_NOIP_SELECTOR
+
 NO_IP UNFLATTENED SELECTOR DOMAIN
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  Helo=example.org
   ...  Settings={symbols_enabled = [RBL_NOIP_HELO_TEXT, RBL_NOIP_SELECTOR_TEXT]}
