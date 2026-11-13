@@ -196,6 +196,8 @@ public:
 
 public:
 	parser_tag_type tag;
+	/* For a simple block: the token that opened it, `{`, `(` or `[` */
+	css_parser_token::token_type opener = css_parser_token::token_type::eof_token;
 
 private:
 	std::variant<std::monostate,

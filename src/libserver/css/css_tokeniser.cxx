@@ -96,7 +96,8 @@ auto make_token(void) -> css_parser_token
 
 static constexpr inline auto is_plain_ident_start(char c) -> bool
 {
-	if ((c & 0x80) || g_ascii_isalpha(c) || c == '_') {
+	/* NUL is replaced with U+FFFD by the preprocessing step, an ident char */
+	if ((c & 0x80) || g_ascii_isalpha(c) || c == '_' || c == '\0') {
 		return true;
 	}
 
@@ -196,14 +197,21 @@ auto css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 		return false;
 	}
 
-	auto num = std::get<float>(value);
+	/* The multiplication is done in double to keep a huge number finite */
+	double num = std::get<float>(value);
 	auto sv = std::get<std::string_view>(dim_token.value);
 
 	/* CSS units are case-insensitive */
 	char lower_buf[8];
-	auto unit_len = sv.size() > sizeof(lower_buf) - 1
-						? sizeof(lower_buf) - 1
-						: sv.size();
+
+	if (sv.size() > sizeof(lower_buf) - 1) {
+		/* Longer than any known unit */
+		flags |= css_parser_token::flag_bad_dimension;
+
+		return false;
+	}
+
+	auto unit_len = sv.size();
 
 	for (auto i = 0; i < unit_len; i++) {
 		lower_buf[i] = g_ascii_tolower(sv[i]);
@@ -224,7 +232,15 @@ auto css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 		return false;
 	}
 
-	value = num;
+	/* A huge number multiplied by a unit stays finite */
+	if (num > G_MAXFLOAT) {
+		num = G_MAXFLOAT;
+	}
+	else if (num < -G_MAXFLOAT) {
+		num = -G_MAXFLOAT;
+	}
+
+	value = static_cast<float>(num);
 
 	return true;
 }
@@ -326,11 +342,14 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token 
 					j++;
 				}
 
-				if (input.size() - offset > 3 && input.substr(offset, 3) == "url") {
+				if (!need_escape && i - offset == 3 &&
+					g_ascii_strncasecmp(&input[offset], "url", 3) == 0) {
 					if (j < input.size() && (input[j] == '"' || input[j] == '\'')) {
 						/* Function token */
 						auto ret = maybe_escape_sv(i,
 												   css_parser_token::token_type::function_token);
+						/* The function token owns its opening parenthesis */
+						offset = i + 1;
 						return ret;
 					}
 					else {
@@ -358,6 +377,8 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token 
 				else {
 					auto ret = maybe_escape_sv(i,
 											   css_parser_token::token_type::function_token);
+					/* The function token owns its opening parenthesis */
+					offset = i + 1;
 					return ret;
 				}
 			}
@@ -381,119 +402,116 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token 
 
 auto
 css_tokeniser::consume_number() -> struct css_parser_token {
+	/*
+	 * The extent of the number is found as the CSS syntax defines it:
+	 * [sign] digits [. digits] [(e|E) [sign] digits]; a dot or an exponent
+	 * mark that is not followed by a digit does not belong to the number
+	 */
 	auto i = offset;
-	auto seen_dot = false, seen_exp = false;
+	const auto n = input.size();
 
-	if (input[i] == '-' || input[i] == '+') {
-		i++;
-	}
-	if (input[i] == '.' && i < input.size()) {
-		seen_dot = true;
+	if (i < n && (input[i] == '-' || input[i] == '+')) {
 		i++;
 	}
 
-	while (i < input.size()) {
-		auto c = input[i];
+	while (i < n && g_ascii_isdigit(input[i])) {
+		i++;
+	}
 
-		if (!g_ascii_isdigit(c)) {
-			if (c == '.') {
-				if (!seen_dot) {
-					seen_dot = true;
-				}
-				else {
-					break;
-				}
+	if (i + 1 < n && input[i] == '.' && g_ascii_isdigit(input[i + 1])) {
+		i += 2;
+
+		while (i < n && g_ascii_isdigit(input[i])) {
+			i++;
+		}
+	}
+
+	if (i < n && (input[i] == 'e' || input[i] == 'E')) {
+		auto j = i + 1;
+
+		if (j < n && (input[j] == '-' || input[j] == '+')) {
+			j++;
+		}
+
+		if (j < n && g_ascii_isdigit(input[j])) {
+			while (j < n && g_ascii_isdigit(input[j])) {
+				j++;
 			}
-			else if (c == 'e' || c == 'E') {
-				if (!seen_exp) {
-					seen_exp = true;
-					seen_dot = true; /* dots are not allowed after e */
 
-					if (i + 1 < input.size()) {
-						auto next_c = input[i + 1];
-						if (next_c == '+' || next_c == '-') {
-							i++;
-						}
-						else if (!g_ascii_isdigit(next_c)) {
-							/* Not an exponent */
-							break;
-						}
-					}
-					else {
-						/* Not an exponent */
-						break;
-					}
-				}
-				else {
-					break;
+			i = j;
+		}
+	}
+
+	if (i == offset) {
+		/* Not a number at all, cannot happen for a checked start */
+		msg_err_css("internal error: invalid number, empty token");
+		offset++;
+
+		return make_token<css_parser_token::token_type::delim_token>(input[offset - 1]);
+	}
+
+	/*
+	 * g_ascii_strtod needs a NUL terminated string: use the stack for
+	 * the usual numbers, and the heap for a long run of digits, so the
+	 * value is never taken from a truncated copy
+	 */
+	char numbuf[64];
+	std::string long_num;
+	const char *numstr;
+	auto len = i - offset;
+
+	if (len < sizeof(numbuf)) {
+		memcpy(numbuf, &input[offset], len);
+		numbuf[len] = '\0';
+		numstr = numbuf;
+	}
+	else {
+		long_num.assign(&input[offset], len);
+		numstr = long_num.c_str();
+	}
+
+	auto num = g_ascii_strtod(numstr, nullptr);
+	offset = i;
+
+	/* Out of the float range numbers are clamped, not dropped */
+	if (std::isnan(num)) {
+		num = 0;
+	}
+	else if (num > G_MAXFLOAT) {
+		num = G_MAXFLOAT;
+	}
+	else if (num < -G_MAXFLOAT) {
+		num = -G_MAXFLOAT;
+	}
+
+	auto ret = make_token<css_parser_token::token_type::number_token>(static_cast<float>(num));
+
+	if (i < n) {
+		if (input[i] == '%') {
+			ret.flags |= css_parser_token::number_percent;
+			offset = i + 1;
+		}
+		else if (is_plain_ident_start(input[i])) {
+			auto dim_token = consume_ident();
+
+			if (dim_token.type == css_parser_token::token_type::ident_token) {
+				if (!ret.adjust_dim(dim_token)) {
+					auto sv = std::get<std::string_view>(dim_token.value);
+					msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
+								  (int) sv.size(), sv.begin(), num);
+					/* Unconsume ident */
+					offset = i;
 				}
 			}
 			else {
-				break;
+				/* We have no option but to uncosume ident token in this case */
+				msg_debug_css("got invalid ident like token after number, unconsume it");
+				offset = i;
 			}
 		}
-
-		i++;
 	}
 
-	if (i > offset) {
-		/* I wish it was supported properly */
-		//auto conv_res = std::from_chars(&input[offset], &input[i], num);
-		char numbuf[128], *endptr = nullptr;
-		size_t n = std::min(i - offset, sizeof(numbuf) - 1);
-		memcpy(numbuf, &input[offset], n);
-		numbuf[n] = '\0';
-		auto num = g_ascii_strtod(numbuf, &endptr);
-		offset = i;
-
-		if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
-			msg_debug_css("invalid number: %s", numbuf);
-			return make_token<css_parser_token::token_type::delim_token>(input[i - 1]);
-		}
-		else {
-
-			auto ret = make_token<css_parser_token::token_type::number_token>(static_cast<float>(num));
-
-			if (i < input.size()) {
-				if (input[i] == '%') {
-					ret.flags |= css_parser_token::number_percent;
-					i++;
-
-					offset = i;
-				}
-				else if (is_plain_ident_start(input[i])) {
-					auto dim_token = consume_ident();
-
-					if (dim_token.type == css_parser_token::token_type::ident_token) {
-						if (!ret.adjust_dim(dim_token)) {
-							auto sv = std::get<std::string_view>(dim_token.value);
-							msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
-										  (int) sv.size(), sv.begin(), num);
-							/* Unconsume ident */
-							offset = i;
-						}
-					}
-					else {
-						/* We have no option but to uncosume ident token in this case */
-						msg_debug_css("got invalid ident like token after number, unconsume it");
-					}
-				}
-				else {
-					/* Plain number, nothing to do */
-				}
-			}
-
-			return ret;
-		}
-	}
-	else {
-		msg_err_css("internal error: invalid number, empty token");
-		i++;
-	}
-
-	offset = i;
-	/* Should not happen */
-	return make_token<css_parser_token::token_type::delim_token>(input[i - 1]);
+	return ret;
 }
 
 /*
@@ -602,6 +620,60 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 		return ret;
 	};
 
+	/* Whether an identifier can start at the position */
+	auto would_start_ident = [this](std::size_t pos) -> bool {
+		if (pos >= input.size()) {
+			return false;
+		}
+
+		auto c = input[pos];
+
+		if (is_plain_ident_start(c)) {
+			return true;
+		}
+
+		if (c == '-') {
+			if (pos + 1 >= input.size()) {
+				return false;
+			}
+
+			auto next_c = input[pos + 1];
+
+			return next_c == '-' || is_plain_ident_start(next_c) ||
+				   (next_c == '\\' && pos + 2 < input.size() &&
+					input[pos + 2] != '\n' && input[pos + 2] != '\r' &&
+					input[pos + 2] != '\f');
+		}
+
+		return c == '\\' && pos + 1 < input.size() && input[pos + 1] != '\n' &&
+			   input[pos + 1] != '\r' && input[pos + 1] != '\f';
+	};
+
+	/* Whether a number can start at the position */
+	auto would_start_number = [this](std::size_t pos) -> bool {
+		if (pos >= input.size()) {
+			return false;
+		}
+
+		auto c = input[pos];
+
+		if (c == '-' || c == '+') {
+			pos++;
+
+			if (pos >= input.size()) {
+				return false;
+			}
+
+			c = input[pos];
+		}
+
+		if (c == '.') {
+			return pos + 1 < input.size() && g_ascii_isdigit(input[pos + 1]);
+		}
+
+		return g_ascii_isdigit(c);
+	};
+
 	/*
 	 * Main tokenisation loop
 	 *
@@ -634,7 +706,9 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 		case '\r':
 		case '\f': {
 			/* Consume as much space as we can */
-			while (i < input.size() && g_ascii_isspace(input[i])) {
+			while (i < input.size() &&
+				   (input[i] == ' ' || input[i] == '\t' || input[i] == '\n' ||
+					input[i] == '\r' || input[i] == '\f')) {
 				i++;
 			}
 
@@ -683,7 +757,7 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 		case '<':
 			/* Maybe an xml like comment */
 			if (i + 3 < input.size() && input[i + 1] == '!' && input[i + 2] == '-' && input[i + 3] == '-') {
-				offset += 3;
+				offset = i + 4;
 
 				return make_token<css_parser_token::token_type::cdo_token>();
 			}
@@ -693,47 +767,28 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 			}
 			break;
 		case '-':
-			if (i + 1 < input.size()) {
-				auto next_c = input[i + 1];
-
-				if (g_ascii_isdigit(next_c)) {
-					/* negative number */
-					return consume_number();
-				}
-				else if (next_c == '-') {
-					if (i + 2 < input.size() && input[i + 2] == '>') {
-						/* XML like comment */
-						offset += 3;
-
-						return make_token<css_parser_token::token_type::cdc_token>();
-					}
-				}
-			}
-			/* No other options, a delimiter - */
-			offset = i + 1;
-			return make_token<css_parser_token::token_type::delim_token>(c);
-
-			break;
 		case '+':
 		case '.':
-			/* Maybe number */
-			if (i + 1 < input.size()) {
-				auto next_c = input[i + 1];
+			if (would_start_number(i)) {
+				return consume_number();
+			}
 
-				if (g_ascii_isdigit(next_c)) {
-					/* Numeric token */
-					return consume_number();
+			if (c == '-') {
+				if (i + 2 < input.size() && input[i + 1] == '-' && input[i + 2] == '>') {
+					/* XML like comment */
+					offset = i + 3;
+
+					return make_token<css_parser_token::token_type::cdc_token>();
 				}
-				else {
-					offset = i + 1;
-					return make_token<css_parser_token::token_type::delim_token>(c);
+
+				if (would_start_ident(i)) {
+					return consume_ident();
 				}
 			}
-			/* No other options, a delimiter - */
+
+			/* No other options, a delimiter */
 			offset = i + 1;
 			return make_token<css_parser_token::token_type::delim_token>(c);
-
-			break;
 		case '\\':
 			if (i + 1 < input.size()) {
 				if (input[i + 1] == '\n' || input[i + 1] == '\r') {
@@ -751,23 +806,21 @@ css_tokeniser::next_token(void) -> struct css_parser_token {
 			}
 			break;
 		case '@':
-			if (i + 3 < input.size()) {
-				if (is_plain_ident_start(input[i + 1]) &&
-					is_plain_ident(input[i + 2]) && is_plain_ident(input[i + 3])) {
-					offset = i + 1;
-					auto ident_token = consume_ident();
+			if (would_start_ident(i + 1)) {
+				offset = i + 1;
+				auto ident_token = consume_ident();
 
-					if (ident_token.type == css_parser_token::token_type::ident_token) {
-						/* Update type */
-						ident_token.type = css_parser_token::token_type::at_keyword_token;
-					}
+				if (ident_token.type == css_parser_token::token_type::ident_token) {
+					/* Update type */
+					ident_token.type = css_parser_token::token_type::at_keyword_token;
+				}
+				else if (ident_token.type == css_parser_token::token_type::function_token) {
+					/* An at-keyword is never a function: leave the parenthesis alone */
+					ident_token.type = css_parser_token::token_type::at_keyword_token;
+					offset--;
+				}
 
-					return ident_token;
-				}
-				else {
-					offset = i + 1;
-					return make_token<css_parser_token::token_type::delim_token>(c);
-				}
+				return ident_token;
 			}
 			else {
 				offset = i + 1;
@@ -1117,6 +1170,144 @@ TEST_SUITE("css")
 		/* A newline ends a string */
 		CHECK(css_has_escape("\"a\n\\68 ide"));
 		CHECK(!css_has_escape("\"a\\\nb\\68 ide\""));
+	}
+
+	TEST_CASE("number tokens follow the CSS syntax")
+	{
+		using tt = css_parser_token::token_type;
+		struct num_case {
+			std::string input;
+			float value;
+			bool dimension;
+			bool percent;
+			std::vector<tt> rest; /* the tokens that follow the number */
+		};
+		const std::vector<num_case> cases{
+			{"1e2px", 100, true, false, {}},
+			{"1E2px", 100, true, false, {}},
+			{"1e+2px", 100, true, false, {}},
+			{"1.5e-1px", 0.15f, true, false, {}},
+			{"1e2", 100, false, false, {}},
+			{"1em", 16, true, false, {}},
+			{"1ex", 8, true, false, {}},
+			{"+1px", 1, true, false, {}},
+			{"-1px", -1, true, false, {}},
+			{".5px", 0.5f, true, false, {}},
+			{"+.5px", 0.5f, true, false, {}},
+			{"-.5px", -0.5f, true, false, {}},
+			{"50%", 50, false, true, {}},
+			{"1PX", 1, true, false, {}},
+			{"1.px", 1, false, false, {tt::delim_token, tt::ident_token}},
+			{"1e+px", 1, false, false, {tt::ident_token, tt::delim_token, tt::ident_token}},
+			{"1.5.5", 1.5f, false, false, {tt::number_token}},
+			{"1e2e2", 100, false, false, {tt::ident_token}},
+			{std::string(40, '0') + "100px", 100, true, false, {}},
+			{std::string(300, '0') + "100px", 100, true, false, {}},
+			{"0." + std::string(200, '0') + "1", 0, false, false, {}},
+			{"1" + std::string(300, '0'), G_MAXFLOAT, false, false, {}},
+			{"-1" + std::string(300, '0'), -G_MAXFLOAT, false, false, {}},
+			{"1e999", G_MAXFLOAT, false, false, {}},
+			{"3e38in", G_MAXFLOAT, true, false, {}},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto &c: cases) {
+			css_tokeniser tok{pool, c.input};
+			auto t = tok.next_token();
+			auto label = c.input.substr(0, 40);
+
+			REQUIRE_MESSAGE(t.type == tt::number_token, label);
+			CHECK_MESSAGE(std::get<float>(t.value) == doctest::Approx(c.value).epsilon(1e-5), label);
+			CHECK_MESSAGE(bool(t.flags & css_parser_token::number_dimension) == c.dimension, label);
+			CHECK_MESSAGE(bool(t.flags & css_parser_token::number_percent) == c.percent, label);
+
+			for (auto expected: c.rest) {
+				CHECK_MESSAGE(tok.next_token().type == expected, label);
+			}
+
+			CHECK_MESSAGE(tok.next_token().type == tt::eof_token, label);
+		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("idents strings urls and at-keywords")
+	{
+		using tt = css_parser_token::token_type;
+		struct tok_case {
+			std::string input;
+			std::vector<std::pair<tt, std::string>> toks;
+		};
+		const std::vector<tok_case> cases{
+			{"-webkit-x", {{tt::ident_token, "-webkit-x"}}},
+			{"--x", {{tt::ident_token, "--x"}}},
+			{"--", {{tt::ident_token, "--"}}},
+			{"-", {{tt::delim_token, "-"}}},
+			{"- x", {{tt::delim_token, "-"}, {tt::whitespace_token, " "}, {tt::ident_token, "x"}}},
+			{"-->", {{tt::cdc_token, ""}}},
+			{"<!--x", {{tt::cdo_token, ""}, {tt::ident_token, "x"}}},
+			{"\"a\\\"b\"", {{tt::string_token, "a\"b"}}},
+			{"'a\\'b'", {{tt::string_token, "a'b"}}},
+			{"\"a\nb", {{tt::string_token, "a"}, {tt::whitespace_token, "\n"}, {tt::ident_token, "b"}}},
+			{"\"a;b", {{tt::string_token, "a;b"}}},
+			{"urlx(a;b)", {{tt::function_token, "urlx"}, {tt::ident_token, "a"}, {tt::semicolon_token, ""}, {tt::ident_token, "b"}, {tt::ebrace_token, ""}}},
+			{"url(a;b)", {{tt::url_token, "url(a;b)"}}},
+			{"URL(a)", {{tt::url_token, "URL(a)"}}},
+			{"calc(1)", {{tt::function_token, "calc"}, {tt::number_token, ""}, {tt::ebrace_token, ""}}},
+			{"@media{", {{tt::at_keyword_token, "media"}, {tt::ocurlbrace_token, ""}}},
+			{"@x(", {{tt::at_keyword_token, "x"}, {tt::obrace_token, ""}}},
+			{"@", {{tt::delim_token, "@"}}},
+			{"a\v", {{tt::ident_token, "a"}, {tt::delim_token, "\v"}}},
+			{"a /* x */\tb", {{tt::ident_token, "a"}, {tt::whitespace_token, " "}, {tt::whitespace_token, "\t"}, {tt::ident_token, "b"}}},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+
+		for (const auto &c: cases) {
+			css_tokeniser tok{pool, c.input};
+
+			for (const auto &[type, text]: c.toks) {
+				auto t = tok.next_token();
+
+				CHECK_MESSAGE(t.type == type, c.input);
+
+				if (!text.empty() && t.type != tt::number_token) {
+					CHECK_MESSAGE(t.get_string_or_default("") == text, c.input);
+				}
+			}
+
+			CHECK_MESSAGE(tok.next_token().type == tt::eof_token, c.input);
+		}
+
+		/* The raw newline ends a string as a bad one */
+		css_tokeniser bad{pool, "\"a\nb"};
+		CHECK(bool(bad.next_token().flags & css_parser_token::flag_bad_string));
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("css escapes")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "css", 0);
+		const std::vector<std::pair<std::string, std::string>> cases{
+			{"w\\69 dth", "width"},
+			{"w\\69dth", "w\xDA\x9Dth"}, /* U+069D: the escape takes all the hex digits */
+			{"w\\69", "wi"},             /* cut by the end of the input */
+			{"\\000041", "a"},
+			{"\\0000411", "a1"}, /* at most six hex digits */
+			{"\\i", "i"},
+			{"\\110000 x", "\xEF\xBF\xBDx"},
+			{"\\d800 x", "\xEF\xBF\xBDx"},
+		};
+
+		for (const auto &c: cases) {
+			auto res = unescape_css(pool, c.first);
+
+			CHECK_MESSAGE(std::string{res} == c.second, c.first);
+		}
+
+		rspamd_mempool_delete(pool);
 	}
 
 	TEST_CASE("many sequential comments do not exhaust stack")

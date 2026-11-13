@@ -280,6 +280,8 @@ bool css_parser::need_unescape(const std::string_view &sv)
 auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
 	auto ret = true, want_more = true;
+	/* The function token owns its parenthesis: only the nested ones are counted */
+	auto depth = 0u;
 
 	msg_debug_css("consume function block; top block: %s, recursion level %d",
 				  top->token_type_str(), rec_level);
@@ -302,13 +304,24 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 			/* Ignore whitespaces */
 			break;
 		case css_parser_token::token_type::ebrace_token:
-			ret = true;
-			want_more = false;
+			if (depth > 0) {
+				depth--;
+			}
+			else {
+				ret = true;
+				want_more = false;
+			}
+			break;
+		case css_parser_token::token_type::obrace_token:
+			depth++;
 			break;
 		case css_parser_token::token_type::comma_token:
 		case css_parser_token::token_type::delim_token:
-		case css_parser_token::token_type::obrace_token:
 			break;
+		case css_parser_token::token_type::function_token:
+			/* A nested function owns a parenthesis as well */
+			depth++;
+			[[fallthrough]];
 		default:
 			/* Attach everything to the function block */
 			top->add_function_argument(std::make_unique<css_consumed_block>(
@@ -647,6 +660,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		case css_parser_token::token_type::ocurlbrace_token:
 			block = std::make_unique<css_consumed_block>(
 				css_consumed_block::parser_tag_type::css_simple_block);
+			block->opener = next_token.type;
 			ret = simple_block_consumer(block,
 										css_parser_token::token_type::ecurlbrace_token,
 										true);
@@ -655,6 +669,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		case css_parser_token::token_type::obrace_token:
 			block = std::make_unique<css_consumed_block>(
 				css_consumed_block::parser_tag_type::css_simple_block);
+			block->opener = next_token.type;
 			ret = simple_block_consumer(block,
 										css_parser_token::token_type::ebrace_token,
 										true);
@@ -663,6 +678,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		case css_parser_token::token_type::osqbrace_token:
 			block = std::make_unique<css_consumed_block>(
 				css_consumed_block::parser_tag_type::css_simple_block);
+			block->opener = next_token.type;
 			ret = simple_block_consumer(block,
 										css_parser_token::token_type::esqbrace_token,
 										true);
