@@ -45,7 +45,12 @@
 #define RSPAMD_DKIM_TEST_ASAN 1
 #endif
 #ifdef RSPAMD_DKIM_TEST_ASAN
+#if __has_include(<sanitizer/allocator_interface.h>)
 #include <sanitizer/allocator_interface.h>
+#else
+/* GCC does not install this header, but its libasan exports the function */
+extern "C" size_t __sanitizer_get_current_allocated_bytes(void);
+#endif
 #endif
 
 namespace rspamd_dkim_test {
