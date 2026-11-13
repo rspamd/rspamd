@@ -1,10 +1,181 @@
-Unreleased
+4.3.0: 13 Nov 2026
 
-  * [Fix] Escape symbol option delimiters in X-Spamd-Result and ClickHouse output: an option containing `[`, `]`, `{`, `}`, `;` or `,` is percent-encoded (together with `%`) when options are joined in X-Spamd-Result, X-Virus, metadata_exporter, ClickHouse and the symbols log line, so a crafted attachment name can no longer appear as an extra symbol; options without delimiters are emitted as is. Stored options are unchanged apart from the existing U+FFFD replacement of invalid characters.
-  * [Fix] asn, reputation, rbl, dmarc, content rules and MULTIPLE_UNIQUE_HEADERS insert multi-value results as separate symbol options instead of one comma-joined option
+  ** Incompatible changes **
+  * [Feature] phishing: Separate URL mismatches from phishing scoring
+  * [Conf] phishing: Use dynamic maps for rewrite permissions, trust selected security URL wrapper hosts and keep the mismatch rollout conservative
+  * [Fix] Store symbol options verbatim and percent-encode `[]{};,` and `%` only when options are joined (X-Spamd-Result, X-Virus, metadata_exporter, ClickHouse, the symbols log line); asn, reputation, rbl, dmarc, content rules and MULTIPLE_UNIQUE_HEADERS insert multi-value results as separate options
+  * [Fix] spf: Evaluate a record in the order of its terms, apply the qualifier of an include and a redirect after the mechanisms (`-ip4:1.2.3.4 +ip4:1.2.3.0/24 -all` let 1.2.3.4 pass)
+  * [Fix] dkim: Reject duplicated tags and l=0 over a body, RSA keys under 1024 bits and keys that are not of the type k= declares
+  * [Fix] dkim: Keep the d= domain in lowercase (results, symbol options and glob maps saw the case the signer wrote)
+  * [Fix] Score ASCII SMTPUTF8 syntax violations as INVALID_FROM_ASCII_ADDR and INVALID_RCPT_ASCII_ADDR (1.0); INVALID_FROM_8BIT and INVALID_RCPT_8BIT fire only for 8-bit addresses
+  * [Fix] mime: Read a multipart child without Content-Type as text unless its data is binary (short-text fuzzy hashes of headerless children change)
+  * [Fix] archive: Count files, not names, in get_files(n) and get_files_full(n); other names of an entry follow it and are flagged as aliases
+  * [Fix] archive: Bound archive.unpack to 1 GiB of output and a million headers when no limit is given, and use only the filters libarchive implements itself
+  * [Fix] lua_util: Return inflate errors as a second value instead of logging them
+  * [Fix] lua_url: Tell a redirect target from the url shown for a link (get_redirected was an alias of get_phished)
+  * [Fix] url: Set the image flag only on urls seen as image sources alone (a link that is also an image source is returned by get_urls)
+  * [Fix] Treat a get_date result of 0 as no date in the time('message') selector and the spamassassin plugin (DATE_IN_PAST rules matched mail without Date)
+  * [Rework] pdf: Read content streams as operands and operators, take pages from the page tree in document order, and space words by text position moves
+
+  ** Major features **
+  * [Feature] Implement draft-ietf-mailmaint-smtputf8-syntax address checks
+  * [Feature] phishing: Add explicit rewrite trust maps
+  * [Feature] multimap: Add the BAD_DKIM_SIGNER rule matching every checked DKIM d= against the bad_dkim_signers glob map
+  * [Feature] rules: Add HTML_TINY_PIXEL_TRACKER and the HTML_TINY_PIXEL_PROBE composite for contentless messages with tiny external tracking pixels
+  * [Feature] rules: Add DATE_FAR_FUTURE_NO_TZ for far-future Date headers without a timezone
+  * [Feature] Add MIME_UNREADABLE_ARCHIVE and MIME_TRUNCATED_ARCHIVE; check names in archives named as documents, in OOXML/ODF packages and in the first 1000 names for EXE_IN_ARCHIVE
+  * [Feature] Add TEXT_WORDS_TRUNCATED, plus words_sampled and words_truncated in text part get_stats
+  * [Feature] pdf: Add PDF_NO_OBJECTS, PDF_DECODE_LIMIT, PDF_UNDECODED_STREAMS, PDF_PARSE_ERRORS and PDF_TEXT_TRUNCATED
+  * [Feature] Add OOXML_INCOMPLETE for a partly read Office file
+  * [Feature] Add SVG_INCOMPLETE for a partly read SVG image
+  * [Feature] html: Make the tags limit harder to reach and track hidden elements past it
+  * [Feature] archive: Add ignore_case and `filters = false` options to archive.unpack
+  * [Feature] statistics_dump: Add `dump --user` to dump per-user statistics of selected users
+  * [Feature] WebUI: Update D3 to 7.9.2, CodeJar to 5.0.0 and Tabulator to 6.7.1
 
   ** Bug fixes **
-  * [Fix] lua_aliases: Reject external maps for equivalent domains instead of accepting them and failing every synchronous lookup (custom equivalent domains never folded)
+  * [CritFix] http: Refuse a header line without a colon (one unauthenticated request aborted the worker)
+  * [CritFix] protocol: Do not abort the worker on an empty Deliver-To header
+  * [CritFix] mime: Do not stop parsing at an empty part (no part after it was scanned)
+  * [Fix] proxy: Fix a milter session use-after-free on upstream failure and complete failed messages on a fresh session
+  * [Fix] milter: Refuse a second end of body before its reply (session use-after-free)
+  * [Fix] milter: Do not read past CONNECT and MACRO commands
+  * [Fix] milter: Abort an unfinished transaction on MAIL and replace the address on a repeated CONNECT
+  * [Fix] milter: Close the connection on QUIT behind queued output and do not write the next buffer after a partial write
+  * [Fix] proxy: Keep references to the ESMTP arguments of a milter message
+  * [Fix] proxy: Close the sockets of keepalive backends
+  * [Fix] lua_util: Use the pool passed to idna_convert_utf8 (heap corruption with 8-bit domains)
+  * [Fix] http: Do not report errors after a reply is given (the lua_http error handler ran on freed data)
+  * [Fix] http: Pool idle connections by TLS verification and peer address, check them for pending data, read interim replies and reset per-request limits and keys
+  * [Fix] http: Refuse a plaintext reply to an encrypted request in progress and keep the first peer key of a message
+  * [Fix] http: Never measure empty header values with strlen
+  * [Fix] http: Append repeated request headers in constant time
+  * [Fix] lua_http: Refuse unspecified, shared, reserved, multicast, unique local, link-local and IPv4-in-IPv6 addresses with forbid_local
+  * [Fix] protocol: Keep ESMTP keywords without a value and bound recipient indexes in X-Rspamd-Rcpt-Esmtp-Args
+  * [Fix] protocol: Do not look users up for a unix socket path in the IP header
+  * [Fix] protocol: Release the previous From, IP and Settings-ID on repeated headers
+  * [Fix] lua_redis: Convert replies of any type and depth (RESP3 maps, sets and doubles crashed the worker), close connections with changed state, validate Sentinel addresses
+  * [Fix] redis_pool: Keep a held connection that is closed (use-after-free), hash key fields with their lengths, fail on AUTH/SELECT errors and cap connections per server
+  * [Fix] redis: Pass TLS options to script uploads, statistics_dump and fuzzy storage
+  * [Fix] redis: Support Sentinel TLS and credentials, and keep the last valid upstreams after discovery errors
+  * [Fix] fuzzy_storage: Preserve the order of Redis updates of a repeated digest
+  * [Fix] librdns: Take only the records that answer the question, and keep the TCP channel usable after an empty frame
+  * [Fix] librdns: Keep a TCP channel whose first connect() fails (truncated replies were never retried over TCP)
+  * [Fix] dns: Convert IDN names without the transitional rules, as the url parser maps them
+  * [Fix] lua_dns: Fix PTR requests for strings that are not addresses and without a pool
+  * [Fix] maps: Back off retries by failure class (a map that failed its first fetch stayed empty for 100 minutes)
+  * [Fix] maps: Retry failures regardless of data expiry and honour Retry-After: 0
+  * [Fix] maps: Keep polling after a failed connect to an IP literal, failed DNS requests or a missing resolver
+  * [Fix] spf: Do not read a slash from a macro value as a prefix length; reject bad lengths, partial mechanism names and versions
+  * [Fix] spf: Read both lengths of a dual prefix (`a/24//64`) and `ip6=` addresses
+  * [Fix] spf: Use the checked address for macros and ptr, bound flattened records to 8192 elements and a week of caching
+  * [Fix] rspamadm: Follow the record order in dnstool spf-flatten
+  * [Fix] dmarc: Read a record to its end (an unknown tag or spaces around `=` dropped the policy), validate pct and rua, escape report fields
+  * [Fix] dmarc: Check DKIM and SPF alignment correctly for IDN From domains
+  * [Fix] dmarc: Do not count a lookup that cannot be made as pending (the organisational policy was never applied)
+  * [Fix] dmarc_report: Claim keys with RENAMENX, skip keys claimed by another run and honour keys_expire
+  * [Fix] dkim: Include headers added by lua_mime.modify_headers in signatures and keep every instance of an existing header
+  * [Fix] dkim: Follow RFC 6376 when hashing the signature header (whitespace, whole-name b= tag, one byte overread)
+  * [Fix] dkim: Do not abort on a key of another type than declared
+  * [Fix] dkim: Skip empty tag-specs as arc.lua does (`;;d=trusted` named another sealer)
+  * [Fix] dkim: Release keys when the key caches are disabled
+  * [Fix] arc: Trust a forwarder only for what it vouched for (every later instance whitelisted and verified, its own dmarc=pass for the From domain)
+  * [Fix] arc: Parse ARC-Authentication-Results from the raw header value and distrust results that sender text can change
+  * [Fix] arc: Read results whatever their case or version, after leading comments and past empty elements
+  * [Fix] arc: Select ARC headers by their parsed i= tag and check the instance before sizing seal headers
+  * [Fix] arc: Split ARC-Authentication-Results in linear time and fail chains over 50 sets
+  * [Fix] Escape sender text in Authentication-Results (MAIL FROM or HELO could add a result of its own)
+  * [Fix] mime: Bound and index the search for boundaries after the end of a part (quadratic parsing)
+  * [Fix] mime: Restore the nesting depth after each child and keep parsing after a too deep branch (content after 64 sibling containers was dropped)
+  * [Fix] mime: Parse the content of each embedded message once and reuse its boundary candidates
+  * [Fix] mime: Accept transport padding after delimiters
+  * [Fix] mime: Parse multiparts inside opaque S/MIME content
+  * [Fix] mime: Decode an embedded message once and ignore a multipart's encoding for readable children
+  * [Fix] mime: Keep readable text with a file signature or control bytes as text, and read the links of binary data shown as text
+  * [Fix] mime: Read binary text/html as an HTML part
+  * [Fix] mime: Read UTF-16 without a byte order mark as clients do, and read its links in both byte orders
+  * [Fix] mime: Mark only non-UTF-8 parts without Content-Type as broken (the check was inverted)
+  * [Fix] mime: Do not take text for an archive with no files
+  * [Fix] mime: Keep boundary, charset, name and filename past the parameters cap
+  * [Fix] mime: Resolve and decode RFC 2231 parameters as mail readers do (pieces, charsets, escapes)
+  * [Fix] mime: Unescape quoted pairs in Content-Type and Content-Disposition values, and do not stop Content-Disposition at an empty value
+  * [Fix] mime: Seed the message headers table with a random per-process value
+  * [Fix] mime: Do not rescan a Received header on unclosed comments
+  * [Fix] mime: Balance nested comments when stripping them from a header
+  * [Fix] mime: Take an SMTP address only if the whole input parses
+  * [Fix] mime: Fix leaks of rejected part headers, Content-Type parameters, Received for addresses and charset names
+  * [Fix] mime: Keep data that fails to uudecode whole
+  * [Fix] mime: Stop the QP encoder corrupting a space at the fold and keep a line break after a full line in CR mode
+  * [Fix] charset: Cache every converter once opened, convert every ISO-8859-16 alias and make UTF-8 guessed by CED valid
+  * [Fix] smtp_date: Reject days past the end of the month and zone minutes over 59; accept names in any case, UTC, quoted pairs in comments and three digit years
+  * [Fix] received: Keep 0 for dates that fail to parse and skip dateless hops in nreceived_bad_time
+  * [Fix] util: Fix rspamd_gmtime before 2000-03-01 and leap days in rspamd_tm_to_time
+  * [Fix] html: Build the tree closer to what browsers build (implied end tags, text after body, formatting elements reopened)
+  * [Fix] html: Read text past the tags limit without taking markup as text, and rewrite links found there
+  * [Fix] html: Keep the attributes rspamd interprets past the attribute limits
+  * [Fix] html: Do not decode character references in tag and attribute names, and start a new attribute after a valueless one
+  * [Fix] html: Follow href of links, action of forms, src of frames and media, formaction of submit controls and xlink:href of SVG links
+  * [Fix] html: Resolve links under a base as browsers do, strip control characters, tabs and line breaks, and accept odd slashes after special schemes
+  * [Fix] html: Read unquoted attribute values as browsers do and rewrite links in broken markup
+  * [Fix] html: Let author CSS override the color, bgcolor and hidden attributes; inherit visibility as its own property
+  * [Fix] html: Keep hiding by opacity, offset or clip apart from display, and keep content of a hidden element hidden
+  * [Fix] html: Decode a numeric entity as one code point, read C1 references as Windows-1252 and do not copy an unfinished entity twice
+  * [Fix] html: Keep reading text after many NUL bytes
+  * [Fix] html: Ignore LRM/RLM in preheader padding for HIDDEN_TEXT
+  * [Fix] html: Count external images with zero sizes or sized by CSS as tiny, resolve relative image sources against the base
+  * [Fix] css: Read syntax as browsers do (comments, strings, escapes, malformed rules, @media all/screen, source order)
+  * [Fix] css: Let !important win over inline styles and specificity, and compare specificity by ids, classes and types
+  * [Fix] css: Tokenise numbers, idents and urls as CSS does and drop sizing declarations with invalid values
+  * [Fix] css: Read hsl greys, hex and legacy colours as browsers do
+  * [Fix] css: Merge repeated declarations in linear time and count a token once against the tokens limit
+  * [Fix] url: Report the host a browser goes to (last `@`, backslashes, encoded separators, hosts that grow under IDN mapping)
+  * [Fix] url: Read numeric hosts by the URL standard (octal, hex, short forms) and mark them as obscured
+  * [Fix] url: Find urls that mail clients make clickable (glued schemes, `www.`, single slashes) and require a word boundary for tel: and callto:
+  * [Fix] url: Scan a token once for the userinfo of its candidates (a 200 KB line took seconds)
+  * [Fix] url: Stop the file URL scan at the end of the text
+  * [Fix] url: Set the urls_limit_reached task variable when max_urls is reached
+  * [Fix] lua_url: Escape control characters in to_http and check arguments of create, set_redirected and inject_url
+  * [Fix] lua_task: Sample urls over max_lua_urls among those the call returns, with a per-process seed
+  * [Fix] url_redirector: Cache failed chains for error_expire only, wait for a concurrent resolution, read Location as browsers do and add URL_REDIRECTOR_LIMIT
+  * [Fix] archive: Find the zip end record in the whole comment range, read zip64, concatenated zips and local headers, and list the Unicode Path names readers show
+  * [Fix] archive: List zip and rar names up to their first NUL
+  * [Fix] archive: Follow unrar, 7-Zip and bsdtar through rar 4 and rar 5 headers, Unicode names and the quick open cache; keep files listed before a broken header
+  * [Fix] archive: Read 7z names byte-wise, list packed-header names in any locale and keep names after unknown properties
+  * [Fix] archive: Read gzip header fields in RFC 1952 order (`evil.exe` was listed as `il.exe`)
+  * [Fix] archive: Find an archive that is not at the start of a part and flag archives that cannot be read
+  * [Fix] archive: Hash archive names with a secret seed
+  * [Fix] lua_magic: Detect file types by place, follow the PE header, require `[Content_Types].xml` for OOXML and do not let the end of a file choose its type
+  * [Fix] lua_magic: Validate standalone SVG as a whole document (embedded SVG suppressed HTML parsing) and bound its parsing cost
+  * [Fix] Go by the name and the detected content of an attachment for scanners and content handlers
+  * [Fix] pdf: Read the syntax that readers accept (object markers, names, strings, in-place actions, /Encrypt)
+  * [Fix] pdf: Bound stream filters, object streams, decoded output and extracted text
+  * [Fix] pdf: Decode a simple font with a cmap by single bytes
+  * [Fix] lua_util: Decode ASCII85 with zero groups
+  * [Fix] ooxml: Read packages that the applications open (any member order, case-insensitive names, absolute targets, unparsable stories), not through packed streams
+  * [Fix] svg: Read images as a browser does (href precedence, tabs in schemes, large style sheets, nested images) and handle images sent with a generic type
+  * [Fix] Find the links of a calendar that clients show, bound the properties kept from a calendar or a vcard and the cost of lines without a colon
+  * [Fix] lang_detection: Do not let a few characters or a short stop words list choose the language; make the result independent of the worker history
+  * [Fix] chartable: See mixed script words in a long text, convert punycode hosts for R_MIXED_CHARSET_URL and do not count diacritics against long texts
+  * [Fix] lua_mime: Trim lines in extract_text_limited in linear time and keep a first line over the limit
+  * [Fix] text: Keep link placeholders at their places after zero width characters are removed
+  * [Fix] cfg: Write max_html_len to its own field (it changed max_word_len and zeroed words_decay)
+  * [Fix] lua_mimepart: Do not abort in filter_words on a part with an url
+  * [Fix] lua_task: Free replaced recipients in set_recipients and keep the original envelope sender in set_from
+  * [Fix] lua_aliases: Reject external maps for equivalent domains
+  * [Fix] statistics_dump: Handle unnamed classifier sections and escape glob characters in prefixes
+  * [Fix] multipattern: Add patterns once without hyperscan; fix ACISM backlinks and a table overread
+  * [Fix] lru: Age usage counters in minutes and enforce the capacity for entries with a TTL
+  * [Fix] re_cache: Keep every regexp the cache returns (regexps past 8192 leaked)
+  * [Fix] mime_expressions: Free regexp flags and reset errors between arguments (double free at config load)
+  * [Fix] zstd: Free the stream output on errors and stop on truncated input
+  * [Fix] str_util: Take no number from an empty string and fix the hex overflow check
+  * [Fix] controller: Release statistics after metrics requests and query arguments in all handlers
+  * [Fix] logger: Reclaim memory on configuration reloads; honour max_tag_len and tag_strip_policy in the syslog logger
+  * [Fix] cfg: Skip the hs_helper worker in a build without hyperscan and report the name of an unknown worker type
+  * [Fix] smtputf8: Accept Catalan L·L and give the same verdict with older ICU builds
+  * [Fix] rules: Accept five-digit iOS build numbers in iPhone Mail X-Mailer (FORGED_X_MAILER on new devices)
+  * [Fix] libucl: Sync with upstream, including CBOR support and parser, emitter and schema fixes
+  * [Fix] Fix the build with older ICU, binutils 2.39+ libbfd and RPM packaging on Fedora 44
 
 4.2.3: 21 Oct 2026
 
