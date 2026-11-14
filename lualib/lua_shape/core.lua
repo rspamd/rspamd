@@ -563,7 +563,11 @@ function T.table(fields, opts)
       -- Check if schema is an optional wrapper
       local is_optional = val.tag == "optional"
       local inner_schema = is_optional and val.inner or val
-      local default_value = is_optional and val.default or nil
+      -- Keep a `false` default: `a and b or nil` would turn it into nil
+      local default_value = nil
+      if is_optional then
+        default_value = val.default
+      end
 
       -- Propagate doc from optional wrapper to inner schema
       local schema_to_store = inner_schema
