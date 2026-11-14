@@ -2016,23 +2016,24 @@ rspamd_message_content_add_url(struct rspamd_message_content_url_cbd *cbd, struc
 
 	url->flags |= cbd->url_flags;
 
+	/* An earlier url object, if any: rspamd_url_set_add_or_increase may
+	 * replace it in the set with this one, but it stays referenced by
+	 * the urls lists of the parts it was found in */
+	struct rspamd_url *earlier = rspamd_url_set_get(
+		MESSAGE_FIELD(task, urls), url);
+
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
 									   max_urls)) {
 		if (cbd->part->urls) {
 			g_ptr_array_add(cbd->part->urls, url);
 		}
 	}
-	else {
+	else if (earlier != NULL && earlier != url) {
 		/* The same url has been found earlier, e.g. as an image
 		 * source of an html part: the flags of this occurrence
 		 * extend the earlier one, so a url that also appears in the
 		 * displayed text is not taken for a mere image one */
-		struct rspamd_url *existing = rspamd_url_set_add_or_return(
-			MESSAGE_FIELD(task, urls), url, max_urls);
-
-		if (existing != NULL && existing != url) {
-			existing->flags |= url->flags;
-		}
+		earlier->flags |= url->flags;
 	}
 
 	return TRUE;
