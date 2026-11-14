@@ -34,6 +34,7 @@
 #include "config.h"
 #include "libmime/message.h"
 #include "libserver/dkim.h"
+#include "libserver/cfg_dynamic.h"
 #include "libserver/url.h"
 #include "libutil/hash.h"
 #include "libserver/maps/map.h"
@@ -42,6 +43,8 @@
 #include "utlist.h"
 #include "unix-std.h"
 #include "lua/lua_common.h"
+#include <math.h>
+#include <limits.h>
 #include "libserver/mempool_vars_internal.h"
 
 #define DEFAULT_SYMBOL_ALIGNED "R_DKIM_ALIGNED"
@@ -91,6 +94,12 @@ struct dkim_ctx {
 	gboolean trusted_only;
 	gboolean check_local;
 	gboolean check_authed;
+	/* Values of the static configuration: the baseline for dynamic options */
+	unsigned int static_strict_multiplier;
+	unsigned int static_time_jitter;
+	unsigned int static_max_sigs;
+	gboolean static_trusted_only;
+	gboolean has_trusted_map; /* A trusted domains map is configured (it may be not loaded yet) */
 };
 
 struct dkim_check_result {
@@ -341,6 +350,109 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
+/*
+ * Dynamic options: plain scalars that are read for every message. Options that
+ * are absent in the update go back to the values of the static configuration.
+ * The update is validated completely before it is applied.
+ */
+static const char *const dkim_dynconf_paths[] = {
+	"time_jitter",
+	"max_sigs",
+	"strict_multiplier",
+	"trusted_only",
+	NULL};
+
+static gboolean
+dkim_dynconf_apply(struct rspamd_config *cfg,
+				   const char *module,
+				   const ucl_object_t *dyn_values,
+				   void *ud,
+				   GError **err)
+{
+	struct dkim_ctx *dkim_module_ctx = (struct dkim_ctx *) ud;
+	unsigned int strict_multiplier = dkim_module_ctx->static_strict_multiplier;
+	unsigned int time_jitter = dkim_module_ctx->static_time_jitter;
+	unsigned int max_sigs = dkim_module_ctx->static_max_sigs;
+	gboolean trusted_only = dkim_module_ctx->static_trusted_only;
+	const ucl_object_t *elt;
+	GQuark q = g_quark_from_static_string("dkim");
+
+	if (dyn_values != NULL) {
+		double d;
+		int64_t v;
+		bool b;
+
+		if ((elt = ucl_object_lookup(dyn_values, "time_jitter")) != NULL) {
+			/* A value of the static configuration is accepted as it is */
+			if (ucl_object_todouble_safe(elt, &d) && isfinite(d) && d >= 0 &&
+				d <= (double) UINT_MAX && (unsigned int) d == time_jitter) {
+				/* Not changed */
+			}
+			else if (!ucl_object_todouble_safe(elt, &d) || !isfinite(d) || d < 0 || d > (double) UINT_MAX) {
+				g_set_error(err, q, EINVAL, "invalid time_jitter");
+				return FALSE;
+			}
+			else {
+				time_jitter = (unsigned int) d;
+			}
+		}
+
+		if ((elt = ucl_object_lookup(dyn_values, "max_sigs")) != NULL) {
+			if (ucl_object_toint_safe(elt, &v) && v >= 0 && v <= INT_MAX &&
+				(unsigned int) v == max_sigs) {
+				/* The static value is accepted as it is, the load code does not check it */
+			}
+			else if (!ucl_object_toint_safe(elt, &v) || v < 1 || v > INT_MAX) {
+				g_set_error(err, q, EINVAL, "invalid max_sigs");
+				return FALSE;
+			}
+			else {
+				max_sigs = (unsigned int) v;
+			}
+		}
+
+		if ((elt = ucl_object_lookup(dyn_values, "strict_multiplier")) != NULL) {
+			if (!ucl_object_toint_safe(elt, &v) || v < 0 || v > INT_MAX) {
+				if (!(ucl_object_toint_safe(elt, &v) && v >= 0 &&
+					  (unsigned int) v == strict_multiplier)) {
+					g_set_error(err, q, EINVAL, "invalid strict_multiplier");
+					return FALSE;
+				}
+			}
+			else {
+				strict_multiplier = (unsigned int) v;
+			}
+		}
+
+		if ((elt = ucl_object_lookup(dyn_values, "trusted_only")) != NULL) {
+			if (!ucl_object_toboolean_safe(elt, &b)) {
+				g_set_error(err, q, EINVAL, "invalid trusted_only");
+				return FALSE;
+			}
+
+			trusted_only = b;
+		}
+	}
+
+	/* The same check as at load */
+	if (trusted_only && !dkim_module_ctx->has_trusted_map) {
+		g_set_error(err, q, EINVAL,
+					"trusted_only is set and no trusted domains are defined");
+		return FALSE;
+	}
+
+	dkim_module_ctx->time_jitter = time_jitter;
+	dkim_module_ctx->max_sigs = max_sigs;
+	dkim_module_ctx->strict_multiplier = strict_multiplier;
+	dkim_module_ctx->trusted_only = trusted_only;
+
+	msg_info_config("applied dynamic configuration: time_jitter = %ud, max_sigs = %ud, "
+					"strict_multiplier = %ud, trusted_only = %d",
+					time_jitter, max_sigs, strict_multiplier, (int) trusted_only);
+
+	return TRUE;
+}
+
 int dkim_module_config(struct rspamd_config *cfg, bool validate)
 {
 	const ucl_object_t *value;
@@ -551,6 +663,12 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 		dkim_module_ctx->trusted_only = FALSE;
 	}
 
+	dkim_module_ctx->static_strict_multiplier = dkim_module_ctx->strict_multiplier;
+	dkim_module_ctx->static_time_jitter = dkim_module_ctx->time_jitter;
+	dkim_module_ctx->static_max_sigs = dkim_module_ctx->max_sigs;
+	dkim_module_ctx->static_trusted_only = dkim_module_ctx->trusted_only;
+	dkim_module_ctx->has_trusted_map = got_trusted;
+
 	/*
 	 * We should use sign headers from dkim_signing module as it is the module that
 	 * is used actually for signing.
@@ -688,6 +806,9 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 								 1,
 								 1);
 		rspamd_config_add_symbol_group(cfg, "DKIM_TRACE", "dkim");
+
+		rspamd_dynconf_register_module(cfg, "dkim", dkim_dynconf_paths,
+									   dkim_dynconf_apply, dkim_module_ctx);
 
 		msg_info_config("init internal dkim module");
 #ifndef HAVE_OPENSSL

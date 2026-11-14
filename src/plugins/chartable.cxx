@@ -29,6 +29,7 @@
 #include "libstat/stat_api.h"
 #include "libmime/lang_detection.h"
 #include "libutil/cxx/utf8_util.h"
+#include "libserver/cfg_dynamic.h"
 
 #include "unicode/utf8.h"
 #include "unicode/uchar.h"
@@ -37,6 +38,9 @@
 #include "unicode/uidna.h"
 
 #include <array>
+#include <cerrno>
+#include <climits>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -44,6 +48,7 @@
 #define DEFAULT_SYMBOL "R_MIXED_CHARSET"
 #define DEFAULT_URL_SYMBOL "R_MIXED_CHARSET_URL"
 #define DEFAULT_THRESHOLD 0.1
+#define DEFAULT_MAX_WORD_LEN 10
 
 #define msg_debug_chartable(...) rspamd_conditional_debug_fast(nullptr, task->from_addr,                                       \
 															   rspamd_chartable_log_id, "chartable", task->task_pool->tag.uid, \
@@ -75,6 +80,9 @@ struct chartable_ctx {
 	const char *url_symbol;
 	double threshold;
 	unsigned int max_word_len;
+	/* Values from the static configuration: the baseline for the dynamic ones */
+	double static_threshold;
+	unsigned int static_max_word_len;
 	struct rspamd_unicode_spoof_checker *spoof_checker;
 };
 
@@ -99,7 +107,7 @@ int chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	chartable_module_ctx = rspamd_mempool_alloc0_type(cfg->cfg_pool,
 													  struct chartable_ctx);
-	chartable_module_ctx->max_word_len = 10;
+	chartable_module_ctx->max_word_len = DEFAULT_MAX_WORD_LEN;
 	chartable_module_ctx->spoof_checker = rspamd_unicode_spoof_checker_create();
 	if (chartable_module_ctx->spoof_checker == nullptr) {
 		msg_err_config("cannot initialise ICU spoof checker");
@@ -114,6 +122,54 @@ int chartable_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
+
+/*
+ * Dynamic options: `threshold` and `max_word_len` are plain scalars read on
+ * every use. An option that is absent in `dyn_values` goes back to the value
+ * of the static configuration.
+ */
+static gboolean
+chartable_dynconf_apply(struct rspamd_config *cfg,
+						const char *module,
+						const ucl_object_t *dyn_values,
+						void *ud,
+						GError **err)
+{
+	auto *chartable_module_ctx = (struct chartable_ctx *) ud;
+	double threshold = chartable_module_ctx->static_threshold;
+	unsigned int max_word_len = chartable_module_ctx->static_max_word_len;
+	const ucl_object_t *elt;
+
+	if (dyn_values != nullptr) {
+		if ((elt = ucl_object_lookup(dyn_values, "threshold")) != nullptr) {
+			if (!ucl_obj_todouble_safe(elt, &threshold) || !std::isfinite(threshold)) {
+				g_set_error(err, g_quark_from_static_string("chartable"), EINVAL,
+							"invalid threshold");
+				return FALSE;
+			}
+		}
+
+		if ((elt = ucl_object_lookup(dyn_values, "max_word_len")) != nullptr) {
+			int64_t v;
+
+			if (!ucl_object_toint_safe(elt, &v) || v < 0 || v > INT_MAX) {
+				g_set_error(err, g_quark_from_static_string("chartable"), EINVAL,
+							"invalid max_word_len");
+				return FALSE;
+			}
+
+			max_word_len = (unsigned int) v;
+		}
+	}
+
+	chartable_module_ctx->threshold = threshold;
+	chartable_module_ctx->max_word_len = max_word_len;
+
+	msg_info_config("applied dynamic configuration: threshold = %.3f, max_word_len = %ud",
+					threshold, max_word_len);
+
+	return TRUE;
+}
 
 int chartable_module_config(struct rspamd_config *cfg, bool _)
 {
@@ -154,8 +210,11 @@ int chartable_module_config(struct rspamd_config *cfg, bool _)
 		chartable_module_ctx->max_word_len = ucl_object_toint(value);
 	}
 	else {
-		chartable_module_ctx->max_word_len = 10;
+		chartable_module_ctx->max_word_len = DEFAULT_MAX_WORD_LEN;
 	}
+
+	chartable_module_ctx->static_threshold = chartable_module_ctx->threshold;
+	chartable_module_ctx->static_max_word_len = chartable_module_ctx->max_word_len;
 
 	rspamd_symcache_add_symbol(cfg->cache,
 							   chartable_module_ctx->symbol,
@@ -171,6 +230,11 @@ int chartable_module_config(struct rspamd_config *cfg, bool _)
 							   nullptr,
 							   SYMBOL_TYPE_NORMAL,
 							   -1);
+
+	static const char *const dynamic_paths[] = {"threshold", "max_word_len", nullptr};
+
+	rspamd_dynconf_register_module(cfg, "chartable", dynamic_paths,
+								   chartable_dynconf_apply, chartable_module_ctx);
 
 	msg_info_config("init internal chartable module");
 
