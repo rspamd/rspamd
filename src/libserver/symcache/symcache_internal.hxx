@@ -445,6 +445,24 @@ public:
 	auto get_item_by_name_mut(std::string_view name, bool resolve_parent) const -> cache_item *;
 
 	/**
+	 * Switches a symbol on or off for every task from now on (the same switch as the
+	 * static `enabled = false` of a symbol definition uses): a disabled symbol is not
+	 * executed and its results are not inserted. A symbol that is disabled by its own
+	 * definition stays disabled when it is switched on.
+	 * @param name symbol name (a virtual symbol is switched on its own)
+	 * @param enabled new state
+	 * @return false if there is no such symbol in the cache
+	 */
+	auto set_item_enabled(std::string_view name, bool enabled) -> bool;
+
+	/**
+	 * Returns false if the symbol is switched off (see `set_item_enabled`) or is not known
+	 */
+	auto is_item_enabled(std::string_view name) const -> bool;
+	/* A known item that is switched off */
+	auto is_item_disabled(std::string_view name) const -> bool;
+
+	/**
 	 * Add a direct dependency
 	 * @param id_from
 	 * @param to

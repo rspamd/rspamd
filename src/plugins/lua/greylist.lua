@@ -104,6 +104,7 @@ local fun = require "fun"
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_lua_utils = require "lua_util"
 local lua_map = require "lua_maps"
+local dynconf = require "lua_dynconf"
 local N = "greylist"
 
 local function data_key(task)
@@ -557,24 +558,41 @@ end
 
 local opts = rspamd_config:get_all_opt('greylist')
 if opts then
+  local message_func
   if opts['message_func'] then
-    settings.message_func = assert(load(opts['message_func']))()
+    message_func = assert(load(opts['message_func']))()
   end
 
-  for k, v in pairs(opts) do
-    if k ~= 'message_func' then
-      settings[k] = v
-    end
+  -- message_func is a code string compiled above, it must not land in settings
+  local settings_opts = lua_util.shallowcopy(opts)
+  settings_opts.message_func = nil
+
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = settings_opts,
+    dynamic = {
+      'expire', 'timeout', 'max_data_len', 'ipv4_mask', 'ipv6_mask', 'action',
+      'message', 'report_time', 'whitelist_symbols', 'greylist_min_score',
+    },
+    transform = function(tbl)
+      if tbl.greylist_min_score then
+        tbl.greylist_min_score = tonumber(tbl.greylist_min_score)
+      end
+      return tbl
+    end,
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
+    lua_util.disable_module(N, "config")
+    return
   end
+  settings = dyn_settings
+  settings.message_func = message_func
 
   local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
       false, false)
   settings.check_local = auth_and_local_conf[1]
   settings.check_authed = auth_and_local_conf[2]
-
-  if settings['greylist_min_score'] then
-    settings['greylist_min_score'] = tonumber(settings['greylist_min_score'])
-  end
 
   whitelisted_ip = lua_map.rspamd_map_add(N, 'whitelisted_ip', 'radix',
       'Greylist whitelist ip map')

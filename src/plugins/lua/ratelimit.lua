@@ -28,6 +28,7 @@ local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
 local rspamd_hash = require "rspamd_cryptobox_hash"
 local lua_selectors = require "lua_selectors"
+local dynconf = require "lua_dynconf"
 local ratelimit_common = require "plugins/ratelimit"
 -- A plugin that implements ratelimits using redis
 
@@ -601,7 +602,27 @@ end
 local opts = rspamd_config:get_all_opt(N)
 if opts then
 
-  settings = lua_util.override_defaults(settings, opts)
+  -- Derived objects (limits, maps, custom_keywords) are written into the live table below
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    -- Only plain values read from settings on every message; the per-bucket
+    -- factors/multipliers are cached in buckets at first use, so not listed
+    dynamic = {
+      'prefix',
+      'allow_local',
+      'expire',
+      'lfb_cache_prefix',
+      'lfb_max_cache_size',
+      'bounce_senders',
+    },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot register %s settings: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+  settings = dyn_settings
 
   if opts['limit'] then
     rspamd_logger.errx(rspamd_config, 'Legacy ratelimit config format no longer supported')

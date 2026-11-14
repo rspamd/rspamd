@@ -25,6 +25,8 @@ end
 
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
+local rspamd_logger = require "rspamd_logger"
+local dynconf = require "lua_dynconf"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = [[
 /[-.0-9][0-9][.-]?nat/i 5
@@ -175,18 +177,19 @@ local checks_hello_bareip = [[
 ]]
 local checks_hello_bareip_map
 
-local config = {
-  ['helo_enabled'] = false,
-  ['hostname_enabled'] = false,
-  ['from_enabled'] = false,
-  ['rcpt_enabled'] = false,
-  ['mid_enabled'] = false,
-  ['url_enabled'] = false
+local settings = {
+  helo_enabled = false,
+  hostname_enabled = false,
+  from_enabled = false,
+  rcpt_enabled = false,
+  mid_enabled = false,
+  url_enabled = false,
+  -- Derived at load from check_local/check_authed (section or `options`)
+  check_local = false,
+  check_authed = false,
 }
 
 local compiled_regexp = {} -- cache of regexps
-local check_local = false
-local check_authed = false
 local N = "hfilter"
 
 local function check_regexp(str, regexp_text)
@@ -350,7 +353,7 @@ end
 --
 local function hfilter_callback(task)
   -- Links checks
-  if config['url_enabled'] then
+  if settings['url_enabled'] then
     local parts = task:get_text_parts()
     if parts then
       local plain_text_part, html_text_part
@@ -393,8 +396,8 @@ local function hfilter_callback(task)
 
   --No more checks for auth user or local network
   local rip = task:get_from_ip()
-  if ((not check_authed and task:get_user()) or
-      (not check_local and rip and rip:is_local())) then
+  if ((not settings.check_authed and task:get_user()) or
+      (not settings.check_local and rip and rip:is_local())) then
     return false
   end
 
@@ -407,7 +410,7 @@ local function hfilter_callback(task)
   -- Check's HELO
   local weight_helo = 0
   local helo
-  if config['helo_enabled'] then
+  if settings['helo_enabled'] then
     helo = task:get_helo()
     if helo then
       if helo ~= rspamc_local_helo then
@@ -460,7 +463,7 @@ local function hfilter_callback(task)
   local weight_hostname = 0
   local hostname = task:get_hostname()
 
-  if config['hostname_enabled'] then
+  if settings['hostname_enabled'] then
     if hostname then
       -- Check regexp HOSTNAME
       local weights = checks_hellohost_map:get_key(hostname)
@@ -492,7 +495,7 @@ local function hfilter_callback(task)
 
   -- MAILFROM checks --
   local frombounce = false
-  if config['from_enabled'] then
+  if settings['from_enabled'] then
     local from = task:get_from(1)
     if from then
       --FROM host check
@@ -514,7 +517,7 @@ local function hfilter_callback(task)
   end
 
   -- Recipients checks --
-  if config['rcpt_enabled'] then
+  if settings['rcpt_enabled'] then
     local rcpt = task:get_recipients()
     if rcpt then
       local count_rcpt = #rcpt
@@ -528,7 +531,7 @@ local function hfilter_callback(task)
   end
 
   --Message ID host check
-  if config['mid_enabled'] then
+  if settings['mid_enabled'] then
     local message_id = task:get_message_id()
     if message_id then
       local mid_split = rspamd_str_split(message_id, '@')
@@ -585,23 +588,29 @@ local symbols_from = {
 
 local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
     false, false)
-check_local = auth_and_local_conf[1]
-check_authed = auth_and_local_conf[2]
 local timeout = 0.0
 
-local opts = rspamd_config:get_all_opt('hfilter')
-if opts then
-  for k, v in pairs(opts) do
-    config[k] = v
-  end
+local opts = rspamd_config:get_all_opt(N)
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts or false,
+  dynamic = {},
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
 end
+settings = dyn_settings
+settings.check_local = auth_and_local_conf[1]
+settings.check_authed = auth_and_local_conf[2]
 
 local function append_t(t, a)
   for _, v in ipairs(a) do
     table.insert(t, v)
   end
 end
-if config['helo_enabled'] then
+if settings['helo_enabled'] then
   checks_hello_bareip_map = add_static_map(checks_hello_bareip, 'Hfilter: HELO bare ip')
   checks_hello_badip_map = add_static_map(checks_hello_badip, 'Hfilter: HELO bad ip')
   checks_hellohost_map = add_static_map(checks_hellohost, 'Hfilter: HELO host')
@@ -609,24 +618,24 @@ if config['helo_enabled'] then
   append_t(symbols_enabled, symbols_helo)
   timeout = math.max(timeout, rspamd_config:get_dns_timeout() * 3)
 end
-if config['hostname_enabled'] then
+if settings['hostname_enabled'] then
   if not checks_hellohost_map then
     checks_hellohost_map = add_static_map(checks_hellohost, 'Hfilter: HOSTNAME')
   end
   append_t(symbols_enabled, symbols_hostname)
   timeout = math.max(timeout, rspamd_config:get_dns_timeout())
 end
-if config['from_enabled'] then
+if settings['from_enabled'] then
   append_t(symbols_enabled, symbols_from)
   timeout = math.max(timeout, rspamd_config:get_dns_timeout())
 end
-if config['rcpt_enabled'] then
+if settings['rcpt_enabled'] then
   append_t(symbols_enabled, symbols_rcpt)
 end
-if config['mid_enabled'] then
+if settings['mid_enabled'] then
   append_t(symbols_enabled, symbols_mid)
 end
-if config['url_enabled'] then
+if settings['url_enabled'] then
   append_t(symbols_enabled, symbols_url)
 end
 

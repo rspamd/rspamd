@@ -23,6 +23,7 @@ local lua_util = require "lua_util"
 local lua_verdict = require "lua_verdict"
 local lua_redis = require "lua_redis"
 local lua_selectors = require "lua_selectors"
+local dynconf = require "lua_dynconf"
 local T = require "lua_shape.core"
 local PluginSchema = require "lua_shape.plugin_schema"
 
@@ -65,13 +66,17 @@ local rule_schema = T.table({
   prefix = T.string():optional():doc({ summary = "Redis key prefix" }),
 }):doc({ summary = "Clustering rule configuration" })
 
-local config_schema = lua_redis.enrich_schema({
+local config_fields = {
   enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
   rules = T.table({}, {
     open = true,
     extra = rule_schema
   }):doc({ summary = "Clustering rules keyed by name" })
-}):doc({ summary = "Clustering plugin configuration" })
+}
+
+local config_schema = lua_redis.enrich_schema(config_fields):doc({ summary = "Clustering plugin configuration" })
+-- Redis connection keys are parsed from raw opts; validate only the plugin's own keys (open table)
+local validate_schema = T.table(config_fields, { open = true })
 
 PluginSchema.register("plugins.clustering", config_schema)
 
@@ -267,7 +272,7 @@ local function clusterting_idempotent_cb(task, rule)
   )
 end
 -- Init part
-local opts = rspamd_config:get_all_opt("clustering")
+local opts = rspamd_config:get_all_opt(N)
 
 -- Initialization part
 if not (opts and type(opts) == 'table') then
@@ -275,24 +280,34 @@ if not (opts and type(opts) == 'table') then
   return
 end
 
-local cfg, cfg_err = config_schema:transform(opts)
-if not cfg then
-  rspamd_logger.errx(rspamd_config, 'invalid clustering config: %s', cfg_err)
+-- Module settings: per-rule configs are materialised into runtime rules below (selectors are compiled,
+-- symbols registered once), so nothing is dynamic here
+local settings = {
+  rules = {},
+}
+
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  schema = validate_schema,
+  dynamic = {},
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'invalid clustering config: %s', dyn_err)
   lua_util.disable_module(N, "config")
   return
 end
 
-opts = cfg
-
-redis_params = lua_redis.parse_redis_server('clustering', opts)
+settings = dyn_settings
+redis_params = lua_redis.parse_redis_server(N, settings)
 
 if not redis_params then
   lua_util.disable_module(N, "redis")
   return
 end
 
-if opts['rules'] then
-  for k, v in pairs(opts['rules']) do
+if settings.rules then
+  for k, v in pairs(settings.rules) do
     local raw_rule = lua_util.override_defaults(default_rule, v)
 
     local rule, err = rule_schema:transform(raw_rule)

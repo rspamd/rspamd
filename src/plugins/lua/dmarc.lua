@@ -21,6 +21,7 @@ local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local dmarc_common = require "plugins/dmarc"
+local dynconf = require "lua_dynconf"
 
 if confighelp then
   return
@@ -28,6 +29,7 @@ end
 
 local N = 'dmarc'
 
+-- Defaults live in lualib/plugins/dmarc.lua as they are shared with rspamadm dmarc_report
 local settings = dmarc_common.default_settings
 
 local redis_params = nil
@@ -670,7 +672,27 @@ local function dmarc_callback(task)
 end
 
 local opts = rspamd_config:get_all_opt('dmarc')
-settings = lua_util.override_defaults(settings, opts)
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts or false,
+  -- Only plain values read from settings on every scan; symbols, maps and redis params are load-time.
+  -- reporting.redis_keys.* stay static: the key layout is shared with rspamadm dmarc_report
+  -- (the dispositions are listed literally: a literal path may add an entry the static config lacks)
+  dynamic = {
+    'actions.reject',
+    'actions.quarantine',
+    'actions.softfail',
+    'reporting.report_local_controller',
+    'reporting.max_entries',
+    'reporting.keys_expire',
+  },
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot register dmarc settings: %s', dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
+end
+settings = dyn_settings
 
 settings.auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
   false, false)

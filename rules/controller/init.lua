@@ -29,6 +29,7 @@ local controller_plugin_paths = {
   neural = dofile(local_rules .. "/controller/neural.lua"),
   selectors = dofile(local_rules .. "/controller/selectors.lua"),
   fuzzy = dofile(local_rules .. "/controller/fuzzy.lua"),
+  dynconf = dofile(local_rules .. "/controller/dynconf.lua"),
 }
 
 if rspamd_util.file_exists(local_conf .. '/controller.lua') then

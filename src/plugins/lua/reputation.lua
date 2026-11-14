@@ -1544,6 +1544,7 @@ end
 
 redis_params = lua_redis.parse_redis_server('reputation')
 local opts = rspamd_config:get_all_opt("reputation")
+require("lua_dynconf").register_static("reputation", opts)
 
 -- Initialization part
 if not (opts and type(opts) == 'table') then

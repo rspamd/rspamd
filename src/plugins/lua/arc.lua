@@ -22,6 +22,7 @@ local fun = require "fun"
 local lua_auth_results = require "lua_auth_results"
 local lua_mime = require "lua_mime"
 local hash = require "rspamd_cryptobox_hash"
+local dynconf = require "lua_dynconf"
 
 if confighelp then
   return
@@ -48,7 +49,7 @@ if not dkim_verify or not dkim_sign or not dkim_canonicalize then
   return
 end
 
-local arc_symbols = {
+local default_symbols = {
   allow = 'ARC_ALLOW',
   invalid = 'ARC_INVALID',
   dnsfail = 'ARC_DNSFAIL',
@@ -57,6 +58,7 @@ local arc_symbols = {
 }
 
 local settings = {
+  symbols = lua_util.shallowcopy(default_symbols),
   allow_envfrom_empty = true,
   allow_hdrfrom_mismatch = false,
   allow_hdrfrom_mismatch_local = false,
@@ -218,7 +220,7 @@ local function arc_validate_seals(task, seals, sigs, ars)
     fail_reason = string.format('invalid count of ARC-Authentication-Results: %d, expected %d',
       #ars, #seals)
     rspamd_logger.infox(task, fail_reason)
-    task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+    task:insert_result(settings.symbols['invalid'], 1.0, fail_reason)
     return false, fail_reason
   end
   for i = 1, #seals do
@@ -226,27 +228,27 @@ local function arc_validate_seals(task, seals, sigs, ars)
       fail_reason = string.format('bad i for signature: %d, expected %d; d=%s',
         sigs[i].i, i, sigs[i].d)
       rspamd_logger.infox(task, fail_reason)
-      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+      task:insert_result(settings.symbols['invalid'], 1.0, fail_reason)
       return false, fail_reason
     end
     if (seals[i].i or 0) ~= i then
       fail_reason = string.format('bad i for seal: %d, expected %d; d=%s',
         seals[i].i, i, seals[i].d)
       rspamd_logger.infox(task, fail_reason)
-      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+      task:insert_result(settings.symbols['invalid'], 1.0, fail_reason)
       return false, fail_reason
     end
     if (tonumber(ars[i].i) or 0) ~= i then
       fail_reason = string.format('bad i for authentication results: %s, expected %d',
         tostring(ars[i].i), i)
       rspamd_logger.infox(task, fail_reason)
-      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+      task:insert_result(settings.symbols['invalid'], 1.0, fail_reason)
       return false, fail_reason
     end
 
     if not seals[i].cv then
       fail_reason = string.format('no cv on i=%d', i)
-      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+      task:insert_result(settings.symbols['invalid'], 1.0, fail_reason)
       return false, fail_reason
     end
 
@@ -254,13 +256,13 @@ local function arc_validate_seals(task, seals, sigs, ars)
       -- We need to ensure that cv of seal is equal to 'none'
       if seals[i].cv ~= 'none' then
         fail_reason = 'cv is not "none" for i=1'
-        task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+        task:insert_result(settings.symbols['invalid'], 1.0, fail_reason)
         return false, fail_reason
       end
     else
       if seals[i].cv ~= 'pass' then
         fail_reason = string.format('cv is %s on i=%d', seals[i].cv, i)
-        task:insert_result(arc_symbols['reject'], 1.0, fail_reason)
+        task:insert_result(settings.symbols['reject'], 1.0, fail_reason)
         return true, fail_reason
       end
     end
@@ -299,13 +301,13 @@ local function arc_callback(task)
 
   if not arc_sig_headers or not arc_seal_headers then
     lua_util.debugm(N, task, 'ARC verification failed: missing required headers')
-    task:insert_result(arc_symbols['na'], 1.0)
+    task:insert_result(settings.symbols['na'], 1.0)
     return
   end
 
   -- A chain that fails here is not sealed further either (see 'arc-failure')
   local function fail_chain(reason)
-    task:insert_result(arc_symbols['invalid'], 1.0, reason)
+    task:insert_result(settings.symbols['invalid'], 1.0, reason)
     task:cache_set('arc-failure', reason)
   end
 
@@ -393,7 +395,7 @@ local function arc_callback(task)
 
   local function finish_arc_seals()
     if cbdata.res ~= 'success' then
-      task:insert_result(arc_symbols.reject, 1.0,
+      task:insert_result(settings.symbols.reject, 1.0,
         rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
           cbdata.errors))
       return
@@ -467,7 +469,7 @@ local function arc_callback(task)
               end
             end
           end
-          task:insert_result(arc_symbols.trusted_allow, mult,
+          task:insert_result(settings.symbols.trusted_allow, mult,
             string.format('%s:s=%s:i=%d', domain, sig.s, index))
         end
       end
@@ -482,7 +484,7 @@ local function arc_callback(task)
     local sig = cbdata.seals[index]
     local arc_allow_result = string.format('%s:s=%s:i=%d',
       cbdata.seal_domains[index], sig.s, index)
-    task:insert_result(arc_symbols.allow, 1.0, arc_allow_result)
+    task:insert_result(settings.symbols.allow, 1.0, arc_allow_result)
     task:cache_set('arc-allow', arc_allow_result)
   end
 
@@ -547,7 +549,7 @@ local function arc_callback(task)
         end
       end
     else
-      task:insert_result(arc_symbols['reject'], 1.0,
+      task:insert_result(settings.symbols['reject'], 1.0,
         rspamd_logger.slog('signature check failed: %s, %s', cbdata.res,
           cbdata.errors))
     end
@@ -612,12 +614,31 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 
-if opts['symbols'] then
-  for k, _ in pairs(arc_symbols) do
-    if opts['symbols'][k] then
-      arc_symbols[k] = opts['symbols'][k]
-    end
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  dynamic = {
+    'trusted_authserv_id',
+    'reuse_auth_results',
+    'check_pubkey',
+    'allow_pubkey_mismatch',
+  },
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
+end
+settings = dyn_settings
+
+-- Only known symbol names are configurable, and only when the value is truthy
+do
+  local user_symbols = type(opts.symbols) == 'table' and opts.symbols or {}
+  local res = {}
+  for k, v in pairs(default_symbols) do
+    res[k] = user_symbols[k] or v
   end
+  settings.symbols = res
 end
 
 local id = rspamd_config:register_symbol({
@@ -635,7 +656,7 @@ rspamd_config:register_symbol({
 })
 
 rspamd_config:register_symbol({
-  name = arc_symbols['allow'],
+  name = settings.symbols['allow'],
   parent = id,
   type = 'virtual',
   score = -1.0,
@@ -643,7 +664,7 @@ rspamd_config:register_symbol({
   groups = { 'arc' },
 })
 rspamd_config:register_symbol({
-  name = arc_symbols['reject'],
+  name = settings.symbols['reject'],
   parent = id,
   type = 'virtual',
   score = 2.0,
@@ -651,7 +672,7 @@ rspamd_config:register_symbol({
   groups = { 'arc' },
 })
 rspamd_config:register_symbol({
-  name = arc_symbols['invalid'],
+  name = settings.symbols['invalid'],
   parent = id,
   type = 'virtual',
   score = 1.0,
@@ -659,7 +680,7 @@ rspamd_config:register_symbol({
   groups = { 'arc' },
 })
 rspamd_config:register_symbol({
-  name = arc_symbols['dnsfail'],
+  name = settings.symbols['dnsfail'],
   parent = id,
   type = 'virtual',
   score = 0.0,
@@ -667,7 +688,7 @@ rspamd_config:register_symbol({
   groups = { 'arc' },
 })
 rspamd_config:register_symbol({
-  name = arc_symbols['na'],
+  name = settings.symbols['na'],
   parent = id,
   type = 'virtual',
   score = 0.0,
@@ -981,7 +1002,17 @@ local function arc_signing_cb(task)
   end
 end
 
-dkim_sign_tools.process_signing_settings(N, settings, opts)
+-- `symbols` is already merged with the defaults in settings: do not let the raw (possibly partial)
+-- user table replace it
+do
+  local signing_opts = {}
+  for k, v in pairs(opts) do
+    if k ~= 'symbols' then
+      signing_opts[k] = v
+    end
+  end
+  dkim_sign_tools.process_signing_settings(N, settings, signing_opts)
+end
 
 -- Process ARC-specific maps that aren't handled by dkim_sign_tools
 local lua_maps = require "lua_maps"
@@ -1051,9 +1082,9 @@ if type(settings.forbidden_ids) == 'table' then
 end
 
 if settings.whitelisted_signers_map then
-  arc_symbols.trusted_allow = arc_symbols.trusted_allow or 'ARC_ALLOW_TRUSTED'
+  settings.symbols.trusted_allow = settings.symbols.trusted_allow or 'ARC_ALLOW_TRUSTED'
   rspamd_config:register_symbol({
-    name = arc_symbols.trusted_allow,
+    name = settings.symbols.trusted_allow,
     parent = id,
     type = 'virtual',
     score = -2.0,

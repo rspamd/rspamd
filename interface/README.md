@@ -11,16 +11,43 @@ viewing statistic and learning.
 
 ## Rspamd setup
 
-It is required to configure dynamic settings to store configured values.
-Basically this can be done by providing the following line in options settings:
+Actions thresholds and symbols scores that are changed in the interface are stored as the dynamic
+configuration (`actions` and `scores` modules of `dynconf`). It is enabled by default: the values are kept
+in the `rspamd_dynconf.json` file in the rspamd database directory (`$DBDIR`), which must be writable for the
+rspamd user, and every worker picks them up from there. The location and the other options can be changed in
+the `dynconf` section (see `conf/rspamd.conf`):
 
 ~~~ucl
-options {
- dynamic_conf = "/var/lib/rspamd/rspamd_dynamic";
+dynconf {
+ path = "/var/lib/rspamd/rspamd_dynconf.json";
 }
 ~~~
 
-Please note that this path must have write access for rspamd user.
+A threshold or a score that the interface changes has the priority 3: it replaces what the main file (priority 0)
+and `local.d` (1) say, but not what `override.d` (10) says. The interface refuses such a change with an error that
+names the entry; an override that is already stored (written by a node, or by hand) and meets such an entry is
+skipped with a warning. An emptied field of the interface (`null`) removes the override of that action or symbol:
+the static value is back.
+
+The names that an override holds are checked when it is written: an unknown symbol or action is an error.
+What a backend delivers (the periodic check, the start of a worker, `rspamadm configdump --dynamic`) is applied
+leniently: an entry that names a symbol that does not exist any more (a disabled plugin, a renamed symbol) is
+skipped with a warning, the rest is applied, and the skipped entries are listed in the dump of the module
+(`/plugins/dynconf/dump`, the `skipped` attribute) and in `last_error` of the backend, for as long as they stay
+skipped. They are offered to the subscribers again at every check, so a symbol that appears later (a composite of a
+map) gets its override then. A stale entry is kept in the stored override, it does not stop a write that does not
+touch it, and an emptied field for it removes it.
+
+The previous implementations are deprecated. The primary controller imports their data once, into the modules that
+hold no overrides yet: the file of the `dynamic_conf` option of the `options` section is read and renamed to
+`<file>.imported`; the Redis hash of the `dynamic_conf {}` module is read when `dynconf` uses the `redis` backend
+(`backend = "redis"`), it is not deleted but marked as imported. Nothing switches the backend to Redis by itself:
+when a `dynamic_conf {}` section with Redis servers is configured and `dynconf` uses another backend (or is disabled
+with `enabled = false`, which needs the `enabled = false` line removed as well), an error is logged at every start and
+the Redis data is not applied. Entries that cannot be changed dynamically because `override.d` defines them are not
+imported either, they are logged as skipped. Only scores and thresholds are imported: the lists
+`symbols_disabled` and `symbols_enabled` of the old module never took effect at runtime and are logged as skipped.
+The `dynamic_conf` section is not needed after the import.
 
 Then controller worker should be configured:
 

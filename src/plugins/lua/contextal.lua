@@ -19,6 +19,7 @@ local N = 'contextal'
 
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 local redis_cache = require "lua_cache"
 local rspamd_http = require "rspamd_http"
 local rspamd_logger = require "rspamd_logger"
@@ -277,8 +278,21 @@ local function set_url_path(base, path)
   return base .. slash .. path
 end
 
-settings = lua_util.override_defaults(settings, opts)
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  dynamic = { 'defer_if_no_result', 'defer_message', 'http_timeout', 'cache_timeout' },
+})
+if not dyn_settings then
+  rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
+  local err_msg = string.format("schema error: %s", dyn_err)
+  lua_util.config_utils.push_config_error(N, err_msg)
+  lua_util.disable_module(N, "failed", err_msg)
+  return
+end
+settings = dyn_settings
 
+-- Validate against the unresolved schema as before (redis mixin fields are not checked)
 local res, err = config_schema:transform(settings)
 if not res then
   rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "libserver/dynamic_cfg.h"
 #include "libserver/cfg_file_private.h"
 #include "libutil/rrd.h"
 #include "libutil/hash.h"
@@ -2661,257 +2660,47 @@ end:
 	return 0;
 }
 
+static int rspamd_controller_handle_plugin_alias(struct rspamd_http_connection_entry *conn_ent,
+												 struct rspamd_http_message *msg,
+												 const char *path);
+
 /*
  * Save actions command handler:
  * request: /saveactions
  * headers: Password
- * input: json array [<spam>,<probable spam>,<greylist>]
+ * input: json array [<spam>,<rewrite subject>,<probable spam>,<greylist>]
  * reply: json {"success":true} or {"error":"error message"}
+ *
+ * The thresholds are stored as the dynamic configuration (the `actions` module
+ * of dynconf): this is a name of the handler of the `dynconf` controller
+ * plugin (rules/controller/dynconf.lua) that does the work
  */
 static int
 rspamd_controller_handle_saveactions(
 	struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session *session = conn_ent->ud;
-	struct ucl_parser *parser;
-	ucl_object_t *obj;
-	const ucl_object_t *cur;
-	struct rspamd_controller_worker_ctx *ctx;
-	const char *error;
-	double score;
-	int i, added = 0;
-	enum rspamd_action_type act;
-	ucl_object_iter_t it = NULL;
-
-	ctx = session->ctx;
-
-	if (!rspamd_controller_check_password(conn_ent, session, msg, TRUE)) {
-		return 0;
-	}
-
-	if (rspamd_http_message_get_body(msg, NULL) == NULL) {
-		msg_err_session("got zero length body, cannot continue");
-		rspamd_controller_send_error(conn_ent,
-									 400,
-									 "Empty body is not permitted");
-		return 0;
-	}
-
-	parser = rspamd_ucl_parser_new_untrusted(msg->body_buf.len);
-	if (!ucl_parser_add_chunk(parser, msg->body_buf.begin, msg->body_buf.len)) {
-		if ((error = ucl_parser_get_error(parser)) != NULL) {
-			msg_err_session("cannot parse input: %s", error);
-			rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-			ucl_parser_free(parser);
-			return 0;
-		}
-
-		msg_err_session("cannot parse input: unknown error");
-		rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-		ucl_parser_free(parser);
-		return 0;
-	}
-
-	obj = ucl_parser_get_object(parser);
-	ucl_parser_free(parser);
-
-	if (obj->type != UCL_ARRAY || obj->len != 4) {
-		msg_err_session("input is not an array of 4 elements");
-		rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-		ucl_object_unref(obj);
-		return 0;
-	}
-
-	it = ucl_object_iterate_new(obj);
-
-	for (i = 0; i < 4; i++) {
-		cur = ucl_object_iterate_safe(it, TRUE);
-
-		switch (i) {
-		case 0:
-		default:
-			act = METRIC_ACTION_REJECT;
-			break;
-		case 1:
-			act = METRIC_ACTION_REWRITE_SUBJECT;
-			break;
-		case 2:
-			act = METRIC_ACTION_ADD_HEADER;
-			break;
-		case 3:
-			act = METRIC_ACTION_GREYLIST;
-			break;
-		}
-
-		if (ucl_object_type(cur) == UCL_NULL) {
-			/* Assume NaN */
-			score = NAN;
-		}
-		else {
-			score = ucl_object_todouble(cur);
-		}
-
-		struct rspamd_action *cfg_action = rspamd_config_get_action_by_type(ctx->cfg, act);
-
-		if (cfg_action && ((isnan(cfg_action->threshold) != isnan(score)) ||
-						   (cfg_action->threshold != score))) {
-			add_dynamic_action(ctx->cfg, DEFAULT_METRIC, act, score);
-			added++;
-		}
-		else {
-			if (remove_dynamic_action(ctx->cfg, DEFAULT_METRIC, act)) {
-				added++;
-			}
-		}
-	}
-
-	ucl_object_iterate_free(it);
-
-	if (dump_dynamic_config(ctx->cfg)) {
-		msg_info_session("<%s> modified %d actions",
-						 rspamd_inet_address_to_string(session->from_addr),
-						 added);
-
-		rspamd_controller_send_string(conn_ent, "{\"success\":true}");
-	}
-	else {
-		rspamd_controller_send_error(conn_ent, 500, "Save error");
-	}
-
-	ucl_object_unref(obj);
-
-	return 0;
+	return rspamd_controller_handle_plugin_alias(conn_ent, msg,
+												 "/plugins/dynconf/saveactions");
 }
 
 /*
  * Save symbols command handler:
  * request: /savesymbols
  * headers: Password
- * input: json data
+ * input: json data [{"name": <symbol>, "value": <score>}, ...]
  * reply: json {"success":true} or {"error":"error message"}
+ *
+ * The scores are stored as the dynamic configuration (the `scores` module of
+ * dynconf), see the handler of the `dynconf` controller plugin
  */
 static int
 rspamd_controller_handle_savesymbols(
 	struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session *session = conn_ent->ud;
-	struct ucl_parser *parser;
-	ucl_object_t *obj;
-	const ucl_object_t *cur, *jname, *jvalue;
-	ucl_object_iter_t iter = NULL;
-	struct rspamd_controller_worker_ctx *ctx;
-	const char *error;
-	double val;
-	struct rspamd_symbol *sym;
-	int added = 0;
-
-	ctx = session->ctx;
-
-	if (!rspamd_controller_check_password(conn_ent, session, msg, TRUE)) {
-		return 0;
-	}
-
-	if (rspamd_http_message_get_body(msg, NULL) == NULL) {
-		msg_err_session("got zero length body, cannot continue");
-		rspamd_controller_send_error(conn_ent,
-									 400,
-									 "Empty body is not permitted");
-		return 0;
-	}
-
-	parser = rspamd_ucl_parser_new_untrusted(msg->body_buf.len);
-	if (!ucl_parser_add_chunk(parser, msg->body_buf.begin, msg->body_buf.len)) {
-		if ((error = ucl_parser_get_error(parser)) != NULL) {
-			msg_err_session("cannot parse input: %s", error);
-			rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-			ucl_parser_free(parser);
-			return 0;
-		}
-
-		msg_err_session("cannot parse input: unknown error");
-		rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-		ucl_parser_free(parser);
-		return 0;
-	}
-
-	obj = ucl_parser_get_object(parser);
-	ucl_parser_free(parser);
-
-	if (obj->type != UCL_ARRAY) {
-		msg_err_session("input is not an array");
-		rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-		ucl_object_unref(obj);
-		return 0;
-	}
-
-	iter = ucl_object_iterate_new(obj);
-
-	while ((cur = ucl_object_iterate_safe(iter, true))) {
-		if (cur->type != UCL_OBJECT) {
-			msg_err_session("json array data error");
-			rspamd_controller_send_error(conn_ent, 400, "Cannot parse input");
-			ucl_object_unref(obj);
-			ucl_object_iterate_free(iter);
-
-			return 0;
-		}
-
-		jname = ucl_object_lookup(cur, "name");
-		jvalue = ucl_object_lookup(cur, "value");
-		val = ucl_object_todouble(jvalue);
-		sym = g_hash_table_lookup(session->cfg->symbols, ucl_object_tostring(jname));
-
-		if (sym && fabs(*sym->weight_ptr - val) > DBL_EPSILON) {
-			if (!add_dynamic_symbol(ctx->cfg, DEFAULT_METRIC,
-									ucl_object_tostring(jname), val)) {
-				msg_err_session("add symbol failed for %s",
-								ucl_object_tostring(jname));
-				rspamd_controller_send_error(conn_ent, 506,
-											 "Add symbol failed");
-				ucl_object_unref(obj);
-				ucl_object_iterate_free(iter);
-
-				return 0;
-			}
-			added++;
-		}
-		else if (sym && ctx->cfg->dynamic_conf) {
-			if (remove_dynamic_symbol(ctx->cfg, DEFAULT_METRIC,
-									  ucl_object_tostring(jname))) {
-				added++;
-			}
-		}
-	}
-
-	ucl_object_iterate_free(iter);
-
-	if (added > 0) {
-		if (ctx->cfg->dynamic_conf) {
-			if (dump_dynamic_config(ctx->cfg)) {
-				msg_info_session("<%s> modified %d symbols",
-								 rspamd_inet_address_to_string(session->from_addr),
-								 added);
-
-				rspamd_controller_send_string(conn_ent, "{\"success\":true}");
-			}
-			else {
-				rspamd_controller_send_error(conn_ent, 500, "Save error");
-			}
-		}
-		else {
-			rspamd_controller_send_string(conn_ent, "{\"success\":true}");
-		}
-	}
-	else {
-		msg_err_session("no symbols to save");
-		rspamd_controller_send_error(conn_ent, 404, "No symbols to save");
-	}
-
-	ucl_object_unref(obj);
-
-	return 0;
+	return rspamd_controller_handle_plugin_alias(conn_ent, msg,
+												 "/plugins/dynconf/savesymbols");
 }
 
 /*
@@ -3744,59 +3533,49 @@ rspamd_controller_handle_unknown(struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
-static int
-rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_ent,
-									struct rspamd_http_message *msg)
+/*
+ * The checks that precede any handler of a plugin: the password and the body (if the handler reads it).
+ * If they fail, the reply has been sent already
+ */
+static gboolean
+rspamd_controller_plugin_precheck(struct rspamd_http_connection_entry *conn_ent,
+								  struct rspamd_http_message *msg,
+								  gboolean is_enable, gboolean need_body)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_controller_plugin_cbdata *cbd;
-	struct rspamd_task *task, **ptask;
-	struct rspamd_http_connection_entry **pconn;
-	struct rspamd_controller_worker_ctx *ctx;
-	lua_State *L;
-	struct http_parser_url u;
-	rspamd_ftok_t lookup;
 
-
-	http_parser_parse_url(msg->url->str, msg->url->len, TRUE, &u);
-
-	if (u.field_set & (1 << UF_PATH)) {
-		gsize unnorm_len;
-		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
-		lookup.len = u.field_data[UF_PATH].len;
-
-		rspamd_normalize_path_inplace((char *) lookup.begin,
-									  lookup.len,
-									  &unnorm_len);
-		lookup.len = unnorm_len;
-	}
-	else {
-		lookup.begin = msg->url->str;
-		lookup.len = msg->url->len;
+	if (!rspamd_controller_check_password(conn_ent, session, msg, is_enable)) {
+		return FALSE;
 	}
 
-	cbd = g_hash_table_lookup(session->ctx->plugins, &lookup);
-
-	if (cbd == NULL || cbd->handler == NULL) {
-		msg_err_session("plugin handler %T has not been found", &lookup);
-		rspamd_controller_send_error(conn_ent, 404, "No command associated");
-		return 0;
-	}
-
-	L = cbd->L;
-	ctx = cbd->ctx;
-
-	if (!rspamd_controller_check_password(conn_ent, session, msg,
-										  cbd->is_enable)) {
-		return 0;
-	}
-	if (cbd->need_task && (rspamd_http_message_get_body(msg, NULL) == NULL)) {
+	if (need_body && (rspamd_http_message_get_body(msg, NULL) == NULL)) {
 		msg_err_session("got zero length body, cannot continue");
 		rspamd_controller_send_error(conn_ent,
 									 400,
 									 "Empty body is not permitted");
-		return 0;
+		return FALSE;
 	}
+
+	return TRUE;
+}
+
+/*
+ * Runs a handler of a plugin (a Lua function registered by `rspamd_plugins.<name>.webui`)
+ * after `rspamd_controller_plugin_precheck`
+ */
+static int
+rspamd_controller_run_lua_plugin(struct rspamd_http_connection_entry *conn_ent,
+								 struct rspamd_http_message *msg,
+								 struct rspamd_controller_plugin_cbdata *cbd)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_task *task, **ptask;
+	struct rspamd_http_connection_entry **pconn;
+	struct rspamd_controller_worker_ctx *ctx;
+	lua_State *L;
+
+	L = cbd->L;
+	ctx = cbd->ctx;
 
 	task = rspamd_task_new(session->ctx->worker, session->cfg, session->pool,
 						   ctx->lang_det, ctx->event_loop, FALSE);
@@ -3865,6 +3644,81 @@ rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_en
 	rspamd_session_pending(task->s);
 
 	return 0;
+}
+
+static int
+rspamd_controller_handle_lua_plugin(struct rspamd_http_connection_entry *conn_ent,
+									struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_plugin_cbdata *cbd;
+	struct http_parser_url u;
+	rspamd_ftok_t lookup;
+
+
+	http_parser_parse_url(msg->url->str, msg->url->len, TRUE, &u);
+
+	if (u.field_set & (1 << UF_PATH)) {
+		gsize unnorm_len;
+		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
+		lookup.len = u.field_data[UF_PATH].len;
+
+		rspamd_normalize_path_inplace((char *) lookup.begin,
+									  lookup.len,
+									  &unnorm_len);
+		lookup.len = unnorm_len;
+	}
+	else {
+		lookup.begin = msg->url->str;
+		lookup.len = msg->url->len;
+	}
+
+	cbd = g_hash_table_lookup(session->ctx->plugins, &lookup);
+
+	if (cbd == NULL || cbd->handler == NULL) {
+		msg_err_session("plugin handler %T has not been found", &lookup);
+		rspamd_controller_send_error(conn_ent, 404, "No command associated");
+		return 0;
+	}
+
+	if (!rspamd_controller_plugin_precheck(conn_ent, msg, cbd->is_enable, cbd->need_task)) {
+		return 0;
+	}
+
+	return rspamd_controller_run_lua_plugin(conn_ent, msg, cbd);
+}
+
+/*
+ * A built-in path that is served by a plugin handler registered under `path`: it needs
+ * the privileged password and the body of the request
+ */
+static int
+rspamd_controller_handle_plugin_alias(struct rspamd_http_connection_entry *conn_ent,
+									  struct rspamd_http_message *msg,
+									  const char *path)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_plugin_cbdata *cbd;
+	rspamd_ftok_t lookup;
+
+	if (!rspamd_controller_plugin_precheck(conn_ent, msg, TRUE, TRUE)) {
+		return 0;
+	}
+
+	lookup.begin = path;
+	lookup.len = strlen(path);
+
+	cbd = g_hash_table_lookup(session->ctx->plugins, &lookup);
+
+	if (cbd == NULL || cbd->handler == NULL) {
+		msg_err_session("plugin handler %s has not been found: "
+						"the controller rules are not loaded?",
+						path);
+		rspamd_controller_send_error(conn_ent, 404, "No command associated");
+		return 0;
+	}
+
+	return rspamd_controller_run_lua_plugin(conn_ent, msg, cbd);
 }
 
 /*

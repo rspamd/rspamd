@@ -439,8 +439,7 @@ struct rspamd_config {
 	GList *statfiles;                                /**< list of all statfiles in config file order         */
 	GHashTable *classifiers_symbols;                 /**< hashtable indexed by symbol name of classifiers    */
 	GHashTable *cfg_params;                          /**< all cfg params indexed by its name in this structure */
-	char *dynamic_conf;                              /**< path to dynamic configuration						*/
-	ucl_object_t *current_dynamic_conf;              /**< currently loaded dynamic configuration				*/
+	char *dynamic_conf;                              /**< path of the legacy dynamic configuration (import only)	*/
 	int clock_res;                                   /**< resolution of clock used							*/
 
 	GList *maps;                      /**< maps active										*/
@@ -528,6 +527,10 @@ struct rspamd_config {
 	struct rspamd_lang_detector *lang_det;              /**< language detector									*/
 	struct rspamd_tokenizer_manager *tokenizer_manager; /**< custom tokenizer manager						*/
 	struct rspamd_worker *cur_worker;                   /**< set dynamically by each worker							*/
+
+	void *dynconf_ctx;       /**< dynamic configuration state (see cfg_dynamic.h)		*/
+	double dyn_next_check;   /**< dynconf: absolute time of the next check, 0 if disarmed	*/
+	uint64_t dyn_generation; /**< dynconf: bumped on every applied dynamic change		*/
 
 	ref_entry_t ref; /**< reference counter									*/
 };
@@ -715,12 +718,14 @@ gboolean rspamd_config_add_symbol_group(struct rspamd_config *cfg,
 										const char *group);
 
 /**
- * Sets action score for a specified metric with the specified priority
+ * Sets the threshold (and flags) of an action. The priority is taken from the `priority`
+ * attribute of `obj` if it is an object, or from the priority of `obj` itself (the priority
+ * of the file where it is defined) otherwise, and is stored with the action: a definition
+ * with a lower priority does not replace the one that is stored, an equal one does
  * @param cfg config file
- * @param metric metric name (or NULL for default metric)
  * @param action_name symbolic name of action
  * @param obj data to set for action
- * @return TRUE if symbol has been inserted or FALSE if action already exists with higher priority
+ * @return TRUE if the action has been set (or kept, as it is defined with a higher priority) or FALSE if the definition is invalid
  */
 gboolean rspamd_config_set_action_score(struct rspamd_config *cfg,
 										const char *action_name,
@@ -839,6 +844,12 @@ struct rspamd_action *rspamd_config_get_action(struct rspamd_config *cfg,
 
 struct rspamd_action *rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 													   enum rspamd_action_type type);
+
+/**
+ * Sorts the actions by thresholds again (needed after a threshold has been changed
+ * in place)
+ */
+void rspamd_config_actions_resort(struct rspamd_config *cfg);
 
 /**
  * Iterate over all actions

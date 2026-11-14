@@ -18,9 +18,24 @@ limitations under the License.
 -- Check messages for 'bulkiness' using DCC
 
 local N = 'dcc'
-local symbol_bulk = "DCC_BULK"
-local symbol = "DCC_REJECT"
-local symbol_fail = "DCC_FAIL"
+local settings = {
+  default_port = 10045,
+  timeout = 5.0,
+  log_clean = false,
+  retransmits = 2,
+  cache_expire = 7200, -- expire redis in 2h
+  message = '${SCANNER}: bulk message found: "${VIRUS}"',
+  detection_category = "hash",
+  default_score = 1,
+  client = '0.0.0.0',
+  symbol_fail = 'DCC_FAIL',
+  symbol = 'DCC_REJECT',
+  symbol_bulk = 'DCC_BULK',
+  body_max = 999999,
+  fuz1_max = 999999,
+  fuz2_max = 999999,
+}
+local dynconf = require "lua_dynconf"
 local opts = rspamd_config:get_all_opt(N)
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
@@ -69,16 +84,29 @@ end
 -- WORKAROUND for deprecated host and port settings
 
 if not opts.symbol_bulk then
-  opts.symbol_bulk = symbol_bulk
+  opts.symbol_bulk = settings.symbol_bulk
 end
 if not opts.symbol_fail then
-  opts.symbol_fail = symbol_fail
+  opts.symbol_fail = settings.symbol_fail
 end
 if not opts.symbol then
-  opts.symbol = symbol
+  opts.symbol = settings.symbol
 end
 
-rule = dcc.configure(opts)
+-- The scanner library copies these settings into its own rule table, so nothing is dynamic here
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  dynamic = {},
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+  lua_util.disable_module(N, "config")
+  return
+end
+settings = dyn_settings
+
+rule = dcc.configure(settings)
 
 if rule then
   local id = rspamd_config:register_symbol({
@@ -89,38 +117,38 @@ if rule then
   rspamd_config:register_symbol {
     type = 'virtual',
     parent = id,
-    name = opts.symbol
+    name = settings.symbol
   }
   rspamd_config:register_symbol {
     type = 'virtual',
     parent = id,
-    name = opts.symbol_bulk
+    name = settings.symbol_bulk
   }
   rspamd_config:register_symbol {
     type = 'virtual',
     parent = id,
-    name = opts.symbol_fail
+    name = settings.symbol_fail
   }
   rspamd_config:set_metric_symbol({
     group = N,
     score = 1.0,
     description = 'Detected as bulk mail by DCC',
     one_shot = true,
-    name = opts.symbol_bulk,
+    name = settings.symbol_bulk,
   })
   rspamd_config:set_metric_symbol({
     group = N,
     score = 2.0,
     description = 'Rejected by DCC',
     one_shot = true,
-    name = opts.symbol,
+    name = settings.symbol,
   })
   rspamd_config:set_metric_symbol({
     group = N,
     score = 0.0,
     description = 'DCC failure',
     one_shot = true,
-    name = opts.symbol_fail,
+    name = settings.symbol_fail,
   })
 else
   lua_util.disable_module(N, "config")

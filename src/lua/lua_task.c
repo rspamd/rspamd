@@ -8643,7 +8643,12 @@ lua_task_timer_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 	}
 
 	if (schedule_more) {
-		ev_timer_again(loop, t);
+		/*
+		 * The timer is a one shot one and it has been stopped before this callback:
+		 * ev_timer_again does nothing for a timer without repeat that is not active,
+		 * so it has to be started
+		 */
+		ev_timer_start(loop, t);
 	}
 	else {
 		/* Cleanup */

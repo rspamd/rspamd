@@ -40,6 +40,7 @@
 #include "libserver/worker_util.h"
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/dkim.h"
+#include "libserver/cfg_dynamic.h"
 #include "libserver/html/html_features.h"
 #include "khash.h"
 #include "fuzzy_wire.h"
@@ -78,6 +79,10 @@ struct fuzzy_mapping {
 	uint64_t fuzzy_flag;
 	const char *symbol;
 	double weight;
+	gboolean own_weight;  /* The flag has its own limit, otherwise it follows the rule */
+	const char *key;      /* Name of the fuzzy_map entry in the configuration (dynamic configuration) */
+	double static_weight; /* The own limit as configured: the baseline for dynamic updates */
+	double dyn_weight;    /* Scratch: the weight computed while an update is validated */
 };
 
 enum fuzzy_rule_mode {
@@ -88,6 +93,22 @@ enum fuzzy_rule_mode {
 
 struct fuzzy_tcp_pending_command; /* Forward declaration */
 KHASH_MAP_INIT_INT(fuzzy_pending_hash, struct fuzzy_tcp_pending_command *);
+
+/*
+ * Rule options that can be changed at runtime (dynamic configuration).
+ * All of them are plain scalars that are read when a command is built or a reply is processed.
+ */
+struct fuzzy_rule_dyn {
+	double hits_limit;
+	double weight_threshold;
+	double prob_bias;
+	double prob_power;
+	double html_weight;
+	double io_timeout;
+	uint32_t retransmits;
+	enum fuzzy_rule_mode mode;
+	gboolean skip_unknown;
+};
 
 struct fuzzy_rule {
 	struct upstream_list *read_servers;  /* Servers for read operations */
@@ -129,6 +150,14 @@ struct fuzzy_rule {
 	int lua_id;
 	gboolean server_supports_v2;
 
+	/* Dynamic configuration */
+	struct fuzzy_rule_dyn static_dyn; /* Values after parsing: the baseline for the dynamic ones */
+	gboolean named;                   /* The rule is named by its configuration key */
+	gboolean own_retransmits;         /* The rule has its own retransmits, so it does not follow the module */
+	gboolean own_io_timeout;          /* The same for timeout */
+	gboolean has_mode_key;            /* `mode` is set explicitly and wins over `read_only` */
+	gboolean html_weight_in_checks;   /* html weight is set by `checks.html`, it wins over `html_weight` */
+
 	/* TCP configuration */
 	gboolean tcp_enabled;   /* Explicitly enable TCP */
 	gboolean tcp_auto;      /* Auto-switch to TCP based on request rate */
@@ -160,6 +189,8 @@ struct fuzzy_ctx {
 	unsigned int max_errors;
 	double revive_time;
 	double io_timeout;
+	double static_io_timeout; /* Dynamic configuration baselines */
+	uint32_t static_retransmits;
 	int check_mime_part_ref; /* Lua callback */
 	int process_rule_ref;    /* Lua callback */
 	int cleanup_rules_ref;
@@ -375,10 +406,13 @@ parse_flags(struct fuzzy_rule *rule,
 			sym = ucl_object_key(val);
 		}
 		if (sym != NULL) {
+			const char *mkey = ucl_object_key(val);
+
 			map =
-				rspamd_mempool_alloc(cfg->cfg_pool,
-									 sizeof(struct fuzzy_mapping));
+				rspamd_mempool_alloc0(cfg->cfg_pool,
+									  sizeof(struct fuzzy_mapping));
 			map->symbol = sym;
+			map->key = mkey ? rspamd_mempool_strdup(cfg->cfg_pool, mkey) : NULL;
 			elt = ucl_object_lookup(val, "flag");
 
 			if (elt != NULL) {
@@ -391,10 +425,14 @@ parse_flags(struct fuzzy_rule *rule,
 
 				if (elt != NULL) {
 					map->weight = ucl_obj_todouble(elt);
+					map->own_weight = TRUE;
 				}
 				else {
 					map->weight = rule->hits_limit;
+					map->own_weight = FALSE;
 				}
+				map->static_weight = map->weight;
+				map->dyn_weight = map->weight;
 				/* Add flag to hash table */
 				g_hash_table_insert(rule->mappings,
 									GINT_TO_POINTER(map->fuzzy_flag), map);
@@ -503,9 +541,11 @@ fuzzy_rule_apply_checks(struct fuzzy_rule *rule,
 
 			if ((opt = ucl_object_lookup(cur, "html_weight")) != NULL) {
 				rule->html_weight = ucl_obj_todouble(opt);
+				rule->html_weight_in_checks = TRUE;
 			}
 			else if ((opt = ucl_object_lookup(cur, "weight")) != NULL) {
 				rule->html_weight = ucl_obj_todouble(opt);
+				rule->html_weight_in_checks = TRUE;
 			}
 
 			if ((opt = ucl_object_lookup(cur, "ignore_link_domains")) != NULL) {
@@ -1857,6 +1897,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "retransmits")) != NULL) {
 		rule->retransmits = ucl_obj_toint(value);
+		rule->own_retransmits = TRUE;
 	}
 	else {
 		rule->retransmits = fuzzy_module_ctx->retransmits;
@@ -1864,6 +1905,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "timeout")) != NULL) {
 		rule->io_timeout = ucl_obj_todouble(value);
+		rule->own_io_timeout = TRUE;
 	}
 	else {
 		rule->io_timeout = fuzzy_module_ctx->io_timeout;
@@ -1875,6 +1917,7 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if (name) {
 		rule->name = name;
+		rule->named = TRUE;
 	}
 	else {
 		rule->name = rule->symbol;
@@ -1887,6 +1930,8 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup(obj, "mode")) != NULL) {
 		const char *mode_str = ucl_object_tostring(value);
+
+		rule->has_mode_key = TRUE;
 
 		if (g_ascii_strcasecmp(mode_str, "read_only") == 0) {
 			rule->mode = fuzzy_rule_read_only;
@@ -2311,6 +2356,17 @@ fuzzy_parse_rule(struct rspamd_config *cfg, const ucl_object_t *obj,
 	if ((value = ucl_object_lookup(obj, "checks")) != NULL) {
 		fuzzy_rule_apply_checks(rule, cfg, value);
 	}
+
+	/* Remember the parsed values: the baseline for dynamic configuration updates */
+	rule->static_dyn.hits_limit = rule->hits_limit;
+	rule->static_dyn.weight_threshold = rule->weight_threshold;
+	rule->static_dyn.prob_bias = rule->prob_bias;
+	rule->static_dyn.prob_power = rule->prob_power;
+	rule->static_dyn.html_weight = rule->html_weight;
+	rule->static_dyn.io_timeout = rule->io_timeout;
+	rule->static_dyn.retransmits = rule->retransmits;
+	rule->static_dyn.mode = rule->mode;
+	rule->static_dyn.skip_unknown = rule->skip_unknown;
 
 	/* Initialize rate tracker */
 	rule->rate_tracker.requests_count = 0;
@@ -2816,6 +2872,316 @@ int fuzzy_check_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
+/*
+ * Dynamic configuration.
+ *
+ * The registry delivers the effective values of the dynamic options (see
+ * fuzzy_dynconf_paths). The options that are absent in the update are
+ * restored to the values of the static configuration. Everything is validated
+ * before anything is changed, so an update is applied completely or not at all.
+ * Values that are equal to the ones in the static configuration are not validated
+ * again: the load code tolerates some of them (with a fallback), and an unrelated
+ * update must not fail because of that. `max_score` is a legacy alias of `hits_limit`
+ * and is not dynamic. `rule.*.hits_limit` is the default for the flags that have no
+ * own limit; flags with their own limit are changed by `rule.*.fuzzy_map.*.hits_limit`.
+ * Not covered: the timeout augmentation of the symcache, that is computed once at
+ * load, and the collision check of writable flags, that is done at load too.
+ */
+static const char *const fuzzy_dynconf_paths[] = {
+	"timeout",
+	"retransmits",
+	"rule.*.hits_limit",
+	"rule.*.fuzzy_map.*.hits_limit",
+	"rule.*.weight_threshold",
+	"rule.*.skip_unknown",
+	"rule.*.read_only",
+	"rule.*.html_weight",
+	"rule.*.prob_power",
+	"rule.*.prob_bias",
+	NULL};
+
+static void
+fuzzy_dynconf_error(GError **err, const char *rule_name, const char *opt, const char *what)
+{
+	if (rule_name) {
+		g_set_error(err, g_quark_from_static_string("fuzzy_check"), EINVAL,
+					"rule %s: invalid %s: %s", rule_name, opt, what);
+	}
+	else {
+		g_set_error(err, g_quark_from_static_string("fuzzy_check"), EINVAL,
+					"invalid %s: %s", opt, what);
+	}
+}
+
+/*
+ * Reads a finite double that is not less than `min` (and less than `max` if it is not NAN).
+ * If `static_obj` has the same value for `key`, the value is the static one and `target`
+ * (that already holds the parsed static value) is left alone.
+ */
+static gboolean
+fuzzy_dynconf_get_double(const ucl_object_t *obj, const char *key, const char *rule_name,
+						 double min, double max, gboolean min_exclusive,
+						 const ucl_object_t *static_obj,
+						 double *target, GError **err)
+{
+	const ucl_object_t *elt = ucl_object_lookup(obj, key), *selt;
+	double v, sv;
+
+	if (elt == NULL) {
+		return TRUE;
+	}
+
+	if (!ucl_object_todouble_safe(elt, &v) || !isfinite(v)) {
+		fuzzy_dynconf_error(err, rule_name, key, "a number is expected");
+		return FALSE;
+	}
+
+	if (static_obj != NULL && (selt = ucl_object_lookup(static_obj, key)) != NULL &&
+		ucl_object_todouble_safe(selt, &sv) && sv == v) {
+		return TRUE;
+	}
+
+	if (v < min || (min_exclusive && v == min) || (!isnan(max) && v >= max)) {
+		fuzzy_dynconf_error(err, rule_name, key, "value is out of range");
+		return FALSE;
+	}
+
+	*target = v;
+
+	return TRUE;
+}
+
+static gboolean
+fuzzy_dynconf_parse_rule(const struct fuzzy_rule *rule, const ucl_object_t *robj,
+						 struct fuzzy_rule_dyn *d, GError **err)
+{
+	const ucl_object_t *elt;
+	bool b;
+
+	if (!fuzzy_dynconf_get_double(robj, "hits_limit", rule->name, 0, NAN, FALSE,
+								  rule->ucl_obj, &d->hits_limit, err)) {
+		return FALSE;
+	}
+
+	if (ucl_object_lookup(robj, "weight_threshold") != NULL) {
+		if (!fuzzy_dynconf_get_double(robj, "weight_threshold", rule->name, -INFINITY, NAN, FALSE,
+									  rule->ucl_obj, &d->weight_threshold, err)) {
+			return FALSE;
+		}
+	}
+
+	if (!fuzzy_dynconf_get_double(robj, "prob_power", rule->name, 0, NAN, TRUE,
+								  rule->ucl_obj, &d->prob_power, err) ||
+		!fuzzy_dynconf_get_double(robj, "prob_bias", rule->name, 0, 1.0, FALSE,
+								  rule->ucl_obj, &d->prob_bias, err)) {
+		return FALSE;
+	}
+
+	/* `checks.html` is a more specific option and it wins, as it does at load */
+	if (!rule->html_weight_in_checks) {
+		if (!fuzzy_dynconf_get_double(robj, "html_weight", rule->name, 0, NAN, FALSE,
+									  rule->ucl_obj, &d->html_weight, err)) {
+			return FALSE;
+		}
+	}
+
+	if ((elt = ucl_object_lookup(robj, "skip_unknown")) != NULL) {
+		if (!ucl_object_toboolean_safe(elt, &b)) {
+			fuzzy_dynconf_error(err, rule->name, "skip_unknown", "a boolean is expected");
+			return FALSE;
+		}
+
+		d->skip_unknown = b;
+	}
+
+	/* `mode` wins over `read_only`, as it does at load */
+	if ((elt = ucl_object_lookup(robj, "read_only")) != NULL && !rule->has_mode_key) {
+		if (!ucl_object_toboolean_safe(elt, &b)) {
+			fuzzy_dynconf_error(err, rule->name, "read_only", "a boolean is expected");
+			return FALSE;
+		}
+
+		d->mode = b ? fuzzy_rule_read_only : fuzzy_rule_read_write;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+fuzzy_dynconf_apply(struct rspamd_config *cfg,
+					const char *module,
+					const ucl_object_t *dyn_values,
+					void *ud,
+					struct rspamd_dynconf_apply_info *info,
+					GError **err)
+{
+	struct fuzzy_ctx *fuzzy_module_ctx = (struct fuzzy_ctx *) ud;
+	struct fuzzy_rule *rule;
+	struct fuzzy_rule_dyn *nd;
+	const ucl_object_t *elt, *rules_obj = NULL, *robj;
+	double io_timeout = fuzzy_module_ctx->static_io_timeout;
+	uint32_t retransmits = fuzzy_module_ctx->static_retransmits;
+	unsigned int i;
+
+	if (dyn_values != NULL) {
+		int64_t v;
+
+		if ((elt = ucl_object_lookup(dyn_values, "timeout")) != NULL) {
+			double dv;
+
+			/* The static value is not validated again */
+			if (!(ucl_object_todouble_safe(elt, &dv) && dv == io_timeout) &&
+				!fuzzy_dynconf_get_double(dyn_values, "timeout", NULL, 0, NAN, TRUE,
+										  NULL, &io_timeout, err)) {
+				return FALSE;
+			}
+		}
+
+		if ((elt = ucl_object_lookup(dyn_values, "retransmits")) != NULL &&
+			!(ucl_object_toint_safe(elt, &v) && v >= 0 && (uint64_t) v == retransmits)) {
+			if (!ucl_object_toint_safe(elt, &v) || v < 0 || v > 1000) {
+				fuzzy_dynconf_error(err, NULL, "retransmits",
+									"an integer in range [0, 1000] is expected");
+				return FALSE;
+			}
+
+			retransmits = (uint32_t) v;
+		}
+
+		rules_obj = ucl_object_lookup(dyn_values, "rule");
+
+		if (rules_obj != NULL && ucl_object_type(rules_obj) != UCL_OBJECT) {
+			rules_obj = NULL;
+		}
+	}
+
+	nd = g_new0(struct fuzzy_rule_dyn, fuzzy_module_ctx->fuzzy_rules->len + 1);
+
+	/* Validate everything first */
+	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+	{
+		nd[i] = rule->static_dyn;
+		robj = NULL;
+
+		if (rules_obj != NULL && rule->named) {
+			robj = ucl_object_lookup(rules_obj, rule->name);
+		}
+
+		if (robj != NULL) {
+			if (ucl_object_type(robj) != UCL_OBJECT ||
+				!fuzzy_dynconf_parse_rule(rule, robj, &nd[i], err)) {
+				if (err && *err == NULL) {
+					fuzzy_dynconf_error(err, rule->name, "rule", "an object is expected");
+				}
+
+				g_free(nd);
+
+				return FALSE;
+			}
+		}
+
+		/* Rules that have no own values follow the module */
+		if (!rule->own_io_timeout) {
+			nd[i].io_timeout = io_timeout;
+		}
+
+		if (!rule->own_retransmits) {
+			nd[i].retransmits = retransmits;
+		}
+
+		/* Weights of the flags: the own limit (static or dynamic) or the one of the rule */
+		GHashTableIter mit;
+		gpointer mk, mv;
+		const ucl_object_t *fmap = robj ? ucl_object_lookup(robj, "fuzzy_map") : NULL;
+		const ucl_object_t *sfmap = rule->ucl_obj ? ucl_object_lookup(rule->ucl_obj, "fuzzy_map") : NULL;
+
+		g_hash_table_iter_init(&mit, rule->mappings);
+
+		while (g_hash_table_iter_next(&mit, &mk, &mv)) {
+			struct fuzzy_mapping *map = (struct fuzzy_mapping *) mv;
+
+			if (!map->own_weight) {
+				map->dyn_weight = nd[i].hits_limit;
+				continue;
+			}
+
+			map->dyn_weight = map->static_weight;
+
+			if (fmap != NULL && ucl_object_type(fmap) == UCL_OBJECT && map->key != NULL) {
+				const ucl_object_t *mobj = ucl_object_lookup(fmap, map->key);
+
+				if (mobj != NULL) {
+					const ucl_object_t *smobj = sfmap ? ucl_object_lookup(sfmap, map->key) : NULL;
+
+					if (ucl_object_type(mobj) != UCL_OBJECT ||
+						!fuzzy_dynconf_get_double(mobj, "hits_limit", rule->name, 0, NAN, FALSE,
+												  smobj, &map->dyn_weight, err)) {
+						if (err && *err == NULL) {
+							fuzzy_dynconf_error(err, rule->name, "fuzzy_map", "an object is expected");
+						}
+
+						g_free(nd);
+
+						return FALSE;
+					}
+				}
+			}
+		}
+	}
+
+	/* Now apply */
+	fuzzy_module_ctx->io_timeout = io_timeout;
+	fuzzy_module_ctx->retransmits = retransmits;
+
+	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+	{
+		GHashTableIter it;
+		gpointer k, v;
+
+		rule->hits_limit = nd[i].hits_limit;
+		rule->weight_threshold = nd[i].weight_threshold;
+		rule->prob_bias = nd[i].prob_bias;
+		rule->prob_power = nd[i].prob_power;
+		rule->html_weight = nd[i].html_weight;
+		rule->io_timeout = nd[i].io_timeout;
+		rule->retransmits = nd[i].retransmits;
+		rule->mode = nd[i].mode;
+		rule->skip_unknown = nd[i].skip_unknown;
+
+		msg_debug_config("rule %s: hits_limit = %.2f, weight_threshold = %.2f, "
+						 "prob_power = %.2f, prob_bias = %.2f, html_weight = %.2f, "
+						 "timeout = %.2f, retransmits = %ud, read_only = %d, skip_unknown = %d",
+						 rule->name, rule->hits_limit, rule->weight_threshold,
+						 rule->prob_power, rule->prob_bias, rule->html_weight,
+						 rule->io_timeout, (unsigned int) rule->retransmits,
+						 rule->mode == fuzzy_rule_read_only, (int) rule->skip_unknown);
+
+		/* Flags without their own limit follow the rule, the others have their own */
+		g_hash_table_iter_init(&it, rule->mappings);
+
+		while (g_hash_table_iter_next(&it, &k, &v)) {
+			struct fuzzy_mapping *map = (struct fuzzy_mapping *) v;
+
+			if (map->weight != map->dyn_weight) {
+				msg_info_config("rule %s: flag %uL (%s) hits limit changed from %.2f to %.2f",
+								rule->name, map->fuzzy_flag, map->symbol,
+								map->weight, map->dyn_weight);
+			}
+
+			map->weight = map->dyn_weight;
+		}
+	}
+
+	g_free(nd);
+
+	msg_info_config("applied dynamic configuration: timeout = %.2f, retransmits = %ud, "
+					"%ud rules",
+					io_timeout, (unsigned int) retransmits,
+					(unsigned int) fuzzy_module_ctx->fuzzy_rules->len);
+
+	return TRUE;
+}
+
 int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 {
 	const ucl_object_t *value, *cur, *elt;
@@ -2922,6 +3288,9 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 	else {
 		fuzzy_module_ctx->retransmits = DEFAULT_RETRANSMITS;
 	}
+
+	fuzzy_module_ctx->static_io_timeout = fuzzy_module_ctx->io_timeout;
+	fuzzy_module_ctx->static_retransmits = fuzzy_module_ctx->retransmits;
 
 	if ((value =
 			 rspamd_config_get_module_opt(cfg, "fuzzy_check",
@@ -3095,6 +3464,9 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 
 	msg_info_config("init internal fuzzy_check module, %d rules loaded",
 					nrules);
+
+	rspamd_dynconf_register_module(cfg, "fuzzy_check", fuzzy_dynconf_paths,
+								   fuzzy_dynconf_apply, fuzzy_module_ctx);
 
 	/* Register global methods */
 	lua_getglobal(L, "rspamd_plugins");

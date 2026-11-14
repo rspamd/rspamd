@@ -4,11 +4,12 @@ ADD_SUBDIRECTORY(fasttext)
 SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/cfg_dynamic.cxx
+        ${CMAKE_CURRENT_SOURCE_DIR}/cfg_dynamic_metric.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/composites/composites.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/composites/composites_manager.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/dkim.c
         ${CMAKE_CURRENT_SOURCE_DIR}/dns.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_cfg.c
         ${CMAKE_CURRENT_SOURCE_DIR}/async_session.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_sqlite.c

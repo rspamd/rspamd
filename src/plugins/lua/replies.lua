@@ -22,6 +22,7 @@ local rspamd_logger = require 'rspamd_logger'
 local hash = require 'rspamd_cryptobox_hash'
 local lua_util = require 'lua_util'
 local lua_redis = require 'lua_redis'
+local dynconf = require 'lua_dynconf'
 local fun = require "fun"
 
 -- A plugin that implements replies check using redis
@@ -362,7 +363,19 @@ if not (opts and type(opts) == 'table') then
   return
 end
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {
+      'message', 'use_auth', 'use_local', 'min_message_id',
+    },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config', tostring(dyn_err))
+    return
+  end
+  settings = dyn_settings
   redis_params = lua_redis.parse_redis_server('replies')
   if not redis_params then
     if not (settings.cookie and settings.cookie_key) then

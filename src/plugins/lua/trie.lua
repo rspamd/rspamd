@@ -138,6 +138,7 @@ local function process_trie_conf(symbol, cf)
 end
 
 local opts = rspamd_config:get_all_opt("trie")
+require("lua_dynconf").register_static("trie", opts)
 if opts then
   for sym, opt in pairs(opts) do
     process_trie_conf(sym, opt)

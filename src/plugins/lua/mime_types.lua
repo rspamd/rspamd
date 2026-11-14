@@ -23,6 +23,7 @@ local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local lua_maps = require "lua_maps"
+local dynconf = require "lua_dynconf"
 local lua_mime_types = require "lua_mime_types"
 local lua_magic_types = require "lua_magic/types"
 local fun = require "fun"
@@ -716,9 +717,46 @@ end
 
 local opts = rspamd_config:get_all_opt('mime_types')
 if opts then
-  for k, v in pairs(opts) do
-    settings[k] = v
+  -- Table options replace the default ones wholesale (shallow merge), so they are excluded from the
+  -- defaults handed to the registry, which merges recursively
+  local reg_defaults = {}
+  for k, v in pairs(settings) do
+    if type(opts[k]) ~= 'table' then
+      reg_defaults[k] = v
+    end
   end
+
+  -- Static values are kept as is (identical to the pre-migration behaviour); only a dynamic
+  -- override that differs from them must be a positive integer
+  local static_limits = {}
+  for _, k in ipairs({ 'max_name_length', 'max_archive_names' }) do
+    if opts[k] ~= nil then
+      static_limits[k] = opts[k]
+    else
+      static_limits[k] = reg_defaults[k]
+    end
+  end
+
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = reg_defaults,
+    opts = opts,
+    dynamic = { 'max_name_length', 'max_archive_names' },
+    transform = function(t)
+      for k, sv in pairs(static_limits) do
+        local v = t[k]
+        if v ~= sv and (type(v) ~= 'number' or v < 1 or v ~= math.floor(v)) then
+          return nil, k .. ' must be a positive integer'
+        end
+      end
+      return t
+    end,
+  })
+  if not dyn_settings then
+    logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+  settings = dyn_settings
 
   settings.filename_whitelist = lua_maps.rspamd_map_add('mime_types', 'filename_whitelist', 'regexp',
       'filename whitelist')

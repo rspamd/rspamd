@@ -18,6 +18,7 @@
 #include "libutil/expression.h"
 #include "src/libserver/composites/composites.h"
 #include "libserver/cfg_file_private.h"
+#include "libserver/cfg_dynamic.h"
 #include "libmime/lang_detection.h"
 #include "libserver/re_cache.h"
 #include "lua/lua_map.h"
@@ -372,7 +373,8 @@ LUA_FUNCTION_DEF(config, set_metric_symbol);
  * - `action`: name of action (string)
  * - `score`: score for action (number)
  * - `metric`: name of metric (string, optional)
- * - `priority`: priority of action's definition
+ * - `priority`: priority of action's definition: a definition replaces the one that is stored with a
+ *   lower or the same priority (the main file has 0, `local.d` 1, `override.d` 10, a dynamic threshold 3)
  */
 LUA_FUNCTION_DEF(config, set_metric_action);
 
@@ -754,6 +756,56 @@ end)
 LUA_FUNCTION_DEF(config, add_on_load);
 
 /***
+ * @method rspamd_config:dynconf_arm(next_check, [function(cfg, ev_base) ... end])
+ * Arms or disarms the per-task trigger of the dynamic configuration registry.
+ * When armed, the first task that starts after `next_check` calls the function
+ * once (in the main Lua state, not in a coroutine, so it must not yield or wait:
+ * it should start an asynchronous check and return). Rspamd postpones the trigger by one second
+ * before the call; the function is expected to call `dynconf_arm` again to schedule the next call.
+ * This is a part of the internal API of `lua_dynconf`.
+ * @param {number} next_check absolute time (as `rspamd_util.get_time()`), `0` disarms the trigger
+ * @param {function} fn the function to call; if omitted, the function that was set before is kept
+ */
+LUA_FUNCTION_DEF(config, dynconf_arm);
+
+/***
+ * @method rspamd_config:dynconf_notify(module, values, [opts])
+ * Delivers the effective values of the dynamic options of a C module to its subscriber
+ * (see `rspamd_dynconf_register_module`). This is a part of the internal API of `lua_dynconf`.
+ * @param {string} module module name
+ * @param {table} values nested table with the effective values of the dynamic paths
+ * @param {table} opts optional: `lenient` (boolean) makes the subscriber skip the entries that it cannot
+ * apply because of the state of the configuration (an unknown symbol) instead of rejecting the update;
+ * `strict` is an array of the keys of the entries that are validated strictly nevertheless; `quiet`
+ * does not log the entries that are skipped (they are still returned)
+ * @return {boolean,string,table} `true`, nil and the array of the reasons of the skipped entries (nil if
+ * there are none) if the subscriber accepted the values, `false` and an error otherwise
+ */
+LUA_FUNCTION_DEF(config, dynconf_notify);
+
+/***
+ * @method rspamd_config:dynconf_bump_generation()
+ * Increases the dynamic configuration generation counter that is visible for C code.
+ * This is a part of the internal API of `lua_dynconf`.
+ */
+LUA_FUNCTION_DEF(config, dynconf_bump_generation);
+
+/***
+ * @method rspamd_config:dynconf_baseline(module, key)
+ * Returns the static state of an action threshold (`module` is `actions`), of a symbol score
+ * (`scores`) or of a symbol (`symbols`), the one that was in effect before any dynamic override
+ * was applied.
+ * This is a part of the internal API of `lua_dynconf`.
+ * @param {string} module `actions`, `scores` or `symbols`
+ * @param {string} key action or symbol name
+ * @return {number|nil, boolean, boolean, boolean} static value (nil if the entry is unknown, the action is
+ * disabled, or for `symbols`), a flag: whether an override is applied to the entry now, a flag:
+ * whether the entry exists at all, and a flag: whether it is defined with a priority that is higher than
+ * the dynamic one (`override.d`), so that no override can change it
+ */
+LUA_FUNCTION_DEF(config, dynconf_baseline);
+
+/***
  * @method rspamd_config:add_periodic(event_base, timeout, function(cfg, ev_base) ... end, [jitter = false])
  * Registers function to be periodically executed by Rspamd
  * @param {ev_base} event_base event base that is needed for async events
@@ -1115,6 +1167,10 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, register_worker_script),
 	LUA_INTERFACE_DEF(config, register_re_selector),
 	LUA_INTERFACE_DEF(config, add_on_load),
+	LUA_INTERFACE_DEF(config, dynconf_arm),
+	LUA_INTERFACE_DEF(config, dynconf_notify),
+	LUA_INTERFACE_DEF(config, dynconf_bump_generation),
+	LUA_INTERFACE_DEF(config, dynconf_baseline),
 	LUA_INTERFACE_DEF(config, add_periodic),
 	LUA_INTERFACE_DEF(config, add_post_init),
 	LUA_INTERFACE_DEF(config, add_config_unload),
@@ -3859,6 +3915,187 @@ lua_config_add_on_load(lua_State *L)
 	DL_APPEND(cfg->on_load_scripts, sc);
 
 	return 0;
+}
+
+static int
+lua_config_dynconf_arm(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	double when;
+	int cbref = LUA_NOREF;
+
+	if (cfg == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	when = luaL_checknumber(L, 2);
+
+	if (lua_type(L, 3) == LUA_TFUNCTION) {
+		lua_pushvalue(L, 3);
+		cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+	}
+	else if (!lua_isnoneornil(L, 3)) {
+		return luaL_error(L, "invalid arguments: function expected");
+	}
+
+	/* The reference is owned by the dynconf state from now on */
+	rspamd_dynconf_set_next_check(cfg, when, cbref);
+
+	return 0;
+}
+
+static int
+lua_config_dynconf_notify(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *module = luaL_checkstring(L, 2);
+	ucl_object_t *values;
+	GError *err = NULL;
+	gboolean ret;
+	struct rspamd_dynconf_apply_info info = {RSPAMD_DYNCONF_APPLY_STRICT, NULL, NULL};
+	GPtrArray *strict_keys = NULL;
+
+	if (cfg == NULL || module == NULL || lua_type(L, 3) != LUA_TTABLE) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	values = ucl_object_lua_import(L, 3);
+
+	if (values == NULL) {
+		lua_pushboolean(L, false);
+		lua_pushstring(L, "cannot convert values to UCL");
+
+		return 2;
+	}
+
+	if (lua_type(L, 4) == LUA_TTABLE) {
+		lua_getfield(L, 4, "lenient");
+
+		if (lua_toboolean(L, -1)) {
+			info.flags |= RSPAMD_DYNCONF_APPLY_LENIENT;
+		}
+
+		lua_pop(L, 1);
+
+		lua_getfield(L, 4, "quiet");
+
+		if (lua_toboolean(L, -1)) {
+			info.flags |= RSPAMD_DYNCONF_APPLY_QUIET;
+		}
+
+		lua_pop(L, 1);
+
+		lua_getfield(L, 4, "strict");
+
+		if (lua_type(L, -1) == LUA_TTABLE) {
+			strict_keys = g_ptr_array_new_with_free_func(g_free);
+
+			for (unsigned int i = 1;; i++) {
+				lua_rawgeti(L, -1, i);
+
+				if (lua_type(L, -1) != LUA_TSTRING) {
+					lua_pop(L, 1);
+					break;
+				}
+
+				g_ptr_array_add(strict_keys, g_strdup(lua_tostring(L, -1)));
+				lua_pop(L, 1);
+			}
+
+			g_ptr_array_add(strict_keys, NULL);
+			info.strict_keys = (const char *const *) strict_keys->pdata;
+		}
+
+		lua_pop(L, 1);
+	}
+
+	ret = rspamd_dynconf_notify(cfg, module, values, &info, &err);
+	ucl_object_unref(values);
+
+	if (strict_keys) {
+		g_ptr_array_free(strict_keys, TRUE);
+	}
+
+	lua_pushboolean(L, ret);
+
+	if (!ret) {
+		lua_pushstring(L, err ? err->message : "unknown error");
+
+		if (err) {
+			g_error_free(err);
+		}
+
+		if (info.skipped) {
+			g_ptr_array_free(info.skipped, TRUE);
+		}
+
+		return 2;
+	}
+
+	lua_pushnil(L);
+
+	if (info.skipped && info.skipped->len > 0) {
+		lua_createtable(L, info.skipped->len, 0);
+
+		for (unsigned int i = 0; i < info.skipped->len; i++) {
+			lua_pushstring(L, (const char *) g_ptr_array_index(info.skipped, i));
+			lua_rawseti(L, -2, i + 1);
+		}
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	if (info.skipped) {
+		g_ptr_array_free(info.skipped, TRUE);
+	}
+
+	return 3;
+}
+
+static int
+lua_config_dynconf_bump_generation(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	rspamd_dynconf_bump_generation(cfg);
+
+	return 0;
+}
+
+static int
+lua_config_dynconf_baseline(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *module = luaL_checkstring(L, 2);
+	const char *key = luaL_checkstring(L, 3);
+	double value = 0;
+	gboolean overridden = FALSE, known = FALSE;
+
+	if (cfg == NULL || module == NULL || key == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	if (rspamd_dynconf_metric_baseline(cfg, module, key, &value, &overridden, &known)) {
+		lua_pushnumber(L, value);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	lua_pushboolean(L, overridden);
+	lua_pushboolean(L, known);
+	lua_pushboolean(L, rspamd_dynconf_metric_masked(cfg, module, key));
+
+	return 4;
 }
 
 static inline int

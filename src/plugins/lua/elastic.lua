@@ -18,6 +18,7 @@ limitations under the License.
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
 local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
 local ucl = require "ucl"
@@ -29,6 +30,7 @@ end
 
 local N = "elastic"
 local connect_prefix = 'http://'
+local es_upstreams -- derived runtime object (upstream list), not a setting
 local rspamd_hostname = rspamd_util.get_hostname()
 -- supported_distro:
 -- from - minimal compatible version supported, including
@@ -529,7 +531,7 @@ local function elastic_send_data(flush_all, task, cfg, ev_base)
   if nlogs_to_send > 0 then
     es_index = settings['index_template']['name'] .. '-' .. os.date(settings['index_template']['pattern'])
 
-    upstream = settings.upstream:get_upstream_round_robin()
+    upstream = es_upstreams:get_upstream_round_robin()
     if not upstream then
       rspamd_logger.errx(log_object,
           'no elastic upstream available (DNS pending or all dead); will retry next tick')
@@ -973,7 +975,7 @@ local function periodic_send_data(cfg, ev_base)
 end
 
 local function configure_geoip_pipeline(cfg, ev_base)
-  local upstream = settings.upstream:get_upstream_round_robin()
+  local upstream = es_upstreams:get_upstream_round_robin()
   if not upstream then
     rspamd_logger.errx(rspamd_config,
         'no elastic upstream available; cannot configure geoip pipeline')
@@ -1173,7 +1175,7 @@ local function get_index_policy(cfg, ev_base, upstream, host, policy_url, index_
 end
 
 local function configure_index_policy(cfg, ev_base)
-  local upstream = settings.upstream:get_upstream_round_robin()
+  local upstream = es_upstreams:get_upstream_round_robin()
   if not upstream then
     rspamd_logger.errx(rspamd_config,
         'no elastic upstream available; cannot configure index policy')
@@ -1451,7 +1453,7 @@ local function configure_index_policy(cfg, ev_base)
 end
 
 local function configure_index_template(cfg, ev_base)
-  local upstream = settings.upstream:get_upstream_round_robin()
+  local upstream = es_upstreams:get_upstream_round_robin()
   if not upstream then
     rspamd_logger.errx(rspamd_config,
         'no elastic upstream available; cannot configure index template')
@@ -1783,7 +1785,7 @@ local function configure_distro(cfg, ev_base)
     verify_distro(true)
   end
 
-  local upstream = settings.upstream:get_upstream_round_robin()
+  local upstream = es_upstreams:get_upstream_round_robin()
   if not upstream then
     rspamd_logger.errx(rspamd_config,
         'no elastic upstream available; will retry distro detection on next tick')
@@ -1856,7 +1858,22 @@ end
 local opts = rspamd_config:get_all_opt('elastic')
 
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {
+      'limits.max_rows', 'limits.max_interval', 'limits.max_fail',
+      'allow_local', 'use_gzip', 'use_keepalive', 'no_ssl_verify',
+    },
+  })
+
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot load settings: %s', dyn_err)
+    lua_util.disable_module(N, "config")
+    return
+  end
+
+  settings = dyn_settings
 
   if not settings['enabled'] then
     rspamd_logger.infox(rspamd_config, 'module disabled in config')
@@ -1871,9 +1888,9 @@ if opts then
       connect_prefix = 'https://'
     end
 
-    settings.upstream = upstream_list.create(rspamd_config, settings['server'] or settings['servers'], 9200)
+    es_upstreams = upstream_list.create(rspamd_config, settings['server'] or settings['servers'], 9200)
 
-    if not settings.upstream then
+    if not es_upstreams then
       rspamd_logger.errx(rspamd_config, 'cannot parse elastic address: %s', settings['server'] or settings['servers'])
       lua_util.disable_module(N, "config")
       return

@@ -2121,7 +2121,8 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   rspamd_rcl_parse_struct_string,
 									   G_STRUCT_OFFSET(struct rspamd_config, dynamic_conf),
 									   0,
-									   "Path to the dynamic configuration");
+									   "Deprecated: path of the legacy dynamic configuration file, "
+									   "it is imported once into the dynamic configuration (dynconf) and renamed");
 		rspamd_rcl_add_default_handler(sub,
 									   "rrd",
 									   rspamd_rcl_parse_struct_string,

@@ -756,6 +756,10 @@ if not opts then
   return
 end
 
+-- Settings are heavily derived at load (sets, maps, custom routines, active routine list),
+-- so only the raw configuration is recorded for dump visibility
+require("lua_dynconf").register_static(N, opts)
+
 -- Process config
 do
   local res, err = config_schema:transform(opts)

@@ -30,6 +30,7 @@ local rspamd_expression = require "rspamd_expression"
 local rspamd_trie = require "rspamd_trie"
 local util = require "rspamd_util"
 local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 local fun = require "fun"
 
 -- Known plugins
@@ -124,15 +125,17 @@ if not (section and type(section) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
 end
 
--- Minimum score to treat symbols as meta
-local meta_score_alpha = 0.5
-
--- Maximum size of regexp checked
-local match_limit = 0
-
--- Default priority of the scores registered in the metric
--- Historically this is set to 2 allowing SA scores to override Rspamd scores
-local scores_priority = 2
+local settings = {
+  -- Minimum score to treat symbols as meta
+  alpha = 0.5,
+  -- Maximum size of regexp checked
+  match_limit = 0,
+  -- Default priority of the scores registered in the metric
+  -- Historically this is set to 2 allowing SA scores to override Rspamd scores
+  scores_priority = 2,
+  -- List of rules that must not use Hyperscan (converted to pcre_only_regexps)
+  pcre_only = {},
+}
 
 local function split(str, delim)
   local result = {}
@@ -883,7 +886,7 @@ local function process_sa_conf(f)
                   end
                 end
               end
-              cur_rule['re']:set_limit(match_limit)
+              cur_rule['re']:set_limit(settings.match_limit)
               cur_rule['re']:set_max_hits(1)
             end
           end
@@ -921,7 +924,7 @@ local function process_sa_conf(f)
               pcre_only = is_pcre_only(cur_rule['symbol']),
             })
             valid_rule = true
-            cur_rule['re']:set_limit(match_limit)
+            cur_rule['re']:set_limit(settings.match_limit)
             cur_rule['re']:set_max_hits(1)
           end
         else
@@ -958,7 +961,7 @@ local function process_sa_conf(f)
               pcre_only = is_pcre_only(cur_rule['symbol']),
             })
             valid_rule = true
-            cur_rule['re']:set_limit(match_limit)
+            cur_rule['re']:set_limit(settings.match_limit)
             cur_rule['re']:set_max_hits(1)
           end
         else
@@ -996,7 +999,7 @@ local function process_sa_conf(f)
               type = 'body',
               pcre_only = is_pcre_only(cur_rule['symbol']),
             })
-            cur_rule['re']:set_limit(match_limit)
+            cur_rule['re']:set_limit(settings.match_limit)
             cur_rule['re']:set_max_hits(1)
           end
         else
@@ -1029,7 +1032,7 @@ local function process_sa_conf(f)
             type = 'url',
             pcre_only = is_pcre_only(cur_rule['symbol']),
           })
-          cur_rule['re']:set_limit(match_limit)
+          cur_rule['re']:set_limit(settings.match_limit)
           cur_rule['re']:set_max_hits(1)
         end
       elseif words[1] == "meta" then
@@ -1281,7 +1284,7 @@ local function post_process()
           })
           rule['re'] = nre
           rule['re_expr'] = nexpr
-          nre:set_limit(match_limit)
+          nre:set_limit(settings.match_limit)
           nre:set_max_hits(old_max_hits)
         end
       end
@@ -1400,7 +1403,7 @@ local function post_process()
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
-      if math.abs(real_score) > meta_score_alpha then
+      if math.abs(real_score) > settings.alpha then
         add_sole_meta(k, r)
       end
     end
@@ -1422,7 +1425,7 @@ local function post_process()
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
-      if math.abs(real_score) > meta_score_alpha then
+      if math.abs(real_score) > settings.alpha then
         add_sole_meta(k, r)
       end
     end
@@ -1450,7 +1453,7 @@ local function post_process()
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
-      if math.abs(real_score) > meta_score_alpha then
+      if math.abs(real_score) > settings.alpha then
         add_sole_meta(k, r)
       end
     end
@@ -1475,7 +1478,7 @@ local function post_process()
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
-      if math.abs(real_score) > meta_score_alpha then
+      if math.abs(real_score) > settings.alpha then
         add_sole_meta(k, r)
       end
     end
@@ -1497,7 +1500,7 @@ local function post_process()
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
-      if math.abs(real_score) > meta_score_alpha then
+      if math.abs(real_score) > settings.alpha then
         add_sole_meta(k, r)
       end
     end
@@ -1584,7 +1587,7 @@ local function post_process()
         rspamd_config:set_metric_symbol {
           name = k, score = r['score'],
           description = r['description'],
-          priority = scores_priority,
+          priority = settings.scores_priority,
           one_shot = true
         }
         scores_added[k] = 1
@@ -1708,25 +1711,34 @@ local has_rules = false
 
 if type(section) == "table" then
   local keywords = {
-    pcre_only = { 'table', function(v)
-      pcre_only_regexps = lua_util.list_to_hash(v)
-    end },
-    alpha = { 'number', function(v)
-      meta_score_alpha = tonumber(v)
-    end },
-    match_limit = { 'number', function(v)
-      match_limit = tonumber(v)
-    end },
-    scores_priority = { 'number', function(v)
-      scores_priority = tonumber(v)
-    end },
+    pcre_only = 'table',
+    alpha = 'number',
+    match_limit = 'number',
+    scores_priority = 'number',
   }
+  -- Only well-typed keywords are options; anything else is an SA rule file
+  local static_opts = {}
+  for k, v in pairs(section) do
+    if keywords[k] and type(v) == keywords[k] then
+      static_opts[k] = v
+    end
+  end
+
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = static_opts,
+    dynamic = {},
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot register settings: %s', dyn_err)
+    lua_util.disable_module(N, "config")
+    return
+  end
+  settings = dyn_settings
+  pcre_only_regexps = lua_util.list_to_hash(settings.pcre_only)
 
   for k, fn in pairs(section) do
-    local kw = keywords[k]
-    if kw and type(fn) == kw[1] then
-      kw[2](fn)
-    else
+    if static_opts[k] == nil then
       -- SA rule file
       if type(fn) == 'table' then
         for _, elt in ipairs(fn) do

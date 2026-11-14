@@ -210,6 +210,23 @@ context("Lua shape validation", function()
       assert_equal(val.port, 8080)
     end)
 
+    test("Table - false default is kept in transform mode", function()
+      local schema = T.table({
+        name = T.string(),
+        enabled = T.default(T.boolean(), false),
+        verbose = T.boolean():with_default(false),
+        raw = { schema = T.boolean(), optional = true, default = false },
+        flag = T.optional(T.boolean()),
+      })
+
+      local val, err = schema:transform({ name = "server" })
+      assert_nil(err)
+      assert_equal(val.enabled, false)
+      assert_equal(val.verbose, false)
+      assert_equal(val.raw, false)
+      assert_nil(val.flag)
+    end)
+
     test("Table - closed table rejects unknown fields", function()
       local schema = T.table({
         name = T.string()

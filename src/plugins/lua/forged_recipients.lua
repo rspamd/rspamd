@@ -31,10 +31,17 @@ if confighelp then
   ]])
 end
 
-local symbol_rcpt = 'FORGED_RECIPIENTS'
-local symbol_sender = 'FORGED_SENDER'
+local N = 'forged_recipients'
+local settings = {
+  symbol_rcpt = 'FORGED_RECIPIENTS',
+  symbol_sender = 'FORGED_SENDER',
+  equivalent_domains = nil, -- optional map definition
+}
 local rspamd_util = require "rspamd_util"
+local rspamd_logger = require "rspamd_logger"
 local lua_aliases = require "lua_aliases"
+local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 
 local E = {}
 
@@ -176,24 +183,42 @@ local function check_forged_headers(task)
   end
 
   if seen_smtp_unmatched and seen_mime_unmatched then
-    task:insert_result(symbol_rcpt, 1.0, opts)
+    task:insert_result(settings.symbol_rcpt, 1.0, opts)
   end
 
   -- Check sender
   if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' then
     local mime_from = task:get_from({ 'mime', 'orig' })
     if not same_mailbox((mime_from or E)[1], smtp_from[1]) then
-      task:insert_result(symbol_sender, 1, ((mime_from or E)[1] or E).addr or '', smtp_from[1].addr)
+      task:insert_result(settings.symbol_sender, 1, ((mime_from or E)[1] or E).addr or '', smtp_from[1].addr)
     end
   end
 end
 
 -- Configuration
-local opts = rspamd_config:get_all_opt('forged_recipients')
+local opts = rspamd_config:get_all_opt(N)
 if opts then
-  if opts['symbol_rcpt'] or opts['symbol_sender'] then
-    if opts.equivalent_domains then
-      lua_aliases.init_equivalent_domains(rspamd_config, opts.equivalent_domains)
+  -- The plugin is opt-in: it registers nothing unless a symbol name is configured
+  local want_rcpt = opts['symbol_rcpt']
+  local want_sender = opts['symbol_sender']
+
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {},
+  })
+
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+
+  settings = dyn_settings
+
+  if want_rcpt or want_sender then
+    if settings.equivalent_domains then
+      lua_aliases.init_equivalent_domains(rspamd_config, settings.equivalent_domains)
     end
 
     local id = rspamd_config:register_symbol({
@@ -203,18 +228,16 @@ if opts then
       group = 'headers',
       score = 0.0,
     })
-    if opts['symbol_rcpt'] then
-      symbol_rcpt = opts['symbol_rcpt']
+    if want_rcpt then
       rspamd_config:register_symbol({
-        name = symbol_rcpt,
+        name = settings.symbol_rcpt,
         type = 'virtual',
         parent = id,
       })
     end
-    if opts['symbol_sender'] then
-      symbol_sender = opts['symbol_sender']
+    if want_sender then
       rspamd_config:register_symbol({
-        name = symbol_sender,
+        name = settings.symbol_sender,
         type = 'virtual',
         parent = id,
       })

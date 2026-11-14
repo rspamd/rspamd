@@ -27,6 +27,7 @@
 #include "utlist.h"
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/cfg_file_private.h"
+#include "libserver/cfg_dynamic.h"
 #include "libmime/lang_detection.h"
 #include "libmime/scan_result_private.h"
 #include "lua/lua_classnames.h"
@@ -1151,6 +1152,11 @@ rspamd_task_process(struct rspamd_task *task, unsigned int stages)
 	}
 
 	task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
+
+	/* Lazy dynamic configuration probe: a single compare unless it is armed */
+	if (task->cfg) {
+		rspamd_dynconf_maybe_check(task->cfg, task->event_loop, task->task_timestamp);
+	}
 
 	st = rspamd_task_select_processing_stage(task, stages);
 

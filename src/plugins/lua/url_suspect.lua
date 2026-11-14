@@ -31,6 +31,7 @@ local lua_util = require "lua_util"
 local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
 local bit = require "bit"
+local dynconf = require "lua_dynconf"
 
 -- Symbol names (fixed, not configurable)
 local symbols = {
@@ -828,9 +829,19 @@ end
 
 -- Plugin registration
 local opts = rspamd_config:get_all_opt(N)
-if opts then
-  settings = lua_util.override_defaults(settings, opts)
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts or false,
+  dynamic = {},
+})
+
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
 end
+
+settings = dyn_settings
 
 if settings.enabled then
   init_maps(settings)

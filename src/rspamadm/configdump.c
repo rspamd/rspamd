@@ -27,6 +27,7 @@ static gboolean compact = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_comments = FALSE;
 static gboolean modules_state = FALSE;
+static gboolean dynamic_conf = FALSE;
 static gboolean symbol_groups_only = FALSE;
 static gboolean symbol_full_details = FALSE;
 static gboolean symbols_exec_plan = FALSE;
@@ -63,6 +64,8 @@ static GOptionEntry entries[] = {
 	 "Show saved comments from the configuration file", NULL},
 	{"modules-state", 'm', 0, G_OPTION_ARG_NONE, &modules_state,
 	 "Show modules state only", NULL},
+	{"dynamic", 0, 0, G_OPTION_ARG_NONE, &dynamic_conf,
+	 "Show dynamic configuration state (registered modules, dynamic paths, defaults, static and effective values)", NULL},
 	{"groups", 'g', 0, G_OPTION_ARG_NONE, &symbol_groups_only,
 	 "Show symbols groups only", NULL},
 	{"symbol-details", 'd', 0, G_OPTION_ARG_NONE, &symbol_full_details,
@@ -88,6 +91,7 @@ rspamadm_configdump_help(gboolean full_help, const struct rspamadm_command *cmd)
 				   "--compact: output compacted json\n"
 				   "-c: config file to test\n"
 				   "-m: show state of modules only\n"
+				   "--dynamic: show dynamic configuration state, optionally for the specified modules only\n"
 				   "-h: show help for dumped options\n"
 				   "--local: show only local (and override) configuration\n"
 				   "--override: show only override configuration\n"
@@ -320,6 +324,85 @@ rspamadm_dump_section_obj(struct rspamd_config *cfg,
 	}
 }
 
+/*
+ * Returns the state of the dynamic configuration registry (lua_dynconf.dump_json)
+ * as UCL, optionally for a single module. Secrets are redacted by the registry.
+ * The overrides of the backends that can be read synchronously (the file one)
+ * are loaded first.
+ */
+static ucl_object_t *
+rspamadm_dynconf_dump(struct rspamd_config *cfg, const char *module)
+{
+	lua_State *L = cfg->lua_state;
+	struct ucl_parser *parser;
+	ucl_object_t *res;
+	const char *json_str;
+	size_t jlen;
+	int err_idx;
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	err_idx = lua_gettop(L);
+
+	/* Backends that need no event loop (the file one) can show their overrides offline */
+	if (rspamd_lua_require_function(L, "lua_dynconf", "load_offline")) {
+		if (lua_pcall(L, 0, 2, err_idx) != 0) {
+			fprintf(stderr, "cannot load dynamic configuration overrides: %s\n",
+					lua_tostring(L, -1));
+		}
+		/* Read and apply errors have been logged by the registry already */
+	}
+
+	lua_settop(L, err_idx);
+
+	if (!rspamd_lua_require_function(L, "lua_dynconf", "dump_json")) {
+		fprintf(stderr, "cannot load lua_dynconf\n");
+		lua_settop(L, err_idx - 1);
+
+		return NULL;
+	}
+
+	lua_createtable(L, 0, 1);
+
+	if (module) {
+		lua_pushstring(L, module);
+		lua_setfield(L, -2, "module");
+	}
+
+	if (lua_pcall(L, 1, 1, err_idx) != 0) {
+		fprintf(stderr, "cannot dump dynamic configuration: %s\n",
+				lua_tostring(L, -1));
+		lua_settop(L, err_idx - 1);
+
+		return NULL;
+	}
+
+	json_str = lua_tolstring(L, -1, &jlen);
+
+	if (json_str == NULL) {
+		fprintf(stderr, "cannot dump dynamic configuration: no data\n");
+		lua_settop(L, err_idx - 1);
+
+		return NULL;
+	}
+
+	parser = ucl_parser_new(UCL_PARSER_NO_FILEVARS);
+
+	if (!ucl_parser_add_chunk(parser, (const unsigned char *) json_str, jlen)) {
+		fprintf(stderr, "cannot parse dynamic configuration dump: %s\n",
+				ucl_parser_get_error(parser));
+		ucl_parser_free(parser);
+		lua_settop(L, err_idx - 1);
+
+		return NULL;
+	}
+
+	res = ucl_parser_get_object(parser);
+	ucl_parser_free(parser);
+	lua_settop(L, err_idx - 1);
+
+	return res;
+}
+
 __attribute__((noreturn)) static void
 rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 {
@@ -388,6 +471,54 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 										  cfg->cfg_ucl_obj,
 										  "plugins_stats",
 										  FALSE);
+
+			exit(EXIT_SUCCESS);
+		}
+
+		if (dynamic_conf) {
+			/* The state of the dynamic configuration registry, offline: only the overrides of synchronous backends are loaded */
+			if (argc <= 1) {
+				ucl_object_t *out = rspamadm_dynconf_dump(cfg, NULL);
+
+				if (out == NULL) {
+					exit(EXIT_FAILURE);
+				}
+
+				rspamadm_dump_section_obj(cfg, out, NULL);
+				ucl_object_unref(out);
+			}
+			else {
+				for (i = 1; i < argc; i++) {
+					ucl_object_t *out = rspamadm_dynconf_dump(cfg, argv[i]);
+					const ucl_object_t *mod_obj;
+
+					if (out == NULL) {
+						exit(EXIT_FAILURE);
+					}
+
+					mod_obj = ucl_object_lookup_path(out, "modules");
+
+					if (mod_obj == NULL || ucl_object_lookup(mod_obj, argv[i]) == NULL) {
+						rspamd_printf("Module %s is NOT registered for dynamic configuration\n", argv[i]);
+					}
+					else {
+						if (!json && !compact) {
+							rspamd_printf("*** Module %s ***\n", argv[i]);
+						}
+
+						rspamadm_dump_section_obj(cfg, out, NULL);
+
+						if (!json && !compact) {
+							rspamd_printf("\n*** End of module %s ***\n", argv[i]);
+						}
+						else {
+							rspamd_printf("\n");
+						}
+					}
+
+					ucl_object_unref(out);
+				}
+			}
 
 			exit(EXIT_SUCCESS);
 		}

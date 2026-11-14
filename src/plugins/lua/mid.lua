@@ -26,6 +26,7 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 local N = "mid"
 
 local settings = {
@@ -72,18 +73,28 @@ end
 
 local opts = rspamd_config:get_all_opt('mid')
 if opts then
-  for k, v in pairs(opts) do
-    settings[k] = v
-  end
-
   if not opts.source then
     rspamd_logger.infox(rspamd_config, 'mid module requires "source" parameter')
     lua_util.disable_module(N, "config")
     return
   end
 
+  -- No schema: `source` is a map definition (string/table/list) and nothing was validated before.
+  -- Symbol names are consumed once at load, so nothing here is dynamic.
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {},
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+    lua_util.disable_module(N, "config")
+    return
+  end
+  settings = dyn_settings
+
   map = rspamd_config:add_map {
-    url = opts.source,
+    url = settings.source,
     description = "Message-IDs map",
     type = 'map'
   }

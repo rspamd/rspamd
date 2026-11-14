@@ -2362,6 +2362,7 @@ end
 
 -- Registration
 local opts = rspamd_config:get_all_opt(N)
+require("lua_dynconf").register_static(N, opts)
 if opts and type(opts) == 'table' then
   redis_params = rspamd_parse_redis_server(N)
 

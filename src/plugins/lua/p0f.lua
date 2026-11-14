@@ -20,6 +20,7 @@ limitations under the License.
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local rspamd_logger = require "rspamd_logger"
+local dynconf = require "lua_dynconf"
 local p0f = require("lua_scanners").filter('p0f').p0f
 
 local N = 'p0f'
@@ -72,6 +73,9 @@ local function check_p0f(task)
 end
 
 local opts = rspamd_config:get_all_opt(N)
+
+-- Settings are parsed by lua_scanners/p0f.lua; record raw config for dump visibility only
+dynconf.register_static(N, opts)
 
 rule = p0f.configure(opts)
 
