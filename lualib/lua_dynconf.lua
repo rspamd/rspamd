@@ -24,8 +24,10 @@ limitations under the License.
 -- override, so reading `settings.option` stays a plain table access: no metamethods, no C calls, no
 -- yields. Table identity (of the root and of intermediate tables) never changes.
 --
--- Without a `dynconf` section in the configuration the registry is a passive store: `register` and
--- `dump` work, but there is no timer, no network traffic and no per-task work.
+-- Without a `dynconf` section in the configuration the framework is enabled with the file backend, the
+-- `interval` policy and the modules `actions`, `scores` and `symbols` only; an explicit `enabled = false`
+-- turns it into a passive store: `register` and `dump` work, but there is no timer, no I/O and no
+-- per-task work.
 --
 -- Lua code here must run on LuaJIT and on PUC Lua 5.3+, so no `goto`, no bit operators and no
 -- integer division are used.
@@ -49,6 +51,8 @@ local REDACTED = '***'
 local INFLIGHT_TIMEOUT = 30.0
 local MAX_DEPTH = 32
 local POLICIES = { interval = true, on_access = true, both = true, manual = true }
+-- Modules that accept overrides when the framework is enabled implicitly (no `enabled` key in the section)
+local DEFAULT_MODULES = { 'actions', 'scores', 'symbols' }
 
 -- Words that mark a value as secret when the last path segment is that word or ends with `_<word>`
 -- (case-insensitive, `-` counts as `_`); `key` alone is matched exactly
@@ -61,6 +65,11 @@ local modules = {}       -- name -> module descriptor
 local backends = {}      -- name -> backend implementation
 local source_order = {}  -- override sources in registration order (later wins)
 local generation = 0
+-- Writes that have been started and not finished: module name -> staged write. The completion of a write
+-- can be lost (the request that the controller handler waits for is destroyed together with its client),
+-- and then the local state has to be reconciled with the backend
+local pending = {}
+local reconcile_pending  -- defined below, with the writes
 
 -- Framework state (top-level `dynconf` section)
 local fw = {
@@ -72,6 +81,7 @@ local fw = {
   jitter = 0.2,
   ttl = 10.0,
   section = nil,
+  allowed = nil,           -- set of the module names that accept overrides, nil = all
   ev_base = nil,
   worker = nil,
   started = false,
@@ -83,6 +93,7 @@ local fw = {
   last_error = nil,
   applied_count = 0,
   on_load_registered = false,
+  legacy_pending = false,  -- the primary controller imports the legacy data after the first good check
 }
 
 -- Note: indexing `rspamd_config` with an unknown name does not return nil (it returns a symbol proxy
@@ -329,7 +340,8 @@ end
 -- Walks an override table. Every leaf (a path matching a declared dynamic pattern) must be clean and, if
 -- there is no schema, of the same type as the base value. Calls `cb(path, value)` for every leaf; numeric
 -- strings are turned into array indices where the base table has them. An entry that a `*` segment
--- selects must exist in the base configuration: overrides never create entries.
+-- selects must exist in the base configuration: overrides never create entries (except for the modules
+-- registered with `subscriber_keys`, where the C subscriber validates the keys).
 local function walk_overrides(mod, tbl, path, cb)
   for k in pairs(tbl) do
     local tk = type(k)
@@ -350,7 +362,7 @@ local function walk_overrides(mod, tbl, path, cb)
 
     if tv == 'function' or tv == 'userdata' or tv == 'thread' then
       ok, err = false, string.format('%s: values of type %s are not allowed', path_str(path), tv)
-    elseif (is_leaf or is_prefix) and not literal_segment(mod, path) and
+    elseif (is_leaf or is_prefix) and not mod.subscriber_keys and not literal_segment(mod, path) and
         (type(base_parent) ~= 'table' or base_parent[path[#path]] == nil) then
       ok, err = false, string.format('%s: there is no such entry in the configuration', path_str(path))
     elseif is_leaf then
@@ -546,9 +558,13 @@ local function bump_generation()
   end
 end
 
--- Tells the C subscriber about the new effective values `values` (the result of the pipeline). Returns
--- true if there is nothing to tell or the subscriber has accepted the update, `false, error` otherwise
-local function notify_c(mod, values)
+-- Tells the C subscriber about the new effective values `values` (the result of the pipeline). `opts`
+-- tells how the update is delivered: `lenient` (an entry that the subscriber cannot apply because of the
+-- state of the configuration, an unknown symbol, is skipped instead of rejecting the update) and
+-- `strict`, an array of the keys of the entries that are validated strictly nevertheless.
+-- Returns `true, nil, skipped` (an array of reasons or nil) if there is nothing to tell or the subscriber
+-- has accepted the update, `false, error` otherwise
+local function notify_c(mod, values, opts)
   if not mod.c_subscriber then
     return true
   end
@@ -557,7 +573,7 @@ local function notify_c(mod, values)
     dbg('no C notification hook is available for %s', mod.name)
     return true
   end
-  local ok, res, err = pcall(notify, rspamd_config, mod.name, snapshot_dynamic(mod, values))
+  local ok, res, err, skipped = pcall(notify, rspamd_config, mod.name, snapshot_dynamic(mod, values), opts)
   if not ok then
     logger.warnx(rspamd_config, 'cannot notify C module %s about the new configuration: %s', mod.name, res)
     return false, string.format('cannot notify C module %s: %s', mod.name, tostring(res))
@@ -565,7 +581,7 @@ local function notify_c(mod, values)
     logger.warnx(rspamd_config, 'C module %s rejected the new configuration: %s', mod.name, err)
     return false, string.format('C module %s rejected the configuration: %s', mod.name, tostring(err))
   end
-  return true
+  return true, nil, skipped
 end
 
 local function run_hooks(mod, changed)
@@ -683,6 +699,7 @@ local function register(name, params)
     version = 0,
     static_only = false,
     c_subscriber = false,
+    subscriber_keys = false,
   }
 
   if params.on_change then
@@ -744,23 +761,43 @@ function exports.register_static(name, opts)
     version = 0,
     static_only = true,
     c_subscriber = false,
+    subscriber_keys = false,
     settings = nil,
   }
 end
 
 --[[[
--- @function lua_dynconf.register_c(module, paths)
+-- @function lua_dynconf.register_c(module, paths, opts)
 -- Registers a C module: its static configuration is the `module` section, `paths` is an array of
 -- dynamic path patterns. After every accepted update the C side is notified with the effective values
 -- of the dynamic paths.
+-- @param {table} opts optional: `subscriber_keys = true` lets a `*` segment match keys that are absent
+-- from the static configuration too (the C subscriber validates them and may reject the update);
+-- `static = false` registers the module without a static configuration (the section named after the
+-- module is not read): the C subscriber owns the static state and gets the overrides only
 -- @return {boolean} true on success, or `false, error`
 --]]
-function exports.register_c(name, paths)
-  local settings, err = register(name, { defaults = {}, dynamic = paths })
+function exports.register_c(name, paths, opts)
+  if type(opts) ~= 'table' then
+    opts = {}
+  end
+  -- `opts = false` means "no static configuration", nil "read the section named after the module"
+  local static_cfg
+  if opts.static == false then
+    static_cfg = false
+  end
+  local settings, err = register(name, {
+    defaults = {},
+    dynamic = paths,
+    opts = static_cfg,
+  })
   if not settings then
     return false, err
   end
   modules[name].c_subscriber = true
+  if opts.subscriber_keys then
+    modules[name].subscriber_keys = true
+  end
   return true
 end
 
@@ -784,6 +821,34 @@ end
 function exports.get(name)
   local mod = modules[name]
   return mod and mod.settings or nil
+end
+
+--[[[
+-- @function lua_dynconf.override(module)
+-- Returns a copy of the override table of the active backend for a module, as this process has it (what
+-- the backend has delivered or this process has written, including the entries that the C subscriber of
+-- the module has skipped); nil if there is none
+--]]
+function exports.override(name)
+  local mod = modules[name]
+  local entry = mod and fw.backend_name and mod.overrides[fw.backend_name]
+  if entry and type(entry.values) == 'table' then
+    return deepcopy(entry.values)
+  end
+  return nil
+end
+
+--[[[
+-- @function lua_dynconf.backend()
+-- Returns the name of the backend that is in use, or nil if dynconf is disabled. Configures the framework
+-- if that has not happened yet.
+--]]
+function exports.backend()
+  ensure_framework()
+  if fw.enabled then
+    return fw.backend_name
+  end
+  return nil
 end
 
 --[[[
@@ -822,9 +887,22 @@ end
 
 -- Applying overrides -----------------------------------------------------------------------------
 
+-- Checks the `modules` allow-list of the framework section; removing an override is always allowed
+local function check_allowed(mod)
+  if fw.allowed and not fw.allowed[mod.name] then
+    return false, string.format('module %s does not accept overrides: it is not listed in the `modules` ' ..
+        'option of the dynconf section', mod.name)
+  end
+  return true
+end
+
 local function check_overrides(mod, values)
   if type(values) ~= 'table' then
     return false, string.format('overrides for %s must be a table', mod.name)
+  end
+  local ok, err = check_allowed(mod)
+  if not ok then
+    return false, err
   end
   return walk_overrides(mod, values, {}, nil)
 end
@@ -872,12 +950,20 @@ function exports.validate(name, values, source)
 end
 
 --[[[
--- @function lua_dynconf.apply(source, module, overrides, version)
+-- @function lua_dynconf.apply(source, module, overrides, version, [opts])
 -- Applies (or removes, when `overrides` is nil/false) the override table of `source` for a module.
 -- On any error the previous state is kept untouched.
--- @return {boolean} ok, or `false, error`; on success the third value is an array of changed paths
+-- `opts` tells how strict the C subscriber of the module is: by default it rejects the whole update when
+-- an entry names something that does not exist (a symbol of a disabled plugin) or that cannot be changed
+-- (it is defined with a higher priority). With `opts.lenient` such entries are skipped, and the rest is
+-- applied; `opts.strict` is an array of the keys of the entries that are validated strictly even then
+-- (the ones that a write changes); `opts.quiet` marks an offer of what has been delivered already (the
+-- retry of the skipped entries): what is skipped is not logged again. What has been skipped is kept in
+-- `skipped` of the module (see `dump`).
+-- @return {boolean} ok, or `false, error`; on success the third value is an array of changed paths and
+-- the fourth one is an array of the reasons of the skipped entries (or nil)
 --]]
-function exports.apply(source, name, overrides, version)
+function exports.apply(source, name, overrides, version, opts)
   local mod = modules[name]
   if not mod then
     return false, string.format('unknown module %s', tostring(name))
@@ -902,7 +988,10 @@ function exports.apply(source, name, overrides, version)
     candidate[k] = v
   end
   if overrides then
-    candidate[source] = { version = version, updated = get_time(), values = deepcopy(overrides) }
+    -- An offer of what was delivered before (`quiet`) is not a new update
+    local prev = mod.overrides[source]
+    local updated = opts and opts.quiet and prev and prev.updated or get_time()
+    candidate[source] = { version = version, updated = updated, values = deepcopy(overrides) }
   else
     candidate[source] = nil
   end
@@ -936,12 +1025,19 @@ function exports.apply(source, name, overrides, version)
   end
   table.sort(changed)
 
-  -- The C subscriber decides first: if it rejects the update nothing has been changed
-  if #changed > 0 then
-    local nok, nerr = notify_c(mod, result)
+  -- The C subscriber decides first: if it rejects the update nothing has been changed. It is also asked
+  -- when no value differs from what this process has: a write validates the entries that it sets
+  -- strictly even if the stored override has them already (the subscriber may have skipped them: a stale
+  -- name, a higher priority definition), and the entries that were skipped before are offered again
+  local skipped
+  if #changed > 0 or (mod.c_subscriber and ((opts and opts.strict and #opts.strict > 0) or
+      (mod.skipped and #mod.skipped > 0))) then
+    local nok, nerr, nskipped = notify_c(mod, result, opts)
     if not nok then
       return false, nerr
     end
+    skipped = nskipped
+    mod.skipped = skipped
   end
 
   for _, change in ipairs(changes) do
@@ -960,7 +1056,7 @@ function exports.apply(source, name, overrides, version)
     run_hooks(mod, changed)
   end
 
-  return true, nil, changed
+  return true, nil, changed, skipped
 end
 
 -- Dump -------------------------------------------------------------------------------------------
@@ -1027,6 +1123,9 @@ function exports.dump(opts)
     backends = {},
     modules = {},
   }
+  if fw.allowed then
+    res.modules_allowed = sorted_keys(fw.allowed)
+  end
 
   if fw.enabled and fw.backend_name then
     local state = {
@@ -1069,6 +1168,8 @@ function exports.dump(opts)
         static = dump_value(mod, mod.static, {}, redact, 1),
         overrides = overrides,
         effective = dump_value(mod, mod.settings or mod.static, {}, redact, 1),
+        -- Entries that the subscriber has skipped in the last update that a backend has delivered
+        skipped = mod.skipped,
       }
     end
   end
@@ -1093,7 +1194,11 @@ end
 -- `check(ev_base, cb)` where `cb(err, updates, commit)` and `updates` is `nil` (nothing changed) or
 -- `{ [module] = { version = n, values = tbl } | false }`; the optional `commit` function is called when the
 -- registry accepts the result (not when it is stale), so that a backend can record what it has delivered.
--- An optional `set(ctx, module, values, cb)` writes an override
+-- An optional `set(ctx, module, values, cb)` writes an override, `update(ctx, module, patch, prepare, cb)`
+-- merges a patch into the stored override (read and written by the backend itself, see `lua_dynconf.update`),
+-- `holds(module)` tells whether the last delivered state holds an override for a module and `invalidate()`
+-- makes the next check deliver the whole state again. A backend that sets `sync = true`
+-- completes `check` before it returns and needs no event loop (`load_offline` relies on that)
 --]]
 function exports.register_backend(name, impl)
   if type(name) ~= 'string' or type(impl) ~= 'table' or type(impl.check) ~= 'function' then
@@ -1115,6 +1220,93 @@ local function disarm_c()
   local arm = cfg_method('dynconf_arm')
   if arm then
     pcall(arm, rspamd_config, 0)
+  end
+end
+
+-- Starts the one-time import of the data of the previous dynamic configuration implementations (see
+-- `lua_dynconf.legacy`) into the modules that hold no override yet
+local function import_legacy()
+  -- What the backend holds, not what has been applied: an entry that the registry has refused is still there
+  local impl = backends[fw.backend_name]
+  local function backend_holds(name)
+    if impl and type(impl.holds) == 'function' then
+      return impl.holds(name)
+    end
+    return modules[name].overrides[fw.backend_name] ~= nil
+  end
+
+  local targets = {}
+  local wanted = false
+  for _, name in ipairs({ 'actions', 'scores' }) do
+    local mod = modules[name]
+    if mod and not mod.static_only and (not fw.allowed or fw.allowed[name]) and
+        not backend_holds(name) then
+      targets[name] = true
+      wanted = true
+    end
+  end
+  if not wanted then
+    return
+  end
+
+  local lok, legacy = pcall(require, 'lua_dynconf.legacy')
+  if not lok then
+    logger.errx(rspamd_config, 'dynconf: cannot load the legacy import: %s', legacy)
+    return
+  end
+
+  local file
+  local get_all_opt = cfg_method('get_all_opt')
+  if get_all_opt then
+    local ok, options = pcall(get_all_opt, rspamd_config, 'options')
+    if ok and type(options) == 'table' and type(options.dynamic_conf) == 'string' then
+      file = options.dynamic_conf
+    end
+  end
+
+  local ok, err = pcall(legacy.run, exports, {
+    targets = targets,
+    file = file,
+    redis = fw.backend_name == 'redis',
+    ev_base = fw.ev_base,
+    ctx = { ev_base = fw.ev_base },
+  })
+  if not ok then
+    logger.errx(rspamd_config, 'dynconf: legacy import failed: %s', err)
+  end
+end
+
+-- What the subscribers have skipped (the reasons that `dump` shows), one note per entry
+local function skipped_notes()
+  local notes = {}
+  for _, name in ipairs(sorted_keys(modules)) do
+    for _, reason in ipairs(modules[name].skipped or {}) do
+      notes[#notes + 1] = string.format('%s: skipped: %s', name, reason)
+    end
+  end
+  return notes
+end
+
+-- A backend delivers only changes, but what has been skipped may become applicable without one (a symbol
+-- that a map has added since the start): offer the stored entries of the modules that still have skipped
+-- ones to the subscribers again, quietly. `delivered` lists the modules that this check has applied
+local function retry_skipped(delivered)
+  local done = {}
+  for _, name in ipairs(delivered) do
+    done[name] = true
+  end
+  for _, name in ipairs(sorted_keys(modules)) do
+    local mod = modules[name]
+    local entry = mod.overrides[fw.backend_name]
+    -- A write that is in flight owns the stored entry
+    if mod.skipped and #mod.skipped > 0 and not done[name] and not pending[name] and entry and
+        type(entry.values) == 'table' then
+      local ok, aerr = exports.apply(fw.backend_name, name, entry.values, entry.version,
+          { lenient = true, quiet = true })
+      if not ok then
+        dbg('cannot offer the skipped entries of %s again: %s', name, aerr)
+      end
+    end
   end
 end
 
@@ -1146,6 +1338,9 @@ local function finish_check(token, cb, err, updates, commit)
 
   local applied = {}
   local errors = {}
+  -- What a backend delivers is applied leniently: an entry that names something that does not exist now
+  -- (a symbol of a plugin that has been disabled since) is skipped and reported, the rest is applied
+  local lenient = { lenient = true }
   if type(updates) == 'table' then
     for _, name in ipairs(sorted_keys(updates)) do
       local upd = updates[name]
@@ -1154,9 +1349,9 @@ local function finish_check(token, cb, err, updates, commit)
       else
         local ok, aerr
         if upd == false then
-          ok, aerr = exports.apply(fw.backend_name, name, nil)
+          ok, aerr = exports.apply(fw.backend_name, name, nil, nil, lenient)
         elseif type(upd) == 'table' then
-          ok, aerr = exports.apply(fw.backend_name, name, upd.values or {}, upd.version)
+          ok, aerr = exports.apply(fw.backend_name, name, upd.values or {}, upd.version, lenient)
         else
           ok, aerr = false, 'invalid update'
         end
@@ -1174,14 +1369,31 @@ local function finish_check(token, cb, err, updates, commit)
     fw.last_update = fw.last_check
     fw.applied_count = fw.applied_count + 1
   end
-  if #errors > 0 then
-    fw.last_error = table.concat(errors, '; ')
-  else
-    fw.last_error = nil
+  retry_skipped(applied)
+  -- The skipped entries are not a failure of the check, but an operator has to see them: they stay in the
+  -- report for as long as the modules keep them skipped, not just after the check that has met them
+  local report = {}
+  for _, e in ipairs(errors) do
+    report[#report + 1] = e
   end
+  for _, n in ipairs(skipped_notes()) do
+    report[#report + 1] = n
+  end
+  fw.last_error = #report > 0 and table.concat(report, '; ') or nil
 
   if cb then
-    cb(#errors > 0 and fw.last_error or nil, applied)
+    cb(#errors > 0 and table.concat(errors, '; ') or nil, applied)
+  end
+
+  local impl = backends[fw.backend_name]
+  if impl and next(pending) ~= nil then
+    reconcile_pending(impl)
+  end
+
+  -- The first check that has reached the backend: now it is known that there are no overrides yet
+  if fw.legacy_pending then
+    fw.legacy_pending = false
+    import_legacy()
   end
 end
 
@@ -1234,6 +1446,81 @@ function exports.check_now(ev_base, cb)
   return true
 end
 
+-- Applies an override locally before it is written, remembering what to go back to if the write fails.
+-- `st` is the staged write of a previous attempt (the state to roll back to is the one before the first)
+local function stage_local(name, values, source, st, strict)
+  local ok, err = exports.validate(name, values or nil, source)
+  if not ok then
+    return nil, err
+  end
+
+  local mod = modules[name]
+  if not st then
+    local prev = mod.overrides[source]
+    st = {
+      name = name,
+      mod = mod,
+      source = source,
+      prev_values = prev and prev.values and deepcopy(prev.values) or nil,
+      prev_version = prev and prev.version,
+    }
+  end
+  -- The C subscribers can still reject the values, and then nothing is written. A write is strict about
+  -- the entries that it changes only: an entry that is stored and has become stale (the symbol does not
+  -- exist now) must not stop a write that does not touch it
+  local aok, aerr = exports.apply(source, name, values or nil, nil, { lenient = true, strict = strict })
+  if not aok then
+    return nil, aerr
+  end
+  st.mine = mod.overrides[source]
+  st.started = get_time()
+  return st
+end
+
+local function rollback(st)
+  -- Nothing must be rolled back if a check has replaced the entry in the meantime
+  if st.mod.overrides[st.source] == st.mine then
+    -- What is restored has been applied before, whatever it has become since
+    local rok, rerr = exports.apply(st.source, st.name, st.prev_values, st.prev_version, { lenient = true })
+    if not rok then
+      logger.warnx(rspamd_config, 'dynconf: cannot roll back the override of %s: %s', st.name, rerr)
+    end
+  end
+end
+
+-- The write of a staged override has finished (`serr` is its error)
+local function finish_write(st, serr, version, cb, rejected)
+  if pending[st.name] == st then
+    pending[st.name] = nil
+  end
+  if serr then
+    rollback(st)
+  elseif st.mod.overrides[st.source] == st.mine and st.mine then
+    st.mine.version = version
+  end
+  if cb then
+    cb(serr, rejected)
+  end
+end
+
+-- A write whose completion has not arrived for too long is lost: its client has gone, or the request
+-- failed without telling. Go back to the state before the write and make the backend deliver what it
+-- really holds, whether the write has reached it or not
+reconcile_pending = function(backend)
+  local now = get_time()
+  for name, st in pairs(pending) do
+    if now - st.started > INFLIGHT_TIMEOUT then
+      pending[name] = nil
+      logger.warnx(rspamd_config, 'dynconf: the write of the override of %s has not finished, ' ..
+          'going back to what the backend holds', name)
+      rollback(st)
+      if type(backend.invalidate) == 'function' then
+        backend.invalidate()
+      end
+    end
+  end
+end
+
 --[[[
 -- @function lua_dynconf.set(module, values, ctx, cb)
 -- Applies an override locally (`values == nil` removes it) and writes it through the backend; if the write
@@ -1248,44 +1535,95 @@ function exports.set(name, values, ctx, cb)
   if type(backend.set) ~= 'function' then
     return false, 'backend does not support writes'
   end
-  local source = fw.backend_name
-  local ok, err = exports.validate(name, values or nil, source)
-  if not ok then
+  -- The entries that this write adds or changes are validated strictly, the ones that it keeps are not
+  local strict = {}
+  local mod = modules[name]
+  if values and mod then
+    local cur = mod.overrides[fw.backend_name]
+    cur = cur and cur.values or {}
+    for _, k in ipairs(sorted_keys(values)) do
+      local old, new = cur[k], values[k]
+      if type(old) == 'table' and type(new) == 'table' then
+        if not table_cmp(old, new) then
+          strict[#strict + 1] = k
+        end
+      elseif old ~= new then
+        strict[#strict + 1] = k
+      end
+    end
+  end
+  local st, err = stage_local(name, values, fw.backend_name, nil, strict)
+  if not st then
     return false, err
   end
+  pending[name] = st
 
-  -- Apply locally first: the C subscribers can still reject the values, and then nothing is written
-  local mod = modules[name]
-  local prev = mod.overrides[source]
-  local prev_values = prev and prev.values and deepcopy(prev.values) or nil
-  local prev_version = prev and prev.version
-  local aok, aerr = exports.apply(source, name, values or nil, nil)
-  if not aok then
-    return false, aerr
+  backend.set(ctx or { ev_base = fw.ev_base }, name, values or nil, function(serr, version)
+    finish_write(st, serr, version, cb)
+  end)
+  return true
+end
+
+--[[[
+-- @function lua_dynconf.update(module, patch, ctx, cb)
+-- Changes some top-level keys of the override that the active backend holds for a module: `patch` maps a
+-- key to its new value, or to `false` to remove the key (the other keys keep their values). The override
+-- disappears when its last key is removed. The patch is merged by the backend with what it holds at the
+-- moment of the write (not with what this process has applied), so an override that this process has not
+-- applied (rejected, or written by somebody else after the last check) is not lost.
+-- `cb(err, rejected)` is called when done; `rejected` is true if the merged override was refused
+-- (validation or a C subscriber), nothing has been written then.
+-- @return {boolean} true if the write has been started, or `false, error`
+--]]
+function exports.update(name, patch, ctx, cb)
+  local backend = fw.backend_name and backends[fw.backend_name]
+  if not fw.enabled or not backend then
+    return false, 'dynconf is not enabled'
   end
-  local mine = mod.overrides[source]
+  local mod = modules[name]
+  if not mod then
+    return false, string.format('unknown module %s', tostring(name))
+  end
+  if type(patch) ~= 'table' then
+    return false, 'patch must be a table'
+  end
+  if type(backend.update) ~= 'function' then
+    return false, 'backend does not support writes'
+  end
 
-  ctx = ctx or { ev_base = fw.ev_base }
-  backend.set(ctx, name, values or nil, function(serr, version)
-    -- Nothing must be rolled back if a check has replaced the entry in the meantime
-    local still_mine = mod.overrides[source] == mine
-    if serr then
-      if still_mine then
-        local rok, rerr = exports.apply(source, name, prev_values, prev_version)
-        if not rok then
-          logger.warnx(rspamd_config, 'dynconf: cannot roll back the override of %s: %s', name, rerr)
-        end
-      end
-      if cb then
-        cb(serr)
-      end
-      return
+  local source = fw.backend_name
+  -- What the patch sets can be checked at once, the rest is checked after the merge
+  local set_values = {}
+  for k, v in pairs(patch) do
+    if v ~= false then
+      set_values[k] = v
     end
-    if still_mine and mine then
-      mine.version = version
+  end
+  if next(set_values) ~= nil then
+    local vok, verr = exports.validate(name, set_values, source)
+    if not vok then
+      return false, verr
     end
-    if cb then
-      cb(nil)
+  end
+
+  -- Only what the patch sets is validated strictly: the stored entries that it keeps may be stale
+  local strict = sorted_keys(set_values)
+  local st
+  backend.update(ctx or { ev_base = fw.ev_base }, name, patch, function(merged)
+    -- Called with the override as the backend holds it after the patch, before the write; again if the
+    -- write has to be retried
+    local nst, perr = stage_local(name, merged, source, st, strict)
+    if not nst then
+      return false, perr
+    end
+    st = nst
+    pending[name] = st
+    return true
+  end, function(serr, version, rejected)
+    if st then
+      finish_write(st, serr, version, cb, rejected)
+    elseif cb then
+      cb(serr, rejected)
     end
   end)
   return true
@@ -1324,6 +1662,11 @@ function exports.start(cfg, ev_base, worker)
   fw.ev_base = ev_base
   fw.worker = worker
 
+  if worker then
+    local ok, primary = pcall(function() return worker:is_primary_controller() end)
+    fw.legacy_pending = ok and primary == true
+  end
+
   if type(backend.start) == 'function' then
     local ok, err = pcall(backend.start, cfg, ev_base, worker)
     if not ok then
@@ -1331,6 +1674,12 @@ function exports.start(cfg, ev_base, worker)
       fw.last_error = tostring(err)
       return false
     end
+  end
+
+  -- A backend that needs no event loop delivers the overrides before the worker serves anything: a
+  -- worker that has just started must not scan with the static values for a whole interval
+  if backend.sync then
+    exports.check_now(ev_base)
   end
 
   local policy = fw.policy
@@ -1359,18 +1708,53 @@ function exports.start(cfg, ev_base, worker)
   return true
 end
 
+-- Parses the `modules` option: an array of module names (a single string is accepted as well)
+local function parse_modules(list)
+  if type(list) == 'string' then
+    list = { list }
+  end
+  if type(list) ~= 'table' then
+    return nil, 'dynconf modules must be an array of module names'
+  end
+  local res = {}
+  for _, m in ipairs(list) do
+    if type(m) ~= 'string' or m == '' then
+      return nil, 'dynconf modules must contain non-empty strings only'
+    end
+    res[m] = true
+  end
+  return res
+end
+
+-- Backends that the framework knows how to load by name
+local BUILTIN_BACKENDS = { redis = 'lua_dynconf.redis', file = 'lua_dynconf.file' }
+
 --[[[
 -- @function lua_dynconf.configure(section)
 -- Configures the framework from the (already parsed) `dynconf` section. Normally called automatically
 -- on the first `register`; calling it explicitly is useful for tests.
+--
+-- Defaults: a missing or empty section enables the framework with `backend = "file"`,
+-- `policy = "interval"` and `modules = ["actions", "scores", "symbols"]`; a section that sets other keys
+-- keeps these defaults for the unset ones. `enabled = false` disables everything. `modules` defaults to
+-- all modules as soon as `enabled = true` is written down explicitly.
 -- @return {boolean} ok, or `false, error` (the framework stays disabled)
 --]]
 function exports.configure(section)
   fw.configured = true
   fw.enabled = false
+  fw.allowed = nil
   fw.section = section
 
-  if type(section) ~= 'table' or not section.enabled then
+  if section == nil then
+    section = {}
+  end
+  if type(section) ~= 'table' then
+    return false, 'the dynconf section must be an object'
+  end
+
+  -- An explicit `enabled = false` is the only way to switch the defaults off
+  if section.enabled ~= nil and not section.enabled then
     return true
   end
 
@@ -1389,13 +1773,24 @@ function exports.configure(section)
     return false, 'dynconf jitter must be between 0 and 1'
   end
 
-  local backend_name = section.backend or 'redis'
-  if not backends[backend_name] and backend_name == 'redis' then
-    local ok, impl = pcall(require, "lua_dynconf.redis")
-    if not ok then
-      return false, string.format('cannot load the redis backend: %s', impl)
+  local allowed
+  if section.modules ~= nil then
+    local merr
+    allowed, merr = parse_modules(section.modules)
+    if not allowed then
+      return false, merr
     end
-    exports.register_backend('redis', impl)
+  elseif section.enabled == nil then
+    allowed = parse_modules(DEFAULT_MODULES)
+  end
+
+  local backend_name = section.backend or 'file'
+  if not backends[backend_name] and BUILTIN_BACKENDS[backend_name] then
+    local ok, impl = pcall(require, BUILTIN_BACKENDS[backend_name])
+    if not ok then
+      return false, string.format('cannot load the %s backend: %s', backend_name, impl)
+    end
+    exports.register_backend(backend_name, impl)
   end
   local backend = backends[backend_name]
   if not backend then
@@ -1412,11 +1807,23 @@ function exports.configure(section)
     end
   end
 
+  -- The Redis hash of the previous implementation has its own server settings
+  if backend_name == 'redis' then
+    local lok, legacy = pcall(require, 'lua_dynconf.legacy')
+    if lok then
+      local cok, cerr = pcall(legacy.configure)
+      if not cok then
+        logger.warnx(rspamd_config, 'dynconf: cannot configure the legacy import: %s', cerr)
+      end
+    end
+  end
+
   fw.backend_name = backend_name
   fw.policy = policy
   fw.interval = interval
   fw.ttl = ttl
   fw.jitter = jitter
+  fw.allowed = allowed
   fw.enabled = true
   add_source(backend_name)
 
@@ -1442,17 +1849,44 @@ ensure_framework = function()
     return
   end
 
+  -- No section is not an error: the defaults apply
   local ok, section = pcall(get_all_opt, rspamd_config, 'dynconf')
   if not ok or type(section) ~= 'table' then
-    return
+    section = {}
   end
 
   local cok, cerr = exports.configure(section)
   if not cok then
     logger.errx(rspamd_config, 'dynconf is disabled: %s', cerr)
     fw.enabled = false
+    fw.allowed = nil
     disarm_c()
   end
+end
+
+--[[[
+-- @function lua_dynconf.load_offline()
+-- Performs one synchronous check when the backend supports it (`sync = true`, the file backend does), so
+-- that tools which never start the workers (`rspamadm configdump --dynamic`) see the overrides. Does
+-- nothing for backends that need an event loop.
+-- @return {boolean} true if the overrides have been loaded; `false` if there is nothing to load offline
+-- (disabled, or the backend needs an event loop); `false, error` if reading has failed
+--]]
+function exports.load_offline()
+  ensure_framework()
+  local backend = fw.enabled and backends[fw.backend_name]
+  if not backend or not backend.sync then
+    return false
+  end
+
+  local result
+  exports.check_now(nil, function(err)
+    result = err or true
+  end)
+  if result == true then
+    return true
+  end
+  return false, result or 'check did not complete'
 end
 
 return exports

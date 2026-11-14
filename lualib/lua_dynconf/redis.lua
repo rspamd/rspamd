@@ -29,6 +29,7 @@ limitations under the License.
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local logger = require "rspamd_logger"
+local json = require "lua_dynconf.json"
 local rspamd_util = require "rspamd_util"
 local ucl = require "ucl"
 
@@ -49,7 +50,19 @@ local applied = {}
 -- name, ARGV[2] is the pre-encoded override JSON object (empty string removes the override), ARGV[3] is
 -- the first version of a hash that does not exist yet. A hash that was deleted and written again starts
 -- from a different number, so a repeated version never hides new content.
+-- If ARGV[4] is given it is the blob that the writer has based the new one on (empty string: there was
+-- none): when the field holds something else the script changes nothing and returns -1, so that the writer
+-- can merge its change into the current content and try again.
 local set_script = [[
+if ARGV[4] then
+  local cur = redis.call('HGET', KEYS[1], ARGV[1])
+  if cur == false then
+    cur = ''
+  end
+  if cur ~= ARGV[4] then
+    return -1
+  end
+end
 if redis.call('EXISTS', KEYS[1]) == 0 then
   redis.call('HSET', KEYS[1], 'v', ARGV[3])
 end
@@ -61,6 +74,9 @@ else
 end
 return v
 ]]
+
+-- How many times an update is merged again when somebody else has changed the module in between
+local UPDATE_ATTEMPTS = 5
 
 local function decode_json(str)
   local parser = ucl.parser()
@@ -124,70 +140,21 @@ function exports.version()
   return tonumber(last_version) or 0
 end
 
-local JSON_ESCAPES = {
-  ['"'] = '\\"', ['\\'] = '\\\\', ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t',
-  ['\b'] = '\\b', ['\f'] = '\\f',
-}
-
-local function json_escape(c)
-  return JSON_ESCAPES[c] or string.format('\\u%04x', c:byte())
+--[[[
+-- @function lua_dynconf.redis.holds(module)
+-- Returns true if the last hash delivered to the registry holds an override for the module (whether or
+-- not the registry has accepted it)
+--]]
+function exports.holds(module)
+  return applied[module] ~= nil
 end
 
-local function encode_value(v, depth)
-  local tv = type(v)
-  if tv == 'string' then
-    if not rspamd_util.is_valid_utf8(v) then
-      error('string is not valid UTF-8')
-    end
-    return '"' .. (v:gsub('[%c"\\]', json_escape)) .. '"'
-  elseif tv == 'number' then
-    if v ~= v or v == math.huge or v == -math.huge then
-      error('number is not finite')
-    end
-    if v == math.floor(v) and math.abs(v) < 1e15 then
-      return string.format('%.0f', v)
-    end
-    -- ucl prints floats with 6 digits only: the shortest exact form is encoded here
-    local str = string.format('%.14g', v)
-    if tonumber(str) ~= v then
-      str = string.format('%.17g', v)
-    end
-    return str
-  elseif tv == 'boolean' then
-    return v and 'true' or 'false'
-  elseif tv ~= 'table' then
-    error(string.format('values of type %s cannot be encoded', tv))
-  end
-
-  if depth > 64 then
-    error('value is nested too deeply')
-  end
-
-  local n, count = #v, 0
-  for _ in pairs(v) do
-    count = count + 1
-  end
-  local parts = {}
-  if n > 0 and n == count then
-    for i = 1, n do
-      parts[i] = encode_value(v[i], depth + 1)
-    end
-    return '[' .. table.concat(parts, ',') .. ']'
-  end
-
-  local keys = {}
-  for k in pairs(v) do
-    keys[#keys + 1] = tostring(k)
-  end
-  table.sort(keys)
-  for _, k in ipairs(keys) do
-    local val = v[k]
-    if val == nil then
-      val = v[tonumber(k)]
-    end
-    parts[#parts + 1] = encode_value(k, depth + 1) .. ':' .. encode_value(val, depth + 1)
-  end
-  return '{' .. table.concat(parts, ',') .. '}'
+--[[[
+-- @function lua_dynconf.redis.invalidate()
+-- Makes the next check fetch the whole hash even if its version has not changed
+--]]
+function exports.invalidate()
+  last_version = '0'
 end
 
 --[[[
@@ -195,13 +162,7 @@ end
 -- Compact JSON encoder that keeps the full precision of numbers (the UCL emitter does not)
 -- @return {string} JSON or `nil, error`
 --]]
-function exports.encode_json(value)
-  local ok, res = pcall(encode_value, value, 1)
-  if not ok then
-    return nil, tostring(res)
-  end
-  return res
-end
+exports.encode_json = json.encode
 
 -- Builds the new state without touching the real one: it is committed once the registry has accepted
 -- the check result. Returns `updates` (or nil) and the new `applied` map
@@ -301,17 +262,9 @@ function exports.check(ev_base, cb)
   end
 end
 
---[[[
--- @function lua_dynconf.redis.set(ctx, module, values, cb)
--- Atomically stores (or removes, when `values` is nil) the override of a module; `ctx` is `{ task = t }`
--- or `{ ev_base = e }`. `cb(err, version)` receives the new global version.
---]]
-function exports.set(ctx, module, values, cb)
-  if not redis_params or not set_script_id then
-    cb('redis backend is not configured')
-    return
-  end
-
+-- Runs the write script. `expected` is the blob that the new one is based on (nil: unconditional write).
+-- `cb(err, version, conflict)`
+local function write_blob(ctx, module, values, expected, cb)
   local blob = ''
   if values ~= nil then
     local eerr
@@ -338,6 +291,10 @@ function exports.set(ctx, module, values, cb)
       return
     end
     local version = tonumber(data)
+    if version and version < 0 then
+      cb(nil, nil, true)
+      return
+    end
     -- Remember what was written (the script builds the field in exactly this way), so that a later
     -- removal by someone else is noticed by this worker too
     if values ~= nil and version then
@@ -348,8 +305,112 @@ function exports.set(ctx, module, values, cb)
     cb(nil, version)
   end
 
-  lua_redis.exec_redis_script(set_script_id, params, script_cb, { redis_key },
-      { FIELD_PREFIX .. module, blob, string.format('%.0f', math.floor(rspamd_util.get_time() * 1000)) })
+  local args = { FIELD_PREFIX .. module, blob, string.format('%.0f', math.floor(rspamd_util.get_time() * 1000)) }
+  if expected ~= nil then
+    args[4] = expected
+  end
+  lua_redis.exec_redis_script(set_script_id, params, script_cb, { redis_key }, args)
+end
+
+--[[[
+-- @function lua_dynconf.redis.set(ctx, module, values, cb)
+-- Atomically stores (or removes, when `values` is nil) the override of a module; `ctx` is `{ task = t }`
+-- or `{ ev_base = e }`. `cb(err, version)` receives the new global version.
+--]]
+function exports.set(ctx, module, values, cb)
+  if not redis_params or not set_script_id then
+    cb('redis backend is not configured')
+    return
+  end
+
+  write_blob(ctx, module, values, nil, function(err, version, conflict)
+    if conflict then
+      -- Cannot happen without an expected blob
+      cb('unexpected conflict')
+    else
+      cb(err, version)
+    end
+  end)
+end
+
+--[[[
+-- @function lua_dynconf.redis.update(ctx, module, patch, prepare, cb)
+-- Changes some top-level keys of the override of a module: `patch` maps a key to its new value, or to
+-- `false` to remove the key. The patch is merged with the blob that redis holds right now, not with what
+-- this worker has applied, and the write succeeds only if the blob has not changed since it was read
+-- (otherwise the merge is repeated, a few times). `prepare(merged)` is called with the result (nil when
+-- no key is left) before every write attempt and returns `ok, error`: a refusal stops the update.
+-- `cb(err, version, rejected)`; `rejected` is true if `prepare` refused.
+--]]
+function exports.update(ctx, module, patch, prepare, cb)
+  if not redis_params or not set_script_id then
+    cb('redis backend is not configured')
+    return
+  end
+
+  local field = FIELD_PREFIX .. module
+
+  local function hget(callback)
+    if ctx and ctx.task then
+      return lua_redis.redis_make_request(ctx.task, redis_params, redis_key, false, callback,
+          'HGET', { redis_key, field })
+    end
+    return lua_redis.redis_make_request_taskless(ctx and ctx.ev_base, rspamd_config, redis_params,
+        redis_key, false, callback, 'HGET', { redis_key, field })
+  end
+
+  local function attempt(n)
+    local function hget_cb(err, data)
+      if err then
+        cb(string.format('redis HGET failed: %s', err))
+        return
+      end
+
+      local expected = ''
+      local values = {}
+      if not lua_redis.is_null(data) and data ~= '' then
+        expected = tostring(data)
+        local decoded = decode_json(expected)
+        if type(decoded) == 'table' and type(decoded.o) == 'table' then
+          values = decoded.o
+        end
+      end
+      for k, v in pairs(patch) do
+        if v == false then
+          values[k] = nil
+        else
+          values[k] = v
+        end
+      end
+      if next(values) == nil then
+        values = nil
+      end
+
+      local called, pok, perr = pcall(prepare, values)
+      if not called or not pok then
+        cb(called and tostring(perr or 'rejected') or tostring(pok), nil, true)
+        return
+      end
+
+      write_blob(ctx, module, values, expected, function(werr, version, conflict)
+        if conflict then
+          if n >= UPDATE_ATTEMPTS then
+            cb('the override is changed by somebody else too often')
+          else
+            attempt(n + 1)
+          end
+        else
+          cb(werr, version)
+        end
+      end)
+    end
+
+    if not hget(hget_cb) then
+      cb('cannot send redis HGET')
+    end
+  end
+
+  attempt(1)
 end
 
 return exports

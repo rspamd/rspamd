@@ -327,6 +327,8 @@ rspamadm_dump_section_obj(struct rspamd_config *cfg,
 /*
  * Returns the state of the dynamic configuration registry (lua_dynconf.dump_json)
  * as UCL, optionally for a single module. Secrets are redacted by the registry.
+ * The overrides of the backends that can be read synchronously (the file one)
+ * are loaded first.
  */
 static ucl_object_t *
 rspamadm_dynconf_dump(struct rspamd_config *cfg, const char *module)
@@ -340,6 +342,17 @@ rspamadm_dynconf_dump(struct rspamd_config *cfg, const char *module)
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
+
+	/* Backends that need no event loop (the file one) can show their overrides offline */
+	if (rspamd_lua_require_function(L, "lua_dynconf", "load_offline")) {
+		if (lua_pcall(L, 0, 2, err_idx) != 0) {
+			fprintf(stderr, "cannot load dynamic configuration overrides: %s\n",
+					lua_tostring(L, -1));
+		}
+		/* Read and apply errors have been logged by the registry already */
+	}
+
+	lua_settop(L, err_idx);
 
 	if (!rspamd_lua_require_function(L, "lua_dynconf", "dump_json")) {
 		fprintf(stderr, "cannot load lua_dynconf\n");
@@ -463,7 +476,7 @@ rspamadm_configdump(int argc, char **argv, const struct rspamadm_command *cmd)
 		}
 
 		if (dynamic_conf) {
-			/* The state of the dynamic configuration registry, offline: no overrides are loaded */
+			/* The state of the dynamic configuration registry, offline: only the overrides of synchronous backends are loaded */
 			if (argc <= 1) {
 				ucl_object_t *out = rspamadm_dynconf_dump(cfg, NULL);
 
