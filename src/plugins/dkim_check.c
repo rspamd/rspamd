@@ -367,6 +367,7 @@ dkim_dynconf_apply(struct rspamd_config *cfg,
 				   const char *module,
 				   const ucl_object_t *dyn_values,
 				   void *ud,
+				   struct rspamd_dynconf_apply_info *info,
 				   GError **err)
 {
 	struct dkim_ctx *dkim_module_ctx = (struct dkim_ctx *) ud;

@@ -26,7 +26,6 @@
 #include "maps/map.h"
 #include "maps/map_helpers.h"
 #include "maps/map_private.h"
-#include "dynamic_cfg.h"
 #include "cfg_dynamic.h"
 #include "utlist.h"
 #include "stat_api.h"
@@ -62,6 +61,7 @@
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
+#include <algorithm>
 #include <cmath>
 #include "libserver/composites/composites.h"
 
@@ -999,7 +999,6 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 									  nullptr);
 	}
 
-	init_dynamic_config(cfg);
 	/* Insert classifiers symbols */
 	rspamd_config_insert_classify_symbols(cfg);
 
@@ -1018,6 +1017,13 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		if (!symcache_ret) {
 			ret = tl::make_unexpected(std::string{"symcache init failed"});
 		}
+
+		/*
+		 * Actions, scores and symbols can be changed dynamically: this needs a loaded
+		 * configuration and the initialised cache (the other callers of this function
+		 * have neither, and may have no Lua libraries yet)
+		 */
+		rspamd_dynconf_register_metric_modules(cfg);
 
 		/* Init re cache */
 		rspamd_re_cache_init(cfg->re_cache, cfg);
@@ -2173,6 +2179,12 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 
 	act->threshold = threshold;
 	act->flags = flags;
+	/*
+	 * The priority is what decides who wins later: `override.d` (10) beats a dynamic
+	 * threshold (3), which beats `local.d` (1) and the main file (0), the same as for
+	 * the scores of symbols
+	 */
+	act->priority = priority;
 
 	enum rspamd_action_type std_act;
 
@@ -2207,6 +2219,14 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 
 		if (elt) {
 			priority = ucl_object_toint(elt);
+		}
+		else if ((elt = ucl_object_lookup_any(obj, "score", "threshold", nullptr)) != nullptr) {
+			/*
+			 * When objects of several files are merged (`duplicate=merge` of local.d) the object keeps
+			 * the priority of its first definition, but the threshold has the priority of the file
+			 * that has set it last
+			 */
+			priority = std::max(priority, ucl_object_get_priority(elt));
 		}
 	}
 
@@ -2271,11 +2291,26 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 	return TRUE;
 }
 
+void rspamd_config_actions_resort(struct rspamd_config *cfg)
+{
+	RSPAMD_CFG_ACTIONS(cfg)->sort();
+}
+
 gboolean
 rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
 								   const char *action_name,
 								   unsigned int priority)
 {
+	enum rspamd_action_type std_act;
+
+	/*
+	 * The actions are stored by their canonical names, the configuration uses both spellings
+	 * (`add_header = null`), the same as rspamd_config_set_action_score expects
+	 */
+	if (rspamd_action_from_str(action_name, &std_act)) {
+		action_name = rspamd_action_to_str(std_act);
+	}
+
 	auto actions = RSPAMD_CFG_ACTIONS(cfg);
 	auto maybe_act = rspamd::find_map(actions->actions_by_name, action_name);
 

@@ -402,6 +402,32 @@ void rspamd_symcache_enable_symbol_static(struct rspamd_symcache *cache,
 										  const char *symbol);
 
 /**
+ * Switches a symbol on or off for all the tasks that start from now on. This works
+ * after the cache has been initialised (unlike the static variants above): a
+ * disabled symbol is not executed and its results are not inserted. A symbol that
+ * is disabled by its own definition (`enabled = false`) stays disabled.
+ * @param cache
+ * @param symbol
+ * @param enabled
+ * @return FALSE if the symbol is unknown
+ */
+gboolean rspamd_symcache_set_symbol_enabled_runtime(struct rspamd_symcache *cache,
+													const char *symbol,
+													gboolean enabled);
+
+/**
+ * Returns FALSE if the symbol is switched off (statically or at runtime) or unknown
+ */
+gboolean rspamd_symcache_get_symbol_enabled_runtime(struct rspamd_symcache *cache,
+													const char *symbol);
+
+/**
+ * Returns TRUE only for a known symbol that is switched off (statically or at runtime)
+ */
+gboolean rspamd_symcache_is_symbol_disabled_runtime(struct rspamd_symcache *cache,
+													const char *symbol);
+
+/**
  * Process specific function for each cache element (in order they are added)
  * @param cache
  * @param func

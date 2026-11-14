@@ -688,6 +688,31 @@ void rspamd_symcache_enable_symbol_static(struct rspamd_symcache *cache,
 	real_cache->enable_symbol_delayed(symbol);
 }
 
+gboolean rspamd_symcache_set_symbol_enabled_runtime(struct rspamd_symcache *cache,
+													const char *symbol,
+													gboolean enabled)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return real_cache->set_item_enabled(symbol, enabled);
+}
+
+gboolean rspamd_symcache_get_symbol_enabled_runtime(struct rspamd_symcache *cache,
+													const char *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return real_cache->is_item_enabled(symbol);
+}
+
+gboolean rspamd_symcache_is_symbol_disabled_runtime(struct rspamd_symcache *cache,
+													const char *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return real_cache->is_item_disabled(symbol);
+}
+
 /* A real structure to match C results without extra copying */
 struct rspamd_symcache_real_timeout_result {
 	struct rspamd_symcache_timeout_result c_api_result;

@@ -67,6 +67,18 @@ rspamd_dynconf_register_module(struct rspamd_config *cfg,
 							   rspamd_dynconf_apply_cb cb,
 							   void *ud)
 {
+	return rspamd_dynconf_register_module_flags(cfg, module, dynamic_paths, cb, ud,
+												RSPAMD_DYNCONF_MODULE_DEFAULT);
+}
+
+gboolean
+rspamd_dynconf_register_module_flags(struct rspamd_config *cfg,
+									 const char *module,
+									 const char *const *dynamic_paths,
+									 rspamd_dynconf_apply_cb cb,
+									 void *ud,
+									 unsigned int flags)
+{
 	if (cfg == nullptr || module == nullptr || cb == nullptr) {
 		return FALSE;
 	}
@@ -107,9 +119,22 @@ rspamd_dynconf_register_module(struct rspamd_config *cfg,
 		}
 	}
 
+	/* Options of the registration */
+	lua_createtable(L, 0, 2);
+
+	if (flags & RSPAMD_DYNCONF_MODULE_SUBSCRIBER_KEYS) {
+		lua_pushboolean(L, TRUE);
+		lua_setfield(L, -2, "subscriber_keys");
+	}
+
+	if (flags & RSPAMD_DYNCONF_MODULE_NO_STATIC) {
+		lua_pushboolean(L, FALSE);
+		lua_setfield(L, -2, "static");
+	}
+
 	auto ret = FALSE;
 
-	if (lua_pcall(L, 2, 2, err_idx) != 0) {
+	if (lua_pcall(L, 3, 2, err_idx) != 0) {
 		msg_err_config("cannot register module %s for dynamic configuration: %s",
 					   module, lua_tostring(L, -1));
 	}
@@ -129,9 +154,41 @@ rspamd_dynconf_register_module(struct rspamd_config *cfg,
 }
 
 gboolean
+rspamd_dynconf_apply_skip(struct rspamd_dynconf_apply_info *info,
+						  const char *module,
+						  const char *key,
+						  const char *reason)
+{
+	if (info == nullptr || !(info->flags & RSPAMD_DYNCONF_APPLY_LENIENT)) {
+		return FALSE;
+	}
+
+	if (info->strict_keys != nullptr) {
+		for (auto *k = info->strict_keys; *k != nullptr; k++) {
+			if (strcmp(*k, key) == 0) {
+				return FALSE;
+			}
+		}
+	}
+
+	if (!(info->flags & RSPAMD_DYNCONF_APPLY_QUIET)) {
+		msg_warn("dynamic configuration: module %s: skip %s: %s", module, key, reason);
+	}
+
+	if (info->skipped == nullptr) {
+		info->skipped = g_ptr_array_new_with_free_func(g_free);
+	}
+
+	g_ptr_array_add(info->skipped, g_strdup(reason));
+
+	return TRUE;
+}
+
+gboolean
 rspamd_dynconf_notify(struct rspamd_config *cfg,
 					  const char *module,
 					  const ucl_object_t *values,
+					  struct rspamd_dynconf_apply_info *info,
 					  GError **err)
 {
 	auto *ctx = dynconf_get_ctx(cfg, false);
@@ -152,8 +209,9 @@ rspamd_dynconf_notify(struct rspamd_config *cfg,
 
 	/* Copy it, as the callback might modify the map by registering modules */
 	auto sub = it->second;
+	struct rspamd_dynconf_apply_info strict_info = {RSPAMD_DYNCONF_APPLY_STRICT, nullptr, nullptr};
 
-	return sub.cb(cfg, module, values, sub.ud, err);
+	return sub.cb(cfg, module, values, sub.ud, info ? info : &strict_info, err);
 }
 
 uint64_t

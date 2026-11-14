@@ -494,6 +494,49 @@ auto symcache::metric_connect_cb(void *k, void *v, void *ud) -> void
 }
 
 
+auto symcache::set_item_enabled(std::string_view name, bool enabled) -> bool
+{
+	auto *item = get_item_by_name_mut(name, false);
+
+	if (item == nullptr) {
+		return false;
+	}
+
+	if (enabled) {
+		auto *sdef = reinterpret_cast<struct rspamd_symbol *>(g_hash_table_lookup(cfg->symbols,
+																				  item->symbol.c_str()));
+
+		if (sdef != nullptr && (sdef->flags & RSPAMD_SYMBOL_FLAG_DISABLED)) {
+			msg_debug_cache("symbol %s is disabled by its definition, keep it disabled",
+							item->symbol.c_str());
+			return true;
+		}
+
+		item->internal_flags |= cache_item::bit_enabled;
+	}
+	else {
+		item->internal_flags &= ~cache_item::bit_enabled;
+	}
+
+	msg_debug_cache("symbol %s is switched %s", item->symbol.c_str(), enabled ? "on" : "off");
+
+	return true;
+}
+
+auto symcache::is_item_enabled(std::string_view name) const -> bool
+{
+	const auto *item = get_item_by_name(name, false);
+
+	return item != nullptr && (item->internal_flags & cache_item::bit_enabled);
+}
+
+auto symcache::is_item_disabled(std::string_view name) const -> bool
+{
+	const auto *item = get_item_by_name(name, false);
+
+	return item != nullptr && !(item->internal_flags & cache_item::bit_enabled);
+}
+
 auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_item *
 {
 	if (id < 0 || id >= items_by_id.size()) {

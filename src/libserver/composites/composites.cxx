@@ -923,6 +923,19 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 	msg_debug_composites("process composite %s", str_key);
 
 	if (!cd->checked[cd->composite->id * 2]) {
+		/*
+		 * A composite that is switched off at runtime (the dynamic configuration)
+		 * must not match: its result would be refused at insertion, but the atoms
+		 * would be removed by the policy of the composite nevertheless
+		 */
+		if (rspamd_symcache_is_symbol_disabled_runtime(task->cfg->cache, str_key)) {
+			msg_debug_composites("composite %s is switched off", str_key);
+			cd->checked[comp->id * 2] = true;
+			cd->checked[comp->id * 2 + 1] = false;
+
+			return;
+		}
+
 		/* For second-pass composites during second pass, skip symcache check since they were
 		 * already marked as checked during first pass but not actually evaluated */
 		bool skip_symcache_check = (cd->is_second_pass && comp->second_pass);
