@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "modules": {
+    "scores": {
+      "v": 1,
+      "o": {
+        "SA_BODY_WORD": 10.0
+      }
+    },
+    "actions": {
+      "v": 1,
+      "o": {
+        "reject": 20.0,
+        "add header": 6.0
+      }
+    }
+  }
+}

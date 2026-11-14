@@ -1,0 +1,9 @@
+From: sender@example.com
+To: rcpt@example.com
+Subject: dynconf composite test
+Date: Mon, 03 Nov 2025 10:00:00 +0000
+Message-ID: <dynconf-2@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+This text has compalpha in it, and compbeta too.
