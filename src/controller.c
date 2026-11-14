@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
+#include "rspamd_build_id.h"
 #include "libserver/cfg_file_private.h"
 #include "libutil/rrd.h"
 #include "libutil/hash.h"
@@ -2952,6 +2953,15 @@ rspamd_controller_handle_stat_common(
 	/* Build git id (RID, -DGIT_ID builds); release builds send no git_id */
 #if defined(GIT_VERSION) && GIT_VERSION == 1
 	ucl_object_insert_key(top, ucl_object_fromstring(RID), "git_id", 0, false);
+#endif
+	/* Build identity: release tag the build descends from */
+	ucl_object_insert_key(top, ucl_object_fromstring(RSPAMD_RELEASE_BASE), "release_base", 0, false);
+	ucl_object_insert_key(top, ucl_object_frombool(RSPAMD_VERSION_DEV ? true : false), "dev", 0, false);
+#ifdef RSPAMD_GIT_DESCRIBE
+	ucl_object_insert_key(top, ucl_object_fromstring(RSPAMD_GIT_DESCRIBE), "git_describe", 0, false);
+#endif
+#ifdef RSPAMD_GIT_DISTANCE
+	ucl_object_insert_key(top, ucl_object_fromint(RSPAMD_GIT_DISTANCE), "git_distance", 0, false);
 #endif
 	ucl_object_insert_key(top, ucl_object_fromstring(session->ctx->cfg->checksum), "config_id", 0, false);
 	uptime = ev_time() - session->ctx->srv->start_time;

@@ -22,6 +22,7 @@
 #include "lua_thread_pool.h"
 #include "libstat/stat_api.h"
 #include "libserver/rspamd_control.h"
+#include "rspamd_build_id.h"
 
 #include <math.h>
 
@@ -503,6 +504,26 @@ rspamd_lua_rspamd_version_numeric(lua_State *L)
 	return 1;
 }
 
+/***
+ * @function rspamd_version([type])
+ * Returns rspamd version information. Without arguments returns the full
+ * version string. Selectors (case insensitive):
+ *
+ * - `short`: `major.minor`
+ * - `main`: `major.minor.patch`
+ * - `major`, `minor`, `patch`: the corresponding version component
+ * - `id`: the build id: the value of GIT_ID given at build time, or "release" when none was given
+ * - `num`: numeric version
+ * - `cmp`: compare the running version with a version string argument
+ * - `release_base`: the last release tag this tree descends from
+ * - `dev`: boolean, true for a development build (version differs from
+ *   `release_base` or the tree is ahead of the release tag)
+ * - `distance`: integer number of commits since the `release_base` tag, 0
+ *   for a release build without git information, or nil if unknown
+ * - `describe`: `<tag>-<n>-g<hash>` from `git describe`, or nil if unknown
+ * @param {string} type optional selector
+ * @return {string|number|boolean} requested value (nil if unknown or unsupported selector)
+ */
 static int
 rspamd_lua_rspamd_version(lua_State *L)
 {
@@ -533,6 +554,26 @@ rspamd_lua_rspamd_version(lua_State *L)
 		}
 		else if (g_ascii_strcasecmp(type, "id") == 0) {
 			result = RID;
+		}
+		else if (g_ascii_strcasecmp(type, "release_base") == 0) {
+			result = RSPAMD_RELEASE_BASE;
+		}
+		else if (g_ascii_strcasecmp(type, "dev") == 0) {
+			lua_pushboolean(L, RSPAMD_VERSION_DEV ? 1 : 0);
+			return 1;
+		}
+		else if (g_ascii_strcasecmp(type, "distance") == 0) {
+#ifdef RSPAMD_GIT_DISTANCE
+			lua_pushinteger(L, RSPAMD_GIT_DISTANCE);
+#else
+			lua_pushnil(L);
+#endif
+			return 1;
+		}
+		else if (g_ascii_strcasecmp(type, "describe") == 0) {
+#ifdef RSPAMD_GIT_DESCRIBE
+			result = RSPAMD_GIT_DESCRIBE;
+#endif
 		}
 		else if (g_ascii_strcasecmp(type, "num") == 0) {
 			return rspamd_lua_rspamd_version_numeric(L);
