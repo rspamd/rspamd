@@ -12,7 +12,8 @@ Guide through the Rspamd release process:
      * [Feature] Feature description
      * [Fix] Fix description
    ```
-4. Update version in CMakeLists.txt
+4. Update version in CMakeLists.txt, and set `RSPAMD_RELEASE_BASE` to X.Y.Z
+   in the release commit (it records the last release tag the tree descends from)
 5. Create release commit with full changelog:
    ```
    git commit --no-verify -S -m "Release X.Y.Z
@@ -30,7 +31,10 @@ Guide through the Rspamd release process:
    Critical fixes:
    * ..."
    ```
-7. Create follow-up commit updating version for next dev cycle
-8. Remind to push commits and tags
+7. Verify `git describe --tags --long` at the tag gives distance 0
+   (`X.Y.Z-0-g<hash>`)
+8. Create follow-up commit updating version for next dev cycle: change only
+   `RSPAMD_VERSION_PATCH`, leave `RSPAMD_RELEASE_BASE` alone
+9. Remind to push commits and tags
 
 Walk through each step interactively.
