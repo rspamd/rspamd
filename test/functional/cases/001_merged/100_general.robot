@@ -984,6 +984,114 @@ TINY PIXEL TRACKER - ESCAPED QUOTE IN STRING CONTROL
   ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
   Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
 
+TINY PIXEL TRACKER - PLUS SIGN ENLARGES
+  # An explicit plus sign is a valid part of a CSS number, so the
+  # enlarged sizes stay in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_plus_sign_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - NONE FOR WIDTH
+  # none is invalid for a width and a height, so the declarations
+  # are dropped and the pixel sizes stay in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_none_width_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - TRAILING GARBAGE
+  # The properties take a single value, so a trailing token makes
+  # the declaration invalid and the previous valid one stays in
+  # effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_trailing_garbage_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - IMPORTANT INSIDE VAR
+  # An !important inside a var() argument does not make the
+  # declaration important, so the last declaration wins
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_important_in_var_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - LONG LEADING ZEROS
+  # The leading zeros of a number are skipped, so a number longer
+  # than the internal buffer is not truncated into a zero
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_long_zeros_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - ESCAPED PROPERTY NAME SHRINKS
+  # A CSS escape, such as w\69 dth, decodes into the plain property
+  # name, so the size it carries is honoured
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_escaped_name_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - ZERO IMPORTANT
+  # A unitless zero may carry an !important flag
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_zero_important_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - NEGATIVE ZERO
+  # A negative zero is a valid zero, while any other negative value
+  # is invalid CSS for the dimensions
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_negative_zero_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - ESCAPED SEMICOLON
+  # An escaped semicolon, such as one of a custom property value,
+  # stays a value character and does not split the style into
+  # declarations
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_escaped_semicolon_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - COMMENT BETWEEN TOKENS
+  # A comment counts as whitespace, so the tokens around it stay
+  # separate and the value is invalid
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_comment_tokens_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - DOUBLE COLON
+  # A value may not start with a colon, so the declaration is
+  # invalid and the attribute dimensions stay in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_double_colon_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - BARE FUNCTION NAME
+  # A function value needs its parentheses, so a bare function name
+  # is invalid and the previous valid declaration stays in effect
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_bare_function_probe.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Expect Symbol With Score  HTML_TINY_PIXEL_TRACKER  3.0
+
+TINY PIXEL TRACKER - LONG MANTISSA EXPONENT
+  # The exponent of a number longer than the internal buffer is
+  # kept, so the magnitude of the number survives the truncation
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_long_exponent_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - ZERO-PADDED EXPONENT
+  # The leading zeros of an exponent are skipped as well, so a run
+  # of them does not drop the exponent off the truncated number and
+  # turn a hundred pixels into a single one
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_long_exponent_zeros_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
+TINY PIXEL TRACKER - BARE URL SAME AS SOURCE
+  # An image source that also appears in the displayed text carries
+  # the text occurrence with it, so it is content rather than a mere
+  # image url
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_bare_url_ham.eml
+  ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
+  Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
+
 TINY PIXEL PROBE COMPOSITE - TRUE POSITIVE
   # Per-recipient tracking in Message-Id and a tracker token in the
   # body corroborate the contentless probe shape

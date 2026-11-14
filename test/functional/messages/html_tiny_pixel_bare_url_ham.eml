@@ -1,11 +1,11 @@
 From: no-reply@service.example.org
 To: <user@example.net>
-Subject: Weekly digest
-Message-ID: <digest-656@service.example.org>
+Subject: Banner
+Message-ID: <banner-1012@service.example.org>
 MIME-Version: 1.0
 Content-Type: text/html; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
-<html><body><p>Visit https://service.example.org/digest/656</p>
-<span style="display:none"><img width="1" height="1" src="https://tracker.example.com/o/656/"/></span>
+<html><body><p>Banner https://tracker.example.com/px/1012/</p>
+<img src="https://tracker.example.com/px/1012/" width="1" height="1" alt="Banner"/>
 </body></html>

@@ -5581,6 +5581,22 @@ bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 }
 
 struct rspamd_url *
+rspamd_url_set_get(khash_t(rspamd_url_hash) * set, struct rspamd_url *u)
+{
+	khiter_t k;
+
+	if (set) {
+		k = kh_get(rspamd_url_hash, set, u);
+
+		if (k != kh_end(set)) {
+			return kh_key(set, k);
+		}
+	}
+
+	return NULL;
+}
+
+struct rspamd_url *
 rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
 							 struct rspamd_url *u,
 							 unsigned int max_urls)
