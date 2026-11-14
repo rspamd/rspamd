@@ -1565,6 +1565,26 @@ rspamd_dkim_make_key(const char *keydata,
 
 		key->specific.key_ssl.key_evp = d2i_PUBKEY_bio(key->specific.key_ssl.key_bio, NULL);
 
+		if (key->specific.key_ssl.key_evp == NULL && key->type == RSPAMD_DKIM_KEY_RSA) {
+			/*
+			 * RFC 6376 defines the "rsa" key data as an RSAPublicKey; what is
+			 * published almost everywhere is a SubjectPublicKeyInfo with one
+			 * inside, but the bare form is valid as well
+			 */
+			const unsigned char *der = (const unsigned char *) key->keydata;
+
+			ERR_clear_error();
+			key->specific.key_ssl.key_evp = d2i_PublicKey(EVP_PKEY_RSA, NULL, &der,
+														  key->decoded_len);
+
+			if (key->specific.key_ssl.key_evp != NULL &&
+				der != (const unsigned char *) key->keydata + key->decoded_len) {
+				/* Trailing data: not a key */
+				EVP_PKEY_free(key->specific.key_ssl.key_evp);
+				key->specific.key_ssl.key_evp = NULL;
+			}
+		}
+
 		if (key->specific.key_ssl.key_evp == NULL) {
 			g_set_error(err,
 						DKIM_ERROR,
@@ -1657,6 +1677,40 @@ rspamd_dkim_key_id(rspamd_dkim_key_t *key)
 {
 	if (key) {
 		return key->key_id;
+	}
+
+	return NULL;
+}
+
+enum rspamd_dkim_key_type
+rspamd_dkim_key_get_type(rspamd_dkim_key_t *key)
+{
+	if (key) {
+		return key->type;
+	}
+
+	return RSPAMD_DKIM_KEY_INVALID;
+}
+
+void *
+rspamd_dkim_key_evp(rspamd_dkim_key_t *key)
+{
+	if (key && key->type != RSPAMD_DKIM_KEY_EDDSA) {
+		return key->specific.key_ssl.key_evp;
+	}
+
+	return NULL;
+}
+
+const unsigned char *
+rspamd_dkim_key_eddsa(rspamd_dkim_key_t *key, gsize *len)
+{
+	if (key && key->type == RSPAMD_DKIM_KEY_EDDSA) {
+		if (len) {
+			*len = key->decoded_len;
+		}
+
+		return key->specific.key_eddsa;
 	}
 
 	return NULL;
