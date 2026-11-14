@@ -69,6 +69,9 @@ auto is_textstring(std::string_view in) -> bool;
  */
 auto b64_decode(std::string_view in, bool allow_fws = true) -> std::optional<std::string>;
 
+/* Encode a base64string: the standard alphabet, padded, on one line */
+auto b64_encode(std::string_view in) -> std::string;
+
 /* Split on a single character, keeping empty elements */
 template<typename Func>
 void split_keep_empty(std::string_view in, char delim, Func &&func)
@@ -121,6 +124,12 @@ auto scan_headers(std::string_view block)
  * tolerant address parser, which makes a single address of several ones.
  */
 auto from_is_single_mailbox(std::string_view value) -> bool;
+
+/**
+ * The domain of the only mailbox of a From value as it is written there,
+ * nullopt if the value does not hold just one mailbox
+ */
+auto from_mailbox_domain(std::string_view value) -> std::optional<std::string_view>;
 
 /**
  * Header fields that are not signed (Section 4), as well as Message-Instance

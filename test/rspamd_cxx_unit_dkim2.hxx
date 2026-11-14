@@ -22,6 +22,7 @@
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
 #include "libserver/dkim2.hxx"
+#include "libserver/dkim2_sign.hxx"
 
 #include <optional>
 #include <string>
@@ -1221,6 +1222,237 @@ TEST_SUITE("rspamd_dkim2")
 		CHECK(body_canon_str("foo\r\nbar\r\nbaz") == "foo\r\nbar\r\nbaz\r\n");
 		/* Empty lines in the middle are preserved */
 		CHECK(body_canon_str("foo\r\n\r\nbar\r\n") == "foo\r\n\r\nbar\r\n");
+	}
+
+	TEST_CASE("dkim2 b64_encode")
+	{
+		CHECK(b64_encode("") == "");
+		CHECK(b64_encode("<>") == "PD4=");
+		CHECK(b64_encode("<bounce@example.com>") == DKIM2_TEST_MF);
+		CHECK(b64_encode("<user@example.net>") == DKIM2_TEST_RT);
+		CHECK(b64_encode(std::string_view{"\x00\xff", 2}) == "AP8=");
+
+		/* What is encoded is what the strict decoder takes */
+		for (std::size_t len = 0; len < 70; len++) {
+			std::string data;
+
+			for (std::size_t k = 0; k < len; k++) {
+				data.push_back(static_cast<char>(k * 37 + len));
+			}
+
+			auto mf = parse_sig("i=1; m=1; t=1; d=example.com; mf=" DKIM2_TEST_MF "; rt=" DKIM2_TEST_RT
+								"; s=a:rsa-sha256:" +
+								b64_encode(data));
+
+			if (len == 0) {
+				CHECK(!mf.has_value());
+			}
+			else {
+				REQUIRE(mf.has_value());
+				CHECK(mf->sig_groups[0][0].sig == data);
+			}
+		}
+	}
+
+	TEST_CASE("dkim2 from_mailbox_domain")
+	{
+		CHECK(from_mailbox_domain("alice@example.com") == "example.com");
+		CHECK(from_mailbox_domain("Alice <alice@Example.COM>") == "Example.COM");
+		CHECK(from_mailbox_domain("alice@example.com (a comment @ here)") == "example.com");
+		CHECK(from_mailbox_domain("\"a@b\" <alice@example.com> (x)") == "example.com");
+		CHECK(from_mailbox_domain("alice@[192.0.2.1]") == "[192.0.2.1]");
+		CHECK(!from_mailbox_domain("alice@example.com, bob@example.org").has_value());
+		CHECK(!from_mailbox_domain("nobody").has_value());
+	}
+
+	TEST_CASE("dkim2 tag_list_builder")
+	{
+		tag_list_builder b;
+
+		b.tag("i").text("1");
+		b.tag("d").text("example.com");
+		b.tag("rt").base64(std::string(40, 'A')).text(",").base64(std::string(100, 'B'));
+		b.tag("s").text("sel:rsa-sha256:").base64(std::string(200, 'C'));
+
+		auto flat = b.unfolded();
+		CHECK(flat == "i=1; d=example.com; rt=" + std::string(40, 'A') + "," + std::string(100, 'B') +
+						  "; s=sel:rsa-sha256:" + std::string(200, 'C'));
+
+		auto folded = b.folded("\r\n");
+
+		/* No line is long, and folding is undone by removing the whitespace */
+		std::size_t line_start = 0;
+		while (line_start < folded.size()) {
+			auto line_end = folded.find("\r\n", line_start);
+			auto line = folded.substr(line_start, line_end - line_start);
+			CHECK(line.size() <= 78);
+			if (line_end == std::string::npos) {
+				break;
+			}
+			/* A continuation line starts with whitespace */
+			REQUIRE(line_end + 2 < folded.size());
+			CHECK(folded[line_end + 2] == '\t');
+			line_start = line_end + 2;
+		}
+
+		auto hdrs = scan_headers("X: " + folded + "\r\n");
+		REQUIRE(hdrs.has_value());
+		REQUIRE(hdrs->size() == 1);
+		CHECK(canon_sig_line("x", (*hdrs)[0].value) == canon_sig_line("x", flat));
+
+		/* Text is never split: only base64 strings and tag boundaries fold */
+		CHECK(folded.find("example.com;\r\n") != std::string::npos);
+		CHECK(folded.find("sel:rsa-sha256:C") != std::string::npos);
+		CHECK(b.folded("\n").find('\r') == std::string::npos);
+	}
+
+	TEST_CASE("dkim2 check_originator")
+	{
+		sign_fields_t fields;
+		fields.domain = "example.com";
+		fields.selector = "sel";
+		fields.alg = "ed25519-sha256";
+		fields.mf = "<bounce@mail.example.com>";
+		fields.rt = {"<user@example.net>"};
+		fields.t = 1700000000;
+
+		auto check = [&](std::string_view header) {
+			auto hdrs = scan_headers(header);
+			REQUIRE(hdrs.has_value());
+			return check_originator(*hdrs, fields);
+		};
+
+		CHECK(!check("From: Alice <alice@example.com>\r\nSubject: x\r\n"));
+		/* The signing domain may be a parent or a subdomain of the From domain */
+		CHECK(!check("From: alice@news.example.com\r\n"));
+		fields.domain = "mail.example.com";
+		CHECK(!check("From: alice@example.com\r\n"));
+		fields.domain = "example.com";
+
+		/* The From is not Authentic */
+		CHECK(check("From: alice@example.org\r\n").has_value());
+		CHECK(check("Subject: no from\r\n").has_value());
+		CHECK(check("From: alice@example.com\r\nFrom: bob@example.com\r\n").has_value());
+		CHECK(check("From: alice@example.com, bob@example.com\r\n").has_value());
+		CHECK(check("From: alice@[192.0.2.1]\r\n").has_value());
+
+		/* A U-label in the From is compared as an A-label, if it can be mapped */
+		fields.domain = "xn--gr-zia.org";
+		fields.mf = "<bounce@xn--gr-zia.org>";
+		CHECK(check("From: Arnt <arnt@gr\xc3\xa5.org>\r\n").has_value());
+		{
+			auto hdrs = scan_headers("From: Arnt <arnt@gr\xc3\xa5.org>\r\n");
+			REQUIRE(hdrs.has_value());
+			auto mapper = [](std::string_view dom) -> std::optional<std::string> {
+				if (dom == "gr\xc3\xa5.org") {
+					return "xn--gr-zia.org";
+				}
+				return std::nullopt;
+			};
+			CHECK(!check_originator(*hdrs, fields, mapper));
+			fields.domain = "example.com";
+			fields.mf = "<bounce@example.com>";
+			CHECK(check_originator(*hdrs, fields, mapper).has_value());
+		}
+		fields.mf = "<bounce@mail.example.com>";
+
+		/* Not an original message */
+		CHECK(check("Message-Instance: m=1; h=sha256:AA==:AA==\r\nFrom: alice@example.com\r\n").has_value());
+		CHECK(check("dkim2-signature: i=1\r\nFrom: alice@example.com\r\n").has_value());
+
+		/* d= is neither the MAIL FROM domain nor its parent */
+		fields.mf = "<bounce@example.org>";
+		CHECK(check("From: alice@example.com\r\n").has_value());
+		fields.mf = "<bounce@example.com>";
+		fields.domain = "mail.example.com";
+		CHECK(check("From: alice@example.com\r\n").has_value());
+		/* ... which does not matter for the null reverse-path */
+		fields.mf = "<>";
+		CHECK(!check("From: alice@example.com\r\n"));
+
+		fields.domain = "example.com";
+		fields.rt.clear();
+		CHECK(check("From: alice@example.com\r\n").has_value());
+		fields.rt = {"<user@example.net>"};
+		fields.selector = "bad selector";
+		CHECK(check("From: alice@example.com\r\n").has_value());
+	}
+
+	TEST_CASE("dkim2 sign_message")
+	{
+		sign_fields_t fields;
+		fields.domain = "example.com";
+		fields.selector = "sel";
+		fields.alg = "ed25519-sha256";
+		fields.mf = "<bounce@example.com>";
+		fields.rt = {"<user@example.net>", "<other@example.org>"};
+		fields.t = 1700000000;
+
+		auto hdrs = scan_headers("Received: by mx\r\nFrom: alice@example.com\r\nSubject:  a \t test\r\n");
+		REQUIRE(hdrs.has_value());
+
+		std::string signed_digest;
+		auto res = sign_message(*hdrs, "Hello\r\n\r\n", fields, "\r\n",
+								[&](std::string_view digest) -> std::optional<std::string> {
+									signed_digest = std::string{digest};
+									return std::string(64, '\x5a');
+								});
+		REQUIRE(res.has_value());
+		CHECK(signed_digest.size() == 32);
+
+		/* What is produced is what the verifier parses */
+		auto mi = parse_mi(res->mi_value);
+		REQUIRE(mi.has_value());
+		CHECK(mi->m == 1);
+		REQUIRE(mi->hash_groups.size() == 1);
+		CHECK(mi->hash_groups[0][0].alg == "sha256");
+		CHECK(mi->hash_groups[0][0].header_hash.size() == 32);
+		CHECK(!mi->has_recipe);
+
+		auto sig = parse_sig(res->sig_value);
+		REQUIRE(sig.has_value());
+		CHECK(sig->i == 1);
+		CHECK(sig->m == 1);
+		CHECK(sig->t == 1700000000);
+		CHECK(sig->domain == "example.com");
+		CHECK(sig->mf == "<bounce@example.com>");
+		REQUIRE(sig->rt.size() == 2);
+		CHECK(sig->rt[1] == "<other@example.org>");
+		CHECK(sig->sig_groups[0][0].selector == "sel");
+		CHECK(sig->sig_groups[0][0].alg == "ed25519-sha256");
+		CHECK(sig->sig_groups[0][0].sig == std::string(64, '\x5a'));
+		CHECK(!check_custody(std::vector{*sig}));
+
+		/* The folded forms unfold to the same fields */
+		auto folded = scan_headers("Message-Instance: " + res->mi + "\r\nDKIM2-Signature: " + res->sig + "\r\n");
+		REQUIRE(folded.has_value());
+		REQUIRE(folded->size() == 2);
+		CHECK(canon_sig_line("a", (*folded)[0].value) == canon_sig_line("a", res->mi_value));
+		CHECK(canon_sig_line("a", (*folded)[1].value) == canon_sig_line("a", res->sig_value));
+
+		/* The digest covers the instance and the field with a null signature */
+		auto input = build_sig_input(std::vector{canon_sig_line("Message-Instance", res->mi_value)}, {},
+									 canon_sig_line("DKIM2-Signature", res->sig_value));
+		CHECK(input.find(":ed25519-sha256:\r\n") != std::string::npos);
+		CHECK(input.find(std::string(8, 'W')) == std::string::npos);
+
+		/* Unsigned header fields and trailing empty lines do not change the hashes */
+		auto hdrs2 = scan_headers("X-Added: 1\r\nFrom: alice@example.com\r\nSubject: a test\r\n");
+		REQUIRE(hdrs2.has_value());
+		auto res2 = sign_message(*hdrs2, "Hello\r\n", fields, "\n",
+								 [](std::string_view) -> std::optional<std::string> {
+									 return std::string(64, '\x5a');
+								 });
+		REQUIRE(res2.has_value());
+		CHECK(res2->mi_value == res->mi_value);
+		CHECK(res2->sig.find('\r') == std::string::npos);
+
+		/* A signing failure is an error */
+		CHECK(!sign_message(*hdrs, "Hello\r\n", fields, "\r\n",
+							[](std::string_view) -> std::optional<std::string> {
+								return std::nullopt;
+							})
+				   .has_value());
 	}
 }
 

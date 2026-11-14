@@ -277,6 +277,21 @@ def scenario(name, signer):
     """Returns the message; the SMTP envelope to scan it with is in the tests"""
     now = int(time.time())
 
+    if name in ("idn_from", "idn_unsigned", "idn_foreign"):
+        # An EAI message: the From has a U-label, DKIM2 itself works with A-labels
+        chain = Chain(signer, original())
+        chain.msg.headers = [(n, "Arnt <arnt@gr\u00e5.org>" if n == "From" else v)
+                             for n, v in chain.msg.headers]
+        if name == "idn_unsigned":
+            return chain.msg.render()
+        chain.add_instance()
+        chain.add_signature("xn--gr-zia.org" if name == "idn_from" else "example.com",
+                            mf="<bounce@xn--gr-zia.org>" if name == "idn_from" else "<bounce@example.com>",
+                            rt=["<list@example.net>"])
+        return chain.render()
+    if name == "unsigned":
+        # For the signing tests: Rspamd is the Originator
+        return original().render()
     if name == "simple":
         return originate(signer).render()
     if name == "tampered_body":

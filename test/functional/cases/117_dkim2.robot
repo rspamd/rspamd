@@ -17,6 +17,10 @@ ${ORIG_RCPT}       list@example.net
 ${FWD_FROM}        bounces@lists.example.net
 ${FWD_RCPT}        bob@example.org
 
+# U+00E5 in UTF-8: the HTTP client sends header values as Latin-1 octets,
+# while an MTA passes an SMTPUTF8 envelope to Rspamd in UTF-8
+${UTF8_A_RING}     \xc3\xa5
+
 *** Keywords ***
 Scan DKIM2 Message
   [Documentation]  Signatures carry timestamps, so the messages are made on the fly
@@ -88,6 +92,21 @@ DKIM2 PASS Bounce
 DKIM2 PASS Subdomain Signs For Parent
   Scan DKIM2 Message  subdomain_from  from=bounce@mail.example.com
   Expect Symbol  R_DKIM2_ALLOW
+
+DKIM2 PASS From With U-label
+  [Documentation]  The From domain is compared in its A-label form
+  Scan DKIM2 Message  idn_from  from=bounce@xn--gr-zia.org
+  Expect DKIM2 Result  R_DKIM2_ALLOW  xn--gr-zia.org:i=1:m=1/1
+
+DKIM2 PASS Envelope With U-label
+  [Documentation]  ... and so are the domains of the SMTP envelope
+  Scan DKIM2 Message  idn_from  from=bounce@gr${UTF8_A_RING}.org
+  Expect DKIM2 Result  R_DKIM2_ALLOW  xn--gr-zia.org:i=1:m=1/1
+
+DKIM2 FAIL From With Foreign U-label
+  Scan DKIM2 Message  idn_foreign
+  Expect DKIM2 Result  R_DKIM2_REJECT
+  ...  example.com:i=1:m=1/1:provisional:DKIM2-Signature i=1 matching From is not authentic
 
 DKIM2 FAIL Subdomain Signing Forbidden
   Scan DKIM2 Message  strict_from  from=bounce@mail.strict.example
