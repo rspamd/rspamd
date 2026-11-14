@@ -1616,6 +1616,7 @@ for name in pairs(pushers) do
 end
 
 local opts = rspamd_config:get_all_opt(N)
+require("lua_dynconf").register_static(N, opts)
 if not opts then
   return
 end

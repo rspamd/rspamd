@@ -20,6 +20,7 @@ local ucl = require "ucl"
 local fun = require "fun"
 local lua_util = require "lua_util"
 local rspamd_redis = require "lua_redis"
+local dynconf = require "lua_dynconf"
 local N = "dynamic_conf"
 
 if confighelp then
@@ -242,9 +243,19 @@ if section then
     return
   end
 
-  for k, v in pairs(section) do
-    settings[k] = v
+  -- This plugin is itself the redis dynamic config source: no option is made
+  -- dynamic here (redis_key/redis_watch_interval drive the sync itself)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = section,
+    dynamic = {},
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot register settings: %s, disabling module', dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
   end
+  settings = dyn_settings
 
   rspamd_config:add_on_load(function(_, ev_base, worker)
     if worker:is_scanner() then

@@ -24,6 +24,7 @@ local logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lutil = require "lua_util"
 local lredis = require "lua_redis"
+local dynconf = require "lua_dynconf"
 
 local settings = {
   interval = 60, -- one iteration step per minute
@@ -31,9 +32,11 @@ local settings = {
   epsilon_common = 0.01, -- eliminate common if spam to ham rate is equal to this epsilon
   common_ttl = 10 * 86400, -- TTL of discriminated common elements
   significant_factor = 3.0 / 4.0, -- which tokens should we update
-  classifiers = {},
   cluster_nodes = 0,
 }
+
+-- Derived runtime state (not user options)
+local classifiers = {}
 
 local template = {}
 
@@ -129,7 +132,7 @@ local function check_redis_classifier(cls, cfg)
     logger.debugm(N, rspamd_config, "enabled expiry for classes %s -> %s expiry",
         table.concat(lutil.keys(class_symbols), ', '), expiry)
 
-    table.insert(settings.classifiers, {
+    table.insert(classifiers, {
       class_symbols = class_symbols,
       class_labels = class_labels,
       redis_params = redis_params,
@@ -174,11 +177,17 @@ end
 
 local opts = rspamd_config:get_all_opt(N)
 
-if opts then
-  for k, v in pairs(opts) do
-    settings[k] = v
-  end
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts or false,
+  dynamic = {}, -- everything is consumed at load (script template, periodic interval)
+})
+if not dyn_settings then
+  logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+  lutil.disable_module(N, 'config')
+  return
 end
+settings = dyn_settings
 
 -- In clustered setup, we need to increase interval of expiration
 -- according to number of nodes in a cluster
@@ -555,7 +564,7 @@ rspamd_config:add_on_load(function(_, ev_base, worker)
 
   local unique_redis_params = {}
   -- Push redis script to all unique redis servers
-  for _, cls in ipairs(settings.classifiers) do
+  for _, cls in ipairs(classifiers) do
     if not unique_redis_params[cls.redis_params.hash] then
       unique_redis_params[cls.redis_params.hash] = cls.redis_params
     end
@@ -565,7 +574,7 @@ rspamd_config:add_on_load(function(_, ev_base, worker)
     local script_id = lredis.add_redis_script(lutil.template(expiry_script,
         template), rp)
 
-    for _, cls in ipairs(settings.classifiers) do
+    for _, cls in ipairs(classifiers) do
       if cls.redis_params.hash == h then
         cls.script = script_id
       end
@@ -573,7 +582,7 @@ rspamd_config:add_on_load(function(_, ev_base, worker)
   end
 
   -- Expire tokens at regular intervals
-  for _, cls in ipairs(settings.classifiers) do
+  for _, cls in ipairs(classifiers) do
     rspamd_config:add_periodic(ev_base,
         settings['interval'],
         function()

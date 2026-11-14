@@ -20,8 +20,12 @@ end
 
 -- Module for checking mail list headers
 local N = 'maillist'
-local symbol = 'MAILLIST'
+local settings = {
+  symbol = 'MAILLIST',
+}
 local lua_util = require "lua_util"
+local rspamd_logger = require "rspamd_logger"
+local dynconf = require "lua_dynconf"
 -- EZMLM
 -- Mailing-List: .*run by ezmlm
 -- Precedence: bulk
@@ -203,18 +207,18 @@ local function check_maillist(task)
   local score = check_generic_list_headers(task)
   if score >= 1 then
     if check_ml_ezmlm(task) then
-      task:insert_result(symbol, 1, 'ezmlm')
+      task:insert_result(settings.symbol, 1, 'ezmlm')
     elseif check_ml_mailman(task) then
-      task:insert_result(symbol, 1, 'mailman')
+      task:insert_result(settings.symbol, 1, 'mailman')
     elseif check_ml_googlegroup(task) then
-      task:insert_result(symbol, 1, 'googlegroups')
+      task:insert_result(settings.symbol, 1, 'googlegroups')
     elseif check_ml_cgp(task) then
-      task:insert_result(symbol, 1, 'cgp')
+      task:insert_result(settings.symbol, 1, 'cgp')
     else
       if score > 2 then
         score = 2
       end
-      task:insert_result(symbol, 0.5 * score, 'generic')
+      task:insert_result(settings.symbol, 0.5 * score, 'generic')
     end
   end
 end
@@ -222,12 +226,23 @@ end
 
 
 -- Configuration
-local opts = rspamd_config:get_all_opt('maillist')
+local opts = rspamd_config:get_all_opt(N)
 if opts then
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {},
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+  settings = dyn_settings
+
   if opts['symbol'] then
-    symbol = opts['symbol']
     rspamd_config:register_symbol({
-      name = symbol,
+      name = settings.symbol,
       callback = check_maillist,
       flags = 'nice'
     })

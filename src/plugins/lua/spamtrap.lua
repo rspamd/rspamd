@@ -18,10 +18,12 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local redis_params
+local trap_map -- derived: compiled map object (settings.map keeps the raw definition)
 local use_redis = false;
 local M = 'spamtrap'
 local lua_util = require "lua_util"
 local fun = require "fun"
+local dynconf = require "lua_dynconf"
 
 local settings = {
   symbol = 'SPAMTRAP',
@@ -139,9 +141,9 @@ local function spamtrap_cb(task)
         end
       end, targets)
 
-    elseif settings['map'] then
+    elseif trap_map then
       local function check_map_functor(target)
-        if settings['map']:get_key(target) then
+        if trap_map:get_key(target) then
           return do_action(target)
         end
       end
@@ -165,35 +167,45 @@ local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config,
 check_local = auth_and_local_conf[1]
 check_authed = auth_and_local_conf[2]
 
-if opts then
-  for k, v in pairs(opts) do
-    settings[k] = v
-  end
-  if settings['map'] then
-    settings['map'] = rspamd_config:add_map {
-      url = settings['map'],
-      description = string.format("Spamtrap map for %s", settings['symbol']),
-      type = "regexp"
-    }
-  else
-    redis_params = rspamd_parse_redis_server('spamtrap')
-    if not redis_params then
-      rspamd_logger.errx(
-          rspamd_config, 'no redis servers are specified, disabling module')
-      return
-    end
-    use_redis = true;
-  end
-
-  local id = rspamd_config:register_symbol({
-    name = "SPAMTRAP_CHECK",
-    type = "callback,postfilter",
-    callback = spamtrap_cb
-  })
-  rspamd_config:register_symbol({
-    name = settings['symbol'],
-    parent = id,
-    type = 'virtual',
-    score = settings.score
-  })
+local dyn_settings, dyn_err = dynconf.register(M, {
+  defaults = settings,
+  opts = opts,
+  dynamic = {
+    'learn_fuzzy', 'fuzzy_flag', 'fuzzy_weight', 'learn_spam',
+    'key_prefix', 'allow_multiple_rcpts',
+  },
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'plugin %s is misconfigured: %s', M, dyn_err)
+  lua_util.disable_module(M, 'config')
+  return
 end
+settings = dyn_settings
+
+if settings['map'] then
+  trap_map = rspamd_config:add_map {
+    url = settings['map'],
+    description = string.format("Spamtrap map for %s", settings['symbol']),
+    type = "regexp"
+  }
+else
+  redis_params = rspamd_parse_redis_server('spamtrap')
+  if not redis_params then
+    rspamd_logger.errx(
+        rspamd_config, 'no redis servers are specified, disabling module')
+    return
+  end
+  use_redis = true
+end
+
+local id = rspamd_config:register_symbol({
+  name = "SPAMTRAP_CHECK",
+  type = "callback,postfilter",
+  callback = spamtrap_cb
+})
+rspamd_config:register_symbol({
+  name = settings['symbol'],
+  parent = id,
+  type = 'virtual',
+  score = settings.score
+})

@@ -1457,6 +1457,7 @@ end
 
 -- Configuration
 local opts = rspamd_config:get_all_opt(N)
+require("lua_dynconf").register_static(N, opts)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   lua_util.disable_module(N, "config")

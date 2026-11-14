@@ -19,6 +19,7 @@ local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local lua_redis = require "lua_redis"
 local lua_mime = require "lua_mime"
+local dynconf = require "lua_dynconf"
 
 if confighelp then
   return
@@ -141,6 +142,19 @@ if not opts then
   return
 end
 
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  dynamic = { 'use_milter_headers', 'check_pubkey', 'allow_pubkey_mismatch' },
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot register settings: %s', dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
+end
+settings = dyn_settings
+
+-- Converts maps/sign_condition and overwrites the raw values with derived objects
 dkim_sign_tools.process_signing_settings(N, settings, opts)
 
 if not dkim_sign_tools.validate_signing_settings(settings) then

@@ -26,9 +26,14 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_config = rspamd_config
 local hash = require "rspamd_cryptobox_hash"
 local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 local N = "rspamd_update"
 local rspamd_version = rspamd_version
 local maps = {}
+local settings = {
+  -- rules = nil: string or list of map definitions (required for the module to work)
+  -- key = nil: trusted public key for signed http(s) maps
+}
 local allow_rules = false -- Deny for now
 local global_priority = 1 -- Default for local rules
 
@@ -123,15 +128,25 @@ local function gen_callback()
 end
 
 -- Configuration part
-local section = rspamd_config:get_all_opt("rspamd_update")
-if section and section.rules then
-  local trusted_key
-  if section.key then
-    trusted_key = section.key
+local opts = rspamd_config:get_all_opt(N)
+if opts and opts.rules then
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {},
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
   end
+  settings = dyn_settings
 
-  if type(section.rules) ~= 'table' then
-    section.rules = { section.rules }
+  local trusted_key = settings.key
+
+  local rules = settings.rules
+  if type(rules) ~= 'table' then
+    rules = { rules }
   end
 
   fun.each(function(elt)
@@ -142,7 +157,7 @@ if section and section.rules then
       map:set_callback(gen_callback(map))
       maps['elt'] = map
     end
-  end, section.rules)
+  end, rules)
 
   fun.each(function(k, map)
     -- Check sanity for maps

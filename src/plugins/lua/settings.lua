@@ -1481,6 +1481,7 @@ if redis_sym_names then
 end
 
 local set_section = rspamd_config:get_all_opt("settings")
+require("lua_dynconf").register_static("settings", set_section)
 
 if set_section and set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl

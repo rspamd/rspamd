@@ -32,6 +32,7 @@ local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
 local lua_aliases = require "lua_aliases"
 local fun = require "fun"
+local dynconf = require "lua_dynconf"
 
 local N = "aliases"
 
@@ -525,7 +526,25 @@ end
 -- Module initialization
 local opts = rspamd_config:get_all_opt(N)
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {
+      'max_recursion_depth',
+      'track_chain',
+      'expand_multiple',
+      'enable_gmail_rules',
+      'enable_plus_aliases',
+      'apply_to_smtp',
+      'apply_to_mime',
+    },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+  settings = dyn_settings
 
   if settings.enabled then
     -- Initialize lua_aliases library

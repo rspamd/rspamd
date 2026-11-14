@@ -1724,6 +1724,7 @@ local function check_clickhouse_upstream(upstream, ev_base, cfg)
 end
 
 local opts = rspamd_config:get_all_opt('clickhouse')
+require("lua_dynconf").register_static('clickhouse', opts)
 if opts then
   -- Legacy `limit` options
   if opts.limit and not opts.limits then

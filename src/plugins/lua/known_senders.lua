@@ -25,6 +25,7 @@ local lua_maps = require "lua_maps"
 local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local T = require "lua_shape.core"
 local PluginSchema = require "lua_shape.plugin_schema"
+local dynconf = require "lua_dynconf"
 
 local redis_params
 local settings = {
@@ -47,7 +48,7 @@ local settings = {
   reply_sender_privacy_length = 16,
 }
 
-local settings_schema = lua_redis.enrich_schema({
+local settings_fields = {
   domains = lua_maps.map_schema:optional():doc({ summary = "Map of domains to track senders" }),
   enabled = T.boolean():optional():doc({ summary = "Enable the plugin" }),
   max_senders = T.one_of({
@@ -72,7 +73,11 @@ local settings_schema = lua_redis.enrich_schema({
   reply_sender_privacy_alg = T.string():optional():doc({ summary = "Hash algorithm for sender privacy" }),
   reply_sender_privacy_prefix = T.string():optional():doc({ summary = "Prefix for hashed sender keys" }),
   reply_sender_privacy_length = T.number():optional():doc({ summary = "Length of hashed sender output" }),
-}):doc({ summary = "Known senders plugin configuration" })
+}
+
+local settings_schema = lua_redis.enrich_schema(settings_fields):doc({ summary = "Known senders plugin configuration" })
+-- Redis connection keys are parsed from raw opts; validate only the plugin's own keys (open table)
+local validate_schema = T.table(settings_fields, { open = true })
 
 PluginSchema.register("plugins.known_senders", settings_schema)
 
@@ -377,14 +382,20 @@ end
 
 local opts = rspamd_config:get_all_opt('known_senders')
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
-  local res, err = settings_schema:transform(settings)
-  if not res then
-    rspamd_logger.errx(rspamd_config, 'invalid %s config: %s', N, err)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    schema = validate_schema,
+    dynamic = {
+      'max_senders', 'max_ttl', 'max_recipients',
+    },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'invalid %s config: %s', N, dyn_err)
     lua_util.disable_module(N, "config")
     return
   end
-  settings = res
+  settings = dyn_settings
 
   if not settings.domains then
     rspamd_logger.errx(rspamd_config, '%s requires "domains" map to be defined', N)

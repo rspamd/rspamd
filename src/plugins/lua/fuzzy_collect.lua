@@ -24,12 +24,18 @@ local rspamd_http = require "rspamd_http"
 local rspamd_keypairlib = require "rspamd_cryptobox_keypair"
 local rspamd_cryptolib = require "rspamd_cryptobox"
 local fun = require "fun"
+local dynconf = require "lua_dynconf"
+
+local N = "fuzzy_collect"
 
 local settings = {
   sync_time = 60.0,
   saved_cookie = '',
   timeout = 10.0,
 }
+
+-- Derived runtime object (parsed from settings.sign_keypair), not a setting
+local sign_keypair
 
 local function send_data_mirror(m, cfg, ev_base, body)
   local function store_callback(err, _, _, _)
@@ -73,7 +79,7 @@ local function collect_fuzzy_hashes(cfg, ev_base)
         settings.saved_cookie = tostring(body)
         rspamd_logger.infox(cfg, 'received collection cookie %s',
             tostring(rspamd_util.encode_base32(settings.saved_cookie:sub(1, 6))))
-        local sig = rspamd_cryptolib.sign_memory(settings.sign_keypair,
+        local sig = rspamd_cryptolib.sign_memory(sign_keypair,
             settings.saved_cookie)
         if not sig then
           rspamd_logger.info(cfg, 'cannot sign cookie')
@@ -140,41 +146,55 @@ local function test_mirror_config(k, m)
   return true
 end
 
-local opts = rspamd_config:get_all_opt('fuzzy_collect')
+local opts = rspamd_config:get_all_opt(N)
 
 if opts and type(opts) == 'table' then
-  for k, v in pairs(opts) do
-    settings[k] = v
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = { 'timeout', 'sync_time' },
+    transform = function(t)
+      -- A non-positive sync_time makes the periodic stop for good
+      for _, k in ipairs({ 'timeout', 'sync_time' }) do
+        if type(t[k]) ~= 'number' or t[k] <= 0 then
+          return nil, k .. ' must be a positive number'
+        end
+      end
+      return t
+    end,
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot register settings: %s', dyn_err)
+    return
   end
+  settings = dyn_settings
   local sane_config = true
 
-  if not settings['sign_keypair'] then
+  if not settings.sign_keypair then
     rspamd_logger.errx(rspamd_config, 'sign_keypair is missing')
     sane_config = false
   end
 
-  settings['sign_keypair'] = rspamd_keypairlib.create(settings['sign_keypair'])
-  if not settings['sign_keypair'] then
+  sign_keypair = rspamd_keypairlib.create(settings.sign_keypair)
+  if not sign_keypair then
     rspamd_logger.errx(rspamd_config, 'sign_keypair is invalid')
     sane_config = false
   end
 
-  if not settings['collect_server'] then
+  if not settings.collect_server then
     rspamd_logger.errx(rspamd_config, 'collect_server is missing')
     sane_config = false
   end
 
-  if not settings['collect_pubkey'] then
+  if not settings.collect_pubkey then
     rspamd_logger.errx(rspamd_config, 'collect_pubkey is missing')
     sane_config = false
   end
 
-  if not settings['mirrors'] then
-    rspamd_logger.errx(rspamd_config, 'collect_pubkey is missing')
+  if not settings.mirrors then
+    rspamd_logger.errx(rspamd_config, 'mirrors is missing')
     sane_config = false
-  end
-
-  if not fun.all(test_mirror_config, settings['mirrors']) then
+  elseif not fun.all(test_mirror_config, settings.mirrors) then
     sane_config = false
   end
 

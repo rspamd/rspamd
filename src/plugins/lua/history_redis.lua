@@ -18,6 +18,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local dynconf = require "lua_dynconf"
 local fun = require "fun"
 local ucl = require "ucl"
 local T = require "lua_shape.core"
@@ -42,7 +43,7 @@ local settings = {
   subject_privacy_length = 16, -- cut the length of the hash
 }
 
-local settings_schema = lua_redis.enrich_schema({
+local settings_fields = {
   key_prefix = T.string():doc({ summary = "History key name template" }),
   expire = T.one_of({
     T.number(),
@@ -54,7 +55,11 @@ local settings_schema = lua_redis.enrich_schema({
   subject_privacy_alg = T.string():optional():doc({ summary = "Hash algorithm for subject obfuscation" }),
   subject_privacy_prefix = T.string():optional():doc({ summary = "Prefix for obfuscated subjects" }),
   subject_privacy_length = T.number():optional():doc({ summary = "Hash length for obfuscated subjects" }),
-})
+}
+
+local settings_schema = lua_redis.enrich_schema(settings_fields)
+-- Redis connection keys are parsed from raw opts; validate only the plugin's own keys (open table)
+local validate_schema = T.table(settings_fields, { open = true })
 
 PluginSchema.register("plugins.history_redis", settings_schema)
 
@@ -289,15 +294,22 @@ end
 
 local opts = rspamd_config:get_all_opt('history_redis')
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
-  local res, err = settings_schema:transform(settings)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    schema = validate_schema,
+    dynamic = {
+      'nrows', 'expire', 'subject_privacy', 'subject_privacy_alg',
+      'subject_privacy_prefix', 'subject_privacy_length',
+    },
+  })
 
-  if not res then
-    rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
+  if not dyn_settings then
+    rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
     lua_util.disable_module(N, "config")
     return
   end
-  settings = res
+  settings = dyn_settings
 
   if settings.compress then
     template_env.COMPRESS = '_zst'

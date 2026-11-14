@@ -23,6 +23,7 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local T = require "lua_shape.core"
 local PluginSchema = require "lua_shape.plugin_schema"
+local dynconf = require "lua_dynconf"
 
 local E = {}
 local N = "external_relay"
@@ -283,14 +284,18 @@ end
 
 local opts = rspamd_config:get_all_opt(N)
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
-
-  local ok, schema_err = config_schema:transform(settings)
-  if not ok then
+  local dyn_settings, schema_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    schema = config_schema,
+    dynamic = { 'rules.*.count' },
+  })
+  if not dyn_settings then
     rspamd_logger.errx(rspamd_config, 'config schema error: %s', schema_err)
     lua_util.disable_module(N, "config")
     return
   end
+  settings = dyn_settings
 
   for k, rule in pairs(settings.rules) do
 

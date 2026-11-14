@@ -23,6 +23,7 @@ local rspamd_text = require "rspamd_text"
 local rspamd_http = require "rspamd_http"
 local rspamd_util = require "rspamd_util"
 local PluginSchema = require "lua_shape.plugin_schema"
+local dynconf = require "lua_dynconf"
 
 local settings = {
   s3_bucket = nil,
@@ -34,7 +35,12 @@ local settings = {
   save_raw = true,
   save_structure = false,
   inline_content_limit = nil,
+  fail_action = nil,
+  zstd_compress = nil,
 }
+
+-- Derived runtime object (not a setting)
+local s3_upstreams
 
 local settings_schema = T.table({
   s3_bucket = T.string():doc({ summary = "S3 bucket name" }),
@@ -196,7 +202,7 @@ local function s3_aws_callback(task)
       secret_key = settings.s3_secret_key,
       method = 'PUT',
     }, content)
-    local s3_upstream = settings.upstreams:get_upstream_round_robin()
+    local s3_upstream = s3_upstreams:get_upstream_round_robin()
     if not s3_upstream then
       rspamd_logger.warnx(task,
           'no S3 upstream available for %s; falling back to URL-only connect',
@@ -225,7 +231,7 @@ local function s3_aws_callback(task)
         secret_key = settings.s3_secret_key,
         method = 'PUT',
       }, part_content)
-      local part_upstream = settings.upstreams:get_upstream_round_robin()
+      local part_upstream = s3_upstreams:get_upstream_round_robin()
       if not part_upstream then
         rspamd_logger.warnx(task,
             'no S3 upstream available for part %s; falling back to URL-only connect',
@@ -252,23 +258,27 @@ if not opts then
   return
 end
 
-settings = lua_util.override_defaults(settings, opts)
-local res, err = settings_schema:transform(settings)
+local dyn_settings, err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  schema = settings_schema,
+  dynamic = { 'zstd_compress', 'save_raw', 'save_structure', 'inline_content_limit' },
+})
 
-if not res then
+if not dyn_settings then
   rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
   lua_util.disable_module(N, "config")
   return
 end
 
-rspamd_logger.infox(rspamd_config, 'enabled AWS s3 dump to %s', res.s3_bucket)
+settings = dyn_settings
 
-settings = res
+rspamd_logger.infox(rspamd_config, 'enabled AWS s3 dump to %s', settings.s3_bucket)
 
-settings.upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(),
+s3_upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(),
     string.format('https://%s.%s', settings.s3_bucket, settings.s3_host), rspamd_config)
 
-if not settings.upstreams then
+if not s3_upstreams then
   rspamd_logger.warnx(rspamd_config, 'cannot parse hostname: %s',
       string.format('https://%s.%s', settings.s3_bucket, settings.s3_host))
   lua_util.disable_module(N, "config")

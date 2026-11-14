@@ -35,6 +35,7 @@ local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
 local lua_maps = require "lua_maps"
+local dynconf = require "lua_dynconf"
 
 local N = "mx_check"
 local CRLF = '\r\n'
@@ -1597,7 +1598,30 @@ do
   opts.wait_for_greeting = nil
 end
 
-settings = lua_util.override_defaults(settings, opts)
+-- Only plain values read from `settings` at scan time are dynamic. Symbol
+-- names, key_prefix, test_mode, maps, timeouts feeding the registered budget
+-- and cross-validated options (probe_*, check_*, expire*, max_mx_a_records,
+-- verify_greeting, port: cached verdicts are keyed by IP only)
+-- are load-time only.
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  dynamic = {
+    'reject_null_mx_message',
+    'reject_authorized', 'reject_local',
+    'greylist_invalid', 'greylist_none', 'greylist_broken', 'greylist_refused',
+    'greylist_null', 'greylist_timeout_connect', 'greylist_timeout_read',
+    'greylist_authorized', 'greylist_local',
+    'check_authorized', 'check_local',
+    'prefer_ipv6', 'send_quit',
+  },
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'mx_check: cannot register settings: %s; disabling module', dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
+end
+settings = dyn_settings
 
 redis_params = lua_redis.parse_redis_server('mx_check')
 if not redis_params then

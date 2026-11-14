@@ -24,6 +24,7 @@ local hash = require "rspamd_cryptobox_hash"
 local rspamd_url = require "rspamd_url"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local dynconf = require "lua_dynconf"
 local N = "url_redirector"
 
 -- Coherent browser fingerprint profiles.
@@ -1159,7 +1160,21 @@ end
 
 local opts = rspamd_config:get_all_opt('url_redirector')
 if opts then
-  settings = lua_util.override_defaults(settings, opts)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {
+      'expire', 'error_expire', 'lock_wait', 'nested_limit', 'max_chain_length',
+      'max_urls', 'max_size', 'check_ssl', 'forbid_local', 'top_urls_count',
+      'redirectors_only',
+    },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot load settings: %s', dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+  settings = dyn_settings
 
   -- Pass redis_timeout to lua_redis instead of the symbol budget.
   -- Nested redis{} block needs the override too -- parse_redis_server

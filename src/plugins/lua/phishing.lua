@@ -22,32 +22,33 @@ local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
+local dynconf = require "lua_dynconf"
 
 -- Phishing detection interface for selecting phished urls and inserting corresponding symbol
 --
 --
 local N = 'phishing'
-local symbol = 'PHISHED_URL'
-local mismatch_symbol = 'URL_DISPLAY_MISMATCH'
-local query_symbol = 'PHISHING_QUERY'
-local rewrite_symbol = 'PHISHING_REWRITE_ALLOWED'
-local phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED'
-local generic_service_symbol = 'PHISHED_GENERIC_SERVICE'
 local openphish_symbol = 'PHISHED_OPENPHISH'
 local phishtank_symbol = 'PHISHED_PHISHTANK'
-local generic_service_name = 'generic service'
 local domains = nil
 local phishing_exceptions_maps = {}
 local anchor_exceptions_maps = {}
 local strict_domains_maps = {}
-local phishing_feed_exclusion_map = nil
-local generic_service_map = nil
-local openphish_map = 'https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt'
-local phishtank_suffix = 'phishtank.rspamd.com'
--- Not enabled by default as their feed is quite large
-local openphish_premium = false
--- Published via DNS
-local phishtank_enabled = false
+local settings = {
+  symbol = 'PHISHED_URL',
+  mismatch_symbol = 'URL_DISPLAY_MISMATCH',
+  query_symbol = 'PHISHING_QUERY',
+  rewrite_symbol = 'PHISHING_REWRITE_ALLOWED',
+  phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED',
+  generic_service_symbol = 'PHISHED_GENERIC_SERVICE',
+  generic_service_name = 'generic service',
+  openphish_map = 'https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt',
+  phishtank_suffix = 'phishtank.rspamd.com',
+  -- Not enabled by default as their feed is quite large
+  openphish_premium = false,
+  -- Published via DNS
+  phishtank_enabled = false,
+}
 local phishing_feed_exclusion_hash
 local generic_service_hash
 local openphish_hash
@@ -59,6 +60,31 @@ local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
+end
+
+-- Aliases take precedence over the corresponding map options
+do
+  local aliased = {}
+  for k, v in pairs(opts) do
+    aliased[k] = v
+  end
+  if aliased['generic_service_url'] then
+    aliased['generic_service_map'] = aliased['generic_service_url']
+  end
+  if aliased['openphish_url'] then
+    aliased['openphish_map'] = aliased['openphish_url']
+  end
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = aliased,
+    dynamic = { 'phishtank_enabled', 'phishtank_suffix', 'generic_service_name' },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+    lua_util.disable_module(N, 'config')
+    return
+  end
+  settings = dyn_settings
 end
 
 local maps = {
@@ -344,10 +370,10 @@ local function phishing_cb(task)
       local phishing_data = {}
       phishing_data.url = url
       phishing_data.exclusion_map = phishing_feed_exclusion_data
-      phishing_data.excl_symbol = phishing_feed_exclusion_symbol
+      phishing_data.excl_symbol = settings.phishing_feed_exclusion_symbol
       if generic_service_hash then
         phishing_data.map = generic_service_data
-        phishing_data.phish_symbol = generic_service_symbol
+        phishing_data.phish_symbol = settings.generic_service_symbol
         check_phishing_map(phishing_data)
       end
 
@@ -357,8 +383,8 @@ local function phishing_cb(task)
         check_phishing_map(phishing_data)
       end
 
-      if phishtank_enabled then
-        phishing_data.dns_suffix = phishtank_suffix
+      if settings.phishtank_enabled then
+        phishing_data.dns_suffix = settings.phishtank_suffix
         phishing_data.phish_symbol = phishtank_symbol
         check_phishing_dns(phishing_data)
       end
@@ -402,7 +428,7 @@ local function phishing_cb(task)
         -- Record the parser signal even when an authenticated sender, known
         -- wrapper or resolved redirect makes it harmless for scoring.
         if href_tld and ptld and href_tld ~= ptld then
-          task:insert_result(mismatch_symbol, 1.0, ptld .. '->' .. href_tld)
+          task:insert_result(settings.mismatch_symbol, 1.0, ptld .. '->' .. href_tld)
         end
 
         if not ptld or not tld then
@@ -420,7 +446,7 @@ local function phishing_cb(task)
           if allowed then
             -- Explicit rewrite permissions also apply to strictly protected
             -- displayed domains. Feed checks and the raw mismatch remain.
-            task:insert_result(rewrite_symbol, 1.0, ptld .. '->' .. tld .. ':' .. allowed)
+            task:insert_result(settings.rewrite_symbol, 1.0, ptld .. '->' .. tld .. ':' .. allowed)
             return
           end
         end
@@ -523,11 +549,11 @@ local function phishing_cb(task)
                   -- A matching embedded target is common in legitimate
                   -- wrappers, but the outer server can ignore it entirely.
                   -- Keep this ambiguous case separate from ordinary phishing.
-                  task:insert_result(query_symbol, 1.0, ptld .. '->' .. tld)
+                  task:insert_result(settings.query_symbol, 1.0, ptld .. '->' .. tld)
                 else
                   -- An observed redirect destination takes precedence over
                   -- query parameters that merely claim a destination.
-                  task:insert_result(symbol, weight, ptld .. '->' .. tld)
+                  task:insert_result(settings.symbol, weight, ptld .. '->' .. tld)
                 end
               end
             end
@@ -634,7 +660,7 @@ local function generic_service_plain_cb(string)
 
   generic_service_data = new_data
   rspamd_logger.infox(generic_service_hash, "parsed %s elements from %s feed",
-      nelts, generic_service_name)
+      nelts, settings.generic_service_name)
   pool:destroy()
 end
 
@@ -700,23 +726,19 @@ end
 if opts then
   local id
   if opts['symbol'] then
-    symbol = opts['symbol']
-    mismatch_symbol = opts['mismatch_symbol'] or mismatch_symbol
-    query_symbol = opts['query_symbol'] or query_symbol
-    rewrite_symbol = opts['rewrite_symbol'] or rewrite_symbol
     -- Register symbol's callback
     id = rspamd_config:register_symbol({
-      name = symbol,
+      name = settings.symbol,
       callback = phishing_cb
     })
 
     -- To exclude from domains for dmarc verified messages
-    rspamd_config:register_dependency(symbol, 'DMARC_CHECK')
+    rspamd_config:register_dependency(settings.symbol, 'DMARC_CHECK')
 
     rspamd_config:register_symbol({
       type = 'virtual',
       parent = id,
-      name = mismatch_symbol,
+      name = settings.mismatch_symbol,
       score = 0.0,
       group = N,
     })
@@ -724,7 +746,7 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       parent = id,
-      name = query_symbol,
+      name = settings.query_symbol,
       score = 0.0,
       group = N,
     })
@@ -732,65 +754,34 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       parent = id,
-      name = rewrite_symbol,
+      name = settings.rewrite_symbol,
       score = 0.0,
       group = N,
     })
 
-    if opts['phishing_feed_exclusion_symbol'] then
-      phishing_feed_exclusion_symbol = opts['phishing_feed_exclusion_symbol']
-    end
-    if opts['phishing_feed_exclusion_map'] then
-      phishing_feed_exclusion_map = opts['phishing_feed_exclusion_map']
-    end
-
-    if opts['phishing_feed_exclusion_enabled'] then
+    if settings.phishing_feed_exclusion_enabled then
       phishing_feed_exclusion_hash = rspamd_config:add_map({
         type = 'callback',
-        url = phishing_feed_exclusion_map,
+        url = settings.phishing_feed_exclusion_map,
         callback = phishing_feed_exclusion_plain_cb,
         description = 'Phishing feed exclusions'
       })
     end
 
-    if opts['generic_service_symbol'] then
-      generic_service_symbol = opts['generic_service_symbol']
-    end
-    if opts['generic_service_map'] then
-      generic_service_map = opts['generic_service_map']
-    end
-    if opts['generic_service_url'] then
-      generic_service_map = opts['generic_service_url']
-    end
-    if opts['generic_service_name'] then
-      generic_service_name = opts['generic_service_name']
-    end
-
-    if opts['generic_service_enabled'] then
+    if settings.generic_service_enabled then
       generic_service_hash = rspamd_config:add_map({
         type = 'callback',
-        url = generic_service_map,
+        url = settings.generic_service_map,
         callback = generic_service_plain_cb,
         description = 'Generic feed'
       })
     end
 
-    if opts['openphish_map'] then
-      openphish_map = opts['openphish_map']
-    end
-    if opts['openphish_url'] then
-      openphish_map = opts['openphish_url']
-    end
-
-    if opts['openphish_premium'] then
-      openphish_premium = true
-    end
-
-    if opts['openphish_enabled'] then
-      if not openphish_premium then
+    if settings.openphish_enabled then
+      if not settings.openphish_premium then
         openphish_hash = rspamd_config:add_map({
           type = 'callback',
-          url = openphish_map,
+          url = settings.openphish_map,
           callback = openphish_plain_cb,
           description = 'Open phishing feed map (see https://www.openphish.com for details)',
           opaque_data = true,
@@ -798,7 +789,7 @@ if opts then
       else
         openphish_hash = rspamd_config:add_map({
           type = 'callback',
-          url = openphish_map,
+          url = settings.openphish_map,
           callback = openphish_json_cb,
           opaque_data = true,
           description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
@@ -806,23 +797,16 @@ if opts then
       end
     end
 
-    if opts['phishtank_enabled'] then
-      phishtank_enabled = true
-      if opts['phishtank_suffix'] then
-        phishtank_suffix = opts['phishtank_suffix']
-      end
-    end
-
     rspamd_config:register_symbol({
       type = 'virtual',
       parent = id,
-      name = generic_service_symbol,
+      name = settings.generic_service_symbol,
     })
 
     rspamd_config:register_symbol({
       type = 'virtual',
       parent = id,
-      name = phishing_feed_exclusion_symbol,
+      name = settings.phishing_feed_exclusion_symbol,
     })
 
     rspamd_config:register_symbol({
@@ -837,8 +821,8 @@ if opts then
       name = phishtank_symbol,
     })
   end
-  if opts['domains'] and type(opts['domains']) == 'string' then
-    domains = lua_maps.map_add_from_ucl(opts['domains'], 'set',
+  if settings.domains and type(settings.domains) == 'string' then
+    domains = lua_maps.map_add_from_ucl(settings.domains, 'set',
         'Phishing domains')
   end
   phishing_map('phishing_exceptions', phishing_exceptions_maps, id)

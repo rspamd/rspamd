@@ -23,10 +23,11 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
+local dynconf = require "lua_dynconf"
 
 local N = "whitelist"
 
-local options = {
+local settings = {
   dmarc_allow_symbol = 'DMARC_POLICY_ALLOW',
   spf_allow_symbol = 'R_SPF_ALLOW',
   dkim_allow_symbol = 'R_DKIM_ALLOW',
@@ -137,7 +138,7 @@ local function whitelist_cb(symbol, rule, task)
   local ip_addr = task:get_ip()
 
   if rule.valid_spf then
-    if not task:has_symbol(options['spf_allow_symbol']) then
+    if not task:has_symbol(settings.spf_allow_symbol) then
       -- Not whitelisted
       spf_violated = true
     end
@@ -185,7 +186,7 @@ local function whitelist_cb(symbol, rule, task)
   end
 
   if rule.valid_dmarc then
-    if not task:has_symbol(options.dmarc_allow_symbol) then
+    if not task:has_symbol(settings.dmarc_allow_symbol) then
       dmarc_violated = true
     end
 
@@ -297,8 +298,8 @@ local function whitelist_cb(symbol, rule, task)
   end
 
   if found_bl then
-    if not ((not options.check_authed and task:get_user()) or
-        (not options.check_local and ip_addr and ip_addr:is_local())) then
+    if not ((not settings.check_authed and task:get_user()) or
+        (not settings.check_local and ip_addr and ip_addr:is_local())) then
       add_symbol(true, final_mult)
     else
       if rule.valid_spf or rule.valid_dmarc then
@@ -322,20 +323,31 @@ end
 local configure_whitelist_module = function()
   local opts = rspamd_config:get_all_opt('whitelist')
   if opts then
-    for k, v in pairs(opts) do
-      options[k] = v
+    local dyn_settings, dyn_err = dynconf.register(N, {
+      defaults = settings,
+      opts = opts,
+      -- Symbol names are load-time: the dependencies are registered for the configured one
+      dynamic = {},
+    })
+
+    if not dyn_settings then
+      rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+      lua_util.disable_module(N, "config")
+      return
     end
+
+    settings = dyn_settings
 
     local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
         false, false)
-    options.check_local = auth_and_local_conf[1]
-    options.check_authed = auth_and_local_conf[2]
+    settings.check_local = auth_and_local_conf[1]
+    settings.check_authed = auth_and_local_conf[2]
   else
     rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
     return
   end
 
-  if options['rules'] then
+  if settings.rules then
     fun.each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
@@ -397,19 +409,19 @@ local configure_whitelist_module = function()
         local spf_dep = false
         local dkim_dep = false
         if rule['valid_spf'] then
-          rspamd_config:register_dependency(symbol, options['spf_allow_symbol'])
+          rspamd_config:register_dependency(symbol, settings.spf_allow_symbol)
           spf_dep = true
         end
         if rule['valid_dkim'] then
-          rspamd_config:register_dependency(symbol, options['dkim_allow_symbol'])
+          rspamd_config:register_dependency(symbol, settings.dkim_allow_symbol)
           dkim_dep = true
         end
         if rule['valid_dmarc'] then
           if not spf_dep then
-            rspamd_config:register_dependency(symbol, options['spf_allow_symbol'])
+            rspamd_config:register_dependency(symbol, settings.spf_allow_symbol)
           end
           if not dkim_dep then
-            rspamd_config:register_dependency(symbol, options['dkim_allow_symbol'])
+            rspamd_config:register_dependency(symbol, settings.dkim_allow_symbol)
           end
           rspamd_config:register_dependency(symbol, 'DMARC_CALLBACK')
         end
@@ -429,7 +441,7 @@ local configure_whitelist_module = function()
           end
         end
       end
-    end, options['rules'])
+    end, settings.rules)
   else
     lua_util.disable_module(N, "config")
   end

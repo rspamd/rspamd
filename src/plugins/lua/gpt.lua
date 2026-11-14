@@ -128,6 +128,7 @@ local llm_search_context = require "llm_search_context"
 local lua_maps_expressions = require "lua_maps_expressions"
 local lua_maps = require "lua_maps"
 local lua_selectors = require "lua_selectors"
+local dynconf = require "lua_dynconf"
 
 -- Exclude checks if one of those is found
 local default_symbols_to_except = {
@@ -1334,7 +1335,26 @@ local types_map = {
 local opts = rspamd_config:get_all_opt(N)
 if opts then
   redis_params = lua_redis.parse_redis_server(N, opts)
-  settings = lua_util.override_defaults(settings, opts)
+  -- No schema: most options accept several types (strings, tables, durations, map definitions)
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = {
+      'allow_passthrough',
+      'allow_ham',
+      'autolearn',
+      'consensus_spam_threshold',
+      'consensus_ham_threshold',
+      'min_words',
+      'reply_trim_mode',
+    },
+  })
+  if not dyn_settings then
+    rspamd_logger.errx(rspamd_config, 'cannot configure %s: %s', N, dyn_err)
+    lua_util.disable_module(N, "config")
+    return
+  end
+  settings = dyn_settings
 
   if redis_params then
     cache_context = lua_cache.create_cache_context(redis_params, settings, N)

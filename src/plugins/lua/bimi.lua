@@ -21,6 +21,7 @@ local T = require "lua_shape.core"
 local lua_redis = require "lua_redis"
 local PluginSchema = require "lua_shape.plugin_schema"
 local ucl = require "ucl"
+local dynconf = require "lua_dynconf"
 local lua_mime = require "lua_mime"
 local rspamd_http = require "rspamd_http"
 local rspamd_util = require "rspamd_util"
@@ -35,7 +36,7 @@ local settings = {
 }
 local redis_params
 
-local settings_schema = lua_redis.enrich_schema({
+local settings_fields = {
   helper_url = T.string():doc({ summary = "BIMI helper service URL" }),
   helper_timeout = T.one_of({
     T.number(),
@@ -66,7 +67,11 @@ local settings_schema = lua_redis.enrich_schema({
     T.number(),
     T.transform(T.string(), lua_util.parse_time_interval)
   }):optional():doc({ summary = "Helper read timeout (seconds)" }),
-})
+}
+
+local settings_schema = lua_redis.enrich_schema(settings_fields)
+-- Redis connection keys are parsed from raw opts; validate only bimi's own keys (open table)
+local validate_schema = T.table(settings_fields, { open = true })
 
 PluginSchema.register("plugins.bimi", settings_schema)
 
@@ -384,12 +389,19 @@ if not opts then
   return
 end
 
-settings = lua_util.override_defaults(settings, opts)
-local res, err = settings_schema:transform(settings)
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts,
+  schema = validate_schema,
+  dynamic = {
+    'helper_url', 'helper_sync', 'vmc_only', 'redis_prefix', 'redis_min_expiry',
+    'helper_connect_timeout', 'helper_ssl_timeout', 'helper_write_timeout', 'helper_read_timeout',
+  },
+})
 
-if not res then
-  rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, err)
-  local err_msg = string.format("schema error: %s", res)
+if not dyn_settings then
+  rspamd_logger.warnx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
+  local err_msg = string.format("schema error: %s", dyn_err)
   lua_util.config_utils.push_config_error(N, err_msg)
   lua_util.disable_module(N, "failed", err_msg)
   return
@@ -397,7 +409,7 @@ end
 
 rspamd_logger.infox(rspamd_config, 'enabled BIMI plugin')
 
-settings = res
+settings = dyn_settings
 redis_params = lua_redis.parse_redis_server(N, opts)
 
 if redis_params then

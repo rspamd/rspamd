@@ -19,6 +19,7 @@ local lua_util = require "lua_util"
 local rspamd_spf = require "rspamd_spf"
 local bit = require "bit"
 local rspamd_logger = require "rspamd_logger"
+local dynconf = require "lua_dynconf"
 
 if confighelp then
   rspamd_config:add_example(nil, N,
@@ -51,18 +52,7 @@ spf {
   return
 end
 
-local symbols = {
-  fail = "R_SPF_FAIL",
-  softfail = "R_SPF_SOFTFAIL",
-  neutral = "R_SPF_NEUTRAL",
-  allow = "R_SPF_ALLOW",
-  dnsfail = "R_SPF_DNSFAIL",
-  permfail = "R_SPF_PERMFAIL",
-  na = "R_SPF_NA",
-  plusall = "R_SPF_PLUSALL",
-}
-
-local default_config = {
+local settings = {
   spf_cache_size = 2048,
   max_dns_nesting = 10,
   max_dns_requests = 30,
@@ -70,36 +60,53 @@ local default_config = {
   whitelist = nil,
   min_cache_ttl = 60 * 5,
   disable_ipv6 = false,
-  symbols = symbols,
+  symbols = {
+    fail = "R_SPF_FAIL",
+    softfail = "R_SPF_SOFTFAIL",
+    neutral = "R_SPF_NEUTRAL",
+    allow = "R_SPF_ALLOW",
+    dnsfail = "R_SPF_DNSFAIL",
+    permfail = "R_SPF_PERMFAIL",
+    na = "R_SPF_NA",
+    plusall = "R_SPF_PLUSALL",
+  },
   external_relay = nil,
 }
 
-local local_config = rspamd_config:get_all_opt('spf')
+local opts = rspamd_config:get_all_opt(N)
 local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
     false, false)
 
-if local_config then
-  local_config = lua_util.override_defaults(default_config, local_config)
-else
-  local_config = default_config
+-- No schema: options such as whitelist/external_relay accept several types (map definitions).
+-- Nothing is dynamic: symbol names are registered once and the rest is consumed at load.
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts or false,
+  dynamic = {},
+})
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'cannot register settings for %s: %s', N, dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
 end
+settings = dyn_settings
 
 local function spf_check_callback(task)
 
   local ip
 
-  if local_config.external_relay then
+  if settings.external_relay then
     -- Search received headers to get header produced by an external relay
     local rh = task:get_received_headers() or {}
     local found = false
 
     for i, hdr in ipairs(rh) do
-      if hdr.real_ip and local_config.external_relay:get_key(hdr.real_ip) then
+      if hdr.real_ip and settings.external_relay:get_key(hdr.real_ip) then
         -- We can use the next header as a source of IP address
         if rh[i + 1] then
           local nhdr = rh[i + 1]
           lua_util.debugm(N, task, 'found external relay %s at received header number %s -> %s',
-              local_config.external_relay, i, nhdr.real_ip)
+              settings.external_relay, i, nhdr.real_ip)
 
           if nhdr.real_ip then
             ip = nhdr.real_ip
@@ -131,16 +138,16 @@ local function spf_check_callback(task)
   local function flag_to_symbol(fl)
     if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then
       publish_result('temperror')
-      return local_config.symbols.dnsfail
+      return settings.symbols.dnsfail
     elseif bit.band(fl, rspamd_spf.flags.plusall) ~= 0 then
       publish_result('pass')
-      return local_config.symbols.plusall
+      return settings.symbols.plusall
     elseif bit.band(fl, rspamd_spf.flags.perm_fail) ~= 0 then
       publish_result('permerror')
-      return local_config.symbols.permfail
+      return settings.symbols.permfail
     elseif bit.band(fl, rspamd_spf.flags.na) ~= 0 then
       publish_result('none')
-      return local_config.symbols.na
+      return settings.symbols.na
     end
 
     return 'SPF_UNKNOWN'
@@ -149,16 +156,16 @@ local function spf_check_callback(task)
   local function policy_decode(res)
     if res == rspamd_spf.policy.fail then
       publish_result('fail')
-      return local_config.symbols.fail, '-'
+      return settings.symbols.fail, '-'
     elseif res == rspamd_spf.policy.pass then
       publish_result('pass')
-      return local_config.symbols.allow, '+'
+      return settings.symbols.allow, '+'
     elseif res == rspamd_spf.policy.soft_fail then
       publish_result('softfail')
-      return local_config.symbols.softfail, '~'
+      return settings.symbols.softfail, '~'
     elseif res == rspamd_spf.policy.neutral then
       publish_result('neutral')
-      return local_config.symbols.neutral, '?'
+      return settings.symbols.neutral, '?'
     end
 
     return 'SPF_UNKNOWN', '?'
@@ -199,7 +206,7 @@ local function spf_check_callback(task)
   end
 
   if ip then
-    if local_config.whitelist and ip and local_config.whitelist:get_key(ip) then
+    if settings.whitelist and ip and settings.whitelist:get_key(ip) then
       rspamd_logger.infox(task, 'whitelisted SPF checks from %s',
           tostring(ip))
       return
@@ -226,7 +233,7 @@ local function spf_check_callback(task)
 end
 
 -- Register all symbols and init rspamd_spf library
-rspamd_spf.config(local_config)
+rspamd_spf.config(settings)
 local sym_id = rspamd_config:register_symbol {
   name = 'SPF_CHECK',
   type = 'callback',
@@ -240,21 +247,21 @@ local sym_id = rspamd_config:register_symbol {
   augmentations = { string.format("timeout=%f", rspamd_config:get_dns_timeout() * 4 or 0.0) },
 }
 
-if local_config.whitelist then
+if settings.whitelist then
   local lua_maps = require "lua_maps"
 
-  local_config.whitelist = lua_maps.map_add_from_ucl(local_config.whitelist,
+  settings.whitelist = lua_maps.map_add_from_ucl(settings.whitelist,
       "radix", "SPF whitelist map")
 end
 
-if local_config.external_relay then
+if settings.external_relay then
   local lua_maps = require "lua_maps"
 
-  local_config.external_relay = lua_maps.map_add_from_ucl(local_config.external_relay,
+  settings.external_relay = lua_maps.map_add_from_ucl(settings.external_relay,
       "radix", "External IP SPF map")
 end
 
-for _, sym in pairs(local_config.symbols) do
+for _, sym in pairs(settings.symbols) do
   rspamd_config:register_symbol {
     name = sym,
     type = 'virtual',

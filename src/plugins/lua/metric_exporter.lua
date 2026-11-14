@@ -24,11 +24,15 @@ local mempool = require "rspamd_mempool"
 local util = require "rspamd_util"
 local tcp = require "rspamd_tcp"
 local lua_util = require "lua_util"
+local dynconf = require "lua_dynconf"
 
 local pool
 local settings = {
   interval = 120,
   timeout = 15,
+  host = 'localhost',
+  port = 2003,
+  metric_prefix = 'rspamd',
   statefile = string.format('%s/%s', rspamd_paths['DBDIR'], 'metric_exporter_last_push')
 }
 
@@ -82,20 +86,7 @@ local function validate_metrics(settings_metrics)
   return true
 end
 
-local function load_defaults(defaults)
-  for k, v in pairs(defaults) do
-    if settings[k] == nil then
-      settings[k] = v
-    end
-  end
-end
-
 local function graphite_config()
-  load_defaults({
-    host = 'localhost',
-    port = 2003,
-    metric_prefix = 'rspamd'
-  })
   return validate_metrics(settings['metrics'])
 end
 
@@ -159,9 +150,16 @@ local function configure_metric_exporter()
     logger.errx(rspamd_config, 'Backend is invalid: ' .. be)
     return false
   end
-  for k, v in pairs(opts) do
-    settings[k] = v
+  local dyn_settings, dyn_err = dynconf.register(N, {
+    defaults = settings,
+    opts = opts,
+    dynamic = { 'host', 'port', 'timeout', 'metric_prefix' },
+  })
+  if not dyn_settings then
+    logger.errx(rspamd_config, 'cannot register settings: %s', dyn_err)
+    return false
   end
+  settings = dyn_settings
   return backends[be]['configure']()
 end
 

@@ -32,6 +32,7 @@ local redis_params
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local lua_redis = require "lua_redis"
+local dynconf = require "lua_dynconf"
 local N = "maps_stats"
 
 local settings = {
@@ -98,11 +99,19 @@ end
 
 local opts = rspamd_config:get_all_opt(N)
 
-if opts then
-  for k, v in pairs(opts) do
-    settings[k] = v
-  end
+local dyn_settings, dyn_err = dynconf.register(N, {
+  defaults = settings,
+  opts = opts or false,
+  dynamic = { 'count' },
+})
+
+if not dyn_settings then
+  rspamd_logger.errx(rspamd_config, 'plugin %s is misconfigured: %s', N, dyn_err)
+  lua_util.disable_module(N, 'config')
+  return
 end
+
+settings = dyn_settings
 
 redis_params = lua_redis.parse_redis_server(N, opts)
 -- XXX, this is a poor approach as not all maps are defined here...

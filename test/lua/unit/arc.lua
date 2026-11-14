@@ -129,6 +129,9 @@ context('ARC seal completion', function()
         end,
       } },
     }, { __index = _G })
+    -- The dynconf registry keeps its state per process, every load needs a fresh one
+    package.loaded['lua_dynconf'] = nil
+    package.loaded['lua_dynconf.redis'] = nil
     local plugin = lua_util.join_path(rspamd_paths.PLUGINSDIR, 'arc.lua')
     assert(compat_env.loadfile(plugin, 't', env))()
     assert(check, 'ARC_CHECK must be registered')
