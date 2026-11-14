@@ -18,6 +18,7 @@
 #include "libutil/expression.h"
 #include "src/libserver/composites/composites.h"
 #include "libserver/cfg_file_private.h"
+#include "libserver/cfg_dynamic.h"
 #include "libmime/lang_detection.h"
 #include "libserver/re_cache.h"
 #include "lua/lua_map.h"
@@ -754,6 +755,36 @@ end)
 LUA_FUNCTION_DEF(config, add_on_load);
 
 /***
+ * @method rspamd_config:dynconf_arm(next_check, [function(cfg, ev_base) ... end])
+ * Arms or disarms the per-task trigger of the dynamic configuration registry.
+ * When armed, the first task that starts after `next_check` calls the function
+ * once (in the main Lua state, not in a coroutine, so it must not yield or wait:
+ * it should start an asynchronous check and return). Rspamd postpones the trigger by one second
+ * before the call; the function is expected to call `dynconf_arm` again to schedule the next call.
+ * This is a part of the internal API of `lua_dynconf`.
+ * @param {number} next_check absolute time (as `rspamd_util.get_time()`), `0` disarms the trigger
+ * @param {function} fn the function to call; if omitted, the function that was set before is kept
+ */
+LUA_FUNCTION_DEF(config, dynconf_arm);
+
+/***
+ * @method rspamd_config:dynconf_notify(module, values)
+ * Delivers the effective values of the dynamic options of a C module to its subscriber
+ * (see `rspamd_dynconf_register_module`). This is a part of the internal API of `lua_dynconf`.
+ * @param {string} module module name
+ * @param {table} values nested table with the effective values of the dynamic paths
+ * @return {boolean,string} `true` if the subscriber accepted the values, `false` and an error otherwise
+ */
+LUA_FUNCTION_DEF(config, dynconf_notify);
+
+/***
+ * @method rspamd_config:dynconf_bump_generation()
+ * Increases the dynamic configuration generation counter that is visible for C code.
+ * This is a part of the internal API of `lua_dynconf`.
+ */
+LUA_FUNCTION_DEF(config, dynconf_bump_generation);
+
+/***
  * @method rspamd_config:add_periodic(event_base, timeout, function(cfg, ev_base) ... end, [jitter = false])
  * Registers function to be periodically executed by Rspamd
  * @param {ev_base} event_base event base that is needed for async events
@@ -1115,6 +1146,9 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, register_worker_script),
 	LUA_INTERFACE_DEF(config, register_re_selector),
 	LUA_INTERFACE_DEF(config, add_on_load),
+	LUA_INTERFACE_DEF(config, dynconf_arm),
+	LUA_INTERFACE_DEF(config, dynconf_notify),
+	LUA_INTERFACE_DEF(config, dynconf_bump_generation),
 	LUA_INTERFACE_DEF(config, add_periodic),
 	LUA_INTERFACE_DEF(config, add_post_init),
 	LUA_INTERFACE_DEF(config, add_config_unload),
@@ -3857,6 +3891,90 @@ lua_config_add_on_load(lua_State *L)
 	lua_pushvalue(L, 2);
 	sc->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 	DL_APPEND(cfg->on_load_scripts, sc);
+
+	return 0;
+}
+
+static int
+lua_config_dynconf_arm(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	double when;
+	int cbref = LUA_NOREF;
+
+	if (cfg == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	when = luaL_checknumber(L, 2);
+
+	if (lua_type(L, 3) == LUA_TFUNCTION) {
+		lua_pushvalue(L, 3);
+		cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+	}
+	else if (!lua_isnoneornil(L, 3)) {
+		return luaL_error(L, "invalid arguments: function expected");
+	}
+
+	/* The reference is owned by the dynconf state from now on */
+	rspamd_dynconf_set_next_check(cfg, when, cbref);
+
+	return 0;
+}
+
+static int
+lua_config_dynconf_notify(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+	const char *module = luaL_checkstring(L, 2);
+	ucl_object_t *values;
+	GError *err = NULL;
+	gboolean ret;
+
+	if (cfg == NULL || module == NULL || lua_type(L, 3) != LUA_TTABLE) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	values = ucl_object_lua_import(L, 3);
+
+	if (values == NULL) {
+		lua_pushboolean(L, false);
+		lua_pushstring(L, "cannot convert values to UCL");
+
+		return 2;
+	}
+
+	ret = rspamd_dynconf_notify(cfg, module, values, &err);
+	ucl_object_unref(values);
+
+	lua_pushboolean(L, ret);
+
+	if (!ret) {
+		lua_pushstring(L, err ? err->message : "unknown error");
+
+		if (err) {
+			g_error_free(err);
+		}
+
+		return 2;
+	}
+
+	return 1;
+}
+
+static int
+lua_config_dynconf_bump_generation(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	rspamd_dynconf_bump_generation(cfg);
 
 	return 0;
 }

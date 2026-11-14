@@ -529,6 +529,10 @@ struct rspamd_config {
 	struct rspamd_tokenizer_manager *tokenizer_manager; /**< custom tokenizer manager						*/
 	struct rspamd_worker *cur_worker;                   /**< set dynamically by each worker							*/
 
+	void *dynconf_ctx;       /**< dynamic configuration state (see cfg_dynamic.h)		*/
+	double dyn_next_check;   /**< dynconf: absolute time of the next check, 0 if disarmed	*/
+	uint64_t dyn_generation; /**< dynconf: bumped on every applied dynamic change		*/
+
 	ref_entry_t ref; /**< reference counter									*/
 };
 

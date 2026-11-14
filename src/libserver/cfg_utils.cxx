@@ -27,6 +27,7 @@
 #include "maps/map_helpers.h"
 #include "maps/map_private.h"
 #include "dynamic_cfg.h"
+#include "cfg_dynamic.h"
 #include "utlist.h"
 #include "stat_api.h"
 #include "unix-std.h"
@@ -403,6 +404,9 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	{
 		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
 	}
+
+	/* Dynamic configuration state (holds a Lua ref) */
+	rspamd_dynconf_free(cfg);
 
 	DL_FOREACH_SAFE(cfg->config_unload_scripts, sc, sctmp)
 	{
