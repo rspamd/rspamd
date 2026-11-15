@@ -129,6 +129,58 @@ CAPPED RESOLVE IP MERGE KEEPS PREFIXED SYMBOL
   Expect Symbol With Exact Options  MFB_CODE_2  1.2.3.4:same-budget.com:selector
   Do Not Expect Symbol  RB_MERGE_PFX_LIMIT
 
+# The final query is the same as the direct one and is merged into it: the
+# symbol is scored once, whether the merge happens while the query is in flight
+# or after its answer. Fake answers come in no fixed order, so this one gets
+# either; the next test always has the answer first
+CAPPED RESOLVE IP MERGE SCORES THE QUERY ONCE
+  Scan With Rule  RB_SCORE_CAP
+  Expect Symbol With Score And Exact Options  RB_SCORE_CAP  1.0  1.2.3.4:from
+  ...  1.2.3.4:same-budget.com:selector
+  Do Not Expect Symbol  RB_SCORE_CAP_LIMIT
+
+# A lookup that no fake record answers has to wait for the nameserver, where
+# nothing answers, and times out: the final queries are built after the
+# direct query was answered
+CAPPED RESOLVE IP MERGE AFTER THE ANSWER SCORES THE QUERY ONCE
+  Scan With Rule  RB_SCORE_LATE
+  Expect Symbol With Score And Exact Options  RB_SCORE_LATE  1.0  1.2.3.4:from
+  ...  1.2.3.4:same-budget.com:same
+  Do Not Expect Symbol  RB_SCORE_LATE_LIMIT
+
+# The merged part belongs to another symbol than the one the answer inserted:
+# that one is inserted as it would be in flight
+CAPPED RESOLVE IP LATE MERGE INSERTS A SYMBOL THE ANSWER DID NOT
+  Scan With Rule  RB_LATE_PFX_CHECK
+  Expect Symbol With Score And Exact Options  LATEA_CODE_2  1.0  1.2.3.4:from
+  Expect Symbol With Score And Exact Options  LATEB_CODE_2  1.0  1.2.3.4:same-budget.com:same
+  Do Not Expect Symbol  RB_LATE_PFX_LIMIT
+
+# Two resolved addresses give one query name: it takes one slot and reports
+# both origins. Counted per address, cap 2 would drop one of them
+CAPPED RESOLVE IP FOLDS FINAL QUERIES WITH ONE NAME
+  Scan With Rule  RB_FOLD2
+  Expect Symbol With Exact Options  RB_FOLD2
+  ...  127.0.0.2:multi-budget.com:selector  127.0.0.3:multi-budget.com:selector
+  Do Not Expect Symbol  RB_FOLD2_LIMIT
+
+# A (1), the shared name (1) and the other name (1). With the shared name
+# charged twice the other one would not fit
+CAPPED RESOLVE IP SENDS A FOLDED QUERY ONCE
+  Scan With Rule  RB_FOLD3
+  Expect Symbol With Exact Options  RB_FOLD3
+  ...  127.0.0.2:multi-budget.com:selector  127.0.0.3:multi-budget.com:selector
+  ...  127.0.0.4:multi-budget.com:selector
+  Do Not Expect Symbol  RB_FOLD3_LIMIT
+
+# A (1) and the other name (1): the shared name does not fit and counts as
+# one dropped request, though two addresses map to it
+CAPPED RESOLVE IP COUNTS A DROPPED FOLDED QUERY ONCE
+  Scan With Rule  RB_FOLDDROP
+  Expect Symbol With Exact Options  RB_FOLDDROP
+  ...  127.0.0.4:multi-budget.com:selector
+  Expect Symbol With Exact Options  RB_FOLDDROP_LIMIT  dropped:1
+
 # resolve_ip, uncapped: A and AAAA for the name, then three final queries
 RESOLVE IP WITHOUT LIMIT
   Scan With Rule  RB_RES_NOLIMIT
