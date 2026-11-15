@@ -1901,12 +1901,12 @@ lua_task_set_message(lua_State *L)
 			if (lua_type(L, 2) == LUA_TSTRING) {
 				const char *s;
 
-				s = lua_tolstring(L, -1, &final_len);
+				s = lua_tolstring(L, 2, &final_len);
 				buf = rspamd_mempool_alloc(task->task_pool, final_len);
 				memcpy(buf, s, final_len);
 			}
 			else {
-				t = lua_check_text(L, -1);
+				t = lua_check_text(L, 2);
 
 				if (t) {
 					final_len = t->len;
@@ -2351,9 +2351,11 @@ lua_task_insert_result_common(lua_State *L, struct rspamd_scan_result *result,
 															  t->len);
 							}
 							else {
+								const char *tname = lua_typename(L, lua_type(L, -1));
+
 								return luaL_error(L, "not rspamd_text option in a table "
 													 "when adding symbol  %s: %s type",
-												  s->name);
+												  s->name, tname);
 							}
 						}
 						else {
@@ -7625,6 +7627,7 @@ lua_task_disable_action(lua_State *L)
 	action_name = luaL_checkstring(L, 2);
 
 	if (task && action_name) {
+		bool found = false;
 
 		for (unsigned int i = 0; i < task->result->nactions; i++) {
 			action_res = &task->result->actions_config[i];
@@ -7638,8 +7641,13 @@ lua_task_disable_action(lua_State *L)
 					lua_pushboolean(L, true);
 				}
 
+				found = true;
 				break;
 			}
+		}
+
+		if (!found) {
+			lua_pushboolean(L, false);
 		}
 	}
 	else {
@@ -8641,6 +8649,9 @@ lua_task_timer_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 			ev_timer_set(&cbdata->ev, lua_tonumber(L, -1), 0.0);
 		}
 	}
+
+	/* Drop the traceback handler and the result/error */
+	lua_settop(L, err_idx - 1);
 
 	if (schedule_more) {
 		/*

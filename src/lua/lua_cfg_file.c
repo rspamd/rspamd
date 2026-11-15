@@ -33,6 +33,7 @@ lua_process_metric(lua_State *L, const char *name, struct rspamd_config *cfg)
 	/* Now iterate through module table */
 	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 		/* key - -2, value - -1 */
+		desc = NULL;
 		symbol = rspamd_mempool_strdup(cfg->cfg_pool, luaL_checkstring(L, -2));
 		if (symbol != NULL) {
 			if (lua_istable(L, -1)) {
@@ -45,6 +46,7 @@ lua_process_metric(lua_State *L, const char *name, struct rspamd_config *cfg)
 				}
 				else {
 					msg_warn_config("cannot get weight of symbol: %s", symbol);
+					lua_pop(L, 1); /* weight */
 					continue;
 				}
 				lua_pop(L, 1);

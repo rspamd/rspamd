@@ -407,7 +407,8 @@ void rspamd_lua_set_path(lua_State *L, const ucl_object_t *cfg_obj, GHashTable *
 	lua_pushstring(L, path_buf);
 	lua_setfield(L, -2, "cpath");
 
-	lua_pop(L, 1);
+	/* Both `package` tables (the first one is left from the path part) */
+	lua_pop(L, 2);
 }
 
 static int
@@ -841,6 +842,9 @@ rspamd_lua_set_env(lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 
 			for (int i = 0; i < lim; i++) {
 				if (!rspamd_lua_load_env(L, lua_env[i], lua_gettop(L), err)) {
+					lua_settop(L, orig_top);
+					g_strfreev(env);
+
 					return FALSE;
 				}
 			}
@@ -2213,6 +2217,13 @@ lua_check_ev_base(lua_State *L, int pos)
 
 static void rspamd_lua_run_postloads_error(struct thread_entry *thread, int ret, const char *msg);
 
+static void
+rspamd_lua_run_postloads_done(struct thread_entry *thread, int ret)
+{
+	/* Drop the script return values before the thread goes back to the pool */
+	lua_settop(thread->lua_state, 0);
+}
+
 void rspamd_lua_run_postloads(lua_State *L, struct rspamd_config *cfg,
 							  struct ev_loop *ev_base, struct rspamd_worker *w)
 {
@@ -2226,6 +2237,7 @@ void rspamd_lua_run_postloads(lua_State *L, struct rspamd_config *cfg,
 	{
 		struct thread_entry *thread = lua_thread_pool_get_for_config(cfg);
 		thread->error_callback = rspamd_lua_run_postloads_error;
+		thread->finish_callback = rspamd_lua_run_postloads_done;
 		L = thread->lua_state;
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, sc->cbref);
@@ -2471,7 +2483,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 	/* Obtain function */
 	if (!rspamd_lua_require_function(L, "lua_redis", "try_load_redis_servers")) {
 		msg_err_config("cannot require lua_redis");
-		lua_pop(L, 2);
+		lua_settop(L, err_idx - 1);
 
 		return FALSE;
 	}
@@ -2486,7 +2498,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 	if (lua_pcall(L, 3, 1, err_idx) != 0) {
 		msg_err_config("cannot call lua try_load_redis_servers script: %s",
 					   lua_tostring(L, -1));
-		lua_settop(L, 0);
+		lua_settop(L, err_idx - 1);
 
 		return FALSE;
 	}
@@ -2496,7 +2508,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 			/* Ref table */
 			lua_pushvalue(L, -1);
 			*ref_id = luaL_ref(L, LUA_REGISTRYINDEX);
-			lua_settop(L, 0);
+			lua_settop(L, err_idx - 1);
 		}
 		else {
 			/* Leave it on the stack */
@@ -2507,7 +2519,7 @@ rspamd_lua_try_load_redis(lua_State *L, const ucl_object_t *obj,
 		return TRUE;
 	}
 	else {
-		lua_settop(L, 0);
+		lua_settop(L, err_idx - 1);
 	}
 
 	return FALSE;
