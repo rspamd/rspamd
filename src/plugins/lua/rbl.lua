@@ -111,6 +111,10 @@ local function maybe_make_hash(data, rule)
     if rule.hash_format then
       if rule.hash_format == 'base32' then
         s = h:base32()
+      elseif rule.hash_format == 'rbase32' then
+        -- RFC 4648 alphabet, no '=' padding (the encoder never emits it);
+        -- the name is lowercased like any other DNS name, see fold_case
+        s = h:base32('rfc')
       elseif rule.hash_format == 'base64' then
         s = h:base64()
       else
@@ -128,6 +132,90 @@ local function maybe_make_hash(data, rule)
   else
     return data
   end
+end
+
+-- Ordering of requests when `max_dns_requests` truncates the work: lower rank
+-- is submitted first. Keys are the check labels used by add_dns_request;
+-- every named selector shares one class and is ordered by its name inside it
+local check_ranks = {
+  from = 1,
+  received = 2,
+  rdns = 3,
+  helo = 4,
+  dkim = 5,
+  replyto = 6,
+  email = 7,
+  url = 8, -- urls, content_urls, numeric_urls and images all use this label
+}
+local SELECTOR_RANK = 100
+local UNKNOWN_RANK = 99
+
+-- Keep the best (lowest, then lexicographically smallest selector name) rank
+local function merge_rank(dst, rank, sel_name)
+  if not rank then
+    return
+  end
+  if not dst.rank or rank < dst.rank or
+      (rank == dst.rank and sel_name and (not dst.sel_name or sel_name < dst.sel_name)) then
+    dst.rank = rank
+    dst.sel_name = sel_name
+  end
+end
+
+-- Merge the labels, origins, forced flag and rank of `req` into `dst`.
+-- With `want_delta` returns what was new to `dst` (and whether any origin
+-- was), in the shape of a request
+local function merge_request(dst, req, want_delta)
+  local delta, has_delta
+  if want_delta then
+    delta = { what = {}, origins = {} }
+    has_delta = false
+  end
+  for label in pairs(req.what) do
+    if not dst.what[label] then
+      dst.what[label] = true
+      if delta then
+        delta.what[label] = true
+      end
+    end
+  end
+  for origin, labels in pairs(req.origins) do
+    local dst_labels = dst.origins[origin]
+    if not dst_labels then
+      dst_labels = {}
+      dst.origins[origin] = dst_labels
+    end
+    for label in pairs(labels) do
+      if not dst_labels[label] then
+        dst_labels[label] = true
+        if delta then
+          delta.origins[origin] = delta.origins[origin] or {}
+          delta.origins[origin][label] = true
+          has_delta = true
+        end
+      end
+    end
+  end
+  if req.forced and not dst.forced then
+    dst.forced = true
+  end
+  merge_rank(dst, req.rank, req.sel_name)
+  return delta, has_delta
+end
+
+-- Total order independent of table iteration order
+local function request_less(a, b)
+  if a.rank ~= b.rank then
+    return a.rank < b.rank
+  end
+  local sa, sb = a.sel_name or '', b.sel_name or ''
+  if sa ~= sb then
+    return sa < sb
+  end
+  if a.n ~= b.n then
+    return a.n < b.n
+  end
+  return (a.resolve_ip and 1 or 0) < (b.resolve_ip and 1 or 0)
 end
 
 -- Only the one legal root dot goes, so a malformed "name.." stays invalid
@@ -271,7 +359,10 @@ matchers.glob = function(_, to_match, _, map)
   return map and map:get_key(to_match) or false
 end
 
-local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
+-- `late_req` (optional): the already submitted request this call merges into,
+-- after its answer was processed; `resolve_table_elt` then only carries the
+-- part that is new
+local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match, late_req)
   local function make_option(origin, ip, label)
     if ip then
       return string.format('%s:%s:%s',
@@ -287,6 +378,36 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
 
   -- merge_checks false restores the pre-4.2.3 one-insertion-per-check behavior
   local merge_checks = rbl.merge_checks ~= false
+
+  -- Symbols that were inserted when the answer was processed first: a late
+  -- merge must not score them again, so the outcome does not depend on
+  -- whether the answer or the merge came first. Only requests with a budget
+  -- keep the record (they are the only ones merged into later)
+  local record = late_req or (resolve_table_elt.answer and resolve_table_elt)
+  local prior
+  if late_req and late_req.inserted then
+    prior = {}
+    for k in pairs(late_req.inserted) do
+      prior[k] = true
+    end
+  end
+
+  -- One merged insertion with all the options of a symbol
+  local function insert_merged(sym_name, options)
+    if prior and prior[sym_name] then
+      -- Options only: NaN keeps the score and the shot count. The symbol
+      -- might be gone (e.g. dropped by a group limit)
+      if task:has_symbol(sym_name) then
+        task:adjust_result(sym_name, 0 / 0, options)
+      end
+      return
+    end
+    task:insert_result(sym_name, 1.0, options)
+    if record then
+      record.inserted = record.inserted or {}
+      record.inserted[sym_name] = true
+    end
+  end
 
   local function insert_results(s, ip)
     -- Symbol name -> origin -> labels; symbols_prefixes may split one origin
@@ -334,7 +455,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         -- A single insertion with one option per check, so the weight is
         -- counted (and a shot spent) once
         table.sort(options)
-        task:insert_result(sym_name, 1.0, options)
+        insert_merged(sym_name, options)
       end
     end
   end
@@ -350,7 +471,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
       options[i] = string.format('%s:%s', origin, err)
     end
     if merge_checks then
-      task:insert_result(rbl.symbol .. '_FAIL', 1.0, options)
+      insert_merged(rbl.symbol .. '_FAIL', options)
     else
       for _, opt in ipairs(options) do
         task:insert_result(rbl.symbol .. '_FAIL', 1.0, opt)
@@ -456,7 +577,31 @@ local function gen_rbl_callback(rule)
     return false
   end
 
-  local function add_dns_request(task, req, forced, is_ip, requests_table, label, whitelist)
+  -- Only with `max_dns_requests`: requests are ordered and charged
+  local budgeted = rule.max_dns_requests ~= nil
+  -- Selector values are already encoded hashes: do not hash them again
+  local selector_raw = rule.hash and rule.selector_hash == false
+
+  -- `opts` (optional): selector = true for named selector results,
+  -- rank/sel_name to inherit the order of the request this one derives from
+  local function add_dns_request(task, req, forced, is_ip, requests_table, label, whitelist, opts)
+    local do_hash = rule.hash
+    local rank, sel_name
+
+    if opts and opts.selector and selector_raw then
+      do_hash = nil
+    end
+
+    if budgeted then
+      if opts and opts.rank then
+        rank, sel_name = opts.rank, opts.sel_name
+      elseif opts and opts.selector then
+        rank, sel_name = SELECTOR_RANK, label
+      else
+        rank = check_ranks[label] or UNKNOWN_RANK
+      end
+    end
+
     -- Discard empty queries to avoid querying the RBL suffix itself
     if not is_ip and (not req or req == '') then
       lua_util.debugm(N, task, 'skip empty RBL request for %s (%s)',
@@ -472,7 +617,7 @@ local function gen_rbl_callback(rule)
       end
 
       -- The query below drops a root dot, so the whitelist must see that name too
-      if not is_ip and not rule.process_script and (rule.resolve_ip or not rule.hash) then
+      if not is_ip and not rule.process_script and (rule.resolve_ip or not do_hash) then
         local stripped = strip_root_dot(req_str)
         if stripped ~= req_str and is_whitelisted(task, stripped, stripped, whitelist, label) then
           return
@@ -488,12 +633,19 @@ local function gen_rbl_callback(rule)
     -- A name that is resolved first must not share a slot with an address
     -- whose reversed octets are spelled the same
     local req_key = resolve_ip and ('resolve:' .. req_str) or req
+    if selector_raw and not do_hash and not is_ip then
+      -- The same value must not share a slot with its hashed twin
+      req_key = 'raw:' .. req_key
+    end
 
     if requests_table[req_key] then
       -- Duplicate request
       local nreq = requests_table[req_key]
       if forced and not nreq.forced then
         nreq.forced = true
+      end
+      if budgeted then
+        merge_rank(nreq, rank, sel_name)
       end
       if not nreq.what[label] then
         nreq.what[label] = true
@@ -522,6 +674,8 @@ local function gen_rbl_callback(rule)
             resolve_ip = resolve_ip,
             what = { [label] = true },
             origins = { [req_str] = { [label] = true } },
+            rank = rank,
+            sel_name = sel_name,
           }
           requests_table[req_key] = nreq
         end
@@ -530,7 +684,7 @@ local function gen_rbl_callback(rule)
         local origin = tostring(req)
 
         -- A hash covers the value as data, a trailing dot included
-        if resolve_ip or not rule.hash then
+        if resolve_ip or not do_hash then
           origin = strip_root_dot(origin)
         end
 
@@ -541,7 +695,9 @@ local function gen_rbl_callback(rule)
         end
 
         if not resolve_ip then
-          origin = maybe_make_hash(origin, rule)
+          if do_hash then
+            origin = maybe_make_hash(origin, rule)
+          end
           to_resolve = fold_case(rule, string.format('%s.%s',
               origin,
               rule.rbl))
@@ -557,6 +713,8 @@ local function gen_rbl_callback(rule)
           resolve_ip = resolve_ip,
           what = { [label] = true },
           origins = { [req_str] = { [label] = true } },
+          rank = rank,
+          sel_name = sel_name,
         }
         requests_table[req_key] = nreq
       end
@@ -838,6 +996,8 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local selector_opts = { selector = true }
+
   local function check_selector(task, requests_table, whitelist)
     for selector_label, selector in pairs(rule.selectors) do
       local res = selector(task)
@@ -845,11 +1005,11 @@ local function gen_rbl_callback(rule)
       if res and type(res) == 'table' then
         for _, r in ipairs(res) do
           add_dns_request(task, r, false, false, requests_table,
-              selector_label, whitelist)
+              selector_label, whitelist, selector_opts)
         end
       elseif res then
         add_dns_request(task, res, false, false,
-            requests_table, selector_label, whitelist)
+            requests_table, selector_label, whitelist, selector_opts)
       end
     end
 
@@ -1025,14 +1185,83 @@ local function gen_rbl_callback(rule)
   end
   local match = matchers[rule.returncodes_matcher]
 
+  -- Dropped requests are reported once, when the last phase has been submitted
+  local function report_limit(task, budget)
+    if budget and budget.dropped > 0 and not budget.reported then
+      budget.reported = true
+      task:insert_result(rule.symbol .. '_LIMIT', 1.0,
+          string.format('dropped:%d', budget.dropped))
+    end
+  end
+
+  -- Iterate requests; with a budget in a fixed priority order, otherwise as before
+  local function iter_requests(tbl)
+    if not budgeted then
+      return pairs(tbl)
+    end
+
+    local list = {}
+    for k, req in pairs(tbl) do
+      list[#list + 1] = { k, req }
+    end
+    table.sort(list, function(a, b)
+      return request_less(a[2], b[2])
+    end)
+
+    local i = 0
+    return function()
+      i = i + 1
+      local e = list[i]
+      if e then
+        return e[1], e[2]
+      end
+    end
+  end
+
   local callback_f = function(task)
     -- DNS requests to issue (might be hashed afterwards)
     local dns_req = {}
     local whitelist = task:cache_get('rbl_whitelisted') or {}
 
+    -- Per-task, per-rule budget: this callback runs once per task and rule.
+    -- `used` counts resolver requests that were really submitted. With
+    -- resolve_ip, origin (A/AAAA) lookups may take at most half of the cap
+    -- (rounded down), the rest is shared by the direct and the final queries
+    local budget
+    if budgeted then
+      budget = {
+        limit = rule.max_dns_requests,
+        origin_limit = math.floor(rule.max_dns_requests / 2),
+        used = 0,
+        sent = {},
+        origin_used = 0,
+        dropped = 0,
+        reported = false,
+      }
+    end
+
     local function gen_rbl_dns_callback(resolve_table_elt)
       return function(_, to_resolve, results, err)
+        if budgeted then
+          -- Kept for a phase-2 request that merges in after the answer arrived
+          resolve_table_elt.answer = { to_resolve = to_resolve, results = results, err = err }
+        end
         rbl_dns_process(task, rule, to_resolve, results, err, resolve_table_elt, match)
+      end
+    end
+
+    -- A phase-2 request with the name of one already submitted in phase 1:
+    -- its labels and origins go to the submitted request, no extra query.
+    -- If the answer has already been processed, the new part is reported
+    -- from the stored answer (it never adds anything to the budget)
+    local function merge_into_sent(sent, req)
+      local delta, has_delta = merge_request(sent, req, true)
+
+      local ans = sent.answer
+      if ans and has_delta then
+        lua_util.debugm(N, task, 'rbl %s; late merge into answered %s',
+            rule.symbol, req.n)
+        rbl_dns_process(task, rule, ans.to_resolve, ans.results, ans.err, delta, match, sent)
       end
     end
 
@@ -1053,22 +1282,7 @@ local function gen_rbl_callback(rule)
       local dedupe_key = (req.resolve_ip and 'resolve:' or 'rbl:') .. req.n
       local existing = deduped_req[dedupe_key]
       if existing then
-        for label, _ in pairs(req.what) do
-          if not existing.what[label] then
-            existing.what[label] = true
-          end
-        end
-        for origin, labels in pairs(req.origins) do
-          if not existing.origins[origin] then
-            existing.origins[origin] = {}
-          end
-          for label in pairs(labels) do
-            existing.origins[origin][label] = true
-          end
-        end
-        if req.forced and not existing.forced then
-          existing.forced = true
-        end
+        merge_request(existing, req)
         lua_util.debugm(N, task, 'merging DNS request for %s: %s (same query %s)',
             rule.symbol, req.orig, req.n)
       else
@@ -1081,6 +1295,39 @@ local function gen_rbl_callback(rule)
     local resolved_req = {}
     local nresolved = 0
 
+    -- Submit one resolver request; without a budget this is a plain call.
+    -- A refused request (budget or resolver) is not charged. `is_origin`
+    -- marks the A/AAAA lookups of resolve_ip
+    local function submit(rtype, params, is_origin)
+      if budget then
+        -- An origin lookup must leave a slot for at least one final query
+        if budget.used >= budget.limit or
+            (is_origin and (budget.origin_used >= budget.origin_limit or
+                budget.used + 1 >= budget.limit)) then
+          budget.dropped = budget.dropped + 1
+          lua_util.debugm(N, task, "rbl %s; max_dns_requests reached, drop %s",
+              rule.symbol, params.name)
+          return false
+        end
+      end
+
+      local ok
+      if rtype == 'aaaa' then
+        ok = r:resolve('aaaa', params)
+      else
+        ok = r:resolve_a(params)
+      end
+
+      if ok and budget then
+        budget.used = budget.used + 1
+        if is_origin then
+          budget.origin_used = budget.origin_used + 1
+        end
+      end
+
+      return ok
+    end
+
     -- This is called when doing resolve_ip phase...
     local function gen_rbl_ip_dns_callback(orig_resolve_table_elt)
       return function(_, _, results, err)
@@ -1090,10 +1337,16 @@ local function gen_rbl_callback(rule)
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
               local nreq
+              local inherit
+              if budgeted then
+                -- The final query keeps the order of the lookup it comes from
+                inherit = { rank = orig_resolve_table_elt.rank,
+                            sel_name = orig_resolve_table_elt.sel_name }
+              end
               for label in pairs(orig_resolve_table_elt.what) do
                 -- Not `_, nreq =`: Lua 5.5 makes the loop variable `_` constant
                 nreq = select(2, add_dns_request(task, dns_res, false, true,
-                    resolved_req, label))
+                    resolved_req, label, nil, inherit))
               end
 
               -- No request if process_script dropped the address
@@ -1118,27 +1371,53 @@ local function gen_rbl_callback(rule)
 
         if nresolved == 0 then
           -- Emit real RBL requests as there are no ip resolution requests
-          for name, req in pairs(resolved_req) do
+          local final_req = resolved_req
+          if budget then
+            -- Different addresses can give one query name (process_script):
+            -- one request, so it is charged once and reports every origin
+            final_req = {}
+            for _, req in pairs(resolved_req) do
+              if final_req[req.n] then
+                merge_request(final_req[req.n], req)
+              else
+                final_req[req.n] = req
+              end
+            end
+          end
+
+          for name, req in iter_requests(final_req) do
             local val_res, val_error = validate_dns(req.n)
-            if val_res then
+            if budget and budget.sent[req.n] then
+              -- Already queried in the first phase: neither resend nor charge,
+              -- but keep what this request derived
+              lua_util.debugm(N, task, "rbl %s; skip %s, already sent",
+                  rule.symbol, req.n)
+              merge_into_sent(budget.sent[req.n], req)
+            elseif val_res then
               lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
                   rule.symbol, name, req.n)
-              r:resolve_a({
+              if submit('a', {
                 task = task,
                 name = req.n,
                 callback = gen_rbl_dns_callback(req),
                 forced = req.forced
-              })
+              }) and budget then
+                -- Names are unique here after the grouping above; recorded
+                -- to keep one table of everything this rule has sent
+                budget.sent[req.n] = req
+              end
             else
               rspamd_logger.warnx(task, 'cannot send invalid DNS request %s for %s: %s',
                   req.n, rule.symbol, val_error)
             end
           end
+
+          report_limit(task, budget)
         end
       end
     end
 
-    for name, req in pairs(deduped_req) do
+    for name, req in iter_requests(deduped_req) do
       local val_res, val_error = validate_dns(req.n)
       if val_res then
         lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
@@ -1147,35 +1426,42 @@ local function gen_rbl_callback(rule)
         if req.resolve_ip then
           -- Deal with both ipv4 and ipv6
           -- Resolve names first
-          if (rule.ipv4 == nil or rule.ipv4) and r:resolve_a({
+          if (rule.ipv4 == nil or rule.ipv4) and submit('a', {
             task = task,
             name = req.n,
             callback = gen_rbl_ip_dns_callback(req),
             forced = req.forced
-          }) then
+          }, true) then
             nresolved = nresolved + 1
           end
-          if (rule.ipv6 == nil or rule.ipv6) and r:resolve('aaaa', {
+          if (rule.ipv6 == nil or rule.ipv6) and submit('aaaa', {
             task = task,
             name = req.n,
             callback = gen_rbl_ip_dns_callback(req),
             forced = req.forced
-          }) then
+          }, true) then
             nresolved = nresolved + 1
           end
         else
-          r:resolve_a({
+          if submit('a', {
             task = task,
             name = req.n,
             callback = gen_rbl_dns_callback(req),
             forced = req.forced
-          })
+          }) and budget then
+            budget.sent[req.n] = req
+          end
         end
 
       else
         rspamd_logger.warnx(task, 'cannot send invalid DNS request %s for %s: %s',
             req.n, rule.symbol, val_error)
       end
+    end
+
+    -- With lookups in flight the report waits for the final queries
+    if nresolved == 0 then
+      report_limit(task, budget)
     end
   end
 
@@ -1191,6 +1477,12 @@ local map_match_types = {
 local function add_rbl(key, rbl, global_opts)
   if not rbl.symbol then
     rbl.symbol = key:upper()
+  end
+
+  if rbl.resolve_ip and rbl.max_dns_requests and rbl.max_dns_requests < 2 then
+    rspamd_logger.warnx(rspamd_config,
+        'rbl %s: max_dns_requests < 2 with resolve_ip: no name can be resolved',
+        rbl.symbol)
   end
 
   local flags_tbl = { 'no_squeeze' }
@@ -1383,6 +1675,18 @@ local function add_rbl(key, rbl, global_opts)
       parent = id,
       score = 0.0,
     }
+
+    if rbl.max_dns_requests then
+      -- Informational: max_dns_requests dropped some of the work. Named after
+      -- the rule symbol even with symbols_prefixes, like the failure symbol
+      rspamd_config:register_symbol {
+        type = 'virtual',
+        flags = 'nostat',
+        name = rbl.symbol .. '_LIMIT',
+        parent = id,
+        score = 0.0,
+      }
+    end
 
     local function process_return_code(suffix)
       local function process_specific_suffix(s)
