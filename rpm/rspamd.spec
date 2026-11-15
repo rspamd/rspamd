@@ -137,6 +137,9 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DENABLE_LTO=ON \
 %endif
+%if "%{getenv:RSPAMD_GIT_DESCRIBE}" != ""
+        -DGIT_DESCRIBE=%{getenv:RSPAMD_GIT_DESCRIBE} \
+%endif
         -DCMAKE_C_FLAGS_RELEASE="%{optflags}" \
         -DCMAKE_CXX_FLAGS_RELEASE="%{optflags}" \
 %if 0%{?fedora} >= 36

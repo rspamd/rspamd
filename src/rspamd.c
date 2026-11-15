@@ -16,6 +16,7 @@
 #include "config.h"
 #include "blas-config.h"
 #include "rspamd.h"
+#include "rspamd_build_id.h"
 #include "libserver/maps/map.h"
 #include "lua/lua_common.h"
 #include "libserver/worker_util.h"
@@ -1357,7 +1358,20 @@ get_cpu_architecture(void)
 static void
 version(struct rspamd_main *rspamd_main)
 {
-#if defined(GIT_VERSION) && GIT_VERSION == 1
+	/*
+	 * Release builds print the plain version. Development builds are marked
+	 * with a -dev suffix, as their version is only the expected next release,
+	 * followed by the exact position relative to the last release tag.
+	 */
+#if RSPAMD_VERSION_DEV
+#if defined(RSPAMD_GIT_DESCRIBE)
+	rspamd_printf("Rspamd daemon version " RVERSION "-dev (" RSPAMD_GIT_DESCRIBE ")\n\n");
+#elif defined(GIT_VERSION) && GIT_VERSION == 1
+	rspamd_printf("Rspamd daemon version " RVERSION "-dev (git." RID ")\n\n");
+#else
+	rspamd_printf("Rspamd daemon version " RVERSION "-dev\n\n");
+#endif
+#elif defined(GIT_VERSION) && GIT_VERSION == 1
 	rspamd_printf("Rspamd daemon version " RVERSION "-git." RID "\n\n");
 #else
 	rspamd_printf("Rspamd daemon version " RVERSION "\n\n");

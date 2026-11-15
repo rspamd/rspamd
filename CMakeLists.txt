@@ -12,6 +12,12 @@ set(RSPAMD_VERSION_MAJOR 4)
 set(RSPAMD_VERSION_MINOR 3)
 set(RSPAMD_VERSION_PATCH 1)
 
+# The last release tag this tree descends from. It is set to X.Y.Z only in the
+# "Release X.Y.Z" commit; the post-release bump commit changes only
+# RSPAMD_VERSION_PATCH, so a version that differs from this value is a
+# development version.
+set(RSPAMD_RELEASE_BASE "4.3.0")
+
 # Keep two digits all the time
 set(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
 set(RSPAMD_VERSION_MINOR_NUM ${RSPAMD_VERSION_MINOR}0)
@@ -317,8 +323,13 @@ AddDependencySubdirectories()
 
 ############################ TARGETS SECTION ###############################
 
+# Build identity (release base, describe, distance) and numeric version id
+include(BuildIdentity)
+
 # Generate config.h
 configure_file(config.h.in src/config.h)
+# Separate header so config.h does not change on every commit
+configure_file(rspamd_build_id.h.in src/rspamd_build_id.h)
 
 ##################### INSTALLATION ##########################################
 # Setup installation targets
