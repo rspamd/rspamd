@@ -1174,7 +1174,7 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 				ret = lua_toboolean(L, -1);
 			}
 			else if (lua_type(L, -1) == LUA_TNUMBER) {
-				ret = lua_tonumber(L, 1);
+				ret = lua_tonumber(L, -1);
 			}
 			else {
 				msg_err_task("%s returned wrong return type: %s",
@@ -1205,7 +1205,7 @@ rspamd_mime_expr_process(void *ud, rspamd_expression_atom_t *atom)
 				ret = lua_toboolean(L, -1);
 			}
 			else if (lua_type(L, -1) == LUA_TNUMBER) {
-				ret = lua_tonumber(L, 1);
+				ret = lua_tonumber(L, -1);
 			}
 			else {
 				msg_err_task("%s returned wrong return type: %s",

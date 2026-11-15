@@ -625,6 +625,8 @@ rspamd_config_process_var(struct rspamd_config *cfg, const rspamd_ftok_t *var,
 								"lua log variable") != 0) {
 				msg_err_config("error loading lua code: '%T': %s", content,
 							   lua_tostring(RSPAMD_LUA_CFG_STATE(cfg), -1));
+				lua_pop(RSPAMD_LUA_CFG_STATE(cfg), 1);
+
 				return FALSE;
 			}
 			if (lua_pcall(RSPAMD_LUA_CFG_STATE(cfg), 0, 1, 0) != 0) {

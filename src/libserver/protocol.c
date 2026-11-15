@@ -2498,9 +2498,12 @@ void rspamd_protocol_write_log_pipe(struct rspamd_task *task)
 					 * -3: key
 					 */
 				}
-			}
 
-			lua_pop(L, 2); /* Top table + key copy */
+				lua_pop(L, 2); /* Top table + key copy */
+			}
+			else {
+				lua_pop(L, 1); /* Non-table value, keep key for lua_next */
+			}
 		}
 
 		lua_pop(L, 1); /* rspamd_plugins global */
