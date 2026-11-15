@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   check:
-    if: github.repository == 'rspamd/rspamd'
+    # Scheduled runs on upstream only; manual runs allowed from forks
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'rspamd/rspamd'
     runs-on: ubuntu-latest
     steps:
       - name: Check out source code
