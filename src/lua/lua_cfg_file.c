@@ -115,9 +115,12 @@ void rspamd_lua_post_load_config(struct rspamd_config *cfg)
 			}
 		}
 
+		int config_idx = lua_gettop(L);
+
 		PTR_ARRAY_FOREACH(names, i, name)
 		{
-			lua_getfield(L, -1, name);
+			/* Always look a section up in the `config` table itself */
+			lua_getfield(L, config_idx, name);
 
 			if (lua_istable(L, -1)) {
 				obj = ucl_object_lua_import(L, lua_gettop(L));
@@ -131,6 +134,9 @@ void rspamd_lua_post_load_config(struct rspamd_config *cfg)
 												 true);
 				}
 			}
+
+			/* The import leaves the section on the stack */
+			lua_pop(L, 1);
 		}
 
 		g_ptr_array_free(names, TRUE);

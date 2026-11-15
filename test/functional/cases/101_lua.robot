@@ -28,6 +28,12 @@ Pre and Post Filters
   Expect Symbol  TEST_PRE
   Expect Symbol  TEST_POST
 
+Global Config Sections
+  [Setup]  Lua Setup  ${RSPAMD_TESTDIR}/lua/config_sections.lua
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  CFGSEC_SECTIONS  alpha=alpha  beta=beta  gamma=gamma
+  Expect Symbol  CFGSEC_REGEXP
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${RSPAMD_LUA_SCRIPT}
