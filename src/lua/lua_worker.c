@@ -452,9 +452,9 @@ lua_worker_add_control_handler(lua_State *L)
 static void
 lua_worker_jemalloc_stats_cb(void *ud, const char *msg)
 {
-	lua_State *L = (lua_State *) ud;
+	GString *buf = (GString *) ud;
 
-	lua_pushstring(L, msg);
+	g_string_append(buf, msg);
 }
 #endif
 
@@ -465,7 +465,11 @@ lua_worker_get_mem_stats(lua_State *L)
 
 	if (w) {
 #ifdef WITH_JEMALLOC
-		malloc_stats_print(lua_worker_jemalloc_stats_cb, (void *) L, NULL);
+		GString *buf = g_string_new(NULL);
+
+		malloc_stats_print(lua_worker_jemalloc_stats_cb, (void *) buf, NULL);
+		lua_pushlstring(L, buf->str, buf->len);
+		g_string_free(buf, TRUE);
 #else
 		lua_pushstring(L, "no stats, jemalloc support is required");
 #endif

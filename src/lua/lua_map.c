@@ -1201,6 +1201,7 @@ struct lua_map_traverse_cbdata {
 	lua_State *L;
 	int cbref;
 	gboolean use_text;
+	unsigned int count;
 };
 
 static gboolean
@@ -1209,6 +1210,7 @@ lua_map_foreach_cb(gconstpointer key, gconstpointer value, gsize _hits, gpointer
 	struct lua_map_traverse_cbdata *cbdata = ud;
 	lua_State *L = cbdata->L;
 
+	cbdata->count++;
 	lua_pushvalue(L, cbdata->cbref);
 
 	if (cbdata->use_text) {
@@ -1228,9 +1230,12 @@ lua_map_foreach_cb(gconstpointer key, gconstpointer value, gsize _hits, gpointer
 	}
 	else {
 		if (lua_isboolean(L, -1)) {
-			lua_pop(L, 2);
+			/* The callback returning true stops the traversal (FALSE here) */
+			gboolean stop = lua_toboolean(L, -1);
 
-			return lua_toboolean(L, -1);
+			lua_pop(L, 1); /* result */
+
+			return !stop;
 		}
 
 		lua_pop(L, 1); /* result */
@@ -1256,6 +1261,7 @@ lua_map_foreach(lua_State *L)
 		lua_pushvalue(L, 2); /* func */
 		cbdata.cbref = lua_gettop(L);
 		cbdata.use_text = use_text;
+		cbdata.count = 0;
 
 		if (map->map->traverse_function) {
 			rspamd_map_traverse(map->map, lua_map_foreach_cb, &cbdata, FALSE);
@@ -1263,6 +1269,7 @@ lua_map_foreach(lua_State *L)
 
 		/* Remove callback */
 		lua_pop(L, 1);
+		lua_pushinteger(L, cbdata.count);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -1508,11 +1515,16 @@ lua_map_on_load_handler(struct rspamd_map *map, gpointer ud)
 	struct lua_map_on_load_cbdata *cbd = ud;
 	lua_State *L = cbd->L;
 
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->ref);
 
-	if (lua_pcall(L, 0, 0, 0) != 0) {
+	if (lua_pcall(L, 0, 0, err_idx) != 0) {
 		msg_err_map("call to on_load function failed: %s", lua_tostring(L, -1));
 	}
+
+	lua_settop(L, err_idx - 1);
 }
 
 static int

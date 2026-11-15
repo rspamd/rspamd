@@ -2543,6 +2543,9 @@ lua_tcp_add_write(lua_State *L)
 
 		if (!lua_tcp_arg_toiovec(L, 3, cbd, iov)) {
 			msg_err("tcp request has bad data argument");
+			if (cbref != -1) {
+				luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+			}
 			lua_pushboolean(L, FALSE);
 			g_free(iov);
 
@@ -2569,9 +2572,12 @@ lua_tcp_add_write(lua_State *L)
 			if (!lua_tcp_arg_toiovec(L, -1, cbd, &iov[niov])) {
 				lua_pop(L, 2);
 				msg_err("tcp request has bad data argument at pos %d", niov);
+				if (cbref != -1) {
+					luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+				}
 				lua_pushboolean(L, FALSE);
+				/* cbd is the live connection owned by the Lua object */
 				g_free(iov);
-				g_free(cbd);
 
 				return 1;
 			}
@@ -2720,7 +2726,6 @@ lua_tcp_sync_write(lua_State *L)
 		if (!lua_tcp_arg_toiovec(L, 2, cbd, iov)) {
 			msg_err("tcp request has bad data argument");
 			g_free(iov);
-			g_free(cbd);
 
 			return luaL_error(L, "invalid arguments second parameter (data) is expected to be either string or rspamd{text}");
 		}
@@ -2729,7 +2734,7 @@ lua_tcp_sync_write(lua_State *L)
 	}
 	else if (tp == LUA_TTABLE) {
 		/* Count parts */
-		lua_pushvalue(L, 3);
+		lua_pushvalue(L, 2);
 
 		lua_pushnil(L);
 		while (lua_next(L, -2) != 0) {
@@ -2744,8 +2749,11 @@ lua_tcp_sync_write(lua_State *L)
 		while (lua_next(L, -2) != 0) {
 			if (!lua_tcp_arg_toiovec(L, -1, cbd, &iov[niov])) {
 				msg_err("tcp request has bad data argument at pos %d", niov);
+				/*
+				 * Buffers of already converted elements are owned by cbd->dtors,
+				 * only the iov array itself must be released here
+				 */
 				g_free(iov);
-				g_free(cbd);
 
 				return luaL_error(L, "invalid arguments second parameter (data) is expected to be either string or rspamd{text}");
 			}

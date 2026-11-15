@@ -647,7 +647,7 @@ lua_upstream_list_add_watcher(lua_State *L)
 			flags = lua_str_to_upstream_flag(lua_tostring(L, 2));
 		}
 		else {
-			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			for (lua_pushnil(L); lua_next(L, 2); lua_pop(L, 1)) {
 				if (lua_isstring(L, -1)) {
 					flags |= lua_str_to_upstream_flag(lua_tostring(L, -1));
 				}
