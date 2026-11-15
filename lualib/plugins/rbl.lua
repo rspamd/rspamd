@@ -120,8 +120,8 @@ local rule_schema_tbl = {
       :doc({ summary = "Check the sending IP address (from SMTP envelope) against this RBL" }),
   hash = T.enum({ "sha1", "sha256", "sha384", "sha512", "md5", "blake2" }):optional()
       :doc({ summary = "Hash algorithm to use for RBL queries (for hash-based RBLs)" }),
-  hash_format = T.enum({ "hex", "base32", "base64" }):optional()
-      :doc({ summary = "Encoding format for hashed RBL queries" }),
+  hash_format = T.enum({ "hex", "base32", "rbase32", "base64" }):optional()
+      :doc({ summary = "Encoding of hashed RBL queries: hex, base32 (zbase32), rbase32 (RFC 4648, unpadded) or base64" }),
   hash_len = T.one_of({ T.integer(), T.transform(T.string(), tonumber) }):optional()
       :doc({ summary = "Truncate hash to this many characters" }),
   helo = T.boolean():optional()
@@ -146,6 +146,8 @@ local rule_schema_tbl = {
       :doc({ summary = "Treat this RBL as a whitelist (positive result means whitelisted)" }),
   local_exclude_ip_map = T.string():optional()
       :doc({ summary = "Path to map file containing IPs to exclude from this RBL check" }),
+  max_dns_requests = T.integer({ min = 1 }):optional()
+      :doc({ summary = "Hard cap on DNS requests this rule submits per message (opt-in); truncation adds <SYMBOL>_LIMIT" }),
   merge_checks = T.boolean():optional()
       :doc({ summary = "Insert the symbol once with a combined option when several checks yield the same DNS query" }),
   monitored_address = T.string():optional()
@@ -197,6 +199,9 @@ local rule_schema_tbl = {
       :doc({ summary = "Selector expression to extract custom data for RBL lookup" }),
   selector_flatten = T.boolean():optional()
       :doc({ summary = "Flatten selector results into individual lookups" }),
+  selector_hash = T.boolean():optional()
+      :doc({ summary = "Set to false to use selector results as they are (already encoded hashes) instead of hashing them with `hash`; " ..
+          "`hash_format` and `hash_len` then do not apply to them" }),
   symbol = T.string():optional()
       :doc({ summary = "Symbol name to register for this RBL rule" }),
   symbols_prefixes = T.table({}, { open = true, extra = T.string() }):optional()
