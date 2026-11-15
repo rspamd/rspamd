@@ -991,7 +991,11 @@ lua_logger_get_id(lua_State *L, int pos, GError **err)
 			lua_pop(L, 1);
 		}
 
-		if (strcmp(clsname, rspamd_task_classname) == 0) {
+		if (clsname == NULL) {
+			g_set_error(err, g_quark_from_static_string("lua_logger"),
+						EINVAL, "unknown class: (none)");
+		}
+		else if (strcmp(clsname, rspamd_task_classname) == 0) {
 			struct rspamd_task *task = lua_check_task(L, pos);
 
 			if (task) {

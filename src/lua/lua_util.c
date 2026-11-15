@@ -1065,7 +1065,7 @@ lua_util_config_from_ucl(lua_State *L)
 		else {
 			msg_err("config_from_ucl: second parameter is expected to be string");
 			ucl_object_unref(obj);
-			lua_pushnil(L);
+			obj = NULL;
 		}
 	}
 
@@ -1077,8 +1077,15 @@ lua_util_config_from_ucl(lua_State *L)
 		top = rspamd_rcl_config_init(cfg, NULL);
 
 		if (!rspamd_rcl_parse(top, cfg, cfg, cfg->cfg_pool, cfg->cfg_ucl_obj, &err)) {
-			msg_err("rcl parse error: %s", err->message);
-			ucl_object_unref(obj);
+			msg_err("rcl parse error: %s", err ? err->message : "unknown error");
+			if (err) {
+				g_error_free(err);
+			}
+			rspamd_rcl_sections_free(top);
+			/* Config owns obj (cfg_ucl_obj) and unrefs it on release */
+			CFG_REF_RELEASE(cfg);
+			cfg = NULL;
+			top = NULL;
 			lua_pushnil(L);
 		}
 		else {
@@ -1093,7 +1100,12 @@ lua_util_config_from_ucl(lua_State *L)
 			*pcfg = cfg;
 		}
 
-		rspamd_rcl_sections_free(top);
+		if (top) {
+			rspamd_rcl_sections_free(top);
+		}
+	}
+	else {
+		lua_pushnil(L);
 	}
 
 	return 1;
@@ -4673,6 +4685,9 @@ lua_ev_base_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 			ev_timer_set(&cbdata->ev, lua_tonumber(L, -1), 0.0);
 		}
 	}
+
+	/* Drop the traceback handler and the result/error message */
+	lua_settop(L, err_idx - 1);
 
 	if (schedule_more) {
 		ev_timer_again(loop, t);
