@@ -14,6 +14,10 @@ ENABLE_LUAJIT := -DENABLE_LUAJIT=ON -DLUA_ROOT=/luajit-build
 
 # Can be filled by a build system
 EXTRA_ARGS :=
+# The build system can pass `git describe` output via the environment
+ifneq ($(RSPAMD_GIT_DESCRIBE),)
+EXTRA_ARGS += -DGIT_DESCRIBE=$(RSPAMD_GIT_DESCRIBE)
+endif
 ENABLE_JEMALLOC := -DENABLE_JEMALLOC=ON
 ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
 
