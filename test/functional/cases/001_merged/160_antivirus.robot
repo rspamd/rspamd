@@ -9,6 +9,8 @@ ${MESSAGE2}         ${RSPAMD_TESTDIR}/messages/freemail.eml
 ${MESSAGE}          ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${SETTINGS_AVAST}   {symbols_enabled = [AVAST_VIRUS]}
 ${SETTINGS_CLAM}    {symbols_enabled = [CLAM_VIRUS]}
+${SETTINGS_CLAM_FAIL}  {symbols_enabled = [CLAM_VIRUS, CLAM_VIRUS_FAIL]}
+${MESSAGE3}         ${RSPAMD_TESTDIR}/messages/btc.eml
 ${SETTINGS_FPROT}   {symbols_enabled = [FPROT_VIRUS, FPROT2_VIRUS_DUPLICATE_DEFAULT]}
 
 *** Test Cases ***
@@ -38,6 +40,15 @@ CLAMAV CACHE MISS
   ...  Settings=${SETTINGS_CLAM}
   Do Not Expect Symbol  CLAM_VIRUS
   Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
+
+CLAMAV ERROR REPLY
+  [Documentation]  A complete reply that is not a verdict is a failed scan, not a clean message
+  ${process} =  Run Dummy Clam  ${RSPAMD_PORT_CLAM}  error
+  Scan File  ${MESSAGE3}
+  ...  Settings=${SETTINGS_CLAM_FAIL}
+  Expect Symbol With Exact Options  CLAM_VIRUS_FAIL  unhandled response: stream: Database reload in progress ERROR
+  Do Not Expect Symbol  CLAM_VIRUS
+  [Teardown]  Terminate Process  ${process}
 
 FPROT MISS
   ${process} =  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}

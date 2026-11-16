@@ -143,7 +143,12 @@ local function clamav_check(task, content, digest, rule, maybe_part)
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
-          if string.find(vname, '^Heuristics%.Encrypted') then
+          if not vname then
+            -- Not a verdict, e.g. `stream: <reason> ERROR`: the scan has failed
+            rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
+            common.yield_result(task, rule, 'unhandled response: ' .. data, 0.0,
+                'fail', maybe_part)
+          elseif string.find(vname, '^Heuristics%.Encrypted') then
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
             common.yield_result(task, rule, 'File is encrypted: ' .. vname,
                 0.0, 'encrypted', maybe_part)
@@ -156,13 +161,9 @@ local function clamav_check(task, content, digest, rule, maybe_part)
             rspamd_logger.errx(task, '%s: ClamAV Limits Exceeded', rule.log_prefix)
             common.yield_result(task, rule, 'Limits Exceeded: ' .. vname, 0.0,
                 'fail', maybe_part)
-          elseif vname then
+          else
             common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
             cached = vname
-          else
-            rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
-            common.yield_result(task, rule, 'unhandled response:' .. vname, 0.0,
-                'fail', maybe_part)
           end
         end
         if cached then

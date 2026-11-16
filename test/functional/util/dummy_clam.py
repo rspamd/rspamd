@@ -12,7 +12,10 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        if self.server.foundvirus:
+        if self.server.error:
+            # A complete reply that is not a verdict
+            self.request.sendall(b"stream: Database reload in progress ERROR\0")
+        elif self.server.foundvirus:
             self.request.sendall(b"stream: Eicar-Test-Signature FOUND\0")
         else:
             self.request.sendall(b"stream: OK\0")
@@ -35,6 +38,8 @@ if __name__ == "__main__":
     server = socketserver.TCPServer((HOST, port), MyTCPHandler, bind_and_activate=False)
     server.allow_reuse_address = True
     server.foundvirus = foundvirus
+    # The second argument `error` asks for an ERROR reply
+    server.error = alen >= 3 and sys.argv[2] == 'error'
     server.server_bind()
     server.server_activate()
 
