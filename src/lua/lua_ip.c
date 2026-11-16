@@ -171,6 +171,7 @@ LUA_FUNCTION_DEF(ip, is_local);
  * @return {boolean}
  */
 LUA_FUNCTION_DEF(ip, less_than);
+LUA_FUNCTION_DEF(ip, less_equal);
 
 static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF(ip, to_string),
@@ -191,6 +192,7 @@ static const struct luaL_reg iplib_m[] = {
 	{"__eq", lua_ip_equal},
 	{"__gc", lua_ip_destroy},
 	{"__lt", lua_ip_less_than},
+	{"__le", lua_ip_less_equal},
 	{NULL, NULL}};
 
 static const struct luaL_reg iplib_f[] = {
@@ -572,6 +574,25 @@ lua_ip_less_than(lua_State *L)
 	if (ip && other) {
 		lua_pushboolean(L,
 						rspamd_inet_address_compare(ip->addr, other->addr, true) < 0);
+	}
+	else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
+
+/* Lua 5.5 does not derive `<=` from `__lt` any more */
+static int
+lua_ip_less_equal(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_ip *ip = lua_check_ip(L, 1),
+						 *other = lua_check_ip(L, 2);
+
+	if (ip && other) {
+		lua_pushboolean(L,
+						rspamd_inet_address_compare(ip->addr, other->addr, true) <= 0);
 	}
 	else {
 		lua_pushnil(L);

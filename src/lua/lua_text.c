@@ -274,6 +274,7 @@ LUA_FUNCTION_DEF(text, find);
 LUA_FUNCTION_DEF(text, gc);
 LUA_FUNCTION_DEF(text, eq);
 LUA_FUNCTION_DEF(text, lt);
+LUA_FUNCTION_DEF(text, le);
 LUA_FUNCTION_DEF(text, concat);
 LUA_FUNCTION_DEF(text, strtoul);
 
@@ -319,6 +320,7 @@ static const struct luaL_reg textlib_m[] = {
 	{"__gc", lua_text_gc},
 	{"__eq", lua_text_eq},
 	{"__lt", lua_text_lt},
+	{"__le", lua_text_le},
 	{"__concat", lua_text_concat},
 	{NULL, NULL}};
 
@@ -1522,6 +1524,26 @@ lua_text_lt(lua_State *L)
 	if (t1 && t2) {
 		if (t1->len == t2->len) {
 			lua_pushboolean(L, memcmp(t1->start, t2->start, t1->len) < 0);
+		}
+		else {
+			lua_pushboolean(L, t1->len < t2->len);
+		}
+	}
+
+	return 1;
+}
+
+/* Lua 5.5 does not derive `<=` from `__lt` any more */
+static int
+lua_text_le(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t1 = lua_check_text_or_string(L, 1),
+						   *t2 = lua_check_text_or_string(L, 2);
+
+	if (t1 && t2) {
+		if (t1->len == t2->len) {
+			lua_pushboolean(L, memcmp(t1->start, t2->start, t1->len) <= 0);
 		}
 		else {
 			lua_pushboolean(L, t1->len < t2->len);

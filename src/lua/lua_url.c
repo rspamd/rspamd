@@ -78,6 +78,7 @@ LUA_FUNCTION_DEF(url, parse);
 LUA_FUNCTION_DEF(url, init);
 LUA_FUNCTION_DEF(url, all);
 LUA_FUNCTION_DEF(url, lt);
+LUA_FUNCTION_DEF(url, le);
 LUA_FUNCTION_DEF(url, eq);
 LUA_FUNCTION_DEF(url, get_order);
 LUA_FUNCTION_DEF(url, get_part_order);
@@ -119,6 +120,7 @@ static const struct luaL_reg urllib_m[] = {
 	{"__tostring", lua_url_tostring},
 	{"__eq", lua_url_eq},
 	{"__lt", lua_url_lt},
+	{"__le", lua_url_le},
 	{NULL, NULL}};
 
 static const struct luaL_reg urllib_f[] = {
@@ -1953,6 +1955,24 @@ lua_url_lt(lua_State *L)
 
 	if (u1 && u2) {
 		lua_pushboolean(L, rspamd_url_cmp(u1->url, u2->url) < 0);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/* Lua 5.5 does not derive `<=` from `__lt` any more */
+static int
+lua_url_le(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *u1 = lua_check_url(L, 1),
+						  *u2 = lua_check_url(L, 2);
+
+	if (u1 && u2) {
+		lua_pushboolean(L, rspamd_url_cmp(u1->url, u2->url) <= 0);
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
