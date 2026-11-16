@@ -3216,40 +3216,40 @@ int fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 			fuzzy_module_ctx->enabled = FALSE;
 		}
 		else {
-			lua_pushstring(L, "process_rule");
-			lua_gettable(L, -2);
+			lua_getfield(L, lua_fuzzy_top + 1, "process_rule");
 
 			if (lua_type(L, -1) != LUA_TFUNCTION) {
 				msg_err_config("process_rule must return "
 							   "function and not %s",
 							   lua_typename(L, lua_type(L, -1)));
 				fuzzy_module_ctx->enabled = FALSE;
+				lua_pop(L, 1);
 			}
 			else {
 				fuzzy_module_ctx->process_rule_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 			}
 
-			lua_pushstring(L, "check_mime_part");
-			lua_gettable(L, -2);
+			lua_getfield(L, lua_fuzzy_top + 1, "check_mime_part");
 
 			if (lua_type(L, -1) != LUA_TFUNCTION) {
 				msg_err_config("check_mime_part must return "
 							   "function and not %s",
 							   lua_typename(L, lua_type(L, -1)));
 				fuzzy_module_ctx->enabled = FALSE;
+				lua_pop(L, 1);
 			}
 			else {
 				fuzzy_module_ctx->check_mime_part_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 			}
 
-			lua_pushstring(L, "cleanup_rules");
-			lua_gettable(L, -2);
+			lua_getfield(L, lua_fuzzy_top + 1, "cleanup_rules");
 
 			if (lua_type(L, -1) != LUA_TFUNCTION) {
 				msg_err_config("cleanup_rules must return "
 							   "function and not %s",
 							   lua_typename(L, lua_type(L, -1)));
 				fuzzy_module_ctx->enabled = FALSE;
+				lua_pop(L, 1);
 			}
 			else {
 				fuzzy_module_ctx->cleanup_rules_ref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -7337,7 +7337,7 @@ fuzzy_lua_learn_handler(lua_State *L)
 	if (lua_type(L, 4) == LUA_TTABLE) {
 		const char *sf;
 
-		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+		for (lua_pushnil(L); lua_next(L, 4); lua_pop(L, 1)) {
 			sf = lua_tostring(L, -1);
 
 			if (sf) {
@@ -7415,7 +7415,7 @@ fuzzy_lua_unlearn_handler(lua_State *L)
 	if (lua_type(L, 4) == LUA_TTABLE) {
 		const char *sf;
 
-		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+		for (lua_pushnil(L); lua_next(L, 4); lua_pop(L, 1)) {
 			sf = lua_tostring(L, -1);
 
 			if (sf) {
@@ -7498,7 +7498,7 @@ fuzzy_lua_gen_hashes_handler(lua_State *L)
 	if (lua_type(L, 4) == LUA_TTABLE) {
 		const char *sf;
 
-		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+		for (lua_pushnil(L); lua_next(L, 4); lua_pop(L, 1)) {
 			sf = lua_tostring(L, -1);
 
 			if (sf) {
@@ -7972,7 +7972,10 @@ fuzzy_lua_push_check_result(struct fuzzy_lua_session *session,
 		lua_setfield(session->L, -2, "found");
 	}
 
-	lua_pcall(session->L, 3, 0, 0);
+	if (lua_pcall(session->L, 3, 0, 0) != 0) {
+		msg_info("fuzzy lua check callback error: %s", lua_tostring(session->L, -1));
+		lua_pop(session->L, 1);
+	}
 }
 
 static int

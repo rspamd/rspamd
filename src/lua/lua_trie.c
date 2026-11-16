@@ -172,6 +172,16 @@ lua_trie_create(lua_State *L)
 		}                                            \
 	} while (0)
 
+/*
+ * Context passed to the multipattern callbacks: it removes any dependency
+ * on the relative stack layout at the moment of the call
+ */
+struct lua_trie_cbctx {
+	lua_State *L;
+	int res_idx;           /* absolute index of the result table, or 0 */
+	gboolean report_start; /* report {start, end} instead of end only */
+};
+
 /* Normal callback type */
 static int
 lua_trie_lua_cb_callback(struct rspamd_multipattern *mp,
@@ -182,10 +192,11 @@ lua_trie_lua_cb_callback(struct rspamd_multipattern *mp,
 						 gsize len,
 						 void *context)
 {
-	lua_State *L = context;
+	struct lua_trie_cbctx *ctx = context;
+	lua_State *L = ctx->L;
 	int ret;
 
-	gboolean report_start = lua_toboolean(L, -1);
+	gboolean report_start = ctx->report_start;
 
 	/* Function */
 	lua_pushvalue(L, 3);
@@ -207,7 +218,7 @@ lua_trie_lua_cb_callback(struct rspamd_multipattern *mp,
 	return ret;
 }
 
-/* Table like callback, expect result table on top of the stack */
+/* Table like callback, the result table is at ctx->res_idx */
 static int
 lua_trie_table_callback(struct rspamd_multipattern *mp,
 						unsigned int strnum,
@@ -217,11 +228,13 @@ lua_trie_table_callback(struct rspamd_multipattern *mp,
 						gsize len,
 						void *context)
 {
-	lua_State *L = context;
+	struct lua_trie_cbctx *ctx = context;
+	lua_State *L = ctx->L;
+	int res_idx = ctx->res_idx;
 
-	int report_start = lua_toboolean(L, -2);
+	int report_start = ctx->report_start;
 	/* Set table, indexed by pattern number */
-	lua_rawgeti(L, -1, strnum + 1);
+	lua_rawgeti(L, res_idx, strnum + 1);
 
 	if (lua_istable(L, -1)) {
 		/* Already have table, add offset */
@@ -238,7 +251,7 @@ lua_trie_table_callback(struct rspamd_multipattern *mp,
 		lua_newtable(L);
 		PUSH_TRIE_MATCH(L, match_start, textpos, report_start);
 		lua_rawseti(L, -2, 1);
-		lua_rawseti(L, -2, strnum + 1);
+		lua_rawseti(L, res_idx, strnum + 1);
 	}
 
 	return 0;
@@ -249,13 +262,14 @@ lua_trie_table_callback(struct rspamd_multipattern *mp,
  */
 static int
 lua_trie_search_str(lua_State *L, struct rspamd_multipattern *trie,
-					const char *str, gsize len, rspamd_multipattern_cb_t cb)
+					const char *str, gsize len, rspamd_multipattern_cb_t cb,
+					struct lua_trie_cbctx *ctx)
 {
 	int ret;
 	unsigned int nfound = 0;
 
 	if ((ret = rspamd_multipattern_lookup(trie, str, len,
-										  cb, L, &nfound)) == 0) {
+										  cb, ctx, &nfound)) == 0) {
 		return nfound;
 	}
 
@@ -291,8 +305,13 @@ lua_trie_match(lua_State *L)
 	gboolean found = FALSE, report_start = FALSE;
 	struct rspamd_lua_text *t;
 	rspamd_multipattern_cb_t cb = lua_trie_lua_cb_callback;
+	struct lua_trie_cbctx ctx;
 
 	int old_top = lua_gettop(L);
+
+	ctx.L = L;
+	ctx.res_idx = 0;
+	ctx.report_start = FALSE;
 
 	if (trie) {
 		if (lua_type(L, 3) != LUA_TFUNCTION) {
@@ -300,17 +319,18 @@ lua_trie_match(lua_State *L)
 				report_start = lua_toboolean(L, 3);
 			}
 
-			lua_pushboolean(L, report_start);
-			/* Table like match */
+			/* Table like match: the result table stays at res_idx */
 			lua_newtable(L);
+			ctx.res_idx = lua_gettop(L);
 			cb = lua_trie_table_callback;
 		}
 		else {
 			if (lua_isboolean(L, 4)) {
 				report_start = lua_toboolean(L, 4);
 			}
-			lua_pushboolean(L, report_start);
 		}
+
+		ctx.report_start = report_start;
 
 		if (lua_type(L, 2) == LUA_TTABLE) {
 			lua_pushvalue(L, 2);
@@ -320,7 +340,7 @@ lua_trie_match(lua_State *L)
 				if (lua_isstring(L, -1)) {
 					text = lua_tolstring(L, -1, &len);
 
-					if (lua_trie_search_str(L, trie, text, len, cb)) {
+					if (lua_trie_search_str(L, trie, text, len, cb, &ctx)) {
 						found = TRUE;
 					}
 				}
@@ -328,36 +348,40 @@ lua_trie_match(lua_State *L)
 					t = lua_check_text(L, -1);
 
 					if (t) {
-						if (lua_trie_search_str(L, trie, t->start, t->len, cb)) {
+						if (lua_trie_search_str(L, trie, t->start, t->len, cb, &ctx)) {
 							found = TRUE;
 						}
 					}
 				}
 				lua_pop(L, 1);
 			}
+
+			/* Drop the copy of the input table */
+			lua_pop(L, 1);
 		}
 		else if (lua_type(L, 2) == LUA_TSTRING) {
 			text = lua_tolstring(L, 2, &len);
 
-			if (lua_trie_search_str(L, trie, text, len, cb)) {
+			if (lua_trie_search_str(L, trie, text, len, cb, &ctx)) {
 				found = TRUE;
 			}
 		}
 		else if (lua_type(L, 2) == LUA_TUSERDATA) {
 			t = lua_check_text(L, 2);
 
-			if (t && lua_trie_search_str(L, trie, t->start, t->len, cb)) {
+			if (t && lua_trie_search_str(L, trie, t->start, t->len, cb, &ctx)) {
 				found = TRUE;
 			}
 		}
 	}
 
-	if (lua_type(L, 3) == LUA_TFUNCTION) {
+	if (ctx.res_idx == 0) {
 		lua_settop(L, old_top);
 		lua_pushboolean(L, found);
 	}
 	else {
-		lua_remove(L, -2);
+		/* Result table is on top of the stack */
+		lua_settop(L, ctx.res_idx);
 	}
 
 	return 1;
@@ -367,7 +391,7 @@ lua_trie_match(lua_State *L)
  * @method trie:search_mime(task, cb)
  * This is a helper mehthod to search pattern within text parts of a message in rspamd task
  * @param {task} task object
- * @param {function} cb callback called on each pattern match @see trie:match
+ * @param {function} cb callback called on each pattern match @see trie:match; it always receives the match end offset only (`report_start` is not supported here)
  * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
  */
@@ -382,6 +406,8 @@ lua_trie_search_mime(lua_State *L)
 	gsize len, i;
 	gboolean found = FALSE;
 	rspamd_multipattern_cb_t cb = lua_trie_lua_cb_callback;
+	/* Only end offsets are reported by the task helpers */
+	struct lua_trie_cbctx ctx = {L, 0, FALSE};
 
 	if (trie && task) {
 		PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, part)
@@ -390,7 +416,7 @@ lua_trie_search_mime(lua_State *L)
 				text = part->utf_content.begin;
 				len = part->utf_content.len;
 
-				if (lua_trie_search_str(L, trie, text, len, cb) != 0) {
+				if (lua_trie_search_str(L, trie, text, len, cb, &ctx) != 0) {
 					found = TRUE;
 				}
 			}
@@ -405,7 +431,7 @@ lua_trie_search_mime(lua_State *L)
  * @method trie:search_rawmsg(task, cb[, caseless])
  * This is a helper mehthod to search pattern within the whole undecoded content of rspamd task
  * @param {task} task object
- * @param {function} cb callback called on each pattern match @see trie:match
+ * @param {function} cb callback called on each pattern match @see trie:match; it always receives the match end offset only (`report_start` is not supported here)
  * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
  */
@@ -418,12 +444,14 @@ lua_trie_search_rawmsg(lua_State *L)
 	const char *text;
 	gsize len;
 	gboolean found = FALSE;
+	/* Only end offsets are reported by the task helpers */
+	struct lua_trie_cbctx ctx = {L, 0, FALSE};
 
 	if (trie && task) {
 		text = task->msg.begin;
 		len = task->msg.len;
 
-		if (lua_trie_search_str(L, trie, text, len, lua_trie_lua_cb_callback) != 0) {
+		if (lua_trie_search_str(L, trie, text, len, lua_trie_lua_cb_callback, &ctx) != 0) {
 			found = TRUE;
 		}
 	}
@@ -436,7 +464,7 @@ lua_trie_search_rawmsg(lua_State *L)
  * @method trie:search_rawbody(task, cb[, caseless])
  * This is a helper mehthod to search pattern within the whole undecoded content of task's body (not including headers)
  * @param {task} task object
- * @param {function} cb callback called on each pattern match @see trie:match
+ * @param {function} cb callback called on each pattern match @see trie:match; it always receives the match end offset only (`report_start` is not supported here)
  * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
  * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
  */
@@ -449,6 +477,8 @@ lua_trie_search_rawbody(lua_State *L)
 	const char *text;
 	gsize len;
 	gboolean found = FALSE;
+	/* Only end offsets are reported by the task helpers */
+	struct lua_trie_cbctx ctx = {L, 0, FALSE};
 
 	if (trie && task) {
 		if (MESSAGE_FIELD(task, raw_headers_content).len > 0) {
@@ -461,7 +491,7 @@ lua_trie_search_rawbody(lua_State *L)
 			len = task->msg.len;
 		}
 
-		if (lua_trie_search_str(L, trie, text, len, lua_trie_lua_cb_callback) != 0) {
+		if (lua_trie_search_str(L, trie, text, len, lua_trie_lua_cb_callback, &ctx) != 0) {
 			found = TRUE;
 		}
 	}

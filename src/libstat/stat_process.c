@@ -517,22 +517,22 @@ rspamd_stat_classifier_is_skipped(struct rspamd_task *task,
 						 lua_tostring(L, -1));
 		}
 		else {
-			if (lua_isboolean(L, 1)) {
-				if (!lua_toboolean(L, 1)) {
+			if (lua_isboolean(L, old_top + 1)) {
+				if (!lua_toboolean(L, old_top + 1)) {
 					ret = TRUE;
 				}
 			}
 
-			if (lua_isstring(L, 2)) {
+			if (lua_isstring(L, old_top + 2)) {
 				if (ret) {
 					msg_notice_task("%s condition for classifier %s returned: %s; skip classifier",
 									is_learn ? "learn" : "classify", cl->cfg->name,
-									lua_tostring(L, 2));
+									lua_tostring(L, old_top + 2));
 				}
 				else {
 					msg_info_task("%s condition for classifier %s returned: %s",
 								  is_learn ? "learn" : "classify", cl->cfg->name,
-								  lua_tostring(L, 2));
+								  lua_tostring(L, old_top + 2));
 				}
 			}
 			else if (ret) {
@@ -1781,13 +1781,16 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 				/* Legacy script */
 				lua_script = ucl_object_tostring(obj);
 
+				/* The script can return any number of values, including none */
+				int old_top = lua_gettop(L);
+
 				if (luaL_dostring(L, lua_script) != 0) {
 					msg_err_task("cannot execute lua script for autolearn "
 								 "extraction: %s",
 								 lua_tostring(L, -1));
 				}
 				else {
-					if (lua_type(L, -1) == LUA_TFUNCTION) {
+					if (lua_gettop(L) > old_top && lua_type(L, -1) == LUA_TFUNCTION) {
 						lua_pushcfunction(L, &rspamd_lua_traceback);
 						err_idx = lua_gettop(L);
 						lua_pushvalue(L, -2); /* Function itself */
@@ -1821,17 +1824,16 @@ rspamd_stat_check_autolearn(struct rspamd_task *task)
 								}
 							}
 						}
-
-						/* Result + error function + original function */
-						lua_pop(L, 3);
 					}
 					else {
 						msg_err_task("lua script must return "
 									 "function(task) and not %s",
-									 lua_typename(L, lua_type(
-														 L, -1)));
+									 lua_gettop(L) > old_top ? lua_typename(L, lua_type(L, -1)) : "nothing");
 					}
 				}
+
+				/* Script results, error function and the call result */
+				lua_settop(L, old_top);
 			}
 			else if (ucl_object_type(obj) == UCL_OBJECT) {
 				/* Check if this is a multi-class autolearn configuration */

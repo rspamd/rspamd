@@ -645,6 +645,11 @@ lua_xmlrpc_parse_table(lua_State *L,
 	int r = pr, num;
 	double dnum;
 
+	/* lua_next needs an absolute index as we push a key on top */
+	if (pos < 0) {
+		pos = lua_gettop(L) + pos + 1;
+	}
+
 	r += rspamd_snprintf(databuf + r, size - r, "<struct>");
 	lua_pushnil(L); /* first key */
 	while (lua_next(L, pos) != 0) {
@@ -666,13 +671,13 @@ lua_xmlrpc_parse_table(lua_State *L,
 			/* Try to avoid conversion errors */
 			if (dnum != (double) num) {
 				r += rspamd_snprintf(databuf + r,
-									 sizeof(databuf) - r,
+									 size - r,
 									 "<double>%f</double>",
 									 dnum);
 			}
 			else {
 				r += rspamd_snprintf(databuf + r,
-									 sizeof(databuf) - r,
+									 size - r,
 									 "<int>%d</int>",
 									 num);
 			}
@@ -689,7 +694,7 @@ lua_xmlrpc_parse_table(lua_State *L,
 			break;
 		case LUA_TTABLE:
 			/* Recursive call */
-			r += lua_xmlrpc_parse_table(L, -1, databuf + r, r, size);
+			r += lua_xmlrpc_parse_table(L, -1, databuf, r, size);
 			break;
 		}
 		r += rspamd_snprintf(databuf + r, size - r, "</value></member>");

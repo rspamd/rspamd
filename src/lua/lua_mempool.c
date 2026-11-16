@@ -210,10 +210,11 @@ lua_mempool_add_destructor(lua_State *L)
 		else {
 			msg_err("trying to add destructor without function");
 		}
+
+		return 0;
 	}
-	else {
-		lua_pushnil(L);
-	}
+
+	lua_pushnil(L);
 
 	return 1;
 }
@@ -242,10 +243,11 @@ lua_mempool_stat(lua_State *L)
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool(L, 1);
 
 	if (mempool) {
+		/* Nothing to report so far, push nothing */
+		return 0;
 	}
-	else {
-		lua_pushnil(L);
-	}
+
+	lua_pushnil(L);
 
 	return 1;
 }
@@ -258,7 +260,7 @@ lua_mempool_suggest_size(lua_State *L)
 
 	if (mempool) {
 		lua_pushinteger(L, rspamd_mempool_suggest_size());
-		return 0;
+		return 1;
 	}
 	else {
 		lua_pushnil(L);
@@ -295,7 +297,7 @@ lua_mempool_set_bucket(lua_State *L)
 			}
 		}
 		else {
-			for (i = 0; i <= nelts; i++) {
+			for (i = 0; i < nelts; i++) {
 				bucket->elts[i] = lua_tonumber(L, 4 + i);
 			}
 		}

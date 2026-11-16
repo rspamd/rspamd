@@ -2366,11 +2366,12 @@ lua_config_register_symbol_from_table(lua_State *L, struct rspamd_config *cfg,
 
 	if (lua_type(L, -1) != LUA_TFUNCTION) {
 		cb_ref = -1;
+		lua_pop(L, 1);
 	}
 	else {
+		/* luaL_ref pops the function itself */
 		cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	}
-	lua_pop(L, 1);
 
 	/* Optional fields */
 	lua_pushstring(L, "weight");
@@ -4244,6 +4245,8 @@ lua_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 	thread->error_callback = lua_periodic_callback_error;
 
 	L = thread->lua_state;
+	/* A pooled thread can carry values left by its previous user */
+	lua_settop(L, 0);
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, periodic->cbref);
 	pcfg = lua_newuserdata(L, sizeof(*pcfg));
@@ -4271,16 +4274,19 @@ lua_periodic_callback_finish(struct thread_entry *thread, int ret)
 	ev_now_update(periodic->event_loop);
 
 	if (ret == 0) {
-		if (lua_type(L, -1) == LUA_TBOOLEAN) {
-			plan_more = lua_toboolean(L, -1);
-			timeout = periodic->timeout;
-		}
-		else if (lua_type(L, -1) == LUA_TNUMBER) {
-			timeout = lua_tonumber(L, -1);
-			plan_more = timeout > 0 ? TRUE : FALSE;
+		/* Read the result only if the function has actually returned one */
+		if (lua_gettop(L) > 0) {
+			if (lua_type(L, -1) == LUA_TBOOLEAN) {
+				plan_more = lua_toboolean(L, -1);
+				timeout = periodic->timeout;
+			}
+			else if (lua_type(L, -1) == LUA_TNUMBER) {
+				timeout = lua_tonumber(L, -1);
+				plan_more = timeout > 0 ? TRUE : FALSE;
+			}
 		}
 
-		lua_pop(L, 1); /* Return value */
+		lua_settop(L, 0); /* Return values */
 	}
 
 	if (periodic->cfg->cur_worker) {
@@ -5707,6 +5713,13 @@ void luaopen_config(lua_State *L)
 	lua_setglobal(L, "RSPAMD_RE_CACHE_FLAG_LOADED");
 }
 
+static void
+lua_call_finish_script_done(struct thread_entry *thread, int ret)
+{
+	/* Drop the script return values before the thread goes back to the pool */
+	lua_settop(thread->lua_state, 0);
+}
+
 void lua_call_finish_script(struct rspamd_config_cfg_lua_script *sc,
 							struct rspamd_task *task)
 {
@@ -5716,6 +5729,7 @@ void lua_call_finish_script(struct rspamd_config_cfg_lua_script *sc,
 
 	thread = lua_thread_pool_get_for_task(task);
 	thread->task = task;
+	thread->finish_callback = lua_call_finish_script_done;
 
 	lua_State *L = thread->lua_state;
 

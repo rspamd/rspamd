@@ -149,8 +149,11 @@ rspamadm_lua_add_path(lua_State *L, const char *path)
 	const char *old_path;
 	gsize len;
 	GString *new_path;
+	int top = lua_gettop(L);
 
+	/* Stack: [package] */
 	lua_getglobal(L, "package");
+	/* Stack: [package, old_path] */
 	lua_getfield(L, -1, "path");
 	old_path = luaL_checklstring(L, -1, &len);
 
@@ -163,9 +166,13 @@ rspamadm_lua_add_path(lua_State *L, const char *path)
 		rspamd_printf_gstring(new_path, "%s;%s", path, old_path);
 	}
 
+	/* old_path is copied into new_path, drop it: [package] */
+	lua_pop(L, 1);
 	lua_pushlstring(L, new_path->str, new_path->len);
+	/* [package, new_path] -> package.path = new_path -> [package] */
 	lua_setfield(L, -2, "path");
-	lua_settop(L, 0);
+	/* Restore the stack to its state on entry */
+	lua_settop(L, top);
 	g_string_free(new_path, TRUE);
 }
 
@@ -209,6 +216,8 @@ rspamadm_lua_load_script(lua_State *L, const char *path)
 		rspamd_fprintf(stderr, "cannot load script %s: %s\n",
 					   path, lua_tostring(L, -1));
 		lua_settop(L, 0);
+		/* Never called: hand the idle running entry back to the pool */
+		lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 
 		return FALSE;
 	}
@@ -360,15 +369,16 @@ rspamadm_lua_exec_handler(lua_State *L, int argc, char **argv)
 {
 	int i;
 
-	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
-	L = thread->lua_state;
-
 	for (i = 1; argv[i] != NULL; i++) {
+		/* A thread is consumed by each call (returned or terminated) */
+		struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
+		L = thread->lua_state;
 
 		if (luaL_loadfile(L, argv[i]) != 0) {
 			rspamd_fprintf(stderr, "cannot load script %s: %s\n",
 						   argv[i], lua_tostring(L, -1));
 			lua_settop(L, 0);
+			lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 
 			return;
 		}
@@ -407,6 +417,7 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 
 		if (lua_type(L, -1) != LUA_TFUNCTION) {
 			rspamd_printf("bad callback type: %s\n", lua_typename(L, lua_type(L, -1)));
+			lua_settop(L, 0);
 			lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 			return;
 		}
@@ -418,6 +429,8 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 
 		if (map == NULL) {
 			rspamd_printf("cannot open %s: %s\n", argv[i], strerror(errno));
+			lua_settop(L, 0);
+			lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 		}
 		else {
 			task = rspamd_task_new(NULL, rspamd_main->cfg, NULL, NULL, NULL, FALSE);
@@ -426,6 +439,8 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 				rspamd_printf("cannot load %s\n", argv[i]);
 				rspamd_task_free(task);
 				munmap(map, len);
+				lua_settop(L, 0);
+				lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 				continue;
 			}
 
@@ -433,6 +448,8 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 				rspamd_printf("cannot parse %s: %e\n", argv[i], task->err);
 				rspamd_task_free(task);
 				munmap(map, len);
+				lua_settop(L, 0);
+				lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 				continue;
 			}
 
@@ -453,16 +470,21 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 								   LUA_ESCAPE_UNPRINTABLE);
 					rspamd_printf("%s\n", outbuf);
 				}
+
+				/* Clean the thread up unless the callback is still suspended */
+				if (lua_status(L) == 0) {
+					lua_settop(L, 0);
+				}
 			}
 
+			/*
+			 * On error the thread has been terminated: its stack must not be
+			 * touched.
+			 */
 			rspamd_task_free(task);
 			munmap(map, len);
-			/* Pop all but the original function */
-			lua_settop(L, func_idx);
 		}
 	}
-
-	lua_settop(L, 0);
 }
 
 
@@ -790,6 +812,7 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 
 	if (body == NULL) {
 		rspamd_controller_send_error(conn_ent, 400, "Empty lua script");
+		lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 
 		return 0;
 	}
@@ -801,7 +824,10 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 	tb = g_string_sized_new(body_len + sizeof("return "));
 	rspamd_printf_gstring(tb, "return %*s", (int) body_len, body);
 
-	if (luaL_loadstring(L, tb->str) != 0) {
+	int load_ret = luaL_loadstring(L, tb->str);
+	g_string_free(tb, TRUE);
+
+	if (load_ret != 0) {
 		/* Reset stack */
 		lua_settop(L, 0);
 		lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -809,12 +835,12 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 		/* Try with no return */
 		if (luaL_loadbuffer(L, body, body_len, "http input") != 0) {
 			rspamd_controller_send_error(conn_ent, 400, "Invalid lua script");
+			lua_settop(L, 0);
+			lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 
 			return 0;
 		}
 	}
-
-	g_string_free(tb, TRUE);
 
 	if (lua_repl_thread_call(thread, 0, conn_ent, lua_thread_http_error_cb) != 0) {
 		return 0;

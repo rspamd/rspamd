@@ -1855,6 +1855,10 @@ lua_ucl_object_iter(lua_State *L)
 				if (idx >= 0) {
 					lua_pushinteger(L, idx + 1);
 				}
+				else {
+					/* Initial state of pairs(): first array element has key 1 */
+					lua_pushinteger(L, 1);
+				}
 			}
 			else {
 				lua_pushnumber(L, -1);

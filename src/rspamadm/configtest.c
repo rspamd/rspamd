@@ -177,8 +177,10 @@ rspamadm_configtest(int argc, char **argv, const struct rspamadm_command *cmd)
 
 				if (!rspamd_lua_universal_pcall(cfg->lua_state, -1, G_STRLOC, 1, "", &err)) {
 					msg_err_config("call to lua function failed: %s",
-								   lua_tostring(cfg->lua_state, -1));
-					lua_pop(cfg->lua_state, 2);
+								   err ? err->message : "unknown error");
+					g_clear_error(&err);
+					/* Only the function is left on the stack */
+					lua_pop(cfg->lua_state, 1);
 					ret = FALSE;
 				}
 				else {

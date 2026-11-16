@@ -399,7 +399,7 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 {
 	const char *lua_script;
 	gsize slen;
-	int err_idx, ref_idx;
+	int err_idx, ref_idx, old_top;
 	gboolean has_ref = FALSE;
 
 	g_assert(obj != NULL);
@@ -410,6 +410,7 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 	*ref_to = -1;
 
 	lua_script = ucl_object_tolstring(obj, &slen);
+	old_top = lua_gettop(L);
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
 
@@ -420,7 +421,7 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 					EINVAL,
 					"cannot load lua parser script: %s",
 					lua_tostring(L, -1));
-		lua_settop(L, 0); /* Error function */
+		lua_settop(L, old_top); /* Error function */
 
 		return FALSE;
 	}
@@ -432,7 +433,7 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 					EINVAL,
 					"cannot init lua parser script: %s",
 					lua_tostring(L, -1));
-		lua_settop(L, 0);
+		lua_settop(L, old_top);
 
 		return FALSE;
 	}
@@ -446,23 +447,31 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 		 * From converts parent request to a client one
 		 * To converts client request to a parent one
 		 */
-		lua_pushstring(L, "from");
-		lua_gettable(L, -2);
+		int tbl_idx = lua_gettop(L);
+
+		lua_getfield(L, tbl_idx, "from");
 
 		if (lua_isfunction(L, -1)) {
 			ref_idx = luaL_ref(L, LUA_REGISTRYINDEX);
 			*ref_from = ref_idx;
 			has_ref = TRUE;
 		}
+		else {
+			lua_pop(L, 1);
+		}
 
-		lua_pushstring(L, "to");
-		lua_gettable(L, -2);
+		lua_getfield(L, tbl_idx, "to");
 
 		if (lua_isfunction(L, -1)) {
 			ref_idx = luaL_ref(L, LUA_REGISTRYINDEX);
 			*ref_to = ref_idx;
 			has_ref = TRUE;
 		}
+		else {
+			lua_pop(L, 1);
+		}
+
+		lua_settop(L, old_top);
 	}
 	else if (!lua_isfunction(L, -1)) {
 		g_set_error(err,
@@ -470,7 +479,7 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 					EINVAL,
 					"cannot init lua parser script: "
 					"must return function");
-		lua_settop(L, 0);
+		lua_settop(L, old_top);
 
 		return FALSE;
 	}
@@ -478,7 +487,7 @@ rspamd_proxy_parse_lua_parser(lua_State *L, const ucl_object_t *obj,
 		/* Just parser from protocol */
 		ref_idx = luaL_ref(L, LUA_REGISTRYINDEX);
 		*ref_from = ref_idx;
-		lua_settop(L, 0);
+		lua_settop(L, old_top);
 		has_ref = TRUE;
 	}
 

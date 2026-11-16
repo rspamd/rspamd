@@ -870,6 +870,9 @@ lua_html_tag_get_style(lua_State *L)
 		if (ltag->tag->block) {
 			lua_html_push_block(L, ltag->tag->block);
 		}
+		else {
+			lua_pushnil(L);
+		}
 	}
 	else {
 		return luaL_error(L, "invalid arguments");

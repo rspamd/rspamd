@@ -272,6 +272,8 @@ int rspamd_stat_cache_redis_check(struct rspamd_task *task,
 		return RSPAMD_LEARN_IGNORE;
 	}
 
+	lua_settop(L, err_idx - 1);
+
 	/* We need to return OK every time */
 	return RSPAMD_LEARN_OK;
 }
@@ -314,6 +316,8 @@ int rspamd_stat_cache_redis_learn(struct rspamd_task *task,
 		lua_settop(L, err_idx - 1);
 		return RSPAMD_LEARN_IGNORE;
 	}
+
+	lua_settop(L, err_idx - 1);
 
 	/* We need to return OK every time */
 	return RSPAMD_LEARN_OK;

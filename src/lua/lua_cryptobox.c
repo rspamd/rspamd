@@ -1496,7 +1496,7 @@ lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int 
 		/* Hash array part */
 		gsize alen;
 #if LUA_VERSION_NUM >= 502
-		alen = lua_rawlen(L, 2);
+		alen = lua_rawlen(L, pos);
 #else
 		alen = lua_objlen(L, pos);
 #endif
@@ -1546,7 +1546,7 @@ lua_cryptobox_update_pos(lua_State *L, struct rspamd_lua_cryptobox_hash *h, int 
 	}
 
 	case LUA_TUSERDATA:
-		t = lua_check_text(L, 2);
+		t = lua_check_text(L, pos);
 		if (t) {
 			rspamd_lua_hash_update(h, t->start, t->len);
 		}
