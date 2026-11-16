@@ -62,6 +62,7 @@ A masked threshold that a backend delivers is skipped and reported
   [Documentation]  the stored override names greylist (override.d wins) and reject (it applies)
   Write Overrides  {"v": 1, "modules": {"actions": {"v": 1, "o": {"greylist": 5, "reject": 150}}}}
   Wait Until Keyword Succeeds  20x  0.5s  Required Score Should Be Seen By All Workers  150
+  Wait Until Keyword Succeeds  20x  0.5s  Controller Should Report Skipped  actions  greylist
   Action Threshold Should Be  greylist  20
   Action Threshold Should Be  reject  150
   ${dump} =  Dump All
@@ -93,6 +94,7 @@ A write that names the masked stored entry again is refused, not reported as a s
 A stale name in the stored scores is skipped, the rest is applied
   Write Overrides  {"v": 2, "modules": {"scores": {"v": 1, "o": {"DYN_HELLO": 40, "STALE_SYMBOL": 5}}}}
   Scores Should Reach All Workers  40.0
+  Wait Until Keyword Succeeds  20x  0.5s  Controller Should Report Skipped  scores  STALE_SYMBOL
   ${dump} =  Dump All
   Should Be Equal  ${dump}[modules][scores][skipped][0]  unknown symbol STALE_SYMBOL
   Should Contain  ${dump}[backends][file][last_error]  unknown symbol STALE_SYMBOL
@@ -168,6 +170,13 @@ Dump All
   Should Be Equal As Integers  ${result}[0]  200
   ${json} =  Check JSON  ${result}[1]
   RETURN  ${json}[data]
+
+Controller Should Report Skipped
+  [Documentation]  The controller polls the file on its own timer: the scanning workers having applied a
+  ...              stored override says nothing about what the controller has read so far
+  [Arguments]  ${module}  ${text}
+  ${dump} =  Dump All
+  Should Contain  ${dump}[modules][${module}][skipped][0]  ${text}
 
 Dump Module
   [Arguments]  ${module}
