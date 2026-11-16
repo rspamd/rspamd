@@ -575,15 +575,14 @@ gboolean rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 										  const char *extraction_pattern, ...);
 
 
-int rspamd_lua_traceback(lua_State *L);
-
 /**
-* Appends the stack trace to an initialised buffer. It does not read or
-* change the Lua stack: the buffer may own its top elements.
+* Message handler for lua_pcall, also usable as a plain call: a string error
+* message at the top of the stack is replaced with "<message>; trace: ...".
+* A non-string error object is kept and the result is pushed above it.
 * @param L
-* @param buf
+* @return 1
 */
-void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf);
+int rspamd_lua_traceback(lua_State *L);
 
 /**
 * Returns size of table at position `tbl_pos`

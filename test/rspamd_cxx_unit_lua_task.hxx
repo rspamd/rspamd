@@ -317,7 +317,27 @@ TEST_SUITE("lua_common")
 		CHECK(msg.find("unknown error") == std::string::npos);
 
 		lua_settop(L, top);
-		lua_close(L);
+
+		/* A plain call: only the message is replaced */
+		lua_pushinteger(L, 42);
+		lua_pushstring(L, "direct55");
+		CHECK(rspamd_lua_traceback(L) == 1);
+		CHECK(lua_gettop(L) == top + 2);
+		CHECK(lua_tointeger(L, -2) == 42);
+		msg = lua_tostring(L, -1);
+		CHECK(msg.find("direct55") != std::string::npos);
+
+		/* An error object that is not a string stays where it is */
+		lua_settop(L, top);
+		lua_newtable(L);
+		CHECK(rspamd_lua_traceback(L) == 1);
+		CHECK(lua_gettop(L) == top + 2);
+		CHECK(lua_type(L, -2) == LUA_TTABLE);
+		msg = lua_tostring(L, -1);
+		CHECK(msg.find("unknown error") != std::string::npos);
+
+		lua_settop(L, top);
+		rspamd_lua_close(L);
 	}
 }
 

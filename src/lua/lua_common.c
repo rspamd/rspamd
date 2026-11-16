@@ -978,7 +978,7 @@ rspamd_lua_init(bool wipe_mem)
 		L = luaL_newstate();
 #else
 #if LUA_VERSION_NUM >= 505
-		L = lua_newstate(rspamd_lua_wipe_realloc, NULL, 0);
+		L = lua_newstate(rspamd_lua_wipe_realloc, NULL, luaL_makeseed(NULL));
 #else
 		L = lua_newstate(rspamd_lua_wipe_realloc, NULL);
 #endif
@@ -2038,12 +2038,6 @@ int rspamd_lua_traceback(lua_State *L)
 	}
 
 	return 1;
-}
-
-void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf)
-{
-	luaL_addstring(buf, "trace:");
-	rspamd_lua_traceback_string(L, buf);
 }
 
 unsigned int rspamd_lua_table_size(lua_State *L, int tbl_pos)
