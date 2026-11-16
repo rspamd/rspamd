@@ -68,6 +68,12 @@ jobs:
           ninja -C build
           sudo ninja -C build install
 
+      - name: Check the requested Lua version
+        if: inputs.enable_luajit == 'OFF' && inputs.lua_version != '' && inputs.lua_version != '5.5'
+        run: |
+          echo "unsupported lua_version: ${{ inputs.lua_version }}"
+          exit 1
+
       - name: Build Lua 5.5 and its FFI module
         if: inputs.enable_luajit == 'OFF' && inputs.lua_version == '5.5'
         env:
@@ -97,6 +103,11 @@ jobs:
           mkdir ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
           cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} ${{ env.LUA_ALTROOT }} -DENABLE_JEMALLOC=${{ inputs.enable_jemalloc }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
+
+      - name: Check that the build uses the Lua it was asked for
+        if: inputs.lua_version == '5.5'
+        run: |
+          grep -E '^LIBLUA_LIBRARY:[A-Z]+=/opt/lua55/lib/liblua\.a$' ${GITHUB_WORKSPACE}/build/CMakeCache.txt
 
       - name: Build rspamd
         run: |
