@@ -294,7 +294,10 @@ TEST_SUITE("rspamd_utils")
 			sigemptyset(&action.sa_mask);
 			REQUIRE(sigaction(SIGXFSZ, &action, &old_action) == 0);
 			REQUIRE(setrlimit(RLIMIT_FSIZE, &limit) == 0);
-			/* The first write stops at the limit, the next one fails with EFBIG */
+			/*
+			 * Linux writes up to the limit and fails the next write with EFBIG;
+			 * the BSDs refuse a write that crosses the limit as a whole
+			 */
 			auto ret = rspamd_write_all(fd, data.data(), data.size());
 			auto saved_errno = errno;
 			/* Restore before any doctest output, it may go to a regular file */
@@ -304,7 +307,7 @@ TEST_SUITE("rspamd_utils")
 			CHECK_FALSE(ret);
 			CHECK(saved_errno == EFBIG);
 			REQUIRE(fstat(fd, &st) == 0);
-			CHECK(st.st_size == 4);
+			CHECK(st.st_size <= 4);
 		}
 #endif
 
