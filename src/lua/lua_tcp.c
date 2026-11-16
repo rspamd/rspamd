@@ -582,6 +582,23 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 
 static void lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, va_list argp);
 
+/*
+ * Lua callback of a queued handler, -1 if it has none. A connect marker is
+ * neither a read nor a write handler: its union is not initialised
+ */
+static inline int
+lua_tcp_handler_cbref(const struct lua_tcp_handler *hdl)
+{
+	switch (hdl->type) {
+	case LUA_WANT_READ:
+		return hdl->h.r.cbref;
+	case LUA_WANT_WRITE:
+		return hdl->h.w.cbref;
+	default:
+		return -1;
+	}
+}
+
 static void
 lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 				   const char *err, ...)
@@ -667,12 +684,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 			break;
 		}
 
-		if (hdl->type == LUA_WANT_READ) {
-			cbref = hdl->h.r.cbref;
-		}
-		else {
-			cbref = hdl->h.w.cbref;
-		}
+		cbref = lua_tcp_handler_cbref(hdl);
 
 		if (cbref != -1) {
 			top = lua_gettop(L);
@@ -759,12 +771,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 
 	g_assert(hdl != NULL);
 
-	if (hdl->type == LUA_WANT_READ) {
-		cbref = hdl->h.r.cbref;
-	}
-	else {
-		cbref = hdl->h.w.cbref;
-	}
+	cbref = lua_tcp_handler_cbref(hdl);
 
 	if (cbref != -1) {
 		top = lua_gettop(L);

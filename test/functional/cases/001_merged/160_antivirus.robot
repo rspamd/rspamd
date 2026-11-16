@@ -1,5 +1,6 @@
 *** Settings ***
 Library         Process
+Library         OperatingSystem
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
@@ -110,6 +111,14 @@ AVAST CACHE MISS
   ...  Settings=${SETTINGS_AVAST}
   Do Not Expect Symbol  AVAST_VIRUS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
+
+CONNECT ERRORS CALL NO BOGUS CALLBACK
+  [Documentation]  The scanners above were refused connections: the connect marker in the handlers queue of
+  ...              a TCP connection has no Lua callback and must not be treated as a handler that has one
+  # The log of the merged suite holds bytes that are not valid UTF-8
+  ${log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
+  Should Contain  ${log}  Connection refused
+  Should Not Contain  ${log}  lua_tcp_push_error: callback call failed: attempt to call a
 
 *** Keywords ***
 Double FProt Teardown
