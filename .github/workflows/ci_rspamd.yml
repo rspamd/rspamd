@@ -15,6 +15,12 @@ on:
       enable_luajit:
         type: string
         default: 'ON'
+      # Only with enable_luajit == 'OFF'. Empty means the Lua that the image
+      # provides. A version set here is built from the lua.org sources, as no
+      # image carries it yet.
+      lua_version:
+        type: string
+        default: ''
       # rspamd ships jemalloc-enabled packages (debian/rules on everything but
       # arm64, rpm/rspamd.spec everywhere), and jemalloc changes how the whole
       # process allocates, so that configuration has to be built and tested and
@@ -51,7 +57,7 @@ jobs:
         run: echo "HYPERSCAN_ALTROOT=-DHYPERSCAN_ROOT_DIR=/vectorscan" >> "$GITHUB_ENV"
 
       - name: Install Lua FFI for non-LuaJIT builds
-        if: inputs.enable_luajit == 'OFF'
+        if: inputs.enable_luajit == 'OFF' && inputs.lua_version == ''
         run: |
           sudo dnf install -y luarocks lua-devel libffi-devel meson pkgconf gcc-c++
           cd /tmp
@@ -62,11 +68,35 @@ jobs:
           ninja -C build
           sudo ninja -C build install
 
+      - name: Build Lua 5.5 and its FFI module
+        if: inputs.enable_luajit == 'OFF' && inputs.lua_version == '5.5'
+        env:
+          LUA_TARBALL_SHA256: 57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d
+        run: |
+          sudo dnf install -y libffi-devel meson pkgconf gcc gcc-c++ make
+          cd /tmp
+          curl -sSfL -o lua-5.5.0.tar.gz https://www.lua.org/ftp/lua-5.5.0.tar.gz
+          echo "${LUA_TARBALL_SHA256}  lua-5.5.0.tar.gz" | sha256sum -c -
+          tar xzf lua-5.5.0.tar.gz
+          cd lua-5.5.0
+          # A static library that is linked into the rspamd shared libraries
+          make -j "$(getconf _NPROCESSORS_ONLN)" linux MYCFLAGS="-fPIC"
+          sudo make install INSTALL_TOP=/opt/lua55
+          # The FFI module: Lua looks for C modules in /usr/local/lib/lua/5.5
+          cd /tmp
+          curl -sSfL https://github.com/q66/cffi-lua/archive/refs/tags/v0.2.4.tar.gz | tar xz
+          cd cffi-lua-0.2.4
+          find . -exec touch {} +
+          CXXFLAGS="-I/opt/lua55/include" meson setup build -Dlua_version=custom -Dbuildtype=release -Dtests=false
+          ninja -C build
+          sudo install -D -m 0755 build/cffi.so /usr/local/lib/lua/5.5/cffi.so
+          echo "LUA_ALTROOT=-DLUA_ROOT=/opt/lua55" >> "$GITHUB_ENV"
+
       - name: Run cmake
         run: |
           mkdir ${GITHUB_WORKSPACE}/build
           cd ${GITHUB_WORKSPACE}/build
-          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} -DENABLE_JEMALLOC=${{ inputs.enable_jemalloc }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
+          cmake -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DENABLE_LUAJIT=${{ inputs.enable_luajit }} ${{ env.LUA_ALTROOT }} -DENABLE_JEMALLOC=${{ inputs.enable_jemalloc }} ${{ env.HYPERSCAN_ALTROOT }} -GNinja ${GITHUB_WORKSPACE}/src
 
       - name: Build rspamd
         run: |
@@ -85,7 +115,7 @@ jobs:
           ninja test
 
       - name: Apply Fedora specifics
-        if: inputs.name == 'fedora-ci'
+        if: startsWith(inputs.name, 'fedora-ci')
         run: |
           sudo mv /usr/bin/miltertest /usr/bin/miltertest.is.broken.on.fedora || true
 

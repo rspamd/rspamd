@@ -171,7 +171,7 @@ if (ENABLE_LUAJIT)
             MODULES luajit)
     set(WITH_LUAJIT 1)
 else ()
-    # Try to find Lua (5.3, 5.4, 5.2, or 5.1 in that order)
+    # Try to find Lua (5.3, 5.4, 5.5, 5.2, or 5.1 in that order)
     ProcessPackage(LIBLUA LIBRARY "lua"
             "lua-5.3"
             LIB_SUFFIXES "lua5.3"
@@ -196,6 +196,19 @@ else ()
                 ROOT ${LUA_ROOT}
                 MODULES lua54
                 OPTIONAL)
+        if (NOT WITH_LIBLUA)
+            ProcessPackage(LIBLUA LIBRARY "lua"
+                    "lua-5.5"
+                    LIB_SUFFIXES "lua5.5"
+                    INCLUDE lua.h INCLUDE_SUFFIXES
+                    "include/lua-5.5"
+                    "include/lua5.5"
+                    "include/lua55"
+                    "include/lua"
+                    ROOT ${LUA_ROOT}
+                    MODULES lua55
+                    OPTIONAL)
+        endif ()
         if (NOT WITH_LIBLUA)
             ProcessPackage(LIBLUA LIBRARY "lua"
                     "lua-5.2"

@@ -50,6 +50,22 @@ jobs:
       # jemalloc-devel (rspamd/rspamd-build-docker).
       enable_jemalloc: 'OFF'
 
+  fedora_lua55:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/master' ||
+      github.repository != 'rspamd/rspamd'
+    uses: ./.github/workflows/ci_rspamd.yml
+    with:
+      image: ghcr.io/rspamd/rspamd-build-docker:fedora-ci
+      name: fedora-ci-lua55
+      enable_luajit: 'OFF'
+      # Lua 5.5 is not packaged in the image yet: the job builds it from the
+      # lua.org sources. It keeps the Lua code and the C API usage working with
+      # the newest Lua (constant loop variables, luaL_Buffer on the stack).
+      lua_version: '5.5'
+      enable_jemalloc: 'OFF'
+
   ubuntu_amd64:
     if: |
       github.event_name == 'pull_request' ||
