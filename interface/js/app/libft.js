@@ -763,7 +763,7 @@ define(["app/common", "bootstrap", "app/tab-utils", "tabulator"],
             sym.options.forEach((opt) => {
                 const match = opt.match(/^\d+:([a-f0-9]+):[\d.]+:/);
                 if (match) {
-                    const [,shortHash] = match;
+                    const [, shortHash] = match;
                     const indices = fuzzyHashIndex[shortHash];
                     if (Array.isArray(indices)) indices.forEach((i) => foundIndices.add(i));
                 }
