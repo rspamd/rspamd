@@ -266,7 +266,9 @@ context("MIME boundary recovery", function()
   local function qp_hide(s)
     local out = {}
     s = s:gsub("=", "=3D")
-    for line in (s .. "\r\n"):gmatch("(.-)\r\n") do
+    -- Not assigned to the loop variable: it is constant in Lua 5.5
+    for src_line in (s .. "\r\n"):gmatch("(.-)\r\n") do
+      local line = src_line
       if line:sub(1, 1) == "-" then
         line = "=2D" .. line:sub(2)
       end
