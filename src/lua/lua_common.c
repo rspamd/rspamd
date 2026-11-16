@@ -2018,27 +2018,31 @@ rspamd_lua_traceback_string(lua_State *L, luaL_Buffer *buf)
 int rspamd_lua_traceback(lua_State *L)
 {
 	luaL_Buffer b;
+	/*
+	 * The message has to be taken before the buffer is initialised: since
+	 * Lua 5.4.3 luaL_buffinit pushes a placeholder, so the message is not
+	 * the top element any more
+	 */
+	const char *msg = lua_tostring(L, -1);
+	int msg_idx = lua_gettop(L);
 
 	luaL_buffinit(L, &b);
-	rspamd_lua_get_traceback_string(L, &b);
+	luaL_addstring(&b, msg ? msg : "unknown error");
+	luaL_addstring(&b, "; trace:");
+	rspamd_lua_traceback_string(L, &b);
 	luaL_pushresult(&b);
+
+	if (msg) {
+		/* The message is replaced with the result */
+		lua_remove(L, msg_idx);
+	}
 
 	return 1;
 }
 
 void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf)
 {
-	const char *msg = lua_tostring(L, -1);
-
-	if (msg) {
-		luaL_addstring(buf, msg);
-		lua_pop(L, 1); /* Error string */
-	}
-	else {
-		luaL_addstring(buf, "unknown error");
-	}
-
-	luaL_addstring(buf, "; trace:");
+	luaL_addstring(buf, "trace:");
 	rspamd_lua_traceback_string(L, buf);
 }
 
