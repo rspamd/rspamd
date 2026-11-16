@@ -2144,7 +2144,9 @@ exports.extract_text_limited = function(task, opts)
 
   local skip_rest = false
 
-  for line in line_iterator do
+  for src_line in line_iterator do
+    -- Truncated below; the loop variable is constant in Lua 5.5
+    local line = src_line
     if skip_rest then break end
 
     local keep_line = true

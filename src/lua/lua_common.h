@@ -578,9 +578,10 @@ gboolean rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 int rspamd_lua_traceback(lua_State *L);
 
 /**
-* Returns stack trace as a string. Caller should clear memory.
+* Appends the stack trace to an initialised buffer. It does not read or
+* change the Lua stack: the buffer may own its top elements.
 * @param L
-* @return
+* @param buf
 */
 void rspamd_lua_get_traceback_string(lua_State *L, luaL_Buffer *buf);
 

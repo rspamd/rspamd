@@ -295,6 +295,32 @@ TEST_SUITE("lua_task")
 	}
 }
 
+TEST_SUITE("lua_common")
+{
+	TEST_CASE("the traceback handler keeps the error message")
+	{
+		/* luaL_buffinit pushes a placeholder since Lua 5.4.3 */
+		auto *L = rspamd_lua_init(false);
+		auto top = lua_gettop(L);
+
+		lua_pushcfunction(L, &rspamd_lua_traceback);
+		auto err_idx = lua_gettop(L);
+		REQUIRE(luaL_loadstring(L, "error('boom55')") == 0);
+		REQUIRE(lua_pcall(L, 0, 0, err_idx) != 0);
+
+		/* The handler and a single result */
+		CHECK(lua_gettop(L) == err_idx + 1);
+		REQUIRE(lua_type(L, -1) == LUA_TSTRING);
+		std::string msg{lua_tostring(L, -1)};
+		CHECK(msg.find("boom55") != std::string::npos);
+		CHECK(msg.find("; trace:") != std::string::npos);
+		CHECK(msg.find("unknown error") == std::string::npos);
+
+		lua_settop(L, top);
+		lua_close(L);
+	}
+}
+
 }// namespace rspamd_lua_task_test
 
 #endif
