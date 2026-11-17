@@ -147,7 +147,9 @@ local function fprot_check(task, content, digest, rule, maybe_part)
           -- see http://www.f-prot.com/support/helpfiles/unix/appendix_c.html for more detail
           local vname = string.match(data, '^[1-3] <[%w%s]-: (.-)>')
           if not vname then
-            rspamd_logger.errx(task, 'Unhandled response: %s', data)
+            rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
+            common.yield_result(task, rule, 'unhandled response: ' .. data,
+                0.0, 'fail', maybe_part)
           else
             common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
             cached = vname

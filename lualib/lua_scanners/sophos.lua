@@ -89,6 +89,8 @@ local function sophos_check(task, content, digest, rule, maybe_part)
     local protocol = 'SSSP/1.0\n'
     local streamsize = string.format('SCANDATA %d\n', #content)
     local bye = 'BYE\n'
+    -- The incomplete last line of the previous chunk of this attempt
+    local pending = ''
 
     local function sophos_callback(err, data, conn)
 
@@ -97,6 +99,8 @@ local function sophos_check(task, content, digest, rule, maybe_part)
         if retransmits > 0 then
 
           retransmits = retransmits - 1
+          -- A new attempt starts a new dialog
+          pending = ''
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
@@ -125,16 +129,34 @@ local function sophos_check(task, content, digest, rule, maybe_part)
               0.0, 'fail', maybe_part)
         end
       else
-        data = tostring(data)
+        data = pending .. tostring(data)
         lua_util.debugm(rule.name, task,
             '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
-        local vname = string.match(data, 'VIRUS (%S+) ')
+        -- A line may be split across reads: keep the unterminated tail
+        local complete = data
+        pending = ''
+        if not data:find('[\r\n]$') then
+          local tail_start = data:find('[^\r\n]*$')
+          pending = data:sub(tail_start)
+          complete = data:sub(1, tail_start - 1)
+        end
+        -- SSSP is line based: a chunk may hold several lines and a terminal
+        -- line (VIRUS, DONE, FAIL, REJ) wins over the progress lines (OK, ACC)
+        local vname, done_ok, fail_0212, rej4, rej1, progress
+        for line in complete:gmatch('[^\r\n]+') do
+          vname = vname or line:match('^VIRUS (%S+) ')
+          done_ok = done_ok or line:find('^DONE OK') ~= nil
+          fail_0212 = fail_0212 or line:find('^FAIL 0212') ~= nil
+          rej4 = rej4 or line:find('^REJ 4') ~= nil
+          rej1 = rej1 or line:find('^REJ 1') ~= nil
+          progress = progress or line:find('^ACC') ~= nil or line:find('^OK SSSP') ~= nil
+        end
         local cached
         if vname then
           common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
           common.save_cache(task, digest, rule, vname, 1.0, maybe_part)
         else
-          if string.find(data, 'DONE OK') then
+          if done_ok then
             if rule['log_clean'] then
               rspamd_logger.infox(task, '%s: message or mime_part is clean', rule.log_prefix)
             else
@@ -142,23 +164,23 @@ local function sophos_check(task, content, digest, rule, maybe_part)
                   '%s: message or mime_part is clean', rule.log_prefix)
             end
             cached = 'OK'
-            -- not finished - continue
-          elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
-            conn:add_read(sophos_callback)
-          elseif string.find(data, 'FAIL 0212') then
+          elseif fail_0212 then
             rspamd_logger.warnx(task, 'Message is encrypted (FAIL 0212): %s', data)
             common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)',
                 0.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
-          elseif string.find(data, 'REJ 4') then
+          elseif rej4 then
             rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
             common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)',
                 0.0, 'fail', maybe_part)
             -- explicitly set REJ1 message when SAVDIreports a protocol error
-          elseif string.find(data, 'REJ 1') then
+          elseif rej1 then
             rspamd_logger.errx(task, 'SAVDI (Protocol error (REJ 1)): %s', data)
             common.yield_result(task, rule, 'SAVDI: Protocol error (REJ 1)',
                 0.0, 'fail', maybe_part)
+          elseif progress or pending ~= '' then
+            -- not finished - continue
+            conn:add_read(sophos_callback)
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
             common.yield_result(task, rule, 'unhandled response: ' .. data,

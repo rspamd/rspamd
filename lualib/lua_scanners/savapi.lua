@@ -95,6 +95,7 @@ local function savapi_check(task, content, digest, rule)
 
     if not message_fd then
       rspamd_logger.errx(task, 'cannot store file for savapi scan: %s', fname)
+      common.yield_result(task, rule, 'cannot store file for scan', 0.0, 'fail')
       return
     end
 
@@ -112,105 +113,52 @@ local function savapi_check(task, content, digest, rule)
     end)
 
     local vnames = {}
+    -- The scan has a single outcome shared by all the attempts
+    local finished = false
 
-    -- Forward declaration for recursive calls
-    local savapi_scan1_cb
-
-    local function savapi_fin_cb(err, conn)
-      local vnames_reordered = {}
-      -- Swap table
-      for virus, _ in pairs(vnames) do
-        table.insert(vnames_reordered, virus)
-      end
-      lua_util.debugm(rule.name, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
-      if #vnames_reordered > 0 then
-        local vname = {}
-        for _, virus in ipairs(vnames_reordered) do
-          table.insert(vname, virus)
-        end
-
-        common.yield_result(task, rule, vname)
-        common.save_cache(task, digest, rule, vname)
-      end
+    local function finish_fail(reason, conn)
       if conn then
         conn:close()
       end
+      if finished then
+        return
+      end
+      finished = true
+      rspamd_logger.errx(task, '%s: %s', rule.log_prefix, reason)
+      common.yield_result(task, rule, reason, 0.0, 'fail')
     end
 
-    local function savapi_scan2_cb(err, data, conn)
-      local result = tostring(data)
-      lua_util.debugm(rule.name, task, "%s: got reply: %s",
-          rule.type, result)
+    -- Write callbacks get (err, conn) on success but (err, nil, conn) on error
+    local function conn_of(a, b)
+      return b or a
+    end
 
-      -- Terminal response - clean
-      if string.find(result, '200') or string.find(result, '210') then
-        if rule['log_clean'] then
-          rspamd_logger.infox(task, '%s: message or mime_part is clean', rule['type'])
-        end
-        common.save_cache(task, digest, rule, 'OK')
-        conn:add_write(savapi_fin_cb, 'QUIT\n')
+    local function start_attempt()
+      -- The verdict is per attempt: nothing seen in a failed one is merged into this
+      vnames = {}
+      -- Becomes true when this attempt has been handled (error or verdict)
+      local dead = false
 
-        -- Terminal response - infected
-      elseif string.find(result, '319') then
-        conn:add_write(savapi_fin_cb, 'QUIT\n')
-
-        -- Non-terminal response
-      elseif string.find(result, '310') then
-        local virus
-        virus = result:match "310.*<<<%s(.*)%s+;.*;.*"
-        if not virus then
-          virus = result:match "310%s(.*)%s+;.*;.*"
-          if not virus then
-            rspamd_logger.errx(task, "%s: virus result unparseable: %s",
-                rule['type'], result)
-            common.yield_result(task, rule, 'virus result unparseable: ' .. result, 0.0, 'fail')
-            return
+      local function on_error(err, conn)
+        if dead or finished then
+          if conn then
+            conn:close()
           end
+          return
         end
-        -- Store unique virus names
-        vnames[virus] = 1
-        -- More content is expected
-        conn:add_write(savapi_scan1_cb, '\n')
-      end
-    end
-
-    savapi_scan1_cb = function(err, conn)
-      conn:add_read(savapi_scan2_cb, '\n')
-    end
-
-    -- 100 PRODUCT:xyz
-    local function savapi_greet2_cb(err, data, conn)
-      local result = tostring(data)
-      if string.find(result, '100 PRODUCT') then
-        lua_util.debugm(rule.name, task, "%s: scanning file: %s",
-            rule['type'], fname)
-        conn:add_write(savapi_scan1_cb, { string.format('SCAN %s\n',
-            fname) })
-      else
-        rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'],
-            rule['product_id'])
-        common.yield_result(task, rule, 'invalid product id: ' .. result, 0.0, 'fail')
-        conn:add_write(savapi_fin_cb, 'QUIT\n')
-      end
-    end
-
-    local function savapi_greet1_cb(err, conn)
-      conn:add_read(savapi_greet2_cb, '\n')
-    end
-
-    local function savapi_callback_init(err, data, conn)
-      if err then
+        dead = true
+        if conn then
+          conn:close()
+        end
 
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
-
           retransmits = retransmits - 1
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           if not upstream then
-            common.yield_result(task, rule,
-                'no upstream available for retry', 0.0, 'fail')
+            finish_fail('no upstream available for retry')
             return
           end
           addr = upstream:get_addr()
@@ -218,38 +166,185 @@ local function savapi_check(task, content, digest, rule)
           lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',
               rule.log_prefix, err, addr, retransmits)
 
-          tcp.request({
-            task = task,
-            host = addr:to_string(),
-            port = addr:get_port(),
-            upstream = upstream,
-            timeout = rule['timeout'],
-            callback = savapi_callback_init,
-            stop_pattern = { '\n' },
-          })
+          if not start_attempt() then
+            finish_fail('failed to scan: ' .. tostring(err))
+          end
         else
-          rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
-        end
-      else
-        local result = tostring(data)
-
-        -- 100 SAVAPI:4.0 greeting
-        if string.find(result, '100') then
-          conn:add_write(savapi_greet1_cb, { string.format('SET PRODUCT %s\n', rule['product_id']) })
+          finish_fail('failed to scan and retransmits exceed: ' .. tostring(err))
         end
       end
+
+      -- QUIT is a courtesy: the verdict has been already delivered
+      local function quit_cb(_, a, b)
+        local conn = conn_of(a, b)
+        if conn then
+          conn:close()
+        end
+      end
+
+      local function send_quit(conn)
+        dead = true
+        conn:add_write(quit_cb, 'QUIT\n')
+      end
+
+      local function report_virus_and_quit(conn)
+        local vname = {}
+        for virus, _ in pairs(vnames) do
+          table.insert(vname, virus)
+        end
+        table.sort(vname)
+        lua_util.debugm(rule.name, task, "%s: number of virus names found %s", rule['type'], #vname)
+        finished = true
+        common.yield_result(task, rule, vname)
+        common.save_cache(task, digest, rule, vname)
+        send_quit(conn)
+      end
+
+      local savapi_scan_read_cb
+
+      -- The name of the infection in an alert line; nil if it cannot be found
+      local function alert_name(result, code)
+        return result:match('^%s*' .. code .. '.*<<<%s(.*)%s+;.*;.*') or
+            result:match('^%s*' .. code .. '%s(.*)%s+;.*;.*')
+      end
+
+      -- Reads the next line of the dialog
+      local function read_next(conn)
+        conn:add_read(savapi_scan_read_cb, '\n')
+      end
+
+      --[[
+      One line is read per call. SAVAPI sends a status line per event:
+      310 (infected), 420 (infected, repairable) and 440 (infected, iframe)
+      are alerts and are followed by more lines; 401, 421, 422, 430, 450 and
+      499 are informational and do not change the verdict; 200/210 (clean)
+      and 319 (end of the alerts) are the final lines; 220 (timeout) and
+      350 (error) mean that the scan has failed
+      --]]
+      savapi_scan_read_cb = function(err, data, conn)
+        if err then
+          on_error(err, conn)
+          return
+        end
+        local result = tostring(data)
+        lua_util.debugm(rule.name, task, "%s: got reply: %s",
+            rule.type, result)
+        local code = result:match('^%s*(%d%d%d)')
+
+        if code == '200' or code == '210' then
+          -- Terminal response - clean (unless virus names have been reported)
+          if next(vnames) then
+            report_virus_and_quit(conn)
+            return
+          end
+          if rule['log_clean'] then
+            rspamd_logger.infox(task, '%s: message or mime_part is clean', rule['type'])
+          end
+          finished = true
+          common.save_cache(task, digest, rule, 'OK')
+          send_quit(conn)
+        elseif code == '319' then
+          -- Terminal response after the alerts
+          if not next(vnames) then
+            -- No alert line has been seen: take what the final line says
+            vnames[alert_name(result, '319') or 'SAVAPI_UNKNOWN_INFECTION'] = 1
+          end
+          report_virus_and_quit(conn)
+        elseif code == '310' or code == '420' or code == '440' then
+          -- Non-terminal response
+          local virus = alert_name(result, code)
+          if not virus then
+            dead = true
+            finish_fail('virus result unparseable: ' .. result, conn)
+            return
+          end
+          -- Store unique virus names
+          vnames[virus] = 1
+          -- More content is expected: the following bytes are still buffered
+          read_next(conn)
+        elseif code == '401' or code == '421' or code == '422' or code == '430' or
+            code == '450' or code == '499' then
+          -- Informational, the final line is still to come
+          read_next(conn)
+        elseif code == '220' or code == '350' then
+          dead = true
+          finish_fail('scan failed: ' .. result, conn)
+        else
+          -- Not a known status: the final line, EOF or the timeout decide
+          lua_util.debugm(rule.name, task, '%s: skip an unknown reply: %s',
+              rule.log_prefix, result)
+          read_next(conn)
+        end
+      end
+
+      local function scan_written_cb(err, a, b)
+        local conn = conn_of(a, b)
+        if err then
+          on_error(err, conn)
+          return
+        end
+        read_next(conn)
+      end
+
+      -- 100 PRODUCT:xyz
+      local function greet2_cb(err, data, conn)
+        if err then
+          on_error(err, conn)
+          return
+        end
+        local result = tostring(data)
+        if result:match('^%s*100%s+PRODUCT') then
+          lua_util.debugm(rule.name, task, "%s: scanning file: %s",
+              rule['type'], fname)
+          conn:add_write(scan_written_cb, string.format('SCAN %s\n', fname))
+        else
+          dead = true
+          finish_fail('invalid product id ' .. tostring(rule['product_id']) .. ': ' .. result, conn)
+        end
+      end
+
+      local function greet1_cb(err, a, b)
+        local conn = conn_of(a, b)
+        if err then
+          on_error(err, conn)
+          return
+        end
+        conn:add_read(greet2_cb, '\n')
+      end
+
+      -- 100 SAVAPI:4.0 greeting
+      local function callback_init(err, data, conn)
+        if err then
+          on_error(err, conn)
+          return
+        end
+        local result = tostring(data)
+
+        if result:match('^%s*100%s+SAVAPI') then
+          conn:add_write(greet1_cb, string.format('SET PRODUCT %s\n', rule['product_id']))
+        else
+          dead = true
+          finish_fail('unexpected greeting: ' .. result, conn)
+        end
+      end
+
+      -- A synchronous failure has already called callback_init with an error
+      local ok = tcp.request({
+        task = task,
+        host = addr:to_string(),
+        port = addr:get_port(),
+        upstream = upstream,
+        timeout = rule['timeout'],
+        callback = callback_init,
+        stop_pattern = '\n',
+      })
+
+      return ok or dead
     end
 
-    tcp.request({
-      task = task,
-      host = addr:to_string(),
-      port = addr:get_port(),
-      upstream = upstream,
-      timeout = rule['timeout'],
-      callback = savapi_callback_init,
-      stop_pattern = { '\n' },
-    })
+    if not start_attempt() then
+      finish_fail('cannot make a TCP connection')
+    end
   end
 
   if common.condition_check_and_continue(task, content, rule, digest, savapi_check_uncached) then

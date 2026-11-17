@@ -40,7 +40,9 @@ local function avast_config(opts)
     timeout = 4.0, -- FIXME: this will break task_timeout!
     log_clean = false,
     detection_category = "virus",
-    retransmits = 1,
+    -- retries after the first attempt: the default is a single attempt, as the
+    -- worst case of every retry is another `timeout` (the task timeout is 8 s)
+    retransmits = 0,
     servers = nil, -- e.g. /var/run/avast/scan.sock
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
@@ -129,6 +131,7 @@ local function avast_check(task, content, digest, rule, maybe_part)
 
     if not message_fd then
       rspamd_logger.errx(task, 'cannot store file for avast scan: %s', fname)
+      common.yield_result(task, rule, 'cannot store file for scan', 0.0, 'fail', maybe_part)
       return
     end
 
@@ -151,6 +154,35 @@ local function avast_check(task, content, digest, rule, maybe_part)
     local avast_scan_done_cb
 
     -- Utility closures
+    -- Makes a connection to the current upstream and starts the dialog
+    local function start_attempt()
+      -- The verdict is per attempt: nothing seen in a failed one is merged into this
+      threats = {}
+      seen_threats = {}
+      seen_clean = false
+      seen_error = false
+      -- A synchronous failure may have already called the callback
+      local cb_called = false
+      tcp_opts.callback = function(...)
+        cb_called = true
+        return avast_helo_cb(...)
+      end
+
+      local is_succ = tcp.request(tcp_opts)
+
+      if not is_succ then
+        rspamd_logger.infox(task, 'cannot create connection to avast server: %s',
+            addr:to_string(true))
+        return cb_called
+      else
+        lua_util.debugm(rule.log_prefix, task, 'established connection to %s; retransmits=%s',
+            addr:to_string(true), retransmits)
+      end
+
+      return true
+    end
+
+    -- N retransmits are N retries after the first attempt
     local function maybe_retransmit()
       if retransmits > 0 then
         retransmits = retransmits - 1
@@ -177,16 +209,11 @@ local function avast_check(task, content, digest, rule, maybe_part)
       end
       addr = upstream:get_addr()
       tcp_opts.upstream = upstream
-      tcp_opts.callback = avast_helo_cb
+      tcp_opts.host = addr:to_string()
+      tcp_opts.port = addr:get_port()
 
-      local is_succ, err = tcp.request(tcp_opts)
-
-      if not is_succ then
-        rspamd_logger.infox(task, 'cannot create connection to avast server: %s (%s)',
-            addr:to_string(true), err)
-      else
-        lua_util.debugm(rule.log_prefix, task, 'established connection to %s; retransmits=%s',
-            addr:to_string(true), retransmits)
+      if not start_attempt() then
+        maybe_retransmit()
       end
     end
 
@@ -219,7 +246,11 @@ local function avast_check(task, content, digest, rule, maybe_part)
           tcp_conn:add_write(avast_scan_cb, string.format(
               'SCAN %s%s', fname, CRLF))
         else
-          rspamd_logger.errx(task, 'Unhandled response: %s', mdata)
+          rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, mdata)
+          tcp_conn:close()
+          tcp_conn = nil
+          common.yield_result(task, rule, 'unhandled response: ' .. tostring(mdata),
+              0.0, 'fail', maybe_part)
         end
       end
     end
@@ -260,6 +291,9 @@ local function avast_check(task, content, digest, rule, maybe_part)
                     rule.symbol, rule.type)
               end
               common.save_cache(task, digest, rule, 'OK', 1.0, maybe_part)
+            elseif not seen_error then
+              common.yield_result(task, rule, 'no verdict in the reply',
+                  0.0, 'fail', maybe_part)
             end
           else
             -- Check line using regular expressions
@@ -287,6 +321,11 @@ local function avast_check(task, content, digest, rule, maybe_part)
                 else
                   -- Unexpected reply
                   rspamd_logger.errx(task, '%s: unexpected reply: %s', rule.log_prefix, mdata)
+                  if not seen_error then
+                    seen_error = true
+                    common.yield_result(task, rule, 'unhandled response: ' .. tostring(mdata),
+                        0.0, 'fail', maybe_part)
+                  end
                 end
               end
             end
@@ -299,8 +338,10 @@ local function avast_check(task, content, digest, rule, maybe_part)
       end
     end
 
-    -- Send the real request
-    maybe_retransmit()
+    -- Send the real request: the first attempt is not a retransmit
+    if not start_attempt() then
+      maybe_retransmit()
+    end
   end
 
   if common.condition_check_and_continue(task, content, rule, digest,

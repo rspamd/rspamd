@@ -156,6 +156,7 @@ local function razor_check(task, content, digest, rule)
           common.save_cache(task, digest, rule, 'OK', rule.default_score)
         else
           rspamd_logger.errx(task, "%s - unknown response from razorfy: %s", addr:to_string(), threat_string)
+          common.yield_result(task, rule, 'unhandled response: ' .. threat_string, 0.0, 'fail')
         end
 
       end
