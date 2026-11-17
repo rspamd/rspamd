@@ -21,6 +21,21 @@ Sync API TCP get request when server is down
   Check url  /request  get  HTTP_ASYNC_RESPONSE  Socket error detected: Connection refused
   Check url  /content-length  get  HTTP_SYNC_WRITE_ERROR  Socket error detected: Connection refused
 
+Sync API connect refused fails cleanly
+  [Documentation]  Repeated refused sync connections return an error each time
+  ...              (the connection objects used to leak)
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [TCP_SYNC_REFUSED_TEST]}
+  Expect Symbol With Exact Options  TCP_SYNC_REFUSED
+  ...  1:false:Socket error detected: Connection refused
+  ...  2:false:Socket error detected: Connection refused
+  ...  3:false:Socket error detected: Connection refused
+
+Fatal error does not call handlers added by a callback when server is down
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [TCP_FATAL_READD_TEST]}
+  Expect Symbol With Exact Options  TCP_FATAL_READD  call1
+
 *** Keywords ***
 Check url
   [Arguments]  ${url}  ${method}  ${expect_symbol}  @{expect_options}
