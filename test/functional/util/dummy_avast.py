@@ -12,6 +12,11 @@ import dummy_pidfile
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
+        if self.server.garbage:
+            # Not the expected "220" banner
+            self.request.sendall(b"421 Service busy\r\n")
+            self.request.close()
+            return
         self.request.sendall(b"220 DAEMON\r\n")
         self.data = self.request.recv(1024).strip()
         self.request.sendall(b"210 SCAN DATA\r\n")
@@ -44,6 +49,10 @@ if __name__ == "__main__":
     server = socketserver.TCPServer((HOST, port), MyTCPHandler, bind_and_activate=False)
     server.allow_reuse_address = True
     server.foundvirus = foundvirus
+    # The second argument `banner` asks for a greeting without the expected banner
+    server.garbage = alen >= 3 and sys.argv[2] == 'banner'
+    if server.garbage:
+        server.foundvirus = False
     server.server_bind()
     server.server_activate()
 

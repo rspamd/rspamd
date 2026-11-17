@@ -13,7 +13,10 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        if self.server.foundvirus:
+        if self.server.error:
+            # A complete reply that is neither a verdict nor a known return code
+            self.request.sendall(b"9 <scan error> FOO\n")
+        elif self.server.foundvirus:
             self.request.sendall(b"1 <infected: EICAR_Test_File> FOO->bar\n")
         else:
             self.request.sendall(b"0 <clean> FOO\n")
@@ -43,6 +46,10 @@ if __name__ == "__main__":
     server = socketserver.TCPServer((HOST, port), MyTCPHandler, bind_and_activate=False)
     server.allow_reuse_address = True
     server.foundvirus = foundvirus
+    # The second argument `error` asks for a reply that is not a verdict
+    server.error = alen >= 3 and sys.argv[2] == 'error'
+    if server.error:
+        server.foundvirus = False
     server.server_bind()
     server.server_activate()
 
