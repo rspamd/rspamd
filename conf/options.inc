@@ -49,7 +49,7 @@ classify_headers = [
 	"X-MimeOLE",
 ];
 
-control_socket = "$DBDIR/rspamd.sock mode=0600";
+control_socket = "$RUNDIR/rspamd.sock mode=0600";
 history_rows = 200;
 explicit_modules = ["settings", "bayes_expiry"];
 
