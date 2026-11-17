@@ -378,8 +378,19 @@ end
 --[[[
 -- @function lua_smtp.sendmail(task, message, opts, callback)
 --]]
-local function sendmail(opts, message, callback)
+local function sendmail(opts, message, user_callback)
   local stage = 'connect'
+  -- The caller is notified exactly once: a synchronous failure of
+  -- rspamd_tcp.request has already called mail_cb with an error, and a fatal
+  -- connection error calls every handler that is still queued
+  local callback_done = false
+  local function callback(...)
+    if callback_done then
+      return
+    end
+    callback_done = true
+    return user_callback(...)
+  end
 
   local function mail_cb(err, data, conn)
     local function no_error_write(merr)
@@ -442,7 +453,12 @@ local function sendmail(opts, message, callback)
     end
 
     -- QUIT stage
-    local function quit_done_cb(_, _)
+    local function quit_done_cb(merr, _)
+      if merr then
+        -- The message has been accepted already, QUIT is a courtesy
+        all_done_cb()
+        return
+      end
       conn:add_read(all_done_cb, CRLF)
     end
     local function quit_cb(merr, mdata)
