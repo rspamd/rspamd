@@ -26,10 +26,34 @@ static const char *M = "rspamd lua tcp";
  * @module rspamd_tcp
  * Rspamd TCP module represents generic TCP asynchronous client available from LUA code.
  * This module hides all complexity: DNS resolving, sessions management, zero-copy
- * text transfers and so on under the hood. It can work in partial or complete modes:
+ * text transfers and so on under the hood. A read can work in the following modes:
  *
- * - partial mode is used when you need to call a continuation routine each time data is available for read
- * - complete mode calls for continuation merely when all data is read from socket (e.g. when a server sends reply and closes a connection)
+ * - partial mode (`partial = true`) calls the callback each time a chunk of data is available for read
+ * - stop pattern mode (`stop_pattern` is a string) calls the callback once, as soon as the pattern is found in the data
+ *   read so far; the callback gets the data in front of the pattern, the pattern itself is stripped, and the bytes
+ *   after it stay buffered for the next read handler. The pattern must be a (non empty) string
+ * - otherwise the callback is called once with the first chunk that has been read (NOT with all the data the peer
+ *   sends: use a stop pattern or the partial mode if the reply can be longer than one read)
+ *
+ * The default timeout of IO operations is 5 seconds.
+ *
+ * Callbacks contract:
+ *
+ * - read callbacks (`callback` of a request that reads, `add_read`) are called as `callback(err, data, conn)`.
+ *   On success `err` is nil and `data` is an `rspamd_text` that is valid **only during the callback**: copy it
+ *   (e.g. with `tostring`) if it is needed later. On a failure `err` is a string, `data` is nil
+ * - write callbacks (`callback` of a request with `read = false`, `add_write`) are called as `callback(nil, conn)`
+ *   when the data has been written and as `callback(err, nil, conn)` on a failure (note the different number of arguments)
+ * - `on_connect` is called as `on_connect(conn)` once the connection is established
+ * - `on_error` is called as `on_error(err, conn)` for connect-phase failures only
+ * - a callback may call any method of `conn`, e.g. add more handlers or `close`. Once a connection has been
+ *   closed, handlers still queued are dropped and never called. On a fatal error every handler queued at that
+ *   moment gets the error, handlers that the callbacks add meanwhile are dropped without being called
+ * - `conn` is a weak handle: it does not keep the connection alive. When the connection is over (closed or
+ *   finished), a handle that Lua code has kept is dead: `close` does nothing, `add_read` and `add_write`
+ *   return `false, "connection is closed"`, `shift_callback` and `starttls` raise an error
+ * - `conn:close()` called from outside the callbacks of the connection (e.g. from a timer) finishes the
+ *   connection at once
  * @example
 local logger = require "rspamd_logger"
 local tcp = require "rspamd_tcp"
@@ -118,8 +142,6 @@ local function http_simple_tcp_symbol(task)
       host = '127.0.0.1',
       timeout = 20,
       port = 18080,
-      ssl = false, -- If SSL connection is needed
-      ssl_verify = true, -- set to false if verify is not needed
     }
 
     is_ok, err = connection:write('GET /request_sync HTTP/1.1\r\nConnection: keep-alive\r\n\r\n')
@@ -156,7 +178,8 @@ LUA_FUNCTION_DEF(tcp, connect_sync);
 /***
  * @method tcp:close()
  *
- * Closes TCP connection
+ * Closes TCP connection; queued handlers are dropped, it is safe to call it from anywhere
+ * and on a dead handle (no-op)
  */
 LUA_FUNCTION_DEF(tcp, close);
 
@@ -164,8 +187,9 @@ LUA_FUNCTION_DEF(tcp, close);
  * @method tcp:add_read(callback, [pattern])
  *
  * Adds new read event to the tcp connection
- * @param {function} callback to be called when data is read
- * @param {string} pattern optional stop pattern
+ * @param {function} callback `function(err, data, conn)` to be called when data is read; `data` (rspamd_text) is valid during the callback only
+ * @param {string} pattern optional stop pattern (stripped from the data passed to the callback)
+ * @return {boolean} false and an error message if the connection is closed (nothing is queued then)
  */
 LUA_FUNCTION_DEF(tcp, add_read);
 
@@ -173,25 +197,59 @@ LUA_FUNCTION_DEF(tcp, add_read);
  * @method tcp:add_write(callback, data)
  *
  * Adds new write event to the tcp connection
- * @param {function} optional callback to be called when data is completely written
- * @param {table/string/text} data to send to a remote server
+ * @param {function} optional callback `function(err, conn)` (`function(err, nil, conn)` on a failure) to be called when data is completely written
+ * @param {table/string/text} data to send to a remote server; an empty string or table is legal (nothing is sent,
+ * the callback is called), data of another type is rejected
+ * A text passed as data is kept alive by the connection until it is closed. A text that is a
+ * view of other memory (`text:sub()`, `text:span()`, `rspamd_text.fromstring(s, true)`) does not
+ * keep its parent alive: the parent must outlive the request (views into the data of the task
+ * are fine for requests bound to that task).
+ * @return {boolean} false if the data has been rejected or the connection is closed, (the error message is
+ * returned in the latter case); nothing is queued then
  */
 LUA_FUNCTION_DEF(tcp, add_write);
 
 /***
  * @method tcp:shift_callback()
  *
- * Shifts the current callback and go to the next one (if any)
+ * Shifts the current callback and go to the next one (if any). When called from a callback, the handler
+ * being served is the one that gets shifted, and the next one is processed after the callback returns.
+ * Raises an error on a dead handle
  */
 LUA_FUNCTION_DEF(tcp, shift_callback);
 
 /***
  * @method tcp:starttls([no_verify])
  *
- * Starts tls connection
- * @param {boolean} no_verify used to skip ssl verification
+ * Starts tls connection on an established plain connection (e.g. after the peer has agreed to STARTTLS).
+ * The handshake runs in the background (under the connect timeout); handlers queued after this call are served
+ * once it is done, and a failed handshake is reported to them as an `ssl error: ...`.
+ *
+ * A handshake that fails is reported as `ssl error: ...` to the handlers queued when the running callback
+ * returns (the one added right after this call is among them), and the connection is closed then, whether the
+ * failure is found at once or later by the event loop. Without any handler queued the connection is just
+ * closed. The callback that calls `starttls` is not called from inside this method; a `partial` read handler,
+ * which stays queued, gets the error after it has returned, like the other handlers.
+ *
+ * Two cases differ. If the method is called from outside of the callbacks of this connection (a stored
+ * handle used from a timer), the queued handlers get the error before the method returns, and the connection
+ * is closed when it returns. If it is called from a callback that reports a fatal error of this connection,
+ * the connection is being torn down already: no handler gets the error and only the result tells it.
+ *
+ * It raises an error (and does nothing) only on misuse: if the connection is closed or not established yet, if
+ * TLS is already started or has failed, and if the connection has plaintext that has been received but not
+ * delivered to a read handler yet (e.g. the peer has sent more data right after the "ready" line: that is a
+ * protocol violation, and the data would otherwise be taken for protected data). Note that data delivered to a
+ * `partial` read callback is not buffered, so it cannot be told apart.
+ * @param {boolean} no_verify true to skip the verification of the peer certificate (also implied by the
+ * `ssl_noverify` flag of the request)
+ * @return {boolean, string} `true` if the handshake has been started; `false` and the error (`ssl error: ...`)
+ * if it has failed at once (the same error is reported to the queued handlers, so callers that do not look at
+ * the result are still told by their next handler)
  */
 LUA_FUNCTION_DEF(tcp, starttls);
+
+static int lua_tcp_gc(lua_State *L);
 
 static const struct luaL_reg tcp_libf[] = {
 	LUA_INTERFACE_DEF(tcp, request),
@@ -206,6 +264,7 @@ static const struct luaL_reg tcp_libm[] = {
 	LUA_INTERFACE_DEF(tcp, add_write),
 	LUA_INTERFACE_DEF(tcp, shift_callback),
 	LUA_INTERFACE_DEF(tcp, starttls),
+	{"__gc", lua_tcp_gc},
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}};
 
@@ -221,6 +280,8 @@ LUA_FUNCTION_DEF(tcp_sync, close);
  *
  * Performs one read operation. If syscall returned with EAGAIN/EINT,
  * restarts the operation, so it always returns either data or error.
+ * Returns `true, data` or `false, error`; `false, "connection is closed"`
+ * after `close`.
  */
 LUA_FUNCTION_DEF(tcp_sync, read_once);
 
@@ -234,7 +295,7 @@ LUA_FUNCTION_DEF(tcp_sync, eof);
 /***
  * @method shutdown()
  *
- * Half-shutdown TCP connection
+ * Half-shutdown TCP connection: returns `true` or `false, error`
  */
 LUA_FUNCTION_DEF(tcp_sync, shutdown);
 
@@ -243,7 +304,13 @@ LUA_FUNCTION_DEF(tcp_sync, shutdown);
  *
  * Writes data into the stream. If syscall returned with EAGAIN/EINT
  * restarts the operation. If performs write() until all the passed
- * data is written completely.
+ * data is written completely. Returns `true` or `false, error`.
+ * Data is a string, `rspamd_text` or a table of them (anything else raises
+ * an error); empty data is written at once, with no IO.
+ * A text passed as data is kept alive by the connection until it is closed. A text that is a
+ * view of other memory (`text:sub()`, `text:span()`, `rspamd_text.fromstring(s, true)`) does not
+ * keep its parent alive: the parent must outlive the request (views into the data of the task
+ * are fine for requests bound to that task).
  */
 LUA_FUNCTION_DEF(tcp_sync, write);
 
@@ -297,10 +364,16 @@ struct lua_tcp_handler {
 	enum lua_tcp_handler_type type;
 };
 
+/*
+ * Something a request must release when it is done: either a buffer to free
+ * through `dtor`, or (lua_ref != 0) a registry reference that keeps a Lua
+ * object, whose memory the request sends, alive
+ */
 struct lua_tcp_dtor {
 	rspamd_mempool_destruct_t dtor;
 	void *data;
 	struct lua_tcp_dtor *next;
+	int lua_ref;
 };
 
 #define LUA_TCP_FLAG_PARTIAL (1u << 0u)
@@ -312,6 +385,15 @@ struct lua_tcp_dtor {
 #define LUA_TCP_FLAG_SSL (1u << 7u)
 #define LUA_TCP_FLAG_SSL_NOVERIFY (1u << 8u)
 #define LUA_TCP_FLAG_FIN_RELEASED (1u << 9u)
+/* A Lua handle (tcp_sync userdata) owns the connection object */
+#define LUA_TCP_FLAG_HANDLE (1u << 10u)
+/* The upstream has already been charged with a failure for this connection */
+#define LUA_TCP_FLAG_UP_FAILED (1u << 11u)
+/* A TLS handshake has failed in `starttls`: the plain stream is not usable */
+#define LUA_TCP_FLAG_TLS_FAILED (1u << 12u)
+
+/* Empty write handlers completed inline in a row before deferring to the loop */
+#define LUA_TCP_MAX_INLINE_PLAN_DEPTH 32
 
 #undef TCP_DEBUG_REFS
 #ifdef TCP_DEBUG_REFS
@@ -330,6 +412,18 @@ struct lua_tcp_dtor {
 #define TCP_RETAIN(x) REF_RETAIN(x)
 #define TCP_RELEASE(x) REF_RELEASE(x)
 #endif
+
+/*
+ * The `rspamd{tcp}` userdata handed to the callbacks. It does NOT own the
+ * connection: the pointer is reset to NULL when the connection is destroyed
+ * (lua_tcp_fin), so a handle kept by Lua code beyond the lifetime of the
+ * connection is just a dead handle. The pointer MUST stay the first member:
+ * `*(struct lua_tcp_cbdata **) ud` is how the handle is accessed.
+ */
+struct lua_tcp_handle {
+	struct lua_tcp_cbdata *cbd;
+	struct lua_tcp_handle *prev, *next;
+};
 
 struct lua_tcp_cbdata {
 	struct rspamd_async_session *session;
@@ -359,7 +453,28 @@ struct lua_tcp_cbdata {
 	double read_timeout;
 	double write_timeout;
 	gboolean use_deduction;
+	/* Set only when the peer has really closed the stream (read returned 0) */
 	gboolean eof;
+	/* Bumped by lua_tcp_shift_handler: lets dispatchers see a callback shifting */
+	unsigned int shift_gen;
+	/* Nesting of lua_tcp_plan_handler_event, bounds inline completions */
+	unsigned int plan_depth;
+	/* Lua callbacks being run now: shift_callback must not plan inside them */
+	unsigned int cb_depth;
+	/*
+	 * Bytes at the beginning of `in` that are being delivered to a read
+	 * callback right now (stop pattern mode keeps them in the buffer until the
+	 * callback returns); everything after them is unread plaintext
+	 */
+	gsize in_delivered;
+	/* Live `rspamd{tcp}` handles of this connection (intrusive list) */
+	struct lua_tcp_handle *handles;
+	/*
+	 * Failure of the TLS handshake detected synchronously by `starttls`, not
+	 * delivered yet: the queued handlers get it when the running callback
+	 * returns (lua_tcp_plan_handler_event)
+	 */
+	char *pending_err;
 };
 
 #define IS_SYNC(c) (((c)->flags & LUA_TCP_FLAG_SYNC) != 0)
@@ -372,13 +487,43 @@ struct lua_tcp_cbdata {
 INIT_LOG_MODULE(lua_tcp)
 
 static void lua_tcp_handler(int fd, short what, gpointer ud);
+static void lua_tcp_deliver_pending_error(struct lua_tcp_cbdata *cbd);
 static void lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd,
 									   gboolean can_read, gboolean can_write);
-static void lua_tcp_unregister_event(struct lua_tcp_cbdata *cbd);
 
+/*
+ * Finaliser of the session event of a sync connection. It is called when the
+ * event is removed, either by us or by the forced cleanup of the session (the
+ * task has timed out): in both cases the event is gone and must be forgotten,
+ * the object itself belongs to its Lua handle
+ */
 static void
-lua_tcp_void_finalyser(gpointer arg)
+lua_tcp_sync_event_finalyser(gpointer arg)
 {
+	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *) arg;
+
+	cbd->async_ev = NULL;
+}
+
+/* Runs the destructors/unrefs of a request, `L` is any thread of the main state */
+static void
+lua_tcp_free_dtors(lua_State *L, struct lua_tcp_dtor *dtors)
+{
+	struct lua_tcp_dtor *dtor, *dttmp;
+
+	LL_FOREACH_SAFE(dtors, dtor, dttmp)
+	{
+		if (dtor->lua_ref != 0) {
+			if (L) {
+				luaL_unref(L, LUA_REGISTRYINDEX, dtor->lua_ref);
+			}
+		}
+		else {
+			dtor->dtor(dtor->data);
+		}
+
+		g_free(dtor);
+	}
 }
 
 static const double default_tcp_timeout = 5.0;
@@ -400,18 +545,10 @@ lua_tcp_global_resolver(struct ev_loop *ev_base,
 	return global_resolver;
 }
 
-static gboolean
-lua_tcp_shift_handler(struct lua_tcp_cbdata *cbd)
+/* Releases everything a (detached) handler owns and frees it */
+static void
+lua_tcp_free_handler(struct lua_tcp_cbdata *cbd, struct lua_tcp_handler *hdl)
 {
-	struct lua_tcp_handler *hdl;
-
-	hdl = g_queue_pop_head(cbd->handlers);
-
-	if (hdl == NULL) {
-		/* We are done */
-		return FALSE;
-	}
-
 	if (hdl->type == LUA_WANT_READ) {
 		msg_debug_tcp("switch from read handler %d", hdl->h.r.cbref);
 		if (hdl->h.r.cbref && hdl->h.r.cbref != -1) {
@@ -423,7 +560,7 @@ lua_tcp_shift_handler(struct lua_tcp_cbdata *cbd)
 		}
 	}
 	else if (hdl->type == LUA_WANT_WRITE) {
-		msg_debug_tcp("switch from write handler %d", hdl->h.r.cbref);
+		msg_debug_tcp("switch from write handler %d", hdl->h.w.cbref);
 		if (hdl->h.w.cbref && hdl->h.w.cbref != -1) {
 			luaL_unref(cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.w.cbref);
 		}
@@ -438,15 +575,43 @@ lua_tcp_shift_handler(struct lua_tcp_cbdata *cbd)
 	}
 
 	g_free(hdl);
+}
+
+static gboolean
+lua_tcp_shift_handler(struct lua_tcp_cbdata *cbd)
+{
+	struct lua_tcp_handler *hdl;
+
+	hdl = g_queue_pop_head(cbd->handlers);
+
+	if (hdl == NULL) {
+		/* We are done */
+		return FALSE;
+	}
+
+	cbd->shift_gen++;
+	lua_tcp_free_handler(cbd, hdl);
 
 	return TRUE;
+}
+
+/* Makes the `rspamd{tcp}` handles that Lua code still keeps dead */
+static void
+lua_tcp_detach_handles(struct lua_tcp_cbdata *cbd)
+{
+	while (cbd->handles) {
+		struct lua_tcp_handle *h = cbd->handles;
+
+		DL_DELETE(cbd->handles, h);
+		h->cbd = NULL;
+		h->prev = h->next = NULL;
+	}
 }
 
 static void
 lua_tcp_fin(gpointer arg)
 {
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *) arg;
-	struct lua_tcp_dtor *dtor, *dttmp;
 
 	if (IS_SYNC(cbd) && cbd->task) {
 		/*
@@ -458,6 +623,9 @@ lua_tcp_fin(gpointer arg)
 	}
 
 	msg_debug_tcp("finishing TCP %s connection", IS_SYNC(cbd) ? "sync" : "async");
+
+	/* Handles that Lua code still keeps must not point to the freed object */
+	lua_tcp_detach_handles(cbd);
 
 	if (cbd->connect_cb != -1) {
 		luaL_unref(cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->connect_cb);
@@ -497,23 +665,69 @@ lua_tcp_fin(gpointer arg)
 	while (lua_tcp_shift_handler(cbd)) {}
 	g_queue_free(cbd->handlers);
 
-	LL_FOREACH_SAFE(cbd->dtors, dtor, dttmp)
-	{
-		dtor->dtor(dtor->data);
-		g_free(dtor);
-	}
+	lua_tcp_free_dtors(cbd->cfg ? cbd->cfg->lua_state : NULL, cbd->dtors);
+	cbd->dtors = NULL;
 
 	g_byte_array_unref(cbd->in);
 	g_free(cbd->hostname);
+	g_free(cbd->pending_err);
 	g_free(cbd);
 }
 
+/*
+ * Returns the connection of a `rspamd{tcp}` handle, or NULL if the handle is
+ * dead, i.e. the connection has been destroyed (a wrong argument type raises
+ * an error). Every method must handle NULL.
+ */
 static struct lua_tcp_cbdata *
 lua_check_tcp(lua_State *L, int pos)
 {
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_tcp_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'tcp' expected");
 	return ud ? *((struct lua_tcp_cbdata **) ud) : NULL;
+}
+
+/* Pushes a new weak `rspamd{tcp}` handle of the connection */
+static void
+lua_tcp_push_handle(lua_State *L, struct lua_tcp_cbdata *cbd)
+{
+	struct lua_tcp_handle *h;
+
+	h = lua_newuserdata(L, sizeof(*h));
+	h->cbd = cbd;
+	h->prev = h->next = NULL;
+	rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
+	DL_PREPEND(cbd->handles, h);
+}
+
+static int
+lua_tcp_gc(lua_State *L)
+{
+	struct lua_tcp_handle *h = rspamd_lua_check_udata_maybe(L, 1, rspamd_tcp_classname);
+
+	if (h && h->cbd) {
+		DL_DELETE(h->cbd->handles, h);
+		h->cbd = NULL;
+		h->prev = h->next = NULL;
+	}
+
+	return 0;
+}
+
+/*
+ * Releases the symcache item of the connection. Dependent symbols may run
+ * synchronously from the call and use the connection (through a handle that
+ * Lua code has stored), so the pointer is cleared before the call.
+ */
+static void
+lua_tcp_release_item(struct lua_tcp_cbdata *cbd)
+{
+	struct rspamd_symcache_dynamic_item *item = cbd->item;
+
+	if (item) {
+		cbd->item = NULL;
+		rspamd_symcache_item_async_dec_check(cbd->task, item, M);
+	}
 }
 
 static void
@@ -524,23 +738,54 @@ lua_tcp_maybe_free(struct lua_tcp_cbdata *cbd)
 		 * in this mode, we don't remove object, we only remove the event
 		 * Object is owned by lua and will be destroyed on __gc()
 		 */
+		gboolean dying = !(cbd->flags & LUA_TCP_FLAG_HANDLE);
 
-		if (cbd->item) {
-			rspamd_symcache_item_async_dec_check(cbd->task, cbd->item, M);
-			cbd->item = NULL;
+		if (dying) {
+			/*
+			 * The connection has failed before the Lua handle was created,
+			 * or the handle is already collected: nobody is going to call
+			 * __gc for it. Nothing must reach the object from now on, as
+			 * releasing the item may run other symbols
+			 */
+			cbd->flags |= LUA_TCP_FLAG_FINISHED;
+			lua_tcp_detach_handles(cbd);
 		}
 
+		if (!dying) {
+			/*
+			 * The handle is alive, so the object must survive, but the calls
+			 * below run other code (dependent symbols, the finalisation of the
+			 * task, postfilters) that may collect the handle if it is no
+			 * longer reachable: __gc frees the object when it sees no
+			 * references. Hold one across the calls (a raw counter, as a
+			 * release would enter this function again)
+			 */
+			cbd->ref.refcount++;
+		}
+
+		lua_tcp_release_item(cbd);
+
 		if (cbd->async_ev) {
-			rspamd_session_remove_event(cbd->session, lua_tcp_void_finalyser, cbd);
+			rspamd_session_remove_event(cbd->session, lua_tcp_sync_event_finalyser, cbd);
 		}
 
 		cbd->async_ev = NULL;
+
+		if (dying) {
+			lua_tcp_fin(cbd);
+		}
+		else if (--cbd->ref.refcount == 0 && !(cbd->flags & LUA_TCP_FLAG_HANDLE)) {
+			/* The handle was collected in a call above and deferred to us */
+			cbd->flags |= LUA_TCP_FLAG_FINISHED;
+			lua_tcp_detach_handles(cbd);
+			lua_tcp_fin(cbd);
+		}
 	}
 	else {
-		if (cbd->item) {
-			rspamd_symcache_item_async_dec_check(cbd->task, cbd->item, M);
-			cbd->item = NULL;
-		}
+		/* The object is going away: see above */
+		cbd->flags |= LUA_TCP_FLAG_FINISHED;
+		lua_tcp_detach_handles(cbd);
+		lua_tcp_release_item(cbd);
 
 		if (cbd->async_ev) {
 			rspamd_session_remove_event(cbd->session, lua_tcp_fin, cbd);
@@ -564,6 +809,15 @@ lua_tcp_maybe_free(struct lua_tcp_cbdata *cbd)
 static void
 lua_tcp_release_conn(struct lua_tcp_cbdata *cbd)
 {
+	if (IS_SYNC(cbd)) {
+		/*
+		 * A sync connection has no ownership reference to drop: every
+		 * operation holds its own reference, which is released when the
+		 * waiting coroutine is resumed
+		 */
+		return;
+	}
+
 	if (cbd->flags & LUA_TCP_FLAG_FIN_RELEASED) {
 		msg_debug_tcp("connection reference is already released");
 
@@ -574,6 +828,17 @@ lua_tcp_release_conn(struct lua_tcp_cbdata *cbd)
 	TCP_RELEASE(cbd);
 }
 
+/* Charges the upstream (if any) with at most one failure per connection */
+static void
+lua_tcp_upstream_fail(struct lua_tcp_cbdata *cbd, gboolean addr_failure,
+					  const char *reason)
+{
+	if (cbd->up && !(cbd->flags & LUA_TCP_FLAG_UP_FAILED)) {
+		cbd->flags |= LUA_TCP_FLAG_UP_FAILED;
+		rspamd_upstream_fail(cbd->up, addr_failure, reason);
+	}
+}
+
 #ifdef __GNUC__
 static void
 lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
@@ -582,29 +847,62 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 
 static void lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, va_list argp);
 
+/*
+ * Lua callback of a queued handler, -1 if it has none. A connect marker is
+ * neither a read nor a write handler: its union is not initialised
+ */
+static inline int
+lua_tcp_handler_cbref(const struct lua_tcp_handler *hdl)
+{
+	switch (hdl->type) {
+	case LUA_WANT_READ:
+		return hdl->h.r.cbref;
+	case LUA_WANT_WRITE:
+		return hdl->h.w.cbref;
+	default:
+		return -1;
+	}
+}
+
 static void
 lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 				   const char *err, ...)
 {
 	va_list ap, ap_copy;
-	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
 	int cbref, top;
 	struct lua_callback_state cbs;
 	lua_State *L;
-	gboolean callback_called = FALSE;
+	unsigned int shifts;
 
 	if (is_fatal && cbd->up) {
-		rspamd_upstream_fail(cbd->up, false, err);
+		char reason[256];
+
+		va_start(ap, err);
+		rspamd_vsnprintf(reason, sizeof(reason), err, ap);
+		va_end(ap);
+		lua_tcp_upstream_fail(cbd, false, reason);
 	}
 
 	if (cbd->thread) {
+		/*
+		 * The reference taken for the pending sync operation is released
+		 * by the resume, no guard is needed
+		 */
 		va_start(ap, err);
 		lua_tcp_resume_thread_error_argp(cbd, err, ap);
 		va_end(ap);
 
 		return;
 	}
+
+	/*
+	 * Callbacks may close the connection, which can drop the last reference
+	 * to it: keep one for the whole body, so cbd stays valid until we return.
+	 * The caller must not touch cbd after this function if it has not got its
+	 * own reference.
+	 */
+	TCP_RETAIN(cbd);
 
 	/*
 	 * Connect-phase error routing. If the caller registered on_error and we
@@ -624,18 +922,18 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 		lua_pushvfstring(L, err, ap);
 		va_end(ap);
 
-		pcbd = lua_newuserdata(L, sizeof(*pcbd));
-		*pcbd = cbd;
-		rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
+		lua_tcp_push_handle(L, cbd);
 		TCP_RETAIN(cbd);
 
 		if (cbd->item) {
 			rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 		}
 
+		cbd->cb_depth++;
 		if (lua_pcall(L, 2, 0, 0) != 0) {
 			msg_info("on_error callback call failed: %s", lua_tostring(L, -1));
 		}
+		cbd->cb_depth--;
 
 		lua_settop(L, top);
 		TCP_RELEASE(cbd);
@@ -651,6 +949,7 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 		}
 
 		lua_thread_pool_restore_callback(&cbs);
+		TCP_RELEASE(cbd);
 
 		return;
 	}
@@ -658,81 +957,126 @@ lua_tcp_push_error(struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &cbs);
 	L = cbs.L;
 
-	va_start(ap, err);
+	if (is_fatal) {
+		GQueue pending = G_QUEUE_INIT;
 
-	for (;;) {
-		hdl = g_queue_peek_head(cbd->handlers);
+		msg_debug_tcp("fatal error rollback all handlers");
 
-		if (hdl == NULL) {
-			break;
+		/*
+		 * Detach the handlers that exist now: callbacks may queue new ones,
+		 * and those must neither be called with this (stale) error nor keep
+		 * the fan-out going
+		 */
+		while ((hdl = g_queue_pop_head(cbd->handlers)) != NULL) {
+			g_queue_push_tail(&pending, hdl);
 		}
 
-		if (hdl->type == LUA_WANT_READ) {
-			cbref = hdl->h.r.cbref;
-		}
-		else {
-			cbref = hdl->h.w.cbref;
-		}
+		while ((hdl = g_queue_pop_head(&pending)) != NULL) {
+			cbref = lua_tcp_handler_cbref(hdl);
 
-		if (cbref != -1) {
-			top = lua_gettop(L);
-			lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
+			/* After `close` no more callbacks are called, handlers are just dropped */
+			if (cbref != -1 && !(cbd->flags & LUA_TCP_FLAG_FINISHED)) {
+				top = lua_gettop(L);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
 
-			/* Error message */
-			va_copy(ap_copy, ap);
-			lua_pushvfstring(L, err, ap_copy);
-			va_end(ap_copy);
+				/* Error message */
+				va_start(ap, err);
+				lua_pushvfstring(L, err, ap);
+				va_end(ap);
 
-			/* Body */
-			lua_pushnil(L);
-			/* Connection */
-			pcbd = lua_newuserdata(L, sizeof(*pcbd));
-			*pcbd = cbd;
-			rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
-			TCP_RETAIN(cbd);
+				/* Body */
+				lua_pushnil(L);
+				/* Connection */
+				lua_tcp_push_handle(L, cbd);
+				TCP_RETAIN(cbd);
 
-			if (cbd->item) {
-				rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+				if (cbd->item) {
+					rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+				}
+
+				cbd->cb_depth++;
+				if (lua_pcall(L, 3, 0, 0) != 0) {
+					msg_info("callback call failed: %s", lua_tostring(L, -1));
+				}
+				cbd->cb_depth--;
+
+				lua_settop(L, top);
+				TCP_RELEASE(cbd);
 			}
 
-			if (lua_pcall(L, 3, 0, 0) != 0) {
-				msg_info("callback call failed: %s", lua_tostring(L, -1));
-			}
-
-			lua_settop(L, top);
-
-			TCP_RELEASE(cbd);
-
-			if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
-				(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
-				/* A callback has called `close` method, so we need to release a refcount */
-				lua_tcp_release_conn(cbd);
-			}
-
-			callback_called = TRUE;
+			lua_tcp_free_handler(cbd, hdl);
 		}
 
-		if (!is_fatal) {
-			if (callback_called) {
-				/* Stop on the first callback found */
+		/* Whatever the callbacks have added is dropped uncalled */
+		while (lua_tcp_shift_handler(cbd)) {}
+	}
+	else {
+		for (;;) {
+			hdl = g_queue_peek_head(cbd->handlers);
+
+			if (hdl == NULL) {
 				break;
 			}
-			else {
-				/* Shift to another callback to inform about non fatal error */
-				msg_debug_tcp("non fatal error find matching callback");
-				lua_tcp_shift_handler(cbd);
-				continue;
+
+			cbref = lua_tcp_handler_cbref(hdl);
+
+			if (cbref != -1 && !(cbd->flags & LUA_TCP_FLAG_FINISHED)) {
+				top = lua_gettop(L);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
+
+				/* Error message */
+				va_start(ap, err);
+				va_copy(ap_copy, ap);
+				lua_pushvfstring(L, err, ap_copy);
+				va_end(ap_copy);
+				va_end(ap);
+
+				/* Body */
+				lua_pushnil(L);
+				/* Connection */
+				lua_tcp_push_handle(L, cbd);
+				TCP_RETAIN(cbd);
+
+				if (cbd->item) {
+					rspamd_symcache_set_cur_item(cbd->task, cbd->item);
+				}
+
+				shifts = cbd->shift_gen;
+
+				cbd->cb_depth++;
+				if (lua_pcall(L, 3, 0, 0) != 0) {
+					msg_info("callback call failed: %s", lua_tostring(L, -1));
+				}
+				cbd->cb_depth--;
+
+				lua_settop(L, top);
+				TCP_RELEASE(cbd);
+
+				/*
+				 * Stop on the first callback found; it is consumed here,
+				 * unless it has shifted itself
+				 */
+				if (cbd->shift_gen == shifts) {
+					lua_tcp_shift_handler(cbd);
+				}
+
+				break;
 			}
-		}
-		else {
-			msg_debug_tcp("fatal error rollback all handlers");
+
+			/* Shift to another callback to inform about non fatal error */
+			msg_debug_tcp("non fatal error find matching callback");
 			lua_tcp_shift_handler(cbd);
 		}
 	}
 
-	va_end(ap);
+	if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
+		(LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) {
+		/* A callback has called `close` method, so we need to release a refcount */
+		lua_tcp_release_conn(cbd);
+	}
 
 	lua_thread_pool_restore_callback(&cbs);
+	TCP_RELEASE(cbd);
 }
 
 static void lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len);
@@ -741,7 +1085,6 @@ static void
 lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 {
 	struct rspamd_lua_text *t;
-	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
 	int cbref, arg_cnt, top;
 	struct lua_callback_state cbs;
@@ -752,21 +1095,18 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 		return;
 	}
 
-	lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &cbs);
-	L = cbs.L;
-
 	hdl = g_queue_peek_head(cbd->handlers);
 
-	g_assert(hdl != NULL);
+	if (hdl == NULL) {
+		return;
+	}
 
-	if (hdl->type == LUA_WANT_READ) {
-		cbref = hdl->h.r.cbref;
-	}
-	else {
-		cbref = hdl->h.w.cbref;
-	}
+	cbref = lua_tcp_handler_cbref(hdl);
 
 	if (cbref != -1) {
+		lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &cbs);
+		L = cbs.L;
+
 		top = lua_gettop(L);
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
 		/* Error */
@@ -785,9 +1125,7 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 			arg_cnt = 2;
 		}
 		/* Connection */
-		pcbd = lua_newuserdata(L, sizeof(*pcbd));
-		*pcbd = cbd;
-		rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
+		lua_tcp_push_handle(L, cbd);
 
 		TCP_RETAIN(cbd);
 
@@ -795,9 +1133,11 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 			rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 		}
 
+		cbd->cb_depth++;
 		if (lua_pcall(L, arg_cnt, 0, 0) != 0) {
 			msg_info("callback call failed: %s", lua_tostring(L, -1));
 		}
+		cbd->cb_depth--;
 
 		lua_settop(L, top);
 		TCP_RELEASE(cbd);
@@ -807,24 +1147,28 @@ lua_tcp_push_data(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 			/* A callback has called `close` method, so we need to release a refcount */
 			lua_tcp_release_conn(cbd);
 		}
-	}
 
-	lua_thread_pool_restore_callback(&cbs);
+		lua_thread_pool_restore_callback(&cbs);
+	}
 }
 
 static void
 lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, va_list argp)
 {
 	struct thread_entry *thread = cbd->thread;
+	guint64 generation = cbd->thread_generation;
 	lua_State *L = thread->lua_state;
+
+	/* The operation is over: the next one records its own coroutine */
+	cbd->thread = NULL;
 
 	lua_pushboolean(L, FALSE);
 	lua_pushvfstring(L, error, argp);
 
 	lua_tcp_shift_handler(cbd);
 	// lua_tcp_unregister_event (cbd);
-	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, cbd->thread);
-	lua_thread_resume_checked(thread, cbd->thread_generation, 2);
+	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, thread);
+	lua_thread_resume_checked(thread, generation, 2);
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
 	TCP_RELEASE(cbd);
@@ -848,13 +1192,18 @@ lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 	 *     (true)
 	 */
 
-	lua_State *L = cbd->thread->lua_state;
+	struct thread_entry *thread = cbd->thread;
+	guint64 generation = cbd->thread_generation;
+	lua_State *L = thread->lua_state;
 	struct lua_tcp_handler *hdl;
 
 	hdl = g_queue_peek_head(cbd->handlers);
 
+	/* The operation is over: the next one records its own coroutine */
+	cbd->thread = NULL;
+
 	lua_pushboolean(L, TRUE);
-	if (hdl->type == LUA_WANT_READ) {
+	if (hdl && hdl->type == LUA_WANT_READ) {
 		lua_pushlstring(L, str, len);
 	}
 	else {
@@ -862,24 +1211,34 @@ lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 	}
 
 	lua_tcp_shift_handler(cbd);
-	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool,
-									  cbd->thread);
+	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, thread);
 
 	if (cbd->item) {
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	struct thread_entry *thread = cbd->thread;
-	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+	lua_thread_resume_checked(thread, generation, 2);
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
 
 	TCP_RELEASE(cbd);
 }
 
+/* A finished or closed connection must never be armed again */
+static inline gboolean
+lua_tcp_conn_closed(const struct lua_tcp_cbdata *cbd)
+{
+	return (cbd->flags & LUA_TCP_FLAG_FINISHED) || cbd->fd == -1;
+}
+
 static void
 lua_tcp_plan_read(struct lua_tcp_cbdata *cbd)
 {
+	if (lua_tcp_conn_closed(cbd) || cbd->pending_err) {
+		msg_debug_tcp("connection is closed, do not plan read");
+		return;
+	}
+
 	rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_READ);
 }
 
@@ -887,6 +1246,9 @@ static void
 lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 {
 	struct lua_tcp_cbdata **pcbd;
+	struct lua_tcp_handler *hdl;
+	struct thread_entry *thread;
+	guint64 generation;
 	lua_State *L;
 
 	if (cbd->thread == NULL) {
@@ -901,30 +1263,79 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 		 * handler gets armed correctly.
 		 */
 		msg_debug_tcp("tcp connected (async probe)");
-		lua_tcp_shift_handler(cbd);
+
+		/* on_connect may have shifted the marker itself */
+		hdl = g_queue_peek_head(cbd->handlers);
+
+		if (hdl && hdl->type == LUA_WANT_CONNECT) {
+			lua_tcp_shift_handler(cbd);
+		}
+
 		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 		return;
 	}
 
 	/* Sync mode: resume the waiting Lua thread with the tcp_sync userdata. */
-	L = cbd->thread->lua_state;
+	thread = cbd->thread;
+	generation = cbd->thread_generation;
+	L = thread->lua_state;
+
+	/* The operation is over: the next one records its own coroutine */
+	cbd->thread = NULL;
 
 	lua_pushboolean(L, TRUE);
 
-	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, cbd->thread);
+	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, thread);
 	pcbd = lua_newuserdata(L, sizeof(*pcbd));
 	*pcbd = cbd;
 	rspamd_lua_setclass(L, rspamd_tcp_sync_classname, -1);
+	/* From now on the handle owns the object, __gc destroys it */
+	cbd->flags |= LUA_TCP_FLAG_HANDLE;
 	msg_debug_tcp("tcp connected");
 
-	lua_tcp_shift_handler(cbd);
+	hdl = g_queue_peek_head(cbd->handlers);
+
+	if (hdl && hdl->type == LUA_WANT_CONNECT) {
+		lua_tcp_shift_handler(cbd);
+	}
 
 	// lua_tcp_unregister_event (cbd);
-	struct thread_entry *thread = cbd->thread;
-	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+	lua_thread_resume_checked(thread, generation, 2);
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
 	TCP_RELEASE(cbd);
+}
+
+/*
+ * The current write handler is complete (or empty): call its callback and
+ * remove it, unless the callback has already shifted the queue itself.
+ * Planning of the next handler is up to the caller.
+ */
+static void
+lua_tcp_write_finish(struct lua_tcp_cbdata *cbd)
+{
+	unsigned int shifts;
+
+	msg_debug_tcp("finishing TCP write, calling TCP handler");
+
+	if ((cbd->flags & LUA_TCP_FLAG_SHUTDOWN)) {
+		/* Half close the connection */
+		if (cbd->fd != -1) {
+			shutdown(cbd->fd, SHUT_WR);
+		}
+		cbd->flags &= ~LUA_TCP_FLAG_SHUTDOWN;
+	}
+
+	if (cbd->up) {
+		rspamd_upstream_ok(cbd->up);
+	}
+
+	shifts = cbd->shift_gen;
+	lua_tcp_push_data(cbd, NULL, 0);
+
+	if (!IS_SYNC(cbd) && cbd->shift_gen == shifts) {
+		lua_tcp_shift_handler(cbd);
+	}
 }
 
 static void
@@ -934,7 +1345,7 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 	unsigned int niov, i;
 	int flags = 0;
 	bool allocated_iov = false;
-	gsize remain;
+	gsize remain, left;
 	gssize r;
 	struct iovec *cur_iov;
 	struct lua_tcp_handler *hdl;
@@ -943,7 +1354,15 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 
 	hdl = g_queue_peek_head(cbd->handlers);
 
-	g_assert(hdl != NULL && hdl->type == LUA_WANT_WRITE);
+	if (hdl == NULL || hdl->type != LUA_WANT_WRITE || cbd->pending_err) {
+		/*
+		 * The queue has been changed under us, serve what is really there (a
+		 * failed `starttls` leaves no stream to write to: the planner reports it)
+		 */
+		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+		return;
+	}
+
 	wh = &hdl->h.w;
 
 	if (wh->pos == wh->total_bytes) {
@@ -953,6 +1372,7 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 	start = &wh->iov[0];
 	niov = wh->iovlen;
 	remain = wh->pos;
+	left = wh->total_bytes - wh->pos;
 	/* We know that niov is small enough for that */
 
 	if (niov < 1024) {
@@ -1012,7 +1432,7 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 			else {
 				lua_tcp_push_error(cbd, TRUE,
 								   "IO write error while trying to write %d bytes: %s",
-								   (int) remain, strerror(errno));
+								   (int) left, strerror(errno));
 
 				msg_debug_tcp("write error, terminate connection");
 				lua_tcp_release_conn(cbd);
@@ -1041,27 +1461,19 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 			 */
 			lua_tcp_write_helper(cbd);
 		}
+		else {
+			/* Nothing has been written but there is no error: wait for the next chance */
+			lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+		}
 	}
 
 	return;
 
 call_finish_handler:
 
-	msg_debug_tcp("finishing TCP write, calling TCP handler");
+	lua_tcp_write_finish(cbd);
 
-	if ((cbd->flags & LUA_TCP_FLAG_SHUTDOWN)) {
-		/* Half close the connection */
-		shutdown(cbd->fd, SHUT_WR);
-		cbd->flags &= ~LUA_TCP_FLAG_SHUTDOWN;
-	}
-
-	if (cbd->up) {
-		rspamd_upstream_ok(cbd->up);
-	}
-
-	lua_tcp_push_data(cbd, NULL, 0);
 	if (!IS_SYNC(cbd)) {
-		lua_tcp_shift_handler(cbd);
 		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 	}
 }
@@ -1071,6 +1483,7 @@ lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 							 struct lua_tcp_read_handler *rh, gboolean eof)
 {
 	unsigned int slen;
+	unsigned int shifts;
 	goffset pos;
 
 	if (rh->stop_pattern) {
@@ -1098,9 +1511,13 @@ lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 		if (pos != -1) {
 			msg_debug_tcp("found TCP stop pattern");
 			rh->scanned = 0;
+			shifts = cbd->shift_gen;
+			/* The callback sees the data and the pattern, the rest is unread */
+			cbd->in_delivered = pos + slen;
 			lua_tcp_push_data(cbd, cbd->in->data, pos);
+			cbd->in_delivered = 0;
 
-			if (!IS_SYNC(cbd)) {
+			if (!IS_SYNC(cbd) && cbd->shift_gen == shifts) {
 				lua_tcp_shift_handler(cbd);
 			}
 			if (pos + slen < cbd->in->len) {
@@ -1119,7 +1536,7 @@ lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 			/* Plan new read, also when there is less data than the pattern */
 			msg_debug_tcp("NOT found TCP stop pattern");
 
-			if (!cbd->eof) {
+			if (!eof) {
 				lua_tcp_plan_read(cbd);
 			}
 			else {
@@ -1135,8 +1552,9 @@ lua_tcp_process_read_handler(struct lua_tcp_cbdata *cbd,
 
 		/* we have eaten all the data, handler should not know that there is something */
 		cbd->in->len = 0;
+		shifts = cbd->shift_gen;
 		lua_tcp_push_data(cbd, cbd->in->data, slen);
-		if (!IS_SYNC(cbd)) {
+		if (!IS_SYNC(cbd) && cbd->shift_gen == shifts) {
 			lua_tcp_shift_handler(cbd);
 		}
 
@@ -1152,19 +1570,32 @@ lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
 {
 	struct lua_tcp_handler *hdl;
 	struct lua_tcp_read_handler *rh;
+	unsigned int shifts;
 
 	hdl = g_queue_peek_head(cbd->handlers);
 
-	g_assert(hdl != NULL && hdl->type == LUA_WANT_READ);
+	if (hdl == NULL || hdl->type != LUA_WANT_READ) {
+		/* The queue has been changed under us, serve what is really there */
+		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+		return;
+	}
+
 	rh = &hdl->h.r;
 
 	if (r > 0) {
 		if (cbd->flags & LUA_TCP_FLAG_PARTIAL) {
+			shifts = cbd->shift_gen;
 			lua_tcp_push_data(cbd, in, r);
 
 			/* Plan next event, unless the callback has closed the connection */
-			if (cbd->fd != -1) {
-				lua_tcp_plan_read(cbd);
+			if (!lua_tcp_conn_closed(cbd)) {
+				if (cbd->shift_gen != shifts || cbd->pending_err) {
+					/* The callback has changed the queue, look at the real head */
+					lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+				}
+				else {
+					lua_tcp_plan_read(cbd);
+				}
 			}
 		}
 		else {
@@ -1218,8 +1649,10 @@ lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
 			return;
 		}
 
-		/* Fatal error */
-		cbd->eof = TRUE;
+		/*
+		 * Fatal error: this is not a clean end of the stream, so `eof` stays
+		 * unset, but nothing more will be read either
+		 */
 		if (cbd->in->len > 0) {
 			/* We have some data to process */
 			lua_tcp_process_read_handler(cbd, rh, TRUE);
@@ -1249,14 +1682,12 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 	socklen_t so_len = sizeof(so_error);
 	struct lua_callback_state cbs;
 	lua_State *L;
-	enum lua_tcp_handler_type event_type;
+	struct lua_tcp_handler *hdl;
+	ev_tstamp elapsed;
+
 	TCP_RETAIN(cbd);
 
 	msg_debug_tcp("processed TCP event: %d", what);
-	ev_tstamp elapsed;
-
-	struct lua_tcp_handler *rh = g_queue_peek_head(cbd->handlers);
-	event_type = rh->type;
 
 	elapsed = rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
 
@@ -1272,34 +1703,73 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 	}
 	(void) elapsed;
 
+	hdl = g_queue_peek_head(cbd->handlers);
+
+	if (hdl == NULL) {
+		/* Nothing is waiting for this event any more: stop here */
+		msg_debug_tcp("event %d with no handlers queued", what);
+		lua_tcp_plan_handler_event(cbd, FALSE, FALSE);
+		goto out;
+	}
+
 	if (what == EV_READ) {
-		if (cbd->ssl_conn) {
-			r = rspamd_ssl_read(cbd->ssl_conn, inbuf, sizeof(inbuf));
+		if (hdl->type != LUA_WANT_READ) {
+			/* Not the event the head is waiting for, arm the right one */
+			lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+			goto out;
+		}
 
-			if (r == -1 && errno != EAGAIN) {
-				/*
-				 * The TLS layer has already reported the error through
-				 * lua_tcp_ssl_on_error, which drained the handlers and
-				 * released the connection: nothing is left to read into
-				 */
-				goto out;
+		for (;;) {
+			if (cbd->ssl_conn) {
+				r = rspamd_ssl_read(cbd->ssl_conn, inbuf, sizeof(inbuf));
+
+				if (r == -1 && errno != EAGAIN) {
+					/*
+					 * The TLS layer has already reported the error through
+					 * lua_tcp_ssl_on_error, which drained the handlers and
+					 * released the connection: nothing is left to read into
+					 */
+					goto out;
+				}
 			}
-		}
-		else {
-			r = read(cbd->fd, inbuf, sizeof(inbuf));
-		}
+			else {
+				r = read(cbd->fd, inbuf, sizeof(inbuf));
+			}
 
-		/*
-		 * Read-only requests never receive an EV_WRITE for connect-complete
-		 * detection, so CONNECTED would otherwise stay unset and the
-		 * downstream FINISHED|CONNECTED gates on conn:close() leak refcounts.
-		 * Gating on r > 0 keeps pre-byte errors routed to on_error.
-		 */
-		if (r > 0 && !(cbd->flags & LUA_TCP_FLAG_CONNECTED)) {
-			cbd->flags |= LUA_TCP_FLAG_CONNECTED;
-		}
+			/*
+			 * Read-only requests never receive an EV_WRITE for connect-complete
+			 * detection, so CONNECTED would otherwise stay unset and the
+			 * downstream FINISHED|CONNECTED gates on conn:close() leak refcounts.
+			 * Gating on r > 0 keeps pre-byte errors routed to on_error.
+			 */
+			if (r > 0 && !(cbd->flags & LUA_TCP_FLAG_CONNECTED)) {
+				cbd->flags |= LUA_TCP_FLAG_CONNECTED;
+			}
 
-		lua_tcp_process_read(cbd, inbuf, r);
+			lua_tcp_process_read(cbd, inbuf, r);
+
+			/*
+			 * OpenSSL may hold more decrypted bytes of the record it has just
+			 * read from: the socket does not become readable for them, so keep
+			 * reading while there is something, as long as a read handler is
+			 * waiting (otherwise lua_tcp_plan_handler_event does that when one
+			 * gets armed). The state is re-checked every round: a callback may
+			 * have closed the connection or changed the queue.
+			 */
+			if (r <= 0 || cbd->ssl_conn == NULL || lua_tcp_conn_closed(cbd) ||
+				rspamd_ssl_pending(cbd->ssl_conn) == 0) {
+				break;
+			}
+
+			hdl = g_queue_peek_head(cbd->handlers);
+
+			if (hdl == NULL || hdl->type != LUA_WANT_READ) {
+				break;
+			}
+
+			msg_debug_tcp("TLS has %z more bytes pending, read again",
+						  rspamd_ssl_pending(cbd->ssl_conn));
+		}
 	}
 	else if (what == EV_WRITE) {
 
@@ -1320,7 +1790,6 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 				cbd->flags |= LUA_TCP_FLAG_CONNECTED;
 
 				if (cbd->connect_cb != -1) {
-					struct lua_tcp_cbdata **pcbd;
 					int top;
 
 					lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, &cbs);
@@ -1328,19 +1797,20 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 
 					top = lua_gettop(L);
 					lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->connect_cb);
-					pcbd = lua_newuserdata(L, sizeof(*pcbd));
-					*pcbd = cbd;
+					lua_tcp_push_handle(L, cbd);
 					TCP_RETAIN(cbd);
-					rspamd_lua_setclass(L, rspamd_tcp_classname, -1);
 
 					if (cbd->item) {
 						rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 					}
 
+					cbd->cb_depth++;
+
 					if (lua_pcall(L, 1, 0, 0) != 0) {
 						msg_info("callback call failed: %s", lua_tostring(L, -1));
 					}
 
+					cbd->cb_depth--;
 					lua_settop(L, top);
 					TCP_RELEASE(cbd);
 					lua_thread_pool_restore_callback(&cbs);
@@ -1354,14 +1824,23 @@ lua_tcp_handler(int fd, short what, gpointer ud)
 			}
 		}
 
-		if (event_type == LUA_WANT_WRITE) {
-			lua_tcp_write_helper(cbd);
-		}
-		else if (event_type == LUA_WANT_CONNECT) {
-			lua_tcp_connect_helper(cbd);
-		}
-		else {
-			g_assert_not_reached();
+		/*
+		 * Dispatch on what is really at the head now: the on_connect callback
+		 * may have changed the queue or closed the connection, and the TLS
+		 * layer reports a finished handshake as EV_WRITE whatever is queued
+		 */
+		if (!lua_tcp_conn_closed(cbd)) {
+			hdl = g_queue_peek_head(cbd->handlers);
+
+			if (hdl != NULL && hdl->type == LUA_WANT_WRITE) {
+				lua_tcp_write_helper(cbd);
+			}
+			else if (hdl != NULL && hdl->type == LUA_WANT_CONNECT) {
+				lua_tcp_connect_helper(cbd);
+			}
+			else {
+				lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+			}
 		}
 
 		if ((cbd->flags & (LUA_TCP_FLAG_FINISHED | LUA_TCP_FLAG_CONNECTED)) ==
@@ -1380,103 +1859,171 @@ out:
 }
 
 static void
-lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd, gboolean can_read,
-						   gboolean can_write)
+lua_tcp_plan_handler_event_do(struct lua_tcp_cbdata *cbd, gboolean can_read,
+							  gboolean can_write)
 {
 	struct lua_tcp_handler *hdl;
+
+	if (cbd->pending_err) {
+		/*
+		 * `starttls` has failed synchronously: nothing is planned on the dead
+		 * stream, the error goes to the handlers queued now. Inside a callback
+		 * the dispatcher that runs it comes back here when it returns
+		 */
+		if (cbd->cb_depth == 0) {
+			lua_tcp_deliver_pending_error(cbd);
+		}
+
+		return;
+	}
 
 	hdl = g_queue_peek_head(cbd->handlers);
 
 	if (hdl == NULL) {
-		if (!(cbd->flags & LUA_TCP_FLAG_FINISHED)) {
+		/* A sync connection simply has no operation pending */
+		if (!IS_SYNC(cbd) && !(cbd->flags & LUA_TCP_FLAG_FINISHED)) {
 			/* We are finished with a connection */
 			msg_debug_tcp("no handlers left, finish session");
 			cbd->flags |= LUA_TCP_FLAG_FINISHED;
 			lua_tcp_release_conn(cbd);
 		}
+
+		return;
 	}
-	else {
-		if (hdl->type == LUA_WANT_READ) {
-			rspamd_session_event_update_label(cbd->async_ev, "tcp read");
 
-			/* We need to check if we have some leftover in the buffer */
-			if (cbd->in->len > 0) {
-				msg_debug_tcp("process read buffer leftover");
-				if (lua_tcp_process_read_handler(cbd, &hdl->h.r, FALSE)) {
-					if (!IS_SYNC(cbd)) {
-						/* We can go to the next handler */
-						lua_tcp_plan_handler_event(cbd, can_read, can_write);
-					}
-				}
-			}
-			else {
-				if (can_read) {
-					/* We need to plan a new event */
-					msg_debug_tcp("plan new read");
-					if (!cbd->use_deduction) {
-						cbd->ev.timeout = cbd->read_timeout;
-					}
-					rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
-												 EV_READ);
-				}
-				else {
-					/* Cannot read more */
-					msg_debug_tcp("cannot read more");
-					lua_tcp_push_error(cbd, FALSE, "EOF, cannot read more data");
-					if (!IS_SYNC(cbd)) {
-						lua_tcp_shift_handler(cbd);
-						lua_tcp_plan_handler_event(cbd, can_read, can_write);
-					}
-				}
-			}
-		}
-		else if (hdl->type == LUA_WANT_WRITE) {
-			rspamd_session_event_update_label(cbd->async_ev, "tcp write");
-			/*
-			 * We need to plan write event if there is something in the
-			 * write request
-			 */
+	if (lua_tcp_conn_closed(cbd)) {
+		/* Never arm a watcher for a descriptor that is gone */
+		msg_debug_tcp("connection is closed, do not plan handlers");
 
-			if (hdl->h.w.pos < hdl->h.w.total_bytes) {
-				msg_debug_tcp("plan new write");
-				if (can_write) {
-					if (!cbd->use_deduction) {
-						cbd->ev.timeout = cbd->write_timeout;
-					}
-					rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
-												 EV_WRITE);
-				}
-				else {
-					/* Cannot write more */
-					lua_tcp_push_error(cbd, FALSE, "EOF, cannot write more data");
-					if (!IS_SYNC(cbd)) {
-						lua_tcp_shift_handler(cbd);
-						lua_tcp_plan_handler_event(cbd, can_read, can_write);
-					}
-				}
-			}
-			else {
-				/* We shouldn't have empty write handlers */
-				g_assert_not_reached();
-			}
-		}
-		else { /* LUA_WANT_CONNECT */
-			rspamd_session_event_update_label(cbd->async_ev, "tcp connect");
-			msg_debug_tcp("plan new connect");
+		return;
+	}
+
+	if (hdl->type == LUA_WANT_READ) {
+		rspamd_session_event_update_label(cbd->async_ev, "tcp read");
+
+		/* We need to check if we have some leftover in the buffer */
+		if (cbd->in->len > 0) {
+			msg_debug_tcp("process read buffer leftover");
+
 			if (!cbd->use_deduction) {
-				cbd->ev.timeout = cbd->connect_timeout;
+				cbd->ev.timeout = cbd->read_timeout;
 			}
-			rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
-										 EV_WRITE);
+
+			if (lua_tcp_process_read_handler(cbd, &hdl->h.r, cbd->eof)) {
+				if (!IS_SYNC(cbd)) {
+					/* We can go to the next handler */
+					lua_tcp_plan_handler_event(cbd, can_read, can_write);
+				}
+			}
+		}
+		else {
+			if (can_read) {
+				/* We need to plan a new event */
+				msg_debug_tcp("plan new read");
+				if (!cbd->use_deduction) {
+					cbd->ev.timeout = cbd->read_timeout;
+				}
+				rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
+											 EV_READ);
+
+				if (cbd->ssl_conn && rspamd_ssl_pending(cbd->ssl_conn) > 0) {
+					/*
+					 * Decrypted bytes are waiting inside the TLS layer, the
+					 * socket is not going to signal them: wake up the loop
+					 */
+					ev_feed_event(cbd->event_loop, &cbd->ev.io, EV_READ);
+				}
+			}
+			else {
+				/* Cannot read more */
+				msg_debug_tcp("cannot read more");
+				/* Consumes the handler that gets the error */
+				lua_tcp_push_error(cbd, FALSE, "EOF, cannot read more data");
+				if (!IS_SYNC(cbd)) {
+					lua_tcp_plan_handler_event(cbd, can_read, can_write);
+				}
+			}
 		}
 	}
+	else if (hdl->type == LUA_WANT_WRITE) {
+		rspamd_session_event_update_label(cbd->async_ev, "tcp write");
+		/*
+		 * We need to plan write event if there is something in the
+		 * write request
+		 */
+
+		if (hdl->h.w.pos < hdl->h.w.total_bytes) {
+			msg_debug_tcp("plan new write");
+			if (can_write) {
+				if (!cbd->use_deduction) {
+					cbd->ev.timeout = cbd->write_timeout;
+				}
+				rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
+											 EV_WRITE);
+			}
+			else {
+				/* Cannot write more */
+				lua_tcp_push_error(cbd, FALSE, "EOF, cannot write more data");
+				if (!IS_SYNC(cbd)) {
+					lua_tcp_plan_handler_event(cbd, can_read, can_write);
+				}
+			}
+		}
+		else if (cbd->plan_depth <= LUA_TCP_MAX_INLINE_PLAN_DEPTH) {
+			/*
+			 * An empty write handler has nothing to send: complete it the
+			 * way a finished write is completed (callback, shift, next one)
+			 */
+			msg_debug_tcp("complete empty write handler");
+			lua_tcp_write_finish(cbd);
+
+			if (!IS_SYNC(cbd)) {
+				lua_tcp_plan_handler_event(cbd, can_read, can_write);
+			}
+		}
+		else {
+			/*
+			 * A long chain of empty handlers: do not nest any deeper, let
+			 * the event loop come back to it (the write helper completes it)
+			 */
+			msg_debug_tcp("defer empty write handler to the event loop");
+			if (!cbd->use_deduction) {
+				cbd->ev.timeout = cbd->write_timeout;
+			}
+			rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_WRITE);
+		}
+	}
+	else { /* LUA_WANT_CONNECT */
+		rspamd_session_event_update_label(cbd->async_ev, "tcp connect");
+		msg_debug_tcp("plan new connect");
+		if (!cbd->use_deduction) {
+			cbd->ev.timeout = cbd->connect_timeout;
+		}
+		rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev,
+									 EV_WRITE);
+	}
+}
+
+static void
+lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd, gboolean can_read,
+						   gboolean can_write)
+{
+	/*
+	 * Callbacks run from here may close the connection: keep it alive until
+	 * the whole planning is done
+	 */
+	TCP_RETAIN(cbd);
+	cbd->plan_depth++;
+	lua_tcp_plan_handler_event_do(cbd, can_read, can_write);
+	cbd->plan_depth--;
+	TCP_RELEASE(cbd);
 }
 
 static gboolean
 lua_tcp_register_event(struct lua_tcp_cbdata *cbd)
 {
 	if (cbd->session) {
-		event_finalizer_t fin = IS_SYNC(cbd) ? lua_tcp_void_finalyser : lua_tcp_fin;
+		event_finalizer_t fin = IS_SYNC(cbd) ? lua_tcp_sync_event_finalyser : lua_tcp_fin;
 
 		cbd->async_ev = rspamd_session_add_event(cbd->session, fin, cbd, M);
 
@@ -1501,6 +2048,12 @@ lua_tcp_ssl_on_error(gpointer ud, GError *err)
 {
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *) ud;
 
+	/*
+	 * Reached straight from the TLS layer, nobody holds a reference for us,
+	 * and a callback may close the connection: keep it for the whole body
+	 */
+	TCP_RETAIN(cbd);
+
 	if (err) {
 		lua_tcp_push_error(cbd, TRUE, "ssl error: %s", err->message);
 	}
@@ -1509,8 +2062,40 @@ lua_tcp_ssl_on_error(gpointer ud, GError *err)
 	}
 
 	lua_tcp_release_conn(cbd);
+	/* cbd may be gone now */
+	TCP_RELEASE(cbd);
 }
 
+static void lua_tcp_close_conn(struct lua_tcp_cbdata *cbd);
+
+/*
+ * Delivers the failure of the handshake that `starttls` has recorded: as one
+ * fatal "ssl error" to the handlers queued now, like lua_tcp_ssl_on_error does
+ * for a failure found later. The caller must hold a reference of its own, cbd
+ * may be gone after the call.
+ */
+static void
+lua_tcp_deliver_pending_error(struct lua_tcp_cbdata *cbd)
+{
+	char *msg = cbd->pending_err;
+
+	/* Taken first: the callbacks must never see it twice */
+	cbd->pending_err = NULL;
+	TCP_RETAIN(cbd);
+
+	lua_tcp_push_error(cbd, TRUE, "%s", msg);
+	g_free(msg);
+
+	/* Nothing is read or written any more, and a callback may not retry */
+	lua_tcp_close_conn(cbd);
+	lua_tcp_release_conn(cbd);
+	TCP_RELEASE(cbd);
+}
+
+/*
+ * Reports a failure by the return value only: every caller pushes exactly one
+ * error (or returns a message) itself
+ */
 static gboolean
 lua_tcp_make_connection(struct lua_tcp_cbdata *cbd)
 {
@@ -1569,8 +2154,8 @@ lua_tcp_make_connection(struct lua_tcp_cbdata *cbd)
 
 		if (!rspamd_ssl_connect_fd(cbd->ssl_conn, fd, cbd->hostname, &cbd->ev,
 								   cbd->ev.timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
-			lua_tcp_push_error(cbd, TRUE, "ssl connection failed: %s",
-							   strerror(errno));
+			msg_info("ssl connection to %s failed: %s", cbd->hostname,
+					 strerror(errno));
 
 			return FALSE;
 		}
@@ -1594,6 +2179,12 @@ lua_tcp_dns_handler(struct rdns_reply *reply, gpointer ud)
 {
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *) ud;
 	const struct rdns_request_name *rn;
+
+	/*
+	 * Nobody holds a reference for the resolver callback, and error callbacks
+	 * may close the connection: keep it for the whole body
+	 */
+	TCP_RETAIN(cbd);
 
 	if (reply->code != RDNS_RC_NOERROR) {
 		rn = rdns_request_get_name(reply->request, NULL);
@@ -1627,18 +2218,21 @@ lua_tcp_dns_handler(struct rdns_reply *reply, gpointer ud)
 			lua_tcp_push_error(cbd, TRUE, "unable to resolve host: %s; no records with this name",
 							   rn->name);
 			lua_tcp_release_conn(cbd);
-			return;
 		}
+		else {
+			cbd->flags |= LUA_TCP_FLAG_RESOLVED;
+			rspamd_inet_address_set_port(cbd->addr, cbd->port);
 
-		cbd->flags |= LUA_TCP_FLAG_RESOLVED;
-		rspamd_inet_address_set_port(cbd->addr, cbd->port);
-
-		if (!lua_tcp_make_connection(cbd)) {
-			lua_tcp_push_error(cbd, TRUE, "unable to make connection to the host %s",
-							   rspamd_inet_address_to_string(cbd->addr));
-			lua_tcp_release_conn(cbd);
+			if (!lua_tcp_make_connection(cbd)) {
+				lua_tcp_push_error(cbd, TRUE, "unable to make connection to the host %s",
+								   rspamd_inet_address_to_string(cbd->addr));
+				lua_tcp_release_conn(cbd);
+			}
 		}
 	}
+
+	/* cbd may be gone now */
+	TCP_RELEASE(cbd);
 }
 
 static gboolean
@@ -1651,20 +2245,22 @@ lua_tcp_arg_toiovec(lua_State *L, int pos, struct lua_tcp_cbdata *cbd,
 	struct lua_tcp_dtor *dtor;
 
 	if (lua_type(L, pos) == LUA_TUSERDATA) {
-		t = lua_check_text(L, pos);
+		/* The strict checker raises an error, which would leak the caller's state */
+		t = rspamd_lua_check_udata_maybe(L, pos, rspamd_text_classname);
 
 		if (t) {
 			vec->iov_base = (void *) t->start;
 			vec->iov_len = t->len;
 
-			if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
-				/* Steal ownership */
-				t->flags = 0;
-				dtor = g_malloc0(sizeof(*dtor));
-				dtor->dtor = g_free;
-				dtor->data = (void *) t->start;
-				LL_PREPEND(cbd->dtors, dtor);
-			}
+			/*
+			 * The data stays owned by the text: keep the text object alive
+			 * until the request is over, so neither the owner nor the
+			 * garbage collector can free the memory that is being sent
+			 */
+			lua_pushvalue(L, pos);
+			dtor = g_malloc0(sizeof(*dtor));
+			dtor->lua_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+			LL_PREPEND(cbd->dtors, dtor);
 		}
 		else {
 			msg_err("bad userdata argument at position %d", pos);
@@ -1689,6 +2285,38 @@ lua_tcp_arg_toiovec(lua_State *L, int pos, struct lua_tcp_cbdata *cbd,
 	return TRUE;
 }
 
+/*
+ * Releases everything lua_tcp_request has acquired before the connection
+ * object got its own lifecycle (ref counting): Lua references, the stop pattern
+ * copy, buffers owned by the destructors list and the object itself.
+ * It must be called before raising a Lua error (which does a longjmp).
+ */
+static void
+lua_tcp_request_discard(lua_State *L, struct lua_tcp_cbdata *cbd, int cbref,
+						int conn_cbref, int error_cbref, char *stop_pattern,
+						struct iovec *iov)
+{
+	if (cbref != -1) {
+		luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+	}
+
+	if (conn_cbref != -1) {
+		luaL_unref(L, LUA_REGISTRYINDEX, conn_cbref);
+	}
+
+	if (error_cbref != -1) {
+		luaL_unref(L, LUA_REGISTRYINDEX, error_cbref);
+	}
+
+	g_free(stop_pattern);
+	g_free(iov);
+
+	if (cbd) {
+		lua_tcp_free_dtors(L, cbd->dtors);
+		g_free(cbd);
+	}
+}
+
 /***
  * @function rspamd_tcp.request({params})
  * This function creates and sends TCP request to the specified host and port,
@@ -1696,13 +2324,17 @@ lua_tcp_arg_toiovec(lua_State *L, int pos, struct lua_tcp_cbdata *cbd,
  * from the remote peer. This function accepts table of arguments with the following
  * attributes
  *
- * - `task`: rspamd task objects (implies `pool`, `session`, `ev_base` and `resolver` arguments)
+ * - `task`: rspamd task objects (implies `pool`, `session`, `ev_base`, `config` and `resolver` arguments)
  * - `ev_base`: event base (if no task specified)
+ * - `config`: config (required if no task is specified)
  * - `resolver`: DNS resolver (no task)
  * - `session`: events session (no task)
  * - `host`: IP or name of the peer (required)
- * - `port`: remote port to use
- * - `data`: a table of strings or `rspamd_text` objects that contains data pieces
+ * - `port`: remote port to use (0..65535, anything else is an error)
+ * - `data`: a table of strings or `rspamd_text` objects that contains data pieces. A text is kept alive by the
+ *   connection until it is closed, but a text that is a view of other memory (`text:sub()`, `text:span()`,
+ *   `rspamd_text.fromstring(s, true)`) does not keep its parent alive: the parent must outlive the request
+ *   (views into the data of the task are fine for requests bound to that task)
  * - `callback`: continuation function (required)
  * - `on_connect`: callback called on connection success (success-only)
  * - `on_error`: callback fired for connect-phase errors only (DNS, socket, connect refused/timeout, SSL handshake). Once the connection is established, errors flow through the regular read/write callback.
@@ -1711,7 +2343,7 @@ lua_tcp_arg_toiovec(lua_State *L, int pos, struct lua_tcp_cbdata *cbd,
  * - `read_timeout`: per-phase timeout, armed on each read.
  * - `write_timeout`: per-phase timeout, armed on each write.
  * - `partial`: boolean flag that specifies that callback should be called on any data portion received
- * - `stop_pattern`: stop reading on finding a certain pattern (e.g. \r\n.\r\n for smtp)
+ * - `stop_pattern`: stop reading on finding a certain pattern (e.g. \r\n.\r\n for smtp); a string, stripped from the data passed to the callback
  * - `shutdown`: half-close socket after writing (boolean: default false)
  * - `read`: read response after sending request (boolean: default true)
  * - `upstream`: optional upstream object that would be used to get an address
@@ -1739,7 +2371,7 @@ lua_tcp_request(lua_State *L)
 	double timeout = default_tcp_timeout;
 	double connect_timeout = 0.0, read_timeout = 0.0, write_timeout = 0.0;
 	gboolean partial = FALSE, do_shutdown = FALSE, do_read = TRUE,
-			 ssl = FALSE, ssl_noverify = FALSE;
+			 ssl = FALSE, ssl_noverify = FALSE, cbref_used = FALSE;
 
 	if (lua_type(L, 1) == LUA_TTABLE) {
 		lua_pushstring(L, "host");
@@ -1750,7 +2382,14 @@ lua_tcp_request(lua_State *L)
 		lua_pushstring(L, "port");
 		lua_gettable(L, -2);
 		if (lua_type(L, -1) == LUA_TNUMBER) {
-			port = lua_tointeger(L, -1);
+			lua_Number pn = lua_tonumber(L, -1);
+
+			if (!(pn >= 0 && pn <= 65535)) {
+				/* Nothing is allocated yet */
+				return luaL_error(L, "invalid port given (correct values: 0..65535)");
+			}
+
+			port = (unsigned int) pn;
 		}
 		else {
 			/* We assume that it is a unix socket */
@@ -1774,11 +2413,15 @@ lua_tcp_request(lua_State *L)
 		lua_pushstring(L, "task");
 		lua_gettable(L, -2);
 		if (lua_type(L, -1) == LUA_TUSERDATA) {
-			task = lua_check_task(L, -1);
-			event_loop = task->event_loop;
-			resolver = task->resolver;
-			session = task->s;
-			cfg = task->cfg;
+			/* The strict checker raises an error, so do not use it here */
+			task = lua_check_task_maybe(L, -1);
+
+			if (task) {
+				event_loop = task->event_loop;
+				resolver = task->resolver;
+				session = task->s;
+				cfg = task->cfg;
+			}
 		}
 		lua_pop(L, 1);
 
@@ -1789,7 +2432,7 @@ lua_tcp_request(lua_State *L)
 				event_loop = *(struct ev_loop **) lua_touserdata(L, -1);
 			}
 			else {
-				g_free(cbd);
+				lua_tcp_request_discard(L, cbd, cbref, -1, -1, NULL, NULL);
 
 				return luaL_error(L, "event loop is required");
 			}
@@ -1814,6 +2457,14 @@ lua_tcp_request(lua_State *L)
 				cfg = NULL;
 			}
 			lua_pop(L, 1);
+
+			if (cfg == NULL) {
+				/* Everything below (timers, Lua state, resolver) needs it */
+				lua_tcp_request_discard(L, cbd, cbref, -1, -1, NULL, NULL);
+
+				return luaL_error(L, "tcp request has bad params: either task "
+									 "or config (together with ev_base) is required");
+			}
 
 			lua_pushstring(L, "resolver");
 			lua_gettable(L, -2);
@@ -1936,10 +2587,12 @@ lua_tcp_request(lua_State *L)
 		}
 
 		lua_pushstring(L, "upstream");
-		lua_gettable(L, 1);
+		lua_gettable(L, -2);
 
 		if (lua_type(L, -1) == LUA_TUSERDATA) {
-			struct rspamd_lua_upstream *lup = lua_check_upstream(L, -1);
+			/* The strict checker raises an error, so do not use it here */
+			struct rspamd_lua_upstream *lup =
+				rspamd_lua_check_udata_maybe(L, -1, rspamd_upstream_classname);
 
 			if (lup) {
 				/* Preserve pointer in case if lup is destructed */
@@ -1961,9 +2614,9 @@ lua_tcp_request(lua_State *L)
 			if (!lua_tcp_arg_toiovec(L, -1, cbd, iov)) {
 				lua_pop(L, 1);
 				msg_err("tcp request has bad data argument");
+				lua_tcp_request_discard(L, cbd, cbref, conn_cbref, error_cbref,
+										stop_pattern, iov);
 				lua_pushboolean(L, FALSE);
-				g_free(iov);
-				g_free(cbd);
 
 				return 1;
 			}
@@ -1986,9 +2639,9 @@ lua_tcp_request(lua_State *L)
 				if (!lua_tcp_arg_toiovec(L, -1, cbd, &iov[niov])) {
 					lua_pop(L, 2);
 					msg_err("tcp request has bad data argument at pos %d", niov);
+					lua_tcp_request_discard(L, cbd, cbref, conn_cbref, error_cbref,
+											stop_pattern, iov);
 					lua_pushboolean(L, FALSE);
-					g_free(iov);
-					g_free(cbd);
 
 					return 1;
 				}
@@ -2004,14 +2657,6 @@ lua_tcp_request(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "tcp request has bad params");
-	}
-
-	if (resolver == NULL && cfg == NULL && task == NULL) {
-		g_free(cbd);
-		g_free(iov);
-
-		return luaL_error(L, "tcp request has bad params: one of "
-							 "{resolver,task,config} should be set");
 	}
 
 	cbd->task = task;
@@ -2041,6 +2686,7 @@ lua_tcp_request(lua_State *L)
 		if (cbref != -1 && !do_read) {
 			/* We have write only callback */
 			wh->h.w.cbref = cbref;
+			cbref_used = TRUE;
 		}
 		else {
 			/* We have simple client callback */
@@ -2048,6 +2694,11 @@ lua_tcp_request(lua_State *L)
 		}
 
 		g_queue_push_tail(cbd->handlers, wh);
+	}
+	else {
+		/* Nothing to send: the vector array is of no use */
+		g_free(iov);
+		iov = NULL;
 	}
 
 	cbd->event_loop = event_loop;
@@ -2105,9 +2756,21 @@ lua_tcp_request(lua_State *L)
 		rh = g_malloc0(sizeof(*rh));
 		rh->type = LUA_WANT_READ;
 		rh->h.r.cbref = cbref;
+		cbref_used = TRUE;
 		rh->h.r.stop_pattern = stop_pattern;
 		rh->h.r.plen = plen;
 		g_queue_push_tail(cbd->handlers, rh);
+	}
+	else {
+		/* No read handler is going to use the pattern */
+		g_free(stop_pattern);
+		stop_pattern = NULL;
+	}
+
+	if (!cbref_used) {
+		/* The main callback is attached to no handler, so it would never be called */
+		luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+		cbref = -1;
 	}
 
 	/*
@@ -2166,9 +2829,11 @@ lua_tcp_request(lua_State *L)
 		cbd->session = session;
 
 		if (rspamd_session_blocked(session)) {
+			/* Nothing has been registered with the item yet */
+			cbd->item = NULL;
 			lua_tcp_push_error(cbd, TRUE, "async session is the blocked state");
+			/* cbd may be freed by this call, do not touch it afterwards */
 			lua_tcp_release_conn(cbd);
-			cbd->item = NULL; /* To avoid decrease with no watcher */
 			lua_pushboolean(L, FALSE);
 
 			return 1;
@@ -2183,10 +2848,10 @@ lua_tcp_request(lua_State *L)
 		lua_tcp_register_watcher(cbd);
 
 		if (!lua_tcp_make_connection(cbd)) {
+			/* The only failure charged to the upstream for this connection */
+			lua_tcp_upstream_fail(cbd, true, "failed to connect");
 			lua_tcp_push_error(cbd, TRUE, "cannot connect to the host: %s", host);
 			lua_pushboolean(L, FALSE);
-
-			rspamd_upstream_fail(cbd->up, true, "failed to connect");
 
 			/* No reset of the item as watcher has been registered */
 			lua_tcp_release_conn(cbd);
@@ -2256,9 +2921,14 @@ lua_tcp_request(lua_State *L)
  * - `session`: events session (no task)
  * - `config`: config (no task)
  * - `host`: IP or name of the peer (required)
- * - `port`: remote port to use
- * - `timeout`: floating point value that specifies timeout for IO operations in **seconds**
- * @return {boolean} true if request has been sent
+ * - `port`: remote port to use (0..65535)
+ * - `timeout`: floating point value that specifies timeout for IO operations in **seconds** (default 5)
+ *
+ * TLS is NOT supported by the synchronous API: passing `ssl = true` raises an error (use
+ * `rspamd_tcp.request`, which supports `ssl` and `starttls`).
+ *
+ * It yields: the calling coroutine is resumed when the connection is established (or has failed).
+ * @return {boolean, connection|error} resumes with `true, connection` or `false, error message`
  */
 static int
 lua_tcp_connect_sync(lua_State *L)
@@ -2279,6 +2949,20 @@ lua_tcp_connect_sync(lua_State *L)
 	struct ev_loop *ev_base = NULL;
 	struct lua_tcp_cbdata *cbd;
 
+	if (lua_type(L, 1) == LUA_TTABLE) {
+		gboolean want_ssl;
+
+		/* The argument parser below ignores unknown fields, check it by hand */
+		lua_pushstring(L, "ssl");
+		lua_gettable(L, 1);
+		want_ssl = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+
+		if (want_ssl) {
+			return luaL_error(L, "connect_sync does not support TLS (ssl = true): "
+								 "use rspamd_tcp.request with `ssl` or `starttls` instead");
+		}
+	}
 
 	int arguments_validated = rspamd_lua_parse_table_arguments(L, 1, &err,
 															   RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
@@ -2299,7 +2983,7 @@ lua_tcp_connect_sync(lua_State *L)
 	}
 
 	if (0 > port || port > 65535) {
-		return luaL_error(L, "invalid port given (correct values: 1..65535)");
+		return luaL_error(L, "invalid port given (correct values: 0..65535)");
 	}
 
 	if (task == NULL && (cfg == NULL || ev_base == NULL || session == NULL)) {
@@ -2343,6 +3027,11 @@ lua_tcp_connect_sync(lua_State *L)
 	cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
 	cbd->thread_generation = cbd->thread ? cbd->thread->generation : 0;
 
+	if (cbd->thread == NULL) {
+		g_free(cbd);
+
+		return luaL_error(L, "connect_sync must be called from a coroutine");
+	}
 
 	cbd->handlers = g_queue_new();
 
@@ -2358,7 +3047,12 @@ lua_tcp_connect_sync(lua_State *L)
 	cbd->connect_timeout = timeout;
 	cbd->read_timeout = timeout;
 	cbd->write_timeout = timeout;
-	cbd->use_deduction = TRUE;
+	/*
+	 * Every operation (connect, each read and each write) has its own full
+	 * timeout: a connection may live much longer than a single budget
+	 */
+	cbd->use_deduction = FALSE;
+	cbd->ev.timeout = cbd->connect_timeout;
 
 	REF_INIT_RETAIN(cbd, lua_tcp_maybe_free);
 
@@ -2437,17 +3131,19 @@ lua_tcp_connect_sync(lua_State *L)
 	return lua_thread_yield(cbd->thread, 0);
 }
 
-static int
-lua_tcp_close(lua_State *L)
+/*
+ * Closes the descriptor and the TLS session, and drops everything that is only
+ * needed for IO. The object itself (and the handlers queued) is destroyed when
+ * the connection reference is released
+ */
+static void
+lua_tcp_close_conn(struct lua_tcp_cbdata *cbd)
 {
-	LUA_TRACE_POINT;
-	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
-
-	if (cbd == NULL) {
-		return luaL_error(L, "invalid arguments");
-	}
-
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
+
+	/* A closed connection reports nothing more */
+	g_free(cbd->pending_err);
+	cbd->pending_err = NULL;
 
 	if (cbd->ssl_conn) {
 		/* TODO: postpone close in case ssl is used ! */
@@ -2470,8 +3166,44 @@ lua_tcp_close(lua_State *L)
 		rspamd_upstream_unref(cbd->up);
 		cbd->up = NULL;
 	}
-	/* Do not release refcount as it will be handled elsewhere */
-	/* TCP_RELEASE (cbd); */
+}
+
+/*
+ * Closes the connection; the ownership reference is dropped here unless a
+ * callback of this connection is running: then the dispatcher that has called
+ * it releases the reference when the callback returns. The connection may be
+ * destroyed by this call, so cbd must not be touched afterwards.
+ */
+static void
+lua_tcp_close_and_release(struct lua_tcp_cbdata *cbd)
+{
+	lua_tcp_close_conn(cbd);
+
+	if (cbd->cb_depth == 0) {
+		lua_tcp_release_conn(cbd);
+	}
+}
+
+/***
+ * @method tcp:close()
+ *
+ * Closes TCP connection. The handlers that are still queued are dropped without
+ * being called. It is safe to call it from any callback of the connection and
+ * from anywhere else (e.g. a timer), and on a handle of a connection that is
+ * already gone (then it does nothing)
+ */
+static int
+lua_tcp_close(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
+
+	if (cbd == NULL) {
+		/* The connection is already destroyed */
+		return 0;
+	}
+
+	lua_tcp_close_and_release(cbd);
 
 	return 0;
 }
@@ -2487,8 +3219,12 @@ lua_tcp_add_read(lua_State *L)
 	gsize plen = 0;
 	int cbref = -1;
 
-	if (cbd == NULL) {
-		return luaL_error(L, "invalid arguments");
+	if (cbd == NULL || lua_tcp_conn_closed(cbd)) {
+		/* Nothing would ever be called: do not queue it */
+		lua_pushboolean(L, FALSE);
+		lua_pushliteral(L, "connection is closed");
+
+		return 2;
 	}
 
 	if (lua_type(L, 2) == LUA_TFUNCTION) {
@@ -2513,8 +3249,9 @@ lua_tcp_add_read(lua_State *L)
 	msg_debug_tcp("added read event, cbref: %d", cbref);
 
 	g_queue_push_tail(cbd->handlers, rh);
+	lua_pushboolean(L, TRUE);
 
-	return 0;
+	return 1;
 }
 
 static int
@@ -2525,10 +3262,25 @@ lua_tcp_add_write(lua_State *L)
 	struct lua_tcp_handler *wh;
 	int cbref = -1, tp;
 	struct iovec *iov = NULL;
-	unsigned int niov = 0, total_out = 0;
+	unsigned int niov = 0;
+	gsize total_out = 0;
 
-	if (cbd == NULL) {
-		return luaL_error(L, "invalid arguments");
+	if (cbd == NULL || lua_tcp_conn_closed(cbd)) {
+		/* Nothing would ever be called: do not queue it */
+		lua_pushboolean(L, FALSE);
+		lua_pushliteral(L, "connection is closed");
+
+		return 2;
+	}
+
+	tp = lua_type(L, 3);
+
+	if (tp != LUA_TSTRING && tp != LUA_TUSERDATA && tp != LUA_TTABLE) {
+		/* Nothing is acquired yet */
+		msg_err("tcp add_write: data must be a string, rspamd{text} or a table of them");
+		lua_pushboolean(L, FALSE);
+
+		return 1;
 	}
 
 	if (lua_type(L, 2) == LUA_TFUNCTION) {
@@ -2536,7 +3288,6 @@ lua_tcp_add_write(lua_State *L)
 		cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 	}
 
-	tp = lua_type(L, 3);
 	if (tp == LUA_TSTRING || tp == LUA_TUSERDATA) {
 		iov = g_malloc(sizeof(*iov));
 		niov = 1;
@@ -2554,7 +3305,7 @@ lua_tcp_add_write(lua_State *L)
 
 		total_out = iov[0].iov_len;
 	}
-	else if (tp == LUA_TTABLE) {
+	else {
 		/* Count parts */
 		lua_pushvalue(L, 3);
 
@@ -2591,6 +3342,16 @@ lua_tcp_add_write(lua_State *L)
 		lua_pop(L, 1);
 	}
 
+	if (total_out == 0) {
+		/*
+		 * An empty write is legal: the handler still has to be completed
+		 * (its callback called), but there is nothing to send
+		 */
+		g_free(iov);
+		iov = NULL;
+		niov = 0;
+	}
+
 	wh = g_malloc0(sizeof(*wh));
 	wh->type = LUA_WANT_WRITE;
 	wh->h.w.iov = iov;
@@ -2614,11 +3375,19 @@ lua_tcp_shift_callback(lua_State *L)
 	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
 
 	if (cbd == NULL) {
-		return luaL_error(L, "invalid arguments");
+		return luaL_error(L, "connection is closed");
 	}
 
 	lua_tcp_shift_handler(cbd);
-	lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+
+	/*
+	 * Inside a callback the dispatcher looks at the real head itself once
+	 * the callback returns; planning here could process buffered data that
+	 * the dispatcher has not consumed yet
+	 */
+	if (cbd->cb_depth == 0) {
+		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+	}
 
 	return 0;
 }
@@ -2655,6 +3424,9 @@ static void
 lua_tcp_sync_session_dtor(gpointer ud)
 {
 	struct lua_tcp_cbdata *cbd = ud;
+	struct thread_entry *thread = cbd->thread;
+	guint64 generation = cbd->thread_generation;
+
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
 
 	if (cbd->fd != -1) {
@@ -2666,9 +3438,82 @@ lua_tcp_sync_session_dtor(gpointer ud)
 
 	/* Task is gone, we should not try use it anymore */
 	cbd->task = NULL;
+	/* The symcache item belongs to the task as well */
+	cbd->item = NULL;
 
 	/* All events are removed when task is done, we should not refer them */
 	cbd->async_ev = NULL;
+
+	if (thread != NULL) {
+		/*
+		 * An operation is pending: its coroutine would never be resumed, as no
+		 * event is going to fire any more. Like lua_redis does, terminate the
+		 * entry (it is not resumed: the task it works for has gone) and drop
+		 * what the operation holds: the entry reference taken at the yield and
+		 * the connection reference. The entry is terminated only if it is still
+		 * the very coroutine that is suspended by us: someone else may have
+		 * terminated or recycled it already, and the pool reference must be
+		 * dropped once
+		 */
+		cbd->thread = NULL;
+
+		if (thread->state == LUA_THREAD_YIELDED && thread->generation == generation) {
+			lua_thread_pool_terminate_entry_full(cbd->cfg->lua_thread_pool,
+												 thread, G_STRLOC, true);
+		}
+
+		lua_thread_pool_release_entry(thread);
+		/* This may free the connection (if no handle owns it): the last access */
+		TCP_RELEASE(cbd);
+	}
+}
+
+/* Common checks of the sync operations: sets *thread to the running coroutine */
+static int
+lua_tcp_sync_op_check(lua_State *L, struct lua_tcp_cbdata *cbd,
+					  struct thread_entry **thread)
+{
+	if (lua_tcp_conn_closed(cbd)) {
+		lua_pushboolean(L, FALSE);
+		lua_pushliteral(L, "connection is closed");
+
+		return 2;
+	}
+
+	if (cbd->thread != NULL) {
+		lua_pushboolean(L, FALSE);
+		lua_pushliteral(L, "another operation is in progress on this connection");
+
+		return 2;
+	}
+
+	*thread = lua_thread_pool_get_running_entry(cbd->cfg->lua_thread_pool);
+
+	if (*thread == NULL) {
+		return luaL_error(L, "tcp_sync methods must be called from a coroutine");
+	}
+
+	return 0;
+}
+
+/*
+ * Starts the operation whose handler is already queued: the coroutine that
+ * is going to yield is the one to be resumed for it, and the references taken
+ * here are dropped when that resume happens
+ */
+static int
+lua_tcp_sync_op_start(struct lua_tcp_cbdata *cbd, struct thread_entry *thread)
+{
+	TCP_RETAIN(cbd);
+	cbd->thread = thread;
+	cbd->thread_generation = thread->generation;
+
+	/* Keep the coroutine alive until the matching resume; see resume sites */
+	lua_thread_pool_retain_entry(thread);
+
+	lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
+
+	return lua_thread_yield(thread, 0);
 }
 
 static int
@@ -2677,12 +3522,18 @@ lua_tcp_sync_read_once(lua_State *L)
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp(L, 1);
 	struct lua_tcp_handler *rh;
+	struct thread_entry *thread = NULL;
+	int ret;
 
 	if (cbd == NULL) {
 		return luaL_error(L, "invalid arguments [self is not rspamd{tcp_sync}]");
 	}
 
-	struct thread_entry *thread = lua_thread_pool_get_running_entry(cbd->cfg->lua_thread_pool);
+	ret = lua_tcp_sync_op_check(L, cbd, &thread);
+
+	if (ret != 0) {
+		return ret;
+	}
 
 	rh = g_malloc0(sizeof(*rh));
 	rh->type = LUA_WANT_READ;
@@ -2691,14 +3542,8 @@ lua_tcp_sync_read_once(lua_State *L)
 	msg_debug_tcp("added read sync event, thread: %p", thread);
 
 	g_queue_push_tail(cbd->handlers, rh);
-	lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 
-	TCP_RETAIN(cbd);
-
-	/* Keep the coroutine alive until the matching resume; see resume sites */
-	lua_thread_pool_retain_entry(thread);
-
-	return lua_thread_yield(thread, 0);
+	return lua_tcp_sync_op_start(cbd, thread);
 }
 
 static int
@@ -2707,18 +3552,28 @@ lua_tcp_sync_write(lua_State *L)
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp(L, 1);
 	struct lua_tcp_handler *wh;
-	int tp;
+	int tp, ret;
 	struct iovec *iov = NULL;
 	unsigned int niov = 0;
 	gsize total_out = 0;
+	struct thread_entry *thread = NULL;
 
 	if (cbd == NULL) {
 		return luaL_error(L, "invalid arguments [self is not rspamd{tcp_sync}]");
 	}
 
-	struct thread_entry *thread = lua_thread_pool_get_running_entry(cbd->cfg->lua_thread_pool);
-
 	tp = lua_type(L, 2);
+
+	if (tp != LUA_TSTRING && tp != LUA_TUSERDATA && tp != LUA_TTABLE) {
+		return luaL_error(L, "invalid arguments second parameter (data) is expected to be either string, rspamd{text} or a table of them");
+	}
+
+	ret = lua_tcp_sync_op_check(L, cbd, &thread);
+
+	if (ret != 0) {
+		return ret;
+	}
+
 	if (tp == LUA_TSTRING || tp == LUA_TUSERDATA) {
 		iov = g_malloc(sizeof(*iov));
 		niov = 1;
@@ -2732,7 +3587,7 @@ lua_tcp_sync_write(lua_State *L)
 
 		total_out = iov[0].iov_len;
 	}
-	else if (tp == LUA_TTABLE) {
+	else {
 		/* Count parts */
 		lua_pushvalue(L, 2);
 
@@ -2767,6 +3622,14 @@ lua_tcp_sync_write(lua_State *L)
 		lua_pop(L, 1);
 	}
 
+	if (total_out == 0) {
+		/* Nothing to send: done without queueing or yielding */
+		g_free(iov);
+		lua_pushboolean(L, TRUE);
+
+		return 1;
+	}
+
 	wh = g_malloc0(sizeof(*wh));
 	wh->type = LUA_WANT_WRITE;
 	wh->h.w.iov = iov;
@@ -2777,14 +3640,8 @@ lua_tcp_sync_write(lua_State *L)
 	msg_debug_tcp("added sync write event, thread: %p", thread);
 
 	g_queue_push_tail(cbd->handlers, wh);
-	lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 
-	TCP_RETAIN(cbd);
-
-	/* Keep the coroutine alive until the matching resume; see resume sites */
-	lua_thread_pool_retain_entry(thread);
-
-	return lua_thread_yield(thread, 0);
+	return lua_tcp_sync_op_start(cbd, thread);
 }
 
 static int
@@ -2810,9 +3667,23 @@ lua_tcp_sync_shutdown(lua_State *L)
 		return luaL_error(L, "invalid arguments [self is not rspamd{tcp_sync}]");
 	}
 
-	shutdown(cbd->fd, SHUT_WR);
+	if (lua_tcp_conn_closed(cbd)) {
+		lua_pushboolean(L, FALSE);
+		lua_pushliteral(L, "connection is closed");
 
-	return 0;
+		return 2;
+	}
+
+	if (shutdown(cbd->fd, SHUT_WR) == -1) {
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, strerror(errno));
+
+		return 2;
+	}
+
+	lua_pushboolean(L, TRUE);
+
+	return 1;
 }
 
 static int
@@ -2821,13 +3692,40 @@ lua_tcp_starttls(lua_State *L)
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
 	gpointer ssl_ctx;
-	gboolean verify_peer;
+	gboolean verify_peer, no_verify = FALSE;
+	GError *err = NULL;
 
-	if (cbd == NULL || cbd->ssl_conn != NULL) {
-		return luaL_error(L, "invalid arguments");
+	if (cbd == NULL || lua_tcp_conn_closed(cbd)) {
+		return luaL_error(L, "starttls: connection is closed");
 	}
 
-	if (cbd->flags & LUA_TCP_FLAG_SSL_NOVERIFY) {
+	if (!(cbd->flags & LUA_TCP_FLAG_CONNECTED)) {
+		return luaL_error(L, "starttls: connection is not established yet");
+	}
+
+	if (cbd->ssl_conn != NULL) {
+		return luaL_error(L, "starttls: TLS is already started on this connection");
+	}
+
+	if (cbd->flags & LUA_TCP_FLAG_TLS_FAILED) {
+		return luaL_error(L, "starttls: the TLS handshake has failed on this connection");
+	}
+
+	if (cbd->in->len > cbd->in_delivered) {
+		/*
+		 * Plaintext that the peer has sent ahead of the handshake would be
+		 * given to the next read handler as if it were protected by TLS
+		 */
+		return luaL_error(L, "starttls refused: %d bytes of plaintext received "
+							 "before the TLS handshake are buffered (protocol violation by the peer)",
+						  (int) (cbd->in->len - cbd->in_delivered));
+	}
+
+	if (lua_type(L, 2) == LUA_TBOOLEAN) {
+		no_verify = lua_toboolean(L, 2);
+	}
+
+	if (no_verify || (cbd->flags & LUA_TCP_FLAG_SSL_NOVERIFY)) {
 		ssl_ctx = cbd->cfg->libs_ctx->ssl_ctx_noverify;
 		verify_peer = FALSE;
 	}
@@ -2841,25 +3739,73 @@ lua_tcp_starttls(lua_State *L)
 											  verify_peer,
 											  cbd->tag);
 
-	if (!rspamd_ssl_connect_fd(cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
-							   cbd->ev.timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
-		lua_tcp_push_error(cbd, TRUE, "ssl connection failed: %s",
-						   strerror(errno));
+	if (!rspamd_ssl_connect_fd_err(cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
+								   cbd->connect_timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd, &err)) {
+		/*
+		 * The handshake has failed at once. It is not raised: the failure is
+		 * recorded and reaches the handlers like one found later by the event
+		 * loop (as one fatal "ssl error" to what is queued when the running
+		 * callback returns), as pushing it from inside the callback would call
+		 * the handlers re-entrantly. There is no way back to plaintext, so the
+		 * stream is shut down here (the TLS session is freed, the watcher is
+		 * stopped) and the connection is closed on delivery
+		 */
+		rspamd_ssl_connection_free(cbd->ssl_conn);
+		cbd->ssl_conn = NULL;
+		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+		cbd->flags |= LUA_TCP_FLAG_TLS_FAILED;
+
+		g_free(cbd->pending_err);
+		cbd->pending_err = g_strdup_printf("ssl error: %s",
+										   err ? err->message : "unknown error");
+		g_clear_error(&err);
+
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, cbd->pending_err);
+
+		if (cbd->cb_depth == 0) {
+			/*
+			 * No callback of this connection is running (a stored handle used
+			 * from a timer): nobody is going to come back to it, report now.
+			 * cbd may be gone afterwards
+			 */
+			lua_tcp_plan_handler_event(cbd, FALSE, FALSE);
+		}
+
+		return 2;
 	}
 
-	return 0;
+	lua_pushboolean(L, TRUE);
+
+	return 1;
 }
 
 static int
 lua_tcp_sync_gc(lua_State *L)
 {
-	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp(L, 1);
-	if (!cbd) {
-		return luaL_error(L, "invalid arguments [self is not rspamd{tcp_sync}]");
+	struct lua_tcp_cbdata **pcbd = rspamd_lua_check_udata_maybe(L, 1, rspamd_tcp_sync_classname);
+	struct lua_tcp_cbdata *cbd;
+
+	/* Never raise an error from a finaliser; a dead handle is already freed */
+	if (pcbd == NULL || *pcbd == NULL) {
+		return 0;
 	}
 
-	lua_tcp_maybe_free(cbd);
-	lua_tcp_fin(cbd);
+	cbd = *pcbd;
+	/* Any later use of this userdata sees a dead handle */
+	*pcbd = NULL;
+	/* From now on the last reference to the object frees it */
+	cbd->flags &= ~LUA_TCP_FLAG_HANDLE;
+
+	/*
+	 * An operation (or a dispatcher that is running Lua code right now) may
+	 * still hold the object: this very call can come from a coroutine that
+	 * is being resumed by it. It is torn down when the last reference is
+	 * released (lua_tcp_maybe_free); with no reference left do it here
+	 */
+	if (cbd->ref.refcount == 0) {
+		lua_tcp_maybe_free(cbd);
+	}
 
 	return 0;
 }

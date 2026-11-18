@@ -172,10 +172,10 @@ local function icap_check(task, content, digest, rule, maybe_part)
     end
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local http_headers = {}
-    local req_headers = {}
     local tcp_options = {}
-    local threat_table = {}
+    -- These are rebuilt for every attempt, see reset_attempt_state()
+    local http_headers, req_headers, threat_table
+    local options_request, respond_headers
 
     -- Build extended User Agent
     if rule.user_agent == "extended" then
@@ -186,23 +186,33 @@ local function icap_check(task, content, digest, rule, maybe_part)
           string.sub(task:get_uid(), 1, 6))
     end
 
-    -- Build the icap queries
-    local options_request = {
-      string.format("OPTIONS icap://%s/%s ICAP/1.0\r\n", addr:to_string(), rule.scheme),
-      string.format('Host: %s\r\n', addr:to_string()),
-      string.format("User-Agent: %s\r\n", rule.user_agent),
-      "Connection: keep-alive\r\n",
-      "Encapsulated: null-body=0\r\n\r\n",
-    }
-    if rule.user_agent == "none" then
-      table.remove(options_request, 3)
+    -- Build the icap queries; a retried attempt (maybe to another upstream)
+    -- must start from scratch as the header tables are appended to while the
+    -- dialog goes on
+    local function reset_attempt_state()
+      http_headers = {}
+      req_headers = {}
+      threat_table = {}
+
+      options_request = {
+        string.format("OPTIONS icap://%s/%s ICAP/1.0\r\n", addr:to_string(), rule.scheme),
+        string.format('Host: %s\r\n', addr:to_string()),
+        string.format("User-Agent: %s\r\n", rule.user_agent),
+        "Connection: keep-alive\r\n",
+        "Encapsulated: null-body=0\r\n\r\n",
+      }
+      if rule.user_agent == "none" then
+        table.remove(options_request, 3)
+      end
+
+      respond_headers = {
+        -- Add main RESPMOD header before any other
+        string.format('RESPMOD icap://%s/%s ICAP/1.0\r\n', addr:to_string(), rule.scheme),
+        string.format('Host: %s\r\n', addr:to_string()),
+      }
     end
 
-    local respond_headers = {
-      -- Add main RESPMOD header before any other
-      string.format('RESPMOD icap://%s/%s ICAP/1.0\r\n', addr:to_string(), rule.scheme),
-      string.format('Host: %s\r\n', addr:to_string()),
-    }
+    reset_attempt_state()
 
     local size = tonumber(#content)
     local chunked_size = string.format("%x", size)
@@ -231,6 +241,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
               rule.log_prefix, addr, addr:get_port())
 
+          reset_attempt_state()
           tcp_options.host = addr:to_string()
           tcp_options.port = addr:get_port()
           tcp_options.callback = icap_callback
@@ -332,11 +343,11 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
 
         table.insert(respond_headers, '\r\n')
-        for _, h in ipairs(resp_req_headers) do
+        for _, h in ipairs(resp_req_headers or {}) do
           table.insert(respond_headers, h)
         end
         table.insert(respond_headers, '\r\n')
-        for _, h in ipairs(resp_http_headers) do
+        for _, h in ipairs(resp_http_headers or {}) do
           table.insert(respond_headers, h)
         end
         table.insert(respond_headers, '\r\n')
@@ -686,7 +697,6 @@ local function icap_check(task, content, digest, rule, maybe_part)
     end
 
     tcp_options.task = task
-    tcp_options.stop_pattern = '\r\n'
     tcp_options.read = false
     tcp_options.timeout = rule.timeout
     tcp_options.callback = icap_callback

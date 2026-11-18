@@ -181,7 +181,7 @@ local function dcc_check(task, content, digest, rule)
     else
       -- Parse the response
       local _, _, result, disposition, header = tostring(data):find("(.-)\n(.-)\n(.-)$")
-      lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
+      lua_util.debugm(rule.name, task, 'DCC result=%s disposition=%s header="%s"',
           result, disposition, header)
 
       if header then
@@ -190,7 +190,7 @@ local function dcc_check(task, content, digest, rule)
         local _, _, info = header:find("; (.-)$")
         if (result == 'R') then
           -- Reject
-          common.yield_result(task, rule, info, rule.default_score)
+          common.yield_result(task, rule, info or 'DCC reject', rule.default_score)
         elseif (result == 'T') then
           -- Temporary failure
           rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
@@ -269,9 +269,13 @@ local function dcc_check(task, content, digest, rule)
           end
         else
           -- Unexpected result
-          rspamd_logger.warnx(task, '%1: Unexpected result. Result: %2, info: %3', rule.log_prefix, result, info);
-          common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
+          rspamd_logger.warnx(task, '%s: Unexpected result. Result: %s, info: %s', rule.log_prefix, result, info);
+          common.yield_result(task, rule, 'error: ' .. tostring(result), 0.0, 'fail')
         end
+      else
+        -- Not a "result, disposition, header" reply
+        rspamd_logger.warnx(task, '%s: unexpected reply: %s', rule.log_prefix, tostring(data))
+        common.yield_result(task, rule, 'unhandled response: ' .. tostring(data), 0.0, 'fail')
       end
     end
   end

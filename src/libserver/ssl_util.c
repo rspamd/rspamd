@@ -452,7 +452,10 @@ rspamd_ssl_connection_dtor(struct rspamd_ssl_connection *conn)
 		g_free(conn->shut_ev);
 	}
 
-	close(conn->fd);
+	if (conn->fd != -1) {
+		close(conn->fd);
+	}
+
 	g_free(conn);
 }
 
@@ -679,6 +682,8 @@ rspamd_ssl_connection_new(gpointer ssl_ctx, struct ev_loop *ev_base,
 
 	g_assert(ssl_ctx != NULL);
 	conn = g_malloc0(sizeof(*conn));
+	/* Not a descriptor yet: 0 would be closed by the destructor */
+	conn->fd = -1;
 	conn->ssl_ctx = ctx;
 	conn->event_loop = ev_base;
 	conn->verify_peer = verify_peer;
@@ -696,10 +701,10 @@ rspamd_ssl_connection_new(gpointer ssl_ctx, struct ev_loop *ev_base,
 
 
 gboolean
-rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
-					  const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
-					  rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
-					  gpointer handler_data)
+rspamd_ssl_connect_fd_err(struct rspamd_ssl_connection *conn, int fd,
+						  const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
+						  rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+						  gpointer handler_data, GError **err)
 {
 	int ret;
 	SSL_SESSION *session = NULL;
@@ -724,6 +729,9 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 				  conn->ssl, SSL_session_reused(conn->ssl) ? "true" : "false");
 
 	if (conn->state != ssl_conn_reset) {
+		g_set_error(err, rspamd_ssl_quark(), 500,
+					"ssl connection is not in the initial state");
+
 		return FALSE;
 	}
 
@@ -731,6 +739,9 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 	int nfd = dup(fd);
 
 	if (nfd == -1) {
+		g_set_error(err, rspamd_ssl_quark(), 500,
+					"cannot duplicate the descriptor: %s", strerror(errno));
+
 		return FALSE;
 	}
 
@@ -742,6 +753,9 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 
 	if (SSL_set_fd(conn->ssl, conn->fd) != 1) {
 		close(conn->fd);
+		conn->fd = -1;
+		g_set_error(err, rspamd_ssl_quark(), 500,
+					"cannot attach ssl to the descriptor");
 
 		return FALSE;
 	}
@@ -775,13 +789,18 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 			msg_debug_ssl("not connected, want write");
 		}
 		else {
-			GError *err = NULL;
+			GError *terr = NULL;
 
 			conn->shut = ssl_shut_unclean;
-			rspamd_tls_set_error(ret, "initial connect", &err);
-			msg_debug_ssl("not connected, fatal error %e", err);
-			g_error_free(err);
+			rspamd_tls_set_error(ret, "initial connect", &terr);
+			msg_debug_ssl("not connected, fatal error %e", terr);
 
+			if (err) {
+				g_propagate_error(err, terr);
+			}
+			else {
+				g_error_free(terr);
+			}
 
 			return FALSE;
 		}
@@ -793,6 +812,16 @@ rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 	}
 
 	return TRUE;
+}
+
+gboolean
+rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
+					  const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
+					  rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+					  gpointer handler_data)
+{
+	return rspamd_ssl_connect_fd_err(conn, fd, hostname, ev, timeout, handler,
+									 err_handler, handler_data, NULL);
 }
 
 gboolean
@@ -832,6 +861,7 @@ rspamd_ssl_accept_fd(struct rspamd_ssl_connection *conn, int fd,
 
 	if (SSL_set_fd(conn->ssl, conn->fd) != 1) {
 		close(conn->fd);
+		conn->fd = -1;
 		return FALSE;
 	}
 

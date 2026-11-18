@@ -118,8 +118,8 @@ local function pyzor_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed',
               rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0,
-              'failed to scan and retransmits exceed')
+          common.yield_result(task, rule,
+              'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         -- pyzor output is unicode (\x09 -> tab, \0a -> newline)
@@ -135,12 +135,19 @@ local function pyzor_check(task, content, digest, rule)
         end
         -- rspamd_logger.infox(task, 'resp: %s', resp)
         if resp[2] ~= [[(200, 'OK')]] then
-          rspamd_logger.errx(task, "error parsing response: %s", str_data)
+          rspamd_logger.errx(task, "%s: error parsing response: %s", rule.log_prefix, str_data)
+          common.yield_result(task, rule, 'unhandled response: ' .. str_data, 0.0, 'fail')
           return
         end
 
         local whitelisted = tonumber(resp[4])
         local reported = tonumber(resp[3])
+
+        if not whitelisted or not reported then
+          rspamd_logger.errx(task, "%s: cannot parse counts in response: %s", rule.log_prefix, str_data)
+          common.yield_result(task, rule, 'unhandled response: ' .. str_data, 0.0, 'fail')
+          return
+        end
 
         --rspamd_logger.infox(task, "%s - count=%s wl=%s", addr:to_string(), reported, whitelisted)
 
@@ -157,8 +164,11 @@ local function pyzor_check(task, content, digest, rule)
           rule.default_score: 1
           Weight: 0
         ]]
-        local weight = tonumber(string.format("%.2f",
-            rule.default_score * (reported - whitelisted) / (reported + whitelisted)))
+        local weight = 0.0
+        if reported + whitelisted > 0 then
+          weight = tonumber(string.format("%.2f",
+              rule.default_score * (reported - whitelisted) / (reported + whitelisted))) or 0.0
+        end
         local info = string.format("count=%d wl=%d", reported, whitelisted)
         local threat_string = string.format("bl_%d_wl_%d",
             reported, whitelisted)

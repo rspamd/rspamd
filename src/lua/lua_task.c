@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "lua_url.h"
 
 #include "message.h"
@@ -8607,7 +8608,6 @@ lua_archive_get_filename(lua_State *L)
 }
 
 struct rspamd_task_timer_cbdata {
-	lua_State *L;
 	struct rspamd_task *task;
 	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_event *async_ev;
@@ -8621,17 +8621,24 @@ lua_timer_fin(gpointer arg)
 	struct rspamd_task_timer_cbdata *cbdata = (struct rspamd_task_timer_cbdata *) arg;
 
 	ev_timer_stop(cbdata->task->event_loop, &cbdata->ev);
-	luaL_unref(cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
+	luaL_unref(cbdata->task->cfg->lua_state, LUA_REGISTRYINDEX, cbdata->cbref);
 }
 
 static void
 lua_task_timer_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 {
 	struct rspamd_task_timer_cbdata *cbdata = (struct rspamd_task_timer_cbdata *) t->data;
+	struct lua_callback_state cbs;
 	lua_State *L;
 	bool schedule_more = false;
 
-	L = cbdata->L;
+	/*
+	 * Not the state that has added the timer: that one can be a pooled thread
+	 * which is a suspended coroutine of somebody else by now, and a call on it
+	 * would break that coroutine
+	 */
+	lua_thread_pool_prepare_callback(cbdata->task->cfg->lua_thread_pool, &cbs);
+	L = cbs.L;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	int err_idx = lua_gettop(L);
@@ -8652,6 +8659,7 @@ lua_task_timer_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 
 	/* Drop the traceback handler and the result/error */
 	lua_settop(L, err_idx - 1);
+	lua_thread_pool_restore_callback(&cbs);
 
 	if (schedule_more) {
 		/*
@@ -8688,7 +8696,6 @@ lua_task_add_timer(lua_State *L)
 	}
 
 	struct rspamd_task_timer_cbdata *cbdata = rspamd_mempool_alloc(task->task_pool, sizeof(*cbdata));
-	cbdata->L = L;
 	lua_pushvalue(L, 3);
 	cbdata->ev.data = cbdata;
 	cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);

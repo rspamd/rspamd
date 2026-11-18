@@ -103,16 +103,24 @@ local function spamassassin_check(task, content, digest, rule)
       content,
     }
 
-    local function spamassassin_callback(err, data)
+    local spamassassin_callback
+
+    local function spamassassin_request()
+      -- The reply is read in chunks: spamd sends the status line, the
+      -- Content-length header and then the headers, and closes the connection
+      local reply = {}
+      local reply_len = 0
+      local done = false
 
       local function spamassassin_requery(error)
+        done = true
 
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
           retransmits = retransmits - 1
 
-          lua_util.debugm(rule.N, task, '%s: Request Error: %s - retries left: %s',
+          lua_util.debugm(rule.name, task, '%s: Request Error: %s - retries left: %s',
               rule.log_prefix, error, retransmits)
 
           -- Select a different upstream!
@@ -124,31 +132,50 @@ local function spamassassin_check(task, content, digest, rule)
           end
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.N, task, '%s: retry IP: %s:%s',
+          lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
               rule.log_prefix, addr, addr:get_port())
 
-          tcp.request({
-            task = task,
-            host = addr:to_string(),
-            port = addr:get_port(),
-            upstream = upstream,
-            timeout = rule['timeout'],
-            data = request_data,
-            callback = spamassassin_callback,
-          })
+          spamassassin_request()
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
               'exceed - err: %s', rule.log_prefix, error)
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed: ' .. error, 0.0, 'fail')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed: ' .. tostring(error), 0.0, 'fail')
         end
       end
 
-      if err then
+      local function spamassassin_fail(reason)
+        done = true
+        rspamd_logger.errx(task, '%s: %s', rule.log_prefix, reason)
+        common.yield_result(task, rule, reason, 0.0, 'fail')
+      end
 
-        spamassassin_requery(err)
+      -- Returns true when the headers block has been received completely
+      local function reply_complete(text)
+        local hdr_end = text:find('\r\n\r\n', 1, true)
+        if not hdr_end then
+          return false
+        end
+        local clen = text:sub(1, hdr_end):match('[\r\n]Content%-length:%s*(%d+)')
+        if not clen then
+          -- Cannot tell, wait for the end of the stream
+          return false
+        end
+        return #text - (hdr_end + 3) >= tonumber(clen)
+      end
 
-      else
-        --lua_util.debugm(rule.N, task, '%s: returned result: %s', rule.log_prefix, data)
+      local function spamassassin_process(text)
+        done = true
+
+        -- SPAMD/1.1 0 EX_OK
+        local proto_status = text:match('^SPAMD/[%d%.]+%s+(%d+)')
+        if not proto_status then
+          spamassassin_fail('unhandled response: ' .. text:sub(1, 128))
+          return
+        end
+        if tonumber(proto_status) ~= 0 then
+          spamassassin_fail('spamd error: ' .. text:sub(1, 128))
+          return
+        end
 
         --[[
         patterns tested against Spamassassin 3.4.6
@@ -157,31 +184,35 @@ local function spamassassin_check(task, content, digest, rule)
           TVD_RCVD_SPACE_BRACKET,UNPARSEABLE_RELAY autolearn=no
           autolearn_force=no version=3.4.6
         ]] --
-        local header = string.gsub(tostring(data), "[\r\n]+[\t ]", " ")
-        --lua_util.debugm(rule.N, task, '%s: returned header: %s', rule.log_prefix, header)
+        local header = string.gsub(text, "[\r\n]+[\t ]", " ")
 
-        local symbols = ""
-        local spam_score = 0
+        local symbols
+        local spam_score
         for s in header:gmatch("[^\r\n]+") do
-          if string.find(s, 'X%-Spam%-Status: %S+, score') then
-            local pattern_symbols = "X%-Spam%-Status: %S+, score%=([%-%d%.]+)%s.*tests%=(.*,?)(%s*%S+)%sautolearn.*"
-            spam_score = string.gsub(s, pattern_symbols, "%1")
-            symbols = string.gsub(s, pattern_symbols, "%2%3")
+          if string.find(s, '^X%-Spam%-Status: %S+, score') then
+            spam_score = tonumber(s:match('score%=([%-%d%.]+)'))
+            symbols = s:match('tests%=(.-)%sautolearn') or s:match('tests%=(.*)$') or ''
             symbols = string.gsub(symbols, "%s", "")
+            break
           end
         end
 
-        lua_util.debugm(rule.N, task, '%s: spam_score: %s, symbols: %s, int spam_score: |%s|, type spam_score: |%s|',
-            rule.log_prefix, spam_score, symbols, tonumber(spam_score), type(spam_score))
+        if not spam_score then
+          spamassassin_fail('no X-Spam-Status in the reply: ' .. text:sub(1, 128))
+          return
+        end
 
-        if tonumber(spam_score) > 0 and #symbols > 0 and symbols ~= "none" then
+        lua_util.debugm(rule.name, task, '%s: spam_score: %s, symbols: %s',
+            rule.log_prefix, spam_score, symbols)
+
+        if spam_score > 0 and #symbols > 0 and symbols ~= "none" then
 
           if rule.extended == false then
             common.yield_result(task, rule, symbols, spam_score)
             common.save_cache(task, digest, rule, symbols, spam_score)
           else
             local symbols_table = lua_util.str_split(symbols, ",")
-            lua_util.debugm(rule.N, task, '%s: returned symbols as table: %s', rule.log_prefix, symbols_table)
+            lua_util.debugm(rule.name, task, '%s: returned symbols as table: %s', rule.log_prefix, symbols_table)
 
             common.yield_result(task, rule, symbols_table, spam_score)
             common.save_cache(task, digest, rule, symbols_table, spam_score)
@@ -191,17 +222,55 @@ local function spamassassin_check(task, content, digest, rule)
           common.log_clean(task, rule, 'no spam detected - spam score: ' .. spam_score .. ', symbols: ' .. symbols)
         end
       end
+
+      spamassassin_callback = function(err, data, conn)
+        if done then
+          return
+        end
+
+        if data then
+          local chunk = tostring(data)
+          table.insert(reply, chunk)
+          reply_len = reply_len + #chunk
+          local text = table.concat(reply)
+          reply = { text }
+          if reply_complete(text) then
+            if conn then
+              conn:close()
+            end
+            spamassassin_process(text)
+            return
+          end
+        end
+
+        if err then
+          -- spamd closes the connection when the reply is sent
+          if reply_len > 0 and tostring(err):find('connection terminated', 1, true) then
+            spamassassin_process(table.concat(reply))
+          else
+            spamassassin_requery(err)
+          end
+        end
+      end
+
+      local ok = tcp.request({
+        task = task,
+        host = addr:to_string(),
+        port = addr:get_port(),
+        upstream = upstream,
+        timeout = rule['timeout'],
+        data = request_data,
+        callback = spamassassin_callback,
+        partial = true,
+        shutdown = true,
+      })
+
+      if not ok and not done then
+        spamassassin_requery('cannot make a TCP connection')
+      end
     end
 
-    tcp.request({
-      task = task,
-      host = addr:to_string(),
-      port = addr:get_port(),
-      upstream = upstream,
-      timeout = rule['timeout'],
-      data = request_data,
-      callback = spamassassin_callback,
-    })
+    spamassassin_request()
   end
 
   if common.condition_check_and_continue(task, content, rule, digest, spamassassin_check_uncached) then

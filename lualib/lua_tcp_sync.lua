@@ -37,13 +37,14 @@ end
 -- @return
 --          true, {data} if everything is fine
 --          false, {error message} otherwise
+--          (including `connection is closed` after close())
 --
 --]]
 function tcp_sync:read_once()
   local is_ok, data
   if self._data:len() > 0 then
     data = self._data
-    self._data = nil
+    self._data = ''
     return true, data
   end
 

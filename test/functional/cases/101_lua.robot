@@ -34,6 +34,11 @@ Global Config Sections
   Expect Symbol With Exact Options  CFGSEC_SECTIONS  alpha=alpha  beta=beta  gamma=gamma
   Expect Symbol  CFGSEC_REGEXP
 
+Event Base Timers
+  [Setup]  Lua Setup  ${RSPAMD_TESTDIR}/lua/ev_base_timer.lua
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  EV_BASE_TIMER  fired=3  nested=1
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${RSPAMD_LUA_SCRIPT}

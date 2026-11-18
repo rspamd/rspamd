@@ -94,6 +94,7 @@ local function kaspersky_check(task, content, digest, rule, maybe_part)
 
     if not message_fd then
       rspamd_logger.errx(task, 'cannot store file for kaspersky scan: %s', fname)
+      common.yield_result(task, rule, 'cannot store file for scan', 0.0, 'fail', maybe_part)
       return
     end
 
