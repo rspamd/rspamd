@@ -324,6 +324,26 @@ int rspamd_read_passphrase_with_prompt(const char *prompt, char *buf, int size, 
 double rspamd_get_ticks(gboolean rdtsc_ok);
 
 /**
+ * Precise monotonic time in nanoseconds since an arbitrary epoch.
+ *
+ * Unlike rspamd_get_ticks(), which deliberately reads the coarse (1-4 ms
+ * resolution) monotonic clock where one exists, this uses the precise
+ * CLOCK_MONOTONIC (vDSO on Linux) and is suitable for timing short
+ * intervals. It never uses rdtsc.
+ * @return nanoseconds, non-decreasing
+ */
+uint64_t rspamd_get_monotonic_ns(void);
+
+typedef uint64_t (*rspamd_monotonic_clock_fn)(void);
+
+/**
+ * Tests only: override the source of rspamd_get_monotonic_ns().
+ * Pass NULL to restore the real clock.
+ * @return the previous override (NULL if the real clock was in use)
+ */
+rspamd_monotonic_clock_fn rspamd_set_monotonic_clock(rspamd_monotonic_clock_fn fn);
+
+/**
  * Portably return the current virtual clock ticks as seconds
  * @return
  */

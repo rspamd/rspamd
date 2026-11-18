@@ -75,6 +75,7 @@
 #include "rspamd_cxx_unit_email_addr.hxx"
 #include "rspamd_cxx_unit_smtputf8.hxx"
 #include "rspamd_cxx_unit_dynconf.hxx"
+#include "rspamd_cxx_unit_monotonic_clock.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

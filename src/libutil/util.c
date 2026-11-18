@@ -1513,6 +1513,48 @@ rspamd_get_ticks(gboolean rdtsc_ok)
 	return res;
 }
 
+static rspamd_monotonic_clock_fn rspamd_monotonic_clock_override = NULL;
+
+rspamd_monotonic_clock_fn
+rspamd_set_monotonic_clock(rspamd_monotonic_clock_fn fn)
+{
+	rspamd_monotonic_clock_fn old = rspamd_monotonic_clock_override;
+
+	rspamd_monotonic_clock_override = fn;
+
+	return old;
+}
+
+uint64_t
+rspamd_get_monotonic_ns(void)
+{
+	if (G_UNLIKELY(rspamd_monotonic_clock_override != NULL)) {
+		return rspamd_monotonic_clock_override();
+	}
+
+#if defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_MONOTONIC)
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	return (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
+#elif defined(__APPLE__)
+	static mach_timebase_info_data_t tb = {0, 0};
+
+	if (tb.denom == 0) {
+		(void) mach_timebase_info(&tb);
+	}
+
+	return mach_absolute_time() * tb.numer / tb.denom;
+#else
+	struct timeval tv;
+
+	(void) gettimeofday(&tv, NULL);
+
+	return (uint64_t) tv.tv_sec * 1000000000ULL + (uint64_t) tv.tv_usec * 1000ULL;
+#endif
+}
+
 double
 rspamd_get_virtual_ticks(void)
 {
