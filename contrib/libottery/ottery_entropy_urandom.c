@@ -14,6 +14,18 @@
 
 #ifndef _WIN32
 
+#include <errno.h>
+#if defined(HAVE_GETRANDOM)
+#include <sys/random.h>
+#elif defined(__linux__)
+#include <sys/syscall.h>
+#endif
+#if defined(HAVE_GETENTROPY)
+#include <unistd.h>
+#elif defined(HAVE_GETENTROPY_SYS_RANDOM)
+#include <sys/random.h>
+#endif
+
 /**
  * Read from a file into an n-byte buffer until the buffer is full or until
  * we reach an error.  Returns the number of bytes read.  If the return
@@ -26,12 +38,61 @@ ottery_read_n_bytes_from_file_(int fd, uint8_t *out, size_t n)
   uint8_t *outp = out;
   while (n) {
     r = read(fd, outp, n);
+    if (r < 0 && errno == EINTR)
+      continue;
     if (r <= 0 || (size_t)r > n)
       return outp - out;
     outp += r;
     n -= r;
   }
   return outp - out;
+}
+
+/**
+ * Get random bytes from the kernel without a file descriptor or a device
+ * node, so seeding works in a chroot, without /dev, or with the descriptor
+ * table full. getrandom() also blocks until the kernel CRNG is seeded,
+ * which reading /dev/urandom does not.
+ *
+ * @return 0 on success, -1 if the interface is missing or failed; the caller
+ *    then falls back to the device.
+ */
+static int
+ottery_get_entropy_syscall_(uint8_t *out, size_t outlen)
+{
+#if defined(HAVE_GETRANDOM) || (defined(__linux__) && defined(SYS_getrandom))
+  uint8_t *p = out;
+  while (outlen) {
+    ssize_t r;
+#ifdef HAVE_GETRANDOM
+    r = getrandom(p, outlen, 0);
+#else
+    r = syscall(SYS_getrandom, p, outlen, 0);
+#endif
+    if (r < 0 && errno == EINTR)
+      continue;
+    if (r <= 0 || (size_t)r > outlen)
+      return -1; /* e.g. ENOSYS on an old kernel or under seccomp */
+    p += r;
+    outlen -= (size_t)r;
+  }
+  return 0;
+#elif defined(HAVE_GETENTROPY) || defined(HAVE_GETENTROPY_SYS_RANDOM)
+  uint8_t *p = out;
+  while (outlen) {
+    /* getentropy() is limited to 256 bytes per call */
+    size_t m = outlen > 256 ? 256 : outlen;
+    if (getentropy(p, m) != 0)
+      return -1;
+    p += m;
+    outlen -= m;
+  }
+  return 0;
+#else
+  (void)out;
+  (void)outlen;
+  return -1;
+#endif
 }
 
 
@@ -68,6 +129,11 @@ ottery_get_entropy_urandom(const struct ottery_entropy_config *cfg,
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
+  /* Prefer the kernel interface unless a device or an fd was configured */
+  if (!(cfg && (cfg->urandom_fd_is_set || cfg->urandom_fname)) &&
+      ottery_get_entropy_syscall_(out, outlen) == 0)
+    return 0;
+
   if (cfg && cfg->urandom_fd_is_set && cfg->urandom_fd >= 0) {
     fd = cfg->urandom_fd;
   } else {
@@ -86,7 +152,7 @@ ottery_get_entropy_urandom(const struct ottery_entropy_config *cfg,
     goto end;
   }
   if (check_device) {
-    if (0 == (st.st_mode & S_IFCHR)) {
+    if (!S_ISCHR(st.st_mode)) {
       result = OTTERY_ERR_INIT_STRONG_RNG;
       goto end;
     }
@@ -95,8 +161,9 @@ ottery_get_entropy_urandom(const struct ottery_entropy_config *cfg,
       if (0 == state->urandom_fd_inode) {
         state->urandom_fd_inode = (uint64_t) st.st_ino;
       } else if ((uint64_t)st.st_ino != state->urandom_fd_inode) {
-        close(fd);
-        return OTTERY_ERR_ACCESS_STRONG_RNG;
+        /* Do not close an fd that the caller owns */
+        result = OTTERY_ERR_ACCESS_STRONG_RNG;
+        goto end;
       }
     }
   }

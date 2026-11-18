@@ -29,6 +29,9 @@
 #cmakedefine HAVE_FLOCK          1
 #cmakedefine HAVE_FPATHCONF      1
 #cmakedefine HAVE_GETPAGESIZE    1
+#cmakedefine HAVE_GETRANDOM      1
+#cmakedefine HAVE_GETENTROPY     1
+#cmakedefine HAVE_GETENTROPY_SYS_RANDOM 1
 #cmakedefine HAVE_GLOB_H         1
 #cmakedefine HAVE_GRP_H          1
 #cmakedefine HAVE_INTTYPES_H     1
