@@ -648,7 +648,7 @@ ottery_st_rand_bytes_from_buf(struct ottery_state *st, uint8_t *out,
 	out += cpy;
 	ottery_st_nextblock_nolock(st);
 	memcpy(out, st->buffer+st->pos, n);
-	CLEARBUF(st->buffer, n);
+	CLEARBUF(st->buffer+st->pos, n);
 	st->pos += n;
 	assert(st->pos < st->prf.output_len);
   }
@@ -741,7 +741,7 @@ ottery_st_rand_bytes_nolock(struct ottery_state_nolock *st, void *out_, size_t n
 	  /* is at most 8 bytes long, that's not such a big deal. */       \
 	  ottery_st_nextblock_nolock(st);                                  \
 	  INT_ASSIGN_PTR(inttype, result, (st)->buffer + (st)->pos);       \
-	  CLEARBUF((st)->buffer, sizeof(inttype));                         \
+	  CLEARBUF((st)->buffer + (st)->pos, sizeof(inttype));             \
 	  (st)->pos += sizeof(inttype);                                    \
 	}                                                                  \
 	unlock;                                                            \
