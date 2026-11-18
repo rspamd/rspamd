@@ -4657,6 +4657,7 @@ lua_ev_base_pending_events(lua_State *L)
 
 struct rspamd_ev_base_cbdata {
 	lua_State *L;
+	struct rspamd_config *cfg;
 	int cbref;
 	ev_timer ev;
 };
@@ -4665,10 +4666,24 @@ static void
 lua_ev_base_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 {
 	struct rspamd_ev_base_cbdata *cbdata = (struct rspamd_ev_base_cbdata *) t->data;
+	struct lua_callback_state cbs;
+	gboolean pooled = FALSE;
 	lua_State *L;
 	bool schedule_more = false;
 
-	L = cbdata->L;
+	/*
+	 * Not the state that has added the timer if it can be avoided: that one
+	 * can be a pooled thread which is a suspended coroutine of somebody else
+	 * by now, and a call on it would break that coroutine
+	 */
+	if (cbdata->cfg && cbdata->cfg->lua_thread_pool) {
+		lua_thread_pool_prepare_callback(cbdata->cfg->lua_thread_pool, &cbs);
+		L = cbs.L;
+		pooled = TRUE;
+	}
+	else {
+		L = cbdata->L;
+	}
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	int err_idx = lua_gettop(L);
@@ -4689,13 +4704,23 @@ lua_ev_base_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 	/* Drop the traceback handler and the result/error message */
 	lua_settop(L, err_idx - 1);
 
+	if (pooled) {
+		lua_thread_pool_restore_callback(&cbs);
+	}
+
 	if (schedule_more) {
-		ev_timer_again(loop, t);
+		/*
+		 * The timer is a one shot one and it has been stopped before this
+		 * callback: ev_timer_again does nothing for a timer without repeat
+		 * that is not active, so it has to be started
+		 */
+		ev_timer_start(loop, t);
 	}
 	else {
 		/* Cleanup */
 		ev_timer_stop(loop, t);
-		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cbref);
+		luaL_unref(cbdata->cfg ? cbdata->cfg->lua_state : cbdata->L,
+				   LUA_REGISTRYINDEX, cbdata->cbref);
 		g_free(cbdata);
 	}
 }
@@ -4714,8 +4739,20 @@ lua_ev_base_add_timer(lua_State *L)
 		return luaL_error(L, "invalid arguments: timeout expected");
 	}
 
-	struct rspamd_ev_base_cbdata *cbdata = g_malloc(sizeof(*cbdata));
+	struct rspamd_ev_base_cbdata *cbdata = g_malloc0(sizeof(*cbdata));
 	cbdata->L = L;
+
+	/* The config gives the thread pool to run the callback on */
+	lua_getglobal(L, "rspamd_config");
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1, rspamd_config_classname);
+
+		if (pcfg) {
+			cbdata->cfg = *pcfg;
+		}
+	}
+	lua_pop(L, 1);
+
 	lua_pushvalue(L, 3);
 	cbdata->ev.data = cbdata;
 	cbdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
