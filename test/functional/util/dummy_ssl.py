@@ -18,6 +18,9 @@ Plaintext commands (a line, `\r\n` terminated):
   STARTTLS-GREET  the same, and send `greeting\n` right after the handshake
   STARTTLS-INJECT answer `READY` and a line of extra plaintext in the same
                   write, do NOT do the handshake
+  STARTTLS-GARBAGE answer `READY` and, a moment later, bytes that are not
+                  TLS: a client that starts its handshake after that fails
+                  at once
 
 The server is bounded: it serves a limited number of connections, every
 connection has a deadline, and the usual alarm based killer is installed.
@@ -100,6 +103,13 @@ class Handler(socketserver.BaseRequestHandler):
         if cmd == b'STARTTLS-INJECT':
             # The extra plaintext follows the ready line in the same segment
             sock.sendall(b'READY\r\nINJECTED\r\n')
+            time.sleep(3)
+            return
+
+        if cmd == b'STARTTLS-GARBAGE':
+            sock.sendall(b'READY\r\n')
+            time.sleep(0.1)
+            sock.sendall(b'this is not a TLS record at all\r\n' * 4)
             time.sleep(3)
             return
 

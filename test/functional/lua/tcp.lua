@@ -774,22 +774,41 @@ local function starttls_verify_symbol(task)
       task:insert_result('TCP_STARTTLS_VERIFY', 1.0, 'err:' .. tostring(err))
       return
     end
-    -- The verification fails either while the handshake is being started
-    -- (starttls raises and closes the connection) or later on (the error
-    -- comes to the next handler): which one depends on how much of the
-    -- handshake the peer has already sent
-    local started, start_err = pcall(conn.starttls, conn)
-    if not started then
-      if tostring(start_err):find('cannot start the TLS handshake', 1, true) then
-        task:insert_result('TCP_STARTTLS_VERIFY', 1.0, 'ssl error')
-      else
-        task:insert_result('TCP_STARTTLS_VERIFY', 1.0, tostring(start_err))
-      end
-      return
-    end
+    -- Whether the verification fails while the handshake is being started or
+    -- later on, the error comes to the next handler
+    conn:starttls()
     conn:add_read(function(err2, _, conn2)
       task:insert_result('TCP_STARTTLS_VERIFY', 1.0, (tostring(err2):match('^ssl error') or tostring(err2)))
       conn2:close()
+    end, '\n')
+  end)
+end
+
+-- [[ The handshake fails inside of starttls() itself: the peer's (bad) reply is
+--    already there when the handshake is started. The result tells it and the
+--    handler added afterwards gets the same error, as if it had failed later ]]
+local starttls_sync_fail_id = 'starttls reports a failure found at once to the next handler'
+
+local function starttls_sync_fail_symbol(task)
+  if task:get_queue_id() ~= starttls_sync_fail_id then
+    return
+  end
+  starttls_request(task, 'STARTTLS-GARBAGE\r\n', function(err, _, conn)
+    if err then
+      task:insert_result('TCP_STARTTLS_SYNC_FAIL', 1.0, 'err:' .. tostring(err))
+      return
+    end
+    -- Let the garbage arrive (the peer sends it 0.1s after the ready line)
+    local deadline = rspamd_util.get_time() + 0.4
+    while rspamd_util.get_time() < deadline do
+      -- busy wait: the event loop must not run here
+    end
+    local started, start_err = conn:starttls(true)
+    conn:add_read(function(err2, _, _)
+      task:insert_result('TCP_STARTTLS_SYNC_FAIL', 1.0,
+          'started=' .. tostring(started),
+          'result=' .. (tostring(start_err):match('^ssl error') or tostring(start_err)),
+          'handler=' .. (tostring(err2):match('^ssl error') or tostring(err2)))
     end, '\n')
   end)
 end
@@ -1112,6 +1131,7 @@ reg('TCP_TLS_EMPTY_TEST', tls_empty_symbol)
 reg('TCP_STARTTLS_INJECT_TEST', starttls_inject_symbol)
 reg('TCP_STARTTLS_TEST', starttls_ok_symbol)
 reg('TCP_STARTTLS_VERIFY_TEST', starttls_verify_symbol)
+reg('TCP_STARTTLS_SYNC_FAIL_TEST', starttls_sync_fail_symbol)
 reg('TCP_DEAD_HANDLE_TEST', dead_handle_symbol)
 reg('TCP_CLOSE_OUTSIDE_TEST', close_outside_symbol)
 reg('TCP_CLOSE_THEN_ADD_TEST', close_then_add_symbol)

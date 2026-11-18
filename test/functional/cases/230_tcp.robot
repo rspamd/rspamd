@@ -76,6 +76,12 @@ starttls verifies the peer unless told not to
   ...  Settings={symbols_enabled = [TCP_STARTTLS_VERIFY_TEST]}
   Expect Symbol With Exact Options  TCP_STARTTLS_VERIFY  ssl error
 
+starttls reports a failure found at once to the next handler
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [TCP_STARTTLS_SYNC_FAIL_TEST]}
+  Expect Symbol With Exact Options  TCP_STARTTLS_SYNC_FAIL  started=false  result=ssl error
+  ...  handler=ssl error
+
 Sync API TCP request
   Scan File  ${MESSAGE}
   ...  Settings={symbols_enabled = [SIMPLE_TCP_TEST]}
