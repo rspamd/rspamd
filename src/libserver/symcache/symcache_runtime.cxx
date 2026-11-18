@@ -727,7 +727,7 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 		 * amounts. One genuinely slow profiled call was enough to make the
 		 * flagged rule blamed for every slow scan thereafter.
 		 */
-		if (profile || (item->flags & cache_item::bit_slow)) {
+		if (profile || (item->internal_flags & cache_item::bit_slow)) {
 			ev_now_update_if_cheap(task->event_loop);
 			dyn_item->start_msec = (ev_now(task->event_loop) -
 									profile_start) *
@@ -1068,7 +1068,7 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 	};
 
 	/* Check if we need to profile symbol (always profile when we have seen this item to be slow */
-	if (profile || item->flags & cache_item::bit_slow) {
+	if (profile || (item->internal_flags & cache_item::bit_slow)) {
 		ev_now_update_if_cheap(task->event_loop);
 		auto diff = ((ev_now(task->event_loop) - profile_start) * 1e3 -
 					 dyn_item->start_msec);
