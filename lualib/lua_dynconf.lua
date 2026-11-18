@@ -1763,8 +1763,15 @@ function exports.configure(section)
     return false, string.format('invalid dynconf policy "%s"', tostring(policy))
   end
 
-  local interval = section.interval and parse_number(section.interval) or 10.0
-  local ttl = section.ttl and parse_number(section.ttl) or 10.0
+  -- An unparsable value must fail the section, not fall back to the default
+  local interval = 10.0
+  if section.interval ~= nil then
+    interval = parse_number(section.interval)
+  end
+  local ttl = 10.0
+  if section.ttl ~= nil then
+    ttl = parse_number(section.ttl)
+  end
   local jitter = tonumber(section.jitter) or 0.2
   if not interval or interval <= 0 or not ttl or ttl <= 0 then
     return false, 'invalid dynconf interval or ttl'

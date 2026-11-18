@@ -7,7 +7,13 @@ local lua_util = require "lua_util"
 return function(_, res)
   local redis_params = lua_redis.try_load_redis_servers(res.redis, nil)
   if res.expire then
-    res.expire = lua_util.parse_time_interval(res.expire)
+    local expire = lua_util.parse_time_interval(res.expire)
+    if not expire then
+      logger.errx('invalid expire value: %s', res.expire)
+
+      return false
+    end
+    res.expire = expire
   end
   if not redis_params then
     logger.errx('cannot load redis server definition')

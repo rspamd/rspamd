@@ -398,7 +398,15 @@ if opts then
       end
 
       if settings.cookie_valid_time then
-        settings.cookie_valid_time = lua_util.parse_time_interval(settings.cookie_valid_time)
+        local valid_time = lua_util.parse_time_interval(settings.cookie_valid_time)
+        if not valid_time then
+          rspamd_logger.errx(rspamd_config,
+              'invalid cookie_valid_time: %s', settings.cookie_valid_time)
+          lua_util.disable_module(N, "config")
+
+          return
+        end
+        settings.cookie_valid_time = valid_time
       end
 
       lua_redis.register_prefix(settings.sender_prefix, N,
