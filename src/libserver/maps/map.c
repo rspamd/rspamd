@@ -732,7 +732,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 	 * is decoded and cached, so they are restored if that fails, otherwise
 	 * the next conditional request would skip the update we never applied
 	 */
-	time_t saved_last_modified = 0, saved_last_checked = 0;
+	time_t saved_last_modified = 0, saved_last_checked = 0, saved_next_check = 0;
 	rspamd_fstring_t *saved_etag = NULL;
 	gboolean validators_saved = FALSE;
 	/* Bad content stays bad until the source changes; local failures may not */
@@ -766,6 +766,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		/* This code is executed when we are actually reading a map */
 		saved_last_checked = cbd->data->last_checked;
+		saved_next_check = cbd->data->next_check;
 		saved_last_modified = cbd->data->last_modified;
 		saved_etag = cbd->data->etag ? rspamd_fstring_new_init(cbd->data->etag->str, cbd->data->etag->len) : NULL;
 		validators_saved = TRUE;
@@ -816,6 +817,8 @@ http_map_finish(struct rspamd_http_connection *conn,
 			goto err;
 		}
 
+		cbd->data->next_check = 0;
+
 		/* Check for expires + etag */
 		double cached_timeout = map->poll_timeout * 2;
 
@@ -828,27 +831,27 @@ http_map_finish(struct rspamd_http_connection *conn,
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
-																	 (time_t) map->poll_timeout,
-																	 etag_hdr != NULL,
-																	 msg->last_modified != 0);
-				cached_timeout = map->next_check - msg->date;
+				cbd->data->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
+																		   (time_t) map->poll_timeout,
+																		   etag_hdr != NULL,
+																		   msg->last_modified != 0);
+				cached_timeout = cbd->data->next_check - msg->date;
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
 				/* Treat invalid expires as no expires header */
-				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
-																	 (time_t) map->poll_timeout,
-																	 etag_hdr != NULL,
-																	 msg->last_modified != 0);
+				cbd->data->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
+																		   (time_t) map->poll_timeout,
+																		   etag_hdr != NULL,
+																		   msg->last_modified != 0);
 			}
 		}
 		else if (etag_hdr != NULL || msg->last_modified != 0) {
 			/* No expires header, but we have ETag or Last-Modified */
-			map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
-																 (time_t) map->poll_timeout,
-																 etag_hdr != NULL,
-																 msg->last_modified != 0);
+			cbd->data->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
+																	   (time_t) map->poll_timeout,
+																	   etag_hdr != NULL,
+																	   msg->last_modified != 0);
 		}
 
 		if (etag_hdr) {
@@ -893,9 +896,9 @@ http_map_finish(struct rspamd_http_connection *conn,
 		cache_cbd->timeout.data = cache_cbd;
 		data->cur_cache_cbd = cache_cbd;
 
-		if (map->next_check) {
+		if (cbd->data->next_check) {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
-									map->next_check);
+									cbd->data->next_check);
 		}
 		else {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
@@ -1024,6 +1027,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 	}
 	else if (msg->code == 304 && cbd->check) {
 		cbd->data->last_checked = msg->date;
+		cbd->data->next_check = 0;
 
 		if (msg->last_modified) {
 			cbd->data->last_modified = msg->last_modified;
@@ -1040,27 +1044,27 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 			hdate = rspamd_http_parse_date(expires_hdr->begin, expires_hdr->len);
 			if (hdate != (time_t) -1 && hdate > msg->date) {
-				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
-																	 (time_t) map->poll_timeout,
-																	 cbd->data->etag != NULL,
-																	 msg->last_modified != 0);
+				cbd->data->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, hdate,
+																		   (time_t) map->poll_timeout,
+																		   cbd->data->etag != NULL,
+																		   msg->last_modified != 0);
 			}
 			else {
 				msg_info_map("invalid expires header: %T, ignore it", expires_hdr);
 				/* Treat invalid expires as no expires header */
-				map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
-																	 (time_t) map->poll_timeout,
-																	 cbd->data->etag != NULL,
-																	 msg->last_modified != 0);
+				cbd->data->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
+																		   (time_t) map->poll_timeout,
+																		   cbd->data->etag != NULL,
+																		   msg->last_modified != 0);
 				has_expires = false;
 			}
 		}
 		else if (cbd->data->etag != NULL || msg->last_modified != 0) {
 			/* No expires header, but we have ETag or Last-Modified */
-			map->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
-																 (time_t) map->poll_timeout,
-																 cbd->data->etag != NULL,
-																 msg->last_modified != 0);
+			cbd->data->next_check = rspamd_http_map_process_next_check(map, bk, msg->date, 0,
+																	   (time_t) map->poll_timeout,
+																	   cbd->data->etag != NULL,
+																	   msg->last_modified != 0);
 		}
 
 		etag_hdr = rspamd_http_message_find_header(msg, "ETag");
@@ -1076,7 +1080,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 		if (has_expires) {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
-									map->next_check);
+									cbd->data->next_check);
 			msg_info_map("data is not modified for server %s (%s), next check at %s "
 						 "(http cache based: %T)",
 						 cbd->data->host,
@@ -1086,7 +1090,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 		else {
 			rspamd_http_date_format(next_check_date, sizeof(next_check_date),
-									map->next_check);
+									cbd->data->next_check);
 			msg_info_map("data is not modified for server %s (%s), next check at %s "
 						 "(timer based)",
 						 cbd->data->host,
@@ -1138,6 +1142,7 @@ err:
 
 	if (validators_saved) {
 		cbd->data->last_checked = saved_last_checked;
+		cbd->data->next_check = saved_next_check;
 		cbd->data->last_modified = saved_last_modified;
 
 		if (cbd->data->etag) {
@@ -1633,6 +1638,34 @@ rspamd_map_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 	MAP_RELEASE(cbd, "periodic");
 }
 
+static time_t
+rspamd_map_next_check(struct rspamd_map *map, gboolean *needs_poll)
+{
+	struct rspamd_map_backend *bk;
+	unsigned int i;
+	time_t next_check = 0;
+
+	*needs_poll = FALSE;
+
+	if (!map->has_data) {
+		return 0;
+	}
+
+	PTR_ARRAY_FOREACH(map->backends, i, bk)
+	{
+		if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
+			if (bk->data.hd->next_check == 0) {
+				*needs_poll = TRUE;
+			}
+			else if (next_check == 0 || bk->data.hd->next_check < next_check) {
+				next_check = bk->data.hd->next_check;
+			}
+		}
+	}
+
+	return next_check;
+}
+
 void rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 {
 	const double lock_mult = 0.1;
@@ -1641,6 +1674,7 @@ void rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 	double jittered_sec;
 	double timeout, error_delay = 0;
 	struct map_periodic_cbdata *cbd;
+	gboolean needs_poll = FALSE;
 
 	if (map->scheduled_check || (map->wrk &&
 								 map->wrk->state != rspamd_worker_state_running)) {
@@ -1657,6 +1691,12 @@ void rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 	}
 
 	map->seen = true;
+
+	/* File changes use INIT to bypass HTTP expiry. */
+	if (map->non_trivial &&
+		!(how & (RSPAMD_MAP_SCHEDULE_ERROR | RSPAMD_MAP_SCHEDULE_INIT))) {
+		map->next_check = rspamd_map_next_check(map, &needs_poll);
+	}
 
 	if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
 		/*
@@ -1700,6 +1740,16 @@ void rspamd_map_schedule_periodic(struct rspamd_map *map, int how)
 			/* No need to check now, wait till next_check */
 			jittered_sec = timeout;
 			reason = "valid non-trivial data";
+		}
+
+		if (needs_poll) {
+			double poll_timeout = map->poll_timeout;
+
+			if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
+				poll_timeout *= lock_mult;
+			}
+			double poll_delay = rspamd_time_jitter(poll_timeout, 0);
+			jittered_sec = MIN(jittered_sec, poll_delay);
 		}
 	}
 	else {
@@ -2179,7 +2229,7 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	memset(&header, 0, sizeof(header));
 	memcpy(header.magic, rspamd_http_file_magic, sizeof(rspamd_http_file_magic));
 	header.mtime = htdata->last_modified;
-	header.next_check = map->next_check;
+	header.next_check = htdata->next_check;
 	header.data_off = RSPAMD_MAP_CACHE_HEADER_SIZE;
 
 	if (htdata->etag) {
@@ -2280,7 +2330,7 @@ rspamd_map_update_http_cached_file(struct rspamd_map *map,
 	memset(&header, 0, sizeof(header));
 	memcpy(header.magic, rspamd_http_file_magic, sizeof(rspamd_http_file_magic));
 	header.mtime = htdata->last_modified;
-	header.next_check = map->next_check;
+	header.next_check = htdata->next_check;
 	header.data_off = RSPAMD_MAP_CACHE_HEADER_SIZE;
 
 	if (htdata->etag) {
@@ -2433,13 +2483,13 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 
 	if (header.next_check > now) {
 		/* We assume that we have this data inside the cached file */
-		map->next_check = rspamd_http_map_process_next_check(map, bk, now, header.next_check,
-															 map->poll_timeout,
-															 header.etag_len > 0,
-															 true);
+		htdata->next_check = rspamd_http_map_process_next_check(map, bk, now, header.next_check,
+																map->poll_timeout,
+																header.etag_len > 0,
+																true);
 	}
 	else {
-		map->next_check = now;
+		htdata->next_check = now;
 	}
 
 	htdata->last_modified = header.mtime;
@@ -2511,7 +2561,7 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 	g_atomic_int_set(&map->shared->loaded, 1);
 	g_atomic_int_set(&map->shared->cached, 1);
 
-	rspamd_localtime(map->next_check, &tm);
+	rspamd_localtime(htdata->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 	rspamd_localtime(htdata->last_modified, &tm);
 	strftime(lm_buf, sizeof(lm_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
@@ -2542,6 +2592,31 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 	unsigned int flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
 
 	data = bk->data.hd;
+
+	if (map->active_http && data->next_check > rspamd_get_calendar_ticks()) {
+		if (check) {
+			if (!map->has_data) {
+				periodic->need_modify = TRUE;
+				periodic->cur_backend = 0;
+			}
+			else {
+				periodic->cur_backend++;
+			}
+			rspamd_map_process_periodic(periodic);
+			return;
+		}
+
+		/* A different backend changed; keep this one's unexpired data. */
+		if ((g_atomic_int_get(&data->cache->available) == 1 &&
+			 rspamd_map_read_cached(map, bk, periodic, data->host)) ||
+			rspamd_map_read_http_cached_file(map, bk, data, &periodic->cbdata)) {
+			periodic->cur_backend++;
+			rspamd_map_process_periodic(periodic);
+			return;
+		}
+
+		data->next_check = 0;
+	}
 
 	if (g_atomic_int_get(&data->cache->available) == 1) {
 		/* Read cached data */
@@ -3077,6 +3152,14 @@ void rspamd_map_watch(struct rspamd_config *cfg,
 			}
 		}
 
+		if (map->active_http) {
+			gboolean needs_poll;
+
+			map->next_check = rspamd_map_next_check(map, &needs_poll);
+			if (needs_poll) {
+				map->next_check = 0;
+			}
+		}
 		rspamd_map_schedule_periodic(map, RSPAMD_MAP_SCHEDULE_INIT);
 
 		cur = g_list_next(cur);
@@ -3150,6 +3233,8 @@ void rspamd_map_preload(struct rspamd_config *cfg)
 						 bk->protocol == MAP_PROTO_HTTPS) {
 					if (!rspamd_map_read_http_cached_file(map, bk, bk->data.hd,
 														  &fake_cbd.cbdata)) {
+
+						bk->data.hd->next_check = 0;
 
 						if (map->fallback_backend) {
 							/* Try fallback */
