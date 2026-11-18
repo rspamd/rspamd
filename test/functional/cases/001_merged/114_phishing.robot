@@ -122,6 +122,22 @@ TEST PHISHING AUTHENTICATED WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
   Do Not Expect Symbol  PHISHING
   Do Not Expect Symbol  PHISHING_QUERY
 
+TEST PHISHING AUTHENTICATED DISPLAYED DOMAIN EXCLUDES SCORING BUT RETAINS MISMATCH
+  Scan File  ${RSPAMD_TESTDIR}/messages/phishing_dmarc_displayed.eml
+  ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
+  ...  Settings={symbols_enabled=[PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
+  Expect Symbol  DMARC_POLICY_ALLOW
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Do Not Expect Symbol  PHISHING
+
+TEST PHISHING AUTHENTICATED SENDER DISPLAYING ANOTHER DOMAIN IS SCORED
+  Scan File  ${RSPAMD_TESTDIR}/messages/phishing_dmarc_foreign_displayed.eml
+  ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
+  ...  Settings={symbols_enabled=[PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
+  Expect Symbol  DMARC_POLICY_ALLOW
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol  PHISHING
+
 TEST PHISHING QUERY SYMBOL CAN ENABLE ITS PARENT CHECK
   Scan File  ${MESSAGE_QSAFE}
   ...  Settings={symbols_enabled=[PHISHING_QUERY]}

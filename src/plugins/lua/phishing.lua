@@ -441,6 +441,14 @@ local function phishing_cb(task)
           return
         end
 
+        -- A sender showing its own DMARC-authenticated domain over a link elsewhere
+        -- (usually its newsletter provider's click tracking) impersonates no one
+        if dmarc_dom and ptld == dmarc_dom then
+          lua_util.debugm(N, 'exclude phishing from %s -> %s by dmarc displayed domain',
+              ptld, tld)
+          return
+        end
+
         if not redirected then
           local allowed = allowed_rewrite(task, url, purl)
           if allowed then
