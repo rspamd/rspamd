@@ -774,7 +774,19 @@ local function starttls_verify_symbol(task)
       task:insert_result('TCP_STARTTLS_VERIFY', 1.0, 'err:' .. tostring(err))
       return
     end
-    conn:starttls()
+    -- The verification fails either while the handshake is being started
+    -- (starttls raises and closes the connection) or later on (the error
+    -- comes to the next handler): which one depends on how much of the
+    -- handshake the peer has already sent
+    local started, start_err = pcall(conn.starttls, conn)
+    if not started then
+      if tostring(start_err):find('cannot start the TLS handshake', 1, true) then
+        task:insert_result('TCP_STARTTLS_VERIFY', 1.0, 'ssl error')
+      else
+        task:insert_result('TCP_STARTTLS_VERIFY', 1.0, tostring(start_err))
+      end
+      return
+    end
     conn:add_read(function(err2, _, conn2)
       task:insert_result('TCP_STARTTLS_VERIFY', 1.0, (tostring(err2):match('^ssl error') or tostring(err2)))
       conn2:close()
