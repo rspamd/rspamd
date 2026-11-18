@@ -39,6 +39,7 @@ local settings = {
   mismatch_symbol = 'URL_DISPLAY_MISMATCH',
   query_symbol = 'PHISHING_QUERY',
   rewrite_symbol = 'PHISHING_REWRITE_ALLOWED',
+  own_domain_symbol = 'PHISHING_OWN_DOMAIN',
   phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED',
   generic_service_symbol = 'PHISHED_GENERIC_SERVICE',
   generic_service_name = 'generic service',
@@ -92,6 +93,7 @@ local maps = {
   rewrite_domains = opts.rewrite_domains,
   rewrite_redirectors = opts.rewrite_redirectors,
   legacy_redirectors = opts.legacy_redirectors,
+  shared_domains = opts.shared_domains,
 }
 if not lua_maps.fill_config_maps(N, maps, {
   trusted_redirectors = {
@@ -112,6 +114,11 @@ if not lua_maps.fill_config_maps(N, maps, {
   legacy_redirectors = {
     type = 'set',
     description = 'Phishing legacy redirectors map',
+    optional = true,
+  },
+  shared_domains = {
+    type = 'set',
+    description = 'Domains with unrelated mailbox owners (e.g. freemail)',
     optional = true,
   },
 }) then
@@ -352,6 +359,8 @@ local function phishing_cb(task)
 
   -- Process all urls
   local dmarc_dom
+  -- Set when a DMARC pass names the mailbox provider and not the author
+  local dmarc_shared = false
   local dsym = task:get_symbol('DMARC_POLICY_ALLOW')
   if dsym then
     dsym = dsym[1] -- legacy stuff, need to take the first element
@@ -359,6 +368,14 @@ local function phishing_cb(task)
       -- DMARC reports the raw From domain (possibly a subdomain),
       -- normalise it to eSLD to allow comparison with url:get_tld()
       dmarc_dom = util.get_tld(dsym.options[1])
+
+      if maps.shared_domains then
+        local raw_dom = dsym.options[1]:lower()
+        if maps.shared_domains:get_key(raw_dom)
+            or (dmarc_dom and maps.shared_domains:get_key(dmarc_dom:lower())) then
+          dmarc_shared = true
+        end
+      end
     end
   end
 
@@ -442,12 +459,11 @@ local function phishing_cb(task)
         end
 
         -- A sender showing its own DMARC-authenticated domain over a link elsewhere
-        -- (usually its newsletter provider's click tracking) impersonates no one
-        if dmarc_dom and ptld == dmarc_dom then
-          lua_util.debugm(N, 'exclude phishing from %s -> %s by dmarc displayed domain',
-              ptld, tld)
-          return
-        end
+        -- (usually its newsletter provider's click tracking) impersonates no one.
+        -- That holds only when the domain owner is the author: any mailbox of a
+        -- shared domain passes DMARC for it, and "outlook.com" over a foreign
+        -- link from an outlook.com account is ordinary credential phishing.
+        local own_domain = dmarc_dom and ptld == dmarc_dom and not dmarc_shared
 
         if not redirected then
           local allowed = allowed_rewrite(task, url, purl)
@@ -553,7 +569,13 @@ local function phishing_cb(task)
           if not found_in_map(anchor_exceptions_maps) then
             if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
               if not domains or is_url_in_map(domains, purl) then
-                if not redirected and query_target_matches(task, url, ptld) then
+                if own_domain then
+                  -- Strict domains and exception maps were consulted above,
+                  -- merely the generic score is replaced by this marker
+                  lua_util.debugm(N, task, 'exclude phishing from %s -> %s by dmarc displayed domain',
+                      ptld, tld)
+                  task:insert_result(settings.own_domain_symbol, 1.0, ptld .. '->' .. tld)
+                elseif not redirected and query_target_matches(task, url, ptld) then
                   -- A matching embedded target is common in legitimate
                   -- wrappers, but the outer server can ignore it entirely.
                   -- Keep this ambiguous case separate from ordinary phishing.
@@ -763,6 +785,14 @@ if opts then
       type = 'virtual',
       parent = id,
       name = settings.rewrite_symbol,
+      score = 0.0,
+      group = N,
+    })
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = settings.own_domain_symbol,
       score = 0.0,
       group = N,
     })

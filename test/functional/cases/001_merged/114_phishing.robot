@@ -15,6 +15,7 @@ ${MESSAGE_QOVERCAP}   ${RSPAMD_TESTDIR}/messages/phishing_query_overcap.eml
 ${MESSAGE_XTLD}       ${RSPAMD_TESTDIR}/messages/phishing_same_label_cross_tld.eml
 ${MESSAGE_QTRUSTED}   ${RSPAMD_TESTDIR}/messages/phishing_query_trusted.eml
 ${MESSAGE_QSTRICT}    ${RSPAMD_TESTDIR}/messages/phishing_query_strict.eml
+${SETTINGS_PHISHING_DMARC}  {symbols_enabled=[PHISHING,PHISHING_QUERY,PHISHING_OWN_DOMAIN,URL_DISPLAY_MISMATCH,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
 ${SETTINGS_PHISHING}  {symbols_enabled = [PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,PHISHING_REWRITE_ALLOWED,STRICT_PHISHING,STRICTER_PHISHING,TEST_PHISHING_WRAPPER]}
 
 *** Test Cases ***
@@ -125,18 +126,40 @@ TEST PHISHING AUTHENTICATED WRAPPER EXCLUDES SCORING BUT RETAINS MISMATCH
 TEST PHISHING AUTHENTICATED DISPLAYED DOMAIN EXCLUDES SCORING BUT RETAINS MISMATCH
   Scan File  ${RSPAMD_TESTDIR}/messages/phishing_dmarc_displayed.eml
   ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
-  ...  Settings={symbols_enabled=[PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
+  ...  Settings=${SETTINGS_PHISHING_DMARC}
   Expect Symbol  DMARC_POLICY_ALLOW
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol With Score  PHISHING_OWN_DOMAIN  0
   Do Not Expect Symbol  PHISHING
 
 TEST PHISHING AUTHENTICATED SENDER DISPLAYING ANOTHER DOMAIN IS SCORED
   Scan File  ${RSPAMD_TESTDIR}/messages/phishing_dmarc_foreign_displayed.eml
   ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
-  ...  Settings={symbols_enabled=[PHISHING,PHISHING_QUERY,URL_DISPLAY_MISMATCH,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
+  ...  Settings=${SETTINGS_PHISHING_DMARC}
   Expect Symbol  DMARC_POLICY_ALLOW
   Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
   Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_OWN_DOMAIN
+
+TEST PHISHING SHARED DOMAIN DISPLAYING ITSELF IS SCORED
+  # Any mailbox of a shared (freemail) domain passes DMARC for it, so the
+  # pass does not make the displayed provider domain trustworthy
+  Scan File  ${RSPAMD_TESTDIR}/messages/phishing_dmarc_shared_displayed.eml
+  ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
+  ...  Settings=${SETTINGS_PHISHING_DMARC}
+  Expect Symbol  DMARC_POLICY_ALLOW
+  Expect Symbol With Score  URL_DISPLAY_MISMATCH  0
+  Expect Symbol  PHISHING
+  Do Not Expect Symbol  PHISHING_OWN_DOMAIN
+
+TEST PHISHING AUTHENTICATED DISPLAYED DOMAIN KEEPS STRICT DOMAIN PROTECTION
+  Scan File  ${RSPAMD_TESTDIR}/messages/phishing_dmarc_displayed.eml
+  ...  IP=8.8.4.4  From=foo@spf.cacophony.za.org
+  ...  Settings={symbols_enabled=[PHISHING,PHISHING_OWN_DOMAIN,STRICTER_PHISHING,DMARC_CHECK,DKIM_CHECK,SPF_CHECK]}
+  Expect Symbol  DMARC_POLICY_ALLOW
+  Expect Symbol  STRICTER_PHISHING
+  Expect Symbol With Score  PHISHING_OWN_DOMAIN  0
+  Do Not Expect Symbol  PHISHING
 
 TEST PHISHING QUERY SYMBOL CAN ENABLE ITS PARENT CHECK
   Scan File  ${MESSAGE_QSAFE}
