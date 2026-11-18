@@ -1389,7 +1389,7 @@ rspamc_profile_output(FILE *out, const ucl_object_t *obj)
 					 });
 
 	for (const auto *cur_elt: ar) {
-		rspamc_print(out, "\t{}: {:3} usec\n",
+		rspamc_print(out, "\t{}: {:3} ms\n",
 					 ucl_object_key(cur_elt), ucl_object_todouble(cur_elt));
 	}
 }
