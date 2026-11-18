@@ -5105,9 +5105,13 @@ rspamd_url_task_subject_callback(struct rspamd_url *url, gsize start_offset,
 static inline khint_t
 rspamd_url_hash(struct rspamd_url *url)
 {
+	/*
+	 * URLs are chosen by the sender: a per-process random seed keeps them
+	 * from being prepared to collide in the URL sets
+	 */
 	if (url->urllen > 0) {
 		return (khint_t) rspamd_cryptobox_fast_hash(url->string, url->urllen,
-													rspamd_hash_seed());
+													rspamd_hash_seed_secure());
 	}
 
 	return 0;
@@ -5119,7 +5123,7 @@ rspamd_url_host_hash(struct rspamd_url *url)
 	if (url->hostlen > 0) {
 		return (khint_t) rspamd_cryptobox_fast_hash(rspamd_url_host_unsafe(url),
 													url->hostlen,
-													rspamd_hash_seed());
+													rspamd_hash_seed_secure());
 	}
 
 	return 0;
