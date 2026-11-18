@@ -514,7 +514,7 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 	rspamd_inet_addr_t *addr = nullptr;
 	auto ret = false;
 
-	if (in.empty()) {
+	if (in.empty() || in.starts_with("helo=")) {
 		return false;
 	}
 
@@ -982,6 +982,16 @@ TEST_SUITE("received")
 				 {"for_mbox", "exim-dev@exim.org"},
 				 {"by_hostname", "hummus.csx.cam.ac.uk"},
 			 }},
+			// eXpurgate HELO literals are not the connecting address
+			{"from [34.76.121.136] (helo=[10.88.0.3]) "
+			 "by tlsNG-c1860d.mxtls.expurgate.net with ESMTP"sv,
+			 {{"real_ip", "34.76.121.136"},
+			  {"from_hostname", "34.76.121.136"},
+			  {"by_hostname", "tlsng-c1860d.mxtls.expurgate.net"}}},
+			{"from [2001:db8::1] (HeLo=[fd00::3]) by relay.example with ESMTP"sv,
+			 {{"real_ip", "2001:db8::1"},
+			  {"from_hostname", "2001:db8::1"},
+			  {"by_hostname", "relay.example"}}},
 			// Haraka received
 			{"from aaa.cn ([1.1.1.1]) by localhost.localdomain (Haraka/2.8.18) with "
 			 "ESMTPA id 349C9C2B-491A-4925-A687-3EF14038C344.1 envelope-from <huxin@xxx.com> "
