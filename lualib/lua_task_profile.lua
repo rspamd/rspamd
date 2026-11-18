@@ -32,6 +32,7 @@ limitations under the License.
 --]]
 
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 
 local exports = {}
 
@@ -62,38 +63,13 @@ local function check_names(name, list)
   return res
 end
 
--- lua_util.parse_time_interval ignores trailing text and reads 'm' as minutes,
--- so '500ms' would become 30000 seconds: parse the whole string here instead
-local interval_units = {
-  ms = 0.001, s = 1, m = 60, h = 3600, d = 86400, w = 7 * 86400, y = 365 * 86400,
-}
-
-local function parse_interval(str)
-  local num, unit = str:match('^%s*([+-]?%d*%.?%d+)%s*(%a*)%s*$')
-  if not num then
-    return nil
-  end
-  local mult = 1
-  if unit ~= '' then
-    mult = interval_units[unit]
-    if not mult then
-      return nil
-    end
-  end
-  local n = tonumber(num)
-  if not n then
-    return nil
-  end
-  return n * mult
-end
-
 --[[[
 -- @function lua_task_profile.new(cfg, opts)
 -- Creates a profiler and registers the selected symbols and groups in the symcache.
 -- @param {rspamd_config} cfg configuration object
 -- @param {table} opts options:
 --   * sample_rate: probability in [0, 1] to keep a scan (default 0); use 0.1 for every 10th scan
---   * slow_time: seconds, a number or a string such as '2s' or '500ms' (units ms, s, m, h, d, w, y); keep a scan if a selected symbol ran at least that long (default 0 = off)
+--   * slow_time: seconds, a number or a string such as '2s' or '500ms' (units ms, s, m, min, h, d, w, y); keep a scan if a selected symbol ran at least that long (default 0 = off)
 --   * max_slow_rate: at most this many slow records per second per worker (default 1, 0 = unlimited)
 --   * groups, symbols: arrays of names of the groups/symbols to time (at least one is required)
 --   * rng, now, seed: test hooks; `rng()` returns a number in [0, 1), `now()` returns seconds,
@@ -119,7 +95,7 @@ exports.new = function(cfg, opts)
   if slow_time == nil then
     slow_time = 0
   elseif type(slow_time) == 'string' then
-    local parsed = parse_interval(slow_time)
+    local parsed = lua_util.parse_time_interval(slow_time)
     if parsed == nil then
       return nil, string.format('slow_time: cannot parse time interval "%s"', slow_time)
     end
