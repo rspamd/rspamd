@@ -58,6 +58,17 @@ gboolean rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, int fd,
 							   gpointer handler_data);
 
 /**
+ * Same as rspamd_ssl_connect_fd, but reports why the handshake could not be
+ * started or has failed at once (the handlers are not called in that case)
+ * @param err if not NULL, set when FALSE is returned (the reason is the TLS error)
+ * @return TRUE if the handshake has been started (or completed)
+ */
+gboolean rspamd_ssl_connect_fd_err(struct rspamd_ssl_connection *conn, int fd,
+								   const char *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
+								   rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+								   gpointer handler_data, GError **err);
+
+/**
  * Accepts SSL session on an already connected (accepted) FD
  * @param conn connection
  * @param fd fd to use (already accepted TCP socket)

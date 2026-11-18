@@ -225,14 +225,27 @@ LUA_FUNCTION_DEF(tcp, shift_callback);
  * The handshake runs in the background (under the connect timeout); handlers queued after this call are served
  * once it is done, and a failed handshake is reported to them as an `ssl error: ...`.
  *
- * It raises an error (and does nothing) if the connection is closed or not established yet, if TLS is already
- * started, and if the connection has plaintext that has been received but not delivered to a read handler yet
- * (e.g. the peer has sent more data right after the "ready" line: that is a protocol violation, and the data
- * would otherwise be taken for protected data). Note that data delivered to a `partial` read callback is not
- * buffered, so it cannot be told apart. If the handshake cannot even be started the connection is closed and an
- * error is raised.
+ * A handshake that fails is reported as `ssl error: ...` to the handlers queued when the running callback
+ * returns (the one added right after this call is among them), and the connection is closed then, whether the
+ * failure is found at once or later by the event loop. Without any handler queued the connection is just
+ * closed. The callback that calls `starttls` is not called from inside this method; a `partial` read handler,
+ * which stays queued, gets the error after it has returned, like the other handlers.
+ *
+ * Two cases differ. If the method is called from outside of the callbacks of this connection (a stored
+ * handle used from a timer), the queued handlers get the error before the method returns, and the connection
+ * is closed when it returns. If it is called from a callback that reports a fatal error of this connection,
+ * the connection is being torn down already: no handler gets the error and only the result tells it.
+ *
+ * It raises an error (and does nothing) only on misuse: if the connection is closed or not established yet, if
+ * TLS is already started or has failed, and if the connection has plaintext that has been received but not
+ * delivered to a read handler yet (e.g. the peer has sent more data right after the "ready" line: that is a
+ * protocol violation, and the data would otherwise be taken for protected data). Note that data delivered to a
+ * `partial` read callback is not buffered, so it cannot be told apart.
  * @param {boolean} no_verify true to skip the verification of the peer certificate (also implied by the
  * `ssl_noverify` flag of the request)
+ * @return {boolean, string} `true` if the handshake has been started; `false` and the error (`ssl error: ...`)
+ * if it has failed at once (the same error is reported to the queued handlers, so callers that do not look at
+ * the result are still told by their next handler)
  */
 LUA_FUNCTION_DEF(tcp, starttls);
 
@@ -376,6 +389,8 @@ struct lua_tcp_dtor {
 #define LUA_TCP_FLAG_HANDLE (1u << 10u)
 /* The upstream has already been charged with a failure for this connection */
 #define LUA_TCP_FLAG_UP_FAILED (1u << 11u)
+/* A TLS handshake has failed in `starttls`: the plain stream is not usable */
+#define LUA_TCP_FLAG_TLS_FAILED (1u << 12u)
 
 /* Empty write handlers completed inline in a row before deferring to the loop */
 #define LUA_TCP_MAX_INLINE_PLAN_DEPTH 32
@@ -454,6 +469,12 @@ struct lua_tcp_cbdata {
 	gsize in_delivered;
 	/* Live `rspamd{tcp}` handles of this connection (intrusive list) */
 	struct lua_tcp_handle *handles;
+	/*
+	 * Failure of the TLS handshake detected synchronously by `starttls`, not
+	 * delivered yet: the queued handlers get it when the running callback
+	 * returns (lua_tcp_plan_handler_event)
+	 */
+	char *pending_err;
 };
 
 #define IS_SYNC(c) (((c)->flags & LUA_TCP_FLAG_SYNC) != 0)
@@ -466,6 +487,7 @@ struct lua_tcp_cbdata {
 INIT_LOG_MODULE(lua_tcp)
 
 static void lua_tcp_handler(int fd, short what, gpointer ud);
+static void lua_tcp_deliver_pending_error(struct lua_tcp_cbdata *cbd);
 static void lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd,
 									   gboolean can_read, gboolean can_write);
 
@@ -648,6 +670,7 @@ lua_tcp_fin(gpointer arg)
 
 	g_byte_array_unref(cbd->in);
 	g_free(cbd->hostname);
+	g_free(cbd->pending_err);
 	g_free(cbd);
 }
 
@@ -1211,7 +1234,7 @@ lua_tcp_conn_closed(const struct lua_tcp_cbdata *cbd)
 static void
 lua_tcp_plan_read(struct lua_tcp_cbdata *cbd)
 {
-	if (lua_tcp_conn_closed(cbd)) {
+	if (lua_tcp_conn_closed(cbd) || cbd->pending_err) {
 		msg_debug_tcp("connection is closed, do not plan read");
 		return;
 	}
@@ -1331,8 +1354,11 @@ lua_tcp_write_helper(struct lua_tcp_cbdata *cbd)
 
 	hdl = g_queue_peek_head(cbd->handlers);
 
-	if (hdl == NULL || hdl->type != LUA_WANT_WRITE) {
-		/* The queue has been changed under us, serve what is really there */
+	if (hdl == NULL || hdl->type != LUA_WANT_WRITE || cbd->pending_err) {
+		/*
+		 * The queue has been changed under us, serve what is really there (a
+		 * failed `starttls` leaves no stream to write to: the planner reports it)
+		 */
 		lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 		return;
 	}
@@ -1563,7 +1589,7 @@ lua_tcp_process_read(struct lua_tcp_cbdata *cbd,
 
 			/* Plan next event, unless the callback has closed the connection */
 			if (!lua_tcp_conn_closed(cbd)) {
-				if (cbd->shift_gen != shifts) {
+				if (cbd->shift_gen != shifts || cbd->pending_err) {
 					/* The callback has changed the queue, look at the real head */
 					lua_tcp_plan_handler_event(cbd, TRUE, TRUE);
 				}
@@ -1838,6 +1864,19 @@ lua_tcp_plan_handler_event_do(struct lua_tcp_cbdata *cbd, gboolean can_read,
 {
 	struct lua_tcp_handler *hdl;
 
+	if (cbd->pending_err) {
+		/*
+		 * `starttls` has failed synchronously: nothing is planned on the dead
+		 * stream, the error goes to the handlers queued now. Inside a callback
+		 * the dispatcher that runs it comes back here when it returns
+		 */
+		if (cbd->cb_depth == 0) {
+			lua_tcp_deliver_pending_error(cbd);
+		}
+
+		return;
+	}
+
 	hdl = g_queue_peek_head(cbd->handlers);
 
 	if (hdl == NULL) {
@@ -2024,6 +2063,32 @@ lua_tcp_ssl_on_error(gpointer ud, GError *err)
 
 	lua_tcp_release_conn(cbd);
 	/* cbd may be gone now */
+	TCP_RELEASE(cbd);
+}
+
+static void lua_tcp_close_conn(struct lua_tcp_cbdata *cbd);
+
+/*
+ * Delivers the failure of the handshake that `starttls` has recorded: as one
+ * fatal "ssl error" to the handlers queued now, like lua_tcp_ssl_on_error does
+ * for a failure found later. The caller must hold a reference of its own, cbd
+ * may be gone after the call.
+ */
+static void
+lua_tcp_deliver_pending_error(struct lua_tcp_cbdata *cbd)
+{
+	char *msg = cbd->pending_err;
+
+	/* Taken first: the callbacks must never see it twice */
+	cbd->pending_err = NULL;
+	TCP_RETAIN(cbd);
+
+	lua_tcp_push_error(cbd, TRUE, "%s", msg);
+	g_free(msg);
+
+	/* Nothing is read or written any more, and a callback may not retry */
+	lua_tcp_close_conn(cbd);
+	lua_tcp_release_conn(cbd);
 	TCP_RELEASE(cbd);
 }
 
@@ -3076,6 +3141,10 @@ lua_tcp_close_conn(struct lua_tcp_cbdata *cbd)
 {
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
 
+	/* A closed connection reports nothing more */
+	g_free(cbd->pending_err);
+	cbd->pending_err = NULL;
+
 	if (cbd->ssl_conn) {
 		/* TODO: postpone close in case ssl is used ! */
 		rspamd_ssl_connection_free(cbd->ssl_conn);
@@ -3624,6 +3693,7 @@ lua_tcp_starttls(lua_State *L)
 	struct lua_tcp_cbdata *cbd = lua_check_tcp(L, 1);
 	gpointer ssl_ctx;
 	gboolean verify_peer, no_verify = FALSE;
+	GError *err = NULL;
 
 	if (cbd == NULL || lua_tcp_conn_closed(cbd)) {
 		return luaL_error(L, "starttls: connection is closed");
@@ -3635,6 +3705,10 @@ lua_tcp_starttls(lua_State *L)
 
 	if (cbd->ssl_conn != NULL) {
 		return luaL_error(L, "starttls: TLS is already started on this connection");
+	}
+
+	if (cbd->flags & LUA_TCP_FLAG_TLS_FAILED) {
+		return luaL_error(L, "starttls: the TLS handshake has failed on this connection");
 	}
 
 	if (cbd->in->len > cbd->in_delivered) {
@@ -3665,25 +3739,45 @@ lua_tcp_starttls(lua_State *L)
 											  verify_peer,
 											  cbd->tag);
 
-	if (!rspamd_ssl_connect_fd(cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
-							   cbd->connect_timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
+	if (!rspamd_ssl_connect_fd_err(cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
+								   cbd->connect_timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd, &err)) {
 		/*
-		 * The handshake could not even be started. This is reported to the
-		 * caller only (by raising an error): pushing it to the handlers from
-		 * inside a running callback would call them re-entrantly. There is no
-		 * way back to plaintext, so the connection is closed too (that also
-		 * frees the TLS session and the descriptor it has duplicated)
+		 * The handshake has failed at once. It is not raised: the failure is
+		 * recorded and reaches the handlers like one found later by the event
+		 * loop (as one fatal "ssl error" to what is queued when the running
+		 * callback returns), as pushing it from inside the callback would call
+		 * the handlers re-entrantly. There is no way back to plaintext, so the
+		 * stream is shut down here (the TLS session is freed, the watcher is
+		 * stopped) and the connection is closed on delivery
 		 */
 		rspamd_ssl_connection_free(cbd->ssl_conn);
 		cbd->ssl_conn = NULL;
-		lua_tcp_close_and_release(cbd);
+		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+		cbd->flags |= LUA_TCP_FLAG_TLS_FAILED;
 
-		/* cbd may be gone */
-		return luaL_error(L, "starttls: cannot start the TLS handshake, "
-							 "the connection has been closed");
+		g_free(cbd->pending_err);
+		cbd->pending_err = g_strdup_printf("ssl error: %s",
+										   err ? err->message : "unknown error");
+		g_clear_error(&err);
+
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, cbd->pending_err);
+
+		if (cbd->cb_depth == 0) {
+			/*
+			 * No callback of this connection is running (a stored handle used
+			 * from a timer): nobody is going to come back to it, report now.
+			 * cbd may be gone afterwards
+			 */
+			lua_tcp_plan_handler_event(cbd, FALSE, FALSE);
+		}
+
+		return 2;
 	}
 
-	return 0;
+	lua_pushboolean(L, TRUE);
+
+	return 1;
 }
 
 static int
