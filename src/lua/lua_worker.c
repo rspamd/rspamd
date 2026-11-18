@@ -1002,6 +1002,7 @@ lua_worker_spawn_process(lua_State *L)
 			abort();
 		}
 		rspamd_random_seed_fast();
+		rspamd_lua_seed_random(L);
 #ifdef HAVE_EVUTIL_RNG_INIT
 		evutil_secure_rng_init();
 #endif

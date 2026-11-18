@@ -455,7 +455,9 @@ uint64_t rspamd_random_uint64_fast_seed(uint64_t *seed);
 uint64_t rspamd_random_uint64_fast(void);
 
 /**
- * Seed fast rng
+ * Reseed the fast rng from the CSPRNG unconditionally. Call it in a forked
+ * child after ottery has been re-initialised; the state is otherwise seeded
+ * lazily on first use, so a state inherited from the parent would be shared.
  */
 void rspamd_random_seed_fast(void);
 

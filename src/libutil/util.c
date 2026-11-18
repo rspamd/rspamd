@@ -1958,7 +1958,8 @@ rspamd_random_uint64_fast(void)
 
 void rspamd_random_seed_fast(void)
 {
-	(void) rspamd_fast_random_seed();
+	/* Explicit seeding: always replaces whatever state was inherited */
+	ottery_rand_bytes((void *) rspamd_fast_random_seed(), sizeof(uint64_t));
 }
 
 double
