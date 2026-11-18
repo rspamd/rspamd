@@ -30,7 +30,7 @@
 struct rspamd_scan_result;
 
 namespace rspamd::symcache {
-enum class cache_item_status : std::uint16_t {
+enum class cache_item_status : std::uint8_t {
 	not_started = 0,
 	started = 1,
 	pending = 2,
@@ -79,6 +79,7 @@ static inline auto item_status_to_str(cache_item_status status) -> const char *
 struct cache_dynamic_item {
 	std::uint16_t start_msec; /* Relative to task time */
 	cache_item_status status;
+	std::uint8_t timed; /* Non-zero if start_msec was stamped when the item started */
 	std::uint32_t async_events;
 };
 

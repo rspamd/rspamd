@@ -717,21 +717,24 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 							 exec_stage_to_str(item->get_stage()), item->get_level());
 
 		/*
-		 * Stamp the start under the SAME condition finalize_item measures
-		 * with (profile || bit_slow). Stamping under `profile` alone left
-		 * start_msec at 0 on every non-profiled task once an item had been
-		 * flagged slow: finalize then computed diff from the TASK start, so
-		 * any DNS-bound or deadline-hitting scan was logged as a multi-second
-		 * "slow synchronous rule" against that item — phantom slowness that
-		 * also shifted pending items' start corrections by whole-scan
-		 * amounts. One genuinely slow profiled call was enough to make the
-		 * flagged rule blamed for every slow scan thereafter.
+		 * Decide once, here, whether this call is timed (profile mode or the
+		 * item has been seen slow) and record the decision in the dynamic
+		 * item. finalize_item must use the recorded value: bit_slow lives on
+		 * the cache_item shared by all tasks, so another task may set or
+		 * clear it while an asynchronous call is in flight, and re-reading
+		 * it at the end would measure from an unset start_msec (the task
+		 * start), producing phantom slow-rule notices and bogus samples.
 		 */
 		if (profile || (item->internal_flags & cache_item::bit_slow)) {
 			ev_now_update_if_cheap(task->event_loop);
 			dyn_item->start_msec = (ev_now(task->event_loop) -
 									profile_start) *
 								   1e3;
+			dyn_item->timed = 1;
+		}
+		else {
+			dyn_item->start_msec = 0;
+			dyn_item->timed = 0;
 		}
 		dyn_item->async_events = 0;
 		/* Nested starts (from finalisation of another item) must not clobber the caller's item */
@@ -1067,8 +1070,8 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 		return true;
 	};
 
-	/* Check if we need to profile symbol (always profile when we have seen this item to be slow */
-	if (profile || (item->internal_flags & cache_item::bit_slow)) {
+	/* Use the decision recorded when the item started, not the shared bit_slow */
+	if (dyn_item->timed) {
 		ev_now_update_if_cheap(task->event_loop);
 		auto diff = ((ev_now(task->event_loop) - profile_start) * 1e3 -
 					 dyn_item->start_msec);
@@ -1097,15 +1100,21 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 				for (const auto &[i, other_item]: rspamd::enumerate(order->d)) {
 					auto *other_dyn_item = &dynamic_items[i];
 
-					if (other_dyn_item->status == cache_item_status::pending && other_dyn_item->start_msec <= dyn_item->start_msec) {
-						other_dyn_item->start_msec += diff;
+					if (other_dyn_item->status == cache_item_status::pending && (!other_dyn_item->timed || other_dyn_item->start_msec <= dyn_item->start_msec)) {
+						/*
+						 * An untimed pending item has no start stamp, so there
+						 * is nothing to shift, but it still needs the idle timer.
+						 */
+						if (other_dyn_item->timed) {
+							other_dyn_item->start_msec += diff;
 
-						msg_debug_cache_task("slow sync rule %s(%d); adjust start time for pending rule %s(%d) by %.2fms to %dms",
-											 item->symbol.c_str(), item->id,
-											 other_item->symbol.c_str(),
-											 other_item->id,
-											 diff,
-											 (int) other_dyn_item->start_msec);
+							msg_debug_cache_task("slow sync rule %s(%d); adjust start time for pending rule %s(%d) by %.2fms to %dms",
+												 item->symbol.c_str(), item->id,
+												 other_item->symbol.c_str(),
+												 other_item->id,
+												 diff,
+												 (int) other_dyn_item->start_msec);
+						}
 						/* We have something pending, so we need to enable slow timer */
 						need_slow = true;
 					}
@@ -1229,7 +1238,7 @@ auto symcache_runtime::describe_inflight_symbols() const -> GString *
 		}
 
 		const auto &name = item->get_name();
-		if (dyn_item->start_msec > 0) {
+		if (dyn_item->timed && dyn_item->start_msec > 0) {
 			rspamd_printf_gstring(out, "%*s (async=%ud, started=%ud ms)",
 								  (int) name.size(), name.data(),
 								  (unsigned int) dyn_item->async_events,
