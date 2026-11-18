@@ -76,9 +76,107 @@ auto symcache_runtime::create(struct rspamd_task *task, symcache &cache) -> symc
 		cache.set_last_profile(now);
 	}
 
+	/* Precise timings are allocated only if some item is going to be timed */
+	checkpoint->profile_all = RSPAMD_TASK_IS_PROFILING(task);
+
+	if (checkpoint->profile_all || cache.has_profiled_items()) {
+		checkpoint->timings = (cache_item_timing *) rspamd_mempool_alloc0(task->task_pool,
+																		  sizeof(cache_item_timing) * checkpoint->order->size());
+		checkpoint->timing_start_ns = rspamd_get_monotonic_ns();
+	}
+
 	task->symcache_runtime = (void *) checkpoint;
 
 	return checkpoint;
+}
+
+auto symcache_runtime::timing_now_us() const -> std::uint32_t
+{
+	auto now_ns = rspamd_get_monotonic_ns();
+
+	if (now_ns <= timing_start_ns) {
+		return 0;
+	}
+
+	auto us = (now_ns - timing_start_ns) / 1000u;
+
+	return us > std::numeric_limits<std::uint32_t>::max() ? std::numeric_limits<std::uint32_t>::max()
+														  : static_cast<std::uint32_t>(us);
+}
+
+auto symcache_runtime::get_item_timing(const cache_item *item, const cache_dynamic_item *dyn_item) -> cache_item_timing *
+{
+	if (timings == nullptr || !(profile_all || (item->internal_flags & cache_item::bit_profiled))) {
+		return nullptr;
+	}
+
+	return &timings[dyn_item - dynamic_items];
+}
+
+auto symcache_runtime::profile_foreach(struct rspamd_task *task, bool all,
+									   rspamd_symcache_profile_cb cb, gpointer ud) const -> unsigned int
+{
+	/* The order is dropped with the runtime */
+	if (timings == nullptr || !order) {
+		return 0;
+	}
+
+	unsigned int nreported = 0;
+	std::uint32_t now_us = 0;
+	auto have_now = false;
+
+	for (const auto [i, item]: rspamd::enumerate(order->d)) {
+		const auto &tm = timings[i];
+
+		if (!(tm.flags & cache_item_timing::started)) {
+			continue;
+		}
+
+		if (!all && !(item->internal_flags & cache_item::bit_profiled)) {
+			continue;
+		}
+
+		struct rspamd_symcache_profile_entry entry;
+		entry.symbol = item->symbol.c_str();
+		entry.flags = 0;
+
+		if (tm.flags & cache_item_timing::finished) {
+			entry.time_ms = tm.elapsed_us / 1e3;
+			entry.sync_time_ms = tm.sync_us / 1e3;
+
+			if (tm.flags & cache_item_timing::async) {
+				entry.flags |= RSPAMD_SYMCACHE_PROFILE_ASYNC;
+			}
+			if (tm.flags & cache_item_timing::aborted) {
+				entry.flags |= RSPAMD_SYMCACHE_PROFILE_ABORTED;
+			}
+		}
+		else {
+			/* Items of the current stage are in flight legitimately */
+			if (item->get_stage() >= cur_stage) {
+				continue;
+			}
+
+			if (!have_now) {
+				now_us = timing_now_us();
+				have_now = true;
+			}
+
+			auto so_far = now_us > tm.start_us ? now_us - tm.start_us : 0u;
+			entry.time_ms = so_far / 1e3;
+			entry.sync_time_ms = (tm.flags & cache_item_timing::async) ? tm.sync_us / 1e3 : entry.time_ms;
+			entry.flags |= RSPAMD_SYMCACHE_PROFILE_UNFINISHED;
+
+			if (tm.flags & cache_item_timing::async) {
+				entry.flags |= RSPAMD_SYMCACHE_PROFILE_ASYNC;
+			}
+		}
+
+		cb(task, &entry, ud);
+		nreported++;
+	}
+
+	return nreported;
 }
 
 auto symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cache) -> bool
@@ -737,6 +835,16 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 			dyn_item->timed = 0;
 		}
 		dyn_item->async_events = 0;
+
+		/* Precise timing is independent of the coarse one above */
+		auto *timing = get_item_timing(item, dyn_item);
+
+		if (timing) {
+			timing->start_us = timing_now_us();
+			timing->elapsed_us = 0;
+			timing->sync_us = 0;
+			timing->flags = cache_item_timing::started;
+		}
 		/* Nested starts (from finalisation of another item) must not clobber the caller's item */
 		auto *saved_cur_item = cur_item;
 		cur_item = dyn_item;
@@ -746,6 +854,17 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 
 		if (item->call(task, dyn_item)) {
 			cur_item = saved_cur_item;
+
+			if (timing && !(timing->flags & cache_item_timing::finished)) {
+				/*
+				 * A synchronous item is finalised inside its call, so this item
+				 * is asynchronous: this is the end of its synchronous part
+				 */
+				auto now_us = timing_now_us();
+
+				timing->sync_us = now_us > timing->start_us ? now_us - timing->start_us : 0;
+				timing->flags |= cache_item_timing::async;
+			}
 
 			if (is_item_done(dyn_item->status)) {
 				/* Finalised synchronously */
@@ -773,6 +892,12 @@ auto symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache,
 			cur_item = saved_cur_item;
 			items_inflight--;
 			set_status(dyn_item, cache_item_status::finished);
+
+			if (timing) {
+				/* Nothing has been executed */
+				timing->flags = 0;
+			}
+
 			return true;
 		}
 	}
@@ -1032,6 +1157,27 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 	}
 
 	msg_debug_cache_task("process finalize for item %s(%d)", item->symbol.c_str(), item->id);
+
+	/* Precise timing: raw wall time, recorded once and independent of the coarse timing */
+	if (auto *timing = get_item_timing(item, dyn_item);
+		timing && (timing->flags & cache_item_timing::started) &&
+		!(timing->flags & cache_item_timing::finished)) {
+		auto now_us = timing_now_us();
+
+		timing->elapsed_us = now_us > timing->start_us ? now_us - timing->start_us : 0;
+
+		if (!(timing->flags & cache_item_timing::async)) {
+			timing->sync_us = timing->elapsed_us;
+		}
+
+		timing->flags |= cache_item_timing::finished;
+
+		if (task->s != nullptr && rspamd_session_blocked(task->s)) {
+			/* Finished by the forced cleanup of the session (e.g. after a task timeout) */
+			timing->flags |= cache_item_timing::aborted;
+		}
+	}
+
 	set_status(dyn_item, cache_item_status::finished);
 	items_inflight--;
 	cur_item = nullptr;
@@ -1075,10 +1221,6 @@ auto symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_ite
 		ev_now_update_if_cheap(task->event_loop);
 		auto diff = ((ev_now(task->event_loop) - profile_start) * 1e3 -
 					 dyn_item->start_msec);
-
-		if (G_UNLIKELY(RSPAMD_TASK_IS_PROFILING(task))) {
-			rspamd_task_profile_set(task, item->symbol.c_str(), diff);
-		}
 
 		if (rspamd_worker_is_scanner(task->worker)) {
 			rspamd_set_counter(item->cd, diff);

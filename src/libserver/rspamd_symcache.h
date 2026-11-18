@@ -620,6 +620,76 @@ rspamd_symcache_item_stat(struct rspamd_symcache_item *item);
 void rspamd_symcache_enable_profile(struct rspamd_task *task);
 
 /**
+ * Selects symbols whose precise execution times are recorded on every scan.
+ * The name of a virtual symbol selects its parent (the executable item); names
+ * of composites, classifiers and unknown symbols select nothing. May be called
+ * before or after the cache is initialised: names are resolved when the cache
+ * is initialised, and again whenever new symbols are registered.
+ * @param cache
+ * @param name symbol name
+ */
+void rspamd_symcache_add_profiled_symbol(struct rspamd_symcache *cache, const char *name);
+
+/**
+ * Selects all symbols of a group (see `rspamd_symcache_add_profiled_symbol`)
+ * @param cache
+ * @param name group name
+ */
+void rspamd_symcache_add_profiled_group(struct rspamd_symcache *cache, const char *name);
+
+enum rspamd_symcache_profile_flags {
+	/** The item is asynchronous: it still had events pending when its call returned */
+	RSPAMD_SYMCACHE_PROFILE_ASYNC = 1u << 0u,
+	/** The item has started but has not finished (it hangs); the time is the time so far */
+	RSPAMD_SYMCACHE_PROFILE_UNFINISHED = 1u << 1u,
+	/** The item was finished by the forced cleanup of the session (e.g. a task timeout) */
+	RSPAMD_SYMCACHE_PROFILE_ABORTED = 1u << 2u,
+};
+
+struct rspamd_symcache_profile_entry {
+	const char *symbol;  /**< executed item name, owned by the cache */
+	double time_ms;      /**< total time of the item */
+	double sync_time_ms; /**< synchronous part of the item call */
+	unsigned int flags;  /**< enum rspamd_symcache_profile_flags */
+};
+
+typedef void (*rspamd_symcache_profile_cb)(struct rspamd_task *task,
+										   const struct rspamd_symcache_profile_entry *entry,
+										   gpointer ud);
+
+/**
+ * Passes the precise timings of the task items to a callback, in the order of
+ * the execution plan.
+ *
+ * Items are timed on every scan when they are selected with
+ * `rspamd_symcache_add_profiled_symbol/group`, and all items are timed on a task
+ * with RSPAMD_TASK_FLAG_PROFILE. With `all == FALSE` only the selected items are
+ * reported, with `all == TRUE` every timed item is reported.
+ *
+ * The numbers are raw wall time measured with the monotonic clock:
+ * - a synchronous item: the run time of its callback;
+ * - an asynchronous item: the wall time from the start of the call to the release
+ *   of its last async event, including network waits and the time other rules kept
+ *   the event loop busy; `sync_time_ms` is the synchronous part of its own call;
+ * - virtual symbols are accounted to their parent item;
+ * - conditions and dependencies are not included.
+ *
+ * An item that has started but not finished is reported with
+ * RSPAMD_SYMCACHE_PROFILE_UNFINISHED and the time so far, but only if it belongs
+ * to a stage earlier than the current one of the task (it hangs, e.g. after a task
+ * timeout); unfinished items of the current stage (including the caller itself)
+ * are skipped.
+ * @param task
+ * @param all report every timed item and not only the selected ones
+ * @param cb callback, the entry is valid during the call only
+ * @param ud
+ * @return the number of entries passed to the callback; 0 when the task has no
+ * symcache runtime or no timings
+ */
+unsigned int rspamd_symcache_profile_foreach(struct rspamd_task *task, gboolean all,
+											 rspamd_symcache_profile_cb cb, gpointer ud);
+
+/**
  * Builds a human-readable description of symbols that have been started but
  * have not yet finished (i.e. are blocked on async events). Intended for use
  * from timeout handlers so operators can see which rules stalled the task.

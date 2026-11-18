@@ -484,23 +484,6 @@ void rspamd_task_add_request_header(struct rspamd_task *task,
 void rspamd_task_write_log(struct rspamd_task *task);
 
 /**
- * Set profiling value for a specific key
- * @param task
- * @param key
- * @param value
- */
-void rspamd_task_profile_set(struct rspamd_task *task, const char *key,
-							 double value);
-
-/**
- * Get value for a specific profiling key
- * @param task
- * @param key
- * @return
- */
-double *rspamd_task_profile_get(struct rspamd_task *task, const char *key);
-
-/**
  * Sets finishing time for a task if not yet set
  * @param task
  * @return

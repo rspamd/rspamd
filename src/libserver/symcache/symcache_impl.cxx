@@ -237,6 +237,10 @@ auto symcache::init() -> bool
 							 (void *) this);
 	}
 
+	/* Requests normally arrive during the config load, before this point */
+	profiled_resolved = true;
+	resolve_profiled(true);
+
 	return res;
 }
 
@@ -1057,6 +1061,11 @@ auto symcache::resort() -> void
 	}
 	/* Finally set the current order */
 	std::swap(ord, items_by_order);
+
+	/* Cover the symbols registered after init (cheap and idempotent) */
+	if (profiled_resolved) {
+		resolve_profiled(false);
+	}
 }
 
 auto symcache::add_symbol_with_callback(std::string_view name,
@@ -1479,6 +1488,104 @@ auto symcache::maybe_resort() -> bool
 	}
 
 	return false;
+}
+
+auto symcache::resolve_profiled_symbol(std::string_view name) -> bool
+{
+	/* The const version also resolves the parent of a virtual symbol */
+	auto *item = const_cast<cache_item *>(get_item_by_name(name, true));
+
+	if (item == nullptr || item->is_virtual() ||
+		item->type == symcache_item_type::COMPOSITE ||
+		item->type == symcache_item_type::CLASSIFIER) {
+		return false;
+	}
+
+	if (!(item->internal_flags & cache_item::bit_profiled)) {
+		item->internal_flags |= cache_item::bit_profiled;
+		profiled_items++;
+	}
+
+	return true;
+}
+
+auto symcache::resolve_profiled_group(std::string_view name) -> bool
+{
+	if (cfg->groups == nullptr) {
+		return false;
+	}
+
+	std::string group_name{name};
+	/*
+	 * A symbol is listed in the `symbols` table of every group it belongs to
+	 * (the main one and the secondary ones), so this covers all of them
+	 */
+	auto *gr = (struct rspamd_symbols_group *) g_hash_table_lookup(cfg->groups, group_name.c_str());
+
+	if (gr == nullptr || gr->symbols == nullptr) {
+		return false;
+	}
+
+	auto found = false;
+	GHashTableIter it;
+	gpointer k, v;
+
+	g_hash_table_iter_init(&it, gr->symbols);
+
+	while (g_hash_table_iter_next(&it, &k, &v)) {
+		if (resolve_profiled_symbol((const char *) k)) {
+			found = true;
+		}
+	}
+
+	return found;
+}
+
+auto symcache::resolve_profiled(bool log_unresolved) -> void
+{
+	if (profiled_symbols.empty() && profiled_groups.empty()) {
+		return;
+	}
+
+	for (const auto &gr: profiled_groups) {
+		if (!resolve_profiled_group(gr) && log_unresolved) {
+			msg_warn_cache("profiled group %s has no executable symbols", gr.c_str());
+		}
+	}
+
+	for (const auto &sym: profiled_symbols) {
+		if (!resolve_profiled_symbol(sym) && log_unresolved) {
+			msg_warn_cache("profiled symbol %s is not an executable symbol", sym.c_str());
+		}
+	}
+
+	if (log_unresolved) {
+		msg_info_cache("%ud symbols are selected for precise profiling", profiled_items);
+	}
+}
+
+auto symcache::add_profiled_symbol(std::string_view name) -> void
+{
+	auto [_it, inserted] = profiled_symbols.emplace(name);
+
+	if (inserted && profiled_resolved) {
+		if (!resolve_profiled_symbol(name)) {
+			msg_warn_cache("profiled symbol %s is not an executable symbol",
+						   std::string(name).c_str());
+		}
+	}
+}
+
+auto symcache::add_profiled_group(std::string_view name) -> void
+{
+	auto [_it, inserted] = profiled_groups.emplace(name);
+
+	if (inserted && profiled_resolved) {
+		if (!resolve_profiled_group(name)) {
+			msg_warn_cache("profiled group %s has no executable symbols",
+						   std::string(name).c_str());
+		}
+	}
 }
 
 auto symcache::get_item_specific_vector(const cache_item &it) -> symcache::items_ptr_vec &
