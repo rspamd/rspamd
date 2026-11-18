@@ -847,6 +847,13 @@ unsigned int rspamd_symcache_profile_foreach(struct rspamd_task *task, gboolean 
 	return cache_runtime->profile_foreach(task, all != FALSE, cb, ud);
 }
 
+gboolean rspamd_symcache_has_profile(struct rspamd_task *task)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	return cache_runtime != nullptr && cache_runtime->has_timings();
+}
+
 void rspamd_symcache_enable_profile(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);

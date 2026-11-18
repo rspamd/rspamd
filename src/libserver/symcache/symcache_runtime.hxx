@@ -308,6 +308,14 @@ public:
 	}
 
 	/**
+	 * Whether the precise timings are recorded for this task
+	 */
+	auto has_timings() const -> bool
+	{
+		return timings != nullptr && order;
+	}
+
+	/**
 	 * Passes the precise timings to a callback (see `rspamd_symcache_profile_foreach`)
 	 */
 	auto profile_foreach(struct rspamd_task *task, bool all,

@@ -690,6 +690,15 @@ unsigned int rspamd_symcache_profile_foreach(struct rspamd_task *task, gboolean 
 											 rspamd_symcache_profile_cb cb, gpointer ud);
 
 /**
+ * Tells whether the task records precise timings at all: there is a symcache
+ * runtime with a timings array (the task has the profile flag or the cache has
+ * selected items). Allows to tell "no timings" from "nothing was reported".
+ * @param task
+ * @return TRUE if `rspamd_symcache_profile_foreach` has anything to look at
+ */
+gboolean rspamd_symcache_has_profile(struct rspamd_task *task);
+
+/**
  * Builds a human-readable description of symbols that have been started but
  * have not yet finished (i.e. are blocked on async events). Intended for use
  * from timeout handlers so operators can see which rules stalled the task.

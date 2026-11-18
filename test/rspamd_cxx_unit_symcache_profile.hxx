@@ -377,6 +377,7 @@ TEST_SUITE("symcache_profile")
 			auto before = fx.clock.reads();
 			CHECK(fx.run_filters());
 			CHECK(fx.clock.reads() == before);
+			CHECK_FALSE(rspamd_symcache_has_profile(fx.task));
 		}
 		{
 			symcache_profile_fixture fx;
@@ -392,6 +393,7 @@ TEST_SUITE("symcache_profile")
 			CHECK(fx.run_filters());
 			/* Runtime base, item start and item end: nothing for unselected items */
 			CHECK(fx.clock.reads() - before == 3);
+			CHECK(rspamd_symcache_has_profile(fx.task));
 		}
 	}
 
