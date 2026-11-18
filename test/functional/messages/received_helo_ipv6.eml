@@ -1,0 +1,13 @@
+Received: from mx.relay.example (mx.relay.example [198.51.100.1])
+ by mail.example.org with ESMTP; Wed, 18 Nov 2026 12:00:02 +0000
+Received: from mx.relay.example (helo=localhost)
+ by mx.relay.example with ESMTP; Wed, 18 Nov 2026 12:00:01 +0000
+Received: from [2001:4860:4860::8888] (HeLo=[fd00::3])
+ by mx.relay.example with ESMTP; Wed, 18 Nov 2026 12:00:00 +0000
+From: sender@example.net
+To: recipient@example.org
+Subject: HELO address must not replace the connecting IPv6 address
+Date: Wed, 18 Nov 2026 12:00:00 +0000
+Message-ID: <received-helo-ipv6@example.net>
+
+Test message.

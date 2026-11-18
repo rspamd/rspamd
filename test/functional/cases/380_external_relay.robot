@@ -40,6 +40,22 @@ EXTERNAL RELAY IP MAP
   Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
   ...  IP=4.31.198.44  HOSTNAME=foobar.example.org  HELO=foobar.example.org
 
+EXTERNAL RELAY IP MAP IGNORES HELO IPV4
+  Scan File  ${RSPAMD_TESTDIR}/messages/received_helo_ipv4.eml
+  ...  Settings={symbols_enabled [EXTERNAL_RELAY_TEST, EXTERNAL_RELAY_IP_MAP]}
+  ...  IP=198.51.100.1
+  Expect Symbol  EXTERNAL_RELAY_IP_MAP
+  Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
+  ...  IP=34.76.121.136  HOSTNAME=34.76.121.136  HELO=34.76.121.136
+
+EXTERNAL RELAY IP MAP IGNORES HELO IPV6
+  Scan File  ${RSPAMD_TESTDIR}/messages/received_helo_ipv6.eml
+  ...  Settings={symbols_enabled [EXTERNAL_RELAY_TEST, EXTERNAL_RELAY_IP_MAP]}
+  ...  IP=198.51.100.1
+  Expect Symbol  EXTERNAL_RELAY_IP_MAP
+  Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
+  ...  IP=2001:4860:4860::8888  HOSTNAME=2001:4860:4860::8888  HELO=2001:4860:4860::8888
+
 EXTERNAL RELAY LOCAL
   Scan File  ${RSPAMD_TESTDIR}/messages/ham.eml
   ...  Settings={symbols_enabled [EXTERNAL_RELAY_TEST, EXTERNAL_RELAY_LOCAL]}
