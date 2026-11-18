@@ -115,6 +115,7 @@ struct http_map_data {
 	rspamd_fstring_t *etag;
 	time_t last_modified;
 	time_t last_checked;
+	time_t next_check;
 	gboolean request_sent;
 	uint64_t gen;
 	uint16_t port;
