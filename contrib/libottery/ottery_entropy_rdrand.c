@@ -51,8 +51,11 @@ ottery_get_entropy_rdrand(const struct ottery_entropy_config *cfg,
   return 0;
 }
 
+/* RDRAND is only mixed on top of the OS source and is never trusted alone:
+ * without FL(STRONG), a failure of the OS source fails the whole seeding
+ * instead of keying the PRF from RDRAND output only. */
 #define ENTROPY_SOURCE_RDRAND                                           \
-  { ottery_get_entropy_rdrand,  SRC(RDRAND)|DOM(CPU)|FL(FAST)|FL(STRONG) }
+  { ottery_get_entropy_rdrand,  SRC(RDRAND)|DOM(CPU)|FL(FAST) }
 
 #endif
 
