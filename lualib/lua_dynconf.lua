@@ -1684,22 +1684,15 @@ function exports.start(cfg, ev_base, worker)
 
   local policy = fw.policy
   if policy == 'interval' or policy == 'both' then
-    -- math.random has the same state in every worker (it is seeded before fork), so workers would probe
-    -- in lockstep: use a private generator (Park-Miller) seeded after fork
-    local seed = (tonumber(rspamd_util.random_hex(8), 16) or 1) % 2147483646 + 1
-    local function rnd()
-      seed = (seed * 16807) % 2147483647
-      return seed / 2147483647
-    end
     local function delay()
       local j = fw.jitter
-      return fw.interval * (1.0 + j * (rnd() * 2.0 - 1.0))
+      return fw.interval * (1.0 + j * (math.random() * 2.0 - 1.0))
     end
     local function tick()
       exports.check_now(ev_base)
       return delay()
     end
-    rspamd_config:add_periodic(ev_base, 0.1 + rnd() * fw.jitter * fw.interval, tick, false)
+    rspamd_config:add_periodic(ev_base, 0.1 + math.random() * fw.jitter * fw.interval, tick, false)
   end
   if policy == 'on_access' or policy == 'both' then
     arm_on_access(ev_base)

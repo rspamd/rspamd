@@ -236,54 +236,8 @@ context("lua_task_profile", function()
     end
   end)
 
-  test("different seeds give different coin sequences", function()
-    local function coins(seed)
-      local p = lua_task_profile.new(stub_cfg(), {
-        sample_rate = 0.5, symbols = { 'A' }, seed = seed })
-      local task = stub_task(PROF)
-      local res = {}
-      -- observe the coins through the decisions
-      for _ = 1, 64 do
-        res[#res + 1] = (p:collect(task)) == 1 and '1' or '0'
-      end
-      return table.concat(res)
-    end
-    assert_equal(coins(12345), coins(12345))
-    assert_not_equal(coins(12345), coins(987654321))
-  end)
-
-  test("default generator is seeded randomly per profiler", function()
-    local function first_values()
-      local p = lua_task_profile.new(stub_cfg(), { sample_rate = 0.5, symbols = { 'A' } })
-      p:collect(stub_task(PROF))
-      local res = {}
-      for i = 1, 32 do
-        res[i] = string.format('%.12f', p.rng())
-      end
-      return table.concat(res, ',')
-    end
-    assert_not_equal(first_values(), first_values())
-  end)
-
-  test("the generator is created lazily, after fork", function()
+  test("the default random source is math.random", function()
     local p = lua_task_profile.new(stub_cfg(), { sample_rate = 0.5, symbols = { 'A' } })
-    assert_nil(p.rng)
-    p:collect(stub_task(PROF))
-    assert_equal(type(p.rng), 'function')
-  end)
-
-  test("default generator stays within [0, 1)", function()
-    local p = lua_task_profile.new(stub_cfg(), { sample_rate = 0.5, symbols = { 'A' } })
-    -- the first collect seeds the generator lazily
-    p:collect(stub_task(PROF))
-    assert_equal(type(p.rng), 'function')
-    local lo, hi = 1, 0
-    for _ = 1, 10000 do
-      local c = p.rng()
-      assert_true(c >= 0 and c < 1)
-      lo = math.min(lo, c)
-      hi = math.max(hi, c)
-    end
-    assert_true(lo < 0.05 and hi > 0.95)
+    assert_equal(p.rng, math.random)
   end)
 end)

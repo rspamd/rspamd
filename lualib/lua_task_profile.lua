@@ -72,8 +72,8 @@ end
 --   * slow_time: seconds, a number or a string such as '2s' or '500ms' (units ms, s, m, min, h, d, w, y); keep a scan if a selected symbol ran at least that long (default 0 = off)
 --   * max_slow_rate: at most this many slow records per second per worker (default 1, 0 = unlimited)
 --   * groups, symbols: arrays of names of the groups/symbols to time (at least one is required)
---   * rng, now, seed: test hooks; `rng()` returns a number in [0, 1), `now()` returns seconds,
---     `seed` is the seed of the private generator
+--   * rng, now: test hooks; `rng()` returns a number in [0, 1) and replaces math.random (which is
+--     reseeded in every worker after fork), `now()` returns seconds
 -- @return {profiler|nil, string|nil} nil, nil when the feature is off; nil, error on invalid options
 --]]
 exports.new = function(cfg, opts)
@@ -147,8 +147,7 @@ exports.new = function(cfg, opts)
     groups = groups,
     symbols = symbols,
     now = opts.now or rspamd_util.get_time,
-    rng = opts.rng,
-    seed = opts.seed,
+    rng = opts.rng or math.random,
   }, profiler_mt)
 
   if max_slow_rate > 0 then
@@ -158,21 +157,6 @@ exports.new = function(cfg, opts)
   end
 
   return self
-end
-
--- Park-Miller generator. math.random has the same state in every worker (it is seeded before fork),
--- so a private generator seeded lazily after fork is used instead.
-local function default_rng(self)
-  local seed = self.seed
-  if not seed then
-    seed = tonumber(rspamd_util.random_hex(8), 16) or 1
-  end
-  seed = seed % 2147483646 + 1
-  local function rnd()
-    seed = (seed * 16807) % 2147483647
-    return seed / 2147483647
-  end
-  return rnd
 end
 
 local function take_token(self)
@@ -200,10 +184,6 @@ end
 -- `task:get_symbols_profile()` (nil for reason 0)
 --]]
 function profiler_mt:collect(task)
-  if not self.rng then
-    self.rng = default_rng(self)
-  end
-
   -- The coin is drawn on every call, before slowness is looked at: reason 1 is an unbiased sample
   local coin = self.rng()
 
