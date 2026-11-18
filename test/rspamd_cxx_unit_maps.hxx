@@ -255,6 +255,104 @@ TEST_SUITE("rspamd_maps")
 		CHECK_FALSE(rspamd_map_parse_retry_after(nullptr, now, &delay));
 	}
 
+	TEST_CASE("HTTP map polling uses each backend's expiry")
+	{
+		struct rspamd_map map{};
+		struct http_map_data data[2]{};
+		struct rspamd_map_backend backends[2]{};
+		void *user_data = nullptr;
+		map.name = (char *) "test";
+		rspamd_strlcpy(map.tag, "test", sizeof(map.tag));
+		map.user_data = &user_data;
+		map.event_loop = ev_loop_new(EVFLAG_AUTO);
+		map.poll_timeout = 60;
+		map.non_trivial = true;
+		map.active_http = true;
+		map.has_data = true;
+		map.backends = g_ptr_array_new();
+
+		for (unsigned int i = 0; i < 2; i++) {
+			backends[i].protocol = MAP_PROTO_HTTP;
+			backends[i].data.hd = &data[i];
+			g_ptr_array_add(map.backends, &backends[i]);
+		}
+
+		const auto now = (time_t) rspamd_get_calendar_ticks();
+		double min_delay = 25, max_delay = 35;
+		bool initial = false;
+		data[0].next_check = now + 3600;
+		data[1].next_check = now + 3600;
+
+		SUBCASE("a later backend does not postpone an earlier expiry")
+		{
+			data[0].next_check = now + 30;
+		}
+
+		SUBCASE("the first backend does not postpone a later backend's expiry")
+		{
+			data[1].next_check = now + 30;
+		}
+
+		SUBCASE("a backend without expiry is polled at the normal interval")
+		{
+			data[0].next_check = now + 3600;
+			data[1].next_check = 0;
+			min_delay = 60;
+			max_delay = 120;
+		}
+
+		SUBCASE("a backend without expiry does not postpone an earlier expiry")
+		{
+			data[0].next_check = now + 30;
+			data[1].next_check = 0;
+		}
+
+		SUBCASE("a backend without expiry does not postpone an expired backend")
+		{
+			data[0].next_check = now - 1;
+			data[1].next_check = 0;
+			min_delay = 2;
+			max_delay = 4;
+		}
+
+		SUBCASE("an expired backend is checked at the minimum interval")
+		{
+			data[0].next_check = now - 1;
+			min_delay = 2;
+			max_delay = 4;
+		}
+
+		SUBCASE("a cached URL does not postpone an uncached URL at startup")
+		{
+			initial = true;
+			map.next_check = now + 3600;
+			data[1].next_check = 0;
+			min_delay = 0;
+			max_delay = 4;
+		}
+
+		struct rspamd_config cfg{};
+		struct rspamd_worker worker{};
+		if (initial) {
+			cfg.maps = g_list_append(nullptr, &map);
+			worker.state = rspamd_worker_state_running;
+			rspamd_map_watch(&cfg, map.event_loop, nullptr, &worker,
+							 RSPAMD_MAP_WATCH_PRIMARY_CONTROLLER);
+			g_list_free(cfg.maps);
+		}
+		else {
+			rspamd_map_schedule_periodic(&map, RSPAMD_MAP_SCHEDULE_NORMAL);
+		}
+		REQUIRE(map.scheduled_check != nullptr);
+		auto delay = ev_timer_remaining(map.event_loop, &map.scheduled_check->ev);
+		CHECK(delay >= min_delay);
+		CHECK(delay <= max_delay);
+		ev_timer_stop(map.event_loop, &map.scheduled_check->ev);
+		g_free(map.scheduled_check);
+		g_ptr_array_free(map.backends, TRUE);
+		ev_loop_destroy(map.event_loop);
+	}
+
 	TEST_CASE("map retry after a failure is not moved by the data expiry")
 	{
 		struct rspamd_map map;
