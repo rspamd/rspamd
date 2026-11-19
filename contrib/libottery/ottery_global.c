@@ -42,6 +42,8 @@ ottery_init(const struct ottery_config *cfg)
 	if (getenv("VALGRIND")) {
 		ottery_valgrind_ = 1;
 	}
+  /* A failed (re)init leaves the state zeroed: it must not stay usable */
+  ottery_global_state_initialized_ = 0;
   int n = ottery_st_init(&ottery_global_state_, cfg);
   if (n == 0)
 	ottery_global_state_initialized_ = 1;

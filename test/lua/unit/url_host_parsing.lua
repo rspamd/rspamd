@@ -15,7 +15,7 @@ context("URL host parsing", function()
     local res = {}
     for _, u in ipairs(task:get_urls(true) or {}) do
       table.insert(res, {
-        host = u:get_host(), tld = u:get_tld(), url = tostring(u),
+        host = u:get_host(), tld = u:get_tld(), url = tostring(u), protocol = u:get_protocol(),
         user = u:get_user(), path = u:get_path(), query = u:get_query(),
         fragment = u:get_fragment(), flags = u:get_flags(),
       })
@@ -24,10 +24,17 @@ context("URL host parsing", function()
     return res
   end
 
-  -- The first url of a link in an HTML part, nil if there is none
+  -- The url of a link in an HTML part, nil if there is none. An email found
+  -- inside the link (e.g. in its query) is skipped: the order of the urls
+  -- of a task is the order of a hash table, which differs between processes
   local function one(href)
-    return extract("text/html; charset=utf-8",
-        '<html><body><a href="' .. href .. '">click</a></body></html>')[1]
+    local urls = extract("text/html; charset=utf-8",
+        '<html><body><a href="' .. href .. '">click</a></body></html>')
+    for _, u in ipairs(urls) do
+      if u.protocol ~= "mailto" then
+        return u
+      end
+    end
   end
 
   -- The assert functions exist only inside the test bodies, so they are passed in
