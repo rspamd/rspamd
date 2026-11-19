@@ -72,6 +72,21 @@ static gboolean rspamd_map_update_http_cached_file(struct rspamd_map *map,
 												   struct rspamd_map_backend *bk,
 												   struct http_map_data *htdata);
 
+/*
+ * A backend has new data. The map is reread only when the rest of the
+ * backends has been checked as well: a backend that is due and is skipped
+ * here would be read from its cache with an expiry that has already passed,
+ * so the map would be scheduled again at once, over and over if an earlier
+ * backend reports a change on every check.
+ */
+static void
+rspamd_map_periodic_backend_changed(struct map_periodic_cbdata *periodic)
+{
+	periodic->changed = TRUE;
+	periodic->cur_backend++;
+	rspamd_map_process_periodic(periodic);
+}
+
 static inline void
 rspamd_map_cache_file_path(struct rspamd_map_backend *bk,
 						   const char *cache_dir,
@@ -750,15 +765,12 @@ http_map_finish(struct rspamd_http_connection *conn,
 			msg_info_map("need to reread map from %s (reply code 200); "
 						 "date timestamp: %z, last modified: %z",
 						 cbd->bk->uri, (size_t) msg->date, (size_t) msg->last_modified);
-			cbd->periodic->need_modify = TRUE;
-			/* Reset the whole chain */
-			cbd->periodic->cur_backend = 0;
 			/* Reset cache, old cached data will be cleaned on timeout */
 			g_atomic_int_set(&data->cache->available, 0);
 			g_atomic_int_set(&map->shared->loaded, 0);
 			data->cur_cache_cbd = NULL;
 
-			rspamd_map_process_periodic(cbd->periodic);
+			rspamd_map_periodic_backend_changed(cbd->periodic);
 			MAP_RELEASE(cbd, "http_callback_data");
 
 			return 0;
@@ -1589,6 +1601,11 @@ rspamd_map_periodic_dtor(struct map_periodic_cbdata *periodic)
 		if (periodic->need_modify && !periodic->cbdata.errored &&
 			periodic->cbdata.cur_data != NULL) {
 			map->has_data = true;
+		}
+
+		if (periodic->need_modify && !periodic->cbdata.errored) {
+			/* Everything the backends have reported is delivered now */
+			map->rebuild_pending = false;
 		}
 
 		if (map->on_load_function) {
@@ -2593,16 +2610,25 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 
 	data = bk->data.hd;
 
-	if (map->active_http && data->next_check > rspamd_get_calendar_ticks()) {
+	/*
+	 * The check is scheduled for the expiry itself and the timer may fire a
+	 * moment before it, so a backend that expires within a second is due:
+	 * otherwise this wake-up is wasted and the check comes late.
+	 */
+	static const double expiry_slack = 1.0;
+
+	if (map->active_http &&
+		data->next_check > rspamd_get_calendar_ticks() + expiry_slack) {
 		if (check) {
 			if (!map->has_data) {
-				periodic->need_modify = TRUE;
-				periodic->cur_backend = 0;
+				/* Nothing is served yet, so load what the cache has */
+				rspamd_map_periodic_backend_changed(periodic);
 			}
 			else {
 				periodic->cur_backend++;
+				rspamd_map_process_periodic(periodic);
 			}
-			rspamd_map_process_periodic(periodic);
+
 			return;
 		}
 
@@ -2628,9 +2654,7 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 							 bk->uri,
 							 (int) data->last_modified,
 							 (int) data->cache->last_modified);
-				periodic->need_modify = TRUE;
-				periodic->cur_backend = 0;
-				rspamd_map_process_periodic(periodic);
+				rspamd_map_periodic_backend_changed(periodic);
 			}
 			else {
 				if (map->active_http) {
@@ -2673,9 +2697,7 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 				msg_info_map("%s: has no data but the map is saved in the "
 							 "cache file; schedule loading from that file",
 							 bk->uri);
-				periodic->need_modify = TRUE;
-				periodic->cur_backend = 0;
-				rspamd_map_process_periodic(periodic);
+				rspamd_map_periodic_backend_changed(periodic);
 
 				return;
 			}
@@ -2850,11 +2872,8 @@ rspamd_map_file_check_callback(struct map_periodic_cbdata *periodic)
 	data = bk->data.fd;
 
 	if (data->need_modify) {
-		periodic->need_modify = TRUE;
-		periodic->cur_backend = 0;
 		data->need_modify = FALSE;
-
-		rspamd_map_process_periodic(periodic);
+		rspamd_map_periodic_backend_changed(periodic);
 
 		return;
 	}
@@ -2877,10 +2896,7 @@ rspamd_map_static_check_callback(struct map_periodic_cbdata *periodic)
 	data = bk->data.sd;
 
 	if (!data->processed) {
-		periodic->need_modify = TRUE;
-		periodic->cur_backend = 0;
-
-		rspamd_map_process_periodic(periodic);
+		rspamd_map_periodic_backend_changed(periodic);
 
 		return;
 	}
@@ -2961,6 +2977,16 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 		map->error_has_retry_after = cbd->has_retry_after;
 		map->error_retry_after = cbd->retry_after;
 
+		if (cbd->changed || cbd->need_modify) {
+			/*
+			 * A change that has been reported is not reported again: a file
+			 * is flagged once, and an HTTP backend that has been read fine
+			 * before this failure replies 304 from now on. Remember that the
+			 * map still has to be reread once the backends are fine.
+			 */
+			map->rebuild_pending = true;
+		}
+
 		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic(cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
@@ -2976,12 +3002,23 @@ rspamd_map_process_periodic(struct map_periodic_cbdata *cbd)
 
 	/* For each backend we need to check for modifications */
 	if (cbd->cur_backend >= cbd->map->backends->len) {
-		/* Last backend */
-		msg_debug_map("finished map: %d of %d", cbd->cur_backend,
-					  cbd->map->backends->len);
-		MAP_RELEASE(cbd, "periodic");
+		if (!cbd->need_modify && (cbd->changed || map->rebuild_pending) &&
+			cbd->map->backends->len > 0) {
+			/* All backends are checked, now read them from the first one */
+			msg_debug_map("checked %d backends of map %s, reread it%s",
+						  cbd->map->backends->len, cbd->map->name,
+						  cbd->changed ? "" : " (pending after a failure)");
+			cbd->need_modify = TRUE;
+			cbd->cur_backend = 0;
+		}
+		else {
+			/* Last backend */
+			msg_debug_map("finished map: %d of %d", cbd->cur_backend,
+						  cbd->map->backends->len);
+			MAP_RELEASE(cbd, "periodic");
 
-		return;
+			return;
+		}
 	}
 
 	bk = g_ptr_array_index(map->backends, cbd->cur_backend);

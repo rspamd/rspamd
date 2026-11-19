@@ -237,6 +237,7 @@ struct rspamd_map {
 	bool no_file_read;         /* Do not read files, pass filename to consumer */
 	bool seen;                 /* This map has already been watched or pre-loaded */
 	bool has_data;             /* Map data has been delivered to the consumer in this process */
+	bool rebuild_pending;      /* A backend has changed but the reread has failed: reread when the check passes */
 	gsize no_file_read_offset; /* Payload offset when consumer mmaps the file (0 for file, 4096 for HTTP cache) */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	struct rspamd_map_shared_data *shared;
@@ -254,6 +255,9 @@ struct map_periodic_cbdata {
 	struct rspamd_map *map;
 	struct map_cb_data cbdata;
 	ev_timer ev;
+	/* Some backend has reported new data while the backends are checked */
+	gboolean changed;
+	/* All backends are checked, now they are being read */
 	gboolean need_modify;
 	enum rspamd_map_error_class errored;
 	bool has_retry_after;
