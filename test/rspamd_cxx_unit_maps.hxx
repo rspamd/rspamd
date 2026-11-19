@@ -423,6 +423,119 @@ TEST_SUITE("rspamd_maps")
 
 		ev_loop_destroy(map.event_loop);
 	}
+
+	TEST_CASE("map is reread once all backends are checked, and again after a failure")
+	{
+		static struct {
+			unsigned int loaded;
+			unsigned int failed;
+		} stats;
+		stats = {};
+
+		struct rspamd_map map{};
+		struct rspamd_map_shared_data shared{};
+		struct rspamd_worker worker{};
+		struct file_map_data files[2]{};
+		struct rspamd_map_backend backends[2]{};
+		std::string names[2];
+		void *user_data = nullptr;
+
+		map.name = (char *) "test";
+		rspamd_strlcpy(map.tag, "test", sizeof(map.tag));
+		map.user_data = &user_data;
+		map.shared = &shared;
+		map.wrk = &worker;
+		map.event_loop = ev_loop_new(EVFLAG_AUTO);
+		map.poll_timeout = 60;
+		map.file_only = true;
+		map.backends = g_ptr_array_new();
+		/* The whole map is one string, every backend adds its file to it */
+		map.read_callback = [](char *chunk, int len, struct map_cb_data *cbd, gboolean) -> char * {
+			if (cbd->cur_data == nullptr) {
+				cbd->cur_data = new std::string;
+			}
+			static_cast<std::string *>(cbd->cur_data)->append(chunk, len);
+
+			return nullptr;
+		};
+		map.fin_callback = [](struct map_cb_data *cbd, void **target) {
+			if (cbd->errored) {
+				delete static_cast<std::string *>(cbd->cur_data);
+				cbd->cur_data = nullptr;
+				stats.failed++;
+			}
+			else if (cbd->cur_data != nullptr) {
+				delete static_cast<std::string *>(cbd->prev_data);
+				*target = cbd->cur_data;
+				stats.loaded++;
+			}
+		};
+
+		const auto ignore_stat = +[](struct ev_loop *, ev_stat *, int) {};
+
+		for (unsigned int i = 0; i < 2; i++) {
+			char templ[] = "/tmp/rspamd-map-test-XXXXXX";
+			int fd = mkstemp(templ);
+			REQUIRE(fd != -1);
+			const char *line = i == 0 ? "one\n" : "two\n";
+			REQUIRE(write(fd, line, strlen(line)) == (ssize_t) strlen(line));
+			close(fd);
+			names[i] = templ;
+
+			files[i].filename = names[i].data();
+			files[i].need_modify = TRUE;
+			ev_stat_init(&files[i].st_ev, ignore_stat, files[i].filename, 0.);
+			backends[i].protocol = MAP_PROTO_FILE;
+			backends[i].data.fd = &files[i];
+			g_ptr_array_add(map.backends, &backends[i]);
+		}
+
+		/* Runs the check that is scheduled now; files are read synchronously */
+		const auto run_scheduled = [&]() {
+			REQUIRE(map.scheduled_check != nullptr);
+			ev_invoke(map.event_loop, &map.scheduled_check->ev, EV_TIMER);
+		};
+		const auto content = [&]() {
+			return user_data ? *static_cast<std::string *>(user_data) : std::string{};
+		};
+
+		/* The second file has no signature, so reading it fails */
+		backends[1].is_signed = TRUE;
+		rspamd_map_schedule_periodic(&map, RSPAMD_MAP_SCHEDULE_INIT);
+		run_scheduled();
+
+		/* Both backends are checked before the reread, not just the first one */
+		CHECK_FALSE(files[0].need_modify);
+		CHECK_FALSE(files[1].need_modify);
+		CHECK(stats.failed == 1);
+		CHECK(stats.loaded == 0);
+		CHECK(content() == "");
+		CHECK(map.rebuild_pending);
+
+		/* No file is flagged now, but the failed reread is still owed */
+		backends[1].is_signed = FALSE;
+		run_scheduled();
+		CHECK(stats.loaded == 1);
+		CHECK(content() == "one\ntwo\n");
+		CHECK(map.has_data);
+		CHECK_FALSE(map.rebuild_pending);
+
+		/* Nothing has changed and nothing is owed: no more rereads */
+		run_scheduled();
+		CHECK(stats.loaded == 1);
+		CHECK(stats.failed == 1);
+
+		if (map.scheduled_check != nullptr) {
+			ev_timer_stop(map.event_loop, &map.scheduled_check->ev);
+			g_free(map.scheduled_check);
+		}
+		delete static_cast<std::string *>(user_data);
+		for (const auto &name: names) {
+			unlink(name.c_str());
+		}
+		g_ptr_array_free(map.backends, TRUE);
+		ev_loop_destroy(map.event_loop);
+	}
 }
 
 #endif

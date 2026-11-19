@@ -2,6 +2,7 @@
 
 import asyncio
 import dummy_killer
+import email.utils
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -13,6 +14,31 @@ import time
 import traceback
 
 class MainHandler(tornado.web.RequestHandler):
+    # /map-expiring: a map with validators that expires soon after it is
+    # fetched; /map-novalidators: a map that looks changed on every check.
+    # See 126_http_map_expiry.robot.
+    MAP_EXPIRING_ETAG = '"map-expiring-v1"'
+    MAP_EXPIRING_TTL = 3
+
+    def compute_etag(self):
+        # Tornado adds an ETag to every reply on its own and answers 304 when
+        # it matches; this map must have no validators at all
+        if self.request.path == '/map-novalidators':
+            return None
+        return super().compute_etag()
+
+    def map_expiring_headers(self):
+        """Sets the validators and the expiry; returns True for a 304 reply"""
+        self.set_header("ETag", self.MAP_EXPIRING_ETAG)
+        self.set_header("Last-Modified", "Thu, 01 Jan 2026 00:00:00 GMT")
+        self.set_header("Expires", email.utils.formatdate(
+            time.time() + self.MAP_EXPIRING_TTL, usegmt=True))
+        if self.request.headers.get("If-None-Match") == self.MAP_EXPIRING_ETAG:
+            print("dummy_http.py: /map-expiring is revalidated", file=sys.stderr)
+            self.set_status(304)
+            return True
+        return False
+
     @tornado.gen.coroutine
     def get(self, path):
         if path == '/empty':
@@ -49,6 +75,13 @@ class MainHandler(tornado.web.RequestHandler):
                 if i % 1024 == 0:
                     yield self.flush()
             self.write("CHUNKED_MAP_END\n")
+        elif path == '/map-novalidators':
+            self.set_header("Content-Type", "text/plain")
+            self.write("novalidators.example.com\n")
+        elif path == '/map-expiring':
+            if not self.map_expiring_headers():
+                self.set_header("Content-Type", "text/plain")
+                self.write("expiring.example.com\n")
         elif path == '/map-query':
             # Parse the 'key' argument from the HTTP request
             key = self.get_query_argument("key", default=None)
@@ -117,6 +150,10 @@ class MainHandler(tornado.web.RequestHandler):
             # Rspamd checks a map with HEAD before fetching it with GET, so
             # this has to be a plain 200 (the catch-all below is not).
             self.set_status(200)
+        elif path == "/map-novalidators":
+            self.set_status(200)
+        elif path == "/map-expiring":
+            self.map_expiring_headers()
         elif path == "/backslash_redirect":
             # A browser reads a backslash after the scheme as a slash, so
             # this leads to another host and not to a path on this one
