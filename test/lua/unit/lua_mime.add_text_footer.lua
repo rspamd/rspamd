@@ -303,4 +303,126 @@ cGF5bG9hZCBkYXRhCg==
             { 'INTROMARKER', 'INNERMARKER', 'ATTACHMENTMARKER' })
         assert_equal(0, #problems, table.concat(problems, '; '))
       end)
+
+  -- Apply the footer and report every delimiter of `boundaries` that does not
+  -- start a line: a delimiter glued to the end of the previous line
+  -- ("...AAAA==--bnd--") is not recognised by strict parsers.
+  local function glued_delimiter_problems(message, boundaries)
+    local res, task = rspamd_task.load_from_string(message, cfg)
+
+    if not res or not task then
+      return { 'failed to load message' }
+    end
+
+    task:process_message()
+
+    local rewrite = lua_mime.add_text_footer(task, html_footer, text_footer)
+
+    if not rewrite or not rewrite.out then
+      task:destroy()
+      return { 'add_text_footer did not rewrite the message' }
+    end
+
+    local body = body_to_string(rewrite)
+    task:destroy()
+
+    local problems = {}
+
+    for _, bnd in ipairs(boundaries) do
+      local needle = '--' .. bnd
+      local pos = 1
+
+      while true do
+        local s, e = string.find(body, needle, pos, true)
+
+        if not s then
+          break
+        end
+
+        if s > 1 and body:sub(s - 1, s - 1) ~= '\n' then
+          problems[#problems + 1] = string.format(
+              'delimiter %s is glued to the previous line ("...%s")',
+              needle, body:sub(math.max(1, s - 12), s - 1))
+        end
+
+        pos = e + 1
+      end
+    end
+
+    if not string.find(body, 'FOOTERMARKER', 1, true) then
+      problems[#problems + 1] = 'footer was not applied'
+    end
+
+    return problems
+  end
+
+  -- No blank line before the delimiters, as Apple Mail writes it: text/plain
+  -- alternative plus multipart/related with the inline image as its last part.
+  local msg_tight_alt_related = [[
+From: sender@example.com
+To: rcpt@example.com
+Subject: alternative over related, delimiters directly after the content
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="altbnd"
+
+--altbnd
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+PLAINMARKER
+--altbnd
+Content-Type: multipart/related; type="text/html"; boundary="relbnd"
+
+--relbnd
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Hello</p><img src="cid:img@example.com"></body></html>
+--relbnd
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-ID: <img@example.com>
+
+iVBORw0KGgo=
+--relbnd--
+
+--altbnd--
+]]
+
+  -- The plainest shape: text/plain plus a PDF attachment, closing delimiter
+  -- directly after the base64 data.
+  local msg_tight_mixed_attachment = [[
+From: sender@example.com
+To: rcpt@example.com
+Subject: text with an attachment, delimiters directly after the content
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixbnd"
+
+--mixbnd
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+PLAINMARKER
+--mixbnd
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="ATTACHMENTMARKER.pdf"
+
+cGF5bG9hZCBkYXRhCg==
+--mixbnd--
+]]
+
+  test("delimiter after a verbatim inline image starts its own line",
+      function()
+        local problems = glued_delimiter_problems(msg_tight_alt_related,
+            { 'altbnd', 'relbnd' })
+        assert_equal(0, #problems, table.concat(problems, '; '))
+      end)
+
+  test("delimiter after a verbatim attachment starts its own line",
+      function()
+        local problems = glued_delimiter_problems(msg_tight_mixed_attachment,
+            { 'mixbnd' })
+        assert_equal(0, #problems, table.concat(problems, '; '))
+      end)
 end)
