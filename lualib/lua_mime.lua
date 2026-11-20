@@ -379,13 +379,10 @@ local function newline(task)
   return '\r\n'
 end
 
--- The line break before a boundary delimiter belongs to the delimiter
--- (RFC 2046), so part content often does not end with one. Ask the writer to
--- add it, otherwise the next delimiter is glued to the last line of the part.
-local function body_entry(content)
-  local last = content:byte(-1)
-
-  return { content, last ~= nil and last ~= 10 and last ~= 13 } -- '\n', '\r'
+-- The delimiter needs its own line break even when the body ends in one
+-- (RFC 2046, section 5.1.1). Empty parts already have a break after the headers.
+local function body_entry(content, has_boundary)
+  return { content, has_boundary and #content > 0 }
 end
 
 local function do_append_footer(task, part, footer, is_multipart, out, state)
@@ -656,7 +653,7 @@ exports.add_text_footer = function(task, html_footer, text_footer)
             parent and parent:is_multipart(), out, state)
       else
         out[#out + 1] = { part:get_raw_headers(), true }
-        out[#out + 1] = body_entry(part:get_raw_content())
+        out[#out + 1] = body_entry(part:get_raw_content(), #boundaries > 0)
       end
     end
   end
@@ -719,9 +716,7 @@ local function do_replacement (task, part, mp, replacements,
     -- Handle the case of empty match
     if #matches_flattened == 0 then
       out[#out + 1] = { part:get_raw_headers(), true }
-      out[#out + 1] = body_entry(part:get_raw_content())
-
-      return
+      return part:get_raw_content()
     end
 
     if is_multipart then
@@ -794,12 +789,11 @@ local function do_replacement (task, part, mp, replacements,
       fragments[#fragments + 1] = content:span(cur_start)
     end
 
-    -- Final stuff
-    out[#out + 1] = body_entry(encode_func(rspamd_text.fromtable(fragments)))
+    return encode_func(rspamd_text.fromtable(fragments))
   else
     -- No matches
     out[#out + 1] = { part:get_raw_headers(), true }
-    out[#out + 1] = body_entry(part:get_raw_content())
+    return part:get_raw_content()
   end
 end
 
@@ -909,14 +903,15 @@ exports.multipattern_text_replace = function(task, mp, replacements)
             boundary), true }
       end
 
+      local content
       if not skip_replacement then
-        do_replacement(task, part, mp, replacements,
+        content = do_replacement(task, part, mp, replacements,
             parent and parent:is_multipart(), out, state)
       else
-        -- Append as is
         out[#out + 1] = { part:get_raw_headers(), true }
-        out[#out + 1] = body_entry(part:get_raw_content())
+        content = part:get_raw_content()
       end
+      out[#out + 1] = body_entry(content, #boundaries > 0)
     end
   end
 

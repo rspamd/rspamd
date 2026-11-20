@@ -24,6 +24,7 @@ context scope would see them as nil.
 
 context("lua_mime.add_text_footer", function()
   local rspamd_task = require "rspamd_task"
+  local rspamd_trie = require "rspamd_trie"
   local rspamd_util = require "rspamd_util"
   local rspamd_test_helper = require "rspamd_test_helper"
   local lua_mime = require "lua_mime"
@@ -56,6 +57,17 @@ context("lua_mime.add_text_footer", function()
     end
 
     return table.concat(buf)
+  end
+
+  local function rewrite_body(message, rewriter)
+    local res, task = rspamd_task.load_from_string(message, cfg)
+    assert(res and task, 'failed to load message')
+    task:process_message()
+
+    local rewrite = rewriter(task)
+    local body = rewrite and rewrite.out and body_to_string(rewrite)
+    task:destroy()
+    return assert(body, 'message body was not rewritten')
   end
 
   local function count_substr(haystack, needle)
@@ -425,4 +437,51 @@ cGF5bG9hZCBkYXRhCg==
             { 'mixbnd' })
         assert_equal(0, #problems, table.concat(problems, '; '))
       end)
+
+  local msg_attachment_ending_in_crlf = msg_tight_mixed_attachment
+      :gsub('Content%-Type: application/pdf', 'Content-Type: application/octet-stream')
+      :gsub('Content%-Transfer%-Encoding: base64', 'Content-Transfer-Encoding: 7bit')
+      :gsub('cGF5bG9hZCBkYXRhCg==', 'attachment data\n')
+      :gsub('\n', '\r\n')
+
+  local msg_single_part = 'From: sender@example.com\r\n' ..
+      'Content-Type: text/plain; charset=utf-8\r\n' ..
+      'Content-Transfer-Encoding: 7bit\r\n\r\nPLAINMARKER'
+
+  test("footer preserves a copied attachment's final CRLF", function()
+    local body = rewrite_body(msg_attachment_ending_in_crlf, function(task)
+      return lua_mime.add_text_footer(task, html_footer, text_footer)
+    end)
+    assert_not_nil(body:find('attachment data\r\n\r\n--mixbnd--', 1, true))
+  end)
+
+  test("an HTML-only footer preserves the end of a standalone plain body", function()
+    local body = rewrite_body(msg_single_part, function(task)
+      return lua_mime.add_text_footer(task, html_footer)
+    end)
+    assert_not_nil(body:match('PLAINMARKER$'))
+  end)
+
+  test("replacement preserves the final CRLF in rewritten and copied parts", function()
+    local body = rewrite_body(msg_attachment_ending_in_crlf, function(task)
+      local mp = rspamd_trie.create({ 'PLAINMARKER' }, rspamd_trie.flags.som)
+      return lua_mime.multipattern_text_replace(task, mp, { 'REPLACED\r\n' })
+    end)
+    assert_not_nil(body:find('REPLACED\r\n\r\n--mixbnd\r\n', 1, true))
+    assert_not_nil(body:find('attachment data\r\n\r\n--mixbnd--', 1, true))
+  end)
+
+  test("replacement preserves the end of a standalone body", function()
+    local body = rewrite_body(msg_single_part, function(task)
+      local mp = rspamd_trie.create({ 'PLAINMARKER' }, rspamd_trie.flags.som)
+      return lua_mime.multipattern_text_replace(task, mp, { 'REPLACED' })
+    end)
+    assert_equal('REPLACED', body)
+
+    local unchanged = rewrite_body(msg_single_part, function(task)
+      local mp = rspamd_trie.create({ 'MISSING' }, rspamd_trie.flags.som)
+      return lua_mime.multipattern_text_replace(task, mp, { 'REPLACED' })
+    end)
+    assert_not_nil(unchanged:match('PLAINMARKER$'))
+  end)
 end)
