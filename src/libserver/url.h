@@ -452,6 +452,15 @@ struct rspamd_url *rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
 bool rspamd_url_host_set_add(khash_t(rspamd_url_host_hash) * set,
 							 struct rspamd_url *u);
 /**
+ * Returns the url stored in a set, if it is there
+ * @param set
+ * @param u
+ * @return the url kept in the set, or NULL if the set is missing or the url is not in it
+ */
+struct rspamd_url *rspamd_url_set_get(khash_t(rspamd_url_hash) * set,
+									  struct rspamd_url *u);
+
+/**
  * Checks if a url is in set
  * @param set
  * @param u

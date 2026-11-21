@@ -975,19 +975,22 @@ auto css_declarations_block::compile_layer(rspamd::html::html_block &out, bool i
 		return std::nullopt;
 	};
 
-	/* A zero percent value, whether a size, a bound or a floor, is an
-	 * absolute zero, so it is normalised to one before anything else */
-	auto zero_percent = [](std::optional<css_dimension> &d) -> void {
-		if (d && d->is_percent && d->dim == 0) {
+	/* A zero value, whether a size, a bound or a floor, is an absolute
+	 * zero, as it does not depend on the environment a percent or a
+	 * relative unit resolves against, so it is normalised to one
+	 * before anything else */
+	auto zero_is_absolute = [](std::optional<css_dimension> &d) -> void {
+		if (d && d->dim == 0 && (d->is_percent || d->is_relative_unit)) {
 			d->is_percent = false;
+			d->is_relative_unit = false;
 		}
 	};
-	zero_percent(width);
-	zero_percent(height);
-	zero_percent(max_width);
-	zero_percent(max_height);
-	zero_percent(min_width);
-	zero_percent(min_height);
+	zero_is_absolute(width);
+	zero_is_absolute(height);
+	zero_is_absolute(max_width);
+	zero_is_absolute(max_height);
+	zero_is_absolute(min_width);
+	zero_is_absolute(min_height);
 
 	/*
 	 * The actual dimensions are recorded before the max bounds clamp
@@ -1326,6 +1329,55 @@ TEST_SUITE("css")
 			CHECK_MESSAGE(static_cast<int>(block->font_mask) != 0, c.first);
 			CHECK_MESSAGE(block->font_size == c.second, c.first);
 		}
+
+		rspamd_mempool_delete(pool);
+	}
+
+	TEST_CASE("a zero size is absolute in any unit")
+	{
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+										"css", 0);
+
+		/* A zero does not depend on what a relative unit or a percent
+		 * resolves against, so it is an absolute zero whatever unit
+		 * carries it, and the nonzero relative sizes keep carrying no
+		 * absolute value */
+		auto compile = [&pool](const char *css_text) -> rspamd::html::html_block * {
+			auto res = process_declaration_tokens(pool,
+												  get_rules_parser_functor(pool, css_text));
+			REQUIRE(res.get() != nullptr);
+			auto *block = res->compile_to_block(pool);
+			REQUIRE(block != nullptr);
+
+			return block;
+		};
+
+		for (const auto *css_text: {"width:0em", "width:0vw", "width:0%"}) {
+			auto *block = compile(css_text);
+			auto mask = block->width_real_mask;
+			CHECK_MESSAGE(block->width_real == 0, css_text);
+			CHECK_MESSAGE(mask == 1, css_text);
+		}
+
+		for (const auto *css_text: {"min-width:0rem", "min-width:0svw"}) {
+			auto *block = compile(css_text);
+			auto mask = block->min_width_mask;
+			CHECK_MESSAGE(block->min_width == 0, css_text);
+			CHECK_MESSAGE(mask == 1, css_text);
+		}
+
+		for (const auto *css_text: {"max-height:0vh", "max-height:0ch"}) {
+			auto *block = compile(css_text);
+			auto mask = block->height_max_mask;
+			CHECK_MESSAGE(block->height_max == 0, css_text);
+			CHECK_MESSAGE(mask == 1, css_text);
+		}
+
+		auto *block = compile("width:1em");
+		CHECK(block->width_real == -1);
+
+		auto real_mask = block->width_real_mask;
+		CHECK(real_mask == 1);
 
 		rspamd_mempool_delete(pool);
 	}

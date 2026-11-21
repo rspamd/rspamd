@@ -218,14 +218,15 @@ rspamd_config.HTML_TINY_PIXEL_TRACKER = {
 
         -- Bare URLs and email addresses in HTML text are content as
         -- well: image sources are the only URLs a contentless probe
-        -- may legitimately have
+        -- may legitimately have, and a source that also appears in
+        -- the displayed text carries the text occurrence with it
         local urls = p:get_mimepart():get_urls(true)
 
         if urls then
           for _, u in ipairs(urls) do
             local ufl = u:get_flags()
 
-            if not ufl or not ufl['image'] then
+            if not ufl or not ufl['image'] or ufl['content'] then
               return false
             end
           end
