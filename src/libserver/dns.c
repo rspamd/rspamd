@@ -139,6 +139,89 @@ rspamd_dns_callback(struct rdns_reply *reply, gpointer ud)
 	}
 }
 
+/* Name must be in ASCII only */
+static gboolean
+rspamd_dns_name_chars_valid(const char *name, gsize nlen)
+{
+	for (gsize i = 0; i < nlen; i++) {
+		if (ascii_dns_table[((unsigned int) name[i]) & 0x7F] == -1) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_dns_resolver_name_is_valid(struct rspamd_dns_resolver *resolver,
+								  const char *name)
+{
+	unsigned int nlen;
+	char *real_name = NULL;
+	const char *p, *end, *label;
+	gboolean ret = TRUE;
+
+	if (name == NULL) {
+		return FALSE;
+	}
+
+	nlen = strlen(name);
+
+	/* The checks of rspamd_dns_resolver_request() */
+	if (nlen == 0 || nlen > DNS_D_MAXNAME) {
+		return FALSE;
+	}
+
+	if (rspamd_str_has_8bit((const unsigned char *) name, nlen)) {
+		real_name = rspamd_dns_resolver_idna_convert_utf8(resolver, NULL,
+														  name, nlen, &nlen);
+
+		if (real_name == NULL) {
+			return FALSE;
+		}
+
+		name = real_name;
+	}
+
+	if (!rspamd_dns_name_chars_valid(name, nlen)) {
+		ret = FALSE;
+	}
+	else {
+		/*
+		 * The checks that rdns does when it builds a query: dots around a
+		 * name are skipped, what is left must be labels of 1 to 63 octets
+		 */
+		p = name;
+		end = name + nlen;
+
+		while (p < end && *p == '.') {
+			p++;
+		}
+
+		while (end > p && *(end - 1) == '.') {
+			end--;
+		}
+
+		if (p == end) {
+			ret = FALSE;
+		}
+
+		for (label = p; ret && p <= end; p++) {
+			if (p == end || *p == '.') {
+				if (p == label || p - label > DNS_D_MAXLABEL) {
+					ret = FALSE;
+				}
+
+				label = p + 1;
+			}
+		}
+	}
+
+	g_free(real_name);
+
+	return ret;
+}
+
 struct rspamd_dns_request_ud *
 rspamd_dns_resolver_request(struct rspamd_dns_resolver *resolver,
 							struct rspamd_async_session *session,
@@ -180,16 +263,14 @@ rspamd_dns_resolver_request(struct rspamd_dns_resolver *resolver,
 	}
 
 	/* Name is now in ASCII only */
-	for (gsize i = 0; i < nlen; i++) {
-		if (ascii_dns_table[((unsigned int) name[i]) & 0x7F] == -1) {
-			/* Invalid DNS name requested */
+	if (!rspamd_dns_name_chars_valid(name, nlen)) {
+		/* Invalid DNS name requested */
 
-			if (!pool) {
-				g_free(real_name);
-			}
-
-			return NULL;
+		if (!pool) {
+			g_free(real_name);
 		}
+
+		return NULL;
 	}
 
 	if (pool != NULL) {

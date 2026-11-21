@@ -541,6 +541,43 @@ TEST_SUITE("rspamd_dkim")
 		}
 	}
 
+	TEST_CASE("rspamd_dns_resolver_name_is_valid")
+	{
+		/*
+		 * Decides if a key request that has not been made is a permanent
+		 * error of a signature or a temporary one: it must refuse every name
+		 * that a request is refused for
+		 */
+		std::string label63(63, 'a'), label64(64, 'a');
+		std::string name253 = label63 + "." + label63 + "." + label63 + "." + std::string(61, 'a');
+		std::vector<std::pair<std::string, bool>> cases{
+			{"sel._domainkey.example.com", true},
+			{"sel._domainkey.example.com.", true},
+			{"example", true},
+			{"xn--gr-zia.org", true},
+			{label63 + ".example.com", true},
+			{name253, true},
+			{label64 + ".example.com", false},
+			{"sel._domainkey." + label64, false},
+			{name253 + "a", false},
+			{"", false},
+			{".", false},
+			{"...", false},
+			{"sel._domainkey..example.com", false},
+			{"sel._domainkey.exa mple.com", false},
+			{"sel._domainkey.exa\tmple.com", false},
+		};
+
+		for (auto &&c: cases) {
+			SUBCASE(fmt::format("name of {}: {}", c.first.size(), c.first).c_str())
+			{
+				CHECK((bool) rspamd_dns_resolver_name_is_valid(nullptr, c.first.c_str()) == c.second);
+			}
+		}
+
+		CHECK_FALSE((bool) rspamd_dns_resolver_name_is_valid(nullptr, nullptr));
+	}
+
 	TEST_CASE("rspamd_dkim_key_type_matches_record")
 	{
 		using namespace rspamd_dkim_test;

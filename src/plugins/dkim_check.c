@@ -1848,17 +1848,27 @@ dkim_module_start_signature(struct rspamd_task *task,
 								  dkim_module_key_handler,
 								  cur)) {
 		/*
-		 * No DNS request means no callback. The usual reason is a name that
-		 * can not be requested at all, such as a d= or s= with a label of
-		 * more than 63 octets. It is the signature that is at fault, and it
-		 * must not be reported as a temporary failure: its author decides
-		 * what d= claims, and a policy treats an unresolved aligned signature
-		 * as a reason not to fail a message.
+		 * No DNS request means no callback, so the result is set here. The
+		 * usual reason is a name that can not be requested at all, such as a
+		 * d= or s= with a label of more than 63 octets. That is a fault of
+		 * the signature, and it must not be reported as a temporary failure:
+		 * its author decides what d= claims, and a policy treats an unresolved
+		 * aligned signature as a reason not to fail a message. A name that is
+		 * valid means that the resolver could not send the request, which is
+		 * temporary: the signature has not been verified, it has not failed.
 		 */
-		msg_info_task("cannot request DKIM key %s",
-					  rspamd_dkim_get_dns_key(ctx));
-		cur->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
-		cur->res->fail_reason = "cannot request DKIM key";
+		const char *dns_key = rspamd_dkim_get_dns_key(ctx);
+
+		if (rspamd_dns_resolver_name_is_valid(task->resolver, dns_key)) {
+			msg_info_task("cannot send a request for DKIM key %s", dns_key);
+			cur->res = rspamd_dkim_create_result(ctx, DKIM_TRYAGAIN, task);
+			cur->res->fail_reason = "cannot request DKIM key";
+		}
+		else {
+			msg_info_task("cannot request DKIM key %s: invalid name", dns_key);
+			cur->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+			cur->res->fail_reason = "invalid DKIM key name";
+		}
 	}
 }
 

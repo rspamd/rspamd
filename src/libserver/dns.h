@@ -88,6 +88,20 @@ gboolean rspamd_dns_resolver_request_task_forced(struct rspamd_task *task,
 												 const char *name);
 
 /**
+ * Tells if a DNS request can be made for a name at all. A request for a name
+ * that is too long, has an empty label or one of more than 63 octets, or has
+ * characters that are not valid in a name is refused before anything is sent.
+ * That is a property of the name, never a failure of DNS: a caller whose
+ * request has not been made uses this check to tell a malformed name, which is
+ * a permanent condition, from a resolver that could not send the request
+ * @param resolver resolver (used to convert names that are not ASCII)
+ * @param name zero terminated name
+ * @return TRUE if a request for the name can be made
+ */
+gboolean rspamd_dns_resolver_name_is_valid(struct rspamd_dns_resolver *resolver,
+										   const char *name);
+
+/**
  * Converts a name into idna from UTF8
  * @param resolver resolver (must be initialised)
  * @param pool optional memory pool (can be NULL, then you need to g_free) the result
