@@ -205,7 +205,7 @@ make %{?_smp_mflags}
 rm -rf %{buildroot}
 
 %pre
-%if !0%{?fedora} > 43
+%if 0%{?fedora} <= 43
 %{_sbindir}/groupadd -r _rspamd 2>/dev/null || :
 %{_sbindir}/useradd -g _rspamd -c "Rspamd user" -s /bin/false -r -d %{_localstatedir}/lib/rspamd _rspamd 2>/dev/null || :
 %endif
