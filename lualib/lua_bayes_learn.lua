@@ -402,18 +402,18 @@ exports.autolearn = function(task, conf, overrides)
   local opts = merge_options(default_autolearn_settings, autolearn_defaults, overrides)
   opts = merge_options(opts, {}, conf)
 
-  if opts.check_balance ~= nil then
-    opts.balance = opts.balance or {}
-    if opts.balance.enabled == nil then
-      opts.balance.enabled = opts.check_balance and true or false
+  if opts.check_balance ~= nil or opts.min_balance ~= nil then
+    -- A merged balance table can still be shared with the defaults.
+    local balance = lua_util.shallowcopy(opts.balance or {})
+    if opts.check_balance ~= nil and balance.enabled == nil then
+      balance.enabled = opts.check_balance and true or false
     end
-  end
 
-  if opts.min_balance ~= nil then
-    opts.balance = opts.balance or {}
-    if opts.balance.min_balance == nil then
-      opts.balance.min_balance = opts.min_balance
+    if opts.min_balance ~= nil and balance.min_balance == nil then
+      balance.min_balance = opts.min_balance
     end
+
+    opts.balance = balance
   end
 
   local external_options = opts.options

@@ -14,22 +14,49 @@ context("Lua bayes learn - autolearn", function()
     }
   end
 
-  test("legacy check_balance and min_balance options are honoured", function()
-    local conf = {
+  local function autolearn(opts)
+    return lua_bayes_learn.autolearn(make_task(3, 0), {
       spam_threshold = 6.0,
       ham_threshold = -0.5,
-      check_balance = true,
+      check_balance = opts.check_balance,
+      min_balance = opts.min_balance,
+      balance = opts.balance,
       logging = { enabled = false },
       verdict_source = {
         extractor = function() return 'spam', 10.0 end,
       },
-    }
-    local res, reason = lua_bayes_learn.autolearn(make_task(3, 0), conf)
+    })
+  end
+
+  test("a legacy minimum balance applies to the current call", function()
+    local res, reason = autolearn({ check_balance = true })
     assert_nil(res)
     assert_equal('spam balance check failed', reason)
 
-    conf.min_balance = 0.25
-    res = lua_bayes_learn.autolearn(make_task(3, 0), conf)
+    res = autolearn({ check_balance = true, min_balance = 0.25 })
     assert_equal('spam', res)
+
+    res, reason = autolearn({ check_balance = true })
+    assert_nil(res)
+    assert_equal('spam balance check failed', reason)
+  end)
+
+  test("legacy check_balance is independent across calls", function()
+    local res = autolearn({ check_balance = false })
+    assert_equal('spam', res)
+
+    res = autolearn({ check_balance = true })
+    assert_nil(res)
+
+    res = autolearn({})
+    assert_equal('spam', res)
+  end)
+
+  test("explicit nested balance settings take precedence over legacy keys", function()
+    local res = autolearn({ check_balance = true, balance = { enabled = false } })
+    assert_equal('spam', res)
+
+    res = autolearn({ check_balance = true, min_balance = 0.25, balance = { min_balance = 0.9 } })
+    assert_nil(res)
   end)
 end)
