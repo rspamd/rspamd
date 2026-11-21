@@ -28,6 +28,7 @@
  * - strict_multiplier (number): multiplier for strict domains
  * - time_jitter (number): jitter in seconds to allow time diff while checking
  * - trusted_only (flag): check signatures only for domains in 'domains' map
+ * - max_sigs (number): maximum number of DKIM-Signature headers to examine per message (default: 5)
  */
 
 
@@ -330,12 +331,12 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
-							   "Obsoleted: maximum number of DKIM signatures to check",
+							   "Maximum number of DKIM-Signature headers to examine per message",
 							   "max_sigs",
 							   UCL_INT,
 							   NULL,
 							   0,
-							   "n/a",
+							   G_STRINGIFY(DEFAULT_MAX_SIGS),
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
