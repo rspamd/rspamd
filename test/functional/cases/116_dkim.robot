@@ -85,6 +85,19 @@ DKIM Signatures At Limit Are Still Checked
   Expect Symbol  R_DKIM_ALLOW
   Do Not Expect Symbol  DKIM_SIGS_TRUNCATED
 
+DKIM Signature With Unusable Key Name Does Not Hide Others
+  [Documentation]  No DNS request can be made for a d= with a label of more
+  ...  than 63 octets, so no reply ever comes for that signature. It must end
+  ...  as a permanent error of its own and not hold back the result of the
+  ...  valid signature below it. It claims the author's domain, so it must not
+  ...  be a temporary failure either: that would leave an aligned signature
+  ...  unresolved at the will of whoever wrote the header
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_unusable_key_name.eml
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Option  R_DKIM_ALIGNED  strict
+  Expect Symbol  R_DKIM_PERMFAIL
+  Do Not Expect Symbol  R_DKIM_TEMPFAIL
+
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
   ${result} =  Scan Message With Rspamc  ${RSPAMD_TESTDIR}/messages/spam_message.eml  --mime  --header=dodkim=1

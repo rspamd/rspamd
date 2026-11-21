@@ -1707,23 +1707,22 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 		msg_info_task("cannot get key for domain %s: %e",
 					  rspamd_dkim_get_dns_key(ctx), err);
 
-		if (err != NULL) {
-			if (err->code == DKIM_SIGERROR_NOKEY) {
-				res->res = rspamd_dkim_create_result(ctx, DKIM_TRYAGAIN, task);
-				res->res->fail_reason = "DNS error when getting key";
-			}
-			else if (err->code == DKIM_SIGERROR_REVOKED) {
-				res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
-				res->res->fail_reason = "key revoked";
-			}
-			else if (err->code == DKIM_SIGERROR_KEYTYPE) {
-				res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
-				res->res->fail_reason = "unknown key type";
-			}
-			else {
-				res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
-				res->res->fail_reason = "invalid DKIM record";
-			}
+		/* No key must mean a result, with or without an error to explain it */
+		if (err != NULL && err->code == DKIM_SIGERROR_NOKEY) {
+			res->res = rspamd_dkim_create_result(ctx, DKIM_TRYAGAIN, task);
+			res->res->fail_reason = "DNS error when getting key";
+		}
+		else if (err != NULL && err->code == DKIM_SIGERROR_REVOKED) {
+			res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+			res->res->fail_reason = "key revoked";
+		}
+		else if (err != NULL && err->code == DKIM_SIGERROR_KEYTYPE) {
+			res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+			res->res->fail_reason = "unknown key type";
+		}
+		else {
+			res->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+			res->res->fail_reason = "invalid DKIM record";
 		}
 	}
 
@@ -1738,7 +1737,13 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
  * Starts the check of a single signature header. An `author` means that the
  * signature is one of those taken beyond max_sigs: it is dropped unless the
  * parsed signature, not the hint it has been chosen by, is aligned with the
- * author and is one that would be checked at all.
+ * author.
+ *
+ * The results of a message are published when every signature that has got a
+ * context has a result as well. So a signature either gets no context here,
+ * which leaves it out of the results, or it must end with a result on every
+ * path: one that has a context and never gets a result hides the results of
+ * all the other signatures.
  */
 static void
 dkim_module_start_signature(struct rspamd_task *task,
@@ -1805,25 +1810,23 @@ dkim_module_start_signature(struct rspamd_task *task,
 				 rspamd_match_hash_map(dkim_module_ctx->dkim_domains,
 									   domain, strlen(domain)) == NULL);
 
+	if (untrusted) {
+		msg_debug_task("skip dkim check for %s domain: not trusted", domain);
+
+		return;
+	}
+
 	if (author != NULL &&
-		(untrusted ||
-		 dkim_module_domain_alignment(author, domain, strlen(domain)) == 0)) {
-		/* It never becomes a part of the results */
+		dkim_module_domain_alignment(author, domain, strlen(domain)) == 0) {
 		msg_debug_task("skip dkim check for %s domain beyond the signatures "
-					   "limit: %s",
-					   domain, untrusted ? "not trusted" : "not aligned");
+					   "limit: not aligned",
+					   domain);
 
 		return;
 	}
 
 	/* Get key */
 	cur->ctx = ctx;
-
-	if (untrusted) {
-		msg_debug_task("skip dkim check for %s domain", domain);
-
-		return;
-	}
 
 	if (dkim_module_ctx->dkim_hash) {
 		key = rspamd_lru_hash_lookup(dkim_module_ctx->dkim_hash,
@@ -1840,11 +1843,22 @@ dkim_module_start_signature(struct rspamd_task *task,
 		rspamd_mempool_add_destructor(task->task_pool,
 									  dkim_module_key_dtor, cur->key);
 	}
-	else {
-		(void) rspamd_get_dkim_key(ctx,
-								   task,
-								   dkim_module_key_handler,
-								   cur);
+	else if (!rspamd_get_dkim_key(ctx,
+								  task,
+								  dkim_module_key_handler,
+								  cur)) {
+		/*
+		 * No DNS request means no callback. The usual reason is a name that
+		 * can not be requested at all, such as a d= or s= with a label of
+		 * more than 63 octets. It is the signature that is at fault, and it
+		 * must not be reported as a temporary failure: its author decides
+		 * what d= claims, and a policy treats an unresolved aligned signature
+		 * as a reason not to fail a message.
+		 */
+		msg_info_task("cannot request DKIM key %s",
+					  rspamd_dkim_get_dns_key(ctx));
+		cur->res = rspamd_dkim_create_result(ctx, DKIM_PERM_ERROR, task);
+		cur->res->fail_reason = "cannot request DKIM key";
 	}
 }
 
