@@ -244,6 +244,14 @@ gpointer rspamd_lua_check_class(lua_State *L, int index, const char *name);
 lua_State *rspamd_lua_init(bool wipe_mem);
 
 /**
+ * Seeds math.random of the given Lua state from the ottery CSPRNG.
+ * Must be called in a forked child after ottery has been re-initialised,
+ * otherwise all the children share the sequence of the parent.
+ * Never throws, the stack is left balanced.
+ */
+void rspamd_lua_seed_random(lua_State *L);
+
+/**
  * Close lua_state and free remainders
  * @param L
  */

@@ -519,6 +519,17 @@ LUA_FUNCTION_DEF(config, get_group_symbols);
 LUA_FUNCTION_DEF(config, get_groups);
 
 /***
+ * @method rspamd_config:register_profiled_symbols({groups = {...}, symbols = {...}})
+ * Selects symbols and groups whose precise execution times are recorded on every
+ * scan (see `task:get_symbols_profile`). Both `groups` and `symbols` are optional
+ * arrays of strings. A virtual symbol selects its parent (executable) item; unknown
+ * names select nothing and are reported in the log. Can be called at any time.
+ * @param {table} tbl `{groups = {'g1'}, symbols = {'SYM'}}`
+ * @return {boolean} true
+ */
+LUA_FUNCTION_DEF(config, register_profiled_symbols);
+
+/***
  * @method rspamd_config:promote_symbols_cache_resort()
  * Promote symbols cache resort after dynamic symbol registration
  * @return {boolean} true if successful
@@ -1181,6 +1192,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF(config, get_symbols),
 	LUA_INTERFACE_DEF(config, get_symbol),
 	LUA_INTERFACE_DEF(config, get_groups),
+	LUA_INTERFACE_DEF(config, register_profiled_symbols),
 	LUA_INTERFACE_DEF(config, get_symbol_callback),
 	LUA_INTERFACE_DEF(config, set_symbol_callback),
 	LUA_INTERFACE_DEF(config, get_symbol_stat),
@@ -4790,6 +4802,72 @@ lua_config_get_group_symbols(lua_State *L)
 	else {
 		return luaL_error(L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+/* Checks that the field is absent or an array of strings, returns the count */
+static int
+lua_config_check_profiled_list(lua_State *L, const char *field)
+{
+	int n = 0;
+
+	lua_getfield(L, 2, field);
+
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return 0;
+	}
+
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return luaL_error(L, "invalid argument: `%s` must be a table of strings", field);
+	}
+
+	for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+		if (lua_type(L, -1) != LUA_TSTRING) {
+			lua_pop(L, 2);
+			return luaL_error(L, "invalid argument: `%s` must contain strings only", field);
+		}
+		n++;
+	}
+
+	lua_pop(L, 1);
+
+	return n;
+}
+
+static int
+lua_config_register_profiled_symbols(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg == NULL || lua_type(L, 2) != LUA_TTABLE) {
+		return luaL_error(L, "invalid arguments: a table is expected");
+	}
+
+	/* Validate everything before touching the cache */
+	lua_config_check_profiled_list(L, "groups");
+	lua_config_check_profiled_list(L, "symbols");
+
+	lua_getfield(L, 2, "groups");
+	if (lua_istable(L, -1)) {
+		for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+			rspamd_symcache_add_profiled_group(cfg->cache, lua_tostring(L, -1));
+		}
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, 2, "symbols");
+	if (lua_istable(L, -1)) {
+		for (lua_pushnil(L); lua_next(L, -2) != 0; lua_pop(L, 1)) {
+			rspamd_symcache_add_profiled_symbol(cfg->cache, lua_tostring(L, -1));
+		}
+	}
+	lua_pop(L, 1);
+
+	lua_pushboolean(L, true);
 
 	return 1;
 }

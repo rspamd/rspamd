@@ -821,6 +821,39 @@ rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_dy
 	return (struct rspamd_symcache_dynamic_item *) cache_runtime->set_cur_item(real_dyn_item);
 }
 
+void rspamd_symcache_add_profiled_symbol(struct rspamd_symcache *cache, const char *name)
+{
+	if (cache != nullptr && name != nullptr) {
+		C_API_SYMCACHE(cache)->add_profiled_symbol(name);
+	}
+}
+
+void rspamd_symcache_add_profiled_group(struct rspamd_symcache *cache, const char *name)
+{
+	if (cache != nullptr && name != nullptr) {
+		C_API_SYMCACHE(cache)->add_profiled_group(name);
+	}
+}
+
+unsigned int rspamd_symcache_profile_foreach(struct rspamd_task *task, gboolean all,
+											 rspamd_symcache_profile_cb cb, gpointer ud)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	if (cache_runtime == nullptr || cb == nullptr) {
+		return 0;
+	}
+
+	return cache_runtime->profile_foreach(task, all != FALSE, cb, ud);
+}
+
+gboolean rspamd_symcache_has_profile(struct rspamd_task *task)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	return cache_runtime != nullptr && cache_runtime->has_timings();
+}
+
 void rspamd_symcache_enable_profile(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);

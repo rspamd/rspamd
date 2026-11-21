@@ -1501,35 +1501,29 @@ context("Dynamic configuration registry", function()
       assert_not_nil(err)
     end)
 
-    test("workers do not share the jitter sequence", function()
+    test("jitter is drawn from math.random", function()
       local delays = {}
-      local calls = 0
-      local util_stub = setmetatable({
-        random_hex = function(n)
-          calls = calls + 1
-          return string.rep(calls == 1 and 'a' or 'b', n)
-        end,
-      }, { __index = real_util })
       local on_load
-      with_config({
+      local real_random = math.random
+      math.random = function() return 0.75 end
+      -- Restore the real function on every path: the Lua state is shared by all tests
+      local ok, err = pcall(with_config, {
         add_on_load = function(_, fn) on_load = fn end,
         add_periodic = function(_, _, timeout, fn)
           table.insert(delays, { first = timeout, second = fn() })
         end,
       }, function(cfg)
-        package.loaded['rspamd_util'] = util_stub
-        for _ = 1, 2 do
-          local dynconf = fresh()
-          with_fake_backend(dynconf, 'fake')
-          assert_true(dynconf.configure({ enabled = true, backend = 'fake', policy = 'interval',
-                                          interval = 10, jitter = 0.5 }))
-          on_load(cfg, 'ev', nil)
-        end
-        package.loaded['rspamd_util'] = real_util
+        local dynconf = fresh()
+        with_fake_backend(dynconf, 'fake')
+        assert_true(dynconf.configure({ enabled = true, backend = 'fake', policy = 'interval',
+                                        interval = 10, jitter = 0.5 }))
+        on_load(cfg, 'ev', nil)
       end)
-      package.loaded['rspamd_util'] = real_util
-      assert_equal(#delays, 2)
-      assert_not_equal(delays[1].first, delays[2].first)
+      math.random = real_random
+      assert(ok, err)
+      assert_equal(#delays, 1)
+      assert_true(math.abs(delays[1].first - (0.1 + 0.75 * 0.5 * 10)) < 1e-9)
+      assert_true(math.abs(delays[1].second - 10 * (1 + 0.5 * (2 * 0.75 - 1))) < 1e-9)
     end)
 
     test("C snapshot expands wildcards", function()

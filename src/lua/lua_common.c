@@ -967,6 +967,44 @@ extern int luaopen_bit(lua_State *L);
 
 static unsigned int lua_initialized = 0;
 
+void rspamd_lua_seed_random(lua_State *L)
+{
+	int top = lua_gettop(L);
+
+	lua_getglobal(L, "math");
+
+	if (lua_istable(L, -1)) {
+		lua_getfield(L, -1, "randomseed");
+
+		if (lua_isfunction(L, -1)) {
+#if defined(WITH_LUAJIT) || LUA_VERSION_NUM < 504
+			/*
+			 * The seed is a double there (Lua 5.3 also reads only the first
+			 * argument and converts it through a double): take 53 bits that
+			 * it holds exactly
+			 */
+			lua_pushnumber(L, (lua_Number) (ottery_rand_uint64() >> 11));
+			if (lua_pcall(L, 1, 0, 0) != 0) {
+#else
+			/* Lua 5.4+: use both integer seeds in full */
+			lua_pushinteger(L, (lua_Integer) ottery_rand_uint64());
+			lua_pushinteger(L, (lua_Integer) ottery_rand_uint64());
+			if (lua_pcall(L, 2, 0, 0) != 0) {
+#endif
+				msg_err("cannot seed Lua PRNG: %s", lua_tostring(L, -1));
+			}
+		}
+		else {
+			msg_err("cannot seed Lua PRNG: no math.randomseed function");
+		}
+	}
+	else {
+		msg_err("cannot seed Lua PRNG: no math table");
+	}
+
+	lua_settop(L, top);
+}
+
 lua_State *
 rspamd_lua_init(bool wipe_mem)
 {
@@ -1062,12 +1100,7 @@ rspamd_lua_init(bool wipe_mem)
 	lua_setglobal(L, "rspamd_plugins");
 
 	/* Set PRNG */
-	lua_getglobal(L, "math");
-	lua_pushstring(L, "randomseed"); /* Push math.randomseed function on top of the stack */
-	lua_gettable(L, -2);
-	lua_pushinteger(L, ottery_rand_uint64());
-	g_assert(lua_pcall(L, 1, 0, 0) == 0);
-	lua_pop(L, 1); /* math table */
+	rspamd_lua_seed_random(L);
 
 	/* Modules state */
 	lua_newtable(L);

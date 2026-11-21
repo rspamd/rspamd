@@ -1915,28 +1915,28 @@ void rspamd_ucl_tospamc_output(const ucl_object_t *top,
 }
 
 static void
+rspamd_protocol_profile_cb(struct rspamd_task *task,
+						   const struct rspamd_symcache_profile_entry *entry,
+						   gpointer ud)
+{
+	ucl_object_t *prof = (ucl_object_t *) ud;
+
+	if (entry->flags & RSPAMD_SYMCACHE_PROFILE_UNFINISHED) {
+		return;
+	}
+
+	ucl_object_insert_key(prof, ucl_object_fromdouble(entry->time_ms),
+						  entry->symbol, 0, true);
+}
+
+static void
 rspamd_protocol_output_profiling(struct rspamd_task *task,
 								 ucl_object_t *top)
 {
-	GHashTable *tbl;
-	GHashTableIter it;
-	gpointer k, v;
 	ucl_object_t *prof;
-	double val;
 
 	prof = ucl_object_typed_new(UCL_OBJECT);
-	tbl = rspamd_mempool_get_variable(task->task_pool, "profile");
-
-	if (tbl) {
-		g_hash_table_iter_init(&it, tbl);
-
-		while (g_hash_table_iter_next(&it, &k, &v)) {
-			val = *(double *) v;
-			ucl_object_insert_key(prof, ucl_object_fromdouble(val),
-								  (const char *) k, 0, false);
-		}
-	}
-
+	rspamd_symcache_profile_foreach(task, TRUE, rspamd_protocol_profile_cb, prof);
 	ucl_object_insert_key(top, prof, "profile", 0, false);
 }
 

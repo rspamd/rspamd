@@ -19,6 +19,7 @@ local upstream_list = require "rspamd_upstream_list"
 local lua_util = require "lua_util"
 local lua_clickhouse = require "lua_clickhouse"
 local lua_settings = require "lua_settings"
+local lua_task_profile = require "lua_task_profile"
 local fun = require "fun"
 
 local N = "clickhouse"
@@ -33,7 +34,19 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 12 -- Current schema version
+local schema_version = 13 -- Current schema version
+local profile_columns = { -- Columns that must exist before an INSERT may name them
+  'ProfileReason', 'Profile.Names', 'Profile.Times', 'Profile.SyncTimes', 'Profile.Flags' }
+
+-- Symbols profile (see the `profile` setting)
+local profiler = nil -- lua_task_profile object, nil when the feature is off
+-- Schema gate: opens in this worker when every upstream is at the schema
+-- version that has the profile columns. Only the batch boundary reads it.
+local profile_gate_open = false
+-- State the rows of the current batch were built with: the field list of the
+-- INSERT has to match every row of the batch
+local batch_profile = false
+local gate_warned = false
 
 local extra_tables = {}
 local extra_table_rows = {}
@@ -98,6 +111,15 @@ local settings = {
     run_every = '7d',
   },
   extra_columns = {},
+  -- Per-symbol run times of selected symbols/groups (off unless sample_rate or
+  -- slow_time is set), see lua_task_profile
+  profile = {
+    sample_rate = 0,
+    slow_time = 0,
+    max_slow_rate = 1,
+    groups = {},
+    symbols = {},
+  },
   -- Inject a curated set of extra_columns from a named preset. Currently
   -- supported: "outbound" (per-sender outbound traffic profiling columns:
   -- languages, hour-of-day, envelope-from domain, recipient domains, etc.).
@@ -190,6 +212,11 @@ CREATE TABLE IF NOT EXISTS rspamd
     `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list; options containing delimiters are percent-encoded)',
     `Groups.Names` Array(LowCardinality(String)) COMMENT 'Group name',
     `Groups.Scores` Array(Float32) COMMENT 'Group score',
+    ProfileReason Enum8('none' = 0, 'sampled' = 1, 'slow' = 2) DEFAULT 'none' COMMENT 'Why the symbols profile was stored: random sample or a slow selected symbol',
+    `Profile.Names` Array(LowCardinality(String)) COMMENT 'Executed symbol (a virtual symbol is accounted to its parent callback)',
+    `Profile.Times` Array(Float32) COMMENT 'Wall-clock run time in milliseconds (asynchronous symbols include waiting)',
+    `Profile.SyncTimes` Array(Float32) COMMENT 'Synchronous part of the symbol own call in milliseconds',
+    `Profile.Flags` Array(UInt8) COMMENT 'Bit mask: 1 asynchronous, 2 unfinished (time so far), 4 finished by task timeout',
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',
     ScanTimeVirtual UInt32 COMMENT 'Deprecated do not use',
     AuthUser String COMMENT 'Username for authenticated SMTP client',
@@ -353,6 +380,18 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (12)]],
   },
+  [12] = {
+    -- Per-symbol run times of selected symbols (the `profile` setting)
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS ProfileReason Enum8('none' = 0, 'sampled' = 1, 'slow' = 2) DEFAULT 'none' COMMENT 'Why the symbols profile was stored: random sample or a slow selected symbol' AFTER `Groups.Scores`,
+      ADD COLUMN IF NOT EXISTS `Profile.Names` Array(LowCardinality(String)) COMMENT 'Executed symbol (a virtual symbol is accounted to its parent callback)' AFTER ProfileReason,
+      ADD COLUMN IF NOT EXISTS `Profile.Times` Array(Float32) COMMENT 'Wall-clock run time in milliseconds (asynchronous symbols include waiting)' AFTER `Profile.Names`,
+      ADD COLUMN IF NOT EXISTS `Profile.SyncTimes` Array(Float32) COMMENT 'Synchronous part of the symbol own call in milliseconds' AFTER `Profile.Times`,
+      ADD COLUMN IF NOT EXISTS `Profile.Flags` Array(UInt8) COMMENT 'Bit mask: 1 asynchronous, 2 unfinished (time so far), 4 finished by task timeout' AFTER `Profile.SyncTimes`
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (13)]],
+  },
 }
 
 local predefined_actions = {
@@ -476,6 +515,19 @@ local function clickhouse_groups_row(res)
   end
 end
 
+local function clickhouse_profile_row(res)
+  local fields = {
+    'ProfileReason',
+    'Profile.Names',
+    'Profile.Times',
+    'Profile.SyncTimes',
+    'Profile.Flags',
+  }
+  for _, v in ipairs(fields) do
+    table.insert(res, v)
+  end
+end
+
 local function clickhouse_asn_row(res)
   local fields = {
     'ASN',
@@ -534,7 +586,57 @@ local function upload_extra_table_schema(upstream, ev_base, cfg, tbl_config)
   return nil
 end
 
-local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, extra_rows)
+-- Column list of the generic INSERT; the row builder in clickhouse_collect
+-- appends values in exactly this order. `with_profile` is the state the rows
+-- of the batch were built with.
+local function clickhouse_fields_list(with_profile)
+  local fields = {}
+  clickhouse_main_row(fields)
+  clickhouse_attachments_row(fields)
+  clickhouse_urls_row(fields)
+  clickhouse_emails_row(fields)
+  clickhouse_fuzzy_row(fields)
+  clickhouse_asn_row(fields)
+
+  if settings.enable_symbols then
+    clickhouse_symbols_row(fields)
+    clickhouse_groups_row(fields)
+  end
+
+  if with_profile then
+    clickhouse_profile_row(fields)
+  end
+
+  if #settings.extra_columns > 0 then
+    clickhouse_extra_columns(fields)
+  end
+
+  return fields
+end
+
+-- Values of the profile columns for one row: always five non-nil values, the
+-- four arrays have the same length
+local function clickhouse_profile_values(reason, prof)
+  local names, times, sync_times, flags = {}, {}, {}, {}
+  local reason_name = lua_task_profile.reason_names[reason] or 'none'
+
+  if prof and reason ~= 0 then
+    local n = #(prof.names or {})
+    if #(prof.times or {}) == n and #(prof.sync_times or {}) == n and
+        #(prof.flags or {}) == n then
+      names, times, sync_times, flags = prof.names or {}, prof.times or {},
+          prof.sync_times or {}, prof.flags or {}
+    else
+      -- ClickHouse rejects a batch with unequal arrays of one Nested
+      rspamd_logger.errx(rspamd_config, 'symbols profile arrays have different lengths, dropping it')
+      reason_name = 'none'
+    end
+  end
+
+  return reason_name, names, times, sync_times, flags
+end
+
+local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, extra_rows, with_profile)
   local log_object = task or rspamd_config
   local upstream = settings.upstream:get_upstream_round_robin()
   if not upstream then
@@ -582,22 +684,7 @@ local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows, ext
     end
   end
 
-  local fields = {}
-  clickhouse_main_row(fields)
-  clickhouse_attachments_row(fields)
-  clickhouse_urls_row(fields)
-  clickhouse_emails_row(fields)
-  clickhouse_fuzzy_row(fields)
-  clickhouse_asn_row(fields)
-
-  if settings.enable_symbols then
-    clickhouse_symbols_row(fields)
-    clickhouse_groups_row(fields)
-  end
-
-  if #settings.extra_columns > 0 then
-    clickhouse_extra_columns(fields)
-  end
+  local fields = clickhouse_fields_list(with_profile)
 
   send_data('generic data', gen_rows,
       string.format('INSERT INTO rspamd (%s)',
@@ -972,6 +1059,11 @@ local function clickhouse_collect(task)
     settings_id = ''
   end
 
+  -- The state of the profile columns is fixed when a batch starts
+  if nrows == 0 then
+    batch_profile = profiler ~= nil and profile_gate_open
+  end
+
   local row = {
     today(timestamp),
     timestamp,
@@ -1179,6 +1271,17 @@ local function clickhouse_collect(task)
     end
     table.insert(row, groups_tab)
     table.insert(row, gr_scores_tab)
+  end
+
+  -- Symbols profile
+  if batch_profile then
+    local reason, prof = profiler:collect(task)
+    local reason_name, names, times, sync_times, flags = clickhouse_profile_values(reason, prof)
+    table.insert(row, reason_name)
+    table.insert(row, names)
+    table.insert(row, times)
+    table.insert(row, sync_times)
+    table.insert(row, flags)
   end
 
   -- Extra columns
@@ -1397,6 +1500,7 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
     local saved_rows = data_rows
     local saved_custom = custom_rows
     local saved_extra = extra_table_rows
+    local saved_profile = batch_profile
     nrows = 0
     last_collection = now
     used_memory = 0
@@ -1404,7 +1508,8 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
     custom_rows = {}
     extra_table_rows = {}
 
-    clickhouse_send_data(nil, ev_base, reason, saved_rows, saved_custom, saved_extra)
+    clickhouse_send_data(nil, ev_base, reason, saved_rows, saved_custom, saved_extra,
+        saved_profile)
 
     if settings.collect_garbage then
       collectgarbage()
@@ -1723,6 +1828,68 @@ local function check_clickhouse_upstream(upstream, ev_base, cfg)
   end
 end
 
+-- Profile columns must not be named in an INSERT until the server has them:
+-- the ALTER is applied by the controller asynchronously, and a batch naming an
+-- unknown column is rejected as a whole. Every scanner asks the upstreams
+-- whether the columns exist and opens the gate when all of them have every one.
+-- The columns are checked directly and not through the schema version number,
+-- so a server migrated to the same version number by other code does not
+-- open the gate.
+local function clickhouse_check_profile_gate(cfg, ev_base)
+  if profile_gate_open then
+    return false
+  end
+
+  local ch_params = {
+    ev_base = ev_base,
+    config = cfg,
+  }
+  local quoted = {}
+  for i, col in ipairs(profile_columns) do
+    quoted[i] = "'" .. col .. "'"
+  end
+  local sql = string.format(
+      [[SELECT count() AS c FROM system.columns WHERE database = currentDatabase() ]] ..
+      [[AND table = 'rspamd' AND name IN (%s)]], table.concat(quoted, ', '))
+  local blocked_by = nil
+  local reason = nil
+
+  for _, up in ipairs(settings.upstream:all_upstreams()) do
+    local name = up:get_name()
+    if not up:get_addr() then
+      blocked_by, reason = name, 'address not resolved yet'
+      break
+    end
+    local err, rows = lua_clickhouse.select_sync(up, settings, ch_params, sql)
+    if err then
+      blocked_by, reason = name, string.format('cannot check the profile columns: %s', err)
+      break
+    end
+    local found = rows and rows[1] and tonumber(rows[1].c)
+    if not found or found < #profile_columns then
+      blocked_by = name
+      reason = string.format('%s of %s profile columns exist', tostring(found), #profile_columns)
+      break
+    end
+  end
+
+  if blocked_by then
+    if not gate_warned then
+      gate_warned = true
+      rspamd_logger.warnx(cfg,
+          'clickhouse symbols profile is disabled until the schema of clickhouse server %s is migrated: %s; ' ..
+          'will check again every 60 seconds', blocked_by, reason)
+    else
+      lua_util.debugm(N, cfg, 'clickhouse symbols profile gate is closed: %s: %s', blocked_by, reason)
+    end
+    return 60.0
+  end
+
+  profile_gate_open = true
+  rspamd_logger.infox(cfg, 'all clickhouse servers have the profile columns: symbols profile is enabled')
+  return false
+end
+
 local opts = rspamd_config:get_all_opt('clickhouse')
 require("lua_dynconf").register_static('clickhouse', opts)
 if opts then
@@ -1787,6 +1954,14 @@ if opts then
     elseif k == 'limits' or k == 'retention' then
       for sk, sv in pairs(v) do
         settings[k][sk] = sv
+      end
+    elseif k == 'profile' then
+      if type(v) == 'table' then
+        for sk, sv in pairs(v) do
+          settings[k][sk] = lua_util.deepcopy(sv)
+        end
+      else
+        rspamd_logger.errx(rspamd_config, 'clickhouse: profile must be a table, ignoring it')
       end
     else
       settings[k] = lua_util.deepcopy(v)
@@ -1882,7 +2057,12 @@ if opts then
       for col_key, col_data in iter_func(settings.extra_columns) do
         -- Array based extra columns
         local col_name = col_data.name or col_key
-        if not col_data.selector or not col_data.type then
+        local col_name_str = tostring(col_name)
+        if col_name_str == 'ProfileReason' or col_name_str:sub(1, 8) == 'Profile.' then
+          rspamd_logger.errx(rspamd_config,
+              'cannot add clickhouse extra row %s: the name is reserved for the symbols profile columns',
+              col_name_str)
+        elseif not col_data.selector or not col_data.type then
           rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: no type or no selector',
               col_name)
         else
@@ -1927,6 +2107,14 @@ if opts then
       settings.extra_columns = columns_transformed
     end
 
+    local prof_err
+    profiler, prof_err = lua_task_profile.new(rspamd_config, settings.profile)
+    if prof_err then
+      rspamd_logger.errx(rspamd_config,
+          'clickhouse: invalid profile settings, running without symbols profile: %s', prof_err)
+      profiler = nil
+    end
+
     rspamd_config:register_symbol({
       name = 'CLICKHOUSE_COLLECT',
       type = 'idempotent',
@@ -1940,6 +2128,7 @@ if opts then
         local saved_rows = data_rows
         local saved_custom = custom_rows
         local saved_extra = extra_table_rows
+        local saved_profile = batch_profile
 
         nrows = 0
         data_rows = {}
@@ -1948,7 +2137,7 @@ if opts then
         extra_table_rows = {}
 
         clickhouse_send_data(task, nil, 'final collection',
-            saved_rows, saved_custom, saved_extra)
+            saved_rows, saved_custom, saved_extra, saved_profile)
 
         if settings.collect_garbage then
           collectgarbage()
@@ -1960,6 +2149,10 @@ if opts then
       if worker:is_scanner() then
         rspamd_config:add_periodic(ev_base, 0,
             clickhouse_maybe_send_data_periodic, true)
+        if profiler then
+          rspamd_config:add_periodic(ev_base, 0,
+              clickhouse_check_profile_gate, false)
+        end
       end
       if worker:is_primary_controller() then
         local upstreams = settings.upstream:all_upstreams()

@@ -857,6 +857,39 @@ LUA_FUNCTION_DEF(task, get_symbols);
 LUA_FUNCTION_DEF(task, get_groups);
 
 /***
+ * @method task:get_symbols_profile([opts])
+ * Returns precise run times of the symcache items of this task. Items selected
+ * with `rspamd_config:register_profiled_symbols` are timed on every scan, all
+ * items are timed on a task with the `profile` flag.
+ *
+ * Times are wall time in float milliseconds measured with a monotonic clock:
+ * for a synchronous item it is the run time of its callback; for an asynchronous
+ * one it is the time from the start of its call to the release of its last async
+ * event (network waits and time the event loop was busy with other rules are
+ * included), and `sync_times` holds the synchronous part of its own call. Virtual
+ * symbols are accounted to their parent item, conditions and dependencies are
+ * not included. The table is not cached: it grows as the task proceeds. An
+ * idempotent symbol sees all items of earlier stages but not itself or items of
+ * its own stage that are still running. An item of an earlier stage that has
+ * started but has not finished (hangs) is reported with the unfinished flag and
+ * the time so far.
+ *
+ * Options (all optional):
+ *
+ * - `all` (boolean, default false): report every timed item and not only the
+ *   registered ones
+ * - `min_time` (number, milliseconds): return nil unless at least one reported
+ *   item took this time or more
+ *
+ * @param {table} opts options
+ * @return {table|nil} nil if the task has no precise timings (or `min_time`
+ * is not reached), otherwise `{names = {...}, times = {...}, sync_times = {...},
+ * flags = {...}}`: four parallel arrays (possibly empty); `flags` is a bit mask:
+ * 1 asynchronous, 2 unfinished, 4 aborted by the forced session cleanup
+ */
+LUA_FUNCTION_DEF(task, get_symbols_profile);
+
+/***
  * @method task:get_symbols_numeric()
  * Returns array of all symbols matched for this task
  * @return {table|number, table|number} table of numbers with symbols ids + table of theirs scores
@@ -1528,6 +1561,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_symbols_numeric),
 	LUA_INTERFACE_DEF(task, get_symbols_tokens),
 	LUA_INTERFACE_DEF(task, get_groups),
+	LUA_INTERFACE_DEF(task, get_symbols_profile),
 	LUA_INTERFACE_DEF(task, process_ann_tokens),
 	LUA_INTERFACE_DEF(task, has_symbol),
 	LUA_INTERFACE_DEF(task, has_symbol_regexp),
@@ -5892,6 +5926,129 @@ lua_task_get_symbols_numeric(lua_State *L)
 	}
 
 	return 2;
+}
+
+struct lua_profile_count_ctx {
+	unsigned int n;
+	unsigned int hit;
+	double min_time;
+};
+
+static void
+lua_task_profile_count_cb(struct rspamd_task *task,
+						  const struct rspamd_symcache_profile_entry *entry,
+						  gpointer ud)
+{
+	struct lua_profile_count_ctx *ctx = (struct lua_profile_count_ctx *) ud;
+
+	ctx->n++;
+
+	if (entry->time_ms >= ctx->min_time) {
+		ctx->hit++;
+	}
+}
+
+struct lua_profile_fill_ctx {
+	lua_State *L;
+	int names, times, sync_times, flags;
+	int idx;
+};
+
+static void
+lua_task_profile_fill_cb(struct rspamd_task *task,
+						 const struct rspamd_symcache_profile_entry *entry,
+						 gpointer ud)
+{
+	struct lua_profile_fill_ctx *ctx = (struct lua_profile_fill_ctx *) ud;
+	lua_State *L = ctx->L;
+
+	ctx->idx++;
+	lua_pushstring(L, entry->symbol);
+	lua_rawseti(L, ctx->names, ctx->idx);
+	lua_pushnumber(L, entry->time_ms);
+	lua_rawseti(L, ctx->times, ctx->idx);
+	lua_pushnumber(L, entry->sync_time_ms);
+	lua_rawseti(L, ctx->sync_times, ctx->idx);
+	lua_pushinteger(L, entry->flags);
+	lua_rawseti(L, ctx->flags, ctx->idx);
+}
+
+static int
+lua_task_get_symbols_profile(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	gboolean all = FALSE, have_min = FALSE;
+	double min_time = 0;
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	/* Validate options before anything is allocated */
+	if (!lua_isnoneornil(L, 2)) {
+		if (lua_type(L, 2) != LUA_TTABLE) {
+			return luaL_error(L, "invalid arguments: options must be a table");
+		}
+
+		lua_getfield(L, 2, "all");
+		if (!lua_isnil(L, -1)) {
+			if (lua_type(L, -1) != LUA_TBOOLEAN) {
+				return luaL_error(L, "invalid arguments: `all` must be a boolean");
+			}
+			all = lua_toboolean(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, 2, "min_time");
+		if (!lua_isnil(L, -1)) {
+			if (lua_type(L, -1) != LUA_TNUMBER) {
+				return luaL_error(L, "invalid arguments: `min_time` must be a number");
+			}
+			min_time = lua_tonumber(L, -1);
+			have_min = TRUE;
+		}
+		lua_pop(L, 1);
+	}
+
+	if (!rspamd_symcache_has_profile(task)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	if (have_min) {
+		struct lua_profile_count_ctx cctx = {0, 0, min_time};
+
+		rspamd_symcache_profile_foreach(task, all, lua_task_profile_count_cb, &cctx);
+
+		if (cctx.hit == 0) {
+			lua_pushnil(L);
+			return 1;
+		}
+	}
+
+	struct lua_profile_fill_ctx fctx;
+
+	lua_createtable(L, 0, 4);
+	lua_createtable(L, 4, 0);
+	fctx.names = lua_gettop(L);
+	lua_createtable(L, 4, 0);
+	fctx.times = lua_gettop(L);
+	lua_createtable(L, 4, 0);
+	fctx.sync_times = lua_gettop(L);
+	lua_createtable(L, 4, 0);
+	fctx.flags = lua_gettop(L);
+	fctx.L = L;
+	fctx.idx = 0;
+
+	rspamd_symcache_profile_foreach(task, all, lua_task_profile_fill_cb, &fctx);
+
+	lua_setfield(L, -5, "flags");
+	lua_setfield(L, -4, "sync_times");
+	lua_setfield(L, -3, "times");
+	lua_setfield(L, -2, "names");
+
+	return 1;
 }
 
 static int

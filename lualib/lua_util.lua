@@ -537,48 +537,101 @@ exports.nkeys = nkeys
 
 --[[[
 -- @function lua_util.parse_time_interval(str)
--- Parses human readable time interval
--- Accepts 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days,
--- 'w' for weeks, 'y' for years
--- @param {string} str input string
--- @return {number|nil} parsed interval as seconds (might be fractional)
+-- Parses human readable time interval, similar to UCL time values.
+-- The whole string must match: an optional sign, a number (`10`, `1.5`, `.5`),
+-- an optional unit and nothing else (surrounding spaces and spaces before the unit are allowed).
+-- Units are case insensitive: 'ms' for milliseconds, 's'/'sec'/'second(s)' for seconds,
+-- 'm'/'min'/'mins'/'minute(s)' for minutes, 'h'/'hour(s)', 'd'/'day(s)', 'w'/'week(s)'
+-- and 'y'/'year(s)' (365 days); no unit means seconds.
+-- Differences from UCL: 'm' means minutes here, whereas an unquoted `10m` in the
+-- configuration is 10 million (UCL number multiplier), so write `10min` there;
+-- exponents, hex numbers and a trailing dot (`5.`) are rejected, while a leading `+`,
+-- `.5` and a space before the unit are accepted; values that are not finite or are
+-- too large to be exact (>= 2^53 seconds) are rejected.
+-- Examples: `10` -> 10, `"500ms"` -> 0.5, `"10min"` -> 600, `"1.5h"` -> 5400
+-- A number is returned unchanged; anything else (including trailing text, unknown units,
+-- exponents, compound values such as `1h30m` and non-string/non-number values) gives nil
+-- @param {string|number} str input string
+-- @return {number|nil} parsed interval as seconds (might be fractional), nil on error
 --]]
+local time_interval_units = {
+  ms = 0.001,
+  s = 1,
+  sec = 1,
+  secs = 1,
+  second = 1,
+  seconds = 1,
+  m = 60,
+  min = 60,
+  mins = 60,
+  minute = 60,
+  minutes = 60,
+  h = 3600,
+  hour = 3600,
+  hours = 3600,
+  d = 86400,
+  day = 86400,
+  days = 86400,
+  w = 86400 * 7,
+  week = 86400 * 7,
+  weeks = 86400 * 7,
+  y = 86400 * 365,
+  year = 86400 * 365,
+  years = 86400 * 365,
+}
+
+-- Largest magnitude (in seconds) accepted: beyond it floats are inexact and
+-- Lua 5.3+ integer multiplication could wrap around
+local time_interval_max = 2 ^ 53
+
+local time_interval_parser
+do
+  local ws = lpeg.S(" \t\n\v\f\r") ^ 0
+  local digit = lpeg.R("09")
+  local number = lpeg.S("+-") ^ -1 *
+      ((digit ^ 1 * (lpeg.P(".") * digit ^ 1) ^ -1) + (lpeg.P(".") * digit ^ 1))
+  local unit = lpeg.R("az", "AZ") ^ 0
+  time_interval_parser = ws * lpeg.C(number) * ws * lpeg.C(unit) * ws * -1
+end
+
 local function parse_time_interval(str)
-  local function parse_time_suffix(s)
-    if s == 's' then
-      return 1
-    elseif s == 'm' then
-      return 60
-    elseif s == 'h' then
-      return 3600
-    elseif s == 'd' then
-      return 86400
-    elseif s == 'w' then
-      return 86400 * 7
-    elseif s == 'y' then
-      return 365 * 86400;
+  if type(str) == 'number' then
+    return str
+  end
+  if type(str) ~= 'string' then
+    return nil
+  end
+
+  local num, unit = lpeg.match(time_interval_parser, str)
+  if not num then
+    return nil
+  end
+
+  local value = tonumber(num)
+  if not value then
+    return nil
+  end
+
+  local mult = 1
+  if unit ~= '' then
+    mult = time_interval_units[string.lower(unit)]
+    if not mult then
+      return nil
     end
   end
 
-  local digit = lpeg.R("09")
-  local parser = {}
-  parser.integer = (lpeg.S("+-") ^ -1) *
-      (digit ^ 1)
-  parser.fractional = (lpeg.P(".")) *
-      (digit ^ 1)
-  parser.number = (parser.integer *
-        (parser.fractional ^ -1)) +
-      (lpeg.S("+-") * parser.fractional)
-  parser.time = lpeg.Cf(lpeg.Cc(1) *
-    (parser.number / tonumber) *
-    ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
-    function(acc, val)
-      return acc * val
-    end)
+  -- inf and too large values; NaN is not equal to itself
+  local magnitude = math.abs(value + 0.0) * math.max(mult, 1)
+  if magnitude ~= magnitude or magnitude >= time_interval_max then
+    return nil
+  end
 
-  local t = lpeg.match(parser.time, str)
+  if mult == 0.001 then
+    -- Divide, so that 500ms is exactly 0.5
+    return value / 1000
+  end
 
-  return t
+  return value * mult
 end
 
 exports.parse_time_interval = parse_time_interval
