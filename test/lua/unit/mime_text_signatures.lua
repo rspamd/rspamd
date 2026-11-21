@@ -8,16 +8,16 @@ Data that is binary still goes by what lua_magic finds.
 context("Text parts that hold a file signature", function()
   local rspamd_task = require "rspamd_task"
 
-  local function load(ct, body)
+  local function load(ct, body, first_html)
     local res, task = rspamd_task.load_from_string(table.concat({
       'Subject: t',
       'MIME-Version: 1.0',
       'Content-Type: multipart/mixed; boundary="XX"',
       '',
       '--XX',
-      'Content-Type: text/plain; charset=utf-8',
+      first_html and 'Content-Type: text/html; charset=utf-8' or 'Content-Type: text/plain; charset=utf-8',
       '',
-      'first part',
+      first_html or 'first part',
       '--XX',
       'Content-Type: ' .. ct,
       '',
@@ -188,6 +188,24 @@ context("Text parts that hold a file signature", function()
     local u = has_url(task, 'signature.example.com')
     assert_not_nil(u)
     assert_true(u:get_flags().content)
+    task:destroy()
+  end)
+
+  test("an ordinary link stays visible when repeated in extracted content", function()
+    local task = load('text/plain', 'GIF89a ' .. text .. string.rep('\1', 4096),
+        '<p><a href="http://signature.example.com/login">Documentation</a></p>')
+    local urls = task:get_urls({content = false})
+    assert_equal(1, #urls)
+    assert_equal('signature.example.com', urls[1]:get_host())
+    task:destroy()
+  end)
+
+  test("an image source keeps the occurrence found in extracted content", function()
+    local task = load('text/plain', 'GIF89a ' .. text .. string.rep('\1', 4096),
+        '<img src="http://signature.example.com/login" width="1" height="1">')
+    local urls = task:get_parts()[2]:get_urls()
+    assert_equal(1, #urls)
+    assert_true(urls[1]:get_flags().content)
     task:destroy()
   end)
 

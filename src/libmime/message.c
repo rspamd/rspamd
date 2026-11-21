@@ -2022,6 +2022,13 @@ rspamd_message_content_add_url(struct rspamd_message_content_url_cbd *cbd, struc
 	struct rspamd_url *earlier = rspamd_url_set_get(
 		MESSAGE_FIELD(task, urls), url);
 
+	/* Keep the provenance of an ordinary link even if this occurrence
+	 * replaces it in the task's URL set. */
+	const unsigned int extracted_flags = RSPAMD_URL_FLAG_CONTENT | RSPAMD_URL_FLAG_QUERY;
+	if (earlier != NULL && !(earlier->flags & (RSPAMD_URL_FLAG_IMAGE | extracted_flags))) {
+		url->flags &= ~extracted_flags;
+	}
+
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD(task, urls), url, false,
 									   max_urls)) {
 		if (cbd->part->urls) {

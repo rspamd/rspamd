@@ -2577,21 +2577,10 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	}
 }
 
-static auto
-html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
-					  struct html_content *hc,
-					  khash_t(rspamd_url_hash) * url_set,
-					  GPtrArray *part_urls,
-					  lua_State *L,
-					  unsigned int max_urls) -> void
+static bool
+html_tag_has_image(const html_tag *tag)
 {
-	auto found_rel_maybe = tag->find_rel();
-
-	if (found_rel_maybe) {
-		if (found_rel_maybe.value() == "icon") {
-			html_process_img_tag(pool, tag, hc, url_set, part_urls, L, max_urls);
-		}
-	}
+	return tag->id == Tag_IMG || (tag->id == Tag_LINK && tag->find_rel() == "icon");
 }
 
 /*
@@ -4325,17 +4314,11 @@ auto html_process_input(struct rspamd_task *task,
 			}
 		}
 
-		if (cur_tag->id == Tag_IMG) {
+		if (html_tag_has_image(cur_tag)) {
 			html_process_img_tag(pool, cur_tag, hc, url_set,
 								 part_urls,
 								 task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
 								 max_urls);
-		}
-		else if (cur_tag->id == Tag_LINK) {
-			html_process_link_tag(pool, cur_tag, hc, url_set,
-								  part_urls,
-								  task->cfg ? (lua_State *) task->cfg->lua_state : NULL,
-								  max_urls);
 		}
 
 		/* Track DOM tag count and max depth */
@@ -5150,7 +5133,7 @@ auto html_process_input(struct rspamd_task *task,
 		if (hc->css_style && tag->id != Tag_UNKNOWN && tag->id < Tag_MAX) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
 
-			if (tag->id == Tag_IMG) {
+			if (html_tag_has_image(tag)) {
 				if (!css_block || tag->block) {
 					img_cascade_blocks.emplace(tag, css_block);
 				}

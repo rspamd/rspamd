@@ -1088,7 +1088,7 @@ TINY PIXEL TRACKER - BARE URL SAME AS SOURCE
   # An image source that also appears in the displayed text carries
   # the text occurrence with it, so it is content rather than a mere
   # image url
-  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_bare_url_ham.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/html_tiny_pixel_same_source_url_ham.eml
   ...  Settings={symbols_enabled = [HTML_TINY_PIXEL_TRACKER]}
   Do Not Expect Symbol  HTML_TINY_PIXEL_TRACKER
 
