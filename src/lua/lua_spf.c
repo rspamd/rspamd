@@ -254,8 +254,17 @@ int lua_spf_resolve(lua_State *L)
 			msg_info_task("cannot make spf request for %s",
 						  spf_cred ? spf_cred->domain : "empty domain");
 			if (spf_cred) {
-				lua_spf_push_result(cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED,
-									NULL, "DNS failed");
+				/*
+				 * No request has been made, so no DNS server has failed: it
+				 * is the domain that can not be asked for, such as one with
+				 * a label of more than 63 octets. RFC 7208 section 4.3 says
+				 * `none` for a malformed domain. It must never be a temporary
+				 * failure: the domain comes from MAIL FROM or HELO, and a
+				 * temporary SPF failure of a domain aligned with From stops
+				 * DMARC from applying its policy.
+				 */
+				lua_spf_push_result(cbd, RSPAMD_SPF_RESOLVED_NA,
+									NULL, "malformed domain");
 			}
 			else {
 				lua_spf_push_result(cbd, RSPAMD_SPF_RESOLVED_NA,

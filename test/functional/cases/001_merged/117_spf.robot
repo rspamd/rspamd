@@ -90,6 +90,16 @@ SPF NA HELO IP LITERAL
   Expect Symbol  R_SPF_NA
   Do Not Expect Symbol  R_SPF_DNSFAIL
 
+SPF NA MALFORMED DOMAIN
+  [Documentation]  No DNS request can be made for a domain with a label of
+  ...  more than 63 octets. That is `none` (RFC 7208 section 4.3) and not a
+  ...  DNS failure: no server has failed, and the sender chooses the domain
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=8.8.8.8  From=x@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.cacophony.za.org
+  ...  Settings=${SETTINGS_SPF}
+  Expect Symbol  R_SPF_NA
+  Do Not Expect Symbol  R_SPF_DNSFAIL
+
 SPF PERMFAIL UNRESOLVEABLE REDIRECT
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail4.org.org.za

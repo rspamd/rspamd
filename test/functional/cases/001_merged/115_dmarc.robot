@@ -46,6 +46,27 @@ DMARC REJECT FAIL
   ...  From=foo@example.net
   Expect Symbol  DMARC_POLICY_REJECT
 
+DMARC REJECT WITH MALFORMED ALIGNED ENVELOPE DOMAIN
+  [Documentation]  The envelope sender is a subdomain of the spoofed From
+  ...  domain that no DNS request can be made for. SPF can not be checked for
+  ...  it, which must not count as a temporary error of an aligned identifier:
+  ...  that would let a sender switch the reject policy off
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/fail_reject.eml
+  ...  Settings=${DMARC_SETTINGS}
+  ...  IP=1.2.3.4
+  ...  From=foo@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.reject.cacophony.za.org
+  Expect Symbol  DMARC_POLICY_REJECT
+  Do Not Expect Symbol  DMARC_DNSFAIL
+
+DMARC REJECT WITH MALFORMED ALIGNED HELO
+  [Documentation]  The same with HELO, which SPF uses when MAIL FROM is empty
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/fail_reject.eml
+  ...  Settings=${DMARC_SETTINGS}
+  ...  IP=1.2.3.4
+  ...  Helo=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.reject.cacophony.za.org
+  Expect Symbol  DMARC_POLICY_REJECT
+  Do Not Expect Symbol  DMARC_DNSFAIL
+
 DMARC REJECT WITH SPACE BEFORE FROM COLON
   Check DMARC With Obsolete From  ${SPACE}
 
