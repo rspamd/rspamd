@@ -24,6 +24,7 @@ context scope would see them as nil.
 
 context("lua_mime.add_text_footer", function()
   local rspamd_task = require "rspamd_task"
+  local rspamd_trie = require "rspamd_trie"
   local rspamd_util = require "rspamd_util"
   local rspamd_test_helper = require "rspamd_test_helper"
   local lua_mime = require "lua_mime"
@@ -56,6 +57,17 @@ context("lua_mime.add_text_footer", function()
     end
 
     return table.concat(buf)
+  end
+
+  local function rewrite_body(message, rewriter)
+    local res, task = rspamd_task.load_from_string(message, cfg)
+    assert(res and task, 'failed to load message')
+    task:process_message()
+
+    local rewrite = rewriter(task)
+    local body = rewrite and rewrite.out and body_to_string(rewrite)
+    task:destroy()
+    return assert(body, 'message body was not rewritten')
   end
 
   local function count_substr(haystack, needle)
@@ -303,4 +315,173 @@ cGF5bG9hZCBkYXRhCg==
             { 'INTROMARKER', 'INNERMARKER', 'ATTACHMENTMARKER' })
         assert_equal(0, #problems, table.concat(problems, '; '))
       end)
+
+  -- Apply the footer and report every delimiter of `boundaries` that does not
+  -- start a line: a delimiter glued to the end of the previous line
+  -- ("...AAAA==--bnd--") is not recognised by strict parsers.
+  local function glued_delimiter_problems(message, boundaries)
+    local res, task = rspamd_task.load_from_string(message, cfg)
+
+    if not res or not task then
+      return { 'failed to load message' }
+    end
+
+    task:process_message()
+
+    local rewrite = lua_mime.add_text_footer(task, html_footer, text_footer)
+
+    if not rewrite or not rewrite.out then
+      task:destroy()
+      return { 'add_text_footer did not rewrite the message' }
+    end
+
+    local body = body_to_string(rewrite)
+    task:destroy()
+
+    local problems = {}
+
+    for _, bnd in ipairs(boundaries) do
+      local needle = '--' .. bnd
+      local pos = 1
+
+      while true do
+        local s, e = string.find(body, needle, pos, true)
+
+        if not s then
+          break
+        end
+
+        if s > 1 and body:sub(s - 1, s - 1) ~= '\n' then
+          problems[#problems + 1] = string.format(
+              'delimiter %s is glued to the previous line ("...%s")',
+              needle, body:sub(math.max(1, s - 12), s - 1))
+        end
+
+        pos = e + 1
+      end
+    end
+
+    if not string.find(body, 'FOOTERMARKER', 1, true) then
+      problems[#problems + 1] = 'footer was not applied'
+    end
+
+    return problems
+  end
+
+  -- No blank line before the delimiters, as Apple Mail writes it: text/plain
+  -- alternative plus multipart/related with the inline image as its last part.
+  local msg_tight_alt_related = [[
+From: sender@example.com
+To: rcpt@example.com
+Subject: alternative over related, delimiters directly after the content
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="altbnd"
+
+--altbnd
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+PLAINMARKER
+--altbnd
+Content-Type: multipart/related; type="text/html"; boundary="relbnd"
+
+--relbnd
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Hello</p><img src="cid:img@example.com"></body></html>
+--relbnd
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-ID: <img@example.com>
+
+iVBORw0KGgo=
+--relbnd--
+
+--altbnd--
+]]
+
+  -- The plainest shape: text/plain plus a PDF attachment, closing delimiter
+  -- directly after the base64 data.
+  local msg_tight_mixed_attachment = [[
+From: sender@example.com
+To: rcpt@example.com
+Subject: text with an attachment, delimiters directly after the content
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixbnd"
+
+--mixbnd
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+PLAINMARKER
+--mixbnd
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="ATTACHMENTMARKER.pdf"
+
+cGF5bG9hZCBkYXRhCg==
+--mixbnd--
+]]
+
+  test("delimiter after a verbatim inline image starts its own line",
+      function()
+        local problems = glued_delimiter_problems(msg_tight_alt_related,
+            { 'altbnd', 'relbnd' })
+        assert_equal(0, #problems, table.concat(problems, '; '))
+      end)
+
+  test("delimiter after a verbatim attachment starts its own line",
+      function()
+        local problems = glued_delimiter_problems(msg_tight_mixed_attachment,
+            { 'mixbnd' })
+        assert_equal(0, #problems, table.concat(problems, '; '))
+      end)
+
+  local msg_attachment_ending_in_crlf = msg_tight_mixed_attachment
+      :gsub('Content%-Type: application/pdf', 'Content-Type: application/octet-stream')
+      :gsub('Content%-Transfer%-Encoding: base64', 'Content-Transfer-Encoding: 7bit')
+      :gsub('cGF5bG9hZCBkYXRhCg==', 'attachment data\n')
+      :gsub('\n', '\r\n')
+
+  local msg_single_part = 'From: sender@example.com\r\n' ..
+      'Content-Type: text/plain; charset=utf-8\r\n' ..
+      'Content-Transfer-Encoding: 7bit\r\n\r\nPLAINMARKER'
+
+  test("footer preserves a copied attachment's final CRLF", function()
+    local body = rewrite_body(msg_attachment_ending_in_crlf, function(task)
+      return lua_mime.add_text_footer(task, html_footer, text_footer)
+    end)
+    assert_not_nil(body:find('attachment data\r\n\r\n--mixbnd--', 1, true))
+  end)
+
+  test("an HTML-only footer preserves the end of a standalone plain body", function()
+    local body = rewrite_body(msg_single_part, function(task)
+      return lua_mime.add_text_footer(task, html_footer)
+    end)
+    assert_not_nil(body:match('PLAINMARKER$'))
+  end)
+
+  test("replacement preserves the final CRLF in rewritten and copied parts", function()
+    local body = rewrite_body(msg_attachment_ending_in_crlf, function(task)
+      local mp = rspamd_trie.create({ 'PLAINMARKER' }, rspamd_trie.flags.som)
+      return lua_mime.multipattern_text_replace(task, mp, { 'REPLACED\r\n' })
+    end)
+    assert_not_nil(body:find('REPLACED\r\n\r\n--mixbnd\r\n', 1, true))
+    assert_not_nil(body:find('attachment data\r\n\r\n--mixbnd--', 1, true))
+  end)
+
+  test("replacement preserves the end of a standalone body", function()
+    local body = rewrite_body(msg_single_part, function(task)
+      local mp = rspamd_trie.create({ 'PLAINMARKER' }, rspamd_trie.flags.som)
+      return lua_mime.multipattern_text_replace(task, mp, { 'REPLACED' })
+    end)
+    assert_equal('REPLACED', body)
+
+    local unchanged = rewrite_body(msg_single_part, function(task)
+      local mp = rspamd_trie.create({ 'MISSING' }, rspamd_trie.flags.som)
+      return lua_mime.multipattern_text_replace(task, mp, { 'REPLACED' })
+    end)
+    assert_not_nil(unchanged:match('PLAINMARKER$'))
+  end)
 end)
