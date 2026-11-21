@@ -858,6 +858,94 @@ rspamd_dkim_add_arc_seal_headers(rspamd_mempool_t *pool,
 								  ctx->hlist);
 }
 
+bool rspamd_dkim_signature_peek_domain(const char *sig, gsize len,
+									   rspamd_ftok_t *domain)
+{
+	const char *p = sig, *end = sig + len;
+	bool found = false;
+
+	/*
+	 * The same tag list grammar as the state machine of
+	 * rspamd_create_dkim_context(), reduced to what is needed to find d=
+	 */
+	while (p < end) {
+		const char *tag, *val, *val_end;
+		gsize taglen;
+
+		while (p < end && g_ascii_isspace(*p)) {
+			p++;
+		}
+
+		tag = p;
+
+		while (p < end && *p != '=' && *p != ';' && !g_ascii_isspace(*p)) {
+			p++;
+		}
+
+		taglen = p - tag;
+
+		if (p == end) {
+			/* A trailing tag with no value is ignored */
+			break;
+		}
+
+		if (*p == ';') {
+			/* An empty tag-spec or one without `=` is skipped */
+			p++;
+			continue;
+		}
+
+		while (p < end && g_ascii_isspace(*p)) {
+			p++;
+		}
+
+		if (p == end || *p != '=' || taglen == 0 || taglen > G_MAXINT8) {
+			return false;
+		}
+
+		p++;
+
+		while (p < end && g_ascii_isspace(*p)) {
+			p++;
+		}
+
+		val = p;
+		p = memchr(val, ';', end - val);
+
+		if (p == NULL) {
+			p = end;
+		}
+		else if (p == val) {
+			/* An empty value before `;` makes the whole signature invalid */
+			return false;
+		}
+
+		val_end = p;
+
+		while (val_end > val && g_ascii_isspace(*(val_end - 1))) {
+			val_end--;
+		}
+
+		if (taglen == 1 && *tag == 'd') {
+			if (found || val_end == val) {
+				/* A duplicated tag is not valid, an empty domain is useless */
+				return false;
+			}
+
+			found = true;
+			domain->begin = val;
+			domain->len = val_end - val;
+		}
+
+		if (p < end) {
+			/* Skip `;` */
+			p++;
+		}
+	}
+
+	return found;
+}
+
 /**
 * Create new dkim context from signature
 * @param sig message's signature

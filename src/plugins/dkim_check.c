@@ -28,6 +28,9 @@
  * - strict_multiplier (number): multiplier for strict domains
  * - time_jitter (number): jitter in seconds to allow time diff while checking
  * - trusted_only (flag): check signatures only for domains in 'domains' map
+ * - max_sigs (number): signatures to check, from the top of a message (default: 5)
+ * - extra_aligned_sigs (number): signatures beyond 'max_sigs' that are still checked
+ *   if they are aligned with the From domain, from the bottom of a message (default: 2)
  */
 
 
@@ -56,6 +59,13 @@
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_TIME_JITTER 60
 #define DEFAULT_MAX_SIGS 5
+#define DEFAULT_EXTRA_ALIGNED_SIGS 2
+/*
+ * How many signature headers beyond max_sigs are looked at, from the bottom
+ * of the message, when searching for the ones aligned with the author
+ */
+#define DKIM_ALIGNED_SCAN_LIMIT 64
+#define DKIM_SYMBOL_TRUNCATED "DKIM_SIGS_TRUNCATED"
 
 static const char *M = "rspamd dkim plugin";
 
@@ -91,6 +101,7 @@ struct dkim_ctx {
 	const char *sign_headers;
 	const char *arc_sign_headers;
 	unsigned int max_sigs;
+	unsigned int extra_aligned_sigs;
 	gboolean trusted_only;
 	gboolean check_local;
 	gboolean check_authed;
@@ -98,6 +109,7 @@ struct dkim_ctx {
 	unsigned int static_strict_multiplier;
 	unsigned int static_time_jitter;
 	unsigned int static_max_sigs;
+	unsigned int static_extra_aligned_sigs;
 	gboolean static_trusted_only;
 	gboolean has_trusted_map; /* A trusted domains map is configured (it may be not loaded yet) */
 };
@@ -190,6 +202,7 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 	dkim_module_ctx->sign_headers = default_sign_headers;
 	dkim_module_ctx->arc_sign_headers = default_arc_sign_headers;
 	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
+	dkim_module_ctx->extra_aligned_sigs = DEFAULT_EXTRA_ALIGNED_SIGS;
 
 	*ctx = (struct module_ctx *) dkim_module_ctx;
 
@@ -330,12 +343,22 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
-							   "Obsoleted: maximum number of DKIM signatures to check",
+							   "Maximum number of DKIM signatures to check, counted from the top of a message",
 							   "max_sigs",
 							   UCL_INT,
 							   NULL,
 							   0,
-							   "n/a",
+							   G_STRINGIFY(DEFAULT_MAX_SIGS),
+							   0);
+	rspamd_rcl_add_doc_by_path(cfg,
+							   "dkim",
+							   "Number of signatures beyond `max_sigs` that are still checked "
+							   "if they are aligned with the From domain (0 to disable)",
+							   "extra_aligned_sigs",
+							   UCL_INT,
+							   NULL,
+							   0,
+							   G_STRINGIFY(DEFAULT_EXTRA_ALIGNED_SIGS),
 							   0);
 	rspamd_rcl_add_doc_by_path(cfg,
 							   "dkim",
@@ -358,6 +381,7 @@ int dkim_module_init(struct rspamd_config *cfg, struct module_ctx **ctx)
 static const char *const dkim_dynconf_paths[] = {
 	"time_jitter",
 	"max_sigs",
+	"extra_aligned_sigs",
 	"strict_multiplier",
 	"trusted_only",
 	NULL};
@@ -374,6 +398,7 @@ dkim_dynconf_apply(struct rspamd_config *cfg,
 	unsigned int strict_multiplier = dkim_module_ctx->static_strict_multiplier;
 	unsigned int time_jitter = dkim_module_ctx->static_time_jitter;
 	unsigned int max_sigs = dkim_module_ctx->static_max_sigs;
+	unsigned int extra_aligned_sigs = dkim_module_ctx->static_extra_aligned_sigs;
 	gboolean trusted_only = dkim_module_ctx->static_trusted_only;
 	const ucl_object_t *elt;
 	GQuark q = g_quark_from_static_string("dkim");
@@ -412,6 +437,16 @@ dkim_dynconf_apply(struct rspamd_config *cfg,
 			}
 		}
 
+		if ((elt = ucl_object_lookup(dyn_values, "extra_aligned_sigs")) != NULL) {
+			if (!ucl_object_toint_safe(elt, &v) || v < 0 ||
+				v > DKIM_ALIGNED_SCAN_LIMIT) {
+				g_set_error(err, q, EINVAL, "invalid extra_aligned_sigs");
+				return FALSE;
+			}
+
+			extra_aligned_sigs = (unsigned int) v;
+		}
+
 		if ((elt = ucl_object_lookup(dyn_values, "strict_multiplier")) != NULL) {
 			if (!ucl_object_toint_safe(elt, &v) || v < 0 || v > INT_MAX) {
 				if (!(ucl_object_toint_safe(elt, &v) && v >= 0 &&
@@ -444,12 +479,14 @@ dkim_dynconf_apply(struct rspamd_config *cfg,
 
 	dkim_module_ctx->time_jitter = time_jitter;
 	dkim_module_ctx->max_sigs = max_sigs;
+	dkim_module_ctx->extra_aligned_sigs = extra_aligned_sigs;
 	dkim_module_ctx->strict_multiplier = strict_multiplier;
 	dkim_module_ctx->trusted_only = trusted_only;
 
 	msg_info_config("applied dynamic configuration: time_jitter = %ud, max_sigs = %ud, "
-					"strict_multiplier = %ud, trusted_only = %d",
-					time_jitter, max_sigs, strict_multiplier, (int) trusted_only);
+					"extra_aligned_sigs = %ud, strict_multiplier = %ud, trusted_only = %d",
+					time_jitter, max_sigs, extra_aligned_sigs, strict_multiplier,
+					(int) trusted_only);
 
 	return TRUE;
 }
@@ -603,6 +640,20 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 	}
 
 	if ((value =
+			 rspamd_config_get_module_opt(cfg, "dkim", "extra_aligned_sigs")) != NULL) {
+		int64_t extra = ucl_object_toint(value);
+
+		if (extra < 0 || extra > DKIM_ALIGNED_SCAN_LIMIT) {
+			msg_warn_config("extra_aligned_sigs must be between 0 and %d, "
+							"using the default of %d",
+							DKIM_ALIGNED_SCAN_LIMIT, DEFAULT_EXTRA_ALIGNED_SIGS);
+		}
+		else {
+			dkim_module_ctx->extra_aligned_sigs = (unsigned int) extra;
+		}
+	}
+
+	if ((value =
 			 rspamd_config_get_module_opt(cfg, "dkim", "whitelist")) != NULL) {
 
 		rspamd_config_radix_from_ucl(cfg, value, "DKIM whitelist",
@@ -667,6 +718,7 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 	dkim_module_ctx->static_strict_multiplier = dkim_module_ctx->strict_multiplier;
 	dkim_module_ctx->static_time_jitter = dkim_module_ctx->time_jitter;
 	dkim_module_ctx->static_max_sigs = dkim_module_ctx->max_sigs;
+	dkim_module_ctx->static_extra_aligned_sigs = dkim_module_ctx->extra_aligned_sigs;
 	dkim_module_ctx->static_trusted_only = dkim_module_ctx->trusted_only;
 	dkim_module_ctx->has_trusted_map = got_trusted;
 
@@ -807,6 +859,22 @@ int dkim_module_config(struct rspamd_config *cfg, bool validate)
 								 1,
 								 1);
 		rspamd_config_add_symbol_group(cfg, "DKIM_TRACE", "dkim");
+
+		rspamd_symcache_add_symbol(cfg->cache,
+								   DKIM_SYMBOL_TRUNCATED,
+								   0,
+								   NULL, NULL,
+								   SYMBOL_TYPE_VIRTUAL,
+								   cb_id);
+		rspamd_config_add_symbol(cfg,
+								 DKIM_SYMBOL_TRUNCATED,
+								 0.0,
+								 "Message has more DKIM signatures than have been checked",
+								 "policies",
+								 0,
+								 1,
+								 1);
+		rspamd_config_add_symbol_group(cfg, DKIM_SYMBOL_TRUNCATED, "dkim");
 
 		rspamd_dynconf_register_module(cfg, "dkim", dkim_dynconf_paths,
 									   dkim_dynconf_apply, dkim_module_ctx);
@@ -1317,6 +1385,104 @@ dkim_module_parse_strict(const char *value, double *allow, double *deny)
 	return FALSE;
 }
 
+/* The author's domain that signatures are aligned with */
+struct dkim_author_domain {
+	const char *domain; /* In the A-label form */
+	gsize len;
+	rspamd_ftok_t tld; /* The organisational domain, a part of `domain` */
+};
+
+/*
+ * Alignment needs an unambiguous author, the same precondition DMARC
+ * applies when it refuses a message carrying more than one From. A
+ * rewrite appends its address and flags the ones already there, so it
+ * is the originals that are counted where any exist.
+ */
+static gboolean
+dkim_module_get_author_domain(struct rspamd_task *task,
+							  struct dkim_author_domain *author)
+{
+	memset(author, 0, sizeof(*author));
+
+	if (MESSAGE_FIELD_CHECK(task, from_mime) &&
+		MESSAGE_FIELD(task, from_mime)->len > 0) {
+		GPtrArray *from_mime = MESSAGE_FIELD(task, from_mime);
+		struct rspamd_email_address *from_addr = NULL, *addr;
+		unsigned int noriginal = 0, j;
+
+		PTR_ARRAY_FOREACH(from_mime, j, addr)
+		{
+			if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+				noriginal++;
+
+				if (from_addr == NULL) {
+					from_addr = addr;
+				}
+			}
+		}
+
+		if (noriginal == 0 && from_mime->len == 1) {
+			from_addr = g_ptr_array_index(from_mime, 0);
+		}
+		else if (noriginal != 1) {
+			from_addr = NULL;
+		}
+
+		if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
+			author->domain = from_addr->domain;
+			author->len = from_addr->domain_len;
+
+			if (rspamd_str_has_8bit((const unsigned char *) author->domain,
+									author->len)) {
+				unsigned int alabel_len = 0;
+
+				author->domain = rspamd_dns_resolver_idna_convert_utf8(
+					task->resolver, task->task_pool,
+					author->domain, author->len, &alabel_len);
+				author->len = alabel_len;
+			}
+
+			if (author->domain != NULL) {
+				(void) rspamd_url_find_tld(author->domain, author->len,
+										   &author->tld);
+			}
+		}
+	}
+
+	return author->domain != NULL;
+}
+
+/*
+ * Alignment of a signing domain with the author's one:
+ * 0 = none, 1 = relaxed, 2 = strict
+ */
+static int
+dkim_module_domain_alignment(const struct dkim_author_domain *author,
+							 const char *domain, gsize domain_len)
+{
+	if (author->domain == NULL) {
+		return 0;
+	}
+
+	if (domain_len == author->len &&
+		g_ascii_strncasecmp(domain, author->domain, domain_len) == 0) {
+		return 2;
+	}
+
+	if (author->tld.len > 0) {
+		rspamd_ftok_t sig_tld = {0};
+
+		if (rspamd_url_find_tld(domain, domain_len, &sig_tld) &&
+			sig_tld.len == author->tld.len &&
+			g_ascii_strncasecmp(sig_tld.begin, author->tld.begin,
+								sig_tld.len) == 0) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 static void
 dkim_module_check(struct dkim_check_result *res)
 {
@@ -1372,60 +1538,9 @@ dkim_module_check(struct dkim_check_result *res)
 		unsigned int nres = 0, i = 0;
 		/* 0 = none, 1 = relaxed, 2 = strict */
 		int best_align = 0, best_align_tempfail = 0;
-		const char *from_domain = NULL;
-		gsize from_domain_len = 0;
-		rspamd_ftok_t from_tld = {0};
+		struct dkim_author_domain author;
 
-		/*
-		 * Alignment needs an unambiguous author, the same precondition DMARC
-		 * applies when it refuses a message carrying more than one From. A
-		 * rewrite appends its address and flags the ones already there, so it
-		 * is the originals that are counted where any exist.
-		 */
-		if (MESSAGE_FIELD_CHECK(task, from_mime) &&
-			MESSAGE_FIELD(task, from_mime)->len > 0) {
-			GPtrArray *from_mime = MESSAGE_FIELD(task, from_mime);
-			struct rspamd_email_address *from_addr = NULL, *addr;
-			unsigned int noriginal = 0, j;
-
-			PTR_ARRAY_FOREACH(from_mime, j, addr)
-			{
-				if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
-					noriginal++;
-
-					if (from_addr == NULL) {
-						from_addr = addr;
-					}
-				}
-			}
-
-			if (noriginal == 0 && from_mime->len == 1) {
-				from_addr = g_ptr_array_index(from_mime, 0);
-			}
-			else if (noriginal != 1) {
-				from_addr = NULL;
-			}
-
-			if (from_addr && from_addr->domain && from_addr->domain_len > 0) {
-				from_domain = from_addr->domain;
-				from_domain_len = from_addr->domain_len;
-
-				if (rspamd_str_has_8bit((const unsigned char *) from_domain,
-										from_domain_len)) {
-					unsigned int alabel_len = 0;
-
-					from_domain = rspamd_dns_resolver_idna_convert_utf8(
-						task->resolver, task->task_pool,
-						from_domain, from_domain_len, &alabel_len);
-					from_domain_len = alabel_len;
-				}
-
-				if (from_domain != NULL) {
-					(void) rspamd_url_find_tld(from_domain, from_domain_len,
-											   &from_tld);
-				}
-			}
-		}
+		(void) dkim_module_get_author_domain(task, &author);
 
 		DL_FOREACH(first, cur)
 		{
@@ -1498,26 +1613,17 @@ dkim_module_check(struct dkim_check_result *res)
 				 * aligned signature is still unresolved needs to tell the two
 				 * apart
 				 */
-				if (from_domain != NULL &&
+				if (author.domain != NULL &&
 					(cur->res->rcode == DKIM_CONTINUE ||
 					 cur->res->rcode == DKIM_TRYAGAIN)) {
 					int *align = (cur->res->rcode == DKIM_CONTINUE) ? &best_align : &best_align_tempfail;
 
 					if (*align < 2) {
-						gsize domain_len = strlen(domain);
+						int sig_align = dkim_module_domain_alignment(&author,
+																	 domain, strlen(domain));
 
-						if (domain_len == from_domain_len &&
-							g_ascii_strncasecmp(domain, from_domain, domain_len) == 0) {
-							*align = 2;
-						}
-						else if (*align < 1 && from_tld.len > 0) {
-							rspamd_ftok_t sig_tld = {0};
-							if (rspamd_url_find_tld(domain, domain_len, &sig_tld) &&
-								sig_tld.len == from_tld.len &&
-								g_ascii_strncasecmp(sig_tld.begin, from_tld.begin,
-													sig_tld.len) == 0) {
-								*align = 1;
-							}
+						if (sig_align > *align) {
+							*align = sig_align;
 						}
 					}
 				}
@@ -1628,16 +1734,252 @@ dkim_module_key_handler(rspamd_dkim_key_t *key,
 	dkim_module_check(res);
 }
 
+/*
+ * Starts the check of a single signature header. An `author` means that the
+ * signature is one of those taken beyond max_sigs: it is dropped unless the
+ * parsed signature, not the hint it has been chosen by, is aligned with the
+ * author and is one that would be checked at all.
+ */
+static void
+dkim_module_start_signature(struct rspamd_task *task,
+							struct rspamd_symcache_dynamic_item *item,
+							struct dkim_ctx *dkim_module_ctx,
+							struct rspamd_mime_header *rh,
+							struct dkim_check_result **pres,
+							const struct dkim_author_domain *author)
+{
+	rspamd_dkim_context_t *ctx;
+	rspamd_dkim_key_t *key;
+	GError *err = NULL;
+	struct dkim_check_result *res = *pres, *cur;
+	const char *domain;
+	gboolean untrusted;
+
+	if (rh->decoded == NULL || rh->decoded[0] == '\0') {
+		msg_info_task("cannot load empty DKIM signature");
+		return;
+	}
+
+	cur = rspamd_mempool_alloc0(task->task_pool, sizeof(*cur));
+	cur->first = res;
+	cur->res = NULL;
+	cur->task = task;
+	cur->mult_allow = 1.0;
+	cur->mult_deny = 1.0;
+	cur->item = item;
+
+	ctx = rspamd_create_dkim_context(rh->decoded,
+									 task->task_pool,
+									 task->resolver,
+									 dkim_module_ctx->time_jitter,
+									 RSPAMD_DKIM_NORMAL,
+									 &err);
+
+	if (res == NULL) {
+		res = cur;
+		res->first = res;
+		res->prev = res;
+		*pres = res;
+	}
+	else {
+		DL_APPEND(res, cur);
+	}
+
+	if (ctx == NULL) {
+		if (err != NULL) {
+			msg_info_task("cannot parse DKIM signature: %e",
+						  err);
+			g_error_free(err);
+		}
+		else {
+			msg_info_task("cannot parse DKIM signature: "
+						  "unknown error");
+		}
+
+		return;
+	}
+
+	domain = rspamd_dkim_get_domain(ctx);
+	untrusted = dkim_module_ctx->trusted_only &&
+				(dkim_module_ctx->dkim_domains == NULL ||
+				 rspamd_match_hash_map(dkim_module_ctx->dkim_domains,
+									   domain, strlen(domain)) == NULL);
+
+	if (author != NULL &&
+		(untrusted ||
+		 dkim_module_domain_alignment(author, domain, strlen(domain)) == 0)) {
+		/* It never becomes a part of the results */
+		msg_debug_task("skip dkim check for %s domain beyond the signatures "
+					   "limit: %s",
+					   domain, untrusted ? "not trusted" : "not aligned");
+
+		return;
+	}
+
+	/* Get key */
+	cur->ctx = ctx;
+
+	if (untrusted) {
+		msg_debug_task("skip dkim check for %s domain", domain);
+
+		return;
+	}
+
+	if (dkim_module_ctx->dkim_hash) {
+		key = rspamd_lru_hash_lookup(dkim_module_ctx->dkim_hash,
+									 rspamd_dkim_get_dns_key(ctx),
+									 task->task_timestamp);
+	}
+	else {
+		key = NULL;
+	}
+
+	if (key != NULL) {
+		cur->key = rspamd_dkim_key_ref(key);
+		/* Release key when task is processed */
+		rspamd_mempool_add_destructor(task->task_pool,
+									  dkim_module_key_dtor, cur->key);
+	}
+	else {
+		(void) rspamd_get_dkim_key(ctx,
+								   task,
+								   dkim_module_key_handler,
+								   cur);
+	}
+}
+
+/*
+ * Tells if a signature header claims a domain that is aligned with the author.
+ * It is a hint to choose signatures by: the header is not parsed here.
+ */
+static gboolean
+dkim_module_signature_looks_aligned(struct rspamd_task *task,
+									const struct dkim_author_domain *author,
+									const struct rspamd_mime_header *rh)
+{
+	rspamd_ftok_t tok;
+	const char *domain;
+	gsize domain_len;
+
+	if (rh->decoded == NULL ||
+		!rspamd_dkim_signature_peek_domain(rh->decoded, strlen(rh->decoded),
+										   &tok)) {
+		return FALSE;
+	}
+
+	domain = tok.begin;
+	domain_len = tok.len;
+
+	if (rspamd_str_has_8bit((const unsigned char *) domain, domain_len)) {
+		/* RFC 8616 allows U-labels in d=, the parser converts them as well */
+		unsigned int alabel_len = 0;
+
+		domain = rspamd_dns_resolver_idna_convert_utf8(task->resolver,
+													   task->task_pool,
+													   domain, domain_len,
+													   &alabel_len);
+		if (domain == NULL) {
+			return FALSE;
+		}
+
+		domain_len = alabel_len;
+	}
+
+	return dkim_module_domain_alignment(author, domain, domain_len) > 0;
+}
+
+/*
+ * Deals with the signature headers that max_sigs leaves out, `left` is the
+ * first of them. A signature is inserted above the existing ones (RFC 6376
+ * section 5.6), so what a positional limit cuts off is the oldest signatures,
+ * and the author's one is normally the oldest of all: the only signature that
+ * can give DMARC an aligned pass is the first one to be lost. RFC 6376
+ * section 6.1 leaves the order of checks to the verifier, so a few of the
+ * signatures that claim the author's domain are still checked, from the
+ * bottom of the message upwards.
+ *
+ * The work is bounded: headers are counted by walking the list only, a bounded
+ * number of them is scanned for d= with no allocations and no logging, and at
+ * most `extra_aligned_sigs` of them reach the parser and a key lookup. A claim
+ * of alignment costs a sender nothing, but it buys nothing either: a pass
+ * still needs a signature that verifies with a key of the author's domain.
+ */
+static void
+dkim_module_check_beyond_limit(struct rspamd_task *task,
+							   struct rspamd_symcache_dynamic_item *item,
+							   struct dkim_ctx *dkim_module_ctx,
+							   struct rspamd_mime_header *rh,
+							   struct rspamd_mime_header *left,
+							   unsigned int checked,
+							   struct dkim_check_result **pres)
+{
+	struct rspamd_mime_header *picked[DKIM_ALIGNED_SCAN_LIMIT], *cur;
+	struct dkim_author_domain author = {0};
+	unsigned int total = checked, scanned = 0, npicked = 0;
+	unsigned int max_extra = MIN(dkim_module_ctx->extra_aligned_sigs,
+								 G_N_ELEMENTS(picked));
+	gboolean has_author = max_extra > 0 &&
+						  dkim_module_get_author_domain(task, &author);
+
+	/* The tail of the list is `prev` of its head */
+	for (cur = rh->prev;; cur = cur->prev) {
+		total++;
+
+		if (has_author && npicked < max_extra &&
+			scanned < DKIM_ALIGNED_SCAN_LIMIT) {
+			scanned++;
+
+			if (dkim_module_signature_looks_aligned(task, &author, cur)) {
+				picked[npicked++] = cur;
+			}
+		}
+
+		if (cur == left) {
+			break;
+		}
+	}
+
+	/* Results are kept in the order of the message */
+	while (npicked > 0) {
+		checked++;
+		dkim_module_start_signature(task, item, dkim_module_ctx,
+									picked[--npicked], pres, &author);
+	}
+
+	if (total > checked) {
+		struct rspamd_symbol_result *sres;
+		char numbuf[64];
+		gsize r;
+
+		msg_info_task("message has %ud DKIM signatures, only %ud have been "
+					  "checked: max_sigs = %ud, extra_aligned_sigs = %ud",
+					  total, checked, dkim_module_ctx->max_sigs,
+					  dkim_module_ctx->extra_aligned_sigs);
+
+		sres = rspamd_task_insert_result(task, DKIM_SYMBOL_TRUNCATED, 1.0,
+										 NULL);
+
+		if (sres != NULL) {
+			r = rspamd_snprintf(numbuf, sizeof(numbuf), "total=%ud", total);
+			rspamd_task_add_result_option(task, sres, numbuf, r);
+			r = rspamd_snprintf(numbuf, sizeof(numbuf), "checked=%ud", checked);
+			rspamd_task_add_result_option(task, sres, numbuf, r);
+		}
+	}
+	else {
+		msg_debug_task("message has %ud DKIM signatures, all have been "
+					   "checked: max_sigs = %ud",
+					   total, dkim_module_ctx->max_sigs);
+	}
+}
+
 static void
 dkim_symbol_callback(struct rspamd_task *task,
 					 struct rspamd_symcache_dynamic_item *item,
 					 void *unused)
 {
-	rspamd_dkim_context_t *ctx;
-	rspamd_dkim_key_t *key;
-	GError *err = NULL;
 	struct rspamd_mime_header *rh, *rh_cur;
-	struct dkim_check_result *res = NULL, *cur;
+	struct dkim_check_result *res = NULL;
 	unsigned int checked = 0;
 	double *dmarc_checks;
 	struct dkim_ctx *dkim_module_ctx = dkim_get_context(task->cfg);
@@ -1693,97 +2035,18 @@ dkim_symbol_callback(struct rspamd_task *task,
 			 * limit of them.
 			 */
 			if (checked >= dkim_module_ctx->max_sigs) {
-				msg_info_task("message has multiple signatures but we"
-							  " stopped after %ud checked signatures as limit"
-							  " is reached",
-							  checked);
 				break;
 			}
 
 			checked++;
+			dkim_module_start_signature(task, item, dkim_module_ctx, rh_cur,
+										&res, NULL);
+		}
 
-			if (rh_cur->decoded == NULL || rh_cur->decoded[0] == '\0') {
-				msg_info_task("cannot load empty DKIM signature");
-				continue;
-			}
-
-			cur = rspamd_mempool_alloc0(task->task_pool, sizeof(*cur));
-			cur->first = res;
-			cur->res = NULL;
-			cur->task = task;
-			cur->mult_allow = 1.0;
-			cur->mult_deny = 1.0;
-			cur->item = item;
-
-			ctx = rspamd_create_dkim_context(rh_cur->decoded,
-											 task->task_pool,
-											 task->resolver,
-											 dkim_module_ctx->time_jitter,
-											 RSPAMD_DKIM_NORMAL,
-											 &err);
-
-			if (res == NULL) {
-				res = cur;
-				res->first = res;
-				res->prev = res;
-			}
-			else {
-				DL_APPEND(res, cur);
-			}
-
-			if (ctx == NULL) {
-				if (err != NULL) {
-					msg_info_task("cannot parse DKIM signature: %e",
-								  err);
-					g_error_free(err);
-					err = NULL;
-				}
-				else {
-					msg_info_task("cannot parse DKIM signature: "
-								  "unknown error");
-				}
-
-				continue;
-			}
-			else {
-				/* Get key */
-				cur->ctx = ctx;
-				const char *domain = rspamd_dkim_get_domain(cur->ctx);
-
-				if (dkim_module_ctx->trusted_only &&
-					(dkim_module_ctx->dkim_domains == NULL ||
-					 rspamd_match_hash_map(dkim_module_ctx->dkim_domains,
-										   domain, strlen(domain)) == NULL)) {
-					msg_debug_task("skip dkim check for %s domain",
-								   rspamd_dkim_get_domain(ctx));
-
-					continue;
-				}
-
-				if (dkim_module_ctx->dkim_hash) {
-					key = rspamd_lru_hash_lookup(dkim_module_ctx->dkim_hash,
-												 rspamd_dkim_get_dns_key(ctx),
-												 task->task_timestamp);
-				}
-				else {
-					key = NULL;
-				}
-
-				if (key != NULL) {
-					cur->key = rspamd_dkim_key_ref(key);
-					/* Release key when task is processed */
-					rspamd_mempool_add_destructor(task->task_pool,
-												  dkim_module_key_dtor, cur->key);
-				}
-				else {
-					if (!rspamd_get_dkim_key(ctx,
-											 task,
-											 dkim_module_key_handler,
-											 cur)) {
-						continue;
-					}
-				}
-			}
+		if (rh_cur != NULL) {
+			/* The limit has left some signatures out */
+			dkim_module_check_beyond_limit(task, item, dkim_module_ctx, rh,
+										   rh_cur, checked, &res);
 		}
 	}
 	else {

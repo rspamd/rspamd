@@ -464,6 +464,83 @@ TEST_SUITE("rspamd_dkim")
 		}
 	}
 
+	TEST_CASE("rspamd_dkim_signature_peek_domain")
+	{
+		/*
+		 * The peek must split the tag list as the full parser does: where
+		 * both accept a signature, both must name the same domain
+		 */
+		struct test_case {
+			std::string sig;
+			bool found;
+			std::string domain;
+			bool valid_seal; /* The full parser accepts it as an ARC seal */
+		};
+		std::vector<test_case> cases{
+			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==", true, "example.com", true},
+			{"i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==; d=example.com", true, "example.com", true},
+			{"i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==; d=example.com ;", true, "example.com", true},
+			{"d=Example.COM; i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==", true, "Example.COM", true},
+			{" d = example.com ; i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==", true, "example.com", true},
+			{"\td\t=\r\n example.com\r\n ; i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==", true,
+			 "example.com", true},
+			{";i=1; ; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==;;", true, "example.com", true},
+			/* A tag-spec without `=` is skipped, and so is a trailing one */
+			{"i=1; cv=none; x; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==; d", true, "example.com", true},
+			/* Only the tag `d` counts, wherever the letter shows up */
+			{"i=1; cv=none; a=rsa-sha256; xd=evil.example; zz=d=evil.example; s=sel; b=dGVzdA==; d=example.com",
+			 true, "example.com", true},
+			{"i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==; dd=example.com", false, "", false},
+			{"i=1; cv=none; a=rsa-sha256; s=d=example.com; b=dGVzdA==", false, "", false},
+			/* No way to pick one of two domains */
+			{"i=1; cv=none; a=rsa-sha256; d=attacker.example; s=sel; b=dGVzdA==;;d=trusted.example", false, "",
+			 false},
+			/* Broken tag lists */
+			{"i=1; cv=none; a=rsa-sha256; d=; s=sel; b=dGVzdA==", false, "", false},
+			{"i=1; cv=none; a=rsa-sha256; d= ; s=sel; b=dGVzdA==", false, "", false},
+			/* The parser takes an empty value at the very end, it is no domain to align */
+			{"i=1; cv=none; a=rsa-sha256; s=sel; b=dGVzdA==; d=", false, "", true},
+			{"i=1; cv=none; a=rsa-sha256; d example.com; s=sel; b=dGVzdA==", false, "", false},
+			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==; =x", false, "", false},
+			{"i=1; cv=none; a=rsa-sha256; d=example.com; s=sel; b=dGVzdA==; zz =", true, "example.com", true},
+			{"", false, "", false},
+			{" ; ;; ", false, "", false},
+			{"d", false, "", false},
+		};
+
+		for (auto &&c: cases) {
+			SUBCASE(fmt::format("sig: {}", c.sig).c_str())
+			{
+				rspamd_ftok_t tok = {0, nullptr};
+				auto found = rspamd_dkim_signature_peek_domain(c.sig.data(), c.sig.size(), &tok);
+
+				CHECK(found == c.found);
+
+				if (found) {
+					CHECK(std::string{tok.begin, tok.len} == c.domain);
+				}
+
+				auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), "dkim", 0);
+				GError *err = nullptr;
+				auto *ctx = rspamd_create_dkim_context(c.sig.c_str(), pool, nullptr, 0,
+													   RSPAMD_DKIM_ARC_SEAL, &err);
+
+				CHECK((ctx != nullptr) == c.valid_seal);
+
+				if (ctx != nullptr && found) {
+					/* The parser lowercases the domain, the peek returns it raw */
+					auto *lc = g_ascii_strdown(tok.begin, tok.len);
+					CHECK(std::string{rspamd_dkim_get_domain(ctx)} == lc);
+					g_free(lc);
+				}
+				if (err) {
+					g_error_free(err);
+				}
+				rspamd_mempool_delete(pool);
+			}
+		}
+	}
+
 	TEST_CASE("rspamd_dkim_key_type_matches_record")
 	{
 		using namespace rspamd_dkim_test;

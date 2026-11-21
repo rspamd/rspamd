@@ -20,6 +20,7 @@
 #include "contrib/libev/ev.h"
 #include "dns.h"
 #include "ref.h"
+#include "fstring.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -148,6 +149,20 @@ rspamd_dkim_context_t *rspamd_create_dkim_context(const char *sig,
 												  unsigned int time_jitter,
 												  enum rspamd_dkim_type type,
 												  GError **err);
+
+/**
+ * Finds the value of the d= tag of a signature header without creating a
+ * context: nothing is allocated, logged or validated beyond the tag list
+ * itself. The tag list is split exactly as rspamd_create_dkim_context() does
+ * it, but the result is still a hint taken from a signature that has not been
+ * parsed: use it to choose signatures, never to decide anything about them
+ * @param sig signature header value
+ * @param len length of the value
+ * @param domain the raw d= value, pointing into `sig`
+ * @return true if the tag list has exactly one non-empty d= tag
+ */
+bool rspamd_dkim_signature_peek_domain(const char *sig, gsize len,
+									   rspamd_ftok_t *domain);
 
 /**
  * Create new dkim context for making a signature

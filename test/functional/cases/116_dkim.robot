@@ -46,12 +46,44 @@ DKIM Accept Large Header List Below Limit
   Expect Symbol  R_DKIM_PERMFAIL
 
 DKIM Unparseable Signatures Count Towards Limit
-  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs.eml
+  [Documentation]  Five signatures that do not parse use up max_sigs, so a
+  ...  valid signature of an unrelated domain below them is left out, and the
+  ...  truncation is reported with the counts
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs_unaligned.eml
   Do Not Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Exact Options  DKIM_SIGS_TRUNCATED  total=6  checked=5
+
+DKIM Aligned Signature Beyond Limit Is Still Checked
+  [Documentation]  The author's signature is the oldest one, so it is the
+  ...  first to fall behind max_sigs: it is still checked as its domain is
+  ...  aligned with From, and nothing is reported as left out
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs.eml
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Option  R_DKIM_ALIGNED  strict
+  Do Not Expect Symbol  DKIM_SIGS_TRUNCATED
+
+DKIM Aligned Signatures Beyond Limit Are Taken From The Bottom
+  [Documentation]  Two signatures above the author's one claim its domain as
+  ...  well: the two extra checks go to the lowest candidates, which include the
+  ...  real signature
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs_decoys_above.eml
+  Expect Symbol  R_DKIM_ALLOW
+  Expect Symbol With Option  R_DKIM_ALIGNED  strict
+  Expect Symbol With Exact Options  DKIM_SIGS_TRUNCATED  total=8  checked=7
+
+DKIM Aligned Signatures Beyond Limit Are Limited Too
+  [Documentation]  The extra checks are a budget of their own: claims of the
+  ...  author's domain below the real signature use it up, which costs a pass
+  ...  and can never earn one
+  Scan File  ${RSPAMD_TESTDIR}/messages/dkim_many_sigs_decoys_below.eml
+  Do Not Expect Symbol  R_DKIM_ALLOW
+  Do Not Expect Symbol  R_DKIM_ALIGNED
+  Expect Symbol With Exact Options  DKIM_SIGS_TRUNCATED  total=8  checked=7
 
 DKIM Signatures At Limit Are Still Checked
   Scan File  ${RSPAMD_TESTDIR}/messages/dkim_sigs_at_limit.eml
   Expect Symbol  R_DKIM_ALLOW
+  Do Not Expect Symbol  DKIM_SIGS_TRUNCATED
 
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
