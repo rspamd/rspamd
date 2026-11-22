@@ -1,3 +1,55 @@
+4.3.1: 22 Nov 2026
+
+  ** Incompatible changes **
+  * [Rework] Move dynamic scores and actions to dynconf: the legacy dynamic configuration file and Redis hash are imported once (the file is renamed), the dynamic_conf plugin is a stub for the dynconf Redis backend, and an override.d threshold wins over a dynamic one, which wins over local.d
+  * [Fix] lua_util: Parse time intervals strictly ("500ms" is now milliseconds, "1 d" and "1D" are a day; unknown units and trailing text are rejected)
+  * [Fix] Seed URL hash sets with a random per-process value (the order of unsorted task urls now differs between processes)
+
+  ** Features **
+  * [Feature] Add the dynconf framework for runtime overrides of plugin options, with Redis and file backends (by default the file backend serves actions, scores and symbols)
+  * [Feature] dynconf: Make scalar options of chartable, dkim and fuzzy_check and the runtime options of 41 Lua plugins dynamic
+  * [Feature] dynconf: Add rspamadm configdump --dynamic and controller endpoints to dump, set, reset and reload overrides
+  * [Feature] symcache: Time selected symbols and groups precisely on every scan, read through rspamd_config:register_profiled_symbols() and task:get_symbols_profile()
+  * [Feature] lualib: Add lua_task_profile to sample per-scan symbol run times
+  * [Feature] clickhouse: Store sampled symbol profiles in new Profile columns (schema version 13)
+  * [Feature] dkim: Check up to extra_aligned_sigs (2 by default) From-aligned signatures beyond max_sigs and add DKIM_SIGS_TRUNCATED when signatures are left unchecked
+  * [Feature] rbl: Add hash_format = "rbase32" (RFC 4648 base32) and selector_hash = false for selectors that return a ready hash
+  * [Feature] rbl: Add max_dns_requests, a per-rule cap on DNS requests per message, with a zero score <SYMBOL>_LIMIT symbol when work is dropped
+  * [Feature] Report the release base and git distance in --version, rspamd_version() and the controller stat reply
+  * [Feature] WebUI: Update Bootstrap to 5.3.9
+
+  ** Bug fixes **
+  * [CritFix] rpm: Create the _rspamd user on RHEL again (fresh EL8/9/10 installs had no user)
+  * [Fix] dkim: Do not let one unresolved signature hide every DKIM result (an untrusted signature with trusted_only or a d= label over 63 octets suppressed all DKIM symbols)
+  * [Fix] dkim: Report a key request that cannot be sent as a temporary error unless the name is invalid
+  * [Fix] spf: Report a malformed domain as none, not a DNS failure (a spoofed sender got DMARC_DNSFAIL instead of the reject policy)
+  * [Fix] Reseed math.random and the fast PRNG in forked workers (all workers drew the same random sequences)
+  * [Fix] libottery: Seed from getrandom/getentropy first, never from RDRAND alone, and do not keep a failed reinit usable
+  * [Fix] libottery: Wipe the bytes actually handed out after a refill (up to 40 bytes of a returned key stayed in the state)
+  * [Fix] phishing: Score a link displaying the DMARC-authenticated From domain as PHISHING_OWN_DOMAIN instead of PHISHING, except for shared_domains (freemail) and strict domains
+  * [Fix] bayes: Honour the check_balance and min_balance autolearn options
+  * [Fix] maps: Keep the expiry of each HTTP backend and check all backends before a reread (the first URL of a map could be fetched every few seconds and the second never)
+  * [Fix] received: Ignore HELO address literals when extracting Received addresses
+  * [Fix] lua_mime: Keep the line break before MIME delimiters after verbatim parts in add_text_footer and multipattern_text_replace
+  * [Fix] url: Merge the flags of a repeated url into its earlier object and keep urls repeated by an extracted part
+  * [Fix] rules: Do not take an image source also shown in the text as image-only in HTML_TINY_PIXEL_TRACKER, and read a zero of any unit as zero
+  * [Fix] clamav: Treat a reply without a verdict as a failure (a database reload passed the message as scanned)
+  * [Fix] lua_scanners: Do not pass error or unrecognised replies as clean in savapi, spamassassin, oletools, fprot, avast, razor, pyzor, dcc and sophos
+  * [Fix] lua_tcp: Fix use-after-free on error callbacks, closing sessions and stale handles, aborts on empty write handlers and a bogus callback call on a failed connect
+  * [Fix] lua_tcp: Arm timeouts of sync operations, drain decrypted TLS data and report starttls failures through the handlers only
+  * [Fix] lua_smtp: Call the completion callback once on an immediate failure
+  * [Fix] Run task:add_timer and ev_base:add_timer callbacks on a callback thread and re-arm timers that return a new interval (the worker aborted, timers stopped firing)
+  * [Fix] Import every section of the global `config` table (three sections aborted rspamd)
+  * [Fix] Fix Lua stack and memory errors in the task, config, util, mempool, map, trie, html, upstream and ucl APIs (map:foreach now stops on true and returns the count; trie callbacks always get the end offset)
+  * [Fix] Fix Lua stack errors in the Redis learn cache, mime expression atoms, fuzzy learn, legacy autolearn and classifier conditions
+  * [Fix] rspamadm: Fix the `lua -P` abort, the exit status of a failing Lua command and thread reuse in `.exec`
+  * [Fix] Keep the Lua error message in tracebacks with Lua 5.4.3 and later
+  * [Fix] lua_mime: Do not assign to a loop variable (the module failed to compile with Lua 5.5)
+  * [Fix] lua_shape: Keep false as a field default
+  * [Fix] symcache: Read the slow flag from internal flags and decide item timing once at its start (callback items were timed on every task, slow-rule notices were wrong)
+  * [Fix] rbl: Do not score a symbol twice when a final resolve_ip query merges into an answered one
+  * [Fix] rspamc: Label profile times as milliseconds
+
 4.3.0: 13 Nov 2026
 
   ** Incompatible changes **
