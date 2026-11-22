@@ -30,7 +30,7 @@
 struct rspamd_scan_result;
 
 namespace rspamd::symcache {
-enum class cache_item_status : std::uint16_t {
+enum class cache_item_status : std::uint8_t {
 	not_started = 0,
 	started = 1,
 	pending = 2,
@@ -79,12 +79,31 @@ static inline auto item_status_to_str(cache_item_status status) -> const char *
 struct cache_dynamic_item {
 	std::uint16_t start_msec; /* Relative to task time */
 	cache_item_status status;
+	std::uint8_t timed; /* Non-zero if start_msec was stamped when the item started */
 	std::uint32_t async_events;
 };
 
 static_assert(sizeof(cache_dynamic_item) == sizeof(std::uint64_t));
 static_assert(std::is_trivial_v<cache_dynamic_item>);
 
+/**
+ * Precise timing of a single item of a task: microseconds relative to the
+ * start of the runtime (saturating at UINT32_MAX)
+ */
+struct cache_item_timing {
+	static constexpr const std::uint32_t started = 1u << 0u;
+	static constexpr const std::uint32_t finished = 1u << 1u;
+	static constexpr const std::uint32_t async = 1u << 2u;
+	static constexpr const std::uint32_t aborted = 1u << 3u;
+
+	std::uint32_t start_us;   /* Start of the call, relative to the runtime creation */
+	std::uint32_t elapsed_us; /* Start of the call to the finalisation of the item */
+	std::uint32_t sync_us;    /* Synchronous part of the call */
+	std::uint32_t flags;
+};
+
+static_assert(sizeof(cache_item_timing) == 16);
+static_assert(std::is_trivial_v<cache_item_timing>);
 
 class symcache_runtime {
 	unsigned items_inflight;
@@ -100,6 +119,12 @@ class symcache_runtime {
 		passthrough,
 	};
 	bool profile;
+	/* Every item of the task is timed precisely (RSPAMD_TASK_FLAG_PROFILE) */
+	bool profile_all;
+	/* Precise timings, indexed as dynamic_items; nullptr when nothing is timed */
+	cache_item_timing *timings;
+	/* Monotonic time of the runtime creation, ns */
+	std::uint64_t timing_start_ns;
 
 	double profile_start;
 	double lim;
@@ -122,6 +147,10 @@ class symcache_runtime {
 
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
 						cache_dynamic_item *dyn_item) -> bool;
+	/* Microseconds since the runtime creation (saturating); reads the precise clock */
+	auto timing_now_us() const -> std::uint32_t;
+	/* Returns the timing of an item if it is timed precisely, nullptr otherwise */
+	auto get_item_timing(const cache_item *item, const cache_dynamic_item *dyn_item) -> cache_item_timing *;
 	/* Processes all buckets of a stage in their order */
 	auto process_stage(struct rspamd_task *task, symcache &cache, exec_stage stage) -> bool;
 	auto check_process_status(struct rspamd_task *task) -> check_status;
@@ -277,6 +306,20 @@ public:
 		std::swap(profile, enable);
 		return enable;
 	}
+
+	/**
+	 * Whether the precise timings are recorded for this task
+	 */
+	auto has_timings() const -> bool
+	{
+		return timings != nullptr && order;
+	}
+
+	/**
+	 * Passes the precise timings to a callback (see `rspamd_symcache_profile_foreach`)
+	 */
+	auto profile_foreach(struct rspamd_task *task, bool all,
+						 rspamd_symcache_profile_cb cb, gpointer ud) const -> unsigned int;
 
 	/**
 	 * Returns the dynamic item by static item id

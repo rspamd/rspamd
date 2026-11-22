@@ -27,7 +27,10 @@
 #ifndef RSPAMD_TEST_FAKE_TIME_HXX
 #define RSPAMD_TEST_FAKE_TIME_HXX
 
+#include <cmath>
+#include <cstdint>
 #include "contrib/libev/ev.h"
+#include "libutil/util.h"
 
 namespace rspamd_test {
 
@@ -42,6 +45,7 @@ public:
 		: now_(start), loop_(loop)
 	{
 		instance_ = this;
+		prev_mono_ = rspamd_set_monotonic_clock(&fake_clock::read_ns);
 		ev_set_fake_time_cb(&fake_clock::read);
 		if (loop_) {
 			ev_now_resync(loop_);
@@ -51,6 +55,7 @@ public:
 	~fake_clock()
 	{
 		ev_set_fake_time_cb(nullptr);
+		rspamd_set_monotonic_clock(prev_mono_);
 		instance_ = nullptr;
 		if (loop_) {
 			ev_now_resync(loop_);
@@ -88,14 +93,31 @@ public:
 		return now_;
 	}
 
+	/* Number of precise (monotonic ns) clock reads so far */
+	std::uint64_t reads() const
+	{
+		return reads_;
+	}
+
 private:
 	static double read()
 	{
 		return instance_ ? instance_->now_ : 0.0;
 	}
 
+	static uint64_t read_ns()
+	{
+		if (instance_ == nullptr) {
+			return 0;
+		}
+		instance_->reads_++;
+		return (uint64_t) std::llround(instance_->now_ * 1e9);
+	}
+
 	double now_;
 	struct ev_loop *loop_;
+	std::uint64_t reads_ = 0;
+	rspamd_monotonic_clock_fn prev_mono_ = nullptr;
 
 	static inline fake_clock *instance_ = nullptr;
 };

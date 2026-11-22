@@ -1246,6 +1246,10 @@ rspamd_handle_child_fork(struct rspamd_worker *wrk,
 	}
 
 	rspamd_random_seed_fast();
+	/* The worker goes on with the Lua state of the main process config */
+	if (rspamd_main->cfg->lua_state) {
+		rspamd_lua_seed_random(RSPAMD_LUA_CFG_STATE(rspamd_main->cfg));
+	}
 #ifdef HAVE_EVUTIL_RNG_INIT
 	evutil_secure_rng_init();
 #endif

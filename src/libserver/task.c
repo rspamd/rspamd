@@ -2259,52 +2259,6 @@ void rspamd_task_add_request_header(struct rspamd_task *task,
 }
 
 
-void rspamd_task_profile_set(struct rspamd_task *task, const char *key,
-							 double value)
-{
-	GHashTable *tbl;
-	double *pval;
-
-	if (key == NULL) {
-		return;
-	}
-
-	tbl = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_PROFILE);
-
-	if (tbl == NULL) {
-		tbl = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
-		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_PROFILE,
-									tbl, (rspamd_mempool_destruct_t) g_hash_table_unref);
-	}
-
-	pval = g_hash_table_lookup(tbl, key);
-
-	if (pval == NULL) {
-		pval = rspamd_mempool_alloc(task->task_pool, sizeof(*pval));
-		*pval = value;
-		g_hash_table_insert(tbl, (void *) key, pval);
-	}
-	else {
-		*pval = value;
-	}
-}
-
-double *
-rspamd_task_profile_get(struct rspamd_task *task, const char *key)
-{
-	GHashTable *tbl;
-	double *pval = NULL;
-
-	tbl = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_PROFILE);
-
-	if (tbl != NULL) {
-		pval = g_hash_table_lookup(tbl, key);
-	}
-
-	return pval;
-}
-
-
 gboolean
 rspamd_task_set_finish_time(struct rspamd_task *task)
 {

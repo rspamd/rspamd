@@ -373,6 +373,14 @@ private:
 	double reload_time;
 	double last_profile;
 
+	/* Symbols and groups selected for precise timing (see `add_profiled_symbol`) */
+	ankerl::unordered_dense::set<std::string> profiled_symbols;
+	ankerl::unordered_dense::set<std::string> profiled_groups;
+	/* Number of items with `bit_profiled` set */
+	unsigned int profiled_items = 0;
+	/* Set when `init` has resolved the requested names */
+	bool profiled_resolved = false;
+
 private:
 	int peak_cb;
 	int cache_id;
@@ -393,6 +401,14 @@ private:
 	 */
 	auto break_dependency_cycles() -> void;
 	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec &;
+	/*
+	 * Marks the executable items behind the requested symbols and groups with
+	 * `bit_profiled`; idempotent and O(requested names). Unresolved names are
+	 * reported if `log_unresolved` is set
+	 */
+	auto resolve_profiled(bool log_unresolved) -> void;
+	auto resolve_profiled_symbol(std::string_view name) -> bool;
+	auto resolve_profiled_group(std::string_view name) -> bool;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
 
@@ -670,6 +686,25 @@ public:
 	auto get_cache_order() const -> auto
 	{
 		return items_by_order;
+	}
+
+	/**
+	 * Selects a symbol for precise per-scan timing: the executable item that runs
+	 * it (the parent for a virtual symbol) gets `bit_profiled`
+	 * @param name
+	 */
+	auto add_profiled_symbol(std::string_view name) -> void;
+	/**
+	 * Selects all symbols of a group for precise per-scan timing
+	 * @param name
+	 */
+	auto add_profiled_group(std::string_view name) -> void;
+	/**
+	 * True if at least one item is selected for precise timing
+	 */
+	auto has_profiled_items() const -> bool
+	{
+		return profiled_items > 0;
 	}
 
 	/**

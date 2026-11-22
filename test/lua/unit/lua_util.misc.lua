@@ -183,3 +183,52 @@ context("Lua util - str_endswith", function()
     end)
   end
 end)
+
+context("Lua util - parse_time_interval", function()
+  -- good: {input, expected seconds}; bad: {label, input}; wrapped in
+  -- pairs because a nil input would end an ipairs walk
+  local good = {
+    { '42', 42 }, { '0', 0 }, { '10s', 10 }, { '10S', 10 },
+    { '500ms', 0.5 }, { '500MS', 0.5 }, { '500Ms', 0.5 }, { '500mS', 0.5 },
+    { '10m', 600 }, { '10M', 600 },
+    { '1min', 60 }, { '1MIN', 60 }, { '2Min', 120 },
+    { '1h', 3600 }, { '1H', 3600 },
+    { '1d', 86400 }, { '1D', 86400 },
+    { '1w', 604800 }, { '1W', 604800 },
+    { '1y', 31536000 }, { '1Y', 31536000 },
+    { '1.5h', 5400 }, { '.5s', 0.5 }, { '+.5s', 0.5 }, { '-.5s', -0.5 },
+    { '+2d', 172800 }, { '-1s', -1 }, { '2.5', 2.5 },
+    { ' 10 s ', 10 }, { '\t10m\n', 600 }, { '10 ms', 0.01 },
+    { 42, 42 }, { 1.5, 1.5 }, { 0, 0 }, { -3, -3 },
+    { '7days', 604800 }, { '1day', 86400 }, { '1hour', 3600 }, { '2hours', 7200 },
+    { '30sec', 30 }, { '30secs', 30 }, { '1 second', 1 }, { '5 Seconds', 5 },
+    { '10mins', 600 }, { '10minutes', 600 }, { '1minute', 60 },
+    { '2weeks', 1209600 }, { '1week', 604800 }, { '1year', 31536000 },
+    { '2Years', 63072000 },
+  }
+  local bad = {
+    { 'empty string', '' }, { 'spaces', ' ' }, { 'unit only', 'ms' },
+    { 'unknown unit', '10x' }, { 'two units', '10 m s' }, { 'compound', '1h30m' },
+    { 'garbage', 'abc' }, { 'comma', '1,5s' }, { 'exponent', '1e3' },
+    { 'trailing text', '10minutesx' }, { 'month', '1month' }, { 'msec', '5msec' },
+    { 'huge digits', string.rep('9', 500) }, { 'huge with unit', string.rep('9', 500) .. 's' },
+    { 'huge ms', string.rep('9', 500) .. 'ms' },
+    { 'too large', '9007199254740993' }, { 'too large minutes', '307445734561825861m' }, { 'trailing dot text', '10s.' },
+    { 'double sign', '+-1' }, { 'sign only', '-' }, { 'dot only', '.' },
+    { 'nil', nil }, { 'true', true }, { 'false', false }, { 'table', {} },
+  }
+
+  for _, c in ipairs(good) do
+    test(string.format('parses %s "%s"', type(c[1]), (tostring(c[1]):gsub('%c', '_'))), function()
+      local res = util.parse_time_interval(c[1])
+      assert_equal(type(res), 'number')
+      assert_true(math.abs(res - c[2]) < 1e-9,
+          string.format('%s: expected %s, got %s', tostring(c[1]), c[2], res))
+    end)
+  end
+  for _, c in ipairs(bad) do
+    test('rejects ' .. c[1], function()
+      assert_equal(util.parse_time_interval(c[2]), nil)
+    end)
+  end
+end)

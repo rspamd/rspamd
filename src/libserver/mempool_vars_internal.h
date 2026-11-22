@@ -45,7 +45,6 @@
  */
 #define RSPAMD_MEMPOOL_HOSTNAME_GENERIC "hostname_generic"
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
-#define RSPAMD_MEMPOOL_PROFILE "profile"
 #define RSPAMD_MEMPOOL_MILTER_REPLY "milter_reply"
 #define RSPAMD_MEMPOOL_DKIM_SIGNATURE "dkim-signature"
 #define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
