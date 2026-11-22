@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 # Define version variables
 set(RSPAMD_VERSION_MAJOR 4)
 set(RSPAMD_VERSION_MINOR 3)
-set(RSPAMD_VERSION_PATCH 1)
+set(RSPAMD_VERSION_PATCH 2)
 
 # The last release tag this tree descends from. It is set to X.Y.Z only in the
 # "Release X.Y.Z" commit; the post-release bump commit changes only
