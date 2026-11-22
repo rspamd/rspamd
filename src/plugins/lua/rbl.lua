@@ -1385,7 +1385,7 @@ local function gen_rbl_callback(rule)
             end
           end
 
-          for name, req in iter_requests(final_req) do
+          for _, req in iter_requests(final_req) do
             local val_res, val_error = validate_dns(req.n)
             if budget and budget.sent[req.n] then
               -- Already queried in the first phase: neither resend nor charge,
@@ -1394,8 +1394,9 @@ local function gen_rbl_callback(rule)
                   rule.symbol, req.n)
               merge_into_sent(budget.sent[req.n], req)
             elseif val_res then
+              -- The checked value (a resolved address), not the table key
               lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
-                  rule.symbol, name, req.n)
+                  rule.symbol, req.orig, req.n)
               if submit('a', {
                 task = task,
                 name = req.n,
@@ -1417,11 +1418,13 @@ local function gen_rbl_callback(rule)
       end
     end
 
-    for name, req in iter_requests(deduped_req) do
+    for _, req in iter_requests(deduped_req) do
       local val_res, val_error = validate_dns(req.n)
       if val_res then
+        -- Keyed by query name: log the value itself (hashed lists hide it),
+        -- other values sharing the query are logged when merged above
         lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
-            rule.symbol, name, req.n)
+            rule.symbol, req.orig, req.n)
 
         if req.resolve_ip then
           -- Deal with both ipv4 and ipv6
