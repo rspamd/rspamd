@@ -31,10 +31,15 @@ Guide through the Rspamd release process:
    Critical fixes:
    * ..."
    ```
-7. Verify `git describe --tags --long` at the tag gives distance 0
-   (`X.Y.Z-0-g<hash>`)
+7. Verify the tag before pushing it:
+   - `git describe --tags --long` at the tag gives distance 0
+     (`X.Y.Z-0-g<hash>`)
+   - `git show X.Y.Z:CMakeLists.txt | grep RSPAMD_RELEASE_BASE` prints X.Y.Z.
+     A stale base makes every build from the release tarball report
+     `X.Y.Z-dev` and `dev: true`; 4.3.1 shipped like that
+   - cmake prints `Build identity: release base X.Y.Z, dev=FALSE`
 8. Create follow-up commit updating version for next dev cycle: change only
-   `RSPAMD_VERSION_PATCH`, leave `RSPAMD_RELEASE_BASE` alone
+   `RSPAMD_VERSION_PATCH`, leave `RSPAMD_RELEASE_BASE` alone (it stays X.Y.Z)
 9. Remind to push commits and tags
 
 Walk through each step interactively.

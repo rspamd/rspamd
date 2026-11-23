@@ -71,6 +71,7 @@ Interactive guide through the Rspamd release process:
 - Update version in CMakeLists.txt
 - Create signed release commit
 - Create signed release tag
+- Check that the tag sets `RSPAMD_RELEASE_BASE` to the release version
 - Update version for next dev cycle
 
 ## Project Rules
