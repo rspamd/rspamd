@@ -16,7 +16,7 @@ set(RSPAMD_VERSION_PATCH 2)
 # "Release X.Y.Z" commit; the post-release bump commit changes only
 # RSPAMD_VERSION_PATCH, so a version that differs from this value is a
 # development version.
-set(RSPAMD_RELEASE_BASE "4.3.0")
+set(RSPAMD_RELEASE_BASE "4.3.1")
 
 # Keep two digits all the time
 set(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
