@@ -927,6 +927,7 @@ size_t http_parser_execute (http_parser *parser,
           case 'P': parser->method = HTTP_POST;
             /* or PROPFIND|PROPPATCH|PUT|PATCH|PURGE */
             break;
+          case 'Q': parser->method = HTTP_QUERY; break;
           case 'R': parser->method = HTTP_REPORT; break;
           case 'S': parser->method = HTTP_SUBSCRIBE; /* or SEARCH or SYMBOLS */ break;
           case 'T': parser->method = HTTP_TRACE; break;

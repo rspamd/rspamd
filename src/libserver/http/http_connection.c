@@ -2415,6 +2415,45 @@ rspamd_http_detach_shared(struct rspamd_http_message *msg)
 	rspamd_http_message_set_body_from_fstring_steal(msg, cpy_str);
 }
 
+/*
+ * RFC 9110 8.6: a user agent should not send Content-Length when a request has
+ * no content and its method does not anticipate any
+ */
+static inline gboolean
+rspamd_http_request_needs_content_length(const struct rspamd_http_message *msg,
+										 gsize bodylen)
+{
+	return bodylen > 0 || msg->method == HTTP_POST ||
+		   msg->method == HTTP_PUT || msg->method == HTTP_PATCH ||
+		   msg->method == HTTP_QUERY;
+}
+
+/*
+ * A Host set by the caller on a plain HTTP/1.1 request: the prelude writes it,
+ * so that it is the first field (RFC 9112 3.2), and the header loops skip it
+ */
+static struct rspamd_http_header *
+rspamd_http_request_prelude_host(struct rspamd_http_connection *conn,
+								 struct rspamd_http_message *msg,
+								 const char *host,
+								 gboolean encrypted)
+{
+	rspamd_ftok_t srch;
+	khiter_t k;
+
+	if (conn->type != RSPAMD_HTTP_CLIENT || encrypted ||
+		msg->method >= HTTP_SYMBOLS ||
+		!(msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER) ||
+		(host == NULL && msg->host == NULL)) {
+		return NULL;
+	}
+
+	RSPAMD_FTOK_ASSIGN(&srch, "Host");
+	k = kh_get(rspamd_http_headers_hash, msg->headers, &srch);
+
+	return k != kh_end(msg->headers) ? kh_value(msg->headers, k) : NULL;
+}
+
 int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 									 char *repbuf, gsize replen, gsize bodylen, gsize enclen, const char *host,
 									 struct rspamd_http_connection *conn, struct rspamd_http_message *msg,
@@ -2425,6 +2464,7 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 	char datebuf[64];
 	int meth_len = 0;
 	const char *server_conn_header, *client_conn_header;
+	struct rspamd_http_header *host_hdr;
 
 	/* Set up connection header strings based on flags and connection type */
 	if (msg->flags & RSPAMD_HTTP_FLAG_HAS_CONNECTION_HEADER) {
@@ -2602,12 +2642,14 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 			else {
 				rspamd_printf_fstring(buf,
 									  "%s %V HTTP/1.0\r\n"
-									  "Content-Length: %z\r\n"
 									  "%s",
 									  http_method_str(msg->method),
 									  msg->url,
-									  bodylen,
 									  client_conn_header);
+
+				if (rspamd_http_request_needs_content_length(msg, bodylen)) {
+					rspamd_printf_fstring(buf, "Content-Length: %z\r\n", bodylen);
+				}
 
 				if (bodylen > 0) {
 					if (mime_type == NULL) {
@@ -2631,120 +2673,65 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 				if (rspamd_http_message_is_standard_port(msg)) {
 					rspamd_printf_fstring(buf,
 										  "%s %s HTTP/1.1\r\n"
-										  "%s"
 										  "Host: %s\r\n"
+										  "%s"
 										  "Content-Length: %z\r\n"
 										  "Content-Type: application/octet-stream\r\n",
 										  "POST",
 										  "/post",
-										  client_conn_header,
 										  host,
+										  client_conn_header,
 										  enclen);
 				}
 				else {
 					rspamd_printf_fstring(buf,
 										  "%s %s HTTP/1.1\r\n"
-										  "%s"
 										  "Host: %s:%d\r\n"
+										  "%s"
 										  "Content-Length: %z\r\n"
 										  "Content-Type: application/octet-stream\r\n",
 										  "POST",
 										  "/post",
-										  client_conn_header,
 										  host,
 										  msg->port,
+										  client_conn_header,
 										  enclen);
 				}
 			}
 			else {
 				if (conn->priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) {
-					/* Write proxied request */
-					if ((msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER)) {
-						rspamd_printf_fstring(buf,
-											  "%s %s://%s:%d/%V HTTP/1.1\r\n"
-											  "%s"
-											  "Content-Length: %z\r\n",
-											  http_method_str(msg->method),
-											  (conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
-											  host,
-											  msg->port,
-											  msg->url,
-											  client_conn_header,
-											  bodylen);
-					}
-					else {
-						if (rspamd_http_message_is_standard_port(msg)) {
-							rspamd_printf_fstring(buf,
-												  "%s %s://%s:%d/%V HTTP/1.1\r\n"
-												  "%s"
-												  "Host: %s\r\n"
-												  "Content-Length: %z\r\n",
-												  http_method_str(msg->method),
-												  (conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
-												  host,
-												  msg->port,
-												  msg->url,
-												  client_conn_header,
-												  host,
-												  bodylen);
-						}
-						else {
-							rspamd_printf_fstring(buf,
-												  "%s %s://%s:%d/%V HTTP/1.1\r\n"
-												  "%s"
-												  "Host: %s:%d\r\n"
-												  "Content-Length: %z\r\n",
-												  http_method_str(msg->method),
-												  (conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
-												  host,
-												  msg->port,
-												  msg->url,
-												  client_conn_header,
-												  host,
-												  msg->port,
-												  bodylen);
-						}
-					}
+					rspamd_printf_fstring(buf,
+										  "%s %s://%s:%d/%V HTTP/1.1\r\n",
+										  http_method_str(msg->method),
+										  (conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
+										  host,
+										  msg->port,
+										  msg->url);
 				}
 				else {
-					/* Unproxied version */
-					if ((msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER)) {
-						rspamd_printf_fstring(buf,
-											  "%s %V HTTP/1.1\r\n"
-											  "%s"
-											  "Content-Length: %z\r\n",
-											  http_method_str(msg->method),
-											  msg->url,
-											  client_conn_header,
-											  bodylen);
-					}
-					else {
-						if (rspamd_http_message_is_standard_port(msg)) {
-							rspamd_printf_fstring(buf,
-												  "%s %V HTTP/1.1\r\n"
-												  "%s"
-												  "Host: %s\r\n"
-												  "Content-Length: %z\r\n",
-												  http_method_str(msg->method),
-												  msg->url,
-												  client_conn_header,
-												  host,
-												  bodylen);
-						}
-						else {
-							rspamd_printf_fstring(buf,
-												  "%s %V HTTP/1.1\r\n"
-												  "%s"
-												  "Host: %s:%d\r\n"
-												  "Content-Length: %z\r\n",
-												  http_method_str(msg->method),
-												  msg->url,
-												  client_conn_header,
-												  host,
-												  msg->port,
-												  bodylen);
-						}
-					}
+					rspamd_printf_fstring(buf,
+										  "%s %V HTTP/1.1\r\n",
+										  http_method_str(msg->method),
+										  msg->url);
+				}
+
+				/* RFC 9112 3.2: Host goes first after the request line */
+				host_hdr = rspamd_http_request_prelude_host(conn, msg, host, encrypted);
+
+				if (host_hdr != NULL) {
+					rspamd_printf_fstring(buf, "Host: %T\r\n", &host_hdr->value);
+				}
+				else if (rspamd_http_message_is_standard_port(msg)) {
+					rspamd_printf_fstring(buf, "Host: %s\r\n", host);
+				}
+				else {
+					rspamd_printf_fstring(buf, "Host: %s:%d\r\n", host, msg->port);
+				}
+
+				rspamd_printf_fstring(buf, "%s", client_conn_header);
+
+				if (rspamd_http_request_needs_content_length(msg, bodylen)) {
+					rspamd_printf_fstring(buf, "Content-Length: %z\r\n", bodylen);
 				}
 
 				if (bodylen > 0) {
@@ -2786,7 +2773,7 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 											gboolean allow_shared)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
-	struct rspamd_http_header *hdr, *hcur;
+	struct rspamd_http_header *hdr, *hcur, *host_hdr;
 	char repbuf[512], *pbody;
 	int i, hdrcount, meth_len = 0, preludelen = 0;
 	gsize bodylen, enclen = 0;
@@ -2927,20 +2914,33 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	}
 
 	if (encrypted) {
+		/* A request keeps its method, one without a method gets the default */
+		gboolean keep_method = conn->type == RSPAMD_HTTP_CLIENT &&
+							   msg->method != HTTP_INVALID;
+
 		if (msg->body_iov_count > 0) {
 			pbody = NULL;
 			bodylen = msg->body_buf.len;
-			msg->method = HTTP_POST;
+
+			if (!keep_method) {
+				msg->method = HTTP_POST;
+			}
 		}
 		else if (msg->body_buf.len == 0) {
 			pbody = NULL;
 			bodylen = 0;
-			msg->method = HTTP_GET;
+
+			if (!keep_method) {
+				msg->method = HTTP_GET;
+			}
 		}
 		else {
 			pbody = (char *) msg->body_buf.begin;
 			bodylen = msg->body_buf.len;
-			msg->method = HTTP_POST;
+
+			if (!keep_method) {
+				msg->method = HTTP_POST;
+			}
 		}
 
 		if (conn->type == RSPAMD_HTTP_SERVER) {
@@ -3061,10 +3061,14 @@ rspamd_http_connection_write_message_common(struct rspamd_http_connection *conn,
 	priv->wr_total = bodylen + 2;
 
 	hdrcount = 0;
+	host_hdr = rspamd_http_request_prelude_host(conn, msg, host, encrypted);
 
 	if (msg->method < HTTP_SYMBOLS) {
 		kh_foreach_value (msg->headers, hdr, {
 			DL_FOREACH (hdr, hcur) {
+				if (hcur == host_hdr) {
+					continue;
+				}
 				/* <name: value\r\n> */
 				priv->wr_total += hcur->combined->len;
 				enclen += hcur->combined->len;
@@ -3146,7 +3150,9 @@ else {
 
 			kh_foreach_value (msg->headers, hdr, {
 				DL_FOREACH (hdr, hcur) {
-					hdrs_sorted[nhdrs++] = hcur;
+					if (hcur != host_hdr) {
+						hdrs_sorted[nhdrs++] = hcur;
+					}
 		}
 	});
 
@@ -3164,6 +3170,9 @@ else
 {
 			kh_foreach_value (msg->headers, hdr, {
 				DL_FOREACH (hdr, hcur) {
+					if (hcur == host_hdr) {
+						continue;
+					}
 					priv->out[i].iov_base = hcur->combined->str;
 					priv->out[i++].iov_len = hcur->combined->len;
 }

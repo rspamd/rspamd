@@ -49,6 +49,15 @@ CHECKV3 VIA PROXY WITH COMPRESSION
   ...  ${MESSAGE}
   Check Rspamc  ${result}  SIMPLE_TEST
 
+PROXY KEEPS THE METHOD OF THE CLIENT
+  [Documentation]  The proxy forwards the method it got, so the backend refuses
+  ...  PUT and QUERY on a check command, and the client gets its reply
+  FOR  ${method}  IN  PUT  QUERY
+    @{result} =  HTTP With Headers  ${method}  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}  /checkv2  data=test
+    Should Be Equal As Integers  ${result}[0]  405
+    Should Be Equal  ${result}[2][Allow]  GET, POST
+  END
+
 *** Keywords ***
 Proxy Setup
   # Run slave & copy variables

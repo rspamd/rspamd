@@ -308,17 +308,22 @@ shm_fail:
 	return FALSE;
 }
 
-void rspamd_http_message_set_method(struct rspamd_http_message *msg,
-									const char *method)
+gboolean
+rspamd_http_message_set_method(struct rspamd_http_message *msg,
+							   const char *method)
 {
 	int i;
 
 	/* Linear search: not very efficient method */
-	for (i = 0; i < HTTP_METHOD_MAX; i++) {
+	for (i = 0; i < HTTP_SYMBOLS; i++) {
 		if (g_ascii_strcasecmp(method, http_method_str(i)) == 0) {
 			msg->method = i;
+
+			return TRUE;
 		}
 	}
+
+	return FALSE;
 }
 
 gboolean

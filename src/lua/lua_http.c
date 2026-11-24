@@ -919,6 +919,37 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
 	}
 }
 
+/* Releases what lua_http_request holds when it returns before the request starts */
+static void
+lua_http_request_abort(lua_State *L, int cbref, struct rspamd_http_message *msg,
+					   rspamd_fstring_t *body, char *mime_type, char *auth,
+					   struct rspamd_cryptobox_pubkey *peer_key,
+					   struct rspamd_cryptobox_keypair *local_kp)
+{
+	if (cbref != -1) {
+		luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+	}
+
+	if (msg) {
+		rspamd_http_message_unref(msg);
+	}
+
+	if (body) {
+		rspamd_fstring_free(body);
+	}
+
+	if (peer_key) {
+		rspamd_pubkey_unref(peer_key);
+	}
+
+	if (local_kp) {
+		rspamd_keypair_unref(local_kp);
+	}
+
+	g_free(mime_type);
+	g_free(auth);
+}
+
 /***
  * @function rspamd_http.request({params...})
  * This function creates HTTP request and accepts several parameters as a table using key=value syntax.
@@ -938,6 +969,7 @@ lua_http_push_headers(lua_State *L, struct rspamd_http_message *msg)
  * @param {table} headers optional headers in form `[name='value']` or `[name=['value1', 'value2']]` to duplicate a header with multiple values. A list form `{{'name', 'value'}, {'name', {'value1', 'value2'}}}` is also accepted and preserves the header order on the wire
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
+ * @param {string} method HTTP method, case insensitive (for example, `GET`, `POST`, `QUERY`); POST for a request with a body and GET otherwise if not set, an unknown method raises an error
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
  * @param {number} max_size maximum size of the reply body in bytes (default is the `max_lua_http_response` global option, 256Mb; 0 disables the limit)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
@@ -962,7 +994,7 @@ lua_http_request(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct ev_loop *ev_base;
-	struct rspamd_http_message *msg;
+	struct rspamd_http_message *msg = NULL;
 	struct lua_http_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_async_session *session = NULL;
@@ -1123,9 +1155,29 @@ lua_http_request(lua_State *L)
 				return 2;
 			}
 
+			luaL_unref(L, LUA_REGISTRYINDEX, cbref);
 			lua_pushboolean(L, FALSE);
 			return 1;
 		}
+
+		lua_pushstring(L, "method");
+		lua_gettable(L, 1);
+
+		if (lua_type(L, -1) != LUA_TNIL &&
+			(lua_type(L, -1) != LUA_TSTRING ||
+			 !rspamd_http_message_set_method(msg, lua_tostring(L, -1)))) {
+			lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+								   peer_key, local_kp);
+
+			if (lua_type(L, -1) != LUA_TSTRING) {
+				return luaL_error(L, "invalid method argument type: %s",
+								  lua_typename(L, lua_type(L, -1)));
+			}
+
+			return luaL_error(L, "invalid method: %s", lua_tostring(L, -1));
+		}
+
+		lua_pop(L, 1);
 
 		lua_pushstring(L, "headers");
 		lua_gettable(L, 1);
@@ -1161,8 +1213,8 @@ lua_http_request(lua_State *L)
 				body = rspamd_fstring_new_init(t->start, t->len);
 			}
 			else {
-				rspamd_http_message_unref(msg);
-				g_free(mime_type);
+				lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+									   peer_key, local_kp);
 
 				return luaL_error(L, "invalid body argument type: %s",
 								  lua_typename(L, lua_type(L, -1)));
@@ -1189,20 +1241,16 @@ lua_http_request(lua_State *L)
 						total_len += t->len;
 					}
 					else {
-						rspamd_http_message_unref(msg);
-						if (mime_type) {
-							g_free(mime_type);
-						}
+						lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+											   peer_key, local_kp);
 
 						return luaL_error(L, "invalid body argument: %s",
 										  lua_typename(L, lua_type(L, -1)));
 					}
 				}
 				else {
-					rspamd_http_message_unref(msg);
-					if (mime_type) {
-						g_free(mime_type);
-					}
+					lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+										   peer_key, local_kp);
 
 					return luaL_error(L, "invalid body argument type: %s",
 									  lua_typename(L, lua_type(L, -1)));
@@ -1216,10 +1264,8 @@ lua_http_request(lua_State *L)
 				body = rspamd_fstring_sized_new(total_len);
 			}
 			else {
-				rspamd_http_message_unref(msg);
-				if (mime_type) {
-					g_free(mime_type);
-				}
+				lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+									   peer_key, local_kp);
 
 				return luaL_error(L, "empty body specified");
 			}
@@ -1244,7 +1290,9 @@ lua_http_request(lua_State *L)
 			}
 		}
 		else if (lua_type(L, -1) != LUA_TNONE && lua_type(L, -1) != LUA_TNIL) {
-			rspamd_http_message_unref(msg);
+			lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+								   peer_key, local_kp);
+
 			return luaL_error(L, "invalid body argument type: %s",
 							  lua_typename(L, lua_type(L, -1)));
 		}
@@ -1337,15 +1385,6 @@ lua_http_request(lua_State *L)
 
 		lua_pop(L, 1);
 
-		lua_pushstring(L, "method");
-		lua_gettable(L, 1);
-
-		if (lua_type(L, -1) == LUA_TSTRING) {
-			rspamd_http_message_set_method(msg, lua_tostring(L, -1));
-		}
-
-		lua_pop(L, 1);
-
 		lua_pushstring(L, "upstream");
 		lua_gettable(L, 1);
 
@@ -1400,14 +1439,8 @@ lua_http_request(lua_State *L)
 	}
 
 	if (session && rspamd_session_blocked(session)) {
-		g_free(auth);
-		rspamd_http_message_unref(msg);
-		if (body) {
-			rspamd_fstring_free(body);
-		}
-		if (local_kp) {
-			rspamd_keypair_unref(local_kp);
-		}
+		lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+							   peer_key, local_kp);
 
 		if (cbref == -1) {
 			/* Coroutine callers expect (err, response), not a bare false */
@@ -1422,28 +1455,16 @@ lua_http_request(lua_State *L)
 		return 1;
 	}
 	if (task == NULL && cfg == NULL) {
-		g_free(auth);
-		rspamd_http_message_unref(msg);
-		if (body) {
-			rspamd_fstring_free(body);
-		}
-		if (local_kp) {
-			rspamd_keypair_unref(local_kp);
-		}
+		lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+							   peer_key, local_kp);
 
 		return luaL_error(L,
 						  "Bad params to rspamd_http:request(): either task or config should be set");
 	}
 
 	if (ev_base == NULL) {
-		g_free(auth);
-		rspamd_http_message_unref(msg);
-		if (body) {
-			rspamd_fstring_free(body);
-		}
-		if (local_kp) {
-			rspamd_keypair_unref(local_kp);
-		}
+		lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+							   peer_key, local_kp);
 
 		return luaL_error(L,
 						  "Bad params to rspamd_http:request(): ev_base isn't passed");
