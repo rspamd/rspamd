@@ -64,6 +64,26 @@ jobs:
           cat > ${PREFIX}/etc/rspamd/local.d/history_redis.conf << 'EOF'
           servers = "127.0.0.1";
           EOF
+          # A deterministic writable map for the maps editor test: "first row
+          # with a Writable badge" is not stable, since absent local.d override
+          # backends are writable too (create-override UX) but open an empty
+          # editor.
+          mkdir -p ${PREFIX}/etc/rspamd/local.d/maps.d
+          cat > ${PREFIX}/etc/rspamd/local.d/maps.d/e2e_map.inc << 'EOF'
+          # E2E fixture: a small writable map with known content
+          example.com
+          example.org
+          example.net
+          EOF
+          cat > ${PREFIX}/etc/rspamd/local.d/multimap.conf << 'EOF'
+          E2E_WRITABLE_MAP {
+              type = "from";
+              filter = "email:domain";
+              map = "$LOCAL_CONFDIR/local.d/maps.d/e2e_map.inc";
+              description = "E2E writable map fixture";
+              score = 0.0;
+          }
+          EOF
           chmod +x ${PREFIX}/bin/rspamd
           mkdir -p /var/run/rspamd /var/lib/rspamd
           chown $USER:$USER /var/run/rspamd /var/lib/rspamd
