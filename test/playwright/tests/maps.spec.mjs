@@ -5,6 +5,8 @@ import {login} from "../helpers/auth.mjs";
 // thresholds; the Maps card, modal editor and read-only handling are untested.
 // Map rows: the clickable cell is span.map-link; a "Writable" badge
 // (span.badge.text-bg-success) marks editable maps.
+// The writable-map test targets the local.d/maps.d/e2e_map.inc fixture created
+// by ci_webui_e2e_playwright.yml.
 test.describe("WebUI Configuration → Maps editor", () => {
     test.beforeEach(async ({page}, testInfo) => {
         const {enablePassword} = testInfo.project.use.rspamdPasswords;
@@ -25,10 +27,14 @@ test.describe("WebUI Configuration → Maps editor", () => {
     });
 
     test("opening a writable map shows the editor with Save enabled", async ({page}) => {
+        // Target the fixture map by uri: the "first Writable row" is not stable,
+        // since absent local.d override backends are writable too
+        // (create-override UX) but open an empty editor.
         const writableLink = page.locator(
-            "#listMaps tbody tr:has(span.badge.text-bg-success) span.map-link"
+            "#listMaps tbody tr:has(span.badge.text-bg-success) span.map-link",
+            {hasText: "e2e_map.inc"}
         );
-        test.skip((await writableLink.count()) === 0, "no writable map present in this configuration");
+        test.skip((await writableLink.count()) === 0, "e2e writable map fixture not present");
 
         // Uncaught JS errors surface here, not as failed assertions: a broken
         // codejar module makes requirejs.onError rethrow (see js/main.js).
