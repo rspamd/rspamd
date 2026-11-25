@@ -46,6 +46,8 @@ struct parse_result {
 	int method = 0;
 	unsigned flags = 0;
 	int keep_alive = 0;// http_should_keep_alive() after the last byte
+	unsigned http_major = 0;
+	unsigned http_minor = 0;
 };
 
 struct cb_state {
@@ -172,6 +174,8 @@ static parse_result parse(int type, std::string_view wire, bool bytewise, bool e
 	res.method = p.method;
 	res.flags = p.flags;
 	res.keep_alive = http_should_keep_alive(&p);
+	res.http_major = p.http_major;
+	res.http_minor = p.http_minor;
 
 	return res;
 }
@@ -922,6 +926,94 @@ TEST_SUITE("http_parser")
 					  "HPE_INVALID_TRANSFER_ENCODING", 0, 0);
 		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: gzip\r\nContent-Length: 3\r\n\r\nabcdef", true, badcl, 0, 0);
 		HP_CHECK_BOTH(1, "HTTP/1.1 204 No Content\r\nTransfer-Encoding: gzip\r\n\r\n", true, "HPE_OK", 0, 1);
+	}
+
+	TEST_CASE("http parser: HTTP version is one digit each")
+	{
+		const char *ver = "HPE_INVALID_VERSION";
+
+		struct bad_case {
+			int type;
+			std::string_view wire;
+			size_t used;
+		};
+		const bad_case bad[] = {
+			{0, "GET /a HTTP/1.10\r\n\r\n", 15},
+			{0, "GET /a HTTP/11.1\r\n\r\n", 13},
+			{0, "GET /a HTTP/1.01\r\n\r\n", 15},
+			{0, "GET /a HTTP/1.1 \r\n", 15},
+			{0, "GET /a HTTP/0.9\r\n\r\n", 12},
+			{1, "HTTP/1.10 200 OK\r\nContent-Length: 3\r\n\r\nabc", 8},
+			{1, "HTTP/11.1 200 OK\r\n\r\n", 6},
+			{1, "HTTP/1.1\t200", 8},
+		};
+
+		for (const auto &c: bad) {
+			HP_CHECK_BOTH(c.type, c.wire, true, ver, 0, 0);
+			auto r = hp_test::parse(c.type, c.wire, false);
+			CHECK(r.used == c.used);
+			CHECK(r.hc == 0);
+		}
+
+		/* Bare LF, version 1.0 and the version-less form still work */
+		{
+			auto r = hp_test::parse(0, "GET /a HTTP/1.1\n\n", false);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.http_major == 1);
+			CHECK(r.http_minor == 1);
+			HP_CHECK_BOTH(0, "GET /a HTTP/1.1\n\n", true, "HPE_OK", 0, 1);
+		}
+		{
+			std::string_view w = "GET /a HTTP/1.0\r\nContent-Length: 0\r\n\r\n";
+			HP_CHECK_BOTH(0, w, true, "HPE_OK", 0, 1);
+			auto r = hp_test::parse(0, w, false);
+			CHECK(r.http_major == 1);
+			CHECK(r.http_minor == 0);
+		}
+		{
+			std::string_view w = "GET /a\r\n\r\n";
+			HP_CHECK_BOTH(0, w, true, "HPE_OK", 0, 1);
+			auto r = hp_test::parse(0, w, false);
+			CHECK(r.http_major == 0);
+			CHECK(r.http_minor == 9);
+		}
+		{
+			std::string_view w = "HTTP/2.0 200 OK\r\nContent-Length: 0\r\n\r\n";
+			HP_CHECK_BOTH(1, w, true, "HPE_OK", 0, 1);
+			auto r = hp_test::parse(1, w, false);
+			CHECK(r.http_major == 2);
+			CHECK(r.http_minor == 0);
+		}
+
+		/* spamc/rspamc lines never reach the version states */
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\r\nContent-length: 2\r\n\r\nab", true, "HPE_OK", 2, 1);
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\nContent-length: 2\n\nab", true, "HPE_OK", 2, 1);
+		HP_CHECK_BOTH(0, "SYMBOLS SPAMC/1.2\nContent-Length: 2\n\nab", true, "HPE_OK", 2, 1);
+	}
+
+	TEST_CASE("http parser: empty reason phrase reaches on_status")
+	{
+		for (bool bytewise: {false, true}) {
+			auto r = hp_test::parse(1, "HTTP/1.1 500\r\nContent-Length: 2\r\n\r\nab", bytewise);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.transcript.rfind("S:|F:Content-Length|V:2|", 0) == 0);
+			CHECK(r.body == 2);
+			CHECK(r.mc == 1);
+
+			auto lf = hp_test::parse(1, "HTTP/1.1 500\nContent-Length: 2\n\nab", bytewise);
+			CHECK(lf.err == "HPE_OK");
+			CHECK(lf.transcript.rfind("S:|F:Content-Length|V:2|", 0) == 0);
+			CHECK(lf.body == 2);
+
+			auto sp = hp_test::parse(1, "HTTP/1.1 500 \r\n\r\n", bytewise);
+			CHECK(sp.err == "HPE_OK");
+			CHECK(sp.transcript == "S:");
+			CHECK(sp.mc == 1);
+
+			auto ok = hp_test::parse(1, "HTTP/1.1 200 OK\r\n\r\n", bytewise);
+			CHECK(ok.err == "HPE_OK");
+			CHECK(ok.transcript == "S:OK");
+		}
 	}
 
 	TEST_CASE("http parser: legacy invariants")

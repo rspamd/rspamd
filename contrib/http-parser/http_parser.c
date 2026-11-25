@@ -238,10 +238,10 @@ enum state
   , s_res_HT
   , s_res_HTT
   , s_res_HTTP
-  , s_res_first_http_major
   , s_res_http_major
-  , s_res_first_http_minor
+  , s_res_http_dot
   , s_res_http_minor
+  , s_res_http_end
   , s_res_first_status_code
   , s_res_status_code
   , s_res_status_start
@@ -268,10 +268,10 @@ enum state
   , s_req_http_HT
   , s_req_http_HTT
   , s_req_http_HTTP
-  , s_req_first_http_major
   , s_req_http_major
-  , s_req_first_http_minor
+  , s_req_http_dot
   , s_req_http_minor
+  , s_req_http_end
   , s_req_spamc_start
   , s_req_spamc
   , s_req_line_almost_done
@@ -792,77 +792,48 @@ size_t http_parser_execute (http_parser *parser,
 
       case s_res_HTTP:
         STRICT_CHECK(ch != '/');
-        parser->state = s_res_first_http_major;
-        break;
-
-      case s_res_first_http_major:
-        if (ch < '0' || ch > '9') {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
-        parser->http_major = ch - '0';
         parser->state = s_res_http_major;
         break;
 
-      /* major HTTP version or dot */
+      /* the single digit of the major HTTP version */
       case s_res_http_major:
-      {
-        if (ch == '.') {
-          parser->state = s_res_first_http_minor;
-          break;
-        }
-
         if (!IS_NUM(ch)) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
-        parser->http_major *= 10;
-        parser->http_major += ch - '0';
+        parser->http_major = ch - '0';
+        parser->state = s_res_http_dot;
+        break;
 
-        if (parser->http_major > 999) {
+      case s_res_http_dot:
+        if (ch != '.') {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
+        parser->state = s_res_http_minor;
         break;
-      }
 
-      /* first digit of minor HTTP version */
-      case s_res_first_http_minor:
+      /* the single digit of the minor HTTP version */
+      case s_res_http_minor:
         if (!IS_NUM(ch)) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
         parser->http_minor = ch - '0';
-        parser->state = s_res_http_minor;
+        parser->state = s_res_http_end;
         break;
 
-      /* minor HTTP version or end of request line */
-      case s_res_http_minor:
-      {
-        if (ch == ' ') {
-          parser->state = s_res_first_status_code;
-          break;
-        }
-
-        if (!IS_NUM(ch)) {
+      case s_res_http_end:
+        if (ch != ' ') {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
-        parser->http_minor *= 10;
-        parser->http_minor += ch - '0';
-
-        if (parser->http_minor > 999) {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
+        parser->state = s_res_first_status_code;
         break;
-      }
 
       case s_res_first_status_code:
       {
@@ -887,11 +858,10 @@ size_t http_parser_execute (http_parser *parser,
               parser->state = s_res_status_start;
               break;
             case CR:
-              parser->state = s_res_line_almost_done;
-              break;
             case LF:
-              parser->state = s_header_field_start;
-              break;
+              /* an empty reason phrase still reaches on_status */
+              parser->state = s_res_status_start;
+              goto reexecute_byte;
             default:
               SET_ERRNO(HPE_INVALID_STATUS);
               goto error;
@@ -912,19 +882,13 @@ size_t http_parser_execute (http_parser *parser,
 
       case s_res_status_start:
       {
-        if (ch == CR) {
-          parser->state = s_res_line_almost_done;
-          break;
-        }
-
-        if (ch == LF) {
-          parser->state = s_header_field_start;
-          break;
-        }
-
         MARK(status);
         parser->state = s_res_status;
         parser->index = 0;
+
+        if (ch == CR || ch == LF)
+          goto reexecute_byte;
+
         break;
       }
 
@@ -1145,57 +1109,42 @@ size_t http_parser_execute (http_parser *parser,
 
       case s_req_http_HTTP:
         STRICT_CHECK(ch != '/');
-        parser->state = s_req_first_http_major;
+        parser->state = s_req_http_major;
         break;
 
-      /* first digit of major HTTP version */
-      case s_req_first_http_major:
+      /* the single digit of the major HTTP version */
+      case s_req_http_major:
         if (ch < '1' || ch > '9') {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
         parser->http_major = ch - '0';
-        parser->state = s_req_http_major;
+        parser->state = s_req_http_dot;
         break;
 
-      /* major HTTP version or dot */
-      case s_req_http_major:
-      {
-        if (ch == '.') {
-          parser->state = s_req_first_http_minor;
-          break;
-        }
-
-        if (!IS_NUM(ch)) {
+      case s_req_http_dot:
+        if (ch != '.') {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
-        parser->http_major *= 10;
-        parser->http_major += ch - '0';
-
-        if (parser->http_major > 999) {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
+        parser->state = s_req_http_minor;
         break;
-      }
 
-      /* first digit of minor HTTP version */
-      case s_req_first_http_minor:
+      /* the single digit of the minor HTTP version */
+      case s_req_http_minor:
         if (!IS_NUM(ch)) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
 
         parser->http_minor = ch - '0';
-        parser->state = s_req_http_minor;
+        parser->state = s_req_http_end;
         break;
 
-      /* minor HTTP version or end of request line */
-      case s_req_http_minor:
+      /* end of the request line */
+      case s_req_http_end:
       {
         if (ch == CR) {
           parser->state = s_req_line_almost_done;
@@ -1207,23 +1156,10 @@ size_t http_parser_execute (http_parser *parser,
           break;
         }
 
-        /* XXX allow spaces after digit? */
-
-        if (!IS_NUM(ch)) {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
-        parser->http_minor *= 10;
-        parser->http_minor += ch - '0';
-
-        if (parser->http_minor > 999) {
-          SET_ERRNO(HPE_INVALID_VERSION);
-          goto error;
-        }
-
-        break;
+        SET_ERRNO(HPE_INVALID_VERSION);
+        goto error;
       }
+
       case s_req_spamc_start: {
     	  if (ch == 'S') {
     		  parser->flags |= F_SPAMC;

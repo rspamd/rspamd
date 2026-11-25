@@ -75,6 +75,9 @@ struct date_state {
 	int headers = 0;
 	/* A header with no name, or a value that is not inside its storage */
 	bool bad_header = false;
+	int code = 0;
+	bool status_null = true;
+	size_t status_len = SIZE_MAX;
 };
 
 static void
@@ -93,6 +96,9 @@ record_finish(struct rspamd_http_connection *conn, struct rspamd_http_message *m
 	st->date = msg->date;
 	st->last_modified = msg->last_modified;
 	st->peer_key = rspamd_http_connection_get_peer_key(conn) != nullptr;
+	st->code = msg->code;
+	st->status_null = msg->status == nullptr;
+	st->status_len = msg->status ? msg->status->len : SIZE_MAX;
 
 	for (khiter_t k = kh_begin(msg->headers); k != kh_end(msg->headers); ++k) {
 		if (!kh_exist(msg->headers, k)) {
@@ -261,6 +267,31 @@ TEST_SUITE("http_header_values")
 		CHECK(t.state.errors == 0);
 		REQUIRE(t.state.finishes == 1);
 		CHECK(t.state.date == (time_t) -1);
+	}
+
+	TEST_CASE("client: reply without a reason phrase")
+	{
+		const char *replies[] = {"HTTP/1.1 500\r\nContent-Length: 0\r\n\r\n",
+								 "HTTP/1.1 500\nContent-Length: 0\n\n"};
+
+		for (const char *reply: replies) {
+			using namespace http_date_test;
+			date_fixture t(true);
+
+			auto *msg = rspamd_http_message_from_url("http://example.com/");
+			REQUIRE(msg != nullptr);
+			REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "example.com", nullptr,
+														 &t.state, 1000.0));
+			t.drain();
+
+			t.push(reply);
+
+			CHECK(t.state.errors == 0);
+			REQUIRE(t.state.finishes == 1);
+			CHECK(t.state.code == 500);
+			CHECK_FALSE(t.state.status_null);
+			CHECK(t.state.status_len == 0);
+		}
 	}
 
 	TEST_CASE("server: Key header with an empty key")
