@@ -654,9 +654,9 @@ TEST_SUITE("http_parser")
 
 		/* A folded chunked value is refused, never read as a plain body */
 		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding: chunked\r\n \r\n\r\n3\r\nabc\r\n0\r\n\r\n",
-					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+					  true, "HPE_INVALID_TRANSFER_ENCODING", 0, 0);
 		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding: chun\r\n ked\r\n\r\n3\r\nabc\r\n0\r\n\r\n",
-					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+					  true, "HPE_INVALID_TRANSFER_ENCODING", 0, 0);
 
 		for (bool bw: {false, true}) {
 			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nConnection:\r\n keep-alive\r\nContent-Length: 0\r\n\r\n", bw);
@@ -830,6 +830,98 @@ TEST_SUITE("http_parser")
 		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nX:\r\n\r\n", true, "HPE_OK", 0, 1);
 		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\r\nContent-length: 3 \r\nUser: x\r\n\r\nabc", true, "HPE_OK", 3, 1);
 		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\r\nContent-length: 3\r\n\r\nabc", true, "HPE_OK", 3, 1);
+	}
+
+	TEST_CASE("http parser: Transfer-Encoding lists")
+	{
+		const char *bad = "HPE_INVALID_TRANSFER_ENCODING";
+		const char *badcl = "HPE_INVALID_CONTENT_LENGTH";
+		const std::string head = "POST /a HTTP/1.1\r\n";
+		const std::string body = "\r\n\r\n3\r\nabc\r\n0\r\n\r\n";
+
+		/* chunked is the last coding */
+		for (const char *te: {"gzip, chunked", "compress, chunked", "deflate,\r\n chunked", "gzip\r\n , chunked",
+							  "gzip,\tchunked", "CHUNKED", "chu, chunked", "\r\n chunked", "gzip ,chunked ",
+							  ",chunked", "gzip,,chunked"}) {
+			std::string w = head + "Transfer-Encoding: " + te + body;
+			HP_CHECK_BOTH(0, w, true, "HPE_OK", 3, 1);
+		}
+		HP_CHECK_BOTH(0, head + "Transfer-Encoding:\r\n chunked" + body, true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, head + "Transfer-Encoding: gzip\r\nTransfer-Encoding: chunked" + body, true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\nTransfer-Encoding: gzip, chunked\n\n3\r\nabc\r\n0\r\n\r\n", true, "HPE_OK", 3, 1);
+
+		/* anything else is refused before the headers callback */
+		for (const char *te: {"chunked, gzip", "gzip", "identity", "xchunked", "chunked;q=1", "\"chunked\"", "",
+							  "chunked, chunked", "chunked, gzip, chunked", "chunked,", "chunkedx", "chunke",
+							  "chunked\r\n , gzip", "chunked\r\n ", "chunked\r\n \r\n", "gzip, chunked x"}) {
+			std::string w = head + "Transfer-Encoding: " + te + body;
+			for (bool bw: {false, true}) {
+				auto r = hp_test::parse(0, w, bw);
+				CHECK(r.err == bad);
+				CHECK(r.hc == 0);
+				CHECK(r.mc == 0);
+			}
+		}
+		HP_CHECK_BOTH(0, head + "Transfer-Encoding: chunked\r\nTransfer-Encoding: gzip" + body, true, bad, 0, 0);
+		HP_CHECK_BOTH(0, head + "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked" + body, true, bad, 0, 0);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, head + "Transfer-Encoding: chunked\r\nTransfer-Encoding: gzip" + body, bw);
+			CHECK(r.hc == 0);
+			r = hp_test::parse(0, "SYMBOLS RSPAMC/1.3\r\nTransfer-Encoding: gzip\r\n\r\n", bw);
+			CHECK(r.err == bad);
+			CHECK(r.hc == 0);
+		}
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\r\nTransfer-Encoding: gzip\r\n\r\n", true, bad, 0, 0);
+
+		/* both framings */
+		HP_CHECK_BOTH(0, head + "Transfer-Encoding: identity\r\nContent-Length: 3\r\n\r\nabc", true, badcl, 0, 0);
+		HP_CHECK_BOTH(0, head + "Content-Length: 3\r\nTransfer-Encoding: gzip, chunked\r\n\r\nabc", true, badcl, 0, 0);
+		HP_CHECK_BOTH(0, head + "Transfer-Encoding: gzip, chunked\r\nContent-Length: 3\r\n\r\nabc", true, badcl, 0, 0);
+
+		/* only the exact field name counts */
+		HP_CHECK_BOTH(0, head + "Transfer-Encodingx: y\r\nContent-Length: 3\r\n\r\nabc", true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, head + "Transfer-Encodin: y\r\nContent-Length: 3\r\n\r\nabc", true, "HPE_OK", 3, 1);
+
+		/* pipelined message after a list-framed one */
+		{
+			std::string w = head + "Connection: keep-alive\r\nTransfer-Encoding: gzip, chunked" + body +
+							"GET /b HTTP/1.1\r\n\r\n";
+			HP_CHECK_BOTH(0, w, true, "HPE_OK", 3, 2);
+			auto r = hp_test::parse(0, w, false);
+			CHECK(r.begin == 2);
+		}
+		/* a trailer does not change the framing */
+		HP_CHECK_BOTH(0,
+					  head + "Connection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n"
+							 "Transfer-Encoding: gzip\r\n\r\nGET /b HTTP/1.1\r\n\r\n",
+					  true, "HPE_OK", 3, 2);
+
+		/* responses */
+		const std::string rhead = "HTTP/1.1 200 OK\r\n";
+		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: gzip, chunked" + body, true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: deflate,\r\n chunked" + body, true, "HPE_OK", 3, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(1, rhead + "Transfer-Encoding: gzip\r\n\r\nabc", bw, false);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.body == 3);
+			CHECK(r.mc == 0);
+			/* keep-alive is only asked for through http_message_needs_eof() */
+			r = hp_test::parse(1, rhead + "Connection: keep-alive\r\nTransfer-Encoding: gzip\r\n\r\nabc", bw, true);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.body == 3);
+			CHECK(r.mc == 1);
+			CHECK(r.keep_alive == 0);
+			r = hp_test::parse(1, "HTTP/1.1 304 Not Modified\r\nTransfer-Encoding: gzip\r\n\r\n", bw, false);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.mc == 1);
+		}
+		/* a second Transfer-Encoding line after chunked fails responses too */
+		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked" + body, true,
+					  "HPE_INVALID_TRANSFER_ENCODING", 0, 0);
+		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: chunked\r\nTransfer-Encoding: gzip" + body, true,
+					  "HPE_INVALID_TRANSFER_ENCODING", 0, 0);
+		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: gzip\r\nContent-Length: 3\r\n\r\nabcdef", true, badcl, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 204 No Content\r\nTransfer-Encoding: gzip\r\n\r\n", true, "HPE_OK", 0, 1);
 	}
 
 	TEST_CASE("http parser: legacy invariants")

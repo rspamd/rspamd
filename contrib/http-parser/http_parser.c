@@ -331,7 +331,9 @@ enum header_states
   , h_content_length_ws
   , h_transfer_encoding
 
+  , h_matching_transfer_encoding_token_start
   , h_matching_transfer_encoding_chunked
+  , h_matching_transfer_encoding_token
   , h_matching_connection_keep_alive
   , h_matching_connection_close
 
@@ -339,6 +341,14 @@ enum header_states
   , h_connection_keep_alive
   , h_connection_close
   };
+
+_Static_assert(F_SKIPBODY < (1 << 6) && F_TRANSFER_ENCODING < (1 << 6),
+               "http_parser.flags is too narrow");
+
+/* rspamd maps errnos after the callback ones to HTTP 400 */
+_Static_assert(HPE_UNEXPECTED_CONTENT_LENGTH > HPE_CB_status &&
+               HPE_INVALID_TRANSFER_ENCODING > HPE_CB_status,
+               "new errnos must follow the HPE_CB_* entries");
 
 enum http_host_state
   {
@@ -1395,6 +1405,13 @@ size_t http_parser_execute (http_parser *parser,
         }
 
         if (ch == ':') {
+          /* header_state is h_transfer_encoding only if the whole field name
+           * matched */
+          if (parser->header_state == h_transfer_encoding &&
+              !(parser->flags & F_TRAILING)) {
+            parser->flags |= F_TRANSFER_ENCODING;
+          }
+
           parser->state = s_header_value_discard_ws;
           CALLBACK_DATA(header_field);
           break;
@@ -1435,12 +1452,26 @@ size_t http_parser_execute (http_parser *parser,
 
         switch (parser->header_state) {
           case h_transfer_encoding:
-            /* looking for 'Transfer-Encoding: chunked' */
+            if ((parser->flags & (F_CHUNKED | F_TRAILING)) == F_CHUNKED) {
+              /* An earlier field ended in chunked, so chunked was not the
+               * last coding */
+              SET_ERRNO(HPE_INVALID_TRANSFER_ENCODING);
+              goto error;
+            }
+
+            /* The first byte is never blank, discard_ws skipped them */
             if ('c' == c) {
               parser->header_state = h_matching_transfer_encoding_chunked;
+            } else if (ch == ',') {
+              parser->header_state = h_matching_transfer_encoding_token_start;
             } else {
-              parser->header_state = h_general;
+              parser->header_state = h_matching_transfer_encoding_token;
             }
+            break;
+
+          case h_matching_transfer_encoding_token_start:
+          case h_matching_transfer_encoding_token:
+            /* The re-executed blank of a folded line */
             break;
 
           case h_content_length:
@@ -1563,12 +1594,37 @@ size_t http_parser_execute (http_parser *parser,
             SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
             goto error;
 
-          /* Transfer-Encoding: chunked */
+          /* Transfer-Encoding: a list of codings, chunked last */
+          case h_matching_transfer_encoding_token_start:
+            /* Before a coding name: blanks and empty list elements */
+            if ('c' == c) {
+              parser->header_state = h_matching_transfer_encoding_chunked;
+              parser->index = 0;
+            } else if (ch == ' ' || ch == '\t' || ch == ',') {
+              break;
+            } else if (tokens[(unsigned char) ch]) {
+              parser->header_state = h_matching_transfer_encoding_token;
+            } else {
+              parser->header_state = h_general;
+            }
+            break;
+
+          case h_matching_transfer_encoding_token:
+            /* Inside a coding name that is not chunked */
+            if (ch == ',') {
+              parser->header_state = h_matching_transfer_encoding_token_start;
+              parser->index = 0;
+            }
+            break;
+
           case h_matching_transfer_encoding_chunked:
             parser->index++;
             if (parser->index > sizeof(CHUNKED)-1
                 || c != CHUNKED[parser->index]) {
-              parser->header_state = h_general;
+              parser->header_state = (ch == ',') ?
+                  h_matching_transfer_encoding_token_start :
+                  h_matching_transfer_encoding_token;
+              parser->index = 0;
             } else if (parser->index == sizeof(CHUNKED)-2) {
               parser->header_state = h_transfer_encoding_chunked;
             }
@@ -1596,6 +1652,10 @@ size_t http_parser_execute (http_parser *parser,
             break;
 
           case h_transfer_encoding_chunked:
+            /* Anything after chunked means it is not the last coding */
+            if (ch != ' ' && ch != '\t') parser->header_state = h_general;
+            break;
+
           case h_connection_keep_alive:
           case h_connection_close:
             if (ch != ' ') parser->header_state = h_general;
@@ -1622,11 +1682,11 @@ size_t http_parser_execute (http_parser *parser,
         enum http_errno err;
 
         if (ch == ' ' || ch == '\t') {
-          /* A folded Transfer-Encoding value is not parsed: refuse it
-           * rather than silently dropping the chunked flag */
+          /* A fold inside or right after "chunked" would continue or
+           * extend that coding: refuse it */
           if (parser->header_state == h_matching_transfer_encoding_chunked ||
               parser->header_state == h_transfer_encoding_chunked) {
-            SET_ERRNO(HPE_INVALID_HEADER_TOKEN);
+            SET_ERRNO(HPE_INVALID_TRANSFER_ENCODING);
             goto error;
           }
 
@@ -1686,6 +1746,19 @@ size_t http_parser_execute (http_parser *parser,
           parser->state = NEW_MESSAGE();
           CALLBACK_NOTIFY(message_complete);
           break;
+        }
+
+        if (parser->flags & F_TRANSFER_ENCODING) {
+          /* Two framings, or a request whose body cannot be delimited */
+          if (parser->content_length != ULLONG_MAX) {
+            SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+            goto error;
+          }
+
+          if (parser->type == HTTP_REQUEST && !(parser->flags & F_CHUNKED)) {
+            SET_ERRNO(HPE_INVALID_TRANSFER_ENCODING);
+            goto error;
+          }
         }
 
         parser->state = s_headers_done;
@@ -1991,6 +2064,10 @@ http_message_needs_eof (const http_parser *parser)
       parser->status_code == 304 ||     /* Not Modified */
       parser->flags & F_SKIPBODY) {     /* response to a HEAD request */
     return 0;
+  }
+
+  if ((parser->flags & F_TRANSFER_ENCODING) && !(parser->flags & F_CHUNKED)) {
+    return 1;
   }
 
   if ((parser->flags & F_CHUNKED) || parser->content_length != ULLONG_MAX) {

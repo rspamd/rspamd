@@ -131,7 +131,7 @@ enum flags
   , F_CONNECTION_KEEP_ALIVE = 1 << 1
   , F_SPAMC                 = 1 << 2
   , F_TRAILING              = 1 << 3
-  /* bit 4 is free */
+  , F_TRANSFER_ENCODING     = 1 << 4
   , F_SKIPBODY              = 1 << 5
   };
 
@@ -181,7 +181,9 @@ enum flags
   XX(INVALID_INTERNAL_STATE, "encountered unexpected internal state")\
   XX(STRICT, "strict mode assertion failed")                         \
   XX(PAUSED, "parser is paused")                                     \
-  XX(UNKNOWN, "an unknown error occurred")
+  XX(UNKNOWN, "an unknown error occurred")                           \
+  XX(INVALID_TRANSFER_ENCODING,                                      \
+     "request has invalid transfer-encoding")
 
 
 /* Define HPE_* values for each errno value above */
