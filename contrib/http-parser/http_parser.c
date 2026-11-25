@@ -960,71 +960,32 @@ size_t http_parser_execute (http_parser *parser,
           }
         } else if (ch == matcher[parser->index]) {
           ; /* nada */
-        } else if (parser->method == HTTP_CONNECT) {
-          if (parser->index == 1 && ch == 'H') {
-            /* XXX: CHECKOUT has been removed */
-            parser->method = HTTP_CHECK;
-          } else if (parser->index == 2  && ch == 'P') {
-            parser->method = HTTP_COPY;
-          } else {
-            SET_ERRNO(HPE_INVALID_METHOD);
-            goto error;
-          }
-        } else if (parser->method == HTTP_MKCOL) {
-          if (parser->index == 1 && ch == 'O') {
-            parser->method = HTTP_MOVE;
-          } else if (parser->index == 1 && ch == 'E') {
-            parser->method = HTTP_MERGE;
-          } else if (parser->index == 1 && ch == '-') {
-            parser->method = HTTP_MSEARCH;
-          } else if (parser->index == 2 && ch == 'A') {
-            parser->method = HTTP_MKACTIVITY;
-          } else {
-            SET_ERRNO(HPE_INVALID_METHOD);
-            goto error;
-          }
-        } else if (parser->method == HTTP_SUBSCRIBE) {
-          if (parser->index == 1 && ch == 'E') {
-            parser->method = HTTP_SEARCH;
-          } else if (ch == 'Y') {
-            parser->method = HTTP_SYMBOLS;
-          }
-          else {
-            SET_ERRNO(HPE_INVALID_METHOD);
-            goto error;
-          }
-        } else if (parser->index == 1 && parser->method == HTTP_POST) {
-          if (ch == 'R') {
-            parser->method = HTTP_PROPFIND; /* or HTTP_PROPPATCH */
-          } else if (ch == 'U') {
-            parser->method = HTTP_PUT; /* or HTTP_PURGE */
-          } else if (ch == 'A') {
-            parser->method = HTTP_PATCH;
-          } else {
-            SET_ERRNO(HPE_INVALID_METHOD);
-            goto error;
-          }
-        } else if (parser->index == 2) {
-          if (parser->method == HTTP_PUT) {
-            if (ch == 'R') {
-              parser->method = HTTP_PURGE;
-            } else {
+        } else if ((ch >= 'A' && ch <= 'Z') || ch == '-') {
+          switch (parser->method << 16 | parser->index << 8 | ch) {
+#define XX(meth, pos, c_, new_meth) \
+            case (HTTP_##meth << 16 | pos << 8 | c_): \
+              parser->method = HTTP_##new_meth; break;
+
+            XX(POST,      1, 'U', PUT)
+            XX(POST,      1, 'A', PATCH)
+            XX(POST,      1, 'R', PROPFIND)
+            XX(PUT,       2, 'R', PURGE)
+            XX(CONNECT,   1, 'H', CHECK)
+            XX(CONNECT,   2, 'P', COPY)
+            XX(MKCOL,     1, 'O', MOVE)
+            XX(MKCOL,     1, 'E', MERGE)
+            XX(MKCOL,     1, '-', MSEARCH)
+            XX(MKCOL,     2, 'A', MKACTIVITY)
+            XX(SUBSCRIBE, 1, 'E', SEARCH)
+            XX(SUBSCRIBE, 1, 'Y', SYMBOLS)
+            XX(PROPFIND,  4, 'P', PROPPATCH)
+            XX(UNLOCK,    2, 'S', UNSUBSCRIBE)
+
+#undef XX
+            default:
               SET_ERRNO(HPE_INVALID_METHOD);
               goto error;
-            }
-          } else if (parser->method == HTTP_UNLOCK) {
-            if (ch == 'S') {
-              parser->method = HTTP_UNSUBSCRIBE;
-            } else {
-              SET_ERRNO(HPE_INVALID_METHOD);
-              goto error;
-            }
-          } else {
-            SET_ERRNO(HPE_INVALID_METHOD);
-            goto error;
           }
-        } else if (parser->index == 4 && parser->method == HTTP_PROPFIND && ch == 'P') {
-          parser->method = HTTP_PROPPATCH;
         } else {
           SET_ERRNO(HPE_INVALID_METHOD);
           goto error;

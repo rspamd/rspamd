@@ -337,6 +337,62 @@ TEST_SUITE("http_parser")
 		CHECK(r.transcript == "U:http:///x");
 	}
 
+	TEST_CASE("http parser: method matching is position exact")
+	{
+		/* Used to read past the end of "SYMBOLS" */
+		HP_CHECK_BOTH(0, "SUBSCRIBY RSPAMC/1.3\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+		HP_CHECK_BOTH(0, "SUBSCRIBEY RSPAMC/1.3\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+		HP_CHECK_BOTH(0, "SUBSCRIBYXX RSPAMC/1.3\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+		HP_CHECK_BOTH(0, "SUBSCRIYX /a HTTP/1.1\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+		/* The method must be refused at the offending byte itself */
+		for (bool bw: {false, true}) {
+			CHECK(hp_test::parse(0, "SUBSCRIBY RSPAMC/1.3\r\n\r\n", bw).used == 8);
+			CHECK(hp_test::parse(0, "SUBSCRIBEY RSPAMC/1.3\r\n\r\n", bw).used == 9);
+			CHECK(hp_test::parse(0, "SUBSCRIBYXX RSPAMC/1.3\r\n\r\n", bw).used == 8);
+			CHECK(hp_test::parse(0, "SUBSCRIYX /a HTTP/1.1\r\n\r\n", bw).used == 7);
+		}
+		/* Used to be accepted as SYMBOLS */
+		HP_CHECK_BOTH(0, "SUBYOLS RSPAMC/1.3\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+
+		HP_CHECK_BOTH(0, "CHECKOUT /a HTTP/1.1\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+		HP_CHECK_BOTH(0, "GXT /a HTTP/1.1\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+		HP_CHECK_BOTH(0, "DXLETE /a HTTP/1.1\r\n\r\n", false, "HPE_INVALID_METHOD", 0, 0);
+
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\r\nContent-Length: 3\r\n\r\nabc", true,
+					  "HPE_OK", 3, 1);
+		{
+			auto r = hp_test::parse(0, "SYMBOLS RSPAMC/1.3\r\nContent-Length: 3\r\n\r\nabc", false);
+			CHECK(r.method == HTTP_SYMBOLS);
+		}
+
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\r\nContent-length: 3\r\n\r\nabc", true,
+					  "HPE_OK", 3, 1);
+		{
+			auto r = hp_test::parse(0, "CHECK SPAMC/1.2\r\nContent-length: 3\r\n\r\nabc", false);
+			CHECK(r.method == HTTP_CHECK);
+			CHECK((r.flags & F_SPAMC) != 0);
+		}
+	}
+
+	TEST_CASE("http parser: every method parses to itself")
+	{
+		const char *methods[] = {"DELETE", "GET", "HEAD", "POST", "PUT", "CONNECT", "OPTIONS",
+								 "TRACE", "COPY", "LOCK", "MKCOL", "MOVE", "PROPFIND",
+								 "PROPPATCH", "SEARCH", "UNLOCK", "REPORT", "MKACTIVITY",
+								 "MERGE", "M-SEARCH", "NOTIFY", "SUBSCRIBE", "UNSUBSCRIBE",
+								 "PATCH", "PURGE"};
+
+		for (const char *m: methods) {
+			CAPTURE(m);
+			std::string wire = m;
+			wire += std::string_view(m) == "CONNECT" ? " h:80 HTTP/1.1\r\n\r\n"
+													 : " /a HTTP/1.1\r\n\r\n";
+			HP_CHECK_BOTH(0, wire, true, "HPE_OK", 0, 1);
+			auto r = hp_test::parse(0, wire, false);
+			CHECK(std::string_view(http_method_str((enum http_method) r.method)) == m);
+		}
+	}
+
 	TEST_CASE("http parser: legacy invariants")
 	{
 		/* spamc/rspamc request lines, bare LF, any letter case */
