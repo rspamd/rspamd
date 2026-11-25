@@ -2094,6 +2094,8 @@ http_parse_host(const char * buf, struct http_parser_url *u, int found_at) {
   const char *p;
   size_t buflen = u->field_data[UF_HOST].off + u->field_data[UF_HOST].len;
 
+  assert(u->field_set & (1 << UF_HOST));
+
   u->field_data[UF_HOST].len = 0;
 
   s = found_at ? s_http_userinfo_start : s_http_host_start;
@@ -2233,7 +2235,12 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
 
   /* host must be present if there is a schema */
   /* parsing http:///toto will fail */
-  if ((u->field_set & ((1 << UF_SCHEMA) | (1 << UF_HOST))) != 0) {
+  if ((u->field_set & (1 << UF_SCHEMA)) &&
+      (u->field_set & (1 << UF_HOST)) == 0) {
+    return 1;
+  }
+
+  if (u->field_set & (1 << UF_HOST)) {
     if (http_parse_host(buf, u, found_at) != 0) {
       return 1;
     }
@@ -2245,12 +2252,22 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
   }
 
   if (u->field_set & (1 << UF_PORT)) {
-    /* Don't bother with endp; we've already validated the string */
-    unsigned long v = strtoul(buf + u->field_data[UF_PORT].off, NULL, 10);
+    /* Parse only the bytes of the field: the buffer is not NUL-terminated */
+    const char *pp = buf + u->field_data[UF_PORT].off;
+    const char *pend = pp + u->field_data[UF_PORT].len;
+    unsigned long v = 0;
 
-    /* Ports have a max value of 2^16 */
-    if (v > 0xffff) {
-      return 1;
+    for (; pp < pend; pp++) {
+      if (!IS_NUM(*pp)) {
+        return 1;
+      }
+
+      v = v * 10 + (unsigned long) (*pp - '0');
+
+      /* Ports have a max value of 2^16 */
+      if (v > 0xffff) {
+        return 1;
+      }
     }
 
     u->port = (uint16_t) v;
