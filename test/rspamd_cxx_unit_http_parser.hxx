@@ -751,6 +751,87 @@ TEST_SUITE("http_parser")
 		rspamd_http_message_unref(msg);
 	}
 
+	TEST_CASE("http parser: ambiguous Content-Length is refused")
+	{
+		const char *dup = "HPE_UNEXPECTED_CONTENT_LENGTH";
+		const char *bad = "HPE_INVALID_CONTENT_LENGTH";
+
+		/* Two Content-Length headers, even identical ones */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 0\r\nContent-Length: 1\r\n\r\nz", true, dup, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 5\r\nContent-length: 5\r\n\r\nabcde", true, dup, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 3\r\nContent-Length: 5\r\n\r\nabcde", true, dup, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nContent-Length: 4\r\n\r\nabcd", true, dup, 0, 0);
+		{
+			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nContent-Length: 0\r\nContent-Length: 1\r\n\r\nz", false);
+			CHECK(r.used == 53);
+			CHECK(r.hc == 0);
+		}
+
+		/* Blanks inside the number */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 1 2\r\n\r\nabcdefghijkl", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 4 2\r\n\r\nabcdefghijkl", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 13 37\r\n\r\nabcdefghijkl", true, bad, 0, 0);
+		{
+			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nContent-Length: 1 2\r\n\r\nabcdefghijkl", false);
+			CHECK(r.used == 36);
+		}
+
+		/* Digits continued over a fold */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 1\r\n 2\r\n\r\nabcdefghijkl", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 5\r\n\t5\r\n\r\nabcde", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\nContent-Length: 5\n 5\n\nabcde", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 3\r\n \t\r\n\r\nabc", true, bad, 0, 0);
+		{
+			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nContent-Length: 1\r\n 2\r\n\r\nabcdefghijkl", false);
+			CHECK(r.used == 38);
+		}
+
+		/* Empty values */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length:\r\n\r\nabcde", true, bad, 0, 0);
+		{
+			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nContent-Length:\r\n\r\nabcde", false);
+			CHECK(r.used == 35);
+			CHECK(r.hc == 0);
+		}
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length:   \r\n\r\nabc", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\nContent-length:\n\nabc", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length:\r\n \r\n\r\nabc", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\r\nContent-length:\r\n\r\nabc", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 18446744073709551615\r\n\r\n", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\nContent-Length:\r\n\r\n",
+					  true, bad, 3, 0);
+
+		/* Both framings, in either order */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding: chunked\r\nContent-Length: 3\r\n\r\nabc", true, bad, 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\nabc", true, bad, 0, 0);
+
+		/* Still accepted */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 3\r\n \r\n\r\nabc", true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 3 \r\n  \r\n\r\nabc", true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length:\r\n 5\r\n\r\nabcde", true, "HPE_OK", 5, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 5 \r\n\r\nabcde", true, "HPE_OK", 5, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nContent-Length:  42 \r\n\r\n", bw);
+			CHECK(r.hc == 1);
+			CHECK(r.err == "HPE_INVALID_EOF_STATE");
+		}
+		/* EOF right after the number and its trailing blank */
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\r\nContent-length: 3 ", true, "HPE_INVALID_EOF_STATE", 0, 0);
+		/* The length state is reset between messages */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nConnection: keep-alive\r\nContent-Length: 3\r\n\r\nabc"
+						 "POST /b HTTP/1.1\r\nConnection: keep-alive\r\nContent-Length: 2\r\n\r\nxy",
+					  true, "HPE_OK", 5, 2);
+		HP_CHECK_BOTH(1, "HTTP/1.1 100 Continue\r\nConnection: keep-alive\r\nContent-Length: 0\r\n\r\n"
+						 "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc",
+					  true, "HPE_OK", 3, 2);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Lengthy: 7\r\nContent-Length: 3\r\n\r\nabc", true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nContent-Length-X: 0\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nOK\r\n0\r\n\r\n",
+					  true, "HPE_OK", 2, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nX:\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\r\nContent-length: 3 \r\nUser: x\r\n\r\nabc", true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\r\nContent-length: 3\r\n\r\nabc", true, "HPE_OK", 3, 1);
+	}
+
 	TEST_CASE("http parser: legacy invariants")
 	{
 		/* spamc/rspamc request lines, bare LF, any letter case */

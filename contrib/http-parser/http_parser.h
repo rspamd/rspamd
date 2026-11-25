@@ -173,6 +173,8 @@ enum flags
   XX(INVALID_HEADER_TOKEN, "invalid character in header")            \
   XX(INVALID_CONTENT_LENGTH,                                         \
      "invalid character in content-length header")                   \
+  XX(UNEXPECTED_CONTENT_LENGTH,                                      \
+     "unexpected content-length header")                             \
   XX(INVALID_CHUNK_SIZE,                                             \
      "invalid character in chunk size header")                       \
   XX(INVALID_CONSTANT, "invalid constant string")                    \

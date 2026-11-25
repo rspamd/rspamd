@@ -327,6 +327,8 @@ enum header_states
 
   , h_connection
   , h_content_length
+  , h_content_length_num
+  , h_content_length_ws
   , h_transfer_encoding
 
   , h_matching_transfer_encoding_chunked
@@ -593,6 +595,10 @@ http_header_value_done (http_parser *parser)
 
       parser->flags |= F_CHUNKED;
       break;
+    case h_content_length:
+      /* No digit was seen: an empty length would leave the body bytes to be
+       * parsed as the next message */
+      return HPE_INVALID_CONTENT_LENGTH;
     default:
       break;
   }
@@ -1449,7 +1455,18 @@ size_t http_parser_execute (http_parser *parser,
               goto error;
             }
 
+            if (parser->content_length != ULLONG_MAX) {
+              /* A second Content-Length, whatever its value */
+              SET_ERRNO(HPE_UNEXPECTED_CONTENT_LENGTH);
+              goto error;
+            }
+
             parser->content_length = ch - '0';
+            parser->header_state = h_content_length_num;
+            break;
+
+          case h_content_length_ws:
+            /* The re-executed blank of a folded line */
             break;
 
           case h_connection:
@@ -1503,10 +1520,14 @@ size_t http_parser_execute (http_parser *parser,
             break;
 
           case h_content_length:
+          case h_content_length_num:
           {
             uint64_t t;
 
-            if (ch == ' ') break;
+            if (ch == ' ') {
+              parser->header_state = h_content_length_ws;
+              break;
+            }
 
             if (!IS_NUM(ch)) {
               SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
@@ -1531,8 +1552,16 @@ size_t http_parser_execute (http_parser *parser,
             }
 
             parser->content_length = t;
+            parser->header_state = h_content_length_num;
             break;
           }
+
+          case h_content_length_ws:
+            /* Digits after a blank would make the length ambiguous */
+            if (ch == ' ') break;
+
+            SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
+            goto error;
 
           /* Transfer-Encoding: chunked */
           case h_matching_transfer_encoding_chunked:
@@ -1599,6 +1628,10 @@ size_t http_parser_execute (http_parser *parser,
               parser->header_state == h_transfer_encoding_chunked) {
             SET_ERRNO(HPE_INVALID_HEADER_TOKEN);
             goto error;
+          }
+
+          if (parser->header_state == h_content_length_num) {
+            parser->header_state = h_content_length_ws;
           }
 
           parser->state = s_header_value_start;
