@@ -833,6 +833,11 @@ size_t http_parser_execute (http_parser *parser,
           goto error;
         }
 
+        if (parser->http_major != 1 || parser->http_minor > 1) {
+          SET_ERRNO(HPE_INVALID_VERSION);
+          goto error;
+        }
+
         parser->state = s_res_first_status_code;
         break;
 
@@ -847,6 +852,7 @@ size_t http_parser_execute (http_parser *parser,
           goto error;
         }
         parser->status_code = ch - '0';
+        parser->index = 1;
         parser->state = s_res_status_code;
         break;
       }
@@ -856,10 +862,18 @@ size_t http_parser_execute (http_parser *parser,
         if (!IS_NUM(ch)) {
           switch (ch) {
             case ' ':
+              if (parser->index != 3) {
+                SET_ERRNO(HPE_INVALID_STATUS);
+                goto error;
+              }
               parser->state = s_res_status_start;
               break;
             case CR:
             case LF:
+              if (parser->index != 3) {
+                SET_ERRNO(HPE_INVALID_STATUS);
+                goto error;
+              }
               /* an empty reason phrase still reaches on_status */
               parser->state = s_res_status_start;
               goto reexecute_byte;
@@ -873,7 +887,8 @@ size_t http_parser_execute (http_parser *parser,
         parser->status_code *= 10;
         parser->status_code += ch - '0';
 
-        if (parser->status_code > 999) {
+        /* index counts the digits; stop before it can wrap */
+        if (++parser->index > 3 || parser->status_code > 999) {
           SET_ERRNO(HPE_INVALID_STATUS);
           goto error;
         }
@@ -890,6 +905,11 @@ size_t http_parser_execute (http_parser *parser,
         if (ch == CR || ch == LF)
           goto reexecute_byte;
 
+        if (!IS_HEADER_CHAR(ch)) {
+          SET_ERRNO(HPE_INVALID_STATUS);
+          goto error;
+        }
+
         break;
       }
 
@@ -904,6 +924,11 @@ size_t http_parser_execute (http_parser *parser,
           parser->state = s_header_field_start;
           CALLBACK_DATA(status);
           break;
+        }
+
+        if (!IS_HEADER_CHAR(ch)) {
+          SET_ERRNO(HPE_INVALID_STATUS);
+          goto error;
         }
 
         break;
@@ -1147,6 +1172,11 @@ size_t http_parser_execute (http_parser *parser,
       /* end of the request line */
       case s_req_http_end:
       {
+        if (parser->http_major != 1 || parser->http_minor > 1) {
+          SET_ERRNO(HPE_INVALID_VERSION);
+          goto error;
+        }
+
         if (ch == CR) {
           parser->state = s_req_line_almost_done;
           break;
@@ -1184,6 +1214,10 @@ size_t http_parser_execute (http_parser *parser,
           }
           else if (ch == LF) {
             parser->state = s_header_field_start;
+          }
+          else if (ch == 127 || ((unsigned char) ch < 32 && ch != 9)) {
+            SET_ERRNO(HPE_INVALID_CONSTANT);
+            goto error;
           }
           break;
       }
@@ -1384,6 +1418,11 @@ size_t http_parser_execute (http_parser *parser,
 
         parser->state = s_header_value;
         parser->index = 0;
+
+        if (!IS_HEADER_CHAR(ch)) {
+          SET_ERRNO(HPE_INVALID_HEADER_TOKEN);
+          goto error;
+        }
 
         c = LOWER(ch);
 
@@ -2245,6 +2284,12 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
   int found_at = 0;
 
   u->port = u->field_set = 0;
+
+  /* field offsets are 16 bit */
+  if (buflen > UINT16_MAX) {
+    return 1;
+  }
+
   s = is_connect ? s_req_server_start : s_req_spaces_before_url;
   uf = old_uf = UF_MAX;
 

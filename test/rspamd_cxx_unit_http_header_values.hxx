@@ -338,6 +338,89 @@ TEST_SUITE("http_header_values")
 		}
 	}
 
+	TEST_CASE("client: a final reply after an interim one has its own reason")
+	{
+		/* The interim reason used to be glued in front of the final one: "ContinueErr" */
+		struct variant {
+			const char *first;
+			const char *second;// pushed separately, if not empty
+			int code;
+			bool status_null;
+		};
+		const variant variants[] = {
+			{"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 500 Err\r\nContent-Length: 0\r\n\r\n", "", 500, false},
+			{"HTTP/1.1 100 Continue\r\n\r\n", "HTTP/1.1 500 Err\r\nContent-Length: 0\r\n\r\n", 500, false},
+			{"HTTP/1.1 100 Continue\n\nHTTP/1.1 500 Err\nContent-Length: 0\n\n", "", 500, false},
+			{"HTTP/1.1 100 Continue\n\n", "HTTP/1.1 500 Err\nContent-Length: 0\n\n", 500, false},
+			/* A 200 records no reason, so a NULL status means the interim one was dropped */
+			{"HTTP/1.1 103 Early Hints\r\nLink: </a.css>; rel=preload\r\n\r\n"
+			 "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+			 "", 200, true},
+			{"HTTP/1.1 103 Early Hints\r\nLink: </a.css>; rel=preload\r\n\r\n",
+			 "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", 200, true},
+		};
+
+		for (const auto &v: variants) {
+			using namespace http_date_test;
+			date_fixture t(true);
+
+			auto *msg = rspamd_http_message_from_url("http://example.com/");
+			REQUIRE(msg != nullptr);
+			REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "example.com", nullptr,
+														 &t.state, 1000.0));
+			t.drain();
+
+			t.push(v.first);
+			if (v.second[0] != '\0') {
+				CHECK(t.state.finishes == 0);
+				t.push(v.second);
+			}
+
+			CHECK(t.state.errors == 0);
+			REQUIRE(t.state.finishes == 1);
+			CHECK(t.state.code == v.code);
+			CHECK(t.state.status_null == v.status_null);
+			if (!v.status_null) {
+				CHECK(t.state.status_len == 3);
+			}
+		}
+	}
+
+	TEST_CASE("client: a final reply does not keep the headers of an interim one")
+	{
+		for (bool two_reads: {false, true}) {
+			using namespace http_date_test;
+			date_fixture t(true);
+
+			auto *msg = rspamd_http_message_from_url("http://example.com/");
+			REQUIRE(msg != nullptr);
+			REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "example.com", nullptr,
+														 &t.state, 1000.0));
+			t.drain();
+
+			const std::string interim = "HTTP/1.1 103 Early Hints\r\nLink: </a>\r\n"
+										"Last-Modified: Sun, 06 Nov 1994 08:49:37 GMT\r\n\r\n";
+			const std::string final_reply = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+
+			CAPTURE(two_reads);
+			if (two_reads) {
+				t.push(interim);
+				t.push(final_reply);
+			}
+			else {
+				t.push(interim + final_reply);
+			}
+
+			CHECK(t.state.errors == 0);
+			REQUIRE(t.state.finishes == 1);
+			CHECK(t.state.code == 200);
+			CHECK(t.state.last_modified == 0);
+			/* Content-Length only */
+			CHECK(t.state.headers == 1);
+			CHECK_FALSE(t.state.bad_header);
+		}
+	}
+
 	TEST_CASE("server: Key header with an empty key")
 	{
 		using namespace http_date_test;
@@ -410,6 +493,45 @@ TEST_SUITE("http_header_values")
 
 		CHECK(t.state.errors == 1);
 		CHECK(t.state.finishes == 0);
+	}
+
+	TEST_CASE("server: control bytes in a sent reason phrase")
+	{
+		using namespace http_date_test;
+		date_fixture t(false);
+
+		auto *msg = rspamd_http_new_message(HTTP_RESPONSE);
+		msg->code = 404;
+		msg->status = rspamd_fstring_new_init("a\x01"
+											  "b\x7f"
+											  "c\td",
+											  7);
+		rspamd_http_message_set_body(msg, "abcd", 4);
+		REQUIRE(rspamd_http_connection_write_message(t.conn, msg, nullptr, "text/plain",
+													 &t.state, 1000.0));
+
+		std::string reply;
+		char buf[4096];
+
+		for (int i = 0; i < 8; i++) {
+			ev_run(t.loop, EVRUN_NOWAIT);
+
+			ssize_t r;
+			while ((r = read(t.remote_fd, buf, sizeof(buf))) > 0) {
+				reply.append(buf, r);
+			}
+		}
+
+		CHECK(reply.rfind("HTTP/1.1 404 a b c\td\r\n", 0) == 0);
+
+		/* The strict parser takes the reply back */
+		http_parser_settings st;
+		memset(&st, 0, sizeof(st));
+		http_parser p;
+		http_parser_init(&p, HTTP_RESPONSE);
+		http_parser_execute(&p, &st, reply.data(), reply.size());
+		CHECK(HTTP_PARSER_ERRNO(&p) == HPE_OK);
+		CHECK(unsigned(p.status_code) == 404u);
 	}
 }
 

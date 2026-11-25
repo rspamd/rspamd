@@ -3632,6 +3632,21 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		}
 
 		/*
+		 * A backend of another version may parse a URL that this proxy
+		 * cannot, so a URL the privileged-input filter could not check is
+		 * never forwarded
+		 */
+		struct http_parser_url url_parsed;
+
+		if (http_parser_parse_url(RSPAMD_FSTRING_DATA(msg->url),
+								  RSPAMD_FSTRING_LEN(msg->url), 0, &url_parsed) != 0) {
+			msg_info_session("cannot parse the request URL, refusing the request");
+			err_code = 400;
+			err_status = "Request URL cannot be parsed";
+			goto err;
+		}
+
+		/*
 		 * Ingress sanitising: this happens before proxy_check_file() may open
 		 * anything and before the message is forwarded or self scanned, so a
 		 * client supplied File/Path/Shm* can neither be acted upon nor be

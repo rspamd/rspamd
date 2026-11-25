@@ -63,6 +63,21 @@ Proxy refuses the Path header
   Should Be Equal As Integers  ${result}[0]  400
   Should Contain  ${result}[1]  ${DENIED}
 
+Proxy refuses a request URL it cannot parse
+  [Documentation]  A URL this proxy cannot parse could not be checked for
+  ...              privileged query arguments, and a backend of another version
+  ...              may parse it differently, so it is never forwarded. The
+  ...              reason is the proxy's own: the backend would refuse the URL
+  ...              too, but with a different text.
+  ${data} =  Get Binary File  ${MESSAGE}
+  ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}
+  ...  From=longurl@example.net  Rcpt=longurl-rcpt@example.net
+  ${pad} =  Evaluate  'x' * 70000
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?Shm=${SHM_NAME}&p=${pad}  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  400
+  Should Contain  ${result}[1]  Request URL cannot be parsed
+
 Client Shm headers never reach the upstream
   [Documentation]  Shm/Shm-Offset/Shm-Length are hop-by-hop and are stripped at
   ...              ingress, so the upstream -- which does honour privileged

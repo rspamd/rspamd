@@ -918,7 +918,6 @@ rspamd_http_decrypt_message(struct rspamd_http_connection *conn,
 	const unsigned char *nm;
 	gsize dec_len;
 	struct rspamd_http_message *msg = priv->msg;
-	struct rspamd_http_header *hdr, *hcur, *hcurtmp;
 	struct http_parser decrypted_parser;
 	struct http_parser_settings decrypted_cb;
 	size_t nparsed;
@@ -940,19 +939,11 @@ rspamd_http_decrypt_message(struct rspamd_http_connection *conn,
 	}
 
 	/* Cleanup message */
-	kh_foreach_value (msg->headers, hdr, {
-		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
-			rspamd_fstring_free (hcur->combined);
-			g_free (hcur);
-}
-});
+	rspamd_http_message_clear_headers(msg);
 
-kh_destroy(rspamd_http_headers_hash, msg->headers);
-msg->headers = kh_init(rspamd_http_headers_hash);
-
-if (msg->url != NULL) {
-	msg->url = rspamd_fstring_assign(msg->url, "", 0);
-}
+	if (msg->url != NULL) {
+		msg->url = rspamd_fstring_assign(msg->url, "", 0);
+	}
 
 msg->body_buf.len = 0;
 
@@ -1043,6 +1034,17 @@ rspamd_http_on_message_complete(http_parser *parser)
 		 * nothing of that
 		 */
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_INTERIM;
+
+		/* The final reply has its own reason phrase and headers */
+		if (priv->msg->status != NULL) {
+			rspamd_fstring_free(priv->msg->status);
+			priv->msg->status = NULL;
+		}
+
+		rspamd_http_message_clear_headers(priv->msg);
+		priv->msg->date = 0;
+		priv->msg->last_modified = 0;
+
 		http_parser_init(parser, HTTP_RESPONSE);
 
 		return 0;
@@ -2477,6 +2479,18 @@ int rspamd_http_message_write_header(const char *mime_type, gboolean encrypted,
 				}
 			}
 			else {
+				/*
+				 * The reader refuses control bytes in a reason phrase, other
+				 * than HT, which it accepts
+				 */
+				for (gsize i = 0; i < msg->status->len; i++) {
+					unsigned char c = (unsigned char) msg->status->str[i];
+
+					if ((c < 0x20 && c != '\t') || c == 0x7f) {
+						msg->status->str[i] = ' ';
+					}
+				}
+
 				status.begin = msg->status->str;
 				status.len = msg->status->len;
 			}

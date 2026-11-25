@@ -1029,10 +1029,10 @@ TEST_SUITE("http_parser")
 			CHECK(r.http_minor == 9);
 		}
 		{
-			std::string_view w = "HTTP/2.0 200 OK\r\nContent-Length: 0\r\n\r\n";
+			std::string_view w = "HTTP/1.0 200 OK\r\nContent-Length: 0\r\n\r\n";
 			HP_CHECK_BOTH(1, w, true, "HPE_OK", 0, 1);
 			auto r = hp_test::parse(1, w, false);
-			CHECK(r.http_major == 2);
+			CHECK(r.http_major == 1);
 			CHECK(r.http_minor == 0);
 		}
 
@@ -1186,6 +1186,89 @@ TEST_SUITE("http_parser")
 			HP_CHECK_BOTH(type, head + "3 ;x\r\n" + rtail, true, "HPE_OK", 3, 1);
 			HP_CHECK_BOTH(type, head + "3\r\n" + rtail, true, "HPE_OK", 3, 1);
 		}
+	}
+
+	TEST_CASE("http parser: only HTTP/1.0 and HTTP/1.1")
+	{
+		const char *ver = "HPE_INVALID_VERSION";
+
+		HP_CHECK_BOTH(0, "GET /a HTTP/2.0\r\n\r\n", true, ver, 0, 0);
+		HP_CHECK_BOTH(0, "GET /a HTTP/1.2\r\n\r\n", true, ver, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/2.0 200 OK\r\n\r\n", true, ver, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/0.9 200 OK\r\n\r\n", true, ver, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.2 200 OK\r\n\r\n", true, ver, 0, 0);
+		HP_CHECK_BOTH(0, "GET /a HTTP/1.0\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(0, "GET /a HTTP/1.1\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(1, "HTTP/1.0 200 OK\r\nContent-Length: 0\r\n\r\n", true, "HPE_OK", 0, 1);
+		/* a request with no version at all is still taken */
+		HP_CHECK_BOTH(0, "GET /a\r\n\r\n", true, "HPE_OK", 0, 1);
+	}
+
+	TEST_CASE("http parser: status code has three digits")
+	{
+		const char *st = "HPE_INVALID_STATUS";
+
+		HP_CHECK_BOTH(1, "HTTP/1.1 20 OK\r\n\r\n", true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 2\r\n\r\n", true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 0200 OK\r\n\r\n", true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 20\n\n", true, st, 0, 0);
+		/* leading zeros must not wrap the digit counter */
+		HP_CHECK_BOTH(1, "HTTP/1.1 " + std::string(259, '0') + " OK\r\n\r\n", true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(1, "HTTP/1.1 500\r\n\r\n", true, "HPE_OK", 0, 1);
+	}
+
+	TEST_CASE("http parser: control bytes in value starts and reasons")
+	{
+		const char *tok = "HPE_INVALID_HEADER_TOKEN";
+		const char *st = "HPE_INVALID_STATUS";
+		const std::string pre = "GET /a HTTP/1.1\r\n";
+
+		HP_CHECK_BOTH(0, pre + "X: \x01z\r\n\r\n", true, tok, 0, 0);
+		HP_CHECK_BOTH(0, pre + std::string("X:\x00", 3), true, tok, 0, 0);
+		HP_CHECK_BOTH(0, pre + "X: \x7f\r\n\r\n", true, tok, 0, 0);
+		HP_CHECK_BOTH(0, pre + "Connection: \x01keep-alive\r\n\r\n", true, tok, 0, 0);
+		HP_CHECK_BOTH(0, pre + "X:\r\n \x01z\r\n\r\n", true, tok, 0, 0);
+		HP_CHECK_BOTH(0, pre + "X: \tb\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(0, pre + "X: \xc3\xa9\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(0, pre + "X:\r\n  b\r\n\r\n", true, "HPE_OK", 0, 1);
+
+		HP_CHECK_BOTH(1, std::string("HTTP/1.1 200 \x00\x01OK\r\n\r\n", 21), true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 O\x01K\r\n\r\n", true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\x7f\r\n\r\n", true, st, 0, 0);
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 \xc3\xa9\r\n\r\n", true, "HPE_OK", 0, 1);
+	}
+
+	TEST_CASE("http parser url: over 64K is refused")
+	{
+		std::string big = "/stat" + std::string(65536, 'x');
+		auto r = hp_test::parse_url(big, 1);
+		CHECK(r.rc == 1);
+		CHECK(r.set == 0);
+
+		auto edge = hp_test::parse_url("/" + std::string(65534, 'x'), 0);
+		CHECK(edge.rc == 0);
+		CHECK(edge.present[UF_PATH]);
+		CHECK(edge.field[UF_PATH].size() == 65535);
+
+		/* 65536 bytes is the first length the 16-bit offsets cannot hold */
+		for (int conn = 0; conn < 2; conn++) {
+			auto lim = hp_test::parse_url("/" + std::string(65535, 'x'), conn);
+			CHECK(lim.rc == 1);
+			CHECK(lim.set == 0);
+		}
+	}
+
+	TEST_CASE("http parser: control bytes in the spamc request line")
+	{
+		const char *c = "HPE_INVALID_CONSTANT";
+
+		HP_CHECK_BOTH(0, std::string("CHECK S\x00garbage\r\n\r\n", 19), true, c, 0, 0);
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\x01\r\n\r\n", true, c, 0, 0);
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\x7f\r\n\r\n", true, c, 0, 0);
+		HP_CHECK_BOTH(0, "SYMBOLS RSPAMC/1.3\r\n\r\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\n\n", true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2 \t\xc3\xa9\r\n\r\n", true, "HPE_OK", 0, 1);
 	}
 
 	TEST_CASE("http parser: legacy invariants")

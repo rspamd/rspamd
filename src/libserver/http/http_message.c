@@ -642,34 +642,49 @@ void rspamd_http_message_drop_shared_body(struct rspamd_http_message *msg)
 	msg->body_buf.allocated_len = 0;
 }
 
-void rspamd_http_message_free(struct rspamd_http_message *msg)
+void rspamd_http_message_clear_headers(struct rspamd_http_message *msg)
 {
 	struct rspamd_http_header *hdr, *hcur, *hcurtmp;
 
-	kh_foreach_value (msg->headers, hdr, {
-		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
-			rspamd_fstring_free (hcur->combined);
-			g_free (hcur);
-}
-});
+	for (khiter_t k = kh_begin(msg->headers); k != kh_end(msg->headers); ++k) {
+		if (!kh_exist(msg->headers, k)) {
+			continue;
+		}
 
-kh_destroy(rspamd_http_headers_hash, msg->headers);
-rspamd_http_message_storage_cleanup(msg);
+		hdr = kh_value(msg->headers, k);
 
-if (msg->url != NULL) {
-	rspamd_fstring_free(msg->url);
-}
-if (msg->status != NULL) {
-	rspamd_fstring_free(msg->status);
-}
-if (msg->host != NULL) {
-	g_string_free(msg->host, TRUE);
-}
-if (msg->peer_key != NULL) {
-	rspamd_pubkey_unref(msg->peer_key);
+		DL_FOREACH_SAFE(hdr, hcur, hcurtmp)
+		{
+			rspamd_fstring_free(hcur->combined);
+			g_free(hcur);
+		}
+	}
+
+	/* The keys point into the headers freed above */
+	kh_clear(rspamd_http_headers_hash, msg->headers);
 }
 
-g_free(msg);
+void rspamd_http_message_free(struct rspamd_http_message *msg)
+{
+	rspamd_http_message_clear_headers(msg);
+
+	kh_destroy(rspamd_http_headers_hash, msg->headers);
+	rspamd_http_message_storage_cleanup(msg);
+
+	if (msg->url != NULL) {
+		rspamd_fstring_free(msg->url);
+	}
+	if (msg->status != NULL) {
+		rspamd_fstring_free(msg->status);
+	}
+	if (msg->host != NULL) {
+		g_string_free(msg->host, TRUE);
+	}
+	if (msg->peer_key != NULL) {
+		rspamd_pubkey_unref(msg->peer_key);
+	}
+
+	g_free(msg);
 }
 
 void rspamd_http_message_set_peer_key(struct rspamd_http_message *msg,
