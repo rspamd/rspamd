@@ -215,7 +215,27 @@ static url_result parse_url(std::string_view url, int is_connect, size_t buflen 
 	return r;
 }
 
+
+/* Value of the first header called name in a transcript ("F:X|V:y|..."),
+ * or "<none>" */
+static std::string header_value(const std::string &tr, const std::string &name)
+{
+	std::string key = "F:" + name + "|V:";
+	auto pos = tr.find(key);
+
+	if (pos == std::string::npos) {
+		return "<none>";
+	}
+	pos += key.size();
+	auto end = tr.find('|', pos);
+
+	return tr.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+}
+
 }// namespace hp_test
+
+/* A literal that may contain NUL bytes */
+#define HP_SV(lit) std::string_view((lit), sizeof(lit) - 1)
 
 /* Whole buffer and byte at a time must agree on the outcome */
 #define HP_CHECK_BOTH(type, wire, eof, expr_err, expr_body, expr_mc) \
@@ -562,6 +582,173 @@ TEST_SUITE("http_parser")
 			/* The 204 completes; the reset parser must not report a message for the first one */
 			CHECK(hp_test_reinit::reinit_mc_calls == 1);
 		}
+	}
+
+	TEST_CASE("http parser: obs-fold in header values")
+	{
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, "GET /a HTTP/1.1\r\nX: a\r\n\tb\r\n\r\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(hp_test::header_value(r.transcript, "X") == "a\tb");
+		}
+
+		std::string_view crlf = "GET / HTTP/1.1\r\n"
+								"Line1:   abc\r\n"
+								"\tdef\r\n"
+								" ghi\r\n"
+								"\t\tjkl\r\n"
+								"  mno \r\n"
+								"\t \tqrs\r\n"
+								"Line2: \t line2\t\r\n"
+								"Line3:\r\n"
+								" line3\r\n"
+								"Line4: \r\n"
+								" \r\n"
+								"Connection:\r\n"
+								" close\r\n"
+								"\r\n";
+		std::string_view lf = "GET / HTTP/1.1\n"
+							  "Line1:   abc\n"
+							  "\tdef\n"
+							  " ghi\n"
+							  "\t\tjkl\n"
+							  "  mno \n"
+							  "\t \tqrs\n"
+							  "Line2: \t line2\t\n"
+							  "Line3:\n"
+							  " line3\n"
+							  "Line4: \n"
+							  " \n"
+							  "Connection:\n"
+							  " close\n"
+							  "\n";
+		for (auto w: {crlf, lf}) {
+			HP_CHECK_BOTH(0, w, true, "HPE_OK", 0, 1);
+			for (bool bw: {false, true}) {
+				auto r = hp_test::parse(0, w, bw);
+				CHECK(hp_test::header_value(r.transcript, "Line1") == "abc\tdef ghi\t\tjkl  mno \t \tqrs");
+				CHECK(hp_test::header_value(r.transcript, "Line2") == "line2\t");
+				CHECK(hp_test::header_value(r.transcript, "Line3") == "line3");
+				CHECK(hp_test::header_value(r.transcript, "Line4") == "");
+				CHECK(hp_test::header_value(r.transcript, "Connection") == "close");
+				CHECK(r.keep_alive == 0);
+			}
+		}
+
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, "GET / HTTP/1.1\nLine3:\n line3\n\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(hp_test::header_value(r.transcript, "Line3") == "line3");
+		}
+
+		/* A fold that starts the value is honoured for the framing headers */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding:\r\n chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n",
+					  true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding:\r\n chunked\r\nContent-Length: 3\r\n\r\nabc",
+					  true, "HPE_INVALID_CONTENT_LENGTH", 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 3\r\nTransfer-Encoding:\r\n chunked\r\n\r\nabc",
+					  true, "HPE_INVALID_CONTENT_LENGTH", 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length:\r\n 5\r\n\r\nabcde", true, "HPE_OK", 5, 1);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nContent-Length: 1\r\n 2\r\n\r\nabcdefghijklmnop", true,
+					  "HPE_INVALID_CONTENT_LENGTH", 0, 0);
+
+		/* A folded chunked value is refused, never read as a plain body */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding: chunked\r\n \r\n\r\n3\r\nabc\r\n0\r\n\r\n",
+					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nTransfer-Encoding: chun\r\n ked\r\n\r\n3\r\nabc\r\n0\r\n\r\n",
+					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, "POST /a HTTP/1.1\r\nConnection:\r\n keep-alive\r\nContent-Length: 0\r\n\r\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.keep_alive == 1);
+		}
+
+		/* An empty header still gives a zero-length value */
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(1, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nX-Empty:\r\nY: z\r\n\r\nabc", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.body == 3);
+			CHECK(hp_test::header_value(r.transcript, "X-Empty") == "");
+			CHECK(hp_test::header_value(r.transcript, "Y") == "z");
+		}
+
+		/* A bare CR between header lines is not a line end */
+		HP_CHECK_BOTH(0, "GET / HTTP/1.1\r\nFoo: 1\rBar: 1\r\n\r\n", true, "HPE_STRICT", 0, 0);
+		HP_CHECK_BOTH(0, "GET / HTTP/1.1\r\nFoo: 1\rBar: 1", true, "HPE_STRICT", 0, 0);
+
+		/* Half-close inside headers, and after a complete empty-valued header */
+		HP_CHECK_BOTH(0, "GET / HTTP/1.1\r\nX:\r\n", true, "HPE_INVALID_EOF_STATE", 0, 0);
+		HP_CHECK_BOTH(0, "GET / HTTP/1.1\r\nX:\r\n\r\n", true, "HPE_OK", 0, 1);
+	}
+
+	TEST_CASE("http parser: control characters in header values")
+	{
+		HP_CHECK_BOTH(0, HP_SV("GET /a HTTP/1.1\r\nX: a\x00"
+							   "b\r\n\r\n"),
+					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+		HP_CHECK_BOTH(0, HP_SV("GET /a HTTP/1.1\r\nX: a\x01"
+							   "b\r\n\r\n"),
+					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+		HP_CHECK_BOTH(0, HP_SV("GET /a HTTP/1.1\r\nX: a\x7f"
+							   "b\r\n\r\n"),
+					  true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+		HP_CHECK_BOTH(0, HP_SV("GET /a HTTP/1.1\r\nX: a\r\n \x01\r\n\r\n"), true, "HPE_INVALID_HEADER_TOKEN", 0, 0);
+
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, "GET /a HTTP/1.1\r\nX: a\tb\r\n\r\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(hp_test::header_value(r.transcript, "X") == "a\tb");
+
+			r = hp_test::parse(0, "GET /a HTTP/1.1\r\nX: \xc3\xa9t\xc3\xa9\r\n\r\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(hp_test::header_value(r.transcript, "X") == "\xc3\xa9t\xc3\xa9");
+
+			r = hp_test::parse(0, "GET /a HTTP/1.1\r\nX: \xff\r\n\r\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(hp_test::header_value(r.transcript, "X") == "\xff");
+		}
+
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nX: a\x01"
+						 "b\r\nContent-Length: 1\r\n\r\nz",
+					  true,
+					  "HPE_INVALID_HEADER_TOKEN", 0, 0);
+
+		/* Legacy request lines */
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\nContent-length: 3\nUser: x\n\nabc", true, "HPE_OK", 3, 1);
+		HP_CHECK_BOTH(0, "CHECK SPAMC/1.2\nContent-length: 3\nUser: x\x01y\n\nabc", true,
+					  "HPE_INVALID_HEADER_TOKEN", 0, 0);
+	}
+
+	TEST_CASE("http message: control bytes in outgoing header values")
+	{
+		auto *msg = rspamd_http_new_message(HTTP_REQUEST);
+
+		rspamd_http_message_add_header_len(msg, "X", "a\x01"
+													 "b\r\nc",
+										   6);
+		rspamd_http_message_add_header_len(msg, "Y", "caf\xc3\xa9", 5);
+		rspamd_http_message_add_header_len(msg, "Z", "a\tb", 3);
+		rspamd_http_message_add_header_len(msg, "D", "a\x7f"
+													 "b",
+										   3);
+
+		auto get = [&](const char *name) {
+			auto *t = rspamd_http_message_find_header(msg, name);
+			return t ? std::string(t->begin, t->len) : std::string("<none>");
+		};
+
+		CHECK(get("X") == "a b  c");
+		CHECK(get("Y") == "caf\xc3\xa9");
+		CHECK(get("Z") == "a\tb");
+		CHECK(get("D") == "a b");
+
+		auto *fs = rspamd_fstring_new_init("p\r\nq\x01", 5);
+		rspamd_http_message_add_header_fstr(msg, "F", fs);
+		CHECK(get("F") == "p  q ");
+		rspamd_fstring_free(fs);
+
+		rspamd_http_message_unref(msg);
 	}
 
 	TEST_CASE("http parser: legacy invariants")

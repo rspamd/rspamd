@@ -278,6 +278,9 @@ enum state
 
   , s_header_field_start
   , s_header_field
+  , s_header_value_discard_ws
+  , s_header_value_discard_ws_almost_done
+  , s_header_value_discard_lws
   , s_header_value_start
   , s_header_value
   , s_header_value_lws
@@ -357,6 +360,8 @@ enum http_host_state
 #define IS_NUM(c)           ((c) >= '0' && (c) <= '9')
 #define IS_ALPHANUM(c)      (IS_ALPHA(c) || IS_NUM(c))
 #define IS_HEX(c)           (IS_NUM(c) || (LOWER(c) >= 'a' && LOWER(c) <= 'f'))
+#define IS_HEADER_CHAR(ch)                                                     \
+  (ch == CR || ch == LF || ch == 9 || ((unsigned char)ch > 31 && ch != 127))
 #define IS_MARK(c)          ((c) == '-' || (c) == '_' || (c) == '.' || \
   (c) == '!' || (c) == '~' || (c) == '*' || (c) == '\'' || (c) == '(' || \
   (c) == ')')
@@ -564,6 +569,35 @@ parse_url_char(enum state s, const char ch)
 
   /* We should never fall out of the switch above unless there's an error */
   return s_dead;
+}
+
+/* Apply the header that has just been completed to the parser flags */
+static enum http_errno
+http_header_value_done (http_parser *parser)
+{
+  switch (parser->header_state) {
+    case h_connection_keep_alive:
+      parser->flags |= F_CONNECTION_KEEP_ALIVE;
+      break;
+    case h_connection_close:
+      /* XXX: not needed for rspamd parser->flags |= F_CONNECTION_CLOSE; */
+      break;
+    case h_transfer_encoding_chunked:
+      if (parser->content_length != ULLONG_MAX) {
+        /* Both framings given: the length is ignored for framing but it
+         * has still been parsed, and a message framed two ways is a
+         * request smuggling vector. Refuse it.
+         */
+        return HPE_INVALID_CONTENT_LENGTH;
+      }
+
+      parser->flags |= F_CHUNKED;
+      break;
+    default:
+      break;
+  }
+
+  return HPE_OK;
 }
 
 size_t http_parser_execute (http_parser *parser,
@@ -1355,7 +1389,7 @@ size_t http_parser_execute (http_parser *parser,
         }
 
         if (ch == ':') {
-          parser->state = s_header_value_start;
+          parser->state = s_header_value_discard_ws;
           CALLBACK_DATA(header_field);
           break;
         }
@@ -1369,27 +1403,27 @@ size_t http_parser_execute (http_parser *parser,
         goto error;
       }
 
-      case s_header_value_start:
-      {
+      case s_header_value_discard_ws:
         if (ch == ' ' || ch == '\t') break;
 
-        MARK(header_value);
-
-        parser->state = s_header_value;
-        parser->index = 0;
-
         if (ch == CR) {
-          parser->header_state = h_general;
-          parser->state = s_header_almost_done;
-          CALLBACK_DATA(header_value);
+          parser->state = s_header_value_discard_ws_almost_done;
           break;
         }
 
         if (ch == LF) {
-          parser->state = s_header_field_start;
-          CALLBACK_DATA(header_value);
+          parser->state = s_header_value_discard_lws;
           break;
         }
+
+        /* fall through */
+
+      case s_header_value_start:
+      {
+        MARK(header_value);
+
+        parser->state = s_header_value;
+        parser->index = 0;
 
         c = LOWER(ch);
 
@@ -1450,6 +1484,11 @@ size_t http_parser_execute (http_parser *parser,
           parser->state = s_header_almost_done;
           CALLBACK_DATA_NOADVANCE(header_value);
           goto reexecute_byte;
+        }
+
+        if (!IS_HEADER_CHAR(ch)) {
+          SET_ERRNO(HPE_INVALID_HEADER_TOKEN);
+          goto error;
         }
 
         c = LOWER(ch);
@@ -1546,43 +1585,63 @@ size_t http_parser_execute (http_parser *parser,
         STRICT_CHECK(ch != LF);
 
         parser->state = s_header_value_lws;
-
-        switch (parser->header_state) {
-          case h_connection_keep_alive:
-            parser->flags |= F_CONNECTION_KEEP_ALIVE;
-            break;
-          case h_connection_close:
-            /* XXX: not needed for rspamd parser->flags |= F_CONNECTION_CLOSE; */
-            break;
-          case h_transfer_encoding_chunked:
-            if (parser->content_length != ULLONG_MAX) {
-              /* Both framings given: the length is ignored for framing but it
-               * has still been parsed, and a message framed two ways is a
-               * request smuggling vector. Refuse it.
-               */
-              SET_ERRNO(HPE_INVALID_CONTENT_LENGTH);
-              goto error;
-            }
-
-            parser->flags |= F_CHUNKED;
-            break;
-          default:
-            break;
-        }
-
         break;
       }
 
       case s_header_value_lws:
       {
-        if (ch == ' ' || ch == '\t')
+        enum http_errno err;
+
+        if (ch == ' ' || ch == '\t') {
+          /* A folded Transfer-Encoding value is not parsed: refuse it
+           * rather than silently dropping the chunked flag */
+          if (parser->header_state == h_matching_transfer_encoding_chunked ||
+              parser->header_state == h_transfer_encoding_chunked) {
+            SET_ERRNO(HPE_INVALID_HEADER_TOKEN);
+            goto error;
+          }
+
           parser->state = s_header_value_start;
-        else
-        {
-          parser->state = s_header_field_start;
           goto reexecute_byte;
         }
+
+        err = http_header_value_done(parser);
+        if (err != HPE_OK) {
+          SET_ERRNO(err);
+          goto error;
+        }
+
+        parser->state = s_header_field_start;
+        goto reexecute_byte;
+      }
+
+      case s_header_value_discard_ws_almost_done:
+      {
+        STRICT_CHECK(ch != LF);
+        parser->state = s_header_value_discard_lws;
         break;
+      }
+
+      case s_header_value_discard_lws:
+      {
+        enum http_errno err;
+
+        if (ch == ' ' || ch == '\t') {
+          parser->state = s_header_value_discard_ws;
+          break;
+        }
+
+        /* The value was empty */
+        err = http_header_value_done(parser);
+        if (err != HPE_OK) {
+          SET_ERRNO(err);
+          goto error;
+        }
+
+        MARK(header_value);
+        parser->state = s_header_field_start;
+        CALLBACK_DATA_NOADVANCE(header_value);
+        goto reexecute_byte;
       }
 
       case s_headers_almost_done:

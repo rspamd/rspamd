@@ -687,6 +687,28 @@ void rspamd_http_message_set_peer_key(struct rspamd_http_message *msg,
 	}
 }
 
+/*
+ * Control bytes in a header value would be refused by the peer's parser
+ * (and CR/LF would inject headers), so they are replaced by spaces. HT is
+ * legal in a value. Space rather than '?': leading blanks are skipped by
+ * the peer's parser and structured values (JSON, UCL) stay valid; trailing
+ * blanks are kept.
+ */
+static void
+rspamd_http_header_neutralise_value(struct rspamd_http_header *hdr)
+{
+	char *p = (char *) hdr->value.begin;
+	char *end = p + hdr->value.len;
+
+	for (; p < end; p++) {
+		unsigned char c = (unsigned char) *p;
+
+		if ((c < 0x20 && c != '\t') || c == 0x7f) {
+			*p = ' ';
+		}
+	}
+}
+
 void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 										const char *name,
 										const char *value,
@@ -716,6 +738,7 @@ void rspamd_http_message_add_header_len(struct rspamd_http_message *msg,
 		hdr->name.len = nlen;
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
+		rspamd_http_header_neutralise_value(hdr);
 		hdr->order = msg->header_cnt++;
 
 		k = kh_put(rspamd_http_headers_hash, msg->headers, &hdr->name,
@@ -761,6 +784,7 @@ void rspamd_http_message_add_header_fstr(struct rspamd_http_message *msg,
 		hdr->name.len = nlen;
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
+		rspamd_http_header_neutralise_value(hdr);
 		hdr->order = msg->header_cnt++;
 
 		k = kh_put(rspamd_http_headers_hash, msg->headers, &hdr->name,
