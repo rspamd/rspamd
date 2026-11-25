@@ -294,6 +294,50 @@ TEST_SUITE("http_header_values")
 		}
 	}
 
+	TEST_CASE("client: a 304 or 101 reply is not held to the size limit")
+	{
+		/* The parser completes these at the end of the headers, whatever Content-Length says */
+		const char *replies[] = {"HTTP/1.1 304 Not Modified\r\nContent-Length: 100000\r\n\r\n",
+								 "HTTP/1.1 101 Switching Protocols\r\nContent-Length: 100000\r\n\r\n"};
+		const int codes[] = {304, 101};
+
+		for (int i = 0; i < 2; i++) {
+			using namespace http_date_test;
+			date_fixture t(true);
+
+			rspamd_http_connection_set_max_size(t.conn, 1000);
+			auto *msg = rspamd_http_message_from_url("http://example.com/");
+			REQUIRE(msg != nullptr);
+			REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "example.com", nullptr,
+														 &t.state, 1000.0));
+			t.drain();
+
+			t.push(replies[i]);
+
+			CHECK(t.state.errors == 0);
+			REQUIRE(t.state.finishes == 1);
+			CHECK(t.state.code == codes[i]);
+		}
+
+		/* A final reply with a body above the limit is still refused */
+		{
+			using namespace http_date_test;
+			date_fixture t(true);
+
+			rspamd_http_connection_set_max_size(t.conn, 1000);
+			auto *msg = rspamd_http_message_from_url("http://example.com/");
+			REQUIRE(msg != nullptr);
+			REQUIRE(rspamd_http_connection_write_message(t.conn, msg, "example.com", nullptr,
+														 &t.state, 1000.0));
+			t.drain();
+
+			t.push("HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n");
+
+			CHECK(t.state.finishes == 0);
+			CHECK(t.state.errors == 1);
+		}
+	}
+
 	TEST_CASE("server: Key header with an empty key")
 	{
 		using namespace http_date_test;

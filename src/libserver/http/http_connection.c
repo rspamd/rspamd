@@ -584,7 +584,13 @@ rspamd_http_on_headers_complete(http_parser *parser)
 	 * Hence, we skip body setup here
 	 */
 	if (parser->content_length != ULLONG_MAX && parser->content_length != 0 &&
-		msg->method != HTTP_HEAD) {
+		msg->method != HTTP_HEAD &&
+		!(parser->type == HTTP_RESPONSE &&
+		  (parser->status_code / 100 == 1 || parser->status_code == 304))) {
+		/*
+		 * Not for 1xx and 304: the parser completes them at the end of the
+		 * headers, whatever Content-Length says, so there is no body to size
+		 */
 		if (conn->max_size > 0 &&
 			parser->content_length > conn->max_size) {
 			/* Too large message */

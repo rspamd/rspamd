@@ -75,6 +75,16 @@ Client Shm headers never reach the upstream
   Expect Symbol  SIMPLE_TEST
   Expect Symbol With Exact Options  FILE_SHM_PROBE  none
 
+Client hop-by-hop headers never reach the upstream
+  [Documentation]  Upgrade, HTTP2-Settings, Proxy-Connection, TE and Trailer
+  ...              describe the client leg only and are stripped by the proxy.
+  Set Test Variable  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_PROXY}
+  Scan File  ${MESSAGE}  Upgrade=h2c  HTTP2-Settings=x  TE=trailers
+  ...  Proxy-Connection=keep-alive  Trailer=X-Foo
+  ...  From=hop@example.net  Rcpt=hop-rcpt@example.net
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol With Exact Options  HOP_BY_HOP_PROBE  none
+
 Client Shm query arguments never reach the upstream
   ${data} =  Get Binary File  ${MESSAGE}
   ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}

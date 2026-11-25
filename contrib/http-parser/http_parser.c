@@ -291,6 +291,7 @@ enum state
   , s_chunk_size
   , s_chunk_parameters
   , s_chunk_size_almost_done
+  , s_chunk_size_ows
 
   , s_headers_almost_done
   , s_headers_done
@@ -1699,9 +1700,8 @@ size_t http_parser_execute (http_parser *parser,
 
         parser->state = s_headers_done;
 
-        /* Set this here so that on_headers_complete() callbacks can see it */
-        parser->upgrade =
-          (parser->type == HTTP_REQUEST && parser->method == HTTP_CONNECT);
+        /* Never set: rspamd does not tunnel */
+        parser->upgrade = 0;
 
         /* Here we call the headers_complete callback. This is somewhat
          * different than other callbacks because if the user returns 1, we
@@ -1740,14 +1740,14 @@ size_t http_parser_execute (http_parser *parser,
 
         parser->nread = 0;
 
-        /* Exit, the rest of the connect is in a different protocol. */
-        if (parser->upgrade) {
+        if (parser->flags & F_SKIPBODY) {
           parser->state = NEW_MESSAGE();
           CALLBACK_NOTIFY(message_complete);
-          return (p - data) + 1;
-        }
-
-        if (parser->flags & F_SKIPBODY) {
+        } else if (parser->type == HTTP_RESPONSE &&
+                   (parser->status_code / 100 == 1 ||
+                    parser->status_code == 304)) {
+          /* These responses never have a body, whatever the framing says.
+           * 204 is left to its framing: rspamd's controller sends a body. */
           parser->state = NEW_MESSAGE();
           CALLBACK_NOTIFY(message_complete);
         } else if (parser->flags & F_CHUNKED) {
@@ -1855,8 +1855,13 @@ size_t http_parser_execute (http_parser *parser,
         unhex_val = unhex[(unsigned char)ch];
 
         if (unhex_val == -1) {
-          if (ch == ';' || ch == ' ') {
+          if (ch == ';') {
             parser->state = s_chunk_parameters;
+            break;
+          }
+
+          if (ch == ' ' || ch == '\t') {
+            parser->state = s_chunk_size_ows;
             break;
           }
 
@@ -1884,12 +1889,39 @@ size_t http_parser_execute (http_parser *parser,
       case s_chunk_parameters:
       {
         assert(parser->flags & F_CHUNKED);
-        /* just ignore this shit. TODO check for overflow */
         if (ch == CR) {
           parser->state = s_chunk_size_almost_done;
           break;
         }
+
+        /* Extensions are ignored, but bare LF, NUL and CTLs are not allowed */
+        if (ch == LF || !IS_HEADER_CHAR(ch)) {
+          SET_ERRNO(HPE_INVALID_CHUNK_SIZE);
+          goto error;
+        }
         break;
+      }
+
+      case s_chunk_size_ows:
+      {
+        assert(parser->flags & F_CHUNKED);
+
+        if (ch == ' ' || ch == '\t') {
+          break;
+        }
+
+        if (ch == ';') {
+          parser->state = s_chunk_parameters;
+          break;
+        }
+
+        if (ch == CR) {
+          parser->state = s_chunk_size_almost_done;
+          break;
+        }
+
+        SET_ERRNO(HPE_INVALID_CHUNK_SIZE);
+        goto error;
       }
 
       case s_chunk_size_almost_done:

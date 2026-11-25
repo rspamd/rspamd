@@ -425,6 +425,7 @@ TEST_SUITE("http_parser")
 			auto r = hp_test::parse(0, w1, bw);
 			CHECK(r.used == w1.size());
 			CHECK(r.used == 62);
+			/* the field is always 0 now; the checks on mc and used are the real ones */
 			CHECK(!r.upgrade);
 			CHECK(r.mc == 1);
 		}
@@ -472,10 +473,14 @@ TEST_SUITE("http_parser")
 		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nUpgrade: h2c\r\nContent-Length: 3\r\n\r\nab", true,
 					  "HPE_INVALID_EOF_STATE", 2, 0);
 
+		/* The second request is only seen if Upgrade does not end the parse */
 		for (bool bw: {false, true}) {
-			auto r = hp_test::parse(0, "GET /ping HTTP/1.1\r\nUpgrade: websocket\r\n\r\n", bw);
-			CHECK(!r.upgrade);
-			CHECK(r.mc == 1);
+			auto r = hp_test::parse(0,
+									"GET /ping HTTP/1.1\r\nUpgrade: websocket\r\nConnection: keep-alive\r\n\r\n"
+									"GET /pong HTTP/1.1\r\n\r\n",
+									bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.mc == 2);
 		}
 
 		/* Legacy request lines */
@@ -501,7 +506,6 @@ TEST_SUITE("http_parser")
 			auto r = hp_test::parse(1, w1, bw);
 			CHECK(r.used == w1.size());
 			CHECK(r.used == 79);
-			CHECK(!r.upgrade);
 		}
 
 		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nUpgrade: h2\r\n\r\nbody-till-eof", true,
@@ -514,21 +518,9 @@ TEST_SUITE("http_parser")
 		for (bool bw: {false, true}) {
 			auto r = hp_test::parse(1, w2, bw, false);
 			CHECK(r.mc == 1);
-			CHECK(!r.upgrade);
 			CHECK(r.used == 71);
 			CHECK(w2.size() == 74);
 		}
-	}
-
-	TEST_CASE("http parser: CONNECT still leaves after the headers")
-	{
-		std::string_view w = "CONNECT host:80 HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc";
-		auto r = hp_test::parse(0, w, false);
-		CHECK(r.err == "HPE_OK");
-		CHECK(r.used == 47);
-		CHECK(w.size() == 50);
-		CHECK(r.upgrade);
-		CHECK(r.body == 0);
 	}
 
 	namespace hp_test_reinit {
@@ -585,6 +577,61 @@ TEST_SUITE("http_parser")
 			CHECK(hp_test_reinit::reinit_hc_calls == 2);
 			/* The 204 completes; the reset parser must not report a message for the first one */
 			CHECK(hp_test_reinit::reinit_mc_calls == 1);
+		}
+	}
+
+	namespace hp_test_reinit_mc {
+	static int hc_calls;
+	static int mc_calls;
+	static int hc(http_parser *)
+	{
+		hc_calls++;
+		return 0;
+	}
+	static int mc(http_parser *p)
+	{
+		mc_calls++;
+		if (mc_calls == 1) {
+			void *d = p->data;
+			http_parser_init(p, HTTP_RESPONSE);
+			p->data = d;
+		}
+		return 0;
+	}
+	}// namespace hp_test_reinit_mc
+
+	TEST_CASE("http parser: re-init inside on_message_complete")
+	{
+		/* An interim reply is completed and the parser is re-armed from the callback */
+		std::string_view w = "HTTP/1.1 100 Continue\r\nContent-Length: 3\r\n\r\n"
+							 "HTTP/1.1 500 Err\r\nContent-Length: 0\r\n\r\n";
+		http_parser_settings s;
+		std::memset(&s, 0, sizeof(s));
+		s.on_headers_complete = hp_test_reinit_mc::hc;
+		s.on_message_complete = hp_test_reinit_mc::mc;
+		for (bool bytewise: {false, true}) {
+			hp_test_reinit_mc::hc_calls = 0;
+			hp_test_reinit_mc::mc_calls = 0;
+
+			http_parser p;
+			http_parser_init(&p, HTTP_RESPONSE);
+			size_t r = 0;
+			if (bytewise) {
+				for (size_t i = 0; i < w.size(); i++) {
+					char one = w[i];
+					r += http_parser_execute(&p, &s, &one, 1);
+				}
+			}
+			else {
+				std::unique_ptr<char[]> buf(new char[w.size()]);
+				std::memcpy(buf.get(), w.data(), w.size());
+				r = http_parser_execute(&p, &s, buf.get(), w.size());
+			}
+			CAPTURE(bytewise);
+			CHECK(HTTP_PARSER_ERRNO(&p) == HPE_OK);
+			CHECK(r == w.size());
+			CHECK(hp_test_reinit_mc::hc_calls == 2);
+			CHECK(hp_test_reinit_mc::mc_calls == 2);
 		}
 	}
 
@@ -926,6 +973,10 @@ TEST_SUITE("http_parser")
 					  "HPE_INVALID_TRANSFER_ENCODING", 0, 0);
 		HP_CHECK_BOTH(1, rhead + "Transfer-Encoding: gzip\r\nContent-Length: 3\r\n\r\nabcdef", true, badcl, 0, 0);
 		HP_CHECK_BOTH(1, "HTTP/1.1 204 No Content\r\nTransfer-Encoding: gzip\r\n\r\n", true, "HPE_OK", 0, 1);
+		/* 204 and 304 with a non-chunked Transfer-Encoding and no length have no body (upstream reads a 204 to EOF) */
+		HP_CHECK_BOTH(1, "HTTP/1.1 204 No Content\r\nTransfer-Encoding: gzip\r\n\r\n", false, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(1, "HTTP/1.1 204 No Content\r\nTransfer-Encoding: gzip\r\nConnection: keep-alive\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nz", true, "HPE_OK", 1, 2);
+		HP_CHECK_BOTH(1, "HTTP/1.1 304 Not Modified\r\nTransfer-Encoding: gzip\r\nConnection: keep-alive\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nz", true, "HPE_OK", 1, 2);
 	}
 
 	TEST_CASE("http parser: HTTP version is one digit each")
@@ -1013,6 +1064,127 @@ TEST_SUITE("http_parser")
 			auto ok = hp_test::parse(1, "HTTP/1.1 200 OK\r\n\r\n", bytewise);
 			CHECK(ok.err == "HPE_OK");
 			CHECK(ok.transcript == "S:OK");
+		}
+	}
+
+	TEST_CASE("http parser: CONNECT is framed like any request")
+	{
+		std::string_view w = "CONNECT host:80 HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc";
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, w, bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.used == 50);
+			CHECK(w.size() == 50);
+			CHECK(r.body == 3);
+			CHECK(r.mc == 1);
+		}
+		HP_CHECK_BOTH(0, w, true, "HPE_OK", 3, 1);
+
+		HP_CHECK_BOTH(0,
+					  "CONNECT /x HTTP/1.1\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\n"
+					  "helloGET /b HTTP/1.1\r\n\r\n",
+					  true, "HPE_OK", 5, 2);
+	}
+
+	TEST_CASE("http parser: 1xx and 304 responses ignore their framing")
+	{
+		std::string_view w1 = "HTTP/1.1 304 Not Modified\r\nContent-Length: 3\r\n\r\n";
+		HP_CHECK_BOTH(1, w1, true, "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(1, w1, false, "HPE_OK", 0, 1);
+
+		/* The next response is not eaten as the body of the 304 */
+		HP_CHECK_BOTH(1,
+					  "HTTP/1.1 304 Not Modified\r\nContent-Length: 3\r\nConnection: keep-alive\r\n\r\n"
+					  "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\nz",
+					  true, "HPE_OK", 1, 2);
+
+		/*
+		 * A 204 keeps its framing: rspamd's controller sends 204 replies
+		 * with a JSON body and rspamc reads it
+		 */
+		std::string_view w2 = "HTTP/1.1 204 No Content\r\nContent-Length: 3\r\nConnection: keep-alive\r\n\r\nabc";
+		HP_CHECK_BOTH(1, w2, true, "HPE_OK", 3, 1);
+
+		HP_CHECK_BOTH(1, "HTTP/1.1 304 Not Modified\r\nTransfer-Encoding: chunked\r\n\r\n", true,
+					  "HPE_OK", 0, 1);
+		HP_CHECK_BOTH(1, "HTTP/1.1 100 Continue\r\nContent-Length: 3\r\n\r\n", false,
+					  "HPE_OK", 0, 1);
+
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc", true, "HPE_OK", 3, 1);
+	}
+
+	TEST_CASE("http parser: header size limit covers header-side states")
+	{
+		const size_t max = HTTP_MAX_HEADER_SIZE;
+		const std::string tail = "\r\nabc\r\n0\r\n\r\n";
+		const std::string heads[2] = {
+			"POST /a HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n",
+			"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n",
+		};
+
+		for (bool bw: {false, true}) {
+			CAPTURE(bw);
+
+			/* blanks after the colon of an otherwise empty-looking header */
+			const std::string pre = "GET /a HTTP/1.1\r\nX:";
+			auto r = hp_test::parse(0, pre + std::string(max - pre.size(), ' ') + "v\r\n\r\n", bw);
+			CHECK(r.err == "HPE_HEADER_OVERFLOW");
+			CHECK(r.used == max);
+
+			/* controls: exactly at the limit is fine */
+			r = hp_test::parse(0, pre + std::string(max - pre.size() - 5, ' ') + "v\r\n\r\n", bw);
+			CHECK(r.err == "HPE_OK");
+			CHECK(r.mc == 1);
+
+			for (int type: {0, 1}) {
+				CAPTURE(type);
+				const auto &head = heads[type];
+
+				/* optional whitespace after the chunk size */
+				r = hp_test::parse(type, head + "3" + std::string(max - 1, ' ') + tail, bw);
+				CHECK(r.err == "HPE_HEADER_OVERFLOW");
+				CHECK(r.used == head.size() + max);
+
+				/* chunk extension */
+				r = hp_test::parse(type, head + "3;" + std::string(max - 2, 'a') + tail, bw);
+				CHECK(r.err == "HPE_HEADER_OVERFLOW");
+				CHECK(r.used == head.size() + max);
+
+				r = hp_test::parse(type, head + "3" + std::string(100, ' ') + tail, bw);
+				CHECK(r.err == "HPE_OK");
+				CHECK(r.body == 3);
+			}
+
+			/* body bytes are not counted */
+			for (const char *start: {"POST /a HTTP/1.1\r\nContent-Length: 100000\r\n\r\n",
+									 "SYMBOLS RSPAMC/1.3\r\nContent-length: 100000\r\n\r\n"}) {
+				r = hp_test::parse(0, std::string(start) + std::string(100000, 'b'), bw);
+				CHECK(r.err == "HPE_OK");
+				CHECK(r.body == 100000);
+			}
+		}
+	}
+
+	TEST_CASE("http parser: chunk-size line is strict")
+	{
+		const char *bad = "HPE_INVALID_CHUNK_SIZE";
+		const std::string rtail = "abc\r\n0\r\n\r\n";
+
+		for (int type: {0, 1}) {
+			std::string head = type == 0 ? "POST /a HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n"
+										 : "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n";
+
+			HP_CHECK_BOTH(type, head + "3;a\nb\r\n" + rtail, true, bad, 0, 0);
+			HP_CHECK_BOTH(type, head + std::string("3;\x00\r\n", 5) + rtail, true, bad, 0, 0);
+			HP_CHECK_BOTH(type, head + "3;a\x01\r\n" + rtail, true, bad, 0, 0);
+			HP_CHECK_BOTH(type, head + "3 x\r\n" + rtail, true, bad, 0, 0);
+			HP_CHECK_BOTH(type, head + "3 \nabc\r\n0\r\n\r\n", true, bad, 0, 0);
+
+			HP_CHECK_BOTH(type, head + "3;name=val\r\n" + rtail, true, "HPE_OK", 3, 1);
+			HP_CHECK_BOTH(type, head + "3 \r\n" + rtail, true, "HPE_OK", 3, 1);
+			HP_CHECK_BOTH(type, head + "3\t;x\r\n" + rtail, true, "HPE_OK", 3, 1);
+			HP_CHECK_BOTH(type, head + "3 ;x\r\n" + rtail, true, "HPE_OK", 3, 1);
+			HP_CHECK_BOTH(type, head + "3\r\n" + rtail, true, "HPE_OK", 3, 1);
 		}
 	}
 

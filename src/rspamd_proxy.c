@@ -2883,6 +2883,13 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 	rspamd_http_message_remove_header(msg, "Date");
 	rspamd_http_message_remove_header(msg, "Server");
 	rspamd_http_message_remove_header(msg, "Key");
+	/* The body is already de-chunked and the framing is ours */
+	rspamd_http_message_remove_header(msg, "Transfer-Encoding");
+	rspamd_http_message_remove_header(msg, "Trailer");
+	rspamd_http_message_remove_header(msg, "TE");
+	rspamd_http_message_remove_header(msg, "Upgrade");
+	rspamd_http_message_remove_header(msg, "HTTP2-Settings");
+	rspamd_http_message_remove_header(msg, "Proxy-Connection");
 	orig_ct = rspamd_http_message_find_header(msg, "Content-Type");
 
 	/* Check if we can use keepalive */
@@ -3675,6 +3682,11 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_http_message_remove_header(msg, "Transfer-Encoding");
 		rspamd_http_message_remove_header(msg, "Keep-Alive");
 		rspamd_http_message_remove_header(msg, "Connection");
+		rspamd_http_message_remove_header(msg, "Upgrade");
+		rspamd_http_message_remove_header(msg, "HTTP2-Settings");
+		rspamd_http_message_remove_header(msg, "Proxy-Connection");
+		rspamd_http_message_remove_header(msg, "TE");
+		rspamd_http_message_remove_header(msg, "Trailer");
 		rspamd_http_message_remove_header(msg, "Key");
 
 		proxy_open_mirror_connections(session);

@@ -14,6 +14,9 @@ local privileged_headers = {'File', 'Path', 'Shm', 'Shm-Offset', 'Shm-Length'}
 -- that a mangled rebuild is named rather than merely missed.
 local ordinary_headers = {'From', '?From'}
 
+-- Hop-by-hop headers a proxy must not forward to the upstream.
+local hop_headers = {'Upgrade', 'HTTP2-Settings', 'Proxy-Connection', 'TE', 'Trailer'}
+
 local function report_headers(task, names)
   local seen = {}
 
@@ -44,6 +47,14 @@ rspamd_config:register_symbol({
   score = 0.0,
   callback = function(task)
     return true, report_headers(task, ordinary_headers)
+  end
+})
+
+rspamd_config:register_symbol({
+  name = 'HOP_BY_HOP_PROBE',
+  score = 0.0,
+  callback = function(task)
+    return true, report_headers(task, hop_headers)
   end
 })
 

@@ -216,10 +216,8 @@ struct http_parser {
   unsigned int method : 8;       /* requests only */
   unsigned int http_errno : 7;
 
-  /* 1 = a CONNECT request: the parser exits after the headers.
-   * 0 = anything else. An Upgrade header does not set it.
-   * Should be checked when http_parser_execute() returns in addition to
-   * error checking.
+  /* Always 0. Kept for ABI: the parser never stops for CONNECT or Upgrade,
+   * every message is framed by its own length.
    */
   unsigned int upgrade : 1;
 
