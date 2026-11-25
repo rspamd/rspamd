@@ -117,7 +117,6 @@ do {                                                                 \
 #define CONNECTION "connection"
 #define CONTENT_LENGTH "content-length"
 #define TRANSFER_ENCODING "transfer-encoding"
-#define UPGRADE "upgrade"
 #define CHUNKED "chunked"
 #define KEEP_ALIVE "keep-alive"
 #define CLOSE "close"
@@ -322,12 +321,10 @@ enum header_states
   , h_matching_proxy_connection
   , h_matching_content_length
   , h_matching_transfer_encoding
-  , h_matching_upgrade
 
   , h_connection
   , h_content_length
   , h_transfer_encoding
-  , h_upgrade
 
   , h_matching_transfer_encoding_chunked
   , h_matching_connection_keep_alive
@@ -1255,10 +1252,6 @@ size_t http_parser_execute (http_parser *parser,
             parser->header_state = h_matching_transfer_encoding;
             break;
 
-          case 'u':
-            parser->header_state = h_matching_upgrade;
-            break;
-
           default:
             parser->header_state = h_general;
             break;
@@ -1348,22 +1341,9 @@ size_t http_parser_execute (http_parser *parser,
               }
               break;
 
-            /* upgrade */
-
-            case h_matching_upgrade:
-              parser->index++;
-              if (parser->index > sizeof(UPGRADE)-1
-                  || c != UPGRADE[parser->index]) {
-                parser->header_state = h_general;
-              } else if (parser->index == sizeof(UPGRADE)-2) {
-                parser->header_state = h_upgrade;
-              }
-              break;
-
             case h_connection:
             case h_content_length:
             case h_transfer_encoding:
-            case h_upgrade:
               if (ch != ' ') parser->header_state = h_general;
               break;
 
@@ -1414,11 +1394,6 @@ size_t http_parser_execute (http_parser *parser,
         c = LOWER(ch);
 
         switch (parser->header_state) {
-          case h_upgrade:
-            parser->flags |= F_UPGRADE;
-            parser->header_state = h_general;
-            break;
-
           case h_transfer_encoding:
             /* looking for 'Transfer-Encoding: chunked' */
             if ('c' == c) {
@@ -1625,7 +1600,7 @@ size_t http_parser_execute (http_parser *parser,
 
         /* Set this here so that on_headers_complete() callbacks can see it */
         parser->upgrade =
-          (parser->flags & F_UPGRADE || parser->method == HTTP_CONNECT);
+          (parser->type == HTTP_REQUEST && parser->method == HTTP_CONNECT);
 
         /* Here we call the headers_complete callback. This is somewhat
          * different than other callbacks because if the user returns 1, we

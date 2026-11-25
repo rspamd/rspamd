@@ -131,7 +131,7 @@ enum flags
   , F_CONNECTION_KEEP_ALIVE = 1 << 1
   , F_SPAMC                 = 1 << 2
   , F_TRAILING              = 1 << 3
-  , F_UPGRADE               = 1 << 4
+  /* bit 4 is free */
   , F_SKIPBODY              = 1 << 5
   };
 
@@ -212,8 +212,8 @@ struct http_parser {
   unsigned int method : 8;       /* requests only */
   unsigned int http_errno : 7;
 
-  /* 1 = Upgrade header was present and the parser has exited because of that.
-   * 0 = No upgrade header present.
+  /* 1 = a CONNECT request: the parser exits after the headers.
+   * 0 = anything else. An Upgrade header does not set it.
    * Should be checked when http_parser_execute() returns in addition to
    * error checking.
    */

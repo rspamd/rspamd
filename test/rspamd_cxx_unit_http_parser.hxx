@@ -393,6 +393,177 @@ TEST_SUITE("http_parser")
 		}
 	}
 
+	TEST_CASE("http parser: Upgrade header does not end the message")
+	{
+		std::string_view w1 = "POST /checkv2 HTTP/1.1\r\nUpgrade: h2c\r\nContent-Length: 3\r\n\r\nabc";
+		HP_CHECK_BOTH(0, w1, true, "HPE_OK", 3, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, w1, bw);
+			CHECK(r.used == w1.size());
+			CHECK(r.used == 62);
+			CHECK(!r.upgrade);
+			CHECK(r.mc == 1);
+		}
+
+		std::string_view w2 = "POST /checkv2 HTTP/1.1\r\nConnection: Upgrade, HTTP2-Settings\r\n"
+							  "Upgrade: h2c\r\nHTTP2-Settings: AAMAAABkAAQAoAAAAAIAAAAA\r\n"
+							  "Content-Length: 3\r\n\r\nabc";
+		HP_CHECK_BOTH(0, w2, true, "HPE_OK", 3, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, w2, bw);
+			CHECK(r.used == w2.size());
+			CHECK(r.used == 141);
+		}
+
+		/* Pipelined request after a keep-alive request with Upgrade */
+		std::string_view w3 = "POST /a HTTP/1.1\r\nConnection: keep-alive\r\nUpgrade: h2c\r\n"
+							  "Content-Length: 3\r\n\r\nabcGET /b HTTP/1.1\r\n\r\n";
+		HP_CHECK_BOTH(0, w3, true, "HPE_OK", 3, 2);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, w3, bw);
+			CHECK(r.used == w3.size());
+			CHECK(r.used == 99);
+			CHECK(r.begin == 2);
+		}
+
+		/* The body must not be parsed as a second request */
+		std::string_view w4 = "POST /a HTTP/1.1\r\nConnection: keep-alive\r\nUpgrade: x\r\n"
+							  "Content-Length: 20\r\n\r\nGET /evil HTTP/1.1\r\n\r\n";
+		HP_CHECK_BOTH(0, w4, true, "HPE_OK", 20, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, w4, bw);
+			CHECK(r.begin == 1);
+			CHECK(r.mc == 1);
+			CHECK(r.body == 20);
+		}
+
+		std::string_view w5 = "POST /a HTTP/1.1\r\nUpgrade: h2c\r\nTransfer-Encoding: chunked\r\n\r\n"
+							  "3\r\nabc\r\n0\r\n\r\n";
+		HP_CHECK_BOTH(0, w5, true, "HPE_OK", 3, 1);
+		for (bool bw: {false, true}) {
+			CHECK(hp_test::parse(0, w5, bw).used == w5.size());
+		}
+
+		/* EOF inside the body is an error now */
+		HP_CHECK_BOTH(0, "POST /a HTTP/1.1\r\nUpgrade: h2c\r\nContent-Length: 3\r\n\r\nab", true,
+					  "HPE_INVALID_EOF_STATE", 2, 0);
+
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, "GET /ping HTTP/1.1\r\nUpgrade: websocket\r\n\r\n", bw);
+			CHECK(!r.upgrade);
+			CHECK(r.mc == 1);
+		}
+
+		/* Legacy request lines */
+		std::string_view w6 = "CHECK SPAMC/1.2\r\nContent-length: 3\r\nUpgrade: x\r\n\r\nabc";
+		HP_CHECK_BOTH(0, w6, true, "HPE_OK", 3, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(0, w6, bw);
+			CHECK(r.used == w6.size());
+			CHECK(r.used == 53);
+			CHECK(r.method == HTTP_CHECK);
+			CHECK((r.flags & F_SPAMC) != 0);
+		}
+		HP_CHECK_BOTH(0, "SYMBOLS SPAMC/1.2\nUpgrade: x\nContent-length: 3\n\nabc", true,
+					  "HPE_OK", 3, 1);
+	}
+
+	TEST_CASE("http parser: Upgrade header in responses")
+	{
+		std::string_view w1 = "HTTP/1.1 200 OK\r\nUpgrade: h2,h2c\r\nConnection: Upgrade\r\n"
+							  "Content-Length: 3\r\n\r\nabc";
+		HP_CHECK_BOTH(1, w1, true, "HPE_OK", 3, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(1, w1, bw);
+			CHECK(r.used == w1.size());
+			CHECK(r.used == 79);
+			CHECK(!r.upgrade);
+		}
+
+		HP_CHECK_BOTH(1, "HTTP/1.1 200 OK\r\nUpgrade: h2\r\n\r\nbody-till-eof", true,
+					  "HPE_OK", 13, 1);
+
+		/* 101 is a body-less 1xx message; what follows closes the connection */
+		std::string_view w2 = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: h2c\r\n"
+							  "Connection: Upgrade\r\n\r\nxyz";
+		HP_CHECK_BOTH(1, w2, false, "HPE_CLOSED_CONNECTION", 0, 1);
+		for (bool bw: {false, true}) {
+			auto r = hp_test::parse(1, w2, bw, false);
+			CHECK(r.mc == 1);
+			CHECK(!r.upgrade);
+			CHECK(r.used == 71);
+			CHECK(w2.size() == 74);
+		}
+	}
+
+	TEST_CASE("http parser: CONNECT still leaves after the headers")
+	{
+		std::string_view w = "CONNECT host:80 HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc";
+		auto r = hp_test::parse(0, w, false);
+		CHECK(r.err == "HPE_OK");
+		CHECK(r.used == 47);
+		CHECK(w.size() == 50);
+		CHECK(r.upgrade);
+		CHECK(r.body == 0);
+	}
+
+	namespace hp_test_reinit {
+	static int reinit_hc_calls;
+	static int reinit_mc_calls;
+	static int reinit_hc(http_parser *p)
+	{
+		reinit_hc_calls++;
+		if (reinit_hc_calls == 1) {
+			void *d = p->data;
+			http_parser_init(p, HTTP_RESPONSE);
+			p->data = d;
+			return 1;
+		}
+		return 0;
+	}
+	static int reinit_mc(http_parser *)
+	{
+		reinit_mc_calls++;
+		return 0;
+	}
+	}// namespace hp_test_reinit
+
+	TEST_CASE("http parser: re-init inside on_headers_complete")
+	{
+		std::string_view w = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nHTTP/1.1 204 No Content\r\n\r\n";
+		http_parser_settings s;
+		std::memset(&s, 0, sizeof(s));
+		s.on_headers_complete = hp_test_reinit::reinit_hc;
+		s.on_message_complete = hp_test_reinit::reinit_mc;
+		for (bool bytewise: {false, true}) {
+			hp_test_reinit::reinit_hc_calls = 0;
+			hp_test_reinit::reinit_mc_calls = 0;
+
+			http_parser p;
+			http_parser_init(&p, HTTP_RESPONSE);
+			size_t r = 0;
+			if (bytewise) {
+				for (size_t i = 0; i < w.size(); i++) {
+					std::unique_ptr<char[]> one(new char[1]);
+					one[0] = w[i];
+					r += http_parser_execute(&p, &s, one.get(), 1);
+				}
+			}
+			else {
+				std::unique_ptr<char[]> buf(new char[w.size()]);
+				std::memcpy(buf.get(), w.data(), w.size());
+				r = http_parser_execute(&p, &s, buf.get(), w.size());
+			}
+			CAPTURE(bytewise);
+			CHECK(HTTP_PARSER_ERRNO(&p) == HPE_OK);
+			CHECK(r == w.size());
+			CHECK(r == 65);
+			CHECK(hp_test_reinit::reinit_hc_calls == 2);
+			/* The 204 completes; the reset parser must not report a message for the first one */
+			CHECK(hp_test_reinit::reinit_mc_calls == 1);
+		}
+	}
+
 	TEST_CASE("http parser: legacy invariants")
 	{
 		/* spamc/rspamc request lines, bare LF, any letter case */
