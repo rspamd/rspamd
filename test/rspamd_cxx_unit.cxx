@@ -58,6 +58,7 @@
 #include "rspamd_cxx_unit_http_chunked.hxx"
 #include "rspamd_cxx_unit_http_key.hxx"
 #include "rspamd_cxx_unit_http_header_values.hxx"
+#include "rspamd_cxx_unit_http_pipelined.hxx"
 #include "rspamd_cxx_unit_http_parser.hxx"
 #include "rspamd_cxx_unit_milter_lifecycle.hxx"
 #include "rspamd_cxx_unit_task_input.hxx"

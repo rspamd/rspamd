@@ -244,6 +244,25 @@ rspamd_http_check_special_header(struct rspamd_http_connection *conn,
 	}
 }
 
+/*
+ * Whether the parser delivers bytes that belong to no message in progress.
+ * Completing a message runs application code, and the parser goes on over the
+ * rest of the same read: with keepalive it is ready for another message, and
+ * a synchronous reply re-arms it through rspamd_http_connection_reset. Such
+ * bytes must never reach the message that was handed over, or the reply being
+ * written, so they are ignored and the connection is not kept alive.
+ */
+static inline gboolean
+rspamd_http_input_after_message(struct rspamd_http_connection *conn)
+{
+	if (conn->priv->msg == NULL || conn->finished) {
+		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static int
 rspamd_http_on_url(http_parser *parser, const char *at, size_t length)
 {
@@ -253,14 +272,7 @@ rspamd_http_on_url(http_parser *parser, const char *at, size_t length)
 
 	priv = conn->priv;
 
-	if (priv->msg == NULL) {
-		/*
-		 * A callback can arrive after the message it belongs to is gone:
-		 * completing a message runs application code, and with keepalive the
-		 * connection is reset right there, so whatever the peer sent after that
-		 * message still reaches the parser. Those bytes belong to no message
-		 * and must not be parsed into one that is no longer there.
-		 */
+	if (rspamd_http_input_after_message(conn)) {
 		return 0;
 	}
 
@@ -278,9 +290,7 @@ rspamd_http_on_status(http_parser *parser, const char *at, size_t length)
 
 	priv = conn->priv;
 
-	if (priv->msg == NULL) {
-		/* Arrived after the message was released, see rspamd_http_on_url */
-		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
+	if (rspamd_http_input_after_message(conn)) {
 		return 0;
 	}
 
@@ -358,9 +368,7 @@ rspamd_http_on_header_field(http_parser *parser,
 
 	priv = conn->priv;
 
-	if (priv->msg == NULL) {
-		/* Arrived after the message was released, see rspamd_http_on_url */
-		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
+	if (rspamd_http_input_after_message(conn)) {
 		return 0;
 	}
 
@@ -390,9 +398,7 @@ rspamd_http_on_header_value(http_parser *parser,
 
 	priv = conn->priv;
 
-	if (priv->msg == NULL) {
-		/* Arrived after the message was released, see rspamd_http_on_url */
-		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
+	if (rspamd_http_input_after_message(conn)) {
 		return 0;
 	}
 
@@ -525,9 +531,7 @@ rspamd_http_on_headers_complete(http_parser *parser)
 	priv = conn->priv;
 	msg = priv->msg;
 
-	if (msg == NULL) {
-		/* Arrived after the message was released, see rspamd_http_on_url */
-		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
+	if (rspamd_http_input_after_message(conn)) {
 		return 0;
 	}
 
@@ -693,13 +697,7 @@ rspamd_http_on_body(http_parser *parser, const char *at, size_t length)
 	pbuf = priv->buf;
 	p = at;
 
-	if (msg == NULL) {
-		/* Arrived after the message was released, see rspamd_http_on_url */
-		conn->priv->flags |= RSPAMD_HTTP_CONN_FLAG_UNSOLICITED;
-		return 0;
-	}
-
-	if (conn->finished) {
+	if (rspamd_http_input_after_message(conn)) {
 		return 0;
 	}
 
@@ -855,7 +853,6 @@ rspamd_http_on_headers_complete_decrypted(http_parser *parser)
 		(struct rspamd_http_connection *) parser->data;
 	struct rspamd_http_connection_private *priv;
 	struct rspamd_http_message *msg;
-	int ret;
 
 	priv = conn->priv;
 	msg = priv->msg;
@@ -877,32 +874,12 @@ rspamd_http_on_headers_complete_decrypted(http_parser *parser)
 		priv->msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 
-	if (msg->method == HTTP_HEAD) {
-		/* We don't care about the rest */
-		rspamd_ev_watcher_stop(priv->ctx->event_loop, &priv->ev);
-		msg->code = parser->status_code;
-		rspamd_http_connection_ref(conn);
-		priv->completed++;
-		ret = conn->finish_handler(conn, msg);
-
-		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
-			rspamd_http_context_push_keepalive(conn->priv->ctx, conn,
-											   msg, conn->priv->ctx->event_loop);
-
-			/* push_keepalive() may decline pooling and leave conn->finished == TRUE */
-			if (!conn->finished) {
-				rspamd_http_connection_reset(conn);
-			}
-		}
-		else {
-			conn->finished = TRUE;
-		}
-
-		rspamd_http_connection_unref(conn);
-
-		return ret;
-	}
-
+	/*
+	 * No HEAD shortcut here: this runs inside the decryption of a message
+	 * that is not finished yet, and the method of the outer request line,
+	 * which is not authenticated, would decide whether to finish it. The
+	 * outer headers handler has already dealt with a HEAD reply of a client.
+	 */
 	priv->msg->method = parser->method;
 	priv->msg->code = parser->status_code;
 
@@ -1070,6 +1047,11 @@ rspamd_http_on_message_complete(http_parser *parser)
 
 		if (ret != 0) {
 			return ret;
+		}
+
+		/* A message that was handed over already is not handed over twice */
+		if (conn->finished || priv->msg == NULL) {
+			return 0;
 		}
 
 		if (conn->body_handler != NULL) {
