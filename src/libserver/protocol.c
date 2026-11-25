@@ -288,9 +288,14 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 		goto err;
 	}
 
+	/*
+	 * A request with no method has not come from the wire: the proxy builds
+	 * one from a milter session and scans it itself, so it is not refused
+	 */
 	if ((task->cmd == CMD_CHECK || task->cmd == CMD_CHECK_V2 ||
 		 task->cmd == CMD_CHECK_V3) &&
-		msg->method != HTTP_GET && msg->method != HTTP_POST) {
+		msg->method != HTTP_GET && msg->method != HTTP_POST &&
+		msg->method != HTTP_INVALID) {
 		g_set_error(&task->err, rspamd_protocol_quark(), 405,
 					"method %s is not allowed", http_method_str(msg->method));
 		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;

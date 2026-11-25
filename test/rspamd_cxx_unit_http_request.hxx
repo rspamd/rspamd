@@ -363,6 +363,18 @@ TEST_SUITE("protocol methods")
 		}
 	}
 
+	TEST_CASE("check commands take a request without a method")
+	{
+		/* What the proxy builds from a milter session and scans itself */
+		for (auto *cmd: check_commands) {
+			CAPTURE(cmd);
+			protocol_fixture f(HTTP_INVALID, cmd);
+
+			CHECK(rspamd_protocol_handle_request(f.task, f.msg));
+			CHECK(f.task->err == nullptr);
+		}
+	}
+
 	TEST_CASE("check commands refuse any other method with 405")
 	{
 		for (auto *cmd: check_commands) {
