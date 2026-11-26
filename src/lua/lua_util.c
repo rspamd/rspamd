@@ -973,6 +973,47 @@ lua_util_create_event_base(lua_State *L)
 	return 1;
 }
 
+/*
+ * Main state of the Lua VM that L belongs to. A config made without a Lua state
+ * of its own keeps this one for later use: L itself can be a pooled thread that
+ * is terminated or runs something else by then.
+ */
+static lua_State *
+lua_util_main_state(lua_State *L)
+{
+	lua_State *main_L = NULL;
+
+	if (lua_pushthread(L)) {
+		lua_pop(L, 1);
+
+		return L;
+	}
+
+	lua_pop(L, 1);
+
+#ifdef LUA_RIDX_MAINTHREAD
+	lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+	main_L = lua_tothread(L, -1);
+	lua_pop(L, 1);
+#else
+	/* The registry has no main thread here: the config that owns the VM has it */
+	lua_getglobal(L, "rspamd_config");
+
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																   rspamd_config_classname);
+
+		if (pcfg && *pcfg && (*pcfg)->own_lua_state) {
+			main_L = RSPAMD_LUA_CFG_STATE(*pcfg);
+		}
+	}
+
+	lua_pop(L, 1);
+#endif
+
+	return main_L ? main_L : L;
+}
+
 static int
 lua_util_load_rspamd_config(lua_State *L)
 {
@@ -983,8 +1024,10 @@ lua_util_load_rspamd_config(lua_State *L)
 	cfg_name = luaL_checkstring(L, 1);
 
 	if (cfg_name) {
+		lua_State *main_L = lua_util_main_state(L);
+
 		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
-		cfg->lua_state = L;
+		cfg->lua_state = main_L;
 
 		if (rspamd_config_read(cfg, cfg_name, NULL, NULL, NULL, FALSE, NULL)) {
 			msg_err_config("cannot load config from %s", cfg_name);
@@ -1070,8 +1113,10 @@ lua_util_config_from_ucl(lua_State *L)
 	}
 
 	if (obj) {
+		lua_State *main_L = lua_util_main_state(L);
+
 		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
-		cfg->lua_state = L;
+		cfg->lua_state = main_L;
 
 		cfg->cfg_ucl_obj = obj;
 		top = rspamd_rcl_config_init(cfg, NULL);
