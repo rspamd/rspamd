@@ -245,6 +245,11 @@ lua_worker_is_primary_controller(lua_State *L)
 }
 
 struct rspamd_control_cbdata {
+	/*
+	 * The state the handler has been added on, used only when cfg has no
+	 * thread pool: it is usually a pooled thread, which is collected, reused
+	 * or suspended for somebody else long before a command comes
+	 */
 	lua_State *L;
 	rspamd_mempool_t *pool;
 	struct rspamd_worker *w;
@@ -296,11 +301,22 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 {
 	struct rspamd_async_session *session, **psession;
 	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *) ud;
+	struct lua_callback_state cbs;
+	/* Not read from cbd at the end: rspamd_session_destroy() below frees it */
+	struct lua_thread_pool *thread_pool = cbd->cfg->lua_thread_pool;
 	rspamd_mempool_t *pool;
 	lua_State *L;
 	int err_idx, status;
 
-	L = cbd->L;
+	/* Commands come from the event loop, so the handler takes a thread of its own */
+	if (thread_pool) {
+		lua_thread_pool_prepare_callback(thread_pool, &cbs);
+		L = cbs.L;
+	}
+	else {
+		L = cbd->L;
+	}
+
 	pool = cbd->pool;
 	session = rspamd_session_create(cbd->pool,
 									lua_worker_control_fin_session,
@@ -404,6 +420,10 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 	else {
 		lua_settop(L, err_idx - 1);
 		rspamd_session_pending(session);
+	}
+
+	if (thread_pool) {
+		lua_thread_pool_restore_callback(&cbs);
 	}
 
 	return TRUE;

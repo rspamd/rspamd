@@ -47,6 +47,7 @@
 #include "utlist.h"
 #include "ottery.h"
 #include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
 #include "unix-std.h"
 #include "libserver/http/http_private.h"
 #include "libserver/http/http_router.h"
@@ -7814,6 +7815,11 @@ enum fuzzy_lua_session_mode {
 
 struct fuzzy_lua_session {
 	struct rspamd_task *task;
+	/*
+	 * The state the session has been started on, used only when the config
+	 * has no thread pool: it is usually a pooled thread, which is collected,
+	 * reused or suspended for somebody else before the reply comes
+	 */
 	lua_State *L;
 	rspamd_inet_addr_t *addr;
 	GPtrArray *commands;
@@ -7839,7 +7845,42 @@ fuzzy_lua_session_fin(void *ud)
 	if (session->fd != -1) {
 		close(session->fd);
 	}
-	luaL_unref(session->L, LUA_REGISTRYINDEX, session->cbref);
+
+	/* The registry is shared by all threads of the VM: the main state is used */
+	if (rspamd_lua_is_initialised()) {
+		luaL_unref(session->task->cfg->lua_thread_pool ? RSPAMD_LUA_CFG_STATE(session->task->cfg) : session->L,
+				   LUA_REGISTRYINDEX, session->cbref);
+	}
+}
+
+/*
+ * Replies and timeouts come from the event loop: the callback runs on a
+ * thread of its own taken from the pool, or on the session's state if there
+ * is no pool. fuzzy_lua_callback_done() must follow.
+ */
+static lua_State *
+fuzzy_lua_callback_state(struct fuzzy_lua_session *session,
+						 struct lua_callback_state *cbs)
+{
+	struct lua_thread_pool *thread_pool = session->task->cfg->lua_thread_pool;
+
+	if (thread_pool) {
+		lua_thread_pool_prepare_callback(thread_pool, cbs);
+
+		return cbs->L;
+	}
+
+	cbs->thread_pool = NULL;
+
+	return session->L;
+}
+
+static void
+fuzzy_lua_callback_done(struct lua_callback_state *cbs)
+{
+	if (cbs->thread_pool) {
+		lua_thread_pool_restore_callback(cbs);
+	}
 }
 
 static gboolean
@@ -7871,22 +7912,26 @@ static void
 fuzzy_lua_push_result(struct fuzzy_lua_session *session, double latency)
 {
 	int nargs = 3;
+	struct lua_callback_state cbs;
+	lua_State *L = fuzzy_lua_callback_state(session, &cbs);
 
-	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
-	lua_pushboolean(session->L, TRUE);
-	rspamd_lua_ip_push(session->L, session->addr);
-	lua_pushnumber(session->L, latency);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(L, TRUE);
+	rspamd_lua_ip_push(L, session->addr);
+	lua_pushnumber(L, latency);
 
 	if (session->server_name != NULL) {
-		lua_pushstring(session->L, session->server_name);
+		lua_pushstring(L, session->server_name);
 		nargs = 4;
 	}
 
 	/* TODO: check results maybe? */
-	if (lua_pcall(session->L, nargs, 0, 0) != 0) {
-		msg_info("fuzzy lua result callback error: %s", lua_tostring(session->L, -1));
-		lua_pop(session->L, 1);
+	if (lua_pcall(L, nargs, 0, 0) != 0) {
+		msg_info("fuzzy lua result callback error: %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
 	}
+
+	fuzzy_lua_callback_done(&cbs);
 }
 
 #ifdef __GNUC__
@@ -7899,24 +7944,28 @@ fuzzy_lua_push_error(struct fuzzy_lua_session *session, const char *err_fmt, ...
 {
 	va_list v;
 	int nargs = 3;
+	struct lua_callback_state cbs;
+	lua_State *L = fuzzy_lua_callback_state(session, &cbs);
 
 	va_start(v, err_fmt);
-	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
-	lua_pushboolean(session->L, FALSE);
-	rspamd_lua_ip_push(session->L, session->addr);
-	lua_pushvfstring(session->L, err_fmt, v);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(L, FALSE);
+	rspamd_lua_ip_push(L, session->addr);
+	lua_pushvfstring(L, err_fmt, v);
 	va_end(v);
 
 	if (session->server_name != NULL) {
-		lua_pushstring(session->L, session->server_name);
+		lua_pushstring(L, session->server_name);
 		nargs = 4;
 	}
 
 	/* TODO: check results maybe? */
-	if (lua_pcall(session->L, nargs, 0, 0) != 0) {
-		msg_info("fuzzy lua error callback error: %s", lua_tostring(session->L, -1));
-		lua_pop(session->L, 1);
+	if (lua_pcall(L, nargs, 0, 0) != 0) {
+		msg_info("fuzzy lua error callback error: %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
 	}
+
+	fuzzy_lua_callback_done(&cbs);
 }
 
 static void
@@ -7927,55 +7976,59 @@ fuzzy_lua_push_check_result(struct fuzzy_lua_session *session,
 {
 	char hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	int r;
+	struct lua_callback_state cbs;
+	lua_State *L = fuzzy_lua_callback_state(session, &cbs);
 
-	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
-	lua_pushboolean(session->L, TRUE);
-	rspamd_lua_ip_push(session->L, session->addr);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(L, TRUE);
+	rspamd_lua_ip_push(L, session->addr);
 
-	lua_createtable(session->L, 0, 9);
+	lua_createtable(L, 0, 9);
 
 	r = rspamd_encode_hex_buf(cmd->digest, sizeof(cmd->digest),
 							  hexbuf, sizeof(hexbuf) - 1);
-	lua_pushlstring(session->L, hexbuf, r);
-	lua_setfield(session->L, -2, "queried");
+	lua_pushlstring(L, hexbuf, r);
+	lua_setfield(L, -2, "queried");
 
-	lua_pushstring(session->L, fuzzy_cmd_type_string(io));
-	lua_setfield(session->L, -2, "type");
+	lua_pushstring(L, fuzzy_cmd_type_string(io));
+	lua_setfield(L, -2, "type");
 
-	lua_pushnumber(session->L, rep->v1.prob);
-	lua_setfield(session->L, -2, "prob");
+	lua_pushnumber(L, rep->v1.prob);
+	lua_setfield(L, -2, "prob");
 
-	lua_pushinteger(session->L, rep->v1.value);
-	lua_setfield(session->L, -2, "value");
+	lua_pushinteger(L, rep->v1.value);
+	lua_setfield(L, -2, "value");
 
-	lua_pushinteger(session->L, rep->v1.flag);
-	lua_setfield(session->L, -2, "flag");
+	lua_pushinteger(L, rep->v1.flag);
+	lua_setfield(L, -2, "flag");
 
 	if (rep->v1.prob > 0.5) {
-		lua_pushboolean(session->L, TRUE);
-		lua_setfield(session->L, -2, "found");
+		lua_pushboolean(L, TRUE);
+		lua_setfield(L, -2, "found");
 
 		r = rspamd_encode_hex_buf(rep->digest, sizeof(rep->digest),
 								  hexbuf, sizeof(hexbuf) - 1);
-		lua_pushlstring(session->L, hexbuf, r);
-		lua_setfield(session->L, -2, "digest");
+		lua_pushlstring(L, hexbuf, r);
+		lua_setfield(L, -2, "digest");
 
-		lua_pushinteger(session->L, rep->ts);
-		lua_setfield(session->L, -2, "added");
+		lua_pushinteger(L, rep->ts);
+		lua_setfield(L, -2, "added");
 
-		lua_pushboolean(session->L,
+		lua_pushboolean(L,
 						(rep->reserved[0] & RSPAMD_FUZZY_REPLY_FLAG_MATCHED_DIGEST) != 0);
-		lua_setfield(session->L, -2, "confirmed");
+		lua_setfield(L, -2, "confirmed");
 	}
 	else {
-		lua_pushboolean(session->L, FALSE);
-		lua_setfield(session->L, -2, "found");
+		lua_pushboolean(L, FALSE);
+		lua_setfield(L, -2, "found");
 	}
 
-	if (lua_pcall(session->L, 3, 0, 0) != 0) {
-		msg_info("fuzzy lua check callback error: %s", lua_tostring(session->L, -1));
-		lua_pop(session->L, 1);
+	if (lua_pcall(L, 3, 0, 0) != 0) {
+		msg_info("fuzzy lua check callback error: %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
 	}
+
+	fuzzy_lua_callback_done(&cbs);
 }
 
 static int
