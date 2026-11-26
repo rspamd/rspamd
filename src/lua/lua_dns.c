@@ -44,6 +44,7 @@ lua_dns_request(lua_State *L)
 	struct lua_rspamd_dns_cbdata *cbdata = NULL;
 	const char *to_resolve = NULL;
 	const char *type_str = NULL;
+	char *ptr_str = NULL;
 	struct rspamd_task *task = NULL;
 	struct thread_entry *thread = NULL;
 	rspamd_mempool_t *pool = NULL;
@@ -62,10 +63,11 @@ lua_dns_request(lua_State *L)
 										  &cfg)) {
 
 		if (err) {
-			ret = luaL_error(L, "invalid arguments: %s", err->message);
+			/* lua_error() does not return: the message is copied first */
+			lua_pushfstring(L, "invalid arguments: %s", err->message);
 			g_error_free(err);
 
-			return ret;
+			return lua_error(L);
 		}
 
 		return luaL_error(L, "invalid arguments");
@@ -76,10 +78,7 @@ lua_dns_request(lua_State *L)
 		pool = task->task_pool;
 		cfg = task->cfg;
 	}
-	else if (session && cfg) {
-		pool = cfg->cfg_pool;
-	}
-	else {
+	else if (session == NULL || cfg == NULL) {
 		return luaL_error(L, "invalid arguments: either task or session/config should be set");
 	}
 
@@ -103,13 +102,7 @@ lua_dns_request(lua_State *L)
 		return luaL_error(L, "invalid arguments: this record type is not supported");
 	}
 
-	cbdata = rspamd_mempool_alloc0(pool, sizeof(*cbdata));
-
-	cbdata->task = task;
-
 	if (type == RDNS_REQUEST_PTR) {
-		char *ptr_str;
-
 		ptr_str = rdns_generate_ptr_from_str(to_resolve);
 
 		if (ptr_str == NULL) {
@@ -120,10 +113,23 @@ lua_dns_request(lua_State *L)
 			return 1;
 		}
 
-		to_resolve = rspamd_mempool_strdup(pool, ptr_str);
-		free(ptr_str);
+		/* rdns copies the name, so it is freed once the request is made */
+		to_resolve = ptr_str;
 	}
 
+	if (task) {
+		cbdata = rspamd_mempool_alloc0(pool, sizeof(*cbdata));
+	}
+	else {
+		/*
+		 * Not from the config pool, which lives as long as the process: freed
+		 * by lua_dns_callback(), and the request data by dns.c, as no pool is
+		 * given to it
+		 */
+		cbdata = g_malloc0(sizeof(*cbdata));
+	}
+
+	cbdata->task = task;
 
 	if (task == NULL) {
 		ret = (rspamd_dns_resolver_request(cfg->dns_resolver,
@@ -151,6 +157,8 @@ lua_dns_request(lua_State *L)
 		}
 	}
 
+	free(ptr_str);
+
 	if (ret) {
 		cbdata->thread = thread;
 		cbdata->thread_generation = thread->generation;
@@ -170,6 +178,10 @@ lua_dns_request(lua_State *L)
 		return lua_thread_yield(thread, 0);
 	}
 	else {
+		if (task == NULL) {
+			g_free(cbdata);
+		}
+
 		lua_pushnil(L);
 		return 1;
 	}
@@ -225,6 +237,11 @@ void lua_dns_callback(struct rdns_reply *reply, void *arg)
 
 	/* Drop the reference taken when the request was issued */
 	lua_thread_pool_release_entry(thread);
+
+	if (cbdata->task == NULL) {
+		/* Allocated without a pool, see lua_dns_request() */
+		g_free(cbdata);
+	}
 }
 
 static int

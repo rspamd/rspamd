@@ -353,11 +353,17 @@ lua_dns_resolver_resolve_common(lua_State *L,
 										  "option=S;task=U{task};forced=B",
 										  &session, &pool, &to_resolve, &cbref, &user_str, &task, &forced)) {
 
+		/* The callback is referenced already when a later argument is wrong */
+		if (cbref != -1) {
+			luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+		}
+
 		if (err) {
-			ret = luaL_error(L, "invalid arguments: %s", err->message);
+			/* lua_error() does not return: the message is copied first */
+			lua_pushfstring(L, "invalid arguments: %s", err->message);
 			g_error_free(err);
 
-			return ret;
+			return lua_error(L);
 		}
 
 		return luaL_error(L, "invalid arguments");
