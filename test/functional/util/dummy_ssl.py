@@ -152,6 +152,10 @@ class Handler(socketserver.BaseRequestHandler):
 
 class SSLServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = True
+    # The default backlog is 5, and a scan of the tcp suite opens a dozen
+    # connections at once: a dropped SYN is retried after a second, which is
+    # as long as the connect timeouts of the tests
+    request_queue_size = 128
     allow_reuse_address = True
 
     def __init__(self, server_address, certfile):
