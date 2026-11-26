@@ -251,34 +251,61 @@ struct rspamd_control_cbdata {
 	 * or suspended for somebody else long before a command comes
 	 */
 	lua_State *L;
+	/* Holds this structure; never freed, as the handler stays registered while the worker lives */
 	rspamd_mempool_t *pool;
 	struct rspamd_worker *w;
 	struct rspamd_config *cfg;
 	struct ev_loop *event_loop;
-	struct rspamd_async_session *session;
 	enum rspamd_control_type cmd;
-	uint64_t cmd_id;
 	int cbref;
+};
+
+/*
+ * One command: commands of one type can overlap, so each has its own session
+ * and reply address. It lives in its own pool until its reply is written.
+ * The reply and the destruction use neither cfg nor Lua: an event of a command
+ * still in flight can be removed while the worker frees its config on exit.
+ */
+struct rspamd_control_cmd_cbdata {
+	struct rspamd_control_cbdata *cbd;
+	rspamd_mempool_t *pool;
+	struct rspamd_async_session *session;
+	uint64_t cmd_id;
 	int fd;
 };
+
+/*
+ * Finaliser of the event that holds the session while the Lua handler runs:
+ * whatever events the handler finishes itself, the reply waits for its return
+ */
+static void
+lua_worker_control_hold_fin(void *ud)
+{
+	(void) ud;
+}
 
 static gboolean
 lua_worker_control_fin_session(void *ud)
 {
 	struct rspamd_control_reply rep;
-	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *) ud;
-	rspamd_mempool_t *pool;
-
-	pool = cbd->pool;
+	struct rspamd_control_cmd_cbdata *ccbd = (struct rspamd_control_cmd_cbdata *) ud;
+	rspamd_mempool_t *pool = ccbd->pool;
 
 	memset(&rep, 0, sizeof(rep));
-	rep.type = cbd->cmd;
-	rep.id = cbd->cmd_id;
+	rep.type = ccbd->cbd->cmd;
+	rep.id = ccbd->cmd_id;
 
-	if (write(cbd->fd, &rep, sizeof(rep)) != sizeof(rep)) {
+	if (write(ccbd->fd, &rep, sizeof(rep)) != sizeof(rep)) {
 		msg_err_pool("cannot write reply to the control socket: %s",
 					 strerror(errno));
 	}
+
+	/*
+	 * The command is over: this frees the session and ccbd. This finaliser is
+	 * called by rspamd_session_pending() only, which, as well as
+	 * rspamd_session_remove_event() calling it, leaves the session alone then.
+	 */
+	rspamd_session_destroy(ccbd->session);
 
 	return TRUE;
 }
@@ -286,9 +313,10 @@ lua_worker_control_fin_session(void *ud)
 static void
 lua_worker_control_session_dtor(void *ud)
 {
-	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *) ud;
+	struct rspamd_control_cmd_cbdata *ccbd = (struct rspamd_control_cmd_cbdata *) ud;
 
-	rspamd_mempool_delete(cbd->pool);
+	/* Holds the session and ccbd */
+	rspamd_mempool_delete(ccbd->pool);
 }
 
 static gboolean
@@ -301,12 +329,17 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 {
 	struct rspamd_async_session *session, **psession;
 	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *) ud;
+	struct rspamd_control_cmd_cbdata *ccbd;
 	struct lua_callback_state cbs;
-	/* Not read from cbd at the end: rspamd_session_destroy() below frees it */
 	struct lua_thread_pool *thread_pool = cbd->cfg->lua_thread_pool;
 	rspamd_mempool_t *pool;
 	lua_State *L;
 	int err_idx, status;
+
+	if (attached_fd != -1) {
+		/* The handler owns it, and Lua never gets it */
+		close(attached_fd);
+	}
 
 	/* Commands come from the event loop, so the handler takes a thread of its own */
 	if (thread_pool) {
@@ -317,15 +350,21 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 		L = cbd->L;
 	}
 
-	pool = cbd->pool;
-	session = rspamd_session_create(cbd->pool,
+	pool = rspamd_mempool_new_short_lived("lua_control");
+	ccbd = rspamd_mempool_alloc0(pool, sizeof(*ccbd));
+	ccbd->cbd = cbd;
+	ccbd->pool = pool;
+	ccbd->fd = fd;
+	ccbd->cmd_id = cmd->id;
+	session = rspamd_session_create(pool,
 									lua_worker_control_fin_session,
 									NULL,
 									lua_worker_control_session_dtor,
-									cbd);
-	cbd->session = session;
-	cbd->fd = fd;
-	cbd->cmd_id = cmd->id;
+									ccbd);
+	ccbd->session = session;
+	/* Removed below, once the handler has returned */
+	rspamd_session_add_event(session, lua_worker_control_hold_fin, ccbd,
+							 "lua control");
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -408,6 +447,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 
 		memset(&rep, 0, sizeof(rep));
 		rep.type = cbd->cmd;
+		rep.id = ccbd->cmd_id;
 		rep.reply.monitored_change.status = -1;
 
 		if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
@@ -415,11 +455,16 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 						 strerror(errno));
 		}
 
+		/*
+		 * Cancels what the handler has started and frees the command; the
+		 * session finaliser is not called, so the reply above is the only one
+		 */
 		rspamd_session_destroy(session);
 	}
 	else {
 		lua_settop(L, err_idx - 1);
-		rspamd_session_pending(session);
+		/* With no events left, this writes the reply and frees the command */
+		rspamd_session_remove_event(session, lua_worker_control_hold_fin, ccbd);
 	}
 
 	if (thread_pool) {
