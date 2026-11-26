@@ -1529,6 +1529,30 @@ rspamd_compare_order_func(gconstpointer a, gconstpointer b)
 	return cb2->order - cb1->order;
 }
 
+/*
+ * Adds a symbol option returned as a userdata, which must be a text. The
+ * results of a symbol callback are read outside of any protected call, so
+ * another userdata is logged and skipped instead of raising a Lua error.
+ */
+static void
+lua_metric_symbol_add_text_option(struct rspamd_task *task,
+								  struct rspamd_symbol_result *s,
+								  const char *symbol,
+								  lua_State *L,
+								  int pos)
+{
+	struct rspamd_lua_text *t = rspamd_lua_check_udata_maybe(L, pos,
+															 rspamd_text_classname);
+
+	if (t) {
+		rspamd_task_add_result_option(task, s, t->start, t->len);
+	}
+	else {
+		msg_err_task("invalid option for %s: userdata that is not a text, ignored",
+					 symbol);
+	}
+}
+
 static void
 lua_metric_symbol_callback(struct rspamd_task *task,
 						   struct rspamd_symcache_dynamic_item *item,
@@ -1616,12 +1640,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 							rspamd_task_add_result_option(task, s, opt, optlen);
 						}
 						else if (lua_type(L, i) == LUA_TUSERDATA) {
-							struct rspamd_lua_text *t = lua_check_text(L, i);
-
-							if (t) {
-								rspamd_task_add_result_option(task, s, t->start,
-															  t->len);
-							}
+							lua_metric_symbol_add_text_option(task, s, cd->symbol, L, i);
 						}
 						else if (lua_type(L, i) == LUA_TTABLE) {
 							gsize objlen = rspamd_lua_table_size(L, i);
@@ -1636,12 +1655,8 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 									rspamd_task_add_result_option(task, s, opt, optlen);
 								}
 								else if (lua_type(L, -1) == LUA_TUSERDATA) {
-									struct rspamd_lua_text *t = lua_check_text(L, -1);
-
-									if (t) {
-										rspamd_task_add_result_option(task, s, t->start,
-																	  t->len);
-									}
+									lua_metric_symbol_add_text_option(task, s, cd->symbol,
+																	  L, -1);
 								}
 
 								lua_pop(L, 1);
@@ -1748,7 +1763,10 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 			res = lua_toboolean(L, stack_level + 1);
 		}
 		else if (type == LUA_TFUNCTION) {
-			g_assert_not_reached();
+			/* Something bogus has been returned, so we should log it */
+			msg_err_task("invalid return value for %s: %s",
+						 cd->symbol, lua_typename(L, type));
+			res = FALSE;
 		}
 		else {
 			res = lua_tonumber(L, stack_level + 1);
@@ -1779,12 +1797,7 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 						rspamd_task_add_result_option(task, s, opt, optlen);
 					}
 					else if (lua_type(L, i) == LUA_TUSERDATA) {
-						struct rspamd_lua_text *t = lua_check_text(L, i);
-
-						if (t) {
-							rspamd_task_add_result_option(task, s, t->start,
-														  t->len);
-						}
+						lua_metric_symbol_add_text_option(task, s, cd->symbol, L, i);
 					}
 					else if (lua_type(L, i) == LUA_TTABLE) {
 						gsize objlen = rspamd_lua_table_size(L, i);
@@ -1799,12 +1812,8 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 								rspamd_task_add_result_option(task, s, opt, optlen);
 							}
 							else if (lua_type(L, -1) == LUA_TUSERDATA) {
-								struct rspamd_lua_text *t = lua_check_text(L, -1);
-
-								if (t) {
-									rspamd_task_add_result_option(task, s, t->start,
-																  t->len);
-								}
+								lua_metric_symbol_add_text_option(task, s, cd->symbol,
+																  L, -1);
 							}
 
 							lua_pop(L, 1);
@@ -4261,6 +4270,12 @@ lua_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 	struct ev_loop **pev_base;
 	struct thread_entry *thread;
 	lua_State *L;
+
+	/*
+	 * The next run is planned by lua_periodic_callback_finish() only, once this
+	 * one is over: a run that is suspended must not be started again
+	 */
+	ev_timer_stop(loop, w);
 
 	REF_RETAIN(periodic);
 	thread = lua_thread_pool_get_for_config(periodic->cfg);
