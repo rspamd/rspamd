@@ -598,8 +598,11 @@ exports.wait_for_storages = function(cfg, task, names, timeout, callback)
     if all_resolved() or rspamd_util.get_ticks() >= deadline then
       callback()
     else
-      -- A timer cannot re-arm itself, so schedule a fresh one on each tick
-      task:add_timer(0.05, poll)
+      -- A timer cannot re-arm itself, so schedule a fresh one on each tick.
+      -- A finishing task refuses timers: give the caller its answer now
+      if task:add_timer(0.05, poll) == false then
+        callback()
+      end
     end
   end
 

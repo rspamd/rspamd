@@ -8144,6 +8144,16 @@ fuzzy_lua_ping_storage(lua_State *L)
 		return luaL_error(L, "invalid arguments: no such rule defined");
 	}
 
+	/*
+	 * A session that is being cleaned up or destroyed refuses new events, and
+	 * a watcher armed without its event would outlive the task
+	 */
+	if (rspamd_session_blocked(task->s)) {
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, "task is finishing");
+		return 2;
+	}
+
 	rspamd_inet_addr_t *addr = NULL;
 
 	if (lua_type(L, 5) == LUA_TSTRING) {
@@ -8303,6 +8313,25 @@ fuzzy_lua_pingall_upstream(struct upstream *up, unsigned int idx, void *ud)
 		return;
 	}
 
+	if (rspamd_session_blocked(ctx->task->s)) {
+		/*
+		 * The session is being torn down and refuses new events: report the
+		 * server as failed instead of arming a watcher that outlives the task
+		 */
+		lua_pushvalue(ctx->L, 2);
+		lua_pushboolean(ctx->L, FALSE);
+		rspamd_lua_ip_push(ctx->L, addr);
+		lua_pushstring(ctx->L, "task is finishing");
+		lua_pushstring(ctx->L, name);
+		if (lua_pcall(ctx->L, 4, 0, 0) != 0) {
+			msg_info("fuzzy lua ping callback error: %s", lua_tostring(ctx->L, -1));
+			lua_pop(ctx->L, 1);
+		}
+		ctx->nresults++;
+
+		return;
+	}
+
 	commands = fuzzy_generate_ping_commands(ctx->task, ctx->rule,
 											ctx->is_write_server);
 
@@ -8436,6 +8465,13 @@ fuzzy_lua_check_storage(lua_State *L)
 
 	if (rule_found == NULL) {
 		return luaL_error(L, "invalid arguments: no such rule defined");
+	}
+
+	/* No new session events while the task is being torn down, see ping_storage */
+	if (rspamd_session_blocked(task->s)) {
+		lua_pushboolean(L, FALSE);
+		lua_pushstring(L, "task is finishing");
+		return 2;
 	}
 
 	GPtrArray *commands = NULL;
