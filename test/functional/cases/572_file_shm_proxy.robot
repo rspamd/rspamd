@@ -63,6 +63,52 @@ Proxy refuses the Path header
   Should Be Equal As Integers  ${result}[0]  400
   Should Contain  ${result}[1]  ${DENIED}
 
+Proxy refuses a request URL it cannot parse
+  [Documentation]  A URL this proxy cannot parse could not be checked for
+  ...              privileged query arguments, and a backend of another version
+  ...              may parse it differently, so it is never forwarded. The
+  ...              reason is the proxy's own: the backend would refuse the URL
+  ...              too, but with a different text.
+  ${data} =  Get Binary File  ${MESSAGE}
+  ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}
+  ...  From=longurl@example.net  Rcpt=longurl-rcpt@example.net
+  ${pad} =  Evaluate  'x' * 70000
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?Shm=${SHM_NAME}&p=${pad}  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  400
+  Should Contain  ${result}[1]  Request URL cannot be parsed
+
+Padded or NUL-ended query keys cannot smuggle a privileged argument
+  [Documentation]  A key may be made of any number of malformed escapes that
+  ...              decode to nothing, and an older upstream cuts a decoded key
+  ...              at the first NUL byte. Neither form may get past the proxy.
+  ...              With an upstream of the same version the Shm NUL check also
+  ...              passes on the upstream's own guard alone.
+  ${data} =  Get Binary File  ${MESSAGE}
+  ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}
+  ...  From=padded@example.net  Rcpt=padded-rcpt@example.net
+  ${pad} =  Evaluate  '%0g' * 23
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?${pad}Shm-Offset=0&a=b  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  200
+  ${json} =  Evaluate  __import__('json').loads($result[2])
+  Set Test Variable  ${SCAN_RESULT}  ${json}
+  Expect Symbol With Exact Options  FILE_SHM_PROBE  none
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?Shm-Offset%00x=0&a=b  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  200
+  ${json} =  Evaluate  __import__('json').loads($result[2])
+  Set Test Variable  ${SCAN_RESULT}  ${json}
+  Expect Symbol With Exact Options  FILE_SHM_PROBE  none
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?File%00x=${BENIGN_FILE}&a=b  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  400
+  Should Contain  ${result}[1]  ${DENIED}
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?${pad}File=${BENIGN_FILE}&a=b  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  400
+  Should Contain  ${result}[1]  ${DENIED}
+
 Client Shm headers never reach the upstream
   [Documentation]  Shm/Shm-Offset/Shm-Length are hop-by-hop and are stripped at
   ...              ingress, so the upstream -- which does honour privileged
@@ -74,6 +120,16 @@ Client Shm headers never reach the upstream
   ...  From=smuggle@example.net  Rcpt=smuggle-rcpt@example.net
   Expect Symbol  SIMPLE_TEST
   Expect Symbol With Exact Options  FILE_SHM_PROBE  none
+
+Client hop-by-hop headers never reach the upstream
+  [Documentation]  Upgrade, HTTP2-Settings, Proxy-Connection, TE and Trailer
+  ...              describe the client leg only and are stripped by the proxy.
+  Set Test Variable  ${RSPAMD_PORT_NORMAL}  ${RSPAMD_PORT_PROXY}
+  Scan File  ${MESSAGE}  Upgrade=h2c  HTTP2-Settings=x  TE=trailers
+  ...  Proxy-Connection=keep-alive  Trailer=X-Foo
+  ...  From=hop@example.net  Rcpt=hop-rcpt@example.net
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol With Exact Options  HOP_BY_HOP_PROBE  none
 
 Client Shm query arguments never reach the upstream
   ${data} =  Get Binary File  ${MESSAGE}
@@ -109,6 +165,35 @@ Ordinary query arguments survive the stripping of a privileged one
   # And the privileged one really was stripped, so this is not a case of the
   # whole query having been forwarded untouched
   Expect Symbol With Exact Options  FILE_SHM_PROBE  none
+
+Encoded delimiters in a query value cannot smuggle a privileged argument
+  [Documentation]  The proxy rewrites the URL when it strips Shm. A value that
+  ...              decodes to '&Shm=...' must stay one opaque value: if the
+  ...              rebuild wrote decoded values back, the upstream would see a
+  ...              Shm argument of its own and try to open the segment.
+  ${data} =  Get Binary File  ${MESSAGE}
+  ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}
+  ...  From=qencoded@example.net  Rcpt=qencoded-rcpt@example.net
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_PROXY}
+  ...  /checkv2?Shm=${SHM_NAME}&a=%26Shm%3D${SHM_NAME}  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  200
+  ${json} =  Evaluate  __import__('json').loads($result[2])
+  Set Test Variable  ${SCAN_RESULT}  ${json}
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol With Exact Options  FILE_SHM_PROBE  none
+
+Permissive proxy keeps the arguments next to a File query argument
+  [Documentation]  Taking File out of the URL must not damage the delimiter
+  ...              in front of the next argument, or the upstream loses it.
+  ${data} =  Get Binary File  ${MESSAGE}
+  ${headers} =  Create Dictionary  Queue-Id=${TEST NAME}
+  ...  Rcpt=qfilekeep-rcpt@example.net
+  @{result} =  HTTP Status And Reason  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL_SLAVE}
+  ...  /checkv2?File=${BENIGN_FILE}&From=qfilekeep@example.net  ${data}  ${headers}
+  Should Be Equal As Integers  ${result}[0]  200
+  ${json} =  Evaluate  __import__('json').loads($result[2])
+  Set Test Variable  ${SCAN_RESULT}  ${json}
+  Expect Symbol With Exact Options  REQUEST_ARG_PROBE  From=qfilekeep@example.net
 
 Client Shm headers cannot override a permissive proxy's own triplet
   [Documentation]  The other proxy worker does forward through shared memory,

@@ -212,6 +212,12 @@ gboolean rspamd_http_message_remove_header(struct rspamd_http_message *msg,
 										   const char *name);
 
 /**
+ * Drop all headers of a message, leaving it usable
+ * @param msg
+ */
+void rspamd_http_message_clear_headers(struct rspamd_http_message *msg);
+
+/**
  * Free HTTP message
  * @param msg
  */

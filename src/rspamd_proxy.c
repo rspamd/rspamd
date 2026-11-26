@@ -1914,32 +1914,157 @@ static const char *proxy_privileged_file_args[] = {"File", "Path"};
 static const char *proxy_privileged_shm_args[] = {"Shm", "Shm-Offset",
 												  "Shm-Length"};
 
+/*
+ * Tells whether a query segment ("key", "key=value" or "key=") names one of
+ * the arguments. The key is url-decoded and compared ignoring case, and it
+ * ends at the first NUL byte: an older upstream turns each key into a header
+ * name with strlen(), so `File%00x` is the header `File` there. The decoder
+ * writes nothing for a malformed escape, so a raw key can be much longer
+ * than the name it decodes to and has to be decoded in full.
+ */
 static gboolean
-proxy_has_query_arg(GHashTable *query_args, const char *name)
+proxy_query_segment_matches(const char *seg, gsize seg_len,
+							const char **names, unsigned int nnames)
 {
-	rspamd_ftok_t srch;
+	/* A key never starts with '=' here, as in the query parser */
+	const char *eq = seg_len > 1 ? memchr(seg + 1, '=', seg_len - 1) : NULL;
+	gsize klen = eq ? (gsize) (eq - seg) : seg_len;
+	char kbuf[64], *key = kbuf;
+	gboolean found = FALSE;
+	const char *nul;
+	gsize dlen;
+	unsigned int i;
 
-	srch.begin = name;
-	srch.len = strlen(name);
+	if (seg_len == 0) {
+		return FALSE;
+	}
 
-	return g_hash_table_lookup(query_args, &srch) != NULL;
+	if (klen > sizeof(kbuf)) {
+		/* The decoder never makes the key longer */
+		key = g_malloc(klen);
+	}
+
+	dlen = rspamd_url_decode(key, seg, klen);
+	nul = memchr(key, '\0', dlen);
+
+	if (nul != NULL) {
+		dlen = nul - key;
+	}
+
+	for (i = 0; i < nnames; i++) {
+		if (strlen(names[i]) == dlen &&
+			g_ascii_strncasecmp(key, names[i], dlen) == 0) {
+			found = TRUE;
+			break;
+		}
+	}
+
+	if (key != kbuf) {
+		g_free(key);
+	}
+
+	return found;
+}
+
+/* Same matching as above over a whole query string */
+static gboolean
+proxy_query_has_arg(const char *seg, const char *end,
+					const char **names, unsigned int nnames)
+{
+	while (seg < end) {
+		const char *amp = memchr(seg, '&', end - seg);
+		const char *seg_end = amp ? amp : end;
+
+		if (proxy_query_segment_matches(seg, seg_end - seg, names, nnames)) {
+			return TRUE;
+		}
+
+		seg = amp ? amp + 1 : end;
+	}
+
+	return FALSE;
 }
 
 /*
- * Rebuilds msg->url without the listed query arguments. Does nothing at all
- * unless at least one of them is really there.
+ * Removes the named query arguments from msg->url. Names are matched by
+ * proxy_query_segment_matches(): the key is url-decoded, cut at the first NUL
+ * and compared ignoring case. Everything that stays is copied byte for byte
+ * from the original URL. The decoded values must never be written back: a
+ * decoded '&',
+ * '=', space or CR/LF would turn into a new argument, or into a new header
+ * line, at the upstream. Does nothing at all unless one of the arguments is
+ * really there. The URL has to be parsed by the caller (with is_connect = 0).
  */
+static void
+proxy_drop_query_args(struct rspamd_http_message *msg,
+					  const struct http_parser_url *u,
+					  const char **names, unsigned int nnames)
+{
+	const char *url, *seg, *end;
+	rspamd_fstring_t *new_url;
+	gboolean dropped = FALSE, kept = FALSE;
+
+	if (!(u->field_set & (1 << UF_QUERY)) || u->field_data[UF_QUERY].off == 0) {
+		return;
+	}
+
+	url = RSPAMD_FSTRING_DATA(msg->url);
+	seg = url + u->field_data[UF_QUERY].off;
+	end = seg + u->field_data[UF_QUERY].len;
+
+	/*
+	 * UF_QUERY.off addresses the first byte *after* the '?', so the prefix has
+	 * to stop one byte short of it: copying up to `off` would keep the original
+	 * delimiter and the one appended below would produce a second one.
+	 */
+	new_url = rspamd_fstring_new_init(url, u->field_data[UF_QUERY].off - 1);
+	new_url = rspamd_fstring_append(new_url, "?", 1);
+
+	while (seg < end) {
+		const char *amp = memchr(seg, '&', end - seg);
+		const char *seg_end = amp ? amp : end;
+		gsize seg_len = seg_end - seg;
+		gboolean skip = FALSE;
+
+		if (seg_len > 0) {
+			skip = proxy_query_segment_matches(seg, seg_len, names, nnames);
+
+			if (skip) {
+				dropped = TRUE;
+			}
+			else {
+				if (kept) {
+					new_url = rspamd_fstring_append(new_url, "&", 1);
+				}
+
+				new_url = rspamd_fstring_append(new_url, seg, seg_len);
+				kept = TRUE;
+			}
+		}
+
+		seg = amp ? amp + 1 : end;
+	}
+
+	if (!dropped) {
+		rspamd_fstring_free(new_url);
+
+		return;
+	}
+
+	if (!kept) {
+		/* Nothing is left, so the '?' goes as well */
+		rspamd_fstring_erase(new_url, new_url->len - 1, 1);
+	}
+
+	rspamd_fstring_free(msg->url);
+	msg->url = new_url;
+}
+
 static void
 proxy_strip_query_args(struct rspamd_http_message *msg,
 					   const char **names, unsigned int nnames)
 {
 	struct http_parser_url u;
-	GHashTable *query_args;
-	GHashTableIter it;
-	gpointer k, v;
-	rspamd_fstring_t *new_url;
-	unsigned int i;
-	gboolean found = FALSE;
 
 	if (msg->url == NULL || msg->url->len == 0) {
 		return;
@@ -1950,71 +2075,7 @@ proxy_strip_query_args(struct rspamd_http_message *msg,
 		return;
 	}
 
-	if (!(u.field_set & (1 << UF_QUERY))) {
-		return;
-	}
-
-	query_args = rspamd_http_message_parse_query(msg);
-
-	for (i = 0; i < nnames; i++) {
-		if (proxy_has_query_arg(query_args, names[i])) {
-			found = TRUE;
-			break;
-		}
-	}
-
-	if (!found) {
-		g_hash_table_unref(query_args);
-
-		return;
-	}
-
-	if (u.field_data[UF_QUERY].off == 0) {
-		/* A query always follows a '?', so this cannot happen; be defensive */
-		g_hash_table_unref(query_args);
-
-		return;
-	}
-
-	/*
-	 * UF_QUERY.off addresses the first byte *after* the '?', so the prefix has
-	 * to stop one byte short of it: copying up to `off` would keep the original
-	 * delimiter and the one appended below would produce a second one.
-	 */
-	new_url = rspamd_fstring_new_init(RSPAMD_FSTRING_DATA(msg->url),
-									  u.field_data[UF_QUERY].off - 1);
-	new_url = rspamd_fstring_append(new_url, "?", 1);
-
-	g_hash_table_iter_init(&it, query_args);
-
-	while (g_hash_table_iter_next(&it, &k, &v)) {
-		const rspamd_ftok_t *key_tok = k, *tok = v;
-		gboolean skip = FALSE;
-
-		for (i = 0; i < nnames; i++) {
-			rspamd_ftok_t srch;
-
-			srch.begin = names[i];
-			srch.len = strlen(names[i]);
-
-			if (rspamd_ftok_icase_equal(key_tok, &srch)) {
-				skip = TRUE;
-				break;
-			}
-		}
-
-		if (!skip) {
-			rspamd_printf_fstring(&new_url, "%T=%T&", key_tok, tok);
-		}
-	}
-
-	/* Erase last character (might be either & or ?) */
-	rspamd_fstring_erase(new_url, new_url->len - 1, 1);
-
-	rspamd_fstring_free(msg->url);
-	msg->url = new_url;
-
-	g_hash_table_unref(query_args);
+	proxy_drop_query_args(msg, &u, names, nnames);
 }
 
 /*
@@ -2037,7 +2098,6 @@ proxy_sanitize_privileged_inputs(struct rspamd_http_message *msg,
 								 int *err_code, const char **err_status)
 {
 	unsigned int i;
-	GHashTable *query_args = NULL;
 	struct http_parser_url u;
 	gboolean has_file_arg = FALSE;
 
@@ -2072,16 +2132,13 @@ proxy_sanitize_privileged_inputs(struct rspamd_http_message *msg,
 		http_parser_parse_url(RSPAMD_FSTRING_DATA(msg->url),
 							  RSPAMD_FSTRING_LEN(msg->url), 0, &u) == 0 &&
 		(u.field_set & (1 << UF_QUERY))) {
-		query_args = rspamd_http_message_parse_query(msg);
+		const char *query = RSPAMD_FSTRING_DATA(msg->url) +
+							u.field_data[UF_QUERY].off;
 
-		for (i = 0; i < G_N_ELEMENTS(proxy_privileged_file_args); i++) {
-			if (proxy_has_query_arg(query_args, proxy_privileged_file_args[i])) {
-				has_file_arg = TRUE;
-				break;
-			}
-		}
-
-		g_hash_table_unref(query_args);
+		has_file_arg = proxy_query_has_arg(query,
+										   query + u.field_data[UF_QUERY].len,
+										   proxy_privileged_file_args,
+										   G_N_ELEMENTS(proxy_privileged_file_args));
 	}
 
 	if (has_file_arg) {
@@ -2103,14 +2160,12 @@ static gboolean
 proxy_check_file(struct rspamd_http_message *msg,
 				 struct rspamd_proxy_session *session)
 {
-	const rspamd_ftok_t *tok, *key_tok;
+	const rspamd_ftok_t *tok;
 	rspamd_ftok_t srch;
 	char *file_str;
 	GHashTable *query_args;
-	GHashTableIter it;
-	gpointer k, v;
 	struct http_parser_url u;
-	rspamd_fstring_t *new_url;
+	static const char *proxy_file_arg[] = {"File"};
 
 	if (!session->allow_file_shm) {
 		/*
@@ -2173,27 +2228,7 @@ proxy_check_file(struct rspamd_http_message *msg,
 				}
 
 				/* We need to create a new URL with file attribute removed */
-				new_url = rspamd_fstring_new_init(RSPAMD_FSTRING_DATA(msg->url),
-												  u.field_data[UF_QUERY].off);
-				new_url = rspamd_fstring_append(new_url, "?", 1);
-
-				g_hash_table_iter_init(&it, query_args);
-
-				while (g_hash_table_iter_next(&it, &k, &v)) {
-					key_tok = k;
-					tok = v;
-
-					if (!rspamd_ftok_icase_equal(key_tok, &srch)) {
-						rspamd_printf_fstring(&new_url, "%T=%T&",
-											  key_tok, tok);
-					}
-				}
-
-				/* Erase last character (might be either & or ?) */
-				rspamd_fstring_erase(new_url, new_url->len - 1, 1);
-
-				rspamd_fstring_free(msg->url);
-				msg->url = new_url;
+				proxy_drop_query_args(msg, &u, proxy_file_arg, 1);
 				session->fname = file_str;
 			}
 
@@ -2877,6 +2912,13 @@ proxy_backend_master_finish_handler(struct rspamd_http_connection *conn,
 	rspamd_http_message_remove_header(msg, "Date");
 	rspamd_http_message_remove_header(msg, "Server");
 	rspamd_http_message_remove_header(msg, "Key");
+	/* The body is already de-chunked and the framing is ours */
+	rspamd_http_message_remove_header(msg, "Transfer-Encoding");
+	rspamd_http_message_remove_header(msg, "Trailer");
+	rspamd_http_message_remove_header(msg, "TE");
+	rspamd_http_message_remove_header(msg, "Upgrade");
+	rspamd_http_message_remove_header(msg, "HTTP2-Settings");
+	rspamd_http_message_remove_header(msg, "Proxy-Connection");
 	orig_ct = rspamd_http_message_find_header(msg, "Content-Type");
 
 	/* Check if we can use keepalive */
@@ -3588,6 +3630,7 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 	struct rspamd_proxy_session *session = conn->ud;
 	int err_code = 404;
 	const char *err_status = "Backend not found";
+	struct rspamd_http_message *req;
 
 	if (!session->master_conn) {
 		session->master_conn = rspamd_mempool_alloc0(session->pool,
@@ -3615,6 +3658,21 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		}
 
 		/*
+		 * A backend of another version may parse a URL that this proxy
+		 * cannot, so a URL the privileged-input filter could not check is
+		 * never forwarded
+		 */
+		struct http_parser_url url_parsed;
+
+		if (http_parser_parse_url(RSPAMD_FSTRING_DATA(msg->url),
+								  RSPAMD_FSTRING_LEN(msg->url), 0, &url_parsed) != 0) {
+			msg_info_session("cannot parse the request URL, refusing the request");
+			err_code = 400;
+			err_status = "Request URL cannot be parsed";
+			goto err;
+		}
+
+		/*
 		 * Ingress sanitising: this happens before proxy_check_file() may open
 		 * anything and before the message is forwarded or self scanned, so a
 		 * client supplied File/Path/Shm* can neither be acted upon nor be
@@ -3626,6 +3684,16 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		}
 
 		if (!proxy_check_file(msg, session)) {
+			goto err;
+		}
+
+		/* Whatever was rebuilt above has to be a URL that can be parsed */
+		if (http_parser_parse_url(RSPAMD_FSTRING_DATA(msg->url),
+								  RSPAMD_FSTRING_LEN(msg->url), 0, &url_parsed) != 0) {
+			msg_info_session("cannot parse the sanitised request URL, "
+							 "refusing the request");
+			err_code = 400;
+			err_status = "Request URL cannot be parsed";
 			goto err;
 		}
 
@@ -3665,6 +3733,11 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 		rspamd_http_message_remove_header(msg, "Transfer-Encoding");
 		rspamd_http_message_remove_header(msg, "Keep-Alive");
 		rspamd_http_message_remove_header(msg, "Connection");
+		rspamd_http_message_remove_header(msg, "Upgrade");
+		rspamd_http_message_remove_header(msg, "HTTP2-Settings");
+		rspamd_http_message_remove_header(msg, "Proxy-Connection");
+		rspamd_http_message_remove_header(msg, "TE");
+		rspamd_http_message_remove_header(msg, "Trailer");
 		rspamd_http_message_remove_header(msg, "Key");
 
 		proxy_open_mirror_connections(session);
@@ -3685,7 +3758,8 @@ proxy_client_finish_handler(struct rspamd_http_connection *conn,
 	return 0;
 
 err:
-	rspamd_http_connection_steal_msg(session->client_conn);
+	/* The request is not handed over to the session, so it is ours to free */
+	req = rspamd_http_connection_steal_msg(session->client_conn);
 	rspamd_http_message_remove_header(msg, "Content-Length");
 	rspamd_http_message_remove_header(msg, "Key");
 	rspamd_http_message_remove_header(msg, "Transfer-Encoding");
@@ -3693,6 +3767,10 @@ err:
 	rspamd_http_message_remove_header(msg, "Connection");
 	rspamd_http_connection_reset(session->client_conn);
 	proxy_client_write_error(session, err_code, err_status);
+
+	if (req) {
+		rspamd_http_message_unref(req);
+	}
 
 	return 0;
 }

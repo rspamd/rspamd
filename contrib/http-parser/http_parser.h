@@ -133,7 +133,7 @@ enum flags
   , F_CONNECTION_KEEP_ALIVE = 1 << 1
   , F_SPAMC                 = 1 << 2
   , F_TRAILING              = 1 << 3
-  , F_UPGRADE               = 1 << 4
+  , F_TRANSFER_ENCODING     = 1 << 4
   , F_SKIPBODY              = 1 << 5
   };
 
@@ -175,13 +175,17 @@ enum flags
   XX(INVALID_HEADER_TOKEN, "invalid character in header")            \
   XX(INVALID_CONTENT_LENGTH,                                         \
      "invalid character in content-length header")                   \
+  XX(UNEXPECTED_CONTENT_LENGTH,                                      \
+     "unexpected content-length header")                             \
   XX(INVALID_CHUNK_SIZE,                                             \
      "invalid character in chunk size header")                       \
   XX(INVALID_CONSTANT, "invalid constant string")                    \
   XX(INVALID_INTERNAL_STATE, "encountered unexpected internal state")\
   XX(STRICT, "strict mode assertion failed")                         \
   XX(PAUSED, "parser is paused")                                     \
-  XX(UNKNOWN, "an unknown error occurred")
+  XX(UNKNOWN, "an unknown error occurred")                           \
+  XX(INVALID_TRANSFER_ENCODING,                                      \
+     "request has invalid transfer-encoding")
 
 
 /* Define HPE_* values for each errno value above */
@@ -214,10 +218,8 @@ struct http_parser {
   unsigned int method : 8;       /* requests only */
   unsigned int http_errno : 7;
 
-  /* 1 = Upgrade header was present and the parser has exited because of that.
-   * 0 = No upgrade header present.
-   * Should be checked when http_parser_execute() returns in addition to
-   * error checking.
+  /* Always 0. Kept for ABI: the parser never stops for CONNECT or Upgrade,
+   * every message is framed by its own length.
    */
   unsigned int upgrade : 1;
 
