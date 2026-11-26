@@ -1484,10 +1484,18 @@ struct lua_callback_data {
 	} callback;
 	gboolean cb_is_ref;
 
-	/* Dynamic data */
-	int stack_level;
 	int order;
+};
+
+/*
+ * One run of a coroutine symbol. The callback data above is shared by every
+ * task that runs the symbol, and other tasks can enter the same symbol while
+ * this run is suspended, so the per-run state must not be kept there.
+ */
+struct lua_coro_call_ctx {
+	struct lua_callback_data *cd;
 	struct rspamd_symcache_dynamic_item *item;
+	int stack_level;
 };
 
 /*
@@ -1532,7 +1540,6 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 	lua_State *L = cd->L;
 	struct rspamd_symbol_result *s;
 
-	cd->item = item;
 	rspamd_symcache_item_async_inc(task, item, "lua symbol");
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -1649,7 +1656,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 	}
 
 	lua_pop(L, 1); /* Error function */
-	rspamd_symcache_item_async_dec_check(task, cd->item, "lua symbol");
+	rspamd_symcache_item_async_dec_check(task, item, "lua symbol");
 	g_assert(lua_gettop(L) == level - 1);
 }
 
@@ -1666,18 +1673,23 @@ lua_metric_symbol_callback_coro(struct rspamd_task *task,
 								gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
+	struct lua_coro_call_ctx *ctx;
 	struct rspamd_task **ptask;
 	struct thread_entry *thread_entry;
 
-	cd->item = item;
 	rspamd_symcache_item_async_inc(task, item, "lua coro symbol");
 	thread_entry = lua_thread_pool_get_for_task(task);
+	/* Code that runs after a yield must be accounted to this symbol again */
+	thread_entry->item = item;
 
 	g_assert(thread_entry->cd == NULL);
-	thread_entry->cd = cd;
+	ctx = rspamd_mempool_alloc_type(task->task_pool, struct lua_coro_call_ctx);
+	ctx->cd = cd;
+	ctx->item = item;
+	thread_entry->cd = ctx;
 
 	lua_State *thread = thread_entry->lua_state;
-	cd->stack_level = lua_gettop(thread);
+	ctx->stack_level = lua_gettop(thread);
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti(thread, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -1701,26 +1713,27 @@ lua_metric_symbol_callback_error(struct thread_entry *thread_entry,
 								 int ret,
 								 const char *msg)
 {
-	struct lua_callback_data *cd = thread_entry->cd;
+	struct lua_coro_call_ctx *ctx = thread_entry->cd;
 	struct rspamd_task *task = thread_entry->task;
-	msg_err_task("call to coroutine (%s) failed (%d): %s", cd->symbol, ret, msg);
+	msg_err_task("call to coroutine (%s) failed (%d): %s", ctx->cd->symbol, ret, msg);
 
-	rspamd_symcache_item_async_dec_check(task, cd->item, "lua coro symbol");
+	rspamd_symcache_item_async_dec_check(task, ctx->item, "lua coro symbol");
 }
 
 static void
 lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 {
-	struct lua_callback_data *cd = thread_entry->cd;
+	struct lua_coro_call_ctx *ctx = thread_entry->cd;
+	struct lua_callback_data *cd = ctx->cd;
 	struct rspamd_task *task = thread_entry->task;
-	int nresults;
+	int nresults, stack_level = ctx->stack_level;
 	struct rspamd_symbol_result *s;
 
 	(void) ret;
 
 	lua_State *L = thread_entry->lua_state;
 
-	nresults = lua_gettop(L) - cd->stack_level;
+	nresults = lua_gettop(L) - stack_level;
 
 	if (nresults >= 1) {
 		/* Function returned boolean, so maybe we need to insert result? */
@@ -1729,23 +1742,23 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 		double flag = 1.0;
 		int type;
 
-		type = lua_type(L, cd->stack_level + 1);
+		type = lua_type(L, stack_level + 1);
 
 		if (type == LUA_TBOOLEAN) {
-			res = lua_toboolean(L, cd->stack_level + 1);
+			res = lua_toboolean(L, stack_level + 1);
 		}
 		else if (type == LUA_TFUNCTION) {
 			g_assert_not_reached();
 		}
 		else {
-			res = lua_tonumber(L, cd->stack_level + 1);
+			res = lua_tonumber(L, stack_level + 1);
 		}
 
 		if (res) {
 			int first_opt = 2;
 
-			if (lua_type(L, cd->stack_level + 2) == LUA_TNUMBER) {
-				flag = lua_tonumber(L, cd->stack_level + 2);
+			if (lua_type(L, stack_level + 2) == LUA_TNUMBER) {
+				flag = lua_tonumber(L, stack_level + 2);
 				/* Shift opt index */
 				first_opt = 3;
 			}
@@ -1758,7 +1771,7 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 			if (s) {
 				unsigned int last_pos = lua_gettop(L);
 
-				for (i = cd->stack_level + first_opt; i <= last_pos; i++) {
+				for (i = stack_level + first_opt; i <= last_pos; i++) {
 					if (lua_type(L, i) == LUA_TSTRING) {
 						gsize optlen;
 						const char *opt = lua_tolstring(L, i, &optlen);
@@ -1804,10 +1817,9 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 		lua_pop(L, nresults);
 	}
 
-	g_assert(lua_gettop(L) == cd->stack_level); /* we properly cleaned up the stack */
+	g_assert(lua_gettop(L) == stack_level); /* we properly cleaned up the stack */
 
-	cd->stack_level = 0;
-	rspamd_symcache_item_async_dec_check(task, cd->item, "lua coro symbol");
+	rspamd_symcache_item_async_dec_check(task, ctx->item, "lua coro symbol");
 }
 
 static GArray *
