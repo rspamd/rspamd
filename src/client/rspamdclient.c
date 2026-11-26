@@ -146,7 +146,8 @@ rspamd_client_finish_handler(struct rspamd_http_connection *conn,
 		if (rspamd_http_message_get_body(msg, NULL) == NULL || msg->code / 100 != 2) {
 			err = g_error_new(RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 							  msg->code,
-							  (int) msg->status->len, msg->status->str);
+							  msg->status ? (int) msg->status->len : 0,
+							  msg->status ? msg->status->str : "");
 			req->cb(c, msg, c->server_name->str, NULL, req->input, req->ud,
 					c->start_time, c->send_time, body, bodylen, err);
 			g_error_free(err);
@@ -526,7 +527,8 @@ rspamd_client_v3_finish_handler(struct rspamd_http_connection *conn,
 	if (rspamd_http_message_get_body(msg, NULL) == NULL || msg->code / 100 != 2) {
 		err = g_error_new(RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 						  msg->code,
-						  (int) msg->status->len, msg->status->str);
+						  msg->status ? (int) msg->status->len : 0,
+						  msg->status ? msg->status->str : "");
 		req->cb(c, msg, c->server_name->str, NULL, req->input, req->ud,
 				c->start_time, c->send_time, NULL, 0, err);
 		g_error_free(err);
