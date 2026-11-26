@@ -10,6 +10,7 @@ extern "C" {
 
 struct thread_entry;
 struct lua_thread_pool;
+struct rspamd_symcache_dynamic_item;
 
 typedef void (*lua_thread_finish_t)(struct thread_entry *thread, int ret);
 
@@ -41,6 +42,17 @@ struct thread_entry {
 	lua_thread_error_t error_callback;
 	struct rspamd_task *task;
 	struct rspamd_config *cfg;
+	/* Pool this entry was taken from; valid while the entry is not FREE */
+	struct lua_thread_pool *pool;
+	/*
+	 * Symcache item this coroutine works for (optional). When it is set, every
+	 * resume makes it the current item of the task again, so the code that runs
+	 * after a yield accounts its async requests to the right symbol whatever
+	 * library has resumed it.
+	 */
+	struct rspamd_symcache_dynamic_item *item;
+	/* Entry that was running when this one was acquired; consumed by lua_thread_call() */
+	struct thread_entry *prev_running;
 
 	/*
 	 * Bumped on every acquire and release. Async libraries snapshot it at the
@@ -93,6 +105,10 @@ void lua_thread_pool_free(struct lua_thread_pool *pool);
  *
  * If the code performed YIELD, the thread is still running and it's live should be controlled by the callee
  *
+ * The entry is bound to the lifetime of the task: if the task is destroyed while
+ * the thread is still suspended, the thread is terminated and any later attempt
+ * to resume it is refused.
+ *
  * @param task
  * @return
  */
@@ -133,6 +149,32 @@ lua_thread_pool_get_running_entry_full(struct lua_thread_pool *pool,
 
 #define lua_thread_pool_get_running_entry(pool) \
 	lua_thread_pool_get_running_entry_full(pool, G_STRLOC)
+
+/**
+ * Currently running thread, but only if `L` is that very thread and it is
+ * allowed to yield right now. Every API that suspends its caller must take the
+ * entry from here (and not from lua_thread_pool_get_running_entry()) before it
+ * starts anything asynchronous, and raise a Lua error on NULL. NULL means that
+ * the caller is not a pooled coroutine at all (the main state, a plain
+ * callback, a coroutine created by the Lua code itself), or that it is one but
+ * a C function between it and the caller makes a yield impossible. A thread
+ * that runs a callback (lua_thread_pool_prepare_callback()) and a thread whose
+ * task has been destroyed while it runs are never returned either.
+ *
+ * Lua 5.1/5.2 and LuaJIT 2.0 cannot detect a C function on the way (they have
+ * no lua_isyieldable()): everything else is checked there as well.
+ *
+ * @param pool
+ * @param L state the calling C function runs on
+ * @return entry to yield or NULL
+ */
+struct thread_entry *
+lua_thread_pool_get_yieldable_entry_full(struct lua_thread_pool *pool,
+										 lua_State *L,
+										 const char *loc);
+
+#define lua_thread_pool_get_yieldable_entry(pool, L) \
+	lua_thread_pool_get_yieldable_entry_full(pool, L, G_STRLOC)
 
 /**
  * Updates currently running thread
@@ -185,7 +227,9 @@ void lua_thread_call_full(struct thread_entry *thread_entry,
 	lua_thread_call_full(thread_entry, narg, G_STRLOC)
 
 /**
- * Yields thread. should be only called in return statement
+ * Yields thread. should be only called in return statement.
+ * The entry must come from lua_thread_pool_get_yieldable_entry(); if the thread
+ * cannot yield after all, a Lua error is raised and the entry stays running.
  * @param thread_entry
  * @param nresults
  * @return
