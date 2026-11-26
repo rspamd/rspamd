@@ -449,9 +449,21 @@ void rspamd_config_free(struct rspamd_config *cfg)
 		rspamd_monitored_ctx_destroy(cfg->monitored_ctx);
 	}
 
+	/*
+	 * The Lua state goes before the redis pool. A Lua object that holds a
+	 * redis connection gives it back to the pool when lua_close() collects
+	 * it; the pool frees every connection it still has, so it must outlive
+	 * such objects. A command that is still pending keeps its context alive
+	 * past lua_close(), and destroying the pool runs its callback: the
+	 * pointers are cleared, so that the callback finds neither the freed
+	 * thread pool nor the closed state of this config.
+	 */
 	if (RSPAMD_LUA_CFG_STATE(cfg) && cfg->own_lua_state) {
 		lua_thread_pool_free((struct lua_thread_pool *) cfg->lua_thread_pool);
+		/* The finalisers run by lua_close() must not use the freed pool */
+		cfg->lua_thread_pool = nullptr;
 		rspamd_lua_close(RSPAMD_LUA_CFG_STATE(cfg));
+		cfg->lua_state = nullptr;
 	}
 
 	if (cfg->redis_pool) {
