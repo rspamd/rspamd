@@ -5,7 +5,9 @@ Documentation   APIs that suspend their caller (sync DNS, HTTP, TCP, redis,
 ...             their task, tasks that are finishing, async sleep callbacks,
 ...             replies that come while nobody waits for them, callbacks
 ...             registered by a coroutine that is suspended or gone, symbol
-...             results, periodics.
+...             results, periodics, DNS replies that come as the last event of
+...             their task, Lua control handlers, finish scripts. The last
+...             test stops rspamd.
 ...             A scan runs the symbol of lua/coroutines.lua named by its
 ...             Coro-Test header. Every test checks that the only scanner worker
 ...             is still the same process (a crashed worker is restarted by the
@@ -28,6 +30,8 @@ ${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${DNS_ANSWER}           127.0.0.2
 # Pid of the scanner worker, taken before the first test
 ${WORKER_PID}           ${NONE}
+# The status of a failed control command, -1 in an unsigned field of the reply
+${CONTROL_FAILED}       4294967295
 
 *** Test Cases ***
 Two tasks in one coroutine symbol at once
@@ -336,6 +340,9 @@ Sync HTTP request cancelled by the task timeout
   Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
   Expect Symbol With Exact Options  CORO_HTTP_CANCELLED_TEST  first=200
   ...  second=session is terminating:nil  third=session is terminating:nil
+  # The postfilter that depends on the symbol runs: the cleanup has finished it
+  Expect Symbol With Exact Options  CORO_HTTP_CANCELLED_DEPENDENT  dependency_done=true
+  Log Since Test Start Should Not Contain  probably a leaked async counter
   Log Since Test Start Should Contain  cancelled coro http: resumed: session is terminating
   # Past the moment the second reply comes (8s)
   Sleep  3s
@@ -444,6 +451,217 @@ Periodic suspended for longer than its interval
   ...  max_active=1
   Coroutines Still Work
 
+DNS reply as the last event, a request fails in its callback
+  [Documentation]  A plain symbol makes an HTTP request over TLS to a closed
+  ...              port of a name: the DNS callback, run for the only event of
+  ...              the task, connects, and the connection fails there. The task
+  ...              is finished once, after the callback
+  Scan File  ${MESSAGE}  Coro-Test=CORO_DNS_LAST_EVENT_TEST
+  Expect Symbol With Exact Options  CORO_DNS_LAST_EVENT  calls=1  error=true
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  Coroutines Still Work
+
+Coroutine resumed by the DNS reply of the last event
+  [Documentation]  The coroutine waits for a sync DNS request, the only event
+  ...              of the task. Resumed by the reply, it makes a request that
+  ...              fails inside request() on Linux, which adds an event and
+  ...              removes it: the task is not finished under the coroutine,
+  ...              whose result is in the reply
+  Scan File  ${MESSAGE}  Coro-Test=CORO_DNS_LAST_EVENT_CORO_TEST
+  ${linux} =  Evaluate  sys.platform.startswith('linux')  modules=sys
+  IF  ${linux}
+    Expect Symbol With Exact Options  CORO_DNS_LAST_EVENT_CORO_TEST  dns=${DNS_ANSWER}
+    ...  http=once  inline=true
+  ELSE
+    Expect Symbol With Option  CORO_DNS_LAST_EVENT_CORO_TEST  dns=${DNS_ANSWER}
+  END
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  Coroutines Still Work
+
+Sync DNS requests in a row
+  [Documentation]  Bound to the task and to the session of the task only, A
+  ...              and PTR, and arguments that are refused
+  Scan File  ${MESSAGE}  Coro-Test=CORO_DNS_SEQUENCE_TEST
+  Expect Symbol With Exact Options  CORO_DNS_SEQUENCE_TEST  task1=${DNS_ANSWER}
+  ...  task2=${DNS_ANSWER}  task3=${DNS_ANSWER}  session=${DNS_ANSWER}  ptr=coro.resolveme
+  ...  session_ptr=coro.resolveme  bad_type=error:bad type  bad_option=error:bad type
+  ...  task_last=${DNS_ANSWER}
+  Coroutines Still Work
+
+DNS callback that starts another request
+  Scan File  ${MESSAGE}  Coro-Test=CORO_DNS_NESTED_CB_TEST
+  Expect Symbol With Exact Options  CORO_DNS_NESTED_CB_TEST  first=${DNS_ANSWER}
+  ...  nested=${DNS_ANSWER}
+  Expect Symbol With Exact Options  CORO_DNS_NESTED_DEPENDENT  dependency_done=true
+  Coroutines Still Work
+
+Numbers returned by a symbol
+  [Documentation]  A finite number that is not zero is the weight (the
+  ...              symbols have score 1); zero, NaN, infinity and a string
+  ...              insert nothing. Plain and coroutine symbols agree
+  Scan File  ${MESSAGE}  Coro-Test=CORO_WEIGHT_TEST
+  FOR  ${suffix}  IN  ${EMPTY}  _CORO
+    Expect Symbol With Score And Exact Options  CORO_WEIGHT_HALF${suffix}  0.5  half
+    Expect Symbol With Score  CORO_WEIGHT_FRACTION${suffix}  2.7
+    Expect Symbol With Score And Exact Options  CORO_WEIGHT_OVERRIDE${suffix}  3  override
+    Do Not Expect Symbol  CORO_WEIGHT_ZERO${suffix}
+    Do Not Expect Symbol  CORO_WEIGHT_NAN${suffix}
+    Do Not Expect Symbol  CORO_WEIGHT_INF${suffix}
+    Do Not Expect Symbol  CORO_WEIGHT_STRING${suffix}
+    Log Since Test Start Should Contain
+    ...  invalid return value for CORO_WEIGHT_NAN${suffix}: nan, ignored
+    Log Since Test Start Should Contain
+    ...  invalid return value for CORO_WEIGHT_INF${suffix}: inf, ignored
+    Log Since Test Start Should Contain
+    ...  invalid return value for CORO_WEIGHT_STRING${suffix}: string
+  END
+  Coroutines Still Work
+
+Periodic that fails keeps its interval
+  [Documentation]  A failed run is planned again with the last interval; a
+  ...              periodic with no interval stops on its error; returning
+  ...              false stops a periodic
+  Wait Until Keyword Succeeds  30x  0.5s  Periodic Errors Are Over
+  Expect Symbol With Exact Options  CORO_PERIODIC_ERRORS  state=done  runs=4  zero=1  num=3
+  # No more runs
+  Sleep  1s
+  Scan File  ${MESSAGE}  Coro-Test=CORO_PERIODIC_ERROR_TEST
+  Expect Symbol With Exact Options  CORO_PERIODIC_ERRORS  state=done  runs=4  zero=1  num=3
+  Log Since Test Start Should Contain Times
+  ...  it is planned again with its last interval, 0.1  3
+  Log Since Test Start Should Contain Times
+  ...  it is stopped as it has no interval to be planned with  1
+  # Registered with no Lua caller
+  Log Since Test Start Should Contain  call to periodic script (registered at unknown) failed
+  Coroutines Still Work
+
+Lua control handler that fails, then works
+  [Documentation]  The worker answers the command whose handler has failed
+  ...              at once, with status -1, and the handler serves the next one
+  Set Control Mode  fail
+  ${status} =  Normal Worker Control Status  reresolve
+  Should Be Equal As Integers  ${status}  ${CONTROL_FAILED}
+  Log Since Test Start Should Contain In Order  coro control: call 1 of reresolve
+  ...  control handler fails on purpose
+  ${status} =  Normal Worker Control Status  reresolve
+  Should Be Equal As Integers  ${status}  0
+  Log Since Test Start Should Contain  coro control: call 2 of reresolve
+  Log Since Test Start Should Not Contain  unknown request id
+  Coroutines Still Work
+
+Two Lua control commands at once
+  [Documentation]  Each one waits for a request of its own (4s) and gets the
+  ...              reply of the worker
+  Set Control Mode  http
+  ${first} =  Start Process  ${RSPAMADM}  control  -j  -t  15
+  ...  -s  ${RSPAMD_TMPDIR}/rspamd.sock  reresolve
+  ${second} =  Start Process  ${RSPAMADM}  control  -j  -t  15
+  ...  -s  ${RSPAMD_TMPDIR}/rspamd.sock  reresolve
+  FOR  ${process}  IN  ${first}  ${second}
+    ${result} =  Wait For Process  ${process}  timeout=30s  on_timeout=kill
+    ${status} =  Control Reply Status Of Normal Worker  ${result}
+    Should Be Equal As Integers  ${status}  0
+  END
+  Log Since Test Start Should Contain  coro control: call 1: request done: 200
+  Log Since Test Start Should Contain  coro control: call 2: request done: 200
+  Log Since Test Start Should Not Contain  unknown request id
+  Coroutines Still Work
+
+DKIM verify callback uses its task argument
+  Scan File  ${MESSAGE}  Coro-Test=CORO_DKIM_VERIFY_TASK_TEST
+  Expect Symbol With Exact Options  CORO_DKIM_VERIFY_TASK  verified=false
+  ...  domain=coro-dkim.test  same_task=true
+  Coroutines Still Work
+
+Map callbacks set twice
+  [Documentation]  map:set_callback() and map:on_load() called twice at
+  ...              config load: the maps are read with the second callbacks,
+  ...              and the first ones are garbage collected
+  Scan File  ${MESSAGE}  Coro-Test=CORO_MAP_REPLACED_TEST
+  Expect Symbol With Exact Options  CORO_MAP_REPLACED  set_callback=released
+  ...  on_load=released
+  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Rspamd Log Should Contain  coro replaced map: the second on_load has run, key=true
+  Rspamd Log Should Contain  coro replaced map: the second callback has run
+  Rspamd Log Should Not Contain  coro replaced map: a replaced
+  Coroutines Still Work
+
+HTTP request with arguments that are not a table
+  Scan File  ${MESSAGE}  Coro-Test=CORO_HTTP_ARGS_TEST
+  Expect Symbol With Exact Options  CORO_HTTP_ARGS  positional=error:table expected
+  ...  string=error:table expected
+  Coroutines Still Work
+
+Sync HTTP request that fails while it is started
+  [Documentation]  TLS to a closed port: on Linux the connection fails inside
+  ...              request(), which returns the error of the connection
+  Scan File  ${MESSAGE}  Coro-Test=CORO_HTTP_START_ERROR_TEST
+  Expect Symbol  CORO_HTTP_START_ERROR_TEST
+  ${linux} =  Evaluate  sys.platform.startswith('linux')  modules=sys
+  IF  ${linux}
+    Expect Symbol With Exact Options  CORO_HTTP_START_ERROR_TEST  err=ssl connection error
+    ...  resp=nil
+  END
+  Coroutines Still Work
+
+Sync HTTP request to an upstream that fails while it is started
+  [Documentation]  The upstream is charged with one failure
+  Scan File  ${MESSAGE}  Coro-Test=CORO_HTTP_UPSTREAM_FAIL_TEST
+  Expect Symbol With Option  CORO_HTTP_UPSTREAM_FAIL_TEST  failures=1
+  ${linux} =  Evaluate  sys.platform.startswith('linux')  modules=sys
+  IF  ${linux}
+    Expect Symbol With Exact Options  CORO_HTTP_UPSTREAM_FAIL_TEST  err=ssl connection error
+    ...  failures=1
+  END
+  Coroutines Still Work
+
+HTTP request of a plain symbol cancelled by the task timeout
+  [Documentation]  The callback of the first request (4s) starts a second
+  ...              one, in flight at the task timeout (6s). The session cleanup
+  ...              finishes the symbol: the postfilter that depends on it runs
+  Scan File  ${MESSAGE}  Coro-Test=CORO_HTTP_CANCELLED_PLAIN_TEST
+  Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
+  Expect Symbol With Exact Options  CORO_HTTP_CANCELLED_PLAIN_TEST  first=200
+  Expect Symbol With Exact Options  CORO_HTTP_CANCELLED_PLAIN_DEPENDENT  dependency_done=true
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  Coroutines Still Work
+
+UDP request with a negative retransmit count
+  Scan File  ${MESSAGE}  Coro-Test=CORO_UDP_RETRANSMITS_TEST
+  Expect Symbol With Exact Options  CORO_UDP_RETRANSMITS_TEST  udp=false:read timeout
+  ...  fast=true
+  Coroutines Still Work
+
+Scanner worker terminates
+  [Documentation]  The last test: it stops rspamd, so it cannot check that
+  ...              coroutines still work. A coroutine waits in a sync redis
+  ...              exec() (a BLPOP of 30s) when the worker terminates. The
+  ...              finish script of the worker, resumed by the DNS reply of the
+  ...              last event of its task, removes another event of the task
+  Scan File  ${MESSAGE}  Coro-Test=CORO_SHUTDOWN_PARK_TEST
+  Expect Symbol With Exact Options  CORO_SHUTDOWN_PARK  periodic=added
+  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Log Since Test Start Should Contain  coro shutdown: waiting in exec()
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  1
+  # The suite teardown cannot do it any more
+  Check Controller Errors
+  Set Suite Variable  ${CONTROLLER_ERRORS}  False
+  # To the main process only, which terminates each worker once
+  Send Signal To Process  SIGTERM  ${RSPAMD_PROCESS}
+  ${result} =  Wait For Process  ${RSPAMD_PROCESS}  timeout=60s  on_timeout=kill
+  Log  ${result.rc}
+  ${linux} =  Evaluate  sys.platform.startswith('linux')  modules=sys
+  IF  ${linux}
+    Log Since Test Start Should Contain
+    ...  coro finish script: dns=${DNS_ANSWER}, http=once, dns_again=${DNS_ANSWER}
+  ELSE
+    Log Since Test Start Should Contain  dns_again=${DNS_ANSWER}
+  END
+  Log Since Test Start Should Contain In Order  coro finish script:
+  ...  terminated normally  main: terminating...
+  No Crash Since Test Start
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+
 *** Keywords ***
 Coroutines Setup
   Run Dummy Http
@@ -534,6 +752,53 @@ Redis Blocked Clients Should Be
 Periodic Runs Are Over
   Scan File  ${MESSAGE}  Coro-Test=CORO_PERIODIC_TEST
   Expect Symbol With Option  CORO_PERIODIC  state=done
+
+Periodic Errors Are Over
+  Scan File  ${MESSAGE}  Coro-Test=CORO_PERIODIC_ERROR_TEST
+  Expect Symbol With Option  CORO_PERIODIC_ERRORS  state=done
+
+Log Since Test Start Should Contain Times
+  [Arguments]  ${expected}  ${times}
+  ${text} =  Log Since Test Start
+  ${count} =  Evaluate  $text.count($expected)
+  Should Be Equal As Integers  ${count}  ${times}
+  ...  msg=rspamd.log has "${expected}" ${count} times since the test has started, not ${times}
+  ...  values=False
+
+Rspamd Log Should Not Contain
+  [Documentation]  Anywhere in the log, also before the test has started
+  [Arguments]  ${unexpected}
+  ${text} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
+  Should Not Contain  ${text}  ${unexpected}  msg=rspamd.log has "${unexpected}"  values=False
+
+Set Control Mode
+  [Documentation]  What the Lua control handler does with the next commands
+  [Arguments]  ${mode}
+  Scan File  ${MESSAGE}  Coro-Test=CORO_CONTROL_MODE_TEST  Coro-Mode=${mode}
+  Expect Symbol With Exact Options  CORO_CONTROL_MODE  mode=${mode}
+
+Control Reply Status Of Normal Worker
+  [Documentation]  The status in the reply of the scanner worker to a control
+  ...              command run by rspamadm control -j
+  [Arguments]  ${result}
+  Log  ${result.stdout}
+  Log  ${result.stderr}
+  Should Be Equal As Integers  ${result.rc}  0  msg=rspamadm control: ${result.stderr}
+  Should Not Be Empty  ${result.stdout}  msg=No reply to rspamadm control: ${result.stderr}
+  ${reply} =  Evaluate  json.loads($result.stdout)  modules=json
+  ${statuses} =  Evaluate
+  ...  [w.get('status') for w in $reply['workers'].values() if w.get('type') == 'normal']
+  Length Should Be  ${statuses}  1  msg=No reply of the normal worker: ${result.stdout}
+  RETURN  ${statuses}[0]
+
+Normal Worker Control Status
+  [Documentation]  Runs a control command, returns the status in the reply of
+  ...              the scanner worker
+  [Arguments]  ${command}
+  ${result} =  Run Process  ${RSPAMADM}  control  -j  -t  15
+  ...  -s  ${RSPAMD_TMPDIR}/rspamd.sock  ${command}  timeout=30s  on_timeout=kill
+  ${status} =  Control Reply Status Of Normal Worker  ${result}
+  RETURN  ${status}
 
 Expect Async Callback Results
   Expect Symbol With Exact Options  CORO_TIMER_CB  sleep=error:coroutine

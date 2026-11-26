@@ -25,6 +25,7 @@ local rspamd_spf = require "rspamd_spf"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_text = require "rspamd_text"
 local rspamd_udp = require "rspamd_udp"
+local rspamd_upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 
@@ -1436,3 +1437,595 @@ register_test_symbol({
         'max_active=' .. tostring(st.max_active))
   end,
 })
+
+--[[ DNS replies that come when their request is the only event of the task.
+--   The callback gets the reply while the request still holds the session, so
+--   what the callback (or the coroutine it resumes) does to other events does
+--   not finish the task under it. Here that is an HTTP request over TLS to a
+--   closed port, which fails inside the call on Linux: its event is added and
+--   removed again right away. ]]
+register_test_symbol({
+  name = 'CORO_DNS_LAST_EVENT_TEST',
+  score = 1.0,
+  callback = function(task)
+    local calls = 0
+
+    -- The name is resolved first: the connection is made by the DNS callback
+    rspamd_http.request({
+      task = task,
+      url = string.format('https://%s:1/request', dns_name),
+      timeout = 1,
+      callback = function(err)
+        calls = calls + 1
+        task:insert_result('CORO_DNS_LAST_EVENT', 1.0, 'calls=' .. tostring(calls),
+            'error=' .. tostring(err ~= nil))
+      end,
+    })
+  end,
+})
+
+register_test_symbol({
+  name = 'CORO_DNS_LAST_EVENT_CORO_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local dns_opt = dns_outcome('dns', sync_dns(task))
+    -- Resumed by the DNS reply
+    local calls = 0
+    local ret = rspamd_http.request({
+      task = task,
+      url = 'https://127.0.0.1:1/request',
+      timeout = 1,
+      callback = function()
+        calls = calls + 1
+      end,
+    })
+    -- Whether the request has failed inside request()
+    local inline = calls > 0
+
+    -- Elsewhere the connection fails later
+    sleep_until(task, function()
+      return calls > 0 or ret == false
+    end, 0.05, 40)
+
+    return true, 1.0, dns_opt, 'http=' .. http_callback_outcome(ret, calls),
+        'inline=' .. tostring(inline)
+  end,
+})
+
+--[[ Sync DNS requests one after another in one coroutine: bound to the
+--   task, to the session of the task only (the request data is not taken from
+--   the config pool then), PTR requests of both kinds (answered by a fake
+--   record), arguments refused before a request is made ]]
+local dns_ptr_name = '127.0.0.2'
+
+register_test_symbol({
+  name = 'CORO_DNS_SEQUENCE_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local opts = {}
+
+    for i = 1, 3 do
+      opts[#opts + 1] = dns_outcome('task' .. tostring(i), sync_dns(task))
+    end
+
+    local function session_request(rtype, name)
+      return rspamd_dns.request({
+        config = rspamd_config,
+        session = task:get_session(),
+        type = rtype,
+        name = name,
+      })
+    end
+
+    opts[#opts + 1] = dns_outcome('session', session_request('a', dns_name))
+    opts[#opts + 1] = dns_outcome('ptr', rspamd_dns.request({
+      task = task,
+      type = 'ptr',
+      name = dns_ptr_name,
+    }))
+    opts[#opts + 1] = dns_outcome('session_ptr', session_request('ptr', dns_ptr_name))
+
+    local ok, err = pcall(rspamd_dns.request, { task = task, name = dns_name, type = {} })
+    opts[#opts + 1] = error_outcome('bad_type', ok, err, 'bad type for key: type', 'bad type')
+
+    -- The callback is taken before the option is found to be wrong
+    local resolver = task:get_resolver()
+    ok, err = pcall(resolver.resolve_a, resolver, {
+      task = task,
+      name = dns_name,
+      callback = function()
+      end,
+      option = {},
+    })
+    opts[#opts + 1] = error_outcome('bad_option', ok, err, 'bad type for key: option', 'bad type')
+
+    opts[#opts + 1] = dns_outcome('task_last', sync_dns(task))
+
+    return true, 1.0, unpack_fn(opts)
+  end,
+})
+
+--[[ The callback of an async DNS request starts another request: the symbol
+--   is pending until the callback of that one has inserted the result ]]
+local function resolver_outcome(results, err)
+  if err then
+    return 'error:' .. tostring(err)
+  end
+
+  return tostring(results and results[1])
+end
+
+register_test_symbol({
+  name = 'CORO_DNS_NESTED_CB_TEST',
+  score = 1.0,
+  callback = function(task)
+    local resolver = task:get_resolver()
+
+    resolver:resolve_a({
+      task = task,
+      name = dns_name,
+      callback = function(_, _, results, err)
+        local first = resolver_outcome(results, err)
+
+        resolver:resolve_a({
+          task = task,
+          name = dns_name,
+          callback = function(_, _, nested_results, nested_err)
+            task:insert_result('CORO_DNS_NESTED_CB_TEST', 1.0, 'first=' .. first,
+                'nested=' .. resolver_outcome(nested_results, nested_err))
+          end,
+        })
+      end,
+    })
+  end,
+})
+
+register_test_symbol({
+  name = 'CORO_DNS_NESTED_DEPENDENT',
+  test = 'CORO_DNS_NESTED_CB_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_DNS_NESTED_DEPENDENT', 1.0,
+        'dependency_done=' .. tostring(task:has_symbol('CORO_DNS_NESTED_CB_TEST')))
+  end,
+})
+
+rspamd_config:register_dependency('CORO_DNS_NESTED_DEPENDENT', 'CORO_DNS_NESTED_CB_TEST')
+
+--[[ A number as the first value returned by a symbol is its weight when it
+--   is finite and not zero (a number after it is the weight then); zero, NaN,
+--   infinity and other types insert nothing. A plain symbol and a coroutine
+--   symbol (resumed once before it returns) agree. ]]
+local weight_returns = {
+  { 'HALF', function()
+    return 0.5, 'half'
+  end },
+  { 'FRACTION', function()
+    return 2.7
+  end },
+  { 'OVERRIDE', function()
+    return 0.5, 3, 'override'
+  end },
+  { 'ZERO', function()
+    return 0
+  end },
+  { 'NAN', function()
+    return 0 / 0
+  end },
+  { 'INF', function()
+    return math.huge
+  end },
+  { 'STRING', function()
+    return '1'
+  end },
+}
+
+for _, def in ipairs(weight_returns) do
+  local name, results = def[1], def[2]
+
+  register_test_symbol({
+    name = 'CORO_WEIGHT_' .. name,
+    test = 'CORO_WEIGHT_TEST',
+    score = 1.0,
+    callback = function()
+      return results()
+    end,
+  })
+
+  register_test_symbol({
+    name = 'CORO_WEIGHT_' .. name .. '_CORO',
+    test = 'CORO_WEIGHT_TEST',
+    score = 1.0,
+    flags = 'coro',
+    callback = function(task)
+      task:get_ev_base():sleep(0.01)
+      return results()
+    end,
+  })
+end
+
+--[[ Periodics whose runs fail: a failed run is planned again with the last
+--   interval of the periodic (the registered one or the number returned
+--   last); one that has no interval (registered with 0, no number returned
+--   yet) stops. Returning false stops a periodic. The first scan of the test
+--   starts them, the scans report their counters. ]]
+local periodic_errors = { runs = 0, zero = 0, num = 0 }
+local periodic_errors_added = false
+
+register_test_symbol({
+  name = 'CORO_PERIODIC_ERROR_TEST',
+  score = 1.0,
+  callback = function(task)
+    local pe = periodic_errors
+
+    if not periodic_errors_added then
+      local ev_base = task:get_ev_base()
+      periodic_errors_added = true
+
+      -- Fails on its first two runs, stops after the fourth one
+      rspamd_config:add_periodic(ev_base, 0.1, function()
+        pe.runs = pe.runs + 1
+
+        if pe.runs <= 2 then
+          error('periodic fails on purpose, run ' .. tostring(pe.runs))
+        end
+
+        return pe.runs < 4
+      end)
+
+      -- Registered by a coroutine whose body is add_periodic() itself: no Lua
+      -- function calls it, so its position is unknown
+      coroutine.wrap(rspamd_config.add_periodic)(rspamd_config, ev_base, 0, function()
+        pe.zero = pe.zero + 1
+        error('periodic without an interval fails on purpose')
+      end)
+
+      -- The first run gives it an interval, the second one fails
+      rspamd_config:add_periodic(ev_base, 0, function()
+        pe.num = pe.num + 1
+
+        if pe.num == 1 then
+          return 0.1
+        elseif pe.num == 2 then
+          error('periodic with a returned interval fails on purpose')
+        end
+
+        return false
+      end)
+    end
+
+    local done = pe.runs >= 4 and pe.zero >= 1 and pe.num >= 3
+
+    task:insert_result('CORO_PERIODIC_ERRORS', 1.0, 'state=' .. (done and 'done' or 'running'),
+        'runs=' .. tostring(pe.runs), 'zero=' .. tostring(pe.zero), 'num=' .. tostring(pe.num))
+  end,
+})
+
+--[[ A Lua handler of a control command (`rspamadm control reresolve`) in the
+--   scanner worker. A scan sets what the next calls do (Coro-Mode header) and
+--   numbers them from 1: 'fail' makes the next call fail; 'http' makes every
+--   call start a request (4s) bound to the session of the command, which is
+--   answered when the request is over. ]]
+local control_state = { mode = 'none', calls = 0 }
+
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  if worker:get_type() ~= 'normal' then
+    return
+  end
+
+  worker:add_control_handler(cfg, ev_base, 'reresolve', function(session, cmd)
+    control_state.calls = control_state.calls + 1
+    local call = control_state.calls
+
+    rspamd_logger.infox(cfg, 'coro control: call %s of %s, mode %s', call, cmd,
+        control_state.mode)
+
+    if control_state.mode == 'fail' then
+      control_state.mode = 'none'
+      error('control handler fails on purpose')
+    elseif control_state.mode == 'http' then
+      rspamd_http.request({
+        url = http_slow_url,
+        config = cfg,
+        ev_base = ev_base,
+        session = session,
+        timeout = 10,
+        callback = function(err, code)
+          rspamd_logger.infox(cfg, 'coro control: call %s: request done: %s', call,
+              err or code)
+        end,
+      })
+    end
+  end)
+end)
+
+register_test_symbol({
+  name = 'CORO_CONTROL_MODE_TEST',
+  score = 1.0,
+  callback = function(task)
+    control_state.mode = header_value(task, 'Coro-Mode', 'none')
+    control_state.calls = 0
+    task:insert_result('CORO_CONTROL_MODE', 1.0, 'mode=' .. control_state.mode)
+  end,
+})
+
+--[[ The task given to the callback of a DKIM verification is a task object:
+--   its methods work ]]
+register_test_symbol({
+  name = 'CORO_DKIM_VERIFY_TASK_TEST',
+  score = 1.0,
+  callback = function(task)
+    local dkim_api = rspamd_plugins and rspamd_plugins.dkim
+
+    if not dkim_api then
+      task:insert_result('CORO_DKIM_VERIFY_TASK', 1.0, 'dkim=no dkim plugin')
+      return
+    end
+
+    local verify_ok, verify_err = dkim_api.verify(task, dkim_signature,
+        function(cb_task, ok, _, domain)
+          cb_task:insert_result('CORO_DKIM_VERIFY_TASK', 1.0, 'verified=' .. tostring(ok),
+              'domain=' .. tostring(domain),
+              'same_task=' .. tostring(cb_task:get_queue_id() == task:get_queue_id()))
+        end)
+
+    if not verify_ok then
+      task:insert_result('CORO_DKIM_VERIFY_TASK', 1.0, 'verify=' .. tostring(verify_err))
+    end
+  end,
+})
+
+--[[ map:set_callback() and map:on_load() called twice at config load: the
+--   maps are read with the second callbacks, and the replaced callbacks are
+--   released (the weak table below loses them once they are collected) ]]
+local replaced_map_callbacks = setmetatable({}, { __mode = 'k' })
+
+do
+  local cb_map = rspamd_config:add_map({
+    type = 'callback',
+    url = coro_map_file,
+    description = 'coroutines test: callback map, callback set twice',
+    callback = function()
+      rspamd_logger.infox(rspamd_config, 'coro replaced map: a replaced callback has run')
+    end,
+  })
+
+  if cb_map then
+    local replaced = function()
+      rspamd_logger.infox(rspamd_config, 'coro replaced map: a replaced callback has run')
+    end
+    replaced_map_callbacks[replaced] = 'set_callback'
+    cb_map:set_callback(replaced)
+    cb_map:set_callback(function(data)
+      rspamd_logger.infox(rspamd_config, 'coro replaced map: the second callback has run, %s bytes',
+          #tostring(data))
+    end)
+  end
+
+  local set_map = rspamd_config:add_map({
+    type = 'set',
+    url = coro_map_file,
+    description = 'coroutines test: set map, on_load set twice',
+  })
+
+  if set_map then
+    local replaced = function()
+      rspamd_logger.infox(rspamd_config, 'coro replaced map: a replaced on_load has run')
+    end
+    replaced_map_callbacks[replaced] = 'on_load'
+    set_map:on_load(replaced)
+    set_map:on_load(function()
+      rspamd_logger.infox(rspamd_config, 'coro replaced map: the second on_load has run, key=%s',
+          set_map:get_key('coro.example.com'))
+    end)
+  end
+end
+
+register_test_symbol({
+  name = 'CORO_MAP_REPLACED_TEST',
+  score = 1.0,
+  callback = function(task)
+    collectgarbage('collect')
+    collectgarbage('collect')
+
+    local kept = {}
+
+    for _, kind in pairs(replaced_map_callbacks) do
+      kept[kind] = true
+    end
+
+    task:insert_result('CORO_MAP_REPLACED', 1.0,
+        'set_callback=' .. (kept.set_callback and 'kept' or 'released'),
+        'on_load=' .. (kept.on_load and 'kept' or 'released'))
+  end,
+})
+
+--[[ rspamd_http.request() takes one table: other arguments are refused ]]
+register_test_symbol({
+  name = 'CORO_HTTP_ARGS_TEST',
+  score = 1.0,
+  callback = function(task)
+    local ok_pos, err_pos = pcall(rspamd_http.request, http_url, function()
+    end)
+    local ok_str, err_str = pcall(rspamd_http.request, http_url)
+
+    task:insert_result('CORO_HTTP_ARGS', 1.0,
+        error_outcome('positional', ok_pos, err_pos, 'requires a table argument', 'table expected'),
+        error_outcome('string', ok_str, err_str, 'requires a table argument', 'table expected'))
+  end,
+})
+
+--[[ A sync request whose connection fails while request() starts it (TLS to
+--   a closed port on Linux): request() returns the error of the connection.
+--   The option is the part of the error before the first colon (the rest has
+--   the details of the TLS library). ]]
+register_test_symbol({
+  name = 'CORO_HTTP_START_ERROR_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local err, resp = rspamd_http.request({
+      task = task,
+      url = 'https://127.0.0.1:1/request',
+      timeout = 1,
+    })
+
+    return true, 1.0, 'err=' .. (tostring(err):match('^[^:]*')), 'resp=' .. tostring(resp)
+  end,
+})
+
+--[[ The same request to an upstream: the failed connection counts as one
+--   failure of the upstream ]]
+register_test_symbol({
+  name = 'CORO_HTTP_UPSTREAM_FAIL_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local ups = rspamd_upstream_list.create(rspamd_config, '127.0.0.1:1', 1)
+    local failures = 0
+
+    ups:add_watcher('failure', function()
+      failures = failures + 1
+    end)
+
+    local err = rspamd_http.request({
+      task = task,
+      url = 'https://127.0.0.1:1/request',
+      upstream = ups:get_upstream_round_robin(),
+      timeout = 1,
+    })
+    -- A failure reported later would come right after
+    task:get_ev_base():sleep(0.1)
+
+    return true, 1.0, 'err=' .. (tostring(err):match('^[^:]*')),
+        'failures=' .. tostring(failures)
+  end,
+})
+
+--[[ The same as CORO_HTTP_CANCELLED_TEST with callbacks in a plain symbol:
+--   the callback of the first request (4s) starts a second one, which is in
+--   flight at the task timeout (6s) ]]
+register_test_symbol({
+  name = 'CORO_HTTP_CANCELLED_PLAIN_TEST',
+  score = 1.0,
+  callback = function(task)
+    rspamd_http.request({
+      task = task,
+      url = http_slow_url,
+      timeout = 10,
+      callback = function(err, code)
+        task:insert_result('CORO_HTTP_CANCELLED_PLAIN_TEST', 1.0,
+            'first=' .. (err and ('error:' .. tostring(err)) or tostring(code)))
+        rspamd_http.request({
+          task = task,
+          url = http_slow_url,
+          timeout = 10,
+          callback = function(second_err)
+            rspamd_logger.infox(rspamd_config, 'cancelled plain http: second callback: %s',
+                second_err)
+          end,
+        })
+      end,
+    })
+  end,
+})
+
+-- A postfilter that depends on a symbol whose request is cancelled by the
+-- task timeout: the session cleanup finishes that symbol, so this one runs
+local function register_dependent_postfilter(name, test)
+  register_test_symbol({
+    name = name,
+    test = test,
+    type = 'postfilter',
+    score = 1.0,
+    callback = function(task)
+      task:insert_result(name, 1.0, 'dependency_done=' .. tostring(task:has_symbol(test)))
+    end,
+  })
+
+  rspamd_config:register_dependency(name, test)
+end
+
+register_dependent_postfilter('CORO_HTTP_CANCELLED_DEPENDENT', 'CORO_HTTP_CANCELLED_TEST')
+register_dependent_postfilter('CORO_HTTP_CANCELLED_PLAIN_DEPENDENT', 'CORO_HTTP_CANCELLED_PLAIN_TEST')
+
+--[[ A UDP request with a negative retransmit count: it is not retransmitted,
+--   the callback gets the read timeout (0.2s) ]]
+register_test_symbol({
+  name = 'CORO_UDP_RETRANSMITS_TEST',
+  score = 1.0,
+  callback = function(task)
+    local started = rspamd_util.get_time()
+
+    rspamd_udp.sendto({
+      task = task,
+      host = '127.0.0.1',
+      port = udp_closed_port,
+      data = 'retransmits',
+      timeout = 0.2,
+      retransmits = -1,
+      callback = function(ok, data)
+        task:insert_result('CORO_UDP_RETRANSMITS_TEST', 1.0, 'udp=' .. ok_outcome(ok, data),
+            'fast=' .. tostring(rspamd_util.get_time() - started < 2))
+      end,
+    })
+  end,
+})
+
+--[[ A coroutine that waits in a sync redis exec() (a BLPOP of 30s) while the
+--   scanner worker terminates: the worker frees its Lua state and its redis
+--   pool with the command in flight. A periodic started by a scan, so that no
+--   task holds it. ]]
+register_test_symbol({
+  name = 'CORO_SHUTDOWN_PARK_TEST',
+  score = 1.0,
+  callback = function(task)
+    rspamd_config:add_periodic(task:get_ev_base(), 0, function(cfg, ev_base)
+      local ok, conn = rspamd_redis.connect_sync({
+        config = cfg,
+        ev_base = ev_base,
+        host = redis_host,
+        timeout = 60,
+      })
+
+      if not ok then
+        rspamd_logger.infox(cfg, 'coro shutdown: cannot connect: %s', conn)
+        return false
+      end
+
+      conn:add_cmd('BLPOP', { 'coro_redis_nokey_shutdown', '30' })
+      rspamd_logger.infox(cfg, 'coro shutdown: waiting in exec()')
+      local res = results_outcome(conn:exec())
+      rspamd_logger.infox(cfg, 'coro shutdown: resumed after exec(): %s', res)
+
+      return false
+    end)
+
+    task:insert_result('CORO_SHUTDOWN_PARK', 1.0, 'periodic=added')
+  end,
+})
+
+--[[ The finish script, run by the scanner worker on a task of its own when it
+--   terminates, waits for a sync DNS request, the only event of that task.
+--   Resumed by the reply, it makes a request that fails inside request() (on
+--   Linux): that request removes its event while the coroutine runs, which
+--   must not finish and free the task under it. The task is gone afterwards,
+--   so the result is a log line. ]]
+rspamd_config:register_finish_script(function(task)
+  local opts = { dns_outcome('dns', sync_dns(task)) }
+  local calls = 0
+  local ret = rspamd_http.request({
+    task = task,
+    url = 'https://127.0.0.1:1/request',
+    timeout = 1,
+    callback = function()
+      calls = calls + 1
+    end,
+  })
+
+  opts[#opts + 1] = 'http=' .. http_callback_outcome(ret, calls)
+  opts[#opts + 1] = dns_outcome('dns_again', sync_dns(task))
+  rspamd_logger.infox(rspamd_config, 'coro finish script: %s', table.concat(opts, ', '))
+end)

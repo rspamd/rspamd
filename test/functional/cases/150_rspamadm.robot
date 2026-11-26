@@ -3,6 +3,7 @@ Suite Setup     Rspamadm Setup
 Suite Teardown  Rspamadm Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 Test Timeout    1 minute
 
 *** Variables ***
@@ -67,6 +68,38 @@ Simple interpreter, two results
   ${result} =  Write to stdin  ${handle}  1+1, 2 * 5
   Should Be Equal  ${result}  2\n10\n
   Wait For Process  ${handle}
+
+Interpreter does not keep the results of a line
+  [Documentation]  The values returned by a line are printed, then nothing
+  ...              holds them: the weak table loses the table returned by the
+  ...              second line
+  ${input} =  Catenate  SEPARATOR=\n
+  ...  w = setmetatable({}, {__mode = 'v'})
+  ...  (function() local t = {} w[1] = t return t end)()
+  ...  (function() collectgarbage() collectgarbage() return w[1] ~= nil end)()
+  Create File  ${RSPAMADM_TMPDIR}/repl_gc.txt  ${input}\n
+  ${result} =  Run Process  ${RSPAMADM}  lua  -b  stdin=${RSPAMADM_TMPDIR}/repl_gc.txt
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stderr}
+  Should Be Equal  ${result.stdout}  {}\nfalse
+
+Interpreter served over HTTP
+  [Documentation]  /exec replies with the values that the code returns, or
+  ...              with its error. No rspamd runs in this suite, so the port
+  ...              of its scanner is free
+  ${handle} =  Start Process  ${RSPAMADM}  lua  -S  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}
+  ...  stdout=${RSPAMADM_TMPDIR}/serve.stdout  stderr=${RSPAMADM_TMPDIR}/serve.stderr
+  Wait Until Keyword Succeeds  30x  0.2s  TCP Connect  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}
+  @{result} =  HTTP  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}  /exec  return 1, {a = 1}
+  Should Be Equal As Integers  ${result}[0]  200
+  ${reply} =  Evaluate  json.loads($result[1])  modules=json
+  Should Be Equal  ${reply}  ${{ [1, {'a': 1}] }}
+  @{result} =  HTTP  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}  /exec  error('exec fails on purpose')
+  Should Contain  ${result}[1]  exec fails on purpose
+  @{result} =  HTTP  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}  /exec  local x = 5
+  Should Be Equal As Integers  ${result}[0]  200
+  ${reply} =  Evaluate  json.loads($result[1])  modules=json
+  Should Be Equal  ${reply}  ${{ [] }}
+  [Teardown]  Terminate Process  ${handle}
 
 Process message callback
   ${handle} =  Start Process  ${RSPAMADM}  lua  stdin=PIPE
