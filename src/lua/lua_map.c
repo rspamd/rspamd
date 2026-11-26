@@ -1529,7 +1529,13 @@ lua_map_set_callback(lua_State *L)
 
 	lua_pushvalue(L, 2);
 	/* Get a reference */
+	int old_ref = map->data.cbdata->ref;
 	map->data.cbdata->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	if (old_ref != -1) {
+		/* The registry is shared by all threads of this state */
+		luaL_unref(L, LUA_REGISTRYINDEX, old_ref);
+	}
 
 	return 0;
 }
@@ -1588,6 +1594,7 @@ lua_map_on_load_handler(struct rspamd_map *map, gpointer ud)
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->ref);
 
+	/* The callback can replace itself with map:on_load(), freeing cbd */
 	if (lua_pcall(L, 0, 0, err_idx) != 0) {
 		msg_err_map("call to on_load function failed: %s", lua_tostring(L, -1));
 	}

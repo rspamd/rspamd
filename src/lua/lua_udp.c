@@ -33,7 +33,7 @@ local logger = require "rspamd_logger"
 local udp = require "rspamd_udp"
 
 rspamd_config.SYM = function(task)
-  udp.sento{
+  udp.sendto{
     host = addr, -- must be ip address object (e.g. received by upstream module)
     port = 500,
     data = {'str1', 'str2'}, -- can be table, string or rspamd_text
@@ -349,7 +349,10 @@ lua_udp_io_handler(int fd, short what, gpointer p)
 			lua_udp_maybe_push_error(cbd, "write error");
 		}
 		else {
-			cbd->retransmits--;
+			if (cbd->retransmits > 0) {
+				cbd->retransmits--;
+			}
+
 			rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_WRITE);
 		}
 	}
@@ -590,7 +593,12 @@ lua_udp_sendto(lua_State *L)
 		lua_pushstring(L, "retransmits");
 		lua_gettable(L, -2);
 		if (lua_type(L, -1) == LUA_TNUMBER) {
-			cbd->retransmits = lua_tonumber(L, -1);
+			double retransmits = lua_tonumber(L, -1);
+
+			/* A negative count or NaN means no retransmits */
+			if (retransmits >= 1) {
+				cbd->retransmits = retransmits < G_MAXUINT ? retransmits : G_MAXUINT;
+			}
 		}
 		lua_pop(L, 1);
 

@@ -2105,7 +2105,7 @@ static void
 dkim_module_lua_push_verify_result(struct rspamd_dkim_lua_verify_cbdata *cbd,
 								   struct rspamd_dkim_check_result *res, GError *err)
 {
-	struct rspamd_task **ptask, *task;
+	struct rspamd_task *task;
 	struct lua_callback_state cbs;
 	const char *error_str = "unknown error";
 	gboolean success = FALSE, pooled = FALSE;
@@ -2173,8 +2173,7 @@ dkim_module_lua_push_verify_result(struct rspamd_dkim_lua_verify_cbdata *cbd,
 	}
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
-	ptask = lua_newuserdata(L, sizeof(*ptask));
-	*ptask = task;
+	rspamd_lua_task_push(L, task);
 	lua_pushboolean(L, success);
 
 	if (error_str) {

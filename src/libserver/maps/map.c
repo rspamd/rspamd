@@ -4364,6 +4364,14 @@ void rspamd_map_set_on_load_function(struct rspamd_map *map, rspamd_map_on_load_
 									 gpointer cbdata, GDestroyNotify dtor)
 {
 	if (map) {
+		/*
+		 * The callback being replaced can be the one running now: map code
+		 * does not touch its data after the callback returns
+		 */
+		if (map->on_load_ud_dtor && map->on_load_ud != cbdata) {
+			map->on_load_ud_dtor(map->on_load_ud);
+		}
+
 		map->on_load_function = cb;
 		map->on_load_ud = cbdata;
 		map->on_load_ud_dtor = dtor;
