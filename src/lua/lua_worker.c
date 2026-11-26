@@ -15,6 +15,7 @@
  */
 
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "unix-std.h"
 #include "worker_util.h"
 #include "rspamd_control.h"
@@ -602,7 +603,11 @@ struct rspamd_lua_process_cbdata {
 	gboolean is_error;
 	gboolean dead; /* Set by SIGCHLD handler when child exits */
 	pid_t cpid;
-	lua_State *L;
+	/*
+	 * The caller's lua_State is not kept: it is usually a pooled thread that
+	 * is reused, suspended or collected long before the child replies
+	 */
+	struct rspamd_config *cfg;
 	uint64_t sz;
 	GString *io_buf;
 	GString *out_buf;
@@ -612,6 +617,10 @@ struct rspamd_lua_process_cbdata {
 	ev_io ev;
 };
 
+/*
+ * Child side only: it runs in the forked process, still inside the
+ * spawn_process() call, so the caller's state is alive and running there
+ */
 static void
 rspamd_lua_execute_lua_subprocess(lua_State *L,
 								  struct rspamd_lua_process_cbdata *cbdata)
@@ -690,12 +699,17 @@ rspamd_lua_execute_lua_subprocess(lua_State *L,
 }
 
 static void
-rspamd_lua_call_on_complete(lua_State *L,
-							struct rspamd_lua_process_cbdata *cbdata,
+rspamd_lua_call_on_complete(struct rspamd_lua_process_cbdata *cbdata,
 							const char *err_msg,
 							const char *data, gsize datalen)
 {
+	struct lua_callback_state cbs;
+	lua_State *L;
 	int err_idx;
+
+	/* Runs from the event loop, so it takes a thread of its own */
+	lua_thread_pool_prepare_callback(cbdata->cfg->lua_thread_pool, &cbs);
+	L = cbs.L;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -722,6 +736,7 @@ rspamd_lua_call_on_complete(lua_State *L,
 	}
 
 	lua_settop(L, err_idx - 1);
+	lua_thread_pool_restore_callback(&cbs);
 }
 
 /* Helper to free cbdata resources */
@@ -729,11 +744,17 @@ static void
 rspamd_lua_cbdata_free(struct rspamd_lua_process_cbdata *cbdata)
 {
 	struct rspamd_srv_command srv_cmd;
-	lua_State *L = cbdata->L;
 
 	close(cbdata->sp[0]);
-	luaL_unref(L, LUA_REGISTRYINDEX, cbdata->func_cbref);
-	luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
+
+	/* The refs live in the registry of the main state, shared by all threads */
+	if (rspamd_lua_is_initialised()) {
+		lua_State *L = RSPAMD_LUA_CFG_STATE(cbdata->cfg);
+
+		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->func_cbref);
+		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
+	}
+
 	g_string_free(cbdata->io_buf, TRUE);
 
 	if (cbdata->out_buf) {
@@ -772,7 +793,7 @@ rspamd_lua_cld_handler(struct rspamd_worker_signal_handler *sigh, void *ud)
 	if (!cbdata->replied) {
 		/* Child died before sending reply - call callback with error and cleanup */
 		ev_io_stop(cbdata->event_loop, &cbdata->ev);
-		rspamd_lua_call_on_complete(cbdata->L, cbdata,
+		rspamd_lua_call_on_complete(cbdata,
 									"Worker has died without reply", NULL, 0);
 		rspamd_lua_cbdata_free(cbdata);
 	}
@@ -803,7 +824,7 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
 			cbdata->replied = TRUE;
-			rspamd_lua_call_on_complete(cbdata->L, cbdata,
+			rspamd_lua_call_on_complete(cbdata,
 										"Unexpected EOF", NULL, 0);
 			kill(cbdata->cpid, SIGTERM);
 
@@ -819,7 +840,7 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			else {
 				ev_io_stop(cbdata->event_loop, &cbdata->ev);
 				cbdata->replied = TRUE;
-				rspamd_lua_call_on_complete(cbdata->L, cbdata,
+				rspamd_lua_call_on_complete(cbdata,
 											strerror(errno), NULL, 0);
 				kill(cbdata->cpid, SIGTERM);
 
@@ -854,7 +875,7 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 		if (r == 0) {
 			ev_io_stop(cbdata->event_loop, &cbdata->ev);
 			cbdata->replied = TRUE;
-			rspamd_lua_call_on_complete(cbdata->L, cbdata,
+			rspamd_lua_call_on_complete(cbdata,
 										"Unexpected EOF", NULL, 0);
 			kill(cbdata->cpid, SIGTERM);
 
@@ -870,7 +891,7 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			else {
 				ev_io_stop(cbdata->event_loop, &cbdata->ev);
 				cbdata->replied = TRUE;
-				rspamd_lua_call_on_complete(cbdata->L, cbdata,
+				rspamd_lua_call_on_complete(cbdata,
 											strerror(errno), NULL, 0);
 				kill(cbdata->cpid, SIGTERM);
 
@@ -894,11 +915,11 @@ rspamd_lua_subprocess_io(EV_P_ ev_io *w, int revents)
 			/* Finished reading data */
 			if (cbdata->is_error) {
 				cbdata->io_buf->str[cbdata->io_buf->len] = '\0';
-				rspamd_lua_call_on_complete(cbdata->L, cbdata,
+				rspamd_lua_call_on_complete(cbdata,
 											cbdata->io_buf->str, NULL, 0);
 			}
 			else {
-				rspamd_lua_call_on_complete(cbdata->L, cbdata,
+				rspamd_lua_call_on_complete(cbdata,
 											NULL, cbdata->io_buf->str, cbdata->io_buf->len);
 			}
 
@@ -962,7 +983,7 @@ lua_worker_spawn_process(lua_State *L)
 
 	actx = w->ctx;
 	cbdata->wrk = w;
-	cbdata->L = L;
+	cbdata->cfg = w->srv->cfg;
 	cbdata->event_loop = actx->event_loop;
 	cbdata->sz = (uint64_t) -1;
 

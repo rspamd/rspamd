@@ -15,6 +15,7 @@
  */
 #include "config.h"
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 
 
 /***
@@ -557,7 +558,12 @@ lua_upstream_flag_to_str(enum rspamd_upstreams_watch_event fl)
 }
 
 struct rspamd_lua_upstream_watcher_cbdata {
-	lua_State *L;
+	/*
+	 * Not the state that has added the watcher: that is usually a pooled
+	 * thread, which is reused, suspended for somebody else or collected long
+	 * before the list is gone
+	 */
+	struct rspamd_config *cfg;
 	int cbref;
 	int parent_cbref; /* Reference to the upstream list */
 	struct upstream_list *upl;
@@ -571,11 +577,14 @@ lua_upstream_watch_func(struct upstream *up,
 {
 	struct rspamd_lua_upstream_watcher_cbdata *cdata =
 		(struct rspamd_lua_upstream_watcher_cbdata *) ud;
+	struct lua_callback_state cbs;
 	lua_State *L;
 	const char *what;
 	int err_idx;
 
-	L = cdata->L;
+	/* Events come from any context, so run the callback on a thread of its own */
+	lua_thread_pool_prepare_callback(cdata->cfg->lua_thread_pool, &cbs);
+	L = cbs.L;
 	what = lua_upstream_flag_to_str(event);
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
@@ -597,12 +606,11 @@ lua_upstream_watch_func(struct upstream *up,
 
 	if (lua_pcall(L, 3, 0, err_idx) != 0) {
 		msg_err("cannot call watch function for upstream: %s", lua_tostring(L, -1));
-		lua_settop(L, 0);
-
-		return;
 	}
 
-	lua_settop(L, 0);
+	/* Drop the traceback handler and the error, if any */
+	lua_settop(L, err_idx - 1);
+	lua_thread_pool_restore_callback(&cbs);
 }
 
 static void
@@ -611,8 +619,18 @@ lua_upstream_watch_dtor(gpointer ud)
 	struct rspamd_lua_upstream_watcher_cbdata *cdata =
 		(struct rspamd_lua_upstream_watcher_cbdata *) ud;
 
-	luaL_unref(cdata->L, LUA_REGISTRYINDEX, cdata->cbref);
-	luaL_unref(cdata->L, LUA_REGISTRYINDEX, cdata->parent_cbref);
+	/*
+	 * The refs belong to the registry of the VM, so the main state is used.
+	 * The list is destroyed by its __gc, possibly from inside lua_close():
+	 * never touch a Lua state once it is closed.
+	 */
+	if (rspamd_lua_is_initialised()) {
+		lua_State *L = RSPAMD_LUA_CFG_STATE(cdata->cfg);
+
+		luaL_unref(L, LUA_REGISTRYINDEX, cdata->cbref);
+		luaL_unref(L, LUA_REGISTRYINDEX, cdata->parent_cbref);
+	}
+
 	g_free(cdata);
 }
 
@@ -642,6 +660,7 @@ lua_upstream_list_add_watcher(lua_State *L)
 
 		enum rspamd_upstreams_watch_event flags = 0;
 		struct rspamd_lua_upstream_watcher_cbdata *cdata;
+		struct rspamd_config *cfg = NULL;
 
 		if (lua_type(L, 2) == LUA_TSTRING) {
 			flags = lua_str_to_upstream_flag(lua_tostring(L, 2));
@@ -659,10 +678,28 @@ lua_upstream_list_add_watcher(lua_State *L)
 			}
 		}
 
+		/* The config gives the thread pool to run the callback on */
+		lua_getglobal(L, "rspamd_config");
+
+		if (lua_type(L, -1) == LUA_TUSERDATA) {
+			struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																	   rspamd_config_classname);
+
+			if (pcfg) {
+				cfg = *pcfg;
+			}
+		}
+
+		lua_pop(L, 1);
+
+		if (cfg == NULL || cfg->lua_thread_pool == NULL) {
+			return luaL_error(L, "add_watcher requires rspamd_config with a Lua thread pool");
+		}
+
 		cdata = g_malloc0(sizeof(*cdata));
 		lua_pushvalue(L, 3); /* callback */
 		cdata->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
-		cdata->L = L;
+		cdata->cfg = cfg;
 		cdata->upl = upl;
 		lua_pushvalue(L, 1); /* upstream list itself */
 		cdata->parent_cbref = luaL_ref(L, LUA_REGISTRYINDEX);
