@@ -834,6 +834,28 @@ register_test_symbol({
 
 rspamd_config:register_dependency('CORO_REDIS_HANDOVER_COLLECT', 'CORO_REDIS_HANDOVER_TEST')
 
+--[[ A command that is answered more than once (one confirmation per
+--   channel): the first reply is the reply of the command, the others are
+--   ignored and do not make a later exec() wait for ever ]]
+register_test_symbol({
+  name = 'CORO_REDIS_SUBSCRIBE_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local ok, conn = connect_redis(task, 3.0)
+
+    if not ok then
+      return true, 1.0, 'connect=' .. tostring(conn)
+    end
+
+    conn:add_cmd('SUBSCRIBE', { 'coro_redis_chan_a', 'coro_redis_chan_b' })
+    -- Both confirmations arrive here
+    task:get_ev_base():sleep(0.3)
+
+    return true, 1.0, 'exec=' .. tostring((conn:exec()))
+  end,
+})
+
 --[[ More replies for one exec() than a Lua stack can take on LuaJIT (8000
 --   slots, 2 per reply): exec() returns an error instead of the replies,
 --   which are delivered from the event loop. Other Lua VMs return them. ]]

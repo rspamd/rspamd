@@ -259,6 +259,15 @@ Sync redis reply taken by a dependent symbol
   Log Since Test Start Should Not Contain  processing of task time out
   Coroutines Still Work
 
+Sync redis command with more than one reply
+  [Documentation]  SUBSCRIBE to two channels is confirmed twice: exec() returns
+  ...              the first confirmation and the second one is ignored
+  Scan File  ${MESSAGE}  Coro-Test=CORO_REDIS_SUBSCRIBE_TEST
+  Expect Symbol With Exact Options  CORO_REDIS_SUBSCRIBE_TEST  exec=true
+  Should Be True  ${SCAN_RESULT}[time_real] < 3
+  Log Since Test Start Should Not Contain  processing of task time out
+  Coroutines Still Work
+
 Sync redis exec() with more replies than the Lua stack can take
   [Documentation]  4100 replies, 2 stack slots each: more than LuaJIT allows
   Scan File  ${MESSAGE}  Coro-Test=CORO_REDIS_BIG_PIPELINE_TEST

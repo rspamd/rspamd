@@ -797,6 +797,15 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 	ud = sp_ud->common_ud;
 	lua_State *L = ctx->async.cfg->lua_state;
 
+	if (sp_ud->flags & LUA_REDIS_SPECIFIC_REPLIED) {
+		/*
+		 * A command has one reply. A subscription is called back again for
+		 * every channel and message: exec() has no way to return those, and
+		 * the command has given back its event with the first one.
+		 */
+		return;
+	}
+
 	sp_ud->flags |= LUA_REDIS_SPECIFIC_REPLIED;
 
 	if (ud->terminated || !rspamd_lua_is_initialised()) {
