@@ -244,7 +244,11 @@ lua_udp_maybe_register_event(struct lua_udp_cbdata *cbd)
 
 	if (cbd->task && !cbd->item) {
 		cbd->item = rspamd_symcache_get_cur_item(cbd->task);
-		rspamd_symcache_item_async_inc(cbd->task, cbd->item, M);
+
+		/* No current item outside of the symbols processing */
+		if (cbd->item) {
+			rspamd_symcache_item_async_inc(cbd->task, cbd->item, M);
+		}
 	}
 
 	return TRUE;

@@ -45,6 +45,7 @@ lua_dns_request(lua_State *L)
 	const char *to_resolve = NULL;
 	const char *type_str = NULL;
 	struct rspamd_task *task = NULL;
+	struct thread_entry *thread = NULL;
 	rspamd_mempool_t *pool = NULL;
 	int ret = 0;
 	gboolean forced = FALSE;
@@ -80,6 +81,20 @@ lua_dns_request(lua_State *L)
 	}
 	else {
 		return luaL_error(L, "invalid arguments: either task or session/config should be set");
+	}
+
+	/*
+	 * The caller is suspended until the reply comes, so it must be a pooled
+	 * coroutine that can yield right now; checked before anything is sent
+	 */
+	if (cfg->lua_thread_pool) {
+		thread = lua_thread_pool_get_yieldable_entry(cfg->lua_thread_pool, L);
+	}
+
+	if (thread == NULL) {
+		return luaL_error(L, "rspamd_dns.request must be called from a coroutine "
+							 "that can yield (a symbol registered with flags = 'coro', "
+							 "not an async callback)");
 	}
 
 	enum rdns_request_type type = rdns_type_fromstr(type_str);
@@ -137,18 +152,22 @@ lua_dns_request(lua_State *L)
 	}
 
 	if (ret) {
-		cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-		cbdata->thread_generation = cbdata->thread->generation;
+		cbdata->thread = thread;
+		cbdata->thread_generation = thread->generation;
 		/* Keep the entry alive until our callback fires (or is cancelled) */
-		lua_thread_pool_retain_entry(cbdata->thread);
+		lua_thread_pool_retain_entry(thread);
 		cbdata->s = session;
 
 		if (task) {
 			cbdata->item = rspamd_symcache_get_cur_item(task);
-			rspamd_symcache_item_async_inc(task, cbdata->item, M);
+
+			/* No current item outside of the symbols processing (e.g. finish scripts) */
+			if (cbdata->item) {
+				rspamd_symcache_item_async_inc(task, cbdata->item, M);
+			}
 		}
 
-		return lua_thread_yield(cbdata->thread, 0);
+		return lua_thread_yield(thread, 0);
 	}
 	else {
 		lua_pushnil(L);
@@ -159,35 +178,53 @@ lua_dns_request(lua_State *L)
 void lua_dns_callback(struct rdns_reply *reply, void *arg)
 {
 	struct lua_rspamd_dns_cbdata *cbdata = arg;
-	lua_State *L = cbdata->thread->lua_state;
+	struct thread_entry *thread = cbdata->thread;
+	lua_State *L = thread->lua_state;
+	int top;
 
-	if (reply->code != RDNS_RC_NOERROR) {
-		lua_pushboolean(L, false);
-		lua_pushstring(L, rdns_strerror(reply->code));
+	/*
+	 * A dead coroutine is never run again: e.g. its task has been destroyed
+	 * while it waited for a request that is not bound to that task
+	 */
+	if (thread->state != LUA_THREAD_DEAD) {
+		top = lua_gettop(L);
+
+		if (reply->code != RDNS_RC_NOERROR) {
+			lua_pushboolean(L, false);
+			lua_pushstring(L, rdns_strerror(reply->code));
+		}
+		else {
+			lua_push_dns_reply(L, reply);
+
+			lua_pushboolean(L, reply->flags & RDNS_AUTH);
+			lua_setfield(L, -3, "authenticated");
+
+			lua_pushboolean(L, reply->flags & RDNS_TRUNCATED);
+			lua_setfield(L, -3, "truncated");
+
+			/* result 1 - not and error */
+			lua_pushboolean(L, true);
+			/* push table into stack, result 2 - results itself */
+			lua_pushvalue(L, -3);
+		}
+
+		if (!lua_thread_resume_checked(thread, cbdata->thread_generation, 2)) {
+			/* The entry may serve another coroutine: leave its stack as it was */
+			lua_settop(L, top);
+		}
 	}
-	else {
-		lua_push_dns_reply(L, reply);
 
-		lua_pushboolean(L, reply->flags & RDNS_AUTH);
-		lua_setfield(L, -3, "authenticated");
-
-		lua_pushboolean(L, reply->flags & RDNS_TRUNCATED);
-		lua_setfield(L, -3, "truncated");
-
-		/* result 1 - not and error */
-		lua_pushboolean(L, true);
-		/* push table into stack, result 2 - results itself */
-		lua_pushvalue(L, -3);
-	}
-
-	lua_thread_resume_checked(cbdata->thread, cbdata->thread_generation, 2);
-
+	/*
+	 * cbdata->task is alive even if nothing has been resumed: cbdata is
+	 * allocated from its pool and the request is bound to its session, whose
+	 * cleanup cancels the request before the task is freed
+	 */
 	if (cbdata->item) {
 		rspamd_symcache_item_async_dec_check(cbdata->task, cbdata->item, M);
 	}
 
 	/* Drop the reference taken when the request was issued */
-	lua_thread_pool_release_entry(cbdata->thread);
+	lua_thread_pool_release_entry(thread);
 }
 
 static int

@@ -964,7 +964,7 @@ lua_http_request_abort(lua_State *L, int cbref, struct rspamd_http_message *msg,
  * - `config`
  *
  * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
- * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/developers/sync_async.html#API-example-http-module)
+ * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/developers/sync_async.html#API-example-http-module); such a call must be made from a coroutine that can yield, e.g. a symbol registered with `flags = 'coro'`, otherwise an error is raised
  * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
  * @param {table} headers optional headers in form `[name='value']` or `[name=['value1', 'value2']]` to duplicate a header with multiple values. A list form `{{'name', 'value'}, {'name', {'value1', 'value2'}}}` is also accepted and preserves the header order on the wire
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
@@ -1004,6 +1004,8 @@ lua_http_request(lua_State *L)
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
 	struct upstream *up = NULL;
+	/* Coroutine to suspend until the reply comes, only without a callback */
+	struct thread_entry *thread = NULL;
 	const char *url, *lua_body;
 	rspamd_fstring_t *body = NULL;
 	int cbref = -1;
@@ -1142,6 +1144,31 @@ lua_http_request(lua_State *L)
 				}
 			}
 			lua_pop(L, 1);
+		}
+
+		if (cbref == -1) {
+			/*
+			 * Without a callback the reply is delivered by resuming the caller,
+			 * so the caller must be a coroutine that can be suspended. This is
+			 * checked before anything is allocated or started for the request:
+			 * otherwise it would run with nobody to resume, or resume a
+			 * coroutine that has not been suspended by it.
+			 */
+			if (cfg == NULL) {
+				return luaL_error(L,
+								  "Bad params to rspamd_http:request(): either task or config should be set");
+			}
+
+			if (cfg->lua_thread_pool != NULL) {
+				thread = lua_thread_pool_get_yieldable_entry(cfg->lua_thread_pool, L);
+			}
+
+			if (thread == NULL) {
+				return luaL_error(L,
+								  "rspamd_http.request without a callback must be called from "
+								  "a coroutine that can yield (a symbol registered with "
+								  "flags = 'coro', not an async callback)");
+			}
 		}
 
 		msg = rspamd_http_message_from_url(url);
@@ -1504,8 +1531,10 @@ lua_http_request(lua_State *L)
 	}
 
 	if (cbd->cbref == -1) {
-		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-		cbd->thread_generation = cbd->thread->generation;
+		/* Checked to be able to yield when the arguments were parsed */
+		g_assert(thread != NULL);
+		cbd->thread = thread;
+		cbd->thread_generation = thread->generation;
 		/* Held for the lifetime of cbd, released in lua_http_cbd_dtor() */
 		lua_thread_pool_retain_entry(cbd->thread);
 	}
@@ -1692,8 +1721,11 @@ lua_http_request(lua_State *L)
 	}
 
 	if (cbd->cbref == -1) {
-		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-		cbd->thread_generation = cbd->thread->generation;
+		/*
+		 * A handler runs from inside of this call only when the request
+		 * fails to start, and that has returned above: cbd is alive and
+		 * its reply resumes the entry that cbd->thread holds
+		 */
 		cbd->flags |= RSPAMD_LUA_HTTP_FLAG_YIELDED;
 
 		return lua_thread_yield(cbd->thread, 0);

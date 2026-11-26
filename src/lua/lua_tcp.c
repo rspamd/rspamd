@@ -169,7 +169,8 @@ rspamd_config:register_symbol({
   name = 'SIMPLE_TCP_TEST',
   score = 1.0,
   callback = http_simple_tcp_symbol,
-  no_squeeze = true
+  -- connect_sync and the connection methods yield: they need a coroutine
+  flags = 'coro',
 })
  *
  */
@@ -1167,7 +1168,6 @@ lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, 
 
 	lua_tcp_shift_handler(cbd);
 	// lua_tcp_unregister_event (cbd);
-	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, thread);
 	lua_thread_resume_checked(thread, generation, 2);
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
@@ -1211,7 +1211,6 @@ lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 	}
 
 	lua_tcp_shift_handler(cbd);
-	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, thread);
 
 	if (cbd->item) {
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
@@ -1285,7 +1284,6 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 
 	lua_pushboolean(L, TRUE);
 
-	lua_thread_pool_set_running_entry(cbd->cfg->lua_thread_pool, thread);
 	pcbd = lua_newuserdata(L, sizeof(*pcbd));
 	*pcbd = cbd;
 	rspamd_lua_setclass(L, rspamd_tcp_sync_classname, -1);
@@ -2948,6 +2946,7 @@ lua_tcp_connect_sync(lua_State *L)
 	struct rspamd_config *cfg = NULL;
 	struct ev_loop *ev_base = NULL;
 	struct lua_tcp_cbdata *cbd;
+	struct thread_entry *thread;
 
 	if (lua_type(L, 1) == LUA_TTABLE) {
 		gboolean want_ssl;
@@ -2995,12 +2994,28 @@ lua_tcp_connect_sync(lua_State *L)
 		timeout = default_tcp_timeout;
 	}
 
+	if (task) {
+		cfg = task->cfg;
+	}
+
+	/*
+	 * The caller is suspended until the connection is established: nothing
+	 * may be started unless it is a pooled coroutine that can yield right now.
+	 * A config made without Lua (e.g. by rspamd_util.config_from_ucl) has no
+	 * thread pool at all.
+	 */
+	thread = cfg->lua_thread_pool ? lua_thread_pool_get_yieldable_entry(cfg->lua_thread_pool, L) : NULL;
+
+	if (thread == NULL) {
+		return luaL_error(L, "connect_sync must be called from a coroutine that can yield "
+							 "(a symbol registered with flags = 'coro', not an async callback)");
+	}
+
 	cbd = g_new0(struct lua_tcp_cbdata, 1);
 
 	if (task) {
 		static const char hexdigests[] = "0123456789abcdef";
 
-		cfg = task->cfg;
 		ev_base = task->event_loop;
 		session = task->s;
 		/* Make a readable tag */
@@ -3024,14 +3039,8 @@ lua_tcp_connect_sync(lua_State *L)
 
 	cbd->task = task;
 	cbd->cfg = cfg;
-	cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-	cbd->thread_generation = cbd->thread ? cbd->thread->generation : 0;
-
-	if (cbd->thread == NULL) {
-		g_free(cbd);
-
-		return luaL_error(L, "connect_sync must be called from a coroutine");
-	}
+	cbd->thread = thread;
+	cbd->thread_generation = thread->generation;
 
 	cbd->handlers = g_queue_new();
 
@@ -3426,6 +3435,7 @@ lua_tcp_sync_session_dtor(gpointer ud)
 	struct lua_tcp_cbdata *cbd = ud;
 	struct thread_entry *thread = cbd->thread;
 	guint64 generation = cbd->thread_generation;
+	struct rspamd_task *task = cbd->task;
 
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
 
@@ -3447,17 +3457,24 @@ lua_tcp_sync_session_dtor(gpointer ud)
 	if (thread != NULL) {
 		/*
 		 * An operation is pending: its coroutine would never be resumed, as no
-		 * event is going to fire any more. Like lua_redis does, terminate the
-		 * entry (it is not resumed: the task it works for has gone) and drop
-		 * what the operation holds: the entry reference taken at the yield and
-		 * the connection reference. The entry is terminated only if it is still
-		 * the very coroutine that is suspended by us: someone else may have
-		 * terminated or recycled it already, and the pool reference must be
-		 * dropped once
+		 * event is going to fire any more. Drop what the operation holds: the
+		 * entry reference taken at the yield and the connection reference.
+		 *
+		 * A coroutine of this very task is terminated by the task itself (the
+		 * guard of lua_thread_pool_get_for_task, run by this pool cleanup
+		 * before or after us) without the thread pool, which can be gone with
+		 * the config: the task drops its config reference before its pool is
+		 * destroyed. If the guard has run, the entry is dead and the pool holds
+		 * no reference to it any more, so it must not be terminated again.
+		 * A coroutine of anything else (another task, the config) is
+		 * terminated here, but only if it is still the very coroutine suspended
+		 * by us: a dead entry is done with, a recycled one belongs to somebody
+		 * else
 		 */
 		cbd->thread = NULL;
 
-		if (thread->state == LUA_THREAD_YIELDED && thread->generation == generation) {
+		if (thread->state == LUA_THREAD_YIELDED && thread->generation == generation &&
+			thread->task != task) {
 			lua_thread_pool_terminate_entry_full(cbd->cfg->lua_thread_pool,
 												 thread, G_STRLOC, true);
 		}
@@ -3487,10 +3504,12 @@ lua_tcp_sync_op_check(lua_State *L, struct lua_tcp_cbdata *cbd,
 		return 2;
 	}
 
-	*thread = lua_thread_pool_get_running_entry(cbd->cfg->lua_thread_pool);
+	/* Checked before anything is queued: the caller must be able to wait */
+	*thread = lua_thread_pool_get_yieldable_entry(cbd->cfg->lua_thread_pool, L);
 
 	if (*thread == NULL) {
-		return luaL_error(L, "tcp_sync methods must be called from a coroutine");
+		return luaL_error(L, "tcp_sync methods must be called from a coroutine that can yield "
+							 "(a symbol registered with flags = 'coro', not an async callback)");
 	}
 
 	return 0;

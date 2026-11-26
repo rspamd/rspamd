@@ -628,7 +628,10 @@ lua_redis_cleanup_events(struct lua_redis_ctx *ctx)
 			rspamd_symcache_item_async_dec_check(result->task, result->item, M);
 		}
 
-		if (result->s) {
+		if (result->sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED) {
+			/* A session cleanup has run lua_redis_fin and has dropped the event */
+		}
+		else if (result->s) {
 			rspamd_session_remove_event(result->s, lua_redis_fin, result->sp_ud);
 		}
 		else {
@@ -760,10 +763,21 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 			}
 			else {
 				/* We cannot resume the thread as the associated task has gone */
-				lua_thread_pool_terminate_entry_full(ud->cfg->lua_thread_pool,
-													 ctx->thread, G_STRLOC, true);
-				lua_thread_pool_release_entry(ctx->thread);
+				thread = ctx->thread;
 				ctx->thread = NULL;
+
+				/*
+				 * A dead thread is terminated already (e.g. its task has been
+				 * destroyed) and the pool holds no reference to it any more.
+				 * Terminating may run Lua GC that frees ctx: do not use it after.
+				 */
+				if (thread->state == LUA_THREAD_YIELDED &&
+					thread->generation == ctx->thread_generation) {
+					lua_thread_pool_terminate_entry_full(ud->cfg->lua_thread_pool,
+														 thread, G_STRLOC, true);
+				}
+
+				lua_thread_pool_release_entry(thread);
 			}
 		}
 	}
@@ -1626,6 +1640,24 @@ lua_redis_add_cmd(lua_State *L)
 			return 2;
 		}
 
+		if (!IS_ASYNC(ctx)) {
+			/*
+			 * A command of a sync connection is sent right here, and only
+			 * exec() can wait for its reply. Refuse it before anything is in
+			 * flight if the caller will not be able to wait: otherwise the
+			 * command, its session event and the async counter of the symbol
+			 * would stay with nobody to collect them.
+			 */
+			struct lua_thread_pool *pool = ctx->async.cfg->lua_thread_pool;
+
+			/* A config made without Lua has no thread pool */
+			if (pool == NULL || lua_thread_pool_get_yieldable_entry(pool, L) == NULL) {
+				return luaL_error(L, "redis add_cmd() on a sync connection must be "
+									 "called from a coroutine that can yield (a symbol "
+									 "registered with flags = 'coro', not an async callback)");
+			}
+		}
+
 		/* Async version */
 		if (lua_type(L, 2) == LUA_TSTRING) {
 			/* No callback version */
@@ -1772,11 +1804,37 @@ lua_redis_exec(lua_State *L)
 			return results;
 		}
 		else {
-			ctx->thread = lua_thread_pool_get_running_entry(ctx->async.cfg->lua_thread_pool);
-			ctx->thread_generation = ctx->thread->generation;
+			struct lua_thread_pool *pool = ctx->async.cfg->lua_thread_pool;
+			struct thread_entry *thread;
+
+			if (ctx->thread != NULL) {
+				/* A second waiter would replace the first one, which is then lost */
+				lua_pushboolean(L, FALSE);
+				lua_pushliteral(L, "another exec() is in progress on this connection");
+
+				return 2;
+			}
+
+			/* A config made without Lua has no thread pool */
+			thread = pool ? lua_thread_pool_get_yieldable_entry(pool, L) : NULL;
+
+			if (thread == NULL) {
+				/*
+				 * add_cmd() makes the same check, so this is a caller that could
+				 * wait when it sent the commands and cannot now (e.g. exec() is
+				 * called through a C function). The replies are queued and are
+				 * returned by an exec() from a proper place.
+				 */
+				return luaL_error(L, "redis exec() must be called from a coroutine "
+									 "that can yield (a symbol registered with "
+									 "flags = 'coro', not an async callback)");
+			}
+
+			ctx->thread = thread;
+			ctx->thread_generation = thread->generation;
 			/* Held while ctx->thread is set, released when consumed or in dtor */
-			lua_thread_pool_retain_entry(ctx->thread);
-			return lua_thread_yield(ctx->thread, 0);
+			lua_thread_pool_retain_entry(thread);
+			return lua_thread_yield(thread, 0);
 		}
 	}
 }
