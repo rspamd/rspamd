@@ -106,12 +106,13 @@ gboolean rspamd_http_message_set_body(struct rspamd_http_message *msg,
 									  const char *data, gsize len);
 
 /**
- * Set message's method by name
+ * Set message's method by name, an HTTP one: not the legacy SYMBOLS or CHECK
  * @param msg
  * @param method
+ * @return FALSE if the method is unknown, the message's method is unchanged then
  */
-void rspamd_http_message_set_method(struct rspamd_http_message *msg,
-									const char *method);
+gboolean rspamd_http_message_set_method(struct rspamd_http_message *msg,
+										const char *method);
 
 /**
  * Maps fd as message's body

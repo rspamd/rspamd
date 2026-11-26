@@ -2535,7 +2535,6 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 								rspamd_http_message_add_header(msg, "File", session->fname);
 							}
 
-							msg->method = HTTP_GET;
 							rspamd_http_connection_write_message_shared(conn,
 																		msg, up_name,
 																		NULL, bk_conn,
@@ -2546,8 +2545,6 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 								rspamd_http_message_drop_shared_body(msg);
 								rspamd_http_message_set_body(msg, session->map, session->map_len);
 							}
-
-							msg->method = HTTP_POST;
 
 							if (m->compress) {
 								proxy_request_compress(msg);
@@ -2728,7 +2725,6 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 				rspamd_http_message_add_header(msg, "File", session->fname);
 			}
 
-			msg->method = HTTP_GET;
 			rspamd_http_connection_write_message_shared(bk_conn->backend_conn,
 														msg, rspamd_upstream_name(bk_conn->up), NULL, bk_conn,
 														bk_conn->timeout);
@@ -2738,8 +2734,6 @@ proxy_open_mirror_connections(struct rspamd_proxy_session *session)
 				rspamd_http_message_drop_shared_body(msg);
 				rspamd_http_message_set_body(msg, session->map, session->map_len);
 			}
-
-			msg->method = HTTP_POST;
 
 			if (m->compress) {
 				proxy_request_compress(msg);
@@ -3567,8 +3561,6 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 				rspamd_http_message_add_header(msg, "File", session->fname);
 			}
 
-			msg->method = HTTP_GET;
-
 			rspamd_http_connection_write_message_shared(
 				session->master_conn->backend_conn,
 				msg, rspamd_upstream_name(session->master_conn->up),
@@ -3581,8 +3573,6 @@ proxy_send_master_message(struct rspamd_proxy_session *session)
 				rspamd_http_message_set_body(msg,
 											 session->map, session->map_len);
 			}
-
-			msg->method = HTTP_POST;
 
 			if (backend->compress) {
 				proxy_request_compress(msg);

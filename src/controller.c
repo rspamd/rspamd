@@ -3526,9 +3526,10 @@ rspamd_controller_handle_unknown(struct rspamd_http_connection_entry *conn_ent,
 	else {
 		rep = rspamd_http_new_message(HTTP_RESPONSE);
 		rep->date = time(NULL);
-		rep->code = 500;
-		rep->status = rspamd_fstring_new_init("Invalid method",
-											  strlen("Invalid method"));
+		rep->code = 405;
+		rep->status = rspamd_fstring_new_init("Method Not Allowed",
+											  strlen("Method Not Allowed"));
+		rspamd_http_message_add_header(rep, "Allow", "GET, POST, OPTIONS");
 		rspamd_http_connection_reset(conn_ent->conn);
 		rspamd_http_router_insert_headers(conn_ent->rt, rep);
 		rspamd_http_connection_write_message(conn_ent->conn,

@@ -158,6 +158,8 @@ rspamd_protocol_escape_braces(struct rspamd_task *task, rspamd_ftok_t *in)
 }
 
 #define COMPARE_CMD(str, cmd, len) (sizeof(cmd) - 1 == (len) && rspamd_lc_cmp((str), (cmd), (len)) == 0)
+/* Methods of the check commands, also the Allow field of a 405 reply */
+#define RSPAMD_PROTOCOL_CHECK_METHODS "GET, POST"
 
 static gboolean
 rspamd_protocol_handle_url(struct rspamd_task *task,
@@ -284,6 +286,21 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 		break;
 	default:
 		goto err;
+	}
+
+	/*
+	 * A request with no method has not come from the wire: the proxy builds
+	 * one from a milter session and scans it itself, so it is not refused
+	 */
+	if ((task->cmd == CMD_CHECK || task->cmd == CMD_CHECK_V2 ||
+		 task->cmd == CMD_CHECK_V3) &&
+		msg->method != HTTP_GET && msg->method != HTTP_POST &&
+		msg->method != HTTP_INVALID) {
+		g_set_error(&task->err, rspamd_protocol_quark(), 405,
+					"method %s is not allowed", http_method_str(msg->method));
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_VERBATIM_ERR_CODE;
+
+		return FALSE;
 	}
 
 	if (u.field_set & (1u << UF_QUERY)) {
@@ -3575,6 +3592,10 @@ void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout, st
 		}
 		else {
 			msg->code = 500 + task->err->code % 100;
+		}
+
+		if (msg->code == 405) {
+			rspamd_http_message_add_header(msg, "Allow", RSPAMD_PROTOCOL_CHECK_METHODS);
 		}
 
 		msg->status = rspamd_fstring_new_init(task->err->message,
