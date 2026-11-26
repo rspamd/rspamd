@@ -253,6 +253,10 @@ rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 	if (luaL_dostring(L, str) != 0) {
 		msg_err("cannot execute lua script %s: %s",
 				str, lua_tostring(L, -1));
+		/* Never called: hand the idle running entry back to the pool */
+		lua_settop(L, 0);
+		lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
+
 		return FALSE;
 	}
 	else {
@@ -268,6 +272,8 @@ rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 			msg_err("lua script must return "
 					"function and not %s",
 					lua_typename(L, lua_type(L, -1)));
+			lua_settop(L, 0);
+			lua_thread_pool_return(rspamd_main->cfg->lua_thread_pool, thread);
 
 			return FALSE;
 		}
@@ -287,13 +293,11 @@ rspamadm_execute_lua_ucl_subr(int argc, char **argv,
 	/* Push results */
 	ucl_object_push_lua(L, res, TRUE);
 
+	/* The entry is back in the pool or terminated once the call is over */
 	if (lua_repl_thread_call(thread, 2, NULL, lua_thread_str_error_cb) != 0) {
 
 		return FALSE;
 	}
-
-	/* error function */
-	lua_settop(L, 0);
 
 	return TRUE;
 }

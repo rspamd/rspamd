@@ -177,12 +177,35 @@ rspamadm_lua_add_path(lua_State *L, const char *path)
 }
 
 
+/*
+ * Takes the results of a call that has succeeded: they are at first ... top of
+ * L, the thread that has run the code. It is called before the thread goes
+ * back to the pool, so the results must not be used once it returns.
+ */
+typedef void (*lua_repl_results_t)(lua_State *L, int first, gpointer ud);
+
+struct lua_repl_call_data {
+	/* The first member: error callbacks take thread->cd for it */
+	struct lua_call_data cd;
+	lua_repl_results_t results_func;
+	/* Stack index right below the called function */
+	int base;
+};
+
 static void
 lua_thread_finish_cb(struct thread_entry *thread, int ret)
 {
-	struct lua_call_data *cd = thread->cd;
+	struct lua_repl_call_data *rcd = thread->cd;
+	lua_State *L = thread->lua_state;
 
-	cd->ret = ret;
+	rcd->cd.ret = ret;
+
+	if (rcd->results_func) {
+		rcd->results_func(L, rcd->base + 1, rcd->cd.ud);
+	}
+
+	/* The thread goes back to the pool right after this callback */
+	lua_settop(L, 0);
 }
 
 static void
@@ -206,6 +229,10 @@ lua_thread_str_error_cb(struct thread_entry *thread, int ret, const char *msg)
 	cd->ret = ret;
 }
 
+static int lua_repl_thread_call_results(struct thread_entry *thread, int narg,
+										gpointer ud, lua_thread_error_t error_func,
+										lua_repl_results_t results_func);
+
 static gboolean
 rspamadm_lua_load_script(lua_State *L, const char *path)
 {
@@ -226,18 +253,34 @@ rspamadm_lua_load_script(lua_State *L, const char *path)
 		return FALSE;
 	}
 
-	lua_settop(L, 0);
-
 	return TRUE;
+}
+
+static void
+rspamadm_print_results(lua_State *L, int first, gpointer ud)
+{
+	int i, cbref;
+	char outbuf[8192];
+
+	for (i = first; i <= lua_gettop(L); i++) {
+		if (lua_isfunction(L, i)) {
+			lua_pushvalue(L, i);
+			cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+			rspamd_printf("local function: %d\n", cbref);
+		}
+		else {
+			lua_logger_out(L, i, outbuf, sizeof(outbuf),
+						   LUA_ESCAPE_UNPRINTABLE);
+			rspamd_printf("%s\n", outbuf);
+		}
+	}
 }
 
 static void
 rspamadm_exec_input(lua_State *L, const char *input)
 {
 	GString *tb;
-	int i, cbref;
-	int top = 0;
-	char outbuf[8192];
 
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
 	L = thread->lua_state;
@@ -264,25 +307,8 @@ rspamadm_exec_input(lua_State *L, const char *input)
 
 	g_string_free(tb, TRUE);
 
-
-	top = lua_gettop(L);
-
-	if (lua_repl_thread_call(thread, 0, NULL, NULL) == 0) {
-		/* Print output */
-		for (i = top; i <= lua_gettop(L); i++) {
-			if (lua_isfunction(L, i)) {
-				lua_pushvalue(L, i);
-				cbref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-				rspamd_printf("local function: %d\n", cbref);
-			}
-			else {
-				lua_logger_out(L, i, outbuf, sizeof(outbuf),
-							   LUA_ESCAPE_UNPRINTABLE);
-				rspamd_printf("%s\n", outbuf);
-			}
-		}
-	}
+	/* The output is printed by rspamadm_print_results() */
+	lua_repl_thread_call_results(thread, 0, NULL, NULL, rspamadm_print_results);
 }
 
 static void
@@ -296,13 +322,25 @@ wait_session_events(void)
 	msg_debug("finished events waiting, terminating session");
 }
 
-int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua_thread_error_t error_func)
+/*
+ * Runs the function and its narg arguments on top of the stack of thread and
+ * waits for it. The thread goes back to the pool (or is terminated) with an
+ * empty stack: on success the results are passed to results_func (if any)
+ * before that.
+ */
+static int
+lua_repl_thread_call_results(struct thread_entry *thread, int narg,
+							 gpointer ud, lua_thread_error_t error_func,
+							 lua_repl_results_t results_func)
 {
 	int ret;
 	guint64 generation;
-	struct lua_call_data *cd = g_new0(struct lua_call_data, 1);
+	struct lua_repl_call_data *rcd = g_new0(struct lua_repl_call_data, 1);
+	struct lua_call_data *cd = &rcd->cd;
 	cd->top = lua_gettop(thread->lua_state);
 	cd->ud = ud;
+	rcd->results_func = results_func;
+	rcd->base = cd->top - narg - 1;
 
 	if (error_func == NULL) {
 		error_func = lua_thread_error_cb;
@@ -310,7 +348,7 @@ int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua
 
 	thread->finish_callback = lua_thread_finish_cb;
 	thread->error_callback = error_func;
-	thread->cd = cd;
+	thread->cd = rcd;
 
 	/* The entry is looked at after the call, when the pool can have let it go */
 	lua_thread_pool_retain_entry(thread);
@@ -331,7 +369,7 @@ int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua
 		error_func(thread, LUA_YIELD,
 				   "the code is suspended by a request that is not bound "
 				   "to rspamadm_session");
-		/* Callers must not take the stack of a stopped coroutine for results */
+		/* The call fails whatever error_func records */
 		cd->ret = LUA_YIELD;
 		lua_thread_pool_terminate_entry_full(thread->pool, thread, G_STRLOC, true);
 	}
@@ -339,9 +377,14 @@ int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua
 	ret = cd->ret;
 
 	lua_thread_pool_release_entry(thread);
-	g_free(cd);
+	g_free(rcd);
 
 	return ret;
+}
+
+int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua_thread_error_t error_func)
+{
+	return lua_repl_thread_call_results(thread, narg, ud, error_func, NULL);
 }
 
 static void
@@ -411,14 +454,29 @@ rspamadm_lua_exec_handler(lua_State *L, int argc, char **argv)
 }
 
 static void
+rspamadm_lua_message_results(lua_State *L, int first, gpointer ud)
+{
+	const char *fname = ud;
+	char outbuf[8192];
+	int i;
+
+	rspamd_printf("lua callback for %s returned:\n", fname);
+
+	for (i = first; i <= lua_gettop(L); i++) {
+		lua_logger_out(L, i, outbuf, sizeof(outbuf),
+					   LUA_ESCAPE_UNPRINTABLE);
+		rspamd_printf("%s\n", outbuf);
+	}
+}
+
+static void
 rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 {
 	gulong cbref;
-	int old_top, func_idx, i, j;
+	int func_idx, i;
 	struct rspamd_task *task, **ptask;
 	gpointer map;
 	gsize len;
-	char outbuf[8192];
 
 	if (argv[1] == NULL) {
 		rspamd_printf("no callback is specified\n");
@@ -475,33 +533,18 @@ rspamadm_lua_message_handler(lua_State *L, int argc, char **argv)
 			}
 
 			rspamd_message_process(task);
-			old_top = lua_gettop(L);
 
 			lua_pushvalue(L, func_idx);
 			ptask = lua_newuserdata(L, sizeof(*ptask));
 			*ptask = task;
 			rspamd_lua_setclass(L, rspamd_task_classname, -1);
 
-
-			if (lua_repl_thread_call(thread, 1, argv[i], lua_thread_str_error_cb) == 0) {
-				rspamd_printf("lua callback for %s returned:\n", argv[i]);
-
-				for (j = old_top + 1; j <= lua_gettop(L); j++) {
-					lua_logger_out(L, j, outbuf, sizeof(outbuf),
-								   LUA_ESCAPE_UNPRINTABLE);
-					rspamd_printf("%s\n", outbuf);
-				}
-
-				/* Clean the thread up unless the callback is still suspended */
-				if (lua_status(L) == 0) {
-					lua_settop(L, 0);
-				}
-			}
-
 			/*
-			 * On error the thread has been terminated: its stack must not be
-			 * touched.
+			 * The results are printed by rspamadm_lua_message_results(); the
+			 * thread is not ours once the call is over
 			 */
+			lua_repl_thread_call_results(thread, 1, argv[i], lua_thread_str_error_cb,
+										 rspamadm_lua_message_results);
 			rspamd_task_free(task);
 			munmap(map, len);
 		}
@@ -809,6 +852,32 @@ lua_thread_http_error_cb(struct thread_entry *thread, int ret, const char *msg)
 }
 
 
+static void
+lua_thread_http_results(lua_State *L, int first, gpointer ud)
+{
+	struct rspamd_http_connection_entry *conn_ent = ud;
+	ucl_object_t *obj, *elt;
+	int i;
+
+	obj = ucl_object_typed_new(UCL_ARRAY);
+
+	for (i = first; i <= lua_gettop(L); i++) {
+		if (lua_isfunction(L, i)) {
+			/* XXX: think about API */
+		}
+		else {
+			elt = ucl_object_lua_import(L, i);
+
+			if (elt) {
+				ucl_array_append(obj, elt);
+			}
+		}
+	}
+
+	rspamd_controller_send_ucl(conn_ent, obj);
+	ucl_object_unref(obj);
+}
+
 /*
  * Exec command handler:
  * request: /exec
@@ -820,9 +889,7 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 						 struct rspamd_http_message *msg)
 {
 	GString *tb;
-	int err_idx, i;
 	lua_State *L;
-	ucl_object_t *obj, *elt;
 	const char *body;
 	gsize body_len;
 	struct thread_entry *thread = lua_thread_pool_get_for_config(rspamd_main->cfg);
@@ -838,9 +905,6 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	lua_pushcfunction(L, &rspamd_lua_traceback);
-	err_idx = lua_gettop(L);
-
 	/* First try return + input */
 	tb = g_string_sized_new(body_len + sizeof("return "));
 	rspamd_printf_gstring(tb, "return %*s", (int) body_len, body);
@@ -851,8 +915,6 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 	if (load_ret != 0) {
 		/* Reset stack */
 		lua_settop(L, 0);
-		lua_pushcfunction(L, &rspamd_lua_traceback);
-		err_idx = lua_gettop(L);
 		/* Try with no return */
 		if (luaL_loadbuffer(L, body, body_len, "http input") != 0) {
 			rspamd_controller_send_error(conn_ent, 400, "Invalid lua script");
@@ -863,28 +925,9 @@ rspamadm_lua_handle_exec(struct rspamd_http_connection_entry *conn_ent,
 		}
 	}
 
-	if (lua_repl_thread_call(thread, 0, conn_ent, lua_thread_http_error_cb) != 0) {
-		return 0;
-	}
-
-	obj = ucl_object_typed_new(UCL_ARRAY);
-
-	for (i = err_idx + 1; i <= lua_gettop(L); i++) {
-		if (lua_isfunction(L, i)) {
-			/* XXX: think about API */
-		}
-		else {
-			elt = ucl_object_lua_import(L, i);
-
-			if (elt) {
-				ucl_array_append(obj, elt);
-			}
-		}
-	}
-
-	rspamd_controller_send_ucl(conn_ent, obj);
-	ucl_object_unref(obj);
-	lua_settop(L, 0);
+	/* The reply is sent by lua_thread_http_results() or by the error callback */
+	lua_repl_thread_call_results(thread, 0, conn_ent, lua_thread_http_error_cb,
+								 lua_thread_http_results);
 
 	return 0;
 }
