@@ -110,7 +110,13 @@ struct lua_expression {
 	struct rspamd_expression *expr;
 	int parse_idx;
 	int process_idx;
+	/*
+	 * The creating state: it runs the parse callback inside lua_expr_create(),
+	 * later on it is used only when there is no config main state
+	 */
 	lua_State *L;
+	/* Gives the main state to release the references on */
+	struct rspamd_config *cfg;
 	rspamd_mempool_t *pool;
 };
 
@@ -132,13 +138,31 @@ static void
 lua_expr_dtor(gpointer p)
 {
 	struct lua_expression *e = (struct lua_expression *) p;
+	lua_State *L;
+
+	if (!rspamd_lua_is_initialised()) {
+		/* The pool outlives the Lua state, and the references have gone with it */
+		return;
+	}
+
+	/*
+	 * The registry is shared by all threads: the main state releases the
+	 * references, as the creating one can be a coroutine that is collected
+	 * by the time the pool is destroyed
+	 */
+	if (e->cfg && e->cfg->lua_thread_pool) {
+		L = RSPAMD_LUA_CFG_STATE(e->cfg);
+	}
+	else {
+		L = e->L;
+	}
 
 	if (e->parse_idx != -1) {
-		luaL_unref(e->L, LUA_REGISTRYINDEX, e->parse_idx);
+		luaL_unref(L, LUA_REGISTRYINDEX, e->parse_idx);
 	}
 
 	if (e->process_idx != -1) {
-		luaL_unref(e->L, LUA_REGISTRYINDEX, e->process_idx);
+		luaL_unref(L, LUA_REGISTRYINDEX, e->process_idx);
 	}
 }
 
@@ -358,7 +382,19 @@ lua_expr_create(lua_State *L)
 
 		e = rspamd_mempool_alloc(pool, sizeof(*e));
 		e->L = L;
+		e->cfg = NULL;
 		e->pool = pool;
+
+		lua_getglobal(L, "rspamd_config");
+		if (lua_type(L, -1) == LUA_TUSERDATA) {
+			struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																	   rspamd_config_classname);
+
+			if (pcfg) {
+				e->cfg = *pcfg;
+			}
+		}
+		lua_pop(L, 1);
 
 		/* Check callbacks */
 		if (lua_istable(L, 2)) {

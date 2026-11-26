@@ -15,6 +15,7 @@
  */
 
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
 #include "libserver/maps/map_private.h"
@@ -195,7 +196,9 @@ static const struct luaL_reg maplib_m[] = {
 	{NULL, NULL}};
 
 struct lua_map_callback_data {
+	/* Used only when the config has no thread pool to run the callback on */
 	lua_State *L;
+	struct rspamd_config *cfg;
 	int ref;
 	gboolean opaque;
 	gboolean by_line;
@@ -209,6 +212,50 @@ lua_check_map(lua_State *L, int pos)
 	void *ud = rspamd_lua_check_udata(L, pos, rspamd_map_classname);
 	luaL_argcheck(L, ud != NULL, pos, "'map' expected");
 	return ud ? *((struct rspamd_lua_map **) ud) : NULL;
+}
+
+/*
+ * State to run a map callback on. It is not the state that has registered
+ * the callback if it can be avoided: that one can be a pooled thread which is
+ * collected, reused or a suspended coroutine of a task by the time the map is
+ * loaded. Each call must be paired with lua_map_callback_state_release().
+ */
+static lua_State *
+lua_map_callback_state_get(struct rspamd_config *cfg, lua_State *L,
+						   struct lua_callback_state *cbs, gboolean *pooled)
+{
+	if (cfg && cfg->lua_thread_pool) {
+		lua_thread_pool_prepare_callback(cfg->lua_thread_pool, cbs);
+		*pooled = TRUE;
+
+		return cbs->L;
+	}
+
+	*pooled = FALSE;
+
+	return L;
+}
+
+static void
+lua_map_callback_state_release(struct lua_callback_state *cbs, gboolean pooled)
+{
+	if (pooled) {
+		lua_thread_pool_restore_callback(cbs);
+	}
+}
+
+/*
+ * State to release a registry reference on: the registry is shared by all
+ * threads, so it is the main state when the config has one
+ */
+static lua_State *
+lua_map_registry_state(struct rspamd_config *cfg, lua_State *L)
+{
+	if (cfg && cfg->lua_thread_pool) {
+		return RSPAMD_LUA_CFG_STATE(cfg);
+	}
+
+	return L;
 }
 
 int lua_config_add_radix_map(lua_State *L)
@@ -462,43 +509,49 @@ lua_map_line_insert(gpointer st, gconstpointer key, gconstpointer value)
 	struct lua_map_callback_data *cbdata = st;
 	struct rspamd_lua_map **pmap;
 	struct rspamd_map *map = cbdata->lua_map->map;
+	struct lua_callback_state cbs;
+	gboolean pooled;
+	lua_State *L;
 
 	if (cbdata->ref == -1) {
 		msg_err_map("map has no callback set");
 		return;
 	}
 
-	lua_pushcfunction(cbdata->L, &rspamd_lua_traceback);
-	int err_idx = lua_gettop(cbdata->L);
+	L = lua_map_callback_state_get(cbdata->cfg, cbdata->L, &cbs, &pooled);
 
-	lua_rawgeti(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->ref);
 
 	/* Push key */
 	if (!cbdata->opaque) {
-		lua_pushstring(cbdata->L, key);
-		lua_pushstring(cbdata->L, value);
+		lua_pushstring(L, key);
+		lua_pushstring(L, value);
 	}
 	else {
 		/* Key */
-		lua_new_text(cbdata->L, key, strlen(key), 0);
+		lua_new_text(L, key, strlen(key), 0);
 
 		/* Value */
-		lua_new_text(cbdata->L, value, strlen(value), 0);
+		lua_new_text(L, value, strlen(value), 0);
 	}
 
 	/* Push map object */
-	pmap = lua_newuserdata(cbdata->L, sizeof(void *));
+	pmap = lua_newuserdata(L, sizeof(void *));
 	*pmap = cbdata->lua_map;
-	rspamd_lua_setclass(cbdata->L, rspamd_map_classname, -1);
+	rspamd_lua_setclass(L, rspamd_map_classname, -1);
 
-	int ret = lua_pcall(cbdata->L, 3, 0, err_idx);
+	int ret = lua_pcall(L, 3, 0, err_idx);
 
 	if (ret != 0) {
 		msg_info_map("call to line callback failed (%d): %s", ret,
-					 lua_tostring(cbdata->L, -1));
+					 lua_tostring(L, -1));
 	}
 
-	lua_settop(cbdata->L, err_idx - 1);
+	lua_settop(L, err_idx - 1);
+	lua_map_callback_state_release(&cbs, pooled);
 }
 
 static char *
@@ -619,32 +672,37 @@ lua_map_fin(struct map_cb_data *data, void **target)
 			msg_err_map("map has no callback set");
 		}
 		else if (cbdata->data != NULL && cbdata->data->len != 0) {
+			struct lua_callback_state cbs;
+			gboolean pooled;
+			lua_State *L = lua_map_callback_state_get(cbdata->cfg, cbdata->L,
+													  &cbs, &pooled);
 
-			lua_pushcfunction(cbdata->L, &rspamd_lua_traceback);
-			int err_idx = lua_gettop(cbdata->L);
+			lua_pushcfunction(L, &rspamd_lua_traceback);
+			int err_idx = lua_gettop(L);
 
-			lua_rawgeti(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+			lua_rawgeti(L, LUA_REGISTRYINDEX, cbdata->ref);
 
 			if (!cbdata->opaque) {
-				lua_pushlstring(cbdata->L, cbdata->data->str, cbdata->data->len);
+				lua_pushlstring(L, cbdata->data->str, cbdata->data->len);
 			}
 			else {
-				lua_new_text(cbdata->L, cbdata->data->str, cbdata->data->len, 0);
+				lua_new_text(L, cbdata->data->str, cbdata->data->len, 0);
 			}
 
-			pmap = lua_newuserdata(cbdata->L, sizeof(void *));
+			pmap = lua_newuserdata(L, sizeof(void *));
 			*pmap = cbdata->lua_map;
-			rspamd_lua_setclass(cbdata->L, rspamd_map_classname, -1);
+			rspamd_lua_setclass(L, rspamd_map_classname, -1);
 
-			int ret = lua_pcall(cbdata->L, 2, 0, err_idx);
+			int ret = lua_pcall(L, 2, 0, err_idx);
 
 			if (ret != 0) {
 				msg_info_map("call to %s failed (%d): %s", "map fin function",
 							 ret,
-							 lua_tostring(cbdata->L, -1));
+							 lua_tostring(L, -1));
 			}
 
-			lua_settop(cbdata->L, err_idx - 1);
+			lua_settop(L, err_idx - 1);
+			lua_map_callback_state_release(&cbs, pooled);
 		}
 
 		cbdata->data = rspamd_fstring_assign(cbdata->data, "", 0);
@@ -666,8 +724,9 @@ lua_map_dtor(struct map_cb_data *data)
 
 	if (data->cur_data) {
 		cbdata = (struct lua_map_callback_data *) data->cur_data;
-		if (cbdata->ref != -1) {
-			luaL_unref(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+		if (cbdata->ref != -1 && rspamd_lua_is_initialised()) {
+			luaL_unref(lua_map_registry_state(cbdata->cfg, cbdata->L),
+					   LUA_REGISTRYINDEX, cbdata->ref);
 		}
 
 		if (cbdata->data) {
@@ -721,6 +780,7 @@ int lua_config_add_map(lua_State *L)
 													 sizeof(*map->data.cbdata));
 			cbdata = map->data.cbdata;
 			cbdata->L = L;
+			cbdata->cfg = cfg;
 			cbdata->data = NULL;
 			cbdata->lua_map = map;
 			cbdata->ref = cbidx;
@@ -1496,7 +1556,9 @@ lua_map_get_uri(lua_State *L)
 }
 
 struct lua_map_on_load_cbdata {
+	/* Used only when the config has no thread pool to run the callback on */
 	lua_State *L;
+	struct rspamd_config *cfg;
 	int ref;
 };
 
@@ -1505,7 +1567,11 @@ lua_map_on_load_dtor(gpointer p)
 {
 	struct lua_map_on_load_cbdata *cbd = p;
 
-	luaL_unref(cbd->L, LUA_REGISTRYINDEX, cbd->ref);
+	if (rspamd_lua_is_initialised()) {
+		luaL_unref(lua_map_registry_state(cbd->cfg, cbd->L),
+				   LUA_REGISTRYINDEX, cbd->ref);
+	}
+
 	g_free(cbd);
 }
 
@@ -1513,7 +1579,9 @@ static void
 lua_map_on_load_handler(struct rspamd_map *map, gpointer ud)
 {
 	struct lua_map_on_load_cbdata *cbd = ud;
-	lua_State *L = cbd->L;
+	struct lua_callback_state cbs;
+	gboolean pooled;
+	lua_State *L = lua_map_callback_state_get(cbd->cfg, cbd->L, &cbs, &pooled);
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	int err_idx = lua_gettop(L);
@@ -1525,6 +1593,7 @@ lua_map_on_load_handler(struct rspamd_map *map, gpointer ud)
 	}
 
 	lua_settop(L, err_idx - 1);
+	lua_map_callback_state_release(&cbs, pooled);
 }
 
 static int
@@ -1541,6 +1610,7 @@ lua_map_on_load(lua_State *L)
 		lua_pushvalue(L, 2);
 		struct lua_map_on_load_cbdata *cbd = g_malloc(sizeof(struct lua_map_on_load_cbdata));
 		cbd->L = L;
+		cbd->cfg = map->map->cfg;
 		cbd->ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
 		rspamd_map_set_on_load_function(map->map, lua_map_on_load_handler, cbd, lua_map_on_load_dtor);

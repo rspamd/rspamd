@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 
 /***
  * @module rspamd_mempool
@@ -141,7 +142,9 @@ static const struct luaL_reg mempoollib_f[] = {
  */
 
 struct lua_mempool_udata {
+	/* Used only when there is no config thread pool to run the destructor on */
 	lua_State *L;
+	struct rspamd_config *cfg;
 	int cbref;
 	rspamd_mempool_t *mempool;
 };
@@ -178,13 +181,40 @@ static void
 lua_mempool_destructor_func(gpointer p)
 {
 	struct lua_mempool_udata *ud = p;
+	struct lua_callback_state cbs;
+	gboolean pooled = FALSE;
+	lua_State *L;
 
-	lua_rawgeti(ud->L, LUA_REGISTRYINDEX, ud->cbref);
-	if (lua_pcall(ud->L, 0, 0, 0) != 0) {
-		msg_info("call to destructor failed: %s", lua_tostring(ud->L, -1));
-		lua_pop(ud->L, 1);
+	if (!rspamd_lua_is_initialised()) {
+		/* The pool outlives the Lua state, and the callback has gone with it */
+		return;
 	}
-	luaL_unref(ud->L, LUA_REGISTRYINDEX, ud->cbref);
+
+	/*
+	 * Not the state that has added the destructor if it can be avoided: that
+	 * one can be a pooled thread which is collected, reused or a suspended
+	 * coroutine of another task by the time the pool is destroyed
+	 */
+	if (ud->cfg && ud->cfg->lua_thread_pool) {
+		lua_thread_pool_prepare_callback(ud->cfg->lua_thread_pool, &cbs);
+		L = cbs.L;
+		pooled = TRUE;
+	}
+	else {
+		L = ud->L;
+	}
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ud->cbref);
+	if (lua_pcall(L, 0, 0, 0) != 0) {
+		msg_info("call to destructor failed: %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
+	}
+	/* The registry is shared by all threads of the state */
+	luaL_unref(L, LUA_REGISTRYINDEX, ud->cbref);
+
+	if (pooled) {
+		lua_thread_pool_restore_callback(&cbs);
+	}
 }
 
 static int
@@ -198,6 +228,20 @@ lua_mempool_add_destructor(lua_State *L)
 		if (lua_isfunction(L, 2)) {
 			ud = rspamd_mempool_alloc(mempool,
 									  sizeof(struct lua_mempool_udata));
+			ud->cfg = NULL;
+
+			/* The config gives the thread pool to run the destructor on */
+			lua_getglobal(L, "rspamd_config");
+			if (lua_type(L, -1) == LUA_TUSERDATA) {
+				struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																		   rspamd_config_classname);
+
+				if (pcfg) {
+					ud->cfg = *pcfg;
+				}
+			}
+			lua_pop(L, 1);
+
 			lua_pushvalue(L, 2);
 			/* Get a reference */
 			ud->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
