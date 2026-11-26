@@ -299,25 +299,46 @@ wait_session_events(void)
 int lua_repl_thread_call(struct thread_entry *thread, int narg, gpointer ud, lua_thread_error_t error_func)
 {
 	int ret;
+	guint64 generation;
 	struct lua_call_data *cd = g_new0(struct lua_call_data, 1);
 	cd->top = lua_gettop(thread->lua_state);
 	cd->ud = ud;
 
+	if (error_func == NULL) {
+		error_func = lua_thread_error_cb;
+	}
+
 	thread->finish_callback = lua_thread_finish_cb;
-	if (error_func) {
-		thread->error_callback = error_func;
-	}
-	else {
-		thread->error_callback = lua_thread_error_cb;
-	}
+	thread->error_callback = error_func;
 	thread->cd = cd;
+
+	/* The entry is looked at after the call, when the pool can have let it go */
+	lua_thread_pool_retain_entry(thread);
+	generation = thread->generation;
 
 	lua_thread_call(thread, narg);
 
 	wait_session_events();
 
+	if (thread->generation == generation && thread->state == LUA_THREAD_YIELDED) {
+		/*
+		 * The code waits for a request that is not bound to rspamadm_session,
+		 * so nothing waits for it here. Once this call is over, its callbacks
+		 * would use the call data freed below, and the code itself what the
+		 * caller frees then (a task, an HTTP connection): the call fails, and
+		 * the coroutine is stopped, so it is never resumed.
+		 */
+		error_func(thread, LUA_YIELD,
+				   "the code is suspended by a request that is not bound "
+				   "to rspamadm_session");
+		/* Callers must not take the stack of a stopped coroutine for results */
+		cd->ret = LUA_YIELD;
+		lua_thread_pool_terminate_entry_full(thread->pool, thread, G_STRLOC, true);
+	}
+
 	ret = cd->ret;
 
+	lua_thread_pool_release_entry(thread);
 	g_free(cd);
 
 	return ret;
