@@ -298,6 +298,12 @@ rspamd_protocol_handle_url(struct rspamd_task *task,
 			key = k;
 			value = v;
 
+			if (memchr(key->begin, '\0', key->len) != NULL) {
+				/* The header name would be cut at the NUL byte */
+				msg_debug_protocol("skip query key with a NUL byte");
+				continue;
+			}
+
 			key_cpy = rspamd_mempool_ftokdup(task->task_pool, key);
 
 			rspamd_http_message_add_header_len(msg, key_cpy,
