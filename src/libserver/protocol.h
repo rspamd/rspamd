@@ -78,6 +78,10 @@ struct ucl_parser *rspamd_ucl_parser_new_untrusted(gsize inlen);
 gboolean rspamd_protocol_handle_headers(struct rspamd_task *task,
 										struct rspamd_http_message *msg);
 
+/* Borrow the rewritten body using the native milter/v2/v3 semantics. */
+void rspamd_protocol_get_rewritten_body(struct rspamd_task *task,
+										const char **body_start, gsize *body_len);
+
 /**
  * Process control chunk and update task structure accordingly
  * @param task
