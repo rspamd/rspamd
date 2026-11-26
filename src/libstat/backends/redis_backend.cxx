@@ -630,6 +630,8 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 		msg_err("call to lua_bayes_init_classifier "
 				"script failed: %s",
 				lua_tostring(L, -1));
+		/* The backend is freed on return, so the stat callback must not find it */
+		rspamd_mempool_remove_variable(cfg->cfg_pool, cookie);
 		lua_settop(L, err_idx - 1);
 
 		return nullptr;
@@ -639,6 +641,17 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	 * top - 1 - classifier function (idx = -2)
 	 * top - learn function (idx = -1)
 	 */
+	if (!lua_isfunction(L, -2) || !lua_isfunction(L, -1)) {
+		msg_err_config("cannot init redis backend for %s: "
+					   "lua_bayes_init_statfile returned %s and %s instead of functions",
+					   backend->stcf->symbol,
+					   lua_typename(L, lua_type(L, -2)),
+					   lua_typename(L, lua_type(L, -1)));
+		rspamd_mempool_remove_variable(cfg->cfg_pool, cookie);
+		lua_settop(L, err_idx - 1);
+
+		return nullptr;
+	}
 
 	lua_pushvalue(L, -2);
 	backend->cbref_classify = luaL_ref(L, LUA_REGISTRYINDEX);
