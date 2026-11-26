@@ -1178,6 +1178,7 @@ lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, 
 	struct thread_entry *thread = cbd->thread;
 	guint64 generation = cbd->thread_generation;
 	lua_State *L = thread->lua_state;
+	int top = lua_gettop(L);
 
 	/* The operation is over: the next one records its own coroutine */
 	cbd->thread = NULL;
@@ -1187,7 +1188,10 @@ lua_tcp_resume_thread_error_argp(struct lua_tcp_cbdata *cbd, const char *error, 
 
 	lua_tcp_shift_handler(cbd);
 	// lua_tcp_unregister_event (cbd);
-	lua_thread_resume_checked(thread, generation, 2);
+	if (!lua_thread_resume_checked(thread, generation, 2)) {
+		/* The entry is dead or serves another coroutine: its stack stays as it was */
+		lua_settop(L, top);
+	}
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
 	TCP_RELEASE(cbd);
@@ -1214,6 +1218,7 @@ lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 	struct thread_entry *thread = cbd->thread;
 	guint64 generation = cbd->thread_generation;
 	lua_State *L = thread->lua_state;
+	int top = lua_gettop(L);
 	struct lua_tcp_handler *hdl;
 
 	hdl = g_queue_peek_head(cbd->handlers);
@@ -1235,7 +1240,10 @@ lua_tcp_resume_thread(struct lua_tcp_cbdata *cbd, const uint8_t *str, gsize len)
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	lua_thread_resume_checked(thread, generation, 2);
+	if (!lua_thread_resume_checked(thread, generation, 2)) {
+		/* The entry is dead or serves another coroutine: its stack stays as it was */
+		lua_settop(L, top);
+	}
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
 
@@ -1268,6 +1276,7 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 	struct thread_entry *thread;
 	guint64 generation;
 	lua_State *L;
+	int top;
 
 	if (cbd->thread == NULL) {
 		/*
@@ -1297,6 +1306,7 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 	thread = cbd->thread;
 	generation = cbd->thread_generation;
 	L = thread->lua_state;
+	top = lua_gettop(L);
 
 	/* The operation is over: the next one records its own coroutine */
 	cbd->thread = NULL;
@@ -1317,7 +1327,16 @@ lua_tcp_connect_helper(struct lua_tcp_cbdata *cbd)
 	}
 
 	// lua_tcp_unregister_event (cbd);
-	lua_thread_resume_checked(thread, generation, 2);
+	if (!lua_thread_resume_checked(thread, generation, 2)) {
+		/*
+		 * The entry is dead or serves another coroutine: its stack stays as it
+		 * was, and the handle that nobody gets does not own the connection,
+		 * which is destroyed when its last reference is released
+		 */
+		*pcbd = NULL;
+		cbd->flags &= ~LUA_TCP_FLAG_HANDLE;
+		lua_settop(L, top);
+	}
 	/* Balances the retain taken at the matching yield */
 	lua_thread_pool_release_entry(thread);
 	TCP_RELEASE(cbd);
@@ -2956,7 +2975,6 @@ lua_tcp_connect_sync(lua_State *L)
 	int64_t port = -1;
 	double timeout = default_tcp_timeout;
 	const char *host = NULL;
-	int ret;
 	uint64_t h;
 
 	struct rspamd_task *task = NULL;
@@ -2991,10 +3009,11 @@ lua_tcp_connect_sync(lua_State *L)
 
 	if (!arguments_validated) {
 		if (err) {
-			ret = luaL_error(L, "invalid arguments: %s", err->message);
+			/* lua_error() does not return: the message is copied first */
+			lua_pushfstring(L, "invalid arguments: %s", err->message);
 			g_error_free(err);
 
-			return ret;
+			return lua_error(L);
 		}
 
 		return luaL_error(L, "invalid arguments");
@@ -3510,9 +3529,9 @@ lua_tcp_sync_session_dtor(gpointer ud)
 		 * A coroutine of this very task is terminated by the task itself (the
 		 * guard of lua_thread_pool_get_for_task, run by this pool cleanup
 		 * before or after us) without the thread pool, which can be gone with
-		 * the config: the task drops its config reference before its pool is
-		 * destroyed. If the guard has run, the entry is dead and the pool holds
-		 * no reference to it any more, so it must not be terminated again.
+		 * the config for a task that runs on a pool of its caller. If the guard
+		 * has run, the entry is dead and the pool holds no reference to it any
+		 * more, so it must not be terminated again.
 		 * A coroutine of anything else (another task, the config) is
 		 * terminated here, but only if it is still the very coroutine suspended
 		 * by us: a dead entry is done with, a recycled one belongs to somebody
