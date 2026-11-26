@@ -1688,7 +1688,14 @@ local function exec_redis_script(id, params, callback, keys, args)
       end
     elseif params.ev_base then
       rspamd_config:add_periodic(params.ev_base, 0.01, function()
-        return check_loaded() or false
+        -- One shot: a periodic that fails is planned again, and the callback
+        -- must not be called once more for the same request
+        local ok, res = pcall(check_loaded)
+        if not ok then
+          logger.errx(rspamd_config, 'cannot wait for redis script %s: %s', id, res)
+          return false
+        end
+        return res or false
       end, false)
     else
       callback('No event base for redis script upload', nil)

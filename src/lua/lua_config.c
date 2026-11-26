@@ -819,6 +819,10 @@ LUA_FUNCTION_DEF(config, dynconf_baseline);
 /***
  * @method rspamd_config:add_periodic(event_base, timeout, function(cfg, ev_base) ... end, [jitter = false])
  * Registers function to be periodically executed by Rspamd
+ * The function returns `true` to be called again in `timeout` seconds, a number to be called
+ * again in that many seconds, or `false`/nothing to stop. A call that fails with an error is
+ * planned again with the interval used last (`timeout`, or the number returned last); a periodic
+ * that has no such interval (`timeout` is 0 and no number has been returned yet) stops.
  * @param {ev_base} event_base event base that is needed for async events
  * @param {number} timeout time in seconds (could be fractional)
  * @param {function} script function to be executed
@@ -1553,6 +1557,103 @@ lua_metric_symbol_add_text_option(struct rspamd_task *task,
 	}
 }
 
+/*
+ * Inserts the symbol as the values returned by its callback say; they are at
+ * base + 1 ... top of L and are left there. The first value decides: true or
+ * a finite number that is not zero (it is the weight then) inserts the symbol,
+ * false, nil and zero do not. A number that follows the first value is the
+ * weight, and the values after them are the options.
+ */
+static void
+lua_metric_symbol_insert_results(struct rspamd_task *task,
+								 struct lua_callback_data *cd,
+								 lua_State *L,
+								 int base)
+{
+	struct rspamd_symbol_result *s;
+	double flag = 1.0;
+	int type, i, first_opt = 2, last_pos = lua_gettop(L);
+
+	if (last_pos <= base) {
+		return;
+	}
+
+	type = lua_type(L, base + 1);
+
+	if (type == LUA_TBOOLEAN) {
+		if (!lua_toboolean(L, base + 1)) {
+			return;
+		}
+	}
+	else if (type == LUA_TNUMBER) {
+		flag = lua_tonumber(L, base + 1);
+
+		if (!isfinite(flag)) {
+			msg_err_task("invalid return value for %s: %f, ignored",
+						 cd->symbol, flag);
+			return;
+		}
+
+		if (flag == 0) {
+			return;
+		}
+	}
+	else if (type == LUA_TNIL) {
+		/* Can happen sometimes... */
+		return;
+	}
+	else {
+		/* Something bogus has been returned, so we should log it */
+		msg_err_task("invalid return value for %s: %s",
+					 cd->symbol, lua_typename(L, type));
+		return;
+	}
+
+	if (lua_type(L, base + 2) == LUA_TNUMBER) {
+		flag = lua_tonumber(L, base + 2);
+		/* Shift opt index */
+		first_opt = 3;
+	}
+
+	s = rspamd_task_insert_result(task, cd->symbol, flag, NULL);
+
+	if (s == NULL) {
+		return;
+	}
+
+	for (i = base + first_opt; i <= last_pos; i++) {
+		if (lua_type(L, i) == LUA_TSTRING) {
+			gsize optlen;
+			const char *opt = lua_tolstring(L, i, &optlen);
+
+			rspamd_task_add_result_option(task, s, opt, optlen);
+		}
+		else if (lua_type(L, i) == LUA_TUSERDATA) {
+			lua_metric_symbol_add_text_option(task, s, cd->symbol, L, i);
+		}
+		else if (lua_type(L, i) == LUA_TTABLE) {
+			gsize objlen = rspamd_lua_table_size(L, i);
+
+			for (unsigned int j = 1; j <= objlen; j++) {
+				lua_rawgeti(L, i, j);
+
+				if (lua_type(L, -1) == LUA_TSTRING) {
+					gsize optlen;
+					const char *opt = lua_tolstring(L, -1, &optlen);
+
+					rspamd_task_add_result_option(task, s, opt, optlen);
+				}
+				else if (lua_type(L, -1) == LUA_TUSERDATA) {
+					lua_metric_symbol_add_text_option(task, s, cd->symbol,
+													  L, -1);
+				}
+
+				lua_pop(L, 1);
+			}
+		}
+	}
+}
+
 static void
 lua_metric_symbol_callback(struct rspamd_task *task,
 						   struct rspamd_symcache_dynamic_item *item,
@@ -1562,7 +1663,6 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	int level = lua_gettop(cd->L), nresults, err_idx, ret;
 	lua_State *L = cd->L;
-	struct rspamd_symbol_result *s;
 
 	rspamd_symcache_item_async_inc(task, item, "lua symbol");
 	lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -1590,82 +1690,7 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 		nresults = lua_gettop(L) - level;
 
 		if (nresults >= 1) {
-			/* Function returned boolean, so maybe we need to insert result? */
-			int res = 0;
-			int i;
-			double flag = 1.0;
-			int type;
-
-			type = lua_type(cd->L, level + 1);
-
-			if (type == LUA_TBOOLEAN) {
-				res = lua_toboolean(L, level + 1);
-			}
-			else if (type == LUA_TNUMBER) {
-				res = lua_tonumber(L, level + 1);
-			}
-			else if (type == LUA_TNIL) {
-				/* Can happen sometimes... */
-				res = FALSE;
-			}
-			else {
-				/* Something bogus has been returned, so we should log it */
-				msg_err_task("invalid return value for %s: %s",
-							 cd->symbol, lua_typename(L, type));
-				res = FALSE;
-			}
-
-			if (res) {
-				int first_opt = 2;
-
-				if (lua_type(L, level + 2) == LUA_TNUMBER) {
-					flag = lua_tonumber(L, level + 2);
-					/* Shift opt index */
-					first_opt = 3;
-				}
-				else {
-					flag = res;
-				}
-
-				s = rspamd_task_insert_result(task, cd->symbol, flag, NULL);
-
-				if (s) {
-					unsigned int last_pos = lua_gettop(L);
-
-					for (i = level + first_opt; i <= last_pos; i++) {
-						if (lua_type(L, i) == LUA_TSTRING) {
-							gsize optlen;
-							const char *opt = lua_tolstring(L, i, &optlen);
-
-							rspamd_task_add_result_option(task, s, opt, optlen);
-						}
-						else if (lua_type(L, i) == LUA_TUSERDATA) {
-							lua_metric_symbol_add_text_option(task, s, cd->symbol, L, i);
-						}
-						else if (lua_type(L, i) == LUA_TTABLE) {
-							gsize objlen = rspamd_lua_table_size(L, i);
-
-							for (unsigned int j = 1; j <= objlen; j++) {
-								lua_rawgeti(L, i, j);
-
-								if (lua_type(L, -1) == LUA_TSTRING) {
-									gsize optlen;
-									const char *opt = lua_tolstring(L, -1, &optlen);
-
-									rspamd_task_add_result_option(task, s, opt, optlen);
-								}
-								else if (lua_type(L, -1) == LUA_TUSERDATA) {
-									lua_metric_symbol_add_text_option(task, s, cd->symbol,
-																	  L, -1);
-								}
-
-								lua_pop(L, 1);
-							}
-						}
-					}
-				}
-			}
-
+			lua_metric_symbol_insert_results(task, cd, L, level);
 			lua_pop(L, nresults);
 		}
 	}
@@ -1742,7 +1767,6 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 	struct lua_callback_data *cd = ctx->cd;
 	struct rspamd_task *task = thread_entry->task;
 	int nresults, stack_level = ctx->stack_level;
-	struct rspamd_symbol_result *s;
 
 	(void) ret;
 
@@ -1751,78 +1775,7 @@ lua_metric_symbol_callback_return(struct thread_entry *thread_entry, int ret)
 	nresults = lua_gettop(L) - stack_level;
 
 	if (nresults >= 1) {
-		/* Function returned boolean, so maybe we need to insert result? */
-		int res = 0;
-		int i;
-		double flag = 1.0;
-		int type;
-
-		type = lua_type(L, stack_level + 1);
-
-		if (type == LUA_TBOOLEAN) {
-			res = lua_toboolean(L, stack_level + 1);
-		}
-		else if (type == LUA_TFUNCTION) {
-			/* Something bogus has been returned, so we should log it */
-			msg_err_task("invalid return value for %s: %s",
-						 cd->symbol, lua_typename(L, type));
-			res = FALSE;
-		}
-		else {
-			res = lua_tonumber(L, stack_level + 1);
-		}
-
-		if (res) {
-			int first_opt = 2;
-
-			if (lua_type(L, stack_level + 2) == LUA_TNUMBER) {
-				flag = lua_tonumber(L, stack_level + 2);
-				/* Shift opt index */
-				first_opt = 3;
-			}
-			else {
-				flag = res;
-			}
-
-			s = rspamd_task_insert_result(task, cd->symbol, flag, NULL);
-
-			if (s) {
-				unsigned int last_pos = lua_gettop(L);
-
-				for (i = stack_level + first_opt; i <= last_pos; i++) {
-					if (lua_type(L, i) == LUA_TSTRING) {
-						gsize optlen;
-						const char *opt = lua_tolstring(L, i, &optlen);
-
-						rspamd_task_add_result_option(task, s, opt, optlen);
-					}
-					else if (lua_type(L, i) == LUA_TUSERDATA) {
-						lua_metric_symbol_add_text_option(task, s, cd->symbol, L, i);
-					}
-					else if (lua_type(L, i) == LUA_TTABLE) {
-						gsize objlen = rspamd_lua_table_size(L, i);
-
-						for (unsigned int j = 1; j <= objlen; j++) {
-							lua_rawgeti(L, i, j);
-
-							if (lua_type(L, -1) == LUA_TSTRING) {
-								gsize optlen;
-								const char *opt = lua_tolstring(L, -1, &optlen);
-
-								rspamd_task_add_result_option(task, s, opt, optlen);
-							}
-							else if (lua_type(L, -1) == LUA_TUSERDATA) {
-								lua_metric_symbol_add_text_option(task, s, cd->symbol,
-																  L, -1);
-							}
-
-							lua_pop(L, 1);
-						}
-					}
-				}
-			}
-		}
-
+		lua_metric_symbol_insert_results(task, cd, L, stack_level);
 		lua_pop(L, nresults);
 	}
 
@@ -4148,7 +4101,7 @@ lua_config_add_post_init(lua_State *L)
 	struct rspamd_config_cfg_lua_script *sc;
 	unsigned int priority = 0;
 	lua_Debug d;
-	char tmp[256], *p;
+	char tmp[256] = "unknown", *p;
 
 	if (cfg == NULL || lua_type(L, 2) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
@@ -4195,7 +4148,7 @@ lua_config_add_config_unload(lua_State *L)
 	struct rspamd_config *cfg = lua_check_config(L, 1);
 	struct rspamd_config_cfg_lua_script *sc;
 	lua_Debug d;
-	char tmp[256], *p;
+	char tmp[256] = "unknown", *p;
 
 	if (cfg == NULL || lua_type(L, 2) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
@@ -4239,6 +4192,8 @@ struct rspamd_lua_periodic {
 	char *lua_src_pos;
 	lua_State *L;
 	double timeout;
+	/* The last interval the periodic has been planned with, 0 if none */
+	double interval;
 	ev_timer ev;
 	int cbref;
 	gboolean need_jitter;
@@ -4260,6 +4215,15 @@ lua_periodic_fin(gpointer p)
 	struct rspamd_lua_periodic *periodic = (struct rspamd_lua_periodic *) p;
 
 	REF_RELEASE(periodic);
+}
+
+/* A terminating worker plans no more periodic runs */
+static gboolean
+lua_periodic_may_plan(struct rspamd_lua_periodic *periodic)
+{
+	struct rspamd_worker *worker = periodic->cfg->cur_worker;
+
+	return worker == NULL || worker->state == rspamd_worker_state_running;
 }
 
 static void
@@ -4326,13 +4290,19 @@ lua_periodic_callback_finish(struct thread_entry *thread, int ret)
 		}
 
 		lua_settop(L, 0); /* Return values */
+
+		if (plan_more && timeout > 0) {
+			periodic->interval = timeout;
+		}
+	}
+	else if (periodic->interval > 0) {
+		/* A failed run is planned again with the interval used last */
+		plan_more = TRUE;
+		timeout = periodic->interval;
 	}
 
-	if (periodic->cfg->cur_worker) {
-		if (periodic->cfg->cur_worker->state != rspamd_worker_state_running) {
-			/* We are terminating, no more periodics */
-			plan_more = FALSE;
-		}
+	if (!lua_periodic_may_plan(periodic)) {
+		plan_more = FALSE;
 	}
 
 	if (plan_more) {
@@ -4357,8 +4327,20 @@ lua_periodic_callback_error(struct thread_entry *thread, int ret, const char *ms
 	struct rspamd_lua_periodic *periodic = thread->cd;
 	cfg = periodic->cfg;
 
-	msg_err_config("call to periodic script (registered at %s) failed: %s",
-				   periodic->lua_src_pos, msg);
+	if (!lua_periodic_may_plan(periodic)) {
+		msg_err_config("call to periodic script (registered at %s) failed: %s",
+					   periodic->lua_src_pos, msg);
+	}
+	else if (periodic->interval > 0) {
+		msg_err_config("call to periodic script (registered at %s) failed: %s; "
+					   "it is planned again with its last interval, %.2f seconds",
+					   periodic->lua_src_pos, msg, periodic->interval);
+	}
+	else {
+		msg_err_config("call to periodic script (registered at %s) failed: %s; "
+					   "it is stopped as it has no interval to be planned with",
+					   periodic->lua_src_pos, msg);
+	}
 
 	lua_periodic_callback_finish(thread, ret);
 }
@@ -4374,7 +4356,7 @@ lua_config_add_periodic(lua_State *L)
 	struct rspamd_lua_periodic *periodic;
 	gboolean need_jitter = FALSE;
 	lua_Debug d;
-	char tmp[256], *p;
+	char tmp[256] = "unknown", *p;
 
 	if (cfg == NULL || timeout < 0 || lua_type(L, 4) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
@@ -4405,6 +4387,7 @@ lua_config_add_periodic(lua_State *L)
 
 	periodic = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*periodic));
 	periodic->timeout = timeout;
+	periodic->interval = timeout;
 	periodic->L = L;
 	periodic->cfg = cfg;
 	periodic->event_loop = ev_base;
