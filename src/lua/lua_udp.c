@@ -122,6 +122,13 @@ static void
 lua_udp_cbd_fin(gpointer p)
 {
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *) p;
+	struct rspamd_symcache_dynamic_item *item = cbd->item;
+
+	/*
+	 * The request still holds the async counter of the symbol only when a
+	 * session cleanup cancels it: lua_udp_maybe_free gives it back otherwise
+	 */
+	cbd->item = NULL;
 
 	if (cbd->sock != -1) {
 		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
@@ -139,6 +146,15 @@ lua_udp_cbd_fin(gpointer p)
 	if (cbd->cbref && rspamd_lua_is_initialised()) {
 		luaL_unref(cbd->cfg ? RSPAMD_LUA_CFG_STATE(cbd->cfg) : cbd->L,
 				   LUA_REGISTRYINDEX, cbd->cbref);
+	}
+
+	if (item) {
+		/*
+		 * The task is alive while its session is cleaned up, and the symbol
+		 * cache starts no dependent symbol from a session that is being
+		 * cleaned up
+		 */
+		rspamd_symcache_item_async_dec_check(cbd->task, item, M);
 	}
 }
 

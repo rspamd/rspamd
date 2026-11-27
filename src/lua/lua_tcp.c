@@ -495,19 +495,72 @@ static void lua_tcp_handler(int fd, short what, gpointer ud);
 static void lua_tcp_deliver_pending_error(struct lua_tcp_cbdata *cbd);
 static void lua_tcp_plan_handler_event(struct lua_tcp_cbdata *cbd,
 									   gboolean can_read, gboolean can_write);
+static gboolean lua_tcp_shift_handler(struct lua_tcp_cbdata *cbd);
+static void lua_tcp_release_item(struct lua_tcp_cbdata *cbd);
 
 /*
- * Finaliser of the session event of a sync connection. It is called when the
- * event is removed, either by us or by the forced cleanup of the session (the
- * task has timed out): in both cases the event is gone and must be forgotten,
- * the object itself belongs to its Lua handle
+ * Finaliser of the session event of a sync connection. The event is gone and
+ * must be forgotten; the object itself belongs to its Lua handle.
+ *
+ * The connection removes the event itself once it is idle (lua_tcp_maybe_free,
+ * on a session that is not blocked), so nothing waits on it then. A cleanup of
+ * the session (the task has timed out or is being destroyed) calls it with the
+ * session blocked, and then an operation can be pending: the session does not
+ * wait for it any more, so it is cancelled. Its coroutine is terminated, as it
+ * would be when its task is destroyed, and what the operation holds is
+ * dropped. The connection is closed, as the stream is left in an unknown state
  */
 static void
 lua_tcp_sync_event_finalyser(gpointer arg)
 {
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *) arg;
+	struct thread_entry *thread = cbd->thread;
+	guint64 generation = cbd->thread_generation;
 
 	cbd->async_ev = NULL;
+
+	if (thread == NULL || !rspamd_session_blocked(cbd->session)) {
+		return;
+	}
+
+	msg_debug_tcp("session cleanup cancels the pending sync operation");
+
+	/* Nothing fires for the operation any more, and no other one can start */
+	cbd->thread = NULL;
+	cbd->flags |= LUA_TCP_FLAG_FINISHED;
+
+	if (cbd->fd != -1) {
+		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+		close(cbd->fd);
+		cbd->fd = -1;
+	}
+
+	/* Armed by `close` called while the operation is pending */
+	ev_timer_stop(cbd->event_loop, &cbd->close_ev);
+
+	while (lua_tcp_shift_handler(cbd)) {}
+
+	/*
+	 * The counter held while a host name is resolved and connected to. The
+	 * session is blocked: no dependent symbol is started from here
+	 */
+	lua_tcp_release_item(cbd);
+
+	/*
+	 * A dead entry is done with, a recycled one serves somebody else. The
+	 * termination can run Lua code (a coroutine of another task gives the
+	 * counter of its symbol back, which can start its dependent symbols): that
+	 * code finds the connection closed through a stored handle, and the
+	 * reference of the operation keeps it alive until the release below
+	 */
+	if (thread->state == LUA_THREAD_YIELDED && thread->generation == generation) {
+		lua_thread_pool_terminate_entry_full(thread->pool, thread, G_STRLOC, true);
+	}
+
+	/* Balances the retain taken at the yield */
+	lua_thread_pool_release_entry(thread);
+	/* The reference of the operation: this may free the connection */
+	TCP_RELEASE(cbd);
 }
 
 /* Runs the destructors/unrefs of a request, `L` is any thread of the main state */
@@ -617,6 +670,15 @@ static void
 lua_tcp_fin(gpointer arg)
 {
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *) arg;
+	struct rspamd_task *task = cbd->task;
+	/*
+	 * The connection still holds the async counter of the symbol only when a
+	 * session cleanup cancels an async connection: lua_tcp_maybe_free gives
+	 * it back before it finishes the connection
+	 */
+	struct rspamd_symcache_dynamic_item *item = cbd->item;
+
+	cbd->item = NULL;
 
 	if (IS_SYNC(cbd) && cbd->task) {
 		/*
@@ -679,6 +741,15 @@ lua_tcp_fin(gpointer arg)
 	g_free(cbd->hostname);
 	g_free(cbd->pending_err);
 	g_free(cbd);
+
+	if (item) {
+		/*
+		 * Given back once nothing can reach the connection. The task is alive
+		 * while its session is cleaned up, and the symbol cache starts no
+		 * dependent symbol from a session that is being cleaned up
+		 */
+		rspamd_symcache_item_async_dec_check(task, item, M);
+	}
 }
 
 /*
