@@ -2532,6 +2532,10 @@ rspamd_dkim_skip_empty_lines(struct rspamd_task *task, struct rspamd_dkim_common
 				state = got_lf;
 			}
 			else {
+				if (skip == 0 && sign) {
+					/* The body ends in spaces without a line ending */
+					*need_crlf = true;
+				}
 				goto end;
 			}
 			break;

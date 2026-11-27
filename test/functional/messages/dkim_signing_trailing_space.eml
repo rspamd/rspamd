@@ -1,0 +1,5 @@
+From: Rspamd <foo@cacophony.za.org>
+To: bob@example.net
+Subject: trailing space
+
+This line ends with a space. 
