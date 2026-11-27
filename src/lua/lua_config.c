@@ -1478,6 +1478,7 @@ lua_config_get_classifier(lua_State *L)
 
 struct lua_callback_data {
 	uint64_t magic;
+	/* State that has registered the symbol: runs it if the config has no thread pool */
 	lua_State *L;
 	struct rspamd_config *cfg;
 	char *symbol;
@@ -1661,10 +1662,27 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
-	int level = lua_gettop(cd->L), nresults, err_idx, ret;
-	lua_State *L = cd->L;
+	struct lua_thread_pool *pool = cd->cfg->lua_thread_pool;
+	struct lua_callback_state cbs;
+	int level, nresults, err_idx, ret;
+	lua_State *L;
 
 	rspamd_symcache_item_async_inc(task, item, "lua symbol");
+
+	/*
+	 * The state that has registered the symbol is used only by a config
+	 * without a thread pool: it can be a pooled thread, which is collected,
+	 * reused or suspended by the time the symbol runs
+	 */
+	if (pool != NULL) {
+		lua_thread_pool_prepare_callback(pool, &cbs);
+		L = cbs.L;
+	}
+	else {
+		L = cd->L;
+	}
+
+	level = lua_gettop(L);
 	lua_pushcfunction(L, &rspamd_lua_traceback);
 	err_idx = lua_gettop(L);
 
@@ -1696,8 +1714,13 @@ lua_metric_symbol_callback(struct rspamd_task *task,
 	}
 
 	lua_pop(L, 1); /* Error function */
-	rspamd_symcache_item_async_dec_check(task, item, "lua symbol");
 	g_assert(lua_gettop(L) == level - 1);
+
+	if (pool != NULL) {
+		lua_thread_pool_restore_callback(&cbs);
+	}
+
+	rspamd_symcache_item_async_dec_check(task, item, "lua symbol");
 }
 
 static void lua_metric_symbol_callback_return(struct thread_entry *thread_entry,
@@ -5060,18 +5083,21 @@ lua_config_register_monitored(lua_State *L)
 	if (cfg != NULL && url != NULL && type != NULL) {
 		if (g_ascii_strcasecmp(type, "dns") == 0) {
 			lua_Debug ar;
+			const char *src = "unknown";
 
 			if (lua_type(L, 4) == LUA_TTABLE) {
 				params = ucl_object_lua_import(L, 4);
 			}
 
 			/* Get lua line and source */
-			lua_getstack(L, 1, &ar);
-			lua_getinfo(L, "nSl", &ar);
+			if (lua_getstack(L, 1, &ar) == 1) {
+				(void) lua_getinfo(L, "nSl", &ar);
+				src = ar.short_src;
+			}
 
 			m = rspamd_monitored_create_(cfg->monitored_ctx, url,
 										 RSPAMD_MONITORED_DNS, RSPAMD_MONITORED_DEFAULT,
-										 params, ar.short_src);
+										 params, src);
 
 			if (m) {
 				pm = lua_newuserdata(L, sizeof(*pm));
