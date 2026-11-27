@@ -1730,6 +1730,8 @@ static void lua_metric_symbol_callback_error(struct thread_entry *thread_entry,
 											 int ret,
 											 const char *msg);
 
+static void lua_metric_symbol_callback_terminate(struct thread_entry *thread_entry);
+
 static void
 lua_metric_symbol_callback_coro(struct rspamd_task *task,
 								struct rspamd_symcache_dynamic_item *item,
@@ -1767,6 +1769,7 @@ lua_metric_symbol_callback_coro(struct rspamd_task *task,
 
 	thread_entry->finish_callback = lua_metric_symbol_callback_return;
 	thread_entry->error_callback = lua_metric_symbol_callback_error;
+	thread_entry->terminate_callback = lua_metric_symbol_callback_terminate;
 
 	lua_thread_call(thread_entry, 1);
 }
@@ -1779,6 +1782,25 @@ lua_metric_symbol_callback_error(struct thread_entry *thread_entry,
 	struct lua_coro_call_ctx *ctx = thread_entry->cd;
 	struct rspamd_task *task = thread_entry->task;
 	msg_err_task("call to coroutine (%s) failed (%d): %s", ctx->cd->symbol, ret, msg);
+
+	rspamd_symcache_item_async_dec_check(task, ctx->item, "lua coro symbol");
+}
+
+/*
+ * The coroutine is terminated while it is suspended: the operation it waits
+ * for has been cancelled (e.g. by the cleanup of the task session on a
+ * timeout), so it never returns and inserts nothing. The counter is given back
+ * as on a return; the task is alive, as its destruction calls no callback
+ */
+static void
+lua_metric_symbol_callback_terminate(struct thread_entry *thread_entry)
+{
+	struct lua_coro_call_ctx *ctx = thread_entry->cd;
+	struct rspamd_task *task = thread_entry->task;
+
+	msg_info_task("coroutine of symbol %s is terminated: the operation it waits "
+				  "for is cancelled",
+				  ctx->cd->symbol);
 
 	rspamd_symcache_item_async_dec_check(task, ctx->item, "lua coro symbol");
 }
@@ -4208,6 +4230,7 @@ lua_config_add_config_unload(lua_State *L)
 
 static void lua_periodic_callback_finish(struct thread_entry *thread, int ret);
 static void lua_periodic_callback_error(struct thread_entry *thread, int ret, const char *msg);
+static void lua_periodic_callback_terminate(struct thread_entry *thread);
 
 struct rspamd_lua_periodic {
 	struct ev_loop *event_loop;
@@ -4269,6 +4292,7 @@ lua_periodic_callback(struct ev_loop *loop, ev_timer *w, int revents)
 	thread->cd = periodic;
 	thread->finish_callback = lua_periodic_callback_finish;
 	thread->error_callback = lua_periodic_callback_error;
+	thread->terminate_callback = lua_periodic_callback_terminate;
 
 	L = thread->lua_state;
 	/* A pooled thread can carry values left by its previous user */
@@ -4366,6 +4390,25 @@ lua_periodic_callback_error(struct thread_entry *thread, int ret, const char *ms
 	}
 
 	lua_periodic_callback_finish(thread, ret);
+}
+
+/*
+ * The run is terminated while it is suspended: the operation it waits for has
+ * been cancelled from the outside (e.g. it uses the session or a connection of
+ * a task that is cleaned up). It is planned again as a failed run is, otherwise
+ * the periodic would stop silently and keep its reference
+ */
+static void
+lua_periodic_callback_terminate(struct thread_entry *thread)
+{
+	struct rspamd_lua_periodic *periodic = thread->cd;
+	struct rspamd_config *cfg = periodic->cfg;
+
+	msg_info_config("periodic script (registered at %s) is terminated: the "
+					"operation it waits for is cancelled",
+					periodic->lua_src_pos);
+
+	lua_periodic_callback_finish(thread, LUA_YIELD);
 }
 
 

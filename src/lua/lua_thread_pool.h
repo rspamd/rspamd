@@ -16,6 +16,8 @@ typedef void (*lua_thread_finish_t)(struct thread_entry *thread, int ret);
 
 typedef void (*lua_thread_error_t)(struct thread_entry *thread, int ret, const char *msg);
 
+typedef void (*lua_thread_terminate_t)(struct thread_entry *thread);
+
 /*
  * Lifecycle of a pooled Lua coroutine. Transitions are enforced by the
  * thread pool so that a thread can never be resumed twice, returned while
@@ -40,6 +42,15 @@ struct thread_entry {
 
 	/* function to log result, i.e. if you want to modify error logging message or somehow process this state, can be NUL */
 	lua_thread_error_t error_callback;
+
+	/*
+	 * Called when the thread is terminated while it is suspended
+	 * (lua_thread_pool_terminate_entry_full() on a YIELDED entry), as neither
+	 * finish_callback nor error_callback is called then. It is called once,
+	 * with the entry already DEAD and task, cfg, cd and item still set. It is
+	 * not called when the task of the thread is destroyed. Can be NULL
+	 */
+	lua_thread_terminate_t terminate_callback;
 	struct rspamd_task *task;
 	struct rspamd_config *cfg;
 	/* Pool this entry was taken from; valid while the entry is not FREE */
@@ -288,6 +299,14 @@ void lua_thread_pool_release_entry(struct thread_entry *thread_entry);
 
 /**
  * Terminates thread pool entry and fill the pool with another thread entry if needed
+ *
+ * With `enforce`, the entry can be a suspended (YIELDED) one: then its
+ * terminate_callback is called before the call returns. That callback can run
+ * Lua code of other symbols (a coroutine symbol gives its async counter back,
+ * which can start dependent symbols unless the session of the task is
+ * blocked), so the caller must be done with its own state before the call, or
+ * hold what it uses afterwards.
+ *
  * @param pool
  * @param thread_entry
  * @param loc

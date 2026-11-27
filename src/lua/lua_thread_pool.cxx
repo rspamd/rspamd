@@ -112,6 +112,7 @@ struct lua_thread_pool {
 			thread_entry->cd = NULL;
 			thread_entry->finish_callback = NULL;
 			thread_entry->error_callback = NULL;
+			thread_entry->terminate_callback = NULL;
 			thread_entry->task = NULL;
 			thread_entry->cfg = NULL;
 
@@ -135,6 +136,15 @@ struct lua_thread_pool {
 						  bool enforce) -> void
 	{
 		struct thread_entry *ent = NULL;
+		/*
+		 * A suspended thread stopped from the outside gets neither its finish
+		 * nor its error callback. A failed thread can be marked as suspended
+		 * too (lua_yield() has raised an error where lua_isyieldable() is not
+		 * available), but its error callback has been called
+		 */
+		lua_thread_terminate_t terminate_cb = enforce && thread_entry->state == LUA_THREAD_YIELDED
+												  ? thread_entry->terminate_callback
+												  : nullptr;
 
 		if (!enforce) {
 			/* we should only terminate failed threads */
@@ -148,8 +158,18 @@ struct lua_thread_pool {
 
 		thread_entry->state = LUA_THREAD_DEAD;
 		thread_entry->prev_running = NULL;
+		thread_entry->terminate_callback = NULL;
 
 		msg_debug_lua_threads("%s: terminated thread entry", loc);
+
+		if (terminate_cb != nullptr) {
+			/*
+			 * The entry is dead already, so the code run by the callback cannot
+			 * resume it, and the reference of the pool keeps it alive
+			 */
+			terminate_cb(thread_entry);
+		}
+
 		/*
 		 * Drop the pool's reference. If an async completion still holds the
 		 * entry (e.g. the owning task is being torn down while a request is in
@@ -269,12 +289,15 @@ lua_thread_task_guard_dtor(void *p)
 			ent->task = NULL;
 			ent->item = NULL;
 			ent->cd = NULL;
+			/* Nobody waits for the coroutine of a destroyed task */
+			ent->terminate_callback = NULL;
 			REF_RELEASE(ent);
 		}
 		else if (ent->state == LUA_THREAD_RUNNING) {
 			/* The task is destroyed from the inside of its own coroutine */
 			ent->task = NULL;
 			ent->item = NULL;
+			ent->terminate_callback = NULL;
 		}
 	}
 
