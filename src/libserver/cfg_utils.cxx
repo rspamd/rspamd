@@ -954,7 +954,8 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	}
 
 #if defined(WITH_HYPERSCAN) && !defined(__aarch64__) && !defined(__powerpc64__)
-	if (!cfg->disable_hyperscan) {
+	/* A config without libraries (config_from_ucl without INIT_LIBS) has no CPU flags */
+	if (!cfg->disable_hyperscan && cfg->libs_ctx != nullptr) {
 		if (!(cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
 			msg_warn_config("CPU doesn't have SSSE3 instructions set "
 							"required for hyperscan, disable it");

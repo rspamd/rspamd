@@ -1742,6 +1742,17 @@ lua_metric_symbol_callback_coro(struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	struct thread_entry *thread_entry;
 
+	if (task->cfg->lua_thread_pool == NULL) {
+		/*
+		 * A config made without Lua (rspamd_util.config_from_ucl or
+		 * load_rspamd_config) has no thread pool, so nothing can be suspended:
+		 * the symbol runs as a plain one, and a sync call in it fails
+		 */
+		lua_metric_symbol_callback(task, item, ud);
+
+		return;
+	}
+
 	rspamd_symcache_item_async_inc(task, item, "lua coro symbol");
 	thread_entry = lua_thread_pool_get_for_task(task);
 	/* Code that runs after a yield must be accounted to this symbol again */
@@ -1870,6 +1881,11 @@ rspamd_register_symbol_fromlua(lua_State *L,
 	}
 
 	if ((ret = rspamd_symcache_find_symbol(cfg->cache, name)) != -1) {
+		/* Nothing takes the callback over: every caller passes its reference on */
+		if (ref != -1) {
+			luaL_unref(L, LUA_REGISTRYINDEX, ref);
+		}
+
 		if (optional) {
 			msg_debug_config("duplicate symbol: %s, skip registering", name);
 
@@ -3874,14 +3890,15 @@ lua_config_replace_regexp(lua_State *L)
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 											  "*old_re=U{regexp};*new_re=U{regexp};pcre_only=B",
 											  &old_re, &new_re, &pcre_only)) {
-			int ret = luaL_error(L, "cannot get parameters list: %s",
-								 err ? err->message : "invalid arguments");
-
 			if (err) {
+				/* lua_error() does not return: the message is copied first */
+				lua_pushfstring(L, "cannot get parameters list: %s", err->message);
 				g_error_free(err);
+
+				return lua_error(L);
 			}
 
-			return ret;
+			return luaL_error(L, "cannot get parameters list: invalid arguments");
 		}
 		else {
 
@@ -4426,6 +4443,12 @@ lua_config_add_periodic(lua_State *L)
 
 	if (cfg == NULL || timeout < 0 || lua_type(L, 4) != LUA_TFUNCTION) {
 		return luaL_error(L, "invalid arguments");
+	}
+
+	if (cfg->lua_thread_pool == NULL) {
+		/* A config made without Lua (e.g. by rspamd_util.config_from_ucl) */
+		return luaL_error(L, "add_periodic: the config has no thread pool to run "
+							 "the periodic on");
 	}
 
 	if (lua_type(L, 5) == LUA_TBOOLEAN) {
@@ -6054,14 +6077,15 @@ lua_config_replace_regexp_scoped(lua_State *L)
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 											  "*old_re=U{regexp};*new_re=U{regexp};pcre_only=B",
 											  &old_re, &new_re, &pcre_only)) {
-			int ret = luaL_error(L, "cannot get parameters list: %s",
-								 err ? err->message : "invalid arguments");
-
 			if (err) {
+				/* lua_error() does not return: the message is copied first */
+				lua_pushfstring(L, "cannot get parameters list: %s", err->message);
 				g_error_free(err);
+
+				return lua_error(L);
 			}
 
-			return ret;
+			return luaL_error(L, "cannot get parameters list: invalid arguments");
 		}
 		else {
 
