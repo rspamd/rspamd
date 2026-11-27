@@ -251,7 +251,10 @@ struct rspamd_control_cbdata {
 	 * or suspended for somebody else long before a command comes
 	 */
 	lua_State *L;
-	/* Holds this structure; never freed, as the handler stays registered while the worker lives */
+	/*
+	 * Holds this structure; freed when another Lua handler of the same command
+	 * replaces this one, kept while the worker lives otherwise
+	 */
 	rspamd_mempool_t *pool;
 	struct rspamd_worker *w;
 	struct rspamd_config *cfg;
@@ -265,9 +268,10 @@ struct rspamd_control_cbdata {
  * and reply address. It lives in its own pool until its reply is written.
  * The reply and the destruction use neither cfg nor Lua: an event of a command
  * still in flight can be removed while the worker frees its config on exit.
+ * Nor do they use the handler, which a new handler of the command can free.
  */
 struct rspamd_control_cmd_cbdata {
-	struct rspamd_control_cbdata *cbd;
+	enum rspamd_control_type cmd_type;
 	rspamd_mempool_t *pool;
 	struct rspamd_async_session *session;
 	uint64_t cmd_id;
@@ -292,7 +296,7 @@ lua_worker_control_fin_session(void *ud)
 	rspamd_mempool_t *pool = ccbd->pool;
 
 	memset(&rep, 0, sizeof(rep));
-	rep.type = ccbd->cbd->cmd;
+	rep.type = ccbd->cmd_type;
 	rep.id = ccbd->cmd_id;
 
 	if (write(ccbd->fd, &rep, sizeof(rep)) != sizeof(rep)) {
@@ -317,6 +321,68 @@ lua_worker_control_session_dtor(void *ud)
 
 	/* Holds the session and ccbd */
 	rspamd_mempool_delete(ccbd->pool);
+}
+
+/*
+ * Status of the reply to a command whose Lua handler has failed. As the C
+ * handlers do, an errno value goes to the status field of the command; the
+ * replies of the statistics commands and of the notifications have none.
+ */
+static void
+lua_worker_control_set_failed(struct rspamd_control_reply *rep)
+{
+	switch (rep->type) {
+	case RSPAMD_CONTROL_RELOAD:
+		rep->reply.reload.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_RERESOLVE:
+		rep->reply.reresolve.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_RECOMPILE:
+		rep->reply.recompile.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
+		rep->reply.hs_loaded.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_LOG_PIPE:
+		rep->reply.log_pipe.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_FUZZY_STAT:
+		rep->reply.fuzzy_stat.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_FUZZY_SYNC:
+		rep->reply.fuzzy_sync.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_MONITORED_CHANGE:
+		rep->reply.monitored_change.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_FUZZY_BLOCKED:
+		rep->reply.fuzzy_blocked.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_WORKERS_SPAWNED:
+		rep->reply.workers_spawned.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_MEMORY_STAT:
+		rep->reply.memory_stat.status = EINVAL;
+		break;
+	case RSPAMD_CONTROL_FUZZY_HASH:
+		rep->reply.fuzzy_hash.status = EINVAL;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * Frees a handler that the control layer no longer has. L is running, so it is
+ * alive, and it shares the registry of the VM the handler has been added in:
+ * the handlers of a worker live in the VM of the worker.
+ */
+static void
+lua_worker_control_cbdata_free(lua_State *L, struct rspamd_control_cbdata *cbd)
+{
+	luaL_unref(L, LUA_REGISTRYINDEX, cbd->cbref);
+	rspamd_mempool_delete(cbd->pool);
 }
 
 static gboolean
@@ -352,7 +418,7 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 
 	pool = rspamd_mempool_new_short_lived("lua_control");
 	ccbd = rspamd_mempool_alloc0(pool, sizeof(*ccbd));
-	ccbd->cbd = cbd;
+	ccbd->cmd_type = cmd->type;
 	ccbd->pool = pool;
 	ccbd->fd = fd;
 	ccbd->cmd_id = cmd->id;
@@ -446,9 +512,10 @@ lua_worker_control_handler(struct rspamd_main *rspamd_main,
 		struct rspamd_control_reply rep;
 
 		memset(&rep, 0, sizeof(rep));
-		rep.type = cbd->cmd;
+		/* The handler can have replaced itself, so cbd is not used after the call */
+		rep.type = ccbd->cmd_type;
 		rep.id = ccbd->cmd_id;
-		rep.reply.monitored_change.status = -1;
+		lua_worker_control_set_failed(&rep);
 
 		if (write(fd, &rep, sizeof(rep)) != sizeof(rep)) {
 			msg_err_pool("cannot write reply to the control socket: %s",
@@ -483,6 +550,8 @@ lua_worker_add_control_handler(lua_State *L)
 	const char *cmd_name = luaL_checkstring(L, 4);
 	enum rspamd_control_type cmd;
 	struct rspamd_control_cbdata *cbd;
+	rspamd_worker_control_handler old_handler;
+	gpointer old_ud;
 
 	if (w && cfg && event_loop && cmd_name && lua_isfunction(L, 5)) {
 		cmd = rspamd_control_command_from_string(cmd_name);
@@ -490,6 +559,8 @@ lua_worker_add_control_handler(lua_State *L)
 		if (cmd == RSPAMD_CONTROL_MAX) {
 			return luaL_error(L, "invalid command type: %s", cmd_name);
 		}
+
+		old_handler = rspamd_control_worker_get_cmd_handler(w, cmd, &old_ud);
 
 		rspamd_mempool_t *pool = rspamd_mempool_new_short_lived("lua_control");
 		cbd = rspamd_mempool_alloc0(pool, sizeof(*cbd));
@@ -505,6 +576,17 @@ lua_worker_add_control_handler(lua_State *L)
 
 		rspamd_control_worker_add_cmd_handler(w, cmd, lua_worker_control_handler,
 											  cbd);
+
+		if (old_handler == lua_worker_control_handler) {
+			/*
+			 * The new handler replaces the one of an earlier call. Commands in
+			 * flight do not use it, and the one running it does not after it
+			 * returns
+			 */
+			msg_info_config("replace the Lua handler of the control command %s",
+							cmd_name);
+			lua_worker_control_cbdata_free(L, (struct rspamd_control_cbdata *) old_ud);
+		}
 	}
 	else {
 		return luaL_error(L, "invalid arguments, need worker, cfg, "

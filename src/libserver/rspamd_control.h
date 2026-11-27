@@ -362,6 +362,14 @@ void rspamd_control_worker_add_cmd_handler(struct rspamd_worker *worker,
 										   gpointer ud);
 
 /**
+ * Returns the custom handler registered for a specific control command of this
+ * worker, or NULL; its user data is stored in *pud unless pud is NULL
+ */
+rspamd_worker_control_handler rspamd_control_worker_get_cmd_handler(struct rspamd_worker *worker,
+																	enum rspamd_control_type type,
+																	gpointer *pud);
+
+/**
  * Start watching on srv pipe
  */
 void rspamd_srv_start_watching(struct rspamd_main *srv,
