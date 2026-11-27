@@ -46,6 +46,7 @@
 #include "utlist.h"
 #include "unix-std.h"
 #include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
 #include <math.h>
 #include <limits.h>
 #include "libserver/mempool_vars_internal.h"
@@ -2090,6 +2091,11 @@ dkim_symbol_callback(struct rspamd_task *task,
 struct rspamd_dkim_lua_verify_cbdata {
 	rspamd_dkim_context_t *ctx;
 	struct rspamd_task *task;
+	/*
+	 * The state that has called verify(), used only when the config has no
+	 * thread pool: it is usually a pooled thread, which is reused, suspended
+	 * for somebody else or collected before the key comes
+	 */
 	lua_State *L;
 	rspamd_dkim_key_t *key;
 	int cbref;
@@ -2099,9 +2105,11 @@ static void
 dkim_module_lua_push_verify_result(struct rspamd_dkim_lua_verify_cbdata *cbd,
 								   struct rspamd_dkim_check_result *res, GError *err)
 {
-	struct rspamd_task **ptask, *task;
+	struct rspamd_task *task;
+	struct lua_callback_state cbs;
 	const char *error_str = "unknown error";
-	gboolean success = FALSE;
+	gboolean success = FALSE, pooled = FALSE;
+	lua_State *L;
 
 	task = cbd->task;
 
@@ -2154,61 +2162,76 @@ dkim_module_lua_push_verify_result(struct rspamd_dkim_lua_verify_cbdata *cbd,
 		break;
 	}
 
-	lua_rawgeti(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
-	ptask = lua_newuserdata(cbd->L, sizeof(*ptask));
-	*ptask = task;
-	lua_pushboolean(cbd->L, success);
-
-	if (error_str) {
-		lua_pushstring(cbd->L, error_str);
+	/* A thread of its own: the one that has called verify() can be gone */
+	if (task->cfg->lua_thread_pool) {
+		lua_thread_pool_prepare_callback(task->cfg->lua_thread_pool, &cbs);
+		L = cbs.L;
+		pooled = TRUE;
 	}
 	else {
-		lua_pushnil(cbd->L);
+		L = cbd->L;
+	}
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
+	rspamd_lua_task_push(L, task);
+	lua_pushboolean(L, success);
+
+	if (error_str) {
+		lua_pushstring(L, error_str);
+	}
+	else {
+		lua_pushnil(L);
 	}
 
 	if (cbd->ctx) {
 		if (res->domain) {
-			lua_pushstring(cbd->L, res->domain);
+			lua_pushstring(L, res->domain);
 		}
 		else {
-			lua_pushnil(cbd->L);
+			lua_pushnil(L);
 		}
 
 		if (res->selector) {
-			lua_pushstring(cbd->L, res->selector);
+			lua_pushstring(L, res->selector);
 		}
 		else {
-			lua_pushnil(cbd->L);
+			lua_pushnil(L);
 		}
 
 		if (res->short_b) {
-			lua_pushstring(cbd->L, res->short_b);
+			lua_pushstring(L, res->short_b);
 		}
 		else {
-			lua_pushnil(cbd->L);
+			lua_pushnil(L);
 		}
 
 		if (res->fail_reason) {
-			lua_pushstring(cbd->L, res->fail_reason);
+			lua_pushstring(L, res->fail_reason);
 		}
 		else {
-			lua_pushnil(cbd->L);
+			lua_pushnil(L);
 		}
 	}
 	else {
-		lua_pushnil(cbd->L);
-		lua_pushnil(cbd->L);
-		lua_pushnil(cbd->L);
-		lua_pushnil(cbd->L);
+		lua_pushnil(L);
+		lua_pushnil(L);
+		lua_pushnil(L);
+		lua_pushnil(L);
 	}
 
-	if (lua_pcall(cbd->L, 7, 0, 0) != 0) {
+	if (lua_pcall(L, 7, 0, 0) != 0) {
 		msg_err_task("call to verify callback failed: %s",
-					 lua_tostring(cbd->L, -1));
-		lua_pop(cbd->L, 1);
+					 lua_tostring(L, -1));
+		lua_pop(L, 1);
 	}
 
-	luaL_unref(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+	if (pooled) {
+		lua_thread_pool_restore_callback(&cbs);
+		/* The registry is shared by all threads: the main state is alive */
+		L = RSPAMD_LUA_CFG_STATE(task->cfg);
+	}
+
+	luaL_unref(L, LUA_REGISTRYINDEX, cbd->cbref);
 }
 
 static void

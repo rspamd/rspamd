@@ -28,6 +28,27 @@ local exports = {}
 
 local N = "stat_tools" -- luacheck: ignore (maybe unused)
 
+-- Checks the values returned by exec() of a sync redis connection: a pair
+-- (ok, reply) per command, or a single (false, error) when the replies cannot
+-- be returned. Returns true or false and the first error
+local function check_redis_replies(...)
+  local nres = select('#', ...)
+
+  if nres == 0 then
+    return false, 'no replies from redis'
+  end
+
+  local replies = { ... }
+
+  for i = 1, nres, 2 do
+    if not replies[i] then
+      return false, tostring(replies[i + 1])
+    end
+  end
+
+  return true
+end
+
 -- Performs synchronous conversion of redis schema
 local function convert_bayes_schema(redis_params, symbol_spam, symbol_ham, expire)
 
@@ -175,6 +196,51 @@ local function convert_sqlite_to_redis(redis_params,
     return false
   end
 
+  -- Commands queued by queue_cmd() that are not sent yet
+  local npending = 0
+
+  -- Sends the queued commands and checks every reply
+  local function flush_cmds()
+    if npending == 0 then
+      return true
+    end
+
+    npending = 0
+
+    return check_redis_replies(conn:exec())
+  end
+
+  -- Queues a command; one exec() can return a limited number of replies,
+  -- so the queued commands are sent every `lim` commands
+  local function queue_cmd(cmd, args)
+    local ok, err = conn:add_cmd(cmd, args)
+
+    if not ok then
+      return false, err
+    end
+
+    npending = npending + 1
+
+    if npending >= lim then
+      return flush_cmds()
+    end
+
+    return true
+  end
+
+  -- Queues the commands and sends them with the ones queued before
+  local function send_cmds(cmds)
+    for _, cmd in ipairs(cmds) do
+      local ok, err = queue_cmd(cmd[1], cmd[2])
+
+      if not ok then
+        return false, err
+      end
+    end
+
+    return flush_cmds()
+  end
+
   if reset_previous then
     -- Do a more complicated cleanup
     -- execute a lua script that cleans up data
@@ -183,24 +249,39 @@ local members = redis.call('SMEMBERS', KEYS[1]..'_keys')
 
 for _,prefix in ipairs(members) do
   local keys = redis.call('KEYS', prefix..'*')
-  redis.call('DEL', keys)
+  -- DEL takes the keys as arguments: pass them in parts that fit the Lua stack
+  for i = 1, #keys, 1000 do
+    redis.call('DEL', unpack(keys, i, math.min(i + 999, #keys)))
+  end
 end
 ]]
     -- Common keys
     for _, sym in ipairs({ symbol_spam, symbol_ham }) do
       logger.messagex('Cleaning up old data for %s', sym)
-      conn:add_cmd('EVAL', { script, '1', sym })
-      conn:exec()
-      conn:add_cmd('DEL', { sym .. "_version" })
-      conn:add_cmd('DEL', { sym .. "_keys" })
-      conn:exec()
+      local ok, err = send_cmds({ { 'EVAL', { script, '1', sym } } })
+
+      if ok then
+        ok, err = send_cmds({
+          { 'DEL', { sym .. "_version" } },
+          { 'DEL', { sym .. "_keys" } },
+        })
+      end
+
+      if not ok then
+        logger.errx('Cannot clean up old data for %s: %s', sym, err)
+        return false
+      end
     end
 
     if learn_cache_db then
       -- Cleanup learned_cache
       logger.messagex('Cleaning up old data learned cache')
-      conn:add_cmd('DEL', { "learned_ids" })
-      conn:exec()
+      local ok, err = send_cmds({ { 'DEL', { "learned_ids" } } })
+
+      if not ok then
+        logger.errx('Cannot clean up old data learned cache: %s', err)
+        return false
+      end
     end
   end
 
@@ -246,14 +327,18 @@ end
         -- tok[2] = token value (number)
         -- tok[3] = user_map[user_id] or ''
         local rkey = string.format('%s%s_%s', prefix, tok[3], tok[1])
-        conn:add_cmd('HINCRBYFLOAT', { rkey, hash_key, tostring(tok[2]) })
+        local ok, err = queue_cmd('HINCRBYFLOAT', { rkey, hash_key, tostring(tok[2]) })
 
-        if expire and expire ~= 0 then
-          conn:add_cmd('EXPIRE', { rkey, tostring(math.floor(expire)) })
+        if ok and expire and expire ~= 0 then
+          ok, err = queue_cmd('EXPIRE', { rkey, tostring(math.floor(expire)) })
+        end
+
+        if not ok then
+          return false, err
         end
       end
 
-      return conn:exec()
+      return flush_cmds()
     end
     -- Fill tokens, sending data to redis each `lim` records
 
@@ -314,18 +399,26 @@ end
 
     for id, learned in pairs(learns) do
       local user = users_map[id]
-      if not conn:add_cmd('HSET', { 'RS' .. user, learns_elt, learned }) then
-        logger.errx('Cannot update learns for user: ' .. user)
-        return false
+      local ok, err = queue_cmd('HSET', { 'RS' .. user, learns_elt, learned })
+
+      if ok then
+        ok, err = queue_cmd('SADD', { symbol .. '_keys', 'RS' .. user })
       end
-      if not conn:add_cmd('SADD', { symbol .. '_keys', 'RS' .. user }) then
-        logger.errx('Cannot update learns for user: ' .. user)
+
+      if not ok then
+        logger.errx('Cannot update learns for user %s: %s', user, err)
         return false
       end
     end
     -- Set version
-    conn:add_cmd('SET', { symbol .. '_version', '2' })
-    return conn:exec()
+    local ok, err = send_cmds({ { 'SET', { symbol .. '_version', '2' } } })
+
+    if not ok then
+      logger.errx('Cannot update learns for %s: %s', symbol, err)
+      return false
+    end
+
+    return true
   end
 
   logger.messagex('Convert spam tokens')
@@ -361,17 +454,25 @@ end
         is_spam = '1'
       end
 
-      if not conn:add_cmd('HSET', { 'learned_ids', digest, is_spam }) then
-        logger.errx('Cannot add hash: ' .. digest)
-        ret = false
-      else
-        total = total + 1
+      local err
+      ret, err = queue_cmd('HSET', { 'learned_ids', digest, is_spam })
+
+      if not ret then
+        logger.errx('Cannot send learned ids to redis: %s', err)
+        break
       end
+
+      total = total + 1
     end
     db:sql('COMMIT;')
 
     if ret then
-      conn:exec()
+      local err
+      ret, err = flush_cmds()
+
+      if not ret then
+        logger.errx('Cannot send learned ids to redis: %s', err)
+      end
     end
 
     if ret then
@@ -379,6 +480,7 @@ end
           total)
     else
       logger.errx('Error occurred during sending data to redis')
+      return false
     end
   end
 

@@ -173,6 +173,12 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_NO_LOCAL (1 << 5)
 /* Per-request connection tuning was read from the request table */
 #define RSPAMD_LUA_HTTP_FLAG_TUNED (1 << 6)
+/*
+ * lua_http_error_handler has run: the callback has got the error, or the
+ * coroutine has (a coroutine that has not yielded yet gets an error from
+ * lua_http_request)
+ */
+#define RSPAMD_LUA_HTTP_FLAG_FAILED (1 << 7)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -197,6 +203,8 @@ struct lua_http_cbdata {
 	char *mime_type;
 	char *host;
 	char *auth;
+	/* Error of a coroutine request that fails before the coroutine yields */
+	char *start_err;
 	struct upstream *up;
 	const char *url;
 	gsize max_size;
@@ -257,17 +265,66 @@ lua_http_read_tuning(lua_State *L, int idx, struct lua_http_cbdata *cbd)
 	cbd->flags |= RSPAMD_LUA_HTTP_FLAG_TUNED;
 }
 
+/*
+ * Resumes the coroutine suspended by a request with (err, nil). The task of a
+ * dead coroutine can be freed, so it is not touched; an entry that
+ * lua_thread_resume_checked() refuses gets its stack back as it was.
+ */
+static void
+lua_http_resume_error(struct thread_entry *thread, guint64 generation,
+					  struct rspamd_task *task,
+					  struct rspamd_symcache_dynamic_item *item,
+					  const char *err)
+{
+	lua_State *L;
+	int top;
+
+	L = thread->lua_state;
+	top = lua_gettop(L);
+	lua_pushstring(L, err);
+	lua_pushnil(L);
+
+	if (item && thread->state != LUA_THREAD_DEAD) {
+		rspamd_symcache_set_cur_item(task, item);
+	}
+
+	if (!lua_thread_resume_checked(thread, generation, 2)) {
+		lua_settop(L, top);
+	}
+}
+
 static void
 lua_http_fin(gpointer arg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) arg;
+	/* Coroutine that waits for this request while the request is cancelled */
+	struct thread_entry *waiting = NULL;
+	guint64 waiting_generation = 0;
+	struct rspamd_task *task = cbd->task;
+	struct rspamd_symcache_dynamic_item *item = cbd->item;
+	/*
+	 * The connection still holds the async counter of the symbol: only a
+	 * session cleanup calls us before lua_http_cbd_dtor has given it back
+	 */
+	gboolean item_held = item != NULL && (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED);
 
 	if (cbd->thread) {
 		/*
-		 * A cancelled session finalises the request directly, without
-		 * lua_http_cbd_dtor, which releases the entry otherwise
+		 * A cancelled session (task timeout, closed client connection)
+		 * finalises the request directly, without lua_http_cbd_dtor, which
+		 * releases the entry otherwise. No reply is going to come: a coroutine
+		 * that waits for it is resumed with an error once the request is
+		 * released, and the entry reference is kept until then.
 		 */
-		lua_thread_pool_release_entry(cbd->thread);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+			waiting = cbd->thread;
+			waiting_generation = cbd->thread_generation;
+		}
+		else {
+			lua_thread_pool_release_entry(cbd->thread);
+		}
+
 		cbd->thread = NULL;
 	}
 
@@ -308,6 +365,8 @@ lua_http_fin(gpointer arg)
 		g_free(cbd->host);
 	}
 
+	g_free(cbd->start_err);
+
 	if (cbd->local_kp) {
 		rspamd_keypair_unref(cbd->local_kp);
 	}
@@ -317,6 +376,30 @@ lua_http_fin(gpointer arg)
 	}
 
 	g_free(cbd);
+
+	if (item_held) {
+		/*
+		 * Given back before any Lua code runs. The session is being cleaned up:
+		 * the symbol cache starts no dependent symbol from here, and a symbol
+		 * whose coroutine waits for the request keeps a counter of its own
+		 * until that coroutine stops
+		 */
+		rspamd_symcache_item_async_dec_check(task, item, M);
+	}
+
+	if (waiting) {
+		/*
+		 * The session is being cleaned up, but whoever owns it is alive: a task
+		 * is freed after the cleanup of its session. The session refuses new
+		 * events, so the code that goes on cannot wait for anything bound to it.
+		 */
+		if (rspamd_lua_is_initialised()) {
+			lua_http_resume_error(waiting, waiting_generation, task, item,
+								  "session is terminating");
+		}
+
+		lua_thread_pool_release_entry(waiting);
+	}
 }
 
 static void
@@ -333,7 +416,11 @@ lua_http_cbd_dtor(struct lua_http_cbdata *cbd)
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
 			/* Event is added merely for resolved events */
 			if (cbd->item) {
-				rspamd_symcache_item_async_dec_check(cbd->task, cbd->item, M);
+				struct rspamd_symcache_dynamic_item *item = cbd->item;
+
+				/* Given back once: lua_http_fin does it for a cancelled request only */
+				cbd->item = NULL;
+				rspamd_symcache_item_async_dec_check(cbd->task, item, M);
 			}
 
 			rspamd_session_remove_event(cbd->session, lua_http_fin, cbd);
@@ -358,16 +445,8 @@ lua_http_push_error(struct lua_http_cbdata *cbd, const char *err)
 		/* Coroutine-style call: resume the yielded thread with (err, nil) */
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
 			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
-
-			L = cbd->thread->lua_state;
-			lua_pushstring(L, err);
-			lua_pushnil(L);
-
-			if (cbd->item) {
-				rspamd_symcache_set_cur_item(cbd->task, cbd->item);
-			}
-
-			lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+			lua_http_resume_error(cbd->thread, cbd->thread_generation,
+								  cbd->task, cbd->item, err);
 		}
 		else {
 			msg_info("lost HTTP error for %s in coroutines mess: %s",
@@ -405,6 +484,8 @@ lua_http_error_handler(struct rspamd_http_connection *conn, GError *err)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *) conn->ud;
 
+	cbd->flags |= RSPAMD_LUA_HTTP_FLAG_FAILED;
+
 	if (cbd->up) {
 		rspamd_upstream_fail(cbd->up, false, err ? err->message : "unknown error");
 	}
@@ -415,10 +496,12 @@ lua_http_error_handler(struct rspamd_http_connection *conn, GError *err)
 			lua_http_resume_handler(conn, NULL, err->message);
 		}
 		else {
-			/* TODO: kill me please */
-			msg_info("lost HTTP error from %s in coroutines mess: %s",
-					 rspamd_inet_address_to_string_pretty(cbd->addr),
-					 err->message);
+			/*
+			 * The connection fails while lua_http_request starts it, before
+			 * the coroutine yields: that call returns the error
+			 */
+			g_free(cbd->start_err);
+			cbd->start_err = g_strdup(err->message);
 		}
 	}
 	else {
@@ -523,6 +606,7 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 	lua_State *L = cbd->thread->lua_state;
 	const char *body;
 	gsize body_len;
+	int top = lua_gettop(L);
 
 	if (err) {
 		lua_pushstring(L, err);
@@ -550,13 +634,11 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 
 		body = rspamd_http_message_get_body(msg, &body_len);
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TEXT) {
-			struct rspamd_lua_text *t;
-
-			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, rspamd_text_classname, -1);
-			t->start = body;
-			t->len = body_len;
-			t->flags = 0;
+			/*
+			 * A copy: the message is freed with the request as soon as the
+			 * coroutine yields again or finishes, and the text can live longer
+			 */
+			lua_new_text(L, body, body_len, TRUE);
 		}
 		else {
 			if (body_len > 0) {
@@ -574,12 +656,19 @@ lua_http_resume_handler(struct rspamd_http_connection *conn,
 		lua_settable(L, -3);
 	}
 
-	if (cbd->item) {
+	/*
+	 * The task of a dead coroutine can be freed (a request not bound to the
+	 * task goes on after it), lua_thread_resume_checked() refuses the entry
+	 */
+	if (cbd->item && cbd->thread->state != LUA_THREAD_DEAD) {
 		/* Replace watcher to deal with nested calls */
 		rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 	}
 
-	lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2);
+	if (!lua_thread_resume_checked(cbd->thread, cbd->thread_generation, 2)) {
+		/* Refused: leave the stack of the entry as it was */
+		lua_settop(L, top);
+	}
 }
 
 /*
@@ -810,9 +899,12 @@ lua_http_dns_handler(struct rdns_reply *reply, gpointer ud)
 				/*
 				 * E.g. the resolved address is denied by `forbid_local`; the
 				 * symbol's async counter taken for the DNS request is released
-				 * below as in the other error paths
+				 * below as in the other error paths. A connection that fails to
+				 * send the request has given its own error already.
 				 */
-				lua_http_push_error(cbd, "unable to make connection to the host");
+				if (!(cbd->flags & RSPAMD_LUA_HTTP_FLAG_FAILED)) {
+					lua_http_push_error(cbd, "unable to make connection to the host");
+				}
 
 				if (cbd->ref.refcount > 1) {
 					REF_RELEASE(cbd);
@@ -964,11 +1056,12 @@ lua_http_request_abort(lua_State *L, int cbref, struct rspamd_http_message *msg,
  * - `config`
  *
  * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
- * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/developers/sync_async.html#API-example-http-module)
+ * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/developers/sync_async.html#API-example-http-module); such a call must be made from a coroutine that can yield, e.g. a symbol registered with `flags = 'coro'`, otherwise an error is raised
  * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
  * @param {table} headers optional headers in form `[name='value']` or `[name=['value1', 'value2']]` to duplicate a header with multiple values. A list form `{{'name', 'value'}, {'name', {'value1', 'value2'}}}` is also accepted and preserves the header order on the wire
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
+ * @param {boolean} opaque_body give the reply body as `rspamd{text}` instead of a string; in **async** mode the text refers to the reply and is valid only while the callback runs, in **sync** mode it is a copy
  * @param {string} method HTTP method, case insensitive (for example, `GET`, `POST`, `QUERY`); POST for a request with a body and GET otherwise if not set, an unknown method raises an error
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
  * @param {number} max_size maximum size of the reply body in bytes (default is the `max_lua_http_response` global option, 256Mb; 0 disables the limit)
@@ -1004,6 +1097,8 @@ lua_http_request(lua_State *L)
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
 	struct upstream *up = NULL;
+	/* Coroutine to suspend until the reply comes, only without a callback */
+	struct thread_entry *thread = NULL;
 	const char *url, *lua_body;
 	rspamd_fstring_t *body = NULL;
 	int cbref = -1;
@@ -1015,50 +1110,7 @@ lua_http_request(lua_State *L)
 	gssize max_size = -1; /* -1 = use the global default; 0 = unlimited */
 	gboolean gzip = FALSE;
 
-	if (lua_gettop(L) >= 2) {
-		/* url, callback and event_base format */
-		url = luaL_checkstring(L, 1);
-
-		if (url == NULL || lua_type(L, 2) != LUA_TFUNCTION) {
-			msg_err("http request has bad params");
-			lua_pushboolean(L, FALSE);
-			return 1;
-		}
-
-		lua_pushvalue(L, 2);
-		cbref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-		if (lua_gettop(L) >= 3 && rspamd_lua_check_udata_maybe(L, 3, rspamd_ev_base_classname)) {
-			ev_base = *(struct ev_loop **) lua_touserdata(L, 3);
-		}
-		else {
-			ev_base = NULL;
-		}
-
-		if (lua_gettop(L) >= 4 && rspamd_lua_check_udata_maybe(L, 4, rspamd_resolver_classname)) {
-			resolver = *(struct rspamd_dns_resolver **) lua_touserdata(L, 4);
-		}
-		else {
-			resolver = lua_http_global_resolver(ev_base);
-		}
-
-		if (lua_gettop(L) >= 5 && rspamd_lua_check_udata_maybe(L, 5, rspamd_session_classname)) {
-			session = *(struct rspamd_async_session **) lua_touserdata(L, 5);
-		}
-		else {
-			session = NULL;
-		}
-
-		msg = rspamd_http_message_from_url(url);
-
-		if (msg == NULL) {
-			luaL_unref(L, LUA_REGISTRYINDEX, cbref);
-			msg_err("cannot create HTTP message from url %s", url);
-			lua_pushboolean(L, FALSE);
-			return 1;
-		}
-	}
-	else if (lua_type(L, 1) == LUA_TTABLE) {
+	if (lua_type(L, 1) == LUA_TTABLE) {
 		lua_pushstring(L, "url");
 		lua_gettable(L, 1);
 		url = luaL_checkstring(L, -1);
@@ -1068,15 +1120,6 @@ lua_http_request(lua_State *L)
 			msg_err("cannot create HTTP message without url");
 			lua_pushboolean(L, FALSE);
 			return 1;
-		}
-
-		lua_pushstring(L, "callback");
-		lua_gettable(L, 1);
-		if (url == NULL || lua_type(L, -1) != LUA_TFUNCTION) {
-			lua_pop(L, 1);
-		}
-		else {
-			cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 		}
 
 		lua_pushstring(L, "task");
@@ -1144,6 +1187,44 @@ lua_http_request(lua_State *L)
 			lua_pop(L, 1);
 		}
 
+		/*
+		 * Referenced after `task`, which raises an error when it is not a task;
+		 * every later exit releases the reference
+		 */
+		lua_pushstring(L, "callback");
+		lua_gettable(L, 1);
+		if (url == NULL || lua_type(L, -1) != LUA_TFUNCTION) {
+			lua_pop(L, 1);
+		}
+		else {
+			cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		}
+
+		if (cbref == -1) {
+			/*
+			 * Without a callback the reply is delivered by resuming the caller,
+			 * so the caller must be a coroutine that can be suspended. This is
+			 * checked before anything is allocated or started for the request:
+			 * otherwise it would run with nobody to resume, or resume a
+			 * coroutine that has not been suspended by it.
+			 */
+			if (cfg == NULL) {
+				return luaL_error(L,
+								  "Bad params to rspamd_http:request(): either task or config should be set");
+			}
+
+			if (cfg->lua_thread_pool != NULL) {
+				thread = lua_thread_pool_get_yieldable_entry(cfg->lua_thread_pool, L);
+			}
+
+			if (thread == NULL) {
+				return luaL_error(L,
+								  "rspamd_http.request without a callback must be called from "
+								  "a coroutine that can yield (a symbol registered with "
+								  "flags = 'coro', not an async callback)");
+			}
+		}
+
 		msg = rspamd_http_message_from_url(url);
 		if (msg == NULL) {
 			msg_err_task_check("cannot create HTTP message from url %s", url);
@@ -1207,7 +1288,8 @@ lua_http_request(lua_State *L)
 			body = rspamd_fstring_new_init(lua_body, bodylen);
 		}
 		else if (lua_type(L, -1) == LUA_TUSERDATA) {
-			t = lua_check_text(L, -1);
+			/* Not lua_check_text(): its error would skip the release below */
+			t = rspamd_lua_check_udata_maybe(L, -1, rspamd_text_classname);
 			/* TODO: think about zero-copy possibilities */
 			if (t) {
 				body = rspamd_fstring_new_init(t->start, t->len);
@@ -1235,7 +1317,7 @@ lua_http_request(lua_State *L)
 #endif
 				}
 				else if (lua_type(L, -1) == LUA_TUSERDATA) {
-					t = lua_check_text(L, -1);
+					t = rspamd_lua_check_udata_maybe(L, -1, rspamd_text_classname);
 
 					if (t) {
 						total_len += t->len;
@@ -1389,11 +1471,20 @@ lua_http_request(lua_State *L)
 		lua_gettable(L, 1);
 
 		if (lua_type(L, -1) == LUA_TUSERDATA) {
-			struct rspamd_lua_upstream *lup = lua_check_upstream(L, -1);
+			/* Not lua_check_upstream(): its error would skip the release */
+			struct rspamd_lua_upstream *lup = rspamd_lua_check_udata_maybe(L, -1,
+																		   rspamd_upstream_classname);
 
 			if (lup) {
 				/* Preserve pointer in case if lup is destructed */
 				up = lup->up;
+			}
+			else {
+				lua_http_request_abort(L, cbref, msg, body, mime_type, auth,
+									   peer_key, local_kp);
+
+				return luaL_error(L, "invalid upstream argument: %s expected",
+								  rspamd_upstream_classname);
 			}
 		}
 
@@ -1432,10 +1523,7 @@ lua_http_request(lua_State *L)
 		lua_pop(L, 1); /* username */
 	}
 	else {
-		msg_err("http request has bad params");
-		lua_pushboolean(L, FALSE);
-
-		return 1;
+		return luaL_error(L, "invalid arguments: rspamd_http.request requires a table argument");
 	}
 
 	if (session && rspamd_session_blocked(session)) {
@@ -1504,8 +1592,10 @@ lua_http_request(lua_State *L)
 	}
 
 	if (cbd->cbref == -1) {
-		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-		cbd->thread_generation = cbd->thread->generation;
+		/* Checked to be able to yield when the arguments were parsed */
+		g_assert(thread != NULL);
+		cbd->thread = thread;
+		cbd->thread_generation = thread->generation;
 		/* Held for the lifetime of cbd, released in lua_http_cbd_dtor() */
 		lua_thread_pool_retain_entry(cbd->thread);
 	}
@@ -1600,7 +1690,22 @@ lua_http_request(lua_State *L)
 		ret = lua_http_make_connection(cbd);
 
 		if (!ret) {
-			if (cbd->up) {
+			/*
+			 * Whether the connection has given its error to the callback (or
+			 * to the coroutine) and has charged the upstream with it
+			 */
+			gboolean reported = (cbd->flags & RSPAMD_LUA_HTTP_FLAG_FAILED) != 0;
+
+			if (cbref == -1) {
+				/*
+				 * Coroutine callers expect (err, response), not a bare false.
+				 * Pushed now: the error goes away with cbd
+				 */
+				lua_pushstring(L, cbd->start_err ? cbd->start_err : "cannot make HTTP connection");
+				lua_pushnil(L);
+			}
+
+			if (cbd->up && !reported) {
 				rspamd_upstream_fail(cbd->up, true, "HTTP connection failed");
 			}
 			if (cbd->ref.refcount > 1) {
@@ -1611,14 +1716,11 @@ lua_http_request(lua_State *L)
 			REF_RELEASE(cbd);
 
 			if (cbref == -1) {
-				/* Coroutine callers expect (err, response), not a bare false */
-				lua_pushstring(L, "cannot make HTTP connection");
-				lua_pushnil(L);
-
 				return 2;
 			}
 
-			lua_pushboolean(L, FALSE);
+			/* false tells that the callback is not going to be called */
+			lua_pushboolean(L, reported);
 
 			return 1;
 		}
@@ -1692,8 +1794,11 @@ lua_http_request(lua_State *L)
 	}
 
 	if (cbd->cbref == -1) {
-		cbd->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-		cbd->thread_generation = cbd->thread->generation;
+		/*
+		 * A handler runs from inside of this call only when the request
+		 * fails to start, and that has returned above: cbd is alive and
+		 * its reply resumes the entry that cbd->thread holds
+		 */
 		cbd->flags |= RSPAMD_LUA_HTTP_FLAG_YIELDED;
 
 		return lua_thread_yield(cbd->thread, 0);

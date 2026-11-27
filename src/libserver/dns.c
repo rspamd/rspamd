@@ -60,6 +60,11 @@ struct rspamd_dns_request_ud {
 	struct rspamd_symcache_dynamic_item *item;
 	struct rdns_request *req;
 	struct rdns_reply *reply;
+	/*
+	 * Set while rspamd_dns_callback() runs the callback: a session cleanup
+	 * from the inside of it reports itself here instead of freeing reqdata
+	 */
+	gboolean *finalised;
 };
 
 static const int8_t ascii_dns_table[128] = {
@@ -77,20 +82,26 @@ static const int8_t ascii_dns_table[128] = {
 	-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1};
 
+/*
+ * Finaliser of the session event of a request, called exactly once:
+ * - by rspamd_session_remove_event() from rspamd_dns_callback(), after the
+ *   callback has been given the reply;
+ * - by a session cleanup (task timeout, task destruction), which comes before
+ *   the task is freed: a request without a reply is cancelled and the callback
+ *   gets a timeout; a cleanup run from the inside of rspamd_dns_callback()
+ *   finds the reply set and leaves reqdata to that function.
+ */
 static void
 rspamd_dns_fin_cb(gpointer arg)
 {
 	struct rspamd_dns_request_ud *reqdata = (struct rspamd_dns_request_ud *) arg;
 
-	if (reqdata->item) {
-		rspamd_symcache_set_cur_item(reqdata->task, reqdata->item);
-	}
-
-	if (reqdata->reply) {
-		reqdata->cb(reqdata->reply, reqdata->ud);
-	}
-	else {
+	if (reqdata->reply == NULL) {
 		struct rdns_reply fake_reply;
+
+		if (reqdata->item) {
+			rspamd_symcache_set_cur_item(reqdata->task, reqdata->item);
+		}
 
 		memset(&fake_reply, 0, sizeof(fake_reply));
 		fake_reply.code = RDNS_RC_TIMEOUT;
@@ -99,16 +110,23 @@ rspamd_dns_fin_cb(gpointer arg)
 		fake_reply.requested_name = reqdata->req->requested_names[0].name;
 
 		reqdata->cb(&fake_reply, reqdata->ud);
-	}
 
-	rdns_request_release(reqdata->req);
+		/* The request is still in flight: dropping its only reference cancels it */
+		rdns_request_release(reqdata->req);
+	}
 
 	if (reqdata->item) {
-		rspamd_symcache_item_async_dec_check(reqdata->task,
-											 reqdata->item, M);
+		struct rspamd_symcache_dynamic_item *item = reqdata->item;
+
+		reqdata->item = NULL;
+		rspamd_symcache_item_async_dec_check(reqdata->task, item, M);
 	}
 
-	if (reqdata->pool == NULL) {
+	if (reqdata->finalised) {
+		/* Called from the inside of rspamd_dns_callback(), which frees reqdata */
+		*reqdata->finalised = TRUE;
+	}
+	else if (reqdata->pool == NULL) {
 		g_free(reqdata);
 	}
 }
@@ -117,23 +135,54 @@ static void
 rspamd_dns_callback(struct rdns_reply *reply, gpointer ud)
 {
 	struct rspamd_dns_request_ud *reqdata = ud;
+	/* Read before the callback: it can free the pool */
+	rspamd_mempool_t *pool = reqdata->pool;
 
 	reqdata->reply = reply;
 
-
 	if (reqdata->session) {
+		gboolean finalised = FALSE;
+
 		/*
-		 * Ref event to avoid double unref by
-		 * event removing
+		 * The event is removed last: while it is registered, the code run
+		 * here cannot finish the session, e.g. a coroutine resumed by the
+		 * callback that removes other events of the task. rdns keeps the
+		 * request and the reply alive until this function returns.
 		 */
-		rdns_request_retain(reply->request);
-		rspamd_session_remove_event(reqdata->session,
-									rspamd_dns_fin_cb, reqdata);
+		reqdata->finalised = &finalised;
+
+		if (reqdata->item) {
+			rspamd_symcache_set_cur_item(reqdata->task, reqdata->item);
+		}
+
+		reqdata->cb(reply, reqdata->ud);
+
+		if (!finalised && reqdata->item) {
+			struct rspamd_symcache_dynamic_item *item = reqdata->item;
+
+			reqdata->item = NULL;
+			rspamd_symcache_item_async_dec_check(reqdata->task, item, M);
+		}
+
+		if (finalised) {
+			/*
+			 * The session has been cleaned up by the code run above: there is
+			 * no event, and reqdata is gone if it was allocated from the pool
+			 */
+			if (pool == NULL) {
+				g_free(reqdata);
+			}
+		}
+		else {
+			reqdata->finalised = NULL;
+			rspamd_session_remove_event(reqdata->session,
+										rspamd_dns_fin_cb, reqdata);
+		}
 	}
 	else {
 		reqdata->cb(reply, reqdata->ud);
 
-		if (reqdata->pool == NULL) {
+		if (pool == NULL) {
 			g_free(reqdata);
 		}
 	}

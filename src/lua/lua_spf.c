@@ -19,6 +19,7 @@
  */
 
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "libserver/spf.h"
 #include "libutil/ref.h"
 
@@ -54,6 +55,11 @@ static luaL_reg rspamd_spf_record_m[] = {
 
 struct rspamd_lua_spf_cbdata {
 	struct rspamd_task *task;
+	/*
+	 * The state that has called resolve(), used only when the config has no
+	 * thread pool: it is usually a pooled thread, which is reused, suspended
+	 * for somebody else or collected before the record is resolved
+	 */
 	lua_State *L;
 	struct rspamd_symcache_dynamic_item *item;
 	int cbref;
@@ -112,42 +118,63 @@ static void
 lua_spf_push_result(struct rspamd_lua_spf_cbdata *cbd, int code_flags,
 					struct spf_resolved *resolved, const char *err)
 {
+	struct rspamd_config *cfg;
+	struct lua_callback_state cbs;
+	gboolean pooled = FALSE;
+	lua_State *L;
+
 	g_assert(cbd != NULL);
 	REF_RETAIN(cbd);
 
-	lua_pushcfunction(cbd->L, &rspamd_lua_traceback);
-	int err_idx = lua_gettop(cbd->L);
+	cfg = cbd->task->cfg;
 
-	lua_rawgeti(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+	/* A thread of its own: the one that has called resolve() can be gone */
+	if (cfg && cfg->lua_thread_pool) {
+		lua_thread_pool_prepare_callback(cfg->lua_thread_pool, &cbs);
+		L = cbs.L;
+		pooled = TRUE;
+	}
+	else {
+		L = cbd->L;
+	}
+
+	lua_pushcfunction(L, &rspamd_lua_traceback);
+	int err_idx = lua_gettop(L);
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
 
 	if (resolved) {
 		struct spf_resolved **presolved;
 
-		presolved = lua_newuserdata(cbd->L, sizeof(*presolved));
-		rspamd_lua_setclass(cbd->L, SPF_RECORD_CLASS, -1);
+		presolved = lua_newuserdata(L, sizeof(*presolved));
+		rspamd_lua_setclass(L, SPF_RECORD_CLASS, -1);
 		*presolved = spf_record_ref(resolved);
 	}
 	else {
-		lua_pushnil(cbd->L);
+		lua_pushnil(L);
 	}
 
-	lua_pushinteger(cbd->L, code_flags);
+	lua_pushinteger(L, code_flags);
 
 	if (err) {
-		lua_pushstring(cbd->L, err);
+		lua_pushstring(L, err);
 	}
 	else {
-		lua_pushnil(cbd->L);
+		lua_pushnil(L);
 	}
 
-	if (lua_pcall(cbd->L, 3, 0, err_idx) != 0) {
+	if (lua_pcall(L, 3, 0, err_idx) != 0) {
 		struct rspamd_task *task = cbd->task;
 
 		msg_err_task("cannot call callback function for spf: %s",
-					 lua_tostring(cbd->L, -1));
+					 lua_tostring(L, -1));
 	}
 
-	lua_settop(cbd->L, err_idx - 1);
+	lua_settop(L, err_idx - 1);
+
+	if (pooled) {
+		lua_thread_pool_restore_callback(&cbs);
+	}
 
 	REF_RELEASE(cbd);
 }
@@ -156,7 +183,11 @@ static void
 lua_spf_dtor(struct rspamd_lua_spf_cbdata *cbd)
 {
 	if (cbd) {
-		luaL_unref(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+		struct rspamd_config *cfg = cbd->task->cfg;
+
+		/* The registry is shared by all threads: the main state is alive */
+		luaL_unref((cfg && cfg->lua_thread_pool) ? RSPAMD_LUA_CFG_STATE(cfg) : cbd->L,
+				   LUA_REGISTRYINDEX, cbd->cbref);
 		if (cbd->item) {
 			rspamd_symcache_item_async_dec_check(cbd->task, cbd->item,
 												 "lua_spf");

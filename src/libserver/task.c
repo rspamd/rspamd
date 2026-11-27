@@ -261,6 +261,8 @@ void rspamd_task_free(struct rspamd_task *task)
 	unsigned int i;
 
 	if (task) {
+		struct rspamd_config *cfg = task->cfg;
+
 		rspamd_task_registry_remove(task);
 
 		debug_task("free pointer %p", task);
@@ -372,8 +374,6 @@ void rspamd_task_free(struct rspamd_task *task)
 				free_iters = rspamd_time_jitter(0,
 												(double) task->cfg->full_gc_iters / 2);
 			}
-
-			CFG_REF_RELEASE(task->cfg);
 		}
 
 		kh_destroy(rspamd_req_headers_hash, task->request_headers);
@@ -391,6 +391,13 @@ void rspamd_task_free(struct rspamd_task *task)
 		else if (task->symcache_runtime) {
 			rspamd_symcache_runtime_destroy(task);
 		}
+
+		/*
+		 * The destructors of the task pool can use the config and its Lua
+		 * state, so the reference is dropped after them; the task itself is
+		 * allocated from its pool and can be gone here
+		 */
+		CFG_REF_RELEASE(cfg);
 	}
 }
 

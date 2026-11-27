@@ -570,6 +570,12 @@ enum rspamd_lua_parse_arguments_flags {
 * - u{classname} - userdata of the following class (stored directly)
 *
 * If any of keys is prefixed with `*` then it is treated as required argument
+*
+* On success the caller owns the function references ('F') and the UCL
+* objects ('O') it gets. On failure the references and objects taken by the
+* call are released and their outputs are set to -1 and NULL, other outputs
+* can be filled up to the key that has failed, `err` is set and the stack is
+* restored to its state before the call.
 * @param L lua state
 * @param pos at which pos start extraction
 * @param err error pointer

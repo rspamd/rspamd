@@ -26,6 +26,22 @@ Redis client
   Should Be Equal As Integers  ${result.rc}  0
   Should Be Equal  ${result.stdout}  true\thello from lua on redis
 
+Interpreter results after sync requests
+  [Documentation]  Lines suspended by a sync HTTP request and by a sync redis
+  ...              command print what they return once they are resumed
+  ${input} =  Catenate  SEPARATOR=\n
+  ...  http = require('rspamd_http')
+  ...  redis = require('rspamd_redis')
+  ...  (function() local err, resp = http.request({url = 'http://127.0.0.1:${RSPAMD_PORT_DUMMY_HTTP}/request', config = rspamd_config, ev_base = rspamadm_ev_base, session = rspamadm_session, timeout = 5}) return err, resp and resp.code, resp and resp.content end)()
+  ...  (function() local ok, conn = redis.connect_sync({host = '${RSPAMD_REDIS_ADDR}:${RSPAMD_REDIS_PORT}', config = rspamd_config, ev_base = rspamadm_ev_base, session = rspamadm_session, timeout = 5}) conn:add_cmd('PING', {}) return ok, conn:exec() end)()
+  ...  1, 'x'
+  ${tmpdir} =  Make Temporary Directory
+  Create File  ${tmpdir}/repl_sync.txt  ${input}\n
+  ${result} =  Run Process  ${RSPAMADM}  lua  -b  stdin=${tmpdir}/repl_sync.txt
+  Cleanup Temporary Directory  ${tmpdir}
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stderr}
+  Should Be Equal  ${result.stdout}  nil\n200\nhello world\ntrue\ntrue\nPONG\n1\nx
+
 # Broken due to tmpdir override
 #DNS client
 #  ${result} =  Run Process  ${RSPAMADM}  --var\=CONFDIR\=${tmpdir}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_dns_client.lua

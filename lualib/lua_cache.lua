@@ -257,6 +257,8 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
     lua_util.debugm(cache_context.N, task, "setting up probes for pending key %s, interval: %s seconds",
       full_key, probe_interval)
 
+    local schedule_probe
+
     -- Set up a timer to probe the key
     local function probe_key()
       probe_count = probe_count + 1
@@ -276,7 +278,7 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
           if err then
             logger.errx(task, "redis error while probing key %s: %s", full_key, err)
             lua_util.debugm(cache_context.N, task, "redis error during probe: %s, retrying later", err)
-            task:add_timer(probe_interval, probe_key)
+            schedule_probe()
             return
           end
 
@@ -290,7 +292,7 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
           if pending then
             lua_util.debugm(cache_context.N, task, "key %s still pending (host: %s), retrying later",
               full_key, pending.hostname)
-            task:add_timer(probe_interval, probe_key)
+            schedule_probe()
           else
             lua_util.debugm(cache_context.N, task, "pending key %s resolved to actual data", full_key)
             callback_data(task, nil, decode_data(data, cache_context))
@@ -300,10 +302,19 @@ local function cache_get(task, key, cache_context, timeout, callback_uncached, c
       )
     end
 
+    -- A finishing task refuses new timers: report it, nobody would call back
+    schedule_probe = function()
+      local ok, err = task:add_timer(probe_interval, probe_key)
+      if ok == false then
+        lua_util.debugm(cache_context.N, task, "cannot schedule a probe for %s: %s", full_key, err)
+        callback_data(task, err or "task is finishing", nil)
+      end
+    end
+
     -- Start the first probe after the initial probe interval
     lua_util.debugm(cache_context.N, task, "scheduling first probe for %s in %s seconds",
       full_key, probe_interval)
-    task:add_timer(probe_interval, probe_key)
+    schedule_probe()
   end
 
   -- Initial cache lookup

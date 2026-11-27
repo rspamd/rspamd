@@ -1074,6 +1074,32 @@ void rspamd_control_worker_add_cmd_handler(struct rspamd_worker *worker,
 	cd->handlers[type].ud = ud;
 }
 
+rspamd_worker_control_handler
+rspamd_control_worker_get_cmd_handler(struct rspamd_worker *worker,
+									  enum rspamd_control_type type,
+									  gpointer *pud)
+{
+	struct rspamd_worker_control_data *cd;
+
+	g_assert(type >= 0 && type < RSPAMD_CONTROL_MAX);
+
+	if (pud) {
+		*pud = NULL;
+	}
+
+	cd = worker->control_data;
+
+	if (cd == NULL || cd->handlers[type].handler == NULL) {
+		return NULL;
+	}
+
+	if (pud) {
+		*pud = cd->handlers[type].ud;
+	}
+
+	return cd->handlers[type].handler;
+}
+
 struct rspamd_srv_reply_data {
 	struct rspamd_worker *worker;
 	struct rspamd_main *srv;

@@ -449,9 +449,21 @@ void rspamd_config_free(struct rspamd_config *cfg)
 		rspamd_monitored_ctx_destroy(cfg->monitored_ctx);
 	}
 
+	/*
+	 * The Lua state goes before the redis pool. A Lua object that holds a
+	 * redis connection gives it back to the pool when lua_close() collects
+	 * it; the pool frees every connection it still has, so it must outlive
+	 * such objects. A command that is still pending keeps its context alive
+	 * past lua_close(), and destroying the pool runs its callback: the
+	 * pointers are cleared, so that the callback finds neither the freed
+	 * thread pool nor the closed state of this config.
+	 */
 	if (RSPAMD_LUA_CFG_STATE(cfg) && cfg->own_lua_state) {
 		lua_thread_pool_free((struct lua_thread_pool *) cfg->lua_thread_pool);
+		/* The finalisers run by lua_close() must not use the freed pool */
+		cfg->lua_thread_pool = nullptr;
 		rspamd_lua_close(RSPAMD_LUA_CFG_STATE(cfg));
+		cfg->lua_state = nullptr;
 	}
 
 	if (cfg->redis_pool) {
@@ -942,7 +954,8 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	}
 
 #if defined(WITH_HYPERSCAN) && !defined(__aarch64__) && !defined(__powerpc64__)
-	if (!cfg->disable_hyperscan) {
+	/* A config without libraries (config_from_ucl without INIT_LIBS) has no CPU flags */
+	if (!cfg->disable_hyperscan && cfg->libs_ctx != nullptr) {
 		if (!(cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
 			msg_warn_config("CPU doesn't have SSSE3 instructions set "
 							"required for hyperscan, disable it");

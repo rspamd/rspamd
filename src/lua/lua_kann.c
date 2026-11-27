@@ -1286,21 +1286,27 @@ lua_kann_train1(lua_State *L)
 												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "lr=N;mini_size=I;max_epoch=I;max_drop_streak=I;frac_val=N;cb=F;pca=u{tensor}",
 												  &lr, &mini_size, &max_epoch, &max_drop_streak, &frac_val, &cbref, &pca)) {
-				n = luaL_error(L, "invalid params: %s",
-							   err ? err->message : "unknown error");
+				/* lua_error() does not return: the message is copied first */
+				lua_pushfstring(L, "invalid params: %s",
+								err ? err->message : "unknown error");
 				g_error_free(err);
 
-				return n;
+				return lua_error(L);
 			}
 		}
 
+		/* From here on every raise releases cbref (a no-op for -1) */
 		if (pca) {
 			/* Check pca matrix validity */
 			if (pca->ndims != 2) {
+				luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+
 				return luaL_error(L, "invalid pca tensor: matrix expected, got a row");
 			}
 
 			if (pca->dim[0] != n_in) {
+				luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+
 				return luaL_error(L, "invalid pca tensor: "
 									 "matrix must have %d rows and it has %d rows instead",
 								  n_in, pca->dim[0]);
@@ -1326,6 +1332,7 @@ lua_kann_train1(lua_State *L)
 				if (rspamd_lua_table_size(L, -1) != n_in) {
 					FREE_VEC(x, n);
 					FREE_VEC(y, n);
+					luaL_unref(L, LUA_REGISTRYINDEX, cbref);
 
 					n = luaL_error(L, "invalid params at pos %d: "
 									  "bad input dimension %d; %d expected",
@@ -1349,6 +1356,7 @@ lua_kann_train1(lua_State *L)
 					FREE_VEC(x, n);
 					FREE_VEC(y, n);
 					g_free(tmp_row);
+					luaL_unref(L, LUA_REGISTRYINDEX, cbref);
 
 					n = luaL_error(L, "(pca on) invalid params at pos %d: "
 									  "bad input dimension %d; %d expected",
@@ -1383,6 +1391,7 @@ lua_kann_train1(lua_State *L)
 				FREE_VEC(x, n);
 				FREE_VEC(y, n);
 				g_free(tmp_row);
+				luaL_unref(L, LUA_REGISTRYINDEX, cbref);
 
 				n = luaL_error(L, "invalid params at pos %d: "
 								  "bad output dimension %d; "
@@ -1420,6 +1429,8 @@ lua_kann_train1(lua_State *L)
 		FREE_VEC(x, n);
 		FREE_VEC(y, n);
 		g_free(tmp_row);
+		/* The callback is called only while the network is trained */
+		luaL_unref(L, LUA_REGISTRYINDEX, cbref);
 	}
 	else {
 		return luaL_error(L, "invalid arguments: kann, inputs, outputs and"

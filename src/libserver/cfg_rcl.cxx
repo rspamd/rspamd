@@ -966,7 +966,7 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 							"cannot init lua file %s: %s",
 							lua_src.c_str(),
 							lua_tostring(L, -1));
-				lua_settop(L, 0);
+				lua_settop(L, err_idx - 1);
 
 				if (::chdir(cur_dir.c_str()) == -1) {
 					msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(),
@@ -3778,6 +3778,9 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 
 	g_assert(L != nullptr);
 
+	/* The stack below belongs to the caller: the config can be read from Lua */
+	auto old_top = lua_gettop(L);
+
 	if (!rspamd_lua_require_function(L, transform_script, nullptr)) {
 		/* No function defined */
 		msg_warn_config("cannot execute lua script %s",
@@ -3798,7 +3801,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 	if (auto ret = lua_pcall(L, 1, 2, err_idx); ret != 0) {
 		msg_err("call to rspamadm lua script failed (%d): %s", ret,
 				lua_tostring(L, -1));
-		lua_settop(L, 0);
+		lua_settop(L, old_top);
 
 		return;
 	}
@@ -3807,8 +3810,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 		msg_info_config("configuration has been transformed in Lua");
 	}
 
-	/* Clear stack completely */
-	lua_settop(L, 0);
+	lua_settop(L, old_top);
 }
 
 static bool

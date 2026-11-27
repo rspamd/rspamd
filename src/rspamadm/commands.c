@@ -119,11 +119,10 @@ rspamadm_lua_command_run(int argc, char **argv,
 		lua_rawseti(L, -2, i); /* Starting from zero ! */
 	}
 
+	/* The entry goes back to the pool with an empty stack once the call is over */
 	if (lua_repl_thread_call(thread, 1, (void *) cmd, lua_thread_str_error_cb) != 0) {
 		exit(EXIT_FAILURE);
 	}
-
-	lua_settop(L, 0);
 }
 
 static const char *
@@ -149,11 +148,10 @@ rspamadm_lua_command_help(gboolean full_help,
 		lua_pushstring(L, "--help");
 		lua_rawseti(L, -2, 1);
 
+		/* The entry goes back to the pool with an empty stack once the call is over */
 		if (lua_repl_thread_call(thread, 1, (void *) cmd, lua_thread_str_error_cb) != 0) {
 			exit(EXIT_FAILURE);
 		}
-
-		lua_settop(L, 0);
 	}
 	else {
 		lua_State *L = rspamd_main->cfg->lua_state;

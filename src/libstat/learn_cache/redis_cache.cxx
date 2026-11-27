@@ -123,6 +123,17 @@ rspamd_stat_cache_redis_init(struct rspamd_stat_ctx *ctx,
 	 * top - 1 - check function (idx = -2)
 	 * top - learn function (idx = -1)
 	 */
+	if (!lua_isfunction(L, -2) || !lua_isfunction(L, -1)) {
+		msg_err_config("cannot init redis learn cache for %s: "
+					   "lua_bayes_init_cache returned %s and %s instead of functions",
+					   st->stcf->symbol,
+					   lua_typename(L, lua_type(L, -2)),
+					   lua_typename(L, lua_type(L, -1)));
+		lua_settop(L, err_idx - 1);
+
+		return nullptr;
+	}
+
 	lua_pushvalue(L, -2);
 	cache_ctx->check_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
@@ -267,9 +278,14 @@ int rspamd_stat_cache_redis_check(struct rspamd_task *task,
 	lua_pushcclosure(L, &rspamd_stat_cache_checked, 0);
 
 	if (lua_pcall(L, 3, 0, err_idx) != 0) {
+		/*
+		 * The cache cannot tell whether the message has been learned: go on
+		 * as on a Redis error reply, since RSPAMD_LEARN_IGNORE reports
+		 * the message as already learned
+		 */
 		msg_err_task("call to redis failed: %s", lua_tostring(L, -1));
 		lua_settop(L, err_idx - 1);
-		return RSPAMD_LEARN_IGNORE;
+		return RSPAMD_LEARN_OK;
 	}
 
 	lua_settop(L, err_idx - 1);

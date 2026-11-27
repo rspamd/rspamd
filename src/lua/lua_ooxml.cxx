@@ -1051,6 +1051,21 @@ auto check_string(lua_State *L, int pos) -> std::optional<std::string_view>
 	return std::string_view{value, len};
 }
 
+/*
+ * A string or an rspamd_text, checked without raising a Lua error: a raise
+ * can longjmp over the destructors of the C++ objects alive in the caller
+ */
+auto check_text_or_string(lua_State *L, int pos) -> std::optional<std::string_view>
+{
+	if (lua_type(L, pos) == LUA_TUSERDATA) {
+		auto *text = static_cast<rspamd_lua_text *>(
+			rspamd_lua_check_udata_maybe(L, pos, rspamd_text_classname));
+		if (text == nullptr) return std::nullopt;
+		return std::string_view{text->start, text->len};
+	}
+	return check_string(L, pos);
+}
+
 auto push_error(lua_State *L, std::string_view error) -> int
 {
 	lua_pushnil(L);
@@ -1259,8 +1274,8 @@ static int lua_ooxml_extract(lua_State *L)
 		}
 		auto story_index = lua_absindex(L, -1);
 		lua_getfield(L, story_index, "content");
-		auto *input = lua_check_text_or_string(L, -1);
-		if (input == nullptr) {
+		auto input = check_text_or_string(L, -1);
+		if (!input) {
 			lua_pop(L, 2);
 			return push_error_with_tokens(L, "invalid OOXML story content", total_tokens);
 		}
@@ -1275,7 +1290,7 @@ static int lua_ooxml_extract(lua_State *L)
 		auto hyperlinks = read_hyperlinks(L, -1);
 		lua_pop(L, 1);
 
-		std::string_view content{input->start, input->len};
+		auto content = *input;
 		auto xml_limits_value = rspamd::xml::effective_limits(limits->xml);
 		ooxml_status parsed;
 		switch (*kind) {

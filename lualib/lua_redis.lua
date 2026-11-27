@@ -1681,10 +1681,21 @@ local function exec_redis_script(id, params, callback, keys, args)
       end
     end
     if params.task then
-      params.task:add_timer(0.01, check_loaded)
+      -- A finishing task refuses new timers: answer now, nobody would call back
+      local ok, err = params.task:add_timer(0.01, check_loaded)
+      if ok == false then
+        callback(err or 'task is finishing', nil)
+      end
     elseif params.ev_base then
       rspamd_config:add_periodic(params.ev_base, 0.01, function()
-        return check_loaded() or false
+        -- One shot: a periodic that fails is planned again, and the callback
+        -- must not be called once more for the same request
+        local ok, res = pcall(check_loaded)
+        if not ok then
+          logger.errx(rspamd_config, 'cannot wait for redis script %s: %s', id, res)
+          return false
+        end
+        return res or false
       end, false)
     else
       callback('No event base for redis script upload', nil)

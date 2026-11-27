@@ -119,6 +119,11 @@ INIT_LOG_MODULE(lua_redis)
 #define LUA_REDIS_SPECIFIC_REPLIED (1 << 0)
 /* session was finished */
 #define LUA_REDIS_SPECIFIC_FINISHED (1 << 1)
+/*
+ * The command holds an async counter of the symbol, taken with its session
+ * event; lua_redis_release_item() gives it back
+ */
+#define LUA_REDIS_SPECIFIC_ITEM_HELD (1 << 2)
 #define LUA_REDIS_ASYNC (1 << 0)
 #define LUA_REDIS_TEXTDATA (1 << 1)
 #define LUA_REDIS_TERMINATED (1 << 2)
@@ -154,10 +159,10 @@ struct lua_redis_ctx {
 
 struct lua_redis_result {
 	gboolean is_error;
+	/* The command holds no session event, async counter or ctx reference any more */
+	gboolean released;
 	int result_ref;
-	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
-	struct rspamd_task *task;
 	struct lua_redis_request_specific_userdata *sp_ud;
 };
 
@@ -181,6 +186,25 @@ lua_redis_free_args(char **args, gsize *arglens, unsigned int nargs)
 
 		g_free(args);
 		g_free(arglens);
+	}
+}
+
+/*
+ * Frees the replies that nobody is going to take. Neither the task nor its
+ * session is touched: the task can be gone.
+ */
+static void
+lua_redis_drop_replies(struct lua_redis_ctx *ctx)
+{
+	while (!g_queue_is_empty(ctx->replies)) {
+		struct lua_redis_result *result = g_queue_pop_head(ctx->replies);
+
+		/* The registry is shared by all threads: the main state is alive with the config */
+		if (rspamd_lua_is_initialised()) {
+			luaL_unref(ctx->async.cfg->lua_state, LUA_REGISTRYINDEX, result->result_ref);
+		}
+
+		g_free(result);
 	}
 }
 
@@ -229,18 +253,29 @@ lua_redis_dtor(struct lua_redis_ctx *ctx)
 		lua_redis_free_args(cur->args, cur->arglens, cur->nargs);
 		g_free(cur->cmd);
 
-		if (cur->cbref != -1) {
+		if (cur->cbref != -1 && rspamd_lua_is_initialised()) {
 			luaL_unref(ud->cfg->lua_state, LUA_REGISTRYINDEX, cur->cbref);
 		}
 
 		g_free(cur);
 	}
 
+	/*
+	 * Every command that has been sent has run lua_redis_fin() by now (each
+	 * one holds a reference until then): nothing queued has an event any
+	 * more, and its task must not be touched, as it can be gone
+	 */
 	if (ctx->events_cleanup) {
+		while (!g_queue_is_empty(ctx->events_cleanup)) {
+			/* Their values are unreferenced when they are returned */
+			g_free(g_queue_pop_head(ctx->events_cleanup));
+		}
+
 		g_queue_free(ctx->events_cleanup);
 		ctx->events_cleanup = NULL;
 	}
 	if (ctx->replies) {
+		lua_redis_drop_replies(ctx);
 		g_queue_free(ctx->replies);
 		ctx->replies = NULL;
 	}
@@ -266,6 +301,82 @@ lua_redis_gc(lua_State *L)
 	return 0;
 }
 
+/*
+ * Terminates the coroutine that has waited in exec() on ctx; the caller has
+ * cleared ctx->thread and holds a reference to ctx. Terminating the coroutine
+ * can give back the async counter of its symbol, and, unless the session is
+ * being cleaned up, the symbols that depend on it run at once: their Lua code
+ * can use this connection. Its replies are dropped before, so that such code
+ * cannot take them with exec(), and nothing of ctx is used after.
+ */
+static void
+lua_redis_terminate_waiter(struct lua_redis_ctx *ctx, struct thread_entry *thread)
+{
+	struct lua_thread_pool *pool = ctx->async.cfg->lua_thread_pool;
+	guint64 generation = ctx->thread_generation;
+
+	/* Its replies have nobody to go to */
+	lua_redis_drop_replies(ctx);
+
+	/* A dead entry is terminated already, a recycled one serves somebody else */
+	if (pool != NULL && thread->state == LUA_THREAD_YIELDED &&
+		thread->generation == generation) {
+		lua_thread_pool_terminate_entry_full(pool, thread, G_STRLOC, true);
+	}
+
+	/* Balances the retain taken at the yield: the entry is alive until here */
+	lua_thread_pool_release_entry(thread);
+}
+
+/*
+ * The session of a sync connection has dropped a command that is still in
+ * flight (task timeout, task destruction): its reply is not going to be
+ * returned, and its timer is stopped. Nothing would end the wait of exec(), so
+ * the connection is closed, and a coroutine that waits in exec() is
+ * terminated, as its task does not wait for it any more.
+ */
+static void
+lua_redis_cancel_sync(struct lua_redis_ctx *ctx)
+{
+	struct lua_redis_userdata *ud = &ctx->async;
+	struct thread_entry *thread = ctx->thread;
+	redisAsyncContext *ac = ud->ctx;
+
+	ctx->thread = NULL;
+	ctx->flags |= LUA_REDIS_TERMINATED;
+	/* The callbacks run by closing the connection return at once */
+	ud->terminated = 1;
+	ud->ctx = NULL;
+	/* No reply is waited for: exec() returns what is stored */
+	ctx->cmds_pending = 0;
+
+	if (ac) {
+		rspamd_redis_pool_release_connection(ud->pool, ac, RSPAMD_REDIS_RELEASE_FATAL);
+	}
+
+	if (thread) {
+		/* The connection is closed and terminated before any Lua code can run */
+		lua_redis_terminate_waiter(ctx, thread);
+	}
+}
+
+/*
+ * Gives back the async counter of the symbol that the command holds, once:
+ * when the command is done with (a reply, an error, a timeout) before its
+ * session event is removed, or when a session cleanup cancels it. The event
+ * holds the task, so the task is alive.
+ */
+static void
+lua_redis_release_item(struct lua_redis_request_specific_userdata *sp_ud)
+{
+	struct lua_redis_userdata *ud = sp_ud->common_ud;
+
+	if (sp_ud->flags & LUA_REDIS_SPECIFIC_ITEM_HELD) {
+		sp_ud->flags &= ~LUA_REDIS_SPECIFIC_ITEM_HELD;
+		rspamd_symcache_item_async_dec_check(ud->task, ud->item, M);
+	}
+}
+
 static void
 lua_redis_fin(void *arg)
 {
@@ -283,6 +394,35 @@ lua_redis_fin(void *arg)
 	msg_debug_lua_redis("finished redis query %p from session %p; refcount=%d",
 						sp_ud, ctx, ctx->ref.refcount);
 	sp_ud->flags |= LUA_REDIS_SPECIFIC_FINISHED;
+
+	/*
+	 * A command that is done with gives its counter back before its event is
+	 * removed. The counter is still held when a session cleanup cancels the
+	 * command: one in flight, a subscription, or a sync one whose stored reply
+	 * has not been returned yet. The symbol cache starts no dependent symbol
+	 * from a session that is being cleaned up.
+	 */
+	lua_redis_release_item(sp_ud);
+
+	/*
+	 * A sync command is finished after its reply has been stored, unless the
+	 * session finishes it first
+	 */
+	if (!IS_ASYNC(ctx) && !(sp_ud->flags & LUA_REDIS_SPECIFIC_REPLIED)) {
+		/* ctx is alive: the reference of this command is dropped below */
+		lua_redis_cancel_sync(ctx);
+	}
+	else if (IS_ASYNC(ctx) && (!(sp_ud->flags & LUA_REDIS_SPECIFIC_REPLIED) ||
+							   (sp_ud->flags & LUA_REDIS_SUBSCRIBED))) {
+		/*
+		 * The session cancels an async command in flight or a subscription,
+		 * and its counter is given back above: the symbol of the connection
+		 * can be finished, and a command added later would charge it again.
+		 * The connection takes no more commands; what is in flight stays on
+		 * the wire, and what comes for it is dropped.
+		 */
+		ctx->flags |= LUA_REDIS_TERMINATED;
+	}
 
 	REDIS_RELEASE(ctx);
 }
@@ -340,10 +480,7 @@ lua_redis_push_error(const char *err,
 		sp_ud->flags |= LUA_REDIS_SPECIFIC_REPLIED;
 
 		if (connected && ud->s) {
-			if (ud->item) {
-				rspamd_symcache_item_async_dec_check(ud->task, ud->item, M);
-			}
-
+			lua_redis_release_item(sp_ud);
 			rspamd_session_remove_event(ud->s, lua_redis_fin, sp_ud);
 		}
 		else {
@@ -450,8 +587,14 @@ lua_redis_push_data(const redisReply *r, struct lua_redis_ctx *ctx,
 	struct lua_callback_state cbs;
 	lua_State *L;
 
-	if (!(sp_ud->flags & (LUA_REDIS_SPECIFIC_REPLIED | LUA_REDIS_SPECIFIC_FINISHED)) ||
-		(sp_ud->flags & LUA_REDIS_SUBSCRIBED)) {
+	/*
+	 * A subscription gets every message while its session event is held.
+	 * Once the session has finished it, the task can be gone: the callback
+	 * (whose closure can hold the task) is not called for what comes after.
+	 */
+	if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED) &&
+		(!(sp_ud->flags & LUA_REDIS_SPECIFIC_REPLIED) ||
+		 (sp_ud->flags & LUA_REDIS_SUBSCRIBED))) {
 		if (sp_ud->cbref != -1) {
 			lua_thread_pool_prepare_callback(ud->cfg->lua_thread_pool, &cbs);
 			L = cbs.L;
@@ -493,11 +636,7 @@ lua_redis_push_data(const redisReply *r, struct lua_redis_ctx *ctx,
 
 		if (!(sp_ud->flags & LUA_REDIS_SUBSCRIBED)) {
 			if (ud->s) {
-				if (ud->item) {
-					rspamd_symcache_item_async_dec_check(ud->task,
-														 ud->item, M);
-				}
-
+				lua_redis_release_item(sp_ud);
 				rspamd_session_remove_event(ud->s, lua_redis_fin, sp_ud);
 			}
 			else {
@@ -535,9 +674,11 @@ lua_redis_callback(redisAsyncContext *c, gpointer r, gpointer priv)
 
 	REDIS_RETAIN(ctx);
 
-	/* If session is finished, we cannot call lua callbacks */
-	if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED) ||
-		(sp_ud->flags & LUA_REDIS_SUBSCRIBED)) {
+	/*
+	 * If session is finished, we cannot call lua callbacks: neither for a
+	 * reply nor for a message of a subscription
+	 */
+	if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED)) {
 		if (c->err == 0) {
 			if (r != NULL) {
 				if (reply->type != REDIS_REPLY_ERROR) {
@@ -584,21 +725,17 @@ lua_redis_callback(redisAsyncContext *c, gpointer r, gpointer priv)
 	REDIS_RELEASE(ctx);
 }
 
+/*
+ * Moves the stored replies to the stack of L. It never raises: it also runs
+ * from the event loop, on a suspended coroutine, where no error can be caught.
+ */
 static int
 lua_redis_push_results(struct lua_redis_ctx *ctx, lua_State *L)
 {
-	int results = g_queue_get_length(ctx->replies);
-	int i;
-	gboolean can_use_lua = TRUE;
-
-	results = g_queue_get_length(ctx->replies);
-
-	if (!lua_checkstack(L, (results * 2) + 1)) {
-		luaL_error(L, "cannot resize stack to fit %d commands",
-				   ctx->cmds_pending);
-
-		can_use_lua = FALSE;
-	}
+	unsigned int results = g_queue_get_length(ctx->replies);
+	unsigned int i;
+	gboolean can_use_lua = results <= (G_MAXINT - 1) / 2 &&
+						   lua_checkstack(L, (int) (results * 2) + 1);
 
 	for (i = 0; i < results; i++) {
 		struct lua_redis_result *result = g_queue_pop_head(ctx->replies);
@@ -610,10 +747,70 @@ lua_redis_push_results(struct lua_redis_ctx *ctx, lua_State *L)
 
 		luaL_unref(L, LUA_REGISTRYINDEX, result->result_ref);
 
-		g_queue_push_tail(ctx->events_cleanup, result);
+		if (result->released) {
+			g_free(result);
+		}
+		else {
+			/* Released by lua_redis_cleanup_events() once the coroutine has stopped */
+			g_queue_push_tail(ctx->events_cleanup, result);
+		}
 	}
 
-	return can_use_lua ? results * 2 : 0;
+	if (!can_use_lua) {
+		/* The replies are lost: the caller gets an error instead of them */
+		if (!lua_checkstack(L, 2)) {
+			return 0;
+		}
+
+		lua_pushboolean(L, FALSE);
+		lua_pushfstring(L, "cannot resize stack to fit %d replies", (int) results);
+
+		return 2;
+	}
+
+	return (int) results * 2;
+}
+
+/*
+ * Gives back what the command of a stored reply holds: the async counter of
+ * its symbol, its session event and its reference to the connection. This is
+ * done from the event loop and never under a running coroutine: removing the
+ * last event of a task session finishes the task, which can be freed on
+ * return. The caller keeps ctx alive.
+ */
+static void
+lua_redis_release_result(struct lua_redis_result *result)
+{
+	struct lua_redis_request_specific_userdata *sp_ud = result->sp_ud;
+	struct rspamd_async_session *s = result->s;
+
+	if (result->released) {
+		return;
+	}
+
+	/*
+	 * The calls below can run Lua code (dependent symbols, the next stage of
+	 * the task) whose exec() returns and frees a released result that is still
+	 * queued: the result is not used after them
+	 */
+	result->released = TRUE;
+	result->s = NULL;
+
+	/*
+	 * Once a session cleanup has run lua_redis_fin, the event is gone, the
+	 * counter is given back and the task can be gone as well; otherwise the
+	 * event holds the task
+	 */
+	if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED)) {
+		lua_redis_release_item(sp_ud);
+
+		if (s) {
+			rspamd_session_remove_event(s, lua_redis_fin, sp_ud);
+		}
+		else {
+			lua_redis_fin(sp_ud);
+		}
+	}
 }
 
 static void
@@ -624,17 +821,7 @@ lua_redis_cleanup_events(struct lua_redis_ctx *ctx)
 	while (!g_queue_is_empty(ctx->events_cleanup)) {
 		struct lua_redis_result *result = g_queue_pop_head(ctx->events_cleanup);
 
-		if (result->item) {
-			rspamd_symcache_item_async_dec_check(result->task, result->item, M);
-		}
-
-		if (result->s) {
-			rspamd_session_remove_event(result->s, lua_redis_fin, result->sp_ud);
-		}
-		else {
-			lua_redis_fin(result->sp_ud);
-		}
-
+		lua_redis_release_result(result);
 		g_free(result);
 	}
 
@@ -655,6 +842,7 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 	struct lua_redis_request_specific_userdata *sp_ud = priv;
 	struct lua_redis_ctx *ctx;
 	struct lua_redis_userdata *ud;
+	struct lua_redis_result *result = NULL;
 	struct thread_entry *thread;
 	int results;
 
@@ -662,16 +850,28 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 	ud = sp_ud->common_ud;
 	lua_State *L = ctx->async.cfg->lua_state;
 
-	sp_ud->flags |= LUA_REDIS_SPECIFIC_REPLIED;
-
-	if (ud->terminated) {
-		/* We are already at the termination stage, just go out */
-		/* TODO:
-		   if somebody is waiting for us (ctx->thread), return result,
-		   otherwise, indeed, ignore
+	if (sp_ud->flags & LUA_REDIS_SPECIFIC_REPLIED) {
+		/*
+		 * A command has one reply. A subscription is called back again for
+		 * every channel and message: exec() has no way to return those, and
+		 * the command has given back its event with the first one.
 		 */
 		return;
 	}
+
+	sp_ud->flags |= LUA_REDIS_SPECIFIC_REPLIED;
+
+	if (ud->terminated || !rspamd_lua_is_initialised()) {
+		/*
+		 * The connection is being destroyed or has been cancelled by the
+		 * session, which has dealt with a waiting coroutine; or Lua is closed
+		 * (the redis pool is destroyed after it at shutdown)
+		 */
+		return;
+	}
+
+	/* Giving back an event or a coroutine can drop the last other reference */
+	REDIS_RETAIN(ctx);
 
 	if (ev_can_stop(&sp_ud->timeout_ev)) {
 		ev_timer_stop(ud->event_loop, &sp_ud->timeout_ev);
@@ -680,7 +880,7 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 	if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED)) {
 		msg_debug_lua_redis("got sync reply from redis: %p for query %p", ac, sp_ud);
 
-		struct lua_redis_result *result = g_malloc0(sizeof *result);
+		result = g_malloc0(sizeof *result);
 
 		if (ac->err == 0) {
 			if (r != NULL) {
@@ -728,8 +928,6 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 
 		result->result_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 		result->s = ud->s;
-		result->item = ud->item;
-		result->task = ud->task;
 		result->sp_ud = sp_ud;
 
 		g_queue_push_tail(ctx->replies, result);
@@ -737,36 +935,55 @@ lua_redis_callback_sync(redisAsyncContext *ac, gpointer r, gpointer priv)
 
 	ctx->cmds_pending--;
 
-	if (ctx->cmds_pending == 0) {
+	if (ctx->cmds_pending == 0 && ctx->thread) {
 		msg_debug_lua_redis("no more commands left for: %p for query %p", ac, sp_ud);
 
-		if (ctx->thread) {
-			if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED)) {
-				/* somebody yielded and waits for results */
-				guint64 thread_generation = ctx->thread_generation;
-				thread = ctx->thread;
-				ctx->thread = NULL;
+		if (!(sp_ud->flags & LUA_REDIS_SPECIFIC_FINISHED)) {
+			/* somebody yielded and waits for results */
+			guint64 thread_generation = ctx->thread_generation;
+			lua_State *thread_L;
+			int top;
 
-				results = lua_redis_push_results(ctx, thread->lua_state);
+			thread = ctx->thread;
+			ctx->thread = NULL;
+			thread_L = thread->lua_state;
+			top = lua_gettop(thread_L);
 
-				if (ud->item) {
-					rspamd_symcache_set_cur_item(ud->task, ud->item);
-				}
+			results = lua_redis_push_results(ctx, thread_L);
 
-				lua_thread_resume_checked(thread, thread_generation, results);
-				/* Drop the reference taken at yield */
-				lua_thread_pool_release_entry(thread);
-				lua_redis_cleanup_events(ctx);
+			if (ud->item) {
+				rspamd_symcache_set_cur_item(ud->task, ud->item);
 			}
-			else {
-				/* We cannot resume the thread as the associated task has gone */
-				lua_thread_pool_terminate_entry_full(ud->cfg->lua_thread_pool,
-													 ctx->thread, G_STRLOC, true);
-				lua_thread_pool_release_entry(ctx->thread);
-				ctx->thread = NULL;
+
+			if (!lua_thread_resume_checked(thread, thread_generation, results)) {
+				/* Dead or recycled: leave its stack as it was */
+				lua_settop(thread_L, top);
 			}
+
+			/* Drop the reference taken at yield */
+			lua_thread_pool_release_entry(thread);
+			/* The coroutine has stopped: its task can be finished now */
+			lua_redis_cleanup_events(ctx);
+		}
+		else {
+			/* We cannot resume the thread as the associated task has gone */
+			thread = ctx->thread;
+			ctx->thread = NULL;
+			/* ctx is held until the end of this function */
+			lua_redis_terminate_waiter(ctx, thread);
 		}
 	}
+	else if (result != NULL && ctx->thread == NULL) {
+		/*
+		 * Nobody waits for this reply: it stays for a later exec(), which
+		 * returns it at once, and what its command holds is given back now,
+		 * from the event loop. Nothing else can do it: exec() runs inside of
+		 * the coroutine, and the coroutine may never call it.
+		 */
+		lua_redis_release_result(result);
+	}
+
+	REDIS_RELEASE(ctx);
 }
 
 static void
@@ -1315,6 +1532,7 @@ lua_redis_make_request(lua_State *L)
 
 				if (ud->item) {
 					rspamd_symcache_item_async_inc(ud->task, ud->item, M);
+					sp_ud->flags |= LUA_REDIS_SPECIFIC_ITEM_HELD;
 				}
 			}
 
@@ -1626,6 +1844,24 @@ lua_redis_add_cmd(lua_State *L)
 			return 2;
 		}
 
+		if (!IS_ASYNC(ctx)) {
+			/*
+			 * A command of a sync connection is sent right here, and only
+			 * exec() can wait for its reply. Refuse it before anything is in
+			 * flight if the caller will not be able to wait: otherwise the
+			 * command, its session event and the async counter of the symbol
+			 * would stay with nobody to collect them.
+			 */
+			struct lua_thread_pool *pool = ctx->async.cfg->lua_thread_pool;
+
+			/* A config made without Lua has no thread pool */
+			if (pool == NULL || lua_thread_pool_get_yieldable_entry(pool, L) == NULL) {
+				return luaL_error(L, "redis add_cmd() on a sync connection must be "
+									 "called from a coroutine that can yield (a symbol "
+									 "registered with flags = 'coro', not an async callback)");
+			}
+		}
+
 		/* Async version */
 		if (lua_type(L, 2) == LUA_TSTRING) {
 			/* No callback version */
@@ -1633,8 +1869,12 @@ lua_redis_add_cmd(lua_State *L)
 			args_pos = 3;
 		}
 		else if (lua_type(L, 2) == LUA_TFUNCTION) {
-			lua_pushvalue(L, 2);
-			cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+			/* A sync connection returns the replies from exec(): the callback is unused */
+			if (IS_ASYNC(ctx)) {
+				lua_pushvalue(L, 2);
+				cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+			}
+
 			cmd = lua_tostring(L, 3);
 			args_pos = 4;
 		}
@@ -1645,9 +1885,8 @@ lua_redis_add_cmd(lua_State *L)
 		sp_ud = g_malloc0(sizeof(*sp_ud));
 		sp_ud->common_ud = &ctx->async;
 		ud = &ctx->async;
-		if (IS_ASYNC(ctx)) {
-			sp_ud->cbref = cbref;
-		}
+		/* -1 for a sync connection: 0 would be unreferenced in the dtor */
+		sp_ud->cbref = cbref;
 
 		sp_ud->ctx = ctx;
 		sp_ud->cmd = g_strdup(cmd);
@@ -1695,6 +1934,7 @@ lua_redis_add_cmd(lua_State *L)
 
 				if (ud->item) {
 					rspamd_symcache_item_async_inc(ud->task, ud->item, M);
+					sp_ud->flags |= LUA_REDIS_SPECIFIC_ITEM_HELD;
 				}
 			}
 
@@ -1734,7 +1974,10 @@ lua_redis_add_cmd(lua_State *L)
 /***
  * @method rspamd_redis:exec()
  * Executes pending commands (suitable for blocking IO only for now)
- * @return {boolean}, {table}, ...: pairs in format [bool, result] for each request pending
+ * @return {boolean}, {table}, ...: pairs in format [bool, result] for each request pending;
+ * a single pair `false, error` if the replies cannot be returned: there are more of
+ * them than the Lua stack can hold, or the task session has been finished (task
+ * timeout, client gone) and has dropped the commands in flight
  */
 static int
 lua_redis_exec(lua_State *L)
@@ -1762,21 +2005,71 @@ lua_redis_exec(lua_State *L)
 							ctx->cmds_pending,
 							replies_pending);
 
+		if (ud->terminated && replies_pending == 0) {
+			/* The session has dropped the commands that were in flight */
+			lua_pushboolean(L, FALSE);
+			lua_pushliteral(L, "Connection is terminated");
+
+			return 2;
+		}
+
 		if (ctx->cmds_pending == 0 && replies_pending == 0) {
 			lua_pushstring(L, "No pending commands to execute");
 			lua_error(L);
 		}
 
 		if (ctx->cmds_pending == 0 && replies_pending > 0) {
+			/*
+			 * Every reply has come while nobody waited for it, and its command
+			 * has given back its event then: nothing is left to do but return
+			 */
 			int results = lua_redis_push_results(ctx, L);
 			return results;
 		}
 		else {
-			ctx->thread = lua_thread_pool_get_running_entry(ctx->async.cfg->lua_thread_pool);
-			ctx->thread_generation = ctx->thread->generation;
+			struct lua_thread_pool *pool = ctx->async.cfg->lua_thread_pool;
+			struct thread_entry *thread;
+
+			if (ctx->thread != NULL) {
+				/* A second waiter would replace the first one, which is then lost */
+				lua_pushboolean(L, FALSE);
+				lua_pushliteral(L, "another exec() is in progress on this connection");
+
+				return 2;
+			}
+
+			if (ud->s && rspamd_session_blocked(ud->s)) {
+				/*
+				 * The session is being cleaned up (e.g. a coroutine resumed by
+				 * it calls exec()): it cancels the commands in flight, so the
+				 * wait could never end with their replies
+				 */
+				lua_pushboolean(L, FALSE);
+				lua_pushliteral(L, "session is terminating");
+
+				return 2;
+			}
+
+			/* A config made without Lua has no thread pool */
+			thread = pool ? lua_thread_pool_get_yieldable_entry(pool, L) : NULL;
+
+			if (thread == NULL) {
+				/*
+				 * add_cmd() makes the same check, so this is a caller that could
+				 * wait when it sent the commands and cannot now (e.g. exec() is
+				 * called through a C function). The replies are queued and are
+				 * returned by an exec() from a proper place.
+				 */
+				return luaL_error(L, "redis exec() must be called from a coroutine "
+									 "that can yield (a symbol registered with "
+									 "flags = 'coro', not an async callback)");
+			}
+
+			ctx->thread = thread;
+			ctx->thread_generation = thread->generation;
 			/* Held while ctx->thread is set, released when consumed or in dtor */
-			lua_thread_pool_retain_entry(ctx->thread);
-			return lua_thread_yield(ctx->thread, 0);
+			lua_thread_pool_retain_entry(thread);
+			return lua_thread_yield(thread, 0);
 		}
 	}
 }

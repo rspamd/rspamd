@@ -21,7 +21,7 @@
 #include "libserver/html/html_block.hxx"
 #include "images.h"
 
-#include "contrib/ankerl/unordered_dense.h"
+#include <bitset>
 #include <frozen/string.h>
 #include <frozen/unordered_map.h>
 
@@ -456,7 +456,11 @@ lua_html_foreach_tag(lua_State *L)
 	const char *tagname;
 	int id;
 	auto any = false;
-	ankerl::unordered_dense::set<int> tags;
+	/*
+	 * Trivially destructible: luaL_error/luaL_checkstring may longjmp out
+	 * of this frame without running destructors (PUC Lua built as C)
+	 */
+	std::bitset<Tag_MAX> tags;
 
 
 	if (lua_type(L, 2) == LUA_TSTRING) {
@@ -467,12 +471,12 @@ lua_html_foreach_tag(lua_State *L)
 		else {
 			id = rspamd_html_tag_by_name(tagname);
 
-			if (id == -1) {
+			if (id < 0 || id >= Tag_MAX) {
 				return luaL_error(L, "invalid tagname: %s", tagname);
 			}
 
 
-			tags.insert(id);
+			tags.set(id);
 		}
 	}
 	else if (lua_type(L, 2) == LUA_TTABLE) {
@@ -486,19 +490,19 @@ lua_html_foreach_tag(lua_State *L)
 			else {
 				id = rspamd_html_tag_by_name(tagname);
 
-				if (id == -1) {
+				if (id < 0 || id >= Tag_MAX) {
 					return luaL_error(L, "invalid tagname: %s", tagname);
 				}
-				tags.insert(id);
+				tags.set(id);
 			}
 		}
 
 		lua_pop(L, 1);
 	}
 
-	if (hc && (any || !tags.empty()) && lua_isfunction(L, 3)) {
+	if (hc && (any || tags.any()) && lua_isfunction(L, 3)) {
 		hc->traverse_all_tags([&](const rspamd::html::html_tag *tag) -> bool {
-			if (tag && (any || tags.contains(tag->id))) {
+			if (tag && (any || (tag->id >= 0 && tag->id < Tag_MAX && tags.test(tag->id)))) {
 				lua_pushcfunction(L, &rspamd_lua_traceback);
 				auto err_idx = lua_gettop(L);
 				lua_pushvalue(L, 3);

@@ -1443,8 +1443,15 @@ LUA_FUNCTION_DEF(task, get_dns_req);
 
 /***
  * @method task:add_timer(timeout, callback)
- * Creates a delayed execution task for the specific callback at given timeout (in seconds)
- *
+ * Creates a delayed execution task for the specific callback at given timeout (in seconds).
+ * The callback is called as `callback(task)`; if it returns a number, it is called
+ * again after that many seconds. A pending timer holds the task; it is cancelled
+ * without calling the callback when the task times out or is destroyed.
+ * @param {number} timeout timeout in seconds
+ * @param {function} callback function to call
+ * @return nothing if the timer has been scheduled; `false` and an error message
+ * if the task is finishing (its session is being cleaned up or destroyed) and
+ * accepts no new asynchronous events, in which case the callback is never called
  */
 LUA_FUNCTION_DEF(task, add_timer);
 
@@ -1808,16 +1815,45 @@ lua_task_get_cfg(lua_State *L)
 	return 1;
 }
 
+static void
+lua_task_release_cfg_dtor(gpointer p)
+{
+	struct rspamd_config *cfg = (struct rspamd_config *) p;
+
+	CFG_REF_RELEASE(cfg);
+}
+
 static int
 lua_task_set_cfg(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	void *ud = rspamd_lua_check_udata(L, 2, rspamd_config_classname);
+	struct rspamd_config *cfg;
 
 	if (task) {
-		luaL_argcheck(L, ud != NULL, 1, "'config' expected");
-		task->cfg = ud ? *((struct rspamd_config **) ud) : NULL;
+		luaL_argcheck(L, ud != NULL && *((struct rspamd_config **) ud) != NULL,
+					  2, "'config' expected");
+		cfg = *((struct rspamd_config **) ud);
+
+		if (cfg != task->cfg) {
+			/*
+			 * The task holds a reference of the config it points to, and
+			 * rspamd_task_free() releases that one after the task pool. The
+			 * previous config stays referenced until the pool is destroyed:
+			 * what the task has made with it can use it in the destructors
+			 * of the pool, and the largest priority makes this one the last.
+			 */
+			CFG_REF_RETAIN(cfg);
+
+			if (task->cfg) {
+				rspamd_mempool_add_destructor_priority(task->task_pool,
+													   lua_task_release_cfg_dtor,
+													   task->cfg, G_MAXUINT);
+			}
+
+			task->cfg = cfg;
+		}
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
@@ -2606,10 +2642,11 @@ lua_task_set_pre_result(lua_State *L)
 												  RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
 												  "*action=S;message=S;module=S;score=D;priority=i;flags=S;result=S",
 												  &act_str, &message, &module, &score, &priority, &fl_str, &res_name)) {
-				int ret = luaL_error(L, "invalid arguments: %s", err->message);
+				/* lua_error() does not return: the message is copied first */
+				lua_pushfstring(L, "invalid arguments: %s", err->message);
 				g_error_free(err);
 
-				return ret;
+				return lua_error(L);
 			}
 		}
 		else {
@@ -8843,6 +8880,11 @@ lua_task_add_timer(lua_State *L)
 	struct rspamd_task *task;
 
 	task = lua_check_task(L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments: task expected");
+	}
+
 	ev_base = task->event_loop;
 	if (!lua_isfunction(L, 3)) {
 		return luaL_error(L, "invalid arguments: callback expected");
@@ -8850,6 +8892,23 @@ lua_task_add_timer(lua_State *L)
 
 	if (!lua_isnumber(L, 2)) {
 		return luaL_error(L, "invalid arguments: timeout expected");
+	}
+
+	if (task->s == NULL) {
+		return luaL_error(L, "invalid arguments: task has no session");
+	}
+
+	/*
+	 * A session that is being cleaned up or destroyed (e.g. a finaliser has
+	 * called a Lua callback that schedules a retry) refuses new events. A timer
+	 * armed without its event would never be stopped and would fire after the
+	 * task and this cbdata are freed
+	 */
+	if (rspamd_session_blocked(task->s)) {
+		lua_pushboolean(L, false);
+		lua_pushstring(L, "task is finishing");
+
+		return 2;
 	}
 
 	struct rspamd_task_timer_cbdata *cbdata = rspamd_mempool_alloc(task->task_pool, sizeof(*cbdata));
@@ -8867,6 +8926,10 @@ lua_task_add_timer(lua_State *L)
 	ev_timer_init(&cbdata->ev, lua_task_timer_cb, lua_tonumber(L, 2), 0.0);
 	ev_timer_start(ev_base, &cbdata->ev);
 
+	/*
+	 * Nothing on success: `return task:add_timer(...)` at the end of a symbol
+	 * callback must not become a symbol result
+	 */
 	return 0;
 }
 

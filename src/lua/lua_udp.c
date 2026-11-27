@@ -33,7 +33,7 @@ local logger = require "rspamd_logger"
 local udp = require "rspamd_udp"
 
 rspamd_config.SYM = function(task)
-  udp.sento{
+  udp.sendto{
     host = addr, -- must be ip address object (e.g. received by upstream module)
     port = 500,
     data = {'str1', 'str2'}, -- can be table, string or rspamd_text
@@ -68,6 +68,16 @@ struct lua_udp_cbdata {
 	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 	struct iovec *iov;
+	/*
+	 * Gives the thread pool to run the callback on and the main state for
+	 * the registry; NULL when there is no thread pool
+	 */
+	struct rspamd_config *cfg;
+	/*
+	 * The state sendto() has been called on, used only without cfg: it is
+	 * usually a pooled thread, which is collected, reused or suspended for
+	 * somebody else before the reply comes
+	 */
 	lua_State *L;
 	unsigned int retransmits;
 	unsigned int iovlen;
@@ -112,6 +122,13 @@ static void
 lua_udp_cbd_fin(gpointer p)
 {
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *) p;
+	struct rspamd_symcache_dynamic_item *item = cbd->item;
+
+	/*
+	 * The request still holds the async counter of the symbol only when a
+	 * session cleanup cancels it: lua_udp_maybe_free gives it back otherwise
+	 */
+	cbd->item = NULL;
 
 	if (cbd->sock != -1) {
 		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
@@ -122,8 +139,50 @@ lua_udp_cbd_fin(gpointer p)
 		rspamd_inet_address_free(cbd->addr);
 	}
 
-	if (cbd->cbref) {
-		luaL_unref(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+	/*
+	 * The registry is shared by all threads of the VM, so the ref is released
+	 * on the main state. Never touch a Lua state once it is closed.
+	 */
+	if (cbd->cbref && rspamd_lua_is_initialised()) {
+		luaL_unref(cbd->cfg ? RSPAMD_LUA_CFG_STATE(cbd->cfg) : cbd->L,
+				   LUA_REGISTRYINDEX, cbd->cbref);
+	}
+
+	if (item) {
+		/*
+		 * The task is alive while its session is cleaned up, and the symbol
+		 * cache starts no dependent symbol from a session that is being
+		 * cleaned up
+		 */
+		rspamd_symcache_item_async_dec_check(cbd->task, item, M);
+	}
+}
+
+/*
+ * Replies and timeouts come from the event loop: the callback runs on a
+ * thread of its own taken from the pool, or on the caller's state if there
+ * is no pool. lua_udp_callback_done() must follow.
+ */
+static lua_State *
+lua_udp_callback_state(struct lua_udp_cbdata *cbd,
+					   struct lua_callback_state *cbs)
+{
+	if (cbd->cfg) {
+		lua_thread_pool_prepare_callback(cbd->cfg->lua_thread_pool, cbs);
+
+		return cbs->L;
+	}
+
+	cbs->thread_pool = NULL;
+
+	return cbd->L;
+}
+
+static void
+lua_udp_callback_done(struct lua_callback_state *cbs)
+{
+	if (cbs->thread_pool) {
+		lua_thread_pool_restore_callback(cbs);
 	}
 }
 
@@ -179,7 +238,8 @@ lua_udp_maybe_push_error(struct lua_udp_cbdata *cbd, const char *err)
 {
 	if (cbd->cbref != -1) {
 		int top;
-		lua_State *L = cbd->L;
+		struct lua_callback_state cbs;
+		lua_State *L = lua_udp_callback_state(cbd, &cbs);
 
 		top = lua_gettop(L);
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
@@ -197,6 +257,7 @@ lua_udp_maybe_push_error(struct lua_udp_cbdata *cbd, const char *err)
 		}
 
 		lua_settop(L, top);
+		lua_udp_callback_done(&cbs);
 	}
 
 	lua_udp_maybe_free(cbd);
@@ -208,7 +269,8 @@ lua_udp_push_data(struct lua_udp_cbdata *cbd, const char *data,
 {
 	if (cbd->cbref != -1) {
 		int top;
-		lua_State *L = cbd->L;
+		struct lua_callback_state cbs;
+		lua_State *L = lua_udp_callback_state(cbd, &cbs);
 
 		top = lua_gettop(L);
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
@@ -226,6 +288,7 @@ lua_udp_push_data(struct lua_udp_cbdata *cbd, const char *data,
 		}
 
 		lua_settop(L, top);
+		lua_udp_callback_done(&cbs);
 	}
 
 	lua_udp_maybe_free(cbd);
@@ -244,7 +307,11 @@ lua_udp_maybe_register_event(struct lua_udp_cbdata *cbd)
 
 	if (cbd->task && !cbd->item) {
 		cbd->item = rspamd_symcache_get_cur_item(cbd->task);
-		rspamd_symcache_item_async_inc(cbd->task, cbd->item, M);
+
+		/* No current item outside of the symbols processing */
+		if (cbd->item) {
+			rspamd_symcache_item_async_inc(cbd->task, cbd->item, M);
+		}
 	}
 
 	return TRUE;
@@ -298,7 +365,10 @@ lua_udp_io_handler(int fd, short what, gpointer p)
 			lua_udp_maybe_push_error(cbd, "write error");
 		}
 		else {
-			cbd->retransmits--;
+			if (cbd->retransmits > 0) {
+				cbd->retransmits--;
+			}
+
 			rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_WRITE);
 		}
 	}
@@ -463,6 +533,7 @@ lua_udp_sendto(lua_State *L)
 		cbd->event_loop = ev_base;
 		cbd->pool = pool;
 		cbd->s = session;
+		cbd->task = task;
 		cbd->addr = addr;
 		cbd->sock = rspamd_socket_create(rspamd_inet_address_get_af(addr),
 										 SOCK_DGRAM, 0, TRUE);
@@ -476,6 +547,29 @@ lua_udp_sendto(lua_State *L)
 		}
 
 		cbd->L = L;
+
+		if (task) {
+			cbd->cfg = task->cfg;
+		}
+		else {
+			lua_getglobal(L, "rspamd_config");
+
+			if (lua_type(L, -1) == LUA_TUSERDATA) {
+				struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																		   rspamd_config_classname);
+
+				if (pcfg) {
+					cbd->cfg = *pcfg;
+				}
+			}
+
+			lua_pop(L, 1);
+		}
+
+		if (cbd->cfg && cbd->cfg->lua_thread_pool == NULL) {
+			/* A config made without Lua: only the caller's state is known */
+			cbd->cfg = NULL;
+		}
 
 		gsize data_len;
 
@@ -515,7 +609,12 @@ lua_udp_sendto(lua_State *L)
 		lua_pushstring(L, "retransmits");
 		lua_gettable(L, -2);
 		if (lua_type(L, -1) == LUA_TNUMBER) {
-			cbd->retransmits = lua_tonumber(L, -1);
+			double retransmits = lua_tonumber(L, -1);
+
+			/* A negative count or NaN means no retransmits */
+			if (retransmits >= 1) {
+				cbd->retransmits = retransmits < G_MAXUINT ? retransmits : G_MAXUINT;
+			}
 		}
 		lua_pop(L, 1);
 

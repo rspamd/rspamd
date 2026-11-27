@@ -70,8 +70,13 @@
 LUA_FUNCTION_DEF(util, create_event_base);
 /***
  * @function util.load_rspamd_config(filename)
- * Load rspamd config from the specified file
- * @return {confg} new configuration object suitable for access
+ * Load rspamd config from the specified file. The Lua code of the config runs in
+ * the Lua state of the caller with `rspamd_config` set to the new config; the
+ * globals `rspamd_config`, `config`, `metrics`, `composites`, `classifiers`,
+ * `rspamd_classifiers`, `rspamd_maps`, `rspamd_paths`, `rspamd_env` and
+ * `rspamd_version` are as before on return. Nothing frees the returned config.
+ * @param {string} filename path to the config file
+ * @return {confg} new configuration object suitable for access or nil on error
  */
 LUA_FUNCTION_DEF(util, load_rspamd_config);
 /***
@@ -973,6 +978,135 @@ lua_util_create_event_base(lua_State *L)
 	return 1;
 }
 
+/*
+ * Main state of the Lua VM that L belongs to. A config made without a Lua state
+ * of its own keeps this one for later use: L itself can be a pooled thread that
+ * is terminated or runs something else by then.
+ */
+static lua_State *
+lua_util_main_state(lua_State *L)
+{
+	lua_State *main_L = NULL;
+
+	if (lua_pushthread(L)) {
+		lua_pop(L, 1);
+
+		return L;
+	}
+
+	lua_pop(L, 1);
+
+#ifdef LUA_RIDX_MAINTHREAD
+	lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+	main_L = lua_tothread(L, -1);
+	lua_pop(L, 1);
+#else
+	/* The registry has no main thread here: the config that owns the VM has it */
+	lua_getglobal(L, "rspamd_config");
+
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																   rspamd_config_classname);
+
+		if (pcfg && *pcfg && (*pcfg)->own_lua_state) {
+			main_L = RSPAMD_LUA_CFG_STATE(*pcfg);
+		}
+	}
+
+	lua_pop(L, 1);
+#endif
+
+	return main_L ? main_L : L;
+}
+
+/*
+ * Globals that reading a config sets in its Lua state: rspamd_config_read()
+ * replaces rspamd_config and creates the others when they are absent, the Lua
+ * entry of a config (rules/rspamd.lua) creates rspamd_maps. A config that shares
+ * the VM of its caller gives them back on return. The hidden ones are nil while
+ * the config is read, so that its Lua code fills tables of its own and leaves
+ * the tables of the caller as they are.
+ */
+static const struct {
+	const char *name;
+	gboolean hide;
+} lua_util_cfg_globals[] = {
+	{"rspamd_config", FALSE},
+	{"rspamd_paths", FALSE},
+	{"rspamd_env", FALSE},
+	{"rspamd_version", FALSE},
+	{"config", TRUE},
+	{"metrics", TRUE},
+	{"composites", TRUE},
+	{"classifiers", TRUE},
+	{"rspamd_classifiers", TRUE},
+	{"rspamd_maps", TRUE},
+};
+
+/*
+ * Keeps the globals above in a registry table: reading a config can clear the
+ * stack of L. Returns the reference to pass to lua_util_restore_cfg_globals().
+ */
+static int
+lua_util_save_cfg_globals(lua_State *L)
+{
+	unsigned int i;
+
+	lua_createtable(L, 0, G_N_ELEMENTS(lua_util_cfg_globals));
+
+	for (i = 0; i < G_N_ELEMENTS(lua_util_cfg_globals); i++) {
+		lua_getglobal(L, lua_util_cfg_globals[i].name);
+		lua_setfield(L, -2, lua_util_cfg_globals[i].name);
+
+		if (lua_util_cfg_globals[i].hide) {
+			lua_pushnil(L);
+			lua_setglobal(L, lua_util_cfg_globals[i].name);
+		}
+	}
+
+	return luaL_ref(L, LUA_REGISTRYINDEX);
+}
+
+static void
+lua_util_restore_cfg_globals(lua_State *L, int ref)
+{
+	unsigned int i;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+
+	for (i = 0; i < G_N_ELEMENTS(lua_util_cfg_globals); i++) {
+		lua_getfield(L, -1, lua_util_cfg_globals[i].name);
+		lua_setglobal(L, lua_util_cfg_globals[i].name);
+	}
+
+	lua_pop(L, 1);
+	luaL_unref(L, LUA_REGISTRYINDEX, ref);
+}
+
+/*
+ * Libraries of the config in the rspamd_config global, with a new reference.
+ * They belong to the process: a config read in the same VM shares them, as a
+ * reloaded config does.
+ */
+static struct rspamd_external_libs_ctx *
+lua_util_caller_libs(lua_State *L)
+{
+	struct rspamd_external_libs_ctx *libs = NULL;
+	struct rspamd_config **pcfg;
+
+	lua_getglobal(L, "rspamd_config");
+	pcfg = rspamd_lua_check_udata_maybe(L, -1, rspamd_config_classname);
+
+	if (pcfg && *pcfg && (*pcfg)->libs_ctx) {
+		libs = (*pcfg)->libs_ctx;
+		REF_RETAIN(libs);
+	}
+
+	lua_pop(L, 1);
+
+	return libs;
+}
+
 static int
 lua_util_load_rspamd_config(lua_State *L)
 {
@@ -983,15 +1117,43 @@ lua_util_load_rspamd_config(lua_State *L)
 	cfg_name = luaL_checkstring(L, 1);
 
 	if (cfg_name) {
-		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
-		cfg->lua_state = L;
+		lua_State *main_L = lua_util_main_state(L);
+		struct rspamd_external_libs_ctx *libs = lua_util_caller_libs(main_L);
+		gboolean loaded;
+		int globals_ref;
 
-		if (rspamd_config_read(cfg, cfg_name, NULL, NULL, NULL, FALSE, NULL)) {
-			msg_err_config("cannot load config from %s", cfg_name);
+		if (libs == NULL) {
+			msg_err("cannot load config from %s: no rspamd_config with libraries "
+					"in this Lua state",
+					cfg_name);
+			lua_pushnil(L);
+
+			return 1;
+		}
+
+		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
+		cfg->lua_state = main_L;
+		cfg->libs_ctx = libs;
+		/* Reading the config can clear the stack of L, the argument included */
+		cfg->cfg_name = rspamd_mempool_strdup(cfg->cfg_pool, cfg_name);
+
+		globals_ref = lua_util_save_cfg_globals(main_L);
+		loaded = rspamd_config_read(cfg, cfg->cfg_name, NULL, NULL, NULL,
+									FALSE, NULL);
+
+		if (loaded) {
+			rspamd_config_post_load(cfg, 0);
+		}
+
+		/* rspamd_config can refer to cfg here, and cfg is freed on failure */
+		lua_util_restore_cfg_globals(main_L, globals_ref);
+
+		if (!loaded) {
+			msg_err_config("cannot load config from %s", cfg->cfg_name);
+			CFG_REF_RELEASE(cfg);
 			lua_pushnil(L);
 		}
 		else {
-			rspamd_config_post_load(cfg, 0);
 			pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
 			rspamd_lua_setclass(L, rspamd_config_classname, -1);
 			*pcfg = cfg;
@@ -1070,8 +1232,10 @@ lua_util_config_from_ucl(lua_State *L)
 	}
 
 	if (obj) {
+		lua_State *main_L = lua_util_main_state(L);
+
 		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
-		cfg->lua_state = L;
+		cfg->lua_state = main_L;
 
 		cfg->cfg_ucl_obj = obj;
 		top = rspamd_rcl_config_init(cfg, NULL);
@@ -4765,10 +4929,22 @@ lua_ev_base_add_timer(lua_State *L)
 
 struct rspamd_ev_base_sleep_cbdata {
 	lua_State *L;
+	/* Gives the thread pool to run the callback on (async mode) */
+	struct rspamd_config *cfg;
 	int cbref;
 	struct thread_entry *thread;
 	guint64 thread_generation;
 	struct rspamd_async_session *session;
+	struct ev_loop *event_loop;
+	/* Sync sleep of a task coroutine: the symbol that waits for it */
+	struct rspamd_task *task;
+	struct rspamd_symcache_dynamic_item *item;
+	/* The coroutine has been woken up */
+	gboolean resumed;
+	/* The timer callback is resuming the coroutine and frees cbdata itself */
+	gboolean resuming;
+	/* The session event is gone */
+	gboolean finalised;
 	ev_timer ev;
 };
 
@@ -4777,6 +4953,105 @@ static void
 lua_ev_base_sleep_session_fin(gpointer ud)
 {
 	/* Nothing to do - timer callback handles everything */
+}
+
+/*
+ * Wakes up the coroutine of a task-bound sync sleep. The caller keeps cbdata
+ * alive: the resumed code can finish the task session.
+ */
+static void
+lua_ev_base_sleep_task_wakeup(struct rspamd_ev_base_sleep_cbdata *cbdata,
+							  gboolean interrupted)
+{
+	struct thread_entry *thread = cbdata->thread;
+
+	cbdata->resumed = TRUE;
+
+	if (thread->state != LUA_THREAD_DEAD) {
+		lua_State *L = thread->lua_state;
+		int top = lua_gettop(L), nres = 0;
+
+		if (interrupted) {
+			/* Lets a waiting loop stop: no further sleep is possible */
+			lua_pushboolean(L, false);
+			lua_pushliteral(L, "task is finishing");
+			nres = 2;
+		}
+
+		if (!lua_thread_resume_checked(thread, cbdata->thread_generation, nres)) {
+			/* Not our coroutine any more: leave its stack as it was */
+			lua_settop(L, top);
+		}
+	}
+}
+
+static void
+lua_ev_base_sleep_task_free(struct rspamd_ev_base_sleep_cbdata *cbdata)
+{
+	/* Balances the retain taken when the coroutine went to sleep */
+	lua_thread_pool_release_entry(cbdata->thread);
+	g_free(cbdata);
+}
+
+/*
+ * Sync sleep of a task coroutine. The event belongs to the task session, so
+ * this is called exactly once, while the task is alive:
+ * - by rspamd_session_remove_event() after the timer has fired and the
+ *   coroutine has been resumed;
+ * - by the session cleanup (task timeout, task destruction) otherwise: the
+ *   coroutine wakes up early, as it does for any other request cancelled by
+ *   the cleanup.
+ */
+static void
+lua_ev_base_sleep_task_fin(gpointer ud)
+{
+	struct rspamd_ev_base_sleep_cbdata *cbdata =
+		(struct rspamd_ev_base_sleep_cbdata *) ud;
+
+	ev_timer_stop(cbdata->event_loop, &cbdata->ev);
+
+	if (!cbdata->resumed) {
+		lua_ev_base_sleep_task_wakeup(cbdata, TRUE);
+	}
+
+	if (cbdata->item) {
+		rspamd_symcache_item_async_dec_check(cbdata->task, cbdata->item, "lua sleep");
+	}
+
+	if (cbdata->resuming) {
+		/* Called from the inside of the timer callback, which goes on with cbdata */
+		cbdata->finalised = TRUE;
+	}
+	else {
+		lua_ev_base_sleep_task_free(cbdata);
+	}
+}
+
+static void
+lua_ev_base_sleep_task_cb(struct ev_loop *loop, struct ev_timer *t, int events)
+{
+	struct rspamd_ev_base_sleep_cbdata *cbdata =
+		(struct rspamd_ev_base_sleep_cbdata *) t->data;
+
+	ev_timer_stop(loop, t);
+	/*
+	 * The session cleanup stops the timer before the task is freed, so both
+	 * are alive here. The event is removed after the coroutine has stopped:
+	 * it holds the task while that code runs, whatever other events the code
+	 * removes itself.
+	 */
+	cbdata->resuming = TRUE;
+	lua_ev_base_sleep_task_wakeup(cbdata, FALSE);
+	cbdata->resuming = FALSE;
+
+	if (cbdata->finalised) {
+		/* The session has been cleaned up by the resumed code: no event, maybe no task */
+		lua_ev_base_sleep_task_free(cbdata);
+	}
+	else {
+		rspamd_session_remove_event(cbdata->session, lua_ev_base_sleep_task_fin,
+									cbdata);
+	}
 }
 
 static void
@@ -4795,7 +5070,23 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 
 	if (cbdata->cbref != -1) {
 		/* Async mode: call the callback */
-		lua_State *L = cbdata->L;
+		struct lua_callback_state cbs;
+		gboolean pooled = FALSE;
+		lua_State *L;
+
+		/*
+		 * Not the state that has called sleep() if it can be avoided: that one
+		 * can be a pooled thread which is terminated or is a suspended
+		 * coroutine of somebody else by now
+		 */
+		if (cbdata->cfg && cbdata->cfg->lua_thread_pool) {
+			lua_thread_pool_prepare_callback(cbdata->cfg->lua_thread_pool, &cbs);
+			L = cbs.L;
+			pooled = TRUE;
+		}
+		else {
+			L = cbdata->L;
+		}
 
 		lua_pushcfunction(L, &rspamd_lua_traceback);
 		int err_idx = lua_gettop(L);
@@ -4806,10 +5097,19 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
 		}
 
 		lua_settop(L, err_idx - 1);
-		luaL_unref(L, LUA_REGISTRYINDEX, cbdata->cbref);
+
+		if (pooled) {
+			lua_thread_pool_restore_callback(&cbs);
+		}
+
+		luaL_unref(cbdata->cfg ? cbdata->cfg->lua_state : cbdata->L,
+				   LUA_REGISTRYINDEX, cbdata->cbref);
 	}
 	else if (cbdata->thread) {
-		/* Sync mode: resume the coroutine */
+		/*
+		 * Sync mode: resume the coroutine. The resume is refused if its task
+		 * has been destroyed meanwhile; nothing below touches the task.
+		 */
 		lua_thread_resume_checked(cbdata->thread, cbdata->thread_generation, 0);
 	}
 
@@ -4826,9 +5126,15 @@ lua_ev_base_sleep_cb(struct ev_loop *loop, struct ev_timer *t, int events)
  * @method ev_base:sleep(time[, callback])
  * Sleep for the specified time. If callback is provided, it's called asynchronously
  * after the timeout. If no callback, this yields the current coroutine and resumes
- * it after the timeout (synchronous mode).
+ * it after the timeout (synchronous mode). The synchronous mode needs a coroutine
+ * that can yield (a symbol registered with `flags = 'coro'`); it raises an error
+ * anywhere else, e.g. in an async callback.
+ * A synchronous sleep of a task coroutine holds the task. If the task is finished
+ * meanwhile (timeout, the client has gone), the sleep ends early.
  * @param {number} time timeout in seconds
  * @param {function} callback optional callback for async mode
+ * @return nothing; `false` and an error message if a synchronous sleep has been
+ * interrupted as its task is being finished (no further sleep is possible then)
  */
 /* Helper to get rspamadm_session from Lua globals if available */
 static struct rspamd_async_session *
@@ -4871,6 +5177,23 @@ lua_ev_base_sleep(lua_State *L)
 
 	/* Try to get rspamadm_session for session event tracking */
 	struct rspamd_async_session *session = lua_get_rspamadm_session(L);
+	/* The config gives the thread pool: to run the callback on or to yield */
+	struct rspamd_config *cfg = NULL;
+
+	lua_getglobal(L, "rspamd_config");
+
+	if (lua_type(L, -1) == LUA_TUSERDATA) {
+		/* Must not raise: cbdata would leak */
+		struct rspamd_config **pcfg = rspamd_lua_check_udata_maybe(L, -1,
+																   rspamd_config_classname);
+
+		if (pcfg) {
+			cfg = *pcfg;
+		}
+	}
+
+	lua_pop(L, 1);
+	cbdata->cfg = cfg;
 
 	if (lua_isfunction(L, 3)) {
 		/* Async mode with callback */
@@ -4890,38 +5213,72 @@ lua_ev_base_sleep(lua_State *L)
 		return 0;
 	}
 	else {
-		/* Sync mode using coroutines - get config from global */
-		lua_getglobal(L, "rspamd_config");
+		/* Sync mode using coroutines */
+		struct thread_entry *thread;
 
-		if (lua_type(L, -1) == LUA_TUSERDATA) {
-			struct rspamd_config *cfg = lua_check_config(L, -1);
-			lua_pop(L, 1);
+		if (cfg == NULL || cfg->lua_thread_pool == NULL) {
+			/* No thread pool available, cannot do sync sleep */
+			g_free(cbdata);
+			return luaL_error(L, "sync sleep requires lua_thread_pool (use callback for async)");
+		}
 
-			if (cfg && cfg->lua_thread_pool) {
-				cbdata->thread = lua_thread_pool_get_running_entry(cfg->lua_thread_pool);
-				cbdata->thread_generation = cbdata->thread->generation;
-				/* Held until the timer fires, released in lua_ev_base_sleep_cb() */
-				lua_thread_pool_retain_entry(cbdata->thread);
+		thread = lua_thread_pool_get_yieldable_entry(cfg->lua_thread_pool, L);
 
-				/* Register session event if available so wait_session_events waits for us */
-				if (session) {
-					cbdata->session = session;
-					rspamd_session_add_event(session,
-											 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
-				}
+		if (thread == NULL) {
+			g_free(cbdata);
+			return luaL_error(L, "ev_base:sleep() without a callback must be called "
+								 "from a coroutine that can yield (a symbol registered "
+								 "with flags = 'coro', not an async callback)");
+		}
 
-				ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
-				ev_timer_start(ev_base, &cbdata->ev);
-
-				return lua_thread_yield(cbdata->thread, 0);
+		if (session == NULL && thread->task != NULL && thread->task->s != NULL) {
+			/*
+			 * Bind the sleep to the task: the task waits for it, and its session
+			 * cleanup wakes the coroutine up before the task is freed
+			 */
+			if (rspamd_session_add_event(thread->task->s,
+										 lua_ev_base_sleep_task_fin, cbdata,
+										 "lua sleep") == NULL) {
+				/*
+				 * The task is being finished; failing here also stops a retry
+				 * loop that would otherwise spin without ever sleeping
+				 */
+				g_free(cbdata);
+				return luaL_error(L, "ev_base:sleep(): the task session is terminating");
 			}
+
+			cbdata->session = thread->task->s;
+			cbdata->event_loop = ev_base;
+			cbdata->task = thread->task;
+			/*
+			 * Accounted to the symbol like any other request of the coroutine,
+			 * so the symcache does not take the sleep for a slow synchronous rule
+			 */
+			cbdata->item = rspamd_symcache_get_cur_item(thread->task);
+
+			if (cbdata->item) {
+				rspamd_symcache_item_async_inc(thread->task, cbdata->item, "lua sleep");
+			}
+
+			ev_timer_init(&cbdata->ev, lua_ev_base_sleep_task_cb, timeout, 0.0);
 		}
 		else {
-			lua_pop(L, 1);
+			/* Register session event if available so wait_session_events waits for us */
+			if (session) {
+				cbdata->session = session;
+				rspamd_session_add_event(session,
+										 lua_ev_base_sleep_session_fin, cbdata, "lua sleep");
+			}
+
+			ev_timer_init(&cbdata->ev, lua_ev_base_sleep_cb, timeout, 0.0);
 		}
 
-		/* No thread pool available, cannot do sync sleep */
-		g_free(cbdata);
-		return luaL_error(L, "sync sleep requires lua_thread_pool (use callback for async)");
+		cbdata->thread = thread;
+		cbdata->thread_generation = thread->generation;
+		/* Held until the coroutine is resumed (or the resume is refused) */
+		lua_thread_pool_retain_entry(thread);
+		ev_timer_start(ev_base, &cbdata->ev);
+
+		return lua_thread_yield(thread, 0);
 	}
 }
