@@ -190,6 +190,15 @@ SELECTORS COMBINED SYMBOL PREFIXES
   Expect Symbol With Score  RBL_CODE_2  2.0
   Expect Symbol With Score  RECEIVED_CODE_2  3.0
 
+SELECTORS SYMBOL PREFIXES RETURN CODE NAMED AS RULE
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [SELECTOR_PREFIXES_SELF_CHECK]}
+  Expect Symbol With Exact Options  RBL_SELECTOR_PREFIXES_SELF  example.org:from
+  Expect Symbol With Exact Options  RECEIVED_SELECTOR_PREFIXES_SELF  example.org:received
+  ${log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
+  Should Not Contain  ${log}  duplicate symbol: RBL_SELECTOR_PREFIXES_SELF
+  Should Not Contain  ${log}  duplicate symbol: RECEIVED_SELECTOR_PREFIXES_SELF
+
 SELECTORS CASE INSENSITIVE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RBL_SELECTOR_CASE]}

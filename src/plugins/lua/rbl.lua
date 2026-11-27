@@ -1691,11 +1691,18 @@ local function add_rbl(key, rbl, global_opts)
       }
     end
 
+    -- A return code named as the rule maps to a symbol registered above:
+    -- the rule symbol, or one per prefix with symbols_prefixes
+    local rule_symbols = { [rbl.symbol] = true }
+    if rbl.symbols_prefixes then
+      for _, prefix in pairs(rbl.symbols_prefixes) do
+        rule_symbols[prefix .. '_' .. rbl.symbol] = true
+      end
+    end
+
     local function process_return_code(suffix)
       local function process_specific_suffix(s)
-        if s ~= rbl.symbol then
-          -- hack
-
+        if not rule_symbols[s] then
           rspamd_config:register_symbol {
             type = 'virtual',
             parent = id,
