@@ -1439,7 +1439,40 @@ void rspamd_lua_add_preload(lua_State *L, const char *name, lua_CFunction func)
 	lua_pop(L, 2); /* preload key + global package */
 }
 
+/*
+ * An output of rspamd_lua_parse_table_arguments that holds a resource: a
+ * registry reference ('F') or an imported UCL object ('O')
+ */
+struct rspamd_lua_parse_owned_arg {
+	int *ref;
+	ucl_object_t **obj;
+};
 
+/*
+ * Gives back what the listed outputs hold and resets them to -1 or NULL: a
+ * caller that gets FALSE cannot tell which outputs have been filled
+ */
+static void
+rspamd_lua_parse_release_owned(lua_State *L,
+							   struct rspamd_lua_parse_owned_arg *owned,
+							   unsigned int nowned)
+{
+	for (unsigned int i = 0; i < nowned; i++) {
+		if (owned[i].ref != NULL) {
+			luaL_unref(L, LUA_REGISTRYINDEX, *owned[i].ref);
+			*owned[i].ref = -1;
+		}
+		else if (owned[i].obj != NULL) {
+			ucl_object_unref(*owned[i].obj);
+			*owned[i].obj = NULL;
+		}
+	}
+}
+
+/*
+ * On failure the function references and UCL objects taken by this call are
+ * released (their outputs are set to -1 and NULL) and the stack is restored
+ */
 gboolean
 rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								 GError **err,
@@ -1457,9 +1490,13 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 		read_semicolon
 	} state = read_key;
 	gsize keylen = 0, *valuelen, clslen;
-	int idx = 0, t, direct_userdata = 0;
+	int idx = 0, t, direct_userdata = 0, top;
+	struct rspamd_lua_parse_owned_arg *owned = NULL;
+	unsigned int nowned = 0, ntaken = 0;
 
 	g_assert(extraction_pattern != NULL);
+
+	top = lua_gettop(L);
 
 	if (pos < 0) {
 		/* Get absolute pos */
@@ -1477,6 +1514,17 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 	p = extraction_pattern;
 	end = p + strlen(extraction_pattern);
 
+	/* Room to note the outputs of the 'F' and 'O' keys */
+	for (const char *c = p; c < end; c++) {
+		if (c[0] == '=' && (c[1] == 'F' || c[1] == 'O')) {
+			nowned++;
+		}
+	}
+
+	if (nowned > 0) {
+		owned = g_newa(struct rspamd_lua_parse_owned_arg, nowned);
+	}
+
 	va_start(ap, extraction_pattern);
 
 	while (p <= end) {
@@ -1485,9 +1533,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 			if (*p == '=') {
 				if (key == NULL) {
 					g_set_error(err, lua_error_quark(), 1, "cannot read key");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				state = read_arg;
@@ -1536,9 +1583,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								(int) keylen,
 								key,
 								lua_typename(L, lua_type(L, idx)), "string");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				if (is_table) {
@@ -1569,9 +1615,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 				if (is_table) {
 					lua_pop(L, 1);
@@ -1601,9 +1646,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 				if (is_table) {
 					lua_pop(L, 1);
@@ -1612,11 +1656,17 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 
 			case 'F':
 				if (t == LUA_TFUNCTION) {
+					int *pref = va_arg(ap, int *);
+
 					if (!is_table) {
 						lua_pushvalue(L, idx);
 					}
 
-					*(va_arg(ap, int *)) = luaL_ref(L, LUA_REGISTRYINDEX);
+					*pref = luaL_ref(L, LUA_REGISTRYINDEX);
+					g_assert(ntaken < nowned);
+					owned[ntaken].ref = pref;
+					owned[ntaken].obj = NULL;
+					ntaken++;
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
@@ -1642,12 +1692,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"function");
-					va_end(ap);
-					if (is_table) {
-						lua_pop(L, 1);
-					}
 
-					return FALSE;
+					goto fail;
 				}
 
 				/* luaL_ref pops argument from the stack */
@@ -1677,9 +1723,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"bool");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				if (is_table) {
@@ -1711,9 +1756,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"double");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				if (is_table) {
@@ -1745,9 +1789,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"double");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				if (is_table) {
@@ -1783,9 +1826,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"string");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				if (is_table) {
@@ -1794,8 +1836,13 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 				break;
 			case 'O':
 				if (t != LUA_TNONE) {
-					*(va_arg(ap, ucl_object_t **)) = ucl_object_lua_import(L,
-																		   idx);
+					ucl_object_t **pobj = va_arg(ap, ucl_object_t **);
+
+					*pobj = ucl_object_lua_import(L, idx);
+					g_assert(ntaken < nowned);
+					owned[ntaken].ref = NULL;
+					owned[ntaken].obj = pobj;
+					ntaken++;
 				}
 				else {
 					failed = TRUE;
@@ -1833,9 +1880,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				state = read_class_start;
@@ -1865,9 +1911,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								key,
 								lua_typename(L, lua_type(L, idx)),
 								"int64");
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				state = read_class_start;
@@ -1885,9 +1930,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 				g_set_error(err, lua_error_quark(), 2, "required parameter "
 													   "%.*s is missing",
 							(int) keylen, key);
-				va_end(ap);
 
-				return FALSE;
+				goto fail;
 			}
 
 			if (!is_table) {
@@ -1909,16 +1953,11 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 				state = read_class;
 			}
 			else {
-				if (is_table) {
-					lua_pop(L, 1);
-				}
-
 				g_set_error(err, lua_error_quark(), 2, "missing classname for "
 													   "%.*s",
 							(int) keylen, key);
-				va_end(ap);
 
-				return FALSE;
+				goto fail;
 			}
 			p++;
 			break;
@@ -1927,10 +1966,6 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 			if (*p == '}') {
 				clslen = p - cls;
 				if (clslen == 0) {
-					if (is_table) {
-						lua_pop(L, 1);
-					}
-
 					g_set_error(err,
 								lua_error_quark(),
 								2,
@@ -1938,9 +1973,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								"%*.s",
 								(int) keylen,
 								key);
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				const char *static_cls = rspamd_lua_static_classname(cls, clslen);
@@ -1970,9 +2004,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 									key,
 									static_cls,
 									rspamd_lua_class_tostring_buf(L, FALSE, idx));
-						va_end(ap);
 
-						return FALSE;
+						goto fail;
 					}
 				}
 
@@ -1991,9 +2024,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 								"%.*s is missing",
 								(int) keylen,
 								key);
-					va_end(ap);
 
-					return FALSE;
+					goto fail;
 				}
 
 				/* Reset read params */
@@ -2017,9 +2049,8 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 				g_set_error(err, lua_error_quark(), 2, "bad format string: %s,"
 													   " at char %c, position %d",
 							extraction_pattern, *p, (int) (p - extraction_pattern));
-				va_end(ap);
 
-				return FALSE;
+				goto fail;
 			}
 
 			p++;
@@ -2030,6 +2061,14 @@ rspamd_lua_parse_table_arguments(lua_State *L, int pos,
 	va_end(ap);
 
 	return TRUE;
+
+fail:
+	va_end(ap);
+	rspamd_lua_parse_release_owned(L, owned, ntaken);
+	/* The value of the key being read can still be on the stack */
+	lua_settop(L, top);
+
+	return FALSE;
 }
 
 static void
