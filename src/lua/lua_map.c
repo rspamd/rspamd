@@ -747,7 +747,7 @@ int lua_config_add_map(lua_State *L)
 	struct rspamd_map *m;
 	gboolean opaque_data = FALSE;
 	gboolean by_line = FALSE;
-	int cbidx = -1, ret;
+	int cbidx = -1;
 	GError *err = NULL;
 
 	if (cfg) {
@@ -755,22 +755,35 @@ int lua_config_add_map(lua_State *L)
 											  RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 											  "*url=O;description=S;callback=F;type=S;opaque_data=B;by_line=B",
 											  &map_obj, &description, &cbidx, &type, &opaque_data, &by_line)) {
-			ret = luaL_error(L, "invalid table arguments: %s", err->message);
+			/* lua_error() does not return: the message is copied first */
+			lua_pushfstring(L, "invalid table arguments: %s", err->message);
 			g_error_free(err);
-			if (map_obj) {
-				ucl_object_unref(map_obj);
-			}
 
-			return ret;
+			return lua_error(L);
 		}
 
-		g_assert(map_obj != NULL);
+		if (map_obj == NULL) {
+			/* A nil url passes the check of a required key */
+			if (cbidx != -1) {
+				luaL_unref(L, LUA_REGISTRYINDEX, cbidx);
+			}
+
+			return luaL_error(L, "invalid table arguments: required parameter url is missing");
+		}
 
 		if (type == NULL && cbidx != -1) {
 			type = "callback";
 		}
 		else if (type == NULL) {
+			ucl_object_unref(map_obj);
+
 			return luaL_error(L, "invalid map type");
+		}
+
+		if (cbidx != -1 && strcmp(type, "callback") != 0) {
+			/* Only a callback map calls the function */
+			luaL_unref(L, LUA_REGISTRYINDEX, cbidx);
+			cbidx = -1;
 		}
 
 		if (strcmp(type, "callback") == 0) {
@@ -960,10 +973,10 @@ int lua_config_add_map(lua_State *L)
 			m->lua_map = map;
 		}
 		else {
-			ret = luaL_error(L, "invalid arguments: unknown type '%s'", type);
+			/* type belongs to the argument table, not to map_obj */
 			ucl_object_unref(map_obj);
 
-			return ret;
+			return luaL_error(L, "invalid arguments: unknown type '%s'", type);
 		}
 
 		map->map = m;
