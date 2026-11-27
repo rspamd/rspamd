@@ -887,7 +887,10 @@ register_test_symbol({
 --[[ The task times out (6s) while the coroutine waits in exec() for a BLPOP
 --   of 30s: the session cleanup closes the connection, so the BLPOP ends at
 --   the timeout, and the coroutine is terminated (no line after exec() is
---   logged) ]]
+--   logged, the symbol keeps the result inserted before the wait). A
+--   postfilter uses the connection afterwards (task cache) ]]
+local redis_cancel_key = 'coro_redis_cancel_conn'
+
 register_test_symbol({
   name = 'CORO_REDIS_CANCEL_TEST',
   score = 1.0,
@@ -900,6 +903,8 @@ register_test_symbol({
     end
 
     conn:add_cmd('BLPOP', { 'coro_redis_nokey_cancel', '30' })
+    task:cache_set(redis_cancel_key, conn)
+    task:insert_result('CORO_REDIS_CANCEL_TEST', 1.0, 'waiting')
     rspamd_logger.infox(task, 'coro redis cancel: waiting in exec()')
     local exec_res = results_outcome(conn:exec())
     rspamd_logger.infox(rspamd_config, 'coro redis cancel: resumed after exec(): %s', exec_res)
@@ -1948,8 +1953,542 @@ local function register_dependent_postfilter(name, test)
   rspamd_config:register_dependency(name, test)
 end
 
+-- A postfilter that depends on a symbol whose operation is cancelled by the
+-- task timeout, and uses the connection that the symbol has stored in the
+-- task cache under `key` after the cleanup: no call of it may start anything.
+-- use(conn) returns the options of the postfilter
+local function register_closed_conn_postfilter(name, test, key, use)
+  register_test_symbol({
+    name = name,
+    test = test,
+    type = 'postfilter',
+    score = 1.0,
+    callback = function(task)
+      local conn = task:cache_get(key)
+
+      if not conn then
+        task:insert_result(name, 1.0, 'no connection')
+        return
+      end
+
+      task:insert_result(name, 1.0, unpack_fn(use(conn)))
+    end,
+  })
+
+  rspamd_config:register_dependency(name, test)
+end
+
 register_dependent_postfilter('CORO_HTTP_CANCELLED_DEPENDENT', 'CORO_HTTP_CANCELLED_TEST')
 register_dependent_postfilter('CORO_HTTP_CANCELLED_PLAIN_DEPENDENT', 'CORO_HTTP_CANCELLED_PLAIN_TEST')
+
+--[[ Requests of plain symbols in flight at the task timeout (6s): a request
+--   timeout of 30s, so only the session cleanup finishes the symbol, and the
+--   postfilter that depends on it runs ]]
+
+-- An async TCP request: a BLPOP of 30s, sent to redis as an inline command
+register_test_symbol({
+  name = 'CORO_TCP_CANCELLED_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_TCP_CANCELLED_TEST', 1.0, 'sent')
+    rspamd_tcp.request({
+      task = task,
+      host = env.REDIS_ADDR or '127.0.0.1',
+      port = tonumber(env.REDIS_PORT) or 6379,
+      data = 'BLPOP coro_tcp_nokey_cancel 30\r\n',
+      read = true,
+      timeout = 30,
+      callback = function(err)
+        rspamd_logger.infox(rspamd_config, 'cancelled tcp: callback: %s', err)
+      end,
+    })
+  end,
+})
+
+-- An async redis request: a BLPOP of 8s, whose reply comes after the cleanup
+register_test_symbol({
+  name = 'CORO_REDIS_ASYNC_CANCELLED_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_REDIS_ASYNC_CANCELLED_TEST', 1.0, 'sent')
+    rspamd_redis.make_request({
+      task = task,
+      host = redis_host,
+      timeout = 30,
+      cmd = 'BLPOP',
+      args = { 'coro_redis_async_cancel', '8' },
+      callback = function(err)
+        rspamd_logger.infox(rspamd_config, 'cancelled async redis: callback: %s', err)
+      end,
+    })
+  end,
+})
+
+-- A command of a sync connection that is never executed: the coroutine
+-- returns, the command alone holds the symbol
+register_test_symbol({
+  name = 'CORO_REDIS_NOEXEC_CANCELLED_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local ok, conn = connect_redis(task, 60.0)
+
+    if not ok then
+      return true, 1.0, 'connect=' .. tostring(conn)
+    end
+
+    conn:add_cmd('BLPOP', { 'coro_redis_noexec_cancel', '30' })
+
+    return true, 1.0, 'sent'
+  end,
+})
+
+-- A UDP request to a port nobody listens on: the read waits
+register_test_symbol({
+  name = 'CORO_UDP_CANCELLED_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_UDP_CANCELLED_TEST', 1.0, 'sent')
+    rspamd_udp.sendto({
+      task = task,
+      host = '127.0.0.1',
+      port = udp_closed_port,
+      data = 'cancelled',
+      timeout = 30,
+      callback = function(ok, data)
+        rspamd_logger.infox(rspamd_config, 'cancelled udp: callback: %s %s', ok, data)
+      end,
+    })
+  end,
+})
+
+register_dependent_postfilter('CORO_TCP_CANCELLED_DEPENDENT', 'CORO_TCP_CANCELLED_TEST')
+register_dependent_postfilter('CORO_REDIS_ASYNC_CANCELLED_DEPENDENT', 'CORO_REDIS_ASYNC_CANCELLED_TEST')
+register_dependent_postfilter('CORO_REDIS_NOEXEC_CANCELLED_DEPENDENT',
+    'CORO_REDIS_NOEXEC_CANCELLED_TEST')
+register_dependent_postfilter('CORO_UDP_CANCELLED_DEPENDENT', 'CORO_UDP_CANCELLED_TEST')
+
+-- An async redis SUBSCRIBE: the subscription holds the symbol after its
+-- confirmation, until the session cleanup
+register_test_symbol({
+  name = 'CORO_REDIS_SUBSCRIBE_CANCELLED_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_REDIS_SUBSCRIBE_CANCELLED_TEST', 1.0, 'sent')
+    rspamd_redis.make_request({
+      task = task,
+      host = redis_host,
+      timeout = 30,
+      cmd = 'SUBSCRIBE',
+      args = { 'coro_redis_subscribe_cancel' },
+      callback = function(err, data)
+        rspamd_logger.infox(rspamd_config, 'cancelled redis subscription: callback: %s %s',
+            err, type(data))
+      end,
+    })
+  end,
+})
+
+register_dependent_postfilter('CORO_REDIS_SUBSCRIBE_CANCELLED_DEPENDENT',
+    'CORO_REDIS_SUBSCRIBE_CANCELLED_TEST')
+
+--[[ The connection of an async redis request, kept by the Lua code (in the
+--   task cache, and after the task, so that the late reply is read): a BLPOP
+--   of 8s, cancelled by the session cleanup at the task timeout (6s). A
+--   postfilter adds a command to it then: the symbol of the connection is
+--   finished, so the connection takes no more commands, and the reply of the
+--   BLPOP that comes later is dropped ]]
+local redis_reused_key = 'coro_redis_async_reused_conn'
+local kept_redis_conns = {}
+
+register_test_symbol({
+  name = 'CORO_REDIS_ASYNC_REUSED_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_REDIS_ASYNC_REUSED_TEST', 1.0, 'sent')
+    local _, conn = rspamd_redis.make_request({
+      task = task,
+      host = redis_host,
+      timeout = 30,
+      cmd = 'BLPOP',
+      args = { 'coro_redis_async_reused', '8' },
+      callback = function(err)
+        rspamd_logger.infox(rspamd_config, 'reused async redis: BLPOP callback: %s', err)
+      end,
+    })
+
+    task:cache_set(redis_reused_key, conn)
+    kept_redis_conns[#kept_redis_conns + 1] = conn
+    -- The log tag of the task is the one of the connection
+    rspamd_logger.infox(task, 'reused async redis: BLPOP sent')
+  end,
+})
+
+register_dependent_postfilter('CORO_REDIS_ASYNC_REUSED_DEPENDENT', 'CORO_REDIS_ASYNC_REUSED_TEST')
+register_closed_conn_postfilter('CORO_REDIS_ASYNC_REUSED_ADD_CMD', 'CORO_REDIS_ASYNC_REUSED_TEST',
+    redis_reused_key, function(conn)
+      return { 'add_cmd=' .. results_outcome(conn:add_cmd(function(err, data)
+        rspamd_logger.infox(rspamd_config, 'reused async redis: PING callback: %s %s', err, data)
+      end, 'PING', {})) }
+    end)
+
+--[[ An async redis subscription of a task, kept by the Lua code: the session
+--   cleanup at the task timeout (6s) finishes it, and the connection stays
+--   subscribed. The task is gone when a message comes: the message is read
+--   and dropped, the callback is not called for it ]]
+local kept_subscriptions = {}
+
+register_test_symbol({
+  name = 'CORO_REDIS_SUBSCRIBE_KEPT_TEST',
+  score = 1.0,
+  callback = function(task)
+    task:insert_result('CORO_REDIS_SUBSCRIBE_KEPT_TEST', 1.0, 'sent')
+    local _, conn = rspamd_redis.make_request({
+      task = task,
+      host = redis_host,
+      timeout = 30,
+      cmd = 'SUBSCRIBE',
+      args = { 'coro_redis_subscribe_kept' },
+      callback = function(err, data)
+        rspamd_logger.infox(rspamd_config, 'kept redis subscription: %s %s', err,
+            type(data) == 'table' and tostring(data[1]) or tostring(data))
+      end,
+    })
+
+    kept_subscriptions[#kept_subscriptions + 1] = conn
+    -- The log tag of the task is the one of the connection
+    rspamd_logger.infox(task, 'kept redis subscription: subscribing')
+  end,
+})
+
+register_dependent_postfilter('CORO_REDIS_SUBSCRIBE_KEPT_DEPENDENT', 'CORO_REDIS_SUBSCRIBE_KEPT_TEST')
+
+--[[ An async redis subscription made by the scanner worker at start, with
+--   no task: nothing finishes it, it gets every message of its channel ]]
+local taskless_subscriptions = {}
+
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  if worker:get_type() ~= 'normal' then
+    return
+  end
+
+  local ok, conn = rspamd_redis.make_request({
+    config = cfg,
+    ev_base = ev_base,
+    host = redis_host,
+    timeout = 30,
+    cmd = 'SUBSCRIBE',
+    args = { 'coro_redis_taskless' },
+    callback = function(err, data)
+      if type(data) == 'table' then
+        rspamd_logger.infox(cfg, 'taskless redis subscription: %s %s %s', err,
+            tostring(data[1]), tostring(data[3]))
+      else
+        rspamd_logger.infox(cfg, 'taskless redis subscription: %s %s', err, data)
+      end
+    end,
+  })
+
+  rspamd_logger.infox(cfg, 'taskless redis subscription: request=%s', ok)
+  taskless_subscriptions[#taskless_subscriptions + 1] = conn
+end)
+
+--[[ A coroutine that waits in a sync TCP read_once() (a BLPOP of 30s sent to
+--   redis) at the task timeout (6s). The session cleanup closes the
+--   connection and terminates the coroutine, which is not resumed: the symbol
+--   keeps the result inserted before the wait. A postfilter uses the
+--   connection afterwards (task cache). ]]
+local tcp_read_cancel_key = 'coro_tcp_read_cancel_conn'
+
+register_test_symbol({
+  name = 'CORO_TCP_SYNC_CANCELLED_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local ok, conn = rspamd_tcp.connect_sync({
+      task = task,
+      host = env.REDIS_ADDR or '127.0.0.1',
+      port = tonumber(env.REDIS_PORT) or 6379,
+      timeout = 30,
+    })
+
+    if not ok then
+      return true, 1.0, 'connect=' .. tostring(conn)
+    end
+
+    task:cache_set(tcp_read_cancel_key, conn)
+    task:insert_result('CORO_TCP_SYNC_CANCELLED_TEST', 1.0, 'waiting')
+    local w_ok, w_err = conn:write('BLPOP coro_tcp_sync_cancel 30\r\n')
+    rspamd_logger.infox(task, 'coro tcp cancel: waiting in read_once(), write=%s',
+        ok_outcome(w_ok, w_err))
+    local r_ok, r_data = conn:read_once()
+    rspamd_logger.infox(rspamd_config, 'coro tcp cancel: resumed after read_once(): %s',
+        ok_outcome(r_ok, r_data))
+
+    return true, 1.0, 'read=' .. ok_outcome(r_ok, r_data)
+  end,
+})
+
+--[[ Sync TCP operations pending at the task timeout (6s), on a socket of
+--   the test (Coro-Port) that never accepts: a write of 16 MB that nobody
+--   reads, and a connection to a socket whose accept queue is full. The
+--   session cleanup closes the connection and terminates the coroutine,
+--   which is not resumed: the symbol keeps the result inserted before the
+--   wait. ]]
+local tcp_write_cancel_key = 'coro_tcp_write_cancel_conn'
+
+local function connect_test_port(task)
+  return rspamd_tcp.connect_sync({
+    task = task,
+    host = '127.0.0.1',
+    port = tonumber(header_value(task, 'Coro-Port', '0')),
+    timeout = 30,
+  })
+end
+
+register_test_symbol({
+  name = 'CORO_TCP_SYNC_WRITE_CANCELLED_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local ok, conn = connect_test_port(task)
+
+    if not ok then
+      return true, 1.0, 'connect=' .. tostring(conn)
+    end
+
+    task:cache_set(tcp_write_cancel_key, conn)
+    task:insert_result('CORO_TCP_SYNC_WRITE_CANCELLED_TEST', 1.0, 'waiting')
+    rspamd_logger.infox(task, 'coro tcp write cancel: waiting in write()')
+    -- Far more than the socket buffers of both ends take
+    local w_ok, w_err = conn:write(string.rep('x', 16 * 1024 * 1024))
+    rspamd_logger.infox(rspamd_config, 'coro tcp write cancel: resumed after write(): %s',
+        ok_outcome(w_ok, w_err))
+
+    return true, 1.0, 'write=' .. ok_outcome(w_ok, w_err)
+  end,
+})
+
+register_test_symbol({
+  name = 'CORO_TCP_SYNC_CONNECT_CANCELLED_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    task:insert_result('CORO_TCP_SYNC_CONNECT_CANCELLED_TEST', 1.0, 'waiting')
+    rspamd_logger.infox(task, 'coro tcp connect cancel: waiting in connect_sync()')
+    local ok, conn = connect_test_port(task)
+    rspamd_logger.infox(rspamd_config, 'coro tcp connect cancel: resumed after connect_sync(): %s',
+        ok_outcome(ok, conn))
+
+    return true, 1.0, 'connect=' .. ok_outcome(ok, conn)
+  end,
+})
+
+--[[ A periodic waits on a sync connection of a task (Coro-Conn: redis or
+--   tcp): the coroutine symbol connects, sends a BLPOP of 30s and starts the
+--   periodic, which waits for the reply (exec() or read_once()). The task
+--   timeout (6s) cancels the operation: the symbol is finished, the run of
+--   the periodic is terminated and planned again (0.1s). The next run does
+--   not use the connection and stops. ]]
+
+-- Sends the BLPOP; returns the function that waits for its reply, or nil
+-- and an error
+local periodic_conn_kinds = {
+  redis = function(task)
+    local ok, conn = connect_redis(task, 60.0)
+
+    if not ok then
+      return nil, conn
+    end
+
+    conn:add_cmd('BLPOP', { 'coro_periodic_task_conn', '30' })
+
+    return function()
+      return results_outcome(conn:exec())
+    end
+  end,
+  tcp = function(task)
+    local ok, conn = rspamd_tcp.connect_sync({
+      task = task,
+      host = env.REDIS_ADDR or '127.0.0.1',
+      port = tonumber(env.REDIS_PORT) or 6379,
+      timeout = 30,
+    })
+
+    if not ok then
+      return nil, conn
+    end
+
+    local w_ok, w_err = conn:write('BLPOP coro_periodic_task_conn 30\r\n')
+
+    if not w_ok then
+      return nil, w_err
+    end
+
+    return function()
+      return results_outcome(conn:read_once())
+    end
+  end,
+}
+
+register_test_symbol({
+  name = 'CORO_PERIODIC_TASK_CONN_TEST',
+  score = 1.0,
+  flags = 'coro',
+  callback = function(task)
+    local kind = header_value(task, 'Coro-Conn', 'redis')
+    local st = { runs = 0, waiting = false }
+    local wait, err = periodic_conn_kinds[kind](task)
+
+    if not wait then
+      return true, 1.0, 'connect=' .. tostring(err)
+    end
+
+    -- The periodic holds the connection, not the task
+    rspamd_config:add_periodic(task:get_ev_base(), 0.1, function(cfg)
+      st.runs = st.runs + 1
+
+      if st.runs > 1 then
+        rspamd_logger.infox(cfg, 'periodic of a task %s connection: run %s', kind, st.runs)
+
+        return false
+      end
+
+      st.waiting = true
+      rspamd_logger.infox(cfg, 'periodic of a task %s connection: waiting', kind)
+      local res = wait()
+      rspamd_logger.infox(cfg, 'periodic of a task %s connection: resumed: %s', kind, res)
+
+      return false
+    end)
+
+    local waiting = sleep_until(task, function()
+      return st.waiting
+    end, 0.05, 40)
+
+    return true, 1.0, 'periodic_waiting=' .. tostring(waiting)
+  end,
+})
+
+-- The coroutines of these symbols are terminated by the session cleanup,
+-- which finishes the symbols
+register_dependent_postfilter('CORO_REDIS_CANCEL_DEPENDENT', 'CORO_REDIS_CANCEL_TEST')
+register_dependent_postfilter('CORO_TCP_SYNC_CANCELLED_DEPENDENT', 'CORO_TCP_SYNC_CANCELLED_TEST')
+register_dependent_postfilter('CORO_TCP_SYNC_WRITE_CANCELLED_DEPENDENT',
+    'CORO_TCP_SYNC_WRITE_CANCELLED_TEST')
+register_dependent_postfilter('CORO_TCP_SYNC_CONNECT_CANCELLED_DEPENDENT',
+    'CORO_TCP_SYNC_CONNECT_CANCELLED_TEST')
+register_dependent_postfilter('CORO_PERIODIC_TASK_CONN_DEPENDENT', 'CORO_PERIODIC_TASK_CONN_TEST')
+
+-- The connections that the cleanup has closed, used afterwards
+register_closed_conn_postfilter('CORO_REDIS_CANCEL_REUSE', 'CORO_REDIS_CANCEL_TEST',
+    redis_cancel_key, function(conn)
+      return { 'add_cmd=' .. results_outcome(conn:add_cmd('PING', {})),
+               'exec=' .. results_outcome(conn:exec()) }
+    end)
+
+local function tcp_closed_outcome(conn)
+  return { 'read=' .. results_outcome(conn:read_once()),
+           'write=' .. results_outcome(conn:write('PING\r\n')),
+           'close=' .. results_outcome(conn:close()) }
+end
+
+register_closed_conn_postfilter('CORO_TCP_SYNC_CANCELLED_REUSE', 'CORO_TCP_SYNC_CANCELLED_TEST',
+    tcp_read_cancel_key, tcp_closed_outcome)
+register_closed_conn_postfilter('CORO_TCP_SYNC_WRITE_CANCELLED_REUSE',
+    'CORO_TCP_SYNC_WRITE_CANCELLED_TEST', tcp_write_cancel_key, tcp_closed_outcome)
+
+--[[ Plain symbols registered by coroutines: by a coroutine created by the Lua
+--   code at config load and collected right after, and by two on_load
+--   coroutines of the scanner worker, one that stays suspended (a sync sleep)
+--   while the worker lives and one that fails, whose thread is terminated and
+--   collected. Each symbol runs on a thread of its own, never on the coroutine
+--   that has registered it. The weak table keeps the registering coroutines
+--   while something else holds them: an option tells what has become of the
+--   coroutine (collected, or its status). ]]
+local late_registrars = setmetatable({}, { __mode = 'v' })
+
+local function register_late_symbol(name)
+  late_registrars[name] = coroutine.running()
+
+  register_test_symbol({
+    name = name,
+    test = 'CORO_LATE_TEST',
+    score = 1.0,
+    callback = function()
+      local registrar = late_registrars[name]
+      local on_registrar = registrar ~= nil and coroutine.running() == registrar
+
+      return true, 1.0, 'thread=' .. (on_registrar and 'registrar' or 'own'),
+          'registrar=' .. (registrar and coroutine.status(registrar) or 'collected')
+    end,
+  })
+end
+
+-- With the Coro-GC header, a full garbage collection before the symbols run
+register_test_symbol({
+  name = 'CORO_LATE_GC',
+  test = 'CORO_LATE_TEST',
+  type = 'prefilter',
+  score = 1.0,
+  callback = function(task)
+    if header_value(task, 'Coro-GC', 'no') == 'full' then
+      collectgarbage('collect')
+      collectgarbage('collect')
+      task:insert_result('CORO_LATE_GC', 1.0, 'collected')
+    end
+  end,
+})
+
+coroutine.wrap(function()
+  register_late_symbol('CORO_LATE_WRAPPED')
+end)()
+
+collectgarbage('collect')
+collectgarbage('collect')
+
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  if worker:get_type() ~= 'normal' then
+    return
+  end
+
+  register_late_symbol('CORO_LATE_SUSPENDED')
+  cfg:promote_symbols_cache_resort()
+  rspamd_logger.infox(cfg, 'coro late symbol: registered by a coroutine that sleeps')
+  -- Longer than the suite
+  ev_base:sleep(86400)
+end)
+
+rspamd_config:add_on_load(function(cfg, _, worker)
+  if worker:get_type() ~= 'normal' then
+    return
+  end
+
+  register_late_symbol('CORO_LATE_FAILED')
+  cfg:promote_symbols_cache_resort()
+  error('coro late symbol: the registering coroutine fails on purpose')
+end)
+
+--[[ worker:add_control_handler() called twice for one command (`rspamadm
+--   control reload`): the second handler serves the commands, the first one is
+--   released. The second handler replaces itself by a third one and fails;
+--   the third one serves the next command. ]]
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  if worker:get_type() ~= 'normal' then
+    return
+  end
+
+  worker:add_control_handler(cfg, ev_base, 'reload', function()
+    rspamd_logger.infox(cfg, 'coro control: the first reload handler has run')
+  end)
+  worker:add_control_handler(cfg, ev_base, 'reload', function()
+    rspamd_logger.infox(cfg, 'coro control: the second reload handler has run')
+    worker:add_control_handler(cfg, ev_base, 'reload', function()
+      rspamd_logger.infox(cfg, 'coro control: the third reload handler has run')
+    end)
+    error('the second reload handler replaces itself and fails')
+  end)
+end)
 
 --[[ A UDP request with a negative retransmit count: it is not retransmitted,
 --   the callback gets the read timeout (0.2s) ]]

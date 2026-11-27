@@ -6,8 +6,10 @@ Documentation   APIs that suspend their caller (sync DNS, HTTP, TCP, redis,
 ...             replies that come while nobody waits for them, callbacks
 ...             registered by a coroutine that is suspended or gone, symbol
 ...             results, periodics, DNS replies that come as the last event of
-...             their task, Lua control handlers, finish scripts. The last
-...             test stops rspamd.
+...             their task, Lua control handlers, finish scripts, requests
+...             cancelled by the task timeout and their connections used
+...             afterwards, redis subscriptions, symbols registered by
+...             coroutines. The last test stops rspamd.
 ...             A scan runs the symbol of lua/coroutines.lua named by its
 ...             Coro-Test header. Every test checks that the only scanner worker
 ...             is still the same process (a crashed worker is restarted by the
@@ -30,8 +32,8 @@ ${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${DNS_ANSWER}           127.0.0.2
 # Pid of the scanner worker, taken before the first test
 ${WORKER_PID}           ${NONE}
-# The status of a failed control command, -1 in an unsigned field of the reply
-${CONTROL_FAILED}       4294967295
+# The status of a failed control command: EINVAL, as the C handlers report errors
+${CONTROL_FAILED}       22
 
 *** Test Cases ***
 Two tasks in one coroutine symbol at once
@@ -290,7 +292,9 @@ Sync redis exec() with more replies than the Lua stack can take
 Sync redis exec() cancelled by the task timeout
   [Documentation]  The coroutine waits for a BLPOP of 30s; the task timeout
   ...              (6s) closes the connection, which ends the BLPOP on the
-  ...              server, and terminates the coroutine
+  ...              server, and terminates the coroutine, which finishes the
+  ...              symbol: the postfilters that depend on it run, and the
+  ...              connection refuses what one of them asks of it
   Redis Blocked Clients Should Be  0
   ${client} =  Start Process  ${RSPAMC}  -j  -t  30  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}
   ...  --header  Coro-Test\=CORO_REDIS_CANCEL_TEST  ${MESSAGE}
@@ -303,11 +307,17 @@ Sync redis exec() cancelled by the task timeout
   ${scan} =  Evaluate  json.loads($result.stdout)  modules=json
   Set Test Variable  ${SCAN_RESULT}  ${scan}
   Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
-  Do Not Expect Symbol  CORO_REDIS_CANCEL_TEST
+  # Only the result inserted before exec(): the coroutine never returns
+  Expect Symbol With Exact Options  CORO_REDIS_CANCEL_TEST  waiting
+  Expect Symbol With Exact Options  CORO_REDIS_CANCEL_DEPENDENT  dependency_done=true
+  Expect Symbol With Exact Options  CORO_REDIS_CANCEL_REUSE
+  ...  add_cmd=false:Connection is terminated  exec=false:Connection is terminated
   # Long before the BLPOP would have ended (30s)
   Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
   Log Since Test Start Should Contain  coro redis cancel: waiting in exec()
   Log Since Test Start Should Not Contain  coro redis cancel: resumed after exec()
+  Log Since Test Start Should Contain  coroutine of symbol CORO_REDIS_CANCEL_TEST is terminated
+  Log Since Test Start Should Not Contain  probably a leaked async counter
   Coroutines Still Work
 
 Sync TCP connection used after idle time
@@ -443,6 +453,25 @@ Map callbacks registered by a collected coroutine
   Rspamd Log Should Contain  coro map on_load fails on purpose
   Coroutines Still Work
 
+Plain symbols registered by coroutines
+  [Documentation]  By a coroutine created by the Lua code at config load and
+  ...              collected, by an on_load coroutine that sleeps while the
+  ...              worker lives and by one that has failed: each symbol runs on
+  ...              a thread of its own, also after a full garbage collection
+  Rspamd Log Should Contain  coro late symbol: registered by a coroutine that sleeps
+  Rspamd Log Should Contain  the registering coroutine fails on purpose
+  Scan File  ${MESSAGE}  Coro-Test=CORO_LATE_TEST
+  Expect Symbol With Exact Options  CORO_LATE_WRAPPED  thread=own  registrar=collected
+  Expect Symbol With Exact Options  CORO_LATE_SUSPENDED  thread=own  registrar=suspended
+  # The failed coroutine can be collected already
+  Expect Symbol With Option  CORO_LATE_FAILED  thread=own
+  Scan File  ${MESSAGE}  Coro-Test=CORO_LATE_TEST  Coro-GC=full
+  Expect Symbol With Exact Options  CORO_LATE_GC  collected
+  Expect Symbol With Exact Options  CORO_LATE_WRAPPED  thread=own  registrar=collected
+  Expect Symbol With Exact Options  CORO_LATE_SUSPENDED  thread=own  registrar=suspended
+  Expect Symbol With Exact Options  CORO_LATE_FAILED  thread=own  registrar=collected
+  Coroutines Still Work
+
 Periodic suspended for longer than its interval
   [Documentation]  Each run sleeps 0.5s, the interval is 0.1s: no run starts
   ...              while another one is suspended
@@ -537,7 +566,8 @@ Periodic that fails keeps its interval
 
 Lua control handler that fails, then works
   [Documentation]  The worker answers the command whose handler has failed
-  ...              at once, with status -1, and the handler serves the next one
+  ...              at once, with status EINVAL (22), and the handler serves the
+  ...              next one
   Set Control Mode  fail
   ${status} =  Normal Worker Control Status  reresolve
   Should Be Equal As Integers  ${status}  ${CONTROL_FAILED}
@@ -565,6 +595,24 @@ Two Lua control commands at once
   Log Since Test Start Should Contain  coro control: call 1: request done: 200
   Log Since Test Start Should Contain  coro control: call 2: request done: 200
   Log Since Test Start Should Not Contain  unknown request id
+  Coroutines Still Work
+
+Lua control handler added twice, then replaced by itself
+  [Documentation]  The second handler of reload serves it, the first one has
+  ...              been released. The second one replaces itself by a third one
+  ...              and fails: the command gets EINVAL (22), the third handler
+  ...              serves the next one
+  Rspamd Log Should Contain  replace the Lua handler of the control command reload
+  ${status} =  Normal Worker Control Status  reload
+  Should Be Equal As Integers  ${status}  ${CONTROL_FAILED}
+  Log Since Test Start Should Contain In Order
+  ...  coro control: the second reload handler has run
+  ...  replace the Lua handler of the control command reload
+  ...  the second reload handler replaces itself and fails
+  ${status} =  Normal Worker Control Status  reload
+  Should Be Equal As Integers  ${status}  0
+  Log Since Test Start Should Contain  coro control: the third reload handler has run
+  Rspamd Log Should Not Contain  coro control: the first reload handler has run
   Coroutines Still Work
 
 DKIM verify callback uses its task argument
@@ -626,6 +674,174 @@ HTTP request of a plain symbol cancelled by the task timeout
   Log Since Test Start Should Not Contain  probably a leaked async counter
   Coroutines Still Work
 
+Async TCP request cancelled by the task timeout
+  [Documentation]  A BLPOP of 30s sent to redis: the session cleanup at the
+  ...              task timeout (6s) closes the connection and finishes the
+  ...              symbol
+  Expect Cancelled Request  CORO_TCP_CANCELLED_TEST
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+  Coroutines Still Work
+
+Async redis request cancelled by the task timeout
+  [Documentation]  A BLPOP of 8s: the session cleanup at the task timeout (6s)
+  ...              finishes the symbol, the reply that comes later is dropped
+  Expect Cancelled Request  CORO_REDIS_ASYNC_CANCELLED_TEST
+  # The BLPOP ends on the server at 8s
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+  Log Since Test Start Should Not Contain  cancelled async redis: callback
+  Coroutines Still Work
+
+Async redis connection used again after the task timeout
+  [Documentation]  The BLPOP (8s) of a connection that the Lua code keeps is
+  ...              cancelled by the session cleanup at the task timeout (6s),
+  ...              which finishes its symbol. A postfilter adds a command to
+  ...              the connection then: it is refused, as it would charge the
+  ...              finished symbol once more. The BLPOP reply that comes at 8s
+  ...              is read and dropped
+  Expect Cancelled Request  CORO_REDIS_ASYNC_REUSED_TEST
+  Expect Symbol With Exact Options  CORO_REDIS_ASYNC_REUSED_ADD_CMD
+  ...  add_cmd=false:Connection is terminated
+  ${tag} =  Log Tag Of  reused async redis: BLPOP sent
+  Wait Until Keyword Succeeds  30x  0.2s  Log Since Test Start Should Contain
+  ...  <${tag}>; lua_redis; lua_redis_callback: got async reply from redis
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+  Log Since Test Start Should Not Contain  reused async redis: BLPOP callback
+  Log Since Test Start Should Not Contain  reused async redis: PING callback
+  Coroutines Still Work
+
+Sync redis command that is never executed, cancelled by the task timeout
+  [Documentation]  The coroutine returns after add_cmd(): the command alone
+  ...              holds the symbol until the session cleanup at the task
+  ...              timeout (6s) closes the connection
+  Expect Cancelled Request  CORO_REDIS_NOEXEC_CANCELLED_TEST
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+  Coroutines Still Work
+
+UDP request cancelled by the task timeout
+  [Documentation]  The read waits for a reply that never comes: the session
+  ...              cleanup at the task timeout (6s) finishes the symbol
+  Expect Cancelled Request  CORO_UDP_CANCELLED_TEST
+  Log Since Test Start Should Not Contain  cancelled udp: callback
+  Coroutines Still Work
+
+Async redis subscription cancelled by the task timeout
+  [Documentation]  The subscription holds the symbol after its confirmation
+  ...              has come: the session cleanup at the task timeout (6s)
+  ...              finishes the symbol
+  Expect Cancelled Request  CORO_REDIS_SUBSCRIBE_CANCELLED_TEST
+  Log Since Test Start Should Contain  cancelled redis subscription: callback: nil table
+  Coroutines Still Work
+
+Async redis subscription kept after its task
+  [Documentation]  The session cleanup at the task timeout (6s) finishes the
+  ...              subscription, whose connection the Lua code keeps: it is
+  ...              still subscribed. A message published when the task is gone
+  ...              is read and dropped, the callback is not called for it
+  Expect Cancelled Request  CORO_REDIS_SUBSCRIBE_KEPT_TEST
+  Log Since Test Start Should Contain  kept redis subscription: nil subscribe
+  ${tag} =  Log Tag Of  kept redis subscription: subscribing
+  ${position} =  Get File Size  ${RSPAMD_TMPDIR}/rspamd.log
+  ${receivers} =  Publish To Redis  coro_redis_subscribe_kept  hello
+  Should Be Equal As Integers  ${receivers}  1
+  Wait Until Keyword Succeeds  30x  0.2s  Log Since Position Should Contain  ${position}
+  ...  <${tag}>; lua_redis; lua_redis_callback: got async reply from redis
+  Log Since Test Start Should Not Contain  kept redis subscription: nil message
+  Coroutines Still Work
+
+Async redis subscription without a task
+  [Documentation]  Made by the scanner worker at start: nothing finishes it,
+  ...              it gets every message published to its channel
+  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Rspamd Log Should Contain  taskless redis subscription: nil subscribe 1
+  FOR  ${i}  IN RANGE  2
+    ${receivers} =  Publish To Redis  coro_redis_taskless  hello${i}
+    Should Be Equal As Integers  ${receivers}  1
+    Wait Until Keyword Succeeds  30x  0.2s
+    ...  Log Since Test Start Should Contain  taskless redis subscription: nil message hello${i}
+  END
+  Coroutines Still Work
+
+Sync TCP read cancelled by the task timeout
+  [Documentation]  The coroutine waits for the reply of a BLPOP of 30s at the
+  ...              task timeout (6s). It is not resumed: the session cleanup
+  ...              closes the connection and terminates the coroutine, which
+  ...              finishes the symbol: the postfilters that depend on it run,
+  ...              and every operation one of them starts fails at once
+  Redis Blocked Clients Should Be  0
+  Scan File  ${MESSAGE}  Coro-Test=CORO_TCP_SYNC_CANCELLED_TEST
+  Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
+  # Only the result inserted before read_once(): the coroutine never returns
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_CANCELLED_TEST  waiting
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_CANCELLED_DEPENDENT  dependency_done=true
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_CANCELLED_REUSE  read=false:connection is closed
+  ...  write=false:connection is closed  close=none
+  Log Since Test Start Should Contain  coro tcp cancel: waiting in read_once(), write=true
+  # Long before the BLPOP would have ended (30s)
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+  Log Since Test Start Should Not Contain  coro tcp cancel: resumed after read_once()
+  Log Since Test Start Should Contain  coroutine of symbol CORO_TCP_SYNC_CANCELLED_TEST is terminated
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  Coroutines Still Work
+
+Sync TCP write cancelled by the task timeout
+  [Documentation]  The peer is a socket of the test that never accepts, so
+  ...              nothing reads the data: the write of 16 MB waits at the
+  ...              task timeout (6s). The session cleanup closes the
+  ...              connection and terminates the coroutine, which finishes the
+  ...              symbol
+  ${port} =  Start Listener
+  Scan File  ${MESSAGE}  Coro-Test=CORO_TCP_SYNC_WRITE_CANCELLED_TEST  Coro-Port=${port}
+  Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
+  # Only the result inserted before write(): the coroutine never returns
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_WRITE_CANCELLED_TEST  waiting
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_WRITE_CANCELLED_DEPENDENT  dependency_done=true
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_WRITE_CANCELLED_REUSE
+  ...  read=false:connection is closed  write=false:connection is closed  close=none
+  Log Since Test Start Should Contain  coro tcp write cancel: waiting in write()
+  Log Since Test Start Should Not Contain  coro tcp write cancel: resumed after write()
+  Log Since Test Start Should Contain
+  ...  coroutine of symbol CORO_TCP_SYNC_WRITE_CANCELLED_TEST is terminated
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  Coroutines Still Work
+  [Teardown]  Close Test Sockets
+
+Sync TCP connect cancelled by the task timeout
+  [Documentation]  The accept queue of a socket of the test is full, so Linux
+  ...              drops the SYN of the connection: the connection is being
+  ...              made at the task timeout (6s). The session cleanup
+  ...              terminates the coroutine, which finishes the symbol, and
+  ...              frees the connection, which has no Lua handle yet
+  ${linux} =  Evaluate  sys.platform.startswith('linux')  modules=sys
+  Skip If  not ${linux}  The connection is not certain to hang elsewhere
+  ${port} =  Start Listener
+  # The backlog is 1: two connections fill the queue
+  Connect To Listener  ${port}
+  Connect To Listener  ${port}
+  Scan File  ${MESSAGE}  Coro-Test=CORO_TCP_SYNC_CONNECT_CANCELLED_TEST  Coro-Port=${port}
+  Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
+  # Only the result inserted before connect_sync(): the coroutine never returns
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_CONNECT_CANCELLED_TEST  waiting
+  Expect Symbol With Exact Options  CORO_TCP_SYNC_CONNECT_CANCELLED_DEPENDENT  dependency_done=true
+  Log Since Test Start Should Contain  coro tcp connect cancel: waiting in connect_sync()
+  Log Since Test Start Should Not Contain  coro tcp connect cancel: resumed after connect_sync()
+  Log Since Test Start Should Contain
+  ...  coroutine of symbol CORO_TCP_SYNC_CONNECT_CANCELLED_TEST is terminated
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  Coroutines Still Work
+  [Teardown]  Close Test Sockets
+
+Periodic waits on a sync redis connection of a task
+  [Documentation]  A coroutine symbol sends a BLPOP of 30s and starts a
+  ...              periodic that waits in exec() for the reply. The task
+  ...              timeout (6s) cancels the command: the symbol is finished,
+  ...              the run of the periodic is terminated and planned again
+  ...              (0.1s), and the next run stops the periodic
+  Expect Terminated Periodic  redis
+
+Periodic waits on a sync TCP connection of a task
+  [Documentation]  The same with read_once() on a sync TCP connection to redis
+  Expect Terminated Periodic  tcp
+
 UDP request with a negative retransmit count
   Scan File  ${MESSAGE}  Coro-Test=CORO_UDP_RETRANSMITS_TEST
   Expect Symbol With Exact Options  CORO_UDP_RETRANSMITS_TEST  udp=false:read timeout
@@ -684,18 +900,42 @@ Coroutines Test Setup
   Set Test Variable  ${LOG_POSITION}  ${size}
   ${reports} =  List Files In Directory  ${RSPAMD_TMPDIR}  rspamd-asan*  absolute=True
   Set Test Variable  ${ASAN_REPORTS_BEFORE}  ${reports}
+  ${sockets} =  Create List
+  Set Test Variable  ${TEST_SOCKETS}  ${sockets}
 
 Scan Alive Symbol
   Scan File  ${MESSAGE}  Coro-Test=CORO_ALIVE_TEST
   Expect Symbol With Exact Options  CORO_ALIVE_TEST  dns=${DNS_ANSWER}
   Expect Symbol  CORO_WORKER_PID
 
-Log Since Test Start
+Log Since Position
+  [Documentation]  rspamd.log from the byte offset ${position} on
+  [Arguments]  ${position}
   ${path} =  Set Variable  ${RSPAMD_TMPDIR}/rspamd.log
   ${text} =  Evaluate
-  ...  pathlib.Path($path).read_bytes()[int($LOG_POSITION):].decode('utf-8', 'replace')
+  ...  pathlib.Path($path).read_bytes()[int($position):].decode('utf-8', 'replace')
   ...  modules=pathlib
   RETURN  ${text}
+
+Log Since Position Should Contain
+  [Arguments]  ${position}  ${expected}
+  ${text} =  Log Since Position  ${position}
+  Should Contain  ${text}  ${expected}
+  ...  msg=rspamd.log has no "${expected}" after the position ${position}  values=False
+
+Log Since Test Start
+  ${text} =  Log Since Position  ${LOG_POSITION}
+  RETURN  ${text}
+
+Log Tag Of
+  [Documentation]  The log tag (of the task) of the first line logged since the
+  ...              test has started that contains ${line}
+  [Arguments]  ${line}
+  ${text} =  Log Since Test Start
+  ${match} =  Evaluate  re.search(r'<([^>\\s]+)>;[^\\n]*' + re.escape($line), $text)  modules=re
+  Should Not Be Equal  ${match}  ${NONE}
+  ...  msg=rspamd.log has no "${line}" since the test has started  values=False
+  RETURN  ${match.group(1)}
 
 Log Since Test Start Should Contain
   [Arguments]  ${expected}
@@ -749,6 +989,35 @@ Redis Blocked Clients Should Be
   ...  msg=redis INFO clients: ${result.stdout} ${result.stderr}  values=False
   Should Be Equal As Integers  ${blocked.group(1)}  ${expected}
 
+Publish To Redis
+  [Documentation]  Returns how many clients have got the message
+  [Arguments]  ${channel}  ${message}
+  ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
+  ...  PUBLISH  ${channel}  ${message}
+  Should Be Equal As Integers  ${result.rc}  0
+  ...  msg=redis-cli PUBLISH: ${result.stdout} ${result.stderr}  values=False
+  RETURN  ${result.stdout}
+
+Start Listener
+  [Documentation]  A TCP socket of the test on a free port, with a backlog of 1,
+  ...              that never accepts. Returns the port; Close Test Sockets
+  ...              closes the socket
+  ${listener} =  Evaluate  socket.create_server(('127.0.0.1', 0), backlog=1)  modules=socket
+  Evaluate  $TEST_SOCKETS.append($listener)
+  ${port} =  Evaluate  $listener.getsockname()[1]
+  RETURN  ${port}
+
+Connect To Listener
+  [Documentation]  A connection of the test, closed by Close Test Sockets
+  [Arguments]  ${port}
+  ${sock} =  Evaluate  socket.create_connection(('127.0.0.1', int($port)), 2)  modules=socket
+  Evaluate  $TEST_SOCKETS.append($sock)
+
+Close Test Sockets
+  FOR  ${sock}  IN  @{TEST_SOCKETS}
+    Call Method  ${sock}  close
+  END
+
 Periodic Runs Are Over
   Scan File  ${MESSAGE}  Coro-Test=CORO_PERIODIC_TEST
   Expect Symbol With Option  CORO_PERIODIC  state=done
@@ -799,6 +1068,44 @@ Normal Worker Control Status
   ...  -s  ${RSPAMD_TMPDIR}/rspamd.sock  ${command}  timeout=30s  on_timeout=kill
   ${status} =  Control Reply Status Of Normal Worker  ${result}
   RETURN  ${status}
+
+Expect Cancelled Request
+  [Documentation]  A scan of the symbol whose request is in flight at the task
+  ...              timeout (6s): the postfilter <symbol without _TEST>_DEPENDENT
+  ...              that depends on it runs
+  [Arguments]  ${test}
+  Scan File  ${MESSAGE}  Coro-Test=${test}
+  Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
+  Expect Symbol With Exact Options  ${test}  sent
+  ${dependent} =  Evaluate  $test[:-len('_TEST')] + '_DEPENDENT'
+  Expect Symbol With Exact Options  ${dependent}  dependency_done=true
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+
+Expect Terminated Periodic
+  [Documentation]  A scan of CORO_PERIODIC_TASK_CONN_TEST: its periodic waits on
+  ...              a sync connection of the task (${kind}) at the task timeout
+  ...              (6s)
+  [Arguments]  ${kind}
+  Redis Blocked Clients Should Be  0
+  Scan File  ${MESSAGE}  Coro-Test=CORO_PERIODIC_TASK_CONN_TEST  Coro-Conn=${kind}
+  Should Be True  4 < ${SCAN_RESULT}[time_real] < 9.5
+  Expect Symbol With Exact Options  CORO_PERIODIC_TASK_CONN_TEST  periodic_waiting=true
+  Expect Symbol With Exact Options  CORO_PERIODIC_TASK_CONN_DEPENDENT  dependency_done=true
+  Wait Until Keyword Succeeds  30x  0.2s
+  ...  Log Since Test Start Should Contain  periodic of a task ${kind} connection: run 2
+  Log Since Test Start Should Contain In Order
+  ...  periodic of a task ${kind} connection: waiting
+  ...  periodic script (registered at
+  ...  ) is terminated: the operation it waits for is cancelled
+  ...  periodic of a task ${kind} connection: run 2
+  Log Since Test Start Should Not Contain  periodic of a task ${kind} connection: resumed
+  Log Since Test Start Should Not Contain  probably a leaked async counter
+  # Long before the BLPOP would have ended (30s)
+  Wait Until Keyword Succeeds  30x  0.2s  Redis Blocked Clients Should Be  0
+  # The second run has stopped the periodic
+  Sleep  0.5s
+  Log Since Test Start Should Contain Times  periodic of a task ${kind} connection: run  1
+  Coroutines Still Work
 
 Expect Async Callback Results
   Expect Symbol With Exact Options  CORO_TIMER_CB  sleep=error:coroutine
