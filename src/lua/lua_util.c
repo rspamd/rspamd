@@ -70,8 +70,13 @@
 LUA_FUNCTION_DEF(util, create_event_base);
 /***
  * @function util.load_rspamd_config(filename)
- * Load rspamd config from the specified file
- * @return {confg} new configuration object suitable for access
+ * Load rspamd config from the specified file. The Lua code of the config runs in
+ * the Lua state of the caller with `rspamd_config` set to the new config; the
+ * globals `rspamd_config`, `config`, `metrics`, `composites`, `classifiers`,
+ * `rspamd_classifiers`, `rspamd_maps`, `rspamd_paths`, `rspamd_env` and
+ * `rspamd_version` are as before on return. Nothing frees the returned config.
+ * @param {string} filename path to the config file
+ * @return {confg} new configuration object suitable for access or nil on error
  */
 LUA_FUNCTION_DEF(util, load_rspamd_config);
 /***
@@ -1014,6 +1019,94 @@ lua_util_main_state(lua_State *L)
 	return main_L ? main_L : L;
 }
 
+/*
+ * Globals that reading a config sets in its Lua state: rspamd_config_read()
+ * replaces rspamd_config and creates the others when they are absent, the Lua
+ * entry of a config (rules/rspamd.lua) creates rspamd_maps. A config that shares
+ * the VM of its caller gives them back on return. The hidden ones are nil while
+ * the config is read, so that its Lua code fills tables of its own and leaves
+ * the tables of the caller as they are.
+ */
+static const struct {
+	const char *name;
+	gboolean hide;
+} lua_util_cfg_globals[] = {
+	{"rspamd_config", FALSE},
+	{"rspamd_paths", FALSE},
+	{"rspamd_env", FALSE},
+	{"rspamd_version", FALSE},
+	{"config", TRUE},
+	{"metrics", TRUE},
+	{"composites", TRUE},
+	{"classifiers", TRUE},
+	{"rspamd_classifiers", TRUE},
+	{"rspamd_maps", TRUE},
+};
+
+/*
+ * Keeps the globals above in a registry table: reading a config can clear the
+ * stack of L. Returns the reference to pass to lua_util_restore_cfg_globals().
+ */
+static int
+lua_util_save_cfg_globals(lua_State *L)
+{
+	unsigned int i;
+
+	lua_createtable(L, 0, G_N_ELEMENTS(lua_util_cfg_globals));
+
+	for (i = 0; i < G_N_ELEMENTS(lua_util_cfg_globals); i++) {
+		lua_getglobal(L, lua_util_cfg_globals[i].name);
+		lua_setfield(L, -2, lua_util_cfg_globals[i].name);
+
+		if (lua_util_cfg_globals[i].hide) {
+			lua_pushnil(L);
+			lua_setglobal(L, lua_util_cfg_globals[i].name);
+		}
+	}
+
+	return luaL_ref(L, LUA_REGISTRYINDEX);
+}
+
+static void
+lua_util_restore_cfg_globals(lua_State *L, int ref)
+{
+	unsigned int i;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+
+	for (i = 0; i < G_N_ELEMENTS(lua_util_cfg_globals); i++) {
+		lua_getfield(L, -1, lua_util_cfg_globals[i].name);
+		lua_setglobal(L, lua_util_cfg_globals[i].name);
+	}
+
+	lua_pop(L, 1);
+	luaL_unref(L, LUA_REGISTRYINDEX, ref);
+}
+
+/*
+ * Libraries of the config in the rspamd_config global, with a new reference.
+ * They belong to the process: a config read in the same VM shares them, as a
+ * reloaded config does.
+ */
+static struct rspamd_external_libs_ctx *
+lua_util_caller_libs(lua_State *L)
+{
+	struct rspamd_external_libs_ctx *libs = NULL;
+	struct rspamd_config **pcfg;
+
+	lua_getglobal(L, "rspamd_config");
+	pcfg = rspamd_lua_check_udata_maybe(L, -1, rspamd_config_classname);
+
+	if (pcfg && *pcfg && (*pcfg)->libs_ctx) {
+		libs = (*pcfg)->libs_ctx;
+		REF_RETAIN(libs);
+	}
+
+	lua_pop(L, 1);
+
+	return libs;
+}
+
 static int
 lua_util_load_rspamd_config(lua_State *L)
 {
@@ -1025,16 +1118,42 @@ lua_util_load_rspamd_config(lua_State *L)
 
 	if (cfg_name) {
 		lua_State *main_L = lua_util_main_state(L);
+		struct rspamd_external_libs_ctx *libs = lua_util_caller_libs(main_L);
+		gboolean loaded;
+		int globals_ref;
+
+		if (libs == NULL) {
+			msg_err("cannot load config from %s: no rspamd_config with libraries "
+					"in this Lua state",
+					cfg_name);
+			lua_pushnil(L);
+
+			return 1;
+		}
 
 		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
 		cfg->lua_state = main_L;
+		cfg->libs_ctx = libs;
+		/* Reading the config can clear the stack of L, the argument included */
+		cfg->cfg_name = rspamd_mempool_strdup(cfg->cfg_pool, cfg_name);
 
-		if (rspamd_config_read(cfg, cfg_name, NULL, NULL, NULL, FALSE, NULL)) {
-			msg_err_config("cannot load config from %s", cfg_name);
+		globals_ref = lua_util_save_cfg_globals(main_L);
+		loaded = rspamd_config_read(cfg, cfg->cfg_name, NULL, NULL, NULL,
+									FALSE, NULL);
+
+		if (loaded) {
+			rspamd_config_post_load(cfg, 0);
+		}
+
+		/* rspamd_config can refer to cfg here, and cfg is freed on failure */
+		lua_util_restore_cfg_globals(main_L, globals_ref);
+
+		if (!loaded) {
+			msg_err_config("cannot load config from %s", cfg->cfg_name);
+			CFG_REF_RELEASE(cfg);
 			lua_pushnil(L);
 		}
 		else {
-			rspamd_config_post_load(cfg, 0);
 			pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
 			rspamd_lua_setclass(L, rspamd_config_classname, -1);
 			*pcfg = cfg;
