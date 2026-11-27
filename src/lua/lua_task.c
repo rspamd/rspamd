@@ -1815,16 +1815,45 @@ lua_task_get_cfg(lua_State *L)
 	return 1;
 }
 
+static void
+lua_task_release_cfg_dtor(gpointer p)
+{
+	struct rspamd_config *cfg = (struct rspamd_config *) p;
+
+	CFG_REF_RELEASE(cfg);
+}
+
 static int
 lua_task_set_cfg(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task(L, 1);
 	void *ud = rspamd_lua_check_udata(L, 2, rspamd_config_classname);
+	struct rspamd_config *cfg;
 
 	if (task) {
-		luaL_argcheck(L, ud != NULL, 1, "'config' expected");
-		task->cfg = ud ? *((struct rspamd_config **) ud) : NULL;
+		luaL_argcheck(L, ud != NULL && *((struct rspamd_config **) ud) != NULL,
+					  2, "'config' expected");
+		cfg = *((struct rspamd_config **) ud);
+
+		if (cfg != task->cfg) {
+			/*
+			 * The task holds a reference of the config it points to, and
+			 * rspamd_task_free() releases that one after the task pool. The
+			 * previous config stays referenced until the pool is destroyed:
+			 * what the task has made with it can use it in the destructors
+			 * of the pool, and the largest priority makes this one the last.
+			 */
+			CFG_REF_RETAIN(cfg);
+
+			if (task->cfg) {
+				rspamd_mempool_add_destructor_priority(task->task_pool,
+													   lua_task_release_cfg_dtor,
+													   task->cfg, G_MAXUINT);
+			}
+
+			task->cfg = cfg;
+		}
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
