@@ -1107,11 +1107,6 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 		static_string_name = name;
 	}
 
-	if (real_type_pair.first == symcache_item_type::IDEMPOTENT && priority != 0) {
-		msg_warn_cache("priority has been set for idempotent symbol %s: %d",
-					   static_string_name.c_str(), priority);
-	}
-
 	if ((real_type_pair.second & SYMBOL_TYPE_FINE) && priority == 0) {
 		/* Adjust priority for negative weighted symbols */
 		priority = 1;
